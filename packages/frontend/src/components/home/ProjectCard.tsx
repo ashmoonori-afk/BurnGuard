@@ -68,7 +68,7 @@ export default function ProjectCard(
       </Link>
 
       {props.onDelete && (
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
+        <div className="absolute top-2 right-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -76,7 +76,8 @@ export default function ProjectCard(
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                className="h-7 w-7 rounded-md bg-background/95 border border-border grid place-items-center text-muted-foreground hover:text-foreground shadow-app-1"
+                type="button"
+                className="h-11 w-11 rounded-md bg-background/95 border border-border grid place-items-center text-muted-foreground hover:text-foreground shadow-app-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={`${props.name} 옵션 메뉴`}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />

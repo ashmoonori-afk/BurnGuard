@@ -20,7 +20,7 @@ export async function closeActiveExportBrowsers(): Promise<void> {
 }
 
 async function terminateBrowser(close: CloseBrowser, policy: ExportBrowserClosePolicy): Promise<void> {
-  let timeout: ReturnType<typeof setTimeout> | null = null; const deadline = new Promise<"deadline">((resolve) => { timeout = setTimeout(() => resolve("deadline"), policy.gracefulDeadlineMs); timeout.unref(); }); let result: "closed" | "deadline";
+  let timeout: ReturnType<typeof setTimeout> | null = null; const deadline = new Promise<"deadline">((resolve) => { timeout = setTimeout(() => resolve("deadline"), policy.gracefulDeadlineMs); }); let result: "closed" | "deadline";
   try { result = await Promise.race([close().then(() => "closed" as const), deadline]); }
   catch (error) { try { await close(); } catch (forceError) { throw new AggregateError([error, forceError], "Chromium graceful and forced close both failed"); } throw error; }
   finally { if (timeout !== null) clearTimeout(timeout); }

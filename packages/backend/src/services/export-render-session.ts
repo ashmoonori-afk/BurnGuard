@@ -1,8 +1,10 @@
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import path from "node:path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { resolveWithin } from "../security/path-boundary";
 import { isChromiumLaunchable } from "./chromium-capability";
 import { registerExportBrowser } from "./export-browser-registry";
+import { chromiumNodeCommand, launchChromiumViaNode } from "./chromium-node-launch";
 
 export type RenderViewport = { readonly width: number; readonly height: number; readonly dpr: 1 | 2 };
 export type RenderFinding = { readonly code: "console_error" | "page_error" | "request_failed" | "remote_request" | "font_error"; readonly path: string | null };
@@ -14,14 +16,25 @@ export class RenderSessionError extends Error {
   constructor(readonly code: "chromium_not_installed" | "chromium_launch_timeout" | "render_failed" | "deck_not_ready" | "render_aborted", message: string, readonly findings: readonly RenderFinding[] = []) { super(message); }
 }
 
-export async function openRenderSession(input: { readonly stagedDir: string; readonly entrypoint: string; readonly viewport: RenderViewport; readonly deck: boolean; readonly signal: AbortSignal; readonly strict?: boolean; readonly onPhase?: (phase: RenderPhase) => void }): Promise<RenderSession> {
+export async function openRenderSession(input: { readonly stagedDir: string; readonly entrypoint: string; readonly viewport: RenderViewport; readonly deck: boolean; readonly signal: AbortSignal; readonly strict?: boolean; readonly browser?: Browser; readonly onPhase?: (phase: RenderPhase) => void }): Promise<RenderSession> {
   if (input.signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled");
-  const browser = await launchChromium(input.signal); const owner = registerExportBrowser(() => browser.close()); const findings: RenderFinding[] = []; let abort: (() => void) | null = null;
+  const browser = input.browser ?? await launchChromium(input.signal);
+  let context: BrowserContext | null = null;
+  const owner = input.browser === undefined ? registerExportBrowser(() => browser.close()) : { close: async () => { await context?.close(); } };
+  const findings: RenderFinding[] = []; let abort: (() => void) | null = null;
   try {
-    const context = await browser.newContext({ viewport: { width: input.viewport.width, height: input.viewport.height }, deviceScaleFactor: input.viewport.dpr }); const page = await context.newPage();
+    context = await browser.newContext({ viewport: { width: input.viewport.width, height: input.viewport.height }, deviceScaleFactor: input.viewport.dpr }); const page = await context.newPage();
     page.on("console", (message) => { if (message.type() === "error") findings.push({ code: "console_error", path: message.text() }); });
-    page.on("pageerror", (error) => findings.push({ code: "page_error", path: error.message })); page.on("requestfailed", (request) => findings.push({ code: "request_failed", path: request.url() }));
-    await page.route("**/*", async (route) => { const url = new URL(route.request().url()); if (url.protocol === "file:" || url.protocol === "data:") await route.continue(); else { findings.push({ code: "remote_request", path: sanitizeUrl(url) }); await route.abort("blockedbyclient"); } });
+    page.on("pageerror", (error) => findings.push({ code: "page_error", path: error.message })); page.on("requestfailed", (request) => { const url = new URL(request.url()); findings.push({ code: "request_failed", path: url.protocol === "file:" ? safeFileFinding(url, input.stagedDir) : sanitizeUrl(url) }); });
+    await page.route("**/*", async (route) => {
+      const url = new URL(route.request().url());
+      if (url.protocol === "data:") { await route.continue(); return; }
+      if (url.protocol === "file:") {
+        try { resolveWithin(input.stagedDir, path.relative(input.stagedDir, fileURLToPath(url))); await route.continue(); return; }
+        catch { findings.push({ code: "remote_request", path: "file:outside-artifact" }); }
+      } else findings.push({ code: "remote_request", path: sanitizeUrl(url) });
+      await route.abort("blockedbyclient");
+    });
     abort = (): void => { void owner.close(); }; input.signal.addEventListener("abort", abort, { once: true }); input.onPhase?.("browser_ready");
     const htmlPath = resolveWithin(input.stagedDir, input.entrypoint); await page.goto(`${pathToFileURL(htmlPath)}${input.deck ? "?print=1" : ""}`, { waitUntil: "load", timeout: 30_000 }); input.onPhase?.("navigated");
     await page.evaluate(async () => { if (document.readyState !== "complete") await new Promise<void>((resolve) => addEventListener("load", () => resolve(), { once: true })); await document.fonts.ready; });
@@ -46,12 +59,14 @@ export type ChromiumLauncher = (options: ChromiumLaunchAttempt) => Promise<Brows
 type LaunchOutcome = { readonly kind: "browser"; readonly browser: Browser } | { readonly kind: "failed"; readonly error: unknown } | { readonly kind: "timeout" } | { readonly kind: "aborted" };
 const LAUNCH_ATTEMPTS: readonly ChromiumLaunchAttempt[] = [{ headless: true }, { headless: true, channel: "chrome" }, { headless: true, channel: "msedge" }];
 
-export async function launchChromium(signal: AbortSignal, launch: ChromiumLauncher = (options) => chromium.launch(options)): Promise<Browser> {
+export async function launchChromium(signal: AbortSignal, launch: ChromiumLauncher = (options) => process.platform === "win32" && chromiumNodeCommand() !== null ? launchChromiumViaNode(options, signal) : chromium.launch(options)): Promise<Browser> {
   // A launch that never completes its handshake blocks the Bun event loop, so
   // the in-process attempt below would freeze every other request and even the
   // timer meant to cap it. The child-process probe answers that question
   // without touching this loop; when it says no, fail immediately.
-  if (!(await isChromiumLaunchable())) {
+  const usable = await isChromiumLaunchable(undefined, { waitForResult: true, signal });
+  if (signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled");
+  if (!usable) {
     throw new RenderSessionError("chromium_launch_timeout", "chromium_launch_timeout: Chromium could not be launched on this host");
   }
   const timeoutMs = chromiumLaunchTimeoutMs(); const errors: string[] = []; const tried: string[] = []; let timedOut = false;
@@ -82,3 +97,4 @@ function settleLaunch(attempt: Promise<Browser>, timeoutMs: number, signal: Abor
   });
 }
 function sanitizeUrl(url: URL): string { return `${url.protocol}//${url.host}${url.pathname}`; }
+function safeFileFinding(url: URL, root: string): string { try { const relative = path.relative(root, fileURLToPath(url)); resolveWithin(root, relative); return relative.split(path.sep).join("/"); } catch { return "file:outside-artifact"; } }

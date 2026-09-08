@@ -2,12 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { createServer } from "node:net";
+import { pathToFileURL } from "node:url";
 import { ExtractionAcquisitionError, acquisitionLimits, createAcquisitionBudget } from "../src/services/extraction-acquisition";
 import {
   assertAggregateAssetBytes,
   assertAssetCount,
   fetchWebsiteResource,
+  resolveSafeImportAddresses,
+  pinnedImportRequest,
 } from "../src/services/extraction-website";
+import { isUnsafeImportHostname } from "../src/services/extraction-path";
 
 const userAgent = "BurnGuard/test design-system-import";
 const adapterSecret = "service-owned-adapter-secret-000001";
@@ -55,6 +60,70 @@ async function withSentinel<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 describe("production website acquisition boundaries", () => {
+  test("Given alternate local IP spellings When host policy runs Then mapped and expanded private addresses are blocked", () => {
+    for (const host of ["::ffff:127.0.0.1", "[::ffff:7f00:1]", "0:0:0:0:0:ffff:a00:1", "::ffff:a9fe:a9fe", "0:0:0:0:0:0:0:1", "::", "fe90::1", "localhost."]) expect(isUnsafeImportHostname(host), host).toBe(true);
+    expect(isUnsafeImportHostname("::ffff:808:808")).toBe(false);
+    expect(isUnsafeImportHostname("2606:4700:4700::1111")).toBe(false);
+  });
+
+  test("Given unresolvable or mixed public and private DNS answers When acquisition resolves Then it fails before connection", async () => {
+    const signal = new AbortController().signal;
+    const url = new URL("https://fixture.example/source");
+    await expect(resolveSafeImportAddresses(url, signal, { resolve4: async () => { throw new Error("DNS failed"); }, resolve6: async () => [], cancel() {} })).rejects.toMatchObject({ code: "website_fetch_failed" });
+    await expect(resolveSafeImportAddresses(url, signal, { resolve4: async () => ["8.8.8.8"], resolve6: async () => ["::ffff:7f00:1"], cancel() {} })).rejects.toMatchObject({ code: "invalid_source_url" });
+    await expect(resolveSafeImportAddresses(new URL("http://8.8.8.8/redirect"), signal)).rejects.toMatchObject({ code: "invalid_source_url" });
+    await expect(resolveSafeImportAddresses(new URL("https://user:secret@8.8.8.8/"), signal)).rejects.toMatchObject({ code: "invalid_source_url" });
+  });
+
+  test("Given validated DNS addresses When the connector resolves again Then it uses only the pinned answer", async () => {
+    let calls = 0;
+    const addresses = await resolveSafeImportAddresses(new URL("https://fixture.example/"), new AbortController().signal, { resolve4: async () => { calls += 1; return ["8.8.8.8"]; }, resolve6: async () => [], cancel() {} });
+    const connected = pinnedImportRequest(new URL("https://fixture.example/path"), addresses[0]!, { maxBytes: 100, kind: "html", noteBytes: () => {}, signal: new AbortController().signal, userAgent });
+    expect(connected.url.toString()).toBe("https://8.8.8.8/path");
+    expect(new Headers(connected.init.headers).get("host")).toBe("fixture.example");
+    expect(connected.init.tls?.serverName).toBe("fixture.example");
+    expect(connected.init.tls?.rejectUnauthorized).toBe(true);
+    expect(calls).toBe(1);
+  });
+
+  test("Given a logical host When native fetch uses a pinned local fixture Then that exact address receives the original Host", async () => {
+    const source = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: (request) => new Response(request.headers.get("host")) });
+    try {
+      const logical = new URL(`http://not-resolved.invalid:${source.port}/fixture`);
+      const pinned = pinnedImportRequest(logical, { address: "127.0.0.1", family: 4 }, { maxBytes: 100, kind: "html", noteBytes: () => {}, signal: AbortSignal.timeout(5000), userAgent });
+      const response = await fetch(pinned.url, pinned.init);
+      expect(await response.text()).toBe(logical.host);
+      const identity = pinned.init.tls?.checkServerIdentity;
+      expect(identity?.("127.0.0.1", { subjectaltname: "DNS:not-resolved.invalid" } as Parameters<NonNullable<typeof identity>>[1])).toBeUndefined();
+      expect(identity?.("127.0.0.1", { subjectaltname: "IP Address:127.0.0.1" } as Parameters<NonNullable<typeof identity>>[1])).toBeInstanceOf(Error);
+    } finally {
+      await source.stop(true);
+    }
+  });
+
+  test("Given an inherited HTTPS proxy When native fetch tunnels a pinned request Then CONNECT carries the validated IP rather than a second DNS hostname", async () => {
+    let connectLine = "";
+    const proxy = createServer((socket) => socket.once("data", (bytes) => {
+      connectLine = bytes.toString().split("\r\n")[0] ?? "";
+      socket.end("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    }));
+    await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+    const address = proxy.address();
+    if (address === null || typeof address === "string") throw new Error("Proxy fixture did not bind");
+    const moduleUrl = pathToFileURL(path.join(import.meta.dir, "../src/services/extraction-website.ts")).href;
+    const source = `const {pinnedImportRequest}=await import(${JSON.stringify(moduleUrl)});
+      const request=pinnedImportRequest(new URL("https://fixture.invalid:443/path"),{address:"127.0.0.1",family:4},{signal:AbortSignal.timeout(5000),userAgent:"fixture",maxBytes:1,kind:"html",noteBytes:()=>{}});
+      try { await fetch(request.url,request.init); } catch {};
+      process.exit(0);`;
+    const proxyUrl = `http://127.0.0.1:${address.port}`;
+    try {
+      // Bun caches environment proxy selection, so keep this fixture in its own process.
+      const child = Bun.spawn([process.execPath, "-e", source], { env: { ...process.env, HTTPS_PROXY: proxyUrl, HTTP_PROXY: proxyUrl, NO_PROXY: "" }, stdout: "ignore", stderr: "pipe" });
+      expect(await child.exited).toBe(0);
+      expect(connectLine).toBe("CONNECT 127.0.0.1:443 HTTP/1.1");
+    } finally { await new Promise<void>((resolve, reject) => proxy.close((error) => error === undefined ? resolve() : reject(error))); }
+  });
+
   test("Given redirects beyond the service limit When production fetch runs Then the typed limit rejects and its server closes", async () => {
     // Given
     const server = Bun.serve({ port: 0, fetch: (request) => Response.redirect(new URL("/next", request.url), 302) });

@@ -2,23 +2,26 @@ import { useState } from "react";
 import type { FileInfo } from "@bg/shared";
 import FileTree from "@/components/files/FileTree";
 import FilePreview from "@/components/files/FilePreview";
-import { mockFileTree } from "@/mocks/project-session";
 
 /**
  * Used both as a route (rarely) and as embedded content within ProjectView's
- * "Design Files" artifact tab. Accepts an optional `files` prop; falls back
- * to fixture when used standalone. Codex swaps the fixture import for
- * `listProjectFiles(projectId)` during wiring.
+ * "Design Files" artifact tab. Preview selection resolves against the latest
+ * file list so a changed hash reloads its contents and a removed file closes.
  */
 export default function DesignFilesView({
+  projectId,
   files,
   onOpenInCanvas,
 }: {
+  projectId: string;
   files?: FileInfo[];
   onOpenInCanvas?: (relPath: string) => void;
 }) {
-  const fileList = files ?? mockFileTree;
-  const [active, setActive] = useState<FileInfo | null>(null);
+  const fileList = files ?? [];
+  const [selection, setSelection] = useState<{ projectId: string; path: string } | null>(null);
+  const active = selection?.projectId === projectId
+    ? fileList.find((file) => file.rel_path === selection.path) ?? null
+    : null;
 
   return (
     <div className="flex-1 flex min-h-0 flex-col sm:flex-row">
@@ -32,14 +35,15 @@ export default function DesignFilesView({
           files={fileList}
           activePath={active?.rel_path ?? null}
           onOpen={(f) => {
-            setActive(f);
-            if (onOpenInCanvas && (f.category === "html" || f.category === "script")) {
+            setSelection({ projectId, path: f.rel_path });
+            if (onOpenInCanvas && f.category === "html") {
               onOpenInCanvas(f.rel_path);
             }
           }}
         />
+        {fileList.length === 0 && <p className="p-3 text-xs text-muted-foreground">아직 생성된 파일이 없어요.</p>}
       </div>
-      <FilePreview file={active} />
+      <FilePreview key={`${projectId}:${active?.rel_path}:${active?.hash}:${active?.updated_at}`} projectId={projectId} file={active} />
     </div>
   );
 }

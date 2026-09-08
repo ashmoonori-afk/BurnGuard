@@ -1,9 +1,7 @@
-import { rm } from "node:fs/promises";
 import { Hono } from "hono";
-import { closeProjectWatcher } from "../services/watcher-registry";
 import type { ApiErrorBody, ApiSuccess, ProjectDetail, SessionInfo } from "@bg/shared";
 import { getSqlite } from "../db/sqlite-client";
-import { projectsDir, resolveManagedPath } from "../lib/paths";
+import { deleteProject, ProjectDeletionError } from "../services/project-deletion";
 import { getLatestProjectSession, getProjectDetail } from "../db/project-read-repository";
 import { processProjectFilesystemSignal } from "../services/watchers";
 import { designDirectionRoutes } from "./design-directions";
@@ -57,24 +55,12 @@ projectRoutes.delete("/api/projects/:id", async (c) => {
     return c.json(fail("project_not_found", "Project not found", { id }), 404);
   }
 
-  // Stop the FS watcher first so it doesn't keep firing change events
-  // on the directory we're about to remove. Also clears any pending
-  // debounce timers and the cached sessionId for this project so a
-  // freshly created project that re-uses the same id starts clean.
-  closeProjectWatcher(id);
-
-  // Remove only managed project storage. Ignore filesystem errors so the DB
-  // row still gets cleaned up if a file handle is held or the dir is gone.
   try {
-    const projectDir = resolveManagedPath(projectsDir, project.dir_path);
-    await rm(projectDir, { recursive: true, force: true });
-  } catch {
-    // Keep the route's existing best-effort deletion behavior.
+    await deleteProject(getSqlite(), id);
+  } catch (error) {
+    if (error instanceof ProjectDeletionError) return c.json(fail(error.code, error.code === "project_in_use" ? "Project has retained learning or active work" : "Project deletion did not complete"), error.code === "project_not_found" ? 404 : 409);
+    throw error;
   }
-
-  // ON DELETE CASCADE on sessions/events/attachments/files/comments/tweaks/exports
-  // removes the rest.
-  getSqlite().prepare("DELETE FROM projects WHERE id=?").run(id);
 
   return c.body(null, 204);
 });

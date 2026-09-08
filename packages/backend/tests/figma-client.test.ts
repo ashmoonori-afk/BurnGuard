@@ -93,6 +93,21 @@ describe("pickFirstFillHex", () => {
 });
 
 describe("extractFigmaTokens", () => {
+  test("Given Korean and colliding names When styles are extracted Then every stable style key retains its color", () => {
+    const styles = ["주요 색상", "보조 색상", "A/B", "A B"].map((name, index) => ({ key: `key-${index}`, fileKey: "f", nodeId: String(index), name, description: "", styleType: "FILL" }));
+    const nodes = Object.fromEntries(styles.map((style, index) => [style.nodeId, { id: style.nodeId, name: style.name, type: "RECTANGLE", fills: [{ type: "SOLID", color: { r: index / 3, g: 0, b: 0 } }] }]));
+    const first = extractFigmaTokens(styles, nodes).colors;
+    const reordered = extractFigmaTokens([...styles].reverse(), nodes).colors;
+    expect(first.size).toBe(4);
+    expect(new Set(first.values()).size).toBe(4);
+    expect([...first].sort()).toEqual([...reordered].sort());
+    expect([...first.keys()].every((key) => /^--color-[a-z0-9-]+$/.test(key))).toBe(true);
+    const generatedName = [...first.keys()][0]!.replace(/^--color-/, "");
+    const extra = { key: "extra", fileKey: "f", nodeId: "extra", name: generatedName, description: "", styleType: "FILL" };
+    const extended = extractFigmaTokens([...styles, extra], { ...nodes, extra: { id: "extra", name: generatedName, type: "RECTANGLE", fills: [{ type: "SOLID", color: { r: 0, g: 1, b: 0 } }] } });
+    expect(extended.colors.size).toBe(5);
+  });
+
   test("turns FILL styles into --color-<slug> entries", () => {
     const styles = [
       {

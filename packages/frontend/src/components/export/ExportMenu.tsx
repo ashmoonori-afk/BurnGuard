@@ -20,16 +20,21 @@ import { Button } from "@/components/ui/button";
 import type { ExportStatus, ProjectType } from "@bg/shared";
 import {
   createExport,
+  cancelExport,
+  retryExport,
+  readExportDownload,
   formatLabel,
   listExports,
   type ExportFormat,
   type ExportOptions,
+  type ExportJob,
 } from "@/api/export";
 import { useUIStore } from "@/state/uiStore";
 import ExportStatusList from "./ExportStatusList";
+import { exportJobState } from "./export-job-state";
+import { apiErrorCopy } from "@/lib/error-copy";
 import {
   buildExportMenuModel,
-  buildExportRetryRequest,
   classifyChromiumFailure,
   CHROMIUM_FAILURE_MESSAGE,
 } from "./export-options";
@@ -86,10 +91,27 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
     onError: (err) => {
       pushToast({
         title: "내보내기를 시작하지 못했어요",
-        body: err instanceof Error ? err.message : String(err),
+        body: apiErrorCopy(err),
         tone: "error",
       });
     },
+  });
+
+  const actionMutation = useMutation({
+    mutationFn: async ({ action, job }: { action: "cancel" | "retry" | "download"; job: ExportJob }) => {
+      if (action === "cancel") return cancelExport(job.id);
+      if (action === "retry") return retryExport(job);
+      const download = await readExportDownload(job.id);
+      const url = URL.createObjectURL(download.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = download.filename;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
+    onSuccess: (_data, { action }) => { if (action !== "download") pushToast({ title: action === "cancel" ? "취소 요청을 보냈어요" : "같은 설정으로 다시 내보내요", tone: "info" }); },
+    onError: (error) => pushToast({ title: "내보내기 요청을 완료하지 못했어요", body: apiErrorCopy(error), tone: "error" }),
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ["project", projectId, "exports"] }); },
   });
 
   const jobs = jobsQuery.data ?? [];
@@ -114,7 +136,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
     for (const job of jobs) {
       const previous = lastStatusRef.current.get(job.id);
       lastStatusRef.current.set(job.id, job.status);
-      if (job.status === "failed" && previous !== "failed") {
+      if (job.status === "failed" && previous !== "failed" && !exportJobState(job).cancelled) {
         const chromiumFailure = classifyChromiumFailure(job.error_message);
         const auditFailed = isDesignAuditExportFailure(job);
         pushToast({
@@ -123,7 +145,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
             ? "내보내기 전 품질 점검에서 고쳐야 할 문제가 발견됐어요."
             : chromiumFailure !== null
               ? CHROMIUM_FAILURE_MESSAGE[chromiumFailure]
-              : (job.error_message ?? "알 수 없는 오류예요."),
+              : apiErrorCopy({ code: job.latest_attempt?.stop_reason }),
           tone: "error",
         });
       }
@@ -145,6 +167,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
       <DropdownMenuContent data-export-menu-content align="end" className="z-[100] w-72">
         <DropdownMenuLabel>내보내기 형식</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {jobsQuery.isError && <div role="alert" className="p-2 text-xs"><p>내보내기 목록을 불러오지 못했어요.</p><button type="button" className="mt-2 underline" onClick={() => void jobsQuery.refetch()}>다시 시도</button></div>}
         {qualityGate !== null && <div className="mx-2 mb-2 rounded-md border border-destructive/30 bg-destructive/10 p-2">
           <p className="text-pretty break-keep text-xs text-foreground">고쳐야 할 문제 {qualityGate.mustFixCount}개가 있어 내보내기를 {"시작할\u00A0수\u00A0없어요."}</p>
           <Button type="button" variant="outline" size="sm" className="mt-2 h-8 w-full max-[900px]:min-h-11" onClick={openQuality}>품질 점검 열기</Button>
@@ -196,18 +219,13 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
             <DropdownMenuSeparator />
             <ExportStatusList
               jobs={jobs}
-              // Standard retries keep using default options — see
-              // services/exports.ts. Graphic PNG is the exact-size exception.
-              onRetry={(format) => {
+              onRetry={(job) => {
                 if (qualityGate !== null) { openQuality(); return; }
-                const request = buildExportRetryRequest(
-                  projectType,
-                  format,
-                  menuModel,
-                );
-                if (request !== null) createMutation.mutate(request);
+                actionMutation.mutate({ action: "retry", job });
               }}
-              retryDisabled={createMutation.isPending}
+              onCancel={(job) => actionMutation.mutate({ action: "cancel", job })}
+              onDownload={(job) => actionMutation.mutate({ action: "download", job })}
+              retryDisabled={createMutation.isPending || actionMutation.isPending}
             />
           </>
         )}

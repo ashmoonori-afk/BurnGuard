@@ -22,10 +22,11 @@ export class ApiError extends Error {
   }
 }
 
-export async function bootstrapApiAuthority(): Promise<void> {
+export async function bootstrapApiAuthority(signal?: AbortSignal): Promise<void> {
   launchCapability = null;
   const res = await fetch("/api/bootstrap", {
     credentials: "same-origin",
+    signal,
     headers: { accept: "application/json" },
   });
   const body = (await res.json().catch(() => null)) as
@@ -36,6 +37,7 @@ export async function bootstrapApiAuthority(): Promise<void> {
     !res.ok ||
     !body ||
     "error" in body ||
+    !("data" in body) || !body.data ||
     typeof body.data.capability !== "string" ||
     body.data.capability.length === 0
   ) {

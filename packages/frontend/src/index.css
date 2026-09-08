@@ -6,7 +6,7 @@
   :root {
     /* Raw palette — canonical hex values. Components should prefer
        semantic tokens below, but exposing the raw scale lets design-
-       system references (and future dark mode) pick from the same well. */
+       system references pick from the same well. */
 
     /* Grey */
     --color-white: #ffffff;
@@ -74,6 +74,28 @@
 
     --radius: 0.5rem;
     color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --background: 23 25 26;
+    --foreground: 241 243 245;
+    --card: 35 38 41;
+    --card-foreground: 241 243 245;
+    --popover: 35 38 41;
+    --popover-foreground: 241 243 245;
+    --primary: 241 243 245;
+    --primary-foreground: 23 25 26;
+    --secondary: 47 49 51;
+    --secondary-foreground: 241 243 245;
+    --muted: 47 49 51;
+    --muted-foreground: 187 197 204;
+    --accent: 109 149 255;
+    --accent-foreground: 17 17 17;
+    --destructive: 255 120 114;
+    --destructive-foreground: 17 17 17;
+    --border: 70 74 77;
+    --input: 70 74 77;
+    --ring: 109 149 255;
+    color-scheme: dark;
   }
 }
 

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, rmdir, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseDesignAuditResult } from "@bg/shared";
@@ -9,6 +9,7 @@ import { projectsDir } from "../src/lib/paths";
 import { artifactOperationRoutes } from "../src/routes/artifact-operations";
 import { artifactRoutes } from "../src/routes/artifacts";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
+import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 
 const projectId = `audit-route-${process.pid}`;
 const root = path.join(projectsDir, projectId);
@@ -46,21 +47,25 @@ describe("design audit routes and safe fix", () => {
     expect(restored.checks[2]?.findings).toHaveLength(1);
   }, 90_000);
 
-  test("Given a nested audit-cache symlink When audited Then typed 503 prevents outside writes", async () => {
-    const id = `${projectId}-cache-link`; const projectRoot = path.join(projectsDir, id); const outside = await mkdtemp(path.join(tmpdir(), "bg-audit-cache-outside-"));
+  for (const alias of [{ type: "dir" as const, name: "symlink", supported: canCreateSymlink() }, { type: "junction" as const, name: "Windows junction", supported: process.platform === "win32" }]) {
+  test.skipIf(!alias.supported)(`Given a nested audit-cache ${alias.name} When audited Then typed 503 prevents outside writes (${alias.type === "dir" ? SYMLINK_SKIP_REASON : "Windows only"})`, async () => {
+    const id = `${projectId}-cache-${alias.type}`; const projectRoot = path.join(projectsDir, id); const outside = await mkdtemp(path.join(tmpdir(), "bg-audit-cache-outside-"));
     try {
-      await mkdir(path.join(projectRoot, ".meta"), { recursive: true }); await writeFile(path.join(projectRoot, "index.html"), html); getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(id, "Cache link", projectRoot); await new ArtifactCoordinator(getSqlite()).initialize(id, projectRoot); await symlink(outside, path.join(projectRoot, ".meta", "audits"));
+      await mkdir(path.join(projectRoot, ".meta"), { recursive: true }); await writeFile(path.join(projectRoot, "index.html"), html); getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(id, "Cache link", projectRoot); await new ArtifactCoordinator(getSqlite()).initialize(id, projectRoot); await symlink(outside, path.join(projectRoot, ".meta", "audits"), alias.type);
       const response = await artifactRoutes.request(`http://local/api/projects/${id}/design-audit`); const body = JSON.stringify(await response.json());
       expect(response.status).toBe(503); expect(body).toContain("project_path_unavailable"); expect(body).not.toContain(outside); expect((await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: outside }))).length).toBe(0);
     } finally { getSqlite().prepare("DELETE FROM projects WHERE id=?").run(id); await rm(projectRoot, { recursive: true, force: true }); await rm(outside, { recursive: true, force: true }); }
   });
+  }
 
-  test("Given escaped and symlinked DB project paths When audited Then typed 503 responses leak no private path", async () => {
-    const outside = await mkdtemp(path.join(tmpdir(), "bg-audit-outside-")); const linked = path.join(projectsDir, `${projectId}-linked`); const ids = [`${projectId}-outside`, `${projectId}-linked`] as const;
+  for (const alias of [{ type: null, name: "escaped", supported: true }, { type: "dir" as const, name: "symlinked", supported: canCreateSymlink() }, { type: "junction" as const, name: "Windows junction", supported: process.platform === "win32" }]) {
+  test.skipIf(!alias.supported)(`Given ${alias.name} DB project paths When audited Then typed 503 responses leak no private path (${alias.type === "dir" ? SYMLINK_SKIP_REASON : "platform boundary"})`, async () => {
+    const outside = await mkdtemp(path.join(tmpdir(), "bg-audit-outside-")); const id = `${projectId}-outside-${alias.type ?? "direct"}`; const linked = path.join(projectsDir, id);
     try {
-      await writeFile(path.join(outside, "index.html"), html); await symlink(outside, linked);
-      const insert = getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)"); insert.run(ids[0], "Outside", outside); insert.run(ids[1], "Linked", linked);
-      for (const id of ids) { const response = await artifactRoutes.request(`http://local/api/projects/${id}/design-audit`); expect(response.status).toBe(503); expect(JSON.stringify(await response.json())).not.toContain(outside); }
-    } finally { for (const id of ids) getSqlite().prepare("DELETE FROM projects WHERE id=?").run(id); await rm(linked, { force: true }); await rm(outside, { recursive: true, force: true }); }
+      await writeFile(path.join(outside, "index.html"), html); if (alias.type !== null) await symlink(outside, linked, alias.type);
+      getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(id, "Outside", alias.type === null ? outside : linked);
+      const response = await artifactRoutes.request(`http://local/api/projects/${id}/design-audit`); expect(response.status).toBe(503); expect(JSON.stringify(await response.json())).not.toContain(outside);
+    } finally { getSqlite().prepare("DELETE FROM projects WHERE id=?").run(id); if (alias.type === "junction") await rmdir(linked); else if (alias.type === "dir") await unlink(linked); await rm(outside, { recursive: true, force: true }); }
   });
+  }
 });

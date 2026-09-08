@@ -34,6 +34,20 @@ NS = {
     "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
 }
 
+MAX_PPTX_ENTRIES = 10000
+MAX_XML_BYTES = 8 * 1024 * 1024
+MAX_PPTX_EXPANDED_BYTES = 128 * 1024 * 1024
+
+
+def read_pptx_xml(zf, name):
+    if zf.getinfo(name).file_size > MAX_XML_BYTES:
+        raise ValueError("PPTX XML entry exceeds extraction limit")
+    with zf.open(name) as source:
+        data = source.read(MAX_XML_BYTES + 1)
+    if len(data) > MAX_XML_BYTES:
+        raise ValueError("PPTX XML entry exceeds extraction limit")
+    return ET.fromstring(data)
+
 
 def compact_spaces(value: str) -> str:
     return re.sub(r"\s+", " ", value or "").strip()
@@ -102,7 +116,7 @@ def parse_theme(zf: zipfile.ZipFile):
     for name in zf.namelist():
         if not re.match(r"ppt/theme/theme\d+\.xml$", name):
             continue
-        root = ET.fromstring(zf.read(name))
+        root = read_pptx_xml(zf, name)
         for node in root.findall(".//*[@typeface]"):
             typeface = compact_spaces(node.attrib.get("typeface", ""))
             if typeface and typeface not in {
@@ -113,11 +127,10 @@ def parse_theme(zf: zipfile.ZipFile):
             }:
                 fonts.append(typeface)
         for node in root.findall(".//a:clrScheme/*", NS):
-            value = (
-                node.attrib.get("lastClr")
-                or node.attrib.get("val")
-                or node.findtext(".//a:srgbClr", default="", namespaces=NS)
-            )
+            color = node.find("a:srgbClr", NS)
+            if color is None:
+                color = node.find("a:sysClr", NS)
+            value = "" if color is None else color.attrib.get("lastClr") or color.attrib.get("val", "")
             value = compact_spaces(value).lstrip("#")
             if re.fullmatch(r"[0-9A-Fa-f]{6}", value):
                 colors.append(f"#{value.upper()}")
@@ -127,6 +140,9 @@ def parse_theme(zf: zipfile.ZipFile):
 def extract_pptx(file_path: Path):
     manifest = empty_manifest("pptx", file_path)
     with zipfile.ZipFile(file_path) as zf:
+        entries = zf.infolist()
+        if len(entries) > MAX_PPTX_ENTRIES or sum(entry.file_size for entry in entries) > MAX_PPTX_EXPANDED_BYTES:
+            raise ValueError("PPTX archive exceeds extraction limit")
         theme_fonts, theme_colors = parse_theme(zf)
         fonts = list(theme_fonts)
         colors = list(theme_colors)
@@ -147,7 +163,7 @@ def extract_pptx(file_path: Path):
         )
 
         for index, slide_name in enumerate(slide_files, start=1):
-            root = ET.fromstring(zf.read(slide_name))
+            root = read_pptx_xml(zf, slide_name)
             fragments = []
             for paragraph in root.findall(".//a:p", NS):
                 runs = []

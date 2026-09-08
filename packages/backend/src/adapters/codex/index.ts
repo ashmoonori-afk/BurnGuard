@@ -2,6 +2,7 @@ import { ulid } from "ulid";
 import type { AdapterRunInput, AdapterRunResult } from "../types";
 import { parseCodexLine, type CodexParserContext } from "./parser";
 import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../owned-process-tree";
+import { settleProcessStreams } from "../process-streams";
 
 export function buildCodexCommand(binaryPath: string): string[] {
   return [
@@ -66,7 +67,7 @@ export async function runCodexTurn(
 
   let exitCode: number;
   try {
-    const readers = Promise.all([
+    const readers = [
       readLines(proc.stdout, async (line) => {
         // Parser exceptions used to bubble up through readLines and
         // abort the read loop entirely, leaving the CLI subprocess
@@ -92,10 +93,8 @@ export async function runCodexTurn(
       readLines(proc.stderr, async (line) => {
         await input.onStderr?.(line);
       }),
-    ]);
-    exitCode = await proc.exited;
-    await closeOwnedProcessTree(proc.pid);
-    await readers;
+    ];
+    exitCode = await settleProcessStreams(proc, readers);
   } finally {
     input.signal?.removeEventListener("abort", onAbort);
     // Always release the decision sink — see the matching comment in

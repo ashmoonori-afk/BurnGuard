@@ -5,6 +5,12 @@ import { appRootDir } from "../lib/app-paths";
 
 let sqliteInstance: Database | null = null;
 
+/** Close the owned connection before removing a test profile or shutting down. */
+export function closeSqlite(): void {
+  sqliteInstance?.close();
+  sqliteInstance = null;
+}
+
 export function getSqlite(): Database {
   if (sqliteInstance !== null) return sqliteInstance;
   const dbPath = path.join(appRootDir, "burnguard.db");

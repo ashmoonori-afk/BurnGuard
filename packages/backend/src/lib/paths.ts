@@ -1,4 +1,5 @@
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
 export * from "./app-paths";
 
@@ -11,6 +12,8 @@ export function resolveManagedPath(root: string, target: string): string {
   return resolveWithin(root, relative);
 }
 
-export function resolveRepoRoot(fromDir = import.meta.dir): string {
+export function resolveRepoRoot(fromDir = import.meta.dir, executablePath = process.execPath): string {
+  const resources = path.join(path.dirname(executablePath), "resources");
+  if (existsSync(path.join(resources, "burnguard-runtime.json"))) return resources;
   return path.resolve(fromDir, "../../../..");
 }

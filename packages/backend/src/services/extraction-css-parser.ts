@@ -1,4 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { resolveRepoRoot } from "../lib/paths";
 import {
   AcquisitionLimitError,
   DEFAULT_ACQUISITION_LIMITS,
@@ -72,7 +76,9 @@ export async function parseCssSource(request: CssParseRequest): Promise<CssParse
     ownedBudget?.dispose();
     throw new AcquisitionLimitError("css_worker_input_bytes", limits.cssWorkerInputBytes, inputBytes);
   }
-  const worker = new Worker(request.workerUrl ?? new URL("./extraction-css-worker.ts", import.meta.url));
+  const packagedWorker = path.join(resolveRepoRoot(), "extraction-css-worker.js");
+  const workerUrl = existsSync(packagedWorker) ? pathToFileURL(packagedWorker) : new URL("./extraction-css-worker.ts", import.meta.url);
+  const worker = new Worker(request.workerUrl ?? workerUrl);
   let resolveMessage: ((outcome: WorkerOutcome) => void) | undefined;
   let resolveAbort: ((outcome: AbortOutcome) => void) | undefined;
   let resolveClose: ((closeCode: number) => void) | undefined;

@@ -1,5 +1,6 @@
 import { Resolver } from "node:dns/promises";
 import { isIP } from "node:net";
+import { checkServerIdentity } from "node:tls";
 import {
   AcquisitionLimitError,
   DEFAULT_ACQUISITION_LIMITS,
@@ -27,25 +28,22 @@ export async function fetchWebsiteResource(
   let current = new URL(inputUrl.toString());
   const limits = options.limits ?? DEFAULT_ACQUISITION_LIMITS;
   for (let redirectCount = 0; redirectCount <= limits.redirects; redirectCount += 1) {
-    await assertSafeImportUrl(current, options.signal);
+    const addresses = await resolveSafeImportAddresses(current, options.signal);
     let response: Response;
     try {
-      response = await fetch(current, {
-        redirect: "manual",
-        headers: { "user-agent": options.userAgent, ...qaAdapterRequestHeaders(current) },
-        signal: options.signal,
-      });
+      response = await requestPinnedWebsiteResource(current, addresses, options);
     } catch (error) {
       if (options.signal.aborted) throwIfAcquisitionAborted(options.signal);
       throw error;
     }
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
+      await response.body?.cancel();
       if (!location) throw new DesignSystemExtractError("website_fetch_failed", `Redirect missing Location header for ${current.toString()}`);
       current = new URL(location, current);
       continue;
     }
-    if (!response.ok) throw new DesignSystemExtractError("website_fetch_failed", `Website fetch failed with HTTP ${response.status}`);
+    if (!response.ok) { await response.body?.cancel(); throw new DesignSystemExtractError("website_fetch_failed", `Website fetch failed with HTTP ${response.status}`); }
     const buffer = await readResponseWithinLimit(response, options.maxBytes, options.signal, limits, options.kind);
     options.noteBytes(buffer.byteLength);
     return { finalUrl: current, text: options.kind === "asset" ? "" : buffer.toString("utf8"), buffer };
@@ -88,27 +86,63 @@ async function readResponseWithinLimit(
     }
     return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
   } finally {
-    await cancellation; reader.releaseLock();
+    await cancellation;
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
 }
 
-async function assertSafeImportUrl(url: URL, signal: AbortSignal): Promise<void> {
+type ImportAddress = { readonly address: string; readonly family: 4 | 6 };
+
+export async function resolveSafeImportAddresses(url: URL, signal: AbortSignal, resolver: Pick<Resolver, "resolve4" | "resolve6" | "cancel"> = new Resolver()): Promise<readonly ImportAddress[]> {
   throwIfAcquisitionAborted(signal);
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new DesignSystemExtractError("invalid_source_url", `Website URL must be http(s): ${url.toString()}`);
+  const ownedQaAdapter = isOwnedQaAdapterResourceUrl(url);
+  if ((!ownedQaAdapter && url.protocol !== "https:") || url.username !== "" || url.password !== "") {
+    throw new DesignSystemExtractError("invalid_source_url", "Website URL must use HTTPS without credentials");
   }
   const host = normalizeImportHostname(url.hostname);
-  const ownedQaAdapter = isOwnedQaAdapterResourceUrl(url);
   if (isUnsafeImportHostname(host) && !ownedQaAdapter) {
     throw new DesignSystemExtractError("invalid_source_url", `Blocked private or local website host: ${url.hostname}`);
   }
-  if (isIP(host) !== 0) return;
-  const resolver = new Resolver();
-  const resolved = await abortable(resolver.resolveAny(host).catch(() => []), signal, () => resolver.cancel());
-  for (const entry of resolved) {
-    if (!('address' in entry)) continue;
-    if (isUnsafeImportHostname(normalizeImportHostname(entry.address))) {
-      throw new DesignSystemExtractError("invalid_source_url", `Blocked hostname resolved to a private or local address: ${url.hostname}`);
+  const family = isIP(host);
+  if (family === 4 || family === 6) return [{ address: host, family }];
+  const resolved = await abortable(Promise.allSettled([resolver.resolve4(host), resolver.resolve6(host)]), signal, () => resolver.cancel());
+  const addresses: ImportAddress[] = [];
+  for (const result of resolved) {
+    if (result.status !== "fulfilled") continue;
+    for (const address of result.value) {
+      const family = isIP(address);
+      if ((family !== 4 && family !== 6) || isUnsafeImportHostname(address)) {
+        throw new DesignSystemExtractError("invalid_source_url", `Blocked hostname resolved to a private or local address: ${url.hostname}`);
+      }
+      addresses.push({ address, family });
     }
   }
+  if (addresses.length === 0) throw new DesignSystemExtractError("website_fetch_failed", "Website hostname has no verifiable public address");
+  return addresses;
+}
+
+export function pinnedImportRequest(url: URL, address: ImportAddress, options: WebsiteFetchOptions): { readonly url: URL; readonly init: BunFetchRequestInit } {
+  const target = new URL(url);
+  target.hostname = address.family === 6 ? `[${address.address}]` : address.address;
+  const hostname = normalizeImportHostname(url.hostname);
+  return {
+    url: target,
+    init: {
+      redirect: "manual", signal: options.signal, keepalive: false,
+      headers: { host: url.host, "user-agent": options.userAgent, ...qaAdapterRequestHeaders(url) },
+      tls: { rejectUnauthorized: true, ...(isIP(hostname) === 0 ? { serverName: hostname } : {}), checkServerIdentity: (_name, certificate) => checkServerIdentity(hostname, certificate) },
+    },
+  };
+}
+
+async function requestPinnedWebsiteResource(url: URL, addresses: readonly ImportAddress[], options: WebsiteFetchOptions): Promise<Response> {
+  let failure: unknown;
+  for (const address of addresses) {
+    throwIfAcquisitionAborted(options.signal);
+    const pinned = pinnedImportRequest(url, address, options);
+    try { return await fetch(pinned.url, pinned.init); }
+    catch (error) { failure = error; }
+  }
+  throw failure ?? new DesignSystemExtractError("website_fetch_failed", "No validated website address could be reached");
 }

@@ -9,6 +9,7 @@ import type { ReadyAttachmentSource } from "./attachment-intake";
 import { switchSessionBackend } from "@/api/session";
 import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
+import { apiErrorCopy } from "@/lib/error-copy";
 
 type Tab = "chat" | "comments";
 
@@ -82,7 +83,7 @@ export default function ChatPane({
     onError: (err) => {
       pushToast({
         title: "백엔드를 바꾸지 못했어요",
-        body: err instanceof Error ? err.message : String(err),
+        body: apiErrorCopy(err),
         tone: "error",
       });
     },
@@ -118,8 +119,7 @@ export default function ChatPane({
           />
         </div>
       </div>
-      {tab === "chat" ? (
-        <>
+      <div hidden={tab !== "chat"} className={tab === "chat" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           <MessageStream
             events={events}
             session={session}
@@ -131,6 +131,8 @@ export default function ChatPane({
             <div className="shrink-0">{statusSlot}</div>
           )}
           <Composer
+            key={session.id}
+            sessionId={session.id}
             onSend={onSend}
             disabled={composerDisabled}
             canInterrupt={canInterrupt}
@@ -140,8 +142,8 @@ export default function ChatPane({
             initialText={composerInitialText}
             projectFiles={projectFiles}
           />
-        </>
-      ) : (
+      </div>
+      {tab === "comments" && (
         <CommentPanel
           comments={comments}
           activeRelPath={activeRelPath}

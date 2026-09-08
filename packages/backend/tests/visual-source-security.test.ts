@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { copyFile, link, mkdir, mkdtemp, readFile, rename, rm, rmdir, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { getSqlite } from "../src/db/sqlite-client";
@@ -13,6 +13,7 @@ import { listSequencedSessionEvents, parsePersistedNormalizedEvent } from "../sr
 import { sessionRoutes } from "../src/routes/session";
 import { releaseUserTurnReservation, reserveUserTurn } from "../src/services/turns";
 import { withPrivateAttachmentInputs } from "../src/services/stage-attachment-inputs";
+import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 
 let root = "";
 let projectId = "";
@@ -135,7 +136,7 @@ describe("immutable attachment guard", () => {
     expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("base");
   });
 
-  test("Given parent directory symlink swap When postflight runs Then outside bytes stay untouched and staged output is not published", async () => {
+  test.skipIf(!canCreateSymlink())(`Given parent directory symlink swap When postflight runs Then outside bytes stay untouched and staged output is not published (${SYMLINK_SKIP_REASON})`, async () => {
     await writeFile(path.join(root, "index.html"), "base");
     const immutable = await stored("immutable_reference");
     const snapshots = await captureImmutableAttachments([{ file_path: immutable, source_role: "immutable_reference", size_bytes: 8, sha256: createHash("sha256").update("original").digest("hex") }]);
@@ -173,7 +174,26 @@ describe("immutable attachment guard", () => {
     }
   });
 
-  test("Given file replacement symlink swap When postflight runs Then only captured inode is restored", async () => {
+  test.skipIf(process.platform !== "win32")("Given a Windows junction parent before capture When immutable inputs open Then outside bytes stay untouched", async () => {
+    const immutable = await stored("immutable_reference");
+    const displaced = `${path.dirname(immutable)}-captured`;
+    const outside = await mkdtemp(path.join(tmpdir(), "burnguard-immutable-junction-"));
+    const sentinel = path.join(outside, path.basename(immutable));
+    await writeFile(sentinel, "original");
+    await rename(path.dirname(immutable), displaced);
+    try {
+      await symlink(outside, path.dirname(immutable), "junction");
+      await expect(captureImmutableAttachments([{ file_path: immutable, source_role: "immutable_reference", size_bytes: 8, sha256: createHash("sha256").update("original").digest("hex") }])).rejects.toThrow("immutable_reference_path_unavailable");
+      expect(await readFile(sentinel, "utf8")).toBe("original");
+    } finally {
+      await rmdir(path.dirname(immutable));
+      await rename(displaced, path.dirname(immutable));
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  for (const alias of ["hardlink", "symlink"] as const) {
+  test.skipIf(alias === "symlink" && !canCreateSymlink())(`Given file replacement ${alias} swap When postflight runs Then only captured inode is restored (${alias === "symlink" ? SYMLINK_SKIP_REASON : "actual inode alias"})`, async () => {
     const immutable = await stored("immutable_reference");
     const snapshots = await captureImmutableAttachments([{ file_path: immutable, source_role: "immutable_reference", size_bytes: 8, sha256: createHash("sha256").update("original").digest("hex") }]);
     const outside = path.join(root, "outside-sentinel");
@@ -181,7 +201,7 @@ describe("immutable attachment guard", () => {
     await writeFile(outside, "outside");
     await writeFile(immutable, "mutated");
     await rename(immutable, displaced);
-    await symlink(outside, immutable);
+    if (alias === "hardlink") await link(outside, immutable); else await symlink(outside, immutable);
 
     try {
       await expect(verifyImmutableAttachments(snapshots)).rejects.toThrow("immutable_reference_path_unavailable");
@@ -194,6 +214,7 @@ describe("immutable attachment guard", () => {
       await rename(displaced, immutable).catch(() => undefined);
     }
   });
+  }
 
   test("Given direct immutable mutation When postflight runs Then original bytes are atomically restored and the turn fails bounded", async () => {
     const immutable = await stored("immutable_reference");

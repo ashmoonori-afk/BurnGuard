@@ -66,12 +66,18 @@ export async function publishManagedTree(
     for (const file of [...destinationManifest.files].reverse()) {
       if (!sourcePaths.has(file.path)) await unlink(path.join(destination, file.path));
     }
+    // A removed directory can become a file in the same publication.
+    await removeEmptyManagedDirectories(destination);
     for (const candidate of opened) {
       const target = path.join(destination, candidate.file.path);
       await mkdir(path.dirname(target), { recursive: true });
       const temporary = path.join(path.dirname(target), `.${path.basename(target)}.${crypto.randomUUID()}.tmp`);
-      await writeFile(temporary, candidate.bytes);
-      await rename(temporary, target);
+      try {
+        await writeFile(temporary, candidate.bytes);
+        await rename(temporary, target);
+      } finally {
+        await rm(temporary, { force: true });
+      }
       afterWrite?.(candidate.file.path);
     }
   } finally {

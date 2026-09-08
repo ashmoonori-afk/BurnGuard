@@ -27,6 +27,8 @@ import { reconcileExtractionState } from "./services/extraction-recovery";
 import { reconcileCatalogState } from "./services/catalog-lifecycle";
 import { ensureAllProjectWatchers } from "./services/watchers";
 import { reconcileArtifactState } from "./services/artifact-recovery";
+import { reconcileProjectDeletions } from "./services/project-deletion";
+import { pruneExpiredArtifactOperations } from "./services/artifact-retention";
 import { reconcileExportState } from "./services/export-recovery";
 import { createProductionResearchRecoveryDependencies } from "./routes/research";
 import { reconcileResearchState, type ResearchRecoveryDependencies } from "./services/research-recovery";
@@ -114,6 +116,7 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   await ensureConfig();
   await seedSampleDesignSystems();
   await runMigrations();
+  await reconcileProjectDeletions(getSqlite());
   await reconcileResearchOnStartup(getSqlite(), researchRecovery);
   await seedCoreData();
   await seedTutorialsOnce();
@@ -122,6 +125,7 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   await reconcileCatalogState(getSqlite(), systemsDir);
   await reconcileExtractionState();
   await reconcileArtifactState(getSqlite());
+  await pruneExpiredArtifactOperations(getSqlite());
   await reconcileExportState(getSqlite());
   await pruneOldExports();
   await ensureAllProjectWatchers();

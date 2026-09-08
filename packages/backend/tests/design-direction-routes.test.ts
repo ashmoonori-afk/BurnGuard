@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, rmdir, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isRecord, parseDesignDirectionState, type DesignDirectionState, type SequencedEventEnvelope } from "@bg/shared";
@@ -13,6 +13,7 @@ import { buildSessionContext } from "../src/services/context";
 import { buildPrompt } from "../src/harness/prompt-builder";
 import type { DesignDirectionRenderer, DirectionRenderInput } from "../src/services/design-direction-renderer";
 import { DesignDirectionWorkflow } from "../src/services/design-direction-workflow";
+import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 
 const projectId = `direction-routes-${process.pid}`;
 const sessionId = `${projectId}-session`;
@@ -35,10 +36,6 @@ beforeAll(async () => {
   insertSession.run(sessionId, projectId);
   insertProject.run(outsideProjectId, "외부 경로", outsideRoot, null);
   insertSession.run(`${outsideProjectId}-session`, outsideProjectId);
-  const symlinkPath = path.join(projectsDir, symlinkProjectId);
-  await symlink(outsideRoot, symlinkPath);
-  insertProject.run(symlinkProjectId, "심볼릭 링크", symlinkPath, null);
-  insertSession.run(`${symlinkProjectId}-session`, symlinkProjectId);
 });
 afterAll(async () => {
   for (const id of [projectId, outsideProjectId, symlinkProjectId]) getSqlite().prepare("DELETE FROM projects WHERE id=?").run(id);
@@ -117,8 +114,8 @@ describe("design direction routes", () => {
     expect((await request(`/api/projects/${projectId}/design-directions/${ready.generation_id}/%5Cescape/preview`)).status).toBe(400);
   });
 
-  test("rejects unmanaged and symlink-escaped project directories without writing outside", async () => {
-    for (const id of [outsideProjectId, symlinkProjectId]) {
+  test("Given an unmanaged project directory When generating Then it rejects without writing outside", async () => {
+    for (const id of [outsideProjectId]) {
       const response = await request(`/api/projects/${id}/design-directions/generate`, "POST");
       expect(response.status).toBe(503);
       expect(await response.json()).toEqual({ error: { code: "project_path_unavailable", message: "Project directory is outside managed storage" } });
@@ -126,6 +123,26 @@ describe("design direction routes", () => {
       expect((await request(`/api/projects/${id}/design-directions/generation/editorial/preview`)).status).toBe(503);
     }
   });
+
+  for (const alias of [{ type: "dir" as const, name: "symlink", supported: canCreateSymlink() }, { type: "junction" as const, name: "Windows junction", supported: process.platform === "win32" }]) {
+    test.skipIf(!alias.supported)(`Given a ${alias.name} project directory When generating Then it rejects without writing outside (${alias.type === "dir" ? SYMLINK_SKIP_REASON : "Windows only"})`, async () => {
+      const id = `${symlinkProjectId}-${alias.type}`;
+      const linked = path.join(projectsDir, id);
+      try {
+        await symlink(outsideRoot, linked, alias.type);
+        getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(id, "Alias", linked);
+        getSqlite().prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(`${id}-session`, id);
+        const response = await request(`/api/projects/${id}/design-directions/generate`, "POST");
+        expect(response.status).toBe(503);
+        expect(JSON.stringify(await response.json())).not.toContain(outsideRoot);
+        expect(await Bun.file(path.join(outsideRoot, ".meta", "directions")).exists()).toBeFalse();
+        expect((await request(`/api/projects/${id}/design-directions/generation/editorial/preview`)).status).toBe(503);
+      } finally {
+        getSqlite().prepare("DELETE FROM projects WHERE id=?").run(id);
+        if (alias.type === "junction") await rmdir(linked); else await unlink(linked);
+      }
+    });
+  }
 
   test("returns typed busy, cancellation, and retry outcomes", async () => {
     getSqlite().prepare("UPDATE sessions SET status='running' WHERE id=?").run(sessionId);

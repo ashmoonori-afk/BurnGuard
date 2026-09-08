@@ -80,7 +80,15 @@ describe("mass research CLI", () => {
     // Given
     const root = path.resolve(import.meta.dir, "../../.."); const scenarios = [["--fixture", "scripts/qa/fixtures/mass-research.json", "--purpose", "prototype"], ["--fixture", "scripts/qa/fixtures/mass-research-adversarial.json", "--scenario", "failures"]] as const;
     // When
-    const receipts = []; for (const [index, args] of scenarios.entries()) { const evidence = path.join(evidenceRoot, `case-${index}`); const child = Bun.spawn(["bun", "run", "scripts/qa/mass-research-dry-run.ts", ...args, "--evidence-dir", evidence], { cwd: root, stdout: "pipe", stderr: "pipe" }); expect(await child.exited, await new Response(child.stderr).text()).toBe(0); receipts.push(JSON.parse(await readFile(path.join(evidence, "receipt.json"), "utf8"))); }
+    const receipts = [];
+    for (const [index, args] of scenarios.entries()) {
+      const evidence = path.join(evidenceRoot, `case-${index}`);
+      const child = Bun.spawn([process.execPath, "run", "scripts/qa/mass-research-dry-run.ts", ...args, "--evidence-dir", evidence], { cwd: root, env: { ...process.env }, stdout: "pipe", stderr: "pipe" });
+      const deadline = setTimeout(() => child.kill(), 45_000);
+      const [exitCode, , stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]).finally(() => clearTimeout(deadline));
+      expect(exitCode, stderr).toBe(0);
+      receipts.push(JSON.parse(await readFile(path.join(evidence, "receipt.json"), "utf8")));
+    }
     // Then
     expect(receipts[0]).toMatchObject({ ok: true, bounded_concurrency: true, cleanup: { complete: true } }); expect(receipts[0].digest).toMatch(/^[0-9a-f]{64}$/); expect(receipts[0].common_rules.length).toBeGreaterThan(0); expect(receipts[0].purpose_rules.length).toBeGreaterThan(0); expect(receipts[1]).toMatchObject({ ok: true, cleanup: { complete: true } }); expect(receipts[1].cases.every((item: { readonly passed: boolean }) => item.passed)).toBe(true);
     // Spawns the QA runner over every fixture; the default 5 s budget is too

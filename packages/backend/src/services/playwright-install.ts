@@ -1,5 +1,10 @@
 import { stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import type { PlaywrightInstallStatus } from "@bg/shared";
+import { resolveRepoRoot } from "../lib/paths";
+import { chromiumNodeCommand } from "./chromium-node-launch";
+import { resetChromiumCapability } from "./chromium-capability";
 
 const MAX_TAIL = 120;
 
@@ -49,7 +54,7 @@ export function getPlaywrightInstallStatus(): PlaywrightInstallStatus {
 }
 
 /**
- * Kicks off `npx playwright install chromium` as a background child process.
+ * Installs the Chromium build required by this app's exact Playwright version.
  * Returns `{ started: true }` when a fresh install begins, or
  * `{ started: false }` if one is already running.
  *
@@ -70,10 +75,7 @@ export function startPlaywrightInstall(): { started: boolean } {
   };
 
   try {
-    const cmd =
-      process.platform === "win32"
-        ? ["cmd.exe", "/c", "npx", "-y", "playwright", "install", "chromium"]
-        : ["npx", "-y", "playwright", "install", "chromium"];
+    const cmd = playwrightInstallCommand();
 
     runningProc = Bun.spawn({
       cmd,
@@ -82,12 +84,12 @@ export function startPlaywrightInstall(): { started: boolean } {
       stdin: "ignore",
       env: { ...process.env },
     });
-  } catch (err) {
+  } catch {
     status = {
       ...status,
       state: "error",
       finished_at: Date.now(),
-      error: err instanceof Error ? err.message : String(err),
+      error: "The bundled browser installer runtime is unavailable. Reinstall BurnGuard to restore it.",
     };
     return { started: false };
   }
@@ -112,12 +114,22 @@ export function startPlaywrightInstall(): { started: boolean } {
       error:
         exitCode === 0
           ? null
-          : `npx playwright install exited with code ${exitCode}. See tail for details.`,
+          : `Chromium installation exited with code ${exitCode}. See tail for details.`,
     };
     runningProc = null;
+    if (exitCode === 0) { resetChromiumCapability(); void probeChromiumOnDisk(); }
   });
 
   return { started: true };
+}
+
+export function playwrightInstallCommand(): string[] {
+  const node = chromiumNodeCommand()?.node;
+  if (node === undefined) throw new Error("Browser installer runtime is unavailable");
+  const packagedCli = path.join(resolveRepoRoot(), "node_modules", "playwright-core", "cli.js");
+  const cli = existsSync(packagedCli) ? packagedCli : path.join(path.dirname(Bun.resolveSync("playwright-core/package.json", import.meta.dir)), "cli.js");
+  if (!existsSync(cli)) throw new Error("Browser installer is unavailable");
+  return [node, cli, "install", "chromium"];
 }
 
 async function readStream(

@@ -13,19 +13,21 @@ export default function BackendSelector({
 }) {
   return (
     <div className="space-y-2">
-      <label className="text-xs font-medium text-muted-foreground">
+      <div id="backend-selector-label" className="text-xs font-medium text-muted-foreground">
         기본 백엔드
-      </label>
-      <div className="space-y-2">
+      </div>
+      <div role="group" aria-labelledby="backend-selector-label" className="space-y-2">
         {detection.backends.map((b) => {
           const active = value === b.id;
           return (
             <button
               key={b.id}
+              type="button"
+              aria-pressed={active}
               onClick={() => b.found && onChange(b.id)}
               disabled={!b.found}
               className={cn(
-                "w-full rounded-md border p-3 text-left transition-colors",
+                "w-full rounded-md border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 active
                   ? "border-accent bg-accent/5"
                   : "border-border hover:bg-muted/50",

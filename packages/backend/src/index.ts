@@ -7,6 +7,11 @@ import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
 import { interruptAllUserTurns } from "./services/turns";
 
+if (process.argv.includes("--bg-chromium-probe")) {
+  const { runChromiumProbeProcess } = await import("./services/chromium-capability");
+  await runChromiumProbeProcess();
+}
+
 await bootstrapLocalAppData();
 const config = await loadConfig();
 // Dev + binary both prefer the canonical port 14070 (Vite proxy target).

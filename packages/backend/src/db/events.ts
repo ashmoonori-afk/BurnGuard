@@ -20,17 +20,32 @@ export async function insertUserEvent(sessionId: string, payload: UserEvent) {
 }
 
 export async function insertNormalizedEvent(sessionId: string, event: NormalizedEvent) {
-  const persisted = insertSequencedEvent(getSqlite(), {
-    id: event.id,
-    sessionId,
-    direction: "down",
-    type: event.type,
-    payload: event,
-    turnId: "turnId" in event ? event.turnId : null,
-    processedAt: event.ts,
-    createdAt: Date.now(),
-  });
-  return { sequence: persisted.sequence, event } satisfies SequencedEventEnvelope;
+  return persistNormalizedEvent(getSqlite(), sessionId, event);
+}
+
+export function persistNormalizedEvent(db: ReturnType<typeof getSqlite>, sessionId: string, event: NormalizedEvent): SequencedEventEnvelope {
+  return db.transaction(() => {
+    const persisted = insertSequencedEvent(db, {
+      id: event.id,
+      sessionId,
+      direction: "down",
+      type: event.type,
+      payload: event,
+      turnId: "turnId" in event ? event.turnId : null,
+      processedAt: event.ts,
+      createdAt: Date.now(),
+    });
+    if (event.type === "usage.delta") {
+      db.prepare("UPDATE sessions SET usage_input_tokens=usage_input_tokens+?,usage_output_tokens=usage_output_tokens+?,usage_cache_read=usage_cache_read+?,updated_at=?,last_active_at=? WHERE id=?")
+        .run(event.input, event.output, event.cached ?? 0, event.ts, event.ts, sessionId);
+    }
+    const status = event.type === "status.running" ? "running"
+      : event.type === "tool.permission_required" ? "awaiting_tool"
+      : event.type === "status.error" ? "error"
+      : event.type === "status.idle" ? (event.stopReason === "requires_action" ? "awaiting_tool" : "idle") : null;
+    if (status !== null) db.prepare("UPDATE sessions SET status=?,updated_at=?,last_active_at=? WHERE id=?").run(status, event.ts, event.ts, sessionId);
+    return { sequence: persisted.sequence, event } satisfies SequencedEventEnvelope;
+  })();
 }
 
 export async function listSessionEvents(sessionId: string, afterSequence?: number): Promise<readonly SequencedEventEnvelope[]> {

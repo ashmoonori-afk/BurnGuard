@@ -14,6 +14,7 @@ import {
 } from "./attachment-intake";
 import { useComposerPlaceholder } from "./useComposerPlaceholder";
 import { useComposerVisualSources } from "./useComposerVisualSources";
+import { useComposerDraft } from "./useComposerDraft";
 
 type ComposerSendState = { readonly kind: "idle" } | { readonly kind: "processing" } | SendOutcome;
 
@@ -37,6 +38,7 @@ function sendStateMessage(state: ComposerSendState): string | null {
 }
 
 export default function Composer({
+  sessionId,
   onSend,
   disabled = false,
   canInterrupt = false,
@@ -46,6 +48,7 @@ export default function Composer({
   initialText = "",
   projectFiles = [],
 }: {
+  sessionId: string;
   /**
    * `signal` aborts the in-flight send request when the caller forwards it to
    * `sendUserEvent`. The composer never assumes it was honoured: it only
@@ -77,24 +80,26 @@ export default function Composer({
   projectFiles?: readonly FileInfo[];
 }) {
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
-  const [text, setText] = useState(initialText);
+  const draft = useComposerDraft(sessionId, initialText);
+  const { text, setText } = draft;
   const [sendState, setSendState] = useState<ComposerSendState>({ kind: "idle" });
   const visualSources = useComposerVisualSources(() => {
     if (sendState.kind !== "processing") setSendState({ kind: "idle" });
-  });
+  }, draft.items, draft.setItems);
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const sendAbort = useRef<AbortController | null>(null);
   const placeholder = useComposerPlaceholder(disabled);
 
   const sending = sendState.kind === "processing";
-  const canSend = text.trim().length > 0 && !disabled && !sending;
+  const canSend = draft.ready && text.trim().length > 0 && !disabled && !sending;
   const statusMessage = sendStateMessage(sendState);
   const retrying = sendState.kind === "failed" || sendState.kind === "cancelled";
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
+    if (!draft.ready || disabled || sending) return;
     const dropped = Array.from(e.dataTransfer.files);
     if (dropped.length > 0) {
       visualSources.add(dropped);
@@ -108,8 +113,7 @@ export default function Composer({
     setSendState({ kind: "processing" });
     try {
       await onSend(text, visualSources.ready(), controller.signal);
-      setText("");
-      visualSources.clear();
+      draft.clear();
       setSendState({ kind: "idle" });
     } catch (error) {
       // Keep the text and the queue intact so retry costs one click.
@@ -140,6 +144,8 @@ export default function Composer({
         onRemove={visualSources.remove}
       />
       <VisualSourceCandidates files={projectFiles} />
+      {!draft.ready && <p role="status" className="text-xs text-muted-foreground">작성 중이던 내용을 불러오고 있어요…</p>}
+      {draft.storageError && <p role="status" className="text-xs text-warning-foreground">이 브라우저에서 초안을 저장하지 못했어요. 페이지를 닫기 전에 메시지를 보내 주세요.</p>}
 
       {statusMessage !== null && (
         <p
@@ -161,7 +167,7 @@ export default function Composer({
         }}
         placeholder={placeholder}
         rows={3}
-        disabled={disabled}
+        disabled={disabled || sending || !draft.ready}
         aria-label="메시지 입력"
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -205,7 +211,7 @@ export default function Composer({
           size="sm"
           className="h-7 gap-1 text-xs max-[900px]:h-11"
           title="참고할 파일을 첨부합니다"
-          disabled={disabled}
+          disabled={disabled || sending || !draft.ready}
           onClick={() => fileInput.current?.click()}
         >
           <Paperclip className="h-3.5 w-3.5" /> 자료 첨부

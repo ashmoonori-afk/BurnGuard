@@ -1,11 +1,7 @@
-import { useEffect, useState } from "react";
-
-/**
- * Fetches a design-system file from the backend and renders it via `srcDoc`.
- * Expected route: `GET /api/design-systems/:id/files/:path` returning text/html.
- * Falls back to an "unavailable" card when the route is not yet implemented
- * or when the file is missing (BE-S4-05 scope).
- */
+import { useQuery } from "@tanstack/react-query";
+import { authorizedFetch, ApiError } from "@/api/client";
+import { apiErrorCopy } from "@/lib/error-copy";
+import { Button } from "@/components/ui/button";
 export default function PreviewIframe({
   systemId,
   path,
@@ -17,62 +13,33 @@ export default function PreviewIframe({
   title?: string;
   refreshKey?: number;
 }) {
-  const [content, setContent] = useState<string | null>(null);
-  const [error, setError] = useState(false);
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const url = `/api/design-systems/${encodeURIComponent(systemId)}/files/${encodedPath}?v=${refreshKey}`;
+  const previewQuery = useQuery({
+    queryKey: ["design-systems", "preview-file", systemId, path, refreshKey],
+    queryFn: async () => {
+      const response = await authorizedFetch(url, { method: "HEAD" });
+      if (!response.ok) throw new ApiError("design_system_preview_failed", "Preview unavailable", response.status);
+      return url;
+    },
+    retry: false,
+  });
+  if (previewQuery.isError) return <div role="alert" className="grid aspect-video place-items-center rounded-md bg-muted p-3 text-center text-xs">
+    <div className="space-y-2">
+      <p>{previewQuery.error instanceof ApiError && previewQuery.error.status === 404 ? "미리보기 자료가 삭제되었거나 이동했어요." : "미리보기를 불러오지 못했어요."}</p>
+      <p className="text-muted-foreground">{apiErrorCopy(previewQuery.error)}</p>
+      <Button size="sm" variant="outline" onClick={() => void previewQuery.refetch()} disabled={previewQuery.isFetching}>다시 시도</Button>
+    </div>
+  </div>;
+  if (previewQuery.isPending) return <div role="status" className="grid aspect-video place-items-center rounded-md bg-muted text-xs text-muted-foreground">미리보기를 불러오는 중이에요.</div>;
 
-  useEffect(() => {
-    let cancelled = false;
-    setContent(null);
-    setError(false);
-
-    const encodedPath = path
-        .split("/")
-        .map((segment) => encodeURIComponent(segment))
-        .join("/");
-
-    fetch(`/api/design-systems/${systemId}/files/${encodedPath}?v=${refreshKey}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.text();
-      })
-      .then((t) => {
-        if (!cancelled) setContent(t);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [systemId, path, refreshKey]);
-
-  if (error) {
-    return (
-      <div className="aspect-video rounded-md bg-muted grid place-items-center text-[10px] font-mono text-muted-foreground text-center p-3">
-        <div>
-          <div className="truncate max-w-[180px]">{path}</div>
-          <div className="mt-1 text-[9px] text-muted-foreground/70">
-            미리보기를 사용할 수 없어요
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!content) {
-    return (
-      <div className="aspect-video rounded-md bg-muted grid place-items-center text-[10px] font-mono text-muted-foreground">
-        불러오는 중…
-      </div>
-    );
-  }
-
+  // The file URL preserves relative styles/images; scripts remain disabled.
   return (
     <iframe
-      title={title ?? path}
-      srcDoc={content}
+      title={title ?? "디자인 시스템 미리보기"}
+      src={previewQuery.data}
       sandbox="allow-same-origin"
+      referrerPolicy="no-referrer"
       className="aspect-video w-full rounded-md border border-border bg-white"
     />
   );

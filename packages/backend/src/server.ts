@@ -15,6 +15,9 @@ export function createApp(authority?: RequestAuthorityOptions): Hono {
     app.use("/api/*", createRequestAuthority(authority));
   }
 
+  // Generated decks use this stable public, bundled runtime URL.
+  app.get("/runtime/deck-stage.js", async (c) => (await import("./routes/runtime")).runtimeRoutes.fetch(c.req.raw));
+
   app.all("/api/*", async (c) => apiRoutes(classifyApiRoute(c.req.path, c.req.method)).then((routes) => routes.fetch(c.req.raw)));
 
   app.get("/assets/*", async (c) => {

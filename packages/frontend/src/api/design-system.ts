@@ -7,8 +7,13 @@ import type {
   DesignSystemFontUploadResponse,
   DesignSystemTokensResponse,
   UpsertDesignSystemColorRequest,
+  DesignSystemPreview,
 } from "@bg/shared";
 import { apiFetch } from "./client";
+
+export async function listDesignSystemPreviews(id: string): Promise<DesignSystemPreview[]> {
+  return apiFetch<DesignSystemPreview[]>(`/api/design-systems/${id}/previews`);
+}
 
 export async function extractDesignSystem(
   body: CreateDesignSystemExtractionRequest,

@@ -1,11 +1,14 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { TurnErrorCode } from "@bg/shared";
+import { apiErrorCopy } from "@/lib/error-copy";
 
 export default function ErrorCard({
-  message,
+  code,
   recoverable,
 }: {
   message: string;
+  code?: TurnErrorCode;
   recoverable: boolean;
 }) {
   return (
@@ -15,15 +18,12 @@ export default function ErrorCard({
         <div className="min-w-0 flex-1">
           <div className="font-medium text-destructive">오류</div>
           <div className="text-destructive/80 mt-0.5 break-words">
-            {message}
+            {apiErrorCopy({ code: code ?? "turn_failed" })}
           </div>
           {recoverable && (
             <div className="mt-2 flex gap-2">
-              <Button size="sm" variant="outline" className="h-7 gap-1">
-                <RefreshCw className="h-3 w-3" /> 다시 시도
-              </Button>
-              <Button size="sm" variant="ghost" className="h-7">
-                신고
+              <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="메시지 입력"]')?.focus()}>
+                <RefreshCw className="h-3 w-3" /> 메시지 입력으로 이동
               </Button>
             </div>
           )}

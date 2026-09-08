@@ -4,8 +4,7 @@ import { ulid } from "ulid";
 import type { NormalizedEvent, UserEvent } from "@bg/shared";
 import { assignAttachmentsToTurn } from "../db/attachments";
 import {
-  bumpSessionUsage,
-  insertNormalizedEvent,
+  persistNormalizedEvent,
   insertUserEvent,
   setSessionStatus,
 } from "../db/events";
@@ -67,13 +66,13 @@ export async function persistAndPublish(sessionId: string, event: NormalizedEven
     await appendSessionTrace(sessionId, { level: "turn_error_diagnostic", error: diagnosticError(cause) });
   }
   const safeEvent = sanitizeTurnEvent(event, cause);
-  const persisted = await insertNormalizedEvent(sessionId, safeEvent);
+  const persisted = persistNormalizedEvent(getSqlite(), sessionId, safeEvent);
+  broker.publish(sessionId, safeEvent);
+  sequencedBroker.publish(sessionId, persisted);
   await appendSessionTrace(sessionId, {
     level: "event",
     event: safeEvent,
   });
-  broker.publish(sessionId, safeEvent);
-  sequencedBroker.publish(sessionId, persisted);
 }
 
 function diagnosticError(error: unknown): Readonly<Record<string, unknown>> {
@@ -169,6 +168,8 @@ export type UserTurnReservation = {
   readonly operationId: string;
 };
 
+export type TurnDependencies = { readonly runAdapter?: typeof runAdapterTurn; readonly detectBackends?: typeof detectBackends };
+
 export function reserveUserTurn(sessionId: string, requestedOperationId?: string): UserTurnReservation | null {
   if (activeTurns.has(sessionId) || isDirectionOperationActive(sessionId)) return null;
   const reservation = { reservationId: ulid(), sessionId, turnId: ulid(), operationId: requestedOperationId ?? ulid() };
@@ -180,23 +181,23 @@ export function releaseUserTurnReservation(reservation: UserTurnReservation): vo
   if (activeTurns.get(reservation.sessionId)?.reservationId === reservation.reservationId) activeTurns.delete(reservation.sessionId);
 }
 
-export function startReservedUserTurn(reservation: UserTurnReservation, payload: Extract<UserEvent, { type: "user.message" }>) {
+export function startReservedUserTurn(reservation: UserTurnReservation, payload: Extract<UserEvent, { type: "user.message" }>, dependencies: TurnDependencies = {}) {
   const activeTurn = activeTurns.get(reservation.sessionId);
   if (activeTurn?.reservationId !== reservation.reservationId) return null;
   const { sessionId, turnId, operationId } = reservation;
   let resolvePrepared: () => void = () => {};
   let rejectPrepared: (error: unknown) => void = () => {};
   const prepared = new Promise<void>((resolve, reject) => { resolvePrepared = resolve; rejectPrepared = reject; });
-  const promise = runUserTurnInternal(sessionId, payload, activeTurn, turnId, operationId, resolvePrepared)
+  const promise = runUserTurnInternal(sessionId, payload, activeTurn, turnId, operationId, resolvePrepared, dependencies)
     .catch((error: unknown) => { rejectPrepared(error); throw error; })
     .finally(() => activeTurns.delete(sessionId));
   activeTurn.completion = promise;
   return { promise, prepared, turnId, operationId };
 }
 
-export function startUserTurn(sessionId: string, payload: Extract<UserEvent, { type: "user.message" }>, requestedOperationId?: string) {
+export function startUserTurn(sessionId: string, payload: Extract<UserEvent, { type: "user.message" }>, requestedOperationId?: string, dependencies: TurnDependencies = {}) {
   const reservation = reserveUserTurn(sessionId, requestedOperationId);
-  return reservation === null ? null : startReservedUserTurn(reservation, payload);
+  return reservation === null ? null : startReservedUserTurn(reservation, payload, dependencies);
 }
 
 async function runUserTurnInternal(
@@ -206,6 +207,7 @@ async function runUserTurnInternal(
   turnId: string,
   operationId: string,
   onPrepared: () => void,
+  dependencies: TurnDependencies,
 ) {
   const session = await getSessionInfo(sessionId);
   if (!session) {
@@ -257,7 +259,7 @@ async function runUserTurnInternal(
     type: "status.running",
   });
 
-  const detection = await detectBackends();
+  const detection = await (dependencies.detectBackends ?? detectBackends)();
   const backend = detection.backends.find((b) => b.id === backendId);
 
   if (!backend?.found || !backend.binary_path) {
@@ -309,18 +311,19 @@ async function runUserTurnInternal(
         const immutableSnapshots = await captureImmutableAttachments(selectedAttachments);
         try {
           await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: payload.attachments ?? [], immutableSnapshots }, async (stageInputs) => {
-            const prompt = await buildPrompt(sessionContext, payload, { contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs });
+            const prompt = await buildPrompt(sessionContext, payload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs });
             await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId, binary: binaryPath });
-            await runAdapterTurn(backendId, {
+            let providerFailed = false;
+            const result = await (dependencies.runAdapter ?? runAdapterTurn)(backendId, {
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,
               signal: activeTurn.abortController.signal, userEvent: payload,
               onEvent: async (event) => {
+                if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason === "error")) providerFailed = true;
                 if (event.type === "file.changed") return;
                 const safeEvent = redactPrivateAttachmentPaths(event, stageInputs);
                 if (safeEvent.type === "chat.message_end" || safeEvent.type === "status.idle") { terminalEvents.push(safeEvent); return; }
                 const eventError = event.type === "status.error" ? Object.assign(new Error(event.message), event.code === undefined ? {} : { code: event.code }) : undefined;
                 await persistAndPublish(sessionId, safeEvent, eventError);
-                if (safeEvent.type === "usage.delta") await bumpSessionUsage(sessionId, { input: safeEvent.input, output: safeEvent.output, cached: safeEvent.cached ?? 0 });
               },
               onStderr: async (line) => { await appendSessionTrace(sessionId, { level: "stderr", turnId, line }); },
               onDecision: (handler) => {
@@ -329,6 +332,7 @@ async function runUserTurnInternal(
                 return () => { if (activeTurn.decisionHandler === handler) activeTurn.decisionHandler = null; };
               },
             });
+            if (result.exitCode !== 0 || providerFailed) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
           });
         } finally {
           await verifyImmutableAttachments(immutableSnapshots);

@@ -1,4 +1,5 @@
 import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../owned-process-tree";
+import { settleProcessStreams } from "../process-streams";
 
 /**
  * Runs `claude -p --output-format stream-json --verbose` against a project dir,
@@ -63,18 +64,16 @@ export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResul
   const onAbort = () => { void closeOwnedProcessTree(proc.pid).catch(() => {}); };
   options.signal?.addEventListener("abort", onAbort, { once: true });
 
-  const readers = Promise.all([
+  const readers = [
     readLines(proc.stdout, options.onStdoutLine),
     options.onStderrLine
       ? readLines(proc.stderr, options.onStderrLine)
       : readLines(proc.stderr, () => {}),
-  ]);
+  ];
 
   let exitCode: number;
   try {
-    exitCode = await proc.exited;
-    await closeOwnedProcessTree(proc.pid);
-    await readers;
+    exitCode = await settleProcessStreams(proc, readers);
   } finally {
     options.signal?.removeEventListener("abort", onAbort);
   }

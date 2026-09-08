@@ -29,7 +29,10 @@ export async function reconcileArtifactState(db: Database): Promise<{ readonly o
     if (project.current_digest === null) await coordinator.initialize(project.id, project.dir_path);
     else {
       const actual = await inspectCanonicalTree(project.dir_path);
-      if (actual.tree_digest !== project.current_digest) await coordinator.observeExternal(project.id, project.dir_path);
+      if (actual.tree_digest !== project.current_digest) {
+        await recoverCommittedBaseline(db, project);
+        await coordinator.observeExternal(project.id, project.dir_path);
+      }
       else await coordinator.initialize(project.id, project.dir_path);
     }
   }
@@ -37,11 +40,32 @@ export async function reconcileArtifactState(db: Database): Promise<{ readonly o
   return { operations: recoveredOperations, projects: projects.length, sessions };
 }
 
+async function recoverCommittedBaseline(db: Database, project: ProjectRow): Promise<void> {
+  const baseline = path.join(project.dir_path, ".meta", "artifact-baseline", "current");
+  try { if ((await inspectCanonicalTree(baseline)).tree_digest === project.current_digest) return; }
+  catch { /* A baseline is a derived copy; rebuild only from a verified receipt. */ }
+  const row = db.query<PersistedArtifactOperationRow, [string, string | null]>(`SELECT * FROM artifact_operations WHERE project_id=? AND status='committed' AND result_digest=? ORDER BY result_revision DESC,created_at DESC LIMIT 1`).get(project.id, project.current_digest);
+  if (row === null) throw new ArtifactOperationError("recovery_unavailable", "Committed baseline recovery bytes are unavailable");
+  const operation = parsePersistedArtifactOperation(row);
+  const receipt = parseSnapshotReceipt(project.dir_path, operation.id, operation.snapshot);
+  const stage = path.join(path.dirname(receipt.snapshotPath), "stage");
+  if ((await inspectCanonicalTree(stage)).tree_digest !== project.current_digest) throw new ArtifactOperationError("corrupt_receipt", "Committed stage differs from current identity");
+  await materializeManagedTree(stage, baseline);
+}
+
 async function reconcileOperation(db: Database, dirPath: string, operation: ReturnType<typeof parsePersistedArtifactOperation>): Promise<void> {
   const receipt = parseSnapshotReceipt(dirPath, operation.id, operation.snapshot);
   await validateCanonicalTree(receipt.snapshotPath, receipt.baseManifest);
   if (receipt.baseManifest.tree_digest !== operation.base_digest) throw new ArtifactOperationError("corrupt_receipt", "Snapshot digest differs from operation base");
   const live = await inspectCanonicalTree(dirPath);
+  const current = db.query<{ current_revision: number; current_digest: string | null }, [string]>("SELECT current_revision,current_digest FROM projects WHERE id=?").get(operation.project_id);
+  if (current !== null && current.current_revision > operation.base_revision && current.current_digest !== null) {
+    // A concurrent observer in an older process may have committed this revision
+    // before its stale peer failed CAS. Never restore that peer's older snapshot.
+    db.prepare("UPDATE artifact_operations SET status='conflicted',result_revision=NULL,result_digest=NULL,diff_json='[]',replay_json=json_set(replay_json,'$.publication','base'),updated_at=? WHERE id=? AND status='recovering'").run(Date.now(), operation.id);
+    publishArtifactOperationEvent(db, { projectId: operation.project_id, operationId: operation.id, revision: current.current_revision, digest: current.current_digest, outcome: "conflicted", diff: [] });
+    return;
+  }
   if (operation.result_revision !== null && operation.result_digest !== null && live.tree_digest === operation.result_digest) {
     db.transaction(() => {
       const project = db.prepare("UPDATE projects SET current_revision=?,current_digest=?,updated_at=? WHERE id=? AND current_revision=? AND current_digest=?").run(operation.result_revision, operation.result_digest, Date.now(), operation.project_id, operation.base_revision, operation.base_digest);

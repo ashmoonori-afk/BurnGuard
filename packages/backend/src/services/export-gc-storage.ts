@@ -8,7 +8,7 @@ import type { ExpiredAttempt, PruneDeps } from "./export-gc";
 
 export const exportGcStorage = {
   listExpired: async (cutoff: number): Promise<readonly ExpiredAttempt[]> => {
-    const rows = getSqlite().query<{ readonly attemptId: string; readonly jobId: string; readonly status: "expired" | "validated"; readonly retentionJson: string }, [number]>(`SELECT id attemptId,job_id jobId,status,retention_json retentionJson FROM export_attempts WHERE status='expired' OR status='validated' AND json_extract(retention_json,'$.retained_until')<? ORDER BY created_at`).all(cutoff);
+    const rows = getSqlite().query<{ readonly attemptId: string; readonly jobId: string; readonly status: "expired" | "validated"; readonly retentionJson: string }, [number]>(`SELECT id attemptId,job_id jobId,status,retention_json retentionJson FROM export_attempts WHERE status='expired' OR status='validated' AND json_extract(retention_json,'$.retained_until')<=? ORDER BY created_at`).all(cutoff);
     const attempts = rows.map((row) => { const value: unknown = JSON.parse(row.retentionJson); if (!record(value) || typeof value["retained_until"] !== "number" || typeof value["output_available"] !== "boolean") throw new ExportGcStorageError("corrupt_retention"); return { row, value, attempt: { attemptId: row.attemptId, jobId: row.jobId, retainedUntil: value["retained_until"], outputAvailable: value["output_available"] } }; });
     const pending = await Promise.all(attempts.map(async ({ row }) => row.status === "validated" || (await stat(resolveWithin(exportsDir, "attempts", assertSafeName(row.attemptId))).catch(() => null))?.isDirectory() === true));
     return attempts.filter((_, index) => pending[index]).map(({ attempt }) => attempt);

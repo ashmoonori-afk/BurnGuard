@@ -1,24 +1,18 @@
 #!/usr/bin/env bun
 /**
- * Phase 0 build: compile the backend into a single Windows x64 executable.
- *
- * Phase 0 does NOT embed the React frontend yet — the binary serves an inline
- * hello page (see packages/backend/src/server.ts) to validate:
- *   (1) `bun build --compile --target=bun-windows-x64` succeeds
- *   (2) the resulting .exe runs on Windows
- *   (3) Hono + native http stack work from the compiled binary
- *   (4) the browser auto-opens
- *
- * Phase 1 replaces the inline page with embedded frontend assets.
+ * Compile the Windows backend and stage its portable resources alongside it.
+ * Distribute the complete dist/windows folder, including resources/.
  */
 import { $ } from "bun";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { stageRuntimeAssets } from "./package-runtime";
 
 const ROOT = path.resolve(import.meta.dir, "..");
-const OUT_DIR = path.join(ROOT, "dist");
+const OUT_DIR = path.join(ROOT, "dist", "windows");
 const OUT = path.join(OUT_DIR, "burnguard-design.exe");
 const ENTRY = path.join(ROOT, "packages/backend/src/index.ts");
+let stage = "preflight";
 
 async function main() {
   if (!existsSync(ENTRY)) {
@@ -35,6 +29,7 @@ async function main() {
   console.log(`[build] target: bun-windows-x64`);
 
   const start = Date.now();
+  stage = "compile";
   // --external electron/chromium-bidi: playwright-core imports both in
   // optional loaders we never hit (we only drive headless chromium).
   // Without the flags bun fails to resolve those optional modules at compile.
@@ -46,12 +41,16 @@ async function main() {
     --external chromium-bidi \
     --outfile ${OUT}`.cwd(ROOT);
 
+  stage = "resources";
+  await stageRuntimeAssets(ROOT, OUT_DIR, true);
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);
   console.log(`[build] done in ${elapsed}s`);
   console.log(`[build] run: ${OUT}`);
+  console.log("[build] distribute the complete dist/windows folder");
 }
 
 main().catch((e) => {
+  console.error(`[build] failed stage=${stage}`);
   console.error(e);
   process.exit(1);
 });

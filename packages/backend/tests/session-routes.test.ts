@@ -7,6 +7,7 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { sessionRoutes } from "../src/routes/session";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { writePreTurnSnapshot } from "../src/services/checkpoints";
+import { insertNormalizedEvent } from "../src/db/events";
 
 const projectId = `session-routes-${process.pid}`;
 const sessionId = `${projectId}-session`;
@@ -29,6 +30,9 @@ describe("production session route boundaries", () => {
     expect((await request("/api/sessions/missing/events")).status).toBe(404);
     expect((await request(`/api/sessions/${sessionId}/events?after_sequence=-1`)).status).toBe(400);
     expect((await request(`/api/sessions/${sessionId}/events?after_sequence=bad`)).status).toBe(400);
+    for (const cursor of ["-1", "bad", "1tail", "9007199254740992"]) {
+      expect((await request(`/api/sessions/${sessionId}/stream?after_sequence=${cursor}`)).status).toBe(400);
+    }
     expect((await request(`/api/sessions/${sessionId}/events`)).status).toBe(200);
     expect((await request("/api/sessions/missing/events", "POST", {})).status).toBe(404);
     expect((await request(`/api/sessions/${sessionId}/events`, "POST", {})).status).toBe(400);
@@ -64,6 +68,8 @@ describe("production session route boundaries", () => {
     expect((await request(`/api/sessions/${sessionId}/tool-decision`, "POST", null)).status).toBe(400);
     expect((await request(`/api/sessions/${sessionId}/tool-decision`, "POST", { toolCallId: "", decision: "allow" })).status).toBe(400);
     expect((await request(`/api/sessions/${sessionId}/tool-decision`, "POST", { toolCallId: "tool", decision: "other" })).status).toBe(400);
+    expect((await request(`/api/sessions/${sessionId}/tool-decision`, "POST", { toolCallId: "missing", decision: "allow" })).status).toBe(409);
+    for (const toolCallId of ["allow", "deny"]) await insertNormalizedEvent(sessionId, { id: `permission-${toolCallId}-${sessionId}`, ts: Date.now(), type: "tool.permission_required", turnId: "route-turn", toolCallId, tool: "Bash", input: {} });
     expect((await request(`/api/sessions/${sessionId}/tool-decision`, "POST", { toolCallId: "allow", decision: "allow", reason: "ok" })).status).toBe(200);
     expect((await request(`/api/sessions/${sessionId}/tool-decision`, "POST", { toolCallId: "deny", decision: "deny" })).status).toBe(200);
     expect(getSqlite().query<{ readonly count: number }, [string]>("SELECT COUNT(*) count FROM events WHERE session_id=? AND direction='up'").get(sessionId)?.count).toBe(2);

@@ -198,8 +198,11 @@ describe("project thumbnail generation and cache", () => {
     const renderGate = new Promise<void>((resolve) => {
       releaseRender = resolve;
     });
+    let started: () => void = () => {};
+    const renderStarted = new Promise<void>((resolve) => { started = resolve; });
     const renderer: ThumbnailRenderer = async (request) => {
       outputPaths.push(request.outputPath);
+      started();
       await renderGate;
       await writeFile(
         request.outputPath,
@@ -211,7 +214,7 @@ describe("project thumbnail generation and cache", () => {
       loadProjectThumbnail(project.id, renderer, () => "first"),
       loadProjectThumbnail(project.id, renderer, () => "second"),
     ]);
-    await settle();
+    await renderStarted;
     releaseRender?.();
     const outcomes = await both;
 
@@ -225,16 +228,19 @@ describe("project thumbnail generation and cache", () => {
 
   test("Given a render slower than the response deadline When requested Then the card answers immediately and the cache is filled in the background", async () => {
     const previousDeadline = process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS;
+    let releaseRender: (() => void) | null = null;
     process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS = "40";
     try {
       const project = await createProject({ digest: digestA });
-      let releaseRender: (() => void) | null = null;
       const renderGate = new Promise<void>((resolve) => {
         releaseRender = resolve;
       });
+      let started: () => void = () => {};
+      const renderStarted = new Promise<void>((resolve) => { started = resolve; });
       let renders = 0;
       const renderer: ThumbnailRenderer = async (request) => {
         renders += 1;
+        started();
         await renderGate;
         await writeFile(request.outputPath, pngFixture(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT));
       };
@@ -244,21 +250,19 @@ describe("project thumbnail generation and cache", () => {
       // project requests queued behind them.
       const outcome = await loadProjectThumbnail(project.id, renderer);
       expect(outcome).toEqual({ kind: "unavailable", code: "thumbnail_unavailable" });
+      await renderStarted;
       expect(renders).toBe(1);
 
       releaseRender?.();
       // The abandoned render keeps going and fills the cache, so the next
       // request serves it without rendering again.
-      delete process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS;
-      let afterRender = await loadProjectThumbnail(project.id, renderer);
-      for (let attempt = 0; attempt < 20 && afterRender.kind !== "ready"; attempt += 1) {
-        await settle();
-        afterRender = await loadProjectThumbnail(project.id, renderer);
-      }
+      process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS = "30000";
+      const afterRender = await loadProjectThumbnail(project.id, renderer);
 
       expect(afterRender.kind).toBe("ready");
       expect(renders).toBe(1);
     } finally {
+      releaseRender?.();
       if (previousDeadline === undefined) delete process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS;
       else process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS = previousDeadline;
     }
@@ -316,16 +320,19 @@ describe("project thumbnail generation and cache", () => {
     const renderGate = new Promise<void>((resolve) => {
       releaseRender = resolve;
     });
+    let bothStarted: () => void = () => {};
+    const renderCapacityReached = new Promise<void>((resolve) => { bothStarted = resolve; });
     const renderer: ThumbnailRenderer = async (request) => {
       inFlight += 1;
       peak = Math.max(peak, inFlight);
+      if (inFlight === 2) bothStarted();
       await renderGate;
       await writeFile(request.outputPath, pngFixture(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT));
       inFlight -= 1;
     };
 
     const all = Promise.all(projects.map((project) => loadProjectThumbnail(project.id, renderer)));
-    await settle();
+    await renderCapacityReached;
     const peakWhileBlocked = peak;
     releaseRender?.();
     const outcomes = await all;

@@ -29,8 +29,7 @@ managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
     throw error;
   }
   const coordinator = new ArtifactCoordinator(getSqlite());
-  if (resolved.project.current_digest === null) await coordinator.initialize(projectId, resolved.project.dir_path);
-  else await coordinator.observeExternal(projectId, resolved.project.dir_path);
+  await coordinator.observeExternal(projectId, resolved.project.dir_path);
   const project = await getProjectDetail(projectId);
   const manifest = await inspectCanonicalTree(resolved.project.dir_path);
   const file = manifest.files.find((entry) => entry.path === resolved.relPath);
