@@ -16,7 +16,7 @@ Generating a landing page or a pitch deck with a coding agent is easy. Getting *
 2. Design advice comes from nowhere in particular. You cannot tell which claim is a hard accessibility constraint and which is one vendor's house style.
 3. Anything you feed the agent for context (brand decks, PDFs, internal sites) ends up in someone else's tenant.
 
-BurnGuard answers those in order. Design systems are first-class inputs and every turn references their tokens. A source-grounded research catalog ships with the repo, so each rule injected into the prompt carries a citation, an authority class, a confidence level, and its own limitations. Nothing leaves your machine: the backend runs on `127.0.0.1`, data lives under `~/.burnguard/`, and authentication is whatever your local CLI already has.
+BurnGuard makes design systems first-class inputs and references their tokens in every turn. Its research catalog gives injected rules citations, authority classes, confidence levels, and limitations. The backend runs on `127.0.0.1` and stores data under `~/.burnguard/`. Generation sends prompts and selected context to the provider configured by your local CLI; website extraction and Figma integration also make their requested network calls.
 
 ## Architecture
 
@@ -41,8 +41,8 @@ Data on disk:
 ```text
 ~/.burnguard/
   config.json          # local settings, chmod 600 after each save
+  burnguard.db         # SQLite database
   data/
-    burnguard.sqlite
     projects/
     systems/
   cache/
@@ -153,7 +153,7 @@ Prerequisites:
 There are no BurnGuard API keys, no key file, and no secrets form. The app reuses the login state of the CLI you already authenticated. A Figma personal access token, if you configure one, is stored only in `~/.burnguard/config.json` and is never echoed back through the API.
 
 ```sh
-bun install
+bun install --frozen-lockfile
 bun run typecheck
 ```
 
@@ -179,6 +179,8 @@ bun run build          # frontend bundle + backend binary
 bun run build:frontend
 bun run build:mac      # add build:mac:dmg for a disk image
 ```
+
+On Windows, distribute the complete `dist/windows/` folder: `burnguard-design.exe` needs its sibling `resources/` directory, which contains the frontend, migrations, sample design systems, CSS worker, Playwright, and a Node runtime for browser rendering. Packaging obtains the exact Node version's redistribution license and caches it under `.bun/`; the packaged copy lives at `resources/node/LICENSE`. The application can run from a different directory, including paths with spaces or Korean characters. Chromium/Chrome/Edge and the selected agent CLI remain runtime prerequisites.
 
 ## Using it
 
@@ -259,11 +261,17 @@ The happy receipt carries the digest, the selected common and purpose rules, per
 ```sh
 bun run typecheck                                  # tsc --build across the workspace
 bun run build:frontend                             # required before the static-serving tests
-bun test                                           # whole suite
+bun run test                                      # whole suite, explicit 30s default deadline
+bun run test:coverage                              # separate per-file 80% coverage gate
+bun run lint                                       # whitespace/error check
+node scripts/qa/e2e-smoke.mjs                       # real browser, isolated local profile
+node scripts/qa/package-smoke.mjs                   # Windows portable build, relocated fixture
 bun test packages/backend/tests/research-catalog.test.ts   # catalog validator alone
 ```
 
-The research suites cover catalog validation, contracts, repositories, migrations, orchestration, recovery, routes, selection, and prompt routing. Run `bun run build:frontend` first, otherwise the static-serving tests fail on a missing bundle; the QA harness manifest cases additionally depend on repository, branch, and evidence preconditions.
+Run tests from the repository root. The test preload creates a fresh temporary `BG_APP_ROOT` and migrates its database; it overrides inherited profile paths and removes only its own fixture afterward. A test process without that isolation fails closed. Passing unit tests and meeting the per-file 80% coverage gate are separate results; the overall percentage alone does not satisfy that gate. Run `bun run build:frontend` before static-serving or browser tests. Browser smoke uses synthetic API fixtures and a separate seeded local profile; it does not send model requests. QA harness manifest cases additionally depend on repository, branch, and evidence preconditions.
+
+If Bun is installed through a Windows npm command shim, pass `--bun <absolute-path-to-bun.exe>` to the browser smoke. Run browser-heavy checks sequentially so independent launches do not compete for the same machine resources.
 
 ## Limitations
 
@@ -300,4 +308,4 @@ Working agreements that matter in this repo:
 - Catalog JSON is canonical: `JSON.stringify(value, null, 2)` plus one trailing newline, records sorted by stable ID, citation arrays sorted, IDs never recycled. The validator enforces all of it.
 - Add a source only after checking the primary page, its usage terms, and a counterexample search. Keep evidence paraphrased and under twenty words.
 - Tests should fail for the right reason. No fixed sleeps, no timing luck, no pinning prose.
-- Run `bun run typecheck` and the relevant `bun test` target before opening a pull request.
+- Run `bun run lint`, `bun run typecheck`, and the relevant `bun test` target before opening a pull request.

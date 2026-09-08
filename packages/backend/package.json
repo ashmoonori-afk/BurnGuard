@@ -18,7 +18,7 @@
     "node-html-parser": "^7.1.0",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "5.4.149",
-    "playwright-core": "^1.59.1",
+    "playwright-core": "1.59.1",
     "postcss": "^8.5.6",
     "pptxgenjs": "^4.0.1",
     "ulid": "^3.0.2"

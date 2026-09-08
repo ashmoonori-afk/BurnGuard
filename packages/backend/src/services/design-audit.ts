@@ -8,7 +8,8 @@ import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
 import { CanonicalTreeManifestError, inspectCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { inspectRenderedPage, type DomAuditFinding, type DomAuditObservation } from "./design-audit-dom";
 import { fingerprintHtmlNode, FilePatchError } from "./file-patch";
-import { openRenderSession, RenderSessionError } from "./export-render-session";
+import { launchChromium, openRenderSession, RenderSessionError } from "./export-render-session";
+import { registerExportBrowser } from "./export-browser-registry";
 import { parseStoredProjectOptions } from "./project-options";
 
 export type AuditRenderedTreeInput = { readonly projectId: string; readonly projectDir: string; readonly entrypoint: string; readonly revision: number; readonly digest: string; readonly treeDigest?: string; readonly safeFix?: boolean; readonly deck?: boolean; readonly canvas?: { readonly width: number; readonly height: number }; readonly signal: AbortSignal };
@@ -25,10 +26,14 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   const viewports = input.canvas === undefined
     ? [{ width: 1280, height: 900, dpr: 1 }, { width: 375, height: 812, dpr: 1 }] as const
     : [{ width: input.canvas.width, height: input.canvas.height, dpr: 1 }] as const;
-  for (const viewport of viewports) {
-    const session = await openRenderSession({ stagedDir: input.projectDir, entrypoint: input.entrypoint, viewport, deck: input.deck ?? false, strict: false, signal: input.signal });
-    try { observations.push(await inspectRenderedPage(session.page)); } finally { await session.close(); }
-  }
+  const browser = await launchChromium(input.signal);
+  const owner = registerExportBrowser(() => browser.close());
+  try {
+    for (const viewport of viewports) {
+      const session = await openRenderSession({ stagedDir: input.projectDir, entrypoint: input.entrypoint, viewport, deck: input.deck ?? false, strict: false, signal: input.signal, browser });
+      try { observations.push(await inspectRenderedPage(session.page)); } finally { await session.close(); }
+    }
+  } finally { await owner.close(); }
   const current = await inspectCanonicalTree(input.projectDir);
   if (current.tree_digest !== expectedTreeDigest) throw new DesignAuditServiceError("stale_artifact_identity", "Artifact identity changed during audit");
   const desktop = observations[0]; const narrow = observations[1] ?? desktop;

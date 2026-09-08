@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CatalogDesignSystemDetail, DesignSystemColorToken, DesignSystemDetail } from "@bg/shared";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { DesignSystemColorToken, DesignSystemDetail } from "@bg/shared";
 import { AlertTriangle, Pencil, Plus, Upload } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   getDesignSystemTokens,
   uploadDesignSystemFont,
@@ -14,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useUIStore } from "@/state/uiStore";
+import { ApiError } from "@/api/client";
+import { apiErrorCopy } from "@/lib/error-copy";
 
 type FontRole = "display" | "sans" | "serif" | "mono";
 
@@ -47,9 +49,17 @@ export default function DesignSystemView({
 } = {}) {
   const { id: paramId } = useParams();
   const id = systemIdOverride ?? paramId;
+  return id ? <DesignSystemEditor key={id} id={id} /> : <p role="alert">디자인 시스템을 찾을 수 없어요. <Link to="/">홈으로 이동</Link></p>;
+}
+
+function DesignSystemEditor({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
-  const [system, setSystem] = useState<CatalogDesignSystemDetail | null>(null);
+  const systemQuery = useQuery({
+    queryKey: ["design-systems", "detail", id], queryFn: () => getDesignSystem(id),
+    retry: false, refetchOnWindowFocus: false,
+  });
+  const system = systemQuery.data;
   const [extractionNotes, setExtractionNotes] = useState<string[]>([]);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -62,6 +72,7 @@ export default function DesignSystemView({
   const [editingColor, setEditingColor] = useState<DesignSystemColorToken | null>(
     null,
   );
+  const [colorEditorOpen, setColorEditorOpen] = useState(false);
   const [draftColorName, setDraftColorName] = useState("");
   const [draftColorValue, setDraftColorValue] = useState("#000000");
   const [fontFile, setFontFile] = useState<File | null>(null);
@@ -87,7 +98,7 @@ export default function DesignSystemView({
     },
     onSuccess: async (result) => {
       if (result.kind === "conflict") {
-        setSystem(result.current);
+        queryClient.setQueryData(["design-systems", "detail", id], result.current);
         setDraftName(result.current.name);
         setDraftDescription(result.current.description ?? "");
         setDraftStatus(result.current.status);
@@ -98,7 +109,7 @@ export default function DesignSystemView({
         });
         return;
       }
-      setSystem(result.system);
+      queryClient.setQueryData(["design-systems", "detail", id], result.system);
       setEditing(false);
       pushToast({ title: "디자인 시스템을 업데이트했어요", tone: "success" });
       await queryClient.invalidateQueries({ queryKey: ["design-systems"] });
@@ -106,7 +117,7 @@ export default function DesignSystemView({
     onError: (err) => {
       pushToast({
         title: "디자인 시스템을 업데이트하지 못했어요",
-        body: err instanceof Error ? err.message : String(err),
+        body: apiErrorCopy(err),
         tone: "error",
       });
     },
@@ -124,6 +135,7 @@ export default function DesignSystemView({
       setColorTokens(tokens.colors);
       setTokenFilePath(tokens.token_file_path);
       setEditingColor(null);
+      setColorEditorOpen(false);
       setDraftColorName("");
       setDraftColorValue("#000000");
       setPreviewRefreshKey((key) => key + 1);
@@ -132,7 +144,7 @@ export default function DesignSystemView({
     onError: (err) => {
       pushToast({
         title: "색상을 저장하지 못했어요",
-        body: err instanceof Error ? err.message : String(err),
+        body: apiErrorCopy(err),
         tone: "error",
       });
     },
@@ -156,28 +168,21 @@ export default function DesignSystemView({
       setPreviewRefreshKey((key) => key + 1);
       pushToast({
         title: "글꼴을 업로드했어요",
-        body: `${font.family}을(를) ${font.rel_path}에 저장했어요`,
+        body: `${font.family} 글꼴을 디자인 시스템에서 사용할 수 있어요.`,
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
         title: "글꼴을 업로드하지 못했어요",
-        body: err instanceof Error ? err.message : String(err),
+        body: apiErrorCopy(err),
         tone: "error",
       });
     },
   });
 
   useEffect(() => {
-    if (!id) return;
-
     let cancelled = false;
-    void getDesignSystem(id).then((next) => {
-      if (!cancelled) {
-        setSystem(next);
-      }
-    });
 
     // Best-effort fetch of the extraction report written by P4.1 / P4.2
     // ingestion. Non-extracted systems (seeded samples) return 404, which
@@ -215,10 +220,21 @@ export default function DesignSystemView({
     };
   }, [id]);
 
-  if (!system || !id) {
+  if (systemQuery.isError) {
+    return <div role="alert" className="mx-auto my-12 max-w-lg space-y-4 px-6 text-center">
+      <h1 className="text-lg font-semibold">{systemQuery.error instanceof ApiError && systemQuery.error.status === 404 ? "디자인 시스템을 찾을 수 없어요" : "디자인 시스템을 불러오지 못했어요"}</h1>
+      <p className="text-sm text-muted-foreground">{systemQuery.error instanceof ApiError && systemQuery.error.status === 404 ? "삭제되었거나 주소가 달라졌을 수 있어요. 홈에서 다시 선택해 주세요." : apiErrorCopy(systemQuery.error)}</p>
+      <div className="flex justify-center gap-3">
+        <Button variant="outline" onClick={() => void systemQuery.refetch()} disabled={systemQuery.isFetching}>{systemQuery.isFetching ? "불러오는 중…" : "다시 시도"}</Button>
+        <Button asChild variant="ghost"><Link to="/">홈으로 이동</Link></Button>
+      </div>
+    </div>;
+  }
+
+  if (!system) {
     return (
       <div className="grid flex-1 place-items-center">
-        <div className="text-sm text-muted-foreground">
+        <div role="status" className="text-sm text-muted-foreground">
           디자인 시스템을 불러오는 중...
         </div>
       </div>
@@ -227,8 +243,8 @@ export default function DesignSystemView({
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-8 py-8">
-        <div className="mx-auto max-w-4xl rounded-2xl border border-border bg-card p-8 shadow-sm">
+      <div className="px-4 py-6 sm:px-8 sm:py-8">
+        <div className="mx-auto max-w-4xl rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-8">
           <div className="flex items-start justify-between gap-4">
             <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
               디자인 시스템
@@ -258,7 +274,7 @@ export default function DesignSystemView({
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
                 {system.description ??
-                  "기본 제공 로컬 디자인 시스템이에요. 파일은 프로젝트 컨텍스트로 세션에 제공돼요."}
+                  "색상과 글꼴을 확인하고 프로젝트에 사용할 디자인을 정리해 보세요."}
               </p>
             </>
           ) : (
@@ -341,9 +357,13 @@ export default function DesignSystemView({
             <DraftValidationCard system={system} notes={extractionNotes} />
           ) : null}
 
-          <dl className="mt-8 grid gap-4 text-sm md:grid-cols-2">
-            {catalogDetailRows(system).map((row) => <InfoRow key={row.label} label={CATALOG_DETAIL_LABELS[row.label] ?? row.label} value={row.label === "Status" ? STATUS_LABELS[system.status] : row.label === "Template" ? system.is_template ? "예" : "아니요" : row.value} />)}
-          </dl>
+          <div className="mt-6 flex flex-wrap gap-2"><Badge variant="outline">{STATUS_LABELS[system.status]}</Badge>{system.is_template ? <Badge variant="outline">템플릿</Badge> : null}</div>
+          <details className="mt-4 rounded-xl border border-border p-4">
+            <summary className="cursor-pointer text-sm font-medium">원본과 파일 정보</summary>
+            <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
+              {catalogDetailRows(system).map((row) => <InfoRow key={row.label} label={CATALOG_DETAIL_LABELS[row.label] ?? row.label} value={row.label === "Status" ? STATUS_LABELS[system.status] : row.label === "Template" ? system.is_template ? "예" : "아니요" : row.value} />)}
+            </dl>
+          </details>
 
           <div className="mt-8 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
             <FontUploadCard
@@ -362,10 +382,12 @@ export default function DesignSystemView({
               tokens={colorTokens}
               tokenFilePath={tokenFilePath}
               editingToken={editingColor}
+              open={colorEditorOpen}
               name={draftColorName}
               value={draftColorValue}
               saving={colorMutation.isPending}
               onAdd={() => {
+                setColorEditorOpen(true);
                 setEditingColor(null);
                 setDraftColorName("new-color");
                 setDraftColorValue("#000000");
@@ -375,6 +397,7 @@ export default function DesignSystemView({
                 });
               }}
               onEdit={(token) => {
+                setColorEditorOpen(true);
                 setEditingColor(token);
                 setDraftColorName(token.name);
                 setDraftColorValue(token.value);
@@ -387,6 +410,7 @@ export default function DesignSystemView({
               onValueChange={setDraftColorValue}
               onSave={() => colorMutation.mutate()}
               onCancel={() => {
+                setColorEditorOpen(false);
                 setEditingColor(null);
                 setDraftColorName("");
                 setDraftColorValue("#000000");
@@ -448,10 +472,11 @@ function FontUploadCard({
       </div>
       <div className="mt-4 space-y-3">
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
+          <label htmlFor="system-font-file" className="text-xs font-medium text-muted-foreground">
             글꼴 파일
           </label>
           <Input
+            id="system-font-file"
             ref={inputRef}
             type="file"
             accept=".woff2,.woff,.ttf,.otf"
@@ -465,10 +490,11 @@ function FontUploadCard({
           ) : null}
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
+          <label htmlFor="system-font-family" className="text-xs font-medium text-muted-foreground">
             글꼴 패밀리
           </label>
           <Input
+            id="system-font-family"
             value={family}
             placeholder="비워 두면 파일 이름에서 추정해요"
             onChange={(e) => onFamilyChange(e.target.value)}
@@ -476,10 +502,11 @@ function FontUploadCard({
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
+          <label htmlFor="system-font-role" className="text-xs font-medium text-muted-foreground">
             토큰에 할당
           </label>
           <select
+            id="system-font-role"
             value={role}
             onChange={(e) => onRoleChange(e.target.value as FontRole)}
             disabled={saving}
@@ -504,11 +531,12 @@ function FontUploadCard({
   );
 }
 
-function ColorTokenEditor({
+export function ColorTokenEditor({
   refEl,
   tokens,
   tokenFilePath,
   editingToken,
+  open,
   name,
   value,
   saving,
@@ -523,6 +551,7 @@ function ColorTokenEditor({
   tokens: DesignSystemColorToken[];
   tokenFilePath: string | null;
   editingToken: DesignSystemColorToken | null;
+  open: boolean;
   name: string;
   value: string;
   saving: boolean;
@@ -533,8 +562,6 @@ function ColorTokenEditor({
   onSave: () => void;
   onCancel: () => void;
 }) {
-  const hasDraft = Boolean(name || editingToken);
-
   return (
     <section ref={refEl} className="rounded-2xl border border-border bg-background p-5">
       <div className="flex items-start justify-between gap-3">
@@ -544,45 +571,51 @@ function ColorTokenEditor({
           </div>
           <h2 className="mt-1 text-base font-semibold">색상 토큰</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            {tokenFilePath ? "colors_and_type.css에서 관리돼요" : "토큰 파일을 찾을 수 없어요"}
+            {tokenFilePath ? "프로젝트에 사용할 색상을 추가하거나 바꿀 수 있어요." : "저장된 색상 자료가 없어요. 새 색상부터 추가해 보세요."}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={onAdd}>
+        <Button variant="outline" size="sm" onClick={onAdd} disabled={saving} aria-expanded={open} aria-controls="system-color-editor">
           <Plus className="h-3.5 w-3.5" />
           색상 추가
         </Button>
       </div>
 
-      {hasDraft ? (
-        <div className="mt-4 rounded-xl border border-border bg-card p-4">
+      {open ? (
+        <div id="system-color-editor" className="mt-4 rounded-xl border border-border bg-card p-4">
           <div className="mb-3 text-xs font-medium">
             {editingToken ? `--${editingToken.name} 편집` : "색상 토큰 추가"}
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_0.8fr]">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
+              <label htmlFor="system-color-name" className="text-xs font-medium text-muted-foreground">
                 토큰 이름
               </label>
               <Input
+                id="system-color-name"
+                aria-invalid={!name.trim()}
+                aria-describedby={!name.trim() ? "system-color-name-error" : undefined}
                 value={name}
                 placeholder="primary-blue"
                 onChange={(e) => onNameChange(e.target.value)}
                 disabled={saving || Boolean(editingToken)}
               />
+              {!name.trim() ? <p id="system-color-name-error" className="text-xs text-destructive">저장하려면 색상 이름을 입력해 주세요.</p> : null}
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
+              <label htmlFor="system-color-value" className="text-xs font-medium text-muted-foreground">
                 색상 값
               </label>
               <div className="flex gap-2">
                 <input
                   type="color"
+                  aria-label="색상 선택"
                   value={normalizeColorInput(value)}
                   onChange={(e) => onValueChange(e.target.value)}
                   disabled={saving}
                   className="h-9 w-11 shrink-0 rounded-md border border-input bg-background p-1"
                 />
                 <Input
+                  id="system-color-value"
                   value={value}
                   placeholder="#0057B8"
                   onChange={(e) => onValueChange(e.target.value)}
@@ -633,6 +666,8 @@ function ColorTokenEditor({
                 size="sm"
                 className="h-7 px-2 text-[11px]"
                 onClick={() => onEdit(token)}
+                disabled={saving}
+                aria-label={`${token.name} 색상 편집`}
               >
                 <Pencil className="h-3 w-3" />
                 편집
@@ -742,12 +777,12 @@ function IssueBox({ label, body }: { label: string; body: string }) {
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-border bg-background px-4 py-3">
-      <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+      <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
         {label}
-      </div>
-      <div className="mt-2 break-all font-mono text-xs text-foreground">
+      </dt>
+      <dd className="mt-2 break-all font-mono text-xs text-foreground">
         {value}
-      </div>
+      </dd>
     </div>
   );
 }

@@ -47,6 +47,8 @@ export default function HomeView() {
   const pushToast = useUIStore((s) => s.pushToast);
   const [activeTab, setActiveTab] = useState<HomeTab>("recent");
   const [projectQuery, setProjectQuery] = useState("");
+  const [systemQuery, setSystemQuery] = useState("");
+  const [systemStatus, setSystemStatus] = useState<"all" | "draft" | "review" | "published">("all");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cliMissingShown = useUIStore((s) => s.cliMissingShown);
   const setCliMissingShown = useUIStore((s) => s.setCliMissingShown);
@@ -244,8 +246,9 @@ export default function HomeView() {
   const filteredRecentCards = filterHomeCards(recentCards, projectQuery);
   const filteredMineCards = filterHomeCards(mineCards, projectQuery);
   const filteredExampleCards = filterHomeCards(exampleCards, projectQuery);
-  const systemCards = (systemsQuery.data ?? []).map((system, index) =>
-    systemToCard(system, index),
+  const systemCards = filterHomeCards(
+    (systemsQuery.data ?? []).filter((system) => systemStatus === "all" || system.status === systemStatus).map(systemToCard),
+    systemQuery,
   );
 
   const onProjectDelete = (card: CardViewModel) =>
@@ -259,18 +262,29 @@ export default function HomeView() {
     searchInputRef.current?.focus();
   };
 
+  const clearSystemFilters = () => {
+    setSystemQuery("");
+    setSystemStatus("all");
+    searchInputRef.current?.focus();
+  };
+
   // The creation form lives in the app shell's sidebar, outside this
   // view's tree, so the empty state hands off by focusing its name
   // field by id. Plain focus() also scrolls the control into view,
   // which is what the narrow layout needs since the sidebar is ordered
   // below the grid there.
   const startProject = () => {
+    document.getElementById("new-project-panel")?.scrollIntoView({ block: "start" });
     document.getElementById("project-name")?.focus();
   };
 
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-4 py-3 sm:px-8">
+          <h1 className="text-lg font-semibold">내 작업</h1>
+          <Button variant="cta" onClick={startProject} aria-controls="new-project-panel"><Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />새 프로젝트</Button>
+        </div>
         <Tabs
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as HomeTab)}
@@ -284,8 +298,8 @@ export default function HomeView() {
               <TabsTrigger value="systems">디자인 시스템</TabsTrigger>
             </TabsList>
 
-            {activeTab === "systems" ? null : (
-              <div className="relative w-full max-w-xs max-[640px]:max-w-none">
+              <div className="flex w-full max-w-sm gap-2 max-[640px]:max-w-none">
+              <div className="relative min-w-0 flex-1">
                 <Search
                   aria-hidden="true"
                   className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -293,19 +307,23 @@ export default function HomeView() {
                 <Input
                   ref={searchInputRef}
                   type="search"
-                  aria-label="프로젝트 검색"
-                  placeholder="프로젝트 검색"
-                  value={projectQuery}
-                  onChange={(event) => setProjectQuery(event.target.value)}
+                  aria-label={activeTab === "systems" ? "디자인 시스템 검색" : "프로젝트 검색"}
+                  placeholder={activeTab === "systems" ? "디자인 시스템 검색" : "프로젝트 검색"}
+                  value={activeTab === "systems" ? systemQuery : projectQuery}
+                  onChange={(event) => activeTab === "systems" ? setSystemQuery(event.target.value) : setProjectQuery(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Escape") {
-                      clearProjectQuery();
+                      if (activeTab === "systems") clearSystemFilters();
+                      else clearProjectQuery();
                     }
                   }}
                   className="pl-8"
                 />
               </div>
-            )}
+              {activeTab === "systems" ? <select aria-label="디자인 시스템 상태" value={systemStatus} onChange={(event) => setSystemStatus(event.target.value as typeof systemStatus)} className="h-9 max-w-32 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <option value="all">모든 상태</option><option value="draft">초안</option><option value="review">검토 중</option><option value="published">게시됨</option>
+              </select> : null}
+              </div>
           </div>
 
           <div className="px-8 pb-8 max-[640px]:px-4">
@@ -377,6 +395,8 @@ export default function HomeView() {
             <TabsContent value="systems">
               <SystemsSection
                 cards={systemCards}
+                hasFilters={systemQuery.trim().length > 0 || systemStatus !== "all"}
+                onClearFilters={clearSystemFilters}
                 isLoading={systemsQuery.isPending}
                 error={systemsQuery.error}
                 onRetry={() => void systemsQuery.refetch()}
@@ -451,6 +471,8 @@ export default function HomeView() {
 
 function SystemsSection({
   cards,
+  hasFilters,
+  onClearFilters,
   isLoading,
   error,
   onRetry,
@@ -471,7 +493,9 @@ function SystemsSection({
   onImport,
   onSystemDelete,
 }: {
-  cards: CardViewModel[];
+  cards: readonly CardViewModel[];
+  hasFilters: boolean;
+  onClearFilters: () => void;
   isLoading: boolean;
   error: Error | null;
   onRetry: () => void;
@@ -508,18 +532,16 @@ function SystemsSection({
   return (
     <div className="space-y-4">
       <div className="max-w-3xl rounded-xl border border-border bg-card/70 px-4 py-3 text-sm leading-6 text-muted-foreground">
-        초안 · 검토 중 · 게시됨 상태의 디자인 시스템이 모두 여기에 모여요.{" "}
-        <span className="font-medium text-foreground">+</span> 타일을 누르면 Git
-        저장소, 웹사이트 URL, 또는 업로드한 PPTX/PDF 파일에서 새 디자인 시스템을
-        가져올 수 있어요. BurnGuard는 기본 제공 샘플과 같은 표준 출력
-        구조를 만들고, 업로드 파일은 Python 요약 단계를 거쳐 프롬프트에 실리는
-        토큰을 가볍게 유지해요.
+        프로젝트에 사용할 색상과 글꼴을 모아 두는 곳이에요. 이름과 상태로 찾거나,
+        가져오기를 눌러 공개 웹사이트·저장소·PPTX/PDF에서 새 초안을 만들어 보세요.
       </div>
 
       <CardGrid>
         <button
           type="button"
           onClick={onToggleImport}
+          aria-expanded={importOpen}
+          aria-controls="system-import-panel"
           className="overflow-hidden rounded-xl border border-dashed border-border bg-card text-left transition-colors hover:border-foreground/40 hover:shadow-app-3"
         >
           <div className="grid h-[120px] place-items-center bg-accent/10 text-accent">
@@ -553,6 +575,8 @@ function SystemsSection({
             ))}
       </CardGrid>
 
+      {!isLoading && error === null && hasFilters ? <p role="status" className="text-sm text-muted-foreground">검색 결과 {cards.length}개 <button type="button" onClick={onClearFilters} className="ml-2 font-medium text-accent underline underline-offset-2">검색과 필터 지우기</button></p> : null}
+
       {isLoading ? (
         <div
           aria-live="polite"
@@ -585,27 +609,25 @@ function SystemsSection({
           aria-live="polite"
           className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-3 text-sm leading-6 text-muted-foreground"
         >
-          아직 만든 디자인 시스템이 없어요. 위 ‘가져오기’ 타일을 눌러 새로
-          만들어 보세요.
+            {hasFilters ? "조건에 맞는 디자인 시스템이 없어요. 이름이나 상태를 바꿔 보세요." : "아직 만든 디자인 시스템이 없어요. 위 ‘가져오기’ 타일을 눌러 새로 만들어 보세요."}
         </div>
       ) : null}
 
       {importOpen ? (
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div id="system-import-panel" className="rounded-xl border border-border bg-card p-5">
           <div className="text-sm font-medium text-foreground">
             디자인 시스템 가져오기
           </div>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-            BurnGuard가 저장소나 웹사이트를 바로 읽어 오거나, PPTX/PDF 업로드를
-            받을 수 있어요. 업로드한 파일은 Python 추출 단계를 거쳐
-            토큰에 필요한 신호와 짧은 페이지 요약만 남긴 뒤 표준 초안 묶음을
-            만들어요.
+            원본에서 색상과 글꼴을 찾아 초안을 만들어요. 가져온 뒤 미리보기를 확인하고,
+            원본과 맞는지 검토한 다음 게시해 주세요.
           </p>
 
           <div className="mt-4 inline-flex rounded-lg border border-border bg-background p-1">
             <button
               type="button"
               onClick={() => onImportModeChange("url")}
+              aria-pressed={importMode === "url"}
               disabled={isPending}
               className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
                 importMode === "url"
@@ -618,6 +640,7 @@ function SystemsSection({
             <button
               type="button"
               onClick={() => onImportModeChange("upload")}
+              aria-pressed={importMode === "upload"}
               disabled={isPending}
               className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
                 importMode === "upload"
@@ -720,16 +743,8 @@ function SystemsSection({
                 </div>
 
                 <div className="rounded-md border border-border bg-background px-3 py-2 text-xs leading-5 text-muted-foreground">
-                  Python 추출 항목:
-                  <div className="mt-1 font-mono text-[11px] text-foreground">
-                    폰트 / 색상
-                    <br />
-                    제목 / 본문
-                    <br />
-                    페이지 요약
-                    <br />
-                    upload-manifest.json
-                  </div>
+                  문서에 사용한 글꼴과 색상, 제목·본문의 스타일을 찾아 정리해요.
+                  파일 크기와 페이지 수에 따라 잠시 걸릴 수 있어요.
                 </div>
               </>
             )}
@@ -752,21 +767,13 @@ function SystemsSection({
             </div>
 
             <div className="rounded-md border border-border bg-background px-3 py-2 text-xs leading-5 text-muted-foreground">
-              생성 결과:
-              <div className="mt-1 font-mono text-[11px] text-foreground">
-                README.md
-                <br />
-                SKILL.md
-                <br />
-                colors_and_type.css
-                <br />
-                fonts/ assets/ preview/ ui_kits/ uploads/
-              </div>
+              가져오기가 끝나면 디자인 시스템 화면으로 이동해요. 색상·글꼴·미리보기를
+              확인하고 수정한 뒤 프로젝트에 사용할 수 있어요.
             </div>
           </div>
 
           {importError ? (
-            <p className="mt-3 text-xs text-destructive">{importError}</p>
+            <p role="alert" className="mt-3 text-xs text-destructive">{importError}</p>
           ) : null}
 
           <div className="mt-4 flex items-center gap-3">

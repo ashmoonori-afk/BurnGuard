@@ -16,7 +16,7 @@ BurnGuard Design는 로컬 우선 AI 디자인 워크스페이스입니다. 이�
 2. 디자인 조언의 출처가 불분명합니다. 어떤 게 접근성 필수 제약이고 어떤 게 특정 벤더의 취향인지 구분되지 않습니다.
 3. 컨텍스트로 넣은 브랜드 덱, PDF, 내부 사이트가 남의 테넌트에 올라갑니다.
 
-BurnGuard는 순서대로 답합니다. 디자인 시스템은 1급 입력이고 모든 턴이 그 토큰을 참조합니다. 근거가 붙은 리서치 카탈로그가 저장소에 함께 들어 있어서, 프롬프트에 주입되는 규칙마다 인용, 권위 등급(authority class), 신뢰도, 그리고 그 규칙 자체의 한계가 따라붙습니다. 데이터는 머신 밖으로 나가지 않습니다. 백엔드는 `127.0.0.1`에서만 돌고, 데이터는 `~/.burnguard/` 아래에 있으며, 인증은 로컬 CLI가 이미 가진 로그인 상태를 그대로 씁니다.
+BurnGuard는 디자인 시스템을 주요 입력으로 삼고 모든 턴에서 토큰을 참조합니다. 리서치 카탈로그의 규칙에는 출처, 권위 등급, 신뢰도와 한계가 붙습니다. 백엔드는 `127.0.0.1`에서 실행하고 데이터는 `~/.burnguard/`에 저장합니다. 생성할 때는 로컬 CLI에 설정된 제공자에게 프롬프트와 선택된 문맥을 전송하며, 웹사이트 추출과 Figma 연동도 요청한 대상에 네트워크 연결을 사용합니다.
 
 ## 아키텍처
 
@@ -41,8 +41,8 @@ Bun 모노레포이고, 워크스페이스 패키지 셋에 스크립트가 붙�
 ```text
 ~/.burnguard/
   config.json          # 로컬 설정, 저장할 때마다 chmod 600
+  burnguard.db         # SQLite 데이터베이스
   data/
-    burnguard.sqlite
     projects/
     systems/
   cache/
@@ -153,7 +153,7 @@ Bun 모노레포이고, 워크스페이스 패키지 셋에 스크립트가 붙�
 BurnGuard 전용 API 키도, 키 파일도, 시크릿 입력 폼도 없습니다. 이미 로그인한 CLI의 인증 상태를 그대로 재사용합니다. Figma 개인 액세스 토큰을 설정하면 `~/.burnguard/config.json`에만 저장되고 API로 다시 노출되지 않습니다.
 
 ```sh
-bun install
+bun install --frozen-lockfile
 bun run typecheck
 ```
 
@@ -179,6 +179,8 @@ bun run build          # 프론트엔드 번들 + 백엔드 바이너리
 bun run build:frontend
 bun run build:mac      # 디스크 이미지는 build:mac:dmg
 ```
+
+Windows에서는 `dist/windows/` 폴더 전체를 배포합니다. `burnguard-design.exe`와 나란히 있는 `resources/`에 프런트엔드, 마이그레이션, 샘플 디자인 시스템, CSS worker, Playwright와 브라우저 렌더링용 Node가 들어갑니다. 패키징은 해당 Node 버전의 라이선스를 받아 `.bun/`에 캐시하고 `resources/node/LICENSE`에 포함합니다. 저장소와 다른 위치, 공백·한글이 있는 경로에서도 실행할 수 있습니다. Chromium/Chrome/Edge와 사용할 에이전트 CLI는 실행 환경에 필요합니다.
 
 ## 사용법
 
@@ -259,11 +261,17 @@ bun run scripts/qa/mass-research-dry-run.ts \
 ```sh
 bun run typecheck                                  # 워크스페이스 전체 tsc --build
 bun run build:frontend                             # 정적 서빙 테스트 전에 필요
-bun test                                           # 전체 스위트
+bun run test                                      # 전체 스위트, 기본 제한시간 30초 명시
+bun run test:coverage                              # 별도 파일별 80% 커버리지 기준
+bun run lint                                       # 공백 오류 검사
+node scripts/qa/e2e-smoke.mjs                       # 실제 브라우저, 격리된 프로필
+node scripts/qa/package-smoke.mjs                   # Windows 배포본을 별도 위치에서 실행
 bun test packages/backend/tests/research-catalog.test.ts   # 카탈로그 검증기 단독
 ```
 
-리서치 스위트는 catalog 검증, 계약, repository, migration, orchestration, recovery, route, selection, prompt routing을 다룹니다. `bun run build:frontend`를 먼저 돌리지 않으면 번들이 없어 정적 서빙 테스트가 실패합니다. QA 하네스 manifest 케이스는 추가로 저장소, branch, 증거 상태에 의존합니다.
+테스트는 저장소 루트에서 실행합니다. preload가 매번 임시 `BG_APP_ROOT`와 정식 마이그레이션을 적용한 DB를 만들고, 상속된 프로필 경로를 덮어써 사용자 데이터 접근을 막습니다. 종료 시 자신이 만든 테스트 폴더만 정리하며, 격리 없이 실행하는 테스트 프로세스는 거절합니다. 단위 테스트 통과와 파일별 80% 커버리지 통과는 별도로 확인하며, 전체 평균만으로 기준 통과를 판단하지 않습니다. 정적 서빙·브라우저 테스트 전에 `bun run build:frontend`를 실행하세요. 브라우저 smoke는 합성 API 응답과 별도의 로컬 샘플 프로필을 사용하며 모델 요청은 보내지 않습니다. QA 하네스 manifest 케이스에는 저장소·branch·증거 상태 사전 조건도 있습니다.
+
+Windows npm 명령 shim으로 Bun을 설치했다면 브라우저 smoke에 `--bun <bun.exe의 절대경로>`를 전달합니다. 여러 브라우저 검증이 같은 PC 자원을 놓고 경쟁하지 않도록 순차 실행하세요.
 
 ## 한계
 
@@ -300,4 +308,4 @@ BurnGuard는 Apache-2.0입니다([LICENSE](LICENSE)). 서드파티 표시는 [NO
 - 카탈로그 JSON은 canonical 형식입니다. `JSON.stringify(value, null, 2)`에 마지막 개행 하나, 레코드는 안정 ID 기준 정렬, 인용 배열도 정렬, ID는 절대 재사용하지 않습니다. 검증기가 전부 강제합니다.
 - 출처는 원본 페이지, 사용 조건, 반례 검색을 확인한 뒤에만 추가합니다. 근거는 재서술로 20단어 미만을 유지합니다.
 - 테스트는 올바른 이유로 실패해야 합니다. 고정 sleep 금지, 타이밍 운 금지, 산문 고정 금지.
-- PR을 열기 전에 `bun run typecheck`와 관련 `bun test` 대상을 실행하세요.
+- PR을 열기 전에 `bun run lint`, `bun run typecheck`와 관련 `bun test` 대상을 실행하세요.

@@ -19,7 +19,6 @@ import type {
   NormalizedEvent,
   PatchFileRequest,
   ProjectDetail,
-  SessionInfo,
 } from "@bg/shared";
 import { parseDesignDirectionState } from "@bg/shared";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -50,18 +49,16 @@ import {
 } from "@/api/design-directions";
 import {
   interruptSession,
-  listSessionEvents,
   sendUserEvent,
   submitToolDecision,
-  subscribeSessionStream,
 } from "@/api/session";
 import ChatPane from "@/components/chat/ChatPane";
 import { visualSourceSendErrorCopy } from "@/components/chat/attachment-intake";
 import { DirectionsView } from "@/components/directions/DirectionsView";
 import { DirectionStatusBar } from "@/components/directions/DirectionStatusBar";
-import PermissionDialog, {
-  type PermissionRequest,
-} from "@/components/chat/PermissionDialog";
+import PermissionDialog from "@/components/chat/PermissionDialog";
+import { useSessionEvents } from "@/hooks/useSessionEvents";
+import { apiErrorCopy } from "@/lib/error-copy";
 import Canvas from "@/components/canvas/Canvas";
 import {
   deserializeDraws,
@@ -111,8 +108,6 @@ export default function ProjectView() {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
-  const [events, setEvents] = useState<NormalizedEvent[]>([]);
-  const [sessionState, setSessionState] = useState<SessionInfo | null>(null);
 
   // Pre-fill from a "Try this prompt" handoff (P4.7e). The home route
   // base64url-encodes the prompt into ?prefill_prompt; we decode it
@@ -164,15 +159,15 @@ export default function ProjectView() {
   const [drawStrokeWidth, setDrawStrokeWidth] = useState(4);
   const [drawShapes, setDrawShapes] = useState<DrawShape[]>([]);
   const [drawResetKey, setDrawResetKey] = useState("");
+  const [drawLoading, setDrawLoading] = useState(false);
+  const [drawError, setDrawError] = useState<string | null>(null);
+  const drawBlocked = drawLoading || drawError !== null;
+  const [drawLoadAttempt, setDrawLoadAttempt] = useState(0);
+  const drawSavesRef = useRef(new Map<string, Promise<unknown>>());
   const drawLayerRef = useRef<DrawLayerHandle | null>(null);
-  const [decidedToolCallIds, setDecidedToolCallIds] = useState<Set<string>>(
-    () => new Set<string>(),
-  );
   const [refreshTick, setRefreshTick] = useState(0);
   const [sendPending, setSendPending] = useState(false);
   const [directionActionError, setDirectionActionError] = useState<Error | null>(null);
-  const seenEventIdsRef = useRef(new Set<string>());
-  const latestEventTsRef = useRef<number | undefined>(undefined);
   const activeTabIdRef = useRef(activeTabId);
   const openFileTabsRef = useRef<ArtifactTab[]>(openFileTabs);
   const sendPendingTimeoutRef = useRef<number | null>(null);
@@ -220,13 +215,8 @@ export default function ProjectView() {
       pushToast({ title: "캔버스가 바뀌어서 다시 불러왔어요. 한 번 더 시도해 주세요", tone: "error" });
       return;
     }
-    pushToast({ title, body: error instanceof Error ? error.message : String(error), tone: "error" });
+    pushToast({ title, body: apiErrorCopy(error), tone: "error" });
   }, [id, pushToast, queryClient]);
-  const replayQuery = useQuery({
-    queryKey: ["session", sessionQuery.data?.id, "events"],
-    queryFn: () => listSessionEvents(sessionQuery.data!.id),
-    enabled: Boolean(sessionQuery.data?.id),
-  });
   const commentsQuery = useQuery({
     queryKey: ["project", id, "comments"],
     queryFn: () => listProjectComments(id!),
@@ -343,7 +333,7 @@ export default function ProjectView() {
     onError: (error) => {
       pushToast({
         title: "캔버스를 새로 고치지 못했어요",
-        body: error instanceof Error ? error.message : String(error),
+        body: apiErrorCopy(error),
         tone: "error",
       });
     },
@@ -394,7 +384,7 @@ export default function ProjectView() {
     onError: (error) => {
       pushToast({
         title: "코멘트를 수정하지 못했어요",
-        body: error instanceof Error ? error.message : String(error),
+        body: apiErrorCopy(error),
         tone: "error",
       });
     },
@@ -404,19 +394,16 @@ export default function ProjectView() {
     mutationFn: (input: {
       toolCallId: string;
       decision: "allow" | "deny";
-    }) => submitToolDecision(id!, input),
-    onSuccess: (_data, variables) => {
-      setDecidedToolCallIds((prev) => {
-        if (prev.has(variables.toolCallId)) return prev;
-        const next = new Set(prev);
-        next.add(variables.toolCallId);
-        return next;
-      });
+    }) => {
+      if (!sessionQuery.data) throw new Error("no_session");
+      return submitToolDecision(sessionQuery.data.id, input);
     },
+    onSuccess: () => { void stream.refreshSnapshot().catch(() => {}); },
     onError: (error) => {
+      void stream.refreshSnapshot().catch(() => {});
       pushToast({
         title: "권한 결정을 보내지 못했어요",
-        body: error instanceof Error ? error.message : String(error),
+        body: apiErrorCopy(error),
         tone: "error",
       });
     },
@@ -504,10 +491,6 @@ export default function ProjectView() {
 
   useEffect(() => {
     clearSendPending(sendPendingTimeoutRef, setSendPending);
-    seenEventIdsRef.current.clear();
-    latestEventTsRef.current = undefined;
-    setEvents([]);
-    setSessionState(null);
     setActiveTabId("design-system");
     setOpenFileTabs([]);
     setMode(null);
@@ -521,7 +504,6 @@ export default function ProjectView() {
     setDrawShapes([]);
     setDrawResetKey("");
     setPresentOpen(false);
-    setDecidedToolCallIds(new Set());
     setDirectionActionError(null);
     setAuditFocus(null);
     setAuditRevealResult(null);
@@ -556,6 +538,7 @@ export default function ProjectView() {
   });
 
   const putDrawsMutation = useMutation({
+    scope: { id: `project-draws:${id}` },
     mutationFn: ({
       relPath,
       svg,
@@ -572,7 +555,13 @@ export default function ProjectView() {
         viewport,
       });
     },
-    onError: (err) => handleWriteError("그리기를 저장하지 못했어요", err),
+    onSuccess: (_data, variables) => {
+      if (activeTabIdRef.current === variables.relPath) setDrawError(null);
+    },
+    onError: (err, variables) => {
+      if (activeTabIdRef.current === variables.relPath) setDrawError("그리기를 저장하지 못했어요. 현재 그리기는 화면에 남아 있어요. 다시 시도해 주세요.");
+      handleWriteError("그리기를 저장하지 못했어요", err);
+    },
   });
 
   // Load saved draws for the current file tab. Computed inline from
@@ -585,25 +574,31 @@ export default function ProjectView() {
     if (!relForDraws) {
       setDrawShapes([]);
       setDrawResetKey(`none:${activeTabId}`);
+      setDrawLoading(false);
+      setDrawError(null);
       return;
     }
     let cancelled = false;
+    setDrawLoading(true);
+    setDrawError(null);
     void (async () => {
       try {
+        await drawSavesRef.current.get(`${id}:${relForDraws}`);
         const svg = await getProjectDraws(id, relForDraws);
         if (cancelled) return;
         setDrawShapes(deserializeDraws(svg));
         setDrawResetKey(`${id}:${relForDraws}:${Date.now()}`);
       } catch {
         if (cancelled) return;
-        setDrawShapes([]);
-        setDrawResetKey(`${id}:${relForDraws}:err`);
+        setDrawError("저장된 그리기를 불러오지 못했어요. 다시 불러온 뒤 편집해 주세요.");
+      } finally {
+        if (!cancelled) setDrawLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [id, activeTabId, openFileTabs]);
+  }, [id, activeTabId, openFileTabs, drawLoadAttempt]);
 
   // Escape는 현재 캔버스 모드를 끈다. 입력 필드 타이핑 중에는 무시해
   // 인스펙터/컴포저의 자체 Escape 동작을 방해하지 않는다.
@@ -627,7 +622,7 @@ export default function ProjectView() {
   // the server-round-trip that Tweaks needs because the layer is purely
   // frontend state; the serialized PUT only fires on commit.
   useEffect(() => {
-    if (mode !== "draw") return;
+    if (mode !== "draw" || drawBlocked) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t) {
@@ -642,7 +637,7 @@ export default function ProjectView() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode]);
+  }, [mode, drawBlocked]);
 
   // Global Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z for Tweaks. Only fires when the
   // user isn't typing into an input / textarea / contentEditable so the
@@ -690,110 +685,72 @@ export default function ProjectView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [mode, tweaksMutation]);
 
-  useEffect(() => {
-    if (!sessionQuery.data) return;
-    // Initial seed only. Once events start flowing, `applyEventToSession`
-    // owns the live session state — overriding it with a stale DB refetch
-    // (e.g. the session row before `setSessionStatus("idle")` finishes)
-    // would flip the status back to "running" after a turn completes.
-    const next = sessionQuery.data;
-    setSessionState((current) => {
-      if (!current || current.id !== next.id) return next;
-      if (current.backend_id === next.backend_id) return current;
-      return {
-        ...current,
-        backend_id: next.backend_id,
-        updated_at: Math.max(current.updated_at, next.updated_at),
-        last_active_at: Math.max(current.last_active_at, next.last_active_at),
-      };
-    });
-  }, [sessionQuery.data]);
+  const handleLiveEvent = useCallback((event: NormalizedEvent) => {
+    if (event.type === "design.direction_state") {
+      mergeDirectionCache(parseDesignDirectionState(event.state));
+    }
+    if (
+      event.type === "chat.user_message" ||
+      event.type === "status.running" ||
+      event.type === "status.error" ||
+      event.type === "status.idle"
+    ) {
+      clearSendPending(sendPendingTimeoutRef, setSendPending);
+    }
 
-  useEffect(() => {
-    if (!replayQuery.data) return;
-    appendEvents(replayQuery.data, seenEventIdsRef, latestEventTsRef, setEvents);
-    const latest = latestDirectionState(replayQuery.data);
-    mergeDirectionCache(latest === null ? null : parseDesignDirectionState(latest));
-  }, [mergeDirectionCache, replayQuery.data]);
+    if (event.type === "file.changed") turnTouchedFilesRef.current = true;
+    if (event.type === "status.idle" && turnTouchedFilesRef.current) {
+      turnTouchedFilesRef.current = false;
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] }),
+        invalidateDesignAudit(),
+      ]);
+    }
+    if (event.type === "status.error") turnTouchedFilesRef.current = false;
 
-  useEffect(() => {
-    const sessionId = sessionQuery.data?.id;
-    if (!sessionId || replayQuery.status !== "success") return;
-
-    let active = true;
-    let cleanup = () => {};
-
-    const connect = () => {
-      cleanup = subscribeSessionStream(sessionId, (event) => {
-        if (event.type === "design.direction_state") {
-          mergeDirectionCache(parseDesignDirectionState(event.state));
-        }
-        appendEvents([event], seenEventIdsRef, latestEventTsRef, setEvents);
-        setSessionState((current) => applyEventToSession(current, event));
-        if (
-          event.type === "chat.user_message" ||
-          event.type === "status.running" ||
-          event.type === "status.error" ||
-          event.type === "status.idle"
-        ) {
-          clearSendPending(sendPendingTimeoutRef, setSendPending);
-        }
-
-        if (event.type === "file.changed") turnTouchedFilesRef.current = true;
-        if (event.type === "status.idle" && turnTouchedFilesRef.current) {
-          turnTouchedFilesRef.current = false;
-          void Promise.all([
-            queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] }),
-            invalidateDesignAudit(),
-          ]);
-        }
-        if (event.type === "status.error") turnTouchedFilesRef.current = false;
-
-        if (event.type === "file.changed" && id) {
-          openFileAsTab(event.path, setOpenFileTabs, setActiveTabId);
-          if (activeTabIdRef.current === event.path) {
-            setRefreshTick((value) => value + 1);
-          }
-          void queryClient.invalidateQueries({
-            queryKey: ["project", id, "files"],
-          });
-        }
-
-        // A CLI turn never emits file.changed — the backend collapses it into
-        // one committed artifact.operation, which is what refreshes the
-        // canvas and the file tabs after a turn (T2).
-        if (event.type === "artifact.operation" && event.outcome === "committed") {
-          turnTouchedFilesRef.current = true;
-          if (id) {
-            openChangedFilesAsTabs(
-              event.changedPaths,
-              openFileTabsRef.current.length > 0,
-              setOpenFileTabs,
-              setActiveTabId,
-            );
-            if (event.changedPaths.includes(activeTabIdRef.current)) {
-              setRefreshTick((value) => value + 1);
-            }
-            void queryClient.invalidateQueries({
-              queryKey: ["project", id, "files"],
-            });
-          }
-        }
-
-        // No sessionQuery invalidation on usage.delta — applyEventToSession
-        // accumulates usage locally. A refetch here was racing with the
-        // backend's own setSessionStatus("idle") call and flipping the
-        // status back to "running" mid-sequence.
+    if (event.type === "file.changed" && id) {
+      openFileAsTab(event.path, setOpenFileTabs, setActiveTabId);
+      if (activeTabIdRef.current === event.path) {
+        setRefreshTick((value) => value + 1);
+      }
+      void queryClient.invalidateQueries({
+        queryKey: ["project", id, "files"],
       });
-    };
+    }
 
-    void connect();
+    // A CLI turn never emits file.changed — the backend collapses it into
+    // one committed artifact.operation, which is what refreshes the
+    // canvas and the file tabs after a turn (T2).
+    if (event.type === "artifact.operation" && event.outcome === "committed") {
+      turnTouchedFilesRef.current = true;
+      if (id) {
+        openChangedFilesAsTabs(
+          event.changedPaths,
+          openFileTabsRef.current.length > 0,
+          setOpenFileTabs,
+          setActiveTabId,
+        );
+        if (event.changedPaths.includes(activeTabIdRef.current)) {
+          setRefreshTick((value) => value + 1);
+        }
+        void queryClient.invalidateQueries({
+          queryKey: ["project", id, "files"],
+        });
+      }
+    }
 
-    return () => {
-      active = false;
-      cleanup();
-    };
-  }, [id, invalidateDesignAudit, mergeDirectionCache, queryClient, replayQuery.status, sessionQuery.data?.id]);
+  }, [id, invalidateDesignAudit, mergeDirectionCache, queryClient]);
+  const stream = useSessionEvents(sessionQuery.data?.id, handleLiveEvent);
+  const events = useMemo(() => stream.state?.envelopes.map((item) => item.event) ?? [], [stream.state?.envelopes]);
+  useEffect(() => {
+    const latest = latestDirectionState(events);
+    mergeDirectionCache(latest === null ? null : parseDesignDirectionState(latest));
+  }, [events, mergeDirectionCache]);
+  useEffect(() => {
+    if (stream.state && sessionQuery.data?.backend_id !== stream.state.session.backend_id) {
+      void stream.refreshSnapshot().catch(() => {});
+    }
+  }, [sessionQuery.data?.backend_id]);
 
   useEffect(() => {
     const project = projectQuery.data;
@@ -810,7 +767,7 @@ export default function ProjectView() {
   );
   const files: FileInfo[] = filesQuery.data ?? [];
   const artifacts = artifactsQuery.data ?? null;
-  const session = sessionState;
+  const session = stream.state?.session ?? null;
   const directionState = directionQuery.data ?? null;
   const directionActionPending =
     generateDirectionsMutation.isPending ||
@@ -825,7 +782,7 @@ export default function ProjectView() {
       : null);
   const directionLoading = directionState?.status === "loading";
   const chatComposerDisabled = sendPending || session?.status === "running";
-  const composerDisabled = chatComposerDisabled || directionLoading;
+  const composerDisabled = chatComposerDisabled || directionLoading || stream.error;
 
   // Turn clock. When the composer flips from idle to busy we stamp a
   // start time; a 1s ticker then drives re-renders so `canInterrupt`
@@ -859,7 +816,7 @@ export default function ProjectView() {
     onError: (err) => {
       pushToast({
         title: "작업을 중단하지 못했어요",
-        body: err instanceof Error ? err.message : String(err),
+        body: apiErrorCopy(err),
         tone: "error",
       });
     },
@@ -895,22 +852,7 @@ export default function ProjectView() {
     () => buildTabs(project, openFileTabs),
     [openFileTabs, project],
   );
-  const pendingPermissions = useMemo<PermissionRequest[]>(() => {
-    const seen = new Set<string>();
-    const out: PermissionRequest[] = [];
-    for (const event of events) {
-      if (event.type !== "tool.permission_required") continue;
-      if (decidedToolCallIds.has(event.toolCallId)) continue;
-      if (seen.has(event.toolCallId)) continue;
-      seen.add(event.toolCallId);
-      out.push({
-        toolCallId: event.toolCallId,
-        tool: event.tool,
-        input: event.input,
-      });
-    }
-    return out;
-  }, [events, decidedToolCallIds]);
+  const pendingPermissions = stream.state?.pending ?? [];
 
   const canvasSrc = useMemo(() => {
     const activeFile = tabs.find(
@@ -983,7 +925,7 @@ export default function ProjectView() {
     onError: (err) => {
       pushToast({
         title: "실행 취소하지 못했어요",
-        body: err instanceof Error ? err.message : String(err),
+        body: apiErrorCopy(err),
         tone: "error",
       });
     },
@@ -1004,7 +946,7 @@ export default function ProjectView() {
     projectQuery.isLoading ||
     sessionQuery.isLoading ||
     filesQuery.isLoading ||
-    artifactsQuery.isLoading;
+    artifactsQuery.isLoading || (Boolean(sessionQuery.data) && !stream.state && !stream.error);
 
   if (isLoading) {
     return (
@@ -1017,7 +959,7 @@ export default function ProjectView() {
   if (!project || !session || !artifacts) {
     return (
       <div className="grid flex-1 place-items-center">
-        <div className="text-sm text-destructive">프로젝트를 열 수 없어요</div>
+        <div className="space-y-3 text-center" role="alert"><p className="text-sm text-destructive">프로젝트를 열 수 없어요. 연결을 확인하고 다시 시도해 주세요.</p><button type="button" className="rounded border px-4 py-2" onClick={() => { void projectQuery.refetch(); void sessionQuery.refetch(); void filesQuery.refetch(); void artifactsQuery.refetch(); stream.retry(); }}>다시 시도</button><button type="button" className="ml-2 rounded border px-4 py-2" onClick={() => navigate("/")}>홈으로</button></div>
       </div>
     );
   }
@@ -1029,6 +971,7 @@ export default function ProjectView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {stream.error && <div role="alert" className="flex items-center justify-between bg-warning/15 px-4 py-2 text-sm"><span>실시간 연결이 끊겼어요. 다시 연결하는 중이에요.</span><button type="button" className="rounded border px-3 py-2" onClick={stream.retry}>다시 연결</button></div>}
       <ProjectTopBar
         project={project}
         canPresent={
@@ -1136,6 +1079,7 @@ export default function ProjectView() {
 
         {activeTab?.kind === "design_files" && (
           <DesignFilesView
+            projectId={id!}
             files={files}
             onOpenInCanvas={(relPath) =>
               openFileAsTab(relPath, setOpenFileTabs, setActiveTabId)
@@ -1214,8 +1158,17 @@ export default function ProjectView() {
               drawStrokeWidth={drawStrokeWidth}
               drawInitialShapes={drawShapes}
               drawResetKey={drawResetKey}
+              drawLoading={drawLoading}
+              drawError={drawError}
+              onRetryDraws={() => {
+                if (putDrawsMutation.isPending) return;
+                if (putDrawsMutation.isError && putDrawsMutation.variables?.relPath === activeRelPath) {
+                  putDrawsMutation.mutate(putDrawsMutation.variables);
+                } else setDrawLoadAttempt((value) => value + 1);
+              }}
               drawLayerRef={drawLayerRef}
               onCommitDraws={(shapes) => {
+                if (drawBlocked) return;
                 setDrawShapes(shapes);
                 if (!activeRelPath) return;
                 const rect = document
@@ -1224,10 +1177,15 @@ export default function ProjectView() {
                 const width = rect?.width ?? 1280;
                 const height = rect?.height ?? 720;
                 const svg = serializeDraws(width, height, shapes);
-                putDrawsMutation.mutate({
+                const save = putDrawsMutation.mutateAsync({
                   relPath: activeRelPath,
                   svg,
                   viewport: `${Math.round(width)}x${Math.round(height)}`,
+                });
+                const key = `${id}:${activeRelPath}`;
+                drawSavesRef.current.set(key, save);
+                void save.catch(() => {}).finally(() => {
+                  if (drawSavesRef.current.get(key) === save) drawSavesRef.current.delete(key);
                 });
               }}
             />
@@ -1339,13 +1297,13 @@ export default function ProjectView() {
               drawTool={drawTool}
               drawColor={drawColor}
               drawStrokeWidth={drawStrokeWidth}
-              drawHasShapes={drawShapes.length > 0}
+              drawHasShapes={!drawBlocked && drawShapes.length > 0}
               onChangeDrawTool={setDrawTool}
               onChangeDrawColor={setDrawColor}
               onChangeDrawWidth={setDrawStrokeWidth}
-              onUndoDraw={() => drawLayerRef.current?.undo()}
-              onRedoDraw={() => drawLayerRef.current?.redo()}
-              onClearDraw={() => drawLayerRef.current?.clear()}
+              onUndoDraw={() => { if (!drawBlocked) drawLayerRef.current?.undo(); }}
+              onRedoDraw={() => { if (!drawBlocked) drawLayerRef.current?.redo(); }}
+              onClearDraw={() => { if (!drawBlocked) drawLayerRef.current?.clear(); }}
             />
           </>
         )}
@@ -1370,28 +1328,6 @@ export default function ProjectView() {
       )}
     </div>
   );
-}
-
-function appendEvents(
-  incoming: NormalizedEvent[],
-  seenEventIdsRef: MutableRefObject<Set<string>>,
-  latestEventTsRef: MutableRefObject<number | undefined>,
-  setEvents: Dispatch<SetStateAction<NormalizedEvent[]>>,
-) {
-  if (incoming.length === 0) return;
-
-  const next = incoming.filter((event) => !seenEventIdsRef.current.has(event.id));
-  if (next.length === 0) return;
-
-  for (const event of next) {
-    seenEventIdsRef.current.add(event.id);
-    latestEventTsRef.current = Math.max(
-      latestEventTsRef.current ?? 0,
-      event.ts,
-    );
-  }
-
-  setEvents((current) => mergeEvents(current, next));
 }
 
 function buildTabs(
@@ -1419,62 +1355,6 @@ function buildTabs(
     },
     ...openFileTabs,
   ];
-}
-
-function mergeEvents(current: NormalizedEvent[], incoming: NormalizedEvent[]) {
-  const merged = new Map<string, NormalizedEvent>();
-  for (const event of current) merged.set(event.id, event);
-  for (const event of incoming) merged.set(event.id, event);
-  return [...merged.values()].sort((a, b) =>
-    a.ts === b.ts ? a.id.localeCompare(b.id) : a.ts - b.ts,
-  );
-}
-
-function applyEventToSession(
-  current: SessionInfo | null,
-  event: NormalizedEvent,
-): SessionInfo | null {
-  if (!current) return current;
-
-  switch (event.type) {
-    case "usage.delta":
-      // Accumulate live. Replay events pass through `setEvents` only, not
-      // through `applyEventToSession`, so there's no double-counting here.
-      return {
-        ...current,
-        usage: {
-          ...current.usage,
-          input: current.usage.input + event.input,
-          output: current.usage.output + event.output,
-          cached: current.usage.cached + (event.cached ?? 0),
-        },
-        updated_at: event.ts,
-        last_active_at: event.ts,
-      };
-    case "status.running":
-      return {
-        ...current,
-        status: "running",
-        updated_at: event.ts,
-        last_active_at: event.ts,
-      };
-    case "status.idle":
-      return {
-        ...current,
-        status: "idle",
-        updated_at: event.ts,
-        last_active_at: event.ts,
-      };
-    case "status.error":
-      return {
-        ...current,
-        status: "error",
-        updated_at: event.ts,
-        last_active_at: event.ts,
-      };
-    default:
-      return current;
-  }
 }
 
 function openFileAsTab(

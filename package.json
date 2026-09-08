@@ -14,6 +14,9 @@
     "build:mac:dmg": "bun run build:frontend && bun run scripts/build-mac.ts -- --dmg",
     "build": "bun run build:frontend && bun run build:backend",
     "typecheck": "tsc --build",
+    "test": "bun test --timeout 30000",
+    "test:coverage": "bun test --coverage --timeout 30000",
+    "lint": "git diff --check",
     "clean": "rm -rf packages/*/dist dist"
   },
   "devDependencies": {

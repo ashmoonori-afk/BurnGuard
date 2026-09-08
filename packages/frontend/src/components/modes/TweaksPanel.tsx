@@ -266,7 +266,7 @@ function SizeRow({
         value={draft}
         placeholder={numericFromLength(computed) || computed || "—"}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
+        onBlur={(e) => commitTweakOnBlur(e.currentTarget, commit)}
         onKeyDown={(e) => handleEnterEscape(e, commit, () => setDraft(numericFromLength(inline)))}
         disabled={saving}
         className={inputCls("min-w-0 flex-1")}
@@ -438,7 +438,7 @@ function ColorRow({
               value={hexDraft}
               onChange={(e) => setHexDraft(e.target.value)}
               onKeyDown={(e) => handleEnterEscape(e, commitHex, () => setOpen(false))}
-              onBlur={commitHex}
+              onBlur={(e) => commitTweakOnBlur(e.currentTarget, commitHex)}
               className={inputCls("min-w-0 flex-1")}
             />
             <button
@@ -546,7 +546,7 @@ function SideInput({
       inputMode="decimal"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => onCommit(draft)}
+      onBlur={(e) => commitTweakOnBlur(e.currentTarget, () => onCommit(draft))}
       onKeyDown={(e) =>
         handleEnterEscape(
           e,
@@ -562,20 +562,28 @@ function SideInput({
   );
 }
 
-function handleEnterEscape(
+const handledBlurInputs = new WeakSet<HTMLInputElement>();
+
+export function commitTweakOnBlur(input: HTMLInputElement, commit: () => void) {
+  if (!handledBlurInputs.has(input)) commit();
+}
+
+export function handleEnterEscape(
   e: ReactKeyboardEvent<HTMLInputElement>,
   onEnter: () => void,
   onEscape: () => void,
 ) {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    onEnter();
-    (e.currentTarget as HTMLInputElement).blur();
-  }
-  if (e.key === "Escape") {
-    e.preventDefault();
-    onEscape();
-    (e.currentTarget as HTMLInputElement).blur();
+  if (e.key !== "Enter" && e.key !== "Escape") return;
+  e.preventDefault();
+  const input = e.currentTarget;
+  // blur fires synchronously, before React applies the restored draft.
+  handledBlurInputs.add(input);
+  try {
+    if (e.key === "Enter") onEnter();
+    else onEscape();
+    input.blur();
+  } finally {
+    handledBlurInputs.delete(input);
   }
 }
 

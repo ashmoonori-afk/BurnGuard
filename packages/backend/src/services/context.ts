@@ -4,6 +4,8 @@ import { getSessionProject } from "../db/events";
 import { getDesignSystemDetail } from "../db/seed";
 import { indexProjectFiles, listIndexedProjectFiles } from "./files";
 import { getLatestDirectionState } from "./design-direction-state";
+import { getSqlite } from "../db/sqlite-client";
+import { readConversationHistory } from "../db/conversation-history";
 
 export async function buildSessionContext(sessionId: string) {
   const project = await getSessionProject(sessionId);
@@ -30,6 +32,7 @@ export async function buildSessionContext(sessionId: string) {
     attachments,
     openComments: comments.filter((c) => c.resolved_at === null),
     designDirectionState,
+    history: readConversationHistory(getSqlite(), sessionId),
   };
 }
 

@@ -11,6 +11,7 @@ export async function subscribeBeforeBackfill(input: ReplayInput): Promise<() =>
   const queued: SequencedEventEnvelope[] = [];
   let replaying = true;
   let cursor = input.afterSequence;
+  let liveDelivery = Promise.resolve();
   const deliver = async (item: SequencedEventEnvelope): Promise<void> => {
     if (item.sequence <= cursor) return;
     await input.emit(item);
@@ -21,12 +22,16 @@ export async function subscribeBeforeBackfill(input: ReplayInput): Promise<() =>
       queued.push(item);
       return;
     }
-    await deliver(item);
+    liveDelivery = liveDelivery.then(() => deliver(item)).catch((error) => { unsubscribe(); throw error; });
+    await liveDelivery;
   });
   try {
     const historical = await input.backfill(input.afterSequence);
-    const merged = [...historical, ...queued].sort((left, right) => left.sequence - right.sequence);
-    for (const item of merged) await deliver(item);
+    queued.push(...historical);
+    while (queued.length > 0) {
+      const batch = queued.splice(0).sort((left, right) => left.sequence - right.sequence);
+      for (const item of batch) await deliver(item);
+    }
     replaying = false;
     return unsubscribe;
   } catch (error) {

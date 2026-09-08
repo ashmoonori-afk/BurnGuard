@@ -48,9 +48,8 @@ export default function EditPanel({
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
           캔버스에 마우스를 올리면 편집할 수 있는 요소가 강조되고, 클릭하면
-          내용을 보고 고칠 수 있어요.{" "}
-          <code className="font-mono">data-bg-node-id</code>가 있는 요소만
-          편집할 수 있어요.
+          텍스트, 링크, 이미지 설명을 고칠 수 있어요. 편집을 지원하는 요소가
+          강조돼요.
         </p>
       </div>
     );
@@ -102,17 +101,18 @@ export default function EditPanel({
             선택 해제
           </button>
         </div>
-        <div className="mt-1 font-mono text-xs">&lt;{target.tag}&gt;</div>
-        <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
-          data-bg-node-id="{target.bg_id}"
+        <div className="mt-1 truncate text-xs font-medium">
+          {target.tag === "img" ? "이미지" : target.tag === "a" ? "링크" : "텍스트 요소"}
+          {target.text.trim() ? ` · ${target.text.trim()}` : ""}
         </div>
       </div>
 
       <section className="px-3 py-2">
-        <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <label htmlFor="element-edit-text" className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           텍스트 내용
         </label>
         <textarea
+          id="element-edit-text"
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={4}
@@ -120,7 +120,11 @@ export default function EditPanel({
         />
       </section>
 
-      <section className="px-3 py-2 border-t border-border">
+      <details className="px-3 py-2 border-t border-border">
+        <summary className="cursor-pointer text-xs">고급 속성</summary>
+        <div className="my-2 break-all font-mono text-[10px] text-muted-foreground">
+          &lt;{target.tag}&gt; · {target.bg_id}
+        </div>
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
             속성
@@ -170,7 +174,7 @@ export default function EditPanel({
             </div>
           ))}
         </div>
-      </section>
+      </details>
 
       <div className="border-t border-border px-3 py-2">
         <button

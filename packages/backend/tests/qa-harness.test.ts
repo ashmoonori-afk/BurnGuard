@@ -11,17 +11,18 @@ async function runScript(
   args: readonly string[],
   environment: Readonly<Record<string, string>> = {},
 ) {
-  const child = Bun.spawn(["bun", "run", script, ...args], {
+  const child = Bun.spawn([process.execPath, "run", script, ...args], {
     cwd: repoRoot,
     stdout: "pipe",
     stderr: "pipe",
     env: { ...processEnv(), ...environment },
   });
+  const deadline = setTimeout(() => child.kill(), 55_000);
   const [exitCode, stdout, stderr] = await Promise.all([
     child.exited,
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
-  ]);
+  ]).finally(() => clearTimeout(deadline));
   return { exitCode, stdout, stderr };
 }
 

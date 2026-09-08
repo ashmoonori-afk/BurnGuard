@@ -32,6 +32,8 @@ export function parsePersistedNormalizedEvent(value: string, id: string): Normal
       const common = { ...base, type, turnId: text(item, "turnId", id), toolCallId: text(item, "toolCallId", id), tool: text(item, "tool", id), ok: truth(item, "ok", id) };
       return output === undefined ? common : { ...common, output };
     }
+    case "tool.permission_decided":
+      return { ...base, type, turnId: text(item, "turnId", id), toolCallId: text(item, "toolCallId", id), decision: decision(item, id) };
     case "artifact.operation":
       return { ...base, type, operationId: text(item, "operationId", id), revision: integer(item, "revision", id), digest: text(item, "digest", id), changedPaths: texts(item, "changedPaths", id), outcome: operationOutcome(item, id) };
     case "export.attempt":

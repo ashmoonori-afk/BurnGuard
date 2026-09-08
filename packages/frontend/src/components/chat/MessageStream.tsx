@@ -105,6 +105,7 @@ export default function MessageStream({
                 <ErrorCard
                   key={g.ev.id}
                   message={g.ev.message}
+                  code={g.ev.code}
                   recoverable={g.ev.recoverable}
                 />
               );

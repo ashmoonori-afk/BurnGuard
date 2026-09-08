@@ -1,4 +1,4 @@
-import { useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type { VisualSourceRole } from "@bg/shared";
 import {
   planAttachmentIntake,
@@ -7,8 +7,7 @@ import {
   type IntakeItem,
 } from "./attachment-intake";
 
-export function useComposerVisualSources(onEdit: () => void) {
-  const [items, setItems] = useState<readonly IntakeItem[]>([]);
+export function useComposerVisualSources(onEdit: () => void, items: readonly IntakeItem[], setItems: Dispatch<SetStateAction<readonly IntakeItem[]>>) {
   return {
     items,
     add(files: readonly File[]) {

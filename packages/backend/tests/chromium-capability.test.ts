@@ -124,4 +124,31 @@ describe("chromium launch capability", () => {
     expect(usable).toBe(true);
     expect(probes).toBe(0);
   });
+
+  test("Given a pending capability poll When a render awaits readiness Then it shares the probe and cancellation stops only its wait", async () => {
+    process.env.BG_CHROMIUM_PROBE_WAIT_MS = "1";
+    let finish!: (usable: boolean) => void;
+    let probes = 0;
+    const probe = (): Promise<boolean> => { probes++; return new Promise((resolve) => { finish = resolve; }); };
+    expect(await isChromiumLaunchable(probe)).toBe(false);
+    const controller = new AbortController();
+    const cancelled = isChromiumLaunchable(probe, { waitForResult: true, signal: controller.signal });
+    controller.abort();
+    expect(await cancelled).toBe(false);
+    const rendering = isChromiumLaunchable(probe, { waitForResult: true });
+    finish(true);
+    expect(await rendering).toBe(true);
+    expect(probes).toBe(1);
+  });
+
+  test("Given a browser installation invalidates an old probe When the old failure completes Then it cannot overwrite the new usable result", async () => {
+    let finish!: (usable: boolean) => void;
+    const old = isChromiumLaunchable(() => new Promise((resolve) => { finish = resolve; }));
+    await Promise.resolve();
+    resetChromiumCapability();
+    expect(await isChromiumLaunchable(async () => true)).toBe(true);
+    finish(false);
+    expect(await old).toBe(false);
+    expect(await isChromiumLaunchable(async () => false)).toBe(true);
+  });
 });

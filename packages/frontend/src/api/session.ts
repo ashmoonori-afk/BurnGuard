@@ -1,4 +1,4 @@
-import type { BackendId, NormalizedEvent, SequencedEventEnvelope, SessionInfo, UserEvent, VisualSourceRole } from "@bg/shared";
+import type { BackendId, SequencedEventEnvelope, SessionInfo, SessionSnapshot, UserEvent, VisualSourceRole } from "@bg/shared";
 import { apiFetch } from "./client";
 
 export async function getSession(id: string): Promise<SessionInfo> {
@@ -8,10 +8,14 @@ export async function getSession(id: string): Promise<SessionInfo> {
 export async function listSessionEvents(
   id: string,
   afterSequence?: number,
-): Promise<NormalizedEvent[]> {
+): Promise<SequencedEventEnvelope[]> {
   const q = afterSequence != null ? `?after_sequence=${afterSequence}` : "";
   const envelopes = await apiFetch<SequencedEventEnvelope[]>(`/api/sessions/${id}/events${q}`);
-  return envelopes.map((item) => item.event);
+  return envelopes;
+}
+
+export async function getSessionSnapshot(id: string): Promise<SessionSnapshot> {
+  return apiFetch<SessionSnapshot>(`/api/sessions/${id}/snapshot`);
 }
 
 /**
@@ -107,14 +111,19 @@ export async function submitToolDecision(
 
 export function subscribeSessionStream(
   id: string,
-  onEvent: (event: NormalizedEvent) => void,
+  onEvent: (event: SequencedEventEnvelope) => void,
   onError?: (err: { kind: "parse" | "connection"; message: string }) => void,
+  options?: { afterSequence?: number; onOpen?: () => void },
 ): () => void {
-  const source = new EventSource(`/api/sessions/${id}/stream`);
+  const source = new EventSource(`/api/sessions/${id}/stream?after_sequence=${options?.afterSequence ?? 0}`);
   const listener = (message: MessageEvent<string>) => {
     let parsed: SequencedEventEnvelope;
     try {
       parsed = JSON.parse(message.data) as SequencedEventEnvelope;
+      if (!Number.isSafeInteger(parsed?.sequence) || parsed.sequence < 1 ||
+          !parsed.event || typeof parsed.event.id !== "string" || typeof parsed.event.type !== "string" || !Number.isFinite(parsed.event.ts)) {
+        throw new Error("invalid_event_envelope");
+      }
     } catch (err) {
       // Malformed payload — call the optional error handler so the
       // caller can surface a toast, but don't bubble up because the
@@ -126,7 +135,7 @@ export function subscribeSessionStream(
       return;
     }
     try {
-      onEvent(parsed.event);
+      onEvent(parsed);
     } catch (err) {
       // Likewise: an exception inside the consumer must not kill the
       // EventSource subscription.
@@ -141,6 +150,7 @@ export function subscribeSessionStream(
   // CONNECTING state). Surface the first one per disconnect cycle so
   // the UI can show a transient "reconnecting" hint without spamming.
   let lastErrorReadyState: number | null = null;
+  const openListener = () => { lastErrorReadyState = null; options?.onOpen?.(); };
   const errorListener = () => {
     if (source.readyState === lastErrorReadyState) return;
     lastErrorReadyState = source.readyState;
@@ -154,9 +164,11 @@ export function subscribeSessionStream(
   };
   source.addEventListener("message", listener as EventListener);
   source.addEventListener("error", errorListener);
+  source.addEventListener("open", openListener);
   return () => {
     source.removeEventListener("message", listener as EventListener);
     source.removeEventListener("error", errorListener);
+    source.removeEventListener("open", openListener);
     source.close();
   };
 }

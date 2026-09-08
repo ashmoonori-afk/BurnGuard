@@ -12,12 +12,13 @@ import {
   type VisualSourceUploadRequestV1,
 } from "@bg/shared";
 import {
-  insertNormalizedEvent,
-  insertUserEvent,
+  persistNormalizedEvent,
   listSessionEvents,
   setSessionBackend,
   setSessionStatus,
 } from "../db/events";
+import { insertSequencedEvent } from "../db/sequenced-event-writer";
+import { readSessionSnapshot } from "../db/session-snapshot";
 import {
   getLatestProjectSession,
   getProjectDetail,
@@ -59,7 +60,7 @@ function fail(
 }
 
 async function persistAndPublishRoute(sessionId: string, event: NormalizedEvent): Promise<void> {
-  const persisted = await insertNormalizedEvent(sessionId, event);
+  const persisted = persistNormalizedEvent(getSqlite(), sessionId, event);
   broker.publish(sessionId, event);
   sequencedBroker.publish(sessionId, persisted);
 }
@@ -69,6 +70,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export const sessionRoutes = new Hono();
+
+sessionRoutes.get("/api/sessions/:id/snapshot", (c) => {
+  const snapshot = readSessionSnapshot(getSqlite(), c.req.param("id"));
+  return snapshot === null ? c.json(fail("session_not_found", "Session not found"), 404) : c.json(ok(snapshot));
+});
 
 sessionRoutes.get("/api/sessions/:id/events", async (c) => {
   const id = c.req.param("id");
@@ -300,7 +306,19 @@ sessionRoutes.post("/api/sessions/:id/tool-decision", async (c) => {
     decision,
     reason: typeof reason === "string" ? reason : undefined,
   };
-  await insertUserEvent(id, payload);
+  const decided = getSqlite().transaction(() => {
+    const pending = readSessionSnapshot(getSqlite(), id)?.pending_permissions.find((item) => item.toolCallId === toolCallId);
+    if (pending === undefined) return null;
+    const now = Date.now();
+    insertSequencedEvent(getSqlite(), { id: ulid(), sessionId: id, direction: "up", type: payload.type, payload, turnId: pending.turnId, processedAt: now, createdAt: now });
+    const event: NormalizedEvent = { id: ulid(), ts: now, type: "tool.permission_decided", turnId: pending.turnId, toolCallId, decision };
+    const persisted = persistNormalizedEvent(getSqlite(), id, event);
+    getSqlite().prepare("UPDATE sessions SET status=? WHERE id=? AND status='awaiting_tool'").run(isUserTurnRunning(id) ? "running" : "idle", id);
+    return persisted;
+  })();
+  if (decided === null) return c.json(fail("permission_not_pending", "This permission request is no longer pending"), 409);
+  broker.publish(id, decided.event);
+  sequencedBroker.publish(id, decided);
 
   // Hand the decision to the adapter that owns this session's turn
   // so it can forward it into the CLI's own channel (stdin pipe
@@ -427,20 +445,30 @@ sessionRoutes.get("/api/sessions/:id/stream", async (c) => {
     return c.json(fail("session_not_found", "Session not found", { id }), 404);
   }
 
+  const cursorValue = c.req.header("Last-Event-ID") ?? c.req.query("after_sequence") ?? "0";
+  const cursor = /^\d+$/.test(cursorValue) ? Number(cursorValue) : Number.NaN;
+  if (!Number.isSafeInteger(cursor) || cursor < 0) {
+    return c.json(fail("invalid_sequence_cursor", "Event cursor must be a non-negative integer"), 400);
+  }
+
   return streamSSE(c, async (stream) => {
     let closed = false;
     let heartbeat: Timer | null = null;
     let unsubscribe = () => {};
+    let resolveClosed: () => void = () => {};
+    const closedPromise = new Promise<void>((resolve) => { resolveClosed = resolve; });
     const closeAndCleanup = () => {
       closed = true;
       if (heartbeat !== null) clearInterval(heartbeat);
       unsubscribe();
+      resolveClosed();
     };
-    const headerCursor = c.req.header("Last-Event-ID");
-    const queryCursor = c.req.query("after_sequence");
-    const cursor = Number.parseInt(headerCursor ?? queryCursor ?? "0", 10);
-    if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error("invalid_sequence_cursor");
-    unsubscribe = await subscribeBeforeBackfill({
+    const signal = c.req.raw.signal;
+    const onAbort = closeAndCleanup;
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+    try {
+      unsubscribe = await subscribeBeforeBackfill({
       afterSequence: cursor,
       subscribe: (listener) => sequencedBroker.subscribe(id, listener),
       backfill: async (afterSequence) => listSessionEvents(id, afterSequence),
@@ -449,6 +477,7 @@ sessionRoutes.get("/api/sessions/:id/stream", async (c) => {
         await stream.writeSSE({ data: JSON.stringify(item), event: "message", id: String(item.sequence) });
       },
     });
+      if (closed) return;
 
     // Heartbeat must fire inside Bun.serve's idleTimeout window (255s max)
     // to keep the SSE connection alive during long Claude Code runs.
@@ -472,12 +501,10 @@ sessionRoutes.get("/api/sessions/:id/stream", async (c) => {
         });
     }, 30_000);
 
-    try {
-      await new Promise<void>((resolve) => {
-        c.req.raw.signal.addEventListener("abort", () => resolve(), { once: true });
-      });
+      await closedPromise;
     } finally {
       closeAndCleanup();
+      signal.removeEventListener("abort", onAbort);
     }
   });
 });

@@ -1,7 +1,6 @@
 node_modules
 dist
 .bun
-bun.lock
 *.log
 .env
 .env.local
@@ -14,6 +13,7 @@ Thumbs.db
 .turbo
 *.tsbuildinfo
 .typecheck
+coverage/
 
 # User data (never commit anyone's ~/.burnguard that happens to be here)
 .burnguard

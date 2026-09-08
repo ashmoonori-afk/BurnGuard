@@ -54,7 +54,7 @@ export function renderGraphic(
       max-width: min(15ch, 100%);
       overflow-wrap: anywhere;
       font-size: clamp(36px, 8vw, 112px);
-      line-height: 1.2;
+      line-height: 1.4;
       letter-spacing: -0.055em;
     }
     h1.long-title {

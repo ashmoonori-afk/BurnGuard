@@ -19,6 +19,7 @@ import {
 } from "./frame-bridge";
 import type { CanvasMode } from "@/components/modes/types";
 import type { SelectedNode } from "@/types/project";
+import { authorizedFetch } from "@/api/client";
 
 const PLACEHOLDER_SRC = `<!doctype html>
 <html lang="ko">
@@ -93,6 +94,9 @@ export default function Canvas({
   qualityFocusedNodeId,
   onQualityRevealResult,
   graphicCanvas,
+  drawLoading = false,
+  drawError = null,
+  onRetryDraws,
 }: {
   mode: CanvasMode | null;
   src?: string | null;
@@ -130,13 +134,19 @@ export default function Canvas({
   qualityFocusedNodeId: string | null;
   onQualityRevealResult: (nodeBgId: string, found: boolean) => void;
   graphicCanvas?: GraphicCanvasV1 | null;
+  drawLoading?: boolean;
+  drawError?: string | null;
+  onRetryDraws?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const lastKnownSlideIdxRef = useRef<number | null>(null);
+  const slideByFileRef = useRef(new Map<string, number | null>());
+  const lastFrameSlideRef = useRef<number | null>(null);
   const restoreTargetSlideIdxRef = useRef<number | null>(null);
   const restoringSlideRef = useRef(false);
-  const [frameSrcDoc, setFrameSrcDoc] = useState<string | null>(null);
+  const frameLoadKey = JSON.stringify([src, frameKey]);
+  const [frameDocument, setFrameDocument] = useState<{ key: string; html: string } | null>(null);
+  const frameSrcDoc = frameDocument?.key === frameLoadKey ? frameDocument.html : null;
   const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null);
   // Surfaces fetch failures inline instead of falling back to the
   // placeholder with no signal (audit fix #6). Cleared on every src
@@ -147,73 +157,64 @@ export default function Canvas({
   } | null>(null);
 
   useEffect(() => {
-    if (activeSlideIdx != null) {
-      lastKnownSlideIdxRef.current = activeSlideIdx;
-    }
-  }, [activeSlideIdx]);
-
-  useEffect(() => {
-    if (!src) {
-      restoreTargetSlideIdxRef.current = null;
-      restoringSlideRef.current = false;
-      return;
-    }
-    restoreTargetSlideIdxRef.current = lastKnownSlideIdxRef.current;
+    restoreTargetSlideIdxRef.current = src ? slideByFileRef.current.get(src) ?? null : null;
     restoringSlideRef.current = restoreTargetSlideIdxRef.current != null;
-  }, [frameKey, src]);
+    lastFrameSlideRef.current = null;
+    onActiveSlideChange(null);
+  }, [frameKey, src, onActiveSlideChange]);
 
   useEffect(() => {
     setLoadedFrameKey(null);
     if (!src) {
-      setFrameSrcDoc(null);
+      setFrameDocument(null);
       setLoadError(null);
       return;
     }
 
-    let cancelled = false;
-    setFrameSrcDoc(null);
+    const controller = new AbortController();
+    setFrameDocument(null);
     setLoadError(null);
 
-    void fetch(src)
+    void authorizedFetch(src, { signal: controller.signal, cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) {
-          const text = await response.text().catch(() => "");
-          const detail = text.trim().slice(0, 200);
           throw Object.assign(
-            new Error(
-              detail ||
-                `Backend returned HTTP ${response.status} fetching the artifact.`,
-            ),
+            new Error("artifact_load_failed"),
             { httpStatus: response.status },
           );
         }
         return response.text();
       })
       .then((html) => {
-        if (cancelled) return;
-        setFrameSrcDoc(
-          buildSandboxedArtifactSrcDoc(
+        if (controller.signal.aborted) return;
+        setFrameDocument({
+          key: frameLoadKey,
+          html: buildSandboxedArtifactSrcDoc(
             html,
             new URL(src, window.location.href).toString(),
             graphicCanvas === null || graphicCanvas === undefined
               ? undefined
               : { graphicCanvas },
           ),
-        );
+        });
       })
       .catch((err: Error & { httpStatus?: number }) => {
-        if (cancelled) return;
-        setFrameSrcDoc(null);
+        if (controller.signal.aborted) return;
+        setFrameDocument(null);
         setLoadError({
           status: err.httpStatus,
-          message: err.message || "결과물을 불러오지 못했어요.",
+          message: err.httpStatus === 404
+            ? "파일을 찾을 수 없어요. 파일 목록을 새로고침한 뒤 다시 선택해 주세요."
+            : err.httpStatus === 401 || err.httpStatus === 403
+              ? "페이지를 새로고침한 뒤 다시 시도해 주세요."
+              : "서버 연결과 파일 상태를 확인한 뒤 다시 시도해 주세요.",
         });
       });
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [frameKey, graphicCanvas, src]);
+  }, [frameLoadKey, graphicCanvas, src]);
 
   useEffect(() => {
     // Push-based: deck-stage's BRIDGE_SCRIPT broadcasts active-slide-
@@ -229,15 +230,9 @@ export default function Canvas({
         // -1 means the artifact has no [data-slide] elements (e.g. a
         // prototype). Surface that as null so the panel hides slide UI.
         const next = payload.index >= 0 ? payload.index : null;
-        if (restoringSlideRef.current) {
-          const target = restoreTargetSlideIdxRef.current;
-          if (target == null || next === target) {
-            restoringSlideRef.current = false;
-            restoreTargetSlideIdxRef.current = null;
-            onActiveSlideChange(next);
-          }
-          return;
-        }
+        lastFrameSlideRef.current = next;
+        if (restoringSlideRef.current) return;
+        slideByFileRef.current.set(src, next);
         onActiveSlideChange(next);
       },
     );
@@ -246,30 +241,23 @@ export default function Canvas({
 
   useEffect(() => {
     const restoreIdx = restoreTargetSlideIdxRef.current;
-    if (!src || frameSrcDoc === null || restoreIdx == null) {
+    if (!src || loadedFrameKey !== (frameKey ?? src) || restoreIdx == null) {
       return;
     }
 
     let cancelled = false;
-    let attempts = 0;
-
-    const restore = () => {
+    void requestFrameSetActiveSlide(iframeRef.current, restoreIdx).then((index) => {
       if (cancelled) return;
-      attempts += 1;
-      void requestFrameSetActiveSlide(iframeRef.current, restoreIdx).then(
-        (ok) => {
-          if (cancelled || ok || attempts >= 10) return;
-          window.setTimeout(restore, 80);
-        },
-      );
-    };
-
-    const timer = window.setTimeout(restore, 40);
+      const next = index === null ? lastFrameSlideRef.current : index >= 0 ? index : null;
+      restoringSlideRef.current = false;
+      restoreTargetSlideIdxRef.current = null;
+      slideByFileRef.current.set(src, next);
+      onActiveSlideChange(next);
+    });
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
     };
-  }, [frameKey, frameSrcDoc, src]);
+  }, [frameKey, loadedFrameKey, src, onActiveSlideChange]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/40 max-[900px]:min-h-48">
@@ -291,7 +279,9 @@ export default function Canvas({
             sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
             allow="fullscreen"
             className="absolute inset-0 h-full w-full border-0 bg-background"
-            onLoad={() => setLoadedFrameKey(frameKey ?? src)}
+            onLoad={() => {
+              if (frameSrcDoc !== null) setLoadedFrameKey(frameKey ?? src);
+            }}
           />
         ) : (
           <iframe
@@ -340,7 +330,7 @@ export default function Canvas({
         />}
         <DrawLayer
           ref={drawLayerRef}
-          active={mode === "draw"}
+          active={mode === "draw" && !drawLoading && !drawError}
           tool={drawTool}
           color={drawColor}
           strokeWidth={drawStrokeWidth}
@@ -348,6 +338,16 @@ export default function Canvas({
           resetKey={drawResetKey}
           onCommit={onCommitDraws}
         />
+        {mode === "draw" && (drawLoading || drawError) && (
+          <div className="absolute inset-0 grid place-items-center bg-background/80">
+            <div role={drawError ? "alert" : "status"} className="rounded border border-border bg-background p-4 text-xs">
+              {drawError ?? "저장된 그리기를 불러오고 있어요."}
+              {drawError && onRetryDraws && (
+                <button type="button" onClick={onRetryDraws} className="ml-3 underline">다시 시도</button>
+              )}
+            </div>
+          </div>
+        )}
         {loadError && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center bg-background/80 backdrop-blur-sm">
             <div className="pointer-events-auto max-w-sm rounded border border-destructive/40 bg-background px-4 py-3 text-xs shadow-md">

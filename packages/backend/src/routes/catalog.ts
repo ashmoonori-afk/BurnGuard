@@ -2,11 +2,11 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Hono } from "hono";
 import type { Context } from "hono";
-import type { ApiErrorBody, ApiSuccess } from "@bg/shared";
+import type { ApiErrorBody, ApiSuccess, DesignSystemPreview } from "@bg/shared";
 import { getSqlite } from "../db/sqlite-client";
 import { CatalogRepositoryError, getCatalogRow, getCatalogTags, getCatalogUsage, updateCatalogMetadata } from "../db/catalog-repository";
 import { systemsDir } from "../lib/paths";
-import { CatalogFileError, catalogPaths } from "../services/catalog-files";
+import { CatalogFileError, catalogPaths, inspectCatalogTree } from "../services/catalog-files";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import {
   CatalogLifecycleError, copyCatalogSystem, purgeCatalogSystem, restoreCatalogSystem, trashCatalogSystem,
@@ -23,6 +23,18 @@ function fail(code: string, message: string, details?: unknown): ApiErrorBody {
 }
 
 export const catalogRoutes = new Hono();
+
+catalogRoutes.get("/api/design-systems/:id/previews", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const row = getCatalogRow(getSqlite(), id);
+    if (row === null || row.lifecycle === "trashed") return c.json(fail("design_system_not_found", "Design system not found"), 404);
+    const paths = await catalogPaths(systemsDir, id, row.dirPath);
+    const tree = await inspectCatalogTree(paths.live);
+    const previews: DesignSystemPreview[] = tree.files.filter((file) => /^preview\/[^/]+\.html?$/i.test(file)).map((file) => ({ path: file }));
+    return c.json(ok(previews));
+  } catch (error) { return catalogError(c, error); }
+});
 
 catalogRoutes.get("/api/design-systems", async (c) => {
   try {

@@ -13,6 +13,11 @@
  * costs nothing, and every in-process render is gated on that answer.
  */
 
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { chromiumNodeCommand } from "./chromium-node-launch";
+import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../adapters/owned-process-tree";
+
 const PROBE_TIMEOUT_MS = 45_000;
 
 /** Re-probe this long after a negative answer: the user may install a browser. */
@@ -51,31 +56,39 @@ const PROBE_WAIT_MS = 2_000;
 /**
  * True when a headless Chromium launch completed in a child process. Cached
  * for the process lifetime on success, and for {@link NEGATIVE_TTL_MS} on
- * failure. Concurrent callers share one probe and none of them waits longer
- * than {@link PROBE_WAIT_MS} for it.
+ * failure. Concurrent callers share one probe. Capability polling returns
+ * quickly; a render can wait for the bounded probe without blocking the loop.
  */
 export async function isChromiumLaunchable(
   runProbe: () => Promise<boolean> = spawnLaunchProbe,
+  options: { readonly waitForResult?: boolean; readonly signal?: AbortSignal } = {},
 ): Promise<boolean> {
+  if (options.signal?.aborted) return false;
   if (process.env.BG_CHROMIUM_ASSUME_USABLE === "1") return true;
   const now = Date.now();
   if (cached !== null && (cached.usable || now - cached.checkedAt < NEGATIVE_TTL_MS)) {
     return cached.usable;
   }
-  inFlight ??= runProbe()
-    .catch(() => false)
-    .then((usable) => {
-      cached = { usable, checkedAt: Date.now() };
-      inFlight = null;
+  if (inFlight === null) {
+    const current = Promise.resolve().then(runProbe).catch(() => false).then((usable) => {
+      if (inFlight === current) { cached = { usable, checkedAt: Date.now() }; inFlight = null; }
       return usable;
     });
+    inFlight = current;
+  }
   const probe = inFlight;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const gaveUp = new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), probeWaitMs()); });
+  let abort: (() => void) | undefined;
+  const gaveUp = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), options.waitForResult ? chromiumCapabilityTimeoutMs() : probeWaitMs());
+    abort = () => resolve(false);
+    options.signal?.addEventListener("abort", abort, { once: true });
+  });
   try {
     return await Promise.race([probe, gaveUp]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
+    if (abort !== undefined) options.signal?.removeEventListener("abort", abort);
   }
 }
 
@@ -103,19 +116,23 @@ process.exit(1);
  * The child inherits this package's cwd, so it resolves the same
  * playwright-core the renderer uses.
  */
-async function spawnLaunchProbe(): Promise<boolean> {
-  const child = Bun.spawn([process.execPath, "-e", PROBE_SOURCE], {
-    cwd: new URL("..", import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:)/u, ""),
+export async function spawnLaunchProbe(node = chromiumNodeCommand(), timeoutMs = chromiumCapabilityTimeoutMs()): Promise<boolean> {
+  const compiled = /\$bunfs|~BUN/i.test(import.meta.url);
+  const fallback = compiled ? [process.execPath, "--bg-chromium-probe"] : [process.execPath, "-e", PROBE_SOURCE];
+  const child = Bun.spawn(node === null ? fallback : [node.node, node.script, "--probe"], {
+    ...ownedProcessSpawnOptions(),
+    cwd: node?.cwd ?? (compiled ? path.dirname(process.execPath) : fileURLToPath(new URL("..", import.meta.url))),
     stdout: "pipe",
     stderr: "ignore",
     stdin: "ignore",
   });
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const expired = new Promise<false>((resolve) => {
+  let forcedClose: Promise<void> | undefined;
+  const expired = new Promise<false>((resolve, reject) => {
     timer = setTimeout(() => {
-      child.kill();
-      resolve(false);
-    }, chromiumCapabilityTimeoutMs());
+      forcedClose = closeOwnedProcessTree(child.pid);
+      void forcedClose.then(() => resolve(false), reject);
+    }, timeoutMs);
   });
   try {
     const exitCode = await Promise.race([child.exited, expired]);
@@ -123,5 +140,14 @@ async function spawnLaunchProbe(): Promise<boolean> {
     return (await new Response(child.stdout).text()).includes("usable");
   } finally {
     if (timer !== undefined) clearTimeout(timer);
+    await forcedClose;
   }
+}
+
+export async function runChromiumProbeProcess(): Promise<never> {
+  const { chromium } = await import("playwright-core");
+  for (const options of [{ headless: true }, { headless: true, channel: "chrome" }, { headless: true, channel: "msedge" }]) {
+    try { const browser = await chromium.launch(options); await browser.close(); process.stdout.write("usable"); process.exit(0); } catch {}
+  }
+  process.exit(1);
 }

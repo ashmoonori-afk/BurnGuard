@@ -23,6 +23,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { APP_VERSION } from "../packages/shared/src/app";
+import { stageRuntimeAssets } from "./package-runtime";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const DIST_ROOT = path.join(ROOT, "dist");
@@ -80,9 +81,7 @@ async function main() {
   }
 
   if (!existsSync(FRONTEND_DIST)) {
-    console.warn(
-      `[build-mac] warning: ${FRONTEND_DIST} not found. Run \`bun run build:frontend\` first so the shipped binary serves the UI.`,
-    );
+    throw new Error("Frontend build is required before packaging the macOS app");
   }
 
   mkdirSync(MAC_DIR, { recursive: true });
@@ -108,6 +107,7 @@ async function main() {
     --target=bun-darwin-arm64 \
     --minify \
     --external electron \
+    --external chromium-bidi \
     --outfile ${binOut}`.cwd(ROOT);
   console.log(
     `[build-mac] compiled in ${((Date.now() - startCompile) / 1000).toFixed(1)}s`,
@@ -134,21 +134,8 @@ async function main() {
     );
   }
 
-  // Ship the frontend next to the app bundle so the backend binary's
-  // `findFrontendDistDir` heuristic still locates it. The binary
-  // walks up from its own parent looking for `packages/frontend/dist`;
-  // we mirror that relative layout inside the bundle's MacOS/ dir.
-  if (existsSync(FRONTEND_DIST)) {
-    const frontendStage = path.join(
-      APP_MACOS,
-      "packages",
-      "frontend",
-      "dist",
-    );
-    mkdirSync(path.dirname(frontendStage), { recursive: true });
-    cpSync(FRONTEND_DIST, frontendStage, { recursive: true });
-    console.log(`[build-mac] frontend: staged inside bundle`);
-  }
+  await stageRuntimeAssets(ROOT, APP_MACOS);
+  console.log("[build-mac] frontend, migrations, themes, and browser resources staged");
 
   console.log(`[build-mac] .app ready: ${APP_BUNDLE}`);
 

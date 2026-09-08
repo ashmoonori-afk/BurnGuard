@@ -39,7 +39,7 @@ export function advanceExportAttempt(db: Database, input: { readonly attemptId: 
 export function completeExportAttempt(db: Database, input: { readonly jobId: string; readonly attemptId: string; readonly outputPath: string; readonly size: number; readonly outputDigest: string; readonly receiptDigest: string }): void {
   const now = Date.now();
   db.transaction(() => {
-    const attempt = db.prepare("UPDATE export_attempts SET status='validated',progress_json=?,output_digest=?,receipt_digest=?,retention_json=?,stop_reason=NULL,updated_at=? WHERE id=? AND job_id=? AND status IN ('validating','recovering')").run(canonicalJson({ stage: "complete", completed: 6, total: 6 }), input.outputDigest, input.receiptDigest, canonicalJson({ retained_until: now + RETENTION_MS, output_available: true }), now, input.attemptId, input.jobId);
+    const attempt = db.prepare("UPDATE export_attempts SET status='validated',progress_json=?,output_digest=?,receipt_digest=?,retention_json=?,stop_reason=NULL,updated_at=? WHERE id=? AND job_id=? AND cancel_requested_at IS NULL AND status IN ('validating','recovering')").run(canonicalJson({ stage: "complete", completed: 6, total: 6 }), input.outputDigest, input.receiptDigest, canonicalJson({ retained_until: now + RETENTION_MS, output_available: true }), now, input.attemptId, input.jobId);
     if (attempt.changes !== 1) throw new ExportLifecycleError("transition_conflict");
     const job = db.prepare("UPDATE exports SET status='succeeded',output_path=?,error_message=NULL,size_bytes=?,completed_at=? WHERE id=?").run(input.outputPath, input.size, now, input.jobId);
     if (job.changes !== 1) throw new ExportLifecycleError("transition_conflict");

@@ -20,6 +20,10 @@ export interface DesignSystemDetail extends DesignSystemSummary {
   archived_at: number | null;
 }
 
+export interface DesignSystemPreview {
+  readonly path: string;
+}
+
 export interface DesignSystemExtractionLineageRequest {
   operation: "override" | "re-extraction";
   parent_receipt_id: string;

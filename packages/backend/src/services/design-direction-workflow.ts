@@ -11,10 +11,11 @@ import {
   isDirectionOperationActive,
 } from "./direction-operation-registry";
 import { SvgDesignDirectionRenderer, type DesignDirectionRenderer } from "./design-direction-renderer";
-import { getLatestDirectionState, publishDirectionState } from "./design-direction-state";
+import { DirectionStateConflictError, getLatestDirectionState, publishDirectionState } from "./design-direction-state";
 
 export const DIRECTION_INTERRUPTION_ERROR = "Direction generation was interrupted; retry unfinished directions.";
 export const DIRECTION_CANCELLATION_ERROR = "Direction generation was cancelled; retry this direction.";
+export const DIRECTION_RENDER_ERROR = "Direction preview could not be rendered; retry this direction.";
 
 export class DesignDirectionWorkflowError extends Error {
   readonly name = "DesignDirectionWorkflowError";
@@ -45,7 +46,7 @@ export class DesignDirectionWorkflow {
       directions: current.directions.map((slot) => retryIds.includes(slot.id) ? { ...slot, status: "pending", preview_url: null, error: null } : slot),
       error: null,
     });
-    return this.start(input, state, retryIds);
+    return this.start(input, state, retryIds, current);
   }
 
   async cancel(sessionId: string): Promise<DesignDirectionState | null> {
@@ -60,34 +61,37 @@ export class DesignDirectionWorkflow {
     if (current === null || current.status !== "loading" || activeDirectionGeneration(sessionId) === current.generation_id) return current;
     const directions = current.directions.map((slot) => slot.status === "pending" ? { ...slot, status: "failed" as const, preview_url: null, error: DIRECTION_INTERRUPTION_ERROR } : slot);
     const recovered = this.snapshot(current, { status: directions.some((slot) => slot.status === "ready") ? "partial" : "failed", directions, error: DIRECTION_INTERRUPTION_ERROR });
-    await publishDirectionState(sessionId, recovered);
+    await this.publishSnapshot(sessionId, recovered, current);
     return recovered;
   }
 
   async select(sessionId: string, generationId: string, revision: number, directionId: string): Promise<DesignDirectionState> {
     const current = await this.requiredState(sessionId);
+    if (isDirectionOperationActive(sessionId)) throw new DesignDirectionWorkflowError("operation_active");
     this.checkIdentity(current, generationId, revision);
     if (!current.directions.some((slot) => slot.id === directionId && slot.status === "ready")) throw new DesignDirectionWorkflowError("direction_not_ready");
     const selected = this.snapshot(current, { selected_id: directionId, selection_revision: current.selection_revision + 1, selection_history: [...current.selection_history, current.selected_id] });
-    await publishDirectionState(sessionId, selected);
+    await this.publishSnapshot(sessionId, selected, current);
     return selected;
   }
 
   async undo(sessionId: string, generationId: string, revision: number): Promise<DesignDirectionState> {
     const current = await this.requiredState(sessionId);
+    if (isDirectionOperationActive(sessionId)) throw new DesignDirectionWorkflowError("operation_active");
     this.checkIdentity(current, generationId, revision);
     const prior = current.selection_history.at(-1);
     if (prior === undefined) throw new DesignDirectionWorkflowError("nothing_to_undo");
     const undone = this.snapshot(current, { selected_id: prior, selection_revision: current.selection_revision + 1, selection_history: current.selection_history.slice(0, -1) });
-    await publishDirectionState(sessionId, undone);
+    await this.publishSnapshot(sessionId, undone, current);
     return undone;
   }
 
-  private async start(input: ProjectSession, state: DesignDirectionState, targetIds: readonly string[]): Promise<StartedGeneration> {
+  private async start(input: ProjectSession, state: DesignDirectionState, targetIds: readonly string[], expected?: DesignDirectionState): Promise<StartedGeneration> {
     if (isDirectionOperationActive(input.sessionId)) throw new DesignDirectionWorkflowError("operation_active");
     const controller = beginDirectionOperation(input.sessionId, state.generation_id);
     if (controller === null) throw new DesignDirectionWorkflowError("operation_capacity");
-    await publishDirectionState(input.sessionId, state);
+    try { await this.publishSnapshot(input.sessionId, state, expected); }
+    catch (error) { finishDirectionOperation(input.sessionId, state.generation_id); throw error; }
     let resolveCompletion: (value: DesignDirectionState) => void = () => {};
     let rejectCompletion: (error: unknown) => void = () => {};
     const deferredCompletion = new Promise<DesignDirectionState>((resolve, reject) => { resolveCompletion = resolve; rejectCompletion = reject; });
@@ -112,7 +116,7 @@ export class DesignDirectionWorkflow {
         replacement = { ...slot, status: "ready", preview_url: previewUrl(input.projectId, state.generation_id, slot.id), error: null };
       } catch (error) {
         if (signal.aborted) replacement = { ...slot, status: "cancelled", preview_url: null, error: DIRECTION_CANCELLATION_ERROR };
-        else replacement = { ...slot, status: "failed", preview_url: null, error: error instanceof Error ? error.message : String(error) };
+        else replacement = { ...slot, status: "failed", preview_url: null, error: DIRECTION_RENDER_ERROR };
       }
       let directions = state.directions.map((candidate) => candidate.id === slot.id ? replacement : candidate);
       if (replacement.status === "cancelled") directions = directions.map((candidate) => candidate.status === "pending" ? { ...candidate, status: "cancelled", preview_url: null, error: DIRECTION_CANCELLATION_ERROR } : candidate);
@@ -126,6 +130,11 @@ export class DesignDirectionWorkflow {
   private finishCompletion(sessionId: string, generationId: string): void {
     if (this.activeCompletions.get(sessionId)?.generationId === generationId) this.activeCompletions.delete(sessionId);
     finishDirectionOperation(sessionId, generationId);
+  }
+
+  private async publishSnapshot(sessionId: string, state: DesignDirectionState, expected?: DesignDirectionState): Promise<void> {
+    try { await publishDirectionState(sessionId, state, expected); }
+    catch (error) { if (error instanceof DirectionStateConflictError) throw new DesignDirectionWorkflowError("revision_conflict"); throw error; }
   }
 
   private operationSignal(sessionId: string, generationId: string): AbortSignal {

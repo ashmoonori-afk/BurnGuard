@@ -5,11 +5,11 @@ import type { SequencedEventEnvelope } from "@bg/shared";
 import { getExportAttemptDetail, getExportJob } from "../src/db/exports";
 import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
-import { projectsDir } from "../src/lib/paths";
+import { exportsDir, projectsDir } from "../src/lib/paths";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { sequencedBroker } from "../src/services/broker";
 import { activeExportBrowserCount } from "../src/services/export-browser-registry";
-import { enqueueProjectExport } from "../src/services/exports";
+import { cancelProjectExport, enqueueProjectExport, type ExportPhase } from "../src/services/exports";
 
 const prefix = `audit-export-${process.pid}`;
 const projects = [{ id: `${prefix}-blocked`, session: `${prefix}-blocked-session`, html: `<!doctype html><html><head><style>:root{--ink:#111}body{background:#fff;color:#aaa}.a,.b{position:absolute;width:80px}.a{left:10px}.b{left:120px}</style></head><body><p class="a" data-bg-node-id="a">Low contrast</p><p class="b" data-bg-node-id="b">Text</p></body></html>` }, { id: `${prefix}-recommended`, session: `${prefix}-recommended-session`, html: `<!doctype html><html><head><style>body{background:#fff;color:#111}.a,.b{position:absolute;width:80px}.a{left:10px}.b{left:120px}</style></head><body><p class="a" data-bg-node-id="a" style="font-size:9px">Small</p><p class="b" data-bg-node-id="b">Text</p></body></html>` }, { id: `${prefix}-ready`, session: `${prefix}-ready-session`, html: `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--paper:#fff;--ink:#111;--accent:#1647d8}*{box-sizing:border-box}html,body{margin:0;background:var(--paper);color:var(--ink);font-family:Arial,sans-serif}.stage{position:relative;min-height:700px;padding:24px}.a,.b{position:absolute;top:100px;width:120px;height:40px}.a{left:24px}.b{left:180px}</style></head><body><main class="stage" data-bg-node-id="ready-stage"><p data-bg-node-id="ready-copy">모든 검사를 통과하는 준비 상태</p><div class="a" data-bg-node-id="ready-a">측정 후보 A</div><div class="b" data-bg-node-id="ready-b">측정 후보 B</div></main></body></html>` }] as const;
@@ -20,7 +20,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { for (const project of projects) { getSqlite().prepare("DELETE FROM projects WHERE id=?").run(project.id); await rm(path.join(projectsDir, project.id), { recursive: true, force: true }); } });
 
-function nextTerminal(sessionId: string): Promise<SequencedEventEnvelope> { return new Promise((resolve, reject) => { const timeout = setTimeout(() => { unsubscribe(); reject(new TypeError("export terminal event timed out")); }, 60_000); const unsubscribe = sequencedBroker.subscribe(sessionId, (item) => { if (item.event.type !== "export.attempt" || item.event.status !== "failed" && item.event.status !== "validated") return; clearTimeout(timeout); unsubscribe(); resolve(item); }); }); }
+function nextTerminal(sessionId: string): Promise<SequencedEventEnvelope> { return new Promise((resolve, reject) => { const timeout = setTimeout(() => { unsubscribe(); reject(new TypeError("export terminal event timed out")); }, 60_000); const unsubscribe = sequencedBroker.subscribe(sessionId, (item) => { if (item.event.type !== "export.attempt" || !["failed", "validated", "cancelled"].includes(item.event.status)) return; clearTimeout(timeout); unsubscribe(); resolve(item); }); }); }
 
 describe("pre-export design audit", () => {
   test("Given must-fix contrast When exporting Then publication is blocked and findings persist", async () => {
@@ -38,4 +38,27 @@ describe("pre-export design audit", () => {
     if (started === null || started.latest_attempt === null) throw new TypeError("export did not start"); await terminal; const job = await getExportJob(started.id); const attempt = await getExportAttemptDetail(started.latest_attempt.id);
     expect(job?.status).toBe("succeeded"); expect(job?.output_path).not.toBeNull(); if (job?.output_path === null || job?.output_path === undefined) throw new TypeError("export output is unavailable"); expect((await stat(job.output_path)).isFile()).toBeTrue(); expect(attempt?.findings).toEqual([]); expect(phases).toEqual(["after_snapshot", "after_partial_render", "after_render", "after_validation", "after_receipt", "after_publish_before_db"]); expect(activeExportBrowserCount()).toBe(0);
   }, 70_000);
+
+  for (const phase of ["after_validation", "after_receipt", "after_publish_before_db"] satisfies ExportPhase[]) {
+    test(`Given cancellation at ${phase} When the real export finishes Then cancellation wins and owned output is removed`, async () => {
+      const terminal = nextTerminal(projects[2].session);
+      let accepted = false;
+      const started = await enqueueProjectExport(projects[2].id, "html_zip", {}, { phase: (attemptId, reached) => {
+        if (reached === phase) accepted = cancelProjectExport(attemptId);
+      } });
+      if (started?.latest_attempt === null || started === null) throw new TypeError("export did not start");
+      const event = await terminal;
+      const job = await getExportJob(started.id);
+      const attempt = await getExportAttemptDetail(started.latest_attempt.id);
+      expect(accepted).toBe(true);
+      expect(event.event.type === "export.attempt" && event.event.status).toBe("cancelled");
+      expect(attempt?.status).toBe("cancelled");
+      expect(attempt?.stop_reason).toBe("user_cancelled");
+      expect(job?.status).toBe("failed");
+      expect(job?.output_path).toBeNull();
+      expect(await Bun.file(path.join(exportsDir, "attempts", started.latest_attempt.id, "artifact.zip")).exists()).toBe(false);
+      expect(await Bun.file(path.join(exportsDir, ".staging", started.latest_attempt.id, "receipt.json")).exists()).toBe(false);
+      expect(activeExportBrowserCount()).toBe(0);
+    }, 70_000);
+  }
 });

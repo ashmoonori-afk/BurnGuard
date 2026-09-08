@@ -15,9 +15,12 @@
  */
 import { spawn, type Subprocess } from "bun";
 import path from "node:path";
+import { APP_NAME } from "../packages/shared/src/app";
+import { isPortFree } from "./qa/port";
+import { bootstrapAuthority } from "./qa/runtime";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-const BACKEND_HEALTH_URL = "http://127.0.0.1:14070/api/projects?tab=recent";
+const BACKEND_HEALTH_URL = "http://127.0.0.1:14070/api/health";
 const FRONTEND_URL = "http://127.0.0.1:5173/";
 const BACKEND_TIMEOUT_MS = 60_000;
 const FRONTEND_TIMEOUT_MS = 30_000;
@@ -26,30 +29,31 @@ const PROBE_TIMEOUT_MS = 800;
 
 type PortState = "burnguard" | "other" | "free";
 
-async function probePort(url: string): Promise<PortState> {
+export async function isBurnGuardHealth(response: Response): Promise<boolean> {
+  if (!response.ok) return false;
+  const value: unknown = await response.json().catch(() => null);
+  return typeof value === "object" && value !== null && "ok" in value && value.ok === true &&
+    "name" in value && value.name === APP_NAME && "version" in value && typeof value.version === "string" &&
+    "runtime" in value && value.runtime === "bun";
+}
+
+export async function probePort(url: string): Promise<PortState> {
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
-    // The backend serves `/api/projects` and returns 200 with a JSON envelope.
-    // Any 2xx/3xx that comes back from 14070 is "ours" — nothing else uses
-    // that route. 4xx/5xx from a non-BurnGuard process would also imply the
-    // port is occupied; treat as "other".
-    if (r.ok) return "burnguard";
-    return "other";
-  } catch (err) {
-    // ECONNREFUSED / abort: nothing listening (or nothing answering in time).
-    return "free";
+    return await isBurnGuardHealth(r) ? "burnguard" : "other";
+  } catch {
+    // An occupied but unresponsive socket is not a free port.
+    return await isPortFree(Number(new URL(url).port)) ? "free" : "other";
   }
 }
 
-async function waitForUrl(url: string, timeoutMs: number): Promise<boolean> {
+async function waitForUrl(url: string, timeoutMs: number, accept: (response: Response) => boolean | Promise<boolean> = (response) => response.ok): Promise<boolean> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     if (stopping) return false;
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
-      // Vite returns 200 for "/", backend returns 200 for the health URL.
-      // Treat any sub-500 response as "the server is answering".
-      if (r.status < 500) return true;
+      if (await accept(r)) return true;
     } catch {
       // not up yet
     }
@@ -96,9 +100,6 @@ function stop(reason: string, code = 0): never {
 }
 
 const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
-for (const signal of signals) {
-  process.on(signal, () => stop(signal));
-}
 
 async function main(): Promise<void> {
   // 1. Pre-flight: is 14070 already busy?
@@ -143,7 +144,7 @@ async function main(): Promise<void> {
   // 3. Wait for backend health.
   console.log("[launcher] waiting for backend on 14070...");
   const backendStart = Date.now();
-  const backendUp = await waitForUrl(BACKEND_HEALTH_URL, BACKEND_TIMEOUT_MS);
+  const backendUp = await waitForUrl(BACKEND_HEALTH_URL, BACKEND_TIMEOUT_MS, isBurnGuardHealth);
   if (!backendUp) {
     console.error(
       `[launcher] backend did not respond within ${BACKEND_TIMEOUT_MS / 1000}s`,
@@ -153,6 +154,9 @@ async function main(): Promise<void> {
   console.log(
     `[launcher] backend ready (${((Date.now() - backendStart) / 1000).toFixed(1)}s)`,
   );
+
+  const authority = await bootstrapAuthority(new URL(BACKEND_HEALTH_URL).origin);
+  if (!Object.values(authority).every(Boolean)) stop("backend bootstrap failed", 1);
 
   // 4. Start frontend.
   console.log("[launcher] starting frontend...");
@@ -186,7 +190,10 @@ async function main(): Promise<void> {
   stop("a child exited", 0);
 }
 
-main().catch((err) => {
-  console.error("[launcher] unexpected error:", err);
-  stop("crash", 1);
-});
+if (import.meta.main) {
+  for (const signal of signals) process.on(signal, () => stop(signal));
+  main().catch((err) => {
+    console.error("[launcher] unexpected error:", err);
+    stop("crash", 1);
+  });
+}

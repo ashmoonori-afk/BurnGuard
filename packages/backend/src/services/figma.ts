@@ -15,6 +15,7 @@
 import { DEFAULT_ACQUISITION_LIMITS, ExtractionAcquisitionError, throwIfAcquisitionAborted, type AcquisitionLimits } from "./extraction-acquisition";
 import { assertFigmaItemCount, readFigmaResponse } from "./extraction-figma-response";
 import { FigmaApiError } from "./figma-errors";
+import { createHash } from "node:crypto";
 
 export { FigmaApiError };
 
@@ -282,12 +283,20 @@ export function extractFigmaTokens(
   const colors = new Map<string, string>();
   const textStyles: FigmaTokens["textStyles"] = [];
   const fontFamilies = new Set<string>();
+  const slugCounts = new Map<string, number>();
+  for (const style of styles) {
+    const slug = slugifyStyleName(style.name);
+    slugCounts.set(slug, (slugCounts.get(slug) ?? 0) + 1);
+  }
 
   for (const style of styles) {
     throwIfAcquisitionAborted(options.signal);
     const node = nodes[style.nodeId];
     if (!node) continue;
-    const slug = slugifyStyleName(style.name);
+    const baseSlug = slugifyStyleName(style.name);
+    const slug = baseSlug.length === 0 || (slugCounts.get(baseSlug) ?? 0) > 1
+      ? `${baseSlug || "style"}--${createHash("sha256").update(style.key).digest("hex")}`
+      : baseSlug;
 
     if (style.styleType === "FILL") {
       const hex = pickFirstFillHex(node.fills);

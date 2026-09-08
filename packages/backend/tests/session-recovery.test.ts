@@ -15,6 +15,7 @@ import { CanonicalTreeManifestError, inspectCanonicalTree, parseCanonicalTreeMan
 import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { EventBroker, SequencedEventBroker } from "../src/services/broker";
 import { PersistedArtifactOperationError } from "../src/services/artifact-operation-record";
+import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 
 let db: Database;
 let root: string;
@@ -46,12 +47,15 @@ describe("canonical managed artifact closure", () => {
     expect((await inspectCanonicalTree(root)).files.map((entry) => entry.path)).toEqual(["index.html"]);
   });
 
-  test("Given unsafe aliases When inspecting Then symlinks and hardlinks are rejected", async () => {
+  test("Given hardlink aliases When inspecting Then aliases are rejected", async () => {
     const hardlinkRoot = await projectRoot();
     const source = path.join(hardlinkRoot, "a.txt");
     await writeFile(source, "same inode");
     await link(source, path.join(hardlinkRoot, "b.txt"));
     await expect(inspectCanonicalTree(hardlinkRoot)).rejects.toMatchObject<Partial<CanonicalTreeManifestError>>({ code: "unsafe_tree_entry" });
+  });
+
+  test.skipIf(!canCreateSymlink())(`Given symlink aliases When inspecting Then links are rejected (${SYMLINK_SKIP_REASON})`, async () => {
     const symlinkRoot = await projectRoot();
     await writeFile(path.join(symlinkRoot, "target"), "target");
     await symlink("target", path.join(symlinkRoot, "link"));

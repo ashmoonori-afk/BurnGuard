@@ -46,14 +46,24 @@ export function isUnsafeImportHostname(hostname: string): boolean {
     const parts = host.split(".").map((part) => Number.parseInt(part, 10));
     const a = parts[0];
     const b = parts[1];
-    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) ||
-      (a === 172 && b !== undefined && b >= 16 && b <= 31) || (a === 192 && b === 168);
+    return a === 10 || a === 127 || a === 0 || a !== undefined && a >= 224 || (a === 169 && b === 254) ||
+      (a === 100 && b !== undefined && b >= 64 && b <= 127) ||
+      (a === 172 && b !== undefined && b >= 16 && b <= 31) || (a === 192 && (b === 168 || b === 0)) ||
+      (a === 198 && (b === 18 || b === 19));
   }
-  return ipVersion === 6 && (host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80:"));
+  if (ipVersion !== 6) return false;
+  const canonical = new URL(`http://[${host}]/`).hostname.slice(1, -1);
+  const mapped = /^::ffff:([0-9a-f]+):([0-9a-f]+)$/.exec(canonical);
+  if (mapped !== null) {
+    const high = Number.parseInt(mapped[1]!, 16), low = Number.parseInt(mapped[2]!, 16);
+    return isUnsafeImportHostname(`${high >>> 8}.${high & 255}.${low >>> 8}.${low & 255}`);
+  }
+  // Only globally routable unicast; excludes unspecified, local, multicast and translation ranges.
+  return !/^[23]/.test(canonical) || canonical.startsWith("2001:db8:") || canonical.startsWith("2001:0:") || canonical.startsWith("2002:");
 }
 
 export function normalizeImportHostname(hostname: string): string {
-  return hostname.trim().replace(/^\[|\]$/g, "").toLowerCase();
+  return hostname.trim().replace(/^\[|\]$/g, "").replace(/\.$/, "").toLowerCase();
 }
 
 export async function listFilesRecursive(

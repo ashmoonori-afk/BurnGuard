@@ -26,13 +26,16 @@ import {
 
 export { MAX_SKILL_CHARS } from "./prompt-design-system";
 
-type SessionContext = NonNullable<Awaited<ReturnType<typeof buildSessionContext>>>;
+type BuiltSessionContext = NonNullable<Awaited<ReturnType<typeof buildSessionContext>>>;
+type SessionContext = Omit<BuiltSessionContext, "history"> & Partial<Pick<BuiltSessionContext, "history">>;
 
 const MAX_FILES_LISTED = 60;
 
 export type PromptContextMode = "compact" | "full";
 
 export interface PromptBuildOptions {
+  /** Authored output and structural reads use the owned operation stage. */
+  outputDirectory?: string;
   contextMode?: PromptContextMode;
   visualSourceManifest?: VisualSourceManifestV1 | null;
   stageAttachmentInputs?: readonly StageAttachmentInput[];
@@ -49,7 +52,7 @@ export async function buildPrompt(
   options: PromptBuildOptions = {},
 ): Promise<string> {
   const lines: string[] = [];
-  const project = context.project;
+  const project = options.outputDirectory === undefined ? context.project : { ...context.project, project_dir: options.outputDirectory };
   const contextMode = options.contextMode ?? "full";
   const projectOptions = parseStoredProjectOptions(project.options_json);
 
@@ -139,7 +142,7 @@ export async function buildPrompt(
   lines.push("");
   appendDesignBriefContext(lines, projectOptions.design_brief);
   await appendVisualSourceContext(lines, {
-    projectDir: project.project_dir,
+    projectDir: context.project.project_dir,
     attachments: context.attachments,
     requestedPaths: userEvent.attachments ?? [],
     selections: userEvent.visualSources,
@@ -151,7 +154,7 @@ export async function buildPrompt(
     attachments: context.attachments,
     requestedPaths: userEvent.attachments ?? [],
     selections: userEvent.visualSources,
-    projectDir: project.project_dir,
+    projectDir: context.project.project_dir,
     stageInputs: options.stageAttachmentInputs,
   });
 
@@ -206,7 +209,7 @@ export async function buildPrompt(
       lines,
       context.attachments,
       userEvent.attachments,
-      project.project_dir,
+      context.project.project_dir,
       options.stageAttachmentInputs,
     );
   }
@@ -273,6 +276,12 @@ export async function buildPrompt(
   );
   lines.push("");
 
+  if (context.history && context.history.length > 0) {
+    lines.push("<burnguard-conversation-v1>");
+    lines.push(JSON.stringify(context.history));
+    lines.push("</burnguard-conversation-v1>");
+    lines.push("");
+  }
   lines.push("## Request");
   lines.push(userEvent.text);
 

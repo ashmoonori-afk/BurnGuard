@@ -1,6 +1,7 @@
 import type { BackendId } from "./app";
 import type { ProjectSummary } from "./home";
 import type { SessionStatus } from "./harness";
+import type { NormalizedEvent } from "./events";
 
 export interface ProjectDetail extends ProjectSummary {
   dir_path: string;
@@ -24,4 +25,11 @@ export interface SessionInfo {
   };
   updated_at: number;
   last_active_at: number;
+}
+
+/** Session state and its durable event cursor are read in one transaction. */
+export interface SessionSnapshot {
+  readonly session: SessionInfo;
+  readonly sequence: number;
+  readonly pending_permissions: readonly Extract<NormalizedEvent, { type: "tool.permission_required" }>[];
 }

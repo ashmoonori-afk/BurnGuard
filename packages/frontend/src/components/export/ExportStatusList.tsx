@@ -8,9 +8,9 @@ import {
 } from "lucide-react";
 import {
   formatLabel,
-  type ExportFormat,
   type ExportJob,
 } from "@/api/export";
+import { exportJobState } from "./export-job-state";
 
 function formatBytes(bytes: number | null | undefined) {
   if (!bytes || bytes <= 0) return "";
@@ -23,9 +23,13 @@ export default function ExportStatusList({
   jobs,
   onRetry,
   retryDisabled,
+  onCancel,
+  onDownload,
 }: {
   jobs: ExportJob[];
-  onRetry?: (format: ExportFormat) => void;
+  onRetry?: (job: ExportJob) => void;
+  onCancel?: (job: ExportJob) => void;
+  onDownload?: (job: ExportJob) => void;
   retryDisabled?: boolean;
 }) {
   if (jobs.length === 0) return null;
@@ -36,8 +40,11 @@ export default function ExportStatusList({
       </div>
       <ul className="space-y-1">
         {jobs.slice(0, 5).map((j) => {
+          const state = exportJobState(j);
           const Icon =
-            j.status === "succeeded"
+            state.cancelled
+              ? Clock
+              : j.status === "succeeded"
               ? CheckCircle2
               : j.status === "failed"
                 ? XCircle
@@ -46,39 +53,41 @@ export default function ExportStatusList({
                   : Clock;
           const iconClass =
             "h-3.5 w-3.5 " +
-            (j.status === "running"
+            (state.cancelled
+              ? "text-muted-foreground"
+              : j.status === "running"
               ? "animate-spin text-muted-foreground"
               : j.status === "succeeded"
                 ? "text-accent"
                 : j.status === "failed"
                   ? "text-destructive"
                   : "text-muted-foreground");
-          const canDownload = j.status === "succeeded";
-          const canRetry = j.status === "failed" && Boolean(onRetry);
+          const canDownload = state.canDownload;
+          const canRetry = state.canRetry && Boolean(onRetry);
           return (
             <li
               key={j.id}
               className="flex items-center gap-2 px-1 text-xs"
-              title={j.latest_attempt?.stop_reason === "validation_failed" && j.error_message?.startsWith("Design audit found ") ? "품질 점검에서 고쳐야 할 문제가 발견됐어요." : (j.error_message ?? undefined)}
+              title={state.label}
             >
               <Icon className={iconClass} />
               <span className="flex-1 truncate">{formatLabel(j.format)}</span>
               {canDownload && (
-                <a
-                  href={`/api/exports/${j.id}/download`}
+                <button
+                  type="button"
+                  onClick={() => onDownload?.(j)}
+                  disabled={retryDisabled}
+                  aria-label={`${formatLabel(j.format)} 다운로드`}
                   className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-accent hover:bg-accent/10"
-                  // download attribute hints the browser to save instead of
-                  // navigate; backend Content-Disposition reinforces it.
-                  download
                 >
                   <Download className="h-3 w-3" />
                   {formatBytes(j.size_bytes)}
-                </a>
+                </button>
               )}
               {canRetry && (
                 <button
                   type="button"
-                  onClick={() => onRetry?.(j.format)}
+                  onClick={() => onRetry?.(j)}
                   disabled={retryDisabled}
                   className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent/10 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                   title="이 내보내기 다시 시도"
@@ -87,11 +96,10 @@ export default function ExportStatusList({
                   다시 시도
                 </button>
               )}
-              {!canDownload && !canRetry && (
-                <span className="text-[10px] text-muted-foreground">
-                  {j.status}
+                <span className="text-[10px] text-muted-foreground" aria-live="polite">
+                  {state.label}
                 </span>
-              )}
+              {state.active && onCancel && <button type="button" disabled={retryDisabled || j.latest_attempt?.cancel_requested_at != null} onClick={() => onCancel(j)} className="rounded px-2 py-1 text-xs underline disabled:opacity-50">취소</button>}
             </li>
           );
         })}

@@ -270,10 +270,13 @@ export async function requestFrameActiveSlide(
 export async function requestFrameSetActiveSlide(
   iframe: HTMLIFrameElement | null,
   slideIndex: number,
-): Promise<boolean> {
-  return (await requestFrameBridge(iframe, "set-active-slide", {
+): Promise<number | null> {
+  const index = await requestFrameBridge(iframe, "set-active-slide", {
     slideIndex,
-  })) as boolean;
+  }).catch(() => null);
+  return typeof index === "number" && Number.isSafeInteger(index) && index >= -1
+    ? index
+    : null;
 }
 
 async function requestFrameBridge(
@@ -529,13 +532,15 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       var targetIndex = Math.max(0, Number(payload.slideIndex) || 0);
       var slideList = document.querySelectorAll("[data-slide]");
       if (!slideList || slideList.length === 0) {
-        response = false;
+        response = -1;
       } else {
         var clamped = Math.min(slideList.length - 1, targetIndex);
         var nextHash = "#slide-" + (clamped + 1);
         try {
           if (location.hash !== nextHash) {
-            history.replaceState(null, "", nextHash);
+            // Resolve against the iframe URL, not the artifact <base>: a
+            // sandboxed srcdoc cannot replace its URL with that HTTP origin.
+            history.replaceState(null, "", location.href.split("#")[0] + nextHash);
             window.dispatchEvent(new HashChangeEvent("hashchange"));
           } else {
             var activeNode = document.querySelector("[data-slide][data-active]");
@@ -546,7 +551,7 @@ const BRIDGE_SCRIPT = String.raw`(function () {
               }
             }
           }
-          response = true;
+          response = clamped;
         } catch (e) {
           response = false;
         }

@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { materializeManagedTree } from "../src/services/artifact-tree-storage";
 import { redactPrivateAttachmentPaths, withPrivateAttachmentInputs, type StageAttachment } from "../src/services/stage-attachment-inputs";
+import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
@@ -81,7 +82,8 @@ describe("private attachment inputs", () => {
     });
   });
 
-  test("Given source or extracted sidecar path swap after open When materialized Then the already-open descriptor supplies the snapshot without touching outside", async () => {
+  for (const alias of ["hardlink", "symlink"] as const) {
+  test.skipIf(alias === "symlink" && !canCreateSymlink())(`Given source or extracted sidecar ${alias} swap after open When materialized Then the already-open descriptor supplies the snapshot without touching outside (${alias === "symlink" ? SYMLINK_SKIP_REASON : "actual inode alias"})`, async () => {
     for (const kind of ["source", "extracted"] as const) {
       const input = await fixture();
       const original = kind === "source" ? input.attachments[0]?.file_path ?? "missing" : `${input.attachments[0]?.file_path}.extracted.md`;
@@ -92,7 +94,7 @@ describe("private attachment inputs", () => {
         await expect(withPrivateAttachmentInputs({ operationDir: input.operation, projectDir: input.project, attachments: input.attachments, requestedPaths: [input.attachments[0]?.file_path ?? "missing"], immutableSnapshots: [], hooks: { afterOpen: async (openedKind) => {
           if (openedKind !== kind) return;
           await rename(original, displaced);
-          await symlink(outside, original);
+          if (alias === "hardlink") await link(outside, original); else await symlink(outside, original);
         } } }, async (sources) => {
           expect(await readFile(sources[0]?.sourcePath ?? "missing", "utf8")).toBe("first");
           expect(await readFile(sources[0]?.extractedTextPath ?? "missing", "utf8")).toBe("text:first");
@@ -104,6 +106,7 @@ describe("private attachment inputs", () => {
       }
     }
   });
+  }
 
   test("Given adapter failure When inputs unwind Then the entire private directory is removed", async () => {
     const input = await fixture();

@@ -3,7 +3,8 @@ import path from "node:path";
 import type { Database } from "bun:sqlite";
 import { ulid } from "ulid";
 import { parseExportOptions, type NormalizedEvent } from "@bg/shared";
-import { completeExportAttempt, failExportAttempt, markExportAttemptCorrupt } from "../db/export-lifecycle-repository";
+import { advanceExportAttempt, failExportAttempt, markExportAttemptCorrupt } from "../db/export-lifecycle-repository";
+import { completeExportAttemptWithEvent } from "./export-events";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import { insertSequencedEvent } from "../db/sequenced-event-writer";
 import { parseExportReceipt, receiptDigest, requireReceiptIdentity, sha256 } from "./export-receipt";
@@ -21,8 +22,25 @@ export async function reconcileExportState(db: Database, root?: string): Promise
 type RecoveryRow = { readonly attempt_id: string; readonly job_id: string; readonly parent_attempt_id: string | null; readonly status: string; readonly project_revision: number; readonly project_digest: string; readonly canonical_options_json: string; readonly options_digest: string; readonly input_closure_digest: string | null; readonly design_system_digest: string | null; readonly renderer_digest: string; readonly capture_digest: string; readonly output_digest: string | null; readonly receipt_digest: string | null; readonly format: "html_zip" | "pdf" | "png" | "pptx" | "handoff"; readonly project_id: string };
 async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Promise<void> {
   const safeId = assertSafeName(row.attempt_id); const stage = resolveWithin(root, ".staging", safeId); const published = resolveWithin(root, "attempts", safeId);
+  const cancelRequested = () => db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(row.attempt_id)?.requested === 1;
+  const cancel = async () => {
+    await rm(stage, { recursive: true, force: true }); await rm(published, { recursive: true, force: true });
+    failExportAttempt(db, { jobId: row.job_id, attemptId: row.attempt_id, status: "cancelled", reason: "user_cancelled", message: "Export cancelled" });
+    emitRecovery(db, row, "cancelled", "user_cancelled");
+  };
+  if (row.status !== "validated" && cancelRequested()) { await cancel(); return; }
   const source = await directoryExists(published) ? published : await directoryExists(stage) ? stage : null;
-  if (source === null) { failExportAttempt(db, { jobId: row.job_id, attemptId: row.attempt_id, status: "failed", reason: "recovery_failed", message: "Export recovery found no owned output" }); emitRecovery(db, row, "failed", "recovery_failed"); return; }
+  if (source === null) {
+    if (row.status === "validated") {
+      markExportAttemptCorrupt(db, { jobId: row.job_id, attemptId: row.attempt_id, message: "Export recovery found no owned output" });
+      emitRecovery(db, row, "corrupt", "receipt_corrupt");
+    } else {
+      failExportAttempt(db, { jobId: row.job_id, attemptId: row.attempt_id, status: "failed", reason: "recovery_failed", message: "Export recovery found no owned output" });
+      emitRecovery(db, row, "failed", "recovery_failed");
+    }
+    return;
+  }
+  let completion: Parameters<typeof completeExportAttemptWithEvent>[1];
   try {
     const receiptSource = await readFile(path.join(source, "receipt.json"), "utf8"); const receipt = parseExportReceipt(JSON.parse(receiptSource));
     const outputPath = resolveWithin(source, receipt.output_file); const output = new Uint8Array(await readFile(outputPath)); const outputDigest = sha256(output);
@@ -30,13 +48,21 @@ async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Pro
     const expectedReceipt = receiptDigest(receipt);
     if (row.output_digest !== null && row.output_digest !== outputDigest || row.receipt_digest !== null && row.receipt_digest !== expectedReceipt || receipt.output_size !== output.byteLength) throw new TypeError("Recovery digest or size mismatch");
     if (row.status === "validated") return;
+    if (cancelRequested()) { await cancel(); return; }
     if (source === stage) { await rm(path.join(stage, "render"), { recursive: true, force: true }); await rm(path.join(stage, "handoff"), { recursive: true, force: true }); await mkdir(path.dirname(published), { recursive: true }); await rm(published, { recursive: true, force: true }); await rename(stage, published); }
     const finalOutput = resolveWithin(published, receipt.output_file); const info = await stat(finalOutput);
-    completeExportAttempt(db, { jobId: row.job_id, attemptId: row.attempt_id, outputPath: finalOutput, size: info.size, outputDigest, receiptDigest: expectedReceipt }); emitRecovery(db, row, "validated", null);
+    if (cancelRequested()) { await cancel(); return; }
+    advanceExportAttempt(db, { attemptId: row.attempt_id, status: "recovering", stage: "publishing" });
+    completion = { jobId: row.job_id, attemptId: row.attempt_id, outputPath: finalOutput, size: info.size, outputDigest, receiptDigest: expectedReceipt, projectId: row.project_id, projectRevision: row.project_revision, projectDigest: row.project_digest };
   } catch (error) {
+    if (cancelRequested()) { await cancel(); return; }
     await rm(stage, { recursive: true, force: true });
     markExportAttemptCorrupt(db, { jobId: row.job_id, attemptId: row.attempt_id, message: error instanceof Error ? error.message : String(error) }); emitRecovery(db, row, "corrupt", "receipt_corrupt");
+    return;
   }
+  // Persistence failure leaves verified bytes and a recovering attempt intact.
+  // It must not classify a valid receipt as corrupt or delete the recoverable output.
+  completeExportAttemptWithEvent(db, completion);
 }
 async function cleanOrphanStages(db: Database, root: string): Promise<void> {
   const staging = resolveWithin(root, ".staging");
@@ -47,7 +73,7 @@ async function cleanOrphanStages(db: Database, root: string): Promise<void> {
     if (exists === null) await rm(resolveWithin(staging, entry.name), { recursive: true, force: true });
   }
 }
-function emitRecovery(db: Database, row: RecoveryRow, status: "validated" | "failed" | "corrupt", stopReason: "recovery_failed" | "receipt_corrupt" | null): void {
+function emitRecovery(db: Database, row: RecoveryRow, status: "validated" | "failed" | "corrupt" | "cancelled", stopReason: "recovery_failed" | "receipt_corrupt" | "user_cancelled" | null): void {
   const session = db.query<{ readonly id: string }, [string]>("SELECT id FROM sessions WHERE project_id=? ORDER BY updated_at DESC LIMIT 1").get(row.project_id); if (session === null) return;
   const event: NormalizedEvent = { id: ulid(), ts: Date.now(), type: "export.attempt", jobId: row.job_id, attemptId: row.attempt_id, status, progress: { stage: status === "validated" ? "complete" : "validating", completed: status === "validated" ? 6 : 3, total: 6 }, projectRevision: row.project_revision, projectDigest: row.project_digest, stopReason };
   insertSequencedEvent(db, { id: event.id, sessionId: session.id, direction: "down", type: event.type, payload: event, turnId: null, processedAt: event.ts, createdAt: event.ts });

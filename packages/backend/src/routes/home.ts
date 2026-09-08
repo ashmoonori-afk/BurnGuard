@@ -8,7 +8,7 @@ import type {
   SettingsSummary,
 } from "@bg/shared";
 import { APP_VERSION } from "@bg/shared";
-import { ensureConfig, loadConfig, saveConfig } from "../config";
+import { loadConfig, updateConfig, type AppConfig } from "../config";
 import {
   createProjectRecord,
   listHomeDesignSystems,
@@ -49,7 +49,7 @@ function parseNumber(value: string | undefined, fallback: number): number {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isBackendId(
@@ -188,7 +188,7 @@ homeRoutes.post("/api/home/use-sample/:slug", async (c) => {
 });
 
 homeRoutes.get("/api/settings", async (c) => {
-  const config = await ensureConfig();
+  const config = await loadConfig();
   return c.json(ok(toSettingsSummary(config)));
 });
 
@@ -198,12 +198,15 @@ homeRoutes.patch("/api/settings", async (c) => {
     return c.json(fail("invalid_body", "Expected a JSON object request body"), 400);
   }
 
-  const config = await ensureConfig();
+  const changes: Pick<Partial<AppConfig>, "theme" | "defaultBackend" | "figmaPersonalAccessToken"> & {
+    chat?: Partial<AppConfig["chat"]>;
+    user?: Partial<AppConfig["user"]>;
+  } = {};
   if ("theme" in patch) {
     if (!isTheme(patch.theme)) {
       return c.json(fail("invalid_theme", "Unsupported theme value"), 400);
     }
-    config.theme = patch.theme;
+    changes.theme = patch.theme;
   }
   if ("default_backend" in patch) {
     if (!isBackendId(patch.default_backend)) {
@@ -212,7 +215,7 @@ homeRoutes.patch("/api/settings", async (c) => {
         400,
       );
     }
-    config.defaultBackend = patch.default_backend;
+    changes.defaultBackend = patch.default_backend;
   }
   if ("chat_abort_threshold_ms" in patch) {
     const raw = patch.chat_abort_threshold_ms;
@@ -230,7 +233,7 @@ homeRoutes.patch("/api/settings", async (c) => {
         400,
       );
     }
-    config.chat.abortThresholdMs = Math.round(raw);
+    changes.chat = { ...changes.chat, abortThresholdMs: Math.round(raw) };
   }
   if ("chat_context_mode" in patch) {
     if (!isChatContextMode(patch.chat_context_mode)) {
@@ -242,7 +245,7 @@ homeRoutes.patch("/api/settings", async (c) => {
         400,
       );
     }
-    config.chat.contextMode = patch.chat_context_mode;
+    changes.chat = { ...changes.chat, contextMode: patch.chat_context_mode };
   }
   if ("user" in patch) {
     if (!isRecord(patch.user)) {
@@ -253,17 +256,17 @@ homeRoutes.patch("/api/settings", async (c) => {
       typeof patch.user.display_name === "string" &&
       patch.user.display_name.trim()
     ) {
-      config.user.displayName = patch.user.display_name.trim();
+      changes.user = { displayName: patch.user.display_name.trim() };
     }
   }
   if ("figma_personal_access_token" in patch) {
     const raw = patch.figma_personal_access_token;
     if (raw === null) {
-      config.figmaPersonalAccessToken = null;
+      changes.figmaPersonalAccessToken = null;
     } else if (typeof raw === "string") {
       const trimmed = raw.trim();
       // Empty string also clears, so the UI can use "" as a clear path.
-      config.figmaPersonalAccessToken = trimmed.length > 0 ? trimmed : null;
+      changes.figmaPersonalAccessToken = trimmed.length > 0 ? trimmed : null;
     } else {
       return c.json(
         fail(
@@ -275,6 +278,11 @@ homeRoutes.patch("/api/settings", async (c) => {
     }
   }
 
-  await saveConfig(config);
+  const config = await updateConfig((current) => ({
+    ...current,
+    ...changes,
+    chat: { ...current.chat, ...changes.chat },
+    user: { ...current.user, ...changes.user },
+  }));
   return c.json(ok(toSettingsSummary(config)));
 });

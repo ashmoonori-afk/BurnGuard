@@ -63,6 +63,14 @@ export type NormalizedEvent =
   | {
       id: string;
       ts: number;
+      type: "tool.permission_decided";
+      turnId: string;
+      toolCallId: string;
+      decision: "allow" | "deny";
+    }
+  | {
+      id: string;
+      ts: number;
       type: "artifact.operation";
       operationId: string;
       revision: number;

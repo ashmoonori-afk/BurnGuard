@@ -9,7 +9,10 @@ export type PruneDeps = {
 };
 
 export async function pruneOldExports(options: PruneOptions = {}, deps: PruneDeps = {}): Promise<PruneResult> {
-  const now = options.now ?? Date.now(); const cutoff = now - (options.retentionMs ?? DEFAULT_EXPORT_RETENTION_MS); const signal = options.signal ?? AbortSignal.timeout(120_000);
+  const now = options.now ?? Date.now();
+  // retained_until already contains the default retention period; an explicit override shifts that deadline once.
+  const cutoff = now + DEFAULT_EXPORT_RETENTION_MS - (options.retentionMs ?? DEFAULT_EXPORT_RETENTION_MS);
+  const signal = options.signal ?? AbortSignal.timeout(120_000);
   const defaults = deps.listExpired === undefined || deps.claim === undefined || deps.removeDirectory === undefined ? (await import("./export-gc-storage")).exportGcStorage : null;
   const listExpired = deps.listExpired ?? defaults?.listExpired; const claim = deps.claim ?? defaults?.claim; const removeDirectory = deps.removeDirectory ?? defaults?.removeDirectory;
   if (listExpired === undefined || claim === undefined || removeDirectory === undefined) throw new TypeError("Export GC dependencies unavailable");

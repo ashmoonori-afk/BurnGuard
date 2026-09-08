@@ -66,44 +66,53 @@ const DrawLayer = forwardRef<
   const svgRef = useRef<SVGSVGElement>(null);
   const [shapes, setShapes] = useState<DrawShape[]>(initialShapes);
   const [draft, setDraft] = useState<DrawShape | null>(null);
+  const shapesRef = useRef(initialShapes);
+  const draftRef = useRef<DrawShape | null>(null);
+  const loadedResetKeyRef = useRef(resetKey);
   const redoStackRef = useRef<DrawShape[]>([]);
   const draggingRef = useRef(false);
 
   useEffect(() => {
+    if (loadedResetKeyRef.current === resetKey) return;
+    loadedResetKeyRef.current = resetKey;
+    shapesRef.current = initialShapes;
     setShapes(initialShapes);
     redoStackRef.current = [];
+    draftRef.current = null;
+    draggingRef.current = false;
     setDraft(null);
   }, [initialShapes, resetKey]);
+
+  // Event handlers publish once. React may replay state updaters in StrictMode.
+  const commit = (next: DrawShape[]) => {
+    shapesRef.current = next;
+    setShapes(next);
+    onCommit(next);
+  };
+
+  const updateDraft = (next: DrawShape | null) => {
+    draftRef.current = next;
+    setDraft(next);
+  };
 
   useImperativeHandle(
     ref,
     () => ({
       undo: () => {
-        setShapes((prev) => {
-          if (prev.length === 0) return prev;
-          const copy = prev.slice();
-          const popped = copy.pop()!;
-          redoStackRef.current.push(popped);
-          onCommit(copy);
-          return copy;
-        });
+        if (shapesRef.current.length === 0) return;
+        const copy = shapesRef.current.slice();
+        redoStackRef.current.push(copy.pop()!);
+        commit(copy);
       },
       redo: () => {
         const next = redoStackRef.current.pop();
         if (!next) return;
-        setShapes((prev) => {
-          const nextList = [...prev, next];
-          onCommit(nextList);
-          return nextList;
-        });
+        commit([...shapesRef.current, next]);
       },
       clear: () => {
-        setShapes((prev) => {
-          if (prev.length === 0) return prev;
-          redoStackRef.current = [];
-          onCommit([]);
-          return [];
-        });
+        if (shapesRef.current.length === 0) return;
+        redoStackRef.current = [];
+        commit([]);
       },
     }),
     [onCommit],
@@ -124,9 +133,9 @@ const DrawLayer = forwardRef<
     (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
     draggingRef.current = true;
     if (tool === "pen") {
-      setDraft({ type: "pen", points: [pt], stroke: color, strokeWidth });
+      updateDraft({ type: "pen", points: [pt], stroke: color, strokeWidth });
     } else if (tool === "rect") {
-      setDraft({
+      updateDraft({
         type: "rect",
         x: pt[0],
         y: pt[1],
@@ -136,7 +145,7 @@ const DrawLayer = forwardRef<
         strokeWidth,
       });
     } else {
-      setDraft({
+      updateDraft({
         type: "arrow",
         x1: pt[0],
         y1: pt[1],
@@ -152,16 +161,15 @@ const DrawLayer = forwardRef<
     if (!draggingRef.current) return;
     const pt = localPoint(e);
     if (!pt) return;
-    setDraft((current) => {
-      if (!current) return current;
-      if (current.type === "pen") {
-        return { ...current, points: [...current.points, pt] };
-      }
-      if (current.type === "rect") {
-        return { ...current, w: pt[0] - current.x, h: pt[1] - current.y };
-      }
-      return { ...current, x2: pt[0], y2: pt[1] };
-    });
+    const current = draftRef.current;
+    if (!current) return;
+    if (current.type === "pen") {
+      updateDraft({ ...current, points: [...current.points, pt] });
+    } else if (current.type === "rect") {
+      updateDraft({ ...current, w: pt[0] - current.x, h: pt[1] - current.y });
+    } else {
+      updateDraft({ ...current, x2: pt[0], y2: pt[1] });
+    }
   };
 
   const handlePointerUp = (e: PointerEvent<SVGSVGElement>) => {
@@ -172,24 +180,19 @@ const DrawLayer = forwardRef<
     } catch {
       // already released
     }
-    setDraft((current) => {
-      if (!current) return null;
-      const trivially_small =
-        (current.type === "rect" && Math.abs(current.w) < 4 && Math.abs(current.h) < 4) ||
-        (current.type === "arrow" &&
-          Math.abs(current.x2 - current.x1) < 4 &&
-          Math.abs(current.y2 - current.y1) < 4) ||
-        (current.type === "pen" && current.points.length < 2);
-      if (trivially_small) return null;
-      const normalized = normalize(current);
-      setShapes((prev) => {
-        const next = [...prev, normalized];
-        redoStackRef.current = [];
-        onCommit(next);
-        return next;
-      });
-      return null;
-    });
+    const current = draftRef.current;
+    updateDraft(null);
+    if (!current || !active) return;
+    const triviallySmall =
+      (current.type === "rect" && Math.abs(current.w) < 4 && Math.abs(current.h) < 4) ||
+      (current.type === "arrow" &&
+        Math.abs(current.x2 - current.x1) < 4 &&
+        Math.abs(current.y2 - current.y1) < 4) ||
+      (current.type === "pen" && current.points.length < 2);
+    if (triviallySmall) return;
+    const normalized = normalize(current);
+    redoStackRef.current = [];
+    commit([...shapesRef.current, normalized]);
   };
 
   return (
@@ -199,11 +202,15 @@ const DrawLayer = forwardRef<
       style={{
         pointerEvents: active ? "auto" : "none",
         cursor: active ? "crosshair" : "default",
+        touchAction: "none",
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
+      onPointerCancel={() => {
+        draggingRef.current = false;
+        updateDraft(null);
+      }}
     >
       {shapes.map((shape, i) => renderShape(shape, `s-${i}`))}
       {draft && renderShape(draft, "draft")}

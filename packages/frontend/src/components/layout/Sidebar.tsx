@@ -112,7 +112,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="flex-1 overflow-y-auto">
+      <div id="new-project-panel" role="region" aria-label="새 프로젝트 만들기" className="flex-1 scroll-mt-20 overflow-y-auto">
         <NewProjectPanel
           type={activeType}
           designSystems={systems}

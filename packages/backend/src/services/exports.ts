@@ -3,7 +3,7 @@ import path from "node:path";
 import { parse } from "node-html-parser";
 import type { ExportFormat, ExportOptions, ExportProgress, ExportStopReason } from "@bg/shared";
 import { getExportJob } from "../db/exports";
-import { createExportAuthority, createRetryAuthority, advanceExportAttempt, completeExportAttempt, failExportAttempt, recordExportAuditFindings, requestExportCancellation, type ExportIdentity } from "../db/export-lifecycle-repository";
+import { createExportAuthority, createRetryAuthority, advanceExportAttempt, failExportAttempt, recordExportAuditFindings, requestExportCancellation, type ExportIdentity } from "../db/export-lifecycle-repository";
 import { getProjectDetail } from "../db/project-read-repository";
 import { getSqlite } from "../db/sqlite-client";
 import { exportsDir, projectsDir, resolveManagedPath, systemsDir } from "../lib/paths";
@@ -13,7 +13,7 @@ import { materializeManagedTree } from "./artifact-tree-storage";
 import { inspectCanonicalTree, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { catalogPaths, inspectCatalogTree, validateCatalogReceiptTree } from "./catalog-files";
 import { resolveStaticClosure } from "./export-closure";
-import { publishExportAttemptEvent } from "./export-events";
+import { completeExportAttemptWithEvent, publishExportAttemptEvent, publishPersistedExportAttemptEvent } from "./export-events";
 import { renderHandoffBundle } from "./export-handoff-render";
 import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "./export-html-validation";
 import { validateHandoffPackage, validatePptxPackage } from "./export-package-validation";
@@ -28,7 +28,7 @@ import { prepareSlideDeckExport } from "./export-stage";
 import { parseStoredProjectOptions } from "./project-options";
 import { zipDirectory } from "./zip";
 
-const RENDERER_CONTRACT = "burnguard-export/1|playwright-core@1.62.1|pdfjs-dist@5.4.149";
+const RENDERER_CONTRACT = "burnguard-export/1|playwright-core@1.59.1|pdfjs-dist@5.4.149";
 const active = new Map<string, AbortController>();
 export type ExportPhase = "after_snapshot" | "after_partial_render" | "after_render" | "after_validation" | "after_receipt" | "after_publish_before_db";
 export type ExportHooks = { readonly phase?: (attemptId: string, phase: ExportPhase, signal: AbortSignal) => Promise<void> | void };
@@ -67,10 +67,15 @@ type Context = { readonly identity: ExportIdentity; readonly project: NonNullabl
 type RunInput = { readonly jobId: string; readonly attemptId: string; readonly context: Context; readonly controller: AbortController; readonly hooks: ExportHooks };
 
 async function runExport(input: RunInput): Promise<void> {
-  const { context } = input; const db = getSqlite(); const stageRoot = resolveWithin(exportsDir, ".staging", assertSafeName(input.attemptId)); const renderRoot = path.join(stageRoot, "render");
+  const { context } = input; const db = getSqlite();
+  let stageRoot: string | null = null, publishedRoot: string | null = null;
   const extension = context.format === "pdf" ? "pdf" : context.format === "png" ? "png" : context.format === "pptx" ? "pptx" : "zip";
-  const outputFile = `artifact.${extension}`; const stagedOutput = path.join(stageRoot, outputFile); const publishedRoot = resolveWithin(exportsDir, "attempts", assertSafeName(input.attemptId));
+  const outputFile = `artifact.${extension}`;
   try {
+    await mkdir(exportsDir, { recursive: true });
+    stageRoot = resolveWithin(exportsDir, ".staging", assertSafeName(input.attemptId));
+    publishedRoot = resolveWithin(exportsDir, "attempts", assertSafeName(input.attemptId));
+    const renderRoot = path.join(stageRoot, "render"), stagedOutput = path.join(stageRoot, outputFile);
     advance(input, "running", "snapshotting");
     const source = resolveManagedPath(projectsDir, context.project.dir_path); const live = await inspectCanonicalTree(source);
     if (live.tree_digest !== context.identity.digest) throw new ExportServiceError("source_changed", "Live project digest differs from stable identity");
@@ -90,21 +95,30 @@ async function runExport(input: RunInput): Promise<void> {
     const inputDigest = sha256(canonicalJson({ schema_version: 1, project: context.identity, entrypoint: context.project.entrypoint, manifest: renderManifest }));
     advanceExportAttempt(db, { attemptId: input.attemptId, status: "running", stage: "rendering", inputClosureDigest: inputDigest, designSystemDigest: context.identity.designSystemDigest });
     emit(context.identity, input, "running", { stage: "rendering", completed: 2, total: 6 }, null); await input.hooks.phase?.(input.attemptId, "after_snapshot", input.controller.signal);
+    input.controller.signal.throwIfAborted();
     const validation = await renderOutput(input, renderRoot, stagedOutput, renderManifest, inputDigest);
     await input.hooks.phase?.(input.attemptId, "after_partial_render", input.controller.signal); await input.hooks.phase?.(input.attemptId, "after_render", input.controller.signal); advance(input, "validating", "validating");
     const outputBytes = new Uint8Array(await readFile(stagedOutput)); const outputDigest = sha256(outputBytes); const outputInfo = await stat(stagedOutput);
     await input.hooks.phase?.(input.attemptId, "after_validation", input.controller.signal);
+    input.controller.signal.throwIfAborted();
     const receipt: ExportReceipt = { schema_version: 1, job_id: input.jobId, attempt_id: input.attemptId, parent_attempt_id: (await getExportJob(input.jobId))?.latest_attempt?.parent_attempt_id ?? null, format: context.format, project: { id: context.identity.projectId, revision: context.identity.revision, digest: context.identity.digest }, options: context.options, output_file: outputFile, output_size: outputInfo.size, digests: { input_closure: inputDigest, design_system: context.identity.designSystemDigest, options: sha256(canonicalJson(context.options)), renderer: context.rendererDigest, capture: context.captureDigest, output: outputDigest }, validation };
     const receiptJson = canonicalJson(receipt); await writeFile(path.join(stageRoot, "receipt.json"), receiptJson);
     const rereadReceipt = parseExportReceipt(JSON.parse(await readFile(path.join(stageRoot, "receipt.json"), "utf8")));
     if (sha256(new Uint8Array(await readFile(stagedOutput))) !== outputDigest || receiptDigest(rereadReceipt) !== sha256(receiptJson)) throw new TypeError("Staged receipt verification failed");
-    await input.hooks.phase?.(input.attemptId, "after_receipt", input.controller.signal); advance(input, "validating", "publishing"); await rm(renderRoot, { recursive: true, force: true }); await mkdir(path.dirname(publishedRoot), { recursive: true }); await rm(publishedRoot, { recursive: true, force: true }); await rename(stageRoot, publishedRoot);
+    await input.hooks.phase?.(input.attemptId, "after_receipt", input.controller.signal);
+    input.controller.signal.throwIfAborted();
+    advance(input, "validating", "publishing"); await rm(renderRoot, { recursive: true, force: true }); await mkdir(path.dirname(publishedRoot), { recursive: true }); await rm(publishedRoot, { recursive: true, force: true });
+    input.controller.signal.throwIfAborted();
+    await rename(stageRoot, publishedRoot);
     await input.hooks.phase?.(input.attemptId, "after_publish_before_db", input.controller.signal);
-    completeExportAttempt(db, { jobId: input.jobId, attemptId: input.attemptId, outputPath: path.join(publishedRoot, outputFile), size: outputInfo.size, outputDigest, receiptDigest: sha256(receiptJson) });
-    emit(context.identity, input, "validated", { stage: "complete", completed: 6, total: 6 }, null);
+    input.controller.signal.throwIfAborted();
+    const outputPath = path.join(publishedRoot, outputFile);
+    const completedEvent = completeExportAttemptWithEvent(db, { jobId: input.jobId, attemptId: input.attemptId, outputPath, size: outputInfo.size, outputDigest, receiptDigest: sha256(receiptJson), projectId: context.identity.projectId, projectRevision: context.identity.revision, projectDigest: context.identity.digest });
+    publishPersistedExportAttemptEvent(completedEvent);
   } catch (error) {
-    await rm(stageRoot, { recursive: true, force: true }); await rm(publishedRoot, { recursive: true, force: true });
-    const cancelled = input.controller.signal.aborted; const reason: ExportStopReason = cancelled ? "user_cancelled" : error instanceof ExportServiceError && error.code === "source_changed" ? "source_changed" : error instanceof ExportServiceError && error.code === "design_audit_failed" ? "validation_failed" : "render_failed";
+    if (stageRoot !== null) await rm(stageRoot, { recursive: true, force: true });
+    if (publishedRoot !== null) await rm(publishedRoot, { recursive: true, force: true });
+    const cancelled = input.controller.signal.aborted || db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(input.attemptId)?.requested === 1; const reason: ExportStopReason = cancelled ? "user_cancelled" : error instanceof ExportServiceError && error.code === "source_changed" ? "source_changed" : error instanceof ExportServiceError && error.code === "design_audit_failed" ? "validation_failed" : "render_failed";
     failExportAttempt(db, { jobId: input.jobId, attemptId: input.attemptId, status: cancelled ? "cancelled" : "failed", reason, message: error instanceof Error ? error.message : String(error) });
     emit(context.identity, input, cancelled ? "cancelled" : "failed", { stage: "rendering", completed: 2, total: 6 }, reason);
   }

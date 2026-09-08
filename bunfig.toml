@@ -2,5 +2,7 @@
 saveTextLockfile = true
 
 [test]
-coverage = true
+preload = ["./scripts/test-preload.ts"]
+timeout = 30000
 coverageThreshold = 0.8
+coverageSkipTestFiles = true

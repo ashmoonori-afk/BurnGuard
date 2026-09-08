@@ -10,6 +10,8 @@ import { beginArtifactPublication, endArtifactPublication } from "./artifact-pub
 import { replaceArtifactFileIndex, replaceArtifactFileIndexInTransaction } from "../db/artifact-file-index";
 import { adoptExistingArtifact, establishEmptyArtifactAuthority } from "./artifact-initialization";
 import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
+import { pruneExpiredArtifactOperations } from "./artifact-retention";
+import { acquireArtifactProjectLock } from "./artifact-project-lock";
 
 type OperationKind = "patch" | "turn" | "restore" | "undo" | "external" | "initialize";
 type CoordinatorFaults = {
@@ -20,6 +22,8 @@ type CoordinatorFaults = {
   readonly beforeDatabaseCommit?: () => void;
   readonly beforeFileIndex?: () => void;
   readonly beforeBaselineFinalize?: () => void;
+  readonly beforeRollback?: () => void;
+  readonly afterExternalCapture?: () => void;
 };
 type RunOperation = {
   readonly projectId: string;
@@ -73,11 +77,18 @@ export class ArtifactCoordinator {
   constructor(private readonly db: Database, private readonly faults: CoordinatorFaults = {}) {}
 
   async initialize(projectId: string, projectDir: string): Promise<CanonicalTreeManifest> {
+    const release = await acquireArtifactProjectLock(this.db, projectId);
+    try { return await this.initializeOnce(projectId, projectDir); }
+    finally { release(); }
+  }
+
+  private async initializeOnce(projectId: string, projectDir: string): Promise<CanonicalTreeManifest> {
     const actual = await inspectCanonicalTree(projectDir);
     const identity = this.projectIdentity(projectId);
-    if (identity.digest === null) await adoptExistingArtifact(this.db, projectId, projectDir, identity.revision, actual);
+    let baselineSource = projectDir;
+    if (identity.digest === null) baselineSource = await adoptExistingArtifact(this.db, projectId, projectDir, identity.revision, actual);
     else if (identity.digest !== actual.tree_digest) throw new ArtifactOperationError("artifact_identity_mismatch", "Live artifact bytes differ from the stable identity");
-    await materializeManagedTree(projectDir, this.baselinePath(projectDir));
+    await materializeManagedTree(baselineSource, this.baselinePath(projectDir));
     replaceArtifactFileIndex(this.db, projectId, actual);
     return actual;
   }
@@ -108,19 +119,26 @@ export class ArtifactCoordinator {
   }
 
   async run(input: RunOperation): Promise<CommittedArtifactOperation> {
+    await pruneExpiredArtifactOperations(this.db, { projectId: input.projectId, preserveOperationId: input.parentOperationId });
     const base = await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
     const id = input.operationId ?? ulid();
     const ownedRoot = this.operationPath(input.projectDir, id);
     const snapshotPath = path.join(ownedRoot, "snapshot");
     const stagePath = path.join(ownedRoot, "stage");
     this.faults.beforeSnapshot?.();
-    await materializeManagedTree(input.projectDir, snapshotPath);
-    await validateCanonicalTree(snapshotPath, base);
-    await materializeManagedTree(input.projectDir, stagePath);
-    await validateCanonicalTree(stagePath, base);
-    this.insertWorking(id, input, base, snapshotPath, stagePath);
+    try {
+      await materializeManagedTree(input.projectDir, snapshotPath);
+      await validateCanonicalTree(snapshotPath, base);
+      await materializeManagedTree(input.projectDir, stagePath);
+      await validateCanonicalTree(stagePath, base);
+      this.insertWorking(id, input, base, snapshotPath, stagePath);
+    } catch (error) {
+      await rm(ownedRoot, { recursive: true, force: true });
+      throw error;
+    }
     input.onPrepared?.(stagePath);
     let publicationStarted = false;
+    let releasePublication: (() => void) | null = null;
     let result: CanonicalTreeManifest;
     let diff: readonly ArtifactFileDiff[];
     const resultRevision = input.expectedRevision + 1;
@@ -133,6 +151,7 @@ export class ArtifactCoordinator {
         publishArtifactOperationEvent(this.db, { projectId: input.projectId, operationId: id, revision: input.expectedRevision, digest: base.tree_digest, outcome: "cancelled", diff });
         return { id, kind: input.kind, status: "cancelled", baseRevision: input.expectedRevision, baseDigest: base.tree_digest, resultRevision: input.expectedRevision, resultDigest: base.tree_digest, diff };
       }
+      releasePublication = await acquireArtifactProjectLock(this.db, input.projectId);
       this.prepareResult(id, resultRevision, result, diff);
       beginArtifactPublication(input.projectId);
       publicationStarted = true;
@@ -145,13 +164,16 @@ export class ArtifactCoordinator {
       this.faults.beforeDatabaseCommit?.();
       this.commit(id, input.projectId, input.expectedRevision, base.tree_digest, resultRevision, result);
     } catch (error) {
+      releasePublication ??= await acquireArtifactProjectLock(this.db, input.projectId);
       const securityFailure = error instanceof ArtifactPublicationPolicyError ||
         (error instanceof Error && "code" in error && error.code === "immutable_reference_escaped");
       try {
+        this.faults.beforeRollback?.();
         if (!securityFailure) await publishManagedTree(snapshotPath, input.projectDir);
         await validateCanonicalTree(input.projectDir, base);
       } finally {
         if (publicationStarted) endArtifactPublication(input.projectId);
+        releasePublication();
       }
       this.terminal(id, "failed", null, null);
       if (securityFailure) {
@@ -163,9 +185,9 @@ export class ArtifactCoordinator {
       if (error instanceof ArtifactOperationError) throw error;
       throw new ArtifactOperationError("operation_failed", error instanceof Error ? error.message : "Artifact operation failed");
     }
-    endArtifactPublication(input.projectId);
-    try { this.faults.beforeBaselineFinalize?.(); await materializeManagedTree(input.projectDir, this.baselinePath(input.projectDir)); }
+    try { this.faults.beforeBaselineFinalize?.(); await materializeManagedTree(stagePath, this.baselinePath(input.projectDir)); }
     catch (error) { console.warn("[artifact] committed operation requires baseline reconciliation", id, error); }
+    finally { endArtifactPublication(input.projectId); releasePublication?.(); }
     publishArtifactOperationEvent(this.db, { projectId: input.projectId, operationId: id, revision: resultRevision, digest: result.tree_digest, outcome: "committed", diff });
     return { id, kind: input.kind, status: "committed", baseRevision: input.expectedRevision, baseDigest: base.tree_digest, resultRevision, resultDigest: result.tree_digest, diff };
   }
@@ -187,8 +209,25 @@ export class ArtifactCoordinator {
   }
 
   async observeExternal(projectId: string, projectDir: string): Promise<CommittedArtifactOperation | null> {
+    const release = await acquireArtifactProjectLock(this.db, projectId);
+    try { return await this.observeExternalUntilStable(projectId, projectDir); }
+    finally { release(); }
+  }
+
+  private async observeExternalUntilStable(projectId: string, projectDir: string): Promise<CommittedArtifactOperation | null> {
+    let latest: CommittedArtifactOperation | null = null;
+    for (let pass = 0; pass < 8; pass += 1) {
+      latest = await this.observeExternalOnce(projectId, projectDir) ?? latest;
+      const live = await inspectCanonicalTree(projectDir);
+      if (live.tree_digest === this.projectIdentity(projectId).digest) return latest;
+    }
+    // The committed baseline remains valid even if an external editor never settles.
+    throw new ArtifactOperationError("external_changes_pending", "External files are still changing; retry after saving finishes");
+  }
+
+  private async observeExternalOnce(projectId: string, projectDir: string): Promise<CommittedArtifactOperation | null> {
     const identity = this.projectIdentity(projectId);
-    if (identity.digest === null) { await this.initialize(projectId, projectDir); return null; }
+    if (identity.digest === null) { await this.initializeOnce(projectId, projectDir); return null; }
     const stableIdentity = { revision: identity.revision, digest: identity.digest };
     const actual = await inspectCanonicalTree(projectDir);
     if (actual.tree_digest === stableIdentity.digest) return null;
@@ -201,16 +240,29 @@ export class ArtifactCoordinator {
     const ownedRoot = this.operationPath(projectDir, id);
     const snapshotPath = path.join(ownedRoot, "snapshot");
     const stagePath = path.join(ownedRoot, "stage");
+    let registered = false;
+    try {
     await materializeManagedTree(baselinePath, snapshotPath);
-    await materializeManagedTree(projectDir, stagePath);
+    const captured = await materializeManagedTree(projectDir, stagePath);
+    this.faults.afterExternalCapture?.();
+    const current = await inspectCanonicalTree(projectDir);
+    if (captured.tree_digest !== current.tree_digest) return null;
     const runInput = { projectId, projectDir, kind: "external" as const, expectedRevision: stableIdentity.revision, expectedArtifactDigest: stableIdentity.digest, mutate: async () => {} };
     this.insertWorking(id, runInput, base, snapshotPath, stagePath);
-    const diff = diffManagedTrees(base, actual);
-    this.prepareResult(id, identity.revision + 1, actual, diff);
-    this.commit(id, projectId, identity.revision, identity.digest, identity.revision + 1, actual);
-    await materializeManagedTree(projectDir, baselinePath);
-    publishArtifactOperationEvent(this.db, { projectId, operationId: id, revision: identity.revision + 1, digest: actual.tree_digest, outcome: "committed", diff });
-    return { id, kind: "external", status: "committed", baseRevision: identity.revision, baseDigest: identity.digest, resultRevision: identity.revision + 1, resultDigest: actual.tree_digest, diff };
+    registered = true;
+    const diff = diffManagedTrees(base, captured);
+    this.prepareResult(id, identity.revision + 1, captured, diff);
+    this.commit(id, projectId, identity.revision, identity.digest, identity.revision + 1, captured);
+    // Use the exact committed stage, never a later version of the live files.
+    await materializeManagedTree(stagePath, baselinePath);
+    publishArtifactOperationEvent(this.db, { projectId, operationId: id, revision: identity.revision + 1, digest: captured.tree_digest, outcome: "committed", diff });
+    return { id, kind: "external", status: "committed", baseRevision: identity.revision, baseDigest: identity.digest, resultRevision: identity.revision + 1, resultDigest: captured.tree_digest, diff };
+    } catch (error) {
+      if (!registered && error instanceof Error && "code" in error && error.code === "tree_mismatch") return null;
+      throw error;
+    } finally {
+      if (!registered) await rm(ownedRoot, { recursive: true, force: true });
+    }
   }
 
   private async rejectExternal(projectId: string, projectDir: string, identity: { readonly revision: number; readonly digest: string }, actual: CanonicalTreeManifest, base: CanonicalTreeManifest, activeId: string): Promise<CommittedArtifactOperation> {
@@ -251,12 +303,17 @@ export class ArtifactCoordinator {
     const snapshot = { schema_version: 1, snapshot_path: snapshotPath, stage_path: stagePath, base_manifest: base };
     const retention = { schema_version: 1, replayable: true, retained_until: now + 30 * 24 * 60 * 60 * 1000, pruned_at: null, prune_reason: null };
     const replay = { schema_version: 1, kind: input.kind, parent_operation_id: input.parentOperationId ?? null, publication: "base" };
-    try { this.db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,?, 'working',?,?,NULL,NULL,?,?,?,'[]',?,?,?,?,?)").run(id, input.projectId, input.expectedRevision, base.tree_digest, input.expectedRevision, input.expectedFileHash ?? "", input.nodeFingerprint ?? "", JSON.stringify(snapshot), JSON.stringify(retention), JSON.stringify(replay), now, now); }
+    try { this.db.transaction(() => {
+      const identity = this.projectIdentity(input.projectId);
+      if (identity.revision !== input.expectedRevision || identity.digest !== base.tree_digest) throw new ArtifactOperationError("operation_conflict", "Stable artifact identity changed before staging");
+      this.db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,?, 'working',?,?,NULL,NULL,?,?,?,'[]',?,?,?,?,?)").run(id, input.projectId, input.expectedRevision, base.tree_digest, input.expectedRevision, input.expectedFileHash ?? "", input.nodeFingerprint ?? "", JSON.stringify(snapshot), JSON.stringify(retention), JSON.stringify(replay), now, now);
+    })(); }
     catch (error) { throw new ArtifactOperationError("operation_conflict", error instanceof Error ? error.message : "Operation conflict"); }
   }
 
   private prepareResult(id: string, revision: number, manifest: CanonicalTreeManifest, diff: readonly ArtifactFileDiff[]): void {
-    this.db.prepare("UPDATE artifact_operations SET result_revision=?,result_digest=?,diff_json=?,replay_json=json_set(replay_json,'$.publication','result'),updated_at=? WHERE id=? AND status='working'").run(revision, manifest.tree_digest, JSON.stringify(diff), Date.now(), id);
+    const changed = this.db.prepare("UPDATE artifact_operations SET result_revision=?,result_digest=?,diff_json=?,replay_json=json_set(replay_json,'$.publication','result'),updated_at=? WHERE id=? AND status='working'").run(revision, manifest.tree_digest, JSON.stringify(diff), Date.now(), id);
+    if (changed.changes !== 1) throw new ArtifactOperationError("invalid_operation_state", "Operation is no longer working");
   }
 
   private commit(id: string, projectId: string, baseRevision: number, baseDigest: string, resultRevision: number, result: CanonicalTreeManifest): void {

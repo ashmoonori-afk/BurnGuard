@@ -7,7 +7,8 @@ import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { listSessionEvents } from "../src/db/events";
 import type { DesignDirectionRenderer, DirectionRenderInput } from "../src/services/design-direction-renderer";
-import { DIRECTION_INTERRUPTION_ERROR, DesignDirectionWorkflow, DesignDirectionWorkflowError } from "../src/services/design-direction-workflow";
+import { DIRECTION_INTERRUPTION_ERROR, DIRECTION_RENDER_ERROR, DesignDirectionWorkflow, DesignDirectionWorkflowError } from "../src/services/design-direction-workflow";
+import { isDirectionOperationActive } from "../src/services/direction-operation-registry";
 import { getLatestDirectionState, publishDirectionState } from "../src/services/design-direction-state";
 import { startUserTurn } from "../src/services/turns";
 import { buildSessionContext } from "../src/services/context";
@@ -76,6 +77,54 @@ class GateRenderer implements DesignDirectionRenderer {
 }
 
 describe("design direction workflow", () => {
+  test("Given initial persistence failure When generation is retried Then the session reservation is released", async () => {
+    const input = session("initial-failure");
+    const workflow = new DesignDirectionWorkflow(undefined, () => 10, () => "generation-initial-failure");
+    const db = getSqlite();
+    db.exec(`CREATE TEMP TRIGGER fail_direction_start BEFORE INSERT ON events WHEN NEW.session_id='${input.sessionId}' BEGIN SELECT RAISE(ABORT,'injected event failure'); END`);
+    try {
+      await expect(workflow.generate(input)).rejects.toThrow("injected event failure");
+      expect(isDirectionOperationActive(input.sessionId)).toBe(false);
+    } finally { db.exec("DROP TRIGGER fail_direction_start"); }
+    expect((await (await workflow.generate(input)).completion).status).toBe("ready");
+  });
+
+  test("Given rendering in progress When another window selects or undoes Then the server rejects without changing selection", async () => {
+    const input = session("active-selection");
+    const renderer = new ProgressGateRenderer();
+    const workflow = new DesignDirectionWorkflow(renderer, () => 10, () => "generation-active-selection");
+    const blocked = renderer.nextBlockedCall();
+    const started = await workflow.generate(input);
+    await blocked;
+    try {
+      await expect(workflow.select(input.sessionId, started.state.generation_id, 0, "editorial")).rejects.toMatchObject({ code: "operation_active" });
+      await expect(workflow.undo(input.sessionId, started.state.generation_id, 0)).rejects.toMatchObject({ code: "operation_active" });
+      expect((await getLatestDirectionState(input.sessionId))?.selection_revision).toBe(0);
+    } finally { await workflow.cancel(input.sessionId); }
+  });
+
+  test("Given two windows with one revision When both select Then only one durable selection succeeds", async () => {
+    const input = session("concurrent-selection");
+    const workflow = new DesignDirectionWorkflow(undefined, () => 10, () => "generation-concurrent-selection");
+    const ready = await (await workflow.generate(input)).completion;
+    const outcomes = await Promise.allSettled([
+      workflow.select(input.sessionId, ready.generation_id, 0, "editorial"),
+      new DesignDirectionWorkflow().select(input.sessionId, ready.generation_id, 0, "modular"),
+    ]);
+    expect(outcomes.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.find((result) => result.status === "rejected")).toMatchObject({ reason: { code: "revision_conflict" } });
+    expect((await getLatestDirectionState(input.sessionId))?.selection_revision).toBe(1);
+  });
+
+  test("Given a renderer error containing a private path When failure is published Then persisted and returned snapshots contain only a public message", async () => {
+    const input = session("private-render-error");
+    const renderer: DesignDirectionRenderer = { render: async () => { throw new Error("EACCES C:/private/SECRET_RENDER_PATH/output.svg"); } };
+    const result = await (await new DesignDirectionWorkflow(renderer).generate(input)).completion;
+    expect(result.error).toBe(DIRECTION_RENDER_ERROR);
+    expect(JSON.stringify(result)).not.toContain("SECRET_RENDER_PATH");
+    expect(JSON.stringify(await listSessionEvents(input.sessionId))).not.toContain("SECRET_RENDER_PATH");
+  });
+
   test("persists exactly three structurally distinct production SVG previews", async () => {
     const input = session("svg");
     const completed = await (await new DesignDirectionWorkflow(undefined, () => 10, () => "generation-svg").generate(input)).completion;

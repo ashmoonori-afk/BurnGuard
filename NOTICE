@@ -23,3 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 lucide-icons/lucide - ISC License - 38 bundled icons (full license: packages/backend/src/harness/assets/lucide/LICENSE).
+
+Windows portable builds also redistribute Node.js and playwright-core.
+Their licenses are included at resources/node/LICENSE and
+resources/node_modules/playwright-core/LICENSE, respectively.

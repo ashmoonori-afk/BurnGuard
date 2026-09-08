@@ -7,6 +7,7 @@ import { runMigrationsFrom } from "../src/db/migrate";
 import { advanceExportAttempt, completeExportAttempt, createExportAuthority, createRetryAuthority, requestExportCancellation } from "../src/db/export-lifecycle-repository";
 import { reconcileExportState } from "../src/services/export-recovery";
 import { canonicalJson, receiptDigest, sha256, type ExportReceipt } from "../src/services/export-receipt";
+import { completeExportAttemptWithEvent } from "../src/services/export-events";
 
 const sourceDir = path.join(import.meta.dir, "../src/db/migrations");
 const databases: Database[] = [];
@@ -49,6 +50,55 @@ afterEach(async () => {
 });
 
 describe("export authority migration", () => {
+  test("Given a validated-event INSERT failure When export completion commits Then job attempt and event all roll back together", async () => {
+    const db = await migratedDatabase(); seedProject(db);
+    const ids = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "html_zip", options: {}, rendererDigest: "r", captureDigest: "c" });
+    advanceExportAttempt(db, { attemptId: ids.attemptId, status: "validating", stage: "publishing" });
+    db.exec("CREATE TRIGGER reject_validated_event BEFORE INSERT ON events WHEN NEW.type='export.attempt' AND json_extract(NEW.payload_json,'$.status')='validated' BEGIN SELECT RAISE(ABORT,'event_insert_blocked'); END");
+    const completion = { ...ids, projectId: "p", projectRevision: 3, projectDigest: "a".repeat(64), outputPath: "/owned/output.zip", size: 1, outputDigest: "o", receiptDigest: "r" };
+    expect(() => completeExportAttemptWithEvent(db, completion)).toThrow("event_insert_blocked");
+    expect(db.query("SELECT status,output_path FROM exports WHERE id=?").get(ids.jobId)).toEqual({ status: "pending", output_path: null });
+    expect(db.query("SELECT status,output_digest FROM export_attempts WHERE id=?").get(ids.attemptId)).toEqual({ status: "validating", output_digest: null });
+    expect(db.query("SELECT COUNT(*) count FROM events").get()).toEqual({ count: 0 });
+    db.exec("DROP TRIGGER reject_validated_event");
+    expect(completeExportAttemptWithEvent(db, completion)?.envelope.event).toMatchObject({ type: "export.attempt", status: "validated" });
+    expect(db.query("SELECT status FROM exports WHERE id=?").get(ids.jobId)).toEqual({ status: "succeeded" });
+  });
+  test("Given cancellation after validation When completion races Then durable cancellation prevents success", async () => {
+    const db = await migratedDatabase(); seedProject(db);
+    const ids = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "html_zip", options: {}, rendererDigest: "r", captureDigest: "c" });
+    advanceExportAttempt(db, { attemptId: ids.attemptId, status: "validating", stage: "publishing" });
+    expect(requestExportCancellation(db, ids.attemptId)).toBe(true);
+    expect(() => completeExportAttempt(db, { ...ids, outputPath: "/owned/output.zip", size: 1, outputDigest: "o", receiptDigest: "r" })).toThrow("transition_conflict");
+    expect(db.query("SELECT status,output_path FROM exports WHERE id=?").get(ids.jobId)).toEqual({ status: "pending", output_path: null });
+  });
+
+  test("Given a cancellation persisted before restart When recovery finds owned output Then it removes bytes and preserves cancellation", async () => {
+    const db = await migratedDatabase(); seedProject(db);
+    const root = await mkdtemp(path.join(tmpdir(), "bg-export-cancel-recovery-")); directories.push(root);
+    const ids = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "html_zip", options: {}, rendererDigest: "r", captureDigest: "c" });
+    const published = path.join(root, "attempts", ids.attemptId);
+    await mkdir(published, { recursive: true }); await writeFile(path.join(published, "artifact.zip"), "cancelled bytes");
+    requestExportCancellation(db, ids.attemptId);
+    await reconcileExportState(db, root);
+    expect(db.query("SELECT status,stop_reason,json_extract(retention_json,'$.output_available') available FROM export_attempts WHERE id=?").get(ids.attemptId)).toEqual({ status: "cancelled", stop_reason: "user_cancelled", available: 0 });
+    expect(await Bun.file(path.join(published, "artifact.zip")).exists()).toBe(false);
+    expect(db.query("SELECT json_extract(payload_json,'$.status') status FROM events WHERE session_id='s'").all()).toEqual([{ status: "cancelled" }]);
+  });
+
+  test("Given a successful output removed externally When recovery runs Then success is invalidated and a retry can start", async () => {
+    const db = await migratedDatabase(); seedProject(db);
+    const root = await mkdtemp(path.join(tmpdir(), "bg-export-missing-success-")); directories.push(root);
+    const identity = { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null };
+    const ids = createExportAuthority(db, { ...identity, format: "html_zip", options: {}, rendererDigest: "r", captureDigest: "c" });
+    advanceExportAttempt(db, { attemptId: ids.attemptId, status: "validating", stage: "publishing" });
+    completeExportAttempt(db, { ...ids, outputPath: path.join(root, "attempts", ids.attemptId, "artifact.zip"), size: 1, outputDigest: "o", receiptDigest: "r" });
+    await reconcileExportState(db, root);
+    expect(db.query("SELECT status,output_path FROM exports WHERE id=?").get(ids.jobId)).toEqual({ status: "failed", output_path: null });
+    expect(db.query("SELECT status,json_extract(retention_json,'$.output_available') available FROM export_attempts WHERE id=?").get(ids.attemptId)).toEqual({ status: "corrupt", available: 0 });
+    expect(createRetryAuthority(db, { jobId: ids.jobId, parentAttemptId: ids.attemptId, identity, rendererDigest: "r", captureDigest: "c" })).toBeString();
+  });
+
   test("Given a fresh database When 0009 is applied Then PNG and nullable lifecycle evidence are supported", async () => {
     const db = await migratedDatabase();
     seed(db);
@@ -151,6 +201,13 @@ describe("export authority migration", () => {
     db.prepare("UPDATE export_attempts SET status='recovering',input_closure_digest=? WHERE id=?").run("a".repeat(64), ids.attemptId);
     const published = path.join(root, "attempts", ids.attemptId); await mkdir(published, { recursive: true }); const output = Uint8Array.from([1, 2, 3]); await writeFile(path.join(published, "artifact.png"), output);
     const receipt: ExportReceipt = { schema_version: 1, job_id: ids.jobId, attempt_id: ids.attemptId, parent_attempt_id: null, format: "png", project: { id: "p", revision: 3, digest: "a".repeat(64) }, options: { png_width: 320, png_height: 240, png_dpr: 1 }, output_file: "artifact.png", output_size: 3, digests: { input_closure: "a".repeat(64), design_system: null, options: sha256(canonicalJson({ png_width: 320, png_height: 240, png_dpr: 1 })), renderer: "b".repeat(64), capture: "c".repeat(64), output: sha256(output) }, validation: { width: 320, height: 240, statistics: { pixels: 76_800, visible_pixels: 76_800, differing_pixels: 100, dominant_ratio: 0.9, luminance_variance: 10, entropy: 0.2 } } }; await writeFile(path.join(published, "receipt.json"), canonicalJson(receipt));
+    db.exec("CREATE TRIGGER reject_recovery_event BEFORE INSERT ON events WHEN NEW.type='export.attempt' AND json_extract(NEW.payload_json,'$.status')='validated' BEGIN SELECT RAISE(ABORT,'event_insert_blocked'); END");
+    await expect(reconcileExportState(db, root)).rejects.toThrow("event_insert_blocked");
+    expect(db.query("SELECT status,stop_reason FROM export_attempts WHERE id=?").get(ids.attemptId)).toEqual({ status: "recovering", stop_reason: null });
+    expect(db.query("SELECT status,output_path FROM exports WHERE id=?").get(ids.jobId)).toEqual({ status: "pending", output_path: null });
+    expect(new Uint8Array(await readFile(path.join(published, "artifact.png")))).toEqual(output);
+    expect(await readFile(path.join(published, "receipt.json"), "utf8")).toBe(canonicalJson(receipt));
+    db.exec("DROP TRIGGER reject_recovery_event");
     await reconcileExportState(db, root); await reconcileExportState(db, root);
     expect(db.query("SELECT status FROM exports WHERE id=?").get(ids.jobId)).toEqual({ status: "succeeded" });
     expect(db.query("SELECT status,receipt_digest FROM export_attempts WHERE id=?").get(ids.attemptId)).toEqual({ status: "validated", receipt_digest: receiptDigest(receipt) });

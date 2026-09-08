@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, RefreshCw } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
-  BackendDetectionResult,
   PlaywrightInstallStatus,
   PythonSettings,
   SettingsSummary,
@@ -26,6 +25,7 @@ import {
   startPypdfInstall,
 } from "@/api/settings";
 import { useUIStore } from "@/state/uiStore";
+import { apiErrorCopy } from "@/lib/error-copy";
 
 const CHAT_CONTEXT_MODE_LABELS = {
   compact: "간단",
@@ -41,20 +41,31 @@ const THEME_LABELS = {
 export default function SettingsModal() {
   const open = useUIStore((s) => s.settingsOpen);
   const setOpen = useUIStore((s) => s.setSettingsOpen);
+  return open ? <SettingsDialog onClose={() => setOpen(false)} /> : null;
+}
+
+function SettingsDialog({ onClose }: { onClose: () => void }) {
   const pushToast = useUIStore((s) => s.pushToast);
   const queryClient = useQueryClient();
-
+  const [returnFocusTarget] = useState(() => typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  const settingsQuery = useQuery({
+    queryKey: ["settings", "dialog"], queryFn: getSettings, gcTime: 0,
+  });
+  const detectionQuery = useQuery({ queryKey: ["backends", "detect"], queryFn: detectBackends });
+  const pwQuery = useQuery({
+    queryKey: ["settings", "playwright"], queryFn: getPlaywrightInstallStatus,
+    refetchInterval: (query) => query.state.data?.state === "installing" ? 1500 : false,
+  });
+  const pyQuery = useQuery({
+    queryKey: ["settings", "python"], queryFn: getPythonSettings,
+    refetchInterval: (query) => query.state.data?.install.state === "installing" ? 1500 : false,
+  });
   const [settings, setSettings] = useState<SettingsSummary | null>(null);
-  const [detection, setDetection] = useState<BackendDetectionResult | null>(
-    null,
-  );
   const [saving, setSaving] = useState(false);
-  const [pw, setPw] = useState<PlaywrightInstallStatus | null>(null);
+  const pw = pwQuery.data ?? null;
+  const py = pyQuery.data ?? null;
   const [pwStarting, setPwStarting] = useState(false);
-  const pwPollRef = useRef<number | null>(null);
-  const [py, setPy] = useState<PythonSettings | null>(null);
   const [pyStarting, setPyStarting] = useState(false);
-  const pyPollRef = useRef<number | null>(null);
   // The Figma PAT input is a separate write-only path: GET /api/settings
   // never returns the value, only a figma_token_set boolean. The user
   // types a token here, hits Save, and the field clears.
@@ -62,55 +73,19 @@ export default function SettingsModal() {
   const [figmaTokenSaving, setFigmaTokenSaving] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    Promise.all([
-      getSettings(),
-      detectBackends(),
-      getPlaywrightInstallStatus(),
-      getPythonSettings().catch(() => null),
-    ]).then(([s, d, p, py0]) => {
-      setSettings(s);
-      setDetection(d);
-      setPw(p);
-      if (py0) setPy(py0);
-    });
-  }, [open]);
-
-  // Poll Playwright status while an install is running so the tail updates
-  // live without the user reopening the dialog.
-  useEffect(() => {
-    if (!open || pw?.state !== "installing") {
-      if (pwPollRef.current != null) {
-        window.clearInterval(pwPollRef.current);
-        pwPollRef.current = null;
-      }
-      return;
-    }
-    if (pwPollRef.current != null) return;
-    pwPollRef.current = window.setInterval(async () => {
-      try {
-        setPw(await getPlaywrightInstallStatus());
-      } catch {
-        // ignore — next tick retries.
-      }
-    }, 1500);
-    return () => {
-      if (pwPollRef.current != null) {
-        window.clearInterval(pwPollRef.current);
-        pwPollRef.current = null;
-      }
-    };
-  }, [open, pw?.state]);
+    // Initialize once; background status/token updates must not replace edits.
+    if (!settings && settingsQuery.data && !settingsQuery.isFetching) setSettings(settingsQuery.data);
+  }, [settings, settingsQuery.data, settingsQuery.isFetching]);
 
   async function handleInstallPlaywright() {
     setPwStarting(true);
     try {
       const next = await startPlaywrightInstall();
-      setPw(next);
+      queryClient.setQueryData(["settings", "playwright"], next);
     } catch (err) {
       pushToast({
         title: "Playwright 설치를 시작하지 못했어요",
-        body: err instanceof Error ? err.message : String(err),
+        body: apiErrorCopy(err),
         tone: "error",
       });
     } finally {
@@ -118,41 +93,15 @@ export default function SettingsModal() {
     }
   }
 
-  // Mirror of the Playwright polling loop — refreshes the Python status
-  // while pip install is running so the tail updates live.
-  useEffect(() => {
-    if (!open || py?.install.state !== "installing") {
-      if (pyPollRef.current != null) {
-        window.clearInterval(pyPollRef.current);
-        pyPollRef.current = null;
-      }
-      return;
-    }
-    if (pyPollRef.current != null) return;
-    pyPollRef.current = window.setInterval(async () => {
-      try {
-        setPy(await getPythonSettings());
-      } catch {
-        // ignore — next tick retries.
-      }
-    }, 1500);
-    return () => {
-      if (pyPollRef.current != null) {
-        window.clearInterval(pyPollRef.current);
-        pyPollRef.current = null;
-      }
-    };
-  }, [open, py?.install.state]);
-
   async function handleInstallPypdf() {
     setPyStarting(true);
     try {
       const next = await startPypdfInstall();
-      setPy(next);
+      queryClient.setQueryData(["settings", "python"], next);
     } catch (err) {
       pushToast({
         title: "pypdf 설치를 시작하지 못했어요",
-        body: err instanceof Error ? err.message : String(err),
+        body: apiErrorCopy(err),
         tone: "error",
       });
     } finally {
@@ -173,11 +122,11 @@ export default function SettingsModal() {
       });
       queryClient.setQueryData(["settings"], next);
       pushToast({ title: "설정을 저장했어요", tone: "success" });
-      setOpen(false);
+      onClose();
     } catch (err) {
       pushToast({
         title: "설정을 저장하지 못했어요",
-        body: err instanceof Error ? err.message : String(err),
+        body: apiErrorCopy(err),
         tone: "error",
       });
     } finally {
@@ -189,7 +138,7 @@ export default function SettingsModal() {
     setFigmaTokenSaving(true);
     try {
       const next = await patchSettings({ figma_personal_access_token: value });
-      setSettings(next);
+      setSettings((draft) => draft ? { ...draft, figma_token_set: next.figma_token_set } : next);
       queryClient.setQueryData(["settings"], next);
       setFigmaTokenInput("");
       pushToast({
@@ -199,7 +148,7 @@ export default function SettingsModal() {
     } catch (err) {
       pushToast({
         title: "Figma 토큰을 저장하지 못했어요",
-        body: err instanceof Error ? err.message : String(err),
+        body: apiErrorCopy(err),
         tone: "error",
       });
     } finally {
@@ -208,21 +157,24 @@ export default function SettingsModal() {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-lg">
+    <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen && !saving && !figmaTokenSaving) onClose(); }}>
+      <DialogContent className="max-w-lg" onCloseAutoFocus={(event) => { if (returnFocusTarget?.isConnected) { event.preventDefault(); returnFocusTarget.focus(); } }}>
         <DialogHeader>
           <DialogTitle>설정</DialogTitle>
           <DialogDescription>
-            이 컴퓨터에만 저장되는 설정이에요 — <code className="font-mono text-[11px]">~/.burnguard/config.json</code>
+            이 컴퓨터에 저장되는 설정이에요. 일반 설정은 아래 저장 버튼으로 적용해요.
           </DialogDescription>
         </DialogHeader>
 
-        {!settings || !detection ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">
+        {!settings && settingsQuery.isError ? (
+          <SettingsLoadError title="설정을 불러오지 못했어요" error={settingsQuery.error} retry={() => void settingsQuery.refetch()} pending={settingsQuery.isFetching} />
+        ) : !settings ? (
+          <div role="status" className="py-8 text-center text-sm text-muted-foreground">
             불러오는 중…
           </div>
         ) : (
-          <div className="space-y-5 py-2">
+          <fieldset disabled={saving} className="min-w-0 space-y-5 py-2">
+            <legend className="sr-only">일반 설정과 연동</legend>
             <div className="space-y-1.5">
               <label
                 htmlFor="display-name"
@@ -242,13 +194,14 @@ export default function SettingsModal() {
               />
             </div>
 
-            <BackendSelector
+            {detectionQuery.data ? <BackendSelector
               value={settings.default_backend}
               onChange={(b) =>
                 setSettings({ ...settings, default_backend: b })
               }
-              detection={detection}
-            />
+              detection={detectionQuery.data}
+            /> : detectionQuery.isPending ? <p role="status" className="text-sm text-muted-foreground">사용할 수 있는 백엔드를 확인하는 중이에요.</p> : null}
+            {detectionQuery.isError ? <SettingsLoadError title="백엔드 상태를 확인하지 못했어요" error={detectionQuery.error} retry={() => void detectionQuery.refetch()} pending={detectionQuery.isFetching} /> : null}
 
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
@@ -257,22 +210,17 @@ export default function SettingsModal() {
               <div className="rounded-md border border-border bg-muted/30 p-3">
                 <div className="flex items-center gap-2">
                   <PlaywrightStateDot state={pw?.state ?? "idle"} />
-                  <span className="text-xs">
-                    {pwLabel(pw)}
+                  <span className="text-xs" role="status">
+                    {pwQuery.isError ? "설치 상태를 확인하지 못했어요." : pwLabel(pw)}
                   </span>
                   <div className="ml-auto flex items-center gap-1.5">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6"
-                      title="새로 고침"
-                      onClick={async () => {
-                        try {
-                          setPw(await getPlaywrightInstallStatus());
-                        } catch {
-                          // ignore
-                        }
-                      }}
+                      className="h-9 w-9"
+                      aria-label="Chromium 상태 다시 확인"
+                      disabled={pwQuery.isFetching}
+                      onClick={() => void pwQuery.refetch()}
                     >
                       <RefreshCw className="h-3 w-3" />
                     </Button>
@@ -282,7 +230,7 @@ export default function SettingsModal() {
                       className="gap-1.5"
                       onClick={handleInstallPlaywright}
                       disabled={
-                        pwStarting || pw?.state === "installing"
+                        pwStarting || !pw || pwQuery.isError || pw?.state === "installing"
                       }
                     >
                       <Download className="h-3 w-3" />
@@ -294,22 +242,14 @@ export default function SettingsModal() {
                     </Button>
                   </div>
                 </div>
-                {pw?.tail && pw.tail.length > 0 && (
-                  <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-all rounded bg-background px-2 py-1.5 font-mono text-[10px] leading-tight text-muted-foreground">
-                    {pw.tail.slice(-12).join("\n")}
-                  </pre>
-                )}
+                {pwQuery.isError ? <SettingsLoadError title="Chromium 상태 조회 실패" error={pwQuery.error} retry={() => void pwQuery.refetch()} pending={pwQuery.isFetching} /> : null}
                 {pw?.error && pw.state === "error" && (
-                  <p className="mt-2 text-[10px] leading-relaxed text-destructive">
-                    {pw.error}
+                  <p role="alert" className="mt-2 text-xs leading-relaxed text-destructive">
+                    설치하지 못했어요. 인터넷 연결과 저장 공간을 확인한 뒤 다시 설치해 주세요.
                   </p>
                 )}
                 <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                  PDF·PPTX 내보내기에는 Chromium이 필요해요. 서버에서{" "}
-                  <code className="font-mono">
-                    npx playwright install chromium
-                  </code>{" "}
-                  를 실행해요. 약 170MB이고 처음 한 번만 받아요.
+                  PDF·PPTX를 만들기 위한 브라우저예요. 처음 설치할 때 인터넷 연결과 충분한 저장 공간이 필요해요.
                 </p>
               </div>
             </div>
@@ -321,20 +261,15 @@ export default function SettingsModal() {
               <div className="rounded-md border border-border bg-muted/30 p-3">
                 <div className="flex items-center gap-2">
                   <PyStateDot py={py} />
-                  <span className="text-xs">{pyLabel(py)}</span>
+                  <span className="text-xs" role="status">{pyQuery.isError ? "설치 상태를 확인하지 못했어요." : pyLabel(py)}</span>
                   <div className="ml-auto flex items-center gap-1.5">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6"
-                      title="새로 고침"
-                      onClick={async () => {
-                        try {
-                          setPy(await getPythonSettings());
-                        } catch {
-                          // ignore
-                        }
-                      }}
+                      className="h-9 w-9"
+                      aria-label="Python 상태 다시 확인"
+                      disabled={pyQuery.isFetching}
+                      onClick={() => void pyQuery.refetch()}
                     >
                       <RefreshCw className="h-3 w-3" />
                     </Button>
@@ -344,7 +279,7 @@ export default function SettingsModal() {
                       className="gap-1.5"
                       onClick={handleInstallPypdf}
                       disabled={
-                        pyStarting ||
+                        pyStarting || !py || pyQuery.isError ||
                         py?.install.state === "installing" ||
                         py?.health.python.found === false
                       }
@@ -363,23 +298,14 @@ export default function SettingsModal() {
                     </Button>
                   </div>
                 </div>
-                {py?.install.tail && py.install.tail.length > 0 && (
-                  <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-all rounded bg-background px-2 py-1.5 font-mono text-[10px] leading-tight text-muted-foreground">
-                    {py.install.tail.slice(-12).join("\n")}
-                  </pre>
-                )}
+                {pyQuery.isError ? <SettingsLoadError title="Python 상태 조회 실패" error={pyQuery.error} retry={() => void pyQuery.refetch()} pending={pyQuery.isFetching} /> : null}
                 {py?.install.error && py.install.state === "error" && (
-                  <p className="mt-2 text-[10px] leading-relaxed text-destructive">
-                    {py.install.error}
+                  <p role="alert" className="mt-2 text-xs leading-relaxed text-destructive">
+                    설치하지 못했어요. Python과 인터넷 연결을 확인한 뒤 다시 설치해 주세요.
                   </p>
                 )}
                 <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                  PDF·PPTX 디자인 시스템 업로드는 Python의{" "}
-                  <code className="font-mono">pypdf</code>를 사용해요. 설치는{" "}
-                  <code className="font-mono">
-                    python -m pip install --user pypdf
-                  </code>{" "}
-                  를 실행해요. 용량이 작고 처음 한 번만 받아요.
+                  업로드한 PDF를 읽는 데 필요한 도구예요. Python이 준비되면 pypdf 설치를 눌러 주세요.
                 </p>
               </div>
             </div>
@@ -417,13 +343,14 @@ export default function SettingsModal() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
+              <div id="chat-context-label" className="text-xs font-medium text-muted-foreground">
                 채팅 컨텍스트
-              </label>
-              <div className="flex gap-2">
+              </div>
+              <div role="group" aria-labelledby="chat-context-label" className="flex gap-2">
                 {(["compact", "full"] as const).map((mode) => (
                   <Button
                     key={mode}
+                    aria-pressed={settings.chat_context_mode === mode}
                     variant={
                       settings.chat_context_mode === mode ? "default" : "outline"
                     }
@@ -444,7 +371,7 @@ export default function SettingsModal() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
+              <label htmlFor="figma-token" className="text-xs font-medium text-muted-foreground">
                 Figma 연동
               </label>
               {settings.figma_token_set ? (
@@ -465,7 +392,9 @@ export default function SettingsModal() {
               ) : (
                 <div className="flex gap-2">
                   <Input
+                    id="figma-token"
                     type="password"
+                    disabled={figmaTokenSaving}
                     autoComplete="off"
                     placeholder="figd_..."
                     value={figmaTokenInput}
@@ -486,19 +415,19 @@ export default function SettingsModal() {
               <p className="text-[11px] text-muted-foreground">
                 Figma 파일에서 공개된 색·텍스트 스타일을 가져올 때 사용해요.
                 토큰은 Figma → Settings → Personal access tokens에서 만들 수
-                있어요. 값은 이 컴퓨터의 <code className="font-mono">~/.burnguard/config.json</code>{" "}
-                에만 저장되고 화면에 다시 표시되지 않아요.
+                있어요. 토큰 저장과 연결 해제는 즉시 적용되며, 아래 취소 버튼으로 되돌릴 수 없어요. 토큰은 이 컴퓨터에만 저장되고 화면에 다시 표시되지 않아요.
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
+              <div id="theme-label" className="text-xs font-medium text-muted-foreground">
                 테마
-              </label>
-              <div className="flex gap-2">
+              </div>
+              <div role="group" aria-labelledby="theme-label" className="flex flex-wrap gap-2">
                 {(["light", "dark", "auto"] as const).map((t) => (
                   <Button
                     key={t}
+                    aria-pressed={settings.theme === t}
                     variant={settings.theme === t ? "default" : "outline"}
                     size="sm"
                     onClick={() => setSettings({ ...settings, theme: t })}
@@ -508,23 +437,31 @@ export default function SettingsModal() {
                 ))}
               </div>
               <p className="text-[11px] text-muted-foreground">
-                다크 테마는 2단계에서 제공될 예정이에요.
+                시스템 설정을 선택하면 이 컴퓨터의 밝은 화면·어두운 화면 설정을 따라가요.
               </p>
             </div>
-          </div>
+          </fieldset>
         )}
 
         <DialogFooter className="pt-2 border-t border-border">
-          <Button variant="ghost" onClick={() => setOpen(false)}>
+          <Button variant="ghost" onClick={onClose} disabled={saving || figmaTokenSaving}>
             취소
           </Button>
-          <Button variant="cta" onClick={save} disabled={saving || !settings}>
+          <Button variant="cta" onClick={save} disabled={saving || figmaTokenSaving || !settings}>
             {saving ? "저장하는 중…" : "저장"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function SettingsLoadError({ title, error, retry, pending }: { title: string; error: unknown; retry: () => void; pending: boolean }) {
+  return <div role="alert" className="space-y-2 rounded-md border border-destructive/30 p-3 text-sm">
+    <p>{title}</p>
+    <p className="text-xs text-muted-foreground">{apiErrorCopy(error)}</p>
+    <Button variant="outline" size="sm" onClick={retry} disabled={pending}>{pending ? "확인하는 중…" : "다시 시도"}</Button>
+  </div>;
 }
 
 function PlaywrightStateDot({
