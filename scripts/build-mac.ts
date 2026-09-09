@@ -14,8 +14,10 @@
  *   - `bun run build:mac:dmg`     → + dmg (macOS only)
  */
 import { $ } from "bun";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
+  createReadStream,
   cpSync,
   existsSync,
   mkdirSync,
@@ -137,28 +139,56 @@ async function main() {
   await stageRuntimeAssets(ROOT, APP_MACOS);
   console.log("[build-mac] frontend, migrations, themes, and browser resources staged");
 
+  const signIdentity = process.env.BG_MAC_SIGN_IDENTITY;
+  if (signIdentity) {
+    console.log(`[build-mac] signing app`);
+    await $`codesign --force --deep --options runtime --timestamp --sign ${signIdentity} ${APP_BUNDLE}`;
+    await $`codesign --verify --deep --strict --verbose=2 ${APP_BUNDLE}`;
+  } else {
+    console.log("[build-mac] signing skipped (set BG_MAC_SIGN_IDENTITY)");
+  }
+
   console.log(`[build-mac] .app ready: ${APP_BUNDLE}`);
+  const artifacts = [binOut];
 
   if (!wantDmg) {
     console.log(
       `[build-mac] skipping dmg (pass --dmg or run \`bun run build:mac:dmg\` on macOS)`,
     );
-    return;
-  }
-
-  if (process.platform !== "darwin") {
+  } else if (process.platform !== "darwin") {
     console.warn(
       `[build-mac] dmg step needs macOS (hdiutil). Current platform: ${process.platform}.`,
     );
     console.warn(
       `[build-mac] run this on Mac to finish packaging:\n  hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_BUNDLE}" -ov -format UDZO "${DMG_OUT}"`,
     );
-    return;
+  } else {
+    console.log(`[build-mac] packaging dmg → ${DMG_OUT}`);
+    await $`hdiutil create -volname ${APP_NAME} -srcfolder ${APP_BUNDLE} -ov -format UDZO ${DMG_OUT}`;
+    console.log(`[build-mac] dmg ready: ${DMG_OUT}`);
+
+    const notaryProfile = process.env.BG_MAC_NOTARY_PROFILE;
+    if (notaryProfile) {
+      console.log(`[build-mac] notarizing dmg`);
+      await $`xcrun notarytool submit ${DMG_OUT} --keychain-profile ${notaryProfile} --wait`;
+      await $`xcrun stapler staple ${DMG_OUT}`;
+    } else {
+      console.log("[build-mac] notarization skipped (set BG_MAC_NOTARY_PROFILE)");
+    }
+    artifacts.push(DMG_OUT);
   }
 
-  console.log(`[build-mac] packaging dmg → ${DMG_OUT}`);
-  await $`hdiutil create -volname ${APP_NAME} -srcfolder ${APP_BUNDLE} -ov -format UDZO ${DMG_OUT}`;
-  console.log(`[build-mac] dmg ready: ${DMG_OUT}`);
+  const checksums: string[] = [];
+  for (const artifact of artifacts) {
+    if (!existsSync(artifact)) continue;
+    const hash = createHash("sha256");
+    for await (const chunk of createReadStream(artifact)) hash.update(chunk);
+    const relativePath = path.relative(DIST_ROOT, artifact).split(path.sep).join("/");
+    checksums.push(`${hash.digest("hex")}  ${relativePath}`);
+  }
+  const sumsOut = path.join(DIST_ROOT, "SHA256SUMS");
+  writeFileSync(sumsOut, `${checksums.join("\n")}\n`, "utf8");
+  console.log(`[build-mac] checksums ready: ${sumsOut}`);
 }
 
 main().catch((err) => {
