@@ -4,7 +4,7 @@ import { parseCodexLine, type CodexParserContext } from "./parser";
 import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../owned-process-tree";
 import { settleProcessStreams } from "../process-streams";
 
-export function buildCodexCommand(binaryPath: string): string[] {
+export function buildCodexCommand(binaryPath: string, generation?: AdapterRunInput["generation"]): string[] {
   return [
     binaryPath,
     "exec",
@@ -12,6 +12,9 @@ export function buildCodexCommand(binaryPath: string): string[] {
     "--skip-git-repo-check",
     "--sandbox",
     "workspace-write",
+    "-c", `model_reasoning_effort="${generation?.effort ?? "low"}"`,
+    ...(generation?.model ? ["--model", generation.model] : []),
+    ...(generation?.vanilla ? ["--ignore-user-config", "-c", "features.plugins=false", "-c", "features.skip_host_skill_discovery=true", "-c", "project_doc_max_bytes=0"] : []),
     "-",
   ];
 }
@@ -49,7 +52,7 @@ export async function runCodexTurn(
   });
 
   const proc = Bun.spawn({
-    cmd: buildCodexCommand(input.binaryPath),
+    cmd: buildCodexCommand(input.binaryPath, input.generation),
     cwd: input.projectDir,
     stdin: new Blob([input.prompt]),
     stdout: "pipe",

@@ -133,14 +133,14 @@ export function createApp(authority?: RequestAuthorityOptions): Hono {
   return app;
 }
 
-export type ApiRouteDomain = "health" | "research" | "catalog" | "learning" | "system" | "managed-files" | "artifact-operations" | "artifacts" | "comments" | "session" | "runtime" | "settings" | "home" | "project" | "not-found";
+export type ApiRouteDomain = "three-scene" | "health" | "research" | "catalog" | "learning" | "system" | "managed-files" | "artifact-operations" | "artifacts" | "comments" | "session" | "runtime" | "settings" | "home" | "project" | "not-found";
 
 export function classifyApiRoute(pathname: string, method: string): ApiRouteDomain {
   if (pathname === "/api/health") return "health";
   if (pathname.startsWith("/api/research")) return "research";
   if (pathname.startsWith("/api/learning")) return "learning";
   if (pathname.startsWith("/api/design-systems")) {
-    return /\/(?:extract|upload|tokens|colors|fonts)(?:\/|$)/.test(pathname) ? "system" : "catalog";
+    return /\/(?:extract|upload|tokens|colors|fonts|pinterest)(?:\/|$)/.test(pathname) ? "system" : "catalog";
   }
   if (/^\/api\/exports\/[^/]+\/download$/.test(pathname)) return "managed-files";
   if (pathname.startsWith("/api/exports")) return "artifacts";
@@ -150,6 +150,7 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
   if (pathname.startsWith("/api/settings/")) return "settings";
   if (pathname === "/api/settings" || pathname.startsWith("/api/backends") || pathname.startsWith("/api/home") || pathname === "/api/projects") return "home";
   if (method === "GET" && /^\/api\/projects\/[^/]+\/thumbnail$/.test(pathname)) return "home";
+  if (/^\/api\/projects\/[^/]+\/three-scene$/.test(pathname)) return "three-scene";
   if (pathname.startsWith("/api/projects")) {
     if (/\/checkpoints(?:\/|$)/.test(pathname)) return "session";
     if (/\/draws(?:\/|$)/.test(pathname) && (method === "GET" || method === "PUT")) return "managed-files";
@@ -163,6 +164,7 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
 
 async function apiRoutes(domain: ApiRouteDomain): Promise<Hono> {
   switch (domain) {
+    case "three-scene": return (await import("./routes/three-scene")).threeSceneRoutes;
     case "health": return (await import("./routes/health")).healthRoutes;
     case "research": return (await import("./routes/research")).researchRoutes;
     case "catalog": return (await import("./routes/catalog")).catalogRoutes;

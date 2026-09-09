@@ -48,6 +48,8 @@ export interface CreateProjectResponse {
 }
 
 export interface BackendDetection {
+  authenticated?: boolean;
+  models?: readonly import("./generation").GenerationModel[];
   id: BackendId;
   found: boolean;
   version?: string;
@@ -60,6 +62,8 @@ export interface BackendDetectionResult {
 }
 
 export interface SettingsSummary {
+  generation_defaults?: Partial<Record<BackendId, import("./generation").GenerationOptions>>;
+  commandcode_api_key_set?: boolean;
   user: {
     id: "local";
     display_name: string;
@@ -91,6 +95,7 @@ export type SettingsPatch = Partial<
     | "theme"
     | "chat_abort_threshold_ms"
     | "chat_context_mode"
+    | "generation_defaults"
   > & {
     user: Partial<SettingsSummary["user"]>;
     /**
@@ -99,5 +104,6 @@ export type SettingsPatch = Partial<
      * never includes the value — only the figma_token_set boolean.
      */
     figma_personal_access_token: string | null;
+    commandcode_api_key: string | null;
   }
 >;

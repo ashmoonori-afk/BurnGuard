@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
-import { VISUAL_SOURCE_ROLES } from "@bg/shared";
+import { VISUAL_SOURCE_ROLES, parseGenerationOptions, type GenerationOptions } from "@bg/shared";
 import { planAttachmentIntake, type IntakeItem } from "./attachment-intake";
 
-export type ComposerDraft = { text: string; items: readonly IntakeItem[] };
+export type ComposerDraft = { text: string; items: readonly IntakeItem[]; generation?: GenerationOptions };
 const memoryDrafts = new Map<string, ComposerDraft>();
 let database: Promise<IDBDatabase> | undefined;
 
@@ -25,7 +25,9 @@ export function parseComposerDraft(value: unknown): ComposerDraft | null {
     const added = next.at(-1);
     if (added?.status === "ready") items = [...items, { ...added, role: VISUAL_SOURCE_ROLES.includes(item.role) ? item.role : "ordinary_content" }];
   }
-  return { text: value.text, items };
+  let generation;
+  if ("generation" in value && value.generation !== undefined) { try { generation = parseGenerationOptions(value.generation); } catch { /* Ignore unsupported old draft options. */ } }
+  return { text: value.text, items, generation };
 }
 
 async function readDraft(id: string): Promise<ComposerDraft | null> {
@@ -42,12 +44,21 @@ async function writeDraft(id: string, draft: ComposerDraft): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("drafts", "readwrite");
     const store = transaction.objectStore("drafts");
-    if (!draft.text && draft.items.length === 0) store.delete(id);
-    else store.put({ text: draft.text, items: draft.items.filter((item) => item.status === "ready") }, id);
+    if (!draft.text && draft.items.length === 0 && !draft.generation) store.delete(id);
+    else store.put({ text: draft.text, items: draft.items.filter((item) => item.status === "ready"), generation: draft.generation }, id);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error);
   });
+}
+
+export async function saveComposerDraft(sessionId: string, draft: ComposerDraft): Promise<void> {
+  memoryDrafts.set(sessionId, draft);
+  await writeDraft(sessionId, draft);
+}
+
+export async function loadComposerDraft(sessionId: string): Promise<ComposerDraft | null> {
+  return memoryDrafts.get(sessionId) ?? await readDraft(sessionId);
 }
 
 /** Files use IndexedDB structured cloning; drafts remain local and keyed by session. */
@@ -80,7 +91,8 @@ export function useComposerDraft(sessionId: string, initialText: string) {
   return {
     ...draft, ready, storageError,
     setText: (text: string) => update({ ...current.current, text }),
+    setGeneration: (generation: GenerationOptions) => update({ ...current.current, generation }),
     setItems: (items: SetStateAction<readonly IntakeItem[]>) => update({ ...current.current, items: typeof items === "function" ? items(current.current.items) : items }),
-    clear: () => update({ text: "", items: [] }),
+    clear: () => update({ text: "", items: [], generation: current.current.generation }),
   };
 }

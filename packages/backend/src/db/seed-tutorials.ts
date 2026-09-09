@@ -1,13 +1,17 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "./client";
 import { getSqlite } from "./sqlite-client";
 import { ArtifactCoordinator, ArtifactOperationError } from "../services/artifact-coordinator";
 import { projectsTable, sessionsTable } from "./schema";
 import { projectsDir } from "../lib/paths";
 import { DECK_STAGE_JS } from "../runtime/deck-stage";
+
+import { promptSampleDesignSystemId, seedPromptSampleDesignSystem } from "./seed-sample-design-systems";
+export { promptSampleDesignSystemId } from "./seed-sample-design-systems";
+import { landingSectionStyles, renderLandingSections } from "./sample-landing-sections";
 
 export const TUTORIAL_TAG = "[burnguard:tutorial]";
 
@@ -34,10 +38,12 @@ export interface PromptSample {
 }
 
 export function getPromptSampleBySlug(slug: string): PromptSample | null {
-  return PROMPT_SAMPLES.find((s) => s.slug === slug) ?? null;
+  const sample = PROMPT_SAMPLES.find((s) => s.slug === slug);
+  if (!sample) return null;
+  return sample.layout === "dashboard" ? sample : { ...sample, prompt: `${sample.prompt}\n\nBuild at least six complete vertical sections: hero, features, workflow, use case, pricing, and FAQ. Use substantive product-specific copy, responsive layouts, and the matching design-system palette. Navigation and footer do not count.` };
 }
 
-const PROMPT_SAMPLES: PromptSample[] = [
+export const PROMPT_SAMPLES: PromptSample[] = [
   {
     slug: "clearinvoice-static-saas",
     name: `${PROMPT_SAMPLE_TAG} ClearInvoice static SaaS`,
@@ -474,6 +480,7 @@ export async function seedTutorialsOnce(): Promise<void> {
     });
   }
   for (const sample of PROMPT_SAMPLES) {
+    await seedPromptSampleDesignSystem(sample, renderPromptSampleHtml(sample));
     const existingSample = existingByName.get(sample.name);
     if (existingSample) {
       await syncPromptSampleProject({
@@ -485,10 +492,12 @@ export async function seedTutorialsOnce(): Promise<void> {
         currentRevision: existingSample.currentRevision,
         currentDigest: existingSample.currentDigest,
       });
+      await db.update(projectsTable).set({ designSystemId: promptSampleDesignSystemId(sample.slug) }).where(and(eq(projectsTable.id, existingSample.id), isNull(projectsTable.designSystemId)));
       continue;
     }
     await writeTutorialProject({
       name: sample.name,
+      designSystemId: promptSampleDesignSystemId(sample.slug),
       type: "from_template",
       entrypoint: "index.html",
       html: renderPromptSampleHtml(sample),
@@ -496,7 +505,7 @@ export async function seedTutorialsOnce(): Promise<void> {
   }
 }
 
-function renderPromptSampleHtml(sample: PromptSample): string {
+export function renderPromptSampleHtml(sample: PromptSample): string {
   switch (sample.layout) {
     case "split-saas":
       return renderSplitSaasSample(sample);
@@ -629,6 +638,7 @@ function renderLiquidOrbSample(sample: PromptSample): string {
 }
 
 function renderEditorialSample(sample: PromptSample): string {
+  const korean = sample.slug === "daon-korean-saas";
   return renderPromptSampleDocument({
     sample,
     colorScheme: "dark",
@@ -657,14 +667,14 @@ function renderEditorialSample(sample: PromptSample): string {
       <header class="masthead"><span>${escapeHtml(sample.eyebrow)}</span><span>Prompt sample / no framework</span></header>
       <section class="grid">
         <div>
-          <h1 data-bg-node-id="sample-headline">${escapeHtml(sample.headline)}<span class="accent-word" data-bg-node-id="sample-accent-word">for focused publishing</span></h1>
+          <h1 data-bg-node-id="sample-headline">${escapeHtml(sample.headline)}<span class="accent-word" data-bg-node-id="sample-accent-word">${korean ? "정산은 다온이, 사장은 매장에." : "for focused publishing"}</span></h1>
           <p class="desc" data-bg-node-id="sample-description">${escapeHtml(sample.subhead)}</p>
-          <form class="signup" data-bg-node-id="sample-email-form"><span>you@example.com</span><button type="button">Join the loop</button></form>
+          <form class="signup" data-bg-node-id="sample-email-form"><span>you@example.com</span><button type="button">${korean ? "무료로 시작하기" : "Join the loop"}</button></form>
         </div>
         <div class="cards">
-          <article class="feature" data-bg-node-id="sample-card-write"><strong>Write</strong><p>Draft issues in a quiet interface that keeps structure visible and noise out.</p></article>
-          <article class="feature" data-bg-node-id="sample-card-curate"><strong>Curate</strong><p>Collect links, notes, and references into one editorial queue.</p></article>
-          <article class="feature" data-bg-node-id="sample-card-publish"><strong>Publish</strong><p>Send polished newsletters with a deliberate cadence and clean archive.</p></article>
+          <article class="feature" data-bg-node-id="sample-card-write"><strong>${korean ? "정산 내역 확인" : "Write"}</strong><p>${korean ? "입금 예정 금액과 실제 내역을 한 화면에서 비교해요." : "Draft issues in a quiet interface that keeps structure visible and noise out."}</p></article>
+          <article class="feature" data-bg-node-id="sample-card-curate"><strong>${korean ? "수수료 검토" : "Curate"}</strong><p>${korean ? "예상과 다른 항목만 모아 차근차근 확인해요." : "Collect links, notes, and references into one editorial queue."}</p></article>
+          <article class="feature" data-bg-node-id="sample-card-publish"><strong>${korean ? "월간 자료 공유" : "Publish"}</strong><p>${korean ? "정산 내역을 내려받아 담당자에게 전달해요." : "Send polished newsletters with a deliberate cadence and clean archive."}</p></article>
         </div>
       </section>
       <section class="info">${renderUsageCard()}${renderPromptCard(sample)}</section>
@@ -815,8 +825,9 @@ function renderPromptSampleDocument(input: {
   body: string;
 }): string {
   const { sample, colorScheme, styles, body } = input;
+  const koreanStyles = sample.slug === "daon-korean-saas" ? `.masthead,.desc,.accent-word,.feature p,.signup span{color:var(--muted)}.feature,.signup{border-color:var(--line);background:var(--panel)}.signup button{background:var(--accent);color:white}.feature::before{display:none}.accent-word{font-family:inherit;font-style:normal;font-size:clamp(30px,4vw,52px);line-height:1.3}.card{background:var(--panel);border-color:var(--line)}.card p,.card li,pre{color:var(--muted)}` : "";
   return `<!doctype html>
-<html lang="en">
+<html lang="${sample.slug === "daon-korean-saas" ? "ko" : "en"}">
 <head>
   <meta charset="utf-8">
   <title>${escapeHtml(promptSampleTitle(sample))}</title>
@@ -833,10 +844,14 @@ function renderPromptSampleDocument(input: {
     }
     * { box-sizing: border-box; }
     ${styles}
+    ${landingSectionStyles}
+    body {background:var(--bg);color:var(--fg)}
+    .info {margin-top:48px}
+    ${koreanStyles}
   </style>
 </head>
 <body>
-${body}
+${body.replace(/<section class="info">/, `${renderLandingSections(sample)}<section class="info">`)}
 </body>
 </html>
 `;
@@ -893,6 +908,7 @@ async function syncPromptSampleProject(input: {
 
 async function writeTutorialProject(input: {
   name: string;
+  designSystemId?: string;
   type: "prototype" | "slide_deck" | "from_template";
   entrypoint: string;
   html: string;
@@ -909,7 +925,7 @@ async function writeTutorialProject(input: {
     id: projectId,
     name: input.name,
     type: input.type,
-    designSystemId: null,
+    designSystemId: input.designSystemId ?? null,
     dirPath,
     entrypoint: input.entrypoint,
     thumbnailPath: null,

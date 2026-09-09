@@ -110,6 +110,15 @@ export interface CreateDesignSystemExtractionResponse {
 export type CreateDesignSystemUploadResponse =
   CreateDesignSystemExtractionResponse;
 
+export interface CreatePinterestMoodRequest {
+  readonly pin_urls: readonly string[];
+  readonly name?: string;
+}
+
+export interface CreatePinterestMoodResponse extends CreateDesignSystemExtractionResponse {
+  readonly pins: readonly { readonly url: string; readonly status: "analyzed" | "unavailable" }[];
+}
+
 /** PATCH /api/design-systems/:id — strict metadata CAS. */
 export interface UpdateDesignSystemRequest {
   readonly expected_revision: number;

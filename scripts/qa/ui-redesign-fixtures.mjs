@@ -60,13 +60,22 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
 
     await scenario("redesign-create-project-persists", async () => {
       await page.setViewportSize({ width: 390, height: 740 });
-      await page.goto(`${base}/?view=mine&create=graphic`, { waitUntil: "domcontentloaded" });
+      await page.goto(`${base}/?view=mine&create=prototype`, { waitUntil: "domcontentloaded" });
       const dialog = page.getByRole("dialog", { name: "새 프로젝트 만들기" });
       await dialog.waitFor();
-      await dialog.getByLabel("프로젝트 이름", { exact: true }).fill("브랜드 캠페인 그래픽");
+      await dialog.getByLabel("프로젝트 이름", { exact: true }).fill("브랜드 캠페인 웹디자인");
       await dialog.getByLabel("누가 보게 되나요?", { exact: true }).fill("새 제품을 기다리는 고객");
       await dialog.getByLabel("무엇을 얻고 싶나요?", { exact: true }).fill("제품 출시 소식을 알리고 행사 참여를 안내해요.");
-      await dialog.getByRole("button", { name: "SNS 1200×628", exact: true }).click();
+      await dialog.getByLabel("세로 섹션 수", { exact: true }).fill("8");
+      await dialog.getByLabel("AI 도구", { exact: true }).selectOption("claude-code");
+      const model = dialog.getByLabel("생성 모델", { exact: true });
+      await page.waitForFunction(() => document.querySelector('[aria-label="생성 모델"]')?.querySelectorAll("option").length > 1);
+      const modelId = await model.locator("option").nth(1).getAttribute("value");
+      await model.selectOption(modelId);
+      assert.equal(await dialog.getByLabel("추론 강도", { exact: true }).inputValue(), "low");
+      assert.equal(await dialog.getByRole("checkbox", { name: /바닐라 모드/ }).isChecked(), true);
+      await dialog.getByLabel("참고 자료 첨부", { exact: true }).setInputFiles({ name: "campaign-reference.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n% Local unsent intake fixture\n%%EOF") });
+      await dialog.getByLabel("campaign-reference.pdf 역할", { exact: true }).selectOption("immutable_reference");
       await dialog.locator("summary").click();
       await dialog.getByLabel("분위기", { exact: true }).selectOption("friendly");
       assert.equal(await dialog.evaluate((element) => element.scrollHeight > element.clientHeight), true, "narrow dialog should contain its scrolling");
@@ -94,28 +103,29 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
       const { data: created } = await response.json();
       assert.match(created.id, /^[0-9A-HJKMNP-TV-Z]{26}$/);
       await page.waitForURL((url) => url.pathname === `/projects/${created.id}`);
-      await page.getByRole("heading", { name: "브랜드 캠페인 그래픽", exact: true }).waitFor();
+      await page.getByRole("heading", { name: "브랜드 캠페인 웹디자인", exact: true }).waitFor();
       const headers = { "x-burnguard-capability": response.request().headers()["x-burnguard-capability"] };
       assert.ok(headers["x-burnguard-capability"], "creation must carry bootstrapped authority");
       const detailResponse = await page.request.get(`${base}/api/projects/${created.id}`, { headers });
       assert.equal(detailResponse.status(), 200);
       const { data: detail } = await detailResponse.json();
-      assert.equal(detail.name, "브랜드 캠페인 그래픽");
-      assert.equal(detail.type, "graphic");
+      assert.equal(detail.name, "브랜드 캠페인 웹디자인");
+      assert.equal(detail.type, "prototype");
       const options = JSON.parse(detail.options_json);
-      assert.deepEqual(options.graphic_canvas, { schema_version: 1, width: 1200, height: 628 });
+      assert.equal(options.design_brief.section_count, 8);
+      assert.equal(options.design_brief.content_source, "attached");
       assert.equal(options.design_brief.visual_mood, "friendly");
       const ownedHome = await realpath(home);
       assert.ok(path.basename(ownedHome).startsWith("burnguard-e2e-home-"), "only an owned E2E profile can be inspected");
       const projectDir = path.join(ownedHome, ".burnguard", "data", "projects", created.id);
       const html = await readFile(path.join(projectDir, "index.html"), "utf8");
-      assert.ok(html.includes("브랜드 캠페인 그래픽"), "created artifact must exist on disk");
+      assert.ok(html.includes("브랜드 캠페인 웹디자인"), "created artifact must exist on disk");
       const { DatabaseSync } = await import("node:sqlite");
       const db = new DatabaseSync(path.join(ownedHome, ".burnguard", "burnguard.db"), { readOnly: true });
       try {
         const row = db.prepare("SELECT p.name, p.type, p.dir_path, s.id AS session_id, s.status, s.last_turn_id, s.usage_input_tokens, s.usage_output_tokens FROM projects p JOIN sessions s ON s.project_id = p.id WHERE p.id = ?").get(created.id);
         assert.equal(row?.name, detail.name);
-        assert.equal(row.type, "graphic");
+        assert.equal(row.type, "prototype");
         assert.equal(path.resolve(row.dir_path), projectDir);
         assert.equal(row.session_id, created.session_id);
         assert.equal(row.status, "idle");
@@ -125,7 +135,57 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
       } finally { db.close(); }
       assert.equal(blockedPosts.length, 0, "project creation unexpectedly tried another POST");
       await page.setViewportSize({ width: 1440, height: 900 });
+      const composer = page.getByRole("textbox", { name: "메시지 입력", exact: true });
+      await composer.waitFor();
+      assert.equal(await composer.inputValue(), "제품 출시 소식을 알리고 행사 참여를 안내해요.");
+      assert.equal(await page.getByLabel("campaign-reference.pdf 역할", { exact: true }).inputValue(), "immutable_reference");
+      const stored = await page.evaluate(async (sessionId) => {
+        const db = await new Promise((resolve, reject) => { const request = indexedDB.open("burnguard-composer", 1); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+        try { return await new Promise((resolve, reject) => { const request = db.transaction("drafts").objectStore("drafts").get(sessionId); request.onsuccess = async () => { const draft = request.result; resolve({ text: draft.text, generation: draft.generation, items: await Promise.all(draft.items.map(async (item) => ({ role: item.role, name: item.file.name, bytes: await item.file.text() }))) }); }; request.onerror = () => reject(request.error); }); } finally { db.close(); }
+      }, created.session_id);
+      assert.equal(stored.generation.model, modelId);
+      assert.equal(stored.generation.effort, "low");
+      assert.equal(stored.items[0].role, "immutable_reference");
+      assert.equal(stored.items[0].bytes, "%PDF-1.4\n% Local unsent intake fixture\n%%EOF");
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByLabel("campaign-reference.pdf 역할", { exact: true }).waitFor();
+      assert.equal(await page.getByLabel("campaign-reference.pdf 역할", { exact: true }).inputValue(), "immutable_reference");
+      assert.equal(await composer.inputValue(), stored.text);
+      assert.equal(blockedPosts.length, 0, "restoring attachments must not send or upload them");
       await shot(page, "redesign-created-workspace");
+    });
+
+    await scenario("redesign-graphic-auth-locked", async () => {
+      await page.goto(`${base}/?create=graphic`, { waitUntil: "domcontentloaded" });
+      const dialog = page.getByRole("dialog", { name: "새 프로젝트 만들기" });
+      await dialog.getByLabel("프로젝트 이름", { exact: true }).waitFor();
+      assert.equal(await dialog.getByRole("button", { name: "그래픽", exact: true }).isDisabled(), true);
+      await dialog.getByText("그래픽을 만들려면 설정에서 Codex를 연결하고 로그인해 주세요.", { exact: true }).waitFor();
+      assert.equal(await dialog.getByRole("button", { name: "프로젝트 만들기", exact: true }).isDisabled(), true);
+      const detection = await page.request.get(`${base}/api/backends/detect`);
+      assert.equal(detection.status(), 200);
+      const { data } = await detection.json();
+      assert.equal(data.backends.some((backend) => backend.id === "codex" && backend.found && backend.authenticated === true), false, "owned CODEX_HOME must be unauthenticated");
+      const bootstrap = await (await page.request.get(`${base}/api/bootstrap`)).json();
+      const rejected = await page.request.post(`${base}/api/projects`, { headers: { "x-burnguard-capability": bootstrap.data.capability, origin: base }, data: { name: "Blocked graphic", type: "graphic", design_system_id: null, backend_id: "codex", options: { graphic_canvas: { schema_version: 1, width: 1080, height: 1080 } } } });
+      assert.equal(rejected.status(), 409, "direct creation must also enforce Codex authentication");
+      await shot(page, "redesign-graphic-locked");
+    });
+
+    await scenario("redesign-pinterest-dialog", async () => {
+      await page.goto(`${base}/?view=systems`, { waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: "Pinterest 무드 가져오기", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Pinterest에서 무드 가져오기", exact: true });
+      await dialog.waitFor();
+      const submit = dialog.getByRole("button", { name: "무드 초안 만들기", exact: true });
+      assert.equal(await submit.isDisabled(), true);
+      await dialog.getByLabel("핀 주소 (한 줄에 하나)", { exact: true }).fill("https://www.pinterest.com/pin/123/");
+      assert.equal(await submit.isEnabled(), true);
+      await dialog.getByText(/원본 이미지가 저장되지는 않아요/).waitFor();
+      await shot(page, "redesign-pinterest-dialog");
+      await dialog.getByRole("button", { name: "취소", exact: true }).click();
+      await dialog.waitFor({ state: "hidden" });
+      assert.equal(blockedPosts.length, 0, "opening Pinterest intake must not fetch or publish a mood");
     });
 
     await scenario("redesign-mobile-workspace-switch", async () => {

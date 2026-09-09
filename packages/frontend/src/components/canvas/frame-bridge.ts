@@ -60,6 +60,7 @@ export interface FrameBgHit {
 }
 
 type BridgeAction =
+  | "scroll-at-point"
   | "hit-select"
   | "hit-comment"
   | "hit-bg"
@@ -221,6 +222,10 @@ export async function requestFrameSelectAtPoint(
   return (await requestFrameBridge(iframe, "hit-select", { x, y })) as
     | FrameSelectHit
     | null;
+}
+
+export async function requestFrameScrollAtPoint(iframe: HTMLIFrameElement | null, x: number, y: number, deltaX: number, deltaY: number): Promise<void> {
+  await requestFrameBridge(iframe, "scroll-at-point", { x, y, deltaX, deltaY });
 }
 
 export async function requestFrameCommentAtPoint(
@@ -477,7 +482,23 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     var payload = data.payload || {};
     var response = null;
 
-    if (data.action === "hit-select") {
+    if (data.action === "scroll-at-point") {
+      var dx = Number(payload.deltaX);
+      var dy = Number(payload.deltaY);
+      if (Number.isFinite(dx) && Number.isFinite(dy)) {
+        var scrollNode = resolveTargetAtPoint(payload.x, payload.y);
+        while (scrollNode && scrollNode !== document.documentElement) {
+          var scrollStyle = window.getComputedStyle(scrollNode);
+          var beforeX = scrollNode.scrollLeft;
+          var beforeY = scrollNode.scrollTop;
+          if (/(auto|scroll)/.test(scrollStyle.overflowY)) scrollNode.scrollTop += Math.max(-2000, Math.min(2000, dy));
+          if (/(auto|scroll)/.test(scrollStyle.overflowX)) scrollNode.scrollLeft += Math.max(-2000, Math.min(2000, dx));
+          if (beforeX !== scrollNode.scrollLeft || beforeY !== scrollNode.scrollTop) break;
+          scrollNode = scrollNode.parentElement;
+        }
+        if (!scrollNode || scrollNode === document.documentElement) window.scrollBy(Math.max(-2000, Math.min(2000, dx)), Math.max(-2000, Math.min(2000, dy)));
+      }
+    } else if (data.action === "hit-select") {
       var selectNode = resolveTargetAtPoint(payload.x, payload.y);
       var selectAnchor = selectNode && selectNode.closest
         ? selectNode.closest("[data-bg-node-id]")

@@ -14,6 +14,7 @@ describe("buildCodexCommand", () => {
       "--skip-git-repo-check",
       "--sandbox",
       "workspace-write",
+      "-c", 'model_reasoning_effort="low"',
       "-",
     ]);
   });

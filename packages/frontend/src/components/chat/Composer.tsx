@@ -1,5 +1,8 @@
-import { useRef, useState } from "react";
-import type { FileInfo } from "@bg/shared";
+import { useEffect, useRef, useState } from "react";
+import { defaultGenerationOptions, type BackendId, type FileInfo, type GenerationOptions } from "@bg/shared";
+import { useQuery } from "@tanstack/react-query";
+import { getSettings } from "@/api/home";
+import GenerationControls from "@/components/settings/GenerationControls";
 import { Paperclip, Send, Settings2, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/state/uiStore";
@@ -39,6 +42,7 @@ function sendStateMessage(state: ComposerSendState): string | null {
 
 export default function Composer({
   sessionId,
+  backendId = "claude-code",
   onSend,
   disabled = false,
   canInterrupt = false,
@@ -49,13 +53,14 @@ export default function Composer({
   projectFiles = [],
 }: {
   sessionId: string;
+  backendId?: BackendId;
   /**
    * `signal` aborts the in-flight send request when the caller forwards it to
    * `sendUserEvent`. The composer never assumes it was honoured: it only
    * reports "cancelled" if the returned promise actually rejects with
    * AbortError.
    */
-  onSend: (text: string, files: readonly ReadyAttachmentSource[], signal: AbortSignal) => void | Promise<void>;
+  onSend: (text: string, files: readonly ReadyAttachmentSource[], signal: AbortSignal, generation?: GenerationOptions) => void | Promise<void>;
   disabled?: boolean;
   /**
    * True when the current turn has exceeded the user's configured
@@ -81,6 +86,15 @@ export default function Composer({
 }) {
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
   const draft = useComposerDraft(sessionId, initialText);
+  const settings = useQuery({ queryKey: ["settings"], queryFn: getSettings });
+  const generation = draft.generation ?? settings.data?.generation_defaults?.[backendId] ?? defaultGenerationOptions(backendId);
+  const priorBackend = useRef(backendId);
+  useEffect(() => {
+    if (priorBackend.current !== backendId) {
+      priorBackend.current = backendId;
+      draft.setGeneration(settings.data?.generation_defaults?.[backendId] ?? defaultGenerationOptions(backendId));
+    }
+  }, [backendId, draft, settings.data]);
   const { text, setText } = draft;
   const [sendState, setSendState] = useState<ComposerSendState>({ kind: "idle" });
   const visualSources = useComposerVisualSources(() => {
@@ -112,7 +126,7 @@ export default function Composer({
     sendAbort.current = controller;
     setSendState({ kind: "processing" });
     try {
-      await onSend(text, visualSources.ready(), controller.signal);
+      await onSend(text, visualSources.ready(), controller.signal, generation);
       draft.clear();
       setSendState({ kind: "idle" });
     } catch (error) {
@@ -147,6 +161,7 @@ export default function Composer({
         onRoleChange={visualSources.setRole}
         onRemove={visualSources.remove}
       />
+      <div className="mb-3"><GenerationControls backendId={backendId} value={generation} onChange={draft.setGeneration} disabled={disabled || sending || !draft.ready} /></div>
       {!draft.ready && <p role="status" className="text-xs text-muted-foreground">작성 중이던 내용을 불러오고 있어요…</p>}
       {draft.storageError && <p role="status" className="text-xs text-warning-foreground">이 브라우저에서 초안을 저장하지 못했어요. 페이지를 닫기 전에 메시지를 보내 주세요.</p>}
 

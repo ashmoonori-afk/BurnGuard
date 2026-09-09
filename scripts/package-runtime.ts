@@ -44,6 +44,13 @@ export async function stageRuntimeAssets(repoRoot: string, outputDirectory: stri
     outdir: resources, target: "bun", minify: true,
   });
   if (!worker.success) throw new AggregateError(worker.logs, "CSS worker packaging failed");
+  const threeDirectory = path.join(resources, ".burnguard-three");
+  await mkdir(threeDirectory);
+  const threeRuntime = await Bun.build({ entrypoints: [path.join(repoRoot, "packages/frontend/src/components/canvas/three-scene-runtime.ts")], target: "browser", format: "iife", minify: true });
+  if (!threeRuntime.success || !threeRuntime.outputs[0]) throw new Error("Three.js runtime packaging failed");
+  await writeFile(path.join(threeDirectory, "runtime.js"), await threeRuntime.outputs[0].text());
+  const threeEntry = Bun.resolveSync("three", path.join(repoRoot, "packages/frontend"));
+  await copyFile(path.resolve(path.dirname(threeEntry), "../LICENSE"), path.join(threeDirectory, "LICENSE"));
   let nodeVersion: string | null = null;
   if (includeWindowsNode) {
     if (process.platform !== "win32") throw new Error("Windows portable packaging requires a Windows Node runtime");

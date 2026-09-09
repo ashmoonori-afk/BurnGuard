@@ -7,7 +7,10 @@ import type {
   CreateProjectResponse,
   DesignSystemSummary,
   ProjectType,
+  GenerationOptions,
 } from "@bg/shared";
+import { defaultGenerationOptions } from "@bg/shared";
+import GenerationControls from "@/components/settings/GenerationControls";
 import { createProject } from "@/api/home";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +29,9 @@ import {
   selectableDesignSystems,
   type BriefForm,
 } from "@/lib/project-creation";
+import ComposerAttachments from "@/components/chat/ComposerAttachments";
+import { planAttachmentIntake, setAttachmentRole, COMPOSER_SUPPORTED_EXTENSIONS, type IntakeItem } from "@/components/chat/attachment-intake";
+import { saveComposerDraft } from "@/components/chat/useComposerDraft";
 import { useUIStore } from "@/state/uiStore";
 
 export type { ProjectType };
@@ -34,6 +40,8 @@ export default function NewProjectPanel({
   type,
   designSystems,
   defaultBackend,
+  graphicReady = false,
+  generationDefaults,
   systemsLoading,
   systemsError,
   onRetrySystems,
@@ -43,6 +51,8 @@ export default function NewProjectPanel({
   type: ProjectType;
   designSystems: DesignSystemSummary[];
   defaultBackend: BackendId;
+  graphicReady?: boolean;
+  generationDefaults?: Partial<Record<BackendId, GenerationOptions>>;
   systemsLoading: boolean;
   systemsError: Error | null;
   onRetrySystems: () => void;
@@ -51,8 +61,13 @@ export default function NewProjectPanel({
 }) {
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
+  const [backendId, setBackendId] = useState<BackendId>(defaultBackend);
+  const effectiveBackend = type === "graphic" ? "codex" : backendId;
+  const [generationByBackend, setGenerationByBackend] = useState(generationDefaults ?? {});
+  const generation = generationByBackend[effectiveBackend] ?? defaultGenerationOptions(effectiveBackend);
   const [form, setForm] = useState<BriefForm>(INITIAL_BRIEF_FORM);
   const [pickedSystemId, setPickedSystemId] = useState<string | null>(null);
+  const [items, setItems] = useState<readonly IntakeItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Derived on every render instead of synced by an effect: a late
@@ -69,6 +84,9 @@ export default function NewProjectPanel({
   const createMutation = useMutation({
     mutationFn: (request: CreateProjectRequest) => createProject(request),
     onSuccess: async (created) => {
+      try { await saveComposerDraft(created.session_id, { text: form.objective, items: items.filter((item) => item.status === "ready"), generation }); }
+      catch { pushToast({ title: "초안을 메시지 작성창으로 옮겼어요", body: "브라우저 저장이 제한돼 있어요. 새로고침하기 전에 전송해 주세요.", tone: "error" }); }
+      setItems([]);
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       onCreated(created);
       setForm(INITIAL_BRIEF_FORM);
@@ -87,7 +105,7 @@ export default function NewProjectPanel({
   });
 
   const built = buildCreateProjectRequest(
-    { ...form, type, backendId: defaultBackend, designSystemId },
+    { ...form, contentSource: items.some((item) => item.status === "ready") ? "attached" : form.contentSource, type, backendId: effectiveBackend, designSystemId },
     designSystems,
   );
   const disabled = createMutation.isPending;
@@ -104,13 +122,14 @@ export default function NewProjectPanel({
   return (
     <form className="p-6" onSubmit={(event) => {
       event.preventDefault();
-      if (!built.ok || disabled) return;
+      if (!built.ok || disabled || (isGraphic && !graphicReady)) return;
       setError(null);
       createMutation.mutate(built.request);
     }}>
       <h2 className="mb-3 text-xs font-semibold text-muted-foreground">02 · 프로젝트 기본 정보</h2>
 
       <div className="space-y-4">
+        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>AI 도구</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={effectiveBackend} disabled={disabled || isGraphic} onChange={(event) => setBackendId(event.target.value === "codex" ? "codex" : "claude-code")}><option value="claude-code">Claude Code</option><option value="codex">Codex</option></select><GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
         <div className="space-y-1.5">
           <label htmlFor="project-name" className={PROJECT_LABEL_CLASS}>
             프로젝트 이름
@@ -199,6 +218,8 @@ export default function NewProjectPanel({
           />
         )}
 
+        {type === "prototype" && <div className="space-y-1.5"><label htmlFor="section-count" className={PROJECT_LABEL_CLASS}>세로 섹션 수</label><Input id="section-count" type="number" min={1} max={30} step={1} value={form.sectionCount ?? 6} disabled={disabled} onChange={(event) => update("sectionCount", event.target.valueAsNumber)} /><p className="text-xs text-muted-foreground">탐색 메뉴와 푸터를 제외한 본문 섹션 수예요.</p></div>}
+        <div className="space-y-2"><label htmlFor="project-materials" className={PROJECT_LABEL_CLASS}>참고 자료 첨부</label><input id="project-materials" type="file" multiple accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")} disabled={disabled} onChange={(event) => { setItems((current) => planAttachmentIntake(current, Array.from(event.target.files ?? []))); event.target.value = ""; }} className="block w-full text-sm" /><p className="text-xs text-muted-foreground">PDF·PPTX, 최대 8개 · 파일당 10 MB · 합계 25 MB. 자료와 역할은 만든 프로젝트의 작성창에 보관하며 직접 전송할 때 AI에 전달해요.</p><ComposerAttachments items={items} sending={disabled} onRemove={(id) => setItems((current) => current.filter((item) => item.id !== id))} onRoleChange={(id, role) => setItems((current) => setAttachmentRole(current, id, role))} /></div>
         <ProjectBriefFields
           form={form}
           disabled={disabled}
@@ -227,11 +248,12 @@ export default function NewProjectPanel({
         )}
       </div>
 
+      {isGraphic && !graphicReady && <p role="status" className="mt-4 text-sm text-muted-foreground">그래픽을 만들려면 설정에서 Codex를 연결하고 로그인해 주세요.</p>}
       <Button
         className="mt-6 h-11 w-full gap-2 rounded-xl"
         type="submit"
         variant="cta"
-        disabled={!built.ok || disabled}
+        disabled={!built.ok || disabled || (isGraphic && !graphicReady)}
       >
         {createMutation.isPending ? "프로젝트를 만드는 중..." : "프로젝트 만들기"}
         <ArrowRight className="h-4 w-4" aria-hidden="true" />

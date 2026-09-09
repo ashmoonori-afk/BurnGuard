@@ -1,5 +1,9 @@
 import { ulid } from "ulid";
 import { Hono } from "hono";
+import { parseGenerationOptions } from "@bg/shared";
+import { loadConfig } from "../config";
+import { detectBackends } from "../services/backends";
+import { resolveGenerationOptions } from "../services/generation-options";
 import { streamSSE } from "hono/streaming";
 import {
   VisualSourceContractError,
@@ -96,6 +100,10 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
     return c.json(fail("session_not_found", "Session not found", { id }), 404);
   }
   const contentType = c.req.header("content-type") ?? "";
+  const [config, detection, project] = await Promise.all([loadConfig(), detectBackends(), getProjectDetail(session.project_id)]);
+  const selectedBackend = detection.backends.find((backend) => backend.id === session.backend_id);
+  if (project?.type === "graphic" && (session.backend_id !== "codex" || selectedBackend?.authenticated !== true)) return c.json(fail("graphic_requires_authenticated_codex", "Graphic generation requires authenticated Codex"), 409);
+  const resolveGeneration = (value: unknown) => resolveGenerationOptions(session.backend_id, value, config, selectedBackend ?? { id: session.backend_id, found: false });
   let payload: UserEvent | null = null;
   let requestedOperationId: string | undefined;
   let reservation: UserTurnReservation | null = null;
@@ -107,6 +115,9 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       body.type === "user.message" &&
       typeof body.text === "string"
     ) {
+      let generation;
+      try { generation = resolveGeneration(body.generation === undefined ? undefined : parseGenerationOptions(body.generation)); }
+      catch { return c.json(fail("invalid_generation_options", "Generation options are invalid"), 400); }
       let visualSources;
       try { visualSources = parseUploadedVisualSourceSelections(body.visualSources); }
       catch (error) {
@@ -116,7 +127,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       if (body.attachments !== undefined && (!Array.isArray(body.attachments) || !body.attachments.every((value) => typeof value === "string"))) return c.json(fail("invalid_attachments", "Attachment selection is invalid"), 400);
       try {
         const canonical = await canonicalizeAttachmentRequest({ sessionId: id, requestedPaths: body.attachments ?? [], selections: visualSources });
-        payload = { type: "user.message", text: body.text, attachments: [...canonical.paths], visualSources: canonical.selections };
+        payload = { type: "user.message", text: body.text, attachments: [...canonical.paths], visualSources: canonical.selections, generation };
       } catch (error) {
         if (error instanceof AttachmentRequestError) return c.json(fail(error.code, "Attachment selection is invalid"), 400);
         throw error;
@@ -132,6 +143,9 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
     const type = form.get("type");
     const text = form.get("text");
     if (type === "user.message" && typeof text === "string") {
+      let generation;
+      try { const raw = form.get("generation"); generation = resolveGeneration(raw === null ? undefined : parseGenerationOptions(typeof raw === "string" ? JSON.parse(raw) : raw)); }
+      catch { return c.json(fail("invalid_generation_options", "Generation options are invalid"), 400); }
       const fileEntries = form
         .getAll("files")
         .filter((value): value is File => value instanceof File);
@@ -169,7 +183,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       const selections = attachmentPaths.map((attachmentPath, index) => ({ source_type: "uploaded_attachment" as const, attachment_path: attachmentPath, role: uploadSources.sources[index]?.role ?? "ordinary_content" }));
       try {
         const canonical = await canonicalizeAttachmentRequest({ sessionId: id, requestedPaths: attachmentPaths, selections });
-        payload = { type: "user.message", text, attachments: [...canonical.paths], visualSources: canonical.selections };
+        payload = { type: "user.message", text, attachments: [...canonical.paths], visualSources: canonical.selections, generation };
       } catch (error) {
         await rollbackSessionAttachments(id, attachmentPaths);
         if (reservation !== null) releaseUserTurnReservation(reservation);

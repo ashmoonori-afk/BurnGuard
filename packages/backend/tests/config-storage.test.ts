@@ -8,6 +8,18 @@ beforeEach(() => saveConfig(structuredClone(defaultConfig)));
 afterAll(() => saveConfig(structuredClone(defaultConfig)));
 
 describe("settings storage", () => {
+  test("Given CommandCode credentials and generation defaults When saved and cleared Then credentials remain write-only", async () => {
+    const generation = { model: "", effort: "low", vanilla: true, provider: "commandcode" };
+    const response = await homeRoutes.request("http://local/api/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ commandcode_api_key: "fixture-commandcode-private", generation_defaults: { "claude-code": generation } }) });
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).not.toContain("fixture-commandcode-private");
+    expect(JSON.parse(body).data.commandcode_api_key_set).toBe(true);
+    expect((await loadConfig()).generationDefaults["claude-code"]).toEqual(generation);
+    const cleared = await homeRoutes.request("http://local/api/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ commandcode_api_key: null }) });
+    expect((await cleared.json()).data.commandcode_api_key_set).toBe(false);
+    expect((await loadConfig()).commandcodeApiKey).toBeNull();
+  });
   test("Given existing settings When GET and startup read them Then neither rewrites the file", async () => {
     const before = await stat(configFilePath);
     expect((await homeRoutes.request("http://local/api/settings")).status).toBe(200);

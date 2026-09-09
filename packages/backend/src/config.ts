@@ -1,9 +1,11 @@
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import type { BackendId, ThemeMode } from "@bg/shared";
-import { APP_VERSION } from "@bg/shared";
+import { APP_VERSION, parseGenerationOptions, type GenerationOptions } from "@bg/shared";
 import { appRootDir, configFilePath } from "./lib/paths";
 
 export interface AppConfig {
+  generationDefaults: Partial<Record<BackendId, GenerationOptions>>;
+  commandcodeApiKey: string | null;
   defaultBackend: BackendId;
   theme: ThemeMode;
   port: number | null;
@@ -50,6 +52,8 @@ export interface AppConfig {
 }
 
 export const defaultConfig: AppConfig = {
+  generationDefaults: {},
+  commandcodeApiKey: null,
   defaultBackend: "claude-code",
   theme: "light",
   port: null,
@@ -85,7 +89,14 @@ function mergeConfig(input: unknown): AppConfig {
   const chat = record(source.chat);
   const logs = record(source.logs);
   const user = record(source.user);
+  const generationDefaults: AppConfig["generationDefaults"] = {};
+  for (const backend of ["codex", "claude-code"] as const) {
+    const value = record(source.generationDefaults)[backend];
+    if (value !== undefined) { try { generationDefaults[backend] = parseGenerationOptions(value); } catch { /* Old or unsupported configuration uses safe defaults. */ } }
+  }
   return {
+    generationDefaults,
+    commandcodeApiKey: typeof source.commandcodeApiKey === "string" && source.commandcodeApiKey.trim() ? source.commandcodeApiKey.trim() : null,
     defaultBackend: source.defaultBackend === "codex" ? "codex" : "claude-code",
     theme: source.theme === "dark" || source.theme === "auto" ? source.theme : "light",
     port: typeof source.port === "number" && Number.isInteger(source.port) && source.port >= 1024 && source.port <= 65535 ? source.port : null,

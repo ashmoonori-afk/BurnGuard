@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { getLocalFonts } from "../services/local-fonts";
 import type {
   ApiErrorBody,
   ApiSuccess,
@@ -25,6 +26,11 @@ function fail(code: string, message: string, details?: unknown): ApiErrorBody {
 }
 
 export const settingsRoutes = new Hono();
+
+settingsRoutes.get("/api/settings/local-fonts", async (c) => {
+  try { return c.json(ok(await getLocalFonts())); }
+  catch { return c.json(fail("local_fonts_unavailable", "Local font listing is unavailable"), 503); }
+});
 
 settingsRoutes.get("/api/settings/playwright", (c) => {
   return c.json(ok(getPlaywrightInstallStatus() satisfies PlaywrightInstallStatus));

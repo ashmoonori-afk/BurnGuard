@@ -10,6 +10,8 @@ export default function CommentPanel({
   onFocus,
   onUpdateBody,
   onToggleResolved,
+  onRequestEdit,
+  editDisabled,
 }: {
   comments: Comment[];
   activeRelPath: string | null;
@@ -18,6 +20,8 @@ export default function CommentPanel({
   onFocus: (id: string | null) => void;
   onUpdateBody: (id: string, body: string) => void;
   onToggleResolved: (id: string, resolved: boolean) => void;
+  onRequestEdit?: (comment: Comment, body: string) => Promise<void>;
+  editDisabled?: boolean;
 }) {
   const visible = activeRelPath
     ? comments.filter((c) => {
@@ -60,6 +64,8 @@ export default function CommentPanel({
             index={idx + 1}
             comment={comment}
             focused={comment.id === focusedId}
+            onRequestEdit={onRequestEdit ? (body) => onRequestEdit(comment, body) : undefined}
+            editDisabled={editDisabled}
             onFocus={() =>
               onFocus(comment.id === focusedId ? null : comment.id)
             }
@@ -81,6 +87,8 @@ function CommentItem({
   onFocus,
   onUpdateBody,
   onToggleResolved,
+  onRequestEdit,
+  editDisabled,
 }: {
   comment: Comment;
   index: number;
@@ -88,9 +96,13 @@ function CommentItem({
   onFocus: () => void;
   onUpdateBody: (body: string) => void;
   onToggleResolved: () => void;
+  onRequestEdit?: (body: string) => Promise<void>;
+  editDisabled?: boolean;
 }) {
   const [draft, setDraft] = useState(comment.body);
   const editingRef = useRef(false);
+  const [sending, setSending] = useState(false);
+  const [sendStatus, setSendStatus] = useState("");
   const resolved = comment.resolved_at !== null;
 
   useEffect(() => {
@@ -148,6 +160,17 @@ function CommentItem({
           rows={2}
           className="w-full resize-none rounded border border-border bg-background p-1.5 text-xs"
         />
+        {onRequestEdit && <button type="button" className="mt-1 rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
+          disabled={editDisabled || sending || !draft.trim()}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={async () => {
+            setSending(true); setSendStatus("");
+            try { await onRequestEdit(draft); setSendStatus("AI에 수정 요청을 보냈어요. 대화에서 진행 상황과 변경 파일을 확인해 주세요."); }
+            catch { setSendStatus("수정 요청을 보내지 못했어요. 대화 상태를 확인하고 다시 시도해 주세요."); }
+            finally { setSending(false); }
+          }}>{sending ? "보내는 중…" : "저장하고 AI로 수정"}</button>}
+        {draft !== comment.body && <p className="text-[10px] text-muted-foreground">수정 요청을 누르면 메모를 먼저 저장해요.</p>}
+        {sendStatus && <p role="status" className="mt-1 text-[10px] text-muted-foreground">{sendStatus}</p>}
         <div className="mt-1.5 flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">
             {new Date(comment.created_at).toLocaleString()}

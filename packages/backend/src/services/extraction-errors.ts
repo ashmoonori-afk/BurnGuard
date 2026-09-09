@@ -3,6 +3,8 @@ export class DesignSystemExtractError extends Error {
   constructor(
     readonly code:
       | "invalid_source_url"
+      | "invalid_pinterest_request"
+      | "pinterest_unavailable"
       | "invalid_upload"
       | "unsupported_source_type"
       | "git_clone_failed"

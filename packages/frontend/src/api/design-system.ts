@@ -11,6 +11,10 @@ import type {
 } from "@bg/shared";
 import { apiFetch } from "./client";
 
+export function extractPinterestMood(body: import("@bg/shared").CreatePinterestMoodRequest): Promise<import("@bg/shared").CreatePinterestMoodResponse> {
+  return apiFetch("/api/design-systems/pinterest", { method: "POST", body: JSON.stringify(body) });
+}
+
 export async function listDesignSystemPreviews(id: string): Promise<DesignSystemPreview[]> {
   return apiFetch<DesignSystemPreview[]>(`/api/design-systems/${id}/previews`);
 }

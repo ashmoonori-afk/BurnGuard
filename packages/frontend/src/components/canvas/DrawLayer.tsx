@@ -1,3 +1,4 @@
+import { canvasPoint } from "./canvas-coordinates";
 import {
   forwardRef,
   useEffect,
@@ -121,8 +122,7 @@ const DrawLayer = forwardRef<
   const localPoint = (e: PointerEvent<SVGSVGElement>): [number, number] | null => {
     const svg = svgRef.current;
     if (!svg) return null;
-    const rect = svg.getBoundingClientRect();
-    return [e.clientX - rect.left, e.clientY - rect.top];
+    return canvasPoint(svg, e.clientX, e.clientY);
   };
 
   const handlePointerDown = (e: PointerEvent<SVGSVGElement>) => {

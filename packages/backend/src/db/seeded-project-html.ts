@@ -238,7 +238,7 @@ const QUARTERLY_REVIEW_DECK_HTML = `<!doctype html>
 </html>
 `;
 
-const SPLASH_TEMPLATE_LANDING_HTML = `<!doctype html>
+export const SPLASH_TEMPLATE_LANDING_HTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -286,6 +286,7 @@ const SPLASH_TEMPLATE_LANDING_HTML = `<!doctype html>
   .cta-band { background: var(--brand); color: white; padding: 56px 32px; text-align: center; margin: 64px 0 0; }
   .cta-band h2 { font-size: 40px; margin: 0 0 16px; font-weight: 800; letter-spacing: -0.02em; }
   .cta-band a { background: white; color: var(--brand); padding: 14px 28px; border-radius: 999px; text-decoration: none; font-weight: 700; }
+  .detail-section {max-width:1200px;margin:0 auto;padding:72px 32px;border-top:1px solid var(--rule)} .detail-section h2{font-size:clamp(28px,4vw,44px);letter-spacing:-.03em;margin:0 0 28px}.detail-section p,.detail-section li{color:var(--ink-soft);line-height:1.8}.detail-section ol{display:grid;gap:20px;padding-left:24px}.detail-section details{padding:20px 0;border-bottom:1px solid var(--rule)}.detail-section summary{font-weight:700;cursor:pointer}.detail-section table{width:100%;border-collapse:collapse}.detail-section td,.detail-section th{text-align:left;padding:18px;border-bottom:1px solid var(--rule)}
   footer { padding: 32px; text-align: center; color: var(--ink-soft); font-size: 13px; }
   @media (max-width: 880px) {
     .hero { grid-template-columns: 1fr; }
@@ -338,6 +339,9 @@ const SPLASH_TEMPLATE_LANDING_HTML = `<!doctype html>
       <p data-bg-node-id="feature-3-body">Split a bill across the table without anyone leaving iMessage. Auto-collected, auto-cleared.</p>
     </div>
   </section>
+  <section class="detail-section" id="how-it-works" data-bg-node-id="splash-workflow"><h2>Know where your money is going.</h2><ol><li><strong>Choose the recipient.</strong> Check their name and destination before entering the amount.</li><li><strong>Review the transfer.</strong> See the exchange rate, any fee and the amount the recipient will receive.</li><li><strong>Follow the receipt.</strong> Keep a reference for each transfer and check its progress in the activity list.</li></ol></section>
+  <section class="detail-section" id="transparency" data-bg-node-id="splash-transparency"><h2>No surprises at the confirmation screen.</h2><p>A good transfer experience explains the total before asking you to continue. This illustrative breakdown shows the information that matters.</p><table><thead><tr><th>What you review</th><th>Why it matters</th></tr></thead><tbody><tr><td>Recipient and currency</td><td>Confirm the destination before money moves.</td></tr><tr><td>Rate and service fee</td><td>Compare the full cost in your sending currency.</td></tr><tr><td>Expected arrival</td><td>Plan around the estimated delivery window.</td></tr></tbody></table></section>
+  <section class="detail-section" id="questions" data-bg-node-id="splash-faq"><h2>A few things before you send.</h2><details><summary>Can I change a recipient?</summary><p>Review and edit the recipient before confirmation. Once a transfer is processing, contact support with the transfer reference.</p></details><details><summary>Where do I find a receipt?</summary><p>Open the transfer in your activity list to review the amount, destination and reference.</p></details><details><summary>Will this sample move real money?</summary><p>No. This page is a design example. Its balances and product claims are illustrative, and its controls do not process payments.</p></details></section>
   <section class="cta-band" data-bg-node-id="cta-band">
     <h2 data-bg-node-id="cta-band-title">Send your first $50 today, on us.</h2>
     <a href="#" data-bg-node-id="cta-band-button">Open free account →</a>

@@ -31,6 +31,8 @@ export default function ModePanel({
   onFocusComment,
   onUpdateCommentBody,
   onToggleCommentResolved,
+  onRequestCommentEdit,
+  commentEditDisabled,
   editTarget,
   editSaving,
   onSaveEdit,
@@ -63,6 +65,8 @@ export default function ModePanel({
   onFocusComment: (id: string | null) => void;
   onUpdateCommentBody: (id: string, body: string) => void;
   onToggleCommentResolved: (id: string, resolved: boolean) => void;
+  onRequestCommentEdit?: (comment: Comment, body: string) => Promise<void>;
+  commentEditDisabled?: boolean;
   editTarget: EditTarget | null;
   editSaving: boolean;
   onSaveEdit: (patch: {
@@ -117,6 +121,8 @@ export default function ModePanel({
           onFocus={onFocusComment}
           onUpdateBody={onUpdateCommentBody}
           onToggleResolved={onToggleCommentResolved}
+          onRequestEdit={onRequestCommentEdit}
+          editDisabled={commentEditDisabled}
         />
       )}
       {mode === "edit" && (

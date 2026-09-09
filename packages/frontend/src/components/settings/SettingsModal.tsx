@@ -17,6 +17,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import BackendSelector from "./BackendSelector";
+import GenerationControls from "./GenerationControls";
+import { defaultGenerationOptions } from "@bg/shared";
 import { detectBackends, getSettings, patchSettings } from "@/api/home";
 import {
   getPlaywrightInstallStatus,
@@ -71,6 +73,20 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
   // types a token here, hits Save, and the field clears.
   const [figmaTokenInput, setFigmaTokenInput] = useState("");
   const [figmaTokenSaving, setFigmaTokenSaving] = useState(false);
+  const [commandcodeKey, setCommandcodeKey] = useState("");
+  const [commandcodeSaving, setCommandcodeSaving] = useState(false);
+
+  async function saveCommandcodeKey(value: string | null) {
+    setCommandcodeSaving(true);
+    try {
+      const next = await patchSettings({ commandcode_api_key: value });
+      setSettings((draft) => draft ? { ...draft, commandcode_api_key_set: next.commandcode_api_key_set } : next);
+      queryClient.setQueryData(["settings"], next);
+      setCommandcodeKey("");
+      pushToast({ title: value === null ? "CommandCode 키를 지웠어요" : "CommandCode 키를 저장했어요", tone: "success" });
+    } catch (error) { pushToast({ title: "CommandCode 키를 저장하지 못했어요", body: apiErrorCopy(error), tone: "error" }); }
+    finally { setCommandcodeSaving(false); }
+  }
 
   useEffect(() => {
     // Initialize once; background status/token updates must not replace edits.
@@ -115,6 +131,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
     try {
       const next = await patchSettings({
         default_backend: settings.default_backend,
+        generation_defaults: settings.generation_defaults,
         theme: settings.theme,
         chat_abort_threshold_ms: settings.chat_abort_threshold_ms,
         chat_context_mode: settings.chat_context_mode,
@@ -157,7 +174,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen && !saving && !figmaTokenSaving) onClose(); }}>
+    <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen && !saving && !figmaTokenSaving && !commandcodeSaving) onClose(); }}>
       <DialogContent className="flex h-[min(780px,calc(100dvh-2rem))] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0" onCloseAutoFocus={(event) => { if (returnFocusTarget?.isConnected) { event.preventDefault(); returnFocusTarget.focus(); } }}>
         <DialogHeader className="shrink-0 border-b border-border px-5 py-5 pr-12 sm:px-7">
           <DialogTitle className="text-xl">설정</DialogTitle>
@@ -212,6 +229,13 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               detection={detectionQuery.data}
             /> : detectionQuery.isPending ? <p role="status" className="text-sm text-muted-foreground">사용할 수 있는 백엔드를 확인하는 중이에요.</p> : null}
             {detectionQuery.isError ? <SettingsLoadError title="백엔드 상태를 확인하지 못했어요" error={detectionQuery.error} retry={() => void detectionQuery.refetch()} pending={detectionQuery.isFetching} /> : null}
+            <GenerationControls backendId={settings.default_backend} value={settings.generation_defaults?.[settings.default_backend] ?? defaultGenerationOptions(settings.default_backend)} onChange={(generation) => setSettings({ ...settings, generation_defaults: { ...settings.generation_defaults, [settings.default_backend]: generation } })} />
+            <div className="space-y-2 rounded-xl border border-border p-3">
+              <label htmlFor="commandcode-api-key" className="text-sm font-medium">CommandCode API 키</label>
+              <p className="text-xs text-muted-foreground">Claude Code 설치가 필요해요. CommandCode의 Claude 모델로 생성하며 API 사용량이 발생해요. {settings.commandcode_api_key_set ? "키가 저장되어 있어요." : "저장된 키가 없어요."}</p>
+              <Input id="commandcode-api-key" type="password" autoComplete="new-password" value={commandcodeKey} onChange={(event) => setCommandcodeKey(event.target.value)} placeholder="새 API 키 입력" disabled={commandcodeSaving} />
+              <div className="flex gap-2"><Button type="button" size="sm" disabled={commandcodeSaving || !commandcodeKey.trim()} onClick={() => void saveCommandcodeKey(commandcodeKey)}>키 저장</Button><Button type="button" size="sm" variant="outline" disabled={commandcodeSaving || !settings.commandcode_api_key_set} onClick={() => void saveCommandcodeKey(null)}>키 삭제</Button></div>
+            </div>
 
             <div className="space-y-1.5">
               <div id="chat-context-label" className="text-xs font-medium text-muted-foreground">

@@ -1,3 +1,4 @@
+import { canvasPoint } from "./canvas-coordinates";
 import {
   useEffect,
   useRef,
@@ -13,6 +14,7 @@ import {
 import { useFrameElementRect } from "@/hooks/useFrameElementRect";
 
 export const TWEAKS_STYLE_KEYS = [
+  "font-family",
   "font-size",
   "font-weight",
   "color",
@@ -66,9 +68,7 @@ export default function TweaksLayer({
       setHoverRect(null);
       return;
     }
-    const overlayRect = overlayRef.current.getBoundingClientRect();
-    const relX = e.clientX - overlayRect.left;
-    const relY = e.clientY - overlayRect.top;
+    const [relX, relY] = canvasPoint(overlayRef.current, e.clientX, e.clientY);
     const seq = ++requestSeqRef.current;
     void requestFrameBgAtPoint(iframeRef.current, relX, relY).then((hit) => {
       if (requestSeqRef.current !== seq) return;
@@ -82,9 +82,7 @@ export default function TweaksLayer({
     if (!active || !overlayRef.current) return;
     if (e.target !== overlayRef.current) return;
 
-    const overlayRect = overlayRef.current.getBoundingClientRect();
-    const relX = e.clientX - overlayRect.left;
-    const relY = e.clientY - overlayRect.top;
+    const [relX, relY] = canvasPoint(overlayRef.current, e.clientX, e.clientY);
     void requestFrameBgAtPoint(iframeRef.current, relX, relY).then((hit) => {
       if (!hit?.bgId) {
         onSelect(null);
