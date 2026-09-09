@@ -25,6 +25,10 @@ test("Given sensitive basenames at any depth, when selecting public assets, then
   }
   expect(isPublicAsset("assets/tokens.css")).toBe(true);
   expect(isPublicAsset("assets/tokenizer.js")).toBe(true);
+  for (const directory of ["credentials", "tokens", "api-keys", "private-keys", "secrets-prod", "accessTokens", "tokens.css"]) {
+    expect(isPublicAsset(`${directory}/data.js`)).toBe(false);
+    expect(isPublicAsset(`assets/${directory}/tokens.css`)).toBe(false);
+  }
 });
 
 test("Given an image over 3MB, when uploading, then Vercel receives bytes and digest references without inline base64", async () => {
