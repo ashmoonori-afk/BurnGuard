@@ -15,6 +15,9 @@ export type DecisionHandler = (decision: ToolDecisionPayload) => void;
 
 /** Input passed from turns.ts → adapters/registry → each adapter. */
 export interface AdapterRunInput {
+  generation?: import("@bg/shared").GenerationOptions;
+  /** Write-only server credential. Never log this input or persist this field. */
+  commandcodeApiKey?: string;
   sessionId: string;
   turnId: string;
   projectDir: string;

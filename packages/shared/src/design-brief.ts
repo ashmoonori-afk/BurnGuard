@@ -65,6 +65,7 @@ export type DesignBriefV1 = {
   readonly visual_mood: DesignBriefVisualMood;
   readonly density: DesignBriefDensity;
   readonly output_size: DesignBriefOutputSize;
+  readonly section_count?: number;
 };
 
 export function parseDesignBriefV1(input: unknown): DesignBriefV1 {
@@ -76,7 +77,10 @@ export function parseDesignBriefV1(input: unknown): DesignBriefV1 {
   if (!/^[a-z]{2}(?:-[A-Z]{2})?$/.test(locale)) {
     invalid("locale");
   }
+  const sectionCount = record.section_count;
+  if (sectionCount !== undefined && (record.output_type !== "prototype" || typeof sectionCount !== "number" || !Number.isSafeInteger(sectionCount) || sectionCount < 1 || sectionCount > 30)) invalid("section_count");
   return {
+    ...(typeof sectionCount === "number" ? { section_count: sectionCount } : {}),
     schema_version: 1,
     output_type: outputType(requiredString(record, "output_type")),
     audience: boundedString(record, "audience", 200),

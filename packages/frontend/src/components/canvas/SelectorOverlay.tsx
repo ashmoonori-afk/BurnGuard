@@ -1,3 +1,4 @@
+import { canvasPoint } from "./canvas-coordinates";
 import {
   useEffect,
   useRef,
@@ -50,9 +51,7 @@ export default function SelectorOverlay({
       setHoverRect(null);
       return;
     }
-    const rect = overlayRef.current.getBoundingClientRect();
-    const relX = e.clientX - rect.left;
-    const relY = e.clientY - rect.top;
+    const [relX, relY] = canvasPoint(overlayRef.current, e.clientX, e.clientY);
     const seq = ++requestSeqRef.current;
     void requestFrameSelectAtPoint(iframeRef.current, relX, relY).then((hit) => {
       if (requestSeqRef.current !== seq) return;
@@ -65,9 +64,7 @@ export default function SelectorOverlay({
   const handleClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!active || !overlayRef.current) return;
     if (e.target !== overlayRef.current) return;
-    const rect = overlayRef.current.getBoundingClientRect();
-    const relX = e.clientX - rect.left;
-    const relY = e.clientY - rect.top;
+    const [relX, relY] = canvasPoint(overlayRef.current, e.clientX, e.clientY);
     void requestFrameSelectAtPoint(iframeRef.current, relX, relY).then((hit) => {
       if (!hit?.selector || !hit.rect) {
         setSelectedKey(null);

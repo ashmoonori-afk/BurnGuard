@@ -5,6 +5,8 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { cn } from "@/lib/utils";
+import { parseLocalFonts } from "@bg/shared";
+import { apiFetch } from "@/api/client";
 import {
   TWEAKS_STYLE_KEYS,
   type TweaksStyleKey,
@@ -57,6 +59,7 @@ const SIZE_RULES: Record<
   TweaksStyleKey,
   { min: number; max: number; allowNegative: boolean }
 > = {
+  "font-family": { min: 0, max: 0, allowNegative: false },
   "font-size": { min: 8, max: 240, allowNegative: false },
   "font-weight": { min: 100, max: 900, allowNegative: false },
   color: { min: 0, max: 0, allowNegative: false },
@@ -161,6 +164,7 @@ export default function TweaksPanel({
       <section className="border-b border-border px-3 py-2">
         <SectionHeader>타이포그래피</SectionHeader>
         <div className="mt-1.5 flex flex-col gap-2">
+          <FontFamilyRow target={target} saving={saving} onApply={onApply} />
           <SizeRow target={target} styleKey="font-size" saving={saving} onApply={onApply} />
           <FontWeightRow target={target} saving={saving} onApply={onApply} />
           <ColorRow target={target} styleKey="color" saving={saving} onApply={onApply} />
@@ -186,6 +190,38 @@ export default function TweaksPanel({
       </p>
     </div>
   );
+}
+
+function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; saving: boolean; onApply: ApplyFn }) {
+  const [families, setFamilies] = useState<readonly string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const inline = target.inline["font-family"] ?? "";
+  const load = async () => {
+    setLoading(true); setError("");
+    try {
+      const query = (window as Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> }).queryLocalFonts;
+      // Browser permission remains an explicit user gesture. Unsupported hosts use Windows' native family list.
+      const result = query
+        ? parseLocalFonts({ schema_version: 1, families: [...new Set((await query.call(window)).map((font) => font.family))] })
+        : parseLocalFonts(await apiFetch<unknown>("/api/settings/local-fonts"));
+      setFamilies(result.families);
+    } catch { setError("글꼴 목록을 불러오지 못했어요. 브라우저의 글꼴 권한을 확인하거나 다시 시도해 주세요."); }
+    finally { setLoading(false); }
+  };
+  return <div className="space-y-1">
+    <label className="flex items-center gap-2 text-[11px]">
+      <RowLabel>글꼴</RowLabel>
+      <select className={inputCls("min-w-0 flex-1")} value={inline} disabled={saving} onChange={(event) => onApply({ "font-family": event.target.value || null })}>
+        <option value="">상속 ({target.computed["font-family"] || "기본"})</option>
+        {inline && !families.some((family) => JSON.stringify(family) === inline) && <option value={inline}>{inline}</option>}
+        {families.map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
+      </select>
+    </label>
+    <button type="button" className="text-[10px] underline" disabled={loading} onClick={() => void load()}>{loading ? "불러오는 중…" : "설치된 글꼴 불러오기"}</button>
+    {error && <p role="alert" className="text-[10px] text-destructive">{error}</p>}
+    {families.length > 0 && <p role="status" className="text-[10px] text-muted-foreground">설치된 글꼴 {families.length}개 · 다른 기기에는 같은 글꼴이 필요해요.</p>}
+  </div>;
 }
 
 function SectionHeader({ children }: { children: React.ReactNode }) {

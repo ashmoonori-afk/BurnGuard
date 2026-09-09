@@ -14,7 +14,7 @@ const cards: readonly CardViewModel[] = [
   {
     id: "launch-poster",
     name: "Launch Poster",
-    subtitle: "프로토타입 · 어제",
+    subtitle: "웹디자인 · 어제",
     href: "/projects/launch-poster",
     tintClass: "bg-rose-100",
   },
@@ -63,7 +63,7 @@ describe("projectToCard", () => {
   });
 
   test.each([
-    ["prototype", "프로토타입"],
+    ["prototype", "웹디자인"],
     ["slide_deck", "슬라이드 덱"],
     ["graphic", "그래픽"],
     ["other", "기타"],

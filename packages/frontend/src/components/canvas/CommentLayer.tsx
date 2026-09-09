@@ -1,3 +1,4 @@
+import { canvasPoint } from "./canvas-coordinates";
 import { useRef, type MouseEvent, type RefObject } from "react";
 import type { Comment } from "@bg/shared";
 import { requestFrameCommentAtPoint } from "./frame-bridge";
@@ -47,11 +48,9 @@ export default function CommentLayer({
     if (!active || !overlayRef.current) return;
     if (e.target !== overlayRef.current) return;
 
-    const rect = overlayRef.current.getBoundingClientRect();
-    const relX = e.clientX - rect.left;
-    const relY = e.clientY - rect.top;
-    const x_pct = (relX / rect.width) * 100;
-    const y_pct = (relY / rect.height) * 100;
+    const [relX, relY] = canvasPoint(overlayRef.current, e.clientX, e.clientY);
+    const x_pct = (relX / overlayRef.current.clientWidth) * 100;
+    const y_pct = (relY / overlayRef.current.clientHeight) * 100;
 
     void requestFrameCommentAtPoint(iframeRef.current, relX, relY).then(
       (hit) => {

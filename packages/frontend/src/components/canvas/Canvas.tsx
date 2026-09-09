@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Comment, GraphicCanvasV1 } from "@bg/shared";
 import CanvasTopBar from "./CanvasTopBar";
 import CommentLayer from "./CommentLayer";
-import type { Ref } from "react";
+import type { Ref, ReactNode } from "react";
 import DrawLayer, {
   type DrawLayerHandle,
   type DrawShape,
@@ -20,6 +20,8 @@ import {
 import type { CanvasMode } from "@/components/modes/types";
 import type { SelectedNode } from "@/types/project";
 import { authorizedFetch } from "@/api/client";
+import { canvasPoint } from "./canvas-coordinates";
+import { requestFrameScrollAtPoint } from "./frame-bridge";
 
 const PLACEHOLDER_SRC = `<!doctype html>
 <html lang="ko">
@@ -97,6 +99,7 @@ export default function Canvas({
   drawLoading = false,
   drawError = null,
   onRetryDraws,
+  sceneTools,
 }: {
   mode: CanvasMode | null;
   src?: string | null;
@@ -137,9 +140,16 @@ export default function Canvas({
   drawLoading?: boolean;
   drawError?: string | null;
   onRetryDraws?: () => void;
+  sceneTools?: ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [moving, setMoving] = useState(false);
+  const [showSceneTools, setShowSceneTools] = useState(false);
+  const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const slideByFileRef = useRef(new Map<string, number | null>());
   const lastFrameSlideRef = useRef<number | null>(null);
   const restoreTargetSlideIdxRef = useRef<number | null>(null);
@@ -269,7 +279,22 @@ export default function Canvas({
         undoPending={undoPending}
         onUndo={onUndo}
       />
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-xs" aria-label="미리보기 배율과 이동">
+        <button type="button" aria-label="미리보기 축소" disabled={zoom <= 0.25} onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}>−</button>
+        <button type="button" title="배율과 위치 초기화" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>{Math.round(zoom * 100)}%</button>
+        <button type="button" aria-label="미리보기 확대" disabled={zoom >= 3} onClick={() => setZoom((v) => Math.min(3, v + 0.25))}>+</button>
+        <button type="button" aria-pressed={moving} className="rounded border border-border px-2 py-1" onClick={() => setMoving((v) => !v)}>화면 이동</button>
+        {moving && <span className="text-muted-foreground">드래그해서 이동해요</span>}
+        {sceneTools && <button type="button" aria-pressed={showSceneTools} className="rounded border border-border px-2 py-1" onClick={() => setShowSceneTools((value) => !value)}>3D 장면</button>}
+      </div>
       <div ref={containerRef} className="relative flex-1 overflow-hidden">
+        <div ref={stageRef} className="absolute inset-0" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "center" }}
+          onWheel={(event) => {
+            if (!mode || moving || !stageRef.current) return;
+            const [x, y] = canvasPoint(stageRef.current, event.clientX, event.clientY);
+            const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? stageRef.current.clientHeight : 1;
+            void requestFrameScrollAtPoint(iframeRef.current, x, y, event.deltaX * unit / zoom, event.deltaY * unit / zoom);
+          }}>
         {src ? (
           <iframe
             ref={iframeRef}
@@ -372,7 +397,16 @@ export default function Canvas({
             </div>
           </div>
         )}
+        </div>
+        {moving && <div className="absolute inset-0 touch-none" style={{ cursor: "grab" }}
+          onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y }; }}
+          onPointerMove={(event) => { const drag = dragRef.current; if (drag) setPan({ x: drag.panX + event.clientX - drag.x, y: drag.panY + event.clientY - drag.y }); }}
+          onPointerUp={() => { dragRef.current = null; }}
+          onPointerCancel={() => { dragRef.current = null; }}
+          onLostPointerCapture={() => { dragRef.current = null; }}
+        />}
       </div>
+      {showSceneTools && sceneTools}
     </div>
   );
 }

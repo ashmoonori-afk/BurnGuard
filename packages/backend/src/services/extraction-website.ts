@@ -1,4 +1,4 @@
-import { Resolver } from "node:dns/promises";
+import { Resolver, lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { checkServerIdentity } from "node:tls";
 import {
@@ -94,7 +94,7 @@ async function readResponseWithinLimit(
 
 type ImportAddress = { readonly address: string; readonly family: 4 | 6 };
 
-export async function resolveSafeImportAddresses(url: URL, signal: AbortSignal, resolver: Pick<Resolver, "resolve4" | "resolve6" | "cancel"> = new Resolver()): Promise<readonly ImportAddress[]> {
+export async function resolveSafeImportAddresses(url: URL, signal: AbortSignal, resolver: Pick<Resolver, "resolve4" | "resolve6" | "cancel"> = new Resolver(), systemLookup: (hostname: string) => Promise<readonly { address: string; family: number }[]> = (hostname) => lookup(hostname, { all: true })): Promise<readonly ImportAddress[]> {
   throwIfAcquisitionAborted(signal);
   const ownedQaAdapter = isOwnedQaAdapterResourceUrl(url);
   if ((!ownedQaAdapter && url.protocol !== "https:") || url.username !== "" || url.password !== "") {
@@ -107,6 +107,13 @@ export async function resolveSafeImportAddresses(url: URL, signal: AbortSignal, 
   const family = isIP(host);
   if (family === 4 || family === 6) return [{ address: host, family }];
   const resolved = await abortable(Promise.allSettled([resolver.resolve4(host), resolver.resolve6(host)]), signal, () => resolver.cancel());
+  // OS lookup supports Windows/network configurations where direct DNS is refused.
+  // An empty successful DNS answer is authoritative; fallback only if both queries failed.
+  if (resolved.every((result) => result.status === "rejected")) {
+    // OS lookup has no cancellation API; abortable stops the caller at its deadline.
+    const fallback = await abortable(systemLookup(host).catch(() => []), signal, () => {});
+    resolved.push({ status: "fulfilled", value: fallback.map((result) => result.address) });
+  }
   const addresses: ImportAddress[] = [];
   for (const result of resolved) {
     if (result.status !== "fulfilled") continue;

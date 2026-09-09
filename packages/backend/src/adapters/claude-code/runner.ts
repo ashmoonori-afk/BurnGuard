@@ -13,6 +13,8 @@ import { settleProcessStreams } from "../process-streams";
  */
 
 export interface RunnerOptions {
+  generation?: import("@bg/shared").GenerationOptions;
+  commandcodeApiKey?: string;
   binaryPath: string;
   projectDir: string;
   prompt: string;
@@ -26,19 +28,39 @@ export interface RunnerResult {
   exitCode: number;
 }
 
+export function buildClaudeCommand(options: Pick<RunnerOptions, "binaryPath" | "generation">): string[] {
+  return [options.binaryPath, "-p", "--output-format", "stream-json", "--verbose",
+    "--permission-mode", "acceptEdits", "--permission-prompts", "none",
+    "--effort", options.generation?.effort ?? "low",
+    ...(options.generation?.model ? ["--model", options.generation.model] : []),
+    ...(options.generation?.vanilla ? ["--safe-mode"] : []),
+  ];
+}
+
+export function buildClaudeEnvironment(options: Pick<RunnerOptions, "generation" | "commandcodeApiKey">, inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env = { ...inherited };
+  if (options.generation?.provider === "commandcode") {
+    if (!options.commandcodeApiKey) throw new Error("commandcode_unavailable");
+    delete env.ANTHROPIC_API_KEY;
+    delete env.CLAUDE_CODE_OAUTH_TOKEN;
+    delete env.CLAUDE_CODE_USE_BEDROCK;
+    delete env.CLAUDE_CODE_USE_VERTEX;
+    delete env.CLAUDE_CODE_USE_FOUNDRY;
+    delete env.ANTHROPIC_CUSTOM_HEADERS;
+    env.ANTHROPIC_BASE_URL = "https://api.commandcode.ai/provider";
+    env.ANTHROPIC_AUTH_TOKEN = options.commandcodeApiKey;
+    env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
+  }
+  return env;
+}
+
 export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResult> {
   // Direct invocation — Bun.spawn's `cwd` option propagates to the child,
   // and on Windows the `claude.cmd` wrapper inherits that cwd so the node
   // process inside sees `process.cwd()` equal to projectDir. This path was
   // previously verified with real Claude output; wrapping in `cmd.exe /c`
   // broke stdin piping on Windows and caused the CLI to hang.
-  const cmd = [
-    options.binaryPath,
-    "-p",
-    "--output-format",
-    "stream-json",
-    "--verbose",
-  ];
+  const cmd = buildClaudeCommand(options);
 
   // eslint-disable-next-line no-console
   console.log(
@@ -51,7 +73,7 @@ export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResul
     stdin: new Blob([options.prompt]),
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env },
+    env: buildClaudeEnvironment(options),
     signal: options.signal,
     killSignal: "SIGKILL",
     ...ownedProcessSpawnOptions(),

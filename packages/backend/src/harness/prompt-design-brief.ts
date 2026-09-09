@@ -8,5 +8,6 @@ export function appendDesignBriefContext(
   lines.push("<burnguard-design-brief-v1>");
   lines.push(JSON.stringify(designBrief));
   lines.push("</burnguard-design-brief-v1>");
+  if (designBrief.output_type === "prototype" && designBrief.section_count !== undefined) lines.push(`Create exactly ${designBrief.section_count} complete vertical content sections, each with substantive copy and a purpose-built layout; navigation and footer do not count as sections.`);
   lines.push("");
 }

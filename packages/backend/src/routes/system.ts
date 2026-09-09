@@ -12,6 +12,7 @@ import type {
   UpsertDesignSystemColorRequest,
 } from "@bg/shared";
 import { getDesignSystemDetail } from "../db/seed";
+import { extractPinterestMood, parsePinterestMoodRequest } from "../services/pinterest-mood";
 import {
   DesignSystemAssetEditError,
   DesignSystemExtractError,
@@ -54,6 +55,16 @@ function parseExtractionLineage(input: unknown): DesignSystemExtractionLineageRe
 }
 
 export const systemRoutes = new Hono();
+
+systemRoutes.post("/api/design-systems/pinterest", async (c) => {
+  try {
+    const request = parsePinterestMoodRequest(await c.req.json<unknown>().catch(() => null));
+    return c.json(ok(await extractPinterestMood(request, c.req.raw.signal)), 201);
+  } catch (error) {
+    if (error instanceof DesignSystemExtractError) return c.json(fail(error.code, error.message), error.code === "publication_failed" ? 500 : error.code === "acquisition_timeout" ? 408 : 400);
+    return c.json(fail("pinterest_unavailable", "Pinterest images could not be read. Try a website or uploaded reference."), 400);
+  }
+});
 
 systemRoutes.post("/api/design-systems/extract", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);

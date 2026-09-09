@@ -2,6 +2,10 @@ import type { DesignDirectionState } from "./design-direction";
 import type { UploadedVisualSourceSelection, VisualSourceManifestV1 } from "./visual-source";
 
 export type TurnErrorCode =
+  | "graphic_requires_authenticated_codex"
+  | "graphic_starter_unchanged"
+  | "commandcode_unavailable"
+  | "unsupported_generation_model_effort"
   | "backend_unavailable"
   | "path_unavailable"
   | "immutable_reference_mutated"
@@ -136,6 +140,7 @@ export type SequencedEventEnvelope = {
 export type UserEvent =
   | {
       type: "user.message";
+      generation?: import("./generation").GenerationOptions;
       text: string;
       attachments?: string[];
       visualSources?: readonly UploadedVisualSourceSelection[];

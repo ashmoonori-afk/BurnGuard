@@ -74,6 +74,7 @@ export type ProjectDraft = {
   readonly graphicHeight: number;
   readonly useSpeakerNotes: boolean;
   readonly copyAsIs: boolean;
+  readonly sectionCount?: number;
 };
 
 export type BriefForm = Omit<
@@ -93,6 +94,7 @@ export const INITIAL_BRIEF_FORM: BriefForm = {
   graphicHeight: 1080,
   useSpeakerNotes: false,
   copyAsIs: false,
+  sectionCount: 6,
 };
 
 export const PROJECT_LABEL_CLASS = "text-xs font-medium text-foreground/80";
@@ -100,6 +102,7 @@ export const PROJECT_CONTROL_CLASS =
   "flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground opacity-100 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-50";
 
 export type DraftProblem =
+  | "section_count_invalid"
   | "name_required"
   | "audience_invalid"
   | "objective_invalid"
@@ -114,6 +117,7 @@ export type BuildResult =
   | { readonly ok: false; readonly problem: DraftProblem };
 
 export const PROBLEM_MESSAGE: Record<DraftProblem, string> = {
+  section_count_invalid: "섹션 수는 1~30 사이의 정수로 입력해 주세요.",
   name_required: "프로젝트 이름을 입력해 주세요.",
   audience_invalid: `누가 보게 되는지 ${AUDIENCE_MAX_LENGTH}자 이내로 적어 주세요.`,
   objective_invalid: `무엇을 얻고 싶은지 ${OBJECTIVE_MAX_LENGTH}자 이내로 적어 주세요.`,
@@ -161,6 +165,7 @@ export function buildCreateProjectRequest(
   draft: ProjectDraft,
   systems: readonly DesignSystemSummary[],
 ): BuildResult {
+  if (draft.type === "prototype" && (!Number.isSafeInteger(draft.sectionCount ?? 6) || (draft.sectionCount ?? 6) < 1 || (draft.sectionCount ?? 6) > 30)) return { ok: false, problem: "section_count_invalid" };
   const name = draft.name.trim();
   if (name.length === 0) return { ok: false, problem: "name_required" };
 
@@ -207,6 +212,7 @@ export function buildCreateProjectRequest(
   }
 
   const brief: DesignBriefV1 = {
+    ...(draft.type === "prototype" ? { section_count: draft.sectionCount ?? 6 } : {}),
     schema_version: 1,
     output_type: draft.type,
     audience,

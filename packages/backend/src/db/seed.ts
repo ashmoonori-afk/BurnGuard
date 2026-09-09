@@ -29,7 +29,9 @@ import {
   sessionsTable,
   usersTable,
 } from "./schema";
-import { SEEDED_PROJECT_HTML } from "./seeded-project-html";
+import { SEEDED_PROJECT_HTML, SPLASH_TEMPLATE_LANDING_HTML } from "./seeded-project-html";
+import { seedSplashDesignSystemFiles } from "./seed-sample-design-systems";
+import { PROMPT_SAMPLES, promptSampleDesignSystemId, renderPromptSampleHtml } from "./seed-tutorials";
 import { renderInitialArtifact } from "./templates";
 import { parseStoredProjectOptions } from "../services/project-options";
 
@@ -67,9 +69,10 @@ export async function seedCoreData() {
 
   for (const system of [...homeDesignSystemFixtures, ...bundledThemeFixtures]) {
     const hasBundledFiles =
-      system.id === "northvale-capital" ||
+      system.id === "northvale-capital" || system.id === "splash" ||
       system.id.startsWith("builtin-theme-");
     const dirPath = path.join(systemsDir, system.id);
+    if (system.id === "splash") await seedSplashDesignSystemFiles(dirPath, SPLASH_TEMPLATE_LANDING_HTML);
 
     await db
       .insert(designSystemsTable)
@@ -302,7 +305,8 @@ export async function createProjectRecord(input: {
 
   await mkdir(path.join(dirPath, ".attachments"), { recursive: true });
   await mkdir(path.join(dirPath, ".meta", "checkpoints"), { recursive: true });
-  const initialArtifact = renderInitialArtifact({
+  const sample = input.type === "from_template" ? PROMPT_SAMPLES.find((item) => promptSampleDesignSystemId(item.slug) === input.designSystemId) : undefined;
+  const initialArtifact = input.type === "from_template" && input.designSystemId === "splash" ? SPLASH_TEMPLATE_LANDING_HTML : sample ? renderPromptSampleHtml(sample) : renderInitialArtifact({
     name: input.name,
     type: input.type,
     options: parseStoredProjectOptions(input.optionsJson),

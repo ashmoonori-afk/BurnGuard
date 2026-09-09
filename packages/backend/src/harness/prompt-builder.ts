@@ -113,8 +113,15 @@ export async function buildPrompt(
     lines.push("</burnguard-graphic-output-v1>");
     lines.push(`- Exact canvas: ${canvas.width} × ${canvas.height} CSS px.`);
     lines.push("- Author exactly one finite artboard; do not add slides, deck runtime, or a second artboard.");
-    lines.push("- Deliver this graphic as PNG only at the persisted canvas dimensions.");
+    lines.push("- Replace the starter in index.html with the authored fixed-size artboard so the canvas can render the result. Keep exactly one [data-graphic-artboard] element.");
+    lines.push("- PNG is the export format, not a replacement for index.html. If generating a raster image, save it inside the output directory and reference it from the authored index.html.");
+    lines.push("- Do not leave the starter message or a separate unreferenced PNG as the result. BurnGuard publishes the staged files after the turn finishes.");
   }
+  lines.push("");
+
+  lines.push("## Editable 3D scenes (only when requested)");
+  lines.push('For basic editable Three.js scenes, author exactly one <section data-bg-three="1" style="width:100%;height:400px"><script type="application/json" data-bg-three-config>JSON</script></section> inside the HTML. BurnGuard provisions the offline bundled runtime and MIT license after a successful turn; never use CDN imports.');
+  lines.push('Scene JSON contract: {"schema_version":1,"background":"#eef2f6","objects":[{"id":"cube1","shape":"cube","color":"#3366ff","position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1]}]}. At most 16 unique IDs (ASCII letters/digits/_/-, max40); shapes cube/sphere/torus; six-digit hex colors; finite position [-50,50], rotation degrees [-360,360], scale [0.1,10]. No extra keys. Preserve and edit existing data-bg-three config when present.');
   lines.push("");
 
   const directionState = context.designDirectionState;

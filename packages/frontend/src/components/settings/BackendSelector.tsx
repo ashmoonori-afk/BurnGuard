@@ -51,7 +51,7 @@ export default function BackendSelector({
               </div>
               {b.found ? (
                 <div className="text-xs text-muted-foreground mt-2">
-                  사용할 준비가 됐어요.
+                  {b.id === "codex" ? b.authenticated === true ? "Codex 로그인을 확인했어요." : "설치는 확인했어요. 그래픽 생성에는 Codex 로그인이 필요해요." : "설치를 확인했어요. 로그인 또는 CommandCode API 키로 생성할 수 있어요."}
                 </div>
               ) : (
                 b.install_hint && (

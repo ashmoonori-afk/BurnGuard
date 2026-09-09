@@ -1,4 +1,9 @@
+import { loadComposerDraft } from "@/components/chat/useComposerDraft";
+import type { ReadyAttachmentSource } from "@/components/chat/attachment-intake";
+import { saveAndRequestCommentEdit } from "@/components/modes/comment-edit-request";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -8,9 +13,11 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
+const ThreeScenePanel = lazy(() => import("@/components/canvas/ThreeScenePanel"));
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ArtifactSummary,
+  GenerationOptions,
   Comment,
   DesignAuditFinding,
   DesignAuditResult,
@@ -170,6 +177,7 @@ export default function ProjectView() {
   const drawLayerRef = useRef<DrawLayerHandle | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [sendPending, setSendPending] = useState(false);
+  const [chatFocusKey, setChatFocusKey] = useState(0);
   const [directionActionError, setDirectionActionError] = useState<Error | null>(null);
   const activeTabIdRef = useRef(activeTabId);
   const openFileTabsRef = useRef<ArtifactTab[]>(openFileTabs);
@@ -984,6 +992,52 @@ export default function ProjectView() {
   const activeRelPath =
     activeTab?.kind === "file" && activeTab.relPath ? activeTab.relPath : null;
   const comments = commentsQuery.data ?? [];
+  const sendMessage = async (text: string, attachedFiles: readonly ReadyAttachmentSource[], signal: AbortSignal, generation?: GenerationOptions) => {
+            if (composerDisabled) {
+              return;
+            }
+            // The backend persists+publishes a `chat.user_message` normalized
+            // event as the first step of runUserTurn, so it echoes back
+            // through SSE within ~10ms on localhost. No optimistic local
+            // state needed — and this way history survives a page reload.
+            setSendPending(true);
+            armSendPendingFallback(sendPendingTimeoutRef, setSendPending);
+
+            try {
+              await sendUserEvent(session.id, {
+                type: "user.message",
+                text,
+                files: attachedFiles,
+                generation,
+              }, { signal });
+            } catch (error) {
+              clearSendPending(sendPendingTimeoutRef, setSendPending);
+              if (!(error instanceof DOMException && error.name === "AbortError")) {
+                pushToast({
+                  title:
+                    error instanceof ApiError && error.status === 409
+                      ? "이미 실행 중인 턴이 있어요"
+                      : "메시지를 보내지 못했어요",
+                  body: visualSourceSendErrorCopy(error),
+                  tone: "error",
+                });
+              }
+              throw error;
+            }
+
+  };
+  const requestCommentEdit = async (comment: Comment, body: string) => {
+    if (composerDisabled) throw new Error("session_not_ready");
+    const known = comments.find((entry) => entry.id === comment.id);
+    if (!known || known.resolved_at !== null || !body.trim()) throw new Error("comment_target_unavailable");
+    await saveAndRequestCommentEdit(() => updateCommentMutation.mutateAsync({ commentId: known.id, patch: { body } }), async (persisted, text) => {
+      if (!files.some((file) => file.rel_path === persisted.rel_path)) throw new Error("comment_target_unavailable");
+      await sendMessage(text, [], new AbortController().signal, (await loadComposerDraft(session.id).catch(() => null))?.generation);
+    });
+    setChatFocusKey((value) => value + 1);
+    setMobilePane("chat");
+  };
+
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -1022,10 +1076,13 @@ export default function ProjectView() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div id="project-chat-pane" className={cn("min-h-0 shrink-0 max-[900px]:flex-1", mobilePane !== "chat" && "max-[900px]:hidden")}>
         <ChatPane
+          chatFocusKey={chatFocusKey}
           events={events}
           session={session}
           projectFiles={files}
           comments={comments}
+          onRequestCommentEdit={requestCommentEdit}
+          commentEditDisabled={composerDisabled}
           activeRelPath={activeRelPath}
           activeSlideIdx={activeSlideIdx}
           focusedCommentId={focusedCommentId}
@@ -1050,38 +1107,7 @@ export default function ProjectView() {
               onCancel={() => cancelDirectionsMutation.mutate()}
             />
           }
-          onSend={async (text, attachedFiles, signal) => {
-            if (composerDisabled) {
-              return;
-            }
-            // The backend persists+publishes a `chat.user_message` normalized
-            // event as the first step of runUserTurn, so it echoes back
-            // through SSE within ~10ms on localhost. No optimistic local
-            // state needed — and this way history survives a page reload.
-            setSendPending(true);
-            armSendPendingFallback(sendPendingTimeoutRef, setSendPending);
-
-            try {
-              await sendUserEvent(session.id, {
-                type: "user.message",
-                text,
-                files: attachedFiles,
-              }, { signal });
-            } catch (error) {
-              clearSendPending(sendPendingTimeoutRef, setSendPending);
-              if (!(error instanceof DOMException && error.name === "AbortError")) {
-                pushToast({
-                  title:
-                    error instanceof ApiError && error.status === 409
-                      ? "이미 실행 중인 턴이 있어요"
-                      : "메시지를 보내지 못했어요",
-                  body: visualSourceSendErrorCopy(error),
-                  tone: "error",
-                });
-              }
-              throw error;
-            }
-          }}
+          onSend={sendMessage}
           onOpenFile={(relPath) => {
             openFileAsTab(relPath, setOpenFileTabs, setActiveTabId);
             setMobilePane("workspace");
@@ -1143,6 +1169,17 @@ export default function ProjectView() {
         {activeTab?.kind === "file" && (
           <div className="flex min-h-0 min-w-0 flex-1 max-[1200px]:flex-col">
             <Canvas
+              sceneTools={activeRelPath && /\.html?$/i.test(activeRelPath) ? <Suspense fallback={<p role="status" className="p-3 text-sm">3D 도구를 불러오는 중…</p>}><ThreeScenePanel
+                key={activeRelPath}
+                projectId={id!}
+                relPath={activeRelPath}
+                disabled={composerDisabled}
+                onSaved={() => {
+                  setRefreshTick((value) => value + 1);
+                  void queryClient.invalidateQueries({ queryKey: ["project", id] });
+                }}
+                onRequestAI={async (text) => { await sendMessage(text, [], new AbortController().signal, (await loadComposerDraft(session.id).catch(() => null))?.generation); setChatFocusKey((value) => value + 1); setMobilePane("chat"); }}
+              /></Suspense> : undefined}
               mode={mode}
               src={canvasSrc}
               frameKey={`${canvasSrc ?? "entrypoint"}:${refreshTick}`}
@@ -1246,6 +1283,8 @@ export default function ProjectView() {
                 setMode("tweaks");
               }}
               comments={comments}
+              onRequestCommentEdit={requestCommentEdit}
+              commentEditDisabled={composerDisabled}
               activeRelPath={activeRelPath}
               activeSlideIdx={activeSlideIdx}
               focusedCommentId={focusedCommentId}

@@ -60,6 +60,24 @@ async function withSentinel<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 describe("production website acquisition boundaries", () => {
+  test("Given refused direct DNS When OS lookup resolves Then public addresses remain pinned and private addresses fail", async () => {
+    const refused = async (): Promise<string[]> => { throw Object.assign(new Error("DNS refused"), { code: "ECONNREFUSED" }); };
+    const resolver = { resolve4: refused, resolve6: refused, cancel() {} };
+    const url = new URL("https://fixture.example/");
+    const signal = new AbortController().signal;
+    const addresses = await resolveSafeImportAddresses(url, signal, resolver, async () => [{ address: "8.8.8.8", family: 4 }]);
+    const pinned = pinnedImportRequest(url, addresses[0]!, { signal, userAgent, maxBytes: 100, kind: "html", noteBytes() {} });
+    expect(pinned.url.hostname).toBe("8.8.8.8");
+    expect(pinned.init.tls?.serverName).toBe("fixture.example");
+    expect(pinned.init.tls?.rejectUnauthorized).toBe(true);
+    await expect(resolveSafeImportAddresses(url, signal, resolver, async () => [{ address: "8.8.8.8", family: 4 }, { address: "127.0.0.1", family: 4 }])).rejects.toMatchObject({ code: "invalid_source_url" });
+    let lookups = 0;
+    await expect(resolveSafeImportAddresses(url, signal, { ...resolver, resolve6: async () => [] }, async () => { lookups++; return []; })).rejects.toMatchObject({ code: "website_fetch_failed" });
+    expect(lookups).toBe(0);
+    const controller = new AbortController();
+    const pending = resolveSafeImportAddresses(url, controller.signal, resolver, () => { controller.abort(); return new Promise(() => {}); });
+    await expect(pending).rejects.toBeInstanceOf(ExtractionAcquisitionError);
+  });
   test("Given alternate local IP spellings When host policy runs Then mapped and expanded private addresses are blocked", () => {
     for (const host of ["::ffff:127.0.0.1", "[::ffff:7f00:1]", "0:0:0:0:0:ffff:a00:1", "::ffff:a9fe:a9fe", "0:0:0:0:0:0:0:1", "::", "fe90::1", "localhost."]) expect(isUnsafeImportHostname(host), host).toBe(true);
     expect(isUnsafeImportHostname("::ffff:808:808")).toBe(false);

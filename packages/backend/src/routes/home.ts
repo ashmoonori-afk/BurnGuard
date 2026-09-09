@@ -7,14 +7,14 @@ import type {
   DesignSystemStatus,
   SettingsSummary,
 } from "@bg/shared";
-import { APP_VERSION } from "@bg/shared";
+import { APP_VERSION, parseGenerationOptions } from "@bg/shared";
 import { loadConfig, updateConfig, type AppConfig } from "../config";
 import {
   createProjectRecord,
   listHomeDesignSystems,
   listHomeProjects,
 } from "../db/seed";
-import { getPromptSampleBySlug, seedTutorialsOnce } from "../db/seed-tutorials";
+import { getPromptSampleBySlug, promptSampleDesignSystemId, seedTutorialsOnce } from "../db/seed-tutorials";
 import { detectBackends } from "../services/backends";
 import { ensureProjectWatcher } from "../services/watchers";
 import {
@@ -70,6 +70,8 @@ function isChatContextMode(
 
 function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): SettingsSummary {
   return {
+    generation_defaults: config.generationDefaults,
+    commandcode_api_key_set: Boolean(config.commandcodeApiKey),
     user: {
       id: config.user.id,
       display_name: config.user.displayName,
@@ -130,6 +132,11 @@ homeRoutes.post("/api/projects", async (c) => {
     throw error;
   }
 
+  if (input.type === "graphic") {
+    const detection = await detectBackends({ force: true });
+    if (input.backendId !== "codex" || !detection.backends.some((backend) => backend.id === "codex" && backend.found && backend.authenticated === true)) return c.json(fail("graphic_requires_authenticated_codex", "그래픽 생성에는 로그인된 Codex 연결이 필요해요."), 409);
+  }
+
   const response = await createProjectRecord({
     name: input.name,
     type: input.type,
@@ -173,7 +180,7 @@ homeRoutes.post("/api/home/use-sample/:slug", async (c) => {
   const created = await createProjectRecord({
     name: `Try: ${baseName}`,
     type: "prototype",
-    designSystemId: null,
+    designSystemId: promptSampleDesignSystemId(sample.slug),
     backendId: "claude-code",
     optionsJson: null,
     entrypoint: "index.html",
@@ -198,10 +205,25 @@ homeRoutes.patch("/api/settings", async (c) => {
     return c.json(fail("invalid_body", "Expected a JSON object request body"), 400);
   }
 
-  const changes: Pick<Partial<AppConfig>, "theme" | "defaultBackend" | "figmaPersonalAccessToken"> & {
+  const changes: Pick<Partial<AppConfig>, "theme" | "defaultBackend" | "figmaPersonalAccessToken" | "commandcodeApiKey" | "generationDefaults"> & {
     chat?: Partial<AppConfig["chat"]>;
     user?: Partial<AppConfig["user"]>;
   } = {};
+  if ("generation_defaults" in patch) {
+    if (!isRecord(patch.generation_defaults) || Object.keys(patch.generation_defaults).some((key) => !isBackendId(key))) return c.json(fail("invalid_generation_options", "Generation defaults are invalid"), 400);
+    changes.generationDefaults = {};
+    try {
+      for (const backend of ["codex", "claude-code"] as const) {
+        const value = patch.generation_defaults[backend];
+        if (value !== undefined) changes.generationDefaults[backend] = parseGenerationOptions(value);
+      }
+    } catch { return c.json(fail("invalid_generation_options", "Generation defaults are invalid"), 400); }
+  }
+  if ("commandcode_api_key" in patch) {
+    const value = patch.commandcode_api_key;
+    if (value !== null && (typeof value !== "string" || value.length > 4096 || /[\r\n]/.test(value))) return c.json(fail("invalid_commandcode_key", "API key is invalid"), 400);
+    changes.commandcodeApiKey = typeof value === "string" ? value.trim() || null : null;
+  }
   if ("theme" in patch) {
     if (!isTheme(patch.theme)) {
       return c.json(fail("invalid_theme", "Unsupported theme value"), 400);
@@ -281,6 +303,7 @@ homeRoutes.patch("/api/settings", async (c) => {
   const config = await updateConfig((current) => ({
     ...current,
     ...changes,
+    generationDefaults: { ...current.generationDefaults, ...changes.generationDefaults },
     chat: { ...current.chat, ...changes.chat },
     user: { ...current.user, ...changes.user },
   }));

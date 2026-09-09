@@ -1,4 +1,5 @@
-import { readdir } from "node:fs/promises";
+import { ensureThreeSceneRuntime } from "./three-scene";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
 import type { NormalizedEvent, UserEvent } from "@bg/shared";
@@ -16,6 +17,7 @@ import { writePreTurnSnapshot, writeTurnCheckpoint } from "./checkpoints";
 import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
 import { appendSessionTrace } from "./trace";
 import { detectBackends } from "./backends";
+import { resolveGenerationOptions } from "./generation-options";
 import { buildPrompt } from "../harness/prompt-builder";
 import { runAdapterTurn } from "../adapters/registry";
 import { loadConfig } from "../config";
@@ -24,6 +26,10 @@ import { buildVisualSourceManifest } from "./visual-source-manifest";
 import { captureImmutableAttachments, verifyImmutableAttachments } from "./immutable-attachment-guard";
 import { redactPrivateAttachmentPaths, withPrivateAttachmentInputs } from "./stage-attachment-inputs";
 import { sanitizeTurnEvent } from "./turn-error-sanitizer";
+
+export function assertGraphicStarterReplaced(before: string, after: string): void {
+  if (before.includes('data-bg-node-id="graphic-copy"') && before.includes("Start with one clear visual message.") && before === after) throw new Error("graphic_starter_unchanged");
+}
 
 type ToolDecision = Extract<UserEvent, { type: "user.tool_decision" }>;
 
@@ -189,7 +195,7 @@ export function startReservedUserTurn(reservation: UserTurnReservation, payload:
   let rejectPrepared: (error: unknown) => void = () => {};
   const prepared = new Promise<void>((resolve, reject) => { resolvePrepared = resolve; rejectPrepared = reject; });
   const promise = runUserTurnInternal(sessionId, payload, activeTurn, turnId, operationId, resolvePrepared, dependencies)
-    .catch((error: unknown) => { rejectPrepared(error); throw error; })
+    .catch(async (error: unknown) => { rejectPrepared(error); await setSessionStatus(sessionId, "idle"); throw error; })
     .finally(() => activeTurns.delete(sessionId));
   activeTurn.completion = promise;
   return { promise, prepared, turnId, operationId };
@@ -259,7 +265,7 @@ async function runUserTurnInternal(
     type: "status.running",
   });
 
-  const detection = await (dependencies.detectBackends ?? detectBackends)();
+  const detection = await (dependencies.detectBackends ?? detectBackends)({ force: true });
   const backend = detection.backends.find((b) => b.id === backendId);
 
   if (!backend?.found || !backend.binary_path) {
@@ -286,6 +292,8 @@ async function runUserTurnInternal(
   const projectDir = sessionContext.project.project_dir;
   const project = await getProjectDetail(sessionContext.project.project_id);
   if (project === null) throw new Error("project_not_found");
+  if (project.type === "graphic" && (backendId !== "codex" || backend.authenticated !== true)) throw new Error("graphic_requires_authenticated_codex");
+  const generation = resolveGenerationOptions(backendId, payload.generation, config, backend);
   const coordinator = new ArtifactCoordinator(getSqlite());
   const base = await coordinator.initialize(project.id, projectDir);
   // The revert route only offers a rollback when a pre-turn snapshot exists,
@@ -304,6 +312,8 @@ async function runUserTurnInternal(
       publicationPolicy: { forbiddenSha256 },
       onPrepared: () => { operationPrepared = true; onPrepared(); },
       mutate: async (stageDir) => {
+        const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
+        const graphicBefore = graphicEntrypoint === null ? null : await readFile(graphicEntrypoint, "utf8");
         const waitsForInterrupt = process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "abort";
         if (waitsForInterrupt && !activeTurn.abortController.signal.aborted) await new Promise<void>((resolve) => activeTurn.abortController.signal.addEventListener("abort", () => resolve(), { once: true }));
         if (activeTurn.abortController.signal.aborted) throw new ArtifactOperationError("operation_cancelled", "Turn was interrupted");
@@ -316,16 +326,19 @@ async function runUserTurnInternal(
             let providerFailed = false;
             const result = await (dependencies.runAdapter ?? runAdapterTurn)(backendId, {
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,
+              generation,
+              ...(generation.provider === "commandcode" ? { commandcodeApiKey: config.commandcodeApiKey ?? undefined } : {}),
               signal: activeTurn.abortController.signal, userEvent: payload,
               onEvent: async (event) => {
                 if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason === "error")) providerFailed = true;
                 if (event.type === "file.changed") return;
-                const safeEvent = redactPrivateAttachmentPaths(event, stageInputs);
+                const scrubbedEvent = config.commandcodeApiKey ? JSON.parse(JSON.stringify(event, (_key, value: unknown) => typeof value === "string" ? value.split(config.commandcodeApiKey!).join("[redacted]") : value)) as NormalizedEvent : event;
+                const safeEvent = redactPrivateAttachmentPaths(scrubbedEvent, stageInputs);
                 if (safeEvent.type === "chat.message_end" || safeEvent.type === "status.idle") { terminalEvents.push(safeEvent); return; }
-                const eventError = event.type === "status.error" ? Object.assign(new Error(event.message), event.code === undefined ? {} : { code: event.code }) : undefined;
+                const eventError = safeEvent.type === "status.error" ? Object.assign(new Error(safeEvent.message), safeEvent.code === undefined ? {} : { code: safeEvent.code }) : undefined;
                 await persistAndPublish(sessionId, safeEvent, eventError);
               },
-              onStderr: async (line) => { await appendSessionTrace(sessionId, { level: "stderr", turnId, line }); },
+              onStderr: async (line) => { await appendSessionTrace(sessionId, { level: "stderr", turnId, line: config.commandcodeApiKey ? line.split(config.commandcodeApiKey).join("[redacted]") : line }); },
               onDecision: (handler) => {
                 activeTurn.decisionHandler = handler;
                 for (const decision of activeTurn.decisionQueue.splice(0)) handler(decision);
@@ -338,6 +351,12 @@ async function runUserTurnInternal(
           await verifyImmutableAttachments(immutableSnapshots);
         }
         if (activeTurn.abortController.signal.aborted) throw new ArtifactOperationError("operation_cancelled", "Turn was interrupted");
+        await ensureThreeSceneRuntime(stageDir);
+        if (graphicEntrypoint !== null && graphicBefore !== null) {
+          const info = await lstat(graphicEntrypoint);
+          if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new Error("graphic_starter_unchanged");
+          assertGraphicStarterReplaced(graphicBefore, await readFile(graphicEntrypoint, "utf8"));
+        }
       },
     });
     for (const event of terminalEvents) await persistAndPublish(sessionId, event);

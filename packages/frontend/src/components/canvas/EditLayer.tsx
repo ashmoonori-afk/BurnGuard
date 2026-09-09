@@ -1,3 +1,4 @@
+import { canvasPoint } from "./canvas-coordinates";
 import {
   useRef,
   useState,
@@ -49,9 +50,7 @@ export default function EditLayer({
       setHoverRect(null);
       return;
     }
-    const overlayRect = overlayRef.current.getBoundingClientRect();
-    const relX = e.clientX - overlayRect.left;
-    const relY = e.clientY - overlayRect.top;
+    const [relX, relY] = canvasPoint(overlayRef.current, e.clientX, e.clientY);
     const seq = ++requestSeqRef.current;
     void requestFrameBgAtPoint(iframeRef.current, relX, relY).then((hit) => {
       if (requestSeqRef.current !== seq) return;
@@ -65,9 +64,7 @@ export default function EditLayer({
     if (!active || !overlayRef.current) return;
     if (e.target !== overlayRef.current) return;
 
-    const overlayRect = overlayRef.current.getBoundingClientRect();
-    const relX = e.clientX - overlayRect.left;
-    const relY = e.clientY - overlayRect.top;
+    const [relX, relY] = canvasPoint(overlayRef.current, e.clientX, e.clientY);
     void requestFrameBgAtPoint(iframeRef.current, relX, relY).then((hit) => {
       if (!hit?.bgId) {
         onSelect(null);

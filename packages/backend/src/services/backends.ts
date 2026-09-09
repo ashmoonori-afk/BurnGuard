@@ -1,8 +1,35 @@
-import type { BackendDetectionResult } from "@bg/shared";
+import { CLAUDE_MODELS, GENERATION_EFFORTS, type BackendDetectionResult, type GenerationModel } from "@bg/shared";
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import path from "node:path";
 
 const VERSION_PROBE_TIMEOUT_MS = 5_000;
 
 let cachedValue: BackendDetectionResult | null = null;
+let cachedAt = 0;
+
+export async function probeCodexAuthentication(binaryPath: string): Promise<boolean> {
+  try {
+    const proc = Bun.spawn({ cmd: [binaryPath, "login", "status"], stdout: "pipe", stderr: "pipe", signal: AbortSignal.timeout(5_000) });
+    const [stdout, stderr, exit] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+    return exit === 0 && /logged in using/i.test(`${stdout}\n${stderr}`);
+  } catch { return false; }
+}
+
+/** Read model metadata only; authentication and personal instructions never enter the API. */
+export async function readCodexModels(): Promise<GenerationModel[]> {
+  try {
+    const raw: unknown = JSON.parse(await readFile(path.join(process.env.CODEX_HOME ?? path.join(homedir(), ".codex"), "models_cache.json"), "utf8"));
+    if (typeof raw !== "object" || raw === null || !("models" in raw) || !Array.isArray(raw.models)) return [];
+    return raw.models.flatMap((model: unknown): GenerationModel[] => {
+      if (typeof model !== "object" || model === null) return [];
+      const m = model as Record<string, unknown>;
+      if (typeof m.slug !== "string" || !/^[a-zA-Z0-9._-]{1,120}$/.test(m.slug) || m.visibility !== "list" || !Array.isArray(m.supported_reasoning_levels)) return [];
+      const efforts = GENERATION_EFFORTS.filter((effort) => m.supported_reasoning_levels instanceof Array && m.supported_reasoning_levels.some((level: unknown) => typeof level === "object" && level !== null && "effort" in level && level.effort === effort));
+      return efforts.includes("low") ? [{ id: m.slug, label: typeof m.display_name === "string" ? m.display_name.slice(0, 120) : m.slug, efforts }] : [];
+    }).slice(0, 100);
+  } catch { return []; }
+}
 
 /**
  * Runs `<binary> --version`. stdout and stderr are drained concurrently —
@@ -61,12 +88,10 @@ async function detectOne(id: "claude-code" | "codex", binaryNames: string[], ins
 }
 
 /**
- * Cached for the lifetime of the process: every turn start asks for the
- * detection result and each miss spawns two CLI subprocesses. Callers that
- * need to observe a freshly installed CLI pass `{ force: true }`.
+ * Cache UI probes briefly; turn start forces a fresh authentication check.
  */
 export async function detectBackends(options: { force?: boolean } = {}): Promise<BackendDetectionResult> {
-  if (!options.force && cachedValue) {
+  if (!options.force && cachedValue && Date.now() - cachedAt < 30_000) {
     return cachedValue;
   }
 
@@ -75,6 +100,9 @@ export async function detectBackends(options: { force?: boolean } = {}): Promise
     detectOne("codex", ["codex", "codex.cmd", "openai-codex"], "Install: https://github.com/openai/codex"),
   ]);
 
-  cachedValue = { backends };
+  const codex = backends.find((backend) => backend.id === "codex");
+  const [authenticated, models] = await Promise.all([codex?.binary_path ? probeCodexAuthentication(codex.binary_path) : false, readCodexModels()]);
+  cachedValue = { backends: backends.map((backend) => backend.id === "codex" ? { ...backend, authenticated, models } : { ...backend, models: CLAUDE_MODELS }) };
+  cachedAt = Date.now();
   return cachedValue;
 }

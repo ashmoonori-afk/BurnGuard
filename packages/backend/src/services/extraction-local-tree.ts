@@ -16,6 +16,7 @@ const READ_CHUNK_BYTES = 64 * 1024;
 
 export type SourceArtifact = { readonly absolutePath: string; readonly relPath: string };
 export type SourceAnalysis = {
+  readonly discoveries?: readonly import("./extraction-provenance").ExtractionDiscovery[];
   readonly brandName: string;
   readonly cssDeclarations: readonly CssDeclarationEvidence[];
   readonly cssParseIssues: readonly CssParseIssue[];

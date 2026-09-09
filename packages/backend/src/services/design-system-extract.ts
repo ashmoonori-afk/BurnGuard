@@ -345,7 +345,7 @@ type CanonicalWriteResult = {
   readonly provenance: ExtractionProvenanceSidecar;
 };
 
-async function persistCanonicalExtraction(
+export async function persistCanonicalExtraction(
   input: CanonicalExtractionInput,
 ): Promise<CreateDesignSystemExtractionResponse> {
   throwIfAcquisitionAborted(input.signal);
@@ -1389,7 +1389,7 @@ async function writeCanonicalDesignSystem(input: {
     generated,
     input.systemDir,
   );
-  const provenance = buildExtractionProvenance(discoveriesFromAnalysis({
+  const provenance = buildExtractionProvenance(input.analysis.discoveries ?? discoveriesFromAnalysis({
     cssDeclarations: input.analysis.cssDeclarations,
     cssParseIssues: input.analysis.cssParseIssues,
     cssVars: input.analysis.cssVars,
@@ -1625,7 +1625,7 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis): string {
   const extractedColorAliases =
     analysis.colors.length === 0
       ? ""
-      : `\n  /* Extracted raw colors from source declarations */\n${analysis.colors
+      : `\n  /* Sampled source colors; see extraction provenance for evidence */\n${analysis.colors
           .slice(0, 16)
           .map((value, index) => `  --src-color-${index + 1}: ${value};`)
           .join("\n")}`;

@@ -2,9 +2,11 @@
 
 # BurnGuard
 
+<img src="doc/images/burnguard-mark.png" width="72" height="72" alt="BurnGuard brand mark" />
+
 **Describe an idea, refine it on canvas, and take the files with you.**
 
-BurnGuard is an AI design workspace that runs on your computer. Connect the **Claude Code or Codex CLI** you already use to create slide decks, web prototypes, and graphics, then refine them through conversation and the canvas. Projects and design systems are stored locally.
+BurnGuard is an AI design workspace that runs on your computer. Connect **Claude Code or Codex CLI** to create slide decks, web designs, and graphics, then refine them through conversation and the canvas. Choose the model and reasoning effort for each request; **LOW and vanilla mode are the defaults**. Projects and design systems are stored locally.
 
 [한국어](README.ko.md) · [Get started](#get-started) · [Workflow](#workflow) · [Development](#development) · [Documentation](doc/README.md)
 
@@ -15,10 +17,11 @@ BurnGuard is an AI design workspace that runs on your computer. Connect the **Cl
 | What you want to make | What you can do in BurnGuard |
 |---|---|
 | Presentations | Create a slide deck, review each slide, then present it or export it as PDF or PPTX. |
-| Web prototypes | Inspect the HTML output on canvas and edit text, attributes, and styles directly. |
+| Web designs | Set the section count, start from complete landing templates with matching design systems, and edit HTML on canvas. |
 | Graphics | Set the canvas dimensions, create a design, and export it as PNG. |
 | Consistent designs | Connect a published design system's colors, typography, and rules to a project. |
-| Work from existing material | Choose a template or attach supported documents and images to provide context. |
+| Work from existing material | Choose a template or attach PDF/PPTX documents and assign reference roles. |
+| Interactive 3D | Add and adjust Three.js objects, or ask AI to create a scene; orbit and zoom in the preview. |
 
 ### A home for starting and resuming work
 
@@ -44,6 +47,8 @@ See the actual output beside your AI conversation. Choose editing, styles, comme
 | Read PDF and PPTX source documents | Python 3 and `pypdf`. Check their status and install the required module from the app settings. |
 
 You can explore the built-in examples and canvas before connecting an AI tool. Generation requires authentication for the selected CLI and is subject to its provider's terms.
+
+Graphic projects require an authenticated Codex connection. Vanilla mode excludes personal plugins and instructions while keeping BurnGuard's project context. Its CLI flags were checked with Codex 0.153.4 and Claude Code 2.1.261; older CLIs may need updating. Turn vanilla mode off explicitly to use personal configuration.
 
 ### Run on Windows
 
@@ -74,10 +79,10 @@ macOS build scripts are also available, but the latest UI changes have not been 
 
 ## Workflow
 
-1. **New project** — Choose slides, prototype, graphic, or template. Set the project name, audience, goal, and design system.
-2. **Create with AI** — Describe the result you want and attach relevant material. Allow or deny actions that require additional permission in the current conversation.
+1. **New project** — Choose slides, web design, graphic, or template. Set the brief and section count, and upload source material immediately. Attachments and the brief arrive as an editable conversation draft.
+2. **Create with AI** — Select the model and effort, review the draft, then send it. Increase effort explicitly when the task needs more reasoning; LOW does not guarantee a particular response time.
 3. **Review the result** — Open generated files and inspect them on canvas. Conversation drafts and attachment roles are restored per session.
-4. **Refine directly** — Use text and style editing, comments, drawing, Undo/Redo, and quality checks to finish the result.
+4. **Refine directly** — Pan and zoom the canvas, scroll while editing styles, load installed fonts, and adjust 3D objects. Send a saved comment to AI with its file and target context, then follow the result in the conversation. Undo/Redo and quality checks remain available.
 5. **Export** — Choose a format supported by the project. Follow progress, cancellation, failure, and expiration states, then download an available result.
 
 ![New project screen guiding users through project type and required details](doc/images/project-create.png)
@@ -86,7 +91,11 @@ macOS build scripts are also available, but the latest UI changes have not been 
 
 In **Design systems (디자인 시스템)**, review imported material, inspect colors, typography, and previews, then publish it. Projects use published systems. URL, Figma, and file imports depend on the supported source formats and authentication requirements.
 
+**Pinterest mood import** accepts up to 12 public pin URLs and creates a reviewable draft from sampled image colors and available metadata. It distinguishes sampled evidence from inferred mood and fallback fonts. Private pins, boards, and shortened links are not supported; unavailable pins are reported individually.
+
 **Settings and connections (설정 및 연결)** brings together your profile, default AI tool, display theme, Chromium, Python, and Figma connection. If one tool's status check fails, you can still edit other settings and retry the failed check separately.
+
+Save or delete a **CommandCode API key** in settings to route supported Claude models through the [CommandCode provider API](https://commandcode.ai/docs/provider). This integration still uses the installed Claude Code CLI. The saved key is never returned by the settings API; real provider execution needs your valid key and account. Local fonts are loaded only when requested, using browser permission or the Windows font list; font files are not uploaded or embedded in exports.
 
 ## Data and network use
 
@@ -136,10 +145,12 @@ Run tests from the repository root. The preload prepares an isolated temporary p
 - This is a single-user workspace that uses local CLIs. Cloud collaborative editing, hosting, and automatic deployment are outside its scope.
 - The research catalog supplies references and limitations for generation. It does not provide a separate research management UI or guarantee the quality of every source. See the [research documentation](doc/research.md).
 - External providers, Figma accounts, all user document types, macOS, Narrator, and full accessibility conformance require verification beyond local regression tests.
-- Per-file coverage gaps and the exact validation scope are recorded separately in the [previous review remediation ledger](doc/09-review-remediation-2026-09-08.md) and the [UI redesign record](doc/10-ui-redesign-2026-09-09.md).
+- Per-file coverage gaps and the exact validation scope are recorded in the [previous review](doc/09-review-remediation-2026-09-08.md), [UI redesign](doc/10-ui-redesign-2026-09-09.md), and [creation and canvas update](doc/11-creation-tools-and-canvas-2026-09-09.md).
 
 ## Documentation and license
 
 [Documentation index](doc/README.md) · [Contributing](doc/CONTRIBUTING.md) · [Architecture](doc/01-architecture.md) · [Data model](doc/02-data-model.md) · [Design system format](doc/05-design-system-format.md)
 
 The code is licensed under **Apache-2.0**. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for third-party sources and licenses. The [image notes](doc/images/README.md) describe image generation and the scope of the actual app screenshots.
+
+The generated B mark, palette, and usage rules are documented in the [brand identity guide](doc/brand-identity.md).

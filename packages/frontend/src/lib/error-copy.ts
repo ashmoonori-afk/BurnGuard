@@ -34,6 +34,10 @@ const ERROR_COPY: Record<string, string> = {
   turn_failed: "AI 작업을 완료하지 못했어요. 요청 내용을 확인하고 다시 보내 주세요.",
   invalid_name: "이름을 확인해 주세요. 비어 있거나 너무 길면 저장할 수 없어요.",
   invalid_backend: "선택한 백엔드를 지원하지 않아요. 다른 백엔드를 골라 주세요.",
+  invalid_generation_options: "모델과 추론 강도 설정을 다시 선택해 주세요.",
+  commandcode_unavailable: "설정에서 CommandCode API 키를 저장하고 Claude Code를 선택해 주세요.",
+  unsupported_generation_model_effort: "이 모델에서 지원하는 추론 강도를 다시 선택해 주세요.",
+  graphic_starter_unchanged: "그래픽 화면이 초기 상태로 남아 결과를 반영하지 않았어요. 다시 생성을 요청해 주세요.",
   invalid_project_options:
     "프로젝트 옵션이 프로젝트 종류와 맞지 않아요. 값을 다시 확인한 뒤 시도해 주세요.",
   forbidden: "이 요청을 처리할 권한이 없어요. 페이지를 새로고침한 뒤 다시 시도해 주세요.",

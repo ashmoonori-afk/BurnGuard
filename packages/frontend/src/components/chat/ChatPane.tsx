@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { MessageSquare, MessageCircleMore } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { BackendId, Comment, FileInfo, NormalizedEvent, SessionInfo } from "@bg/shared";
+import type { BackendId, Comment, FileInfo, GenerationOptions, NormalizedEvent, SessionInfo } from "@bg/shared";
 import MessageStream from "./MessageStream";
 import Composer from "./Composer";
 import CommentPanel from "@/components/modes/CommentPanel";
@@ -14,6 +14,7 @@ import { apiErrorCopy } from "@/lib/error-copy";
 type Tab = "chat" | "comments";
 
 export default function ChatPane({
+  chatFocusKey,
   events,
   session,
   composerDisabled,
@@ -35,7 +36,10 @@ export default function ChatPane({
   onFocusComment,
   onUpdateCommentBody,
   onToggleCommentResolved,
+  onRequestCommentEdit,
+  commentEditDisabled,
 }: {
+  chatFocusKey?: number;
   events: NormalizedEvent[];
   session: SessionInfo;
   composerDisabled?: boolean;
@@ -47,6 +51,7 @@ export default function ChatPane({
     text: string,
     files: readonly ReadyAttachmentSource[],
     signal: AbortSignal,
+    generation?: GenerationOptions,
   ) => void | Promise<void>;
   onOpenFile?: (relPath: string) => void;
   onRevertTurn?: (turnId: string) => void;
@@ -61,8 +66,11 @@ export default function ChatPane({
   onFocusComment: (id: string | null) => void;
   onUpdateCommentBody: (id: string, body: string) => void;
   onToggleCommentResolved: (id: string, resolved: boolean) => void;
+  onRequestCommentEdit?: (comment: Comment, body: string) => Promise<void>;
+  commentEditDisabled?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("chat");
+  useEffect(() => { if (chatFocusKey) setTab("chat"); }, [chatFocusKey]);
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
 
@@ -134,6 +142,7 @@ export default function ChatPane({
           <Composer
             key={session.id}
             sessionId={session.id}
+            backendId={session.backend_id}
             onSend={onSend}
             disabled={composerDisabled}
             canInterrupt={canInterrupt}
@@ -153,6 +162,8 @@ export default function ChatPane({
           onFocus={onFocusComment}
           onUpdateBody={onUpdateCommentBody}
           onToggleResolved={onToggleCommentResolved}
+          onRequestEdit={onRequestCommentEdit}
+          editDisabled={commentEditDisabled}
         />
       )}
     </aside>

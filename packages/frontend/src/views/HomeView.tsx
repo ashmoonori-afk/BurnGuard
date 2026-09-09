@@ -27,6 +27,7 @@ import {
 import ProjectCardSection from "@/components/home/ProjectCardSection";
 import ProjectCard from "@/components/home/ProjectCard";
 import NewProjectPanel from "@/components/home/NewProjectPanel";
+import PinterestImportDialog from "@/components/home/PinterestImportDialog";
 import DeleteDesignSystemDialog from "@/components/home/DeleteDesignSystemDialog";
 import DeleteProjectDialog from "@/components/home/DeleteProjectDialog";
 import CliMissingModal from "@/components/errors/CliMissingModal";
@@ -47,7 +48,7 @@ type SystemImportMode = "url" | "upload";
 
 const PROJECT_TYPES = [
   { id: "slide_deck", label: "슬라이드 덱", description: "이야기가 선명한 발표 자료", icon: Presentation, color: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" },
-  { id: "prototype", label: "프로토타입", description: "직접 눌러보는 웹과 앱 화면", icon: Blocks, color: "bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300" },
+  { id: "prototype", label: "웹디자인", description: "직접 눌러보는 웹과 앱 화면", icon: Blocks, color: "bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300" },
   { id: "graphic", label: "그래픽", description: "목적에 맞는 포스터와 이미지", icon: Image, color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
   { id: "from_template", label: "템플릿", description: "준비된 스타일에서 빠르게 시작", icon: LayoutTemplate, color: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" },
 ] as const;
@@ -93,6 +94,7 @@ export default function HomeView() {
     | null
   >(null);
   const [systemImportOpen, setSystemImportOpen] = useState(false);
+  const [pinterestImportOpen, setPinterestImportOpen] = useState(false);
   const [systemImportMode, setSystemImportMode] =
     useState<SystemImportMode>("url");
   const [systemSourceUrl, setSystemSourceUrl] = useState("");
@@ -139,6 +141,8 @@ export default function HomeView() {
     queryKey: ["backends", "detect"],
     queryFn: detectBackends,
   });
+
+  const graphicReady = detectionQuery.data?.backends.some((backend) => backend.id === "codex" && backend.found && backend.authenticated === true) ?? false;
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteProject(id),
@@ -313,7 +317,7 @@ export default function HomeView() {
         </div>
         {detectionQuery.data?.backends.every((backend) => !backend.found) ? <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-sm text-muted-foreground">AI와 작업하려면 Claude Code 또는 Codex를 연결해 주세요. 예제와 편집 기능은 먼저 살펴볼 수 있어요.</p><Button variant="outline" size="sm" onClick={() => setCliMissingOpen(true)}>AI 연결 안내</Button></div> : null}
         {activeTab === "recent" || activeTab === "mine" ? <section aria-label="빠른 시작" className="mb-10 grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 xl:grid-cols-4">
-          {PROJECT_TYPES.map(({ id, label, description, icon: Icon, color }) => <button key={id} type="button" onClick={() => startProject(id)} aria-haspopup="dialog" className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:items-start xl:gap-3">
+          {PROJECT_TYPES.map(({ id, label, description, icon: Icon, color }) => <button key={id} type="button" onClick={() => startProject(id)} disabled={id === "graphic" && !graphicReady} title={id === "graphic" && !graphicReady ? "설정에서 Codex 연결과 로그인을 완료해 주세요" : undefined} aria-haspopup="dialog" className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:items-start xl:gap-3">
             <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${color}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
             <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{label}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span></span>
             <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" aria-hidden="true" />
@@ -427,6 +431,10 @@ export default function HomeView() {
             </TabsContent>
 
             <TabsContent value="systems">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+                <div><h2 className="text-sm font-semibold">핀에서 디자인 무드 찾기</h2><p className="mt-1 text-xs text-muted-foreground">Pinterest 공개 핀의 이미지에서 색상과 무드를 모아 초안을 만들어요.</p></div>
+                <Button variant="outline" onClick={() => setPinterestImportOpen(true)}>Pinterest 무드 가져오기</Button>
+              </div>
               <SystemsSection
                 cards={systemCards}
                 hasFilters={systemQuery.trim().length > 0 || systemStatus !== "all"}
@@ -472,12 +480,20 @@ export default function HomeView() {
           <div className="px-6 pt-5">
             <p id="project-type-label" className="mb-2 text-xs font-semibold text-muted-foreground">01 · 무엇을 만드나요?</p>
             <div role="group" aria-labelledby="project-type-label" className="flex flex-wrap gap-2">
-              {[...PROJECT_TYPES, { id: "other" as const, label: "기타" }].map((type) => <button key={type.id} type="button" disabled={creatingProject} aria-pressed={creationType === type.id} onClick={() => { const next = new URLSearchParams(searchParams); next.set("create", type.id); setSearchParams(next, { replace: true }); }} className={`min-h-10 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${creationType === type.id ? "border-accent bg-accent/10 text-accent" : "border-border bg-card text-muted-foreground hover:bg-muted"}`}>{type.label}</button>)}
+              {[...PROJECT_TYPES, { id: "other" as const, label: "기타" }].map((type) => <button key={type.id} type="button" disabled={creatingProject || (type.id === "graphic" && !graphicReady)} aria-pressed={creationType === type.id} onClick={() => { const next = new URLSearchParams(searchParams); next.set("create", type.id); setSearchParams(next, { replace: true }); }} className={`min-h-10 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${creationType === type.id ? "border-accent bg-accent/10 text-accent" : "border-border bg-card text-muted-foreground hover:bg-muted"}`}>{type.label}</button>)}
             </div>
+            {!graphicReady && <p className="mt-2 text-xs text-muted-foreground">그래픽은 설정에서 Codex 연결과 로그인을 완료하면 사용할 수 있어요.</p>}
           </div>
-          {settingsQuery.isPending ? <p role="status" className="p-6 text-sm text-muted-foreground">프로젝트 설정을 불러오는 중이에요.</p> : settingsQuery.isError ? <div role="alert" className="space-y-3 p-6"><p className="text-sm text-destructive">프로젝트 설정을 불러오지 못했어요.</p><Button variant="outline" onClick={() => void settingsQuery.refetch()}>설정 다시 불러오기</Button></div> : creationType !== null ? <NewProjectPanel type={creationType} designSystems={systemsQuery.data ?? []} defaultBackend={settingsQuery.data.default_backend} systemsLoading={systemsQuery.isPending} systemsError={systemsQuery.error} onRetrySystems={() => void systemsQuery.refetch()} onPendingChange={setCreatingProject} onCreated={(project) => navigate(`/projects/${project.id}`)} /> : null}
+          {settingsQuery.isPending ? <p role="status" className="p-6 text-sm text-muted-foreground">프로젝트 설정을 불러오는 중이에요.</p> : settingsQuery.isError ? <div role="alert" className="space-y-3 p-6"><p className="text-sm text-destructive">프로젝트 설정을 불러오지 못했어요.</p><Button variant="outline" onClick={() => void settingsQuery.refetch()}>설정 다시 불러오기</Button></div> : creationType !== null ? <NewProjectPanel generationDefaults={settingsQuery.data.generation_defaults} graphicReady={graphicReady} type={creationType} designSystems={systemsQuery.data ?? []} defaultBackend={settingsQuery.data.default_backend} systemsLoading={systemsQuery.isPending} systemsError={systemsQuery.error} onRetrySystems={() => void systemsQuery.refetch()} onPendingChange={setCreatingProject} onCreated={(project) => navigate(`/projects/${project.id}`)} /> : null}
         </DialogContent>
       </Dialog>
+
+      <PinterestImportDialog open={pinterestImportOpen} onOpenChange={setPinterestImportOpen} onCreated={(result) => {
+        void queryClient.invalidateQueries({ queryKey: ["design-systems"] });
+        const unavailable = result.pins.filter((pin) => pin.status === "unavailable").length;
+        pushToast({ tone: unavailable ? "warn" : "success", title: unavailable ? `무드 초안을 만들었어요. 읽지 못한 핀 ${unavailable}개는 결과에서 확인해 주세요.` : "Pinterest 무드 초안을 만들었어요." });
+        navigate(`/systems/${result.system.id}`);
+      }} />
 
       {detectionQuery.data ? (
         <CliMissingModal

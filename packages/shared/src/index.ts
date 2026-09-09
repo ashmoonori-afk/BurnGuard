@@ -23,4 +23,7 @@ export * from "./project";
 export * from "./reference-layout";
 export * from "./research-contract";
 export * from "./settings";
+export * from "./generation";
 export * from "./visual-source";
+export * from "./local-fonts";
+export * from "./three-scene";

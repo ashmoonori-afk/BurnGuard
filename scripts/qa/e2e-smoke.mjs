@@ -22,6 +22,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { runReviewUiFixtures } from "./review-ui-fixtures.mjs";
 import { runReviewCanvasFixtures } from "./review-canvas-fixtures.mjs";
 import { runUiRedesignFixtures } from "./ui-redesign-fixtures.mjs";
+import { runCreationCanvasFixtures } from "./creation-canvas-fixtures.mjs";
 import { runSettingsRedesignFixtures } from "./settings-redesign-fixtures.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -248,6 +249,7 @@ try {
   await runReviewUiFixtures(page, context, BASE, scenario);
   await runReviewCanvasFixtures(page, context, BASE, scenario);
   await runSettingsRedesignFixtures(page, BASE, scenario);
+  await runCreationCanvasFixtures(page, BASE, scenario, { home, shot });
 } catch (error) {
   results.push({ name: "harness", ok: false, error: String(error?.stack ?? error) });
 } finally {
@@ -296,6 +298,7 @@ async function startBackend(homeDir) {
   const env = {
     ...process.env,
     BG_APP_ROOT: path.join(homeDir, ".burnguard"),
+    CODEX_HOME: path.join(homeDir, ".codex"),
     BG_PORT: String(PORT),
     BG_NO_OPEN: "1",
   };

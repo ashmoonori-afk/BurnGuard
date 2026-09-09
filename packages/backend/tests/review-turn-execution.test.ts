@@ -61,6 +61,28 @@ test("Given prompt-directed writes When generation succeeds Then only stage chan
   await followup.promise;
 });
 
+test("Given explicit generation options When a turn runs Then the adapter receives the validated selected model and effort", async () => {
+  let observed = false;
+  const generation = { model: "fixture-model", effort: "high" as const, vanilla: true, provider: "native" as const };
+  const turn = startUserTurn(sessionId, { type: "user.message", text: "Create", generation }, undefined, {
+    detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "fixture", models: [{ id: "fixture-model", label: "Fixture", efforts: ["low", "high"] }] }] }),
+    runAdapter: async (_backend, input) => { expect(input.generation).toEqual(generation); observed = true; return { exitCode: 0 }; },
+  });
+  await turn!.promise;
+  expect(observed).toBe(true);
+});
+
+test("Given a graphic project without authenticated Codex When a turn starts Then no adapter runs and the session returns to idle", async () => {
+  getSqlite().prepare("UPDATE projects SET type='graphic' WHERE id=?").run(projectId);
+  let invoked = false;
+  const turn = start(async () => { invoked = true; return { exitCode: 0 }; });
+  void turn.prepared.catch(() => {});
+  await expect(turn.promise).rejects.toThrow("graphic_requires_authenticated_codex");
+  expect(invoked).toBe(false);
+  expect(getSqlite().query("SELECT status FROM sessions WHERE id=?").get(sessionId)).toEqual({ status: "idle" });
+  expect((await inspectCanonicalTree(projectDir)).tree_digest).toBe(digest);
+});
+
 for (const failure of ["exit", "event"] as const) {
   test(`Given provider ${failure} failure after a write When generation ends Then live identity stays and no success checkpoint is written`, async () => {
     const turn = start(async (_backend, input) => {
