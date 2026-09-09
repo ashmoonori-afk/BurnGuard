@@ -50,7 +50,22 @@ AI 도구 연결 전에도 기본 예제와 캔버스를 살펴볼 수 있습니
 
 그래픽 프로젝트는 Codex 로그인이 확인되어야 만들 수 있습니다. 바닐라 모드는 개인 플러그인과 지침을 제외하고 BurnGuard의 프로젝트 맥락을 전달합니다. 해당 CLI 옵션은 Codex 0.153.4와 Claude Code 2.1.261에서 확인했으며, 오래된 CLI는 업데이트가 필요할 수 있습니다. 개인 설정을 쓰려면 바닐라 모드를 직접 해제하세요.
 
-### Windows에서 실행
+### Windows 앱으로 실행
+
+Windows ZIP 전체를 압축 해제하고 **`BurnGuard.exe`**를 더블클릭하세요. Windows의 **Microsoft Edge WebView2 Runtime**을 사용하는 네이티브 창이 열립니다. 로컬 엔진은 앱과 함께 시작하며 창을 닫으면 진행 중인 작업과 함께 종료됩니다. `%USERPROFILE%\.burnguard`에 있는 기존 프로젝트를 그대로 사용합니다. 이전 브라우저 방식의 BurnGuard 서버가 켜져 있다면 먼저 종료하세요.
+
+**Windows 10/11 x64와 .NET Framework 4.8**을 대상으로 합니다. WebView2가 없다면 Microsoft의 [Evergreen Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703)을 설치하세요. 별도 Chromium 브라우저는 포함하지 않습니다. AI CLI·렌더링·자료 읽기에 필요한 도구는 위 표와 같습니다.
+
+소스에서 앱을 만들려면 **.NET 8 SDK**를 설치한 뒤 실행하세요.
+
+```powershell
+bun install --frozen-lockfile
+bun run build:windows
+```
+
+실행 파일은 `dist/windows-native/BurnGuard.exe`이며 저장소의 `Start-BurnGuard-Desktop.bat`으로도 열 수 있습니다. 배포 ZIP은 `dist/BurnGuard-0.4.0-windows-x64.zip`입니다. `service/`를 포함한 폴더 전체를 함께 옮기세요. 네이티브 실행기는 약 **90KB**, 기존 Bun·Node 엔진과 디자인 자료를 포함한 ZIP은 약 **103MiB**이며 압축 해제 후 약 **272MiB**입니다. 현재는 서명과 자동 업데이트가 없는 포터블 앱입니다. [구조와 검증 내역](doc/12-windows-native-2026-09-09.md).
+
+### 소스에서 브라우저로 실행
 
 ```powershell
 git clone https://github.com/ashmoonori-afk/BurnGuard.git

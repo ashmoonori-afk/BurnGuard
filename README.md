@@ -50,7 +50,22 @@ You can explore the built-in examples and canvas before connecting an AI tool. G
 
 Graphic projects require an authenticated Codex connection. Vanilla mode excludes personal plugins and instructions while keeping BurnGuard's project context. Its CLI flags were checked with Codex 0.153.4 and Claude Code 2.1.261; older CLIs may need updating. Turn vanilla mode off explicitly to use personal configuration.
 
-### Run on Windows
+### Windows desktop app
+
+Extract the complete Windows ZIP and double-click **`BurnGuard.exe`**. It opens a native Windows window using the shared **Microsoft Edge WebView2 Runtime**, starts the local engine, and stops owned work when you close the window. Existing projects in `%USERPROFILE%\.burnguard` remain available. Stop any older browser-mode BurnGuard server first.
+
+The portable app targets **Windows 10/11 x64 with .NET Framework 4.8**. If WebView2 is missing, install Microsoft's [Evergreen Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703). The app does not include a separate Chromium browser. AI CLIs, rendering, and document-import prerequisites still apply.
+
+To build it from source, install the **.NET 8 SDK**, then run:
+
+```powershell
+bun install --frozen-lockfile
+bun run build:windows
+```
+
+Open `dist/windows-native/BurnGuard.exe` or double-click `Start-BurnGuard-Desktop.bat`. Distribute `dist/BurnGuard-0.4.0-windows-x64.zip` and keep the whole extracted folder, including `service/`. The native launcher is about **90 KB**; the complete ZIP is about **103 MiB** (**272 MiB** extracted), including the existing Bun/Node engines and design assets. This portable build is unsigned and has no automatic updater. [Native app details and verification](doc/12-windows-native-2026-09-09.md).
+
+### Run from source in a browser
 
 ```powershell
 git clone https://github.com/ashmoonori-afk/BurnGuard.git
@@ -125,6 +140,7 @@ The Bun monorepo uses the existing React, React Query, Radix, and Tailwind stack
 | `packages/frontend` | React/Vite UI, conversations, canvas, design systems, and settings |
 | `packages/backend` | Hono, SQLite, CLI execution, file recovery, extraction, and exports |
 | `packages/shared` | Versioned API and event contracts and parsers |
+| `packages/desktop-windows` | Windows x64 WinForms/WebView2 window and owned engine lifecycle |
 | `scripts` | Launching, builds, and isolated QA |
 
 ```powershell

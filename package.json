@@ -10,6 +10,7 @@
     "dev:frontend": "bun run --cwd packages/frontend dev",
     "build:frontend": "bun run --cwd packages/frontend build",
     "build:backend": "bun run scripts/build-binary.ts",
+    "build:windows": "bun run build && bun run scripts/build-windows-native.ts",
     "build:mac": "bun run build:frontend && bun run scripts/build-mac.ts",
     "build:mac:dmg": "bun run build:frontend && bun run scripts/build-mac.ts -- --dmg",
     "build": "bun run build:frontend && bun run build:backend",
