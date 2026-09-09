@@ -25,7 +25,8 @@
     "./extraction-domain": "./src/extraction-domain.ts",
     "./events": "./src/events.ts",
     "./learning-contract": "./src/learning-contract.ts",
-    "./security": "./src/security.ts"
+    "./security": "./src/security.ts",
+    "./updates": "./src/updates.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

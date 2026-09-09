@@ -3,9 +3,11 @@ import { getLocalFonts } from "../services/local-fonts";
 import type {
   ApiErrorBody,
   ApiSuccess,
+  AppUpdateStatus,
   PlaywrightInstallStatus,
   PythonSettings,
 } from "@bg/shared";
+import { getAppUpdater } from "../services/mac-updates";
 import {
   getPlaywrightInstallStatus,
   startPlaywrightInstall,
@@ -31,6 +33,25 @@ export const settingsRoutes = new Hono();
 settingsRoutes.get("/api/settings/local-fonts", async (c) => {
   try { return c.json(ok(await getLocalFonts())); }
   catch { return c.json(fail("local_fonts_unavailable", "Local font listing is unavailable"), 503); }
+});
+
+settingsRoutes.get("/api/settings/updates", (c) => {
+  return c.json(ok(getAppUpdater().status() satisfies AppUpdateStatus));
+});
+
+settingsRoutes.post("/api/settings/updates/check", async (c) => {
+  const updater = getAppUpdater();
+  if (!updater.status().supported) return c.json(fail("update_unsupported", "This installation cannot update itself"), 409);
+  await updater.check();
+  return c.json(ok(updater.status() satisfies AppUpdateStatus));
+});
+
+settingsRoutes.post("/api/settings/updates/apply", async (c) => {
+  const updater = getAppUpdater();
+  const result = await updater.apply();
+  if (result === "unsupported") return c.json(fail("update_unsupported", "This installation cannot update itself"), 409);
+  if (result === "not_ready") return c.json(fail("update_not_ready", "No update has been downloaded yet"), 409);
+  return c.json(ok({ accepted: true as const }), 202);
 });
 
 settingsRoutes.get("/api/settings/playwright", (c) => {

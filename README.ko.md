@@ -112,7 +112,7 @@ bun run build
 
 `dist/windows/burnguard-design.exe`를 실행하면 빌드된 UI를 **http://127.0.0.1:14070**에서 제공합니다. 배포할 때는 **`dist/windows` 폴더 전체**를 옮기세요. `resources`에는 UI·마이그레이션·기본 디자인 자료·Playwright·Node와 라이선스가 함께 들어 있습니다. Chromium과 Python 상태는 별도로 확인해야 합니다.
 
-macOS 빌드 스크립트도 있지만 최신 UI 변경을 macOS에서 직접 검증하지는 않았습니다. [빌드·개발 문서](doc/CONTRIBUTING.md)를 참고하세요.
+macOS 빌드도 같은 Velopack 업데이트 채널을 사용합니다. `bun run build:mac:release`가 설치 패키지·포터블 앱·`releases.osx.json` 피드를 만들고, 패키지된 앱은 설정 → 업데이트에서 GitHub Releases의 새 버전을 확인해 적용합니다. [빌드·개발 문서](doc/CONTRIBUTING.md)와 [업데이트 문서](doc/13-windows-updates-and-original-samples.md#macos-packaging-and-updates)를 참고하세요.
 
 ## 작업 흐름
 

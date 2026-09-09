@@ -1,0 +1,44 @@
+name: macOS release package
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  package:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: bun install --frozen-lockfile
+      - name: Verify tagged version
+        run: |
+          version=$(bun -e 'console.log(JSON.parse(await Bun.file("package.json").text()).version)')
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then echo "Tag and app version differ" >&2; exit 1; fi
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun test packages/backend/tests/mac-updates.test.ts packages/backend/tests/app-update-routes.test.ts --timeout 30000
+      # Signing/notarization stay off until BG_MAC_* secrets exist; unsigned packages are for verification only.
+      - run: bun run build:mac:release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BurnGuard-macOS
+          path: dist/releases/*
+      - name: Attach to the tag's draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The Windows workflow drafts the release for the same tag; whichever job finishes first creates it.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/releases/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/releases/* --draft --verify-tag --title "BurnGuard $GITHUB_REF_NAME" --notes 'Windows and macOS installers, portable apps, and automatic update feeds. Publish this draft after checking the packages.'
+          fi
