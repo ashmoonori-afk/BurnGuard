@@ -47,6 +47,12 @@ test("Given CommandCode selection When building Claude invocation Then native se
   expect(command.join(" ")).not.toContain(config.commandcodeApiKey);
 });
 
+test("Given the installed Claude CLI option set When building the command Then no unknown permission flag is passed", () => {
+  const command = buildClaudeCommand({ binaryPath: "claude", generation: undefined });
+  expect(command).not.toContain("--permission-prompts");
+  expect(command.slice(command.indexOf("--permission-mode"), command.indexOf("--permission-mode") + 2)).toEqual(["--permission-mode", "acceptEdits"]);
+});
+
 test("Given initial graphic HTML When provider leaves it unchanged Then publication fails while existing image-backed edits remain valid", () => {
   const starter = '<p data-bg-node-id="graphic-copy">Start with one clear visual message.</p>';
   expect(() => assertGraphicStarterReplaced(starter, starter)).toThrow("graphic_starter_unchanged");
