@@ -20,20 +20,23 @@ export default function AppShell({ children }: { children: ReactNode }) {
         isProject ? "h-dvh overflow-hidden" : "min-h-screen",
       )}
     >
-      {!isHome && !isProject && <TopBar />}
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-accent-foreground">본문으로 건너뛰기</a>
       <div
         className={cn(
-          "flex min-h-0 flex-1 max-[900px]:flex-col",
-          isProject ? "overflow-hidden" : "max-[900px]:overflow-y-auto",
+          "flex min-h-0 flex-1 max-lg:flex-col",
+          isProject && "overflow-hidden",
         )}
       >
-        {isHome && <Sidebar />}
+        {!isProject && <Sidebar />}
         <main
+          id="main-content"
+          tabIndex={-1}
           className={cn(
-            "min-w-0 flex-1 max-[900px]:order-1 flex flex-col",
+            "min-w-0 flex-1 flex flex-col outline-none",
             isProject && "min-h-0 overflow-hidden",
           )}
         >
+          {!isHome && !isProject && <TopBar />}
           {children}
         </main>
       </div>

@@ -12,6 +12,7 @@ import { buildArtifactSummary, indexProjectFiles, listIndexedProjectFiles } from
 import { getExportAttemptDetail, getExportJob, listExportAttempts, listProjectExports } from "../db/exports";
 import { ExportLifecycleError } from "../db/export-lifecycle-repository";
 import { getProjectDetail } from "../db/project-read-repository";
+import { isCanonicalTreeRootMissing } from "../services/canonical-tree-manifest";
 import type { ExportQaPhase } from "../services/export-qa-barrier";
 
 function ok<T>(data: T): ApiSuccess<T> {
@@ -31,6 +32,16 @@ function isExportFormat(value: unknown): value is ExportFormat {
 }
 
 export const artifactRoutes = new Hono();
+
+for (const resource of ["files", "artifacts", "refresh"]) {
+  artifactRoutes.use(`/api/projects/:id/${resource}`, async (c, next) => {
+    const project = await getProjectDetail(c.req.param("id")!);
+    if (project !== null && await isCanonicalTreeRootMissing(project.dir_path)) {
+      return c.json(fail("project_directory_missing", "프로젝트 폴더를 찾을 수 없습니다. 폴더를 원래 위치로 복원한 뒤 다시 시도해 주세요."), 409);
+    }
+    await next();
+  });
+}
 
 artifactRoutes.get("/api/projects/:id/files", async (c) => {
   const projectId = c.req.param("id");

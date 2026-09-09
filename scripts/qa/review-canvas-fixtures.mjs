@@ -15,7 +15,7 @@ const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 export async function runReviewCanvasFixtures(page, context, base, scenario) {
   assert.equal(page.context(), context, "canvas fixtures require the caller's existing browser context");
   const receipts = [];
-  const state = { shortCount: 10, slowRequested: null, releaseSlow: null, finishSlow: null, heldSlow: false };
+  const state = { shortCount: 10, filesFail: false, slowRequested: null, releaseSlow: null, finishSlow: null, heldSlow: false };
   const viewport = page.viewportSize();
   const routePattern = `${base}/api/**`;
   const routeHandler = async (route) => {
@@ -33,7 +33,9 @@ export async function runReviewCanvasFixtures(page, context, base, scenario) {
     if (pathname === `/api/projects/${PROJECT}`) return ok(projectFixture());
     if (pathname === `/api/projects/${PROJECT}/session`) return ok(sessionFixture());
     if (pathname === `/api/projects/${PROJECT}/artifacts`) return ok({ project_id: PROJECT, entrypoint: "long.html", entrypoint_url: `/api/projects/${PROJECT}/fs/long.html`, design_system_id: SYSTEM, design_system_url: null, file_count: 5, current_revision: 1, current_digest: DIGEST, updated_at: AT });
-    if (pathname === `/api/projects/${PROJECT}/files`) return ok(fileFixtures(state.shortCount));
+    if (pathname === `/api/projects/${PROJECT}/files`) return state.filesFail
+      ? route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: { code: "fixture_temporary_failure", message: "PRIVATE_FIXTURE_FAILURE" } }) })
+      : ok(fileFixtures(state.shortCount));
     if (pathname === `/api/projects/${PROJECT}/comments`) return ok(commentFixtures());
     if (pathname === `/api/projects/${PROJECT}/exports`) return ok([]);
     if ([`/api/projects/${PROJECT}/design-directions`, `/api/projects/${PROJECT}/design-audit`].includes(pathname)) return ok(null);
@@ -81,12 +83,57 @@ export async function runReviewCanvasFixtures(page, context, base, scenario) {
     await page.route(routePattern, routeHandler);
     registered = true;
     await page.goto(`${base}/projects/${PROJECT}`, { waitUntil: "domcontentloaded" });
-    await activeSlide(page, "long.html", 0);
+    try {
+      await activeSlide(page, "long.html", 0);
+    } catch (error) {
+      const state = await page.evaluate(() => ({
+        headings: [...document.querySelectorAll("h1")].map((node) => node.textContent?.slice(0, 120)),
+        alerts: [...document.querySelectorAll('[role="alert"]')].map((node) => node.textContent?.slice(0, 240)),
+        canvasCount: document.querySelectorAll('iframe[title="캔버스"]').length,
+        canvasBounds: document.querySelector('iframe[title="캔버스"]')?.getBoundingClientRect().toJSON(),
+      }));
+      state.frame = await page.frameLocator('iframe[title="캔버스"]').locator("body").evaluate((body) => ({
+        fixture: body.getAttribute("data-review-deck"),
+        text: body.textContent?.slice(0, 200),
+        hash: location.hash,
+        activeSlides: [...body.querySelectorAll("[data-slide]")].map((slide) => ({
+          index: slide.getAttribute("data-review-index"), active: slide.hasAttribute("data-active"),
+          display: getComputedStyle(slide).display, bounds: slide.getBoundingClientRect().toJSON(),
+        })),
+      })).catch(() => null);
+      throw new Error(`Canvas fixture initialization failed: ${JSON.stringify(state)}`, { cause: error });
+    }
+
+    await run("review-background-refetch-keeps-edit-draft", async () => {
+      await page.getByRole("button", { name: "편집", exact: true }).click();
+      const frame = page.frameLocator('iframe[title="캔버스"]');
+      const target = await frame.locator('[data-slide][data-active] h1').boundingBox();
+      assert.ok(target, "editable fixture heading has no canvas bounds");
+      await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
+      const input = page.getByLabel("텍스트 내용", { exact: true });
+      await input.fill("새로고침 오류에도 유지할 편집 초안");
+      state.filesFail = true;
+      // React Query's real window-focus listener starts the background fetch.
+      // The response and DOM lifecycle remain native; only HTTP is synthetic.
+      await page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
+      const warning = page.getByRole("alert", { name: "작업 정보 새로고침 오류", exact: true });
+      await warning.waitFor();
+      assert.equal(await input.inputValue(), "새로고침 오류에도 유지할 편집 초안");
+      assert.equal(await page.getByRole("heading", { name: "프로젝트를 열 수 없어요", exact: true }).count(), 0);
+      assert.equal((await warning.innerText()).includes("PRIVATE_FIXTURE_FAILURE"), false);
+      state.filesFail = false;
+      const restored = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/projects/${PROJECT}/files` && response.status() === 200);
+      await warning.getByRole("button", { name: "작업 정보 다시 불러오기", exact: true }).click();
+      await restored;
+      await warning.waitFor({ state: "hidden" });
+      assert.equal(await input.inputValue(), "새로고침 오류에도 유지할 편집 초안");
+      await page.getByRole("button", { name: "미리보기", exact: true }).click();
+    });
 
     await run("review-R26-file-slide-restore-clamp-comments", async () => {
       // Establish both tabs first: Design Files intentionally unmounts Canvas.
       await page.getByRole("button", { name: "디자인 파일", exact: true }).click();
-      await page.locator("nav").getByRole("button", { name: /^short\.html(?:\s|$)/ }).click();
+      await page.getByRole("navigation", { name: "프로젝트 파일 탐색", exact: true }).getByRole("button", { name: /^short\.html(?:\s|$)/ }).click();
       await activeSlide(page, "short.html", 0);
       const frame = page.frameLocator('iframe[title="캔버스"]');
       await frame.getByRole("button", { name: "마지막 장", exact: true }).click();
@@ -168,7 +215,7 @@ async function correctComment(page, name) {
 
 async function selectPreviewFile(page, file) {
   const escaped = file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  await page.locator("nav").getByRole("button", { name: new RegExp(`^${escaped}(?:\\s|$)`) }).click();
+  await page.getByRole("navigation", { name: "프로젝트 파일 탐색", exact: true }).getByRole("button", { name: new RegExp(`^${escaped}(?:\\s|$)`) }).click();
 }
 
 async function decodedPng(page) {
@@ -180,7 +227,7 @@ async function decodedPng(page) {
 }
 
 function deck(file, count) {
-  const slides = Array.from({ length: count }, (_, index) => `<section data-slide data-review-index="${index}"${index === 0 ? " data-active" : ""}><h1>${file}: ${index + 1}</h1></section>`).join("");
+  const slides = Array.from({ length: count }, (_, index) => `<section data-slide data-review-index="${index}"${index === 0 ? " data-active" : ""}><h1 data-bg-node-id="review-title-${file}-${index}">${file}: ${index + 1}</h1></section>`).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font:24px sans-serif}section{display:none;padding:100px}section[data-active]{display:block}nav{position:fixed;right:16px;top:16px;display:flex;gap:12px}button{padding:12px}</style></head><body data-review-deck="${file}"><nav><button id="previous">이전 장</button><button id="last">마지막 장</button></nav>${slides}<script>(()=>{const slides=[...document.querySelectorAll('[data-slide]')];const index=()=>Math.max(0,Math.min(slides.length-1,Number(location.hash.replace('#slide-',''))-1||0));const apply=()=>slides.forEach((slide,i)=>slide.toggleAttribute('data-active',i===index()));window.addEventListener('hashchange',apply);document.querySelector('#last').onclick=()=>{location.hash='#slide-'+slides.length;apply()};document.querySelector('#previous').onclick=()=>{location.hash='#slide-'+Math.max(1,index());apply()};apply()})()</script></body></html>`;
 }
 

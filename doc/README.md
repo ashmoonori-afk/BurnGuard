@@ -1,17 +1,15 @@
 # Documentation Index
 
-This folder contains the authoritative product and engineering documentation for BurnGuard Design.
+This folder contains product and engineering documentation for BurnGuard. Some specifications are historical snapshots; use the dated implementation records for current behavior.
 
-## Current Repo Stage
+## Start Here
 
-As of April 22, 2026, the codebase is in **late Phase 1 / internal alpha**:
-- the end-to-end prompt -> render -> refresh -> HTML zip loop works
-- Claude Code is wired through a real runner/parser path
-- Codex is wired through a raw streamed path
-- slide deck scaffolding has landed earlier than the original Phase 2 plan
-- several Phase 2 and Phase 3 UI surfaces still exist only as placeholders
+- [Product introduction and setup](../README.md), also available in [Korean](../README.ko.md).
+- [UI redesign and verification, September 9, 2026](./10-ui-redesign-2026-09-09.md): current navigation, creation, workspace, settings, and runtime fixes.
+- [Review remediation, September 8, 2026](./09-review-remediation-2026-09-08.md): R01–R37, regression evidence, and remaining coverage/platform checks.
+- [Research catalog](./research.md): source contracts and their limits.
 
-If you only read one planning document, start with [06-milestones.md](./06-milestones.md).
+The original milestones and screen specification below describe earlier plans; they are not a current release checklist.
 
 ## Read In Order
 
@@ -40,7 +38,8 @@ If you only read one planning document, start with [06-milestones.md](./06-miles
 | Current runtime topology | [01-architecture.md](./01-architecture.md) |
 | SQLite schema | [02-data-model.md](./02-data-model.md) |
 | Normalized event types and adapter behavior | [03-backend-adapters.md](./03-backend-adapters.md) |
-| UI screen contract | [04-ui-spec.md](./04-ui-spec.md) |
+| Current UI flow and evidence | [10-ui-redesign-2026-09-09.md](./10-ui-redesign-2026-09-09.md) |
+| Original UI specification | [04-ui-spec.md](./04-ui-spec.md) |
 | Design system sample format | [05-design-system-format.md](./05-design-system-format.md) |
 | Phase status and remaining work | [06-milestones.md](./06-milestones.md) |
 | Engineering decisions | [07-decisions.md](./07-decisions.md) |
@@ -58,7 +57,7 @@ Stored at repo root, outside `doc/`:
 
 ## Document Conventions
 
-- Docs are written in English
+- Documents may be written in English or Korean; the root README is available in both
 - Code blocks use fenced triple-backtick blocks with a language hint when useful
 - Relative links are preferred for cross-references
 - Concrete dates are used when describing status snapshots to avoid ambiguity

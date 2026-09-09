@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { MoreHorizontal, Trash2 } from "lucide-react";
+import { ArrowUpRight, Blocks, File, Image, MoreHorizontal, Palette, Presentation, RefreshCw, Trash2 } from "lucide-react";
 import { resolveThumbnailSource } from "./thumbnail-source";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,28 +16,31 @@ export default function ProjectCard(
   props: CardViewModel & { onDelete?: () => void },
 ) {
   const [failedSource, setFailedSource] = useState<string | null>(null);
+  const projectLinkRef = useRef<HTMLAnchorElement>(null);
   const thumbnailSource = resolveThumbnailSource(props.thumbnail, failedSource);
+  const thumbnailFailed = Boolean(props.thumbnail) && props.thumbnail === failedSource;
+  const Icon = props.kind === "system" ? Palette : props.kind === "slide_deck" ? Presentation : props.kind === "prototype" ? Blocks : props.kind === "graphic" ? Image : File;
 
   return (
     <div className="group relative">
       <Link
+        ref={projectLinkRef}
         to={props.href}
-        className="block rounded-xl border border-border bg-card overflow-hidden hover:shadow-app-3 transition-shadow"
+        className="block overflow-hidden rounded-2xl border border-border bg-card transition-colors hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div
           data-qa="project-thumbnail"
           data-state={thumbnailSource === null ? "fallback" : "image"}
           className={cn(
-            "aspect-video grid place-items-center overflow-hidden text-2xl",
+            "aspect-[16/10] grid place-items-center overflow-hidden border-b border-border/60",
             props.tintClass,
           )}
         >
           {thumbnailSource === null ? (
-            props.emoji ? (
-              <span className="text-3xl">{props.emoji}</span>
-            ) : (
-              <div className="h-10 w-10 rounded bg-white/50 border border-border" />
-            )
+            <div className="flex flex-col items-center gap-3 text-slate-500">
+              <span className="grid h-16 w-16 place-items-center rounded-2xl border border-white/80 bg-white/70"><Icon className="h-7 w-7" strokeWidth={1.5} aria-hidden="true" /></span>
+              <span className="text-xs">{thumbnailFailed ? "미리보기를 불러오지 못했어요" : "미리보기가 없어요"}</span>
+            </div>
           ) : (
             <img
               src={thumbnailSource}
@@ -57,15 +60,18 @@ export default function ProjectCard(
             템플릿
           </Badge>
         )}
-        <div data-qa="project-card-details" className="p-3">
-          <div className="text-sm font-medium text-foreground line-clamp-1">
+        <div data-qa="project-card-details" className="relative p-4 pr-10">
+          <div className="line-clamp-1 text-sm font-semibold text-foreground">
             {props.name}
           </div>
-          <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+          <div className="mt-1.5 line-clamp-1 text-xs text-muted-foreground">
             {props.subtitle}
           </div>
+          <ArrowUpRight className="absolute right-4 top-4 h-4 w-4 text-muted-foreground group-hover:text-accent" aria-hidden="true" />
         </div>
       </Link>
+
+      {thumbnailFailed && <button type="button" onClick={() => { setFailedSource(null); projectLinkRef.current?.focus(); }} aria-label={`${props.name} 미리보기 다시 불러오기`} className="mt-2 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />미리보기 다시 불러오기</button>}
 
       {props.onDelete && (
         <div className="absolute top-2 right-2">
@@ -77,7 +83,7 @@ export default function ProjectCard(
                   e.stopPropagation();
                 }}
                 type="button"
-                className="h-11 w-11 rounded-md bg-background/95 border border-border grid place-items-center text-muted-foreground hover:text-foreground shadow-app-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="grid h-11 w-11 place-items-center rounded-xl border border-border bg-card/95 text-muted-foreground shadow-app-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={`${props.name} 옵션 메뉴`}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />

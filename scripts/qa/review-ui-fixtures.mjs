@@ -16,9 +16,9 @@ const digest = "a".repeat(64);
 export async function runReviewUiFixtures(page, context, base, scenario) {
   const receipts = [];
   const state = {
-    bootstrapFails: false, settingsFails: false, playwrightFails: false, systemBExists: false,
+    bootstrapFails: false, settingsFails: false, playwrightFails: false, systemBExists: false, projectDirectoryMissingAt: null,
     settings: settingsFixture(), snapshotSequence: 10, usage: { input: 100, output: 20, cached: 5, cache_write: 0 },
-    pending: [], history: historyFixture(), stream: [], decisions: [], sent: [], snapshots: 0, streams: [],
+    pending: [], history: historyFixture(), stream: [], decisions: [], sent: [], snapshots: 0, streams: [], snapshotWaiters: new Set(),
   };
   const sse = await startSseFixture(state, base);
   const routePattern = `${base}/api/**`;
@@ -67,6 +67,7 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
     if (project) {
       const [, id, suffix] = project;
       const sessionId = id === PROJECT_B ? SESSION_B : SESSION_A;
+      if (state.projectDirectoryMissingAt !== null && suffix === state.projectDirectoryMissingAt) return fail(409, "project_directory_missing");
       if (!suffix) return ok(projectFixture(id));
       if (suffix === "/session") return ok(sessionFixture(sessionId, id, state.usage));
       if (suffix === "/artifacts") return ok({ project_id: id, entrypoint: "", entrypoint_url: null, design_system_id: SYSTEM_A, design_system_url: null, file_count: 0, current_revision: 0, current_digest: digest, updated_at: AT });
@@ -80,6 +81,11 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
       const projectId = id === SESSION_B ? PROJECT_B : PROJECT_A;
       if (suffix === "/snapshot") {
         state.snapshots += 1;
+        // A failed project query must remain visible while another required
+        // resource is still loading; release these responses on user recovery.
+        if (state.projectDirectoryMissingAt !== null) {
+          await new Promise((resolve) => state.snapshotWaiters.add(resolve));
+        }
         return ok({ session: sessionFixture(id, projectId, state.usage), sequence: state.snapshotSequence, pending_permissions: id === SESSION_A ? state.pending : [] });
       }
       if (suffix === "/events" && method === "GET") return ok(id === SESSION_A ? state.history : []);
@@ -120,7 +126,7 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
   };
   const openHome = async () => {
     await page.goto(`${base}/`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("tab", { name: "최근", exact: true }).waitFor();
+    await page.getByRole("tab", { name: "최근 작업", exact: true }).waitFor();
   };
   const openSettings = async () => {
     await page.getByRole("button", { name: "설정", exact: true }).click();
@@ -128,6 +134,7 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
   };
   const openProject = async (id = PROJECT_A) => {
     await page.goto(`${base}/projects/${id}`, { waitUntil: "domcontentloaded" });
+    await showChatPane(page);
     await page.getByRole("textbox", { name: "메시지 입력", exact: true }).waitFor();
     await page.waitForFunction(() => !document.querySelector('textarea[aria-label="메시지 입력"]')?.disabled);
   };
@@ -140,11 +147,11 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
       state.bootstrapFails = true;
       await page.goto(`${base}/`, { waitUntil: "domcontentloaded" });
       await page.getByRole("button", { name: "다시 연결", exact: true }).waitFor();
-      assert.equal(await page.getByRole("tab", { name: "최근", exact: true }).count(), 0);
+      assert.equal(await page.getByRole("tab", { name: "최근 작업", exact: true }).count(), 0);
       assert.equal((await page.locator("body").innerText()).includes(PRIVATE_ERROR), false);
       state.bootstrapFails = false;
       await page.getByRole("button", { name: "다시 연결", exact: true }).click();
-      await page.getByRole("tab", { name: "최근", exact: true }).waitFor();
+      await page.getByRole("tab", { name: "최근 작업", exact: true }).waitFor();
     });
 
     await run("review-R28-R29-settings-draft-and-partial-failure", async () => {
@@ -203,6 +210,7 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
       state.usage = { input: 107, output: 23, cached: 7, cache_write: 0 };
       state.stream = [increment];
       await page.reload({ waitUntil: "domcontentloaded" });
+      await showChatPane(page);
       await waitUsage(page, 107, 23, 7);
       assert.equal(await page.getByRole("dialog", { name: "이 도구 실행을 허용할까요?", exact: true }).count(), 0);
     });
@@ -229,6 +237,7 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
         assert.deepEqual(recorded.body, { toolCallId, decision });
         assert.equal(recorded.authority, AUTHORITY);
         await page.reload({ waitUntil: "domcontentloaded" });
+        await showChatPane(page);
         await waitUsage(page, 107, 23, 7);
         assert.equal(await page.getByRole("dialog", { name: "이 도구 실행을 허용할까요?", exact: true }).count(), 0);
       }
@@ -247,11 +256,13 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
       await page.getByLabel("자료 파일 선택 (PDF, PPTX)", { exact: true }).setInputFiles({ name: fileName, mimeType: "application/pdf", buffer: Buffer.from(fileBytes) });
       await page.getByRole("combobox", { name: `${fileName} 역할`, exact: true }).selectOption("immutable_reference");
       await waitDraft(page, SESSION_A, draftText, fileName, "immutable_reference");
-      await page.getByRole("button", { name: "코멘트", exact: true }).click();
+      const chat = page.getByRole("complementary", { name: "AI 대화와 코멘트", exact: true });
+      await chat.getByRole("button", { name: "코멘트", exact: true }).click();
       await page.getByRole("textbox", { name: "메시지 입력", exact: true }).waitFor({ state: "hidden" });
-      await page.getByRole("button", { name: "채팅", exact: true }).click();
+      await chat.getByRole("button", { name: "대화", exact: true }).click();
       assert.equal(await page.getByRole("textbox", { name: "메시지 입력", exact: true }).inputValue(), draftText);
       await page.reload({ waitUntil: "domcontentloaded" });
+      await showChatPane(page);
       await page.getByRole("combobox", { name: `${fileName} 역할`, exact: true }).waitFor();
       assert.equal(await page.getByRole("textbox", { name: "메시지 입력", exact: true }).inputValue(), draftText);
       assert.equal(await page.getByRole("combobox", { name: `${fileName} 역할`, exact: true }).inputValue(), "immutable_reference");
@@ -270,6 +281,25 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
       await waitDraft(page, SESSION_A, "", null, null);
     });
 
+    await run("review-project-directory-missing-retry", async () => {
+      for (const source of ["", "/files"]) {
+        state.projectDirectoryMissingAt = source;
+        await page.goto(`${base}/projects/${PROJECT_A}`, { waitUntil: "domcontentloaded" });
+        await page.getByRole("heading", { name: "프로젝트를 열 수 없어요", exact: true }).waitFor();
+        const message = await page.getByRole("alert").innerText();
+        assert.ok(message.includes("폴더"), "missing project directory did not explain the unavailable folder");
+        assert.equal(message.includes(PRIVATE_ERROR), false, "private API failure leaked into recovery UI");
+        await page.getByRole("button", { name: "홈으로", exact: true }).waitFor();
+        state.projectDirectoryMissingAt = null;
+        for (const resolve of state.snapshotWaiters) resolve();
+        state.snapshotWaiters.clear();
+        await page.getByRole("button", { name: "다시 시도", exact: true }).click();
+        await showChatPane(page);
+        await page.getByRole("textbox", { name: "메시지 입력", exact: true }).waitFor();
+        await page.waitForFunction(() => !document.querySelector('textarea[aria-label="메시지 입력"]')?.disabled);
+      }
+    });
+
     await run("review-R33-theme-save-reload-and-system-change", async () => {
       await page.emulateMedia({ colorScheme: "light" });
       await openHome();
@@ -281,7 +311,7 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
       assert.equal(state.settings.theme, "dark");
       await page.reload({ waitUntil: "domcontentloaded" });
       await waitTheme(page, "dark");
-      await page.getByRole("tab", { name: "최근", exact: true }).waitFor();
+      await page.getByRole("tab", { name: "최근 작업", exact: true }).waitFor();
       dialog = await openSettings();
       await dialog.getByRole("button", { name: "시스템 설정", exact: true }).click();
       await dialog.getByRole("button", { name: "저장", exact: true }).last().click();
@@ -294,6 +324,8 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
       await waitTheme(page, "light");
     });
   } finally {
+    for (const resolve of state.snapshotWaiters) resolve();
+    state.snapshotWaiters.clear();
     await page.goto("about:blank").catch(() => {});
     try {
       if (routeRegistered) await page.unroute(routePattern, routeHandler);
@@ -301,6 +333,12 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
     } finally { await sse.close(); }
   }
   return receipts;
+}
+
+async function showChatPane(page) {
+  if ((page.viewportSize()?.width ?? 1440) > 900) return;
+  await page.getByRole("button", { name: "AI 대화", exact: true }).click();
+  assert.equal(await page.getByRole("button", { name: "AI 대화", exact: true }).getAttribute("aria-pressed"), "true");
 }
 
 async function startSseFixture(state, base) {

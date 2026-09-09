@@ -48,19 +48,19 @@
        `rgb(var(--accent) / <alpha-value>)`). Keep each semantic
        aligned with a raw palette entry so updates stay one-step. */
 
-    --background: 255 255 255;       /* white */
-    --foreground: 23 25 26;          /* grey-900 */
+    --background: 246 248 250;       /* workspace */
+    --foreground: 23 25 32;          /* ink */
     --card: 255 255 255;             /* white */
     --card-foreground: 23 25 26;     /* grey-900 */
     --popover: 255 255 255;          /* white */
     --popover-foreground: 23 25 26;  /* grey-900 */
     --primary: 23 25 26;             /* grey-900 */
     --primary-foreground: 255 255 255;
-    --secondary: 241 243 245;        /* grey-50 */
+    --secondary: 238 241 246;        /* quiet controls */
     --secondary-foreground: 23 25 26;
-    --muted: 241 243 245;            /* grey-50 */
-    --muted-foreground: 94 100 108;  /* grey-600 */
-    --accent: 0 79 255;              /* blue-500 (brand) */
+    --muted: 239 242 247;            /* canvas surround */
+    --muted-foreground: 98 108 124;  /* supporting copy */
+    --accent: 36 84 224;             /* cobalt */
     --accent-foreground: 255 255 255;
     --success: 0 206 120;           /* green-500 */
     --success-foreground: 23 25 26;
@@ -68,11 +68,11 @@
     --warning-foreground: 23 25 26;
     --destructive: 217 45 32;        /* red-700 */
     --destructive-foreground: 255 255 255;
-    --border: 220 228 234;           /* grey-100 */
-    --input: 220 228 234;            /* grey-100 */
+    --border: 225 230 237;           /* subtle dividers */
+    --input: 215 222 232;            /* visible input edge */
     --ring: 0 79 255;                /* blue-500 */
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
     color-scheme: light;
   }
   :root[data-theme="dark"] {

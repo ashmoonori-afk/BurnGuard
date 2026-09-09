@@ -35,9 +35,9 @@ export default function ProjectBriefFields({
   showOutputSize?: boolean;
 }) {
   return (
-    <div className="space-y-3 border-t border-border pt-4">
-      <div className="text-[10px] font-medium uppercase tracking-wide text-foreground/80">
-        브리프
+    <div className="space-y-4 border-t border-border pt-5">
+      <div className="text-xs font-semibold text-muted-foreground">
+        03 · 누구를 위한 작업인가요?
       </div>
 
       <div className="space-y-1.5">
@@ -49,6 +49,7 @@ export default function ProjectBriefFields({
           placeholder="예: 국내 투자 심사역"
           maxLength={AUDIENCE_MAX_LENGTH}
           value={form.audience}
+          required
           disabled={disabled}
           onChange={(e) => onChange("audience", e.target.value)}
         />
@@ -64,12 +65,16 @@ export default function ProjectBriefFields({
           placeholder="예: 다음 분기 예산 승인 받기"
           maxLength={OBJECTIVE_MAX_LENGTH}
           value={form.objective}
+          required
           disabled={disabled}
           onChange={(e) => onChange("objective", e.target.value)}
           className={`${PROJECT_CONTROL_CLASS} h-auto resize-none py-2 leading-relaxed`}
         />
       </div>
 
+      <details className="rounded-xl border border-border bg-muted/30 p-4">
+        <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">상세 설정 <span className="ml-1 text-xs font-normal text-muted-foreground">자료 · 스타일 · 크기</span></summary>
+        <div className="mt-4 space-y-4">
       <ChoiceField
         id="brief-content-source"
         label="자료는 어디서 오나요?"
@@ -108,6 +113,8 @@ export default function ProjectBriefFields({
           onSelect={(v) => onChange("outputSize", v)}
         />
       )}
+        </div>
+      </details>
     </div>
   );
 }

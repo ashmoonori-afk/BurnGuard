@@ -43,10 +43,10 @@ export default function EditPanel({
   if (!target) {
     return (
       <div className="p-4">
-        <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
+        <div className="mb-2 text-sm font-semibold">
           편집
         </div>
-        <p className="text-xs text-muted-foreground leading-relaxed">
+        <p className="text-sm leading-6 text-muted-foreground">
           캔버스에 마우스를 올리면 편집할 수 있는 요소가 강조되고, 클릭하면
           텍스트, 링크, 이미지 설명을 고칠 수 있어요. 편집을 지원하는 요소가
           강조돼요.
@@ -88,15 +88,15 @@ export default function EditPanel({
 
   return (
     <div className="flex min-h-0 flex-col overflow-y-auto">
-      <div className="border-b border-border px-3 py-2">
+      <div className="border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span className="text-sm font-semibold">
             편집
           </span>
           <button
             type="button"
             onClick={onClear}
-            className="text-[10px] text-muted-foreground hover:text-foreground"
+            className="min-h-9 rounded px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             선택 해제
           </button>
@@ -107,8 +107,8 @@ export default function EditPanel({
         </div>
       </div>
 
-      <section className="px-3 py-2">
-        <label htmlFor="element-edit-text" className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <section className="px-4 py-3">
+        <label htmlFor="element-edit-text" className="text-xs font-medium text-muted-foreground">
           텍스트 내용
         </label>
         <textarea
@@ -116,12 +116,12 @@ export default function EditPanel({
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={4}
-          className="mt-1 w-full resize-none rounded border border-border bg-background p-1.5 text-xs font-mono"
+          className="mt-2 w-full resize-y rounded-lg border border-border bg-background p-3 text-sm leading-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       </section>
 
-      <details className="px-3 py-2 border-t border-border">
-        <summary className="cursor-pointer text-xs">고급 속성</summary>
+      <details className="border-t border-border px-4 py-3">
+        <summary className="cursor-pointer text-xs leading-6">고급 속성</summary>
         <div className="my-2 break-all font-mono text-[10px] text-muted-foreground">
           &lt;{target.tag}&gt; · {target.bg_id}
         </div>
@@ -151,7 +151,8 @@ export default function EditPanel({
                   setAttrRows(next);
                 }}
                 placeholder="이름"
-                className="min-w-0 flex-1 rounded border border-border bg-background p-1 text-[11px] font-mono"
+                aria-label={`속성 ${idx + 1} 이름`}
+                className="min-h-10 min-w-0 flex-1 rounded border border-border bg-background p-2 text-xs font-mono"
               />
               <input
                 value={row.value}
@@ -161,12 +162,13 @@ export default function EditPanel({
                   setAttrRows(next);
                 }}
                 placeholder="값"
-                className="min-w-0 flex-1 rounded border border-border bg-background p-1 text-[11px] font-mono"
+                aria-label={`속성 ${idx + 1} 값`}
+                className="min-h-10 min-w-0 flex-1 rounded border border-border bg-background p-2 text-xs font-mono"
               />
               <button
                 type="button"
                 onClick={() => setAttrRows(attrRows.filter((_, i) => i !== idx))}
-                className="px-1 text-muted-foreground hover:text-foreground"
+                className="min-h-10 min-w-9 rounded text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label="속성 삭제"
               >
                 ×
@@ -176,14 +178,14 @@ export default function EditPanel({
         </div>
       </details>
 
-      <div className="border-t border-border px-3 py-2">
+      <div className="sticky bottom-0 border-t border-border bg-background px-4 py-3">
         <button
           type="button"
           onClick={handleSave}
           disabled={saving}
           className={cn(
-            "w-full rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-white",
-            "hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60",
+            "min-h-11 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-foreground",
+            "hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60",
           )}
         >
           {saving ? "저장하는 중..." : "저장"}

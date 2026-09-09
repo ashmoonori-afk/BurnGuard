@@ -10,6 +10,7 @@ const ERROR_COPY: Record<string, string> = {
   session_not_found: "작업 세션을 찾을 수 없어요. 프로젝트를 다시 열어 주세요.",
   permission_not_pending: "이미 처리된 권한 요청이에요. 현재 작업 상태를 다시 확인해 주세요.",
   stale_artifact_identity: "파일이 변경됐어요. 최신 결과를 확인한 뒤 다시 시도해 주세요.",
+  project_directory_missing: "프로젝트 폴더를 찾을 수 없어요. 폴더를 원래 위치로 복원한 뒤 다시 시도해 주세요.",
   export_corrupt: "내보낸 파일을 확인할 수 없어요. 다시 내보내기를 눌러 새 파일을 만들어 주세요.",
   export_not_ready: "아직 내려받을 수 없어요. 내보내기 상태를 확인한 뒤 다시 시도해 주세요.",
   export_terminal: "이미 내보내기가 끝났어요. 최신 상태를 확인해 주세요.",

@@ -41,6 +41,15 @@ export class CanonicalTreeManifestError extends Error {
   }
 }
 
+/** Distinguish an absent root from unsafe entries or unavailable recovery receipts. */
+export async function isCanonicalTreeRootMissing(root: string): Promise<boolean> {
+  try { await lstat(root); return false; }
+  catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return true;
+    throw error;
+  }
+}
+
 export async function inspectCanonicalTree(
   root: string,
   limits: CanonicalTreeLimits = DEFAULT_CANONICAL_TREE_LIMITS,

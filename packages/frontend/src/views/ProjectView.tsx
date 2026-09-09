@@ -22,6 +22,8 @@ import type {
 } from "@bg/shared";
 import { parseDesignDirectionState } from "@bg/shared";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { MessageSquare, Monitor } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   getArtifacts,
   getProject,
@@ -138,6 +140,7 @@ export default function ProjectView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [activeTabId, setActiveTabId] = useState("design-system");
+  const [mobilePane, setMobilePane] = useState<"workspace" | "chat">("workspace");
   const [openFileTabs, setOpenFileTabs] = useState<ArtifactTab[]>([]);
   const [mode, setMode] = useState<CanvasMode | null>(null);
   const [selection, setSelection] = useState<SelectedNode | null>(null);
@@ -839,6 +842,7 @@ export default function ProjectView() {
       return;
     }
     if (!openFileTabs.some((tab) => tab.id === activeTabId)) openFileAsTab(detail.entrypoint, setOpenFileTabs, setActiveTabId);
+    setMobilePane("workspace");
     setMode("quality");
   }, [activeTabId, artifactsQuery.data?.entrypoint_url, openFileTabs, projectQuery.data, pushToast]);
   const qualityGate = auditReport !== null && isDesignAuditCurrent(auditReport, artifactsQuery.data?.current_digest ?? "") && auditReport.overall_status === "must_fix"
@@ -942,11 +946,16 @@ export default function ProjectView() {
   }, [mode]);
   useEffect(() => { setAuditFocus(null); setAuditRevealResult(null); }, [auditReport?.artifact_digest, auditReport?.created_at]);
 
-  const isLoading =
+  const loadQueries = [projectQuery, filesQuery, artifactsQuery, sessionQuery];
+  const loadError = loadQueries.find((query) => query.error && (
+    query.data === undefined || !isTransientProjectLoadError(query.error)
+  ))?.error;
+  const refreshError = loadQueries.find((query) => query.error)?.error;
+  const isLoading = !loadError && (
     projectQuery.isLoading ||
     sessionQuery.isLoading ||
     filesQuery.isLoading ||
-    artifactsQuery.isLoading || (Boolean(sessionQuery.data) && !stream.state && !stream.error);
+    artifactsQuery.isLoading || (Boolean(sessionQuery.data) && !stream.state && !stream.error));
 
   if (isLoading) {
     return (
@@ -956,10 +965,17 @@ export default function ProjectView() {
     );
   }
 
-  if (!project || !session || !artifacts) {
+  if (loadError || !project || !session || !artifacts) {
     return (
-      <div className="grid flex-1 place-items-center">
-        <div className="space-y-3 text-center" role="alert"><p className="text-sm text-destructive">프로젝트를 열 수 없어요. 연결을 확인하고 다시 시도해 주세요.</p><button type="button" className="rounded border px-4 py-2" onClick={() => { void projectQuery.refetch(); void sessionQuery.refetch(); void filesQuery.refetch(); void artifactsQuery.refetch(); stream.retry(); }}>다시 시도</button><button type="button" className="ml-2 rounded border px-4 py-2" onClick={() => navigate("/")}>홈으로</button></div>
+      <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto p-6">
+        <div className="max-w-md rounded-2xl border border-border bg-card p-7 text-center shadow-sm" role="alert">
+          <h1 className="text-lg font-semibold">프로젝트를 열 수 없어요</h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">{loadError ? apiErrorCopy(loadError) : "연결을 확인하고 다시 시도해 주세요."}</p>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <button type="button" className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground" onClick={() => { void projectQuery.refetch(); void sessionQuery.refetch(); void filesQuery.refetch(); void artifactsQuery.refetch(); stream.retry(); }}>다시 시도</button>
+            <button type="button" className="min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted" onClick={() => navigate("/")}>홈으로</button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -971,6 +987,7 @@ export default function ProjectView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {refreshError && <div role="alert" aria-label="작업 정보 새로고침 오류" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm"><span>최신 작업 정보를 불러오지 못했어요. 작성 중인 내용은 유지돼요.</span><button type="button" className="min-h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium" onClick={() => { for (const query of loadQueries) if (query.isError) void query.refetch(); }}>작업 정보 다시 불러오기</button></div>}
       {stream.error && <div role="alert" className="flex items-center justify-between bg-warning/15 px-4 py-2 text-sm"><span>실시간 연결이 끊겼어요. 다시 연결하는 중이에요.</span><button type="button" className="rounded border px-3 py-2" onClick={stream.retry}>다시 연결</button></div>}
       <ProjectTopBar
         project={project}
@@ -986,7 +1003,7 @@ export default function ProjectView() {
           <ArtifactTabs
             tabs={tabs}
             activeId={activeTabId}
-            onSelect={setActiveTabId}
+            onSelect={(tabId) => { setActiveTabId(tabId); setMobilePane("workspace"); }}
             onClose={(tabId) => {
               setOpenFileTabs((current) =>
                 current.filter((tab) => tab.id !== tabId),
@@ -998,7 +1015,12 @@ export default function ProjectView() {
           />
         }
       />
-      <div className="flex min-h-0 flex-1 overflow-hidden max-[900px]:flex-col">
+      <div className="flex shrink-0 gap-2 border-b border-border bg-background p-2 min-[901px]:hidden" aria-label="작업 영역 전환">
+        <button type="button" aria-pressed={mobilePane === "workspace"} aria-controls="project-workspace-pane" onClick={() => setMobilePane("workspace")} className={cn("flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-medium", mobilePane === "workspace" ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted")}><Monitor className="h-4 w-4" aria-hidden="true" />작업 화면</button>
+        <button type="button" aria-pressed={mobilePane === "chat"} aria-controls="project-chat-pane" onClick={() => setMobilePane("chat")} className={cn("flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-medium", mobilePane === "chat" ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted")}><MessageSquare className="h-4 w-4" aria-hidden="true" />AI 대화{session.status === "running" && <span className="h-2 w-2 rounded-full bg-accent" aria-label="AI 작업 중" />}</button>
+      </div>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div id="project-chat-pane" className={cn("min-h-0 shrink-0 max-[900px]:flex-1", mobilePane !== "chat" && "max-[900px]:hidden")}>
         <ChatPane
           events={events}
           session={session}
@@ -1024,7 +1046,7 @@ export default function ProjectView() {
             <DirectionStatusBar
               state={directionState}
               cancelPending={cancelDirectionsMutation.isPending}
-              onOpen={() => setActiveTabId("directions")}
+              onOpen={() => { setActiveTabId("directions"); setMobilePane("workspace"); }}
               onCancel={() => cancelDirectionsMutation.mutate()}
             />
           }
@@ -1060,9 +1082,10 @@ export default function ProjectView() {
               throw error;
             }
           }}
-          onOpenFile={(relPath) =>
-            openFileAsTab(relPath, setOpenFileTabs, setActiveTabId)
-          }
+          onOpenFile={(relPath) => {
+            openFileAsTab(relPath, setOpenFileTabs, setActiveTabId);
+            setMobilePane("workspace");
+          }}
           onRevertTurn={(turnId) => restoreMutation.mutate(turnId)}
           revertingTurnId={
             restoreMutation.isPending
@@ -1070,6 +1093,8 @@ export default function ProjectView() {
               : null
           }
         />
+        </div>
+        <div id="project-workspace-pane" className={cn("flex min-h-0 min-w-0 flex-1", mobilePane !== "workspace" && "max-[900px]:hidden")}>
 
         {activeTab?.kind === "design_system" && (
           <DesignSystemView
@@ -1116,7 +1141,7 @@ export default function ProjectView() {
         )}
 
         {activeTab?.kind === "file" && (
-          <>
+          <div className="flex min-h-0 min-w-0 flex-1 max-[1200px]:flex-col">
             <Canvas
               mode={mode}
               src={canvasSrc}
@@ -1305,8 +1330,9 @@ export default function ProjectView() {
               onRedoDraw={() => { if (!drawBlocked) drawLayerRef.current?.redo(); }}
               onClearDraw={() => { if (!drawBlocked) drawLayerRef.current?.clear(); }}
             />
-          </>
+          </div>
         )}
+        </div>
       </div>
       <PermissionDialog
         request={pendingPermissions[0] ?? null}
@@ -1328,6 +1354,11 @@ export default function ProjectView() {
       )}
     </div>
   );
+}
+
+function isTransientProjectLoadError(error: Error): boolean {
+  if (error instanceof ApiError) return error.status === 0 || error.status === 429 || error.status >= 500;
+  return error instanceof TypeError;
 }
 
 function buildTabs(

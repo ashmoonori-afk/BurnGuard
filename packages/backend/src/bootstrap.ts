@@ -124,7 +124,10 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   reconcilePipelineRows(getDb());
   await reconcileCatalogState(getSqlite(), systemsDir);
   await reconcileExtractionState();
-  await reconcileArtifactState(getSqlite());
+  const artifactRecovery = await reconcileArtifactState(getSqlite());
+  for (const project of artifactRecovery.unavailableProjects) {
+    console.warn("[artifact] project recovery deferred", project.projectId, project.code);
+  }
   await pruneExpiredArtifactOperations(getSqlite());
   await reconcileExportState(getSqlite());
   await pruneOldExports();

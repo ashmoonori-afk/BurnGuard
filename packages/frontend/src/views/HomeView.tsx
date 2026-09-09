@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { ArrowUpRight, Blocks, Image, LayoutTemplate, Plus, Presentation, Search } from "lucide-react";
+import type { ProjectType } from "@bg/shared";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   deleteDesignSystem,
   extractDesignSystem,
@@ -11,6 +12,7 @@ import { ApiError } from "@/api/client";
 import {
   deleteProject,
   detectBackends,
+  getSettings,
   listDesignSystems,
   listProjects,
   restoreSamples,
@@ -24,12 +26,14 @@ import {
 } from "@/components/home/mappers";
 import ProjectCardSection from "@/components/home/ProjectCardSection";
 import ProjectCard from "@/components/home/ProjectCard";
+import NewProjectPanel from "@/components/home/NewProjectPanel";
 import DeleteDesignSystemDialog from "@/components/home/DeleteDesignSystemDialog";
 import DeleteProjectDialog from "@/components/home/DeleteProjectDialog";
 import CliMissingModal from "@/components/errors/CliMissingModal";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Tabs,
   TabsContent,
@@ -41,17 +45,35 @@ import { useUIStore } from "@/state/uiStore";
 type HomeTab = "recent" | "mine" | "examples" | "systems";
 type SystemImportMode = "url" | "upload";
 
+const PROJECT_TYPES = [
+  { id: "slide_deck", label: "슬라이드 덱", description: "이야기가 선명한 발표 자료", icon: Presentation, color: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" },
+  { id: "prototype", label: "프로토타입", description: "직접 눌러보는 웹과 앱 화면", icon: Blocks, color: "bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300" },
+  { id: "graphic", label: "그래픽", description: "목적에 맞는 포스터와 이미지", icon: Image, color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
+  { id: "from_template", label: "템플릿", description: "준비된 스타일에서 빠르게 시작", icon: LayoutTemplate, color: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" },
+] as const;
+
+const HOME_TITLES: Record<HomeTab, { title: string; description: string }> = {
+  recent: { title: "무엇을 만들어 볼까요?", description: "아이디어를 시작하거나, 이어서 작업할 프로젝트를 열어 보세요." },
+  mine: { title: "내 프로젝트", description: "직접 만든 작업을 한곳에서 찾고 이어서 다듬어요." },
+  examples: { title: "예제로 시작하기", description: "실제 작업을 열어 보고, 만드는 흐름을 익혀 보세요." },
+  systems: { title: "디자인 시스템", description: "색상과 글꼴을 모아 일관된 스타일로 작업해요." },
+};
+
 export default function HomeView() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
-  const [activeTab, setActiveTab] = useState<HomeTab>("recent");
+  const requestedView = searchParams.get("view");
+  const activeTab: HomeTab = requestedView === "mine" || requestedView === "examples" || requestedView === "systems" ? requestedView : "recent";
+  const requestedType = searchParams.get("create");
+  const creationType: ProjectType | null = requestedType === "other" || PROJECT_TYPES.some((type) => type.id === requestedType) ? requestedType as ProjectType : null;
+  const createTriggerRef = useRef<HTMLButtonElement>(null);
+  const [creatingProject, setCreatingProject] = useState(false);
   const [projectQuery, setProjectQuery] = useState("");
   const [systemQuery, setSystemQuery] = useState("");
   const [systemStatus, setSystemStatus] = useState<"all" | "draft" | "review" | "published">("all");
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const cliMissingShown = useUIStore((s) => s.cliMissingShown);
-  const setCliMissingShown = useUIStore((s) => s.setCliMissingShown);
   const [cliMissingOpen, setCliMissingOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
@@ -109,8 +131,9 @@ export default function HomeView() {
         (a, b) => b.updated_at - a.updated_at,
       );
     },
-    enabled: activeTab === "systems",
+    enabled: activeTab === "systems" || creationType !== null,
   });
+  const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, enabled: creationType !== null });
   const detectionQuery = useQuery({
     queryKey: ["backends", "detect"],
     queryFn: detectBackends,
@@ -228,18 +251,6 @@ export default function HomeView() {
     },
   });
 
-  useEffect(() => {
-    const detection = detectionQuery.data;
-    if (!detection || cliMissingShown) {
-      return;
-    }
-
-    if (detection.backends.every((backend) => !backend.found)) {
-      setCliMissingOpen(true);
-      setCliMissingShown(true);
-    }
-  }, [cliMissingShown, detectionQuery.data, setCliMissingShown]);
-
   const recentCards = (recentQuery.data ?? []).map(projectToCard);
   const mineCards = (mineQuery.data ?? []).map(projectToCard);
   const exampleCards = (examplesQuery.data ?? []).map(projectToCard);
@@ -268,32 +279,52 @@ export default function HomeView() {
     searchInputRef.current?.focus();
   };
 
-  // The creation form lives in the app shell's sidebar, outside this
-  // view's tree, so the empty state hands off by focusing its name
-  // field by id. Plain focus() also scrolls the control into view,
-  // which is what the narrow layout needs since the sidebar is ordered
-  // below the grid there.
-  const startProject = () => {
-    document.getElementById("new-project-panel")?.scrollIntoView({ block: "start" });
-    document.getElementById("project-name")?.focus();
+  const startProject = (type: ProjectType = "slide_deck") => {
+    const next = new URLSearchParams(searchParams);
+    next.set("create", type);
+    setSearchParams(next);
+  };
+  const closeCreation = () => {
+    if (creatingProject) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("create");
+    setSearchParams(next);
+  };
+  const changeView = (view: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("view", view);
+    setSearchParams(next);
   };
 
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-4 py-3 sm:px-8">
-          <h1 className="text-lg font-semibold">내 작업</h1>
-          <Button variant="cta" onClick={startProject} aria-controls="new-project-panel"><Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />새 프로젝트</Button>
+        <div className="mx-auto w-full max-w-[1440px] px-4 pb-8 pt-7 sm:px-8 sm:pt-10 lg:px-10">
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-5">
+          <div>
+            <p className="mb-2 text-xs font-semibold text-muted-foreground">나의 작업 공간</p>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-[32px] sm:leading-tight">{HOME_TITLES[activeTab].title}</h1>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{HOME_TITLES[activeTab].description}</p>
+          </div>
+          <Button ref={createTriggerRef} variant="cta" className="h-11 gap-2 rounded-xl px-4" onClick={() => startProject()} aria-haspopup="dialog"><Plus className="h-4 w-4" aria-hidden="true" />새 프로젝트</Button>
         </div>
+        {detectionQuery.data?.backends.every((backend) => !backend.found) ? <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-sm text-muted-foreground">AI와 작업하려면 Claude Code 또는 Codex를 연결해 주세요. 예제와 편집 기능은 먼저 살펴볼 수 있어요.</p><Button variant="outline" size="sm" onClick={() => setCliMissingOpen(true)}>AI 연결 안내</Button></div> : null}
+        {activeTab === "recent" || activeTab === "mine" ? <section aria-label="빠른 시작" className="mb-10 grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 xl:grid-cols-4">
+          {PROJECT_TYPES.map(({ id, label, description, icon: Icon, color }) => <button key={id} type="button" onClick={() => startProject(id)} aria-haspopup="dialog" className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:items-start xl:gap-3">
+            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${color}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{label}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span></span>
+            <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" aria-hidden="true" />
+          </button>)}
+        </section> : null}
         <Tabs
           value={activeTab}
-          onValueChange={(value) => setActiveTab(value as HomeTab)}
+          onValueChange={changeView}
           className="flex flex-1 flex-col"
         >
-          <div className="flex items-center justify-between gap-4 px-8 pb-4 pt-8 max-[640px]:flex-col max-[640px]:items-stretch max-[640px]:px-4 max-[640px]:pt-4">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
             <TabsList className="max-[640px]:grid max-[640px]:h-auto max-[640px]:w-full max-[640px]:grid-cols-2">
-              <TabsTrigger value="recent">최근</TabsTrigger>
-              <TabsTrigger value="mine">내 디자인</TabsTrigger>
+              <TabsTrigger value="recent">최근 작업</TabsTrigger>
+              <TabsTrigger value="mine">내 프로젝트</TabsTrigger>
               <TabsTrigger value="examples">예제</TabsTrigger>
               <TabsTrigger value="systems">디자인 시스템</TabsTrigger>
             </TabsList>
@@ -326,7 +357,7 @@ export default function HomeView() {
               </div>
           </div>
 
-          <div className="px-8 pb-8 max-[640px]:px-4">
+          <div>
             <TabsContent value="recent">
               <ProjectCardSection
                 cards={filteredRecentCards}
@@ -338,7 +369,7 @@ export default function HomeView() {
                 emptyHint="프로젝트 종류를 고르고 이름을 입력하면 최근 작업한 프로젝트가 최대 12개까지 여기에 나타나요."
                 onRetry={() => void recentQuery.refetch()}
                 onClearQuery={clearProjectQuery}
-                onStartProject={startProject}
+                onStartProject={() => startProject()}
                 onDelete={onProjectDelete}
               />
             </TabsContent>
@@ -354,14 +385,14 @@ export default function HomeView() {
                 emptyHint="프로젝트 종류를 고르고 이름을 입력하면 예제를 제외한 내 프로젝트가 모두 여기에 모여요."
                 onRetry={() => void mineQuery.refetch()}
                 onClearQuery={clearProjectQuery}
-                onStartProject={startProject}
+                onStartProject={() => startProject()}
                 onDelete={onProjectDelete}
               />
             </TabsContent>
 
             <TabsContent value="examples">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+                <p className="max-w-2xl text-xs leading-5 text-muted-foreground">
                   기본으로 들어 있는 튜토리얼, 프롬프트 샘플, 템플릿 예제예요.
                   지워도 괜찮아요 — ‘예제 복원’을 누르면 기본 세트가 다시
                   생겨요.
@@ -387,7 +418,7 @@ export default function HomeView() {
                 emptyHint="‘예제 복원’을 누르면 기본 예제 세트를 다시 받아올 수 있어요."
                 onRetry={() => void examplesQuery.refetch()}
                 onClearQuery={clearProjectQuery}
-                onStartProject={startProject}
+                onStartProject={() => startProject()}
                 onDelete={onProjectDelete}
               />
             </TabsContent>
@@ -426,7 +457,24 @@ export default function HomeView() {
             </TabsContent>
           </div>
         </Tabs>
+        </div>
       </div>
+
+      <Dialog open={creationType !== null} onOpenChange={(open) => { if (!open) closeCreation(); }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-2xl gap-0 p-0" hideClose={creatingProject} onEscapeKeyDown={(event) => { if (creatingProject) event.preventDefault(); }} onInteractOutside={(event) => { if (creatingProject) event.preventDefault(); }} onOpenAutoFocus={(event) => { event.preventDefault(); document.getElementById("project-name")?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); createTriggerRef.current?.focus(); }}>
+          <DialogHeader className="border-b border-border px-6 pb-5 pt-6">
+            <DialogTitle className="text-xl">새 프로젝트 만들기</DialogTitle>
+            <DialogDescription className="pt-1 leading-6">형식과 작업 목적을 정하면, 프로젝트에서 AI와 함께 만들 수 있어요.</DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pt-5">
+            <p id="project-type-label" className="mb-2 text-xs font-semibold text-muted-foreground">01 · 무엇을 만드나요?</p>
+            <div role="group" aria-labelledby="project-type-label" className="flex flex-wrap gap-2">
+              {[...PROJECT_TYPES, { id: "other" as const, label: "기타" }].map((type) => <button key={type.id} type="button" disabled={creatingProject} aria-pressed={creationType === type.id} onClick={() => { const next = new URLSearchParams(searchParams); next.set("create", type.id); setSearchParams(next, { replace: true }); }} className={`min-h-10 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${creationType === type.id ? "border-accent bg-accent/10 text-accent" : "border-border bg-card text-muted-foreground hover:bg-muted"}`}>{type.label}</button>)}
+            </div>
+          </div>
+          {settingsQuery.isPending ? <p role="status" className="p-6 text-sm text-muted-foreground">프로젝트 설정을 불러오는 중이에요.</p> : settingsQuery.isError ? <div role="alert" className="space-y-3 p-6"><p className="text-sm text-destructive">프로젝트 설정을 불러오지 못했어요.</p><Button variant="outline" onClick={() => void settingsQuery.refetch()}>설정 다시 불러오기</Button></div> : creationType !== null ? <NewProjectPanel type={creationType} designSystems={systemsQuery.data ?? []} defaultBackend={settingsQuery.data.default_backend} systemsLoading={systemsQuery.isPending} systemsError={systemsQuery.error} onRetrySystems={() => void systemsQuery.refetch()} onPendingChange={setCreatingProject} onCreated={(project) => navigate(`/projects/${project.id}`)} /> : null}
+        </DialogContent>
+      </Dialog>
 
       {detectionQuery.data ? (
         <CliMissingModal
@@ -518,6 +566,7 @@ function SystemsSection({
   onImport: () => void;
   onSystemDelete: (card: CardViewModel) => void;
 }) {
+  const importTriggerRef = useRef<HTMLButtonElement>(null);
   // Match the backend MAX_UPLOAD_BYTES guard in design-system-extract.ts
   // so the user sees the size ceiling client-side instead of getting
   // "invalid_upload" back after the multipart round-trip.
@@ -538,27 +587,27 @@ function SystemsSection({
 
       <CardGrid>
         <button
+          ref={importTriggerRef}
           type="button"
           onClick={onToggleImport}
-          aria-expanded={importOpen}
-          aria-controls="system-import-panel"
-          className="overflow-hidden rounded-xl border border-dashed border-border bg-card text-left transition-colors hover:border-foreground/40 hover:shadow-app-3"
+          aria-haspopup="dialog"
+          className="overflow-hidden rounded-2xl border border-dashed border-border bg-card text-left transition-colors hover:border-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <div className="grid h-[120px] place-items-center bg-accent/10 text-accent">
+          <div className="grid aspect-[16/10] place-items-center border-b border-border bg-accent/5 text-accent">
             <div className="grid place-items-center gap-2">
-              <div className="grid h-12 w-12 place-items-center rounded-full border border-current/20 bg-white/70">
-                <Plus className="h-6 w-6" />
+              <div className="grid h-12 w-12 place-items-center rounded-xl border border-current/20 bg-card">
+                <Plus className="h-6 w-6" aria-hidden="true" />
               </div>
               <div className="text-xs font-medium tracking-[0.16em]">
                 가져오기
               </div>
             </div>
           </div>
-          <div className="p-3">
-            <div className="text-sm font-medium text-foreground">
+          <div className="p-4">
+            <div className="text-sm font-semibold text-foreground">
               디자인 시스템 가져오기
             </div>
-            <div className="mt-0.5 text-xs text-muted-foreground">
+            <div className="mt-1.5 text-xs text-muted-foreground">
               Git URL, 웹사이트 URL, 또는 PPTX/PDF 업로드
             </div>
           </div>
@@ -613,15 +662,17 @@ function SystemsSection({
         </div>
       ) : null}
 
-      {importOpen ? (
-        <div id="system-import-panel" className="rounded-xl border border-border bg-card p-5">
-          <div className="text-sm font-medium text-foreground">
+      <Dialog open={importOpen} onOpenChange={(open) => { if (!open && !isPending) onToggleImport(); }}>
+        <DialogContent id="system-import-panel" className="w-[calc(100%-2rem)] max-w-3xl" hideClose={isPending} onEscapeKeyDown={(event) => { if (isPending) event.preventDefault(); }} onInteractOutside={(event) => { if (isPending) event.preventDefault(); }} onCloseAutoFocus={(event) => { event.preventDefault(); importTriggerRef.current?.focus(); }}>
+          <DialogHeader>
+          <DialogTitle>
             디자인 시스템 가져오기
-          </div>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+          </DialogTitle>
+          <DialogDescription className="pt-1 leading-6">
             원본에서 색상과 글꼴을 찾아 초안을 만들어요. 가져온 뒤 미리보기를 확인하고,
             원본과 맞는지 검토한 다음 게시해 주세요.
-          </p>
+          </DialogDescription>
+          </DialogHeader>
 
           <div className="mt-4 inline-flex rounded-lg border border-border bg-background p-1">
             <button
@@ -790,8 +841,8 @@ function SystemsSection({
               취소
             </Button>
           </div>
-        </div>
-      ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

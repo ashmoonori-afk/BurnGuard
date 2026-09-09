@@ -21,7 +21,7 @@ export function DirectionCard({
   return (
     <article
       className={cn(
-        "min-w-0 overflow-hidden rounded-lg border bg-card",
+        "min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow",
         selected ? "border-accent ring-2 ring-accent/20" : "border-border",
       )}
       aria-busy={pending}

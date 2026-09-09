@@ -19,7 +19,7 @@ export function GraphicCanvasFields({
   return (
     <fieldset className="space-y-3 border-t border-border pt-4">
       <legend className="text-xs font-medium text-foreground/80">
-        그래픽 캔버스 · CSS px
+        이미지 크기 · px
       </legend>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">

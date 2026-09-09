@@ -37,11 +37,11 @@ export default function DrawPanel({
   return (
     <div className="flex min-h-0 flex-col overflow-y-auto">
       <div className="border-b border-border px-3 py-2">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="text-sm font-semibold">
           그리기
         </div>
-        <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
-          캔버스 위에 메모를 스케치해요. 파일마다 저장되고 html_zip
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+          캔버스 위에 메모를 스케치해요. 파일마다 저장되고 HTML ZIP
           내보내기에는 포함되지 않아요.
         </p>
       </div>
@@ -59,9 +59,9 @@ export default function DrawPanel({
               aria-checked={tool === t.id}
               onClick={() => onChangeTool(t.id)}
               className={cn(
-                "flex flex-col items-center gap-0.5 rounded border px-2 py-1.5 text-[10px] transition-colors",
+                "flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs transition-colors",
                 tool === t.id
-                  ? "border-amber-500 bg-amber-500/10 text-amber-700"
+                  ? "border-accent bg-accent/10 text-accent"
                   : "border-border text-muted-foreground hover:text-foreground",
               )}
             >
@@ -87,7 +87,7 @@ export default function DrawPanel({
               title={c}
               aria-label={`색상 ${c}`}
               className={cn(
-                "h-6 w-6 rounded-full border-2 transition-transform",
+                "h-9 w-9 rounded-full border-4 transition-transform max-[900px]:h-11 max-[900px]:w-11",
                 color === c ? "border-foreground scale-110" : "border-transparent",
               )}
               style={{ backgroundColor: c }}
@@ -110,7 +110,7 @@ export default function DrawPanel({
               onClick={() => onChangeWidth(w)}
               aria-label={`선 굵기 ${w}px`}
               className={cn(
-                "flex h-7 w-10 items-center justify-center rounded border text-[10px] transition-colors",
+                "flex h-10 w-12 items-center justify-center rounded-lg border text-xs transition-colors max-[900px]:h-11",
                 strokeWidth === w
                   ? "border-foreground bg-muted"
                   : "border-border text-muted-foreground hover:text-foreground",
@@ -125,12 +125,12 @@ export default function DrawPanel({
         </div>
       </section>
 
-      <div className="px-3 py-2 flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-3">
         <button
           type="button"
           onClick={onUndo}
           disabled={!hasShapes}
-          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
           title="실행 취소 (Ctrl+Z)"
         >
           <Undo2 className="h-3 w-3" /> 실행 취소
@@ -138,7 +138,7 @@ export default function DrawPanel({
         <button
           type="button"
           onClick={onRedo}
-          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground"
+          className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:text-foreground"
           title="다시 실행 (Ctrl+Shift+Z)"
         >
           <Redo2 className="h-3 w-3" /> 다시 실행
@@ -147,7 +147,7 @@ export default function DrawPanel({
           type="button"
           onClick={onClear}
           disabled={!hasShapes}
-          className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px] text-destructive hover:bg-destructive/10 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-2 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-40 disabled:cursor-not-allowed"
           title="이 파일의 그리기를 모두 지워요"
         >
           <Trash2 className="h-3 w-3" /> 모두 지우기

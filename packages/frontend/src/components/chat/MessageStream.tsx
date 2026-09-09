@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, MessageSquare } from "lucide-react";
 import type { NormalizedEvent, SessionInfo } from "@bg/shared";
 import AgentMessage from "./blocks/AgentMessage";
 import ThinkingBlock from "./blocks/ThinkingBlock";
@@ -67,8 +67,22 @@ export default function MessageStream({
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="chat-scroll absolute inset-0 overflow-y-auto px-3 py-4 space-y-3"
+        className="chat-scroll absolute inset-0 space-y-4 overflow-y-auto px-4 py-5"
       >
+        {groups.length === 0 && (
+          <div className="py-7">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <MessageSquare className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <h2 className="text-base font-semibold tracking-tight">무엇을 만들어 볼까요?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">목적과 원하는 내용을 알려 주세요. 완성된 결과를 보면서 계속 다듬을 수 있어요.</p>
+            <ol className="mt-5 space-y-3 text-xs leading-relaxed text-muted-foreground">
+              <li className="flex gap-2.5"><span className="font-medium text-primary">01</span> 아래에 작업을 요청해요.</li>
+              <li className="flex gap-2.5"><span className="font-medium text-primary">02</span> 미리보기에서 결과를 확인해요.</li>
+              <li className="flex gap-2.5"><span className="font-medium text-primary">03</span> 수정하거나 코멘트를 남겨요.</li>
+            </ol>
+          </div>
+        )}
         {groups.map((g, i) => {
           switch (g.kind) {
             case "user":
@@ -118,7 +132,7 @@ export default function MessageStream({
         <button
           type="button"
           onClick={jumpToBottom}
-          className="absolute bottom-3 right-4 z-10 inline-flex items-center gap-1 rounded-full border border-border bg-background/95 px-2.5 py-1 text-[11px] font-medium text-foreground shadow-sm backdrop-blur hover:bg-background"
+          className="absolute bottom-10 right-4 z-10 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-background/95 px-3 py-1.5 text-xs font-medium text-foreground shadow-sm backdrop-blur hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           title="최신으로 이동"
         >
           <ArrowDown className="h-3 w-3" />
