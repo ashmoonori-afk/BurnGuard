@@ -30,7 +30,7 @@ export interface RunnerResult {
 
 export function buildClaudeCommand(options: Pick<RunnerOptions, "binaryPath" | "generation">): string[] {
   return [options.binaryPath, "-p", "--output-format", "stream-json", "--verbose",
-    "--permission-mode", "acceptEdits", "--permission-prompts", "none",
+    "--permission-mode", "acceptEdits",
     "--effort", options.generation?.effort ?? "low",
     ...(options.generation?.model ? ["--model", options.generation.model] : []),
     ...(options.generation?.vanilla ? ["--safe-mode"] : []),

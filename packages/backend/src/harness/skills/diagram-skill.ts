@@ -50,6 +50,26 @@ fewest marks. Do not combine types unless separate, titled panels are clearer.
 - Reference existing design-system tokens by CSS variable name with \`var(--...)\`.
   Do not hardcode colours, font families, or introduce a diagram palette.
 
+## DIAGRAM_VISUAL_CRAFT
+
+- Lay nodes on an 8px grid with equal gaps; align node edges in each lane and
+  keep every node the same height within a row.
+- Nodes: 8-12px corner radius, a tinted surface fill (accent or neutral at
+  8-14% opacity) with a 1px hairline stroke at 30-40% of the ink colour, 16-20px
+  inner padding, label 14-16px in the body face, weight 500. Decision nodes may
+  use a diamond or a pill; all other shapes stay rectangles.
+- Edges: 1.5px stroke in the muted ink colour, rounded joins, one arrowhead
+  style via a single \`<marker>\`; orthogonal or gently curved routes with 8px
+  clearance from nodes. Edge labels 12-13px on a small surface plate so they
+  never sit on the line.
+- Lanes and groups: a very light band (2-4% ink) with a 12-13px uppercase
+  tracked title in the corner; no heavy boxes around groups.
+- Emphasis: one accent for the main path or critical node; secondary paths in
+  neutrals; dashed strokes for optional or future links; add a compact legend
+  when more than one line style is used.
+- Title above the SVG at 20-24px with a one-line caption; keep 24px of
+  whitespace around the drawing.
+
 ## Anti-patterns
 
 - No decorative 3D, fake perspective, gradients that imply depth, or ornamental

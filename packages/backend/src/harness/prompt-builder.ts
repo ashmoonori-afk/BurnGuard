@@ -10,6 +10,11 @@ import { getSqlite } from "../db/sqlite-client";
 import { DECK_SKILL_MD } from "./skills/deck-skill";
 import { DIAGRAM_SKILL_MD } from "./skills/diagram-skill";
 import { PROTOTYPE_NAVIGATION_CONTRACT, PROTOTYPE_SKILL_MD } from "./skills/prototype-skill";
+import {
+  DEFAULT_VISUAL_IDENTITY,
+  VISUAL_CRAFT_BY_TYPE,
+  VISUAL_CRAFT_CORE,
+} from "./skills/visual-craft-skill";
 import { appendAttachmentContext } from "./prompt-attachments";
 import {
   COMPACT_DECK_SKILL_MD,
@@ -261,6 +266,19 @@ export async function buildPrompt(
     lines.push("");
   }
 
+  const visualCraft = selectVisualCraft(project.project_type);
+  if (visualCraft !== null) {
+    lines.push("## Visual craft");
+    lines.push(VISUAL_CRAFT_CORE.trim());
+    lines.push(visualCraft.trim());
+    lines.push("");
+    if (!context.designSystem) {
+      lines.push("## Default visual identity");
+      lines.push(DEFAULT_VISUAL_IDENTITY.trim());
+      lines.push("");
+    }
+  }
+
   if (isDiagramRequest(userEvent.text)) {
     lines.push("## Diagram skill");
     lines.push(DIAGRAM_SKILL_MD.trim());
@@ -310,4 +328,15 @@ const DIAGRAM_REQUEST_PATTERN =
 
 function isDiagramRequest(request: string): boolean {
   return DIAGRAM_REQUEST_PATTERN.test(request);
+}
+
+function selectVisualCraft(projectType: SessionContext["project"]["project_type"]): string | null {
+  switch (projectType) {
+    case "prototype":
+    case "slide_deck":
+    case "graphic":
+      return VISUAL_CRAFT_BY_TYPE[projectType];
+    default:
+      return null;
+  }
 }

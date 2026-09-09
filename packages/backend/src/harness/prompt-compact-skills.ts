@@ -12,6 +12,9 @@ export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 - Preserve \`<script src="/runtime/deck-stage.js" defer></script>\`; do not set \`data-active\` statically or reimplement deck navigation.
 - Every visible text element needs a unique \`data-bg-node-id="slide-{N}-{purpose}"\`; parent slides use \`data-bg-node-id="slide-{N}"\`.
 
+## Projection scale
+- Declare and use \`--deck-type-hero: 80px; --deck-type-heading: 52px; --deck-type-body: 32px; --deck-type-caption: 24px; --deck-pad-slide: 72px; --deck-pad-block: 32px\`. Set \`.deck-slide { font-size: var(--deck-type-body) }\` so unstyled text inherits the scale; every other \`font-size\` is \`var(--deck-type-*)\` (or a \`calc()\` that scales one up), never a raw px value. At 1920x1080 no rendered text may be below \`24px\`; never shrink type or tighten spacing toward web density in self-review.
+
 ## Style
 - Use asymmetric layouts, oversized type or KPI numbers where useful, and avoid centered-everything except cover/closing slides.
 - Keep CSS inline in the top \`<style>\` block. Reference design-system CSS variables (see list above) and avoid new palettes, font stacks, or typefaces.`;
@@ -27,5 +30,5 @@ export const COMPACT_PROTOTYPE_SKILL_MD = `# Prototype compact contract
 ## Structure & style
 - Keep \`index.html\` as home; each HTML page uses inline CSS and vanilla JS unless the user explicitly asks otherwise.
 - Top-level semantic sections need \`data-section\` and unique \`data-bg-node-id\` values for visible text and editable parent sections.
-- Strong visual hierarchy, asymmetric sections outside true heroes, responsive down to 360 px, no hidden primary value.
+- Strong visual hierarchy, asymmetric sections outside true heroes, responsive down to 320 px, no hidden primary value.
 - Keep CSS in one top \`<style>\` block. Reference design-system CSS variables (see list above) and avoid new palettes, font stacks, or typefaces.`;
