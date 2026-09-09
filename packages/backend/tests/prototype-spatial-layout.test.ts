@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildPrompt, MAX_SKILL_CHARS } from "../src/harness/prompt-builder";
-import { PROTOTYPE_SKILL_MD } from "../src/harness/skills/prototype-skill";
+import { PROTOTYPE_NAVIGATION_CONTRACT, PROTOTYPE_SKILL_MD } from "../src/harness/skills/prototype-skill";
 
 const SPATIAL_SENTINELS = ["scroll-owner", "wrap-first", "load-bearing"];
 const ORIGINAL_ARCHETYPE_DESCRIPTIONS = [
@@ -20,6 +20,31 @@ const ORIGINAL_ARCHETYPE_DESCRIPTIONS = [
 ];
 
 describe("prototype spatial layout vocabulary", () => {
+  test("Given full compact and vanilla modes When building a prompt Then only prototypes receive the shared navigation contract once", async () => {
+    for (const projectType of ["prototype", "slide_deck", "graphic"] as const) {
+      for (const contextMode of ["full", "compact"] as const) {
+        for (const vanilla of [false, true]) {
+          const prompt = await buildPrompt({
+            project: {
+              project_id: "prototype-navigation-test",
+              project_name: "Prototype navigation test",
+              project_type: projectType,
+              entrypoint: "index.html",
+              project_dir: "/missing/prototype-navigation-test",
+              options_json: null,
+            },
+            files: [], attachments: [], designSystem: null, openComments: [],
+          }, { type: "user.message", text: "Build the requested website" }, {
+            contextMode,
+            backendId: "codex",
+            generation: { model: "gpt-5.4", provider: "native", effort: "low", vanilla },
+          });
+          expect(prompt.split(PROTOTYPE_NAVIGATION_CONTRACT.trim())).toHaveLength(projectType === "prototype" ? 2 : 1);
+        }
+      }
+    }
+  });
+
   test("ships each spatial rule group in the built prototype prompt", async () => {
     const prompt = await buildPrompt(
       {

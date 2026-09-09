@@ -1,5 +1,6 @@
 import { Paperclip, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { commentEditDisplayText } from "@/components/modes/comment-edit-request";
 
 export default function UserMessage({
   text,
@@ -18,7 +19,7 @@ export default function UserMessage({
   return (
     <div className="group flex flex-col items-end gap-1">
       <div className="max-w-[94%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-md border border-primary/15 bg-primary/5 px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
-        {text}
+        {commentEditDisplayText(text)}
         {attachmentCount && attachmentCount > 0 ? (
           <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
             <Paperclip className="h-3 w-3" aria-hidden="true" /> 첨부 파일 {attachmentCount}개

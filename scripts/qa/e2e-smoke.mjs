@@ -311,7 +311,8 @@ async function startBackend(homeDir) {
   let deadline;
   try {
     await new Promise((resolve, reject) => {
-      deadline = setTimeout(() => reject(new Error("backend readiness timeout")), 90_000);
+      // Cold sample profiles copy and hash bundled assets before listening, including on busy Windows hosts.
+      deadline = setTimeout(() => reject(new Error("backend readiness timeout")), 180_000);
       child.once("error", reject);
       child.once("exit", () => reject(new Error("backend exited before readiness")));
       child.stdout.on("data", (chunk) => { backendLog += chunk; if (backendLog.includes(READY)) resolve(); });
