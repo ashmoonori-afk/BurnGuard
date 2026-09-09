@@ -1,6 +1,6 @@
 {
   "name": "burnguard-design",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "license": "Apache-2.0",
   "private": true,
   "workspaces": ["packages/*"],
