@@ -1,6 +1,7 @@
 import { cp, copyFile, lstat, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { APP_NAME, APP_VERSION } from "../packages/shared/src/app";
+import { nativeModulePackages } from "../packages/backend/src/services/native-binding";
 
 export function isRuntimeSource(relativePath: string): boolean {
   const normalized = relativePath.replaceAll("\\", "/");
@@ -38,13 +39,11 @@ export async function stageRuntimeAssets(repoRoot: string, outputDirectory: stri
   await cp(frontend, path.join(resources, "packages/frontend/dist"), { recursive: true });
   const playwright = path.dirname(Bun.resolveSync("playwright-core/package.json", path.join(repoRoot, "packages/backend")));
   await cp(playwright, path.join(resources, "node_modules/playwright-core"), { recursive: true, dereference: true });
-  if (includeWindowsNode) {
-    // Native canvas bindings and PDF.js's relative worker must remain real files.
-    const canvasRoot = path.dirname(Bun.resolveSync("@napi-rs/canvas/package.json", path.join(repoRoot, "packages/backend")));
-    for (const name of ["@napi-rs/canvas", "@napi-rs/canvas-win32-x64-msvc", "pdfjs-dist"]) {
-      const source = path.dirname(Bun.resolveSync(`${name}/package.json`, name === "@napi-rs/canvas-win32-x64-msvc" ? canvasRoot : path.join(repoRoot, "packages/backend")));
-      await cp(source, path.join(destinationParent, "node_modules", name), { recursive: true, dereference: true });
-    }
+  // Native canvas bindings and PDF.js's relative worker must remain real files on every platform.
+  const canvasRoot = path.dirname(Bun.resolveSync("@napi-rs/canvas/package.json", path.join(repoRoot, "packages/backend")));
+  for (const name of nativeModulePackages(process.platform, process.arch)) {
+    const source = path.dirname(Bun.resolveSync(`${name}/package.json`, name.startsWith("@napi-rs/canvas-") ? canvasRoot : path.join(repoRoot, "packages/backend")));
+    await cp(source, path.join(destinationParent, "node_modules", name), { recursive: true, dereference: true });
   }
   await copyFile(path.join(repoRoot, "packages/backend/src/services/chromium-node-bridge.mjs"), path.join(resources, "chromium-node-bridge.mjs"));
   const worker = await Bun.build({
