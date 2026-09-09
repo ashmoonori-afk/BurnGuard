@@ -8,6 +8,7 @@ import { CatalogRepositoryError, getCatalogRow, getCatalogTags, getCatalogUsage,
 import { systemsDir } from "../lib/paths";
 import { CatalogFileError, catalogPaths, inspectCatalogTree } from "../services/catalog-files";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
+import { rawFileHeaders } from "../security/raw-file-response";
 import {
   CatalogLifecycleError, copyCatalogSystem, purgeCatalogSystem, restoreCatalogSystem, trashCatalogSystem,
 } from "../services/catalog-lifecycle";
@@ -58,7 +59,8 @@ catalogRoutes.get("/api/design-systems/:id/files/*", async (c) => {
     const paths = await catalogPaths(systemsDir, id, row.dirPath);
     const candidate = resolveWithin(paths.live, ...relPath.replaceAll("\\", "/").split("/").map(assertSafeName));
     if (!(await stat(candidate)).isFile()) return c.json(fail("design_system_file_not_found", "Design system file not found"), 404);
-    return new Response(Bun.file(candidate), { headers: { "Content-Type": catalogContentType(relPath), "Cache-Control": "no-cache" } });
+    const type = catalogContentType(relPath);
+    return new Response(Bun.file(candidate), { headers: { ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(candidate) }), "Content-Type": type, "Cache-Control": "no-cache" } });
   } catch (error) {
     if (error instanceof Error) return c.json(fail("design_system_file_not_found", "Design system file not found", { id, path: relPath }), 404);
     throw error;

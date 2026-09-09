@@ -2,18 +2,23 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { Hono } from "hono";
 import { APP_NAME } from "@bg/shared/app";
+import { APP_SHELL_SECURITY_HEADERS } from "@bg/shared/security";
 import { resolveRepoRoot } from "./lib/paths";
 import {
   createRequestAuthority,
   type RequestAuthorityOptions,
 } from "./security/request-authority";
 import { PathBoundaryError, resolveWithin } from "./security/path-boundary";
+import { createRequestBodyLimit } from "./security/request-limits";
 
 export function createApp(authority?: RequestAuthorityOptions): Hono {
   const app = new Hono();
   if (authority) {
     app.use("/api/*", createRequestAuthority(authority));
   }
+  // Body ceilings run before any route parses a body; the authority check
+  // above already refused unauthenticated callers without touching it.
+  app.use("/api/*", createRequestBodyLimit());
 
   // Generated decks use this stable public, bundled runtime URL.
   app.get("/runtime/deck-stage.js", async (c) => (await import("./routes/runtime")).runtimeRoutes.fetch(c.req.raw));
@@ -58,6 +63,7 @@ export function createApp(authority?: RequestAuthorityOptions): Hono {
       if (existsSync(indexPath)) {
         return new Response(Bun.file(indexPath), {
           headers: {
+            ...APP_SHELL_SECURITY_HEADERS,
             "Content-Type": "text/html; charset=utf-8",
             "Cache-Control": "no-cache",
           },
@@ -65,6 +71,7 @@ export function createApp(authority?: RequestAuthorityOptions): Hono {
       }
     }
 
+    for (const [name, value] of Object.entries(APP_SHELL_SECURITY_HEADERS)) c.header(name, value);
     return c.html(`<!doctype html>
 <html lang="en">
 <head>

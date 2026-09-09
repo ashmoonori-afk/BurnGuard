@@ -6,6 +6,7 @@ import { pickPort } from "./lib/port";
 import { appRootDir } from "./lib/app-paths";
 import { acquireWindowsProfile } from "./profile-ownership";
 import { generateLaunchCapability } from "./security/request-authority";
+import { MAX_REQUEST_BODY_BYTES } from "./security/request-limits";
 import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
 import { interruptAllUserTurns } from "./services/turns";
@@ -50,6 +51,8 @@ const server = Bun.serve({
   // any POST that awaits a multi-minute LLM CLI subprocess. 255 is the max
   // a single uint8 allows; SSE routes also write periodic heartbeats.
   idleTimeout: 255,
+  // The largest body any API route accepts; per-route ceilings are lower.
+  maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
   fetch: app.fetch,
 });
 
