@@ -122,8 +122,14 @@ export function resolveWithin(root: string, ...segments: string[]): string {
 
   // macOS exposes temporary directories through both `/var` and its
   // canonical `/private/var` spelling. Preserve the public path spelling
-  // callers used while retaining the realpath-based containment check.
-  if (process.platform === "darwin" && resolved.startsWith("/private/")) {
+  // callers used while retaining the realpath-based containment check. A
+  // root the caller already spelled under `/private/` keeps that spelling:
+  // stripping it there would move the result out of the caller's root.
+  if (
+    process.platform === "darwin" &&
+    resolved.startsWith("/private/") &&
+    !path.resolve(root).startsWith("/private/")
+  ) {
     return resolved.slice("/private".length);
   }
   return resolved;
