@@ -27,5 +27,5 @@ export const COMPACT_PROTOTYPE_SKILL_MD = `# Prototype compact contract
 ## Structure & style
 - Keep \`index.html\` as home; each HTML page uses inline CSS and vanilla JS unless the user explicitly asks otherwise.
 - Top-level semantic sections need \`data-section\` and unique \`data-bg-node-id\` values for visible text and editable parent sections.
-- Strong visual hierarchy, asymmetric sections outside true heroes, responsive down to 360 px, no hidden primary value.
+- Strong visual hierarchy, asymmetric sections outside true heroes, responsive down to 320 px, no hidden primary value.
 - Keep CSS in one top \`<style>\` block. Reference design-system CSS variables (see list above) and avoid new palettes, font stacks, or typefaces.`;
