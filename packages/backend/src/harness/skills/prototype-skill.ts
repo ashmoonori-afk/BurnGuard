@@ -1,12 +1,12 @@
 /**
  * Per-type skill text injected into the prompt by `prompt-builder.ts`.
- * Prototype projects produce a single `index.html` rendered live in the
- * canvas iframe. This skill teaches the CLI what a polished landing /
+ * Prototype projects produce `index.html` and linked pages rendered in the
+ * canvas iframe. This skill teaches the CLI what a polished website /
  * hero prototype looks like inside our constraints — plain HTML +
  * inline CSS + vanilla JS, no framework, no bundler.
  *
  * Keep this tight — it ships on every turn for a prototype project.
- * Current size ~5 KB; re-measure before adding new sections.
+ * Keep the core skill within 5 KB; navigation is a shared delivery contract.
  *
  * Design-system boundary: STRUCTURE only — section archetypes, content
  * strictness, node-id contracts, interaction conventions. Colour,
@@ -17,15 +17,15 @@ export const PROTOTYPE_SKILL_MD = `# Prototype authoring conventions
 
 ## Artifact contract
 
-- One \`index.html\` at the project root with all CSS inline in a top
-  \`<style>\` block and JS inline in a \`<script>\` before \`</body>\`.
+- The homepage is \`index.html\` at the project root. Each page has CSS in a top
+  \`<style>\` block and JS inline before \`</body>\`.
 - No React, Vue, Svelte, Tailwind classes, or bundler-only syntax (no
   JSX, no \`import\` of npm modules). Plain HTML / CSS / vanilla JS only.
 - External CDN \`<script>\` tags allowed only on explicit user request.
 
 ## Default page structure
 
-- Unspecified pages default to: navbar → hero → features → social proof
+- Unspecified homepages default to: navbar → hero → features → social proof
   → pricing or secondary feature → CTA banner → footer (4–7 sections).
 - Top-level blocks are \`<section data-section="<archetype>">\` direct
   children of \`<body>\`, except navbar (\`<header>\`) and footer
@@ -112,4 +112,11 @@ export const PROTOTYPE_SKILL_MD = `# Prototype authoring conventions
 
 - No React, Vue, Svelte, Next.js, Vite, \`npm install\`, or external packages.
 - No files outside the project directory, token overrides, secrets, or API keys.
+`;
+
+export const PROTOTYPE_NAVIGATION_CONTRACT = `## Website navigation contract
+- For a new website prototype or a request to expand its navigation, create the homepage and the core subpages implied by the requested user journey, each with distinct useful content. Respect an explicit single-page or single-screen request. A scoped edit must preserve other pages and must not add unrelated subpages.
+- Keep \`index.html\` as home and author real local HTML files such as \`about.html\` or \`products/detail.html\`. Use relative links such as \`about.html\` and \`../index.html\` in the same preview; no client router or local server setup is needed. Do not use root-relative paths or \`target="_blank"\` for site navigation.
+- Share the visual language and navigation across pages, mark the current page, and provide a working link back home. Link only to authored pages; fragment links are allowed when the destination section exists. Never use \`href="#"\` as a substitute for a promised page.
+- Open every authored page at desktop and narrow widths, exercise its primary links and the return-home path, and fix missing pages, assets or layout failures before reporting completion.
 `;

@@ -109,7 +109,7 @@ import {
   isDesignAuditCurrent,
   preferDesignAuditResult,
 } from "@/lib/design-audit-state";
-import { resolveCanvasSource } from "@/lib/canvas-source";
+import { resolveCanvasNavigation, resolveCanvasSource } from "@/lib/canvas-source";
 
 export default function ProjectView() {
   const { id } = useParams();
@@ -149,6 +149,7 @@ export default function ProjectView() {
   const [activeTabId, setActiveTabId] = useState("design-system");
   const [mobilePane, setMobilePane] = useState<"workspace" | "chat">("workspace");
   const [openFileTabs, setOpenFileTabs] = useState<ArtifactTab[]>([]);
+  const [canvasNavigation, setCanvasNavigation] = useState<{ projectId: string; relPath: string; url: string } | null>(null);
   const [mode, setMode] = useState<CanvasMode | null>(null);
   const [selection, setSelection] = useState<SelectedNode | null>(null);
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
@@ -870,7 +871,7 @@ export default function ProjectView() {
     const activeFile = tabs.find(
       (tab) => tab.id === activeTabId && tab.kind === "file" && tab.relPath,
     );
-    return resolveCanvasSource({
+    const source = resolveCanvasSource({
       projectId: project?.id ?? null,
       activeRelPath: activeFile?.relPath ?? null,
       indexedRelPaths: filesQuery.isSuccess
@@ -878,14 +879,27 @@ export default function ProjectView() {
         : null,
       entrypointUrl: artifacts?.entrypoint_url ?? null,
     });
+    return source && canvasNavigation && canvasNavigation.projectId === project?.id && canvasNavigation.relPath === activeFile?.relPath ? canvasNavigation.url : source;
   }, [
     activeTabId,
+    canvasNavigation,
     artifacts?.entrypoint_url,
     files,
     filesQuery.isSuccess,
     project?.id,
     tabs,
   ]);
+
+  const handleCanvasNavigate = useCallback((href: string) => {
+    if (!canvasSrc || !id) return;
+    const target = resolveCanvasNavigation(href, new URL(canvasSrc, window.location.href).href, files.map((file) => file.rel_path));
+    if (!target) {
+      pushToast({ title: "페이지를 열 수 없어요", body: "현재 프로젝트에 있는 HTML 페이지 링크인지 확인해 주세요.", tone: "warn" });
+      return;
+    }
+    setCanvasNavigation({ ...target, projectId: id });
+    openFileAsTab(target.relPath, setOpenFileTabs, setActiveTabId);
+  }, [canvasSrc, files, id, pushToast]);
 
   // File-level single-step undo (audit fix #7). Tracks per-file undo
   // availability and exposes it through the canvas top bar. Server
@@ -1182,6 +1196,7 @@ export default function ProjectView() {
               /></Suspense> : undefined}
               mode={mode}
               src={canvasSrc}
+              onNavigate={handleCanvasNavigate}
               frameKey={`${canvasSrc ?? "entrypoint"}:${refreshTick}`}
               onModeChange={setMode}
               onSelect={(next) => {

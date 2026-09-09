@@ -98,19 +98,16 @@ interface BridgeResponse {
  * being asked. Add new event names here AND in BRIDGE_SCRIPT (or
  * deck-stage.ts for runtime-emitted events).
  */
-type FrameEventName = "active-slide-changed";
+type FrameEventName = "active-slide-changed" | "navigate";
+
+type FrameEventPayload<E extends FrameEventName> = E extends "navigate" ? { href: string } : { index: number };
 
 interface FrameEvent<E extends FrameEventName = FrameEventName> {
   __bgFrameBridge: true;
   type: "event";
   event: E;
-  payload: E extends "active-slide-changed" ? { index: number } : unknown;
+  payload: FrameEventPayload<E>;
 }
-
-type FrameEventPayload<E extends FrameEventName> = Extract<
-  FrameEvent,
-  { event: E }
->["payload"];
 
 interface PendingRequest {
   source: Window;
@@ -618,6 +615,48 @@ const BRIDGE_SCRIPT = String.raw`(function () {
 
   window.addEventListener("hashchange", notifyActiveSlide);
 
+  function scrollToFragment(hash) {
+    var id = hash.slice(1);
+    try { id = decodeURIComponent(id); } catch (e) { /* keep malformed fragments literal */ }
+    var target = document.getElementById(id) || document.getElementsByName(id)[0];
+    try {
+      if (location.hash !== hash) {
+        history.replaceState(null, "", location.href.split("#")[0] + hash);
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      }
+    } catch (e) { /* scrolling still works when history is unavailable */ }
+    if (target) target.scrollIntoView();
+    else if (!id || id.toLowerCase() === "top") window.scrollTo(0, 0);
+  }
+
+  function initializeNavigation() {
+    // Window bubbling lets authored element/document handlers prevent navigation first.
+    window.addEventListener("click", function (event) {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      var link = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+      if (!link || link.hasAttribute("download")) return;
+      var target = (link.getAttribute("target") || "").toLowerCase();
+      if (target && target !== "_self") return;
+      var href = (link.getAttribute("href") || "").trim();
+      if (!href) return;
+      var base;
+      var destination;
+      try { base = new URL(document.baseURI); destination = new URL(href, base); } catch (e) { return; }
+      if (destination.origin !== base.origin || !/^https?:$/.test(destination.protocol)) return;
+      if (href.charAt(0) === "#" || (destination.pathname === base.pathname && destination.search === base.search && destination.hash)) {
+        event.preventDefault();
+        scrollToFragment(destination.hash);
+      } else if (/\.html?$/i.test(destination.pathname)) {
+        event.preventDefault();
+        window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: "navigate", payload: { href: destination.href } }, "*");
+      }
+    });
+    try {
+      var hash = new URL(document.baseURI).hash;
+      if (hash) scrollToFragment(hash);
+    } catch (e) { /* no valid artifact base */ }
+  }
+
   // Watch for [data-slide] structural edits AND data-active attribute
   // toggles. Either one means the active slide may have changed.
   if (typeof MutationObserver === "function") {
@@ -633,8 +672,9 @@ const BRIDGE_SCRIPT = String.raw`(function () {
   // Emit an initial state so the parent gets the first slide without
   // a request.
   if (document.readyState === "complete" || document.readyState === "interactive") {
+    initializeNavigation();
     notifyActiveSlide();
   } else {
-    document.addEventListener("DOMContentLoaded", notifyActiveSlide);
+    document.addEventListener("DOMContentLoaded", function () { initializeNavigation(); notifyActiveSlide(); });
   }
 })();`;

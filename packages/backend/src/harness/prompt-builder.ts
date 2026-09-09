@@ -9,7 +9,7 @@ import { selectPromptLearning } from "../db/learning-store";
 import { getSqlite } from "../db/sqlite-client";
 import { DECK_SKILL_MD } from "./skills/deck-skill";
 import { DIAGRAM_SKILL_MD } from "./skills/diagram-skill";
-import { PROTOTYPE_SKILL_MD } from "./skills/prototype-skill";
+import { PROTOTYPE_NAVIGATION_CONTRACT, PROTOTYPE_SKILL_MD } from "./skills/prototype-skill";
 import { appendAttachmentContext } from "./prompt-attachments";
 import {
   COMPACT_DECK_SKILL_MD,
@@ -257,6 +257,7 @@ export async function buildPrompt(
         ? COMPACT_PROTOTYPE_SKILL_MD.trim()
         : PROTOTYPE_SKILL_MD.trim(),
     );
+    lines.push(PROTOTYPE_NAVIGATION_CONTRACT.trim());
     lines.push("");
   }
 

@@ -20,12 +20,12 @@ export const COMPACT_PROTOTYPE_SKILL_MD = `# Prototype compact contract
 
 ## Token budget rules (READ THESE FIRST)
 - The "## Prototype structure" section above is your map. Use it to plan instead of Reading the full file.
-- **Read \`index.html\` at most ONCE per turn.** Re-reading the same file is forbidden — keep findings in working memory across tool calls.
+- Read each target HTML file at most once per turn; keep findings in working memory across tool calls.
 - When you need a section's exact markup, use \`Grep\` for \`data-section="..."\` (or \`data-bg-node-id\`) to find the line, then \`Read\` with \`offset\`/\`limit\` covering that section only.
 - Prefer multiple targeted \`Edit\` calls over \`Write\`. \`Write\` re-emits the entire artifact and is the most expensive thing you can do.
 
 ## Structure & style
-- Work in \`index.html\`; keep the artifact self-contained with inline CSS and vanilla JS unless the user explicitly asks otherwise.
+- Keep \`index.html\` as home; each HTML page uses inline CSS and vanilla JS unless the user explicitly asks otherwise.
 - Top-level semantic sections need \`data-section\` and unique \`data-bg-node-id\` values for visible text and editable parent sections.
 - Strong visual hierarchy, asymmetric sections outside true heroes, responsive down to 360 px, no hidden primary value.
 - Keep CSS in one top \`<style>\` block. Reference design-system CSS variables (see list above) and avoid new palettes, font stacks, or typefaces.`;

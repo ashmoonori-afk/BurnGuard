@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveCanvasSource } from "../src/lib/canvas-source";
+import { resolveCanvasNavigation, resolveCanvasSource } from "../src/lib/canvas-source";
 
 describe("resolveCanvasSource", () => {
   test("Given a stale active entrypoint and zero indexed files When resolved Then the empty canvas does not fetch the missing file", () => {
@@ -60,4 +60,15 @@ describe("resolveCanvasSource", () => {
       }),
     ).toBe("/api/projects/project-1/fs/index.html");
   });
+});
+test("Given prototype page links When navigating Then only indexed HTML in the current project resolves", () => {
+  const source = "http://localhost:5173/api/projects/project-1/fs/index.html";
+  const files = ["index.html", "pages/about us.html", "script.js"];
+  const about = resolveCanvasNavigation("pages/about%20us.html?view=detail#team", source, files);
+  expect(about).toEqual({ relPath: "pages/about us.html", url: "http://localhost:5173/api/projects/project-1/fs/pages/about%20us.html?view=detail#team" });
+  expect(resolveCanvasNavigation("../index.html", about!.url, files)?.relPath).toBe("index.html");
+  expect(resolveCanvasNavigation("%ed%8e%98%ec%9d%b4%ec%a7%80.html#details", source, ["페이지.html"])?.relPath).toBe("페이지.html");
+  for (const href of [null, {}, "https://example.com/index.html", "//example.com/index.html", "javascript:alert(1)", "data:text/html,hi", "/api/projects/project-2/fs/index.html", "../index.html", "missing.html", "script.js", "pages%2fabout%20us.html", "pages%5cabout%20us.html", "pages/%ZZ.html", "http://user:pass@localhost:5173/api/projects/project-1/fs/index.html"]) {
+    expect(resolveCanvasNavigation(href, source, files)).toBeNull();
+  }
 });

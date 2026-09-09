@@ -47,6 +47,34 @@ describe("canvas review regressions", () => {
     if (expected >= 0) expect(slides[expected]!.active).toBe(true);
   });
 
+  test("Given local HTML links When normally clicked Then navigation is tagged while authored and external actions remain intact", () => {
+    const bridge = navigationBridge("http://localhost/api/projects/p/fs/index.html");
+    expect(bridge.click("pages/about.htm#details")).toBe(true);
+    expect(bridge.messages.filter((message) => message.event === "navigate")).toEqual([
+      { __bgFrameBridge: true, type: "event", event: "navigate", payload: { href: "http://localhost/api/projects/p/fs/pages/about.htm#details" } },
+    ]);
+    for (const href of ["https://external.example/about.html", "//external.example/about.html", "javascript:void(0)", "mailto:hello@example.com", "assets/logo.svg", ""]) expect(bridge.click(href)).toBe(false);
+    for (const event of [{ defaultPrevented: true }, { button: 1 }, { ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }]) expect(bridge.click("about.html", event)).toBe(false);
+    expect(bridge.click("about.html", {}, { download: "" })).toBe(false);
+    expect(bridge.click("about.html", {}, { target: "_blank" })).toBe(false);
+    expect(bridge.messages.filter((message) => message.event === "navigate")).toHaveLength(1);
+  });
+
+  test("Given a srcdoc with an initial fragment When loaded or an anchor is clicked Then it scrolls locally without loading the server page", () => {
+    const bridge = navigationBridge("http://localhost/api/projects/p/fs/about.html#%EB%AC%B8%EC%9D%98", "loading");
+    expect(bridge.scrolled).toEqual([]);
+    bridge.loaded();
+    expect(bridge.scrolled).toEqual(["문의"]);
+    expect(bridge.location.href).toBe("about:srcdoc#%EB%AC%B8%EC%9D%98");
+    expect(bridge.click("#details")).toBe(true);
+    expect(bridge.click("about.html#details")).toBe(true);
+    expect(bridge.scrolled).toEqual(["문의", "details", "details"]);
+    expect(bridge.click("#")).toBe(true);
+    expect(bridge.scrolled.at(-1)).toBe("top");
+    expect(bridge.location.href).toBe("about:srcdoc");
+    expect(bridge.messages.filter((message) => message.event === "navigate")).toEqual([]);
+  });
+
   test("Given a real text file When preview loads Then it forwards cancellation and bypasses stale cache", async () => {
     const controller = new AbortController();
     const preview = await loadFilePreview("project", { rel_path: "notes/a b.md", category: "document" }, controller.signal, async (url, init) => {
@@ -103,4 +131,37 @@ function assertSrcdocUrl(url: string) {
   // A relative fragment resolves through the injected artifact <base> and
   // throws SecurityError in a real sandboxed srcdoc iframe.
   expect(url.startsWith("about:srcdoc#slide-")).toBe(true);
+}
+
+function navigationBridge(baseHref: string, readyState = "complete") {
+  const script = buildSandboxedArtifactSrcDoc("<head></head>", baseHref).match(/<script>([\s\S]*?)<\/script>/)![1]!;
+  const listeners = new Map<string, (event?: unknown) => void>();
+  const messages: Array<{ event: string; payload: unknown }> = [];
+  const scrolled: string[] = [];
+  const location = { href: "about:srcdoc", hash: "" };
+  runInNewContext(script, {
+    URL, location, HashChangeEvent: class {},
+    window: {
+      parent: { postMessage: (message: { event: string; payload: unknown }) => messages.push(message) },
+      addEventListener: (name: string, listener: (event?: unknown) => void) => listeners.set(name, listener),
+      dispatchEvent() {}, scrollTo: () => scrolled.push("top"),
+    },
+    document: {
+      baseURI: baseHref, readyState, querySelectorAll: () => [],
+      addEventListener: (name: string, listener: () => void) => listeners.set(name, listener),
+      getElementById: (id: string) => ["문의", "details"].includes(id) ? { scrollIntoView: () => scrolled.push(id) } : null,
+      getElementsByName: () => [],
+    },
+    history: { replaceState(_state: unknown, _title: string, href: string) { location.href = href; location.hash = new URL(href).hash; } },
+  });
+  return {
+    messages, scrolled, location, loaded: () => listeners.get("DOMContentLoaded")!(),
+    click(href: string, event: Record<string, unknown> = {}, attributes: Record<string, string> = {}) {
+      let prevented = false;
+      const linkAttributes = { href, ...attributes };
+      const link = { getAttribute: (key: string) => Reflect.get(linkAttributes, key) ?? null, hasAttribute: (key: string) => Object.hasOwn(linkAttributes, key) };
+      listeners.get("click")!({ button: 0, target: { closest: () => link }, preventDefault() { prevented = true; }, ...event });
+      return prevented;
+    },
+  };
 }

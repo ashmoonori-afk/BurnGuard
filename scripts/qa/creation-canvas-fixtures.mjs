@@ -1,7 +1,7 @@
 // Run only against e2e-smoke's owned temporary profile. Provider POSTs are intercepted;
 // mock transcript assertions below are UI delivery checks, never provider execution proof.
 import assert from "node:assert/strict";
-import { realpath, writeFile } from "node:fs/promises";
+import { mkdir, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export async function runCreationCanvasFixtures(page, base, scenario, { home, shot }) {
@@ -118,6 +118,8 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       assert.equal(captured.generation.model, modelValue);
       assert.equal(captured.generation.effort, effortValue);
       assert.equal(captured.generation.vanilla, vanilla);
+      assert.ok(captured.text.includes("명시적인 확인을 받을 때까지 이미지 생성 도구를 호출하거나 파일을 변경하지 마세요"));
+      assert.ok(captured.text.includes("직접 브라우저로 렌더링하고 스크린샷을 확인하세요"));
       const target = JSON.parse(captured.text.split("\n")[1]);
       assert.equal(target.file, "index.html");
       assert.equal(target.request, draft);
@@ -138,6 +140,9 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
         events.forEach((event, index) => source.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ sequence: 10000 + index, event: { ...event, id: `canvas-fixture-${index}`, ts: Date.now() } }) })));
       }, { sessionId: fixture.sessionId, text: captured.text });
       await chat.getByText("[모의 응답] 요청을 확인했어요.", { exact: true }).waitFor();
+      await chat.getByText(`코멘트 수정 · index.html\n${draft}`, { exact: true }).waitFor();
+      const transcript = await chat.innerText();
+      for (const hidden of [target.comment_id, "comment_id", "artifact_digest", "artifact_revision", "다음 저장된 코멘트에 따라"]) assert.ok(!transcript.includes(hidden), `${hidden} must stay out of chat copy`);
       await shot(page, "creation-canvas-comment-mock-response");
       allowMockSend = false;
     });
@@ -173,10 +178,31 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       assert.equal(await restoredResponse.text(), before, "undo must restore exact pre-scene HTML bytes");
       await shot(page, "creation-canvas-three-undone");
     });
+
+    await scenario("creation-canvas-prototype-subpages", async () => {
+      await createFixture(page, base, ownedHome, "Linked prototype pages", {
+        "index.html": '<!doctype html><html><head><meta charset="utf-8"></head><body><h1 id="fixture-hero" data-bg-node-id="fixture-hero">Prototype home</h1><a href="pages/%ed%8e%98%ec%9d%b4%ec%a7%80.html#details">서비스 소개</a><a href="missing.html">없는 페이지</a></body></html>',
+        "pages/페이지.html": '<!doctype html><html><head><meta charset="utf-8"></head><body><a href="../index.html">홈으로</a><h1 data-bg-node-id="about-heading">서비스 소개 페이지</h1><div style="height:1500px"></div><h2 id="details">서비스 상세</h2><div style="height:900px"></div></body></html>',
+      });
+      const frame = () => page.frameLocator('iframe[title="캔버스"]');
+      await frame().getByRole("link", { name: "서비스 소개", exact: true }).click();
+      await frame().getByRole("heading", { name: "서비스 소개 페이지", exact: true }).waitFor();
+      await page.waitForFunction(() => document.querySelector('iframe[title="캔버스"]')?.getAttribute("srcdoc")?.includes("pages/%ed%8e%98%ec%9d%b4%ec%a7%80.html#details"));
+      assert.ok(await frame().locator("#details").evaluate((element) => Math.abs(element.getBoundingClientRect().top) < 5), "linked fragment must scroll within the subpage");
+      assert.ok((await page.locator('iframe[title="캔버스"]').getAttribute("sandbox")).includes("allow-scripts"));
+      assert.ok(!(await page.locator('iframe[title="캔버스"]').getAttribute("sandbox")).includes("allow-same-origin"));
+      await shot(page, "creation-canvas-prototype-subpage");
+      await frame().getByRole("link", { name: "홈으로", exact: true }).click();
+      await frame().getByRole("heading", { name: "Prototype home", exact: true }).waitFor();
+      await frame().getByRole("link", { name: "없는 페이지", exact: true }).click();
+      await page.getByText("페이지를 열 수 없어요", { exact: true }).waitFor();
+      await frame().getByRole("heading", { name: "Prototype home", exact: true }).waitFor();
+      await shot(page, "creation-canvas-prototype-home");
+    });
   } finally { await page.unroute(eventPattern, guard); }
 }
 
-async function createFixture(page, base, ownedHome, name) {
+async function createFixture(page, base, ownedHome, name, pages = {}) {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(base, { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: "최근 작업", exact: true }).waitFor();
@@ -188,6 +214,14 @@ async function createFixture(page, base, ownedHome, name) {
   const projectDir = await realpath(path.join(ownedHome, ".burnguard", "data", "projects", project.id));
   assert.ok(projectDir.startsWith(ownedHome + path.sep), "fixture escaped the owned temporary profile");
   await writeFile(path.join(projectDir, "index.html"), '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:Arial,sans-serif}h1{margin:32px;padding:32px;font-size:32px}main{height:2600px;background:linear-gradient(#fff,#dde6f4)}</style></head><body><h1 id="fixture-hero" data-bg-node-id="fixture-hero">Canvas fixture heading</h1><main data-bg-node-id="fixture-body">Owned scroll fixture</main></body></html>');
+  for (const [relPath, html] of Object.entries(pages)) {
+    const target = path.resolve(projectDir, relPath);
+    assert.ok(target.startsWith(projectDir + path.sep), "fixture page escaped its project");
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, html);
+  }
+  // The file route reconciles external fixture writes before the UI reads artifact identity.
+  assert.equal((await page.request.get(`${base}/api/projects/${project.id}/fs/index.html`)).status(), 200);
   await page.goto(`${base}/projects/${project.id}`, { waitUntil: "domcontentloaded" });
   await page.frameLocator('iframe[title="캔버스"]').locator("#fixture-hero").waitFor();
   const sessionResponse = await page.request.get(`${base}/api/projects/${project.id}/session`);

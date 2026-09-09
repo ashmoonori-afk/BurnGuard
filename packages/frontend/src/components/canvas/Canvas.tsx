@@ -73,6 +73,7 @@ export default function Canvas({
   onModeChange,
   onSelect,
   onRefresh,
+  onNavigate,
   comments,
   activeRelPath,
   activeSlideIdx,
@@ -108,6 +109,7 @@ export default function Canvas({
   onModeChange: (m: CanvasMode | null) => void;
   onSelect: (s: SelectedNode | null) => void;
   onRefresh: () => void;
+  onNavigate?: (href: string) => void;
   comments: Comment[];
   activeRelPath: string | null;
   activeSlideIdx: number | null;
@@ -250,6 +252,13 @@ export default function Canvas({
     );
     return unsubscribe;
   }, [frameKey, onActiveSlideChange, src]);
+
+  useEffect(() => {
+    return subscribeFrameEvent(iframeRef.current, "navigate", (payload: unknown) => {
+      if (payload === null || typeof payload !== "object" || !("href" in payload) || typeof payload.href !== "string") return;
+      onNavigate?.(payload.href);
+    });
+  }, [frameKey, src, onNavigate]);
 
   useEffect(() => {
     const restoreIdx = restoreTargetSlideIdxRef.current;

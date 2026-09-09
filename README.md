@@ -1,4 +1,4 @@
-![BurnGuard — a workspace for turning ideas into designs](doc/images/burnguard-cover.png)
+![BurnGuard — your local AI design studio for slides, websites and graphics](doc/images/burnguard-cover.png)
 
 # BurnGuard
 
@@ -17,7 +17,7 @@ BurnGuard is an AI design workspace that runs on your computer. Connect **Claude
 | What you want to make | What you can do in BurnGuard |
 |---|---|
 | Presentations | Create a slide deck, review each slide, then present it or export it as PDF or PPTX. |
-| Web designs | Set the section count, start from complete landing templates with matching design systems, and edit HTML on canvas. |
+| Web designs | Create a homepage and linked subpages, navigate them in the preview, and edit HTML on canvas. Start from landing templates with matching design systems. |
 | Graphics | Set the canvas dimensions, create a design, and export it as PNG. |
 | Consistent designs | Connect a published design system's colors, typography, and rules to a project. |
 | Work from existing material | Choose a template or attach PDF/PPTX documents and assign reference roles. |
