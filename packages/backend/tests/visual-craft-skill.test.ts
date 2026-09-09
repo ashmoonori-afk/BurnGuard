@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildPrompt, MAX_SKILL_CHARS } from "../src/harness/prompt-builder";
-import { COMPACT_PROTOTYPE_SKILL_MD } from "../src/harness/prompt-compact-skills";
+import { COMPACT_DECK_SKILL_MD, COMPACT_PROTOTYPE_SKILL_MD } from "../src/harness/prompt-compact-skills";
+import { DECK_SKILL_MD } from "../src/harness/skills/deck-skill";
 import { DIAGRAM_SKILL_MD } from "../src/harness/skills/diagram-skill";
 import {
   DECK_VISUAL_CRAFT,
@@ -110,6 +111,20 @@ describe("visual craft skill", () => {
     expect(
       VISUAL_CRAFT_CORE.length + largestPerType + DEFAULT_VISUAL_IDENTITY.length,
     ).toBeLessThanOrEqual(MAX_VISUAL_CRAFT_CHARS);
+  });
+
+  test("compact deck skill ships the same projection scale as the full skill", () => {
+    for (const declaration of [
+      "--deck-type-hero: 80px",
+      "--deck-type-heading: 52px",
+      "--deck-type-body: 32px",
+      "--deck-type-caption: 24px",
+      "--deck-pad-slide: 72px",
+    ]) {
+      expect(COMPACT_DECK_SKILL_MD).toContain(declaration);
+      expect(DECK_SKILL_MD).toContain(declaration);
+    }
+    expect(DECK_VISUAL_CRAFT).toContain("--deck-type-caption");
   });
 
   test("diagram skill carries its visual craft section within budget", () => {
