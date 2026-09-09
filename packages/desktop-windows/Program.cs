@@ -181,9 +181,17 @@ namespace BurnGuard.Desktop
                 web.CoreWebView2.Settings.IsStatusBarEnabled = false;
                 web.CoreWebView2.Settings.IsWebMessageEnabled = false;
                 web.CoreWebView2.Settings.AreHostObjectsAllowed = false;
+                web.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
+                web.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
+                // CoreWebView2.NavigationStarting fires only for top-level documents, leaving sandboxed canvas iframes unaffected.
                 web.CoreWebView2.NavigationStarting += (_, args) =>
                 {
-                    if (IsAppUrl(args.Uri)) return;
+                    if (IsAppUrl(args.Uri))
+                    {
+                        if (IsTopLevelAppRoute(new Uri(args.Uri))) return;
+                        args.Cancel = true;
+                        return;
+                    }
                     args.Cancel = true;
                     if (args.IsUserInitiated && !args.IsRedirected) OpenExternal(args.Uri);
                 };
@@ -213,6 +221,8 @@ namespace BurnGuard.Desktop
         }
 
         private bool IsAppUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && origin != null && uri.Scheme == origin.Scheme && uri.Host == origin.Host && uri.Port == origin.Port && string.IsNullOrEmpty(uri.UserInfo);
+
+        private static bool IsTopLevelAppRoute(Uri uri) => !uri.AbsolutePath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) && !uri.AbsolutePath.StartsWith("/runtime/", StringComparison.OrdinalIgnoreCase);
 
         private async Task CheckUpdateAsync()
         {

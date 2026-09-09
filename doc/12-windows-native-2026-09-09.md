@@ -22,7 +22,7 @@ The launcher is approximately 90 KB, with a roughly 103 MiB archive / 272 MiB ex
 - The backend uses `127.0.0.1:14070`; `BG_PORT` supports an explicit isolated profile during QA. An occupied port is rejected before migrations or recovery. Stop older browser-mode servers before launching.
 - Readiness arrives over the owned child's stdout, with protocol version, expected process ID, and exact loopback URL. Shutdown uses the parent's private stdin pipe; no HTTP shutdown endpoint is exposed.
 - Closing the window interrupts active work and closes registered rendering browsers. A Windows Job Object cleans up the owned process tree after the bounded graceful shutdown or an unexpected host exit.
-- Existing launch capability, Host/Origin checks, and canvas sandbox remain enforced. Top-level navigation stays on the app origin; explicit external HTTP(S) links open in the default browser. No production host-object or web-message bridge is exposed.
+- Existing launch capability, Host/Origin checks, and canvas sandbox remain enforced. Top-level navigation stays on the app origin; explicit external HTTP(S) links open in the default browser. Top-level `/api/` and `/runtime/` paths are blocked so project-controlled backend file responses never render as app-origin documents. No production host-object or web-message bridge is exposed.
 - Project data remains in `%USERPROFILE%\.burnguard`. Production WebView state is separate under `%LOCALAPPDATA%\BurnGuard\WebView2`; smoke tests keep their WebView cache inside the isolated test profile.
 
 ## Verification
