@@ -3,6 +3,9 @@ import type { DesignAuditCheck, DesignAuditFinding, DesignAuditResult } from "@b
 import { ApiError } from "../src/api/client";
 import { designAuditActionAvailability, designAuditControlAvailability, designAuditErrorCode, designAuditViewState, groupDesignAuditResult, isDesignAuditCurrent, preferDesignAuditResult } from "../src/lib/design-audit-state";
 import { DESIGN_AUDIT_ERROR_COPY } from "../src/components/modes/design-audit-copy";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import QualityPanel, { type QualityPanelBinding } from "../src/components/modes/QualityPanel";
 
 const DIGEST_A = "a".repeat(64);
 const DIGEST_B = "b".repeat(64);
@@ -16,6 +19,17 @@ function result(overrides: Partial<DesignAuditResult> = {}): DesignAuditResult {
   const checks: readonly DesignAuditCheck[] = [check({ code: "text_overflow" }), check({ code: "element_overlap" }), check({ code: "minimum_text_size" }), check({ code: "contrast" }), check({ code: "narrow_width" }), check({ code: "duplicate_node_id" }), check({ code: "missing_image" }), check({ code: "token_usage" })];
   return { schema_version: 1, project_id: "project-1", artifact_revision: 2, artifact_digest: DIGEST_A, created_at: 100, overall_status: "ready", checks, ...overrides };
 }
+
+test("Given quality findings When current or busy Then automatic repair is enabled only for the current idle report", () => {
+  const report = result({ overall_status: "must_fix", checks: [check({ status: "fail", findings: [finding()] })] });
+  const quality: QualityPanelBinding = { state: { kind: "must_fix", running: false, report }, pendingFindingId: null, focusedFindingId: null, revealResult: null, onRetry() {}, onOpenFile() {}, onReveal() {}, onApplySafeFix() {}, onAutoFix() {}, autoFixPending: false, autoFixDisabled: false };
+  const repairButton = (binding: QualityPanelBinding) => renderToStaticMarkup(createElement(QualityPanel, { quality: binding })).match(/<button[^>]*>[\s\S]*?<\/button>/g)?.find((button) => button.includes("문제 자동 수정") || button.includes("자동으로 수정하고 있어요")) ?? "";
+  expect(repairButton(quality)).not.toContain('disabled=""');
+  expect(repairButton({ ...quality, autoFixPending: true })).toContain('disabled=""');
+  expect(repairButton({ ...quality, autoFixDisabled: true })).toContain('disabled=""');
+  expect(repairButton({ ...quality, state: { kind: "stale", running: false, report } })).toContain('disabled=""');
+  expect(repairButton({ ...quality, state: { kind: "ready", running: false, report: result() } })).toContain('disabled=""');
+});
 
 describe("preferDesignAuditResult", () => {
   test("Given snapshots for different projects When merging Then only the current project is accepted", () => {

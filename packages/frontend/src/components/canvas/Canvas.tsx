@@ -9,8 +9,7 @@ import DrawLayer, {
   type DrawTool,
 } from "./DrawLayer";
 import EditLayer, { type EditTarget } from "./EditLayer";
-import SelectorOverlay from "./SelectorOverlay";
-import TweaksLayer, { type TweaksTarget } from "./TweaksLayer";
+import TweaksLayer, { type TweaksStyleKey, type TweaksTarget } from "./TweaksLayer";
 import QualityLayer from "./QualityLayer";
 import {
   buildSandboxedArtifactSrcDoc,
@@ -18,7 +17,6 @@ import {
   subscribeFrameEvent,
 } from "./frame-bridge";
 import type { CanvasMode } from "@/components/modes/types";
-import type { SelectedNode } from "@/types/project";
 import { authorizedFetch } from "@/api/client";
 import { embedCanvasImages } from "@/lib/canvas-images";
 import { canvasPoint } from "./canvas-coordinates";
@@ -71,7 +69,6 @@ export default function Canvas({
   src,
   frameKey,
   onModeChange,
-  onSelect,
   onRefresh,
   onNavigate,
   comments,
@@ -83,6 +80,9 @@ export default function Canvas({
   editSelectedBgId,
   onSelectEditTarget,
   tweaksSelectedBgId,
+  tweaksTarget,
+  tweaksSaving,
+  onApplyTweak,
   onSelectTweaksTarget,
   drawTool,
   drawColor,
@@ -102,12 +102,12 @@ export default function Canvas({
   drawError = null,
   onRetryDraws,
   sceneTools,
+  colorPalette,
 }: {
   mode: CanvasMode | null;
   src?: string | null;
   frameKey?: string;
   onModeChange: (m: CanvasMode | null) => void;
-  onSelect: (s: SelectedNode | null) => void;
   onRefresh: () => void;
   onNavigate?: (href: string) => void;
   comments: Comment[];
@@ -124,6 +124,9 @@ export default function Canvas({
   editSelectedBgId: string | null;
   onSelectEditTarget: (target: EditTarget | null) => void;
   tweaksSelectedBgId: string | null;
+  tweaksTarget: TweaksTarget | null;
+  tweaksSaving: boolean;
+  onApplyTweak: (patch: Partial<Record<TweaksStyleKey, string | null>>) => void;
   onSelectTweaksTarget: (target: TweaksTarget | null) => void;
   drawTool: DrawTool;
   drawColor: string;
@@ -144,6 +147,7 @@ export default function Canvas({
   drawError?: string | null;
   onRetryDraws?: () => void;
   sceneTools?: ReactNode;
+  colorPalette?: ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -289,6 +293,7 @@ export default function Canvas({
         canUndo={canUndo}
         undoPending={undoPending}
         onUndo={onUndo}
+        colorPalette={colorPalette}
       />
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-xs" aria-label="미리보기 배율과 이동">
         <button type="button" aria-label="미리보기 축소" disabled={zoom <= 0.25} onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}>−</button>
@@ -331,12 +336,6 @@ export default function Canvas({
             className="absolute inset-0 h-full w-full border-0 bg-background"
           />
         )}
-        <SelectorOverlay
-          active={mode === "select"}
-          iframeRef={iframeRef}
-          activeRelPath={activeRelPath}
-          onSelect={onSelect}
-        />
         <CommentLayer
           active={mode === "comment"}
           comments={comments}
@@ -355,9 +354,12 @@ export default function Canvas({
           onSelect={onSelectEditTarget}
         />
         <TweaksLayer
-          active={mode === "tweaks"}
+          active={mode === "tweaks" || mode === "select"}
           iframeRef={iframeRef}
-          selectedBgId={mode === "tweaks" ? tweaksSelectedBgId : null}
+          selectedBgId={mode === "tweaks" || mode === "select" ? tweaksSelectedBgId : null}
+          target={tweaksTarget}
+          saving={tweaksSaving}
+          onApply={onApplyTweak}
           onSelect={onSelectTweaksTarget}
         />
         {mode === "quality" && <QualityLayer

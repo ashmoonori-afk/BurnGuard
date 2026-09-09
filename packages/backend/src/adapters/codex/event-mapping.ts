@@ -4,6 +4,10 @@ import type { NormalizedEvent } from "@bg/shared";
 import { resolveWithin } from "../../security/path-boundary";
 import type { CodexParserContext } from "./parser";
 
+export function isCodexStartupNotice(message: string): boolean {
+  return /^Under-development features enabled: [a-z0-9_, ]+\. Under-development features are incomplete and may behave unpredictably\. To suppress this warning, set `?suppress_unstable_features_warning = true`? in [^\r\n]+config\.toml`?\.?$/.test(message.trim());
+}
+
 export function mapCodexEnvelope(
   obj: Record<string, unknown>,
   ctx: CodexParserContext,
@@ -42,12 +46,15 @@ function mapItem(
       : [];
   }
   if (itemType === "error" && completed) {
+    const message = asString(value.message) ?? "Codex reported an error";
+    // Codex sends this startup notice as an error item in some CLI versions.
+    if (isCodexStartupNotice(message)) return [];
     return [{
       id: ulid(),
       ts: Date.now(),
       type: "chat.delta",
       turnId: ctx.turnId,
-      text: asString(value.message) ?? "Codex reported an error",
+      text: message,
     }];
   }
   if (itemType === "command_execution") {

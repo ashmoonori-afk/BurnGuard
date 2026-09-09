@@ -19,7 +19,7 @@ describe("sandboxed artifact policy", () => {
     const policy = metaPolicy(srcDoc);
     expect(policy.get("connect-src")).toEqual(["http://127.0.0.1:14070"]);
     expect(policy.get("form-action")).toEqual(["'none'"]);
-    expect(policy.get("frame-src")).toEqual(["'none'"]);
+    expect(policy.get("frame-src")).toEqual(["https://www.google.com/maps/embed", "https://www.google.com/maps/embed/"]);
     expect(policy.get("object-src")).toEqual(["'none'"]);
     expect(policy.get("base-uri")).toEqual(["http://127.0.0.1:14070"]);
     expect(srcDoc.indexOf("Content-Security-Policy")).toBeLessThan(srcDoc.indexOf("<base href"));

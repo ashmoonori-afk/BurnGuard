@@ -1,6 +1,5 @@
 import type { Comment } from "@bg/shared";
 import type { CanvasMode } from "./types";
-import type { SelectedNode } from "@/types/project";
 import type { EditTarget } from "@/components/canvas/EditLayer";
 import type { DrawTool } from "@/components/canvas/DrawLayer";
 import type {
@@ -10,7 +9,6 @@ import type {
 import CommentPanel from "./CommentPanel";
 import DrawPanel from "./DrawPanel";
 import EditPanel from "./EditPanel";
-import SelectorReadOnlyPanel from "./SelectorReadOnlyPanel";
 import TweaksPanel from "./TweaksPanel";
 import type { TweakChangePreview } from "./TweaksPanel";
 import QualityPanel, { type QualityPanelBinding } from "./QualityPanel";
@@ -24,8 +22,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
  */
 export default function ModePanel({
   mode,
-  selection,
-  onPromoteToTweaks,
   comments,
   activeRelPath,
   activeSlideIdx,
@@ -59,8 +55,6 @@ export default function ModePanel({
   uxReview,
 }: {
   mode: CanvasMode | null;
-  selection: SelectedNode | null;
-  onPromoteToTweaks: () => void;
   comments: Comment[];
   activeRelPath: string | null;
   activeSlideIdx: number | null;
@@ -100,13 +94,7 @@ export default function ModePanel({
 
   return (
     <aside aria-label="캔버스 도구 설정" className="flex min-h-0 w-[280px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1400px]:w-[320px] max-[1200px]:max-h-[40%] max-[1200px]:w-full max-[1200px]:shrink max-[1200px]:border-l-0 max-[1200px]:border-t">
-      {mode === "select" && (
-        <SelectorReadOnlyPanel
-          selection={selection}
-          onPromoteToTweaks={onPromoteToTweaks}
-        />
-      )}
-      {mode === "tweaks" && (
+      {(mode === "select" || mode === "tweaks") && (
         <TweaksPanel
           target={tweaksTarget}
           saving={tweaksSaving}

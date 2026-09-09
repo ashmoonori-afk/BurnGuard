@@ -10,6 +10,18 @@ function ctx(): CodexParserContext {
 }
 
 describe("parseCodexLine — structured path", () => {
+  test("Given the CLI startup feature notice When emitted as an error item Then it is omitted while real errors and authored text remain", () => {
+    const warning = 'Under-development features enabled: skip_host_skill_discovery. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in C:\\Users\\fixture\\.codex\\config.toml.';
+    const errorItem = (message: string) => JSON.stringify({ type: "item.completed", item: { type: "error", message } });
+    expect(parseCodexLine(errorItem(warning), ctx())).toEqual([]);
+    expect(parseCodexLine(warning, ctx())).toEqual([]);
+    expect(parseCodexLine("Authentication failed", ctx())[0]).toMatchObject({ type: "chat.delta", text: "Authentication failed" });
+    expect(parseCodexLine(`${warning}\nAuthentication failed`, ctx())).toHaveLength(1);
+    expect(parseCodexLine(errorItem("Authentication failed"), ctx())[0]).toMatchObject({ type: "chat.delta", text: "Authentication failed" });
+    expect(parseCodexLine(errorItem(`${warning}\nAuthentication failed`), ctx())).toHaveLength(1);
+    expect(parseCodexLine(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: warning } }), ctx())[0]).toMatchObject({ type: "chat.delta", text: warning });
+  });
+
   test("tool_start becomes tool.started and registers the tool name", () => {
     const c = ctx();
     const events = parseCodexLine(

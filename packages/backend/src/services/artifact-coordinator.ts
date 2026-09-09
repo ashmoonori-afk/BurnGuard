@@ -13,7 +13,7 @@ import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } f
 import { pruneExpiredArtifactOperations } from "./artifact-retention";
 import { acquireArtifactProjectLock } from "./artifact-project-lock";
 
-type OperationKind = "patch" | "turn" | "restore" | "undo" | "external" | "initialize";
+type OperationKind = "patch" | "palette" | "turn" | "restore" | "undo" | "external" | "initialize";
 type CoordinatorFaults = {
   readonly beforeSnapshot?: () => void;
   readonly beforePublishRead?: (relativePath: string) => void | Promise<void>;

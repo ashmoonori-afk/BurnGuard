@@ -11,6 +11,7 @@ import { homeRoutes } from "../src/routes/home";
 import { classifyApiRoute } from "../src/server";
 import {
   resetChromiumCapability,
+  isChromiumLaunchable,
   setChromiumCapabilityForTesting,
 } from "../src/services/chromium-capability";
 import { parsePng } from "../src/services/export-png-validation";
@@ -177,6 +178,37 @@ describe("project list thumbnail exposure", () => {
 });
 
 describe("project thumbnail generation and cache", () => {
+  test("Given a cold browser probe beyond the capability polling deadline When the response expires Then rendering still fills the cache", async () => {
+    const previousDeadline = process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS;
+    const previousWait = process.env.BG_CHROMIUM_PROBE_WAIT_MS;
+    process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS = "40";
+    process.env.BG_CHROMIUM_PROBE_WAIT_MS = "1";
+    resetChromiumCapability();
+    let release!: (usable: boolean) => void;
+    const gate = new Promise<boolean>((resolve) => { release = resolve; });
+    const probe = isChromiumLaunchable(() => gate, { waitForResult: true });
+    try {
+      const project = await createProject({ digest: digestA });
+      const recorded = recordingRenderer();
+      let rendered!: () => void;
+      const completed = new Promise<void>((resolve) => { rendered = resolve; });
+      const renderer: ThumbnailRenderer = async (request) => { await recorded.renderer(request); rendered(); };
+      expect(await loadProjectThumbnail(project.id, renderer)).toEqual({ kind: "unavailable", code: "thumbnail_unavailable" });
+      release(true);
+      await probe;
+      await completed;
+      process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS = "30000";
+      expect((await loadProjectThumbnail(project.id, renderer)).kind).toBe("ready");
+      expect(recorded.requests).toHaveLength(1);
+    } finally {
+      release(true);
+      setChromiumCapabilityForTesting(true);
+      if (previousDeadline === undefined) delete process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS;
+      else process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS = previousDeadline;
+      if (previousWait === undefined) delete process.env.BG_CHROMIUM_PROBE_WAIT_MS;
+      else process.env.BG_CHROMIUM_PROBE_WAIT_MS = previousWait;
+    }
+  });
   test("Given a project with no cached thumbnail When loaded Then it renders once at exactly 640x360 and stores the PNG", async () => {
     const project = await createProject({ digest: digestA });
     const { renderer, requests } = recordingRenderer();

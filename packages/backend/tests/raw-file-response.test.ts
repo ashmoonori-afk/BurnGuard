@@ -69,7 +69,7 @@ describe("raw file response headers", () => {
       const policy = directives(headers["Content-Security-Policy"] ?? null);
       expect(policy.get("connect-src")).toEqual(["http://localhost"]);
       expect(policy.get("form-action")).toEqual(["'none'"]);
-      expect(policy.get("frame-src")).toEqual(["'none'"]);
+      expect(policy.get("frame-src")).toEqual(["https://www.google.com/maps/embed", "https://www.google.com/maps/embed/"]);
       expect(policy.get("object-src")).toEqual(["'none'"]);
     }
   });

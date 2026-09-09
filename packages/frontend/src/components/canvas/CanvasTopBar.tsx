@@ -2,6 +2,7 @@ import { Eye, MessageSquare, MousePointer2, Paintbrush, Pencil, RefreshCw, Shiel
 import { cn } from "@/lib/utils";
 import type { CanvasMode } from "@/components/modes/types";
 import { Button } from "@/components/ui/button";
+import type { ReactNode } from "react";
 
 const MODES: Array<{ id: CanvasMode; label: string; icon: LucideIcon; hint: string }> = [
   { id: "edit", label: "편집", icon: Pencil, hint: "요소를 눌러 텍스트·링크·이미지 설명을 수정해요." },
@@ -19,6 +20,7 @@ export default function CanvasTopBar({
   canUndo = false,
   undoPending = false,
   onUndo,
+  colorPalette,
 }: {
   mode: CanvasMode | null;
   onModeChange: (m: CanvasMode | null) => void;
@@ -31,6 +33,7 @@ export default function CanvasTopBar({
   canUndo?: boolean;
   undoPending?: boolean;
   onUndo?: () => void;
+  colorPalette?: ReactNode;
 }) {
   return (
     <div className="shrink-0 border-b border-border bg-background px-3 py-2">
@@ -58,6 +61,7 @@ export default function CanvasTopBar({
             </button>
           );
         })}
+        {colorPalette}
       </div>
 
       <div className="ml-auto flex items-center gap-1">

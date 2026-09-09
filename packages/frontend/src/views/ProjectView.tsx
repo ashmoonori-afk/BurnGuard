@@ -69,6 +69,8 @@ import PermissionDialog from "@/components/chat/PermissionDialog";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { apiErrorCopy } from "@/lib/error-copy";
 import Canvas from "@/components/canvas/Canvas";
+import ColorPalette from "@/components/canvas/ColorPalette";
+import { qualityFixRequest } from "@/lib/quality-fix-request";
 import {
   deserializeDraws,
   serializeDraws,
@@ -84,7 +86,6 @@ import type {
 import { getProjectDraws, putProjectDraws } from "@/api/draws";
 import PresentOverlay from "@/components/present/PresentOverlay";
 import ModePanel from "@/components/modes/ModePanel";
-import { selectedNodeToTweaksTarget } from "@/components/modes/SelectorReadOnlyPanel";
 import { DESIGN_AUDIT_ERROR_COPY } from "@/components/modes/design-audit-copy";
 import {
   buildTweakChangePreview,
@@ -96,7 +97,7 @@ import ProjectTopBar from "@/components/project/ProjectTopBar";
 import DesignFilesView from "@/views/DesignFilesView";
 import DesignSystemView from "@/views/DesignSystemView";
 import { useUIStore } from "@/state/uiStore";
-import type { ArtifactTab, SelectedNode } from "@/types/project";
+import type { ArtifactTab } from "@/types/project";
 import {
   latestDirectionState,
   preferDirectionState,
@@ -151,7 +152,6 @@ export default function ProjectView() {
   const [openFileTabs, setOpenFileTabs] = useState<ArtifactTab[]>([]);
   const [canvasNavigation, setCanvasNavigation] = useState<{ projectId: string; relPath: string; url: string } | null>(null);
   const [mode, setMode] = useState<CanvasMode | null>(null);
-  const [selection, setSelection] = useState<SelectedNode | null>(null);
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
   const [activeSlideIdx, setActiveSlideIdx] = useState<number | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
@@ -178,6 +178,8 @@ export default function ProjectView() {
   const drawLayerRef = useRef<DrawLayerHandle | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [sendPending, setSendPending] = useState(false);
+  const [autoFixPending, setAutoFixPending] = useState(false);
+  const autoFixRef = useRef(false);
   const [chatFocusKey, setChatFocusKey] = useState(0);
   const [directionActionError, setDirectionActionError] = useState<Error | null>(null);
   const activeTabIdRef = useRef(activeTabId);
@@ -503,10 +505,11 @@ export default function ProjectView() {
 
   useEffect(() => {
     clearSendPending(sendPendingTimeoutRef, setSendPending);
+    autoFixRef.current = false;
+    setAutoFixPending(false);
     setActiveTabId("design-system");
     setOpenFileTabs([]);
     setMode(null);
-    setSelection(null);
     setFocusedCommentId(null);
     setActiveSlideIdx(null);
     setEditTarget(null);
@@ -617,7 +620,7 @@ export default function ProjectView() {
   useEffect(() => {
     if (mode === null) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || e.defaultPrevented) return;
       const t = e.target as HTMLElement | null;
       if (t) {
         const tag = t.tagName;
@@ -655,7 +658,7 @@ export default function ProjectView() {
   // user isn't typing into an input / textarea / contentEditable so the
   // inspector's own value fields still undo natively.
   useEffect(() => {
-    if (mode !== "tweaks") return;
+    if (mode !== "tweaks" && mode !== "select") return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t) {
@@ -698,6 +701,13 @@ export default function ProjectView() {
   }, [mode, tweaksMutation]);
 
   const handleLiveEvent = useCallback((event: NormalizedEvent) => {
+    if (autoFixRef.current && (event.type === "status.idle" || event.type === "status.error")) {
+      autoFixRef.current = false;
+      setAutoFixPending(false);
+      if (event.type === "status.idle" && event.stopReason !== "error" && event.stopReason !== "interrupted") {
+        void retryProjectDesignAudit(id ?? "").then(mergeDesignAuditCache).catch((error: unknown) => setAuditActionError(error instanceof Error ? error : new Error(String(error))));
+      }
+    }
     if (event.type === "design.direction_state") {
       mergeDirectionCache(parseDesignDirectionState(event.state));
     }
@@ -751,7 +761,7 @@ export default function ProjectView() {
       }
     }
 
-  }, [id, invalidateDesignAudit, mergeDirectionCache, queryClient]);
+  }, [id, invalidateDesignAudit, mergeDirectionCache, mergeDesignAuditCache, queryClient]);
   const stream = useSessionEvents(sessionQuery.data?.id, handleLiveEvent);
   const events = useMemo(() => stream.state?.envelopes.map((item) => item.event) ?? [], [stream.state?.envelopes]);
   useEffect(() => {
@@ -941,7 +951,6 @@ export default function ProjectView() {
         }),
         invalidateDesignAudit(),
       ]);
-      setSelection(null);
       setTweaksTarget(null);
       setTweakReview(null);
       setMode((current) => current === "quality" ? current : null);
@@ -1052,6 +1061,39 @@ export default function ProjectView() {
     setMobilePane("chat");
   };
 
+  const requestQualityFix = async () => {
+    if (composerDisabled || autoFixRef.current || !auditReport || safeFixMutation.isPending || designAuditQuery.isFetching || !isDesignAuditCurrent(auditReport, artifacts.current_digest)) return;
+    autoFixRef.current = true;
+    setAutoFixPending(true);
+    try {
+      const latest = await getArtifacts(id!);
+      if (!isDesignAuditCurrent(auditReport, latest.current_digest)) {
+        throw new ApiError("stale_artifact_identity", "Artifact changed", 409);
+      }
+      const generation = (await loadComposerDraft(session.id).catch(() => null))?.generation;
+      await sendMessage(qualityFixRequest(auditReport), [], new AbortController().signal, generation);
+      setChatFocusKey((value) => value + 1);
+      setMobilePane("chat");
+    } catch (error) {
+      autoFixRef.current = false;
+      setAutoFixPending(false);
+      handleWriteError("자동 수정을 시작하지 못했어요", error);
+    }
+  };
+
+
+  const handleApplyTweak = (patch: Partial<Record<TweaksStyleKey, string | null>>) => {
+    if (!activeRelPath || !tweaksTarget || tweaksMutation.isPending) return;
+    setTweakReview(buildTweakChangePreview(tweaksTarget, patch));
+    tweaksMutation.mutate({
+      relPath: activeRelPath,
+      patch: { node_bg_id: tweaksTarget.bg_id, styles: patch },
+      history: {
+        kind: "apply",
+        frame: buildTweaksUndoFrame(tweaksTarget, activeRelPath, patch),
+      },
+    });
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -1183,6 +1225,20 @@ export default function ProjectView() {
         {activeTab?.kind === "file" && (
           <div className="flex min-h-0 min-w-0 flex-1 max-[1200px]:flex-col">
             <Canvas
+              colorPalette={activeRelPath && /\.html?$/i.test(activeRelPath) ? <ColorPalette
+                key={activeRelPath}
+                projectId={id!}
+                relPath={activeRelPath}
+                refreshKey={`${artifacts.current_digest}:${refreshTick}`}
+                disabled={composerDisabled || tweaksMutation.isPending || patchFileMutation.isPending || undoMutation.isPending}
+                onSaved={() => {
+                  setRefreshTick((value) => value + 1);
+                  setTweaksTarget(null);
+                  tweaksUndoRef.current = [];
+                  tweaksRedoRef.current = [];
+                  void queryClient.invalidateQueries({ queryKey: ["project", id] });
+                }}
+              /> : undefined}
               sceneTools={activeRelPath && /\.html?$/i.test(activeRelPath) ? <Suspense fallback={<p role="status" className="p-3 text-sm">3D 도구를 불러오는 중…</p>}><ThreeScenePanel
                 key={activeRelPath}
                 projectId={id!}
@@ -1199,10 +1255,6 @@ export default function ProjectView() {
               onNavigate={handleCanvasNavigate}
               frameKey={`${canvasSrc ?? "entrypoint"}:${refreshTick}`}
               onModeChange={setMode}
-              onSelect={(next) => {
-                setSelection(next);
-                if (!next) setTweakReview(null);
-              }}
               onRefresh={() => {
                 if (!id) return;
                 refreshMutation.mutate();
@@ -1229,6 +1281,9 @@ export default function ProjectView() {
               editSelectedBgId={editTarget?.bg_id ?? null}
               onSelectEditTarget={setEditTarget}
               tweaksSelectedBgId={tweaksTarget?.bg_id ?? null}
+              tweaksTarget={tweaksTarget}
+              tweaksSaving={tweaksMutation.isPending}
+              onApplyTweak={handleApplyTweak}
               onSelectTweaksTarget={setTweaksTarget}
               drawTool={drawTool}
               drawColor={drawColor}
@@ -1284,6 +1339,9 @@ export default function ProjectView() {
                 },
               }}
               quality={{
+                onAutoFix: () => { void requestQualityFix(); },
+                autoFixPending,
+                autoFixDisabled: Boolean(composerDisabled),
                 state: auditState,
                 pendingFindingId: safeFixMutation.isPending ? safeFixMutation.variables?.findingId ?? null : null,
                 focusedFindingId: auditFocus?.findingId ?? null,
@@ -1304,13 +1362,6 @@ export default function ProjectView() {
                   if (finding.source.node_bg_id !== null) setAuditFocus({ findingId: finding.id, nodeBgId: finding.source.node_bg_id, relPath: finding.source.rel_path });
                   safeFixMutation.mutate({ findingId: finding.id, relPath: finding.safe_fix.rel_path, request: finding.safe_fix.request });
                 },
-              }}
-              selection={selection}
-              onPromoteToTweaks={() => {
-                const target = selectedNodeToTweaksTarget(selection);
-                if (!target) return;
-                setTweaksTarget(target);
-                setMode("tweaks");
               }}
               comments={comments}
               onRequestCommentEdit={requestCommentEdit}
@@ -1347,21 +1398,7 @@ export default function ProjectView() {
               tweaksTarget={tweaksTarget}
               tweakReview={tweakReview}
               tweaksSaving={tweaksMutation.isPending}
-              onApplyTweak={(patch) => {
-                if (!activeRelPath || !tweaksTarget) return;
-                setTweakReview(buildTweakChangePreview(tweaksTarget, patch));
-                tweaksMutation.mutate({
-                  relPath: activeRelPath,
-                  patch: {
-                    node_bg_id: tweaksTarget.bg_id,
-                    styles: patch,
-                  },
-                  history: {
-                    kind: "apply",
-                    frame: buildTweaksUndoFrame(tweaksTarget, activeRelPath, patch),
-                  },
-                });
-              }}
+              onApplyTweak={handleApplyTweak}
               onResetTweaks={() => {
                 if (!activeRelPath || !tweaksTarget) return;
                 const keys = Object.keys(tweaksTarget.inline);
