@@ -17,7 +17,8 @@ import { spawn, type Subprocess } from "bun";
 import path from "node:path";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-const BACKEND_HEALTH_URL = "http://127.0.0.1:14070/api/projects?tab=recent";
+const BACKEND_PORT = Number.parseInt(process.env.BG_PORT ?? "14070", 10);
+const BACKEND_HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/api/health`;
 const FRONTEND_URL = "http://127.0.0.1:5173/";
 const BACKEND_TIMEOUT_MS = 60_000;
 const FRONTEND_TIMEOUT_MS = 30_000;
@@ -29,12 +30,16 @@ type PortState = "burnguard" | "other" | "free";
 async function probePort(url: string): Promise<PortState> {
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
-    // The backend serves `/api/projects` and returns 200 with a JSON envelope.
-    // Any 2xx/3xx that comes back from 14070 is "ours" — nothing else uses
-    // that route. 4xx/5xx from a non-BurnGuard process would also imply the
-    // port is occupied; treat as "other".
-    if (r.ok) return "burnguard";
-    return "other";
+    if (!r.ok) return "other";
+    const body: unknown = await r.json().catch(() => null);
+    return typeof body === "object" &&
+      body !== null &&
+      "ok" in body &&
+      body.ok === true &&
+      "name" in body &&
+      body.name === "BurnGuard Design"
+      ? "burnguard"
+      : "other";
   } catch (err) {
     // ECONNREFUSED / abort: nothing listening (or nothing answering in time).
     return "free";
@@ -101,11 +106,20 @@ for (const signal of signals) {
 }
 
 async function main(): Promise<void> {
+  if (process.env.BG_SCAN_PORT === "1" && process.env.BG_PORT === undefined) {
+    console.error(
+      "[launcher] BG_SCAN_PORT=1 requires BG_PORT when using the launcher.",
+    );
+    console.error(
+      "           Choose a fixed free port so Vite and the backend share one proxy target.",
+    );
+    process.exit(1);
+  }
   // 1. Pre-flight: is 14070 already busy?
   const initial = await probePort(BACKEND_HEALTH_URL);
   if (initial === "burnguard") {
     console.error(
-      "[launcher] BurnGuard backend is already running on 14070.",
+      `[launcher] BurnGuard backend is already running on ${BACKEND_PORT}.`,
     );
     console.error(
       "           Close that window first (or use the existing app), then re-run this launcher.",
@@ -114,10 +128,10 @@ async function main(): Promise<void> {
   }
   if (initial === "other") {
     console.error(
-      "[launcher] Port 14070 is occupied by a non-BurnGuard process.",
+      `[launcher] Port ${BACKEND_PORT} is occupied by a non-BurnGuard process.`,
     );
     console.error(
-      "           Free the port (Resource Monitor on Windows, `lsof -i :14070` on macOS) and try again.",
+      `           Free the port (Resource Monitor on Windows, \`lsof -i :${BACKEND_PORT}\` on macOS) and try again.`,
     );
     process.exit(1);
   }
@@ -141,7 +155,7 @@ async function main(): Promise<void> {
   });
 
   // 3. Wait for backend health.
-  console.log("[launcher] waiting for backend on 14070...");
+  console.log(`[launcher] waiting for backend on ${BACKEND_PORT}...`);
   const backendStart = Date.now();
   const backendUp = await waitForUrl(BACKEND_HEALTH_URL, BACKEND_TIMEOUT_MS);
   if (!backendUp) {

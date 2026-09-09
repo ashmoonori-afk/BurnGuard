@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,6 +9,7 @@ import { projectsDir } from "../src/lib/paths";
 import { artifactOperationRoutes } from "../src/routes/artifact-operations";
 import { artifactRoutes } from "../src/routes/artifacts";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
+import { resetChromiumCapability, setChromiumCapabilityForTesting } from "../src/services/chromium-capability";
 
 const projectId = `audit-route-${process.pid}`;
 const root = path.join(projectsDir, projectId);
@@ -19,7 +20,8 @@ beforeAll(async () => {
   getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, "Audit", root);
   await new ArtifactCoordinator(getSqlite()).initialize(projectId, root);
 });
-afterAll(async () => { getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId); await rm(root, { recursive: true, force: true }); });
+beforeEach(() => setChromiumCapabilityForTesting(true));
+afterAll(async () => { resetChromiumCapability(); getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId); await rm(root, { recursive: true, force: true }); });
 
 async function data(response: Response): Promise<unknown> { const value: unknown = await response.json(); return typeof value === "object" && value !== null ? Reflect.get(value, "data") : null; }
 

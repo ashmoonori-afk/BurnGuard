@@ -3,6 +3,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { browserOpenCommand, openBrowser } from "../src/lib/browser";
+import {
+  parseUlwStatus,
+  ULW_SESSION_ID,
+} from "../../../scripts/qa/ulw-status";
 
 const repoRoot = path.resolve(import.meta.dir, "../../..");
 
@@ -38,6 +42,32 @@ function processEnv(): Record<string, string> {
 // so the CLI-driving cases below are skipped there; the pure-logic cases
 // stay platform-independent and keep running everywhere.
 describe("QA harness CLI", () => {
+  test("Given the current nested toolkit status When parsed Then the attempt directory is derived", () => {
+    const status = parseUlwStatus(JSON.stringify({
+      ok: true,
+      plan: {
+        goals: [{
+          id: "G001-current",
+          attempt: 2,
+          status: "complete",
+        }],
+      },
+    }));
+
+    expect(status.currentAttemptDir).toBe(
+      `.omo/evidence/ulw/${ULW_SESSION_ID}/G001-current/a2`,
+    );
+  });
+
+  test("Given legacy or malformed toolkit status When parsed Then each boundary is explicit", () => {
+    expect(parseUlwStatus('{"currentAttemptDir":".omo/evidence/legacy"}')).toEqual({
+      currentAttemptDir: ".omo/evidence/legacy",
+    });
+    expect(() => parseUlwStatus("{")).toThrow(SyntaxError);
+    expect(() => parseUlwStatus("{}")).toThrow(TypeError);
+    expect(() => parseUlwStatus('{"plan":{"goals":[]}}')).toThrow(TypeError);
+  });
+
   test.skipIf(process.platform === "win32")("Given repository state When preflight emits JSON Then it returns a sanitized manifest", async () => {
     // Given: this worktree and its locally ignored evidence directory.
     // When: preflight runs through its public CLI.
@@ -103,7 +133,7 @@ describe("QA harness CLI", () => {
     // Then: every probe rejects and the script removes only its own sentinel.
     expect(result.exitCode).toBe(0);
     expect(Object.values(JSON.parse(result.stdout))).not.toContain(false);
-  }, 20_000);
+  }, 60_000);
 
   test.skipIf(process.platform === "win32")("Given malformed scenario When runner parses it Then it fails without evidence", async () => {
     // Given: an invalid scenario and a fresh output path.

@@ -111,8 +111,8 @@ function CommentPin({
       title={comment.body || "(no note)"}
       className={cn(
         "absolute -translate-x-1/2 -translate-y-1/2 h-6 w-6 rounded-full text-[10px] font-semibold border shadow-md flex items-center justify-center transition",
-        "bg-orange-500 text-white border-white",
-        focused && "ring-2 ring-orange-300 scale-110",
+        "bg-accent text-accent-foreground border-white",
+        focused && "ring-2 ring-accent/30 scale-110",
       )}
       style={{
         left: `${comment.x_pct}%`,

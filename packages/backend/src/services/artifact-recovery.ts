@@ -4,7 +4,7 @@ import path from "node:path";
 import type { NormalizedEvent } from "@bg/shared/events";
 import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
 import { materializeManagedTree, publishManagedTree } from "./artifact-tree-storage";
-import { inspectCanonicalTree, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
+import { CanonicalTreeManifestError, inspectCanonicalTree, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
 
@@ -23,14 +23,20 @@ export async function reconcileArtifactState(db: Database): Promise<{ readonly o
     await reconcileOperation(db, operation.dir_path, parsed);
     recoveredOperations += 1;
   }
-  const projects = db.query<ProjectRow, []>("SELECT id,dir_path,current_digest FROM projects ORDER BY id").all();
+  const projects = db.query<ProjectRow, []>("SELECT id,dir_path,current_digest FROM projects WHERE archived_at IS NULL ORDER BY id").all();
   const coordinator = new ArtifactCoordinator(db);
   for (const project of projects) {
-    if (project.current_digest === null) await coordinator.initialize(project.id, project.dir_path);
-    else {
-      const actual = await inspectCanonicalTree(project.dir_path);
-      if (actual.tree_digest !== project.current_digest) await coordinator.observeExternal(project.id, project.dir_path);
-      else await coordinator.initialize(project.id, project.dir_path);
+    try {
+      if (project.current_digest === null) await coordinator.initialize(project.id, project.dir_path);
+      else {
+        const actual = await inspectCanonicalTree(project.dir_path);
+        if (actual.tree_digest !== project.current_digest) await coordinator.observeExternal(project.id, project.dir_path);
+        else await coordinator.initialize(project.id, project.dir_path);
+      }
+    } catch (error) {
+      if (!(error instanceof CanonicalTreeManifestError) || error.code !== "tree_missing") throw error;
+      const now = Date.now();
+      db.prepare("UPDATE projects SET archived_at=?,updated_at=? WHERE id=? AND archived_at IS NULL").run(now, now, project.id);
     }
   }
   const sessions = recoverPersistedSessions(db);

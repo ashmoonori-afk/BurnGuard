@@ -32,6 +32,7 @@ Bun 모노레포이고, 워크스페이스 패키지 셋에 스크립트가 붙�
 런타임 구조:
 
 - 백엔드는 기본적으로 `127.0.0.1:14070`에서 대기합니다. `BG_PORT`로 덮어쓸 수 있고, `BG_SCAN_PORT=1`이면 14070부터 14170까지 탐색합니다.
+- 원클릭 런처는 Vite 프록시 대상 포트가 하나로 고정되어야 합니다. 런처에서는 `BG_PORT`를 명시해야 하며, `BG_PORT` 없는 `BG_SCAN_PORT=1`은 거부됩니다.
 - `/api/health`를 제외한 모든 `/api` 라우트는 실행 단위 capability로 보호됩니다. `GET /api/bootstrap`이 동일 출처 호출자에게 `HttpOnly` 쿠키와 JSON 본문으로 capability를 내주고, 변경 요청은 추가로 일치하는 `Origin` 헤더와 `X-Burnguard-Capability` 헤더를 요구합니다. `Host`가 맞지 않으면 `421`입니다.
 - 프로젝트, 세션, 이벤트, 코멘트, export, 카탈로그, 학습, 리서치의 원본은 SQLite입니다. 마이그레이션은 `packages/backend/src/db/migrations/`에 있고 bootstrap에서 실행되며, 리서치 상태는 `0010_research.sql`에서 정의됩니다.
 - 프론트엔드는 `/api`로만 백엔드와 통신하고, 캔버스는 sandbox iframe에서 프로젝트 아티팩트를 렌더링합니다.

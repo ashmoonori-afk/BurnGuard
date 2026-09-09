@@ -32,6 +32,7 @@ A Bun monorepo with three workspace packages plus scripts.
 Runtime shape:
 
 - The backend listens on `127.0.0.1:14070` by default (`BG_PORT` overrides it, `BG_SCAN_PORT=1` scans 14070 to 14170).
+- The one-click launchers require one deterministic Vite proxy target. Set `BG_PORT` explicitly when launching through them; `BG_SCAN_PORT=1` without `BG_PORT` is rejected.
 - Every `/api` route except `/api/health` is guarded by a per-launch capability. `GET /api/bootstrap` hands the capability to a same-origin caller as an `HttpOnly` cookie and in the JSON body; mutations additionally require a matching `Origin` header and the `X-Burnguard-Capability` header. A mismatched `Host` gets `421`.
 - SQLite is the source of truth for projects, sessions, events, comments, exports, catalog, learning, and research. Migrations live in `packages/backend/src/db/migrations/` and run at bootstrap; research state comes from `0010_research.sql`.
 - The frontend talks to the backend only through `/api`, and the canvas renders project artifacts in a sandboxed iframe.

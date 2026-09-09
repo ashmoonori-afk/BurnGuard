@@ -1,3 +1,5 @@
+import path from "node:path";
+
 /**
  * Is a headless Chromium launch usable in this process?
  *
@@ -78,7 +80,6 @@ export async function isChromiumLaunchable(
     if (timer !== undefined) clearTimeout(timer);
   }
 }
-
 function probeWaitMs(): number {
   const override = Number(process.env.BG_CHROMIUM_PROBE_WAIT_MS);
   return Number.isFinite(override) && override > 0 ? override : PROBE_WAIT_MS;
@@ -97,6 +98,25 @@ for (const options of attempts) {
 }
 process.exit(1);
 `;
+export const CHROMIUM_PROBE_ARG = "--burnguard-chromium-probe";
+
+export async function runChromiumProbeCommand(): Promise<number> {
+  const { chromium } = await import("playwright-core");
+  const attempts = [
+    { headless: true },
+    { headless: true, channel: "chrome" },
+    { headless: true, channel: "msedge" },
+  ] as const;
+  for (const options of attempts) {
+    try {
+      const browser = await chromium.launch(options);
+      await browser.close();
+      process.stdout.write("usable");
+      return 0;
+    } catch {}
+  }
+  return 1;
+}
 
 /**
  * Runs the launch in a child so a blocked event loop cannot reach the server.
@@ -104,8 +124,15 @@ process.exit(1);
  * playwright-core the renderer uses.
  */
 async function spawnLaunchProbe(): Promise<boolean> {
-  const child = Bun.spawn([process.execPath, "-e", PROBE_SOURCE], {
-    cwd: new URL("..", import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:)/u, ""),
+  const compiled = import.meta.dir.startsWith("/$bunfs/");
+  const child = Bun.spawn(
+    compiled
+      ? [process.execPath, CHROMIUM_PROBE_ARG]
+      : [process.execPath, "-e", PROBE_SOURCE],
+  {
+    cwd: compiled
+      ? path.dirname(process.execPath)
+      : new URL("..", import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:)/u, ""),
     stdout: "pipe",
     stderr: "ignore",
     stdin: "ignore",

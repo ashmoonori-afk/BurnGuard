@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { Hono } from "hono";
 import { APP_NAME } from "@bg/shared/app";
-import { resolveRepoRoot } from "./lib/paths";
+import { resolveRuntimeRoot } from "./lib/paths";
 import {
   createRequestAuthority,
   type RequestAuthorityOptions,
@@ -179,9 +179,9 @@ async function apiRoutes(domain: ApiRouteDomain): Promise<Hono> {
 }
 
 function findFrontendDistDir() {
-  const repoRoot = resolveRepoRoot();
+  const runtimeRoot = resolveRuntimeRoot();
   const candidates = [
-    path.join(repoRoot, "packages", "frontend", "dist"),
+    path.join(runtimeRoot, "packages", "frontend", "dist"),
     path.join(import.meta.dir, "..", "..", "frontend", "dist"),
   ];
 

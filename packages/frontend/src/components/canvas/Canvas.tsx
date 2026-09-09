@@ -174,7 +174,7 @@ export default function Canvas({
     setFrameSrcDoc(null);
     setLoadError(null);
 
-    void fetch(src)
+    void fetch(src, { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) {
           const text = await response.text().catch(() => "");
@@ -323,6 +323,7 @@ export default function Canvas({
           active={mode === "edit"}
           iframeRef={iframeRef}
           selectedBgId={mode === "edit" ? editSelectedBgId : null}
+          requestKey={loadedFrameKey}
           onSelect={onSelectEditTarget}
         />
         <TweaksLayer

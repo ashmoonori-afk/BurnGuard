@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "node-html-parser";
+import { defaultTreeAdapter, parse as parseHtmlDocument, parseFragment, serialize, type DefaultTreeAdapterTypes } from "parse5";
 import type { ExportFormat, ExportOptions, ExportProgress, ExportStopReason } from "@bg/shared";
 import { getExportJob } from "../db/exports";
 import { createExportAuthority, createRetryAuthority, advanceExportAttempt, completeExportAttempt, failExportAttempt, recordExportAuditFindings, requestExportCancellation, type ExportIdentity } from "../db/export-lifecycle-repository";
@@ -14,22 +15,19 @@ import { inspectCanonicalTree, validateCanonicalTree, type CanonicalTreeManifest
 import { catalogPaths, inspectCatalogTree, validateCatalogReceiptTree } from "./catalog-files";
 import { resolveStaticClosure } from "./export-closure";
 import { publishExportAttemptEvent } from "./export-events";
-import { renderHandoffBundle } from "./export-handoff-render";
 import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "./export-html-validation";
 import { validateHandoffPackage, validatePptxPackage } from "./export-package-validation";
-import { renderDeckToPdf } from "./export-pdf";
-import { renderToPng } from "./export-png";
-import { renderDeckToPptx } from "./export-pptx-render";
 import { canonicalJson, parseExportReceipt, receiptDigest, sha256, type ExportReceipt } from "./export-receipt";
 import type { ExportValidation } from "./export-receipt-validation";
-import { openRenderSession } from "./export-render-session";
-import { auditRenderedTree } from "./design-audit";
+import { auditRenderedTreeForExport } from "./design-audit";
 import { prepareSlideDeckExport } from "./export-stage";
 import { parseStoredProjectOptions } from "./project-options";
 import { zipDirectory } from "./zip";
 
 const RENDERER_CONTRACT = "burnguard-export/1|playwright-core@1.62.1|pdfjs-dist@5.4.149";
 const active = new Map<string, AbortController>();
+const DESIGN_AUDIT_TIMEOUT_MS = 30_000;
+const HTML_EXPORT_CSP = "default-src 'none'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'none'; object-src 'none'; frame-src 'self' data: blob:; worker-src 'self' blob:; base-uri 'none'; form-action 'none'";
 export type ExportPhase = "after_snapshot" | "after_partial_render" | "after_render" | "after_validation" | "after_receipt" | "after_publish_before_db";
 export type ExportHooks = { readonly phase?: (attemptId: string, phase: ExportPhase, signal: AbortSignal) => Promise<void> | void };
 
@@ -76,16 +74,30 @@ async function runExport(input: RunInput): Promise<void> {
     if (live.tree_digest !== context.identity.digest) throw new ExportServiceError("source_changed", "Live project digest differs from stable identity");
     await materializeManagedTree(source, renderRoot); await validateCanonicalTree(renderRoot, live);
     if (context.project.type === "slide_deck") await prepareSlideDeckExport(renderRoot, context.project.entrypoint);
+    if (context.format === "html_zip") await enforceOfflineHtmlPolicy(renderRoot, await inspectCanonicalTree(renderRoot));
     const renderManifest = await inspectCanonicalTree(renderRoot);
     const graphicCanvas = context.project.type === "graphic"
       ? parseStoredProjectOptions(context.project.options_json).graphic_canvas ?? undefined
       : undefined;
-    const audit = await auditRenderedTree({ projectId: context.identity.projectId, projectDir: renderRoot, entrypoint: context.project.entrypoint, revision: context.identity.revision, digest: context.identity.digest, treeDigest: renderManifest.tree_digest, safeFix: false, deck: context.project.type === "slide_deck", ...(graphicCanvas === undefined ? {} : { canvas: graphicCanvas }), signal: input.controller.signal });
-    const auditUnknowns = audit.checks.filter((check) => check.reason !== null).map((check) => ({ code: `design_audit:${check.code}:${check.status}`, path: null }));
-    const auditFindings = audit.checks.flatMap((check) => check.findings.map((finding) => ({ code: finding.check_code, path: finding.source.rel_path }))).slice(0, 200 - auditUnknowns.length);
-    recordExportAuditFindings(db, input.attemptId, [...auditFindings, ...auditUnknowns]);
-    const mustFixCount = audit.checks.flatMap((check) => check.findings).filter((finding) => finding.severity === "must_fix").length;
-    if (mustFixCount > 0) throw new ExportServiceError("design_audit_failed", `Design audit found ${mustFixCount} must-fix finding${mustFixCount === 1 ? "" : "s"}`);
+    const auditController = new AbortController();
+    const abortAudit = () => auditController.abort(input.controller.signal.reason);
+    if (input.controller.signal.aborted) abortAudit();
+    else input.controller.signal.addEventListener("abort", abortAudit, { once: true });
+    const auditTimeout = setTimeout(
+      () => auditController.abort(new Error("Design audit timed out")),
+      DESIGN_AUDIT_TIMEOUT_MS,
+    );
+    try {
+      const audit = await auditRenderedTreeForExport({ projectId: context.identity.projectId, projectDir: renderRoot, entrypoint: context.project.entrypoint, revision: context.identity.revision, digest: context.identity.digest, treeDigest: renderManifest.tree_digest, safeFix: false, deck: context.project.type === "slide_deck", ...(graphicCanvas === undefined ? {} : { canvas: graphicCanvas }), signal: auditController.signal });
+      const auditUnknowns = audit.checks.filter((check) => check.reason !== null).map((check) => ({ code: `design_audit:${check.code}:${check.status}`, path: null }));
+      const auditFindings = audit.checks.flatMap((check) => check.findings.map((finding) => ({ code: finding.check_code, path: finding.source.rel_path }))).slice(0, 200 - auditUnknowns.length);
+      recordExportAuditFindings(db, input.attemptId, [...auditFindings, ...auditUnknowns]);
+      const mustFixCount = audit.checks.flatMap((check) => check.findings).filter((finding) => finding.severity === "must_fix").length;
+      if (mustFixCount > 0) throw new ExportServiceError("design_audit_failed", `Design audit found ${mustFixCount} must-fix finding${mustFixCount === 1 ? "" : "s"}`);
+    } finally {
+      clearTimeout(auditTimeout);
+      input.controller.signal.removeEventListener("abort", abortAudit);
+    }
     await resolveStaticClosure(renderRoot, context.project.entrypoint, renderManifest);
     const inputDigest = sha256(canonicalJson({ schema_version: 1, project: context.identity, entrypoint: context.project.entrypoint, manifest: renderManifest }));
     advanceExportAttempt(db, { attemptId: input.attemptId, status: "running", stage: "rendering", inputClosureDigest: inputDigest, designSystemDigest: context.identity.designSystemDigest });
@@ -110,18 +122,56 @@ async function runExport(input: RunInput): Promise<void> {
   }
 }
 
+async function enforceOfflineHtmlPolicy(renderRoot: string, manifest: CanonicalTreeManifest): Promise<void> {
+  const policy = `<meta http-equiv="Content-Security-Policy" content="${HTML_EXPORT_CSP}" data-burnguard-export-policy="offline">`;
+  for (const file of manifest.files) {
+    if (!/\.html?$/iu.test(file.path)) continue;
+    const filePath = resolveWithin(renderRoot, file.path);
+    const document = parseHtmlDocument(await readFile(filePath, "utf8"));
+    const html = directElement(document.childNodes, "html");
+    const head = html === null ? null : directElement(html.childNodes, "head");
+    if (head === null) throw new TypeError(`HTML parser did not produce a document head for ${file.path}`);
+    const fragment = parseFragment(head, policy, {});
+    const meta = directElement(fragment.childNodes, "meta");
+    if (meta === null) throw new TypeError(`HTML parser did not produce an export policy for ${file.path}`);
+    defaultTreeAdapter.detachNode(meta);
+    const first = head.childNodes[0];
+    if (first === undefined) defaultTreeAdapter.appendChild(head, meta);
+    else defaultTreeAdapter.insertBefore(head, meta, first);
+    await writeFile(filePath, serialize(document));
+  }
+}
+
+function directElement(nodes: readonly DefaultTreeAdapterTypes.ChildNode[], tagName: string): DefaultTreeAdapterTypes.Element | null {
+  for (const node of nodes) {
+    if (defaultTreeAdapter.isElementNode(node) && node.tagName === tagName) return node;
+  }
+  return null;
+}
+
 async function renderOutput(input: RunInput, renderRoot: string, outputPath: string, manifest: CanonicalTreeManifest, inputDigest: string): Promise<ExportValidation> {
   const { context } = input;
   switch (context.format) {
     case "html_zip": {
-      const session = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: context.project.type === "slide_deck", signal: input.controller.signal }); await session.close();
       const archiveManifest = buildHtmlArchiveManifest({ schema_version: 1, entrypoint: context.project.entrypoint, project_revision: context.identity.revision, project_digest: context.identity.digest, input_closure_digest: inputDigest }, manifest.files.map((file) => ({ path: file.path, size: file.size, sha256: file.sha256 })));
       await writeFile(path.join(renderRoot, HTML_EXPORT_MANIFEST), canonicalJson(archiveManifest)); await zipDirectory(renderRoot, outputPath); await validateHtmlArchive(new Uint8Array(await readFile(outputPath)), archiveManifest); return { entries: archiveManifest.entries.length };
     }
-    case "png": return renderToPng({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, width: context.options.png_width ?? 1280, height: context.options.png_height ?? 720, dpr: context.options.png_dpr ?? 1, deck: context.project.type === "slide_deck", signal: input.controller.signal });
-    case "pdf": return renderDeckToPdf({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, paper: context.options.pdf_paper, title: `${context.project.name} r${context.identity.revision}`, signal: input.controller.signal });
-    case "pptx": { await renderDeckToPptx({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, size: context.options.pptx_size, signal: input.controller.signal }); const slides = parse(await readFile(path.join(renderRoot, context.project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length; return validatePptxPackage(new Uint8Array(await readFile(outputPath)), slides); }
-    case "handoff": { const bundle = path.join(path.dirname(renderRoot), "handoff"); await renderHandoffBundle({ stagedProjectDir: renderRoot, stagingDir: bundle, entrypoint: context.project.entrypoint, tokensSrcPath: null, tokensFileName: null, designSystemName: context.project.design_system_name, project: { id: context.project.id, name: context.project.name, type: context.project.type, entrypoint: context.project.entrypoint }, isDeck: context.project.type === "slide_deck", signal: input.controller.signal }); await zipDirectory(bundle, outputPath); return validateHandoffPackage(new Uint8Array(await readFile(outputPath)), context.project.entrypoint); }
+    case "png": {
+      const { renderToPng } = await import("./export-png");
+      return renderToPng({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, width: context.options.png_width ?? 1280, height: context.options.png_height ?? 720, dpr: context.options.png_dpr ?? 1, deck: context.project.type === "slide_deck", signal: input.controller.signal });
+    }
+    case "pdf": {
+      const { renderDeckToPdf } = await import("./export-pdf");
+      return renderDeckToPdf({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, paper: context.options.pdf_paper, title: `${context.project.name} r${context.identity.revision}`, signal: input.controller.signal });
+    }
+    case "pptx": {
+      const { renderDeckToPptx } = await import("./export-pptx-render");
+      await renderDeckToPptx({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, size: context.options.pptx_size, signal: input.controller.signal }); const slides = parse(await readFile(path.join(renderRoot, context.project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length; return validatePptxPackage(new Uint8Array(await readFile(outputPath)), slides);
+    }
+    case "handoff": {
+      const { renderHandoffBundle } = await import("./export-handoff-render");
+      const bundle = path.join(path.dirname(renderRoot), "handoff"); await renderHandoffBundle({ stagedProjectDir: renderRoot, stagingDir: bundle, entrypoint: context.project.entrypoint, tokensSrcPath: null, tokensFileName: null, designSystemName: context.project.design_system_name, project: { id: context.project.id, name: context.project.name, type: context.project.type, entrypoint: context.project.entrypoint }, isDeck: context.project.type === "slide_deck", signal: input.controller.signal }); await zipDirectory(bundle, outputPath); return validateHandoffPackage(new Uint8Array(await readFile(outputPath)), context.project.entrypoint);
+    }
   }
 }
 

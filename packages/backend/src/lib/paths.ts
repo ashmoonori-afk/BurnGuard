@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
 export * from "./app-paths";
@@ -13,4 +14,18 @@ export function resolveManagedPath(root: string, target: string): string {
 
 export function resolveRepoRoot(fromDir = import.meta.dir): string {
   return path.resolve(fromDir, "../../../..");
+}
+
+export function resolveRuntimeRoot(
+  fromDir = import.meta.dir,
+  executablePath = process.execPath,
+): string {
+  const resources = path.resolve(
+    path.dirname(executablePath),
+    "..",
+    "Resources",
+  );
+  return existsSync(path.join(resources, "packages"))
+    ? resources
+    : resolveRepoRoot(fromDir);
 }

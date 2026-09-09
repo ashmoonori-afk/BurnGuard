@@ -19,7 +19,7 @@ import {
   exportsDir,
   logsDir,
   projectsDir,
-  resolveRepoRoot,
+  resolveRuntimeRoot,
   systemsDir,
 } from "./lib/paths";
 import { pruneOldExports } from "./services/export-gc";
@@ -62,7 +62,7 @@ export function isSampleSourcePathAllowed(relPath: string): boolean {
 }
 
 export async function seedBundledDesignSystems(
-  repoRoot = resolveRepoRoot(),
+  repoRoot = resolveRuntimeRoot(),
   destinationRoot = systemsDir,
 ): Promise<void> {
   const themesSource = path.join(repoRoot, "design system themes");
@@ -79,7 +79,7 @@ export async function seedBundledDesignSystems(
 }
 
 async function seedSampleDesignSystems(): Promise<void> {
-  const repoRoot = resolveRepoRoot();
+  const repoRoot = resolveRuntimeRoot();
   const sampleSource = path.join(repoRoot, "design system sample");
   const sampleDestination = path.join(systemsDir, "northvale-capital");
 

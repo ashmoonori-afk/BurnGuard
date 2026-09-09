@@ -35,6 +35,9 @@ const APP_RESOURCES = path.join(APP_CONTENTS, "Resources");
 const BIN_NAME = "burnguard-design";
 const ENTRY = path.join(ROOT, "packages/backend/src/index.ts");
 const FRONTEND_DIST = path.join(ROOT, "packages/frontend/dist");
+const MIGRATIONS = path.join(ROOT, "packages/backend/src/db/migrations");
+const DESIGN_SYSTEM_THEMES = path.join(ROOT, "design system themes");
+const DESIGN_SYSTEM_SAMPLE = path.join(ROOT, "design system sample");
 const ICON_SRC = path.join(ROOT, "assets/icon.icns");
 const DMG_OUT = path.join(
   DIST_ROOT,
@@ -108,6 +111,8 @@ async function main() {
     --target=bun-darwin-arm64 \
     --minify \
     --external electron \
+    --external chromium-bidi/lib/cjs/bidiMapper/BidiMapper \
+    --external chromium-bidi/lib/cjs/cdp/CdpConnection \
     --outfile ${binOut}`.cwd(ROOT);
   console.log(
     `[build-mac] compiled in ${((Date.now() - startCompile) / 1000).toFixed(1)}s`,
@@ -134,20 +139,20 @@ async function main() {
     );
   }
 
-  // Ship the frontend next to the app bundle so the backend binary's
-  // `findFrontendDistDir` heuristic still locates it. The binary
-  // walks up from its own parent looking for `packages/frontend/dist`;
-  // we mirror that relative layout inside the bundle's MacOS/ dir.
-  if (existsSync(FRONTEND_DIST)) {
-    const frontendStage = path.join(
-      APP_MACOS,
-      "packages",
-      "frontend",
-      "dist",
-    );
-    mkdirSync(path.dirname(frontendStage), { recursive: true });
-    cpSync(FRONTEND_DIST, frontendStage, { recursive: true });
-    console.log(`[build-mac] frontend: staged inside bundle`);
+  const resources = [
+    [FRONTEND_DIST, path.join("packages", "frontend", "dist")],
+    [MIGRATIONS, path.join("packages", "backend", "src", "db", "migrations")],
+    [DESIGN_SYSTEM_THEMES, "design system themes"],
+    [DESIGN_SYSTEM_SAMPLE, "design system sample"],
+  ] as const;
+  for (const [source, relative] of resources) {
+    if (!existsSync(source)) {
+      throw new Error(`[build-mac] required resource not found: ${source}`);
+    }
+    const destination = path.join(APP_RESOURCES, relative);
+    mkdirSync(path.dirname(destination), { recursive: true });
+    cpSync(source, destination, { recursive: true });
+    console.log(`[build-mac] resource: ${relative}`);
   }
 
   console.log(`[build-mac] .app ready: ${APP_BUNDLE}`);

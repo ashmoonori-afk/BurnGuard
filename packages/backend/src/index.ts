@@ -5,7 +5,22 @@ import { pickPort } from "./lib/port";
 import { generateLaunchCapability } from "./security/request-authority";
 import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
+import {
+  CHROMIUM_PROBE_ARG,
+  runChromiumProbeCommand,
+} from "./services/chromium-capability";
+import {
+  DESIGN_AUDIT_WORKER_ARG,
+  runDesignAuditWorkerCommand,
+} from "./services/design-audit";
 import { interruptAllUserTurns } from "./services/turns";
+
+if (process.argv.includes(DESIGN_AUDIT_WORKER_ARG)) {
+  process.exit(await runDesignAuditWorkerCommand());
+}
+if (process.argv.includes(CHROMIUM_PROBE_ARG)) {
+  process.exit(await runChromiumProbeCommand());
+}
 
 await bootstrapLocalAppData();
 const config = await loadConfig();

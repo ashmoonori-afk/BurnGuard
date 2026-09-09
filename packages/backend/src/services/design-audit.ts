@@ -12,9 +12,76 @@ import { openRenderSession, RenderSessionError } from "./export-render-session";
 import { parseStoredProjectOptions } from "./project-options";
 
 export type AuditRenderedTreeInput = { readonly projectId: string; readonly projectDir: string; readonly entrypoint: string; readonly revision: number; readonly digest: string; readonly treeDigest?: string; readonly safeFix?: boolean; readonly deck?: boolean; readonly canvas?: { readonly width: number; readonly height: number }; readonly signal: AbortSignal };
+type SerializedAuditInput = Omit<AuditRenderedTreeInput, "signal">;
+type AuditWorkerOutput = { readonly ok: true; readonly result: DesignAuditResult } | { readonly ok: false; readonly message: string };
+export const DESIGN_AUDIT_WORKER_ARG = "--burnguard-design-audit-worker";
 export class DesignAuditServiceError extends Error {
   readonly name = "DesignAuditServiceError";
   constructor(readonly code: "project_not_found" | "project_path_unavailable" | "stale_artifact_identity" | "audit_unavailable", message: string) { super(message); }
+}
+
+export async function auditRenderedTreeForExport(input: AuditRenderedTreeInput): Promise<DesignAuditResult> {
+  if (process.env.NODE_ENV === "test") return auditRenderedTree(input);
+  if (input.signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled");
+  const serialized: SerializedAuditInput = {
+    projectId: input.projectId,
+    projectDir: input.projectDir,
+    entrypoint: input.entrypoint,
+    revision: input.revision,
+    digest: input.digest,
+    ...(input.treeDigest === undefined ? {} : { treeDigest: input.treeDigest }),
+    ...(input.safeFix === undefined ? {} : { safeFix: input.safeFix }),
+    ...(input.deck === undefined ? {} : { deck: input.deck }),
+    ...(input.canvas === undefined ? {} : { canvas: input.canvas }),
+  };
+  const compiled = import.meta.dir.startsWith("/$bunfs/");
+  const child = Bun.spawn(compiled
+    ? [process.execPath, DESIGN_AUDIT_WORKER_ARG]
+    : [process.execPath, new URL("../index.ts", import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:)/u, ""), DESIGN_AUDIT_WORKER_ARG], {
+    stdin: new Blob([JSON.stringify(serialized)]),
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, BG_CHROMIUM_ASSUME_USABLE: "1" },
+  });
+  const onAbort = (): void => { child.kill(); };
+  input.signal.addEventListener("abort", onAbort, { once: true });
+  try {
+    const [exitCode, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    if (input.signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled");
+    const output = parseAuditWorkerOutput(stdout);
+    if (exitCode !== 0 || !output.ok) throw new DesignAuditServiceError("audit_unavailable", output.ok ? stderr || "Rendered audit worker failed" : output.message);
+    return output.result;
+  } finally {
+    input.signal.removeEventListener("abort", onAbort);
+    child.kill();
+  }
+}
+
+export async function runDesignAuditWorkerCommand(): Promise<number> {
+  try {
+    const input = JSON.parse(await Bun.stdin.text()) as SerializedAuditInput;
+    const result = await auditRenderedTree({ ...input, signal: new AbortController().signal });
+    process.stdout.write(JSON.stringify({ ok: true, result } satisfies AuditWorkerOutput));
+    return 0;
+  } catch (error) {
+    process.stdout.write(JSON.stringify({ ok: false, message: error instanceof Error ? error.message : String(error) } satisfies AuditWorkerOutput));
+    return 1;
+  }
+}
+
+function parseAuditWorkerOutput(raw: string): AuditWorkerOutput {
+  const value = JSON.parse(raw) as unknown;
+  if (typeof value !== "object" || value === null || typeof Reflect.get(value, "ok") !== "boolean") throw new TypeError("Rendered audit worker returned invalid JSON");
+  if (Reflect.get(value, "ok") === false) {
+    const message = Reflect.get(value, "message");
+    if (typeof message !== "string") throw new TypeError("Rendered audit worker returned an invalid error");
+    return { ok: false, message };
+  }
+  return { ok: true, result: parseDesignAuditResult(Reflect.get(value, "result")) };
 }
 
 export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<DesignAuditResult> {
