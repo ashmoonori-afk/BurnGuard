@@ -183,6 +183,11 @@ export function reserveUserTurn(sessionId: string, requestedOperationId?: string
   return reservation;
 }
 
+/** Whether another CLI turn may start anywhere in the process; `harness.maxConcurrentSessions` is the ceiling. */
+export function hasTurnCapacity(maxConcurrentTurns: number): boolean {
+  return activeTurns.size < maxConcurrentTurns;
+}
+
 export function releaseUserTurnReservation(reservation: UserTurnReservation): void {
   if (activeTurns.get(reservation.sessionId)?.reservationId === reservation.reservationId) activeTurns.delete(reservation.sessionId);
 }

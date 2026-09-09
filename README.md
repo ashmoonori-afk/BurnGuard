@@ -153,7 +153,7 @@ The default data directory is `~/.burnguard/`, or `%USERPROFILE%\.burnguard\` on
 
 Local storage does not mean all processing happens offline. During AI generation, prompts and selected context are sent to the provider used by your CLI. Web and Figma imports and tool installation also use the network. Check your provider's policies before attaching sensitive material.
 
-The app binds to loopback and checks API launch authority and Host/Origin. The canvas runs in a separate sandbox. Exposing this server directly to the internet is outside the supported deployment scope.
+The app binds to loopback and checks API launch authority and Host/Origin. The canvas runs in a separate sandbox under a Content-Security-Policy that keeps generated artifacts from reaching other hosts, and raw project files are never rendered as a top-level page. Other processes and users on the same machine are trusted: do not run BurnGuard on a shared or remotely reachable host, and never expose this server directly to the internet. See the [security model](doc/01-architecture.md#7-security-and-safety-model).
 
 ## Development
 

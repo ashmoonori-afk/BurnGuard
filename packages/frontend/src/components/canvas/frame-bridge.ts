@@ -25,6 +25,7 @@
  */
 
 import type { GraphicCanvasV1 } from "@bg/shared";
+import { artifactContentSecurityPolicy } from "@bg/shared/security";
 import { buildGraphicPreviewInjection } from "@/lib/graphic-preview";
 
 export interface FrameRect {
@@ -196,7 +197,11 @@ export function buildSandboxedArtifactSrcDoc(
   baseHref: string,
   options?: SandboxedArtifactOptions,
 ): string {
-  const baseTag = `<base href="${escapeHtmlAttr(baseHref)}">`;
+  // The policy must be the first thing the parser sees in <head> so it also
+  // governs the artifact's own inline resources; a sandboxed srcdoc has an
+  // opaque origin, so the app origin is named explicitly instead of 'self'.
+  const policyTag = `<meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttr(artifactContentSecurityPolicy(new URL(baseHref).origin))}">`;
+  const baseTag = `${policyTag}<base href="${escapeHtmlAttr(baseHref)}">`;
   const graphicPreview = options?.graphicCanvas === undefined
     ? ""
     : buildGraphicPreviewInjection(options.graphicCanvas);

@@ -2,6 +2,7 @@ import type {
   PypdfInstallStatus,
   PythonHealth,
 } from "@bg/shared";
+import { PYPDF_REQUIRED_VERSION, isSupportedPypdfVersion } from "./pypdf-version";
 
 const MAX_TAIL = 120;
 const CHECK_TIMEOUT_MS = 3_000;
@@ -75,6 +76,16 @@ export function parsePypdfVersion(raw: string): string | null {
   return /^\d+(?:\.\d+)+/.test(firstLine) ? firstLine : null;
 }
 
+/** Health summary for an importable pypdf; only the reviewed line or newer is usable. */
+export function pypdfHealth(version: string | null): PythonHealth["pypdf"] {
+  return { found: version !== null, version, supported: isSupportedPypdfVersion(version), required_version: PYPDF_REQUIRED_VERSION };
+}
+
+/** `python -m pip install --user pypdf==<reviewed version>`: the installer never floats to latest. */
+export function pypdfInstallCommand(prefix: readonly string[]): string[] {
+  return [...prefix, "-m", "pip", "install", "--user", `pypdf==${PYPDF_REQUIRED_VERSION}`];
+}
+
 export async function checkPythonRuntime(): Promise<PythonHealth> {
   let pythonExecutable: string[] | null = null;
   let pythonVersion: string | null = null;
@@ -109,10 +120,7 @@ export async function checkPythonRuntime(): Promise<PythonHealth> {
       executable: pythonExecutable,
       version: pythonVersion,
     },
-    pypdf: {
-      found: pypdfVersion !== null,
-      version: pypdfVersion,
-    },
+    pypdf: pypdfHealth(pypdfVersion),
     checked_at: Date.now(),
   };
   cachedHealth = next;
@@ -128,7 +136,7 @@ export function getPypdfInstallStatus(): PypdfInstallStatus {
 }
 
 /**
- * Spawns `python -m pip install --user pypdf` so PDF uploads start
+ * Spawns `python -m pip install --user pypdf==<pinned>` so PDF uploads start
  * working without asking the user for a shell. `--user` avoids needing
  * admin on Windows / sudo on Unix for system-wide installs.
  *
@@ -158,7 +166,7 @@ export function startPypdfInstall(): { started: boolean; reason?: string } {
 
   try {
     runningInstall = Bun.spawn({
-      cmd: [...prefix, "-m", "pip", "install", "--user", "pypdf"],
+      cmd: pypdfInstallCommand(prefix),
       stdout: "pipe",
       stderr: "pipe",
       stdin: "ignore",

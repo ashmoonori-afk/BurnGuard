@@ -16,6 +16,7 @@ import {
   getPypdfInstallStatus,
   startPypdfInstall,
 } from "../services/python-health";
+import { PYPDF_REQUIRED_VERSION } from "../services/pypdf-version";
 
 function ok<T>(data: T): ApiSuccess<T> {
   return { data };
@@ -89,7 +90,7 @@ settingsRoutes.post("/api/settings/python/install", (c) => {
     ok({
       health: getCachedPythonHealth() ?? {
         python: { found: false, executable: null, version: null },
-        pypdf: { found: false, version: null },
+        pypdf: { found: false, version: null, supported: false, required_version: PYPDF_REQUIRED_VERSION },
         checked_at: Date.now(),
       },
       install: getPypdfInstallStatus(),

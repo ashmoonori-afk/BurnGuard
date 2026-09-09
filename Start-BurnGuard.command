@@ -40,10 +40,10 @@ if ! command -v bun >/dev/null 2>&1; then
 fi
 
 if [ ! -d "node_modules" ]; then
-    echo "[BurnGuard] First-time setup: running bun install..."
-    if ! bun install; then
+    echo "[BurnGuard] First-time setup: running bun install --frozen-lockfile..."
+    if ! bun install --frozen-lockfile; then
         echo
-        echo "[BurnGuard] bun install failed. See log above."
+        echo "[BurnGuard] bun install --frozen-lockfile failed. See log above."
         echo
         read -n 1 -s -r -p "Press any key to close..."
         echo

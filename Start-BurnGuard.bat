@@ -23,11 +23,11 @@ if errorlevel 1 (
 )
 
 if not exist "node_modules" (
-    echo [BurnGuard] First-time setup: running bun install...
-    call bun install
+    echo [BurnGuard] First-time setup: running bun install --frozen-lockfile...
+    call bun install --frozen-lockfile
     if errorlevel 1 (
         echo.
-        echo [BurnGuard] bun install failed. See log above.
+        echo [BurnGuard] bun install --frozen-lockfile failed. See log above.
         echo.
         pause
         exit /b 1

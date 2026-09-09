@@ -50,9 +50,13 @@ export async function appendAttachmentContext(
           `  extracted_text_path: ${relativeExtracted} (safe text version for Read)`,
         );
       }
+      // Everything inside the delimiter came out of the uploaded document. It is
+      // data for the model to design from, never instructions to follow.
+      lines.push("  <burnguard-untrusted-document-text>");
       for (const summaryLine of renderAttachmentSummary(summary)) {
         lines.push(`  ${summaryLine}`);
       }
+      lines.push("  </burnguard-untrusted-document-text>");
     } else {
       lines.push(`  path: ${relativeSource}`);
     }

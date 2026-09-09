@@ -71,8 +71,11 @@ function htmlReferences(source: string, file: string): readonly string[] {
 
 function cssReferences(source: string, file: string): readonly string[] {
   let root: postcss.Root;
-  try { root = postcss.parse(source, { from: file }); }
-  catch (error) { throw new ExportClosureError("malformed_html", error instanceof Error ? error.message : file); }
+  // `map: false`: project CSS is untrusted, so a `sourceMappingURL` comment must
+  // not make PostCSS read a file on this host. The stable file name is the only
+  // detail exposed; dependency exception text is not.
+  try { root = postcss.parse(source, { from: file, map: false }); }
+  catch { throw new ExportClosureError("malformed_html", file); }
   const values: string[] = [];
   root.walkAtRules("import", (rule) => {
     const match = /^(?:url\()?\s*["']?([^"')\s]+)["']?/.exec(rule.params);

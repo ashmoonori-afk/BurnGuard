@@ -26,7 +26,9 @@ type CssDeclarationEvidence = {
 self.onmessage = (event: MessageEvent<ParseRequest>): void => {
   const request = event.data;
   try {
-    const root = postcss.parse(request.content, { from: request.sourceId });
+    // `map: false` keeps PostCSS from following a `sourceMappingURL` comment to
+    // a file on this host; the CSS is untrusted and only its declarations matter.
+    const root = postcss.parse(request.content, { from: request.sourceId, map: false });
     const declarations: CssDeclarationEvidence[] = [];
     const issues: CssParseIssue[] = [];
     let declarationOrder = 0;

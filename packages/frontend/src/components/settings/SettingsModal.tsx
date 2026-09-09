@@ -409,9 +409,11 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
                       <Download className="h-3 w-3" />
                       {py?.install.state === "installing"
                         ? "설치하는 중…"
-                        : py?.health.pypdf.found
-                          ? "pypdf 다시 설치"
-                          : "pypdf 설치"}
+                        : py?.health.pypdf.found && !py.health.pypdf.supported
+                          ? "pypdf 업데이트"
+                          : py?.health.pypdf.found
+                            ? "pypdf 다시 설치"
+                            : "pypdf 설치"}
                     </Button>
                   </div>
                 </div>
@@ -547,8 +549,10 @@ function PyStateDot({ py }: { py: PythonSettings | null }) {
       color = "bg-amber-500 animate-pulse";
     } else if (!py.health.python.found) {
       color = "bg-red-500";
-    } else if (py.health.pypdf.found) {
+    } else if (py.health.pypdf.found && py.health.pypdf.supported) {
       color = "bg-emerald-500";
+    } else if (py.health.pypdf.found) {
+      color = "bg-amber-500";
     } else if (py.install.state === "error") {
       color = "bg-red-500";
     } else {
@@ -563,6 +567,9 @@ function pyLabel(py: PythonSettings | null): string {
   if (py.install.state === "installing") return "pypdf를 설치하는 중이에요…";
   if (!py.health.python.found) {
     return "Python을 찾지 못했어요 — Python 3.10 이상을 설치해 주세요.";
+  }
+  if (py.health.pypdf.found && !py.health.pypdf.supported) {
+    return `pypdf ${py.health.pypdf.version ?? ""}은(는) 지원하지 않는 버전이에요 — ${py.health.pypdf.required_version} 이상으로 업데이트해 주세요.`;
   }
   if (py.health.pypdf.found) {
     const ver = py.health.pypdf.version ? ` ${py.health.pypdf.version}` : "";

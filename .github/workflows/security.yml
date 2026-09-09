@@ -1,0 +1,54 @@
+name: Security
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run build:frontend
+      # The full suite needs a prepared workstation (Chromium, Node bridge,
+      # Python + pypdf); see doc/07-manual-smoke-test.md. This gate runs the
+      # boundary tests that need none of that.
+      - name: Security boundary tests
+        run: >-
+          bun test --timeout 30000
+          packages/backend/tests/request-authority.test.ts
+          packages/backend/tests/path-boundary.test.ts
+          packages/backend/tests/raw-file-response.test.ts
+          packages/backend/tests/app-shell-headers.test.ts
+          packages/backend/tests/request-limits.test.ts
+          packages/backend/tests/css-source-map-boundary.test.ts
+          packages/backend/tests/python-health.test.ts
+          packages/backend/tests/turn-error-sanitizer.test.ts
+          packages/backend/tests/config-storage.test.ts
+          packages/frontend/tests/artifact-csp.test.ts
+          packages/frontend/tests/client.test.ts
+      # Advisories with no upstream fix are allowlisted by id; remove an id as
+      # soon as a fixed release exists. image-size (via pptxgenjs, image parsing
+      # never reached) and react-router v6 (fixed only in v7).
+      - name: Dependency audit
+        run: >-
+          bun audit
+          --ignore=GHSA-w3rx-r6r6-pgpr
+          --ignore=GHSA-5p2g-fcmc-qvqq
+          --ignore=GHSA-wrjc-x8rr-h8h6
+          --ignore=GHSA-337j-9hxr-rhxg
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -10,6 +10,7 @@ import { ArtifactIdentityError, requireArtifactIdentity } from "../services/arti
 import { inspectCanonicalTree } from "../services/canonical-tree-manifest";
 import { resolveDrawFile, resolveProjectFile } from "../services/managed-project-files";
 import { FilePatchError, fingerprintHtmlNode, htmlWithEditableIds } from "../services/file-patch";
+import { rawFileHeaders } from "../security/raw-file-response";
 
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
 function fail(code: string, message: string, details?: unknown): ApiErrorBody { return { error: { code, message, details } }; }
@@ -34,7 +35,8 @@ managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
   const manifest = await inspectCanonicalTree(resolved.project.dir_path);
   const file = manifest.files.find((entry) => entry.path === resolved.relPath);
   if (project === null || project.current_digest === null || file === undefined) return c.json(fail("artifact_identity_unavailable", "Artifact identity is unavailable"), 409);
-  const headers: Record<string, string> = { "Cache-Control": "no-cache", "Content-Type": contentType(resolved.absolutePath), ETag: `"${file.sha256}"`, "X-Burnguard-File-Hash": file.sha256, "X-Burnguard-Revision": String(project.current_revision), "X-Burnguard-Artifact-Digest": project.current_digest };
+  const type = contentType(resolved.absolutePath);
+  const headers: Record<string, string> = { ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(resolved.absolutePath) }), "Cache-Control": "no-cache", "Content-Type": type, ETag: `"${file.sha256}"`, "X-Burnguard-File-Hash": file.sha256, "X-Burnguard-Revision": String(project.current_revision), "X-Burnguard-Artifact-Digest": project.current_digest };
   const nodeBgId = c.req.query("node_bg_id");
   if (nodeBgId !== undefined) {
     try { headers["X-Burnguard-Node-Fingerprint"] = fingerprintHtmlNode(await readFile(resolved.absolutePath, "utf8"), nodeBgId).fingerprint; }
@@ -56,12 +58,14 @@ managedFileRoutes.get("/api/projects/:id/draws/*", async (c) => {
   if (relPath.length === 0) return c.json(fail("invalid_path", "File path is required"), 400);
   const resolved = await resolveDrawFile(projectId, relPath);
   if (resolved === null) return c.json(fail("project_not_found", "Project or path invalid", { projectId, relPath }), 404);
+  const svgType = "image/svg+xml; charset=utf-8";
+  const headers = { ...rawFileHeaders(c.req.raw, { contentType: svgType, filename: path.basename(resolved.absolutePath) }), "Content-Type": svgType, "Cache-Control": "no-cache" };
   try {
     if (!(await stat(resolved.absolutePath)).isFile()) return c.json(fail("not_a_file", "Draws sidecar is not a file", { relPath }), 400);
-    return c.body(await readFile(resolved.absolutePath, "utf8"), 200, { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "no-cache" });
+    return c.body(await readFile(resolved.absolutePath, "utf8"), 200, headers);
   } catch (error) {
     if (!(error instanceof Error)) throw error;
-    return c.body('<svg xmlns="http://www.w3.org/2000/svg"></svg>', 200, { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "no-cache" });
+    return c.body('<svg xmlns="http://www.w3.org/2000/svg"></svg>', 200, headers);
   }
 });
 

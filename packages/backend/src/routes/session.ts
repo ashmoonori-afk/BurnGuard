@@ -40,11 +40,13 @@ import { ArtifactCoordinator, ArtifactOperationError } from "../services/artifac
 import { materializeManagedTree } from "../services/artifact-tree-storage";
 import { getSqlite } from "../db/sqlite-client";
 import { assertSafeName } from "../security/path-boundary";
+import { MAX_USER_MESSAGE_CHARS } from "../security/request-limits";
 import { appendSessionTrace } from "../services/trace";
 import {
   interruptUserTurn,
   isUserTurnRunning,
   releaseUserTurnReservation,
+  hasTurnCapacity,
   reserveUserTurn,
   startReservedUserTurn,
   type UserTurnReservation,
@@ -101,6 +103,9 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
   }
   const contentType = c.req.header("content-type") ?? "";
   const [config, detection, project] = await Promise.all([loadConfig(), detectBackends(), getProjectDetail(session.project_id)]);
+  if (!hasTurnCapacity(config.harness.maxConcurrentSessions)) {
+    return c.json(fail("turn_capacity_exhausted", "Too many turns are running; wait for one to finish", { limit: config.harness.maxConcurrentSessions }), 429);
+  }
   const selectedBackend = detection.backends.find((backend) => backend.id === session.backend_id);
   if (project?.type === "graphic" && (session.backend_id !== "codex" || selectedBackend?.authenticated !== true)) return c.json(fail("graphic_requires_authenticated_codex", "Graphic generation requires authenticated Codex"), 409);
   const resolveGeneration = (value: unknown) => resolveGenerationOptions(session.backend_id, value, config, selectedBackend ?? { id: session.backend_id, found: false });
@@ -115,6 +120,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       body.type === "user.message" &&
       typeof body.text === "string"
     ) {
+      if (body.text.length > MAX_USER_MESSAGE_CHARS) return c.json(fail("message_too_long", `Message exceeds ${MAX_USER_MESSAGE_CHARS} characters`, { limit: MAX_USER_MESSAGE_CHARS }), 400);
       let generation;
       try { generation = resolveGeneration(body.generation === undefined ? undefined : parseGenerationOptions(body.generation)); }
       catch { return c.json(fail("invalid_generation_options", "Generation options are invalid"), 400); }
@@ -143,6 +149,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
     const type = form.get("type");
     const text = form.get("text");
     if (type === "user.message" && typeof text === "string") {
+      if (text.length > MAX_USER_MESSAGE_CHARS) return c.json(fail("message_too_long", `Message exceeds ${MAX_USER_MESSAGE_CHARS} characters`, { limit: MAX_USER_MESSAGE_CHARS }), 400);
       let generation;
       try { const raw = form.get("generation"); generation = resolveGeneration(raw === null ? undefined : parseGenerationOptions(typeof raw === "string" ? JSON.parse(raw) : raw)); }
       catch { return c.json(fail("invalid_generation_options", "Generation options are invalid"), 400); }
