@@ -9,6 +9,7 @@ import { generateLaunchCapability } from "./security/request-authority";
 import { MAX_REQUEST_BODY_BYTES } from "./security/request-limits";
 import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
+import { configureAppUpdater, startAppUpdateScheduler } from "./services/mac-updates";
 import { interruptAllUserTurns } from "./services/turns";
 
 if (process.argv.includes("--bg-chromium-probe")) {
@@ -79,6 +80,8 @@ const shutdown = async (): Promise<void> => {
   // would keep writing into it after the server is gone.
   server.stop(false); await interruptAllUserTurns(); await closeActiveExportBrowsers(); server.stop(true); profileOwner?.close(); process.exit(0);
 };
+// macOS self-update: the staged package is applied by the bundled updater once this process has shut down.
+startAppUpdateScheduler(configureAppUpdater({ shutdown }));
 process.on("SIGINT", () => { void shutdown(); });
 process.on("SIGTERM", () => { void shutdown(); });
 if (isDesktop) {
