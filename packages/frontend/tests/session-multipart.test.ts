@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { ApiError, bootstrapApiAuthority } from "../src/api/client";
-import { sendUserEvent } from "../src/api/session";
+import { preserveSessionDocuments, sendUserEvent } from "../src/api/session";
 
 const originalFetch = globalThis.fetch;
 
@@ -30,6 +30,27 @@ async function installAuthorizedFetch(
 }
 
 describe("multipart user event upload", () => {
+  test("Given selected documents When originals are preserved Then only the authorized document endpoint receives the files", async () => {
+    const requests: string[] = [];
+    await installAuthorizedFetch(async (input, init) => {
+      requests.push(String(input));
+      expect(init?.method).toBe("POST");
+      expect(new Headers(init?.headers).get("x-burnguard-capability")).toBe("launch-token");
+      expect(init?.body).toBeInstanceOf(FormData);
+      const files = (init?.body as FormData).getAll("files") as File[];
+      expect(files.map((file) => file.name)).toEqual(["source.pdf"]);
+      expect(await files[0]!.text()).toBe("original bytes");
+      return Response.json({ data: { paths: ["docs/attachments/source.pdf"] } });
+    });
+    await preserveSessionDocuments("session-1", [new File(["original bytes"], "source.pdf")]);
+    expect(requests).toEqual(["/api/sessions/session-1/documents"]);
+  });
+
+  test("Given a failed document save When the API rejects Then the caller can retain its draft and retry", async () => {
+    await installAuthorizedFetch(() => Response.json({ error: { code: "save_failed", message: "Failed" } }, { status: 500 }));
+    await expect(preserveSessionDocuments("session-1", [upload()])).rejects.toBeInstanceOf(ApiError);
+  });
+
   test("Given API authority When a multipart message is sent Then the capability protects the request", async () => {
     let sentHeaders: Headers | null = null;
     await installAuthorizedFetch((_input, init) => {

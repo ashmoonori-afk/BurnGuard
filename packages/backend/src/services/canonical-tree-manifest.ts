@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
+import { isProjectDocumentPath } from "./project-document-paths";
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const OWNED_EPHEMERAL_FILES = new Set([".burnguard-publication", ".burnguard-catalog"]);
@@ -68,7 +69,7 @@ export async function inspectCanonicalTree(
       const relativePath = path.relative(root, target).split(path.sep).join("/");
       const topLevel = relativePath.split("/")[0];
       if (topLevel !== undefined && EXCLUDED_PROJECT_DIRECTORIES.has(topLevel)) continue;
-      if (OWNED_EPHEMERAL_FILES.has(relativePath)) continue;
+      if (OWNED_EPHEMERAL_FILES.has(relativePath) || isProjectDocumentPath(relativePath)) continue;
       if (entry.isSymbolicLink() || info.isSymbolicLink()) throw new CanonicalTreeManifestError("unsafe_tree_entry", "Canonical tree cannot contain links");
       if (info.isDirectory()) {
         await visit(target);
@@ -158,6 +159,7 @@ function digestEntries(files: readonly CanonicalTreeEntry[]): string {
 }
 
 function isNormalizedRelativePath(value: string): boolean {
+  if (isProjectDocumentPath(value)) return false;
   const topLevel = value.split("/")[0];
   return value.length > 0 && !value.includes("\\") && !value.includes("\0") && !value.startsWith("/") && value.normalize("NFC") === value && path.posix.normalize(value) === value && value !== "." && !value.split("/").includes("..") && topLevel !== undefined && !EXCLUDED_PROJECT_DIRECTORIES.has(topLevel) && !OWNED_EPHEMERAL_FILES.has(value);
 }

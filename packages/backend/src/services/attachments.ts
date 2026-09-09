@@ -34,13 +34,7 @@ export type AttachmentUpload = File | {
   readonly roleExplicit?: boolean;
 };
 
-export async function saveSessionAttachments(sessionId: string, uploads: readonly AttachmentUpload[]) {
-  const files = uploads.map((upload) => upload instanceof File ? upload : upload.file);
-  const context = getAttachmentContext(sessionId);
-  if (!context) {
-    throw new Error("session_not_found");
-  }
-
+export function validateAttachmentFiles(files: readonly File[]): void {
   if (files.length > ATTACHMENT_LIMITS.maxCount) {
     throw new Error(`attachment_limit_exceeded:${ATTACHMENT_LIMITS.maxCount}`);
   }
@@ -52,10 +46,20 @@ export async function saveSessionAttachments(sessionId: string, uploads: readonl
 
   // Kind gate runs before any write so a batch containing a source the
   // extractor cannot process persists nothing at all.
-  const unsupported = files.filter((file) => inferUploadKind(file.name || "attachment", file.type) === null);
+  const unsupported = files.filter((file) => inferUploadKind(file.name || "attachment") === null);
   if (unsupported.length > 0) {
     throw new UnsupportedAttachmentKindError(unsupported.map((file) => file.name || "attachment"));
   }
+}
+
+export async function saveSessionAttachments(sessionId: string, uploads: readonly AttachmentUpload[]) {
+  const files = uploads.map((upload) => upload instanceof File ? upload : upload.file);
+  const context = getAttachmentContext(sessionId);
+  if (!context) throw new Error("session_not_found");
+  validateAttachmentFiles(files);
+  // Keep a durable original even if extraction, sending, or a later AI turn fails.
+  const { saveProjectDocuments } = await import("./project-documents");
+  await saveProjectDocuments(sessionId, files);
 
   const attachmentsDir = resolveWithin(context.project_dir, ".attachments");
   await mkdir(attachmentsDir, { recursive: true });

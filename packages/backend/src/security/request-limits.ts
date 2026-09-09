@@ -16,7 +16,7 @@ export const MAX_USER_MESSAGE_CHARS = 200_000;
 const MULTIPART_ROUTES = [
   /^\/api\/design-systems\/upload$/,
   /^\/api\/design-systems\/[^/]+\/fonts$/,
-  /^\/api\/sessions\/[^/]+\/events$/,
+  /^\/api\/sessions\/[^/]+\/(?:events|documents)$/,
 ];
 
 export function requestBodyLimitFor(pathname: string, method: string): number {

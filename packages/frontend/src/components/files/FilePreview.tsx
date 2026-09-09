@@ -3,6 +3,7 @@ import { AlertCircle, Download, File, FileSearch, FolderOpen, Loader2, RotateCcw
 import type { FileInfo } from "@bg/shared";
 import { ApiError, authorizedFetch } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { fileDisplayPath } from "./FileTree";
 
 const MAX_TEXT_BYTES = 1024 * 1024;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -127,7 +128,7 @@ export default function FilePreview({ projectId, file }: { projectId: string; fi
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
         <div className="min-w-0 flex-1 basis-36">
           <p className="mb-1 text-[11px] font-medium text-muted-foreground">파일 미리보기 · 읽기 전용</p>
-          <h3 className="break-all font-mono text-xs leading-5">{file.rel_path}</h3>
+          <h3 title={file.rel_path} className="break-all font-mono text-xs leading-5">{fileDisplayPath(file.rel_path)}</h3>
         </div>
         <Button asChild variant="outline" className="min-h-11 shrink-0 text-xs">
           <a href={`/api/projects/${encodeURIComponent(projectId)}/fs/${file.rel_path.split("/").map(encodeURIComponent).join("/")}`} download={file.rel_path.split("/").at(-1)}><Download aria-hidden="true" />원본 다운로드</a>

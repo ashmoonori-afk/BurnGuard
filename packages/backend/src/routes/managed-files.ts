@@ -11,6 +11,8 @@ import { inspectCanonicalTree } from "../services/canonical-tree-manifest";
 import { resolveDrawFile, resolveProjectFile } from "../services/managed-project-files";
 import { FilePatchError, fingerprintHtmlNode, htmlWithEditableIds } from "../services/file-patch";
 import { rawFileHeaders } from "../security/raw-file-response";
+import { isProjectDocumentPath } from "../services/project-document-paths";
+import { readProjectDocument } from "../services/project-documents";
 
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
 function fail(code: string, message: string, details?: unknown): ApiErrorBody { return { error: { code, message, details } }; }
@@ -23,6 +25,13 @@ managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
   const relPath = c.req.path.startsWith(prefix) ? decodeURIComponent(c.req.path.slice(prefix.length)) : "";
   const resolved = await resolveProjectFile(projectId, relPath);
   if (resolved === null) return c.json(fail("file_not_found", "Project file not found", { projectId, relPath }), 404);
+  if (isProjectDocumentPath(resolved.relPath)) {
+    try {
+      const document = await readProjectDocument(resolved.project.dir_path, resolved.relPath);
+      const type = "application/octet-stream";
+      return new Response(document.bytes, { headers: { ...rawFileHeaders(c.req.raw, { contentType: type, filename: document.filename }), "Content-Type": type, "Cache-Control": "no-store", ETag: `"${document.sha256}"` } });
+    } catch { return c.json(fail("document_unavailable", "The saved document is missing or changed"), 404); }
+  }
   try {
     if (!(await stat(resolved.absolutePath)).isFile()) return c.json(fail("not_a_file", "Requested path is not a file", { relPath }), 400);
   } catch (error) {

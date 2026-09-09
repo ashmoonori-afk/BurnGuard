@@ -7,6 +7,7 @@ import { Paperclip, Send, Settings2, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
+import { apiErrorCopy } from "@/lib/error-copy";
 import ComposerAttachments from "./ComposerAttachments";
 import { VisualSourceCandidates } from "./VisualSourceCandidates";
 import {
@@ -18,6 +19,7 @@ import {
 import { useComposerPlaceholder } from "./useComposerPlaceholder";
 import { useComposerVisualSources } from "./useComposerVisualSources";
 import { useComposerDraft } from "./useComposerDraft";
+import { useComposerDocuments } from "./useComposerDocuments";
 
 type ComposerSendState = { readonly kind: "idle" } | { readonly kind: "processing" } | SendOutcome;
 
@@ -32,7 +34,7 @@ function sendStateMessage(state: ComposerSendState): string | null {
     case "failed":
       if (state.code === "unsupported_file_kind") return "지원하지 않는 형식이라 저장하지 않았어요. 해당 파일을 빼고 다시 보내 주세요.";
       if (state.code === "unsupported_visual_source") return "URL·웹·스톡 소스는 지원하지 않아 저장하지 않았어요. 로컬 PDF 또는 PPTX를 업로드해 주세요.";
-      return "전송에 실패했어요. 다시 보내기를 눌러 주세요.";
+      return apiErrorCopy(state);
     default: {
       const unreachable: never = state;
       return unreachable;
@@ -86,6 +88,7 @@ export default function Composer({
 }) {
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
   const draft = useComposerDraft(sessionId, initialText);
+  const documents = useComposerDocuments(sessionId, draft.ready, draft.items);
   const settings = useQuery({ queryKey: ["settings"], queryFn: getSettings });
   const generation = draft.generation ?? settings.data?.generation_defaults?.[backendId] ?? defaultGenerationOptions(backendId);
   const priorBackend = useRef(backendId);
@@ -106,7 +109,7 @@ export default function Composer({
   const placeholder = useComposerPlaceholder(disabled);
 
   const sending = sendState.kind === "processing";
-  const canSend = draft.ready && text.trim().length > 0 && !disabled && !sending;
+  const canSend = draft.ready && documents.canSend && text.trim().length > 0 && !disabled && !sending;
   const statusMessage = sendStateMessage(sendState);
   const retrying = sendState.kind === "failed" || sendState.kind === "cancelled";
 
@@ -162,6 +165,10 @@ export default function Composer({
         onRemove={visualSources.remove}
       />
       {!draft.ready && <p role="status" className="text-xs text-muted-foreground">작성 중이던 내용을 불러오고 있어요…</p>}
+      {draft.ready && documents.status !== "empty" && <p role="status" className="mb-2 text-xs text-muted-foreground">
+        {documents.status === "saving" ? "원본을 프로젝트 docs/attachments에 저장하고 있어요…" : documents.status === "saved" ? "원본을 docs/attachments에 저장했어요. 첨부를 빼도 저장된 파일은 남아요." : "원본을 저장하지 못했어요. 다시 저장한 뒤 전송해 주세요."}
+        {documents.status === "error" && <Button type="button" size="sm" variant="ghost" onClick={documents.retry}>다시 저장</Button>}
+      </p>}
       {draft.storageError && <p role="status" className="text-xs text-warning-foreground">이 브라우저에서 초안을 저장하지 못했어요. 페이지를 닫기 전에 메시지를 보내 주세요.</p>}
 
       {statusMessage !== null && (

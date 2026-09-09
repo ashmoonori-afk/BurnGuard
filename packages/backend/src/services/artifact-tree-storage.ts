@@ -4,6 +4,7 @@ import { mkdir, open, readFile, readdir, rename, rm, unlink, writeFile, type Fil
 import path from "node:path";
 import type { CanonicalTreeEntry, CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { DEFAULT_CANONICAL_TREE_LIMITS, inspectCanonicalTree, validateCanonicalTree } from "./canonical-tree-manifest";
+import { isProjectDocumentPath } from "./project-document-paths";
 
 export type ArtifactFileDiff = {
   readonly path: string;
@@ -135,6 +136,7 @@ async function removeEmptyManagedDirectories(root: string, current = root): Prom
   for (const entry of await readdir(current, { withFileTypes: true })) {
     if (!entry.isDirectory() || (current === root && isExcluded(entry.name))) continue;
     const target = path.join(current, entry.name);
+    if (isProjectDocumentPath(path.relative(root, target))) continue;
     await removeEmptyManagedDirectories(root, target);
     if ((await readdir(target)).length === 0) await rm(target, { recursive: true });
   }

@@ -1,5 +1,4 @@
-import { cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import type { CheckpointRef } from "@bg/shared/harness";
 import { getProjectDetail } from "../db/project-read-repository";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
@@ -8,8 +7,6 @@ import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { getSqlite } from "../db/sqlite-client";
 import { ArtifactCoordinator } from "./artifact-coordinator";
 import { materializeManagedTree } from "./artifact-tree-storage";
-
-const EXCLUDED_DIR_NAMES = new Set([".meta", ".attachments", ".burnguard-inputs"]);
 
 function snapshotDir(projectDir: string, turnId: string): string {
   return resolveWithin(
@@ -22,11 +19,8 @@ function snapshotDir(projectDir: string, turnId: string): string {
 }
 
 /**
- * Takes a full-file snapshot of the project directory as it exists
- * right before a turn starts. The snapshot excludes `.meta` and
- * `.attachments` so the checkpoint tree itself and any user uploads
- * don't recurse into every snapshot. Used by the rollback UI (P3.7):
- * restore = copy this snapshot back over the live project.
+ * Snapshots the managed artifact tree before a turn starts.
+ * Private uploads and checkpoint metadata stay outside rollback.
  */
 export async function writePreTurnSnapshot(
   projectId: string,
@@ -37,21 +31,7 @@ export async function writePreTurnSnapshot(
   if (!project) return null;
 
   const dest = snapshotDir(project.dir_path, turnId);
-  await mkdir(path.dirname(dest), { recursive: true });
-  await rm(dest, { recursive: true, force: true });
-  await mkdir(dest, { recursive: true });
-
-  const entries = await readdir(project.dir_path, { withFileTypes: true });
-  for (const entry of entries) {
-    if (EXCLUDED_DIR_NAMES.has(entry.name)) continue;
-    const src = path.join(project.dir_path, entry.name);
-    const target = path.join(dest, entry.name);
-    if (entry.isDirectory()) {
-      await cp(src, target, { recursive: true });
-    } else if (entry.isFile()) {
-      await cp(src, target);
-    }
-  }
+  await materializeManagedTree(project.dir_path, dest);
 
   const createdAt = Date.now();
   return {
@@ -98,8 +78,8 @@ export interface RestoreResult {
 
 /**
  * Restores the project file tree to the pre-turn snapshot for
- * `turnId`. Clears non-`.meta`/`.attachments` entries at the project
- * root, then copies the snapshot tree back. Callers must ensure no
+ * `turnId` through managed publication, preserving private uploads.
+ * Callers must ensure no
  * turn is running — this function will happily overwrite files under
  * an active CLI subprocess if called concurrently.
  */

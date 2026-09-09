@@ -5,6 +5,7 @@ import { ArtifactCoordinator } from "./artifact-coordinator";
 import { waitForArtifactPublication } from "./artifact-publication-registry";
 import { appendSessionTrace } from "./trace";
 import { isTransientFilePath } from "./files";
+import { isProjectDocumentPath } from "./project-document-paths";
 import {
   RESERVED_PROJECT_WATCHER,
   projectSessionIds as sessionIdCache,
@@ -53,7 +54,7 @@ export async function ensureAllProjectWatchers(projectIds?: readonly string[]): 
 
 export function shouldSkipPath(relPath: string): boolean {
   const top = relPath.split("/")[0];
-  return top !== undefined && (IGNORED_TOP_LEVEL.has(top) || isTransientFilePath(relPath));
+  return top !== undefined && (IGNORED_TOP_LEVEL.has(top) || isTransientFilePath(relPath) || isProjectDocumentPath(relPath));
 }
 
 export async function processProjectFilesystemSignal(projectId: string, projectDir: string) {
