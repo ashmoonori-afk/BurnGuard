@@ -10,6 +10,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const release = process.argv[2] === "--release";
+if (process.argv.length > (release ? 3 : 2)) throw new Error("Usage: node scripts/qa/windows-native-smoke.mjs [--release]");
 if (process.platform !== "win32") throw new Error("Windows and the WebView2 Runtime are required.");
 const parent = await realpath(tmpdir());
 const fixture = await mkdtemp(path.join(parent, "burnguard-native-"));
@@ -24,7 +26,14 @@ let receipt;
 const env = { ...process.env, BG_APP_ROOT: profile, BG_PORT: String(port), BG_NO_OPEN: "1" };
 try {
   await mkdir(evidence, { recursive: true });
-  await cp(path.join(repo, "dist/windows-native"), app, { recursive: true });
+  if (release) {
+    await mkdir(app);
+    const extract = spawn("tar.exe", ["-xf", path.join(repo, "dist/releases/BurnGuard-win-Portable.zip"), "-C", app], { windowsHide: true, stdio: "ignore" });
+    assert.equal((await bounded(once(extract, "exit"), 90_000))[0], 0, "release ZIP extraction must succeed");
+    const version = JSON.parse(await readFile(path.join(repo, "package.json"), "utf8")).version;
+    assert.ok((await readFile(path.join(app, "current/sq.version"), "utf8")).includes(`<version>${version}</version>`));
+    checks.push("velopack-portable-layout");
+  } else await cp(path.join(repo, "dist/windows-native"), app, { recursive: true });
   await mkdir(profile);
   const report = path.join(fixture, "smoke.json");
   guard = createServer();
@@ -51,8 +60,8 @@ try {
   await once(guard, "listening");
   checks.push("window-close-stops-owned-service-and-releases-port");
   await cp(receipt.screenshot, path.join(evidence, "native-window.png"));
-  const result = { ok: true, checks, webViewVersion: receipt.webViewVersion, dom: receipt.dom };
-  await writeFile(path.join(evidence, "native-smoke.json"), JSON.stringify(result, null, 2));
+  const result = { ok: true, release, checks, webViewVersion: receipt.webViewVersion, dom: receipt.dom };
+  await writeFile(path.join(evidence, release ? "release-native-smoke.json" : "native-smoke.json"), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
 } catch (error) {
   console.error(JSON.stringify({ ok: false, checks, error: error.message, native: receipt }));
@@ -71,7 +80,7 @@ try {
 }
 
 async function run(report) {
-  child = spawn(path.join(app, "BurnGuard.exe"), ["--smoke-test", "--smoke-report", report], { cwd: fixture, env, windowsHide: false, stdio: "ignore" });
+  child = spawn(path.join(app, release ? "current/BurnGuard.exe" : "BurnGuard.exe"), ["--smoke-test", "--smoke-report", report], { cwd: fixture, env, windowsHide: false, stdio: "ignore" });
   const [code] = await bounded(once(child, "exit"), 120_000);
   return code;
 }

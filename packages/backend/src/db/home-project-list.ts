@@ -4,6 +4,7 @@ import { projectThumbnailUrl } from "../services/project-thumbnails";
 import { getDb } from "./client";
 import { designSystemsTable, projectsTable } from "./schema";
 import { PROMPT_SAMPLE_TAG, TUTORIAL_TAG } from "./seed-tutorials";
+import { ORIGINAL_SAMPLE_TAG } from "../data/original-samples";
 
 export async function listHomeProjects(
   tab: string,
@@ -67,6 +68,7 @@ export function isExampleProject(row: {
   }
   return (
     row.name.startsWith(TUTORIAL_TAG) ||
+    row.name.startsWith(ORIGINAL_SAMPLE_TAG) ||
     row.name.startsWith(PROMPT_SAMPLE_TAG)
   );
 }

@@ -10,10 +10,12 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon Condition="Exists('BurnGuard.ico')">BurnGuard.ico</ApplicationIcon>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>0.1.0</Version>
+    <Version>0.5.0</Version>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="qa/**/*.cs" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
     <Reference Include="System.Web.Extensions" />
     <Content Include="BurnGuard.ico" Condition="Exists('BurnGuard.ico')" CopyToOutputDirectory="PreserveNewest" />

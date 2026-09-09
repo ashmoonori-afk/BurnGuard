@@ -5,6 +5,7 @@ This folder contains product and engineering documentation for BurnGuard. Some s
 ## Start Here
 
 - [Product introduction and setup](../README.md), also available in [Korean](../README.ko.md).
+- [Windows updates and original samples](./13-windows-updates-and-original-samples.md): installer publication, safe update application, and four original collections across three formats.
 - [Windows native app, September 9, 2026](./12-windows-native-2026-09-09.md): portable WebView2 window, engine ownership, packaging, and verification.
 - [Generation and canvas update, September 9, 2026](./11-creation-tools-and-canvas-2026-09-09.md): models, LOW effort, source intake, 3D, fonts, comments, Pinterest, and validation boundaries.
 - [Brand identity](./brand-identity.md): generated mark, palette, and usage rules.

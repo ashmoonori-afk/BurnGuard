@@ -65,6 +65,25 @@ function expectRequest(result: BuildResult): CreateProjectRequest {
 }
 
 describe("selectableDesignSystems", () => {
+  test("Given original templates, When choosing a supported format, Then requests retain the actual format", () => {
+    const originals = ["sonnel", "foliover", "oddward", "velune"].map((brand) =>
+      system(`sample-system-original-${brand}`, "published", true));
+    for (const type of ["prototype", "slide_deck", "graphic"] as const) {
+      expect(selectableDesignSystems(originals, type)).toEqual(originals);
+      for (const original of originals) {
+        const request = expectRequest(buildCreateProjectRequest(draft({
+          type, designSystemId: original.id, backendId: "codex", graphicHeight: 1350,
+        }), originals));
+        expect(request.type).toBe(type);
+        expect(request.design_system_id).toBe(original.id);
+        expect(request.options?.design_brief?.output_type).toBe(type);
+        if (type === "graphic") expect(request.options?.graphic_canvas).toEqual({ schema_version: 1, width: 1080, height: 1350 });
+      }
+    }
+    expect(selectableDesignSystems(originals, "other")).toEqual([]);
+    expect(selectableDesignSystems([system(originals[0]!.id, "draft", true)], "prototype")).toEqual([]);
+  });
+
   test("offers only published non-template systems to normal projects", () => {
     const normalTypes: ProjectType[] = ["prototype", "slide_deck", "other"];
     for (const type of normalTypes) {

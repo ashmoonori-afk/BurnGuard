@@ -39,6 +39,8 @@ async function main() {
     --minify \
     --external electron \
     --external chromium-bidi \
+    --external @napi-rs/canvas \
+    --external pdfjs-dist \
     --outfile ${OUT}`.cwd(ROOT);
 
   stage = "resources";

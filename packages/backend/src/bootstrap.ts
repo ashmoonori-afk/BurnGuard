@@ -11,6 +11,7 @@ import { runMigrations } from "./db/migrate-local";
 import { reconcilePipelineRows } from "./db/pipeline-repository";
 import { seedCoreData } from "./db/seed";
 import { seedTutorialsOnce } from "./db/seed-tutorials";
+import { seedOriginalSamplesOnce } from "./db/seed-original-samples";
 import { seedLearningItems } from "./services/learning-service";
 import {
   appRootDir,
@@ -120,6 +121,7 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   await reconcileResearchOnStartup(getSqlite(), researchRecovery);
   await seedCoreData();
   await seedTutorialsOnce();
+  await seedOriginalSamplesOnce();
   seedLearningItems(getSqlite());
   reconcilePipelineRows(getDb());
   await reconcileCatalogState(getSqlite(), systemsDir);

@@ -31,7 +31,7 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   try {
     for (const viewport of viewports) {
       const session = await openRenderSession({ stagedDir: input.projectDir, entrypoint: input.entrypoint, viewport, deck: input.deck ?? false, strict: false, signal: input.signal, browser });
-      try { observations.push(await inspectRenderedPage(session.page)); } finally { await session.close(); }
+      try { observations.push(await inspectRenderedPage(session.page, input.canvas !== undefined)); } finally { await session.close(); }
     }
   } finally { await owner.close(); }
   const current = await inspectCanonicalTree(input.projectDir);

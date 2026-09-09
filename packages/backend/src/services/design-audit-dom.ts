@@ -4,7 +4,7 @@ import type { DesignAuditCheckCode, DesignAuditSeverity, DesignAuditTargetedActi
 export type DomAuditFinding = { readonly code: DesignAuditCheckCode; readonly severity: DesignAuditSeverity; readonly nodeId: string | null; readonly evidence: string; readonly measured?: number; readonly threshold?: number; readonly action: DesignAuditTargetedAction };
 export type DomAuditObservation = { readonly findings: readonly DomAuditFinding[]; readonly measurable: Readonly<Record<DesignAuditCheckCode, boolean>>; readonly unknownReasons: Readonly<Partial<Record<DesignAuditCheckCode, DesignAuditUnknownReason>>> };
 
-export async function inspectRenderedPage(page: Page): Promise<DomAuditObservation> {
+export async function inspectRenderedPage(page: Page, fixedCanvas = false): Promise<DomAuditObservation> {
   await page.evaluate(async () => {
     const pending = [...document.images].filter((image) => !image.complete);
     await Promise.all(pending.map((image) => new Promise<void>((resolve) => {
@@ -12,7 +12,7 @@ export async function inspectRenderedPage(page: Page): Promise<DomAuditObservati
       image.addEventListener("load", done, { once: true }); image.addEventListener("error", done, { once: true });
     })));
   });
-  return page.evaluate(() => {
+  return page.evaluate((fixedCanvas) => {
     type Code = "text_overflow" | "element_overlap" | "minimum_text_size" | "contrast" | "narrow_width" | "duplicate_node_id" | "missing_image" | "token_usage";
     type Severity = "must_fix" | "recommended";
     type Action = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token";
@@ -34,8 +34,19 @@ export async function inspectRenderedPage(page: Page): Promise<DomAuditObservati
     if (textElements.length > 0) { delete unknownReasons.text_overflow; delete unknownReasons.minimum_text_size; }
     for (const element of textElements) {
       const rect = element.getBoundingClientRect();
-      const canvas = element.closest<HTMLElement>("[data-slide]")?.getBoundingClientRect(); const bounds = canvas ?? { left: 0, right: document.documentElement.clientWidth, top: 0, bottom: document.documentElement.clientHeight };
-      if (element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1 || rect.left < bounds.left - 1 || rect.right > bounds.right + 1 || rect.top < bounds.top - 1 || rect.bottom > bounds.bottom + 1) push(element, { code: "text_overflow", severity: "must_fix", evidence: `Text geometry ${Math.round(element.scrollWidth)}x${Math.round(element.scrollHeight)} exceeds ${Math.round(element.clientWidth)}x${Math.round(element.clientHeight)}`, action: "expand_or_reflow_text" });
+      const style = getComputedStyle(element);
+      const canvas = element.closest<HTMLElement>("[data-slide]")?.getBoundingClientRect();
+      const bounds = canvas ?? { left: 0, right: document.documentElement.clientWidth, top: 0, bottom: fixedCanvas ? window.innerHeight : Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) };
+      // Scroll dimensions include visible ink outside tight line boxes; only clipped axes lose text.
+      const clips = (overflow: string): boolean => overflow !== "visible";
+      let clipped = (clips(style.overflowX) && element.scrollWidth > element.clientWidth + 1) || (clips(style.overflowY) && element.scrollHeight > element.clientHeight + 1);
+      const range = document.createRange(); range.selectNodeContents(element);
+      const textRect = range.getBoundingClientRect();
+      for (let parent = element.parentElement; parent !== null && !clipped; parent = parent.parentElement) {
+        const parentStyle = getComputedStyle(parent); const parentRect = parent.getBoundingClientRect();
+        clipped = (clips(parentStyle.overflowX) && (textRect.left < parentRect.left - 1 || textRect.right > parentRect.right + 1)) || (clips(parentStyle.overflowY) && (textRect.top < parentRect.top - 1 || textRect.bottom > parentRect.bottom + 1));
+      }
+      if (clipped || Math.min(rect.left, textRect.left) < bounds.left - 1 || Math.max(rect.right, textRect.right) > bounds.right + 1 || Math.min(rect.top, textRect.top) < bounds.top - 1 || Math.max(rect.bottom, textRect.bottom) > bounds.bottom + 1) push(element, { code: "text_overflow", severity: "must_fix", evidence: "Text geometry exceeds clipping or page bounds", action: "expand_or_reflow_text" });
       const size = Number.parseFloat(getComputedStyle(element).fontSize);
       if (Number.isFinite(size) && size < 12) push(element, { code: "minimum_text_size", severity: "recommended", evidence: `Rendered font size is ${size}px; minimum is 12px`, action: "set_minimum_font_size", measured: size, threshold: 12 });
     }
@@ -74,5 +85,5 @@ export async function inspectRenderedPage(page: Page): Promise<DomAuditObservati
     const rootStyle = getComputedStyle(document.documentElement); measurable.token_usage = [...rootStyle].some((name) => name.startsWith("--")); if (measurable.token_usage) delete unknownReasons.token_usage;
     if (measurable.token_usage) for (const element of elements) { const inline = element.getAttribute("style") ?? ""; const match = inline.match(/(?:^|;)\s*(?:color|background(?:-color)?|border(?:-[\w-]+)?-color)\s*:\s*(#[0-9a-f]{3,8}|rgba?\([^;]+\)|hsla?\([^;]+\))/iu); if (match?.[1] !== undefined) push(element, { code: "token_usage", severity: "recommended", evidence: `Inline literal color ${match[1]} bypasses exposed design tokens`, action: "replace_literal_with_token" }); }
     return { findings, measurable, unknownReasons };
-  });
+  }, fixedCanvas);
 }

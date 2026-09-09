@@ -31,7 +31,7 @@ catalogRoutes.get("/api/design-systems/:id/previews", async (c) => {
     if (row === null || row.lifecycle === "trashed") return c.json(fail("design_system_not_found", "Design system not found"), 404);
     const paths = await catalogPaths(systemsDir, id, row.dirPath);
     const tree = await inspectCatalogTree(paths.live);
-    const previews: DesignSystemPreview[] = tree.files.filter((file) => /^preview\/[^/]+\.html?$/i.test(file)).map((file) => ({ path: file }));
+    const previews: DesignSystemPreview[] = tree.files.filter((file) => /^(?:preview\/[^/]+|preview)\.html?$/i.test(file)).map((file) => ({ path: file }));
     return c.json(ok(previews));
   } catch (error) { return catalogError(c, error); }
 });

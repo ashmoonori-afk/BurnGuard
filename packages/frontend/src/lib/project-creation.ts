@@ -129,12 +129,11 @@ export const PROBLEM_MESSAGE: Record<DraftProblem, string> = {
   graphic_pixel_limit: "전체 픽셀은 1,600만 이하가 되도록 크기를 줄여 주세요.",
 };
 
-/**
- * Design systems the user may pick for `type`. Template projects can
- * start from any published system because real installs do not seed
- * template-marked rows. Every other project type excludes templates,
- * and no project can select a half-finished draft.
- */
+export function isOriginalSampleSystem(id: string | null): boolean {
+  return /^sample-system-original-(sonnel|foliover|oddward|velune)$/.test(id ?? "");
+}
+
+/** Published original samples support each of their three actual formats. */
 export function selectableDesignSystems(
   systems: readonly DesignSystemSummary[],
   type: ProjectType,
@@ -142,7 +141,8 @@ export function selectableDesignSystems(
   const wantTemplate = type === "from_template";
   return systems.filter(
     (system) =>
-      system.status === "published" && (wantTemplate || !system.is_template),
+      system.status === "published" && (wantTemplate || !system.is_template ||
+        (isOriginalSampleSystem(system.id) && ["prototype", "slide_deck", "graphic"].includes(type))),
   );
 }
 

@@ -34,6 +34,7 @@ import { seedSplashDesignSystemFiles } from "./seed-sample-design-systems";
 import { PROMPT_SAMPLES, promptSampleDesignSystemId, renderPromptSampleHtml } from "./seed-tutorials";
 import { renderInitialArtifact } from "./templates";
 import { parseStoredProjectOptions } from "../services/project-options";
+import { copyOriginalSample, findOriginalSample, originalSampleFormats, originalGraphicCanvas } from "../data/original-samples";
 
 export { isExampleProject, listHomeProjects } from "./home-project-list";
 
@@ -303,6 +304,12 @@ export async function createProjectRecord(input: {
   const sessionId = ulid();
   const dirPath = path.join(projectsDir, projectId);
 
+  const original = findOriginalSample(input.designSystemId);
+  const originalFormat = original ? originalSampleFormats.find((format) => format.type === (input.type === "from_template" ? "prototype" : input.type)) : undefined;
+  if (originalFormat) {
+    input = { ...input, type: originalFormat.type, entrypoint: originalFormat.entrypoint, optionsJson: originalFormat.type === "graphic" ? JSON.stringify({ ...parseStoredProjectOptions(input.optionsJson), graphic_canvas: originalGraphicCanvas }) : input.optionsJson };
+  }
+
   await mkdir(path.join(dirPath, ".attachments"), { recursive: true });
   await mkdir(path.join(dirPath, ".meta", "checkpoints"), { recursive: true });
   const sample = input.type === "from_template" ? PROMPT_SAMPLES.find((item) => promptSampleDesignSystemId(item.slug) === input.designSystemId) : undefined;
@@ -348,7 +355,8 @@ export async function createProjectRecord(input: {
 
   try {
     await new ArtifactCoordinator(getSqlite()).initializeProject(projectId, dirPath, async (stage) => {
-      await writeFile(path.join(stage, input.entrypoint), initialArtifact, "utf8");
+      if (original && originalFormat) await copyOriginalSample(original.slug, originalFormat.directory, stage);
+      else await writeFile(path.join(stage, input.entrypoint), initialArtifact, "utf8");
     });
   } catch (error) {
     getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId);

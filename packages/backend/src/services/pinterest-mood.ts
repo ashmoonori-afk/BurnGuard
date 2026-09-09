@@ -1,4 +1,4 @@
-import { createCanvas, loadImage } from "@napi-rs/canvas";
+import { createCanvas, loadImage } from "./export-native-modules";
 import { parse } from "node-html-parser";
 import type { CreatePinterestMoodRequest, CreatePinterestMoodResponse } from "@bg/shared";
 import { createAcquisitionBudget, ExtractionAcquisitionError, throwIfAcquisitionAborted } from "./extraction-acquisition";

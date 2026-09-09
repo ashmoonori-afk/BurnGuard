@@ -1,0 +1,9 @@
+:root {
+ --canvas:#111214; --primary:#d4ff3f; --secondary:#f44bac; --accent:#f4f4ee;
+ --font-display:Arial, sans-serif; --font-body:Arial,sans-serif;
+ --space-1:8px; --space-2:16px; --space-3:24px; --space-4:40px; --space-5:64px; --space-6:104px;
+ --text-small:12px; --text-body:17px; --text-section:clamp(48px,6vw,88px);
+ --text-display:clamp(85px,15.8vw,240px);
+ --line-body:1.75; --line-display:.88;
+ --tracking-display:-.07em; --radius:0px; --rule:1px solid currentColor;
+}

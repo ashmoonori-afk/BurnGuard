@@ -14,6 +14,8 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
+using Velopack;
+using Velopack.Sources;
 
 namespace BurnGuard.Desktop
 {
@@ -25,6 +27,8 @@ namespace BurnGuard.Desktop
         [STAThread]
         private static int Main(string[] args)
         {
+            // A second launch must activate the existing window before considering a staged update.
+            VelopackApp.Build().SetAutoApplyOnStartup(false).Run();
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             string report = null;
@@ -51,7 +55,19 @@ namespace BurnGuard.Desktop
                         if (report != null) throw new InvalidOperationException("A BurnGuard window already owns this profile.");
                         return 0;
                     }
-                    try { Application.Run(new DesktopWindow(identity, activateMessage, report)); }
+                    try
+                    {
+                        if (report == null)
+                        {
+                            var updates = CreateUpdateManager();
+                            if (updates.IsInstalled && updates.UpdatePendingRestart != null)
+                            {
+                                updates.WaitExitThenApplyUpdates(updates.UpdatePendingRestart, silent: false, restart: true);
+                                return 0;
+                            }
+                        }
+                        Application.Run(new DesktopWindow(identity, activateMessage, report));
+                    }
                     finally { mutex.ReleaseMutex(); }
                 }
             }
@@ -69,6 +85,8 @@ namespace BurnGuard.Desktop
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             File.WriteAllText(path, Json.Serialize(value), new UTF8Encoding(false));
         }
+
+        internal static UpdateManager CreateUpdateManager() => new UpdateManager(new GithubSource("https://github.com/ashmoonori-afk/BurnGuard", null, false));
     }
 
     internal sealed class DesktopWindow : Form
@@ -86,6 +104,17 @@ namespace BurnGuard.Desktop
         private bool stopped;
         private bool smokeStarted;
         private int port;
+        private readonly ToolStrip updateStrip = new ToolStrip { Dock = DockStyle.Bottom, GripStyle = ToolStripGripStyle.Hidden };
+        private readonly ToolStripButton checkUpdate = new ToolStripButton("업데이트 확인");
+        private readonly ToolStripLabel updateStatus = new ToolStripLabel("업데이트 대기 중");
+        private readonly ToolStripButton restartUpdate = new ToolStripButton("다시 시작해 적용") { Visible = false };
+        private readonly System.Windows.Forms.Timer updateTimer = new System.Windows.Forms.Timer { Interval = 6 * 60 * 60 * 1000 };
+        private readonly CancellationTokenSource updateCancellation = new CancellationTokenSource();
+        private UpdateManager updates;
+        private VelopackAsset pendingUpdate;
+        private bool checkingUpdate;
+        private bool updateStarted;
+        private bool restartForUpdate;
 
         internal DesktopWindow(string identity, uint activateMessage, string report)
         {
@@ -98,6 +127,14 @@ namespace BurnGuard.Desktop
             var icon = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BurnGuard.ico");
             if (File.Exists(icon)) Icon = new Icon(icon);
             Controls.Add(web); Controls.Add(status);
+            if (report == null)
+            {
+                updateStrip.Items.AddRange(new ToolStripItem[] { checkUpdate, updateStatus, restartUpdate });
+                Controls.Add(updateStrip);
+                checkUpdate.Click += async (_, __) => await CheckUpdateAsync();
+                restartUpdate.Click += (_, __) => { restartForUpdate = true; Close(); };
+                updateTimer.Tick += async (_, __) => await CheckUpdateAsync();
+            }
             Shown += async (_, __) => await StartAsync();
             FormClosing += OnClosing;
         }
@@ -162,6 +199,12 @@ namespace BurnGuard.Desktop
                     if (closing) return;
                     if (!args.IsSuccess) { Fail("BurnGuard 화면을 불러오지 못했습니다."); return; }
                     status.Hide();
+                    if (report == null && !updateStarted)
+                    {
+                        updateStarted = true;
+                        updateTimer.Start();
+                        await CheckUpdateAsync();
+                    }
                     if (report != null && !smokeStarted) { smokeStarted = true; await SmokeAsync(); }
                 };
                 web.CoreWebView2.Navigate(origin.AbsoluteUri + (report == null ? "" : "?create=slide_deck"));
@@ -170,6 +213,41 @@ namespace BurnGuard.Desktop
         }
 
         private bool IsAppUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && origin != null && uri.Scheme == origin.Scheme && uri.Host == origin.Host && uri.Port == origin.Port && string.IsNullOrEmpty(uri.UserInfo);
+
+        private async Task CheckUpdateAsync()
+        {
+            if (report != null || closing || checkingUpdate) return;
+            checkingUpdate = true; checkUpdate.Enabled = false;
+            try
+            {
+                updates = updates ?? Program.CreateUpdateManager();
+                if (!updates.IsInstalled)
+                {
+                    updateStatus.Text = "자동 업데이트는 설치 패키지에서 사용할 수 있습니다";
+                    updateTimer.Stop();
+                    return;
+                }
+                pendingUpdate = updates.UpdatePendingRestart;
+                if (pendingUpdate == null)
+                {
+                    updateStatus.Text = "업데이트 확인 중…";
+                    var available = await updates.CheckForUpdatesAsync();
+                    if (closing) return;
+                    if (available == null) { updateStatus.Text = "최신 버전입니다 (" + updates.CurrentVersion + ")"; return; }
+                    updateStatus.Text = "업데이트 다운로드 중…";
+                    var progress = new Progress<int>(value => { if (!closing) updateStatus.Text = "업데이트 다운로드 중… " + value + "%"; });
+                    await updates.DownloadUpdatesAsync(available, value => ((IProgress<int>)progress).Report(value), updateCancellation.Token);
+                    if (closing) return;
+                    pendingUpdate = updates.UpdatePendingRestart;
+                    if (pendingUpdate == null) throw new InvalidOperationException("Downloaded update was not staged.");
+                }
+                updateStatus.Text = "새 버전 " + pendingUpdate.Version + " 준비 완료 · 다음 실행 시 적용 (재시작하면 진행 중인 작업이 중단됩니다)";
+                restartUpdate.Visible = true;
+            }
+            catch (OperationCanceledException) { }
+            catch { if (!closing) updateStatus.Text = "업데이트를 확인하지 못했습니다 · 인터넷 연결 또는 배포 상태를 확인해 주세요"; }
+            finally { checkingUpdate = false; if (!closing) checkUpdate.Enabled = true; }
+        }
 
         private void OpenExternal(string value)
         {
@@ -285,6 +363,7 @@ namespace BurnGuard.Desktop
             args.Cancel = true;
             if (closing) return;
             closing = true; Enabled = false;
+            updateTimer.Stop(); updateCancellation.Cancel();
             status.Text = "작업을 중단하고 BurnGuard를 종료하고 있습니다…"; status.Show(); status.BringToFront();
             try
             {
@@ -298,7 +377,14 @@ namespace BurnGuard.Desktop
             finally
             {
                 if (job != IntPtr.Zero) { Native.CloseHandle(job); job = IntPtr.Zero; }
-                web.Dispose(); service?.Dispose(); stopped = true; Close();
+                web.Dispose(); service?.Dispose(); updateTimer.Dispose();
+                // Schedule only after the owned backend and its job have stopped; never force-exit active work.
+                if (restartForUpdate && pendingUpdate != null)
+                {
+                    try { updates.WaitExitThenApplyUpdates(pendingUpdate, silent: false, restart: true); }
+                    catch { MessageBox.Show(this, "업데이트 재시작을 예약하지 못했습니다. BurnGuard를 다시 실행해 주세요.", "BurnGuard"); }
+                }
+                stopped = true; Close();
             }
         }
     }

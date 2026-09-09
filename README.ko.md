@@ -50,9 +50,13 @@ AI 도구 연결 전에도 기본 예제와 캔버스를 살펴볼 수 있습니
 
 그래픽 프로젝트는 Codex 로그인이 확인되어야 만들 수 있습니다. 바닐라 모드는 개인 플러그인과 지침을 제외하고 BurnGuard의 프로젝트 맥락을 전달합니다. 해당 CLI 옵션은 Codex 0.153.4와 Claude Code 2.1.261에서 확인했으며, 오래된 CLI는 업데이트가 필요할 수 있습니다. 개인 설정을 쓰려면 바닐라 모드를 직접 해제하세요.
 
+PDF와 HTML 덱은 슬라이드의 전체 디자인을 유지합니다. 현재 PPTX 내보내기는 편집 가능한 텍스트와 슬라이드 배경을 옮기며, 이미지와 임의의 CSS 레이아웃은 포함하지 않습니다.
+
 ### Windows 앱으로 실행
 
-Windows ZIP 전체를 압축 해제하고 **`BurnGuard.exe`**를 더블클릭하세요. Windows의 **Microsoft Edge WebView2 Runtime**을 사용하는 네이티브 창이 열립니다. 로컬 엔진은 앱과 함께 시작하며 창을 닫으면 진행 중인 작업과 함께 종료됩니다. `%USERPROFILE%\.burnguard`에 있는 기존 프로젝트를 그대로 사용합니다. 이전 브라우저 방식의 BurnGuard 서버가 켜져 있다면 먼저 종료하세요.
+**`BurnGuard-win-Setup.exe`**로 설치하거나 **`BurnGuard-win-Portable.zip`** 전체를 압축 해제하고 `BurnGuard.exe`를 여세요. Windows의 **Microsoft Edge WebView2 Runtime**을 사용하는 네이티브 창이 열립니다. 로컬 엔진은 앱과 함께 시작하며 창을 닫으면 진행 중인 작업과 함께 종료됩니다. `%USERPROFILE%\.burnguard`에 있는 기존 프로젝트를 그대로 사용합니다. 이전 브라우저 방식의 BurnGuard 서버가 켜져 있다면 먼저 종료하세요.
+
+**0.5.0부터 자동 업데이트를 지원합니다.** 시작할 때와 6시간마다 GitHub Releases의 새 정식 버전을 확인하고 다운로드하며, 다음 실행 때 적용합니다. 하단의 **다시 시작해 적용**을 누르면 현재 작업을 중단하고 바로 재시작할 수도 있습니다. 오프라인에서도 작업 공간은 사용할 수 있습니다. 실제 업데이트 제공은 배포자가 업데이트 파일을 포함한 릴리스를 공개한 뒤부터 가능합니다.
 
 **Windows 10/11 x64와 .NET Framework 4.8**을 대상으로 합니다. WebView2가 없다면 Microsoft의 [Evergreen Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703)을 설치하세요. 별도 Chromium 브라우저는 포함하지 않습니다. AI CLI·렌더링·자료 읽기에 필요한 도구는 위 표와 같습니다.
 
@@ -60,10 +64,22 @@ Windows ZIP 전체를 압축 해제하고 **`BurnGuard.exe`**를 더블클릭하
 
 ```powershell
 bun install --frozen-lockfile
-bun run build:windows
+bun run build:windows:release
 ```
 
-실행 파일은 `dist/windows-native/BurnGuard.exe`이며 저장소의 `Start-BurnGuard-Desktop.bat`으로도 열 수 있습니다. 배포 ZIP은 `dist/BurnGuard-0.4.0-windows-x64.zip`입니다. `service/`를 포함한 폴더 전체를 함께 옮기세요. 네이티브 실행기는 약 **90KB**, 기존 Bun·Node 엔진과 디자인 자료를 포함한 ZIP은 약 **103MiB**이며 압축 해제 후 약 **272MiB**입니다. 현재는 서명과 자동 업데이트가 없는 포터블 앱입니다. [구조와 검증 내역](doc/12-windows-native-2026-09-09.md).
+**`dist/releases/`**의 설치 파일·포터블 ZIP·`.nupkg`·`releases.win.json`을 함께 게시하세요. 개발용 `dist/windows-native/` 폴더에는 업데이트 설치 정보가 없습니다. 기존 0.4.0 사용자는 새 설치 파일이나 포터블 패키지로 한 번 전환해야 합니다. 현재 패키지는 서명되지 않았습니다. [빌드·게시·업데이트 안내](doc/13-windows-updates-and-original-samples.md).
+
+### 네 가지 오리지널 샘플
+
+**예시**에서 둘러보거나 **새 프로젝트 → 템플릿**에서 오리지널 디자인 시스템을 고르세요. 컬렉션마다 완성된 웹 페이지, 슬라이드 6장, 1080 × 1350 그래픽과 토큰·구성 규칙·미리보기가 있는 디자인 시스템을 제공합니다. 웹은 모두 7개 이상 섹션으로 구성했습니다. 템플릿으로 만든 복사본은 내 프로젝트에 표시되며, 수정하거나 삭제한 예시는 재실행해도 덮어쓰거나 복구하지 않습니다.
+
+| SONNEL · 손으로 다루는 사운드 오브젝트 | FOLIOVER · 소재를 탐구하는 저널 |
+|---|---|
+| ![SONNEL 오리지널 사운드 오브젝트](samples/original/sonnel/assets/hero.png) | ![FOLIOVER 오리지널 소재 구성](samples/original/foliover/assets/hero.png) |
+| ODDWARD · 실험적인 크리에이티브 스튜디오 | VELUNE · 조형적인 빛의 아틀리에 |
+| ![ODDWARD 오리지널 크롬 조각](samples/original/oddward/assets/hero.png) | ![VELUNE 오리지널 유리 조명](samples/original/velune/assets/hero.png) |
+
+문안과 이미지 4장을 새로 만든 가상 콘셉트입니다. 실제 판매 상품이나 참고 사이트와의 제휴를 뜻하지 않습니다. [샘플 원본·이미지 프롬프트·참고 방향](samples/original/README.md).
 
 ### 소스에서 브라우저로 실행
 
