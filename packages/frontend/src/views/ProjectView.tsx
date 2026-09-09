@@ -1,8 +1,9 @@
 import { loadComposerDraft } from "@/components/chat/useComposerDraft";
-import ThreeScenePanel from "@/components/canvas/ThreeScenePanel";
 import type { ReadyAttachmentSource } from "@/components/chat/attachment-intake";
 import { saveAndRequestCommentEdit } from "@/components/modes/comment-edit-request";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -12,6 +13,7 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
+const ThreeScenePanel = lazy(() => import("@/components/canvas/ThreeScenePanel"));
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ArtifactSummary,
@@ -1167,7 +1169,7 @@ export default function ProjectView() {
         {activeTab?.kind === "file" && (
           <div className="flex min-h-0 min-w-0 flex-1 max-[1200px]:flex-col">
             <Canvas
-              sceneTools={activeRelPath && /\.html?$/i.test(activeRelPath) ? <ThreeScenePanel
+              sceneTools={activeRelPath && /\.html?$/i.test(activeRelPath) ? <Suspense fallback={<p role="status" className="p-3 text-sm">3D 도구를 불러오는 중…</p>}><ThreeScenePanel
                 key={activeRelPath}
                 projectId={id!}
                 relPath={activeRelPath}
@@ -1177,7 +1179,7 @@ export default function ProjectView() {
                   void queryClient.invalidateQueries({ queryKey: ["project", id] });
                 }}
                 onRequestAI={async (text) => { await sendMessage(text, [], new AbortController().signal, (await loadComposerDraft(session.id).catch(() => null))?.generation); setChatFocusKey((value) => value + 1); setMobilePane("chat"); }}
-              /> : undefined}
+              /></Suspense> : undefined}
               mode={mode}
               src={canvasSrc}
               frameKey={`${canvasSrc ?? "entrypoint"}:${refreshTick}`}

@@ -49,6 +49,10 @@ try {
   const ui = await request("/");
   assert.equal(ui.status, 200);
   assert.match(await ui.text(), /<div id="root"/);
+  const mark = await request("/assets/burnguard-mark.png");
+  assert.equal(mark.status, 200);
+  assert.match(mark.headers.get("content-type"), /image\/png/);
+  assert.deepEqual(Buffer.from(await mark.arrayBuffer()).subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
   const runtime = await request("/runtime/deck-stage.js");
   assert.match(runtime.headers.get("content-type"), /javascript/);
   assert.doesNotMatch(await runtime.text(), /<!doctype html>/i);

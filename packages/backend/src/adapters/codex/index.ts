@@ -4,7 +4,7 @@ import { parseCodexLine, type CodexParserContext } from "./parser";
 import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../owned-process-tree";
 import { settleProcessStreams } from "../process-streams";
 
-export function buildCodexCommand(binaryPath: string, generation?: AdapterRunInput["generation"]): string[] {
+export function buildCodexCommand(binaryPath: string, generation?: AdapterRunInput["generation"], platform = process.platform): string[] {
   return [
     binaryPath,
     "exec",
@@ -15,6 +15,8 @@ export function buildCodexCommand(binaryPath: string, generation?: AdapterRunInp
     "-c", `model_reasoning_effort="${generation?.effort ?? "low"}"`,
     ...(generation?.model ? ["--model", generation.model] : []),
     ...(generation?.vanilla ? ["--ignore-user-config", "-c", "features.plugins=false", "-c", "features.skip_host_skill_discovery=true", "-c", "project_doc_max_bytes=0"] : []),
+    // Ignoring user config also drops Windows sandbox selection and makes exec read-only.
+    ...(generation?.vanilla && platform === "win32" ? ["-c", 'windows.sandbox="unelevated"'] : []),
     "-",
   ];
 }

@@ -20,6 +20,9 @@ test("Given dynamic model capabilities When selecting effort Then unsupported va
   expect(buildCodexCommand("codex", generation)).toContain("--ignore-user-config");
   expect(buildCodexCommand("codex", generation)).toContain("features.plugins=false");
   expect(buildCodexCommand("codex", generation)).toContain("features.skip_host_skill_discovery=true");
+  expect(buildCodexCommand("codex", generation, "win32")).toContain('windows.sandbox="unelevated"');
+  expect(buildCodexCommand("codex", generation, "linux")).not.toContain('windows.sandbox="unelevated"');
+  expect(buildCodexCommand("codex", { ...generation, vanilla: false }, "win32")).not.toContain('windows.sandbox="unelevated"');
 });
 
 test("Given CommandCode selection When building Claude invocation Then native secrets cannot override its Messages endpoint", () => {

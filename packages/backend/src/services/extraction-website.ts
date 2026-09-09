@@ -110,7 +110,8 @@ export async function resolveSafeImportAddresses(url: URL, signal: AbortSignal, 
   // OS lookup supports Windows/network configurations where direct DNS is refused.
   // An empty successful DNS answer is authoritative; fallback only if both queries failed.
   if (resolved.every((result) => result.status === "rejected")) {
-    const fallback = await abortable(systemLookup(host).catch(() => []), signal);
+    // OS lookup has no cancellation API; abortable stops the caller at its deadline.
+    const fallback = await abortable(systemLookup(host).catch(() => []), signal, () => {});
     resolved.push({ status: "fulfilled", value: fallback.map((result) => result.address) });
   }
   const addresses: ImportAddress[] = [];

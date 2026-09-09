@@ -23,7 +23,7 @@ export default function Sidebar() {
     <aside className="flex shrink-0 flex-col border-b border-border bg-card lg:sticky lg:top-0 lg:h-dvh lg:w-[224px] lg:border-b-0 lg:border-r" aria-label="워크스페이스 탐색">
       <div className="flex items-center justify-between px-5 py-4 lg:px-6 lg:pb-8 lg:pt-7">
         <Link to="/" className="inline-flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="BurnGuard 홈">
-          <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-xl border border-border bg-white p-1.5"><img src="/brand/burnguard-mark.png" alt="" className="h-full w-full object-contain" /></span>
+          <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-xl border border-border bg-white p-1.5"><img src="/assets/burnguard-mark.png" alt="" className="h-full w-full object-contain" /></span>
           <span className="text-lg font-bold tracking-tight">BurnGuard<span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Design workspace</span></span>
         </Link>
         <button type="button" aria-label="설정" onClick={() => openSettings(true)} className="grid h-11 w-11 place-items-center rounded-xl text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring lg:hidden"><Settings2 className="h-5 w-5" /></button>

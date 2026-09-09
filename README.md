@@ -20,7 +20,7 @@ BurnGuard is an AI design workspace that runs on your computer. Connect **Claude
 | Web designs | Set the section count, start from complete landing templates with matching design systems, and edit HTML on canvas. |
 | Graphics | Set the canvas dimensions, create a design, and export it as PNG. |
 | Consistent designs | Connect a published design system's colors, typography, and rules to a project. |
-| Work from existing material | Choose a template or attach supported documents and images to provide context. |
+| Work from existing material | Choose a template or attach PDF/PPTX documents and assign reference roles. |
 | Interactive 3D | Add and adjust Three.js objects, or ask AI to create a scene; orbit and zoom in the preview. |
 
 ### A home for starting and resuming work

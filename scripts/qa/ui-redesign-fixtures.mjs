@@ -69,13 +69,13 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
       await dialog.getByLabel("세로 섹션 수", { exact: true }).fill("8");
       await dialog.getByLabel("AI 도구", { exact: true }).selectOption("claude-code");
       const model = dialog.getByLabel("생성 모델", { exact: true });
-      await page.waitForFunction(() => document.querySelector('[aria-label="생성 모델"]')?.querySelectorAll("option").length > 1);
+      await page.waitForFunction(() => document.querySelector('[aria-label="생성 모델"]')?.querySelectorAll("option").length > 1, null, { timeout: 10_000 });
       const modelId = await model.locator("option").nth(1).getAttribute("value");
       await model.selectOption(modelId);
       assert.equal(await dialog.getByLabel("추론 강도", { exact: true }).inputValue(), "low");
       assert.equal(await dialog.getByRole("checkbox", { name: /바닐라 모드/ }).isChecked(), true);
       await dialog.getByLabel("참고 자료 첨부", { exact: true }).setInputFiles({ name: "campaign-reference.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n% Local unsent intake fixture\n%%EOF") });
-      await dialog.getByLabel("campaign-reference.pdf 역할", { exact: true }).selectOption("immutable_reference");
+      await dialog.getByLabel("campaign-reference.pdf 역할", { exact: true }).selectOption("immutable_reference", { timeout: 10_000 });
       await dialog.locator("summary").click();
       await dialog.getByLabel("분위기", { exact: true }).selectOption("friendly");
       assert.equal(await dialog.evaluate((element) => element.scrollHeight > element.clientHeight), true, "narrow dialog should contain its scrolling");
@@ -148,7 +148,7 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
       assert.equal(stored.items[0].role, "immutable_reference");
       assert.equal(stored.items[0].bytes, "%PDF-1.4\n% Local unsent intake fixture\n%%EOF");
       await page.reload({ waitUntil: "domcontentloaded" });
-      await page.getByLabel("campaign-reference.pdf 역할", { exact: true }).waitFor();
+      await page.getByLabel("campaign-reference.pdf 역할", { exact: true }).waitFor({ timeout: 10_000 });
       assert.equal(await page.getByLabel("campaign-reference.pdf 역할", { exact: true }).inputValue(), "immutable_reference");
       assert.equal(await composer.inputValue(), stored.text);
       assert.equal(blockedPosts.length, 0, "restoring attachments must not send or upload them");
@@ -166,7 +166,9 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
       assert.equal(detection.status(), 200);
       const { data } = await detection.json();
       assert.equal(data.backends.some((backend) => backend.id === "codex" && backend.found && backend.authenticated === true), false, "owned CODEX_HOME must be unauthenticated");
-      const bootstrap = await (await page.request.get(`${base}/api/bootstrap`)).json();
+      const bootstrapResponse = await page.request.get(`${base}/api/bootstrap`, { headers: { origin: base }, timeout: 10_000 });
+      assert.equal(bootstrapResponse.status(), 200, "bootstrap requires same-origin authority");
+      const bootstrap = await bootstrapResponse.json();
       const rejected = await page.request.post(`${base}/api/projects`, { headers: { "x-burnguard-capability": bootstrap.data.capability, origin: base }, data: { name: "Blocked graphic", type: "graphic", design_system_id: null, backend_id: "codex", options: { graphic_canvas: { schema_version: 1, width: 1080, height: 1080 } } } });
       assert.equal(rejected.status(), 409, "direct creation must also enforce Codex authentication");
       await shot(page, "redesign-graphic-locked");

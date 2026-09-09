@@ -32,7 +32,7 @@ export default function ProjectTopBar({
           aria-label="프로젝트 목록으로"
           title="홈"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white"><img src="/brand/burnguard-mark.png" alt="" className="h-7 w-7 object-contain" /></span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white"><img src="/assets/burnguard-mark.png" alt="" className="h-7 w-7 object-contain" /></span>
         </Link>
         <div className="min-w-0">
           <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground"><span>프로젝트</span><ChevronRight className="h-3 w-3" aria-hidden="true" /><span>{projectTypeLabel(project.type)}</span></div>

@@ -29,9 +29,23 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       const scaled = await iframe.boundingBox();
       assert.ok(scaled && Math.abs(scaled.width / original.width - 0.75) < 0.02, "75% must scale the entire frame");
       await page.getByRole("button", { name: "화면 이동", exact: true }).click();
-      await page.mouse.move(scaled.x + scaled.width / 2, scaled.y + scaled.height / 2);
+      const start = { x: scaled.x + scaled.width / 2, y: scaled.y + scaled.height / 2 };
+      // Wait for the mode's actual hit surface, not just the preceding button click.
+      await page.waitForFunction(({ x, y }) => {
+        const target = document.elementFromPoint(x, y);
+        return target instanceof HTMLElement && target.style.cursor === "grab";
+      }, start);
+      await page.mouse.move(start.x, start.y);
       await page.mouse.down();
-      await page.mouse.move(scaled.x + scaled.width / 2 + 45, scaled.y + scaled.height / 2 + 25);
+      await page.mouse.move(start.x + 45, start.y + 25);
+      // Continuous pointer updates commit asynchronously. Observe the exact requested
+      // translation before releasing capture, then check the rendered geometry too.
+      await page.waitForFunction(() => {
+        const stage = document.querySelector('iframe[title="캔버스"]')?.parentElement;
+        if (!stage) return false;
+        const transform = new DOMMatrixReadOnly(getComputedStyle(stage).transform);
+        return Math.abs(transform.m41 - 45) < 0.1 && Math.abs(transform.m42 - 25) < 0.1;
+      }, null, { timeout: 5000 });
       await page.mouse.up();
       const moved = await iframe.boundingBox();
       assert.ok(moved && Math.abs(moved.x - scaled.x - 45) < 2, "pan must move the scaled stage");

@@ -15,7 +15,7 @@ The mark combines two folded canvas planes into a compact **B**. Its open center
 
 Use the existing application sans-serif stack for the live **BurnGuard** wordmark, with semibold weight and normal tracking. Keep text separate from the raster mark so it stays sharp and accessible. No additional font dependency is required.
 
-Use `packages/frontend/public/brand/burnguard-mark.png` in the app and `doc/images/burnguard-mark.png` in documentation. These are identical opaque PNGs with white backing, not transparent assets. Display the full square with `object-fit: contain` on a white rounded badge, including in dark mode. Prefer at least 32 px for the app mark; the browser favicon is a compact exception. Do not stretch, recolor, crop, add shadows inside the image, or use the mark as a replacement for functional toolbar icons. Pair it with the name wherever space permits. When adjacent text already names BurnGuard, the image can have empty alternative text.
+Use `packages/frontend/public/assets/burnguard-mark.png` in the app and `doc/images/burnguard-mark.png` in documentation. These are identical opaque PNGs with white backing, not transparent assets. Display the full square with `object-fit: contain` on a white rounded badge, including in dark mode. Prefer at least 32 px for the app mark; the browser favicon is a compact exception. Do not stretch, recolor, crop, add shadows inside the image, or use the mark as a replacement for functional toolbar icons. Pair it with the name wherever space permits. When adjacent text already names BurnGuard, the image can have empty alternative text.
 
 The existing README cover remains the expressive illustration; this mark provides the compact product identity.
 
