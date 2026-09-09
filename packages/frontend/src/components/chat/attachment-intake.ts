@@ -1,5 +1,6 @@
 import type { VisualSourceRole } from "@bg/shared";
 import { ApiError } from "@/api/client";
+import { apiErrorCopy } from "@/lib/error-copy";
 
 /**
  * Mirrors the backend intake contract for early feedback only. The backend
@@ -89,7 +90,7 @@ export function visualSourceSendErrorCopy(error: unknown): string {
     case "invalid_visual_sources": return "시각 자료 역할 정보가 올바르지 않아요. 역할을 다시 선택해 주세요.";
     case "unsupported_visual_source": return "URL·웹·스톡 자료는 지원하지 않아요. 로컬 PDF 또는 PPTX를 올려 주세요.";
     case "session_busy": return "이미 작업이 진행 중이에요. 완료된 뒤 다시 보내 주세요.";
-    default: return "요청을 보내지 못했어요. 첨부 자료를 확인한 뒤 다시 시도해 주세요.";
+    default: return apiErrorCopy(error);
   }
 }
 

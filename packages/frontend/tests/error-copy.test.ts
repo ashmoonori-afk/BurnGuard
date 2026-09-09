@@ -27,6 +27,12 @@ const KNOWN_CODES = [
 ];
 
 describe("apiErrorCopy", () => {
+  test("Given a PDF extraction failure When mapped Then it offers the matching recovery step", () => {
+    for (const [code, step] of Object.entries({ pdf_password_required: "암호를 해제", pdf_invalid: "다시 저장", pdf_runtime_unavailable: "업데이트", pdf_extraction_timeout: "나누어", pdf_size_limit: "줄이거나", pdf_page_limit: "페이지", pdf_text_limit: "텍스트", attachment_extract_failed: "새 사본" })) {
+      expect(apiErrorCopy(new FakeApiError(code, "private internal error"))).toContain(step);
+    }
+  });
+
   test("Given every documented ApiError code When mapped Then it returns Korean copy, never the raw message", () => {
     for (const code of KNOWN_CODES) {
       const englishMessage = `raw backend message for ${code}`;

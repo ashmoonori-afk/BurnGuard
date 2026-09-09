@@ -8,6 +8,8 @@ import {
 import type { FileInfo } from "@bg/shared";
 import { cn } from "@/lib/utils";
 
+export const fileDisplayPath = (path: string): string => path.replace(/^docs\/attachments\/[a-f0-9]{64}-/, "docs/attachments/");
+
 const CATEGORY_ORDER: FileInfo["category"][] = [
   "folder",
   "stylesheet",
@@ -97,7 +99,7 @@ export default function FileTree({
                       )}
                     >
                       <Icon aria-hidden="true" className={cn("h-4 w-4 shrink-0", active && "text-accent")} />
-                      <span className="min-w-0 flex-1 truncate">{f.rel_path}</span>
+                      <span className="min-w-0 flex-1 truncate">{fileDisplayPath(f.rel_path)}</span>
                       {f.size_bytes != null && (
                         <span className="shrink-0 font-mono text-[10px] font-normal text-muted-foreground">
                           {formatSize(f.size_bytes)}

@@ -28,6 +28,12 @@ export type VisualSourceUploadFile = {
   readonly role: VisualSourceRole;
 };
 
+export async function preserveSessionDocuments(id: string, files: readonly File[]): Promise<void> {
+  const form = new FormData();
+  for (const file of files) form.append("files", file);
+  await apiFetch<{ paths: string[] }>(`/api/sessions/${id}/documents`, { method: "POST", body: form });
+}
+
 export async function sendUserEvent(
   id: string,
   event: UserEvent & { files?: readonly (File | VisualSourceUploadFile)[] },

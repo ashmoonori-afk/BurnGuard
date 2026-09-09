@@ -1,5 +1,6 @@
 import { copyFile, cp, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
+import { isProjectDocumentPath } from "./project-document-paths";
 
 const HANDOFF_EXCLUDED_TOP_LEVEL = new Set([".meta", ".attachments", ".burnguard-inputs"]);
 
@@ -26,7 +27,7 @@ export async function copyProjectIntoBundle(
     const src = path.join(stagedProjectDir, entry.name);
     const dest = path.join(bundleSourceDir, entry.name);
     if (entry.isDirectory()) {
-      await cp(src, dest, { recursive: true });
+      await cp(src, dest, { recursive: true, filter: (source) => !isProjectDocumentPath(path.relative(stagedProjectDir, source)) });
     } else if (entry.isFile()) {
       await copyFile(src, dest);
     }

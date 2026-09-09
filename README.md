@@ -60,7 +60,8 @@ Choose **Share (공유)**, prepare the validated HTML export, enter a Vercel tok
 | Run from source | Bun. The current repository validation environment uses Bun 1.3.13 on Windows. |
 | AI generation | An installed and authenticated `claude` or `codex` CLI |
 | PDF, PPTX, and PNG rendering and previews | Chromium or a supported Chrome/Edge installation. Check its status in the app settings. |
-| Read PDF and PPTX source documents | Python 3 and `pypdf`. Check their status and install the required module from the app settings. |
+| Read PDF chat attachments | Bundled Node and PDF.js; no Python installation needed. Image-only PDFs retain their original, with an explicit note that OCR was not performed. |
+| Import design systems from PDF/PPTX; read PPTX attachments | Python 3; PDF design-system extraction additionally requires the supported `pypdf` version. Check the app settings. |
 
 You can explore the built-in examples and canvas before connecting an AI tool. Generation requires authentication for the selected CLI and is subject to its provider's terms.
 
@@ -129,6 +130,7 @@ macOS builds use the same Velopack release channel: `bun run build:mac:release` 
 ## Workflow
 
 1. **New project** — Choose slides, web design, graphic, or template. Set the brief and section count, and upload source material immediately. Attachments and the brief arrive as an editable conversation draft.
+   Once the project exists, selected attachments are immediately preserved in `docs/attachments`. Originals survive send failures, removing a selection, AI edits, and undo; they appear in Project Files for download and are excluded from website publication.
 2. **Create with AI** — Select the model and effort, review the draft, then send it. Increase effort explicitly when the task needs more reasoning; LOW does not guarantee a particular response time.
 3. **Review the result** — Open generated files and inspect them on canvas. Conversation drafts and attachment roles are restored per session.
 4. **Refine directly** — Pan and zoom the canvas, scroll while editing styles, load installed fonts, and adjust 3D objects. Send a saved comment to AI with its file and target context, then follow the result in the conversation. Undo/Redo and quality checks remain available.

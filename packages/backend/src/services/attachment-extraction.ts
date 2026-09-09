@@ -1,4 +1,5 @@
 import { rm, writeFile } from "node:fs/promises";
+import { AttachmentPdfError, extractPdfAttachment } from "./attachment-pdf";
 import type { UploadManifest } from "./extraction-upload";
 
 export type AttachmentExtractionInput = {
@@ -10,8 +11,11 @@ export type AttachmentExtractionInput = {
 
 export async function extractAttachmentUpload(input: AttachmentExtractionInput): Promise<void> {
   try {
-    const { runPythonUploadExtractor } = await import("./design-system-extract");
-    await runPythonUploadExtractor({ sourcePath: input.sourcePath, manifestPath: input.manifestPath });
+    if (input.sourcePath.toLowerCase().endsWith(".pdf")) await extractPdfAttachment(input.sourcePath, input.manifestPath);
+    else {
+      const { runPythonUploadExtractor } = await import("./design-system-extract");
+      await runPythonUploadExtractor({ sourcePath: input.sourcePath, manifestPath: input.manifestPath });
+    }
     const { readUploadManifest } = await import("./extraction-upload");
     const manifest = await readUploadManifest(input.manifestPath);
     await writeFile(input.extractedTextPath, renderAttachmentExtract(manifest, input.originalName), "utf8");
@@ -22,13 +26,13 @@ export async function extractAttachmentUpload(input: AttachmentExtractionInput):
       rm(input.extractedTextPath, { force: true }),
     ]);
     const message = error instanceof Error ? error.message : String(error);
-    throw new AttachmentExtractionError(input.originalName, message);
+    throw new AttachmentExtractionError(input.originalName, message, error instanceof AttachmentPdfError ? error.code : "attachment_extract_failed");
   }
 }
 
 export class AttachmentExtractionError extends Error {
   readonly name = "AttachmentExtractionError";
-  constructor(readonly originalName: string, reason: string) {
+  constructor(readonly originalName: string, reason: string, readonly code = "attachment_extract_failed") {
     super(`attachment_extract_failed:${originalName}:${reason}`);
   }
 }

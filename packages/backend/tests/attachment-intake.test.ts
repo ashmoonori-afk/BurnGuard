@@ -118,6 +118,9 @@ describe("session attachment intake", () => {
 
     expect(attachmentRowCount()).toBe(before);
     expect(await storedFileNames()).toEqual(beforeFiles);
+    const originals = await readdir(path.join(root, "docs/attachments"));
+    expect(originals.some((name) => name.endsWith("-first.pdf"))).toBe(true);
+    expect(originals.some((name) => name.endsWith("-broken.pdf"))).toBe(true);
   });
 
   test("Given an immutable visual upload When saving Then its durable role and SHA-256 provenance are stored", async () => {

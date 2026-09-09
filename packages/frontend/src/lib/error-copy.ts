@@ -55,6 +55,14 @@ const ERROR_COPY: Record<string, string> = {
     "Figma 액세스 토큰이 없어요. 설정 → Figma 액세스에서 먼저 등록한 뒤 다시 시도해 주세요.",
   upload_extract_failed:
     "업로드한 파일을 분석하지 못했어요. 파일이 손상되지 않았는지 확인한 뒤 다시 시도해 주세요.",
+  pdf_password_required: "암호로 보호된 PDF예요. 암호를 해제한 사본을 첨부해 주세요.",
+  pdf_invalid: "PDF 내용을 읽을 수 없어요. 파일이 정상적으로 열리는지 확인하거나 PDF로 다시 저장해 주세요.",
+  pdf_runtime_unavailable: "PDF 분석 도구를 실행하지 못했어요. 앱을 업데이트한 뒤 다시 전송해 주세요.",
+  pdf_extraction_timeout: "PDF 분석 시간이 초과됐어요. 필요한 페이지만 나누어 첨부해 주세요.",
+  pdf_size_limit: "PDF 크기가 분석 한도를 넘었어요. 파일을 줄이거나 나누어 첨부해 주세요.",
+  pdf_page_limit: "PDF 페이지 수가 분석 한도를 넘었어요. 필요한 페이지만 나누어 첨부해 주세요.",
+  pdf_text_limit: "PDF 텍스트가 분석 한도를 넘었어요. 필요한 부분만 나누어 첨부해 주세요.",
+  attachment_extract_failed: "첨부 자료의 내용을 분석하지 못했어요. 파일을 확인하거나 새 사본을 첨부해 주세요.",
   unsafe_source_content:
     "안전하지 않은 내용이 감지돼 가져올 수 없어요. 다른 원본으로 다시 시도해 주세요.",
   // Client-side guard in HomeView's import form (mirrors the disabled
