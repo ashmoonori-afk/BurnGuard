@@ -1,6 +1,7 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+import type { Browser, BrowserContext, Page } from "playwright-core";
+import { chromium } from "./playwright-runtime";
 import { resolveWithin } from "../security/path-boundary";
 import { isChromiumLaunchable } from "./chromium-capability";
 import { registerExportBrowser } from "./export-browser-registry";

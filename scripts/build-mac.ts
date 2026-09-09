@@ -112,12 +112,16 @@ async function main() {
   // turns the import into a null resolution that throws only if
   // the loader is ever actually called — which it isn't in our
   // code path.
+  // `--external playwright-core`: it resolves its own package.json at
+  // load time and --compile would bake this machine's absolute path into
+  // the binary; services/playwright-runtime.ts loads the staged copy instead.
   await $`bun build ${ENTRY} \
     --compile \
     --target=bun-darwin-arm64 \
     --minify \
     --external electron \
     --external chromium-bidi \
+    --external playwright-core \
     --outfile ${serviceOut}`.cwd(ROOT);
   console.log(
     `[build-mac] compiled in ${((Date.now() - startCompile) / 1000).toFixed(1)}s`,

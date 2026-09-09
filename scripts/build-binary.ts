@@ -33,12 +33,16 @@ async function main() {
   // --external electron/chromium-bidi: playwright-core imports both in
   // optional loaders we never hit (we only drive headless chromium).
   // Without the flags bun fails to resolve those optional modules at compile.
+  // --external playwright-core: it resolves its own package.json at load time,
+  // which --compile would bake as this machine's absolute path; the runtime
+  // loader in services/playwright-runtime.ts reads the staged copy instead.
   await $`bun build ${ENTRY} \
     --compile \
     --target=bun-windows-x64 \
     --minify \
     --external electron \
     --external chromium-bidi \
+    --external playwright-core \
     --external @napi-rs/canvas \
     --external pdfjs-dist \
     --outfile ${OUT}`.cwd(ROOT);
