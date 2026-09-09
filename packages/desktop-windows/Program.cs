@@ -103,6 +103,7 @@ namespace BurnGuard.Desktop
         private bool closing;
         private bool stopped;
         private bool smokeStarted;
+        private long startupElapsedMs;
         private int port;
         private readonly ToolStrip updateStrip = new ToolStrip { Dock = DockStyle.Bottom, GripStyle = ToolStripGripStyle.Hidden };
         private readonly ToolStripButton checkUpdate = new ToolStripButton("업데이트 확인");
@@ -167,10 +168,13 @@ namespace BurnGuard.Desktop
                 try { listener.Start(); }
                 catch (SocketException) { throw new InvalidOperationException($"포트 {port}를 다른 프로그램이 사용 중입니다. 기존 BurnGuard 서버를 종료한 뒤 다시 실행해 주세요."); }
                 finally { listener.Stop(); }
+                status.Text = "BurnGuard를 준비하고 있어요. 처음 실행할 때는 샘플과 글꼴 준비에 시간이 걸릴 수 있어요.";
+                var startup = Stopwatch.StartNew();
                 StartService();
-                var completed = await Task.WhenAny(ready.Task, Task.Delay(TimeSpan.FromSeconds(60)));
+                var completed = await Task.WhenAny(ready.Task, Task.Delay(TimeSpan.FromSeconds(120)));
+                startupElapsedMs = startup.ElapsedMilliseconds;
                 if (closing) return;
-                if (completed != ready.Task) throw new TimeoutException("BurnGuard 서버가 60초 안에 시작되지 않았습니다.");
+                if (completed != ready.Task) throw new TimeoutException("BurnGuard 서버가 120초 안에 시작되지 않았습니다.");
                 origin = new Uri(await ready.Task);
                 string userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BurnGuard", "WebView2", identity);
                 if (report != null) userData = Path.Combine(Environment.GetEnvironmentVariable("BG_APP_ROOT"), "cache", "webview2");
@@ -353,9 +357,9 @@ namespace BurnGuard.Desktop
                 var screenshot = Path.ChangeExtension(report, ".png");
                 Directory.CreateDirectory(Path.GetDirectoryName(screenshot));
                 using (var stream = File.Create(screenshot)) await web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, stream);
-                Program.WriteReport(report, new { ok = true, processId = Process.GetCurrentProcess().Id, servicePid = service.Id, webViewVersion = web.CoreWebView2.Environment.BrowserVersionString, screenshot, dom });
+                Program.WriteReport(report, new { ok = true, startupElapsedMs, processId = Process.GetCurrentProcess().Id, servicePid = service.Id, webViewVersion = web.CoreWebView2.Environment.BrowserVersionString, screenshot, dom });
             }
-            catch (Exception exception) { Program.ExitCode = 1; Program.WriteReport(report, new { ok = false, error = exception.Message }); }
+            catch (Exception exception) { Program.ExitCode = 1; Program.WriteReport(report, new { ok = false, startupElapsedMs, error = exception.Message }); }
             Close();
         }
 
@@ -363,7 +367,7 @@ namespace BurnGuard.Desktop
         {
             if (closing) return;
             Program.ExitCode = 1;
-            if (report != null) Program.WriteReport(report, new { ok = false, error = message });
+            if (report != null) Program.WriteReport(report, new { ok = false, startupElapsedMs, error = message });
             else MessageBox.Show(this, message, "BurnGuard", MessageBoxButtons.OK, MessageBoxIcon.Error);
             Close();
         }
