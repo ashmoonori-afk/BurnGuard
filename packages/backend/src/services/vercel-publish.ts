@@ -14,7 +14,12 @@ export class VercelPublishError extends Error {
 
 // Only browser assets are public; never upload package/config files or archive metadata.
 export function isPublicAsset(name: string): boolean {
-  return !name.split("/").some((part) => !part || part.startsWith(".") || /^(?:attachments?|references?|node_modules|private|secrets?)$/i.test(part))
+  const parts = name.split("/");
+  return !parts.some((part, index) => {
+    if (!part || part.startsWith(".") || /^(?:attachments?|references?|node_modules|private)$/i.test(part)) return true;
+    if (index === parts.length - 1 && part.toLowerCase() === "tokens.css") return false;
+    return /(?:^|[._ -])(?:secrets?|tokens?|credentials?|passwords?|api[._ -]*keys?|(?:access|refresh|auth|bearer)[._ -]*tokens?|private[._ -]*keys?)(?:[._ -]|$)/i.test(part.replace(/([a-z0-9])([A-Z])/g, "$1-$2"));
+  })
     && !/[\\:%\x00-\x1f]/.test(name)
     && /\.(?:html?|css|js|mjs|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|mp4|webm|mp3|wav)$/i.test(name)
     && !/(?:^|\/)(?:[^/]*config[^/]*|credentials[^/]*)$/i.test(name);

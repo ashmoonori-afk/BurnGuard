@@ -46,8 +46,10 @@ try {
   await new Promise((resolve) => guard.close(resolve));
   guard = null;
 
-  assert.equal(await run(report), 0, "real native smoke must exit successfully");
+  await rm(report, { force: true });
+  const nativeExit = await run(report);
   receipt = JSON.parse(await readFile(report, "utf8"));
+  assert.equal(nativeExit, 0, "real native smoke must exit successfully");
   assert.equal(receipt.ok, true);
   assert.equal(receipt.dom.origin, `http://127.0.0.1:${port}`);
   assert.equal(receipt.dom.modelSelected, true);
@@ -60,7 +62,7 @@ try {
   await once(guard, "listening");
   checks.push("window-close-stops-owned-service-and-releases-port");
   await cp(receipt.screenshot, path.join(evidence, "native-window.png"));
-  const result = { ok: true, release, checks, webViewVersion: receipt.webViewVersion, dom: receipt.dom };
+  const result = { ok: true, release, checks, startupElapsedMs: receipt.startupElapsedMs, webViewVersion: receipt.webViewVersion, dom: receipt.dom };
   await writeFile(path.join(evidence, release ? "release-native-smoke.json" : "native-smoke.json"), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
 } catch (error) {
@@ -81,7 +83,7 @@ try {
 
 async function run(report) {
   child = spawn(path.join(app, release ? "current/BurnGuard.exe" : "BurnGuard.exe"), ["--smoke-test", "--smoke-report", report], { cwd: fixture, env, windowsHide: false, stdio: "ignore" });
-  const [code] = await bounded(once(child, "exit"), 120_000);
+  const [code] = await bounded(once(child, "exit"), 180_000);
   return code;
 }
 

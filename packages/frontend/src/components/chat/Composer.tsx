@@ -141,7 +141,7 @@ export default function Composer({
     <div
       data-qa="composer"
       className={cn(
-        "max-h-[60%] shrink-0 overflow-y-auto border-t border-border bg-background p-3",
+        "max-h-[55%] shrink-0 overflow-y-auto border-t border-border bg-background p-3",
         dragOver && "ring-2 ring-accent ring-inset",
       )}
       onDragOver={(e) => {
@@ -161,7 +161,6 @@ export default function Composer({
         onRoleChange={visualSources.setRole}
         onRemove={visualSources.remove}
       />
-      <div className="mb-3"><GenerationControls backendId={backendId} value={generation} onChange={draft.setGeneration} disabled={disabled || sending || !draft.ready} /></div>
       {!draft.ready && <p role="status" className="text-xs text-muted-foreground">작성 중이던 내용을 불러오고 있어요…</p>}
       {draft.storageError && <p role="status" className="text-xs text-warning-foreground">이 브라우저에서 초안을 저장하지 못했어요. 페이지를 닫기 전에 메시지를 보내 주세요.</p>}
 
@@ -185,7 +184,7 @@ export default function Composer({
           }
         }}
         placeholder={placeholder}
-        rows={4}
+        rows={3}
         disabled={disabled || sending || !draft.ready}
         aria-label="메시지 입력"
         onKeyDown={(e) => {
@@ -194,10 +193,11 @@ export default function Composer({
             void send();
           }
         }}
-        className="block min-h-[104px] w-full resize-none rounded-xl border border-input bg-muted/25 p-3 text-sm leading-relaxed placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+        className="block min-h-[88px] w-full resize-none rounded-xl border border-input bg-muted/25 p-3 text-sm leading-relaxed placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
       />
 
-      <div className="mt-2 flex items-center gap-1.5">
+      <div className="mt-2"><GenerationControls compact backendId={backendId} value={generation} onChange={draft.setGeneration} disabled={disabled || sending || !draft.ready} /></div>
+      <div className="mt-1 flex items-center gap-1.5">
         <input
           ref={fileInput}
           type="file"

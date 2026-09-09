@@ -130,7 +130,7 @@ export default function TweaksPanel({ target, saving, onApply, onResetAll, onCle
 function GeometryControls({ target, saving, onApply }: { target: TweaksTarget; saving: boolean; onApply: ApplyFn }) {
   const { width, height, rotation } = targetDimensions(target);
   const locked = isAspectLocked(target);
-  return <section aria-label="크기와 회전" className="space-y-3 px-3 py-4">
+  return <section aria-label="크기와 회전" className="m-3 space-y-3 rounded-lg border border-border bg-card p-3">
     <div className="grid grid-cols-2 gap-3">
       <GeometryNumber label="가로" unit="px" value={width} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, value, height, locked))} />
       <GeometryNumber label="세로" unit="px" value={height} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, width, value, locked))} />
@@ -145,7 +145,7 @@ function GeometryControls({ target, saving, onApply }: { target: TweaksTarget; s
         </select>
       </label>
     </div>
-    <p className="text-xs leading-relaxed text-muted-foreground">박스 손잡이로 크기를, 위쪽 둥근 손잡이로 회전을 조절해요. Esc로 드래그를 취소하고 Ctrl/⌘+Z로 되돌릴 수 있어요.</p>
+    <p className="text-[11px] leading-relaxed text-muted-foreground">손잡이를 끌어 크기·회전을 조절하세요.<br />Esc 취소 · Ctrl/⌘+Z 실행 취소</p>
   </section>;
 }
 

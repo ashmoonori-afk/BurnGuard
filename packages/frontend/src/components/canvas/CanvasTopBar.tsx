@@ -36,10 +36,10 @@ export default function CanvasTopBar({
   colorPalette?: ReactNode;
 }) {
   return (
-    <div className="shrink-0 border-b border-border bg-background px-3 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-      <div className="grid flex-1 grid-cols-4 gap-1 min-[1400px]:flex" aria-label="캔버스 도구">
-        <button type="button" onClick={() => onModeChange(null)} aria-pressed={mode === null} className={cn("flex min-h-10 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium max-[900px]:min-h-11", mode === null ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><Eye className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />미리보기</button>
+    <div className="z-20 shrink-0 border-b border-border bg-background px-2 py-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-1 min-[901px]:flex-nowrap">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5 min-[901px]:flex-nowrap" aria-label="캔버스 도구">
+        <button type="button" title="미리보기" aria-label="미리보기" onClick={() => onModeChange(null)} aria-pressed={mode === null} className={cn("flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium max-[900px]:min-h-11", mode === null ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><Eye className="h-4 w-4 shrink-0" aria-hidden="true" /><span className={mode === null ? "hidden min-[1100px]:inline" : "hidden min-[1500px]:inline"}>미리보기</span></button>
         {MODES.map((m) => {
           const active = m.id === mode;
           const Icon = m.icon;
@@ -49,26 +49,27 @@ export default function CanvasTopBar({
               type="button"
               onClick={() => onModeChange(active ? null : m.id)}
               aria-pressed={active}
+              aria-label={m.label}
               title={active ? "다시 누르면 모드 끄기" : m.hint}
               className={cn(
-                "flex min-h-10 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11",
+                "flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11",
                 active
                   ? "bg-accent/10 text-accent"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{m.label}
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className={active || m.id === "quality" ? "hidden min-[1100px]:inline" : "hidden min-[1500px]:inline"}>{m.label}</span>
             </button>
           );
         })}
         {colorPalette}
       </div>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex shrink-0 items-center gap-0.5 border-l border-border pl-1">
         <Button
           variant="ghost"
           size="icon"
-          className="h-10 w-10 max-[900px]:h-11 max-[900px]:w-11"
+          className="h-9 w-9 max-[900px]:h-11 max-[900px]:w-11"
           aria-label="마지막 저장 실행 취소"
           onClick={onUndo}
           disabled={!canUndo || undoPending || !onUndo}
@@ -83,7 +84,7 @@ export default function CanvasTopBar({
         <Button
           variant="ghost"
           size="icon"
-          className="h-10 w-10 max-[900px]:h-11 max-[900px]:w-11"
+          className="h-9 w-9 max-[900px]:h-11 max-[900px]:w-11"
           aria-label="캔버스 새로고침"
           onClick={onRefresh}
           title="캔버스 새로고침"
@@ -92,7 +93,6 @@ export default function CanvasTopBar({
         </Button>
       </div>
       </div>
-      {mode !== null && <p className="mt-2 border-t border-border/70 pt-2 text-xs leading-relaxed text-muted-foreground" role="status">{MODES.find((item) => item.id === mode)?.hint}</p>}
     </div>
   );
 }

@@ -33,8 +33,8 @@ export default function ColorPalette({ projectId, relPath, refreshKey, disabled,
     onError: (error) => { if (isStaleIdentityError(error)) void palette.refetch(); },
   });
   return <div className="relative">
-    <button type="button" aria-expanded={open} aria-label="컬러 팔레트" onClick={() => setOpen((value) => !value)} className="flex min-h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11">
-      <Palette className="h-3.5 w-3.5" aria-hidden="true" />컬러 팔레트
+    <button type="button" title="컬러 팔레트" aria-expanded={open} aria-label="컬러 팔레트" onClick={() => setOpen((value) => !value)} className="flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11">
+      <Palette className="h-4 w-4" aria-hidden="true" /><span className="hidden min-[1500px]:inline">컬러 팔레트</span>
     </button>
     {open && <section aria-label="현재 페이지 색상" className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[85vw] rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-xl" onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); } }}>
       <div className="mb-2 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">현재 페이지 색상</h2><button type="button" className="text-xs text-muted-foreground" onClick={() => setOpen(false)}>닫기</button></div>

@@ -93,7 +93,7 @@ export default function ModePanel({
   if (!mode) return null;
 
   return (
-    <aside aria-label="캔버스 도구 설정" className="flex min-h-0 w-[280px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1400px]:w-[320px] max-[1200px]:max-h-[40%] max-[1200px]:w-full max-[1200px]:shrink max-[1200px]:border-l-0 max-[1200px]:border-t">
+    <aside aria-label="캔버스 도구 설정" className="flex min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1500px]:w-[288px] max-[1000px]:max-h-[40%] max-[1000px]:w-full max-[1000px]:shrink max-[1000px]:border-l-0 max-[1000px]:border-t">
       {(mode === "select" || mode === "tweaks") && (
         <TweaksPanel
           target={tweaksTarget}

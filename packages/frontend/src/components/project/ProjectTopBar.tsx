@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ChevronRight, Play } from "lucide-react";
+import { ChevronRight, PanelLeftClose, PanelLeftOpen, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 import type { ProjectDetail } from "@bg/shared";
@@ -14,6 +14,8 @@ export default function ProjectTopBar({
   canPresent,
   qualityGate,
   onOpenQuality,
+  chatCollapsed,
+  onToggleChat,
 }: {
   project: ProjectDetail;
   tabsSlot?: ReactNode;
@@ -21,12 +23,15 @@ export default function ProjectTopBar({
   canPresent: boolean;
   qualityGate: ExportQualityGate;
   onOpenQuality: () => void;
+  chatCollapsed?: boolean;
+  onToggleChat?: () => void;
 }) {
   const displayName = stripInternalProjectTag(project.name);
   return (
     <header className="shrink-0 border-b border-border bg-background">
-      <div className="flex min-h-[72px] flex-wrap items-center justify-between gap-x-5 gap-y-3 px-5 py-3 max-[600px]:px-3">
+      <div className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 max-[600px]:px-3">
       <div className="flex min-w-0 flex-1 items-center gap-3 max-[600px]:basis-full">
+        {onToggleChat && <button type="button" onClick={onToggleChat} aria-label={chatCollapsed ? "AI 대화 펼치기" : "AI 대화 접기"} title={chatCollapsed ? "AI 대화 펼치기" : "AI 대화 접기"} className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted min-[901px]:flex">{chatCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}</button>}
         <Link
           to="/"
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -65,7 +70,7 @@ export default function ProjectTopBar({
         <ExportMenu projectId={project.id} projectType={project.type} projectOptionsJson={project.options_json} qualityGate={qualityGate} onOpenQuality={onOpenQuality} />
       </div>
       </div>
-      {tabsSlot && <div className="h-12 min-w-0 overflow-hidden border-t border-border bg-muted/30">{tabsSlot}</div>}
+      {tabsSlot && <div className="h-10 min-w-0 overflow-hidden border-t border-border bg-muted/20 max-[900px]:h-11">{tabsSlot}</div>}
     </header>
   );
 }
