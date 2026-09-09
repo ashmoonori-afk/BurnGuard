@@ -36,6 +36,8 @@ jobs:
           packages/backend/tests/python-health.test.ts
           packages/backend/tests/turn-error-sanitizer.test.ts
           packages/backend/tests/config-storage.test.ts
+          packages/backend/tests/mac-updates.test.ts
+          packages/backend/tests/app-update-routes.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts
       # Advisories with no upstream fix are allowlisted by id; remove an id as
