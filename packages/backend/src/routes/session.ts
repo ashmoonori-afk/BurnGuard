@@ -201,9 +201,8 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
           const codes = new Set(["pdf_password_required", "pdf_invalid", "pdf_runtime_unavailable", "pdf_extraction_timeout", "pdf_size_limit", "pdf_page_limit", "pdf_text_limit", "attachment_extract_failed"]);
           return c.json(fail(codes.has(error.code) ? error.code : "attachment_extract_failed", "Could not read the attachment. Its original remains in docs/attachments."), 422);
         }
-        const message = error instanceof Error ? error.message : String(error);
         return c.json(
-          fail("invalid_attachments", "Attachment upload rejected", { message }),
+          fail("invalid_attachments", "Attachment upload rejected"),
           400,
         );
       }
