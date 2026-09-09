@@ -29,7 +29,7 @@ and type from its tokens and apply everything else here.
   -0.04em, sized with clamp() (hero 44-88px, section titles 32-56px). Body
   16-18px, line-height 1.55-1.65, measure 55-70ch. \`text-wrap: balance\` on headings.
 - Headlines wrap in 3 lines or fewer: widen the container before shrinking type.
-- Eyebrows: 12-13px, uppercase, letter-spacing 0.14-0.2em, muted colour. Never
+- Eyebrows: 11-13px, uppercase, letter-spacing 0.14-0.2em, muted colour. Never
   numbered filler ("SECTION 01", "STEP 1", "ABOUT US").
 - Tabular numerals for every metric; keep the unit beside the number.
 
@@ -53,9 +53,8 @@ and type from its tokens and apply everything else here.
   64-96px on mobile. Related items 8-16px apart, unrelated groups 48px or more.
 - 12-column grid, 24-32px gutters, content max-width 1200-1280px. Asymmetric
   spans (7/5, 8/4) beat 6/6 outside heroes.
-- Grids never leave voids: every bento cell is filled and no row ends with an
-  orphan card (5 items = one 2x cell + 4, or rows of 2 + 3); use fewer, larger
-  cards (3-5) rather than eight small ones.
+- Grids never leave voids: every bento cell is filled; use fewer, larger cards
+  (3-5) rather than eight small ones.
 
 ## Motion
 - Easing cubic-bezier(0.32, 0.72, 0, 1); 200-300ms for hover, 500-800ms for
@@ -65,7 +64,8 @@ and type from its tokens and apply everything else here.
 
 ## Self-check before finishing
 Judge the render at 1280 and 375: no headline over 3 lines, no grid void, no
-stray accent, no default-blue link, no text under 12px, nothing clipped.
+stray accent, no default-blue link, no text under 12px, nothing clipped. If it
+still looks like a template, rework the hero and the type scale first.
 `;
 
 export const PROTOTYPE_VISUAL_CRAFT = `## Website craft (PROTOTYPE_VISUAL_CRAFT)
@@ -97,29 +97,28 @@ export const PROTOTYPE_VISUAL_CRAFT = `## Website craft (PROTOTYPE_VISUAL_CRAFT)
 
 export const DECK_VISUAL_CRAFT = `## Deck craft (DECK_VISUAL_CRAFT)
 
-- Use the deck skill's projection tokens at their declared values for every
-  text element; never lower them in self-review. Eyebrows, chrome, captions
-  and chart labels are --deck-type-caption (24px), nothing smaller.
 - Every slide is a poster: one dominant element (headline, number, chart, or
-  image) and everything else supports it. Two competing elements means two
-  slides. The dominant element spans at least half the slide width or height
-  and the composition fills 60-80% of the height; a small cluster floating in
-  an empty slide is web density, not projection.
-- Cover: full-bleed dark or accent field, --deck-type-hero title with tight
-  tracking, eyebrow above, one context line below, one background device;
-  the closing slide mirrors it.
-- Chrome on content slides: running title top-left in the margin, mono slide
-  number bottom-right, both muted; eyebrows and badges sit in the content
-  area below the chrome, never in the same corner, never under 24px.
-- Bullets are the last resort: prefer two columns, a big number with one
-  claim, a three-step row, or a labelled diagram. At most 4 one-line bullets.
-- Big numbers: 280-400px (a third of the slide height) in the display face and
-  the accent colour, unit attached, a --deck-type-body label, caption below.
-- Charts: inline SVG filling its column (at least 40% of the slide width),
-  hairline axes, 2-3 series, key series in the accent, direct labels at
-  --deck-type-caption instead of a legend, one takeaway line above.
-- Media and mocks sit in nested frames with a soft shadow; never stretched.
-- Safe area: nothing inside --deck-pad-slide of the edge or off the artboard.
+  image) and everything else supports it. Two competing elements means two slides.
+- Cover: full-bleed dark or accent field, title at --deck-type-hero with tight
+  tracking, eyebrow above, one line of context below, one background device.
+  The closing slide mirrors it.
+- Chrome on every content slide: running title top-left, slide number
+  bottom-right in mono, both at --deck-type-caption and muted; identical
+  --deck-pad-slide margins on all slides.
+- Bullets are the last resort: prefer two columns, a big number with a
+  one-sentence claim, a three-step row, or a labelled diagram. At most 4
+  bullets, each one line.
+- Big numbers: 120-200px in the display face and the accent colour, unit
+  attached, a 32px label, source caption below.
+- Charts: inline SVG with hairline axes, 2-3 series at most, the key series in
+  the accent and the rest in neutrals, direct labels instead of a legend, one
+  takeaway line above.
+- Rhythm: alternate dark and light slides at least once every 3-4 slides and
+  use one accent-field slide for the key claim.
+- Media and product mocks sit in nested frames with a soft shadow; never
+  stretched, never with a hard 1px black border.
+- Safe area: nothing inside --deck-pad-slide of the edge; verify no wrap pushes
+  content off the 16:9 artboard.
 `;
 
 export const GRAPHIC_VISUAL_CRAFT = `## Graphic craft (GRAPHIC_VISUAL_CRAFT)
