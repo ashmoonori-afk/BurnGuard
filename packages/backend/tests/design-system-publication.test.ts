@@ -121,20 +121,27 @@ describe("seeded extraction restart reconciliation", () => {
   test("Given real migrated crash rows When startup reconciliation runs Then rows, markers, receipts, and sentinels converge", async () => {
     // Given
     const home = await root();
-    const child = Bun.spawn([process.execPath, path.join(import.meta.dir, "fixtures/extraction-recovery-probe.ts")], {
-      env: { ...process.env, HOME: home, USERPROFILE: home }, stdout: "pipe", stderr: "pipe",
+    const outputPath = path.join(home, "recovery-result.json");
+    const environment = Object.fromEntries(
+      ["PATH", "TMPDIR", "NODE_PATH"].flatMap((key) => {
+        const value = process.env[key];
+        return value === undefined ? [] : [[key, value]];
+      }),
+    );
+    const child = Bun.spawn([process.execPath, path.join(import.meta.dir, "fixtures/extraction-recovery-probe.ts"), outputPath], {
+      env: { ...environment, HOME: home, USERPROFILE: home }, stdout: "ignore", stderr: "pipe",
     });
     const exactExit = child.exited;
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(child.stdout).text(), new Response(child.stderr).text(), awaitBounded(exactExit),
+    const [stderr, exitCode] = await Promise.all([
+      new Response(child.stderr).text(), awaitBounded(exactExit),
     ]);
 
     // When
     // Assert the exit code before parsing: a crashed probe writes nothing to
-    // stdout, and `JSON.parse("")` would hide the child's stderr behind an
+    // its receipt, and parsing a missing file would hide the child's stderr behind an
     // "Unexpected EOF" syntax error.
     expect(exitCode, stderr).toBe(0);
-    const result: unknown = JSON.parse(stdout);
+    const result: unknown = JSON.parse(await readFile(outputPath, "utf8"));
 
     // Then
     expect(result).toMatchObject({

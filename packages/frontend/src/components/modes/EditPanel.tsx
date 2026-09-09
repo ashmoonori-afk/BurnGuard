@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
 import type { EditTarget } from "@/components/canvas/EditLayer";
+import { Button } from "@/components/ui/button";
 
 interface AttrRow {
   key: string;
@@ -177,17 +177,16 @@ export default function EditPanel({
       </details>
 
       <div className="border-t border-border px-3 py-2">
-        <button
+        <Button
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className={cn(
-            "w-full rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-white",
-            "hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60",
-          )}
+          variant="cta"
+          size="sm"
+          className="w-full"
         >
           {saving ? "저장하는 중..." : "저장"}
-        </button>
+        </Button>
       </div>
     </div>
   );

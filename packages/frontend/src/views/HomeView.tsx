@@ -57,6 +57,7 @@ export default function HomeView() {
     id: string;
     name: string;
   } | null>(null);
+  const lastDeleteProjectName = useRef("");
   const [deleteSystemTarget, setDeleteSystemTarget] = useState<{
     id: string;
     name: string;
@@ -251,8 +252,10 @@ export default function HomeView() {
     systemQuery,
   );
 
-  const onProjectDelete = (card: CardViewModel) =>
+  const onProjectDelete = (card: CardViewModel) => {
+    lastDeleteProjectName.current = card.name;
     setDeleteTarget({ id: card.id, name: card.name });
+  };
 
   // Clearing from an empty-result panel removes the button the user is
   // standing on, so focus returns to the search field instead of the
@@ -441,7 +444,7 @@ export default function HomeView() {
         onOpenChange={(open) => {
           if (!open && !deleteMutation.isPending) setDeleteTarget(null);
         }}
-        projectName={deleteTarget?.name ?? ""}
+        projectName={deleteTarget?.name ?? lastDeleteProjectName.current}
         onConfirm={() => {
           if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
         }}

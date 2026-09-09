@@ -9,6 +9,8 @@ import { inspectCanonicalTree } from "../../src/services/canonical-tree-manifest
 import { buildExtractionProvenance } from "../../src/services/extraction-provenance";
 import { reconcileExtractionState } from "../../src/services/extraction-recovery";
 
+const outputPath = process.argv[2];
+if (outputPath === undefined) throw new TypeError("Recovery probe output path is required");
 const digest = (value: string): string => createHash("sha256").update(value).digest("hex");
 const exists = async (target: string): Promise<boolean> => (await stat(target).catch(() => null)) !== null;
 
@@ -71,5 +73,5 @@ const result = {
   outside_row_preserved: sqlite.query("SELECT id FROM design_systems WHERE id='outside-row'").get() !== null,
   outside_sentinel: await readFile(sentinel, "utf8"),
 };
-process.stdout.write(`${JSON.stringify(result)}\n`);
+await writeFile(outputPath, `${JSON.stringify(result)}\n`, "utf8");
 sqlite.close();

@@ -59,7 +59,14 @@ async function main(): Promise<void> {
   const trackedBaseline = await readRepositoryIdentity(root);
   let trackedProductMutationRejected = false;
   try {
-    await writeFile(trackedPath, `${trackedContent}\n`);
+    const trackedMutation = trackedContent.replace(
+      '"name": "burnguard-design"',
+      '"name": "burnguard-design-qa"',
+    );
+    if (trackedMutation === trackedContent) {
+      throw new QaPreflightError("mutation_missing", "Tracked fixture mutation did not apply");
+    }
+    await writeFile(trackedPath, trackedMutation);
     try {
       assertRepositoryIdentity(await readRepositoryIdentity(root), trackedBaseline);
     } catch (error) {
