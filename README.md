@@ -98,7 +98,9 @@ bun install --frozen-lockfile
 bun run scripts/dev-launcher.ts
 ```
 
-The launcher waits for the backend to be ready, starts the frontend, and opens a browser. You can also start it with `Start-BurnGuard.bat` in the repository.
+This development launcher waits for the backend to be ready, starts the frontend, and opens a browser.
+
+On Windows, double-click `Start-BurnGuard.bat` to open the native app. It builds the app on first launch (Bun and the .NET 8 SDK are required), then opens the existing build immediately on later launches. After updating source code, run `Start-BurnGuard.bat --rebuild` to build and open the updated app. Close the browser-mode servers before opening the native app.
 
 - App: **http://127.0.0.1:5173**
 - Backend health: **http://127.0.0.1:14070/api/health**
