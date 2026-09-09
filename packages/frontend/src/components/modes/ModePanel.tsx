@@ -14,6 +14,8 @@ import SelectorReadOnlyPanel from "./SelectorReadOnlyPanel";
 import TweaksPanel from "./TweaksPanel";
 import type { TweakChangePreview } from "./TweaksPanel";
 import QualityPanel, { type QualityPanelBinding } from "./QualityPanel";
+import UxReviewPanel, { type UxReviewBinding } from "./UxReviewPanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 /**
  * Right-side mode pane. Renders nothing when no mode is active so the canvas
@@ -54,6 +56,7 @@ export default function ModePanel({
   onRedoDraw,
   onClearDraw,
   quality,
+  uxReview,
 }: {
   mode: CanvasMode | null;
   selection: SelectedNode | null;
@@ -91,6 +94,7 @@ export default function ModePanel({
   onRedoDraw: () => void;
   onClearDraw: () => void;
   quality: QualityPanelBinding;
+  uxReview: UxReviewBinding;
 }) {
   if (!mode) return null;
 
@@ -133,7 +137,11 @@ export default function ModePanel({
           onClear={onClearEdit}
         />
       )}
-      {mode === "quality" && <QualityPanel quality={quality} />}
+      {mode === "quality" && <Tabs defaultValue="quality" className="flex min-h-0 flex-1 flex-col">
+        <TabsList aria-label="결과물 검토" className="m-2 h-auto shrink-0"><TabsTrigger value="quality" className="min-h-11 flex-1">품질 검사</TabsTrigger><TabsTrigger value="ux" className="min-h-11 flex-1">UX 개선</TabsTrigger></TabsList>
+        <TabsContent value="quality" className="min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col"><QualityPanel quality={quality} /></TabsContent>
+        <TabsContent value="ux" className="min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col"><UxReviewPanel key={`${uxReview.projectId}:${uxReview.relPath}:${uxReview.digest}:${uxReview.revision}`} binding={uxReview} /></TabsContent>
+      </Tabs>}
       {mode === "draw" && (
         <DrawPanel
           tool={drawTool}

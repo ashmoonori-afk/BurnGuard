@@ -3,7 +3,7 @@ import "./export-pdf-deadline-cases";
 import "./export-pdf-producer-closure-cases";
 import "./export-receipt-boundary-cases";
 import { deflateSync } from "node:zlib";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
@@ -14,6 +14,7 @@ import { parseExportOptions } from "../../shared/src/export";
 import { inspectCanonicalTree, parseCanonicalTreeManifest, validateCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { ExportClosureError, resolveStaticClosure } from "../src/services/export-closure";
 import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "../src/services/export-html-validation";
+import { zipDirectory } from "../src/services/zip";
 import { PdfValidationError, validatePdf } from "../src/services/export-pdf-validation";
 import { analyzePixels, parsePng, validateDecodedPng } from "../src/services/export-png-validation";
 import { canonicalJson, parseExportReceipt, receiptDigest, requireReceiptIdentity, sha256, type ExportReceipt } from "../src/services/export-receipt";
@@ -119,6 +120,18 @@ describe("export validation contracts", () => {
       const manifest = await inspectCanonicalTree(root); const closure = await resolveStaticClosure(root, "index.html", manifest);
       expect(parseCanonicalTreeManifest(JSON.parse(JSON.stringify(manifest)))).toEqual(manifest); await expect(validateCanonicalTree(root, manifest)).resolves.toEqual(manifest);
       expect(closure.referenced_paths).toEqual(["fonts/a.woff2", "images/a.png", "scripts/child.js", "scripts/main.js", "styles/main.css", "styles/nested.css"]);
+      const archiveManifest = buildHtmlArchiveManifest({ schema_version: 1, entrypoint: "index.html", project_revision: 7, project_digest: manifest.tree_digest, input_closure_digest: digest }, manifest.files.map((file) => ({ path: file.path, size: file.size, sha256: file.sha256 })));
+      await writeFile(path.join(root, HTML_EXPORT_MANIFEST), canonicalJson(archiveManifest));
+      const archivePath = `${root}.zip`;
+      try {
+        await zipDirectory(root, archivePath);
+        const bytes = new Uint8Array(await readFile(archivePath));
+        expect((await validateHtmlArchive(bytes, archiveManifest)).entries).toEqual(archiveManifest.entries);
+        const reopened = await JSZip.loadAsync(bytes);
+        expect(await reopened.file("index.html")?.async("string")).toContain('href="styles/main.css"');
+        expect(await reopened.file("fonts/a.woff2")?.async("string")).toBe("font");
+        expect(await reopened.file("scripts/child.js")?.async("string")).toBe("export const value=1");
+      } finally { await rm(archivePath, { force: true }); }
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 

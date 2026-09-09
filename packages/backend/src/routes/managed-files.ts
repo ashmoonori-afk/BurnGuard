@@ -9,7 +9,7 @@ import { ArtifactCoordinator } from "../services/artifact-coordinator";
 import { ArtifactIdentityError, requireArtifactIdentity } from "../services/artifact-identity";
 import { inspectCanonicalTree } from "../services/canonical-tree-manifest";
 import { resolveDrawFile, resolveProjectFile } from "../services/managed-project-files";
-import { FilePatchError, fingerprintHtmlNode } from "../services/file-patch";
+import { FilePatchError, fingerprintHtmlNode, htmlWithEditableIds } from "../services/file-patch";
 
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
 function fail(code: string, message: string, details?: unknown): ApiErrorBody { return { error: { code, message, details } }; }
@@ -43,7 +43,10 @@ managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
       throw error;
     }
   }
-  return new Response(Bun.file(resolved.absolutePath), { headers });
+  const body = /\.html?$/i.test(resolved.absolutePath)
+    ? htmlWithEditableIds(await readFile(resolved.absolutePath, "utf8"))
+    : Bun.file(resolved.absolutePath);
+  return new Response(body, { headers });
 });
 
 managedFileRoutes.get("/api/projects/:id/draws/*", async (c) => {
@@ -116,6 +119,10 @@ function contentType(filePath: string): string {
     case ".jpg": case ".jpeg": return "image/jpeg";
     case ".webp": return "image/webp";
     case ".gif": return "image/gif";
+    case ".woff": return "font/woff";
+    case ".woff2": return "font/woff2";
+    case ".ttf": return "font/ttf";
+    case ".otf": return "font/otf";
     case ".md": case ".txt": return "text/plain; charset=utf-8";
     default: return "application/octet-stream";
   }

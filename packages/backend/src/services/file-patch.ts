@@ -8,6 +8,7 @@ export class FilePatchError extends Error {
     | "unsupported_file"
     | "node_not_found"
     | "ambiguous_node_id"
+    | "non_leaf_text_target"
     | "stale_node_fingerprint"
     | "invalid_utf8";
 
@@ -36,6 +37,31 @@ export type HtmlNodeFingerprint = {
   readonly end: number;
 };
 
+/** Preview anchors also resolve against the untouched canonical bytes. */
+function parseWithEditableIds(html: string) {
+  const root = parse(html, { comment: true });
+  const elements = root.querySelectorAll("*");
+  const used = new Set(elements.map((node) => node.getAttribute("data-bg-node-id")).filter(Boolean));
+  const additions: { start: number; id: string }[] = [];
+  for (const node of elements) {
+    if (node.hasAttribute("data-bg-node-id") || /^(html|head|body|script|style|meta|link|title|base|noscript)$/i.test(node.tagName)) continue;
+    let id = `bg-auto-${node.range[0]}`;
+    while (used.has(id)) id += "-";
+    used.add(id);
+    node.setAttribute("data-bg-node-id", id);
+    additions.push({ start: node.range[0] + 1 + node.rawTagName.length, id });
+  }
+  return { root, additions };
+}
+
+export function htmlWithEditableIds(html: string): string {
+  const { additions } = parseWithEditableIds(html);
+  for (const { start, id } of additions.reverse()) {
+    html = `${html.slice(0, start)} data-bg-node-id="${id}"${html.slice(start)}`;
+  }
+  return html;
+}
+
 /**
  * Pure HTML rewrite: serialize a patched DOM tree, preserving everything
  * except the target node's text/attributes. Exposed separately so it can
@@ -45,7 +71,7 @@ export function applyHtmlNodePatch(
   html: string,
   input: PatchHtmlNodeInput,
 ): string {
-  const root = parse(html, { comment: true });
+  const { root } = parseWithEditableIds(html);
   const selector = `[data-bg-node-id="${escapeAttrSelector(input.node_bg_id)}"]`;
   const targets = root.querySelectorAll(selector);
   if (targets.length === 0) {
@@ -62,6 +88,9 @@ export function applyHtmlNodePatch(
   const [start, end] = target.range;
 
   if (input.text !== undefined) {
+    if (target.querySelectorAll("*").some((node) => !/^(span|em|strong|br|i|b|u|s|small|sup|sub|mark|code)$/i.test(node.tagName))) {
+      throw new FilePatchError("non_leaf_text_target", "Select a text element without child elements");
+    }
     target.set_content(escapeHtmlText(input.text));
   }
 
@@ -103,7 +132,7 @@ export function applyHtmlNodePatch(
 }
 
 export function fingerprintHtmlNode(html: string, nodeBgId: string): HtmlNodeFingerprint {
-  const root = parse(html, { comment: true });
+  const { root } = parseWithEditableIds(html);
   const targets = root.querySelectorAll(`[data-bg-node-id="${escapeAttrSelector(nodeBgId)}"]`);
   if (targets.length === 0) throw new FilePatchError("node_not_found", "node_not_found");
   if (targets.length !== 1) throw new FilePatchError("ambiguous_node_id", "ambiguous_node_id");

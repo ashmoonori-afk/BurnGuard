@@ -1,13 +1,14 @@
 import { cp } from "node:fs/promises";
 import path from "node:path";
+import { copyBundledFonts } from "./bundled-fonts";
 import { resolveRepoRoot } from "../lib/paths";
 
 export const ORIGINAL_SAMPLE_TAG = "[burnguard:original-sample]";
 export const originalSamples = [
-  { slug: "sonnel", name: "SONNEL", description: "Tactile sound objects and playful precision." },
+  { slug: "sonnel", name: "SONNEL", description: "A cobalt sound-synthesis lab for tactile precision." },
   { slug: "foliover", name: "FOLIOVER", description: "An independent journal of materials and culture." },
   { slug: "oddward", name: "ODDWARD", description: "Experimental creative work with expressive typography." },
-  { slug: "velune", name: "VELUNE", description: "Sculptural light and considered interiors." },
+  { slug: "velune", name: "VELUNE", description: "Moonlit glass lighting in deep plum and opal mint." },
 ] as const;
 export const originalSampleFormats = [
   { type: "prototype", directory: "web", entrypoint: "index.html", label: "Web" },
@@ -23,4 +24,5 @@ export async function copyOriginalSample(slug: string, directory: string, destin
   const source = path.join(repoRoot, "samples", "original", slug);
   await cp(path.join(source, directory), destination, { recursive: true });
   await cp(path.join(source, "assets"), path.join(destination, "assets"), { recursive: true });
+  await copyBundledFonts(destination, repoRoot);
 }

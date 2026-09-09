@@ -321,7 +321,7 @@ async function runUserTurnInternal(
         const immutableSnapshots = await captureImmutableAttachments(selectedAttachments);
         try {
           await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: payload.attachments ?? [], immutableSnapshots }, async (stageInputs) => {
-            const prompt = await buildPrompt(sessionContext, payload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs });
+            const prompt = await buildPrompt(sessionContext, payload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation });
             await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId, binary: binaryPath });
             let providerFailed = false;
             const result = await (dependencies.runAdapter ?? runAdapterTurn)(backendId, {

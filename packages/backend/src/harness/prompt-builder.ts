@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { VisualSourceManifestV1 } from "@bg/shared";
+import type { BackendId, GenerationOptions, VisualSourceManifestV1 } from "@bg/shared";
 import type { StageAttachmentInput } from "../services/stage-attachment-inputs";
 import type { UserEvent } from "@bg/shared/events";
 import type { buildSessionContext } from "../services/context";
@@ -17,6 +17,8 @@ import {
 } from "./prompt-compact-skills";
 import { appendDesignBriefContext } from "./prompt-design-brief";
 import { appendDesignSystemContext } from "./prompt-design-system";
+import { DESIGN_CRAFT_RULES } from "./design-craft";
+import { appendModelPromptContext } from "./prompt-model-context";
 import { appendReferenceLayoutContext } from "./prompt-reference-layout";
 import { appendVisualSourceContext } from "./prompt-visual-sources";
 import {
@@ -34,6 +36,8 @@ const MAX_FILES_LISTED = 60;
 export type PromptContextMode = "compact" | "full";
 
 export interface PromptBuildOptions {
+  backendId?: BackendId;
+  generation?: GenerationOptions;
   /** Authored output and structural reads use the owned operation stage. */
   outputDirectory?: string;
   contextMode?: PromptContextMode;
@@ -262,6 +266,8 @@ export async function buildPrompt(
     lines.push("");
   }
 
+  lines.push(DESIGN_CRAFT_RULES);
+  appendModelPromptContext(lines, options.backendId, options.generation);
   lines.push("## Delivery");
   lines.push(
     `- Write or edit files inside \`${project.project_dir}\`. Do not touch anything outside this directory.`,

@@ -43,9 +43,18 @@ export async function renderDeckToPdf(input: {
     }));
     if (preflight.some((slide) => slide.clipped || slide.width <= 0 || slide.height <= 0)) throw new PdfExportError("render_failed", "Slide content is clipped");
     const paper = input.paper ?? "a4"; const dimensions = pdfDimensionsForPaper(paper); const combined = await PDFDocument.create();
-    await session.page.addStyleTag({ content: "[data-slide]{display:none!important}[data-slide][data-bg-export-page]{display:block!important}" });
+    const slideDisplays = await session.page.evaluate(() => [...document.querySelectorAll<HTMLElement>("[data-slide]")].map((slide) => ({ value: slide.style.getPropertyValue("display"), priority: slide.style.getPropertyPriority("display") })));
     for (let index = 0; index < preflight.length; index += 1) {
-      await session.page.evaluate((pageIndex) => { for (const [slideIndex, slide] of [...document.querySelectorAll<HTMLElement>("[data-slide]")].entries()) slide.toggleAttribute("data-bg-export-page", slideIndex === pageIndex); }, index);
+      await session.page.evaluate(({ pageIndex, displays }) => {
+        for (const [slideIndex, slide] of [...document.querySelectorAll<HTMLElement>("[data-slide]")].entries()) {
+          slide.toggleAttribute("data-bg-export-page", slideIndex === pageIndex);
+          // Inline importance keeps authored print selectors from exposing every slide.
+          const original = displays[slideIndex];
+          if (slideIndex !== pageIndex) slide.style.setProperty("display", "none", "important");
+          else if (original?.value) slide.style.setProperty("display", original.value, original.priority);
+          else slide.style.removeProperty("display");
+        }
+      }, { pageIndex: index, displays: slideDisplays });
       const pageBytes = await session.page.pdf({ format: dimensions.format, width: dimensions.width, height: dimensions.height, landscape: dimensions.format !== undefined, printBackground: true, preferCSSPageSize: false, displayHeaderFooter: false });
       const part = await PDFDocument.load(pageBytes); const copied = await combined.copyPages(part, part.getPageIndices()); for (const page of copied) combined.addPage(page);
     }

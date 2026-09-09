@@ -45,6 +45,8 @@ export function buildTweakChangePreview(
   return null;
 }
 
+const BUNDLED_FONTS = ["DM Sans", "Space Grotesk", "DM Serif Display", "Bebas Neue", "IBM Plex Mono", "Gowun Batang", "Pretendard"];
+
 const FONT_WEIGHTS: Array<{ value: string; label: string }> = [
   { value: "300", label: "Light (300)" },
   { value: "400", label: "Normal (400)" },
@@ -214,10 +216,12 @@ function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; savi
       <RowLabel>글꼴</RowLabel>
       <select className={inputCls("min-w-0 flex-1")} value={inline} disabled={saving} onChange={(event) => onApply({ "font-family": event.target.value || null })}>
         <option value="">상속 ({target.computed["font-family"] || "기본"})</option>
-        {inline && !families.some((family) => JSON.stringify(family) === inline) && <option value={inline}>{inline}</option>}
-        {families.map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
+        {inline && ![...BUNDLED_FONTS, ...families].some((family) => JSON.stringify(family) === inline) && <option value={inline}>{inline}</option>}
+        {BUNDLED_FONTS.map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
+        {families.filter((family) => !BUNDLED_FONTS.includes(family)).map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
       </select>
     </label>
+    <p className="text-[10px] text-muted-foreground">기본 7종은 새 프로젝트에 포함돼요. 기존 프로젝트에서는 글꼴 파일이 필요해요.</p>
     <button type="button" className="text-[10px] underline" disabled={loading} onClick={() => void load()}>{loading ? "불러오는 중…" : "설치된 글꼴 불러오기"}</button>
     {error && <p role="alert" className="text-[10px] text-destructive">{error}</p>}
     {families.length > 0 && <p role="status" className="text-[10px] text-muted-foreground">설치된 글꼴 {families.length}개 · 다른 기기에는 같은 글꼴이 필요해요.</p>}

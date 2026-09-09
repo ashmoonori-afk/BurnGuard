@@ -50,24 +50,27 @@ export async function readCanvasImage(response: Response, budget: { remaining: n
   }
 }
 
-/** Inline only this project's images: opaque frames cannot send Strict cookies. */
+/** Inline project images, fonts and linked CSS: opaque frames cannot send Strict cookies. */
 export async function embedCanvasImages(html: string, documentUrl: string, signal: AbortSignal): Promise<string> {
   const document = new DOMParser().parseFromString(html, "text/html");
   const fetched = new Map<string, Promise<string>>();
   const resources = new AbortController();
   const boundedSignal = AbortSignal.any([signal, resources.signal, AbortSignal.timeout(15000)]);
   const budget = { remaining: 32 * 1024 * 1024 };
-  const resolve = async (source: string): Promise<string> => {
-    if (!source || !isProjectImageUrl(source, documentUrl)) return source;
-    const url = new URL(source, documentUrl).href;
-    let pending = fetched.get(url);
+  const resolve = async (source: string, base = documentUrl, stylesheet = false): Promise<string> => {
+    if (!source || !isProjectImageUrl(source, base)) return source;
+    const url = new URL(source, base).href;
+    const key = `${stylesheet ? "css:" : "asset:"}${url}`;
+    let pending = fetched.get(key);
     if (!pending) {
       if (fetched.size >= 64) { resources.abort(); throw new Error("artifact_image_limit"); }
       pending = (async () => {
-        const response = await authorizedFetch(url, { signal: boundedSignal });
+        const response = await authorizedFetch(url, { signal: boundedSignal, redirect: "error" });
         if (!response.ok) throw Object.assign(new Error("artifact_image_load_failed"), { httpStatus: response.status });
-        if (!response.headers.get("content-type")?.startsWith("image/")) { await response.body?.cancel(); return source; }
+        const mime = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+        if (stylesheet ? mime !== "text/css" : !/^(?:image\/|font\/(?:woff2?|ttf|otf)$|application\/(?:font-woff|vnd.ms-fontobject)$)/.test(mime)) { await response.body?.cancel(); return source; }
         const blob = await readCanvasImage(response, budget, () => resources.abort());
+        if (stylesheet) return blob.text();
         return new Promise<string>((done, reject) => {
           const reader = new FileReader();
           reader.onload = () => done(String(reader.result));
@@ -75,7 +78,7 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
           reader.readAsDataURL(blob);
         });
       })().catch((error: unknown) => { resources.abort(); throw error; });
-      fetched.set(url, pending);
+      fetched.set(key, pending);
     }
     return pending;
   };
@@ -92,8 +95,19 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
     }))).join(", "));
   }));
   await Promise.all(Array.from(document.querySelectorAll("style, [style]")).map(async element => {
-    if (element.tagName === "STYLE") element.textContent = await embedCssImages(element.textContent ?? "", resolve);
-    if (element.hasAttribute("style")) element.setAttribute("style", await embedCssImages(element.getAttribute("style")!, resolve));
+    if (element.tagName === "STYLE") element.textContent = await embedCssImages(element.textContent ?? "", url => resolve(url));
+    if (element.hasAttribute("style")) element.setAttribute("style", await embedCssImages(element.getAttribute("style")!, url => resolve(url)));
+  }));
+  await Promise.all(Array.from(document.querySelectorAll('link[rel~="stylesheet"][href]')).map(async link => {
+    const source = link.getAttribute("href")!;
+    if (!isProjectImageUrl(source, documentUrl)) return;
+    const css = await resolve(source, documentUrl, true);
+    if (css === source) return;
+    const style = document.createElement("style");
+    if (link.hasAttribute("media")) style.setAttribute("media", link.getAttribute("media")!);
+    // Linked stylesheets are one level only; imports never receive host authority.
+    style.textContent = (await embedCssImages(css.replace(/@import\s+(?:url\([^)]*\)|"[^"]*"|'[^']*')[^;]*;/gi, ""), url => resolve(url, new URL(source, documentUrl).href))).replace(/<\/style/gi, "<\\/style");
+    link.replaceWith(style);
   }));
   return fetched.size === 0 ? html : `<!doctype html>${document.documentElement.outerHTML}`;
 }

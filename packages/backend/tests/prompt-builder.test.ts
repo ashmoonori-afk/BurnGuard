@@ -4,6 +4,7 @@ import path from "node:path";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { getSqlite } from "../src/db/sqlite-client";
 import { buildPrompt } from "../src/harness/prompt-builder";
+import { DESIGN_CRAFT_RULES } from "../src/harness/design-craft";
 import { ensureLearningSchema } from "./learning-fixture";
 import {
   attachmentExtractedTextPath,
@@ -37,6 +38,39 @@ function makeContext(
 }
 
 describe("buildPrompt", () => {
+  test("Given resolved model selections When assembling Then execution guidance follows the selected model and preserves the request", async () => {
+    const text = "선택한 영역만 수정해 주세요.\nKeep my exact wording.";
+    const cases = [
+      { backendId: "codex", model: "gpt-5.4", provider: "native", profile: "codex" },
+      { backendId: "claude-code", model: "sonnet", provider: "native", profile: "claude" },
+      { backendId: "claude-code", model: "opus", provider: "native", profile: "claude-opus" },
+      { backendId: "claude-code", model: "claude-opus-4-6", provider: "commandcode", profile: "claude-opus" },
+    ] as const;
+    for (const selected of cases) {
+      const generation = { model: selected.model, provider: selected.provider, effort: "low", vanilla: true } as const;
+      const prompt = await buildPrompt(makeContext(), { type: "user.message", text }, { backendId: selected.backendId, generation });
+      const metadata = JSON.parse(prompt.match(/<burnguard-model-guidance-v1>\n([^\n]+)\n<\/burnguard-model-guidance-v1>/)![1]!);
+      expect(metadata).toEqual({ schema_version: 1, profile: selected.profile, model: selected.model, provider: selected.provider, effort: "low" });
+      expect(prompt.endsWith(`## Request\n${text}`)).toBe(true);
+      expect(prompt).toContain("Do not touch anything outside this directory.");
+      expect(generation.effort).toBe("low");
+      expect(prompt.indexOf("<burnguard-model-guidance-v1>")).toBeLessThan(prompt.indexOf("## Delivery"));
+    }
+    const prompt = await buildPrompt(makeContext(), { type: "user.message", text });
+    expect(prompt).not.toContain("<burnguard-model-guidance-v1>");
+  });
+
+  test("Given any generation mode without a design system, When assembling, Then shipped craft rules occur once before delivery", async () => {
+    for (const project_type of ["prototype", "slide_deck", "graphic", "from_template", "other"] as const) {
+      for (const contextMode of ["compact", "full"] as const) {
+        const prompt = await buildPrompt(makeContext({ project_type }), { type: "user.message", text: "Improve the selected element" }, { contextMode });
+        expect(prompt.split(DESIGN_CRAFT_RULES)).toHaveLength(2);
+        expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
+        expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeGreaterThan(prompt.indexOf("## Project"));
+      }
+    }
+  });
+
   test("includes only the selected ready design direction", async () => {
     const base = {
       schema_version: 1, project_id: "p1", session_id: "s1", generation_id: "g1", status: "ready",

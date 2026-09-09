@@ -1,9 +1,10 @@
-:root {
+:root{--font-display:"Bebas Neue","Pretendard",sans-serif;--font-body:"Pretendard",sans-serif;--font-caption:"Pretendard",sans-serif;--display:var(--font-display);--body:var(--font-body);--caption:var(--font-caption);--weight:400;
  --canvas:#111214; --primary:#d4ff3f; --secondary:#f44bac; --accent:#f4f4ee;
- --font-display:Arial, sans-serif; --font-body:Arial,sans-serif;
  --space-1:8px; --space-2:16px; --space-3:24px; --space-4:40px; --space-5:64px; --space-6:104px;
  --text-small:12px; --text-body:17px; --text-section:clamp(48px,6vw,88px);
  --text-display:clamp(85px,15.8vw,240px);
- --line-body:1.75; --line-display:.88;
- --tracking-display:-.07em; --radius:0px; --rule:1px solid currentColor;
+ --line-body:1.75; --line-display:1.05;
+ --tracking-display:0em; --radius:0px; --rule:1px solid currentColor;
 }
+body{font-family:var(--font-body)}h1,h2,h3{font-family:var(--font-display);font-weight:var(--weight);font-synthesis:none}h1[lang=ko],h2[lang=ko],h3[lang=ko]{line-height:1.12}
+h1[lang=ko],h2[lang=ko],h3[lang=ko]{font-family:var(--font-body);font-weight:700;letter-spacing:-.04em}

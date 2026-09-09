@@ -1253,6 +1253,21 @@ export default function ProjectView() {
             />
             <ModePanel
               mode={mode}
+              uxReview={{
+                projectId: id!,
+                relPath: activeRelPath,
+                digest: artifacts.current_digest,
+                revision: project.current_revision,
+                disabled: composerDisabled,
+                onRequestAI: async (text, signal) => {
+                  if (composerDisabled || signal.aborted) throw new Error("session_not_ready");
+                  const generation = (await loadComposerDraft(session.id).catch(() => null))?.generation ?? { model: "", effort: "low" as const, vanilla: true, provider: "native" as const };
+                  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+                  await sendMessage(text, [], signal, generation);
+                  setChatFocusKey((value) => value + 1);
+                  setMobilePane("chat");
+                },
+              }}
               quality={{
                 state: auditState,
                 pendingFindingId: safeFixMutation.isPending ? safeFixMutation.variables?.findingId ?? null : null,

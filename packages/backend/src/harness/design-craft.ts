@@ -1,0 +1,17 @@
+/** Product-owned generation guidance; independent of installed agent skills. */
+export const DESIGN_CRAFT_RULES = `## BurnGuard anti-slop and completion checks
+Start from the user's purpose, the current artifact and the selected design direction. Identify what the reader must understand or do first. Reuse existing components and design tokens. A requested edit should improve its target without rewriting unrelated sections.
+
+Compose the artifact around its content:
+- Choose a layout that fits each piece of information: a comparison belongs in a comparison layout, a process needs an ordered flow, and long records need a readable list or table. Do not turn every paragraph into the same decorated tile. Remove sections that repeat an earlier point.
+- Give the primary action more prominence than navigation and secondary actions. Button text must describe the result of pressing it; use the same term wherever the action repeats. Keep explanatory copy close to the relevant control, with enough detail to decide and without filler slogans.
+- Use the project's display, body and mono roles deliberately. Preserve Korean fallback coverage and supplied brand fonts. Check long Korean/English labels and numeric columns for wrapping and alignment. Reuse a small spacing scale; align related edges and leave more separation between unrelated groups.
+- Reserve strong color for meaningful emphasis or status. Do not scatter saturated badges, gradients, bright borders or glowing decorations across otherwise unrelated content. Ensure that status also has a text or shape cue. Surface treatments and corner sizes should express grouping and control roles, not decorate every element equally.
+- Prefer a useful visual that communicates real content: an actual interface, supplied image, labeled diagram or data chart. Do not manufacture customer logos, reviews, metrics or screenshot-like filler to make a page look complete. Sample data must be recognizable as sample data. Keep units and context beside numbers and choose chart geometry that makes the intended comparison readable.
+- Add motion only to explain a change or confirm an action. Keep typing, repeated interactions and keyboard navigation immediate. Animate only intended properties, honor reduced motion, and avoid making all sections enter sequentially before they can be read. An interactive control needs a clear resting state as well as hover and focus states.
+
+Check the delivered result, not just its source:
+- Inspect the rendered artifact at its specified dimensions. For responsive pages, also inspect a narrow viewport; for decks and graphics, preserve the required fixed artboard. Look for clipped text, unreadable contrast, broken alignment, accidental overflow, missing assets and excessive repetition. Read the content in order and verify that its purpose remains clear.
+- Where controls exist, exercise the main action with both pointer and keyboard. Verify visible focus, accessible names, useful validation, and relevant loading, empty and error states. Check that a promised outcome actually happens and that recovery is possible after an error.
+- Fix observed failures and inspect again. Describe only checks actually performed. If rendering or interaction cannot be observed, state which verification is unavailable; source inspection and static tests alone cannot establish visual quality. Never disable a check, lower its threshold or introduce a bypass to declare success. Apply intentional brand choices without weakening accessibility or correctness.
+`;

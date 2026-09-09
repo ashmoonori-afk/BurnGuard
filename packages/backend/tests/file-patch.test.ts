@@ -4,6 +4,8 @@ import {
   FilePatchError,
   parseInlineStyle,
   serializeInlineStyle,
+  htmlWithEditableIds,
+  fingerprintHtmlNode,
 } from "../src/services/file-patch";
 
 const FIXTURE = `<!doctype html>
@@ -16,6 +18,29 @@ const FIXTURE = `<!doctype html>
 </html>`;
 
 describe("applyHtmlNodePatch", () => {
+  test("Given an older slide without leaf IDs, When preview anchors are patched, Then only that element changes", () => {
+    const html = '<section data-bg-node-id="slide"><h1>Title</h1><p>Body</p><img src="photo.png"></section>';
+    const preview = htmlWithEditableIds(html);
+    const id = preview.match(/<h1 data-bg-node-id="([^"]+)"/)![1]!;
+    expect(htmlWithEditableIds(preview)).toBe(preview);
+    expect(fingerprintHtmlNode(html, id).start).toBe(html.indexOf("<h1>"));
+    const patched = applyHtmlNodePatch(html, { node_bg_id: id, text: "New title" });
+    expect(patched).toContain('>New title</h1><p>Body</p><img src="photo.png">');
+    expect(() => applyHtmlNodePatch(html, { node_bg_id: "slide", text: "Flattened" })).toThrow(FilePatchError);
+    const imageId = preview.match(/<img data-bg-node-id="([^"]+)"/)![1]!;
+    const imagePatched = applyHtmlNodePatch(html, { node_bg_id: imageId, attributes: { src: "other.png", alt: "Updated description" } });
+    expect(imagePatched).toContain('src="other.png"');
+    expect(imagePatched).toContain('alt="Updated description"');
+    expect(imagePatched).toContain('<h1>Title</h1><p>Body</p>');
+  });
+
+  test("Given an authored automatic-looking ID, When missing IDs are assigned, Then anchors remain unique", () => {
+    const html = '<h1>Title</h1><p data-bg-node-id="bg-auto-0">Body</p>';
+    expect(htmlWithEditableIds(html)).toContain('<h1 data-bg-node-id="bg-auto-0-">');
+    expect(applyHtmlNodePatch(html, { node_bg_id: "bg-auto-0-", text: "New" })).toContain('>New</h1>');
+    expect(applyHtmlNodePatch('<h1 data-bg-node-id="title">Hello<br><em>world</em></h1>', { node_bg_id: "title", text: "Updated" })).toContain('>Updated</h1>');
+  });
+
   test("rewrites text of the targeted node only", () => {
     const out = applyHtmlNodePatch(FIXTURE, {
       node_bg_id: "hero-title",

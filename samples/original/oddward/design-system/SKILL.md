@@ -9,7 +9,7 @@ description: ODDWARD original identity and format rules.
 BurnGuard를 위한 독립 가상 브랜드. 기존 로고·문구·제품을 복제하지 않습니다.
 
 ## Visual rules
-검은 바탕, 라임 전환, 마젠타 작업 사례. 무거운 Arial과 음수 자간, 비대칭 7:5 그리드와 큰 빈 면을 사용합니다. 둥근 카드, 그라데이션, 장식 그림자를 피합니다.
+검은 바탕, 라임 전환, 마젠타 작업 사례. 응축된 Bebas Neue 영문과 단단한 Pretendard 한글, 비대칭 7:5 그리드와 큰 빈 면을 사용합니다. 둥근 카드, 그라데이션, 장식 그림자를 피합니다.
 
 ## Tokens / spacing
 `colors_and_type.css`에 색, 타입, 간격 변수가 있습니다. 8/16/24/40/64/104px 간격. 본문 17px, 행간 1.75, 최대 읽기 폭 36em. 데스크톱 수평 패딩 4–7vw, 모바일 6vw. 600px 아래 두 열은 한 열로 전환합니다. 제목은 의미 단위로 줄바꿈하고 화면 밖으로 밀지 않습니다.
@@ -30,4 +30,8 @@ BurnGuard를 위한 독립 가상 브랜드. 기존 로고·문구·제품을 �
 - System preview: 팔레트/타입/컴포넌트/이미지를 압축한 참고표. 랜딩 복제 금지.
 
 ## Editing / accessibility
-편집 요소에 고유 `data-bg-node-id`. 시스템 글꼴과 인라인 스타일만 사용합니다. 로컬 입력은 전송·저장을 암시하지 않습니다. 추가 모션은 `prefers-reduced-motion`에서 해제합니다.
+편집 요소에 고유 `data-bg-node-id`. 번들 fonts/fonts.css와 인라인 스타일을 사용합니다. 로컬 입력은 전송·저장을 암시하지 않습니다. 추가 모션은 `prefers-reduced-motion`에서 해제합니다.
+
+## Bundled typography
+Display: Bebas Neue 400 for English; Korean headings use Pretendard 700. Body and captions: Pretendard 400–600. Keep Bebas Neue tracking at 0 and never synthesize a bold face.
+Load fonts/fonts.css before inline CSS. Use --font-display, --font-body and --font-caption tokens. Body 16–20px, line height 1.7–1.75; Korean headings at least 1.12, with semantic line breaks. Keep the six slides and 1080×1350 poster canvas. No network font imports or synthetic display bold/italic. The seeder copies the shared fonts directory, including SIL Open Font License notices, into every project and design system. Keep these files in exports; see fonts/README.md for provenance.

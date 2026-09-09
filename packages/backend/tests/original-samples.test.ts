@@ -30,6 +30,11 @@ test("Given original samples, when seeded and copied, then all formats have dura
     const image = await app.request(`http://original.test${thumbnail}`, { headers });
     expect(image.status).toBe(200);
     expect(image.headers.get("content-type")).toContain("image/png");
+    for (const [file, mime] of [["fonts/fonts.css", "text/css"], ["fonts/PretendardVariable.woff2", "font/woff2"]]) {
+      const resource = await app.request(`http://original.test/api/design-systems/${systemId}/files/${file}`, { headers });
+      expect(resource.status).toBe(200);
+      expect(resource.headers.get("content-type")).toContain(mime);
+    }
     for (const format of originalSampleFormats) {
       const row = rows.find((item) => item.name === `${ORIGINAL_SAMPLE_TAG} ${sample.name} · ${format.label}`)!;
       expect(row.type).toBe(format.type);
@@ -53,4 +58,5 @@ test("Given original samples, when seeded and copied, then all formats have dura
   await seedOriginalSamplesOnce();
   expect(db.prepare("SELECT 1 FROM projects WHERE name=?").get(deleted.name)).toBeNull();
   expect(await readFile(path.join(edited.dir_path, edited.entrypoint), "utf8")).toBe("user edited sample");
-}, 60_000);
+// Four collections and twelve full clones include bundled font and image bytes.
+}, 120_000);

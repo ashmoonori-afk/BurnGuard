@@ -1,3 +1,4 @@
+import { copyBundledFonts } from "../data/bundled-fonts";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { and, desc, eq, isNull } from "drizzle-orm";
@@ -156,6 +157,7 @@ export async function seedCoreData() {
       lastActiveAt: project.updated_at,
     });
     await new ArtifactCoordinator(getSqlite()).initializeProject(project.id, dirPath, async (stage) => {
+      await copyBundledFonts(stage);
       if (html === undefined) return;
       await writeFile(path.join(stage, entrypoint), html, "utf8");
       if (project.type === "slide_deck") {
@@ -356,7 +358,14 @@ export async function createProjectRecord(input: {
   try {
     await new ArtifactCoordinator(getSqlite()).initializeProject(projectId, dirPath, async (stage) => {
       if (original && originalFormat) await copyOriginalSample(original.slug, originalFormat.directory, stage);
-      else await writeFile(path.join(stage, input.entrypoint), initialArtifact, "utf8");
+      else {
+        await copyBundledFonts(stage);
+        await writeFile(path.join(stage, input.entrypoint), initialArtifact, "utf8");
+        if (input.type === "slide_deck") {
+          await mkdir(path.join(stage, "runtime"), { recursive: true });
+          await writeFile(path.join(stage, "runtime", "deck-stage.js"), DECK_STAGE_JS, "utf8");
+        }
+      }
     });
   } catch (error) {
     getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId);
