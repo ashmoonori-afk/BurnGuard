@@ -28,8 +28,12 @@ export interface PythonHealth {
     version: string | null;
   };
   pypdf: {
+    /** `import pypdf` succeeded. */
     found: boolean;
     version: string | null;
+    /** The installed release is the reviewed minimum or newer; older builds are refused by the extractor. */
+    supported: boolean;
+    required_version: string;
   };
   checked_at: number;
 }

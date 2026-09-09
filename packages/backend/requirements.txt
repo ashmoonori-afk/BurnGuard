@@ -5,5 +5,9 @@
 # Install with `python -m pip install --user -r requirements.txt`, or
 # from inside the app via Settings → "Python for uploads" → Install
 # pypdf.
+#
+# The pin mirrors PYPDF_REQUIRED_VERSION in
+# packages/backend/src/services/pypdf-version.ts; older releases carry
+# malformed-PDF resource-exhaustion advisories and are refused at runtime.
 
-pypdf>=4.0,<5.0
+pypdf==6.18.0

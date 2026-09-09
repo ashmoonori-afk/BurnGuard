@@ -19,6 +19,10 @@
  *   - Everything else is a byte-for-byte copy of the original
  *     `design-system-upload-extract.py` source.
  */
+import { PYPDF_REQUIRED_VERSION } from "./pypdf-version";
+
+const REQUIRED_PYPDF_TUPLE = PYPDF_REQUIRED_VERSION.split(".").join(", ");
+
 export const UPLOAD_EXTRACTOR_PY = String.raw`#!/usr/bin/env python3
 import argparse
 import json
@@ -35,6 +39,12 @@ NS = {
 }
 
 MAX_PPTX_ENTRIES = 10000
+# Mirrors PYPDF_REQUIRED_VERSION (pypdf-version.ts): older releases carry
+# malformed-PDF resource-exhaustion advisories and are refused before parsing.
+REQUIRED_PYPDF = (${REQUIRED_PYPDF_TUPLE})
+# Untrusted documents run under a memory and CPU ceiling on POSIX hosts.
+MAX_ADDRESS_SPACE_BYTES = 3 * 1024 * 1024 * 1024
+MAX_CPU_SECONDS = 120
 MAX_XML_BYTES = 8 * 1024 * 1024
 MAX_PPTX_EXPANDED_BYTES = 128 * 1024 * 1024
 
@@ -260,11 +270,19 @@ def extract_pdf_fonts(page, page_index, warnings):
 
 def extract_pdf(file_path: Path):
     try:
+        import pypdf
         from pypdf import PdfReader
     except Exception as exc:
         raise RuntimeError(
             "PDF upload requires the Python package 'pypdf'. Install it with 'py -3 -m pip install pypdf' or 'python -m pip install pypdf'."
         ) from exc
+
+    installed = tuple(int(part) for part in re.findall(r"\d+", getattr(pypdf, "__version__", "0"))[:3])
+    if installed < REQUIRED_PYPDF:
+        raise RuntimeError(
+            "PDF upload requires pypdf %s or newer; found %s. Update it from the app settings or with 'python -m pip install --user pypdf==%s'."
+            % (".".join(str(part) for part in REQUIRED_PYPDF), getattr(pypdf, "__version__", "unknown"), ".".join(str(part) for part in REQUIRED_PYPDF))
+        )
 
     manifest = empty_manifest("pdf", file_path)
     reader = PdfReader(str(file_path))
@@ -325,7 +343,26 @@ def extract_pdf(file_path: Path):
     return manifest
 
 
+def apply_resource_limits():
+    try:
+        import resource
+    except ImportError:
+        return
+    for name, limit in (("RLIMIT_AS", MAX_ADDRESS_SPACE_BYTES), ("RLIMIT_CPU", MAX_CPU_SECONDS)):
+        kind = getattr(resource, name, None)
+        if kind is None:
+            continue
+        try:
+            soft, hard = resource.getrlimit(kind)
+            ceiling = limit if hard == resource.RLIM_INFINITY else min(limit, hard)
+            if soft == resource.RLIM_INFINITY or soft > ceiling:
+                resource.setrlimit(kind, (ceiling, hard))
+        except (ValueError, OSError):
+            continue
+
+
 def main():
+    apply_resource_limits()
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)

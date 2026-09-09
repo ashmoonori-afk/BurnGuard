@@ -60,7 +60,7 @@ export async function runSettingsRedesignFixtures(page, base, scenario) {
     if (pathname === `/api/design-systems/${systemId}/previews`) return ok([]);
     if (pathname === "/api/backends/detect") return ok({ backends: [{ id: "claude-code", found: true, version: "fixture" }, { id: "codex", found: true, version: "fixture" }] });
     if (pathname === "/api/settings/playwright") return ok(installed);
-    if (pathname === "/api/settings/python") return ok({ health: { python: { found: true, executable: ["fixture-python"], version: "Python fixture" }, pypdf: { found: true, version: "fixture" }, checked_at: at }, install: installed });
+    if (pathname === "/api/settings/python") return ok({ health: { python: { found: true, executable: ["fixture-python"], version: "Python fixture" }, pypdf: { found: true, version: "fixture", supported: true, required_version: "fixture" }, checked_at: at }, install: installed });
     return missing();
   };
   const run = async (name, callback) => {
