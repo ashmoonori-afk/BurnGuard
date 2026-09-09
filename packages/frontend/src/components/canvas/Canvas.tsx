@@ -303,7 +303,8 @@ export default function Canvas({
             key={frameKey}
             title="캔버스"
             srcDoc={frameSrcDoc ?? PLACEHOLDER_SRC}
-            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-popups"
+            referrerPolicy="no-referrer"
             allow="fullscreen"
             className="absolute inset-0 h-full w-full border-0 bg-background"
             onLoad={() => {
@@ -315,7 +316,8 @@ export default function Canvas({
             ref={iframeRef}
             title="캔버스 자리 표시자"
             srcDoc={PLACEHOLDER_SRC}
-            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-popups"
+            referrerPolicy="no-referrer"
             allow="fullscreen"
             className="absolute inset-0 h-full w-full border-0 bg-background"
           />

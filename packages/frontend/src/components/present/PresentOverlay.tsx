@@ -93,6 +93,7 @@ export default function PresentOverlay({
         title="프레젠테이션"
         src={withPresentFlag(src)}
         sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
         onLoad={() => iframeRef.current?.focus()}
         className="absolute inset-0 h-full w-full border-0 bg-black"
       />
