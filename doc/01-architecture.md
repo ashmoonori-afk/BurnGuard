@@ -219,7 +219,7 @@ Important backend routes today:
 
 ## 7. Security and Safety Model
 
-Current enforcement:
+Current enforcement (updated 2026-09-09 after the security assessment):
 
 - server binds to `127.0.0.1`
 - each backend launch generates a new 256-bit API capability; the frontend
@@ -230,15 +230,72 @@ Current enforcement:
   `/api/health` is public
 - development explicitly trusts the fixed Vite authority at
   `127.0.0.1:5173`, whose proxy preserves that authority
-- project file serving normalizes and bounds relative paths
-- file writing is delegated to the underlying CLI working inside the project directory
-- turn execution is serialized per session to avoid concurrent writes from overlapping prompts
-- iframe uses a sandboxed render surface
+- request bodies are bounded before any route parses them
+  (`security/request-limits.ts`: 1 MiB JSON, 4 MiB draw sidecars, 64 MiB
+  multipart intake; `Bun.serve` carries the same 64 MiB hard ceiling); a user
+  message is capped at 200,000 characters; `harness.maxConcurrentSessions` is
+  enforced as a process-wide ceiling on concurrent CLI turns (HTTP 429)
+- the application shell is served with `Content-Security-Policy:
+  frame-ancestors 'none'`, `X-Frame-Options: DENY` and
+  `X-Content-Type-Options: nosniff` (the Vite dev server sets the same headers)
+- raw project, draw and design-system files (`/api/projects/:id/fs/*`,
+  `/api/projects/:id/draws/*`, `/api/design-systems/:id/files/*`) are never
+  rendered as a same-origin top-level document: a navigation
+  (`Sec-Fetch-Dest: document`) receives `Content-Disposition: attachment`,
+  every response carries `nosniff`, and HTML/SVG framed by the app carries the
+  artifact Content-Security-Policy (`@bg/shared/security`)
+- the canvas renders artifacts in a sandboxed `srcdoc` iframe without
+  `allow-same-origin`; the same artifact policy is injected as a `<meta>` so
+  artifact scripts can only reach the BurnGuard origin (plus Google Fonts for
+  styles/fonts): no outbound fetch, forms, nested frames or plugins; popups stay
+  sandboxed and referrers are suppressed
+- project file serving normalizes and bounds relative paths through realpath
+  containment; website and research imports enforce HTTPS, reject credentials
+  and private addresses, and pin resolved public IPs
+- untrusted CSS (imports, project files during export) is parsed with
+  `map: false` so a `sourceMappingURL` comment can never read a host file
+- untrusted PDF uploads are parsed only by the reviewed pypdf release pinned in
+  `packages/backend/requirements.txt` (`PYPDF_REQUIRED_VERSION`); older
+  installs are reported as unsupported and refused by the extractor, which also
+  applies POSIX memory/CPU limits to itself
+- file writing is delegated to the underlying CLI working inside the project
+  directory; turn execution is serialized per session; immutable reference
+  attachments are captured before a turn and restored if the CLI mutates them
+- attachment summaries are inserted into the prompt inside
+  `<burnguard-untrusted-document-text>` delimiters together with an explicit
+  instruction to treat imported text as data, not instructions
+- the Windows desktop shell cancels top-level WebView2 navigation to `/api/*`
+  and `/runtime/*`; external links open in the default browser
+- Windows automatic updates (Velopack) read only the public GitHub Releases of
+  `ashmoonori-afk/BurnGuard` over HTTPS, skip drafts and prereleases, verify
+  each package against the SHA-256 feed before staging it, and never apply an
+  update while the owned backend is running
+
+Accepted risks and trust assumptions:
+
+- **Local processes are trusted.** The launch capability, Host/Origin and
+  Fetch Metadata checks defend the browser boundary (CSRF, DNS rebinding,
+  hostile pages). They do not authenticate other processes or OS users on the
+  same host: anything that can open the loopback port and set those headers can
+  call `/api/bootstrap` and receive the capability. Do not run BurnGuard on a
+  shared host or a remote-development machine that untrusted users can reach.
+- **The update trust root is the GitHub account, not a code-signing key.**
+  Packages are not Authenticode-signed, so anyone who can publish a release in
+  the repository can ship code to every installed copy. Keep the release
+  workflow tag-driven, publish drafts only after checking the package, protect
+  the account with 2FA and branch/tag protection, and add package signing
+  before wider distribution.
+- **CLI tool approval is not a pre-execution gate.** Claude Code runs with
+  `acceptEdits` and no permission prompts; Codex runs with the
+  `workspace-write` sandbox. A deny decision aborts the turn after the fact.
+  Imported documents can still attempt prompt injection; the delimiters above
+  reduce, but do not eliminate, that risk.
 
 Not yet implemented:
 - real tool confirmation gate
 - hard runtime enforcement of write-deny rules outside the project directory
-- cancellable subprocess interruption
+  for every backend
+- OS-user-scoped transport for local API access
 
 ## 8. Observability
 
