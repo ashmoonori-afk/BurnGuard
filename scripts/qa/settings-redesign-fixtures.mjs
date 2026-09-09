@@ -59,6 +59,7 @@ export async function runSettingsRedesignFixtures(page, base, scenario) {
     if (pathname === `/api/design-systems/${systemId}/tokens`) return ok(tokens);
     if (pathname === `/api/design-systems/${systemId}/previews`) return ok([]);
     if (pathname === "/api/backends/detect") return ok({ backends: [{ id: "claude-code", found: true, version: "fixture" }, { id: "codex", found: true, version: "fixture" }] });
+    if (pathname === "/api/settings/updates") return ok({ supported: false, unsupported_reason: "not_installed", state: "unsupported", current_version: "fixture", available_version: null, progress: null, checked_at: null, error: null });
     if (pathname === "/api/settings/playwright") return ok(installed);
     if (pathname === "/api/settings/python") return ok({ health: { python: { found: true, executable: ["fixture-python"], version: "Python fixture" }, pypdf: { found: true, version: "fixture", supported: true, required_version: "fixture" }, checked_at: at }, install: installed });
     return missing();

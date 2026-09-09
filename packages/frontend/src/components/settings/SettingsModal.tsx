@@ -21,6 +21,10 @@ import GenerationControls from "./GenerationControls";
 import { defaultGenerationOptions } from "@bg/shared";
 import { detectBackends, getSettings, patchSettings } from "@/api/home";
 import {
+  applyAppUpdate,
+  checkAppUpdate,
+  getAppUpdateStatus,
+  waitForAppRestart,
   getPlaywrightInstallStatus,
   getPythonSettings,
   startPlaywrightInstall,
@@ -28,6 +32,7 @@ import {
 } from "@/api/settings";
 import { useUIStore } from "@/state/uiStore";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { appUpdateView } from "@/lib/app-update-state";
 
 const CHAT_CONTEXT_MODE_LABELS = {
   compact: "간단",
@@ -53,6 +58,16 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
   const settingsQuery = useQuery({
     queryKey: ["settings", "dialog"], queryFn: getSettings, gcTime: 0,
   });
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateApplying, setUpdateApplying] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const updateQuery = useQuery({
+    queryKey: ["settings", "updates"], queryFn: getAppUpdateStatus,
+    enabled: !updateApplying,
+    refetchOnMount: "always", refetchOnWindowFocus: false, refetchOnReconnect: false,
+    refetchInterval: (query) => !updateApplying && (updateChecking || (query.state.data && appUpdateView(query.state.data).busy)) ? 1500 : false,
+  });
+  const updateView = updateQuery.data ? appUpdateView(updateQuery.data) : null;
   const detectionQuery = useQuery({ queryKey: ["backends", "detect"], queryFn: detectBackends });
   const pwQuery = useQuery({
     queryKey: ["settings", "playwright"], queryFn: getPlaywrightInstallStatus,
@@ -92,6 +107,38 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
     // Initialize once; background status/token updates must not replace edits.
     if (!settings && settingsQuery.data && !settingsQuery.isFetching) setSettings(settingsQuery.data);
   }, [settings, settingsQuery.data, settingsQuery.isFetching]);
+
+  async function handleCheckUpdate() {
+    setUpdateChecking(true);
+    setUpdateError(null);
+    try {
+      const next = await checkAppUpdate();
+      queryClient.setQueryData(["settings", "updates"], next);
+    } catch {
+      setUpdateError("업데이트를 확인하지 못했습니다 · 인터넷 연결 또는 배포 상태를 확인해 주세요");
+    } finally {
+      setUpdateChecking(false);
+    }
+  }
+
+  async function handleApplyUpdate() {
+    setUpdateApplying(true);
+    setUpdateError(null);
+    try {
+      await applyAppUpdate();
+    } catch {
+      setUpdateError("업데이트 재시작을 예약하지 못했습니다. BurnGuard를 다시 실행해 주세요.");
+      setUpdateApplying(false);
+      return;
+    }
+    try {
+      await waitForAppRestart();
+      window.location.reload();
+    } catch {
+      setUpdateError("업데이트가 적용되는 동안 연결이 끊겼어요. BurnGuard를 다시 열어 주세요.");
+      setUpdateApplying(false);
+    }
+  }
 
   async function handleInstallPlaywright() {
     setPwStarting(true);
@@ -174,7 +221,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen && !saving && !figmaTokenSaving && !commandcodeSaving) onClose(); }}>
+    <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen && !saving && !figmaTokenSaving && !commandcodeSaving && !updateApplying) onClose(); }}>
       <DialogContent className="flex h-[min(780px,calc(100dvh-2rem))] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0" onCloseAutoFocus={(event) => { if (returnFocusTarget?.isConnected) { event.preventDefault(); returnFocusTarget.focus(); } }}>
         <DialogHeader className="shrink-0 border-b border-border px-5 py-5 pr-12 sm:px-7">
           <DialogTitle className="text-xl">설정</DialogTitle>
@@ -195,7 +242,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
             불러오는 중…
           </div>
         ) : (
-          <fieldset disabled={saving} className="min-w-0 space-y-5">
+          <fieldset disabled={saving || updateApplying} className="min-w-0 space-y-5">
             <legend className="sr-only">일반 설정과 연동</legend>
             <section id="settings-user" aria-labelledby="settings-user-title" className="scroll-mt-6 space-y-5 rounded-2xl border border-border bg-card p-5">
               <div className="space-y-1"><h2 id="settings-user-title" className="text-base font-semibold">사용자</h2><p className="text-sm leading-6 text-muted-foreground">프로젝트에서 사용할 이름을 정해요.</p></div>
@@ -429,6 +476,28 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
+            {updateView?.visible !== false ? (
+              <section className="space-y-1.5" aria-labelledby="settings-updates-title">
+                <h3 id="settings-updates-title" className="text-xs font-medium text-muted-foreground">업데이트</h3>
+                <div className="rounded-md border border-border bg-muted/30 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span aria-hidden="true" className={`inline-block h-2 w-2 shrink-0 rounded-full ${updateApplying || updateChecking || updateView?.busy ? "bg-amber-500 animate-pulse" : updateError || updateQuery.isError || updateQuery.data?.state === "error" ? "bg-red-500" : updateView?.canApply || (updateQuery.data?.state === "idle" && updateQuery.data.checked_at !== null) ? "bg-emerald-500" : "bg-muted-foreground/40"}`} />
+                    <span className="min-w-0 flex-1 text-xs" role="status">
+                      {updateApplying ? "업데이트를 적용하고 다시 시작하는 중…" : updateQuery.isError ? "업데이트를 확인하지 못했습니다 · 인터넷 연결 또는 배포 상태를 확인해 주세요" : updateView?.label ?? "불러오는 중…"}
+                    </span>
+                    <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-1.5 sm:w-auto">
+                      <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={handleCheckUpdate} disabled={!updateView?.canCheck || updateChecking || updateApplying}>
+                        <RefreshCw className="h-3 w-3" aria-hidden="true" />업데이트 확인
+                      </Button>
+                      {updateView?.canApply ? <Button type="button" variant="outline" size="sm" onClick={handleApplyUpdate} disabled={updateChecking || updateApplying}>다시 시작해 적용</Button> : null}
+                    </div>
+                  </div>
+                  {updateError ? <p role="alert" className="mt-2 text-xs leading-relaxed text-destructive">{updateError}</p> : null}
+                  {updateQuery.isError && !updateApplying ? <SettingsLoadError title="업데이트 상태 조회 실패" error={updateQuery.error} retry={() => void updateQuery.refetch()} pending={updateQuery.isFetching} /> : null}
+                </div>
+              </section>
+            ) : null}
+
             </section>
             <section id="settings-connections" aria-labelledby="settings-connections-title" className="scroll-mt-6 space-y-5 rounded-2xl border border-border bg-card p-5">
               <div className="space-y-1"><h2 id="settings-connections-title" className="text-base font-semibold">외부 연결</h2><p className="text-sm leading-6 text-muted-foreground">Figma의 색상과 텍스트 스타일을 가져와요.</p></div>
@@ -489,10 +558,10 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
         </div>
         <DialogFooter className="shrink-0 flex-row items-center justify-end gap-2 border-t border-border bg-card px-5 py-4 sm:px-7">
           <p className="mr-auto hidden text-xs text-muted-foreground sm:block">일반 설정은 저장 후 적용돼요.</p>
-          <Button variant="ghost" onClick={onClose} disabled={saving || figmaTokenSaving}>
+          <Button variant="ghost" onClick={onClose} disabled={saving || figmaTokenSaving || updateApplying}>
             취소
           </Button>
-          <Button variant="cta" onClick={save} disabled={saving || figmaTokenSaving || !settings}>
+          <Button variant="cta" onClick={save} disabled={saving || figmaTokenSaving || updateApplying || !settings}>
             {saving ? "저장하는 중…" : "저장"}
           </Button>
         </DialogFooter>
