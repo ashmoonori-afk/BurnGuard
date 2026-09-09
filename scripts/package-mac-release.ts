@@ -38,7 +38,7 @@ if (signing.length === 0) console.warn("[release] unsigned package: set BG_MAC_S
 const platform = "[osx]";
 await $`dotnet tool restore`.cwd(root);
 // The pack id and feed channel pair with the Windows release so one GitHub release serves both feeds.
-await $`dotnet tool run vpk -- ${platform} pack --packId BurnGuard --packVersion ${APP_VERSION} --packDir ${bundle} --mainExe burnguard-design --packTitle BurnGuard --packAuthors BurnGuard --channel osx --icon ${path.join(root, "assets/icon.icns")} --outputDir ${output} ${signing}`.cwd(root);
+await $`dotnet tool run vpk -- ${platform} pack --packId BurnGuard --packVersion ${APP_VERSION} --packDir ${bundle} --mainExe BurnGuard --packTitle BurnGuard --packAuthors BurnGuard --channel osx --icon ${path.join(root, "assets/icon.icns")} --outputDir ${output} ${signing}`.cwd(root);
 
 const files: string[] = [];
 for await (const name of new Bun.Glob("*").scan({ cwd: output, onlyFiles: true })) {

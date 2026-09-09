@@ -3,11 +3,8 @@
  * macOS build (P3.10): produces a .app bundle under `dist/mac/` and,
  * when run ON macOS, packages it into a .dmg under `dist/`.
  *
- * The Bun compile step is cross-platform: `--target=bun-darwin-arm64`
- * works on Windows too. The .app wrapper is pure file ops so it also
- * works anywhere. Only the final `hdiutil create` step needs to run
- * on macOS — on other platforms the script skips it and logs the
- * manual command to run locally.
+ * The Bun compile step can target darwin from another platform, but the
+ * AppKit/WKWebView shell is compiled on macOS with the local SDK.
  *
  * Call paths:
  *   - `bun run build:mac`         → binary + .app
@@ -35,8 +32,10 @@ const APP_BUNDLE = path.join(MAC_DIR, `${APP_NAME}.app`);
 const APP_CONTENTS = path.join(APP_BUNDLE, "Contents");
 const APP_MACOS = path.join(APP_CONTENTS, "MacOS");
 const APP_RESOURCES = path.join(APP_CONTENTS, "Resources");
-const BIN_NAME = "burnguard-design";
+const BIN_NAME = "BurnGuard";
+const SERVICE_BIN_NAME = "burnguard-design";
 const ENTRY = path.join(ROOT, "packages/backend/src/index.ts");
+const NATIVE_ENTRY = path.join(ROOT, "packages/desktop-mac/main.swift");
 const FRONTEND_DIST = path.join(ROOT, "packages/frontend/dist");
 const ICON_SRC = path.join(ROOT, "assets/icon.icns");
 const DMG_OUT = path.join(
@@ -65,9 +64,14 @@ const INFO_PLIST = `<?xml version="1.0" encoding="UTF-8"?>
   <key>CFBundleIconFile</key>
   <string>icon</string>
   <key>LSMinimumSystemVersion</key>
-  <string>11.0</string>
+  <string>14.0</string>
   <key>LSApplicationCategoryType</key>
   <string>public.app-category.developer-tools</string>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key>
+    <true/>
+  </dict>
   <key>NSHighResolutionCapable</key>
   <true/>
 </dict>
@@ -77,7 +81,10 @@ const INFO_PLIST = `<?xml version="1.0" encoding="UTF-8"?>
 async function main() {
   const wantDmg = process.argv.includes("--dmg");
 
-  if (!existsSync(ENTRY)) {
+  if (process.platform !== "darwin" || process.arch !== "arm64") {
+    throw new Error("Build the native macOS app on Apple Silicon macOS.");
+  }
+  if (!existsSync(ENTRY) || !existsSync(NATIVE_ENTRY)) {
     console.error(`[build-mac] entry not found: ${ENTRY}`);
     process.exit(1);
   }
@@ -90,6 +97,7 @@ async function main() {
   mkdirSync(APP_MACOS, { recursive: true });
   mkdirSync(APP_RESOURCES, { recursive: true });
 
+  const serviceOut = path.join(APP_MACOS, SERVICE_BIN_NAME);
   const binOut = path.join(APP_MACOS, BIN_NAME);
   console.log(`[build-mac] version: ${APP_VERSION}`);
   console.log(`[build-mac] entry:   ${ENTRY}`);
@@ -110,7 +118,7 @@ async function main() {
     --minify \
     --external electron \
     --external chromium-bidi \
-    --outfile ${binOut}`.cwd(ROOT);
+    --outfile ${serviceOut}`.cwd(ROOT);
   console.log(
     `[build-mac] compiled in ${((Date.now() - startCompile) / 1000).toFixed(1)}s`,
   );
@@ -137,7 +145,12 @@ async function main() {
   }
 
   await stageRuntimeAssets(ROOT, APP_MACOS);
-  console.log("[build-mac] frontend, migrations, themes, and browser resources staged");
+  const swiftc = Bun.which("swiftc");
+  if (!swiftc) throw new Error("swiftc is required to build the native macOS window.");
+  const sdk = (await $`xcrun --sdk macosx --show-sdk-path`.cwd(ROOT).text()).trim();
+  await $`${swiftc} -O -swift-version 5 -target arm64-apple-macos14.0 -sdk ${sdk} -framework AppKit -framework WebKit ${NATIVE_ENTRY} -o ${binOut}`.cwd(ROOT);
+  chmodSync(binOut, 0o755);
+  console.log("[build-mac] frontend, migrations, themes, browser resources, and native window staged");
 
   const signIdentity = process.env.BG_MAC_SIGN_IDENTITY;
   if (signIdentity) {
@@ -149,7 +162,7 @@ async function main() {
   }
 
   console.log(`[build-mac] .app ready: ${APP_BUNDLE}`);
-  const artifacts = [binOut];
+  const artifacts = [binOut, serviceOut];
 
   if (!wantDmg) {
     console.log(

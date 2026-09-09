@@ -223,6 +223,25 @@ describe("project thumbnail generation and cache", () => {
     expect(await cachedFiles(project.dirPath)).toEqual([`${projectThumbnailIdentity({ id: project.id, current_revision: 3, current_digest: digestA }) ?? ""}.png`]);
   });
 
+  test("Given cache-only desktop mode When a thumbnail is uncached Then it returns the fallback without probing or rendering", async () => {
+    const previous = process.env.BG_THUMBNAIL_CACHE_ONLY;
+    process.env.BG_THUMBNAIL_CACHE_ONLY = "1";
+    try {
+      const project = await createProject({ digest: digestA });
+      const { renderer, requests } = recordingRenderer();
+
+      await expect(loadProjectThumbnail(project.id, renderer)).resolves.toEqual({
+        kind: "unavailable",
+        code: "thumbnail_unavailable",
+      });
+      expect(requests).toEqual([]);
+      expect(await cachedFiles(project.dirPath)).toEqual([]);
+    } finally {
+      if (previous === undefined) delete process.env.BG_THUMBNAIL_CACHE_ONLY;
+      else process.env.BG_THUMBNAIL_CACHE_ONLY = previous;
+    }
+  });
+
   test("Given concurrent cold-cache requests for one project When both miss Then a single render serves both", async () => {
     const project = await createProject({ digest: digestA });
     const outputPaths: string[] = [];

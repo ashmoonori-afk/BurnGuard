@@ -181,6 +181,23 @@ describe("browser auto-open characterization", () => {
     else process.env.BG_NO_OPEN = previousNoOpen;
   });
 
+  test("Given desktop mode When openBrowser is called Then no external browser starts", () => {
+    const previousDesktop = process.env.BG_DESKTOP;
+    const previousNoOpen = process.env.BG_NO_OPEN;
+    process.env.BG_DESKTOP = "1";
+    delete process.env.BG_NO_OPEN;
+    let launches = 0;
+    try {
+      openBrowser("http://127.0.0.1:14079", () => { launches += 1; });
+      expect(launches).toBe(0);
+    } finally {
+      if (previousDesktop === undefined) delete process.env.BG_DESKTOP;
+      else process.env.BG_DESKTOP = previousDesktop;
+      if (previousNoOpen === undefined) delete process.env.BG_NO_OPEN;
+      else process.env.BG_NO_OPEN = previousNoOpen;
+    }
+  });
+
   test("Given auto-open enabled When openBrowser is called Then the native opener is launched", () => {
     // Given: auto-open enabled and an injected launcher.
     const previousNoOpen = process.env.BG_NO_OPEN;

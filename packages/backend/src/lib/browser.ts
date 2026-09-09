@@ -14,7 +14,7 @@ type BrowserLauncher = (command: readonly string[]) => void;
 
 /** Cross-platform "open URL in default browser". */
 export function openBrowser(url: string, launch?: BrowserLauncher): void {
-  if (process.env.BG_NO_OPEN === "1") return;
+  if (process.env.BG_NO_OPEN === "1" || process.env.BG_DESKTOP === "1") return;
 
   try {
     const command = browserOpenCommand(process.platform, url);
