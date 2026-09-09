@@ -132,6 +132,10 @@ async function loadProjectThumbnailUncapped(
   const cached = await readThumbnailFile(cachePath);
   if (cached !== null) return { kind: "ready", bytes: cached, etag: `"${identity}"` };
 
+  if (process.env.BG_THUMBNAIL_CACHE_ONLY === "1") {
+    return { kind: "unavailable", code: "thumbnail_unavailable" };
+  }
+
   if (Date.now() < chromiumUnavailableUntil) return { kind: "unavailable", code: "thumbnail_unavailable" };
 
   // Never start an in-process launch before the child-process probe says a
