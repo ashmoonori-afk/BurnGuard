@@ -19,7 +19,7 @@ function hex(value: string): string | null {
 
 /** Only opaque hexadecimal CSS colors are exposed. Strings, URLs and alpha colors stay untouched. */
 export function paletteCss(css: string, colors: Map<string, Color>, change?: { color: string; value: string }, inline = false): string {
-  const tree = postcss.parse(inline ? `a{${css}}` : css);
+  const tree = postcss.parse(inline ? `a{${css}}` : css, { map: false });
   tree.walkDecls((decl) => {
     if (!/^(?:--|color$|background|border|outline|(?:box|text)-shadow$|fill$|stroke$|caret-color$|accent-color$|text-decoration-color$)/i.test(decl.prop)) return;
     decl.value = decl.value.replace(/url\((?:\\.|[^)])*\)|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\*[\s\S]*?\*\/|#[\w-]+/gi, (token) => {
@@ -87,7 +87,8 @@ export async function projectPaletteFiles(root: string, relPath: string): Promis
   for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
     const href = link.getAttribute("href");
     if (!href || /^[a-z][a-z\d+.-]*:|^\/\//i.test(href)) continue;
-    const relative = path.posix.normalize(path.posix.join(path.posix.dirname(relPath), decodeURIComponent(href.split(/[?#]/)[0] ?? "")));
+    const decoded = decodeURIComponent(href.split(/[?#]/)[0] ?? "");
+    const relative = path.posix.normalize(decoded.startsWith("/") ? decoded.slice(1) : path.posix.join(path.posix.dirname(relPath), decoded));
     if (!relative.endsWith(".css") || !allowed.has(relative)) continue;
     files.set(relative, await read(relative));
   }
