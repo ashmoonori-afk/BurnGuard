@@ -1,0 +1,2 @@
+:root{--paper:#e7e4dc;--ink:#242624;--accent:#ef5b24;--display:Arial,sans-serif;--caption:Consolas,monospace;--weight:700;--space-1:8px;--space-2:16px;--space-3:24px;--space-4:40px;--space-5:64px;}
+body{background:var(--paper);color:var(--ink);font:16px/1.7 Arial,sans-serif}h1,h2,h3{font-family:var(--display)}:focus-visible{outline:2px solid var(--ink);outline-offset:5px}

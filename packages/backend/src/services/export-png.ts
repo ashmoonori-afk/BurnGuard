@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { createCanvas, loadImage } from "@napi-rs/canvas";
+import { createCanvas, loadImage } from "./export-native-modules";
 import { openRenderSession, type RenderPhase } from "./export-render-session";
 import { analyzePixels, validatePngStatistics, type PngValidation } from "./export-png-validation";
 

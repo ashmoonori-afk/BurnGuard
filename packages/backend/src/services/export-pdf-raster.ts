@@ -1,4 +1,4 @@
-import { createCanvas } from "@napi-rs/canvas";
+import { createCanvas } from "./export-native-modules";
 import { isPdfSingleEdgeClipped, pdfRasterBudgetFits, pdfRasterDimensions, PDF_MAX_PAGE_PIXELS, PDF_RASTER_SCALE } from "./export-pdf-contract";
 
 export type PdfContentBounds = { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };

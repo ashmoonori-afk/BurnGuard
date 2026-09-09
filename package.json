@@ -1,6 +1,6 @@
 {
   "name": "burnguard-design",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "license": "Apache-2.0",
   "private": true,
   "workspaces": ["packages/*"],
@@ -11,6 +11,7 @@
     "build:frontend": "bun run --cwd packages/frontend build",
     "build:backend": "bun run scripts/build-binary.ts",
     "build:windows": "bun run build && bun run scripts/build-windows-native.ts",
+    "build:windows:release": "bun run build && bun run scripts/build-windows-native.ts --skip-zip && bun run scripts/package-windows-release.ts",
     "build:mac": "bun run build:frontend && bun run scripts/build-mac.ts",
     "build:mac:dmg": "bun run build:frontend && bun run scripts/build-mac.ts -- --dmg",
     "build": "bun run build:frontend && bun run build:backend",

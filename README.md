@@ -23,6 +23,8 @@ BurnGuard is an AI design workspace that runs on your computer. Connect **Claude
 | Work from existing material | Choose a template or attach PDF/PPTX documents and assign reference roles. |
 | Interactive 3D | Add and adjust Three.js objects, or ask AI to create a scene; orbit and zoom in the preview. |
 
+PDF and the HTML deck preserve the full slide design. The current PPTX exporter transfers editable text and slide backgrounds; it does not include images or reproduce arbitrary CSS layouts.
+
 ### A home for starting and resuming work
 
 Start a new project by choosing its type. Enter a name, audience, and goal, then expand any additional options you need. Search and reopen recent work, your projects, examples, and design systems from their own lists.
@@ -52,7 +54,9 @@ Graphic projects require an authenticated Codex connection. Vanilla mode exclude
 
 ### Windows desktop app
 
-Extract the complete Windows ZIP and double-click **`BurnGuard.exe`**. It opens a native Windows window using the shared **Microsoft Edge WebView2 Runtime**, starts the local engine, and stops owned work when you close the window. Existing projects in `%USERPROFILE%\.burnguard` remain available. Stop any older browser-mode BurnGuard server first.
+Install **`BurnGuard-win-Setup.exe`**, or extract **`BurnGuard-win-Portable.zip`** and open `BurnGuard.exe`. The native window uses the shared **Microsoft Edge WebView2 Runtime**, starts the local engine, and stops owned work when you close it. Existing projects in `%USERPROFILE%\.burnguard` remain available. Stop any older browser-mode BurnGuard server first.
+
+Version **0.5.0** adds automatic updates through GitHub Releases: the app checks at startup and every six hours, downloads a new stable release, and applies it on the next launch. You can also choose **다시 시작해 적용** in the bottom bar; this stops current work and restarts the app. Offline checks do not prevent using the workspace. Releases must be published with their update assets before the public feed can supply updates.
 
 The portable app targets **Windows 10/11 x64 with .NET Framework 4.8**. If WebView2 is missing, install Microsoft's [Evergreen Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703). The app does not include a separate Chromium browser. AI CLIs, rendering, and document-import prerequisites still apply.
 
@@ -60,10 +64,22 @@ To build it from source, install the **.NET 8 SDK**, then run:
 
 ```powershell
 bun install --frozen-lockfile
-bun run build:windows
+bun run build:windows:release
 ```
 
-Open `dist/windows-native/BurnGuard.exe` or double-click `Start-BurnGuard-Desktop.bat`. Distribute `dist/BurnGuard-0.4.0-windows-x64.zip` and keep the whole extracted folder, including `service/`. The native launcher is about **90 KB**; the complete ZIP is about **103 MiB** (**272 MiB** extracted), including the existing Bun/Node engines and design assets. This portable build is unsigned and has no automatic updater. [Native app details and verification](doc/12-windows-native-2026-09-09.md).
+Publish the installer, portable ZIP, `.nupkg`, and `releases.win.json` from **`dist/releases/`** together. The raw `dist/windows-native/` development folder has no update installation metadata. Existing 0.4.0 users need to switch to the new installer or portable package once. Packages are currently unsigned. [Build, publish, and update guide](doc/13-windows-updates-and-original-samples.md).
+
+### Four original sample collections
+
+Start in **Examples (예시)** or select an original design system in **New project → Template**. Each collection includes a complete web page, six-slide presentation, 1080 × 1350 graphic, and a published design system with tokens, composition rules, and a visual preview. Web pages contain seven or more sections. Your copies appear in My projects; edited or deleted examples stay that way across restarts.
+
+| SONNEL · tactile sound objects | FOLIOVER · material journal |
+|---|---|
+| ![SONNEL original sound object](samples/original/sonnel/assets/hero.png) | ![FOLIOVER original material composition](samples/original/foliover/assets/hero.png) |
+| ODDWARD · experimental studio | VELUNE · sculptural lighting |
+| ![ODDWARD original chrome sculpture](samples/original/oddward/assets/hero.png) | ![VELUNE original glass light](samples/original/velune/assets/hero.png) |
+
+These are fictional concepts with newly written copy and four generated images. They are not commercial products or affiliations with the reference sites. [Sample sources, image prompts, and design references](samples/original/README.md).
 
 ### Run from source in a browser
 

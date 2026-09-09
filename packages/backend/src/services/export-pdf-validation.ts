@@ -1,5 +1,5 @@
 import type { BrowserContext } from "playwright-core";
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { getDocument } from "./export-native-modules";
 import { PDF_POINT_TOLERANCE } from "./export-pdf-contract";
 import { assertPdfRasterBudget, PdfRasterError, rasterizePdfPage, type PdfContentBounds, type PdfPixelStatistics, type PdfRasterObservation, type PdfRasterPage } from "./export-pdf-raster";
 

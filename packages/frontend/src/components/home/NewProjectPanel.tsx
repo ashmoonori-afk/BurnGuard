@@ -26,6 +26,7 @@ import {
   PROJECT_LABEL_CLASS,
   buildCreateProjectRequest,
   keepSelectedDesignSystemId,
+  isOriginalSampleSystem,
   selectableDesignSystems,
   type BriefForm,
 } from "@/lib/project-creation";
@@ -62,9 +63,8 @@ export default function NewProjectPanel({
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
   const [backendId, setBackendId] = useState<BackendId>(defaultBackend);
-  const effectiveBackend = type === "graphic" ? "codex" : backendId;
+  const [templateFormat, setTemplateFormat] = useState<"prototype" | "slide_deck" | "graphic">("prototype");
   const [generationByBackend, setGenerationByBackend] = useState(generationDefaults ?? {});
-  const generation = generationByBackend[effectiveBackend] ?? defaultGenerationOptions(effectiveBackend);
   const [form, setForm] = useState<BriefForm>(INITIAL_BRIEF_FORM);
   const [pickedSystemId, setPickedSystemId] = useState<string | null>(null);
   const [items, setItems] = useState<readonly IntakeItem[]>([]);
@@ -79,7 +79,11 @@ export default function NewProjectPanel({
     selectable,
   );
   const isTemplate = type === "from_template";
-  const isGraphic = type === "graphic";
+  const isOriginal = isOriginalSampleSystem(designSystemId);
+  const effectiveType = isTemplate && isOriginal ? templateFormat : type;
+  const isGraphic = effectiveType === "graphic";
+  const effectiveBackend = isGraphic ? "codex" : backendId;
+  const generation = generationByBackend[effectiveBackend] ?? defaultGenerationOptions(effectiveBackend);
 
   const createMutation = useMutation({
     mutationFn: (request: CreateProjectRequest) => createProject(request),
@@ -105,7 +109,7 @@ export default function NewProjectPanel({
   });
 
   const built = buildCreateProjectRequest(
-    { ...form, contentSource: items.some((item) => item.status === "ready") ? "attached" : form.contentSource, type, backendId: effectiveBackend, designSystemId },
+    { ...form, contentSource: items.some((item) => item.status === "ready") ? "attached" : form.contentSource, type: effectiveType, backendId: effectiveBackend, designSystemId, ...(isOriginal && isGraphic ? { graphicWidth: 1080, graphicHeight: 1350 } : {}) },
     designSystems,
   );
   const disabled = createMutation.isPending;
@@ -200,16 +204,32 @@ export default function NewProjectPanel({
               ? "디자인 시스템을 불러오지 못했어요. 로컬 서버가 켜져 있는지 확인해 주세요."
               : selectable.length === 0
                 ? isTemplate ? "게시된 템플릿이 아직 없어요. 디자인 시스템에서 초안을 만들고 게시하면 사용할 수 있어요." : "디자인 시스템 없이 시작할 수 있어요. 나만의 색상과 글꼴은 디자인 시스템에서 관리해요."
+                : isOriginal
+                  ? "선택한 브랜드의 완성된 웹·슬라이드·그래픽 샘플로 시작해요. 만든 뒤 내용과 디자인을 수정할 수 있어요."
                 : isTemplate
                   ? "게시된 디자인 시스템을 템플릿으로 사용할 수 있어요."
                   : "게시된 디자인 시스템만 목록에 나와요. 없이도 시작할 수 있어요."}
         </p>
 
+        {isTemplate && isOriginal && (
+          <div className="space-y-1.5">
+            <label htmlFor="template-format" className={PROJECT_LABEL_CLASS}>만들 형식</label>
+            <select id="template-format" className={PROJECT_CONTROL_CLASS} value={templateFormat} disabled={disabled} onChange={(event) => {
+              const value = event.target.value;
+              if (value === "prototype" || value === "slide_deck" || value === "graphic") setTemplateFormat(value);
+            }}>
+              <option value="prototype">웹 페이지</option>
+              <option value="slide_deck">슬라이드</option>
+              <option value="graphic">그래픽 · 1080 × 1350</option>
+            </select>
+          </div>
+        )}
+
         {isGraphic && (
           <GraphicCanvasFields
-            width={form.graphicWidth}
-            height={form.graphicHeight}
-            disabled={disabled}
+            width={isOriginal ? 1080 : form.graphicWidth}
+            height={isOriginal ? 1350 : form.graphicHeight}
+            disabled={disabled || isOriginal}
             onChange={(size) => setForm((current) => ({
               ...current,
               graphicWidth: size.width,
@@ -218,7 +238,7 @@ export default function NewProjectPanel({
           />
         )}
 
-        {type === "prototype" && <div className="space-y-1.5"><label htmlFor="section-count" className={PROJECT_LABEL_CLASS}>세로 섹션 수</label><Input id="section-count" type="number" min={1} max={30} step={1} value={form.sectionCount ?? 6} disabled={disabled} onChange={(event) => update("sectionCount", event.target.valueAsNumber)} /><p className="text-xs text-muted-foreground">탐색 메뉴와 푸터를 제외한 본문 섹션 수예요.</p></div>}
+        {effectiveType === "prototype" && <div className="space-y-1.5"><label htmlFor="section-count" className={PROJECT_LABEL_CLASS}>세로 섹션 수</label><Input id="section-count" type="number" min={1} max={30} step={1} value={form.sectionCount ?? 6} disabled={disabled} onChange={(event) => update("sectionCount", event.target.valueAsNumber)} /><p className="text-xs text-muted-foreground">탐색 메뉴와 푸터를 제외한 본문 섹션 수예요.</p></div>}
         <div className="space-y-2"><label htmlFor="project-materials" className={PROJECT_LABEL_CLASS}>참고 자료 첨부</label><input id="project-materials" type="file" multiple accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")} disabled={disabled} onChange={(event) => { const picked = Array.from(event.target.files ?? []); setItems((current) => planAttachmentIntake(current, picked)); event.target.value = ""; }} className="block w-full text-sm" /><p className="text-xs text-muted-foreground">PDF·PPTX, 최대 8개 · 파일당 10 MB · 합계 25 MB. 자료와 역할은 만든 프로젝트의 작성창에 보관하며 직접 전송할 때 AI에 전달해요.</p><ComposerAttachments items={items} sending={disabled} onRemove={(id) => setItems((current) => current.filter((item) => item.id !== id))} onRoleChange={(id, role) => setItems((current) => setAttachmentRole(current, id, role))} /></div>
         <ProjectBriefFields
           form={form}
@@ -227,7 +247,7 @@ export default function NewProjectPanel({
           showOutputSize={!isGraphic}
         />
 
-        {type === "slide_deck" && (
+        {effectiveType === "slide_deck" && (
           <ToggleRow
             title="발표자 노트 사용"
             hint="슬라이드 위 글자를 줄여요"
@@ -237,7 +257,7 @@ export default function NewProjectPanel({
           />
         )}
 
-        {isTemplate && (
+        {isTemplate && !isOriginal && (
           <ToggleRow
             title="템플릿을 그대로 복사"
             hint="구조는 유지하고 내용만 바꿔요"

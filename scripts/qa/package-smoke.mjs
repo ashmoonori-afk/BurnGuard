@@ -46,6 +46,21 @@ try {
   assert.ok(systems.data.length > 0);
   assert.ok((await readFile(path.join(profile, "burnguard.db"))).length > 0);
   checks.push("fresh-migrations-and-seeded-systems");
+  const originals = projects.data.filter((project) => project.name.startsWith("[burnguard:original-sample]"));
+  assert.equal(originals.length, 12, "the packaged runtime must seed all original sample formats");
+  assert.equal(systems.data.filter((system) => system.id.startsWith("sample-system-original-")).length, 4);
+  for (const project of originals) {
+    const { data: detail } = await (await request(`/api/projects/${project.id}`, { headers })).json();
+    const { data: session } = await (await request(`/api/projects/${project.id}/session`, { headers })).json();
+    assert.equal(session.backend_id, project.type === "graphic" ? "codex" : "claude-code");
+    const html = await request(`/api/projects/${project.id}/fs/${detail.entrypoint}`, { headers });
+    assert.equal(html.status, 200);
+    assert.match(await html.text(), /assets\/hero\.png/);
+    const hero = await request(`/api/projects/${project.id}/fs/assets/hero.png`, { headers });
+    assert.equal(hero.status, 200);
+    assert.match(hero.headers.get("content-type"), /image\/png/);
+  }
+  checks.push("twelve-original-samples-four-systems-and-local-images");
   const ui = await request("/");
   assert.equal(ui.status, 200);
   assert.match(await ui.text(), /<div id="root"/);

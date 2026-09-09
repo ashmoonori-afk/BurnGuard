@@ -20,6 +20,7 @@ import {
 import type { CanvasMode } from "@/components/modes/types";
 import type { SelectedNode } from "@/types/project";
 import { authorizedFetch } from "@/api/client";
+import { embedCanvasImages } from "@/lib/canvas-images";
 import { canvasPoint } from "./canvas-coordinates";
 import { requestFrameScrollAtPoint } from "./frame-bridge";
 
@@ -195,6 +196,7 @@ export default function Canvas({
         }
         return response.text();
       })
+      .then((html) => embedCanvasImages(html, new URL(src, window.location.href).href, controller.signal))
       .then((html) => {
         if (controller.signal.aborted) return;
         setFrameDocument({

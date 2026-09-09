@@ -3,6 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
+import { inspectRenderedPage } from "../src/services/design-audit-dom";
+import { launchChromium } from "../src/services/export-render-session";
 import { auditRenderedTree } from "../src/services/design-audit";
 
 const allPassFixture = `<!doctype html><html><head><style>:root{--ink:#111;--paper:#fff}html,body{margin:0;background:var(--paper);color:var(--ink)}.a,.b{position:absolute;width:100px;height:30px}.a{left:10px;top:10px}.b{left:150px;top:10px}</style></head><body><div class="a" data-bg-node-id="a">Alpha</div><div class="b" data-bg-node-id="b">Beta</div></body></html>`;
@@ -65,4 +67,16 @@ describe("rendered design auditor", () => {
       expect(result.overall_status).toBe("ready"); expect(result.checks.every((check) => check.status === "pass")).toBeTrue();
     } finally { await rm(root, { recursive: true, force: true }); }
   }, 60_000);
+  test("Given visible tight text and clipped or off-canvas text When inspected Then only lost text fails", async () => {
+  const browser = await launchChromium(AbortSignal.timeout(60_000));
+  try {
+    const page = await browser.newPage({ viewport: { width: 1080, height: 1350 } });
+    await page.setContent('<!doctype html><style>body{margin:40px}h1{font:100px/.82 Arial;margin:40px 0}#clip{overflow:hidden;height:20px}#parent{overflow:hidden;height:20px}#below{margin-top:1500px}</style><h1 data-bg-node-id="visible">VISIBLE</h1><h1 id="clip" data-bg-node-id="clip">CLIPPED</h1><div id="parent"><div data-bg-node-id="ancestor" style="height:60px">First<br>Second<br>Third</div></div><p id="below" data-bg-node-id="below">Below the fold</p>');
+    const overflow = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "text_overflow").map((finding) => finding.nodeId);
+    expect(overflow).not.toContain("visible"); expect(overflow).not.toContain("below");
+    expect(overflow).toContain("clip"); expect(overflow).toContain("ancestor");
+    expect((await inspectRenderedPage(page, true)).findings.some((finding) => finding.code === "text_overflow" && finding.nodeId === "below")).toBeTrue();
+  } finally { await browser.close(); }
+ }, 60_000);
+
 });
