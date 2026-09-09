@@ -105,7 +105,7 @@ export default function SelectorOverlay({
     >
       {active && hoverRect && (
         <div
-          className="absolute pointer-events-none border-2 border-sky-400/80 bg-sky-400/10"
+          className="absolute pointer-events-none border-2 border-accent/80 bg-accent/10"
           style={{
             left: hoverRect.left,
             top: hoverRect.top,
@@ -116,7 +116,7 @@ export default function SelectorOverlay({
       )}
       {active && selectedRect && (
         <div
-          className="absolute pointer-events-none border-2 border-sky-500 bg-sky-500/10"
+          className="absolute pointer-events-none border-2 border-accent bg-accent/10"
           style={{
             left: selectedRect.left,
             top: selectedRect.top,

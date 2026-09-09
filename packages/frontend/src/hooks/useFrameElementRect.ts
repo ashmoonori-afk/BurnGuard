@@ -29,6 +29,7 @@ export function useFrameElementRect<TIdentifier extends string>(
     iframe: HTMLIFrameElement | null,
     id: TIdentifier,
   ) => Promise<FrameRect | null>,
+  requestKey?: unknown,
 ): FrameRect | null {
   const [rect, setRect] = useState<FrameRect | null>(null);
 
@@ -37,6 +38,7 @@ export function useFrameElementRect<TIdentifier extends string>(
       setRect(null);
       return;
     }
+    setRect(null);
     let alive = true;
     const tick = async () => {
       if (!alive) return;
@@ -50,7 +52,7 @@ export function useFrameElementRect<TIdentifier extends string>(
       alive = false;
       window.clearInterval(id);
     };
-  }, [identifier, iframeRef, resolver]);
+  }, [identifier, iframeRef, resolver, requestKey]);
 
   return rect;
 }

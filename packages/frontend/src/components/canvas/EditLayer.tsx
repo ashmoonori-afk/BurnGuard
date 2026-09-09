@@ -23,11 +23,13 @@ export default function EditLayer({
   active,
   iframeRef,
   selectedBgId,
+  requestKey,
   onSelect,
 }: {
   active: boolean;
   iframeRef: RefObject<HTMLIFrameElement | null>;
   selectedBgId: string | null;
+  requestKey: string | null;
   onSelect: (target: EditTarget | null) => void;
 }) {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -40,6 +42,7 @@ export default function EditLayer({
     iframeRef,
     selectedBgId,
     requestFrameRectForBgId,
+    requestKey,
   );
 
   const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
@@ -90,7 +93,7 @@ export default function EditLayer({
     >
       {hoverRect && (
         <div
-          className="absolute pointer-events-none border-2 border-blue-500/80 bg-blue-500/10"
+          className="absolute pointer-events-none border-2 border-accent/80 bg-accent/10"
           style={{
             left: hoverRect.left,
             top: hoverRect.top,
@@ -101,7 +104,7 @@ export default function EditLayer({
       )}
       {selectedRect && (
         <div
-          className="absolute pointer-events-none border-2 border-orange-500 bg-orange-500/10"
+          className="absolute pointer-events-none border-2 border-accent bg-accent/10"
           style={{
             left: selectedRect.left,
             top: selectedRect.top,

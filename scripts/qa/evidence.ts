@@ -1,35 +1,28 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import { QaInputError, QaPreflightError, QaTimeoutError } from "./errors";
+import {
+  parseUlwStatus,
+  ULW_SESSION_ID,
+  type UlwStatus,
+} from "./ulw-status";
 
-export const ULW_SESSION_ID = "burnguard-mass-ulw-research-20260825";
+export { ULW_SESSION_ID };
 
 export type IsolatedHome = {
   readonly path: string;
   readonly environment: Readonly<Record<string, string>>;
 };
 
-type UlwStatus = { readonly currentAttemptDir: string };
-
 function parseStatus(raw: string): UlwStatus {
-  let value: unknown;
   try {
-    value = JSON.parse(raw);
+    return parseUlwStatus(raw);
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new QaInputError("truncated_status", "ULW status was not valid JSON");
     }
-    throw error;
-  }
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    !("currentAttemptDir" in value) ||
-    typeof value.currentAttemptDir !== "string"
-  ) {
     throw new QaInputError("invalid_attempt", "ULW status has no current attempt directory");
   }
-  return { currentAttemptDir: value.currentAttemptDir };
 }
 
 async function runToolkit(args: readonly string[]): Promise<string> {

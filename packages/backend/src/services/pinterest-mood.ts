@@ -109,4 +109,3 @@ export async function extractPinterestMood(input: CreatePinterestMoodRequest, si
     throw error;
   } finally { budget.dispose(); }
 }
-

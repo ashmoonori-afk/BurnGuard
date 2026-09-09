@@ -1022,7 +1022,7 @@ export default function ProjectView() {
               }
               throw error;
             }
-          
+
   };
   const requestCommentEdit = async (comment: Comment, body: string) => {
     if (composerDisabled) throw new Error("session_not_ready");

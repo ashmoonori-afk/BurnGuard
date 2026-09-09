@@ -338,6 +338,7 @@ export default function Canvas({
           active={mode === "edit"}
           iframeRef={iframeRef}
           selectedBgId={mode === "edit" ? editSelectedBgId : null}
+          requestKey={loadedFrameKey}
           onSelect={onSelectEditTarget}
         />
         <TweaksLayer
