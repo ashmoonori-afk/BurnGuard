@@ -123,6 +123,7 @@ namespace BurnGuard.Desktop
             ClientSize = new Size(1280, 850);
             MinimumSize = new Size(900, 640);
             StartPosition = FormStartPosition.CenterScreen;
+            if (report != null) { ShowInTaskbar = false; Opacity = 0; }
             AutoScaleMode = AutoScaleMode.Dpi;
             var icon = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BurnGuard.ico");
             if (File.Exists(icon)) Icon = new Icon(icon);

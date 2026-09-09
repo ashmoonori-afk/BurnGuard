@@ -102,7 +102,7 @@ export default function ChatPane({
 
   return (
     <aside aria-label="AI 대화와 코멘트" className="flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden bg-background min-[901px]:w-[340px] min-[901px]:border-r min-[901px]:border-border">
-      <div className="flex shrink-0 items-stretch gap-4 border-b border-border px-4 pt-2">
+      <div className="flex shrink-0 items-center gap-3 border-b border-border px-3">
         <ChatTab
           id="chat"
           active={tab}
@@ -119,16 +119,10 @@ export default function ChatPane({
         >
           코멘트 {openCommentCount > 0 && <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{openCommentCount}</span>}
         </ChatTab>
+        <div className="ml-auto shrink-0"><BackendToggle current={session.backend_id} disabled={switchBackend.isPending || sessionRunning} onSwitch={(next) => switchBackend.mutate(next)} /></div>
+
       </div>
       <div hidden={tab !== "chat"} className={tab === "chat" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
-          <span className="text-xs font-medium text-muted-foreground">AI 모델</span>
-          <BackendToggle
-            current={session.backend_id}
-            disabled={switchBackend.isPending || sessionRunning}
-            onSwitch={(next) => switchBackend.mutate(next)}
-          />
-        </div>
           <MessageStream
             events={events}
             session={session}
@@ -200,7 +194,7 @@ function BackendToggle({
                 : `다음 턴부터 ${backendLabel(opt)} 사용`
           }
           className={cn(
-            "min-h-8 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11 max-[900px]:min-w-11",
+            "min-h-8 rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11 max-[900px]:min-w-11",
             opt === current
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",
@@ -237,7 +231,7 @@ function ChatTab({
       onClick={() => setActive(id)}
       aria-pressed={active === id}
       className={cn(
-        "flex min-h-11 items-center gap-2 border-b-2 -mb-px px-1 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "flex min-h-11 items-center gap-1.5 border-b-2 -mb-px px-0.5 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active === id
           ? "border-primary text-primary"
           : "border-transparent text-muted-foreground hover:text-foreground",

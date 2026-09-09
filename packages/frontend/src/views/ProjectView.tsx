@@ -149,6 +149,7 @@ export default function ProjectView() {
   }, []);
   const [activeTabId, setActiveTabId] = useState("design-system");
   const [mobilePane, setMobilePane] = useState<"workspace" | "chat">("workspace");
+  const [chatCollapsed, setChatCollapsed] = useState(false);
   const [openFileTabs, setOpenFileTabs] = useState<ArtifactTab[]>([]);
   const [canvasNavigation, setCanvasNavigation] = useState<{ projectId: string; relPath: string; url: string } | null>(null);
   const [mode, setMode] = useState<CanvasMode | null>(null);
@@ -181,6 +182,7 @@ export default function ProjectView() {
   const [autoFixPending, setAutoFixPending] = useState(false);
   const autoFixRef = useRef(false);
   const [chatFocusKey, setChatFocusKey] = useState(0);
+  useEffect(() => { if (chatFocusKey > 0) setChatCollapsed(false); }, [chatFocusKey]);
   const [directionActionError, setDirectionActionError] = useState<Error | null>(null);
   const activeTabIdRef = useRef(activeTabId);
   const openFileTabsRef = useRef<ArtifactTab[]>(openFileTabs);
@@ -1100,6 +1102,8 @@ export default function ProjectView() {
       {refreshError && <div role="alert" aria-label="작업 정보 새로고침 오류" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm"><span>최신 작업 정보를 불러오지 못했어요. 작성 중인 내용은 유지돼요.</span><button type="button" className="min-h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium" onClick={() => { for (const query of loadQueries) if (query.isError) void query.refetch(); }}>작업 정보 다시 불러오기</button></div>}
       {stream.error && <div role="alert" className="flex items-center justify-between bg-warning/15 px-4 py-2 text-sm"><span>실시간 연결이 끊겼어요. 다시 연결하는 중이에요.</span><button type="button" className="rounded border px-3 py-2" onClick={stream.retry}>다시 연결</button></div>}
       <ProjectTopBar
+        chatCollapsed={chatCollapsed}
+        onToggleChat={() => setChatCollapsed((value) => !value)}
         project={project}
         canPresent={
           project.type === "slide_deck" &&
@@ -1130,7 +1134,7 @@ export default function ProjectView() {
         <button type="button" aria-pressed={mobilePane === "chat"} aria-controls="project-chat-pane" onClick={() => setMobilePane("chat")} className={cn("flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-medium", mobilePane === "chat" ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted")}><MessageSquare className="h-4 w-4" aria-hidden="true" />AI 대화{session.status === "running" && <span className="h-2 w-2 rounded-full bg-accent" aria-label="AI 작업 중" />}</button>
       </div>
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div id="project-chat-pane" className={cn("min-h-0 shrink-0 max-[900px]:flex-1", mobilePane !== "chat" && "max-[900px]:hidden")}>
+        <div id="project-chat-pane" className={cn("min-h-0 shrink-0 max-[900px]:flex-1", mobilePane !== "chat" && "max-[900px]:hidden", chatCollapsed && "min-[901px]:hidden")}>
         <ChatPane
           chatFocusKey={chatFocusKey}
           events={events}
@@ -1223,7 +1227,7 @@ export default function ProjectView() {
         )}
 
         {activeTab?.kind === "file" && (
-          <div className="flex min-h-0 min-w-0 flex-1 max-[1200px]:flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 max-[1000px]:flex-col">
             <Canvas
               colorPalette={activeRelPath && /\.html?$/i.test(activeRelPath) ? <ColorPalette
                 key={activeRelPath}

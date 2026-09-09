@@ -295,16 +295,8 @@ export default function Canvas({
         onUndo={onUndo}
         colorPalette={colorPalette}
       />
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-xs" aria-label="미리보기 배율과 이동">
-        <button type="button" aria-label="미리보기 축소" disabled={zoom <= 0.25} onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}>−</button>
-        <button type="button" title="배율과 위치 초기화" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>{Math.round(zoom * 100)}%</button>
-        <button type="button" aria-label="미리보기 확대" disabled={zoom >= 3} onClick={() => setZoom((v) => Math.min(3, v + 0.25))}>+</button>
-        <button type="button" aria-pressed={moving} className="rounded border border-border px-2 py-1" onClick={() => setMoving((v) => !v)}>화면 이동</button>
-        {moving && <span className="text-muted-foreground">드래그해서 이동해요</span>}
-        {sceneTools && <button type="button" aria-pressed={showSceneTools} className="rounded border border-border px-2 py-1" onClick={() => setShowSceneTools((value) => !value)}>3D 장면</button>}
-      </div>
-      <div ref={containerRef} className="relative flex-1 overflow-hidden">
-        <div ref={stageRef} className="absolute inset-0" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "center" }}
+      <div ref={containerRef} className="relative flex-1 overflow-hidden bg-muted/70">
+        <div ref={stageRef} className="absolute inset-3 rounded-md shadow-md ring-1 ring-border/60 max-[600px]:inset-2" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "center" }}
           onWheel={(event) => {
             if (!mode || moving || !stageRef.current) return;
             const [x, y] = canvasPoint(stageRef.current, event.clientX, event.clientY);
@@ -320,7 +312,7 @@ export default function Canvas({
             sandbox="allow-scripts allow-popups"
             referrerPolicy="no-referrer"
             allow="fullscreen"
-            className="absolute inset-0 h-full w-full border-0 bg-background"
+            className="absolute inset-0 h-full w-full rounded-md border-0 bg-background"
             onLoad={() => {
               if (frameSrcDoc !== null) setLoadedFrameKey(frameKey ?? src);
             }}
@@ -333,7 +325,7 @@ export default function Canvas({
             sandbox="allow-scripts allow-popups"
             referrerPolicy="no-referrer"
             allow="fullscreen"
-            className="absolute inset-0 h-full w-full border-0 bg-background"
+            className="absolute inset-0 h-full w-full rounded-md border-0 bg-background"
           />
         )}
         <CommentLayer
@@ -420,6 +412,16 @@ export default function Canvas({
           onPointerCancel={() => { dragRef.current = null; }}
           onLostPointerCapture={() => { dragRef.current = null; }}
         />}
+      </div>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-background px-3 py-1 text-xs" aria-label="미리보기 배율과 이동">
+        <span className="min-w-0 truncate text-[11px] text-muted-foreground">{moving ? "화면을 드래그해서 이동해요" : activeRelPath ?? "캔버스"}</span>
+        <div className="flex shrink-0 items-center gap-1">
+          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label="미리보기 축소" disabled={zoom <= 0.25} onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}>−</button>
+          <button type="button" className="h-8 min-w-12 rounded px-1 tabular-nums hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring" title="배율과 위치 초기화" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>{Math.round(zoom * 100)}%</button>
+          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label="미리보기 확대" disabled={zoom >= 3} onClick={() => setZoom((v) => Math.min(3, v + 0.25))}>+</button>
+          <button type="button" aria-pressed={moving} className={`ml-1 h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${moving ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setMoving((v) => !v)}>화면 이동</button>
+          {sceneTools && <button type="button" aria-pressed={showSceneTools} className={`h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${showSceneTools ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setShowSceneTools((value) => !value)}>3D 장면</button>}
+        </div>
       </div>
       {showSceneTools && sceneTools}
     </div>

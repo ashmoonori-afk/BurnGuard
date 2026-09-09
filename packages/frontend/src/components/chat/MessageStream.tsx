@@ -70,17 +70,13 @@ export default function MessageStream({
         className="chat-scroll absolute inset-0 space-y-4 overflow-y-auto px-4 py-5"
       >
         {groups.length === 0 && (
-          <div className="py-7">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <div className="py-4">
+            <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <MessageSquare className="h-5 w-5" aria-hidden="true" />
             </div>
-            <h2 className="text-base font-semibold tracking-tight">무엇을 만들어 볼까요?</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">목적과 원하는 내용을 알려 주세요. 완성된 결과를 보면서 계속 다듬을 수 있어요.</p>
-            <ol className="mt-5 space-y-3 text-xs leading-relaxed text-muted-foreground">
-              <li className="flex gap-2.5"><span className="font-medium text-primary">01</span> 아래에 작업을 요청해요.</li>
-              <li className="flex gap-2.5"><span className="font-medium text-primary">02</span> 미리보기에서 결과를 확인해요.</li>
-              <li className="flex gap-2.5"><span className="font-medium text-primary">03</span> 수정하거나 코멘트를 남겨요.</li>
-            </ol>
+            <h2 className="text-sm font-semibold tracking-tight">무엇을 만들어 볼까요?</h2>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">목적과 원하는 내용을 알려 주세요. 완성된 결과를 보면서 계속 다듬을 수 있어요.</p>
+
           </div>
         )}
         {groups.map((g, i) => {

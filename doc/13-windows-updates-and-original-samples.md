@@ -15,6 +15,8 @@ Each local packaging run replaces the generated `dist/releases/` directory. Keep
 
 For each new version:
 
+Before publishing any release, run the mandatory Daybreak (`gpt-daybreak-blue-latest`, LOW by default) security review against the final changes and package. Retain its scope, commit/tree and evidence in `.omo/evidence/release-<version>/`, fix release blockers and obtain Daybreak verification of the fixes. Keep the release as a draft while this gate is incomplete. CI and package smoke checks remain separate requirements.
+
 1. Increase the version together in root/backend/frontend/shared `package.json`, `packages/shared/src/app.ts`, and `packages/desktop-windows/BurnGuard.Desktop.csproj`.
 2. Commit and merge the verified change. A tag must match the version, for example `v0.5.0`.
 3. Push that tag to run **Windows release package**. The workflow builds packages and creates a **draft** GitHub Release. A manual workflow run only produces a downloadable Actions artifact.

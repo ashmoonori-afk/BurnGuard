@@ -18,6 +18,15 @@ test("Given a validated static export, when prepared for Vercel, then only brows
   expect(isPublicAsset("assets/tokens.css")).toBe(true);
 });
 
+test("Given sensitive basenames at any depth, when selecting public assets, then credentials are blocked but CSS design tokens remain", () => {
+  for (const filename of ["secret.js", "secrets.js", "token.js", "TOKENS.mjs", "api-key.js", "api_key.js", "apiKeys.js", "access-token.js", "refresh_tokens.js", "privatekey.js", "privateKeys.js", "site.secret.js", "authToken.js", "credentials.js", "passwords.js"]) {
+    expect(isPublicAsset(filename)).toBe(false);
+    expect(isPublicAsset(`assets/nested/${filename}`)).toBe(false);
+  }
+  expect(isPublicAsset("assets/tokens.css")).toBe(true);
+  expect(isPublicAsset("assets/tokenizer.js")).toBe(true);
+});
+
 test("Given an image over 3MB, when uploading, then Vercel receives bytes and digest references without inline base64", async () => {
   const data = new Uint8Array(4 * 1024 * 1024);
   const fetcher = (async (url: unknown, init?: RequestInit) => {

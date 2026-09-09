@@ -46,8 +46,10 @@ try {
   await new Promise((resolve) => guard.close(resolve));
   guard = null;
 
-  assert.equal(await run(report), 0, "real native smoke must exit successfully");
+  await rm(report, { force: true });
+  const nativeExit = await run(report);
   receipt = JSON.parse(await readFile(report, "utf8"));
+  assert.equal(nativeExit, 0, "real native smoke must exit successfully");
   assert.equal(receipt.ok, true);
   assert.equal(receipt.dom.origin, `http://127.0.0.1:${port}`);
   assert.equal(receipt.dom.modelSelected, true);
