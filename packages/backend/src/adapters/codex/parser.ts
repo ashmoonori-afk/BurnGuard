@@ -1,6 +1,6 @@
 import { ulid } from "ulid";
 import type { NormalizedEvent } from "@bg/shared";
-import { mapCodexEnvelope } from "./event-mapping";
+import { isCodexStartupNotice, mapCodexEnvelope } from "./event-mapping";
 
 export interface CodexParserContext {
   turnId: string;
@@ -32,7 +32,7 @@ export function parseCodexLine(
   ctx: CodexParserContext,
 ): NormalizedEvent[] {
   const trimmed = line.trim();
-  if (!trimmed) return [];
+  if (!trimmed || isCodexStartupNotice(trimmed)) return [];
 
   if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
     try {

@@ -1,16 +1,56 @@
 import { Hono } from "hono";
-import type { ApiErrorBody, ApiSuccess, PatchFileResponse } from "@bg/shared";
+import type { ApiErrorBody, ApiSuccess, PatchFileResponse, ProjectPalette, PatchProjectPaletteResponse } from "@bg/shared";
 import { getSqlite } from "../db/sqlite-client";
 import { getArtifactOperation, listArtifactOperations } from "../db/artifact-operation-query";
 import { getProjectDetail } from "../db/project-read-repository";
 import { ArtifactCoordinator, ArtifactOperationError } from "../services/artifact-coordinator";
 import { PersistedArtifactOperationError } from "../services/artifact-operation-record";
 import { FilePatchError } from "../services/file-patch";
+import { readProjectPalette, replaceProjectPalette } from "../services/project-palette";
+import { inspectCanonicalTree } from "../services/canonical-tree-manifest";
+import { projectsDir, resolveManagedPath } from "../lib/paths";
 
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
 function fail(code: string, message: string, details?: unknown): ApiErrorBody { return { error: { code, message, details } }; }
 
 export const artifactOperationRoutes = new Hono();
+
+artifactOperationRoutes.get("/api/projects/:id/palette", async (c) => {
+  const project = await getProjectDetail(c.req.param("id"));
+  if (!project) return c.json(fail("project_not_found", "Project not found"), 404);
+  const relPath = c.req.query("path") ?? project.entrypoint;
+  try {
+    const root = resolveManagedPath(projectsDir, project.dir_path);
+    const palette = await readProjectPalette(root, relPath);
+    if (project.current_digest === null || (await inspectCanonicalTree(root)).tree_digest !== project.current_digest) {
+      return c.json(fail("stale_artifact_digest", "Artifact changed; reload the page"), 409);
+    }
+    return c.json(ok({ ...palette, rel_path: relPath, revision: project.current_revision, artifact_digest: project.current_digest } satisfies ProjectPalette));
+  } catch (error) {
+    if (error instanceof ArtifactOperationError) return c.json(fail(error.code, error.message), 422);
+    return c.json(fail("palette_unavailable", "Page colors could not be read"), 422);
+  }
+});
+
+artifactOperationRoutes.patch("/api/projects/:id/palette", async (c) => {
+  const projectId = c.req.param("id");
+  const project = await getProjectDetail(projectId);
+  if (!project) return c.json(fail("project_not_found", "Project not found"), 404);
+  const body: unknown = await c.req.json().catch(() => null);
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return c.json(fail("invalid_palette", "Expected palette change"), 400);
+  const fields = body as Record<string, unknown>;
+  if (Object.keys(fields).some((key) => !["rel_path", "expected_revision", "expected_artifact_digest", "color", "value"].includes(key))) return c.json(fail("invalid_palette", "Unknown palette field"), 400);
+  const { rel_path, expected_revision, expected_artifact_digest, color, value } = fields;
+  if (typeof rel_path !== "string" || typeof expected_revision !== "number" || !Number.isSafeInteger(expected_revision) || expected_revision < 0 || typeof expected_artifact_digest !== "string" || !/^[a-f0-9]{64}$/.test(expected_artifact_digest) || typeof color !== "string" || !/^#[a-f0-9]{6}$/i.test(color) || typeof value !== "string" || !/^#[a-f0-9]{6}$/i.test(value)) return c.json(fail("invalid_palette", "Page identity and six-digit colors are required"), 400);
+  try {
+    const root = resolveManagedPath(projectsDir, project.dir_path);
+    const result = await new ArtifactCoordinator(getSqlite()).run({ projectId, projectDir: root, kind: "palette", expectedRevision: expected_revision, expectedArtifactDigest: expected_artifact_digest, mutate: (stage) => replaceProjectPalette(stage, rel_path, color.toLowerCase(), value.toLowerCase()) });
+    return c.json(ok({ rel_path, operation_id: result.id, result_revision: result.resultRevision, result_digest: result.resultDigest, diff: result.diff, updated_at: Date.now() } satisfies PatchProjectPaletteResponse));
+  } catch (error) {
+    if (error instanceof ArtifactOperationError) return c.json(fail(error.code, "Page colors could not be changed; reload and try again"), error.code.startsWith("stale_") || error.code === "operation_conflict" ? 409 : 422);
+    return c.json(fail("palette_unavailable", "Page colors could not be changed"), 422);
+  }
+});
 
 // Hono matches routes in declaration order. Keep the specific undo-info
 // route before the generic file route so its suffix is not treated as part

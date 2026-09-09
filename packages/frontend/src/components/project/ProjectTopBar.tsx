@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 import type { ProjectDetail } from "@bg/shared";
 import ExportMenu, { type ExportQualityGate } from "@/components/export/ExportMenu";
+import VercelShare from "@/components/export/VercelShare";
 import { projectTypeLabel } from "@/lib/format";
 
 export default function ProjectTopBar({
@@ -60,6 +61,7 @@ export default function ProjectTopBar({
         >
           <Play className="h-3.5 w-3.5" /> 발표
         </Button>)}
+        <VercelShare key={project.id} projectId={project.id} />
         <ExportMenu projectId={project.id} projectType={project.type} projectOptionsJson={project.options_json} qualityGate={qualityGate} onOpenQuality={onOpenQuality} />
       </div>
       </div>

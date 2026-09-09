@@ -2,7 +2,7 @@ import { parseCanonicalTreeManifest, type CanonicalTreeManifest } from "./canoni
 import type { ArtifactFileDiff } from "./artifact-tree-storage";
 
 const HASH = /^[0-9a-f]{64}$/;
-const KINDS = ["patch", "turn", "restore", "undo", "external", "initialize"] as const;
+const KINDS = ["patch", "palette", "turn", "restore", "undo", "external", "initialize"] as const;
 export type ArtifactOperationKind = (typeof KINDS)[number];
 export type ArtifactReplay = {
   readonly kind: ArtifactOperationKind;

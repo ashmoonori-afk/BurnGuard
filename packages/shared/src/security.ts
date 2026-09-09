@@ -5,7 +5,8 @@
  *
  * The artifact keeps scripts and inline styles because generated prototypes
  * rely on them, but it can only talk to the BurnGuard origin: no outbound
- * fetch/XHR/beacon, no form submission, no nested frames or plugins. Google
+ * fetch/XHR/beacon, no form submission or plugins. Only Google's official map
+ * embed paths can load in nested frames. Google
  * Fonts stays reachable because generated artifacts commonly link it and the
  * export renderer already treats every other remote resource as a failure.
  */
@@ -21,7 +22,7 @@ export function artifactContentSecurityPolicy(origin: string): string {
     `img-src ${origin} data: blob:`,
     `media-src ${origin} data: blob:`,
     `connect-src ${origin}`,
-    "frame-src 'none'",
+    "frame-src https://www.google.com/maps/embed https://www.google.com/maps/embed/",
     "object-src 'none'",
     "form-action 'none'",
     `base-uri ${origin}`,

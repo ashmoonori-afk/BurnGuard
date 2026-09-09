@@ -5,6 +5,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { cn } from "@/lib/utils";
+import { dimensionPatch, isAspectLocked, MAX_ELEMENT_SIZE, rotationPatch, targetDimensions } from "@/lib/element-geometry";
 import { parseLocalFonts } from "@bg/shared";
 import { apiFetch } from "@/api/client";
 import {
@@ -61,6 +62,12 @@ const SIZE_RULES: Record<
   TweaksStyleKey,
   { min: number; max: number; allowNegative: boolean }
 > = {
+  width: { min: 1, max: MAX_ELEMENT_SIZE, allowNegative: false },
+  height: { min: 1, max: MAX_ELEMENT_SIZE, allowNegative: false },
+  rotate: { min: -180, max: 180, allowNegative: true },
+  "aspect-ratio": { min: 0, max: 0, allowNegative: false },
+  "box-sizing": { min: 0, max: 0, allowNegative: false },
+  display: { min: 0, max: 0, allowNegative: false },
   "font-family": { min: 0, max: 0, allowNegative: false },
   "font-size": { min: 8, max: 240, allowNegative: false },
   "font-weight": { min: 100, max: 900, allowNegative: false },
@@ -73,22 +80,8 @@ const SIZE_RULES: Record<
   "border-radius": { min: 0, max: 320, allowNegative: false },
 };
 
-/**
- * Right-side inspector for Tweaks mode. Replaces the earlier generic text
- * grid with typed controls: fixed-px numeric inputs for size properties,
- * a palette-backed picker for colours, a dropdown for font-weight, and
- * 4-side compact inputs for padding / margin / border-radius. Every
- * change still commits through `onApply` (same diff-based contract), so
- * the existing undo/redo + PATCH wiring in ProjectView is unchanged.
- */
-export default function TweaksPanel({
-  target,
-  saving,
-  onApply,
-  onResetAll,
-  onClear,
-  review,
-}: {
+/** Simple geometry first; the existing style controls remain under Advanced. */
+export default function TweaksPanel({ target, saving, onApply, onResetAll, onClear, review }: {
   target: TweaksTarget | null;
   saving: boolean;
   onApply: ApplyFn;
@@ -96,102 +89,80 @@ export default function TweaksPanel({
   onClear: () => void;
   review: TweakChangePreview | null;
 }) {
-  if (!target) {
-    return (
-      <div className="p-4">
-        <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
-          스타일
-        </div>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          캔버스에 마우스를 올리면 요소가 강조되고, 클릭하면 CSS를 살펴보고
-          고칠 수 있어요. 바꾼 값은 선택한 요소의 인라인 스타일로 저장돼요.
-          Cmd/Ctrl+Z로 마지막 변경을 되돌릴 수 있어요.
-        </p>
+  if (!target) return <div className="p-4"><h2 className="text-sm font-semibold">요소 선택</h2><p className="mt-2 text-xs leading-relaxed text-muted-foreground">요소를 누르면 크기 조절 박스가 나타나요. 손잡이를 끌거나 가로·세로·회전 값을 입력해 주세요.</p></div>;
+  return <div className="flex min-h-0 flex-col overflow-y-auto">
+    <header className="flex items-center justify-between border-b border-border px-3 py-2">
+      <h2 className="text-sm font-semibold">선택한 요소</h2>
+      <button type="button" onClick={onClear} className="min-h-10 rounded px-2 text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">선택 해제</button>
+    </header>
+    <GeometryControls key={target.bg_id} target={target} saving={saving} onApply={onApply} />
+    <details className="border-t border-border">
+      <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">고급</summary>
+      <div className="flex items-center justify-between gap-2 px-3 pb-2">
+        <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">&lt;{target.tag}&gt; · {target.bg_id}</span>
+        <button type="button" onClick={onResetAll} disabled={saving || Object.keys(target.inline).length === 0} className="min-h-10 shrink-0 rounded px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring">스타일 초기화</button>
       </div>
-    );
-  }
-
-  return (
-    <div className="flex min-h-0 flex-col overflow-y-auto">
-      <div className="border-b border-border px-3 py-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-            스타일
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onResetAll}
-              className="text-[10px] text-muted-foreground hover:text-foreground"
-              title="이 요소의 인라인 덮어쓰기를 모두 지워요"
-              disabled={saving || Object.keys(target.inline).length === 0}
-            >
-              초기화
-            </button>
-            <button
-              type="button"
-              onClick={onClear}
-              className="text-[10px] text-muted-foreground hover:text-foreground"
-            >
-              선택 해제
-            </button>
-          </div>
-        </div>
-        <div className="mt-1 font-mono text-xs">&lt;{target.tag}&gt;</div>
-        <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
-          data-bg-node-id="{target.bg_id}"
-        </div>
-      </div>
-      {review && (
-        <section
-          aria-label="마지막 인라인 패치"
-          className="border-b border-border bg-muted/30 px-3 py-2"
-        >
-          <SectionHeader>마지막 변경</SectionHeader>
-          <pre className="mt-1.5 overflow-x-auto rounded border border-border bg-background px-2 py-1.5 font-mono text-[10px] leading-relaxed">
-            <span className="text-muted-foreground">
-              - {review.property}: {review.from}
-            </span>
-            {"\n"}
-            <span className="text-foreground">
-              + {review.property}: {review.to}
-            </span>
-          </pre>
-          <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
-            되돌릴 수 있는 인라인 스타일 덮어쓰기로 저장했어요.
-          </p>
-        </section>
-      )}
-
-      <section className="border-b border-border px-3 py-2">
-        <SectionHeader>타이포그래피</SectionHeader>
-        <div className="mt-1.5 flex flex-col gap-2">
+      <section className="border-t border-border px-3 py-3">
+        <SectionHeader>글꼴과 색상</SectionHeader>
+        <div className="mt-2 flex flex-col gap-2">
           <FontFamilyRow target={target} saving={saving} onApply={onApply} />
           <SizeRow target={target} styleKey="font-size" saving={saving} onApply={onApply} />
           <FontWeightRow target={target} saving={saving} onApply={onApply} />
           <ColorRow target={target} styleKey="color" saving={saving} onApply={onApply} />
+          <ColorRow target={target} styleKey="background-color" saving={saving} onApply={onApply} />
           <SizeRow target={target} styleKey="line-height" saving={saving} onApply={onApply} />
           <SizeRow target={target} styleKey="letter-spacing" saving={saving} onApply={onApply} />
         </div>
       </section>
-
-      <section className="border-b border-border px-3 py-2">
-        <SectionHeader>박스</SectionHeader>
-        <div className="mt-1.5 flex flex-col gap-2">
-          <ColorRow target={target} styleKey="background-color" saving={saving} onApply={onApply} />
+      <section className="border-t border-border px-3 py-3">
+        <SectionHeader>여백과 모서리</SectionHeader>
+        <div className="mt-2 flex flex-col gap-2">
           <SidesRow target={target} styleKey="padding" saving={saving} onApply={onApply} />
           <SidesRow target={target} styleKey="margin" saving={saving} onApply={onApply} />
           <SidesRow target={target} styleKey="border-radius" saving={saving} onApply={onApply} />
         </div>
       </section>
+      {review && <section aria-label="마지막 변경" className="border-t border-border px-3 py-3"><SectionHeader>마지막 변경</SectionHeader><p className="mt-2 break-all font-mono text-[11px] text-muted-foreground">{review.property}: {review.from} → {review.to}</p></section>}
+    </details>
+  </div>;
+}
 
-      <p className="px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
-        크기는 <code className="font-mono">px</code> 단위로 저장돼요. 크기 칸을
-        비우면 그 덮어쓰기가 사라지고, 팔레트 색을 누르거나 hex 값을 입력하면
-        색이 지정돼요.
-      </p>
+function GeometryControls({ target, saving, onApply }: { target: TweaksTarget; saving: boolean; onApply: ApplyFn }) {
+  const { width, height, rotation } = targetDimensions(target);
+  const locked = isAspectLocked(target);
+  return <section aria-label="크기와 회전" className="space-y-3 px-3 py-4">
+    <div className="grid grid-cols-2 gap-3">
+      <GeometryNumber label="가로" unit="px" value={width} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, value, height, locked))} />
+      <GeometryNumber label="세로" unit="px" value={height} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, width, value, locked))} />
+      <GeometryNumber label="회전" unit="°" value={rotation} min={-360} max={360} disabled={saving} onCommit={value => onApply(rotationPatch(value))} />
+      <label className="block text-xs">비율
+        <select aria-label="비율" disabled={saving} value={locked ? "locked" : "free"} onChange={event => {
+          const value = event.target.value;
+          if (value === "free" || value === "locked") onApply({ "aspect-ratio": value === "free" ? "auto" : `${width} / ${height}` });
+          else { const ratio = Number(value); onApply({ ...dimensionPatch(target, width, width / ratio, false), "aspect-ratio": `${ratio} / 1` }); }
+        }} className="mt-1 min-h-10 w-full rounded border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <option value="free">자유롭게</option><option value="locked">현재 비율 유지</option><option value="1">1 : 1</option><option value="1.3333333333333333">4 : 3</option><option value="1.7777777777777777">16 : 9</option><option value="0.5625">9 : 16</option>
+        </select>
+      </label>
     </div>
-  );
+    <p className="text-xs leading-relaxed text-muted-foreground">박스 손잡이로 크기를, 위쪽 둥근 손잡이로 회전을 조절해요. Esc로 드래그를 취소하고 Ctrl/⌘+Z로 되돌릴 수 있어요.</p>
+  </section>;
+}
+
+function GeometryNumber({ label, unit, value, min, max, disabled, onCommit }: { label: string; unit: string; value: number; min: number; max: number; disabled: boolean; onCommit: (value: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const parsed = Number(draft);
+    if (!draft.trim() || !Number.isFinite(parsed)) { setDraft(String(value)); return; }
+    const next = Math.min(max, Math.max(min, parsed));
+    setDraft(String(next));
+    if (Math.abs(next - value) > 0.005) onCommit(next);
+  };
+  return <label className="block text-xs">{label}<span className="mt-1 flex min-h-10 items-center rounded border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+    <input aria-label={label} type="number" step="0.1" min={min} max={max} value={draft} disabled={disabled} onChange={event => setDraft(event.target.value)} onBlur={event => commitTweakOnBlur(event.currentTarget, commit)} onKeyDown={event => handleEnterEscape(event, commit, () => setDraft(String(value)))} className="min-w-0 flex-1 bg-transparent px-2 py-2 outline-none" />
+    <span className="pr-2 text-muted-foreground">{unit}</span>
+  </span></label>;
 }
 
 function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; saving: boolean; onApply: ApplyFn }) {

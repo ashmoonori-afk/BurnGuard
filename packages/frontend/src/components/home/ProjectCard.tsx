@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, Blocks, File, Image, MoreHorizontal, Palette, Presentation, RefreshCw, Trash2 } from "lucide-react";
-import { resolveThumbnailSource } from "./thumbnail-source";
+import { resolveThumbnailSource, thumbnailRetryDelay } from "./thumbnail-source";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -16,9 +16,17 @@ export default function ProjectCard(
   props: CardViewModel & { onDelete?: () => void },
 ) {
   const [failedSource, setFailedSource] = useState<string | null>(null);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const projectLinkRef = useRef<HTMLAnchorElement>(null);
   const thumbnailSource = resolveThumbnailSource(props.thumbnail, failedSource);
   const thumbnailFailed = Boolean(props.thumbnail) && props.thumbnail === failedSource;
+  const retryDelay = thumbnailRetryDelay(retryAttempt);
+  useEffect(() => { setRetryAttempt(0); setFailedSource(null); }, [props.thumbnail]);
+  useEffect(() => {
+    if (!thumbnailFailed || retryDelay === null) return;
+    const timer = setTimeout(() => { setRetryAttempt((attempt) => attempt + 1); setFailedSource(null); }, retryDelay);
+    return () => clearTimeout(timer);
+  }, [thumbnailFailed, retryDelay]);
   const Icon = props.kind === "system" ? Palette : props.kind === "slide_deck" ? Presentation : props.kind === "prototype" ? Blocks : props.kind === "graphic" ? Image : File;
 
   return (
@@ -39,7 +47,7 @@ export default function ProjectCard(
           {thumbnailSource === null ? (
             <div className="flex flex-col items-center gap-3 text-slate-500">
               <span className="grid h-16 w-16 place-items-center rounded-2xl border border-white/80 bg-white/70"><Icon className="h-7 w-7" strokeWidth={1.5} aria-hidden="true" /></span>
-              <span className="text-xs">{thumbnailFailed ? "미리보기를 불러오지 못했어요" : "미리보기가 없어요"}</span>
+              <span className="text-xs">{thumbnailFailed ? retryDelay === null ? "미리보기를 불러오지 못했어요" : "미리보기를 준비하고 있어요" : "미리보기가 없어요"}</span>
             </div>
           ) : (
             <img
@@ -71,7 +79,7 @@ export default function ProjectCard(
         </div>
       </Link>
 
-      {thumbnailFailed && <button type="button" onClick={() => { setFailedSource(null); projectLinkRef.current?.focus(); }} aria-label={`${props.name} 미리보기 다시 불러오기`} className="mt-2 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />미리보기 다시 불러오기</button>}
+      {thumbnailFailed && retryDelay === null && <button type="button" onClick={() => { setRetryAttempt(0); setFailedSource(null); projectLinkRef.current?.focus(); }} aria-label={`${props.name} 미리보기 다시 불러오기`} className="mt-2 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />미리보기 다시 불러오기</button>}
 
       {props.onDelete && (
         <div className="absolute top-2 right-2">

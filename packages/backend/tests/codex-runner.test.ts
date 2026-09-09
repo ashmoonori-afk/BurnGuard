@@ -15,6 +15,8 @@ describe("buildCodexCommand", () => {
       "--sandbox",
       "workspace-write",
       "-c", 'model_reasoning_effort="low"',
+      "-c", "suppress_unstable_features_warning=true",
+      "-c", "features.image_generation=true",
       "-",
     ]);
   });

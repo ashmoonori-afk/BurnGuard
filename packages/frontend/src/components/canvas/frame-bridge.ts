@@ -29,6 +29,11 @@ import { artifactContentSecurityPolicy } from "@bg/shared/security";
 import { buildGraphicPreviewInjection } from "@/lib/graphic-preview";
 
 export interface FrameRect {
+  rotation?: number;
+  boxWidth?: number;
+  boxHeight?: number;
+  scaleX?: number;
+  scaleY?: number;
   left: number;
   top: number;
   width: number;
@@ -51,6 +56,7 @@ export interface FrameCommentHit {
 }
 
 export interface FrameBgHit {
+  geometry?: { width: number; height: number };
   rect: FrameRect | null;
   bgId: string | null;
   tag: string | null;
@@ -344,6 +350,7 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     "color",
     "line-height",
     "letter-spacing",
+    "rotate", "aspect-ratio", "box-sizing", "display",
     "width",
     "height",
     "padding",
@@ -353,6 +360,23 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     "background",
     "background-color"
   ];
+
+  function elementRect(node) {
+    var rect = node.getBoundingClientRect();
+    var matrix = new DOMMatrix();
+    for (var current = node; current; current = current.parentElement) {
+      var style = getComputedStyle(current);
+      var rotation = style.rotate && style.rotate !== "none" ? parseFloat(style.rotate) : 0;
+      var own = new DOMMatrix().rotate(rotation || 0);
+      if (style.transform && style.transform !== "none") own = own.multiply(new DOMMatrix(style.transform));
+      matrix = own.multiply(matrix);
+    }
+    var scaleX = Math.hypot(matrix.a, matrix.b), scaleY = Math.hypot(matrix.c, matrix.d);
+    return { left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+      rotation: Math.atan2(matrix.b, matrix.a) * 180 / Math.PI,
+      boxWidth: node.offsetWidth * scaleX, boxHeight: node.offsetHeight * scaleY,
+      scaleX: scaleX, scaleY: scaleY };
+  }
 
   function toRect(node) {
     if (!node || !node.getBoundingClientRect) return null;
@@ -525,7 +549,8 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       var rawNode = resolveTargetAtPoint(payload.x, payload.y);
       var bgNode = rawNode && rawNode.closest ? rawNode.closest("[data-bg-node-id]") : null;
       response = bgNode ? {
-        rect: toRect(bgNode),
+        rect: elementRect(bgNode),
+        geometry: { width: bgNode.offsetWidth, height: bgNode.offsetHeight },
         bgId: bgNode.getAttribute("data-bg-node-id"),
         tag: String(bgNode.tagName || "").toLowerCase(),
         text: String(bgNode.textContent || ""),
@@ -542,7 +567,7 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       }
     } else if (data.action === "rect-bg") {
       var bgRectNode = queryByBgId(payload.bgId);
-      response = bgRectNode ? toRect(bgRectNode) : null;
+      response = bgRectNode ? elementRect(bgRectNode) : null;
     } else if (data.action === "active-slide") {
       var slides = document.querySelectorAll("[data-slide]");
       if (!slides || slides.length === 0) {

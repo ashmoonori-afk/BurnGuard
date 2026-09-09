@@ -12,6 +12,24 @@ export interface ProjectDetail extends ProjectSummary {
   current_digest: string | null;
 }
 
+export interface ProjectPalette {
+  readonly rel_path: string;
+  readonly revision: number;
+  readonly artifact_digest: string;
+  readonly colors: readonly { readonly id: string; readonly name: string; readonly value: string; readonly count: number }[];
+  readonly files: readonly string[];
+}
+
+export interface PatchProjectPaletteRequest {
+  readonly rel_path: string;
+  readonly expected_revision: number;
+  readonly expected_artifact_digest: string;
+  readonly color: string;
+  readonly value: string;
+}
+
+export type PatchProjectPaletteResponse = Omit<import("./file-patch").PatchFileResponse, "node_bg_id">;
+
 export interface SessionInfo {
   id: string;
   project_id: string;

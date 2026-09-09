@@ -43,6 +43,14 @@ Open **Quality → UX improvements** to review the current HTML structure and se
 
 Edit text and images individually. Website ZIPs include the project HTML, CSS, JavaScript, images and bundled fonts: extract and upload to static hosting. Features that require an external API or server still need that service.
 
+Select an element to resize or rotate it with canvas handles, or enter its width, height and aspect ratio. Typography and spacing live under **Advanced (고급)**. The **Color palette** beside Quality updates opaque HEX colors in the current HTML and its linked local CSS, with undo. **Fix issues automatically** sends the current findings to your selected AI and runs another quality check after the turn completes; unresolved and unmeasurable checks stay visible.
+
+Generated creative images must use Codex's image tool; unavailable image generation is reported instead of replaced with CSS/SVG artwork. Real locations use verified map embeds, and subpages use layouts suited to their purpose while sharing the brand. The canvas permits official Google Maps embed URLs. NAVER's remote JavaScript API is not supported in the sandbox; it needs a compatible provider integration and configuration.
+
+### Share a website
+
+Choose **Share (공유)**, prepare the validated HTML export, enter a Vercel token (and optional team ID), then click **Publish publicly**. Once Vercel reports READY, copy or open the deployment link. Tokens stay in memory and are cleared when the dialog closes or the deployment is ready. Deployment protection may require visitors to sign in; check it in your Vercel project. [Vercel Hobby](https://vercel.com/docs/plans/hobby) is free for personal, non-commercial use; commercial work needs an appropriate plan. Account-backed live deployment requires your token.
+
 ## Get started
 
 ### Prerequisites

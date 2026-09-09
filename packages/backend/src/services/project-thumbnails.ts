@@ -137,7 +137,7 @@ async function loadProjectThumbnailUncapped(
   // Never start an in-process launch before the child-process probe says a
   // launch actually completes here: on a host where it does not, the launch
   // blocks the event loop and takes the whole backend down with it.
-  if (!(await isChromiumLaunchable())) return { kind: "unavailable", code: "thumbnail_unavailable" };
+  if (!(await isChromiumLaunchable(undefined, { waitForResult: true }))) return { kind: "unavailable", code: "thumbnail_unavailable" };
 
   const rendered = await renderThumbnailOnce(cachePath, {
     request: {
