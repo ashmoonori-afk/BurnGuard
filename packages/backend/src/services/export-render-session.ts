@@ -53,14 +53,14 @@ export async function openRenderSession(input: { readonly stagedDir: string; rea
   }
 }
 
-/** Some hosts (Bun on Windows) start Chromium but never complete the Playwright handshake, so every attempt is capped. */
+/** Bun's in-process launch (seen on Windows and macOS) can start Chromium yet never complete the Playwright handshake or resolve browser.close(), so every attempt is capped. */
 export const CHROMIUM_LAUNCH_TIMEOUT_MS = 20_000;
 type ChromiumLaunchAttempt = { readonly headless: true; readonly channel?: string };
 export type ChromiumLauncher = (options: ChromiumLaunchAttempt) => Promise<Browser>;
 type LaunchOutcome = { readonly kind: "browser"; readonly browser: Browser } | { readonly kind: "failed"; readonly error: unknown } | { readonly kind: "timeout" } | { readonly kind: "aborted" };
 const LAUNCH_ATTEMPTS: readonly ChromiumLaunchAttempt[] = [{ headless: true }, { headless: true, channel: "chrome" }, { headless: true, channel: "msedge" }];
 
-export async function launchChromium(signal: AbortSignal, launch: ChromiumLauncher = (options) => process.platform === "win32" && chromiumNodeCommand() !== null ? launchChromiumViaNode(options, signal) : chromium.launch(options)): Promise<Browser> {
+export async function launchChromium(signal: AbortSignal, launch: ChromiumLauncher = (options) => chromiumNodeCommand() !== null ? launchChromiumViaNode(options, signal) : chromium.launch(options)): Promise<Browser> {
   // A launch that never completes its handshake blocks the Bun event loop, so
   // the in-process attempt below would freeze every other request and even the
   // timer meant to cap it. The child-process probe answers that question
