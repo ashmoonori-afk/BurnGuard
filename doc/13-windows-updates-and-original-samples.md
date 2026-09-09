@@ -22,6 +22,21 @@ For each new version:
 
 No tag or public release is created by the local build script. Package signing is not configured. Configure a trusted Windows signing certificate in a private release environment before signed distribution; never commit certificate secrets. Changing the repository requires updating the native `GithubSource` URL before shipping the last release on the old feed.
 
+## macOS packaging and updates
+
+macOS packages use the same Velopack tool and the same GitHub release. Build on macOS with Bun 1.3.14 and the .NET 8 SDK:
+
+```bash
+bun install --frozen-lockfile
+bun run build:mac:release
+```
+
+`dist/releases/` then contains `BurnGuard-osx-Setup.pkg`, `BurnGuard-osx-Portable.zip`, the full `.nupkg`, the `releases.osx.json` feed, and SHA256 sums. The packed bundle is `BurnGuard.app` with `Contents/MacOS/UpdateMac` beside the engine; only that bundle can update itself. The plain `dist/mac/BurnGuard Design.app` and the DMG are development builds without an updater.
+
+The **macOS release package** workflow runs on the same `v*` tag as the Windows workflow and attaches its assets to the same draft release (whichever job finishes first creates the draft). Publish the draft with both `releases.win.json` and `releases.osx.json` attached. Signing and notarization run when `BG_MAC_SIGN_IDENTITY`, `BG_MAC_INSTALL_IDENTITY` and `BG_MAC_NOTARY_PROFILE` are configured; unsigned packages are for verification only and Gatekeeper will warn on first launch.
+
+On macOS the engine itself checks the feed shortly after launch and every six hours, downloads the newer full package into `~/.burnguard/cache/updates`, verifies its SHA-256 against the feed, and shows the result in Settings → 업데이트. **다시 시작해 적용** stops the engine and lets `UpdateMac` swap the bundle and relaunch it. `BG_UPDATE_FEED_URL` (loopback or HTTPS) points the check at a local feed for rehearsals.
+
 ## How updates behave
 
 - Once the workspace opens, check for a newer stable version; repeat every six hours or when **업데이트 확인** is pressed.

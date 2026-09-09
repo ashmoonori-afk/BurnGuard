@@ -114,7 +114,7 @@ bun run build
 
 Run `dist/windows/burnguard-design.exe` to serve the built UI at **http://127.0.0.1:14070**. To distribute the app, copy the **entire `dist/windows` folder**. Its `resources` directory includes the UI, migrations, bundled design assets, Playwright, Node, and their licenses. Check Chromium and Python availability separately.
 
-macOS build scripts are also available, but the latest UI changes have not been directly verified on macOS. See the [build and development guide](doc/CONTRIBUTING.md).
+macOS builds use the same Velopack release channel: `bun run build:mac:release` produces the installer, portable app and `releases.osx.json` feed, and the packaged app checks GitHub Releases for updates from Settings → 업데이트. See the [build and development guide](doc/CONTRIBUTING.md) and [updates](doc/13-windows-updates-and-original-samples.md#macos-packaging-and-updates).
 
 ## Workflow
 

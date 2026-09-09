@@ -266,10 +266,14 @@ Current enforcement (updated 2026-09-09 after the security assessment):
   instruction to treat imported text as data, not instructions
 - the Windows desktop shell cancels top-level WebView2 navigation to `/api/*`
   and `/runtime/*`; external links open in the default browser
-- Windows automatic updates (Velopack) read only the public GitHub Releases of
+- automatic updates (Velopack) read only the public GitHub Releases of
   `ashmoonori-afk/BurnGuard` over HTTPS, skip drafts and prereleases, verify
   each package against the SHA-256 feed before staging it, and never apply an
-  update while the owned backend is running
+  update while the backend is running. Windows drives this from the native
+  shell; macOS drives it from the backend (`services/mac-updates.ts`), which
+  hands the verified package to the bundled `UpdateMac` after its own graceful
+  shutdown. A `BG_UPDATE_FEED_URL` override is honoured only for loopback or
+  HTTPS feeds and exists for local rehearsals
 
 Accepted risks and trust assumptions:
 
