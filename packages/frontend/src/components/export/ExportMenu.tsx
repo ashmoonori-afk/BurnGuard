@@ -156,15 +156,15 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="outline"
+          variant="cta"
           size="sm"
-          className="gap-1.5 focus:ring-2 focus:ring-ring focus:ring-offset-1 max-[900px]:min-h-11 max-[900px]:min-w-11 max-[900px]:justify-center max-[900px]:gap-0 max-[900px]:px-0 max-[900px]:text-[0px]"
+          className="min-h-10 gap-2 px-4 focus:ring-2 focus:ring-ring focus:ring-offset-1 max-[900px]:min-h-11"
           aria-label="내보내기"
         >
           <Download className="h-3.5 w-3.5" /> 내보내기
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent data-export-menu-content align="end" className="z-[100] w-72">
+      <DropdownMenuContent data-export-menu-content align="end" className="z-[100] w-80 max-w-[calc(100vw-24px)] p-2">
         <DropdownMenuLabel>내보내기 형식</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {jobsQuery.isError && <div role="alert" className="p-2 text-xs"><p>내보내기 목록을 불러오지 못했어요.</p><button type="button" className="mt-2 underline" onClick={() => void jobsQuery.refetch()}>다시 시도</button></div>}
@@ -184,6 +184,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
           return (
             <DropdownMenuItem
               key={option.key}
+              className="min-h-11 gap-3 rounded-md px-3"
               disabled={disabled}
               onClick={(event) => {
                 if (disabled) return;

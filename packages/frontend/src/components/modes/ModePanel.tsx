@@ -91,7 +91,7 @@ export default function ModePanel({
   if (!mode) return null;
 
   return (
-    <aside className="w-[320px] shrink-0 border-l border-border bg-background flex flex-col min-h-0 overflow-hidden max-[900px]:w-full max-[900px]:max-h-[48vh] max-[900px]:shrink max-[900px]:border-l-0 max-[900px]:border-t">
+    <aside aria-label="캔버스 도구 설정" className="flex min-h-0 w-[280px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1400px]:w-[320px] max-[1200px]:max-h-[40%] max-[1200px]:w-full max-[1200px]:shrink max-[1200px]:border-l-0 max-[1200px]:border-t">
       {mode === "select" && (
         <SelectorReadOnlyPanel
           selection={selection}
@@ -143,16 +143,5 @@ export default function ModePanel({
         />
       )}
     </aside>
-  );
-}
-
-function EmptyPanel({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="p-4">
-      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
-        {title}
-      </div>
-      <p className="text-xs text-muted-foreground leading-relaxed">{body}</p>
-    </div>
   );
 }

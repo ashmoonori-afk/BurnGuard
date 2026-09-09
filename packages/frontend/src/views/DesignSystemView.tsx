@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DesignSystemColorToken, DesignSystemDetail } from "@bg/shared";
-import { AlertTriangle, Pencil, Plus, Upload } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CheckCircle2, Pencil, Plus, Upload } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import {
   getDesignSystemTokens,
@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useUIStore } from "@/state/uiStore";
-import { ApiError } from "@/api/client";
+import { ApiError, authorizedFetch } from "@/api/client";
 import { apiErrorCopy } from "@/lib/error-copy";
 
 type FontRole = "display" | "sans" | "serif" | "mono";
@@ -67,8 +67,9 @@ function DesignSystemEditor({ id }: { id: string }) {
   const [draftStatus, setDraftStatus] = useState<DesignSystemDetail["status"]>(
     "draft",
   );
-  const [colorTokens, setColorTokens] = useState<DesignSystemColorToken[]>([]);
-  const [tokenFilePath, setTokenFilePath] = useState<string | null>(null);
+  const tokensQuery = useQuery({ queryKey: ["design-systems", "tokens", id], queryFn: () => getDesignSystemTokens(id), retry: false });
+  const colorTokens = tokensQuery.data?.colors ?? [];
+  const tokenFilePath = tokensQuery.data?.token_file_path ?? null;
   const [editingColor, setEditingColor] = useState<DesignSystemColorToken | null>(
     null,
   );
@@ -83,16 +84,16 @@ function DesignSystemEditor({ id }: { id: string }) {
   const fontInputRef = useRef<HTMLInputElement | null>(null);
 
   const updateMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (nextStatus?: DesignSystemDetail["status"]) => {
       if (!id) throw new Error("missing id");
       if (!system) throw new Error("missing system");
-      const trimmedName = draftName.trim();
+      const trimmedName = nextStatus ? system.name : draftName.trim();
       if (!trimmedName) throw new Error("이름을 비워 둘 수 없어요.");
       return await updateDesignSystemWithConflictReload(id, {
         expected_revision: system.metadata_revision,
         name: trimmedName,
-        description: draftDescription.trim() ? draftDescription.trim() : null,
-        status: draftStatus,
+        description: nextStatus ? system.description : draftDescription.trim() ? draftDescription.trim() : null,
+        status: nextStatus ?? draftStatus,
         tags: system.tags,
       });
     },
@@ -132,8 +133,7 @@ function DesignSystemEditor({ id }: { id: string }) {
       });
     },
     onSuccess: (tokens) => {
-      setColorTokens(tokens.colors);
-      setTokenFilePath(tokens.token_file_path);
+      queryClient.setQueryData(["design-systems", "tokens", id], tokens);
       setEditingColor(null);
       setColorEditorOpen(false);
       setDraftColorName("");
@@ -182,18 +182,18 @@ function DesignSystemEditor({ id }: { id: string }) {
   });
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
     // Best-effort fetch of the extraction report written by P4.1 / P4.2
     // ingestion. Non-extracted systems (seeded samples) return 404, which
     // we treat as "no notes" without surfacing an error.
-    void fetch(`/api/design-systems/${id}/files/uploads/extraction-report.json`)
+    void authorizedFetch(`/api/design-systems/${encodeURIComponent(id)}/files/uploads/extraction-report.json`, { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) return null;
         return (await res.json()) as { notes?: unknown };
       })
       .then((payload) => {
-        if (cancelled || !payload) return;
+        if (controller.signal.aborted || !payload) return;
         const notes = Array.isArray(payload.notes)
           ? payload.notes.filter((n): n is string => typeof n === "string")
           : [];
@@ -203,21 +203,7 @@ function DesignSystemEditor({ id }: { id: string }) {
         // ignore — notes are advisory
       });
 
-    void getDesignSystemTokens(id)
-      .then((tokens) => {
-        if (cancelled) return;
-        setColorTokens(tokens.colors);
-        setTokenFilePath(tokens.token_file_path);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setColorTokens([]);
-        setTokenFilePath(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [id]);
 
   if (systemQuery.isError) {
@@ -242,18 +228,19 @@ function DesignSystemEditor({ id }: { id: string }) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="px-4 py-6 sm:px-8 sm:py-8">
-        <div className="mx-auto max-w-4xl rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-8">
-          <div className="flex items-start justify-between gap-4">
-            <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              디자인 시스템
-            </div>
+    <div className="min-w-0 flex-1 overflow-y-auto bg-background">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
+        <Link to="/?view=systems" className="mb-5 inline-flex min-h-9 items-center gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><ArrowLeft className="h-4 w-4" />디자인 라이브러리로 돌아가기</Link>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-7">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-medium text-muted-foreground">디자인 시스템</span><Badge variant={system.status === "published" ? "accent" : "outline"}>{STATUS_LABELS[system.status]}</Badge>{system.is_template ? <Badge variant="outline">템플릿</Badge> : null}</div>
             {!editing ? (
+              <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
+                disabled={updateMutation.isPending}
                 onClick={() => {
                   setDraftName(system.name);
                   setDraftDescription(system.description ?? "");
@@ -264,12 +251,14 @@ function DesignSystemEditor({ id }: { id: string }) {
                 <Pencil className="h-3.5 w-3.5" />
                 세부 정보 편집
               </Button>
+              {system.status !== "published" ? <Button variant="cta" size="sm" onClick={() => updateMutation.mutate(system.status === "draft" ? "review" : "published")} disabled={updateMutation.isPending}>{updateMutation.isPending ? "저장하는 중…" : system.status === "draft" ? "검토 시작" : "디자인 시스템 게시"}<ArrowUpRight className="h-3.5 w-3.5" /></Button> : null}
+              </div>
             ) : null}
           </div>
 
           {!editing ? (
             <>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight">
+              <h1 className="mt-5 break-words text-2xl font-semibold tracking-tight sm:text-3xl">
                 {system.name}
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
@@ -335,7 +324,7 @@ function DesignSystemEditor({ id }: { id: string }) {
               <div className="flex items-center gap-2 pt-1">
                 <Button
                   variant="cta"
-                  onClick={() => updateMutation.mutate()}
+                  onClick={() => updateMutation.mutate(undefined)}
                   disabled={
                     updateMutation.isPending || !draftName.trim()
                   }
@@ -357,15 +346,18 @@ function DesignSystemEditor({ id }: { id: string }) {
             <DraftValidationCard system={system} notes={extractionNotes} />
           ) : null}
 
-          <div className="mt-6 flex flex-wrap gap-2"><Badge variant="outline">{STATUS_LABELS[system.status]}</Badge>{system.is_template ? <Badge variant="outline">템플릿</Badge> : null}</div>
-          <details className="mt-4 rounded-xl border border-border p-4">
-            <summary className="cursor-pointer text-sm font-medium">원본과 파일 정보</summary>
-            <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
-              {catalogDetailRows(system).map((row) => <InfoRow key={row.label} label={CATALOG_DETAIL_LABELS[row.label] ?? row.label} value={row.label === "Status" ? STATUS_LABELS[system.status] : row.label === "Template" ? system.is_template ? "예" : "아니요" : row.value} />)}
-            </dl>
-          </details>
-
-          <div className="mt-8 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <nav aria-label="디자인 시스템 섹션" className="mt-6 flex flex-wrap gap-2 border-t border-border pt-5">
+            {[{ id: "system-previews", label: "디자인 미리보기" }, { id: "system-style-editor", label: "색상과 글꼴" }, { id: "system-source-details", label: "원본 정보" }].map(({ id: sectionId, label }) => <Button key={sectionId} size="sm" variant="outline" onClick={() => { const section = document.getElementById(sectionId); if (section instanceof HTMLDetailsElement) section.open = true; section?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>{label}</Button>)}
+          </nav>
+        </div>
+        <section id="system-previews" className="mt-6 scroll-mt-6 rounded-2xl border border-border bg-card">
+          <div className="border-b border-border px-5 py-5 sm:px-7"><h2 className="text-lg font-semibold">디자인 미리보기</h2><p className="mt-1 text-sm text-muted-foreground">저장된 디자인 자료를 확인하고 프로젝트에 사용할 스타일을 다듬어요.</p></div>
+          <SystemPreviewGrid systemId={id} onEditColors={() => colorEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} previewRefreshKey={previewRefreshKey} />
+        </section>
+        <section id="system-style-editor" className="mt-8 scroll-mt-6">
+          <div className="mb-4"><h2 className="text-lg font-semibold">색상과 글꼴 편집</h2><p className="mt-1 text-sm text-muted-foreground">색상 저장과 글꼴 업로드는 각각 바로 적용돼요.</p></div>
+          {tokensQuery.isError ? <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-card p-4"><p className="text-sm">색상을 불러오지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요.</p><Button variant="outline" size="sm" disabled={tokensQuery.isFetching} onClick={() => void tokensQuery.refetch()}>다시 시도</Button></div> : null}
+          <div className="grid min-w-0 gap-5 lg:grid-cols-[0.8fr_1.2fr]">
             <FontUploadCard
               file={fontFile}
               family={fontFamily}
@@ -377,7 +369,7 @@ function DesignSystemEditor({ id }: { id: string }) {
               onRoleChange={setFontRole}
               onUpload={() => fontMutation.mutate()}
             />
-            <ColorTokenEditor
+            {tokensQuery.isPending || tokensQuery.isError ? <section role="status" className="grid min-h-48 place-items-center rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground">{tokensQuery.isPending ? "색상을 불러오는 중이에요." : "색상을 다시 불러오면 편집할 수 있어요."}</section> : <ColorTokenEditor
               refEl={colorEditorRef}
               tokens={colorTokens}
               tokenFilePath={tokenFilePath}
@@ -415,24 +407,16 @@ function DesignSystemEditor({ id }: { id: string }) {
                 setDraftColorName("");
                 setDraftColorValue("#000000");
               }}
-            />
+            />}
           </div>
-        </div>
-      </div>
+        </section>
+          <details id="system-source-details" className="mt-6 scroll-mt-6 rounded-2xl border border-border bg-card p-5">
+            <summary className="cursor-pointer text-sm font-medium">원본과 파일 정보</summary>
+            <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
+              {catalogDetailRows(system).map((row) => <InfoRow key={row.label} label={CATALOG_DETAIL_LABELS[row.label] ?? row.label} value={row.label === "Status" ? STATUS_LABELS[system.status] : row.label === "Template" ? system.is_template ? "예" : "아니요" : row.value} />)}
+            </dl>
+          </details>
 
-      <div className="border-t border-border bg-background">
-        <div className="mx-auto max-w-6xl">
-          <SystemPreviewGrid
-            systemId={id}
-            onEditColors={() => {
-              colorEditorRef.current?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              });
-            }}
-            previewRefreshKey={previewRefreshKey}
-          />
-        </div>
       </div>
     </div>
   );
@@ -460,7 +444,7 @@ function FontUploadCard({
   onUpload: () => void;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-background p-5">
+    <section className="min-w-0 rounded-2xl border border-border bg-card p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -563,7 +547,7 @@ export function ColorTokenEditor({
   onCancel: () => void;
 }) {
   return (
-    <section ref={refEl} className="rounded-2xl border border-border bg-background p-5">
+    <section ref={refEl} className="min-w-0 rounded-2xl border border-border bg-card p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -640,7 +624,7 @@ export function ColorTokenEditor({
         </div>
       ) : null}
 
-      <div className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+      <div className="mt-4 grid max-h-[420px] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
         {tokens.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
             아직 감지된 색상 토큰이 없어요.
@@ -664,7 +648,7 @@ export function ColorTokenEditor({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-[11px]"
+                className="h-9 px-2 text-xs"
                 onClick={() => onEdit(token)}
                 disabled={saving}
                 aria-label={`${token.name} 색상 편집`}
@@ -693,84 +677,10 @@ function DraftValidationCard({
   notes: string[];
 }) {
   return (
-    <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/80 p-5">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-amber-100 text-amber-700">
-          <AlertTriangle className="h-4 w-4" />
-        </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="border-amber-300 bg-white text-amber-800">
-              확인 필요
-            </Badge>
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-amber-800">
-              초안 검증
-            </span>
-          </div>
-          <h2 className="mt-2 text-base font-semibold text-foreground">
-            이 컴포넌트와 타이포그래피 패턴이 실제 원본과 일치하나요?
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            이 초안은 자동으로 만들었어요. 검토할 핵심은 추출된 컴포넌트 패턴, 타이포그래피
-            샘플, 미리보기 섹션이 {system.name}의 원본 자료를 충실히 반영하는지예요.
-            그렇지 않다면 원본 CSS와 HTML을 다시 살펴보고, 더 잘 맞도록 초안을
-            다시 만들어야 해요.
-          </p>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <IssueBox
-              label="컴포넌트 확인"
-              body="버튼, 카드, 폼, 배지, 표와 그 밖의 미리보기 컴포넌트가 원본 디자인 시스템을 제대로 대표하나요?"
-            />
-            <IssueBox
-              label="타이포그래피 확인"
-              body="디스플레이, 제목, 본문 샘플이 추정한 기본값이 아니라 실제 원본의 글꼴 선택, 크기, 굵기, 분위기를 반영하나요?"
-            />
-          </div>
-
-          <div className="mt-3 rounded-xl border border-amber-200 bg-white/80 px-4 py-3">
-            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-amber-800">
-              아니라면
-            </div>
-            <p className="mt-2 text-sm leading-6 text-foreground">
-              검토 또는 게시하기 전에 원본 CSS, HTML, 캡처한 UI 파일을 더 면밀히
-              분석하여 추출을 다시 실행하고, 초안이 실제 시스템을 더 정확히
-              반영하도록 해 주세요.
-            </p>
-          </div>
-
-          {notes.length > 0 ? (
-            <div className="mt-3 rounded-xl border border-amber-200 bg-white/80 px-4 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-amber-800">
-                추출 메모
-              </div>
-              <ul className="mt-2 space-y-1 text-sm leading-6 text-foreground">
-                {notes.map((note, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <span
-                      className="mt-[7px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
-                      aria-hidden="true"
-                    />
-                    <span>{note}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
-      </div>
+    <section className="mt-5 rounded-xl border border-border bg-muted/40 p-4">
+      <div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-accent" /><div className="min-w-0"><h2 className="text-sm font-semibold">미리보기를 확인한 뒤 검토를 시작해요</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">{system.name}의 색상, 글꼴, 컴포넌트가 원본과 맞는지 확인해 주세요. 필요한 부분을 수정한 뒤 검토 상태로 변경할 수 있어요.</p></div></div>
+      {notes.length > 0 ? <details className="mt-3 border-t border-border pt-3"><summary className="cursor-pointer text-sm font-medium">추출 메모 {notes.length}개</summary><ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-muted-foreground">{notes.map((note, index) => <li key={index}>{note}</li>)}</ul></details> : null}
     </section>
-  );
-}
-
-function IssueBox({ label, body }: { label: string; body: string }) {
-  return (
-    <div className="rounded-xl border border-amber-200 bg-white/80 px-4 py-3">
-      <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-amber-800">
-        {label}
-      </div>
-      <p className="mt-2 text-sm leading-6 text-foreground">{body}</p>
-    </div>
   );
 }
 

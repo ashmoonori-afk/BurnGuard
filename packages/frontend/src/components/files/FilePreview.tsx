@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { AlertCircle, Download, File, FileSearch, FolderOpen, Loader2, RotateCcw } from "lucide-react";
 import type { FileInfo } from "@bg/shared";
 import { ApiError, authorizedFetch } from "@/api/client";
+import { Button } from "@/components/ui/button";
 
 const MAX_TEXT_BYTES = 1024 * 1024;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -107,25 +109,40 @@ export default function FilePreview({ projectId, file }: { projectId: string; fi
     };
   }, [projectId, file?.rel_path, file?.hash, file?.updated_at, file?.size_bytes, file?.category, retry]);
 
-  if (!file) return <div className="flex-1 grid place-items-center p-8 text-sm text-muted-foreground">미리 볼 파일을 선택해 주세요.</div>;
-  if (file.category === "folder") return <div className="flex-1 grid place-items-center p-8 text-sm text-muted-foreground">폴더 안의 파일을 선택해 주세요.</div>;
+  if (!file || file.category === "folder") {
+    const Icon = file ? FolderOpen : FileSearch;
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-auto p-6">
+        <div className="max-w-xs text-center">
+          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl border border-border bg-muted/40"><Icon aria-hidden="true" className="h-5 w-5 text-muted-foreground" /></div>
+          <h3 className="text-sm font-medium">{file ? "폴더 안의 파일을 선택해 주세요." : "미리 볼 파일을 선택해 주세요."}</h3>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">코드와 이미지를 확인하거나 원본 파일을 내려받을 수 있어요.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-      <header className="px-4 py-2 border-b border-border shrink-0">
-        <div className="text-sm font-mono break-all">{file.rel_path}</div>
-        <a className="text-xs text-accent underline" href={`/api/projects/${encodeURIComponent(projectId)}/fs/${file.rel_path.split("/").map(encodeURIComponent).join("/")}`} download={file.rel_path.split("/").at(-1)}>원본 다운로드</a>
+    <section aria-label="파일 미리보기" className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
+        <div className="min-w-0 flex-1 basis-36">
+          <p className="mb-1 text-[11px] font-medium text-muted-foreground">파일 미리보기 · 읽기 전용</p>
+          <h3 className="break-all font-mono text-xs leading-5">{file.rel_path}</h3>
+        </div>
+        <Button asChild variant="outline" className="min-h-11 shrink-0 text-xs">
+          <a href={`/api/projects/${encodeURIComponent(projectId)}/fs/${file.rel_path.split("/").map(encodeURIComponent).join("/")}`} download={file.rel_path.split("/").at(-1)}><Download aria-hidden="true" />원본 다운로드</a>
+        </Button>
       </header>
-      <div className="flex-1 min-h-0 overflow-auto p-4">
-        {preview.kind === "loading" && <p role="status" className="text-sm text-muted-foreground">파일을 불러오고 있어요.</p>}
-        {preview.kind === "error" && <div role="alert" className="text-sm"><p>{preview.message}</p><button type="button" onClick={() => setRetry((value) => value + 1)} className="mt-2 underline">다시 시도</button></div>}
-        {preview.kind === "image" && <img src={preview.url} alt={file.rel_path} className="max-w-full h-auto" onError={() => setPreview({ kind: "error", message: "이미지를 표시할 수 없어요. 파일이 손상되지 않았는지 확인해 주세요." })} />}
+      <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-6" aria-busy={preview.kind === "loading"}>
+        {preview.kind === "loading" && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />파일을 불러오고 있어요.</p>}
+        {preview.kind === "error" && <div role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm"><div className="flex items-start gap-2"><AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-destructive" /><p className="leading-6">{preview.message}</p></div><Button type="button" variant="outline" onClick={() => setRetry((value) => value + 1)} className="mt-3 min-h-11"><RotateCcw aria-hidden="true" />다시 시도</Button></div>}
+        {preview.kind === "image" && <div className="grid min-h-40 place-items-center rounded-xl border border-border bg-muted/30 p-3"><img src={preview.url} alt={file.rel_path} className="h-auto max-w-full rounded-md" onError={() => setPreview({ kind: "error", message: "이미지를 표시할 수 없어요. 파일이 손상되지 않았는지 확인해 주세요." })} /></div>}
         {preview.kind === "text" && <>
-          {preview.truncated && <p role="status" className="mb-3 text-xs text-muted-foreground">파일이 커서 처음 1MB만 표시해요.</p>}
-          <pre className="text-xs font-mono whitespace-pre-wrap break-words">{preview.text || "(빈 파일)"}</pre>
+          {preview.truncated && <p role="status" className="mb-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">파일이 커서 처음 1MB만 표시해요. 전체 내용은 원본을 내려받아 확인해 주세요.</p>}
+          <pre className="whitespace-pre-wrap break-all rounded-xl border border-border bg-muted/20 p-4 font-mono text-xs leading-6">{preview.text || "(빈 파일)"}</pre>
         </>}
-        {preview.kind === "unsupported" && <p className="text-sm text-muted-foreground">이 형식이나 크기의 파일은 미리보기를 지원하지 않아요. 텍스트와 20MB 이하 이미지를 선택해 주세요.</p>}
+        {preview.kind === "unsupported" && <div className="rounded-xl border border-dashed border-border p-6 text-center"><File aria-hidden="true" className="mx-auto mb-3 h-6 w-6 text-muted-foreground" /><h4 className="text-sm font-medium">원본 파일로 확인해 주세요.</h4><p className="mx-auto mt-2 max-w-sm text-xs leading-6 text-muted-foreground">이 형식이나 크기의 파일은 미리보기를 지원하지 않아요. 텍스트와 20MB 이하 이미지의 미리보기를 제공해요.</p></div>}
       </div>
-    </div>
+    </section>
   );
 }

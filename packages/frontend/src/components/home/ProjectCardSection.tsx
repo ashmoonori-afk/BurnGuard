@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { FolderOpen, Search } from "lucide-react";
 import CardGrid from "./CardGrid";
 import type { CardViewModel } from "./mappers";
 import ProjectCard from "./ProjectCard";
@@ -34,7 +35,7 @@ export default function ProjectCardSection({
     return (
       <div
         aria-live="polite"
-        className="rounded-xl border border-dashed border-border bg-card/50 p-16 text-center"
+        className="rounded-2xl border border-border bg-card px-6 py-14 text-center"
       >
         <p className="text-sm font-medium text-foreground">
           프로젝트를 불러오는 중이에요.
@@ -69,10 +70,11 @@ export default function ProjectCardSection({
     return (
       <div
         aria-live="polite"
-        className="rounded-xl border border-dashed border-border bg-card/50 p-16 text-center"
+        className="rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center"
       >
-        <p className="text-sm font-medium text-foreground">{emptyText}</p>
-        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+        <span className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl bg-muted text-muted-foreground"><FolderOpen className="h-6 w-6" aria-hidden="true" /></span>
+        <p className="text-base font-semibold text-foreground">{emptyText}</p>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
           {emptyHint}
         </p>
         <Button className="mt-4" variant="cta" onClick={onStartProject}>
@@ -86,8 +88,9 @@ export default function ProjectCardSection({
     return (
       <div
         aria-live="polite"
-        className="rounded-xl border border-dashed border-border bg-card/50 p-16 text-center"
+        className="rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center"
       >
+        <span className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl bg-muted text-muted-foreground"><Search className="h-6 w-6" aria-hidden="true" /></span>
         <p className="text-sm font-medium text-foreground">
           ‘{query.trim()}’에 대한 검색 결과가 없어요.
         </p>

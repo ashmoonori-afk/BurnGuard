@@ -40,7 +40,7 @@ export default function PreviewIframe({
       src={previewQuery.data}
       sandbox="allow-same-origin"
       referrerPolicy="no-referrer"
-      className="aspect-video w-full rounded-md border border-border bg-white"
+      className="h-[280px] w-full rounded-lg border border-border bg-white sm:h-[320px]"
     />
   );
 }

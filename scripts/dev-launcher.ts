@@ -126,7 +126,7 @@ async function main(): Promise<void> {
   // 2. Start backend.
   console.log("[launcher] starting backend...");
   backend = spawn({
-    cmd: ["bun", "run", "--cwd", "packages/backend", "dev"],
+    cmd: [process.execPath, "run", "--cwd", "packages/backend", "dev"],
     cwd: REPO_ROOT,
     stdout: "inherit",
     stderr: "inherit",
@@ -161,7 +161,7 @@ async function main(): Promise<void> {
   // 4. Start frontend.
   console.log("[launcher] starting frontend...");
   frontend = spawn({
-    cmd: ["bun", "run", "--cwd", "packages/frontend", "dev"],
+    cmd: [process.execPath, "run", "--cwd", "packages/frontend", "dev"],
     cwd: REPO_ROOT,
     stdout: "inherit",
     stderr: "inherit",

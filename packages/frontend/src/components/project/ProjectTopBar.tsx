@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
-import { Home, Play } from "lucide-react";
+import { ChevronRight, Home, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 import type { ProjectDetail } from "@bg/shared";
 import ExportMenu, { type ExportQualityGate } from "@/components/export/ExportMenu";
+import { projectTypeLabel } from "@/lib/format";
 
 export default function ProjectTopBar({
   project,
@@ -22,30 +23,33 @@ export default function ProjectTopBar({
 }) {
   const displayName = stripInternalProjectTag(project.name);
   return (
-    <header className="h-12 border-b border-border bg-background flex items-stretch shrink-0 overflow-hidden">
-      <div className="flex items-center gap-3 px-4 shrink-0 border-r border-border max-[900px]:gap-2 max-[900px]:px-2">
+    <header className="shrink-0 border-b border-border bg-background">
+      <div className="flex min-h-[72px] flex-wrap items-center justify-between gap-x-5 gap-y-3 px-5 py-3 max-[600px]:px-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3 max-[600px]:basis-full">
         <Link
           to="/"
-          className="text-muted-foreground hover:text-foreground"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="프로젝트 목록으로"
           title="홈"
         >
           <Home className="h-4 w-4" />
         </Link>
-        <div className="flex items-center min-w-0">
-          <div
-            className="text-sm font-medium w-[180px] truncate max-[900px]:w-[96px] max-[480px]:w-[72px]"
+        <div className="min-w-0">
+          <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground"><span>프로젝트</span><ChevronRight className="h-3 w-3" aria-hidden="true" /><span>{projectTypeLabel(project.type)}</span></div>
+          <h1
+            className="truncate text-base font-semibold tracking-tight"
             title={displayName}
           >
             {displayName}
-          </div>
+          </h1>
         </div>
       </div>
-      <div className="min-w-0 flex-1 overflow-hidden">{tabsSlot}</div>
-      <div className="px-3 flex items-center gap-2 shrink-0 max-[900px]:px-2 max-[900px]:gap-1">
+      <div className="flex shrink-0 items-center gap-2 max-[600px]:ml-auto">
+        {project.type === "slide_deck" && (
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          className="gap-1.5 max-[900px]:min-h-11 max-[900px]:min-w-11 max-[900px]:justify-center max-[900px]:gap-0 max-[900px]:px-0 max-[900px]:text-[0px]"
+          className="min-h-10 gap-2 px-3 max-[900px]:min-h-11"
           onClick={onPresent}
           disabled={!canPresent || !onPresent}
           title={
@@ -55,9 +59,11 @@ export default function ProjectTopBar({
           }
         >
           <Play className="h-3.5 w-3.5" /> 발표
-        </Button>
+        </Button>)}
         <ExportMenu projectId={project.id} projectType={project.type} projectOptionsJson={project.options_json} qualityGate={qualityGate} onOpenQuality={onOpenQuality} />
       </div>
+      </div>
+      {tabsSlot && <div className="h-12 min-w-0 overflow-hidden border-t border-border bg-muted/30">{tabsSlot}</div>}
     </header>
   );
 }

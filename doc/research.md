@@ -55,5 +55,5 @@ Format each JSON file with `JSON.stringify(value, null, 2)` plus one final newli
 
 ```sh
 cd /tmp
-bun test /absolute/path/to/Design-Claude-Burnguard/packages/backend/tests/research-catalog.test.ts
+bun test /absolute/path/to/BurnGuard/packages/backend/tests/research-catalog.test.ts
 ```

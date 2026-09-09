@@ -75,14 +75,14 @@ export default function ChatPane({
         updated,
       );
       pushToast({
-        title: "백엔드를 바꿨어요",
+        title: "AI 모델을 바꿨어요",
         body: `다음 턴부터 ${backendLabel(updated.backend_id)}를 사용해요.`,
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "백엔드를 바꾸지 못했어요",
+        title: "AI 모델을 바꾸지 못했어요",
         body: apiErrorCopy(err),
         tone: "error",
       });
@@ -90,17 +90,18 @@ export default function ChatPane({
   });
 
   const sessionRunning = session.status === "running";
+  const openCommentCount = comments.filter((comment) => comment.resolved_at === null).length;
 
   return (
-    <aside className="w-[360px] shrink-0 border-r border-border bg-background flex flex-col min-h-0 overflow-hidden max-[900px]:h-[360px] max-[900px]:w-full max-[900px]:border-r-0 max-[900px]:border-b">
-      <div className="flex items-stretch gap-1 px-3 pt-2 border-b border-border">
+    <aside aria-label="AI 대화와 코멘트" className="flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden bg-background min-[901px]:w-[340px] min-[901px]:border-r min-[901px]:border-border">
+      <div className="flex shrink-0 items-stretch gap-4 border-b border-border px-4 pt-2">
         <ChatTab
           id="chat"
           active={tab}
           setActive={setTab}
           icon={<MessageSquare className="h-3.5 w-3.5" />}
         >
-          채팅
+          대화
         </ChatTab>
         <ChatTab
           id="comments"
@@ -108,18 +109,18 @@ export default function ChatPane({
           setActive={setTab}
           icon={<MessageCircleMore className="h-3.5 w-3.5" />}
         >
-          코멘트
+          코멘트 {openCommentCount > 0 && <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{openCommentCount}</span>}
         </ChatTab>
-        <div className="ml-auto flex items-center gap-1 pb-1 text-[10px]">
-          <span className="text-muted-foreground">백엔드</span>
+      </div>
+      <div hidden={tab !== "chat"} className={tab === "chat" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
+          <span className="text-xs font-medium text-muted-foreground">AI 모델</span>
           <BackendToggle
             current={session.backend_id}
             disabled={switchBackend.isPending || sessionRunning}
             onSwitch={(next) => switchBackend.mutate(next)}
           />
         </div>
-      </div>
-      <div hidden={tab !== "chat"} className={tab === "chat" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           <MessageStream
             events={events}
             session={session}
@@ -169,7 +170,7 @@ function BackendToggle({
 }) {
   const options: BackendId[] = ["claude-code", "codex"];
   return (
-    <div className="flex overflow-hidden rounded border border-border">
+    <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-0.5" role="group" aria-label="AI 모델 선택">
       {options.map((opt) => (
         <button
           key={opt}
@@ -188,14 +189,14 @@ function BackendToggle({
                 : `다음 턴부터 ${backendLabel(opt)} 사용`
           }
           className={cn(
-            "max-[900px]:min-h-11 max-[900px]:min-w-11 px-1.5 py-0.5 font-mono uppercase transition-colors",
+            "min-h-8 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11 max-[900px]:min-w-11",
             opt === current
-              ? "bg-foreground/90 text-background"
-              : "bg-background text-muted-foreground hover:text-foreground",
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
             disabled && opt !== current && "opacity-40 cursor-not-allowed",
           )}
         >
-          {opt === "claude-code" ? "cc" : "cx"}
+          {backendLabel(opt)}
         </button>
       ))}
     </div>
@@ -221,12 +222,13 @@ function ChatTab({
 }) {
   return (
     <button
+      type="button"
       onClick={() => setActive(id)}
       aria-pressed={active === id}
       className={cn(
-        "flex max-[900px]:min-h-11 items-center gap-1.5 px-2.5 py-2 text-xs font-medium border-b-2 -mb-px transition-colors",
+        "flex min-h-11 items-center gap-2 border-b-2 -mb-px px-1 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active === id
-          ? "border-foreground text-foreground"
+          ? "border-primary text-primary"
           : "border-transparent text-muted-foreground hover:text-foreground",
       )}
     >

@@ -4,7 +4,7 @@ import path from "node:path";
 import type { NormalizedEvent } from "@bg/shared/events";
 import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
 import { materializeManagedTree, publishManagedTree } from "./artifact-tree-storage";
-import { inspectCanonicalTree, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
+import { inspectCanonicalTree, isCanonicalTreeRootMissing, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
 
@@ -13,11 +13,18 @@ type RecoveryRow = PersistedArtifactOperationRow & { readonly dir_path: string }
 
 type SnapshotReceipt = { readonly snapshotPath: string; readonly baseManifest: CanonicalTreeManifest };
 
-export async function reconcileArtifactState(db: Database): Promise<{ readonly operations: number; readonly projects: number; readonly sessions: number }> {
+export async function reconcileArtifactState(db: Database): Promise<{ readonly operations: number; readonly projects: number; readonly sessions: number; readonly unavailableProjects: readonly { readonly projectId: string; readonly code: "project_directory_missing" }[] }> {
+  const projectRoots = db.query<ProjectRow, []>("SELECT id,dir_path,current_digest FROM projects ORDER BY id").all();
+  const missingProjectIds = new Set<string>();
+  for (const project of projectRoots) {
+    if (await isCanonicalTreeRootMissing(project.dir_path)) missingProjectIds.add(project.id);
+  }
   const operations = db.query<RecoveryRow, []>(`SELECT o.id,o.project_id,p.dir_path,o.status,o.base_revision,o.base_digest,o.result_revision,o.result_digest,o.expected_revision,o.expected_file_hash,o.node_fingerprint,o.diff_json,o.snapshot_json,o.retention_json,o.replay_json,o.created_at,o.updated_at
     FROM artifact_operations o JOIN projects p ON p.id=o.project_id WHERE o.status IN ('pending','working','recovering') ORDER BY o.created_at,o.id`).all();
   let recoveredOperations = 0;
   for (const operation of operations) {
+    // A temporarily absent project must keep its exact receipt for a later restart.
+    if (typeof operation.project_id === "string" && missingProjectIds.has(operation.project_id)) continue;
     const parsed = parsePersistedArtifactOperation(operation);
     db.prepare("UPDATE artifact_operations SET status='recovering',updated_at=? WHERE id=?").run(Date.now(), parsed.id);
     await reconcileOperation(db, operation.dir_path, parsed);
@@ -26,6 +33,7 @@ export async function reconcileArtifactState(db: Database): Promise<{ readonly o
   const projects = db.query<ProjectRow, []>("SELECT id,dir_path,current_digest FROM projects ORDER BY id").all();
   const coordinator = new ArtifactCoordinator(db);
   for (const project of projects) {
+    if (missingProjectIds.has(project.id)) continue;
     if (project.current_digest === null) await coordinator.initialize(project.id, project.dir_path);
     else {
       const actual = await inspectCanonicalTree(project.dir_path);
@@ -37,7 +45,7 @@ export async function reconcileArtifactState(db: Database): Promise<{ readonly o
     }
   }
   const sessions = recoverPersistedSessions(db);
-  return { operations: recoveredOperations, projects: projects.length, sessions };
+  return { operations: recoveredOperations, projects: projects.length - missingProjectIds.size, sessions, unavailableProjects: [...missingProjectIds].map((projectId) => ({ projectId, code: "project_directory_missing" })) };
 }
 
 async function recoverCommittedBaseline(db: Database, project: ProjectRow): Promise<void> {

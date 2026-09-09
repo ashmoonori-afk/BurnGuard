@@ -2,6 +2,7 @@ import type {
   DesignSystemStatus,
   DesignSystemSummary,
   ProjectSummary,
+  ProjectType,
 } from "@bg/shared";
 import { formatRelativeDay, projectTypeLabel } from "@/lib/format";
 
@@ -15,7 +16,7 @@ export interface CardViewModel {
   subtitle: string;
   href: string;
   tintClass: string;
-  emoji?: string;
+  kind?: ProjectType | "system";
   thumbnail?: string | null;
   isTemplate?: boolean;
 }
@@ -58,6 +59,7 @@ export function projectToCard(p: ProjectSummary): CardViewModel {
     href: `/projects/${p.id}`,
     tintClass: PROJECT_TINTS[p.type] ?? "bg-stone-100",
     thumbnail: p.thumbnail_path,
+    kind: p.type,
   };
 }
 
@@ -82,6 +84,7 @@ export function systemToCard(s: DesignSystemSummary, index = 0): CardViewModel {
     href: `/systems/${s.id}`,
     tintClass: SYSTEM_TINTS[index % SYSTEM_TINTS.length],
     thumbnail: s.thumbnail_path,
+    kind: "system",
     isTemplate: s.is_template,
   };
 }

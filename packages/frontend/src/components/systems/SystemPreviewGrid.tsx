@@ -96,14 +96,14 @@ export default function SystemPreviewGrid({
     <div className="px-4 py-6 space-y-8 sm:px-8">
       {groups.map((grp) => (
         <section key={grp.group}>
-          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            {grp.group}
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+            {grp.group}<span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{grp.items.length}</span>
           </h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {grp.items.map((it) => (
               <article
                 key={it.path}
-                className="rounded-xl border border-border bg-card p-4 hover:shadow-app-2 transition-shadow"
+                className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-3"
               >
                 <div className="mb-3">
                   <PreviewIframe
@@ -121,7 +121,7 @@ export default function SystemPreviewGrid({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 shrink-0 px-2 text-[11px]"
+                      className="h-9 shrink-0 px-3 text-xs"
                       onClick={onEditColors}
                     >
                       <Pencil className="h-3 w-3" />

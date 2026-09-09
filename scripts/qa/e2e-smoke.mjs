@@ -21,6 +21,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runReviewUiFixtures } from "./review-ui-fixtures.mjs";
 import { runReviewCanvasFixtures } from "./review-canvas-fixtures.mjs";
+import { runUiRedesignFixtures } from "./ui-redesign-fixtures.mjs";
+import { runSettingsRedesignFixtures } from "./settings-redesign-fixtures.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
@@ -59,8 +61,8 @@ try {
 
   await scenario("home-loads", async () => {
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("tab", { name: "최근" }).waitFor({ timeout: 20_000 });
-    for (const name of ["내 디자인", "예제", "디자인 시스템"]) {
+    await page.getByRole("tab", { name: "최근 작업", exact: true }).waitFor({ timeout: 20_000 });
+    for (const name of ["내 프로젝트", "예제", "디자인 시스템"]) {
       await page.getByRole("tab", { name }).waitFor({ timeout: 5_000 });
     }
     await shot(page, "01-home");
@@ -70,7 +72,7 @@ try {
   await scenario("open-example-project", async () => {
     // The seeded "Portfolio Playground" fixture is a plain project (no
     // tutorial tag), so it lives on the 최근 tab, not on 예제.
-    await page.getByRole("tab", { name: "최근" }).click();
+    await page.getByRole("tab", { name: "최근 작업", exact: true }).click();
     const card = page.locator("a[href^='/projects/']").filter({ hasText: FIXTURE_PROJECT }).first();
     await card.waitFor({ timeout: 20_000 });
     await card.click();
@@ -207,20 +209,30 @@ try {
     for (const width of [1024, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
-      await page.getByRole("tab", { name: "최근", exact: true }).waitFor();
+      await page.getByRole("tab", { name: "최근 작업", exact: true }).waitFor();
       const create = page.getByRole("button", { name: "새 프로젝트", exact: true });
       await create.waitFor();
-      await create.focus();
-      await page.keyboard.press("Enter");
       if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)) throw new Error(`Home overflows at ${width}px`);
       await shot(page, `08-home-${width}`);
+      await create.focus();
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: "새 프로젝트 만들기" });
+      await dialog.waitFor();
+      await dialog.getByLabel("프로젝트 이름", { exact: true }).waitFor();
+      if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)) throw new Error(`Home overflows at ${width}px`);
+      await shot(page, `08-create-${width}`);
+      await page.keyboard.press("Escape");
+      await dialog.waitFor({ state: "hidden" });
+      await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "새 프로젝트");
     }
     await page.setViewportSize({ width: 1440, height: 900 });
   });
 
+  await runUiRedesignFixtures(page, BASE, scenario, { home, shot, fixtureProjectName: FIXTURE_PROJECT });
+
   await scenario("delete-project", async () => {
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("tab", { name: "최근" }).click();
+    await page.getByRole("tab", { name: "최근 작업", exact: true }).click();
     const card = page.locator("a[href^='/projects/']").filter({ hasText: FIXTURE_PROJECT }).first();
     await card.waitFor({ timeout: 20_000 });
     await card.hover();
@@ -235,6 +247,7 @@ try {
   });
   await runReviewUiFixtures(page, context, BASE, scenario);
   await runReviewCanvasFixtures(page, context, BASE, scenario);
+  await runSettingsRedesignFixtures(page, BASE, scenario);
 } catch (error) {
   results.push({ name: "harness", ok: false, error: String(error?.stack ?? error) });
 } finally {

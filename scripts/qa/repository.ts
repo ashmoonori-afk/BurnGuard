@@ -3,7 +3,7 @@ import path from "node:path";
 import { QaPreflightError, QaTimeoutError } from "./errors";
 
 export const EXPECTED_BRANCH = "main";
-export const EXPECTED_ORIGIN = "https://github.com/ashmoonori-afk/Design-Claude-Burnguard.git";
+export const EXPECTED_ORIGIN = "https://github.com/ashmoonori-afk/BurnGuard.git";
 export const EXPECTED_BASE = "b016bb84e3157e10d2ec7cffebaa25681f58def3";
 
 export type RepositoryIdentity = {

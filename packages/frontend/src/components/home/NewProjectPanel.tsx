@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type {
   BackendId,
   CreateProjectRequest,
@@ -30,14 +30,6 @@ import { useUIStore } from "@/state/uiStore";
 
 export type { ProjectType };
 
-const TYPE_LABEL: Record<ProjectType, string> = {
-  prototype: "새 프로토타입",
-  slide_deck: "새 슬라이드 덱",
-  graphic: "새 그래픽",
-  from_template: "템플릿으로 시작",
-  other: "새 프로젝트",
-};
-
 export default function NewProjectPanel({
   type,
   designSystems,
@@ -45,6 +37,7 @@ export default function NewProjectPanel({
   systemsLoading,
   systemsError,
   onRetrySystems,
+  onPendingChange,
   onCreated,
 }: {
   type: ProjectType;
@@ -53,6 +46,7 @@ export default function NewProjectPanel({
   systemsLoading: boolean;
   systemsError: Error | null;
   onRetrySystems: () => void;
+  onPendingChange?: (pending: boolean) => void;
   onCreated: (project: CreateProjectResponse) => void;
 }) {
   const queryClient = useQueryClient();
@@ -98,13 +92,23 @@ export default function NewProjectPanel({
   );
   const disabled = createMutation.isPending;
 
+  useEffect(() => {
+    onPendingChange?.(disabled);
+    return () => onPendingChange?.(false);
+  }, [disabled, onPendingChange]);
+
   function update<K extends keyof BriefForm>(key: K, value: BriefForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   return (
-    <div className="p-6">
-      <h2 className="mb-4 text-base font-semibold">{TYPE_LABEL[type]}</h2>
+    <form className="p-6" onSubmit={(event) => {
+      event.preventDefault();
+      if (!built.ok || disabled) return;
+      setError(null);
+      createMutation.mutate(built.request);
+    }}>
+      <h2 className="mb-3 text-xs font-semibold text-muted-foreground">02 · 프로젝트 기본 정보</h2>
 
       <div className="space-y-4">
         <div className="space-y-1.5">
@@ -113,8 +117,10 @@ export default function NewProjectPanel({
           </label>
           <Input
             id="project-name"
-            placeholder="제목 없음"
+            placeholder="예: 다음 분기 브랜드 제안서"
             value={form.name}
+            autoFocus
+            required
             disabled={disabled}
             onChange={(e) => update("name", e.target.value)}
           />
@@ -161,20 +167,20 @@ export default function NewProjectPanel({
             <button
               type="button"
               onClick={onRetrySystems}
-              className="text-[11px] font-medium text-accent underline underline-offset-2 hover:no-underline"
+              className="text-xs font-medium text-accent underline underline-offset-2 hover:no-underline"
             >
               다시 시도
             </button>
           ) : null}
         </div>
 
-        <p className="text-[11px] leading-relaxed text-foreground/80">
+        <p className="text-xs leading-relaxed text-muted-foreground">
           {systemsLoading
             ? "디자인 시스템을 불러오는 중이에요."
             : systemsError
               ? "디자인 시스템을 불러오지 못했어요. 로컬 서버가 켜져 있는지 확인해 주세요."
               : selectable.length === 0
-                ? `${isTemplate ? "게시된 템플릿이 아직 없어요" : "게시된 디자인 시스템이 아직 없어요"}. 메인 화면 위쪽의 '디자인 시스템' 탭에서 먼저 만들어 보세요.`
+                ? isTemplate ? "게시된 템플릿이 아직 없어요. 디자인 시스템에서 초안을 만들고 게시하면 사용할 수 있어요." : "디자인 시스템 없이 시작할 수 있어요. 나만의 색상과 글꼴은 디자인 시스템에서 관리해요."
                 : isTemplate
                   ? "게시된 디자인 시스템을 템플릿으로 사용할 수 있어요."
                   : "게시된 디자인 시스템만 목록에 나와요. 없이도 시작할 수 있어요."}
@@ -222,28 +228,24 @@ export default function NewProjectPanel({
       </div>
 
       <Button
-        className="mt-6 w-full"
+        className="mt-6 h-11 w-full gap-2 rounded-xl"
+        type="submit"
         variant="cta"
         disabled={!built.ok || disabled}
-        onClick={() => {
-          if (!built.ok || disabled) return;
-          setError(null);
-          createMutation.mutate(built.request);
-        }}
       >
-        <Plus className="h-4 w-4" />{" "}
-        {createMutation.isPending ? "만드는 중..." : "만들기"}
+        {createMutation.isPending ? "프로젝트를 만드는 중..." : "프로젝트 만들기"}
+        <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Button>
 
       {error ? (
-        <p className="mt-3 text-center text-[11px] text-destructive">{error}</p>
+        <p role="alert" className="mt-3 text-center text-xs text-destructive">{error}</p>
       ) : (
-        <p className="mt-3 text-center text-[11px] leading-relaxed text-foreground/80">
+        <p aria-live="polite" className="mt-3 text-center text-xs leading-relaxed text-muted-foreground">
           {built.ok
-            ? "이 프로젝트는 기본적으로 나만 볼 수 있어요."
+            ? "만든 뒤 요청을 입력하면 AI와 작업을 시작해요."
             : PROBLEM_MESSAGE[built.problem]}
         </p>
       )}
-    </div>
+    </form>
   );
 }

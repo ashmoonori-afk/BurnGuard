@@ -48,12 +48,13 @@ export function DirectionsView({
     return (
       <DirectionShell busy={actionPending}>
         <div className="grid min-h-full place-items-center px-4 py-12 text-center">
-          <div className="max-w-md">
-            <Compass className="mx-auto mb-4 h-8 w-8 text-accent" aria-hidden="true" />
-            <h1 className="text-lg font-semibold">프로젝트의 디자인 방향을 정해요</h1>
+          <div className="max-w-lg rounded-2xl border border-border bg-card px-6 py-10 shadow-sm sm:px-10">
+            <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-accent/10"><Compass className="h-7 w-7 text-accent" aria-hidden="true" /></div>
+            <h1 className="text-xl font-semibold tracking-tight">프로젝트의 디자인 방향을 정해요</h1>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground [word-break:keep-all]">
               현재 콘텐츠를 바탕으로 서로 다른 구성과 스타일의 미리보기 3개를 만들어요.
             </p>
+            <p className="mt-3 text-xs leading-6 text-muted-foreground">미리보기를 비교하고 원하는 방향을 선택하면 다음 AI 생성에 반영돼요.</p>
             <Button
               type="button"
               variant="cta"
@@ -75,7 +76,7 @@ export function DirectionsView({
 
   return (
     <DirectionShell busy={loading || actionPending}>
-      <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6">
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-7 sm:px-7">
         <header className="flex items-start justify-between gap-4 max-[600px]:flex-col">
           <div className="min-w-0">
             <h1 className="text-lg font-semibold">디자인 방향</h1>
@@ -111,7 +112,7 @@ export function DirectionsView({
         {!loading ? <ContentOutline items={state.content_outline} /> : null}
 
         <section
-          className="mt-5 grid min-w-0 grid-cols-3 gap-4 max-[900px]:grid-cols-2 max-[600px]:grid-cols-1"
+          className="mt-6 grid min-w-0 grid-cols-3 gap-5 max-[1100px]:grid-cols-2 max-[600px]:grid-cols-1"
           aria-label="디자인 방향 후보"
         >
           {state.directions.map((direction) => (
@@ -161,7 +162,7 @@ function DirectionShell({
 }) {
   return (
     <main
-      className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-background"
+      className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/30"
       aria-busy={busy}
     >
       {children}

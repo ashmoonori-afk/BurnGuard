@@ -49,6 +49,7 @@ export default function ArtifactTabs({
   return (
     <div
       ref={scrollRef}
+      aria-label="프로젝트 작업 탭"
       className={cn(
         "relative flex h-full w-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden px-2",
         // Edge fade + snap only while the strip actually overflows, so a
@@ -78,11 +79,12 @@ export default function ArtifactTabs({
               type="button"
               onClick={() => onSelect(tab.id)}
               title={tab.relPath ?? tab.title}
+              aria-pressed={isActive}
               className={cn(
-                "flex h-full items-center gap-2 border-b-2 px-3 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                "flex h-full items-center gap-2 border-b-2 px-4 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 isActive
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
+                  ? "border-accent bg-background text-accent"
+                  : "border-transparent text-muted-foreground hover:bg-background/70 hover:text-foreground",
                 tab.closeable && "pr-1.5",
               )}
             >

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { createElement, createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import FileTree from "../src/components/files/FileTree";
 import BackendSelector from "../src/components/settings/BackendSelector";
 import { ColorTokenEditor } from "../src/views/DesignSystemView";
 import { groupSystemPreviews } from "../src/components/systems/SystemPreviewGrid";
@@ -24,13 +25,16 @@ test("Given two available backends When one is selected Then assistive technolog
     detection: {
       backends: [
         { id: "claude-code", found: true, binary_path: "claude", version: "1" },
-        { id: "codex", found: true, binary_path: "codex", version: "1" },
+        { id: "codex", found: true, binary_path: "C:/private/tools/codex.exe", version: "1" },
       ],
     },
   }));
   expect(html).toContain('aria-labelledby="backend-selector-label"');
   expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
   expect(html.match(/aria-pressed="false"/g)).toHaveLength(1);
+  expect(html).toContain("Claude Code");
+  expect(html).toContain("Codex");
+  expect(html).not.toContain("C:/private/tools");
 });
 
 test("Given only one standard preview and a custom preview When grouped Then absent sections stay absent and both existing files remain", () => {
@@ -39,4 +43,16 @@ test("Given only one standard preview and a custom preview When grouped Then abs
     { group: "색상", items: [{ path: "preview/colors-brand.html", title: "브랜드 색상" }] },
     { group: "기타 미리보기", items: [{ path: "preview/mobile-header.html", title: "mobile header" }] },
   ]);
+});
+
+
+test("Given a selected project file When the file browser renders Then its current item and complete path are available to keyboard and screen-reader users", () => {
+  const html = renderToStaticMarkup(createElement(FileTree, {
+    files: [{ rel_path: "styles/brand.css", category: "stylesheet" }, { rel_path: "notes/brief.md", category: "document" }],
+    activePath: "styles/brand.css", onOpen() {},
+  }));
+  expect(html).toContain('aria-label="프로젝트 파일 탐색"');
+  expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+  expect(html).toContain('title="styles/brand.css"');
+  expect(html).toContain('title="notes/brief.md"');
 });

@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react";
+import { Paperclip, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function UserMessage({
@@ -16,12 +16,12 @@ export default function UserMessage({
 }) {
   const canRevert = Boolean(turnId && onRevert);
   return (
-    <div className="group relative flex justify-end">
-      <div className="max-w-[85%] rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-sm text-foreground whitespace-pre-wrap">
+    <div className="group flex flex-col items-end gap-1">
+      <div className="max-w-[94%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-md border border-primary/15 bg-primary/5 px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
         {text}
         {attachmentCount && attachmentCount > 0 ? (
-          <div className="mt-1 text-[10px] text-muted-foreground">
-            📎 첨부 파일 {attachmentCount}개
+          <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Paperclip className="h-3 w-3" aria-hidden="true" /> 첨부 파일 {attachmentCount}개
           </div>
         ) : null}
       </div>
@@ -38,13 +38,12 @@ export default function UserMessage({
           disabled={reverting}
           title="이 턴 이전 상태로 되돌리기"
           className={cn(
-            "absolute -left-6 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-muted-foreground opacity-0 transition-opacity",
-            "group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:text-foreground max-[900px]:opacity-100",
+            "inline-flex min-h-7 items-center justify-center gap-1 rounded px-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11",
             reverting && "opacity-100 animate-pulse",
           )}
         >
           <RotateCcw className="h-3 w-3" />
-          <span className="sr-only">이 턴 되돌리기</span>
+          <span>이 턴 되돌리기</span>
         </button>
       )}
     </div>

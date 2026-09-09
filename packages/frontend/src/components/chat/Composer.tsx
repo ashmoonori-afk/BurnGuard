@@ -23,7 +23,7 @@ function sendStateMessage(state: ComposerSendState): string | null {
     case "idle":
       return null;
     case "processing":
-      return "보내는 중이에요. 서버 처리 진행률은 알 수 없어요.";
+      return "메시지와 첨부 자료를 보내고 있어요…";
     case "cancelled":
       return "전송 요청을 취소했어요. 다시 보낼 수 있어요.";
     case "failed":
@@ -127,7 +127,7 @@ export default function Composer({
     <div
       data-qa="composer"
       className={cn(
-        "shrink-0 border-t border-border p-3 bg-background",
+        "max-h-[60%] shrink-0 overflow-y-auto border-t border-border bg-background p-3",
         dragOver && "ring-2 ring-accent ring-inset",
       )}
       onDragOver={(e) => {
@@ -137,13 +137,16 @@ export default function Composer({
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
     >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <label htmlFor={`composer-${sessionId}`} className="text-xs font-semibold text-foreground">작업 요청</label>
+        <span className="text-[11px] text-muted-foreground">Ctrl / ⌘ + Enter</span>
+      </div>
       <ComposerAttachments
         items={visualSources.items}
         sending={sending}
         onRoleChange={visualSources.setRole}
         onRemove={visualSources.remove}
       />
-      <VisualSourceCandidates files={projectFiles} />
       {!draft.ready && <p role="status" className="text-xs text-muted-foreground">작성 중이던 내용을 불러오고 있어요…</p>}
       {draft.storageError && <p role="status" className="text-xs text-warning-foreground">이 브라우저에서 초안을 저장하지 못했어요. 페이지를 닫기 전에 메시지를 보내 주세요.</p>}
 
@@ -151,13 +154,14 @@ export default function Composer({
         <p
           role="status"
           aria-live="polite"
-          className="mb-2 text-[11px] leading-relaxed text-muted-foreground"
+          className="mb-2 rounded-md bg-muted px-2.5 py-2 text-xs leading-relaxed text-muted-foreground"
         >
           {statusMessage}
         </p>
       )}
 
       <textarea
+        id={`composer-${sessionId}`}
         value={text}
         onChange={(e) => {
           setText(e.target.value);
@@ -166,7 +170,7 @@ export default function Composer({
           }
         }}
         placeholder={placeholder}
-        rows={3}
+        rows={4}
         disabled={disabled || sending || !draft.ready}
         aria-label="메시지 입력"
         onKeyDown={(e) => {
@@ -175,13 +179,10 @@ export default function Composer({
             void send();
           }
         }}
-        className="w-full resize-none bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
+        className="block min-h-[104px] w-full resize-none rounded-xl border border-input bg-muted/25 p-3 text-sm leading-relaxed placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
       />
-      <p className="mt-1 text-[10px] text-muted-foreground">
-        Cmd/Ctrl+Enter로 보내기
-      </p>
 
-      <div className="flex items-center gap-1 mt-2">
+      <div className="mt-2 flex items-center gap-1.5">
         <input
           ref={fileInput}
           type="file"
@@ -200,8 +201,9 @@ export default function Composer({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-muted-foreground max-[900px]:h-11 max-[900px]:w-11"
+          className="h-9 w-9 shrink-0 text-muted-foreground max-[900px]:h-11 max-[900px]:w-11"
           title="설정 열기"
+          aria-label="설정 열기"
           onClick={() => setSettingsOpen(true)}
         >
           <Settings2 className="h-3.5 w-3.5" />
@@ -209,7 +211,7 @@ export default function Composer({
         <Button
           variant="outline"
           size="sm"
-          className="h-7 gap-1 text-xs max-[900px]:h-11"
+          className="h-9 gap-1.5 px-2.5 text-xs max-[900px]:h-11"
           title="참고할 파일을 첨부합니다"
           disabled={disabled || sending || !draft.ready}
           onClick={() => fileInput.current?.click()}
@@ -221,7 +223,7 @@ export default function Composer({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 gap-1 text-xs max-[900px]:h-11"
+            className="h-9 gap-1.5 px-3 text-xs max-[900px]:h-11"
             onClick={() => sendAbort.current?.abort()}
             aria-label="전송 취소"
             title="전송 요청을 취소합니다"
@@ -232,7 +234,7 @@ export default function Composer({
           <Button
             variant="destructive"
             size="sm"
-            className="h-7 gap-1 text-xs max-[900px]:h-11"
+            className="h-9 gap-1.5 px-3 text-xs max-[900px]:h-11"
             disabled={interruptPending || !onInterrupt}
             onClick={() => onInterrupt?.()}
             title="진행 중인 작업을 중단합니다"
@@ -248,7 +250,7 @@ export default function Composer({
           <Button
             variant="cta"
             size="sm"
-            className="h-7 gap-1 text-xs max-[900px]:h-11"
+            className="h-9 gap-1.5 px-3 text-xs max-[900px]:h-11"
             disabled={!canSend}
             onClick={() => void send()}
             aria-label={retrying ? "다시 보내기 (Cmd/Ctrl+Enter)" : "보내기 (Cmd/Ctrl+Enter)"}
@@ -259,6 +261,7 @@ export default function Composer({
           </Button>
         )}
       </div>
+      <VisualSourceCandidates files={projectFiles} />
     </div>
   );
 }

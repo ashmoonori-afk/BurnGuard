@@ -68,34 +68,38 @@ export default function FileTree({
   }
 
   return (
-    <nav className="p-2 space-y-4 text-sm">
+    <nav aria-label="프로젝트 파일 탐색" className="space-y-5 p-3 text-sm">
       {CATEGORY_ORDER.map((cat) => {
         const list = byCategory.get(cat);
         if (!list || list.length === 0) return null;
         return (
           <section key={cat}>
-            <div className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-              {CATEGORY_LABEL[cat]}
+            <div className="mb-2 flex items-center justify-between px-2 text-xs font-medium text-muted-foreground">
+              <span>{CATEGORY_LABEL[cat]}</span>
+              <span className="tabular-nums" aria-label={`${list.length}개`}>{list.length}</span>
             </div>
-            <ul>
+            <ul className="space-y-1">
               {list.map((f) => {
                 const Icon = iconFor(f.category);
                 const active = activePath === f.rel_path;
                 return (
                   <li key={f.rel_path}>
                     <button
+                      type="button"
                       onClick={() => onOpen(f)}
+                      aria-current={active ? "page" : undefined}
+                      title={f.rel_path}
                       className={cn(
-                        "w-full flex items-center gap-2 px-2 py-1 rounded-md text-left text-xs transition-colors",
+                        "flex min-h-11 w-full min-w-0 items-center gap-3 rounded-lg border px-3 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
                         active
-                          ? "bg-muted text-foreground"
-                          : "hover:bg-muted/60",
+                          ? "border-accent/25 bg-accent/10 font-medium text-foreground"
+                          : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                       )}
                     >
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      <span className="truncate">{f.rel_path}</span>
+                      <Icon aria-hidden="true" className={cn("h-4 w-4 shrink-0", active && "text-accent")} />
+                      <span className="min-w-0 flex-1 truncate">{f.rel_path}</span>
                       {f.size_bytes != null && (
-                        <span className="ml-auto text-[10px] text-muted-foreground font-mono shrink-0">
+                        <span className="shrink-0 font-mono text-[10px] font-normal text-muted-foreground">
                           {formatSize(f.size_bytes)}
                         </span>
                       )}
