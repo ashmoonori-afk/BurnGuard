@@ -96,7 +96,9 @@ bun install --frozen-lockfile
 bun run scripts/dev-launcher.ts
 ```
 
-실행기는 backend 준비 후 frontend를 시작하고 브라우저를 엽니다. 이후에는 저장소의 `Start-BurnGuard.bat`으로도 시작할 수 있습니다.
+이 개발용 실행기는 backend 준비 후 frontend를 시작하고 브라우저를 엽니다.
+
+Windows에서는 `Start-BurnGuard.bat`를 더블클릭하면 네이티브 앱이 열립니다. 첫 실행은 Bun과 .NET 8 SDK로 앱을 빌드하며, 이후에는 기존 빌드를 바로 엽니다. 소스를 업데이트한 뒤에는 `Start-BurnGuard.bat --rebuild`로 다시 빌드해 여세요. 네이티브 앱을 열기 전에는 브라우저 모드 서버를 종료해 주세요.
 
 - 앱: **http://127.0.0.1:5173**
 - Backend 상태: **http://127.0.0.1:14070/api/health**
