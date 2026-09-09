@@ -61,7 +61,7 @@ export default function DrawPanel({
               className={cn(
                 "flex flex-col items-center gap-0.5 rounded border px-2 py-1.5 text-[10px] transition-colors",
                 tool === t.id
-                  ? "border-amber-500 bg-amber-500/10 text-amber-700"
+                  ? "border-accent bg-accent/10 text-accent"
                   : "border-border text-muted-foreground hover:text-foreground",
               )}
             >

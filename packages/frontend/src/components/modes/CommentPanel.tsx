@@ -107,7 +107,7 @@ function CommentItem({
     <div
       className={cn(
         "rounded-md border text-xs bg-background",
-        focused ? "border-orange-400" : "border-border",
+        focused ? "border-accent" : "border-border",
       )}
     >
       <button
@@ -120,7 +120,7 @@ function CommentItem({
             "inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold",
             resolved
               ? "bg-muted text-muted-foreground"
-              : "bg-orange-500 text-white",
+              : "bg-accent text-accent-foreground",
           )}
         >
           {index}

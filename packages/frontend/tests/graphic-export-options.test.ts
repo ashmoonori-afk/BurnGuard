@@ -62,9 +62,9 @@ describe("graphic export menu model", () => {
 });
 
 describe("chromium export failure copy", () => {
-  test("Given a launch timeout message When classified Then the HTML ZIP fallback is offered", () => {
+  test("Given a launch timeout message When classified Then safe retry guidance is offered", () => {
     expect(classifyChromiumFailure("chromium_launch_timeout: Chromium did not finish launching\ntried channels: bundled, chrome, msedge")).toBe("launch_timeout");
-    expect(CHROMIUM_FAILURE_MESSAGE.launch_timeout).toBe("이 환경에서는 Chromium 렌더링을 완료하지 못했어요. HTML ZIP 내보내기는 계속 쓸 수 있어요.");
+    expect(CHROMIUM_FAILURE_MESSAGE.launch_timeout).toBe("Chromium 렌더링을 완료하지 못했어요. 설정에서 Chromium 상태를 확인한 뒤 다시 시도해 주세요.");
   });
 
   test("Given a missing browser When classified Then the install guidance covers the code and the older message", () => {
