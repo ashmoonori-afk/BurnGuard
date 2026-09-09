@@ -32,15 +32,18 @@ export function renderSlideDeck(
   return `<!doctype html>
 <html lang="en">
 <head>
+  <link rel="stylesheet" href="fonts/fonts.css">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
   <style>
+    h1, h2, h3 { font-family: "Space Grotesk", "Pretendard", sans-serif; }
+    code, pre, .number { font-family: "IBM Plex Mono", "Pretendard", monospace; font-variant-numeric: tabular-nums; }
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Segoe UI Variable Text", sans-serif;
+      font-family: "DM Sans", "Pretendard", sans-serif;
       background:
         radial-gradient(circle at top right, rgba(224, 107, 76, 0.16), transparent 24%),
         radial-gradient(circle at bottom left, rgba(26, 35, 48, 0.12), transparent 28%),
@@ -74,13 +77,15 @@ export function renderSlideDeck(
       width: 100%;
       max-height: 100vh;
       background: #ffffff;
-      padding: 64px;
+      padding: clamp(24px, 6vw, 64px);
       display: grid;
       place-items: center;
       border-bottom: 1px solid #e7dece;
       box-shadow: 0 24px 60px rgba(24, 35, 45, 0.14);
     }
     .deck-slide > .deck-body {
+      min-width: 0;
+      overflow-wrap: anywhere;
       max-width: 920px;
       width: 100%;
     }
@@ -92,11 +97,11 @@ export function renderSlideDeck(
       background: #f6f1e8;
     }
     .eyebrow {
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 600;
       letter-spacing: 0.16em;
       text-transform: uppercase;
-      color: #e06b4c;
+      color: #a84129;
       margin-bottom: 20px;
     }
     .deck-slide.deck-cover .eyebrow {
@@ -106,8 +111,8 @@ export function renderSlideDeck(
       margin: 0;
       letter-spacing: -0.03em;
     }
-    h1 { font-size: 64px; line-height: 1.02; }
-    h2 { font-size: 44px; line-height: 1.08; }
+    h1 { font-size: clamp(32px, 6vw, 64px); line-height: 1.15; }
+    h2 { font-size: clamp(28px, 5vw, 44px); line-height: 1.15; }
     p {
       margin-top: 24px;
       font-size: 20px;
@@ -156,7 +161,7 @@ export function renderSlideDeck(
     </div>
   </section>
 
-  <script src="/runtime/deck-stage.js" defer></script>
+  <script src="runtime/deck-stage.js" defer></script>
 </body>
 </html>`;
 }

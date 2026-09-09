@@ -1,3 +1,4 @@
+import { copyBundledFonts } from "../data/bundled-fonts";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
@@ -171,7 +172,7 @@ Use only one index.html file with inline CSS and no external JavaScript.
 
 Fonts:
 - Use system sans for body.
-- Use Georgia or another local serif fallback for cinematic display typography.
+- Use bundled DM Serif Display with Gowun Batang for Korean cinematic headings; use Pretendard for readable Korean body text. Load fonts/fonts.css and keep local font files with exports.
 
 Navigation:
 - Glassmorphic nav over the hero.
@@ -291,14 +292,15 @@ Use data-bg-node-id on the page title, every KPI tile (parent + value + delta + 
 export const PROTOTYPE_TUTORIAL_HTML = `<!doctype html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="fonts/fonts.css">
   <meta charset="utf-8">
   <title>Prototype tutorial</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    :root { color-scheme: light; --ink: #111827; --accent: #E06B4C; }
+    :root { color-scheme: light; --ink: #111827; --accent: #b74328; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "DM Sans", "Pretendard", system-ui, sans-serif;
       background: #FAFAF7;
       color: var(--ink);
       min-height: 100vh;
@@ -354,6 +356,7 @@ export const PROTOTYPE_TUTORIAL_HTML = `<!doctype html>
 export const DECK_TUTORIAL_HTML = `<!doctype html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="fonts/fonts.css">
   <meta charset="utf-8">
   <title>Deck tutorial</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -363,7 +366,7 @@ export const DECK_TUTORIAL_HTML = `<!doctype html>
       margin: 0;
       background: #101318;
       color: var(--ink);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "DM Sans", "Pretendard", system-ui, sans-serif;
     }
     body[data-deck-ready] .deck-slide:not([data-active]) {
       display: none;
@@ -422,7 +425,7 @@ export const DECK_TUTORIAL_HTML = `<!doctype html>
       <p data-bg-node-id="slide-3-body">Open the Export menu and pick HTML zip, PDF, or PowerPoint. PDF and PPTX need a Chromium install — Settings has a one-click button.</p>
     </div>
   </section>
-  <script src="/runtime/deck-stage.js"></script>
+  <script src="runtime/deck-stage.js"></script>
 </body>
 </html>
 `;
@@ -530,7 +533,7 @@ function renderSplitSaasSample(sample: PromptSample): string {
       min-height: 100vh;
       background: #050505;
       color: var(--fg);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "DM Sans", "Pretendard", system-ui, sans-serif;
     }
     body::before {
       content: "";
@@ -596,7 +599,7 @@ function renderLiquidOrbSample(sample: PromptSample): string {
     sample,
     colorScheme: "light",
     styles: `
-    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 12% 0%, rgba(96,177,255,0.36), transparent 34rem), #f8fbff; color: #09111f; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 12% 0%, rgba(96,177,255,0.36), transparent 34rem), #f8fbff; color: #09111f; font-family: "DM Sans", "Pretendard", system-ui, sans-serif; }
     .page { width: min(1600px, calc(100vw - 40px)); margin: 0 auto; padding: 30px 0 46px; }
     .nav { position: sticky; top: 30px; z-index: 3; width: fit-content; margin: 0 auto 96px; display: flex; align-items: center; gap: 28px; padding: 12px 14px 12px 20px; border: 1px solid rgba(255,255,255,0.72); border-radius: 16px; background: rgba(255,255,255,0.36); backdrop-filter: blur(36px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 18px 70px rgba(0,132,255,0.13); }
     .brand { font-weight: 900; letter-spacing: -0.05em; }
@@ -609,7 +612,7 @@ function renderLiquidOrbSample(sample: PromptSample): string {
     h1 { margin: 24px 0 18px; max-width: 640px; font-size: clamp(56px, 8vw, 118px); line-height: 0.92; letter-spacing: -0.08em; }
     .subhead { max-width: 620px; color: rgba(9,17,31,0.64); font-size: 19px; line-height: 1.7; }
     .cta { display: inline-flex; align-items: center; gap: 13px; margin-top: 30px; padding: 15px 18px 15px 22px; box-shadow: 0 18px 44px rgba(0,132,255,0.25); }
-    .arrow { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #fff; color: #0084ff; }
+    .arrow { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #fff; color: #0061bd; }
     .orb-wrap { display: grid; place-items: center; min-height: 560px; }
     .orb { width: min(560px, 82vw); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 34% 25%, #fff 0 8%, rgba(255,255,255,0.1) 18%), radial-gradient(circle at 58% 32%, #74d7ff, transparent 23%), radial-gradient(circle at 42% 64%, #725cff, transparent 28%), radial-gradient(circle at 68% 68%, #00a3ff, transparent 26%), radial-gradient(circle, rgba(255,255,255,0.7), rgba(0,132,255,0.28) 58%, transparent 72%); filter: saturate(1.35) contrast(1.05); box-shadow: 0 50px 130px rgba(0,132,255,0.22), inset -30px -40px 80px rgba(0,43,155,0.22); }
     .logos { margin-top: 34px; padding: 24px 0 0; border-top: 1px solid rgba(9,17,31,0.08); color: rgba(9,17,31,0.48); }
@@ -643,12 +646,12 @@ function renderEditorialSample(sample: PromptSample): string {
     sample,
     colorScheme: "dark",
     styles: `
-    body { margin: 0; min-height: 100vh; background: #000; color: #fff; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; min-height: 100vh; background: #000; color: #fff; font-family: "DM Sans", "Pretendard", system-ui, sans-serif; }
     .page { width: min(1180px, calc(100vw - 38px)); margin: 0 auto; padding: 54px 0; }
     .masthead { display: flex; justify-content: space-between; gap: 20px; padding-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.14); color: rgba(255,255,255,0.62); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; }
     .grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 28px; margin-top: 46px; }
     h1 { margin: 0; font-size: clamp(72px, 14vw, 180px); line-height: 0.82; letter-spacing: -0.095em; }
-    .accent-word { display: block; margin-top: 10px; font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 400; letter-spacing: -0.07em; color: rgba(255,255,255,0.76); }
+    .accent-word { display: block; margin-top: 10px; font-family: "DM Serif Display", "Gowun Batang", Georgia, serif; font-style: italic; font-weight: 400; letter-spacing: -0.07em; color: rgba(255,255,255,0.76); }
     .desc { max-width: 580px; margin: 36px 0 0; color: rgba(255,255,255,0.64); font-size: 19px; line-height: 1.75; }
     .signup { display: flex; gap: 10px; max-width: 520px; margin-top: 34px; padding: 8px; border: 1px solid rgba(255,255,255,0.16); border-radius: 999px; background: rgba(255,255,255,0.045); backdrop-filter: blur(18px); }
     .signup span { flex: 1; color: rgba(255,255,255,0.5); padding: 13px 16px; }
@@ -688,17 +691,17 @@ function renderCinematicSample(sample: PromptSample): string {
     sample,
     colorScheme: "dark",
     styles: `
-    body { margin: 0; min-height: 100vh; color: #fff; background: #002c42; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; min-height: 100vh; color: #fff; background: #002c42; font-family: "DM Sans", "Pretendard", system-ui, sans-serif; }
     .hero { position: relative; min-height: 100vh; display: grid; place-items: center; overflow: hidden; padding: 28px; }
     .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, rgba(215,233,245,0.28), transparent 34%), linear-gradient(90deg, rgba(0,0,0,0.54), transparent 32%, transparent 68%, rgba(0,0,0,0.44)), linear-gradient(180deg, rgba(0,44,66,0.1), #00131e); }
     .hero::after { content: ""; position: absolute; inset: 0; opacity: 0.16; background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.12) 0 1px, transparent 1px 5px); mix-blend-mode: overlay; pointer-events: none; }
     .nav { position: absolute; top: 28px; left: 50%; z-index: 2; transform: translateX(-50%); width: min(1120px, calc(100vw - 42px)); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 14px 18px; border: 1px solid rgba(255,255,255,0.18); border-radius: 999px; background: rgba(255,255,255,0.08); backdrop-filter: blur(20px); }
-    .logo { font-family: Georgia, "Times New Roman", serif; font-size: 24px; letter-spacing: -0.04em; }
-    .logo sup { font-size: 10px; color: rgba(255,255,255,0.58); }
+    .logo { font-family: "DM Serif Display", "Gowun Batang", Georgia, serif; font-size: 24px; letter-spacing: -0.04em; }
+    .logo sup { font-size: 12px; color: rgba(255,255,255,0.58); }
     .links { display: flex; gap: 22px; color: rgba(255,255,255,0.66); font-size: 13px; }
     .journey { justify-self: end; border: 1px solid rgba(255,255,255,0.24); border-radius: 999px; padding: 10px 16px; color: #fff; background: rgba(255,255,255,0.08); text-decoration: none; }
     .copy { position: relative; z-index: 1; width: min(960px, 100%); text-align: center; padding-top: 74px; }
-    h1 { margin: 0 auto; max-width: 950px; font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: clamp(62px, 10vw, 150px); line-height: 0.9; letter-spacing: -0.075em; text-wrap: balance; }
+    h1 { margin: 0 auto; max-width: 950px; font-family: "DM Serif Display", "Gowun Batang", Georgia, serif; font-weight: 400; font-size: clamp(62px, 10vw, 150px); line-height: 0.9; letter-spacing: -0.075em; text-wrap: balance; }
     .subtext { max-width: 720px; margin: 28px auto 0; color: rgba(255,255,255,0.72); font-size: 18px; line-height: 1.75; }
     .hero-cta { display: inline-flex; margin-top: 34px; border: 1px solid rgba(255,255,255,0.26); border-radius: 999px; padding: 14px 20px; color: #002c42; background: rgba(255,255,255,0.86); text-decoration: none; font-weight: 900; }
     .info { position: relative; z-index: 1; width: min(1120px, calc(100vw - 42px)); margin: -120px auto 54px; display: grid; grid-template-columns: 0.78fr 1.22fr; gap: 18px; }
@@ -720,7 +723,7 @@ function renderDashboardSample(sample: PromptSample): string {
     sample,
     colorScheme: "dark",
     styles: `
-    body { margin: 0; min-height: 100vh; color: #f5f7fb; background: #0e1117; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif; font-feature-settings: 'tnum'; }
+    body { margin: 0; min-height: 100vh; color: #f5f7fb; background: #0e1117; font-family: "DM Sans", "Pretendard", system-ui, sans-serif; font-feature-settings: 'tnum'; }
     .shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
     .sidebar { background: #0a0d12; border-right: 1px solid rgba(255,255,255,0.06); padding: 24px 16px; display: flex; flex-direction: column; }
     .brand { font-weight: 800; font-size: 20px; letter-spacing: -0.02em; margin-bottom: 28px; padding: 0 8px; }
@@ -729,7 +732,7 @@ function renderDashboardSample(sample: PromptSample): string {
     .nav-item.active { color: #f5f7fb; background: #161b24; }
     .nav-item:hover { background: rgba(255,255,255,0.04); color: #f5f7fb; }
     .user-pill { margin-top: auto; padding: 10px 12px; background: #161b24; border-radius: 8px; font-size: 13px; display: flex; align-items: center; gap: 10px; }
-    .avatar { width: 28px; height: 28px; border-radius: 50%; background: #3b82f6; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+    .avatar { color: #071b39; width: 28px; height: 28px; border-radius: 50%; background: #3b82f6; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
     main { padding: 24px 32px; }
     .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
     .page-title { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
@@ -747,7 +750,7 @@ function renderDashboardSample(sample: PromptSample): string {
     .table-panel { overflow-x: auto; }
     .panel h3 { margin: 0 0 16px; font-size: 14px; font-weight: 600; color: rgba(245,247,251,0.78); text-transform: uppercase; letter-spacing: 0.08em; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { text-align: left; padding: 10px 0; color: rgba(245,247,251,0.55); border-bottom: 1px solid rgba(255,255,255,0.06); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+    th { text-align: left; padding: 10px 0; color: rgba(245,247,251,0.55); border-bottom: 1px solid rgba(255,255,255,0.06); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
     td { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
     tr:hover td { background: rgba(255,255,255,0.02); }
     .num-col { text-align: right; }
@@ -755,12 +758,12 @@ function renderDashboardSample(sample: PromptSample): string {
     .down { color: #ff7a85; }
     .feed-item { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
     .feed-item:last-child { border-bottom: none; }
-    .feed-item .time { color: rgba(245,247,251,0.45); font-size: 11px; margin-top: 4px; }
-    footer { padding: 16px 0 0; color: rgba(245,247,251,0.4); font-size: 11px; }
+    .feed-item .time { color: rgba(245,247,251,0.45); font-size: 12px; margin-top: 4px; }
+    footer { padding: 16px 0 0; color: rgba(245,247,251,0.4); font-size: 12px; }
     .info { display: grid; grid-template-columns: 0.6fr 1.4fr; gap: 18px; margin-top: 28px; }
     ${commonInfoStyles()}
     @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } .sidebar { display: none; } .kpi-grid { grid-template-columns: repeat(2, 1fr); } .panels { grid-template-columns: 1fr; } .info { grid-template-columns: 1fr; } }
-    @media (max-width: 480px) { main { padding: 20px 14px; } .topbar, .kpi-grid { display: grid; grid-template-columns: 1fr; gap: 12px; } table { min-width: 600px; } }
+    @media (max-width: 480px) { main { padding: 20px 14px; } .topbar, .kpi-grid { display: grid; grid-template-columns: 1fr; gap: 12px; } table { table-layout: fixed; } th,td { overflow-wrap: anywhere; } }
     @media (prefers-reduced-motion: reduce) { .kpi { transition: none; } }
     `,
     body: `
@@ -773,7 +776,7 @@ function renderDashboardSample(sample: PromptSample): string {
         <a class="nav-item" href="#" data-bg-node-id="nav-cash">Cash</a>
         <a class="nav-item" href="#" data-bg-node-id="nav-reports">Reports</a>
         <a class="nav-item" href="#" data-bg-node-id="nav-settings">Settings</a>
-        <div class="user-pill" data-bg-node-id="user-pill"><div class="avatar">M</div><div><div>Min Park</div><div style="color:rgba(245,247,251,0.45);font-size:11px;">Operations</div></div></div>
+        <div class="user-pill" data-bg-node-id="user-pill"><div class="avatar">M</div><div><div>Min Park</div><div style="color:var(--dashboard-muted);font-size:12px;">Operations</div></div></div>
       </aside>
       <main>
         <div class="topbar" data-bg-node-id="topbar">
@@ -829,12 +832,16 @@ function renderPromptSampleDocument(input: {
   return `<!doctype html>
 <html lang="${sample.slug === "daon-korean-saas" ? "ko" : "en"}">
 <head>
+<link rel="stylesheet" href="fonts/fonts.css">
   <meta charset="utf-8">
   <title>${escapeHtml(promptSampleTitle(sample))}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     :root {
       color-scheme: ${colorScheme};
+      --try-button-bg: #186ade;
+      --try-button-fg: #ffffff;
+      --dashboard-muted: #aab3c2;
       --bg: ${sample.theme.bg};
       --fg: ${sample.theme.fg};
       --muted: ${sample.theme.muted};
@@ -864,7 +871,7 @@ function commonInfoStyles(mode: "dark" | "light" = "dark"): string {
     .card h2 { margin: 0 0 12px; font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; }
     .card p, .card li { color: ${light ? "rgba(9,17,31,0.64)" : "rgba(255,255,255,0.64)"}; font-size: 13px; line-height: 1.65; }
     .card ol { margin: 0; padding-left: 20px; }
-    pre { max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0; color: ${light ? "#253041" : "rgba(255,255,255,0.82)"}; font: 12px/1.55 "SFMono-Regular", Consolas, monospace; }
+    pre { white-space: pre-wrap; word-break: break-word; margin: 0; color: ${light ? "#253041" : "rgba(255,255,255,0.82)"}; font: 12px/1.55 "SFMono-Regular", Consolas, monospace; }
   `;
 }
 
@@ -878,7 +885,7 @@ function renderPromptCard(sample: PromptSample): string {
   // project, redirects to it, and pre-fills the chat composer with
   // this prompt — no manual copy-paste needed (P4.7e).
   const tryButtonStyles =
-    "display:inline-block;margin-top:12px;padding:10px 18px;background:#186ade;color:#ffffff;border:none;border-radius:4px;font-weight:600;font-family:inherit;font-size:14px;cursor:pointer;";
+    "display:inline-block;margin-top:12px;padding:10px 18px;background:var(--try-button-bg);color:var(--try-button-fg);border:none;border-radius:4px;font-weight:600;font-family:inherit;font-size:14px;cursor:pointer;";
   return `<section class="card" id="prompt" data-bg-node-id="sample-prompt"><h2>Source prompt</h2><pre>${escapeHtml(sample.prompt)}</pre><form action="/api/home/use-sample/${escapeHtml(sample.slug)}" method="POST" target="_top" style="margin:0;"><button type="submit" data-bg-node-id="sample-try-button" style="${tryButtonStyles}">Try this prompt →</button></form></section>`;
 }
 
@@ -898,7 +905,7 @@ async function syncPromptSampleProject(input: {
   const userOperations = getSqlite().query<{ readonly count: number }, [string]>("SELECT COUNT(*) count FROM artifact_operations WHERE project_id=? AND status='committed' AND json_extract(replay_json,'$.kind')!='initialize'").get(input.id)?.count ?? 0;
   if (userOperations > 0) return;
   try {
-    await coordinator.run({ projectId: input.id, projectDir: input.dirPath, kind: "initialize", expectedRevision: input.currentRevision, expectedArtifactDigest: input.currentDigest, mutate: async (stage) => { await writeFile(path.join(stage, input.entrypoint), input.html, "utf8"); } });
+    await coordinator.run({ projectId: input.id, projectDir: input.dirPath, kind: "initialize", expectedRevision: input.currentRevision, expectedArtifactDigest: input.currentDigest, mutate: async (stage) => { await copyBundledFonts(stage); await writeFile(path.join(stage, input.entrypoint), input.html, "utf8"); } });
   } catch (error) {
     if (error instanceof ArtifactOperationError && error.code === "artifact_identity_mismatch") return;
     throw error;
@@ -946,6 +953,7 @@ async function writeTutorialProject(input: {
     lastActiveAt: now,
   });
   await new ArtifactCoordinator(getSqlite()).initializeProject(projectId, dirPath, async (stage) => {
+    await copyBundledFonts(stage);
     await writeFile(path.join(stage, input.entrypoint), input.html, "utf8");
     if (input.type === "slide_deck") {
       await mkdir(path.join(stage, "runtime"), { recursive: true });

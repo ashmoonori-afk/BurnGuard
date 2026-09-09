@@ -37,6 +37,12 @@ See the actual output beside your AI conversation. Choose editing, styles, comme
 
 ![Workspace with separate conversation, canvas, and editing tools](doc/images/workspace-editor.png)
 
+## Review and refine
+
+Open **Quality → UX improvements** to review the current HTML structure and search 10 original patterns. Send a proposal to the existing AI conversation with an explicit click, preserving the selected model and effort. Product-owned anti-slop rules and model-specific execution guidance apply to generation; static heuristics do not certify usability or visual quality. [Guidance and verification scope](doc/design-craft.md).
+
+Edit text and images individually. Website ZIPs include the project HTML, CSS, JavaScript, images and bundled fonts: extract and upload to static hosting. Features that require an external API or server still need that service.
+
 ## Get started
 
 ### Prerequisites
@@ -70,6 +76,8 @@ bun run build:windows:release
 Publish the installer, portable ZIP, `.nupkg`, and `releases.win.json` from **`dist/releases/`** together. The raw `dist/windows-native/` development folder has no update installation metadata. Existing 0.4.0 users need to switch to the new installer or portable package once. Packages are currently unsigned. [Build, publish, and update guide](doc/13-windows-updates-and-original-samples.md).
 
 ### Four original sample collections
+
+Six Google Fonts families and Pretendard are bundled locally: DM Sans, Space Grotesk, DM Serif Display, Bebas Neue, IBM Plex Mono, and Gowun Batang, with Pretendard for Korean body text. Original collections use distinct pairings; new projects and built-in themes include the fonts and license notices, and the style panel offers these families. [Font sources](assets/fonts/README.md) · [Typography baseline](doc/05-design-system-format.md#bundled-typography-baseline)
 
 Start in **Examples (예시)** or select an original design system in **New project → Template**. Each collection includes a complete web page, six-slide presentation, 1080 × 1350 graphic, and a published design system with tokens, composition rules, and a visual preview. Web pages contain seven or more sections. Your copies appear in My projects; edited or deleted examples stay that way across restarts.
 

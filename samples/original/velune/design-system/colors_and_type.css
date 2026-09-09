@@ -1,9 +1,9 @@
-:root {
- --canvas:#f1ede5; --primary:#4c252e; --secondary:#292722; --accent:#a98755;
- --font-display:Georgia, serif; --font-body:Arial,sans-serif;
+:root{--font-display:"DM Serif Display","Gowun Batang",serif;--font-body:"DM Sans","Pretendard",sans-serif;--font-caption:"DM Sans","Pretendard",sans-serif;--display:var(--font-display);--body:var(--font-body);--caption:var(--font-caption);--weight:400;
+ --canvas:#24172f; --primary:#b9e8d6; --secondary:#eae0f4; --accent:#b89ae0; --ink:#f8f3fb;
  --space-1:8px; --space-2:16px; --space-3:24px; --space-4:40px; --space-5:64px; --space-6:104px;
  --text-small:12px; --text-body:17px; --text-section:clamp(48px,6vw,88px);
  --text-display:clamp(65px,9vw,140px);
  --line-body:1.75; --line-display:1.02;
  --tracking-display:-.045em; --radius:0px; --rule:1px solid currentColor;
 }
+body{font-family:var(--font-body)}h1,h2,h3{font-family:var(--font-display);font-weight:var(--weight);font-synthesis:none}h1[lang=ko],h2[lang=ko],h3[lang=ko]{line-height:1.12}

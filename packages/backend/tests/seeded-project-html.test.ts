@@ -32,13 +32,13 @@ describe("SEEDED_PROJECT_HTML", () => {
     }
   });
 
-  test("decks include the deck-stage runtime script tag", () => {
+  test("decks reference their bundled runtime for offline audit and export", () => {
     const deckIds = fixtures
       .filter((p) => p.type === "slide_deck" && p.archived_at == null)
       .map((p) => p.id);
     for (const id of deckIds) {
       const html = SEEDED_PROJECT_HTML[id];
-      expect(html).toContain('script src="/runtime/deck-stage.js"');
+      expect(html).toContain('script src="runtime/deck-stage.js"');
       expect(html).toContain("data-slide");
     }
   });

@@ -1,2 +1,4 @@
-:root{--paper:#f4f1e8;--ink:#19201c;--accent:#32483d;--display:Georgia,serif;--caption:Arial,sans-serif;--weight:400;--space-1:8px;--space-2:16px;--space-3:24px;--space-4:40px;--space-5:64px;}
-body{background:var(--paper);color:var(--ink);font:16px/1.7 Arial,sans-serif}h1,h2,h3{font-family:var(--display)}:focus-visible{outline:2px solid var(--ink);outline-offset:5px}
+:root{--font-display:"DM Serif Display","Gowun Batang",serif;--font-body:"Pretendard",sans-serif;--font-caption:"Pretendard",sans-serif;--display:var(--font-display);--body:var(--font-body);--caption:var(--font-caption);--weight:400;--paper:#f4f1e8;--ink:#19201c;--accent:#32483d;--space-1:8px;--space-2:16px;--space-3:24px;--space-4:40px;--space-5:64px;}
+body{background:var(--paper);color:var(--ink);font:16px/1.7 var(--font-body)}h1,h2,h3{font-family:var(--display)}:focus-visible{outline:2px solid var(--ink);outline-offset:5px}
+
+body{font-family:var(--font-body)}h1,h2,h3{font-family:var(--font-display);font-weight:var(--weight);font-synthesis:none}h1[lang=ko],h2[lang=ko],h3[lang=ko]{line-height:1.12}

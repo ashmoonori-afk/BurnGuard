@@ -35,6 +35,10 @@ AI 대화 옆에 실제 결과물을 띄웁니다. 편집·스타일·코멘트�
 
 ![대화·캔버스·편집 도구를 구분한 작업 공간](doc/images/workspace-editor.png)
 
+**품질 점검 → UX 개선**에서 현재 HTML의 제목·행동·입력·링크·이미지·문단을 진단하고, 10개 자체 패턴을 검색해 AI 수정 요청으로 보낼 수 있습니다. 요청은 선택한 모델·추론 강도를 유지합니다. 모든 생성에는 자체 anti-slop 지침과 모델별 실행 지침이 적용됩니다. 정적 진단과 생성 지침이 실제 사용성이나 품질 통과를 보증하지는 않습니다. [디자인 지침과 검증 범위](doc/design-craft.md).
+
+텍스트와 이미지를 요소별로 선택해 편집할 수 있습니다. 웹 ZIP은 프로젝트의 HTML·CSS·JavaScript·이미지·폰트를 포함하므로 압축을 풀어 정적 호스팅에 업로드하세요. 외부 API나 서버가 필요한 기능은 해당 서비스를 별도로 연결해야 합니다.
+
 ## 시작하기
 
 ### 준비할 것
@@ -71,12 +75,14 @@ bun run build:windows:release
 
 ### 네 가지 오리지널 샘플
 
+Google Fonts 6종과 Pretendard를 로컬 파일로 제공합니다. DM Sans·Space Grotesk·DM Serif Display·Bebas Neue·IBM Plex Mono·고운바탕을 브랜드별로 조합하고, 한글 본문은 Pretendard를 사용합니다. 새 프로젝트와 기본 테마에 글꼴·라이선스가 포함되며, 스타일에서 선택할 수 있습니다. [폰트 구성과 출처](assets/fonts/README.md) · [타이포그래피 기본 사양](doc/05-design-system-format.md#bundled-typography-baseline)
+
 **예시**에서 둘러보거나 **새 프로젝트 → 템플릿**에서 오리지널 디자인 시스템을 고르세요. 컬렉션마다 완성된 웹 페이지, 슬라이드 6장, 1080 × 1350 그래픽과 토큰·구성 규칙·미리보기가 있는 디자인 시스템을 제공합니다. 웹은 모두 7개 이상 섹션으로 구성했습니다. 템플릿으로 만든 복사본은 내 프로젝트에 표시되며, 수정하거나 삭제한 예시는 재실행해도 덮어쓰거나 복구하지 않습니다.
 
-| SONNEL · 손으로 다루는 사운드 오브젝트 | FOLIOVER · 소재를 탐구하는 저널 |
+| SONNEL · 코발트 사운드 연구실 | FOLIOVER · 소재를 탐구하는 저널 |
 |---|---|
 | ![SONNEL 오리지널 사운드 오브젝트](samples/original/sonnel/assets/hero.png) | ![FOLIOVER 오리지널 소재 구성](samples/original/foliover/assets/hero.png) |
-| ODDWARD · 실험적인 크리에이티브 스튜디오 | VELUNE · 조형적인 빛의 아틀리에 |
+| ODDWARD · 실험적인 크리에이티브 스튜디오 | VELUNE · 플럼과 민트의 달빛 조명 |
 | ![ODDWARD 오리지널 크롬 조각](samples/original/oddward/assets/hero.png) | ![VELUNE 오리지널 유리 조명](samples/original/velune/assets/hero.png) |
 
 문안과 이미지 4장을 새로 만든 가상 콘셉트입니다. 실제 판매 상품이나 참고 사이트와의 제휴를 뜻하지 않습니다. [샘플 원본·이미지 프롬프트·참고 방향](samples/original/README.md).

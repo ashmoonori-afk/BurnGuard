@@ -6,7 +6,7 @@
 
 ## Palette / typography
 Background #f4f1e8; ink #19201c; accent #32483d. Chartreuse #cfdd72 is a secondary panel with dark ink text.
-Display: Georgia,serif. Body: Arial, sans-serif. Caption: Arial,sans-serif. No external fonts. Body 16–20px with 1.7 line height. Fluid display type with clamp.
+Display: DM Serif Display 400 for English and Gowun Batang 400 for Korean. Body and captions: Pretendard 400–600.
 
 ## Spacing / layout
 8 / 16 / 24 / 40 / 64px. Desktop gutters 4–5%; two-column asymmetric editorial grid. At 650px, stack in reading order. Straight 1px rules; no generic rounded cards.
@@ -20,3 +20,7 @@ Use original generated assets/hero.png. Web: 7 substantive sections. Deck: 6 dat
 Always retain Original concept · BurnGuard sample.
 
 Files: colors_and_type.css contains portable tokens; preview.html demonstrates the system. The seeder supplies assets/hero.png.
+
+## Bundled typography
+Display: DM Serif Display 400 for English and Gowun Batang 400 for Korean. Body and captions: Pretendard 400–600.
+Load fonts/fonts.css before inline CSS. Use --font-display, --font-body and --font-caption tokens. Body 16–20px, line height 1.7–1.75; Korean headings at least 1.12, with semantic line breaks. Keep the six slides and 1080×1350 poster canvas. No network font imports or synthetic display bold/italic. The seeder copies the shared fonts directory, including SIL Open Font License notices, into every project and design system. Keep these files in exports; see fonts/README.md for provenance.

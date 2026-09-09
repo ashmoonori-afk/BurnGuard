@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { launchChromium } from "../src/services/export-render-session";
 import { DECK_STAGE_JS } from "../src/runtime/deck-stage";
 import { prepareSlideDeckExport } from "../src/services/export-stage";
+import { copyBundledFonts } from "../src/data/bundled-fonts";
 
 describe("export path boundary", () => {
   test("rejects an entrypoint outside the staged project", async () => {
@@ -78,6 +79,7 @@ beforeAll(async () => {
 describe("deck export smoke (chromium-gated)", () => {
   async function stageDeck() {
     const dir = await mkdtemp(path.join(tmpdir(), "burnguard-exports-test-"));
+    await copyBundledFonts(dir);
     await mkdir(path.join(dir, "runtime"), { recursive: true });
     await writeFile(
       path.join(dir, "runtime", "deck-stage.js"),
@@ -93,19 +95,22 @@ describe("deck export smoke (chromium-gated)", () => {
     return dir;
   }
 
-  test.skipIf(!SMOKE_OPT_IN)("PDF: renderDeckToPdf produces a non-empty .pdf", async () => {
+  test.skipIf(!SMOKE_OPT_IN)("Given authored important print display When PDF exports Then each slide appears exactly once", async () => {
     expect(chromiumAvailable).toBe(true);
     const dir = await stageDeck();
     const out = path.join(dir, "deck.pdf");
     try {
+      const source = await readFile(path.join(dir, "deck.html"), "utf8");
+      await writeFile(path.join(dir, "deck.html"), source.replace("</head>", "<style>@media print{body[data-deck-ready] [data-slide]{display:flex!important}}</style></head>"));
       const { renderDeckToPdf } = await import("../src/services/export-pdf");
-      await renderDeckToPdf({
+      const result = await renderDeckToPdf({
         stagedDir: dir,
         entrypoint: "deck.html",
         outputPath: out,
       });
       const info = await stat(out);
       expect(info.size).toBeGreaterThan(1024);
+      expect(result.pages).toBe((source.match(/<section\s+data-slide/g) ?? []).length);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -182,6 +182,8 @@ function catalogContentType(file: string): string {
     case ".jpg": case ".jpeg": return "image/jpeg";
     case ".woff": return "font/woff";
     case ".woff2": return "font/woff2";
+    case ".ttf": return "font/ttf";
+    case ".otf": return "font/otf";
     default: return "application/octet-stream";
   }
 }

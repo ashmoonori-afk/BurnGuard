@@ -15,6 +15,7 @@
 const SERIES_A_INVESTOR_LANDING_HTML = `<!doctype html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="fonts/fonts.css">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Northvale Capital — Series A 2026</title>
@@ -27,7 +28,7 @@ const SERIES_A_INVESTOR_LANDING_HTML = `<!doctype html>
     --rule: #dce3e8;
     --brand-blue: #7399c6;
     --action-blue: #186ade;
-    --serif: "Zen Serif", Georgia, "Times New Roman", serif;
+    --serif: "DM Serif Display", "Gowun Batang", Georgia, serif;
     --sans: "Pretendard", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
@@ -104,6 +105,7 @@ const SERIES_A_INVESTOR_LANDING_HTML = `<!doctype html>
 const QUARTERLY_REVIEW_DECK_HTML = `<!doctype html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="fonts/fonts.css">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Northvale — Q1 2026 Review</title>
@@ -118,7 +120,7 @@ const QUARTERLY_REVIEW_DECK_HTML = `<!doctype html>
     --action-blue: #186ade;
     --up: #2f7a4f;
     --down: #b03a3a;
-    --serif: "Zen Serif", Georgia, "Times New Roman", serif;
+    --serif: "DM Serif Display", "Gowun Batang", Georgia, serif;
     --sans: "Pretendard", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
@@ -151,10 +153,21 @@ const QUARTERLY_REVIEW_DECK_HTML = `<!doctype html>
   .closing { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; background: var(--ink); color: white; }
   .closing h1 { font-family: var(--serif); font-size: 96px; letter-spacing: -0.02em; margin: 0; }
   .closing .meta { color: rgba(255,255,255,0.6); margin-top: 16px; }
+  @media (max-width: 720px) {
+    [data-slide] { width: 100%; height: auto; min-height: 100vh; margin: 0; padding: 32px 24px 64px; overflow-wrap: anywhere; }
+    .deck-cover h1, .closing h1 { font-size: 44px; }
+    h2 { font-size: 30px; }
+    .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .kpi .num { font-size: 42px; }
+    .two-col { grid-template-columns: 1fr; gap: 24px; }
+    .takeaway { padding: 20px; font-size: 18px; }
+    table { table-layout: fixed; }
+    .slide-num { right: 24px; bottom: 16px; }
+  }
 </style>
 </head>
 <body>
-  <script src="/runtime/deck-stage.js" defer></script>
+  <script src="runtime/deck-stage.js" defer></script>
 
   <section data-slide class="deck-slide deck-cover" data-bg-node-id="slide-1">
     <div class="eyebrow" data-bg-node-id="slide-1-eyebrow">Quarterly review · Q1 2026</div>
@@ -241,6 +254,7 @@ const QUARTERLY_REVIEW_DECK_HTML = `<!doctype html>
 export const SPLASH_TEMPLATE_LANDING_HTML = `<!doctype html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="fonts/fonts.css">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Splash — Money that moves at message speed</title>
@@ -354,6 +368,7 @@ export const SPLASH_TEMPLATE_LANDING_HTML = `<!doctype html>
 const PORTFOLIO_PLAYGROUND_HTML = `<!doctype html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="fonts/fonts.css">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Portfolio Playground</title>
@@ -364,20 +379,24 @@ const PORTFOLIO_PLAYGROUND_HTML = `<!doctype html>
     --ink-soft: #555555;
     --rule: #e5e5e5;
     --accent: #ff5722;
-    --serif: Georgia, "Times New Roman", serif;
+    --accent-ink: #b4320b;
+    --sw-blue: #1f6feb;
+    --sw-green: #2f7a4f;
+    --sw-red: #b03a3a;
+    --serif: "DM Serif Display", "Gowun Batang", Georgia, serif;
     --sans: "Inter", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: var(--sans); color: var(--ink); background: var(--bg); line-height: 1.6; }
   .container { max-width: 960px; margin: 0 auto; padding: 64px 24px; }
   .hero { border-bottom: 1px solid var(--rule); padding-bottom: 48px; margin-bottom: 48px; }
-  .hero .eyebrow { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .hero .eyebrow { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent-ink); font-weight: 700; }
   .hero h1 { font-family: var(--serif); font-size: 64px; line-height: 1.05; letter-spacing: -0.02em; margin: 16px 0 16px; }
   .hero p { font-size: 19px; color: var(--ink-soft); max-width: 60ch; margin: 0; }
   section { margin: 56px 0; }
   section h2 { font-family: var(--serif); font-size: 28px; margin: 0 0 24px; font-weight: 700; }
   .swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
-  .sw { height: 80px; border-radius: 8px; display: flex; align-items: flex-end; padding: 8px 12px; color: white; font-size: 11px; font-weight: 600; }
+  .sw { height: 80px; border-radius: 8px; display: flex; align-items: flex-end; padding: 8px 12px; color: white; font-size: 12px; font-weight: 600; }
   .type-stack > * { margin: 0; }
   .type-stack .h-d { font-family: var(--serif); font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
   .type-stack .h-1 { font-family: var(--serif); font-size: 36px; font-weight: 700; margin-top: 16px; line-height: 1.15; }
@@ -387,7 +406,7 @@ const PORTFOLIO_PLAYGROUND_HTML = `<!doctype html>
   .buttons { display: flex; gap: 12px; flex-wrap: wrap; }
   .btn { padding: 12px 20px; font-size: 14px; font-weight: 600; border-radius: 999px; border: 1px solid var(--ink); background: var(--ink); color: white; cursor: pointer; }
   .btn.ghost { background: transparent; color: var(--ink); }
-  .btn.accent { background: var(--accent); border-color: var(--accent); }
+  .btn.accent { background: var(--accent); border-color: var(--accent); color: var(--ink); }
   .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .card { background: white; border: 1px solid var(--rule); border-radius: 12px; padding: 24px; }
   .card h3 { margin: 0 0 8px; font-size: 18px; font-weight: 700; }
@@ -410,12 +429,12 @@ const PORTFOLIO_PLAYGROUND_HTML = `<!doctype html>
   <section data-bg-node-id="section-palette">
     <h2 data-bg-node-id="palette-title">Palette</h2>
     <div class="swatches">
-      <div class="sw" style="background:#111111" data-bg-node-id="sw-ink">#111111</div>
-      <div class="sw" style="background:#555555" data-bg-node-id="sw-ink-soft">#555555</div>
-      <div class="sw" style="background:#ff5722" data-bg-node-id="sw-accent">#FF5722</div>
-      <div class="sw" style="background:#1f6feb" data-bg-node-id="sw-blue">#1F6FEB</div>
-      <div class="sw" style="background:#2f7a4f" data-bg-node-id="sw-green">#2F7A4F</div>
-      <div class="sw" style="background:#b03a3a" data-bg-node-id="sw-red">#B03A3A</div>
+      <div class="sw" style="background:var(--ink)" data-bg-node-id="sw-ink">#111111</div>
+      <div class="sw" style="background:var(--ink-soft)" data-bg-node-id="sw-ink-soft">#555555</div>
+      <div class="sw" style="background:var(--accent);color:var(--ink)" data-bg-node-id="sw-accent">#FF5722</div>
+      <div class="sw" style="background:var(--sw-blue)" data-bg-node-id="sw-blue">#1F6FEB</div>
+      <div class="sw" style="background:var(--sw-green)" data-bg-node-id="sw-green">#2F7A4F</div>
+      <div class="sw" style="background:var(--sw-red)" data-bg-node-id="sw-red">#B03A3A</div>
     </div>
   </section>
   <section data-bg-node-id="section-type">
@@ -462,6 +481,7 @@ const PORTFOLIO_PLAYGROUND_HTML = `<!doctype html>
 const MARKET_UPDATE_MICROSITE_HTML = `<!doctype html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="fonts/fonts.css">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Salt Markets — April 2026 update</title>
@@ -471,8 +491,9 @@ const MARKET_UPDATE_MICROSITE_HTML = `<!doctype html>
     --ink: #16191c;
     --ink-soft: #50545a;
     --rule: #e1ddd2;
-    --accent: #c7503a;
-    --serif: Georgia, "Times New Roman", serif;
+    --accent: #b94430;
+    --signup-muted: #b8b9ba;
+    --serif: "DM Serif Display", "Gowun Batang", Georgia, serif;
     --sans: "Inter", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
@@ -486,7 +507,7 @@ const MARKET_UPDATE_MICROSITE_HTML = `<!doctype html>
   .lede p { font-size: 19px; color: var(--ink-soft); max-width: 56ch; margin: 0; }
   .articles { padding: 48px 32px; max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 32px 48px; }
   .article { border-top: 1px solid var(--rule); padding-top: 24px; }
-  .article .kicker { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .article .kicker { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
   .article h2 { font-family: var(--serif); font-size: 26px; line-height: 1.2; margin: 8px 0 12px; }
   .article p { font-size: 15px; color: var(--ink-soft); margin: 0 0 12px; }
   .article a { color: var(--ink); font-weight: 600; font-size: 14px; text-decoration: none; border-bottom: 1px solid var(--ink); }
@@ -542,7 +563,7 @@ const MARKET_UPDATE_MICROSITE_HTML = `<!doctype html>
   </section>
   <section class="signup" data-bg-node-id="signup">
     <h3 data-bg-node-id="signup-title">Get the next issue in your inbox.</h3>
-    <p style="margin:0;color:rgba(255,255,255,0.6);" data-bg-node-id="signup-body">One email a month. No promotions, ever.</p>
+    <p style="margin:0;color:var(--signup-muted);" data-bg-node-id="signup-body">One email a month. No promotions, ever.</p>
     <form data-bg-node-id="signup-form">
       <input type="email" placeholder="you@desk.example" data-bg-node-id="signup-input" />
       <button type="button" data-bg-node-id="signup-button">Subscribe</button>

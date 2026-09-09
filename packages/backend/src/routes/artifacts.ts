@@ -80,6 +80,15 @@ artifactRoutes.post("/api/projects/:id/refresh", async (c) => {
 });
 
 artifactRoutes.get("/api/projects/:id/design-audit", async (c) => designAuditResponse(c.req.param("id"), false, c.req.raw.signal, c));
+artifactRoutes.get("/api/projects/:id/ux-review", async (c) => {
+  if (Object.keys(c.req.queries()).some((key) => key !== "path") || (c.req.queries("path")?.length ?? 0) > 1) return c.json(fail("invalid_review_path", "Only one HTML path is supported"), 400);
+  const { getProjectUxReview, UxReviewError } = await import("../services/ux-review");
+  try { return c.json(ok(await getProjectUxReview(c.req.param("id"), c.req.query("path")))); }
+  catch (error) {
+    if (!(error instanceof UxReviewError)) throw error;
+    return c.json(fail(error.code, error.message), error.code === "project_not_found" ? 404 : error.code === "invalid_review_path" ? 400 : error.code === "stale_artifact_identity" ? 409 : 503);
+  }
+});
 artifactRoutes.post("/api/projects/:id/design-audit/retry", async (c) => designAuditResponse(c.req.param("id"), true, c.req.raw.signal, c));
 
 async function designAuditResponse(projectId: string, force: boolean, signal: AbortSignal, c: Context) {

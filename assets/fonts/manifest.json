@@ -1,0 +1,60 @@
+{
+  "families": [
+    {
+      "family": "DM Sans",
+      "file": "DMSans.woff2",
+      "weight": "100 1000",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/dmsans/DMSans%5Bopsz%2Cwght%5D.ttf",
+      "licenseFile": "DMSans-OFL.txt"
+    },
+    {
+      "family": "Space Grotesk",
+      "file": "SpaceGrotesk.woff2",
+      "weight": "300 700",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf",
+      "licenseFile": "SpaceGrotesk-OFL.txt"
+    },
+    {
+      "family": "DM Serif Display",
+      "file": "DMSerifDisplay.woff2",
+      "weight": "400",
+      "category": "serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/dmserifdisplay/DMSerifDisplay-Regular.ttf",
+      "licenseFile": "DMSerifDisplay-OFL.txt"
+    },
+    {
+      "family": "Bebas Neue",
+      "file": "BebasNeue.woff2",
+      "weight": "400",
+      "category": "display",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf",
+      "licenseFile": "BebasNeue-OFL.txt"
+    },
+    {
+      "family": "IBM Plex Mono",
+      "file": "IBMPlexMono.woff2",
+      "weight": "400",
+      "category": "monospace",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexmono/IBMPlexMono-Regular.ttf",
+      "licenseFile": "IBMPlexMono-OFL.txt"
+    },
+    {
+      "family": "Gowun Batang",
+      "file": "GowunBatang.woff2",
+      "weight": "400",
+      "category": "serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/gowunbatang/GowunBatang-Regular.ttf",
+      "licenseFile": "GowunBatang-OFL.txt"
+    },
+    {
+      "family": "Pretendard",
+      "file": "PretendardVariable.woff2",
+      "weight": "45 930",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/orioncactus/pretendard/main/packages/pretendard/dist/web/variable/woff2/PretendardVariable.woff2",
+      "licenseFile": "Pretendard-OFL.txt"
+    }
+  ]
+}

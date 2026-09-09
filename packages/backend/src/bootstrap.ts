@@ -1,3 +1,4 @@
+import { copyBundledFonts } from "./data/bundled-fonts";
 import type { Database } from "bun:sqlite";
 import { cp, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
@@ -77,6 +78,7 @@ export async function seedBundledDesignSystems(
       );
       if (await exists(destination)) return;
       await cp(path.join(themesSource, slug), destination, { recursive: true });
+      await copyBundledFonts(destination, repoRoot);
     }),
   );
 }

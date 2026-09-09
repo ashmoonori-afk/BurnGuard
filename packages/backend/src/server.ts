@@ -140,6 +140,7 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
   if (pathname.startsWith("/api/research")) return "research";
   if (pathname.startsWith("/api/learning")) return "learning";
   if (pathname.startsWith("/api/design-systems")) {
+    if (/^\/api\/design-systems\/[^/]+\/files\//.test(pathname)) return "catalog";
     return /\/(?:extract|upload|tokens|colors|fonts|pinterest)(?:\/|$)/.test(pathname) ? "system" : "catalog";
   }
   if (/^\/api\/exports\/[^/]+\/download$/.test(pathname)) return "managed-files";
@@ -156,7 +157,7 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
     if (/\/draws(?:\/|$)/.test(pathname) && (method === "GET" || method === "PUT")) return "managed-files";
     if (/\/fs(?:\/|$)/.test(pathname) && method === "GET" && !pathname.endsWith("/undo-info")) return "managed-files";
     if (/\/(?:fs|operations)(?:\/|$)/.test(pathname)) return "artifact-operations";
-    if (/\/(?:files|artifacts|refresh|exports|design-audit)(?:\/|$)/.test(pathname)) return "artifacts";
+    if (/\/(?:files|artifacts|refresh|exports|design-audit|ux-review)(?:\/|$)/.test(pathname)) return "artifacts";
     return "project";
   }
   return "not-found";

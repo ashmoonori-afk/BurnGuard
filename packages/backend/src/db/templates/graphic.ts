@@ -10,10 +10,13 @@ export function renderGraphic(
   return `<!doctype html>
 <html lang="ko">
 <head>
+  <link rel="stylesheet" href="fonts/fonts.css">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
   <style>
+    h1, h2, h3 { font-family: "Space Grotesk", "Pretendard", sans-serif; }
+    code, pre, .number { font-family: "IBM Plex Mono", "Pretendard", monospace; font-variant-numeric: tabular-nums; }
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
     html, body {
@@ -23,7 +26,7 @@ export function renderGraphic(
       overflow: hidden;
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "DM Sans", "Pretendard", sans-serif;
       background: #eaf0ff;
       color: #14213d;
     }

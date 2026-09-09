@@ -40,6 +40,20 @@
 
 ## 3. `SKILL.md` frontmatter
 
+### Bundled typography baseline
+
+New projects and bundled themes carry `fonts/fonts.css`, local WOFF2 files, and their licenses. The shared source is [`assets/fonts/`](../assets/fonts/README.md). Load the stylesheet before applying type tokens; do not depend on Google Fonts network requests at runtime.
+
+| Role | Default stack | Intended use |
+|---|---|---|
+| Body / UI | DM Sans, Pretendard, system-ui, sans-serif | English and Korean body copy; 16–18px, line-height 1.55–1.8 |
+| Heading | Space Grotesk, Pretendard, sans-serif | Product and technical headings; 300–700 weight |
+| Editorial display | DM Serif Display, Gowun Batang, serif | English/Korean editorial headings; regular weight, comfortable line height |
+| Expressive display | Bebas Neue, Pretendard, sans-serif | Short English poster headlines; Korean uses Pretendard |
+| Numbers / code | IBM Plex Mono, Pretendard, monospace | Labels, tabular numbers and code; regular weight |
+
+Specify display, body and mono tokens, available weights, Korean fallback, and responsive sizes in each system. Keep Korean body text at readable tracking and at least 1.55 line-height; reserve tight tracking and display faces for short headings. Check wrapping at mobile width and fixed slide/poster boundaries after changing fonts. Copy the font files and license notices with HTML exports. Existing user-supplied fonts remain separate; embedding a local font still depends on its own license.
+
 ```markdown
 ---
 name: northvale-capital-design

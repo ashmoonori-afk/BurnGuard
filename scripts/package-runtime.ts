@@ -5,7 +5,7 @@ import { APP_NAME, APP_VERSION } from "../packages/shared/src/app";
 export function isRuntimeSource(relativePath: string): boolean {
   const normalized = relativePath.replaceAll("\\", "/");
   if (normalized.split("/").some((part) => part === "..") || path.isAbsolute(normalized)) return false;
-  return normalized === "LICENSE" || normalized.startsWith("design system themes/") || normalized.startsWith("samples/original/") ||
+  return normalized === "LICENSE" || normalized === "NOTICE" || normalized.startsWith("assets/fonts/") || normalized.startsWith("design system themes/") || normalized.startsWith("samples/original/") ||
     (normalized.startsWith("design system sample/") && !normalized.startsWith("design system sample/uploads/")) ||
     normalized.startsWith("packages/backend/src/db/migrations/");
 }
