@@ -22,6 +22,7 @@ import {
 } from "./prompt-compact-skills";
 import { appendDesignBriefContext } from "./prompt-design-brief";
 import { appendDesignSystemContext } from "./prompt-design-system";
+import { appendGraphicOutputContext } from "./prompt-graphic-set";
 import { DESIGN_CRAFT_RULES } from "./design-craft";
 import { appendModelPromptContext } from "./prompt-model-context";
 import { appendReferenceLayoutContext } from "./prompt-reference-layout";
@@ -108,21 +109,7 @@ export async function buildPrompt(
     );
   }
   if (project.project_type === "graphic" && projectOptions.graphic_canvas !== null) {
-    const canvas = projectOptions.graphic_canvas;
-    lines.push("<burnguard-graphic-output-v1>");
-    lines.push(JSON.stringify({
-      schema_version: 1,
-      width_css_px: canvas.width,
-      height_css_px: canvas.height,
-      artboard_count: 1,
-      delivery_format: "png",
-    }));
-    lines.push("</burnguard-graphic-output-v1>");
-    lines.push(`- Exact canvas: ${canvas.width} × ${canvas.height} CSS px.`);
-    lines.push("- Author exactly one finite artboard; do not add slides, deck runtime, or a second artboard.");
-    lines.push("- Replace the starter in index.html with the authored fixed-size artboard so the canvas can render the result. Keep exactly one [data-graphic-artboard] element.");
-    lines.push("- PNG is the export format, not a replacement for index.html. If generating a raster image, save it inside the output directory and reference it from the authored index.html.");
-    lines.push("- Do not leave the starter message or a separate unreferenced PNG as the result. BurnGuard publishes the staged files after the turn finishes.");
+    appendGraphicOutputContext(lines, projectOptions.graphic_canvas, projectOptions.graphic_set);
   }
   lines.push("");
 

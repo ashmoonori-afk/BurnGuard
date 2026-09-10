@@ -2,12 +2,28 @@ import { readFile, writeFile } from "node:fs/promises";
 import { PDFDocument } from "pdf-lib";
 import type { PdfPaper } from "@bg/shared";
 import { PDF_PRINT_CSS, pdfDimensionsForPaper, pdfPointsForPaper, pdfRasterBudgetFitsPages } from "./export-pdf-contract";
+import { capturePageFromSession } from "./export-frame-capture";
 import { openRenderSession, RenderSessionError, type RenderPhase, type RenderSession } from "./export-render-session";
 import { validatePdf, type PdfValidation } from "./export-pdf-validation";
 
+/** Stacked artboards carry layout spacing and page minimums that would print as blank pages. */
+export const ARTBOARD_PRINT_CSS = `
+html, body { min-width: 0 !important; min-height: 0 !important; }
+[data-graphic-artboard] { margin: 0 !important; }
+`;
+const ARTBOARD_SIZE_TOLERANCE = 1;
+
 export class PdfExportError extends Error {
   readonly name = "PdfExportError";
-  constructor(readonly code: "chromium_not_installed" | "chromium_launch_timeout" | "deck_not_ready" | "render_failed" | "resource_limit", message: string) { super(message); }
+  constructor(readonly code: "chromium_not_installed" | "chromium_launch_timeout" | "deck_not_ready" | "render_failed" | "resource_limit" | "mixed_page_sizes", message: string) { super(message); }
+}
+
+/** Artboard paper prints one page per artboard, so a set with more than one size has no single page geometry. */
+export function assertUniformArtboardPages(pages: readonly { readonly width: number; readonly height: number }[]): void {
+  const first = pages[0];
+  if (first === undefined) throw new PdfExportError("render_failed", "Export pages are missing or clipped");
+  const mixed = pages.find((page) => Math.abs(page.width - first.width) > ARTBOARD_SIZE_TOLERANCE || Math.abs(page.height - first.height) > ARTBOARD_SIZE_TOLERANCE);
+  if (mixed !== undefined) throw new PdfExportError("mixed_page_sizes", `Artboard PDF requires one page size; found ${first.width}x${first.height} and ${mixed.width}x${mixed.height}`);
 }
 
 export async function renderDeckToPdf(input: {
@@ -35,6 +51,10 @@ export async function renderDeckToPdf(input: {
     await session.page.evaluate((value) => { document.title = value; }, title);
     await session.page.addStyleTag({ content: PDF_PRINT_CSS });
     const selector = input.selector ?? "[data-slide]";
+    if (selector === "[data-graphic-artboard]") {
+      await session.page.addStyleTag({ content: ARTBOARD_PRINT_CSS });
+      await capturePageFromSession(session.page).awaitRenderReady();
+    }
     const preflight = await session.page.evaluate((elementSelector) => [...document.querySelectorAll<HTMLElement>(elementSelector)].map((slide) => {
       const bounds = slide.getBoundingClientRect();
       const clipped = [...slide.querySelectorAll<HTMLElement>("*")].some((element) => {
@@ -45,6 +65,7 @@ export async function renderDeckToPdf(input: {
     }), selector);
     if (preflight.length === 0 || preflight.some((slide) => slide.clipped || slide.width <= 0 || slide.height <= 0)) throw new PdfExportError("render_failed", "Export pages are missing or clipped");
     const paper = input.paper ?? "a4";
+    if (paper === "artboard") assertUniformArtboardPages(preflight);
     const pagePoints = paper === "artboard"
       ? preflight.map((page) => pdfPointsForPaper(paper, page))
       : preflight.map(() => pdfPointsForPaper(paper));
