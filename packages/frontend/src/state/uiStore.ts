@@ -7,6 +7,7 @@ export interface Toast {
   title: string;
   body?: string;
   tone: ToastTone;
+  action?: { readonly label: string; readonly onSelect: () => void };
 }
 
 interface UIState {

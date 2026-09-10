@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveCanvasNavigation, resolveCanvasSource } from "../src/lib/canvas-source";
+import { resolveCanvasNavigation, resolveCanvasPageTarget, resolveCanvasSource } from "../src/lib/canvas-source";
 
 describe("resolveCanvasSource", () => {
   test("Given a stale active entrypoint and zero indexed files When resolved Then the empty canvas does not fetch the missing file", () => {
@@ -68,6 +68,10 @@ test("Given prototype page links When navigating Then only indexed HTML in the c
   expect(about).toEqual({ relPath: "pages/about us.html", url: "http://localhost:5173/api/projects/project-1/fs/pages/about%20us.html?view=detail#team" });
   expect(resolveCanvasNavigation("../index.html", about!.url, files)?.relPath).toBe("index.html");
   expect(resolveCanvasNavigation("%ed%8e%98%ec%9d%b4%ec%a7%80.html#details", source, ["페이지.html"])?.relPath).toBe("페이지.html");
+  expect(resolveCanvasNavigation("products/?tab=all#featured", source, [...files, "products/index.html"])).toEqual({ relPath: "products/index.html", url: "http://localhost:5173/api/projects/project-1/fs/products/index.html?tab=all#featured" });
+  expect(resolveCanvasNavigation("products", source, [...files, "products/index.html"])?.relPath).toBe("products/index.html");
+  expect(resolveCanvasPageTarget("missing.html", source)?.relPath).toBe("missing.html");
+  expect(resolveCanvasPageTarget("https://example.com/missing.html", source)).toBeNull();
   for (const href of [null, {}, "https://example.com/index.html", "//example.com/index.html", "javascript:alert(1)", "data:text/html,hi", "/api/projects/project-2/fs/index.html", "../index.html", "missing.html", "script.js", "pages%2fabout%20us.html", "pages%5cabout%20us.html", "pages/%ZZ.html", "http://user:pass@localhost:5173/api/projects/project-1/fs/index.html"]) {
     expect(resolveCanvasNavigation(href, source, files)).toBeNull();
   }

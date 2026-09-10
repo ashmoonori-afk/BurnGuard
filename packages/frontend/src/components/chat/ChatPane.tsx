@@ -27,6 +27,7 @@ export default function ChatPane({
   onRevertTurn,
   revertingTurnId,
   composerInitialText,
+  activePageLabel,
   statusSlot,
   projectFiles,
   comments,
@@ -57,6 +58,7 @@ export default function ChatPane({
   onRevertTurn?: (turnId: string) => void;
   revertingTurnId?: string | null;
   composerInitialText?: string;
+  activePageLabel?: string | null;
   statusSlot?: ReactNode;
   projectFiles: readonly FileInfo[];
   comments: Comment[];
@@ -144,6 +146,7 @@ export default function ChatPane({
             interruptPending={interruptPending}
             onInterrupt={onInterrupt}
             initialText={composerInitialText}
+            activePageLabel={activePageLabel}
             projectFiles={projectFiles}
           />
       </div>

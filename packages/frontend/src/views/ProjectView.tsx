@@ -110,7 +110,7 @@ import {
   isDesignAuditCurrent,
   preferDesignAuditResult,
 } from "@/lib/design-audit-state";
-import { resolveCanvasNavigation, resolveCanvasSource } from "@/lib/canvas-source";
+import { isSafeCanvasPagePath, resolveCanvasNavigation, resolveCanvasPageTarget, resolveCanvasSource } from "@/lib/canvas-source";
 
 export default function ProjectView() {
   const { id } = useParams();
@@ -123,7 +123,7 @@ export default function ProjectView() {
   // base64url-encodes the prompt into ?prefill_prompt; we decode it
   // once on mount, hand it to the composer, and strip the param so a
   // refresh doesn't re-prefill on top of whatever the user has typed.
-  const [composerPrefill] = useState<string>(() => {
+  const [composerPrefill, setComposerPrefill] = useState<string>(() => {
     const raw = searchParams.get("prefill_prompt");
     if (!raw) return "";
     try {
@@ -906,12 +906,24 @@ export default function ProjectView() {
     if (!canvasSrc || !id) return;
     const target = resolveCanvasNavigation(href, new URL(canvasSrc, window.location.href).href, files.map((file) => file.rel_path));
     if (!target) {
-      pushToast({ title: "페이지를 열 수 없어요", body: "현재 프로젝트에 있는 HTML 페이지 링크인지 확인해 주세요.", tone: "warn" });
+      const missing = resolveCanvasPageTarget(href, new URL(canvasSrc, window.location.href).href);
+      const active = tabs.find((tab) => tab.id === activeTabId && tab.kind === "file")?.relPath;
+      const canCreate = missing !== null && active !== undefined && isSafeCanvasPagePath(missing.relPath) && isSafeCanvasPagePath(active);
+      pushToast({
+        title: "페이지를 열 수 없어요",
+        body: "현재 프로젝트에 있는 HTML 페이지 링크인지 확인해 주세요.",
+        tone: "warn",
+        ...(canCreate ? { action: { label: "이 페이지 만들기", onSelect: () => {
+          setComposerPrefill(`Create \`${missing.relPath}\` linked from \`${active}\`, sharing the same header/nav/footer`);
+          setChatFocusKey((value) => value + 1);
+          setMobilePane("chat");
+        } } } : {}),
+      });
       return;
     }
     setCanvasNavigation({ ...target, projectId: id });
     openFileAsTab(target.relPath, setOpenFileTabs, setActiveTabId);
-  }, [canvasSrc, files, id, pushToast]);
+  }, [activeTabId, canvasSrc, files, id, pushToast, tabs]);
 
   // File-level single-step undo (audit fix #7). Tracks per-file undo
   // availability and exposes it through the canvas top bar. Server
@@ -1033,6 +1045,7 @@ export default function ProjectView() {
                 type: "user.message",
                 text,
                 files: attachedFiles,
+                ...(activeRelPath === null ? {} : { active_rel_path: activeRelPath }),
                 generation,
               }, { signal });
             } catch (error) {
@@ -1159,6 +1172,7 @@ export default function ProjectView() {
           interruptPending={interruptMutation.isPending}
           onInterrupt={() => interruptMutation.mutate()}
           composerInitialText={composerPrefill}
+          activePageLabel={activeRelPath !== null && activeRelPath !== project.entrypoint ? `보고 있는 페이지: ${activeRelPath}` : null}
           statusSlot={
             <DirectionStatusBar
               state={directionState}
@@ -1229,20 +1243,23 @@ export default function ProjectView() {
         {activeTab?.kind === "file" && (
           <div className="flex min-h-0 min-w-0 flex-1 max-[1000px]:flex-col">
             <Canvas
-              colorPalette={activeRelPath && /\.html?$/i.test(activeRelPath) ? <ColorPalette
-                key={activeRelPath}
-                projectId={id!}
-                relPath={activeRelPath}
-                refreshKey={`${artifacts.current_digest}:${refreshTick}`}
-                disabled={composerDisabled || tweaksMutation.isPending || patchFileMutation.isPending || undoMutation.isPending}
-                onSaved={() => {
-                  setRefreshTick((value) => value + 1);
-                  setTweaksTarget(null);
-                  tweaksUndoRef.current = [];
-                  tweaksRedoRef.current = [];
-                  void queryClient.invalidateQueries({ queryKey: ["project", id] });
-                }}
-              /> : undefined}
+              colorPalette={activeRelPath && /\.html?$/i.test(activeRelPath) ? <div className="flex items-center gap-2">
+                {project.type === "prototype" && artifacts.pages.length > 1 ? <label className="flex items-center gap-1.5 text-xs text-muted-foreground">페이지<select aria-label="캔버스 페이지" value={activeRelPath} className="h-8 max-w-44 rounded-md border border-border bg-background px-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onChange={(event) => openFileAsTab(event.target.value, setOpenFileTabs, setActiveTabId)}>{artifacts.pages.map((page) => <option key={page.rel_path} value={page.rel_path}>{page.title}</option>)}</select></label> : null}
+                <ColorPalette
+                  key={activeRelPath}
+                  projectId={id!}
+                  relPath={activeRelPath}
+                  refreshKey={`${artifacts.current_digest}:${refreshTick}`}
+                  disabled={composerDisabled || tweaksMutation.isPending || patchFileMutation.isPending || undoMutation.isPending}
+                  onSaved={() => {
+                    setRefreshTick((value) => value + 1);
+                    setTweaksTarget(null);
+                    tweaksUndoRef.current = [];
+                    tweaksRedoRef.current = [];
+                    void queryClient.invalidateQueries({ queryKey: ["project", id] });
+                  }}
+                />
+              </div> : undefined}
               sceneTools={activeRelPath && /\.html?$/i.test(activeRelPath) ? <Suspense fallback={<p role="status" className="p-3 text-sm">3D 도구를 불러오는 중…</p>}><ThreeScenePanel
                 key={activeRelPath}
                 projectId={id!}
