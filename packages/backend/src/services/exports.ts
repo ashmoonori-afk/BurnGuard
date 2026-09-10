@@ -104,13 +104,15 @@ async function runExport(input: RunInput): Promise<void> {
     const graphicCanvas = context.project.type === "graphic"
       ? parseStoredProjectOptions(context.project.options_json).graphic_canvas ?? undefined
       : undefined;
+    let attemptFindings: readonly AttemptFinding[];
     if (context.format === "html_zip" && context.options.skip_quality_check === true) {
-      recordExportAuditFindings(db, input.attemptId, [{ code: "design_audit:skipped_by_user", path: null }]);
+      attemptFindings = [{ code: "design_audit:skipped_by_user", path: null }];
+      recordExportAuditFindings(db, input.attemptId, attemptFindings);
     } else {
       const audit = await auditRenderedTree({ projectId: context.identity.projectId, projectDir: renderRoot, entrypoint: context.project.entrypoint, revision: context.identity.revision, digest: context.identity.digest, treeDigest: renderManifest.tree_digest, safeFix: false, deck: context.project.type === "slide_deck", ...(graphicCanvas === undefined ? {} : { canvas: graphicCanvas }), signal: input.controller.signal });
       const auditUnknowns = audit.checks.filter((check) => check.reason !== null).map((check) => ({ code: `design_audit:${check.code}:${check.status}`, path: null }));
       const auditFindings = audit.checks.flatMap((check) => check.findings.map((finding) => ({ code: finding.check_code, path: finding.source.rel_path }))).slice(0, 200 - auditUnknowns.length);
-      const attemptFindings: readonly AttemptFinding[] = [...auditFindings, ...auditUnknowns];
+      attemptFindings = [...auditFindings, ...auditUnknowns];
       recordExportAuditFindings(db, input.attemptId, attemptFindings);
       const mustFixCount = audit.checks.flatMap((check) => check.findings).filter((finding) => finding.severity === "must_fix").length;
       if (mustFixCount > 0) throw new ExportServiceError("design_audit_failed", `Design audit found ${mustFixCount} must-fix finding${mustFixCount === 1 ? "" : "s"}`);
