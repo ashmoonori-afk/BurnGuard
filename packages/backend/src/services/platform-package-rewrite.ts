@@ -13,8 +13,10 @@ const HTML_URL_ATTRIBUTES = ["src", "poster", "xlink:href"] as const;
 const MAX_URL_LENGTH = 4096;
 const MAX_IMPORT_DEPTH = 4;
 
+/** Upload folder and default asset path segment: ASCII letters, digits and dashes only, so the package never trips the mall-origin filename warnings itself. */
 export function packageSlug(name: string): string {
-  return slugifyProjectName(name).toLocaleLowerCase("en-US");
+  const ascii = slugifyProjectName(name).toLocaleLowerCase("en-US").replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
+  return ascii === "" ? "site" : ascii;
 }
 
 export function defaultAssetBaseUrl(slug: string): string {

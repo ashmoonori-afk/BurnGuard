@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { packageSlug } from "../src/services/platform-package-rewrite";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
@@ -250,5 +251,18 @@ describe("platform package boundaries", () => {
     // When the published bytes are tampered with
     await writeFile(outputPath, new Uint8Array([...built.bytes.slice(0, built.bytes.byteLength - 1), (built.bytes[built.bytes.byteLength - 1] ?? 0) ^ 0xff]));
     await expect(verifyExportDownload(ids.jobId)).rejects.toBeInstanceOf(ExportDownloadError);
+  });
+});
+
+describe("packageSlug", () => {
+  test("Given a project name with brackets, a middle dot, and Hangul When slugged Then the upload folder name is ASCII-safe", () => {
+    // Given / When
+    const slug = packageSlug("[burnguard:original-sample] VELUNE · Web");
+    // Then: the exporter's own folder must not trip cafe24_korean_asset_filename.
+    expect(slug).toBe("burnguard-original-sample-velune-web");
+    expect(slug).toMatch(/^[a-z0-9-]+$/);
+    expect(packageSlug("카드뉴스 세트")).toBe("site");
+    // A blank name keeps slugifyProjectName's own ASCII fallback.
+    expect(packageSlug("  ")).toBe("export");
   });
 });
