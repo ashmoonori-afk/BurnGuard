@@ -78,6 +78,11 @@ Current export implementation:
 | `pdf` | Schema/UI placeholder only |
 | `pptx` | Schema/UI placeholder only |
 | `handoff` | Schema/UI placeholder only |
+| `png_zip` | Implemented: one PNG per deck slide or graphic frame, or section-aware PNG/JPEG slices for a product detail page |
+| `cafe24_package` | Implemented: Cafe24 (카페24) Smart Design layout, per-page fragments, rewritten assets, guide, and lint report |
+| `imweb_package` | Implemented: Imweb (아임웹) code-widget fragments plus shared header and footer code, guide, and lint report |
+
+PDF accepts an `artboard` paper for graphic projects: each page uses the artboard's own pixel size converted to points, so a graphic set prints one page per artboard. A set whose artboards differ in size has no single page geometry and is rejected.
 
 The HTML zip export currently shells out to Windows PowerShell `Compress-Archive`.
 
