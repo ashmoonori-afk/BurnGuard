@@ -1,5 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import type { ExportOptions, GraphicSetV1 } from "@bg/shared";
+import type { CapturePage, CaptureRequest, SectionMeasurement } from "../src/services/export-frame-capture";
 import { createCanvas } from "../src/services/export-native-modules";
+import { renderPngZipWithPage, type PngZipResult } from "../src/services/export-png-zip";
 import { planSlices, SlicePlanError, type SliceRegion } from "../src/services/export-slice-plan";
 import { JpegValidationError, parseJpeg, validateJpeg } from "../src/services/export-jpeg-validation";
 
@@ -140,4 +147,171 @@ describe("JPEG slice validation", () => {
     // Then
     expect(low).toBeLessThan(high);
   });
+});
+
+type SliceRecorder = { readonly page: CapturePage; readonly captures: CaptureRequest[]; readonly flattened: number[] };
+
+let root = "";
+let stagedDir = "";
+let outputPath = "";
+
+beforeEach(async () => {
+  root = await mkdtemp(path.join(tmpdir(), "bg-slice-export-"));
+  stagedDir = path.join(root, "project");
+  outputPath = path.join(root, "artifact.zip");
+  await mkdir(stagedDir, { recursive: true });
+});
+
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+});
+
+function pngBytes(width: number, height: number): Uint8Array {
+  const canvas = createCanvas(width, height);
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#0f1c2e";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#e8f0ff";
+  context.fillRect(0, 0, width, Math.max(1, Math.floor(height / 4)));
+  return new Uint8Array(canvas.toBuffer("image/png"));
+}
+
+function padded(bytes: Uint8Array, size: number): Uint8Array {
+  if (size <= bytes.byteLength) return bytes;
+  const filled = new Uint8Array(size);
+  filled.set(bytes);
+  return filled;
+}
+
+function slicePage(measurement: SectionMeasurement, encode: (request: CaptureRequest) => Uint8Array): SliceRecorder {
+  const captures: CaptureRequest[] = [];
+  const flattened: number[] = [];
+  const page: CapturePage = {
+    awaitRenderReady: async () => undefined,
+    measureFrames: async () => [],
+    isolateFrame: async () => null,
+    restoreFrames: async () => undefined,
+    measureSections: async () => measurement,
+    flattenBackground: async () => { flattened.push(captures.length); },
+    capture: async (request) => { captures.push(request); return encode(request); },
+  };
+  return { page, captures, flattened };
+}
+
+const detailSet: GraphicSetV1 = { schema_version: 1, kind: "product_detail", frame_count: 1 };
+
+async function runSlices(page: CapturePage, options: ExportOptions, graphicSet: GraphicSetV1 = detailSet): Promise<PngZipResult> {
+  return await renderPngZipWithPage({
+    page,
+    stagedDir,
+    outputPath,
+    deck: false,
+    graphic_set: graphicSet,
+    options,
+    receiptWriter: async () => undefined,
+    signal: new AbortController().signal,
+  });
+}
+
+describe("product detail slice export", () => {
+  test("Given the 860x12000 page When exported as PNG slices Then each slice is clipped, validated and receipted at its section bottom", async () => {
+    // Given
+    const recorder = slicePage(
+      { pageWidth: 860, pageHeight: 12_000, originX: 0, originY: 0, sectionBottoms: [4800, 9600, 12_000] },
+      (request) => pngBytes(request.clip.width, request.clip.height),
+    );
+
+    // When
+    const { validation, findings } = await runSlices(recorder.page, { slice_height: 5000, slice_format: "png" });
+
+    // Then
+    expect(recorder.captures.map((capture) => capture.clip)).toEqual([
+      { x: 0, y: 0, width: 860, height: 4800 },
+      { x: 0, y: 4800, width: 860, height: 4800 },
+      { x: 0, y: 9600, width: 860, height: 2400 },
+    ]);
+    expect(validation.outputs.map((output) => [output.rel_path, output.height, output.image_format])).toEqual([
+      ["01.png", 4800, "png"],
+      ["02.png", 4800, "png"],
+      ["03.png", 2400, "png"],
+    ]);
+    expect(validation.outputs.map((output) => output.source_region)).toEqual([
+      { top: 0, bottom: 4800 },
+      { top: 4800, bottom: 9600 },
+      { top: 9600, bottom: 12_000 },
+    ]);
+    expect(findings).toEqual([]);
+  }, 30_000);
+
+  test("Given a section taller than the slice height When exported Then the forced cut is reported with its slice index", async () => {
+    // Given
+    const recorder = slicePage(
+      { pageWidth: 780, pageHeight: 7000, originX: 0, originY: 0, sectionBottoms: [7000] },
+      (request) => pngBytes(request.clip.width, request.clip.height),
+    );
+
+    // When
+    const { findings, validation } = await runSlices(recorder.page, { slice_height: 3000, slice_format: "png" });
+
+    // Then
+    expect(findings).toEqual([{ code: "cut_through_content", slice: 1 }, { code: "cut_through_content", slice: 2 }]);
+    expect(validation.outputs).toHaveLength(3);
+    expect(recorder.captures.every((capture) => capture.clip.height <= 3000)).toBe(true);
+  }, 30_000);
+
+  test("Given JPEG slices When exported Then transparency is flattened before capture and decoded dimensions are recorded", async () => {
+    // Given
+    const recorder = slicePage(
+      { pageWidth: 780, pageHeight: 5000, originX: 0, originY: 0, sectionBottoms: [2500, 5000] },
+      (request) => jpegBytes(request.clip.width, request.clip.height, request.quality ?? 85),
+    );
+
+    // When
+    const { validation } = await runSlices(recorder.page, { slice_height: 3000, slice_format: "jpeg", jpeg_quality: 85 });
+
+    // Then
+    expect(recorder.flattened).toEqual([0]);
+    expect(recorder.captures.every((capture) => capture.format === "jpeg" && capture.quality === 85)).toBe(true);
+    expect(validation.outputs.map((output) => [output.rel_path, output.width, output.height, output.image_format])).toEqual([
+      ["01.jpg", 780, 2500, "jpeg"],
+      ["02.jpg", 780, 2500, "jpeg"],
+    ]);
+  }, 30_000);
+
+  test("Given a preset byte cap When the first quality is too large Then quality drops in bounded steps until the slice fits", async () => {
+    // Given: Coupang caps a slice at 5,000,000 bytes.
+    const recorder = slicePage(
+      { pageWidth: 780, pageHeight: 2000, originX: 0, originY: 0, sectionBottoms: [2000] },
+      (request) => padded(jpegBytes(request.clip.width, request.clip.height, request.quality ?? 85), (request.quality ?? 85) * 62_000),
+    );
+
+    // When
+    const { validation } = await runSlices(
+      recorder.page,
+      { slice_height: 3000, slice_format: "jpeg", jpeg_quality: 85 },
+      { schema_version: 1, kind: "product_detail", frame_count: 1, preset_id: "coupang-product-detail" },
+    );
+
+    // Then
+    expect(recorder.captures.map((capture) => capture.quality)).toEqual([85, 80]);
+    expect(validation.outputs[0]?.bytes).toBe(80 * 62_000);
+    expect(validation.outputs[0]?.image_format).toBe("jpeg");
+  }, 30_000);
+
+  test("Given a slice that stays over the cap at quality 60 When exported Then the export fails instead of shipping an oversized upload", async () => {
+    // Given
+    const recorder = slicePage(
+      { pageWidth: 780, pageHeight: 2000, originX: 0, originY: 0, sectionBottoms: [2000] },
+      (request) => padded(jpegBytes(request.clip.width, request.clip.height, request.quality ?? 85), 6_000_000),
+    );
+
+    // When / Then
+    await expect(runSlices(
+      recorder.page,
+      { slice_height: 3000, slice_format: "jpeg", jpeg_quality: 85 },
+      { schema_version: 1, kind: "product_detail", frame_count: 1, preset_id: "coupang-product-detail" },
+    )).rejects.toMatchObject({ code: "slice_bytes_exceeded" });
+    expect(recorder.captures.map((capture) => capture.quality)).toEqual([85, 80, 75, 70, 65, 60]);
+    expect(existsSync(outputPath)).toBe(false);
+  }, 30_000);
 });
