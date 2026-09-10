@@ -70,7 +70,7 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
       if (state.projectDirectoryMissingAt !== null && suffix === state.projectDirectoryMissingAt) return fail(409, "project_directory_missing");
       if (!suffix) return ok(projectFixture(id));
       if (suffix === "/session") return ok(sessionFixture(sessionId, id, state.usage));
-      if (suffix === "/artifacts") return ok({ project_id: id, entrypoint: "", entrypoint_url: null, design_system_id: SYSTEM_A, design_system_url: null, file_count: 0, current_revision: 0, current_digest: digest, updated_at: AT });
+      if (suffix === "/artifacts") return ok({ project_id: id, entrypoint: "", entrypoint_url: null, pages: [], site_overflow: false, design_system_id: SYSTEM_A, design_system_url: null, file_count: 0, current_revision: 0, current_digest: digest, updated_at: AT });
       if (["/files", "/comments", "/exports"].includes(suffix)) return ok([]);
       if (["/design-directions", "/design-audit"].includes(suffix)) return ok(null);
       return fail(404, "fixture_project_route_missing");
