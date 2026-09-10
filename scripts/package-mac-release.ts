@@ -4,7 +4,7 @@
  * .nupkg, releases.osx.json feed) from the .app that `build-mac.ts` produced.
  * Publication is a separate release step; this only writes dist/releases.
  *
- * Signing and notarization run only when credentials are present:
+ * Release packaging requires signing and notarization credentials:
  *   BG_MAC_SIGN_IDENTITY       Developer ID Application certificate subject
  *   BG_MAC_INSTALL_IDENTITY    Developer ID Installer certificate subject
  *   BG_MAC_NOTARY_PROFILE      notarytool keychain profile name
@@ -29,10 +29,16 @@ if (path.dirname(output) !== distribution || path.basename(output) !== "releases
 await rm(output, { recursive: true, force: true });
 
 const signing: string[] = [];
-if (process.env.BG_MAC_SIGN_IDENTITY) signing.push("--signAppIdentity", process.env.BG_MAC_SIGN_IDENTITY);
-if (process.env.BG_MAC_INSTALL_IDENTITY) signing.push("--signInstallIdentity", process.env.BG_MAC_INSTALL_IDENTITY);
-if (process.env.BG_MAC_NOTARY_PROFILE) signing.push("--notaryProfile", process.env.BG_MAC_NOTARY_PROFILE);
-if (signing.length === 0) console.warn("[release] unsigned package: set BG_MAC_SIGN_IDENTITY, BG_MAC_INSTALL_IDENTITY and BG_MAC_NOTARY_PROFILE for a distributable build");
+const requiredSigning = [
+  ["BG_MAC_SIGN_IDENTITY", "--signAppIdentity"],
+  ["BG_MAC_INSTALL_IDENTITY", "--signInstallIdentity"],
+  ["BG_MAC_NOTARY_PROFILE", "--notaryProfile"],
+] as const;
+for (const [environmentKey, argument] of requiredSigning) {
+  const value = process.env[environmentKey];
+  if (!value) throw new Error(`[release] ${environmentKey} is required; refusing to publish an unsigned macOS package`);
+  signing.push(argument, value);
+}
 
 // `[osx]` is interpolated so the Bun shell never treats it as a glob.
 const platform = "[osx]";

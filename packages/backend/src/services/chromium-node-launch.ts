@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium, type Browser } from "playwright-core";
+import type { Browser } from "playwright-core";
+import { chromium } from "./playwright-runtime";
 import { resolveRepoRoot } from "../lib/paths";
 import { registerExportBrowser } from "./export-browser-registry";
 import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../adapters/owned-process-tree";

@@ -163,7 +163,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         var environment = ProcessInfo.processInfo.environment
         environment["BG_DESKTOP"] = "1"
         environment["BG_NO_OPEN"] = "1"
-        environment["BG_THUMBNAIL_CACHE_ONLY"] = "1"
+        environment["BG_UPDATE_WAIT_PID"] = String(ProcessInfo.processInfo.processIdentifier)
         if environment["BG_PORT"] == nil {
             environment["BG_PORT"] = "14070"
         }
@@ -204,8 +204,16 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             guard let data = json.data(using: .utf8),
                   let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let protocolVersion = message["protocol"] as? Int,
-                  protocolVersion == 1,
-                  let urlString = message["url"] as? String,
+                  protocolVersion == 1 else {
+                fail("BurnGuard 시작 응답을 확인할 수 없습니다.")
+                return
+            }
+            if message["event"] as? String == "shutdown" {
+                closing = true
+                NSApp.terminate(nil)
+                return
+            }
+            guard let urlString = message["url"] as? String,
                   let url = URL(string: urlString) else {
                 fail("BurnGuard 시작 응답을 확인할 수 없습니다.")
                 return

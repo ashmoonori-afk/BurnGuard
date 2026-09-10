@@ -104,13 +104,17 @@ async function runExport(input: RunInput): Promise<void> {
     const graphicCanvas = context.project.type === "graphic"
       ? parseStoredProjectOptions(context.project.options_json).graphic_canvas ?? undefined
       : undefined;
-    const audit = await auditRenderedTree({ projectId: context.identity.projectId, projectDir: renderRoot, entrypoint: context.project.entrypoint, revision: context.identity.revision, digest: context.identity.digest, treeDigest: renderManifest.tree_digest, safeFix: false, deck: context.project.type === "slide_deck", ...(graphicCanvas === undefined ? {} : { canvas: graphicCanvas }), signal: input.controller.signal });
-    const auditUnknowns = audit.checks.filter((check) => check.reason !== null).map((check) => ({ code: `design_audit:${check.code}:${check.status}`, path: null }));
-    const auditFindings = audit.checks.flatMap((check) => check.findings.map((finding) => ({ code: finding.check_code, path: finding.source.rel_path }))).slice(0, 200 - auditUnknowns.length);
-    const attemptFindings: readonly AttemptFinding[] = [...auditFindings, ...auditUnknowns];
-    recordExportAuditFindings(db, input.attemptId, attemptFindings);
-    const mustFixCount = audit.checks.flatMap((check) => check.findings).filter((finding) => finding.severity === "must_fix").length;
-    if (mustFixCount > 0) throw new ExportServiceError("design_audit_failed", `Design audit found ${mustFixCount} must-fix finding${mustFixCount === 1 ? "" : "s"}`);
+    if (context.format === "html_zip" && context.options.skip_quality_check === true) {
+      recordExportAuditFindings(db, input.attemptId, [{ code: "design_audit:skipped_by_user", path: null }]);
+    } else {
+      const audit = await auditRenderedTree({ projectId: context.identity.projectId, projectDir: renderRoot, entrypoint: context.project.entrypoint, revision: context.identity.revision, digest: context.identity.digest, treeDigest: renderManifest.tree_digest, safeFix: false, deck: context.project.type === "slide_deck", ...(graphicCanvas === undefined ? {} : { canvas: graphicCanvas }), signal: input.controller.signal });
+      const auditUnknowns = audit.checks.filter((check) => check.reason !== null).map((check) => ({ code: `design_audit:${check.code}:${check.status}`, path: null }));
+      const auditFindings = audit.checks.flatMap((check) => check.findings.map((finding) => ({ code: finding.check_code, path: finding.source.rel_path }))).slice(0, 200 - auditUnknowns.length);
+      const attemptFindings: readonly AttemptFinding[] = [...auditFindings, ...auditUnknowns];
+      recordExportAuditFindings(db, input.attemptId, attemptFindings);
+      const mustFixCount = audit.checks.flatMap((check) => check.findings).filter((finding) => finding.severity === "must_fix").length;
+      if (mustFixCount > 0) throw new ExportServiceError("design_audit_failed", `Design audit found ${mustFixCount} must-fix finding${mustFixCount === 1 ? "" : "s"}`);
+    }
     await resolveStaticClosure(renderRoot, context.project.entrypoint, renderManifest);
     const inputDigest = sha256(canonicalJson({ schema_version: 1, project: context.identity, entrypoint: context.project.entrypoint, manifest: renderManifest }));
     advanceExportAttempt(db, { attemptId: input.attemptId, status: "running", stage: "rendering", inputClosureDigest: inputDigest, designSystemDigest: context.identity.designSystemDigest });
@@ -153,7 +157,9 @@ async function renderOutput(input: RunInput, renderRoot: string, outputPath: str
   const only = (validation: ExportValidation): RenderedOutput => ({ validation, findings: [] });
   switch (context.format) {
     case "html_zip": {
-      const session = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: context.project.type === "slide_deck", signal: input.controller.signal }); await session.close();
+      if (context.options.skip_quality_check !== true) {
+        const session = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: context.project.type === "slide_deck", signal: input.controller.signal }); await session.close();
+      }
       const archiveManifest = buildHtmlArchiveManifest({ schema_version: 1, entrypoint: context.project.entrypoint, project_revision: context.identity.revision, project_digest: context.identity.digest, input_closure_digest: inputDigest }, manifest.files.map((file) => ({ path: file.path, size: file.size, sha256: file.sha256 })));
       await writeFile(path.join(renderRoot, HTML_EXPORT_MANIFEST), canonicalJson(archiveManifest)); await zipDirectory(renderRoot, outputPath); await validateHtmlArchive(new Uint8Array(await readFile(outputPath)), archiveManifest); return only({ entries: archiveManifest.entries.length });
     }

@@ -10,7 +10,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon Condition="Exists('BurnGuard.ico')">BurnGuard.ico</ApplicationIcon>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>0.5.4</Version>
+    <Version>0.5.6</Version>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="qa/**/*.cs" />

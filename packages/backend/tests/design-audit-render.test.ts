@@ -82,3 +82,18 @@ describe("rendered design auditor", () => {
  }, 60_000);
 
 });
+
+test("Given offscreen lazy and stalled images When audited Then loading completes or stops within a bounded wait", async () => {
+  const browser = await launchChromium(new AbortController().signal);
+  try {
+    const page = await browser.newPage();
+    await page.route("https://audit.test/**", route => route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>' }));
+    await page.setContent('<div style="height:10000px"></div><img data-bg-node-id="lazy" loading="lazy" src="https://audit.test/image.svg"><img data-bg-node-id="stalled">');
+    await page.evaluate(() => Object.defineProperty(document.querySelector('[data-bg-node-id="stalled"]'), "complete", { get: () => false }));
+    const started = performance.now();
+    const result = await inspectRenderedPage(page);
+    expect(performance.now() - started).toBeLessThan(10000);
+    expect(result.findings.some(f => f.code === "missing_image" && f.nodeId === "lazy")).toBe(false);
+    expect(result.findings.some(f => f.code === "missing_image" && f.nodeId === "stalled")).toBe(true);
+  } finally { await browser.close(); }
+}, 30000);

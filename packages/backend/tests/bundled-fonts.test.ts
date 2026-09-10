@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { copyBundledFonts } from "../src/data/bundled-fonts";
 import { createProjectRecord } from "../src/db/seed";
+import { PROTOTYPE_TUTORIAL_NAME, seedTutorialsOnce } from "../src/db/seed-tutorials";
 import { appRootDir, resolveRepoRoot } from "../src/lib/paths";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { getSqlite } from "../src/db/client";
@@ -30,4 +31,16 @@ test("Given bundled local fonts, when initializing projects and copying over bra
   expect(await readFile(path.join(branded, "fonts/Pretendard-OFL.txt"), "utf8")).toContain("SIL OPEN FONT LICENSE");
   expect(isRuntimeSource("assets/fonts/fonts.css")).toBe(true);
   expect(isRuntimeSource("assets/fonts/../../secret")).toBe(false);
+});
+
+test("Given an existing tutorial project When startup seeding runs again Then its live files are not mutated", async () => {
+  await seedTutorialsOnce();
+  const project = getSqlite().query<{ readonly dirPath: string }, [string]>("SELECT dir_path dirPath FROM projects WHERE name=?").get(PROTOTYPE_TUTORIAL_NAME);
+  if (project === null) throw new Error("tutorial fixture was not seeded");
+  const missingFont = path.join(project.dirPath, "fonts", "Pretendard-OFL.txt");
+  await rm(missingFont);
+
+  await seedTutorialsOnce();
+
+  await expect(readFile(missingFont)).rejects.toThrow();
 });

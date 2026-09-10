@@ -8,8 +8,15 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
   await page.evaluate(async () => {
     const pending = [...document.images].filter((image) => !image.complete);
     await Promise.all(pending.map((image) => new Promise<void>((resolve) => {
-      const done = (): void => resolve();
+      const done = (): void => {
+        clearTimeout(timer);
+        image.removeEventListener("load", done); image.removeEventListener("error", done);
+        resolve();
+      };
+      const timer = setTimeout(done, 5000);
       image.addEventListener("load", done, { once: true }); image.addEventListener("error", done, { once: true });
+      image.loading = "eager";
+      if (image.complete) done();
     })));
   });
   return page.evaluate((fixedCanvas) => {

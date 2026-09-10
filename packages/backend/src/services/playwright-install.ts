@@ -2,9 +2,9 @@ import { stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { PlaywrightInstallStatus } from "@bg/shared";
-import { resolveRepoRoot } from "../lib/paths";
 import { chromiumNodeCommand } from "./chromium-node-launch";
 import { resetChromiumCapability } from "./chromium-capability";
+import { playwrightCoreDirectory } from "./playwright-runtime";
 
 const MAX_TAIL = 120;
 
@@ -32,7 +32,7 @@ let probe: Promise<void> | null = null;
 function probeChromiumOnDisk(): Promise<void> {
   probe ??= (async () => {
     try {
-      const { chromium } = await import("playwright-core");
+      const { chromium } = await import("./playwright-runtime");
       chromiumOnDisk = (await stat(chromium.executablePath())).isFile();
     } catch {
       chromiumOnDisk = false;
@@ -126,8 +126,7 @@ export function startPlaywrightInstall(): { started: boolean } {
 export function playwrightInstallCommand(): string[] {
   const node = chromiumNodeCommand()?.node;
   if (node === undefined) throw new Error("Browser installer runtime is unavailable");
-  const packagedCli = path.join(resolveRepoRoot(), "node_modules", "playwright-core", "cli.js");
-  const cli = existsSync(packagedCli) ? packagedCli : path.join(path.dirname(Bun.resolveSync("playwright-core/package.json", import.meta.dir)), "cli.js");
+  const cli = path.join(playwrightCoreDirectory(), "cli.js");
   if (!existsSync(cli)) throw new Error("Browser installer is unavailable");
   return [node, cli, "install", "chromium"];
 }

@@ -14,30 +14,32 @@ const WORKER = String.raw`
 import {readFile,writeFile,stat} from 'node:fs/promises';
 console.log = console.warn = () => {};
 try {
-  const [moduleUrl, source, output, maxBytes] = process.argv.slice(1);
+  const [moduleUrl, source, output, maxBytes, extractedOutput] = process.argv.slice(1);
   if ((await stat(source)).size > Number(maxBytes)) throw {code:'pdf_size_limit'};
   const {getDocument} = await import(moduleUrl);
   const task = getDocument({data:new Uint8Array(await readFile(source)),isEvalSupported:false,useSystemFonts:false,disableFontFace:true,verbosity:0});
   const pdf = await task.promise;
   try {
     if (pdf.numPages > 200) throw {code:'pdf_page_limit'};
-    const pages = []; let total = 0;
+    const pages = []; const extracted = ['# Extracted PDF text']; let total = 0;
     for (let index=1; index<=pdf.numPages; index++) {
       const page = await pdf.getPage(index);
       const text = await page.getTextContent();
-      let excerpt = '';
+      let pageText = '';
       for (const item of text.items) {
         if (typeof item.str !== 'string') continue;
-        total += item.str.length;
+        total += item.str.length + 1;
         if (total > 1000000) throw {code:'pdf_text_limit'};
-        if (excerpt.length < 640) excerpt += item.str.slice(0,640-excerpt.length) + (item.hasEOL ? '\n' : ' ');
+        pageText += item.str + (item.hasEOL ? '\n' : ' ');
       }
-      excerpt = excerpt.trim().slice(0,640);
+      const excerpt = pageText.trim().slice(0,640);
       pages.push({index,title:'Page '+index,summary:'',text_excerpt:excerpt});
+      extracted.push('## Page '+index, pageText.trim());
       page.cleanup();
     }
     const notes = pages.some(page=>page.text_excerpt) ? ['PDF text extracted locally; images are not OCR processed.'] : ['텍스트가 없는 PDF예요. 자동 OCR을 지원하지 않으므로 첨부 원본의 시각 자료를 직접 확인해야 해요.'];
-    await writeFile(output,JSON.stringify({kind:'pdf',page_count:pdf.numPages,pages,notes}));
+    await writeFile(output,JSON.stringify({kind:'pdf',page_count:pdf.numPages,pages,notes,fonts:[],colors:[],headings:[],bodies:[]}));
+    await writeFile(extractedOutput,extracted.join('\n\n')+'\n\n'+notes.join('\n'));
   } finally { await task.destroy(); }
 } catch(error) {
   const codes=['pdf_size_limit','pdf_page_limit','pdf_text_limit'];
@@ -46,13 +48,13 @@ try {
 }
 `;
 
-export async function extractPdfAttachment(sourcePath: string, manifestPath: string): Promise<void> {
+export async function extractPdfAttachment(sourcePath: string, manifestPath: string, extractedTextPath: string): Promise<void> {
   const command = chromiumNodeCommand();
   if (!command) throw new AttachmentPdfError("pdf_runtime_unavailable");
   let modulePath: string;
   try { modulePath = createRequire(path.join(resolveRepoRoot(), "packages/backend/package.json")).resolve("pdfjs-dist/legacy/build/pdf.mjs"); }
   catch { throw new AttachmentPdfError("pdf_runtime_unavailable"); }
-  const child = Bun.spawn([command.node, "--max-old-space-size=512", "--input-type=module", "--eval", WORKER, pathToFileURL(modulePath).href, sourcePath, manifestPath, String(MAX_UPLOAD_BYTES)], { stdin: "ignore", stdout: "pipe", stderr: "ignore", windowsHide: true });
+  const child = Bun.spawn([command.node, "--max-old-space-size=512", "--input-type=module", "--eval", WORKER, pathToFileURL(modulePath).href, sourcePath, manifestPath, String(MAX_UPLOAD_BYTES), extractedTextPath], { stdin: "ignore", stdout: "pipe", stderr: "ignore", windowsHide: true });
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; child.kill(); }, 30_000);
   try {

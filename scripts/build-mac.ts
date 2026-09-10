@@ -112,12 +112,16 @@ async function main() {
   // turns the import into a null resolution that throws only if
   // the loader is ever actually called — which it isn't in our
   // code path.
+  // `--external playwright-core`: it resolves its own package.json at
+  // load time and --compile would bake this machine's absolute path into
+  // the binary; services/playwright-runtime.ts loads the staged copy instead.
   await $`bun build ${ENTRY} \
     --compile \
     --target=bun-darwin-arm64 \
     --minify \
     --external electron \
     --external chromium-bidi \
+    --external playwright-core \
     --outfile ${serviceOut}`.cwd(ROOT);
   console.log(
     `[build-mac] compiled in ${((Date.now() - startCompile) / 1000).toFixed(1)}s`,
@@ -144,13 +148,13 @@ async function main() {
     );
   }
 
-  await stageRuntimeAssets(ROOT, APP_MACOS);
+  await stageRuntimeAssets(ROOT, APP_MACOS, true);
   const swiftc = Bun.which("swiftc");
   if (!swiftc) throw new Error("swiftc is required to build the native macOS window.");
   const sdk = (await $`xcrun --sdk macosx --show-sdk-path`.cwd(ROOT).text()).trim();
   await $`${swiftc} -O -swift-version 5 -target arm64-apple-macos14.0 -sdk ${sdk} -framework AppKit -framework WebKit ${NATIVE_ENTRY} -o ${binOut}`.cwd(ROOT);
   chmodSync(binOut, 0o755);
-  console.log("[build-mac] frontend, migrations, themes, browser resources, and native window staged");
+  console.log("[build-mac] frontend, migrations, themes, browser resources, Node renderer runtime, and native window staged");
 
   const signIdentity = process.env.BG_MAC_SIGN_IDENTITY;
   if (signIdentity) {
