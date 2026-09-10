@@ -28,8 +28,12 @@ jobs:
       - run: bun run typecheck
       - run: bun run lint
       - run: bun test packages/backend/tests/mac-updates.test.ts packages/backend/tests/app-update-routes.test.ts --timeout 30000
-      # Signing/notarization stay off until BG_MAC_* secrets exist; unsigned packages are for verification only.
-      - run: bun run build:mac:release
+      - name: Build signed and notarized macOS release
+        env:
+          BG_MAC_SIGN_IDENTITY: ${{ secrets.BG_MAC_SIGN_IDENTITY }}
+          BG_MAC_INSTALL_IDENTITY: ${{ secrets.BG_MAC_INSTALL_IDENTITY }}
+          BG_MAC_NOTARY_PROFILE: ${{ secrets.BG_MAC_NOTARY_PROFILE }}
+        run: bun run build:mac:release
       - name: Verify the bundled Node renderer runtime
         run: test -x "dist/mac/BurnGuard Design.app/Contents/MacOS/resources/node/node"
       - uses: actions/upload-artifact@v4

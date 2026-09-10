@@ -77,6 +77,25 @@ describe("update support detection", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("Given a native macOS shell with UpdateMac When support is detected Then updates remain enabled", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-mac-native-support-"));
+    try {
+      const macos = path.join(root, "BurnGuard.app", "Contents", "MacOS");
+      await Bun.write(path.join(macos, "burnguard-design"), "bin");
+      await writeFile(path.join(macos, "UpdateMac"), "#!/bin/sh\n", "utf8");
+      await chmod(path.join(macos, "UpdateMac"), 0o755);
+      expect(
+        detectUpdateSupport({
+          platform: "darwin",
+          execPath: path.join(macos, "burnguard-design"),
+          desktopShell: true,
+        }),
+      ).toEqual({ supported: true, reason: null });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("app updater flow", () => {
@@ -110,12 +129,51 @@ describe("app updater flow", () => {
       const sha = createHash("sha256").update(good).digest("hex").toUpperCase();
       const spawned: string[][] = [];
       let shutdowns = 0;
-      const updater = createAppUpdater({ currentVersion: "0.5.1", cacheDir: root, source: fakeSource([asset({ SHA256: sha })], { "BurnGuard-0.5.2-osx-full.nupkg": good }), support: { supported: true, reason: null }, updaterPath: "/Applications/BurnGuard.app/Contents/MacOS/UpdateMac", spawn: (cmd) => { spawned.push(cmd); }, shutdown: async () => { shutdowns += 1; }, scheduleShutdown: (run) => run() });
+      const updater = createAppUpdater({ currentVersion: "0.5.1", cacheDir: root, source: fakeSource([asset({ SHA256: sha })], { "BurnGuard-0.5.2-osx-full.nupkg": good }), support: { supported: true, reason: null }, updaterPath: "/Applications/BurnGuard.app/Contents/MacOS/UpdateMac", waitPid: 4242, spawn: (cmd) => { spawned.push(cmd); }, shutdown: async () => { shutdowns += 1; }, scheduleShutdown: (run) => run() });
       expect(await updater.apply()).toBe("not_ready");
       await updater.check();
       expect(await updater.apply()).toBe("applying");
-      expect(spawned).toEqual([["/Applications/BurnGuard.app/Contents/MacOS/UpdateMac", "apply", "--package", path.join(root, "updates", "BurnGuard-0.5.2-osx-full.nupkg"), "--waitPid", String(process.pid)]]);
+      expect(spawned).toEqual([["/Applications/BurnGuard.app/Contents/MacOS/UpdateMac", "apply", "--package", path.join(root, "updates", "BurnGuard-0.5.2-osx-full.nupkg"), "--waitPid", "4242"]]);
       expect(shutdowns).toBe(1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("Given a staged package modified after download When checked again Then tampering clears readiness and blocks apply", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-updater-tamper-"));
+    try {
+      const good = new TextEncoder().encode("pkg");
+      const sha = createHash("sha256").update(good).digest("hex").toUpperCase();
+      const spawned: string[][] = [];
+      let shutdowns = 0;
+      const updater = createAppUpdater({
+        currentVersion: "0.5.1",
+        cacheDir: root,
+        source: fakeSource(
+          [asset({ SHA256: sha })],
+          { "BurnGuard-0.5.2-osx-full.nupkg": good },
+        ),
+        support: { supported: true, reason: null },
+        updaterPath: "/Applications/BurnGuard.app/Contents/MacOS/UpdateMac",
+        spawn: (cmd) => { spawned.push([...cmd]); },
+        shutdown: async () => { shutdowns += 1; },
+        scheduleShutdown: (run) => run(),
+      });
+      await updater.check();
+      await writeFile(
+        path.join(root, "updates", "BurnGuard-0.5.2-osx-full.nupkg"),
+        "tampered",
+        "utf8",
+      );
+
+      expect(await updater.apply()).toBe("not_ready");
+      expect(updater.status()).toMatchObject({
+        state: "error",
+        error: "package_digest_mismatch",
+      });
+      expect(spawned).toEqual([]);
+      expect(shutdowns).toBe(0);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
