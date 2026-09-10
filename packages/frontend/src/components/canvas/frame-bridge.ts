@@ -711,14 +711,14 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       var base;
       var destination;
       try { base = new URL(document.baseURI); destination = new URL(href, base); } catch (e) { return; }
-      if (destination.origin !== base.origin || !/^https?:$/.test(destination.protocol)) {
-        event.preventDefault();
-        return;
-      }
+      if (destination.origin !== base.origin || !/^https?:$/.test(destination.protocol)) return;
       if (href.charAt(0) === "#" || (destination.pathname === base.pathname && destination.search === base.search && destination.hash)) {
         event.preventDefault();
         scrollToFragment(destination.hash);
-      } else {
+      } else if (/\.html?$/i.test(destination.pathname) || !/\.[^\/]*$/.test(destination.pathname.replace(/\/$/, ""))) {
+        // Mirrors resolveCanvasPageTarget: an .html file, or a directory-style
+        // path (trailing slash or extension-less last segment) that the parent
+        // resolves to dir/index.html. Asset links keep their default behavior.
         event.preventDefault();
         window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: "navigate", payload: { href: destination.href } }, "*");
       }
