@@ -156,7 +156,7 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
   if (pathname.startsWith("/api/sessions")) return "session";
   if (pathname.startsWith("/api/runtime")) return "runtime";
   if (pathname.startsWith("/api/settings/")) return "settings";
-  if (pathname === "/api/settings" || pathname.startsWith("/api/backends") || pathname.startsWith("/api/home") || pathname === "/api/projects") return "home";
+  if (pathname === "/api/settings" || pathname.startsWith("/api/backends") || pathname.startsWith("/api/home") || pathname === "/api/projects" || pathname === "/api/projects/import") return "home";
   if (method === "GET" && /^\/api\/projects\/[^/]+\/thumbnail$/.test(pathname)) return "home";
   if (/^\/api\/projects\/[^/]+\/three-scene$/.test(pathname)) return "three-scene";
   if (pathname.startsWith("/api/projects")) {

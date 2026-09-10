@@ -55,6 +55,10 @@ test("Given import requests without launch authority When submitted Then the sha
   const app = createApp({ capability: "import-test", appAuthority: "127.0.0.1:14070" });
   const response = await app.request(new Request("http://127.0.0.1:14070/api/projects/import", { method: "POST", headers: { host: "127.0.0.1:14070", origin: "http://127.0.0.1:14070" }, body: await zipForm({ "index.html": "ok" }) }));
   expect(response.status).toBe(403);
+  const allowed = await app.request(new Request("http://127.0.0.1:14070/api/projects/import", { method: "POST", headers: { host: "127.0.0.1:14070", origin: "http://127.0.0.1:14070", "x-burnguard-capability": "import-test" }, body: await zipForm({ "index.html": "<!doctype html><html><body>ok</body></html>" }) }));
+  const result = await allowed.json() as { data?: { id: string }; error?: unknown };
+  expect({ status: allowed.status, error: result.error }).toEqual({ status: 201, error: undefined });
+  const detail = await getProjectDetail(result.data!.id); created.push({ id: detail!.id, dir: detail!.dir_path });
 });
 
 test("Given symlinks or highly compressed oversized content When imported Then extraction is rejected", async () => {
