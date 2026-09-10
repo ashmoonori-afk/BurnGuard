@@ -93,6 +93,22 @@ describe("design brief prompt context", () => {
     expect(prompt).not.toContain("## Slide deck skill");
   });
 
+  test("Given prototype pages in the brief When the prompt is built Then the page contract is emitted", async () => {
+    // Given
+    const designBrief = {
+      schema_version: 1, output_type: "prototype", audience: "방문자", objective: "서비스 소개",
+      content_source: "none", locale: "ko-KR", brand_mode: "none", visual_mood: "formal",
+      density: "balanced", output_size: "responsive", pages: ["about.html", "제품/상세.html"],
+    } as const;
+
+    // When
+    const prompt = await buildPrompt(context(JSON.stringify({ design_brief: designBrief }), "prototype"), { type: "user.message", text: "사이트를 만들어줘" });
+
+    // Then
+    expect(taggedJson(prompt, "burnguard-design-brief-v1")["pages"]).toEqual(["about.html", "제품/상세.html"]);
+    expect(prompt).toContain("Create exactly these pages as real local files linked from the shared nav: index.html, about.html, 제품/상세.html");
+  });
+
   test("Given malformed project options When the prompt is built Then no partial brief leaks", async () => {
     const prompt = await buildPrompt(
       context(
