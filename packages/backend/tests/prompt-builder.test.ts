@@ -4,7 +4,7 @@ import path from "node:path";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { getSqlite } from "../src/db/sqlite-client";
 import { buildPrompt } from "../src/harness/prompt-builder";
-import { DESIGN_CRAFT_RULES } from "../src/harness/design-craft";
+import { DESIGN_CRAFT_RULES, IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../src/harness/design-craft";
 import { PROTOTYPE_NAVIGATION_CONTRACT } from "../src/harness/skills/prototype-skill";
 import { ensureLearningSchema } from "./learning-fixture";
 import {
@@ -53,6 +53,7 @@ describe("buildPrompt", () => {
       const metadata = JSON.parse(prompt.match(/<burnguard-model-guidance-v1>\n([^\n]+)\n<\/burnguard-model-guidance-v1>/)![1]!);
       expect(metadata).toEqual({ schema_version: 1, profile: selected.profile, model: selected.model, provider: selected.provider, effort: "low" });
       expect(prompt.endsWith(`## Request\n${text}`)).toBe(true);
+      expect(prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
       expect(prompt).toContain("Read-only attachment copies and ../preview-report.json explicitly supplied by this harness are authorized inputs outside the output directory. Never modify them.");
       expect(prompt).not.toContain("Do not use Read, Glob, or Bash against the original binary");
       expect(generation.effort).toBe("low");
@@ -67,6 +68,7 @@ describe("buildPrompt", () => {
       for (const contextMode of ["compact", "full"] as const) {
         const prompt = await buildPrompt(makeContext({ project_type }), { type: "user.message", text: "Improve the selected element" }, { contextMode });
         expect(prompt.split(DESIGN_CRAFT_RULES)).toHaveLength(2);
+        expect(prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
         expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
         expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeGreaterThan(prompt.indexOf("## Project"));
       }

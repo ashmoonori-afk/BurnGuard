@@ -361,10 +361,10 @@ async function runUserTurnInternal(
             if (result.exitCode !== 0 || providerFailed) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
             if (project.type === "slide_deck") {
               const toolCallId = ulid();
-              await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "덱 문안·글꼴 점검", input: { scope: "all_slides" } });
+              await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", input: { scope: "all_slides" } });
               const review = await runAdapter(backendId, { ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}`, signal: AbortSignal.any([activeTurn.abortController.signal, AbortSignal.timeout(120_000)]) });
               const reviewed = review.exitCode === 0 && !providerFailed;
-              await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴 점검", ok: reviewed });
+              await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", ok: reviewed });
               if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
             }
           });

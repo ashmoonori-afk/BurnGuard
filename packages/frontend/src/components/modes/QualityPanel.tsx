@@ -41,7 +41,7 @@ export default function QualityPanel({ quality }: { readonly quality: QualityPan
         <Button type="button" size="sm" className="mt-3 w-full max-[900px]:min-h-11" disabled={quality.autoFixDisabled || !current || !controls.canRetry || grouped === null || grouped.mustFix.length + grouped.recommended.length === 0} onClick={quality.onAutoFix}>
           {quality.autoFixPending ? <Loader2 className="motion-safe:animate-spin" /> : <WandSparkles />}{quality.autoFixPending ? "자동으로 수정하고 있어요" : "문제 자동 수정"}
         </Button>
-        <p className="mt-1.5 break-keep text-[11px] leading-relaxed text-muted-foreground">현재 검사 결과를 AI에 보내 수정하고, 작업이 끝나면 다시 검사해요. 덱은 생성 완료 전에 전체 문안·글꼴을 AI가 한 번 더 점검해요. 문안 기본 검사는 미완성 문구를 찾으며, 사실 검증을 대신하지 않아요.</p>
+        <p className="mt-1.5 break-keep text-[11px] leading-relaxed text-muted-foreground">현재 검사 결과를 AI에 보내 수정하고, 작업이 끝나면 다시 검사해요. 덱은 생성 완료 전에 전체 문안·글꼴·이미지 중복·아트보드 크기를 AI가 한 번 더 점검해요. 문안 기본 검사는 미완성 문구를 찾으며, 사실 검증을 대신하지 않아요.</p>
         {(quality.state.kind === "error_cold" || quality.state.kind === "error_warm") && <p role="alert" className="mt-2 text-pretty break-keep rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs text-foreground">{DESIGN_AUDIT_ERROR_COPY[quality.state.errorCode]}</p>}
         {(quality.state.kind === "stale" || quality.state.kind === "error_warm" && !quality.state.current) && <p className="mt-2 text-pretty break-keep rounded bg-warning/15 px-2 py-1.5 text-xs text-foreground">{"이전 결과예요. 현재 결과물에는 안전 수정을 적용할\u00A0수\u00A0없어요."}</p>}
       </header>

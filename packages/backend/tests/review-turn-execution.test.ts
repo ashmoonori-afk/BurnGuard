@@ -145,7 +145,10 @@ for (const reviewFails of [false, true]) test(`Given a deck generation When mand
     expect(input.generation?.effort).toBe("low");
     if (calls === 1) await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide><h1>Placeholder</h1></section>');
     else {
-      expect(input.prompt).toContain("Mandatory deck copy and typography review");
+      const { DECK_REVIEW_PROMPT } = await import("../src/harness/skills/deck-skill");
+      const { IMAGE_ARTBOARD_COMPLETION_CHECKS } = await import("../src/harness/design-craft");
+      expect(input.prompt.endsWith(DECK_REVIEW_PROMPT)).toBe(true);
+      expect(input.prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
       expect(input.prompt).toContain("--deck-font-heading");
       expect(input.prompt).toContain("including every slide");
       if (reviewFails) return { exitCode: 1 };

@@ -68,7 +68,7 @@ function rulesForKind(kind: GraphicSetKind, canvas: GraphicCanvasV1): readonly s
     case "banner_set":
       return [
         "Author one [data-graphic-artboard] per declared frame size, in declared order, each at its own exact width and height.",
-        "Every artboard carries the same single message; only layout and crop change between sizes.",
+        "Every artboard carries the same single message, with layout and distinct imagery suited to its size. Reuse the same content image across sizes only when explicitly requested by the user.",
         "Keep the message and the call to action inside the artboard even at the smallest size; never let text overflow or clip.",
       ];
     case "print":
