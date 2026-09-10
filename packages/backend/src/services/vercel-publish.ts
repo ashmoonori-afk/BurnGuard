@@ -84,5 +84,7 @@ export async function requestVercel(endpoint: string, token: string, teamId: str
   if (!value || typeof value !== "object" || !("id" in value) || typeof value.id !== "string" || !/^dpl_[a-zA-Z0-9]+$/.test(value.id) || !("url" in value) || typeof value.url !== "string" || !/^[a-zA-Z0-9-]+\.vercel\.app$/.test(value.url)) throw new VercelPublishError("publish_provider_failed");
   const state = "readyState" in value ? value.readyState : "status" in value ? value.status : undefined;
   if (state === "ERROR" || state === "CANCELED") throw new VercelPublishError("publish_build_failed");
-  return { schema_version: 1, id: value.id, url: `https://${value.url}`, ready: state === "READY" };
+  const alias = state === "READY" && "alias" in value && Array.isArray(value.alias)
+    ? value.alias.find((item: unknown): item is string => typeof item === "string" && /^[a-zA-Z0-9-]+\.vercel\.app$/.test(item)) : undefined;
+  return { schema_version: 1, id: value.id, url: `https://${alias ?? value.url}`, ready: state === "READY" };
 }

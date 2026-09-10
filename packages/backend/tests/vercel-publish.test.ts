@@ -71,3 +71,8 @@ test("Given internal generation notes and font licenses When publishing Then not
   const files = await deploymentFiles(await zip.generateAsync({ type: "uint8array" }), expected);
   expect(files.map(file => file.file).sort()).toEqual(["assets/site.css", "fonts/DMSans-OFL.txt", "index.html"]);
 });
+
+test("Given a ready production alias When checking deployment Then the shared URL uses that alias", async () => {
+  const fetcher = (async () => Response.json({ id: "dpl_test", url: "preview.vercel.app", readyState: "READY", alias: ["https://invalid.example", "public-site.vercel.app"] })) as typeof fetch;
+  expect((await requestVercel("/v13/deployments/dpl_test", "test-token", undefined, new AbortController().signal, undefined, fetcher)).url).toBe("https://public-site.vercel.app");
+});
