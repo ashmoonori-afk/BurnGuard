@@ -55,5 +55,5 @@ for await (const name of new Bun.Glob("*").scan({ cwd: output, onlyFiles: true }
   const bytes = await readFile(path.join(output, name));
   files.push(`${new Bun.CryptoHasher("sha256").update(bytes).digest("hex")}  ${name}`);
 }
-await writeFile(path.join(output, "SHA256SUMS.txt"), files.sort().join("\n") + "\n");
+await writeFile(path.join(output, "SHA256SUMS-macos.txt"), files.sort().join("\n") + "\n");
 console.log(`[release] ${APP_VERSION}: macOS installer, portable app, and update feed ready in dist/releases`);
