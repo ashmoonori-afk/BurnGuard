@@ -180,7 +180,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
         <DropdownMenuSeparator />
         {jobsQuery.isError && <div role="alert" className="p-2 text-xs"><p>내보내기 목록을 불러오지 못했어요.</p><button type="button" className="mt-2 underline" onClick={() => void jobsQuery.refetch()}>다시 시도</button></div>}
         {qualityGate !== null && <div className="mx-2 mb-2 rounded-md border border-destructive/30 bg-destructive/10 p-2">
-          <p className="text-pretty break-keep text-xs text-foreground">고쳐야 할 문제 {qualityGate.mustFixCount}개가 있어 내보내기를 {"시작할\u00A0수\u00A0없어요."}</p>
+          <p className="text-pretty break-keep text-xs text-foreground">개선 권장사항 {qualityGate.mustFixCount}개가 있어요. 현재 상태 그대로 내보낼 수 있어요.</p>
           <Button type="button" variant="outline" size="sm" className="mt-2 h-8 w-full max-[900px]:min-h-11" onClick={openQuality}>품질 점검 열기</Button>
         </div>}
         {!menuModel.ok && (
@@ -205,11 +205,6 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
               disabled={disabled}
               onClick={(event) => {
                 if (disabled) return;
-                if (qualityGate !== null) {
-                  event.preventDefault();
-                  openQuality();
-                  return;
-                }
                 // Keep the dropdown open so the user can watch the status list.
                 event.preventDefault();
                 createMutation.mutate({
@@ -245,7 +240,6 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
             <ExportStatusList
               jobs={jobs}
               onRetry={(job) => {
-                if (qualityGate !== null) { openQuality(); return; }
                 actionMutation.mutate({ action: "retry", job });
               }}
               onCancel={(job) => actionMutation.mutate({ action: "cancel", job })}

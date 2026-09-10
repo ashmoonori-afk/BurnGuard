@@ -19,6 +19,32 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
   };
   await page.route(eventPattern, guard);
   try {
+    await scenario("creation-canvas-ctrl-wheel-zoom", async () => {
+      await createFixture(page, base, ownedHome, "Zoom keyboard test");
+      await page.frameLocator('iframe[title="캔버스"]').locator("#fixture-hero").waitFor();
+      const input = page.getByRole("spinbutton", { name: "아트보드 확대 비율" });
+      await input.fill("800");
+      assert.equal(await input.inputValue(), "800");
+      await page.getByTitle("배율과 위치 초기화", { exact: true }).click();
+      const frame = page.locator('iframe[title="캔버스"]');
+      const rect = await frame.boundingBox();
+      const hero = await page.frameLocator('iframe[title="캔버스"]').locator("#fixture-hero").boundingBox();
+      await page.mouse.move(hero.x + 20, hero.y + 20);
+      await page.keyboard.down("Control");
+      await page.mouse.wheel(0, -400);
+      await page.keyboard.up("Control");
+      await page.waitForFunction(() => Number(document.querySelector('[aria-label="아트보드 확대 비율"]').value) > 100);
+      const enlargedHero = await page.frameLocator('iframe[title="캔버스"]').locator("#fixture-hero").boundingBox();
+      assert.ok(enlargedHero && enlargedHero.x < hero.x + 20 && enlargedHero.x + enlargedHero.width > hero.x + 20, "zoom preserves the pointed content");
+      const before = Number(await input.inputValue());
+      await page.getByRole("button", { name: "화면 이동", exact: true }).click();
+      await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      await page.keyboard.down("Control"); await page.mouse.wheel(0, -400); await page.keyboard.up("Control");
+      await page.waitForFunction(value => Number(document.querySelector('[aria-label="아트보드 확대 비율"]').value) > value, before);
+      await page.getByTitle("배율과 위치 초기화", { exact: true }).click();
+      await page.getByRole("button", { name: "화면 이동", exact: true }).click();
+      await shot(page, "creation-canvas-ctrl-wheel-zoom");
+    });
     await scenario("creation-canvas-zoom-scroll-font", async () => {
       await createFixture(page, base, ownedHome, "Canvas geometry");
       const frame = page.frameLocator('iframe[title="캔버스"]');
@@ -27,7 +53,7 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       assert.ok(original);
       await page.getByRole("button", { name: "미리보기 축소", exact: true }).click();
       const scaled = await iframe.boundingBox();
-      assert.ok(scaled && Math.abs(scaled.width / original.width - 0.75) < 0.02, "75% must scale the entire frame");
+      assert.ok(scaled && Math.abs(scaled.width / original.width - 0.8) < 0.02, "80% must scale the entire frame");
       await page.getByRole("button", { name: "화면 이동", exact: true }).click();
       const start = { x: scaled.x + scaled.width / 2, y: scaled.y + scaled.height / 2 };
       // Wait for the mode's actual hit surface, not just the preceding button click.

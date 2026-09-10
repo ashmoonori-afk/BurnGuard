@@ -5,7 +5,7 @@ import { ulid } from "ulid";
 import { getAttachmentContext, insertAttachmentRecord } from "../db/attachment-context";
 import { getSqlite } from "../db/sqlite-client";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
-import { inferUploadKind } from "./upload-kind";
+import { inferAttachmentKind } from "./upload-kind";
 import { attachmentExtractedTextPath, attachmentSummaryPath } from "./attachment-paths";
 export { attachmentExtractedTextPath, attachmentSummaryPath };
 
@@ -16,7 +16,7 @@ export const ATTACHMENT_LIMITS = {
   maxBytesTotal: 25 * 1024 * 1024,
 } as const;
 
-/** Raised when an upload's kind is one `inferUploadKind` cannot resolve to an extractor. */
+/** Raised when an upload's kind is one `inferAttachmentKind` cannot resolve to an extractor. */
 export class UnsupportedAttachmentKindError extends Error {
   readonly name = "UnsupportedAttachmentKindError";
   readonly code = "unsupported_file_kind";
@@ -46,7 +46,7 @@ export function validateAttachmentFiles(files: readonly File[]): void {
 
   // Kind gate runs before any write so a batch containing a source the
   // extractor cannot process persists nothing at all.
-  const unsupported = files.filter((file) => inferUploadKind(file.name || "attachment") === null);
+  const unsupported = files.filter((file) => inferAttachmentKind(file.name || "attachment") === null);
   if (unsupported.length > 0) {
     throw new UnsupportedAttachmentKindError(unsupported.map((file) => file.name || "attachment"));
   }

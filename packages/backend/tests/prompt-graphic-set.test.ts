@@ -139,6 +139,13 @@ describe("graphic output prompt block", () => {
     expect(block["question_order"]).toEqual(["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "features", "payment_cta"]);
     expect(block["forbidden_hero_openings"]).toContain("AI-based");
     expect(ruleKinds(prompt)).toEqual(["product_detail"]);
+    expect(prompt).toContain("entire 12000 CSS px height");
+    expect(prompt).not.toContain("free height");
+    expect(prompt).not.toContain("change one region");
+    expect(prompt).toContain("--page-background");
+    expect(prompt).toContain("every product-detail section must contain a relevant, visible image");
+    expect(prompt).toContain("exclusively with Codex image generation");
+    expect(prompt).toContain("summarize and polish even a full 500-character field");
     expect(prompt).toContain("- detail_brief.persona_pain: 새벽마다 재고를 세는 사장님");
     expect(prompt).toContain("- detail_brief.urgency: 이번 주 입고분 한정");
     expect(prompt).not.toContain("- detail_brief.evidence:");

@@ -22,7 +22,7 @@ afterAll(async () => { for (const project of projects) { getSqlite().prepare("DE
 
 function nextTerminal(sessionId: string): Promise<SequencedEventEnvelope> { return new Promise((resolve, reject) => { const timeout = setTimeout(() => { unsubscribe(); reject(new TypeError("export terminal event timed out")); }, 60_000); const unsubscribe = sequencedBroker.subscribe(sessionId, (item) => { if (item.event.type !== "export.attempt" || !["failed", "validated", "cancelled"].includes(item.event.status)) return; clearTimeout(timeout); unsubscribe(); resolve(item); }); }); }
 
-describe("pre-export design audit", () => {
+describe("advisory design audit", () => {
   test("Given must-fix contrast When the user skips quality checks Then HTML publishes with the choice recorded", async () => {
     const terminal = nextTerminal(projects[0].session);
     const started = await enqueueProjectExport(projects[0].id, "html_zip", { skip_quality_check: true });
@@ -32,18 +32,18 @@ describe("pre-export design audit", () => {
     const attempt = await getExportAttemptDetail(started.latest_attempt.id);
     expect(job?.status).toBe("succeeded");
     expect(job?.options).toEqual({ skip_quality_check: true });
-    expect(attempt?.findings).toEqual([{ code: "design_audit:skipped_by_user", path: null }]);
+    expect(attempt?.findings).toEqual([]);
     expect(activeExportBrowserCount()).toBe(0);
   });
 
-  test("Given must-fix contrast When exporting Then publication is blocked and findings persist", async () => {
+  test("Given must-fix contrast When exporting Then publication succeeds without running the audit", async () => {
     const terminal = nextTerminal(projects[0].session); const started = await enqueueProjectExport(projects[0].id, "html_zip", {}); if (started === null || started.latest_attempt === null) throw new TypeError("export did not start"); await terminal; const job = await getExportJob(started.id); const attempt = await getExportAttemptDetail(started.latest_attempt.id);
-    expect(job?.status).toBe("failed"); expect(job?.output_path).toBeNull(); expect(job?.error_message).toContain("must-fix"); expect(attempt?.stop_reason).toBe("validation_failed"); expect(attempt?.findings.some((finding) => finding.code === "contrast")).toBeTrue();
+    expect(job?.status).toBe("succeeded"); expect(job?.output_path).not.toBeNull(); expect(job?.error_message).toBeNull(); expect(attempt?.findings).toEqual([]);
   }, 70_000);
 
-  test("Given only recommendations When exporting Then output publishes and findings remain", async () => {
+  test("Given only recommendations When exporting Then output publishes without an automatic audit", async () => {
     const terminal = nextTerminal(projects[1].session); const started = await enqueueProjectExport(projects[1].id, "html_zip", {}); if (started === null || started.latest_attempt === null) throw new TypeError("export did not start"); await terminal; const job = await getExportJob(started.id); const attempt = await getExportAttemptDetail(started.latest_attempt.id);
-    expect(job?.error_message).toBeNull(); expect(job?.status).toBe("succeeded"); expect(job?.output_path).not.toBeNull(); expect(attempt?.findings.some((finding) => finding.code === "minimum_text_size")).toBeTrue(); expect(attempt?.findings).toContainEqual({ code: "design_audit:token_usage:skipped", path: null });
+    expect(job?.error_message).toBeNull(); expect(job?.status).toBe("succeeded"); expect(job?.output_path).not.toBeNull(); expect(attempt?.findings).toEqual([]);
   }, 70_000);
 
   test("Given the all-eight-ready fixture When exporting HTML Then output publishes without findings", async () => {

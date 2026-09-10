@@ -11,7 +11,7 @@ import {
 // The backend owns the truth about which sources its extractor can process.
 // Importing it here pins the composer mirror to that authority at test time;
 // the composer itself must not import backend code into the browser bundle.
-import { inferUploadKind } from "../../backend/src/services/upload-kind";
+import { inferAttachmentKind } from "../../backend/src/services/upload-kind";
 
 function file(name: string, type = "", sizeBytes = 8): File {
   const value = new File([new Uint8Array(Math.min(sizeBytes, 1024))], name, { type });
@@ -69,10 +69,10 @@ describe("composer attachment intake", () => {
     const probes = ["deck.pdf", "deck.PDF", "slides.pptx", "notes.txt", "photo.png", "archive.zip", "noextension"];
 
     const composerVerdicts = probes.map((name) => readyAttachmentSources(planAttachmentIntake([], [file(name)])).length === 1);
-    const backendVerdicts = probes.map((name) => inferUploadKind(name, null) !== null);
+    const backendVerdicts = probes.map((name) => inferAttachmentKind(name) !== null);
 
     expect(composerVerdicts).toEqual(backendVerdicts);
-    expect([...COMPOSER_SUPPORTED_EXTENSIONS]).toEqual([".pdf", ".pptx"]);
+    expect([...COMPOSER_SUPPORTED_EXTENSIONS]).toEqual([".pdf", ".pptx", ".docx", ".png", ".jpg", ".jpeg", ".webp"]);
   });
 });
 

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 export type AttachmentSummary = {
-  readonly kind: "pdf" | "pptx";
+  readonly kind: "pdf" | "pptx" | "docx" | "image";
   readonly brand_name?: string;
   readonly page_count: number;
   readonly fonts: readonly string[];
@@ -15,7 +15,7 @@ export type AttachmentSummary = {
 export async function readAttachmentSummaryFile(filePath: string): Promise<AttachmentSummary | null> {
   try {
     const value: unknown = JSON.parse(await readFile(filePath, "utf8"));
-    if (!isRecord(value) || (value["kind"] !== "pdf" && value["kind"] !== "pptx")) return null;
+    if (!isRecord(value) || (value["kind"] !== "pdf" && value["kind"] !== "pptx" && value["kind"] !== "docx" && value["kind"] !== "image")) return null;
     const pageCount = value["page_count"];
     if (typeof pageCount !== "number" || !Number.isSafeInteger(pageCount) || pageCount < 0) return null;
     const pages = value["pages"];

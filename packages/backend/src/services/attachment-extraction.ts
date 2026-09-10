@@ -11,6 +11,11 @@ export type AttachmentExtractionInput = {
 
 export async function extractAttachmentUpload(input: AttachmentExtractionInput): Promise<void> {
   try {
+    if (/\.(docx|png|jpe?g|webp)$/i.test(input.sourcePath)) {
+      const { extractImageOrWordAttachment } = await import("./attachment-image-word");
+      await extractImageOrWordAttachment(input);
+      return;
+    }
     const isPdf = input.sourcePath.toLowerCase().endsWith(".pdf");
     if (isPdf) await extractPdfAttachment(input.sourcePath, input.manifestPath, input.extractedTextPath);
     else {
