@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, rename, rm } from "node:fs/promises";
+import { mkdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { APP_VERSION } from "@bg/shared/app";
 import type { AppUpdateStatus, AppUpdateUnsupportedReason } from "@bg/shared/updates";
@@ -106,7 +106,7 @@ export function updaterBinaryPath(execPath: string): string {
 
 /** Only a Velopack-packaged macOS bundle (UpdateMac beside the executable) can update itself. */
 export function detectUpdateSupport(input: { readonly platform: NodeJS.Platform; readonly execPath: string; readonly desktopShell: boolean }): UpdateSupport {
-  if (input.desktopShell) return { supported: false, reason: "windows_shell" };
+  if (input.platform === "win32" && input.desktopShell) return { supported: false, reason: "windows_shell" };
   if (input.platform !== "darwin") return { supported: false, reason: "platform" };
   return existsSync(updaterBinaryPath(input.execPath)) ? { supported: true, reason: null } : { supported: false, reason: "not_installed" };
 }
@@ -117,6 +117,8 @@ export type AppUpdaterDependencies = {
   readonly source: AppUpdateSource;
   readonly support: UpdateSupport;
   readonly updaterPath: string;
+  /** Process that owns the app bundle and must exit before replacement. */
+  readonly waitPid?: number;
   /** Starts the detached updater process; must not throw for a well-formed command. */
   readonly spawn: (cmd: readonly string[]) => void;
   /** The application's graceful shutdown; the updater swaps the bundle once this pid exits. */
@@ -161,7 +163,7 @@ export function createAppUpdater(deps: AppUpdaterDependencies): AppUpdater {
       patch({ state: "idle", available_version: null, checked_at: Date.now() });
       return;
     }
-    if (staged !== null && staged.asset.FileName === asset.FileName && staged.asset.SHA256 === asset.SHA256 && existsSync(staged.file)) {
+    if (staged !== null && staged.asset.FileName === asset.FileName && staged.asset.SHA256 === asset.SHA256 && existsSync(staged.file) && await packageMatches(staged.file, asset)) {
       patch({ state: "ready", available_version: asset.Version, checked_at: Date.now() });
       return;
     }
@@ -186,11 +188,39 @@ export function createAppUpdater(deps: AppUpdaterDependencies): AppUpdater {
     async apply() {
       if (!deps.support.supported) return "unsupported";
       if (staged === null || state.state !== "ready") return "not_ready";
-      deps.spawn([deps.updaterPath, "apply", "--package", staged.file, "--waitPid", String(process.pid)]);
+      if (!(await packageMatches(staged.file, staged.asset))) {
+        staged = null;
+        patch({ state: "error", error: "package_digest_mismatch", checked_at: Date.now() });
+        return "not_ready";
+      }
+      deps.spawn([deps.updaterPath, "apply", "--package", staged.file, "--waitPid", String(deps.waitPid ?? process.pid)]);
       (deps.scheduleShutdown ?? ((run) => { setTimeout(run, 250); }))(() => { void deps.shutdown(); });
       return "applying";
     },
   };
+}
+
+async function packageMatches(file: string, asset: VelopackFeedAsset): Promise<boolean> {
+  let fileSize: number;
+  try {
+    fileSize = (await stat(file)).size;
+  } catch {
+    return false;
+  }
+  if (fileSize !== asset.Size) return false;
+
+  const hash = createHash("sha256");
+  const reader = Bun.file(file).stream().getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      hash.update(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return hash.digest("hex").toUpperCase() === asset.SHA256;
 }
 
 async function downloadPackage(deps: AppUpdaterDependencies, asset: VelopackFeedAsset, onProgress: (percent: number) => void): Promise<string> {
@@ -311,6 +341,7 @@ export function configureAppUpdater(overrides: Partial<AppUpdaterDependencies> &
     source: overrides.source ?? resolveUpdateSource(),
     support,
     updaterPath: overrides.updaterPath ?? updaterBinaryPath(execPath),
+    waitPid: overrides.waitPid ?? (Number.parseInt(process.env.BG_UPDATE_WAIT_PID ?? "", 10) || process.pid),
     spawn: overrides.spawn ?? ((cmd) => { Bun.spawn([...cmd], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref(); }),
     shutdown: overrides.shutdown,
     ...(overrides.scheduleShutdown === undefined ? {} : { scheduleShutdown: overrides.scheduleShutdown }),
