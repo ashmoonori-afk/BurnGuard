@@ -18,10 +18,13 @@ import { renderHandoffBundle } from "./export-handoff-render";
 import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "./export-html-validation";
 import { formatExtension } from "./export-naming";
 import { validateHandoffPackage, validatePptxPackage } from "./export-package-validation";
-import { renderDeckToPdf } from "./export-pdf";
+import { assertUniformArtboardPages, PdfExportError, renderDeckToPdf } from "./export-pdf";
 import { pdfPointsForPaper, pdfRasterBudgetFitsPages } from "./export-pdf-contract";
+import { ExportError } from "./export-errors";
 import { renderPlatformPackage } from "./export-platform-package";
-import { renderPngZip } from "./export-png-zip";
+import { capturePageFromSession } from "./export-frame-capture";
+import { renderPngZipWithPage } from "./export-png-zip";
+import type { SliceFinding } from "./export-slice-plan";
 import { renderToPng } from "./export-png";
 import { renderDeckToPptx } from "./export-pptx-render";
 import { canonicalJson, parseExportReceipt, receiptDigest, sha256, type ExportReceipt } from "./export-receipt";
@@ -36,6 +39,19 @@ const RENDERER_CONTRACT = "burnguard-export/1|playwright-core@1.59.1|pdfjs-dist@
 const active = new Map<string, AbortController>();
 export type ExportPhase = "after_snapshot" | "after_partial_render" | "after_render" | "after_validation" | "after_receipt" | "after_publish_before_db";
 export type ExportHooks = { readonly phase?: (attemptId: string, phase: ExportPhase, signal: AbortSignal) => Promise<void> | void };
+
+export type AttemptFinding = { readonly code: string; readonly path: string | null };
+export const MAX_ATTEMPT_FINDINGS = 200;
+
+/**
+ * Batch renderers report per-slice findings that the design audit knows nothing about.
+ * Both sets live in the one attempt findings row, so the audit set is merged, never replaced.
+ */
+export function recordRenderFindings(attemptId: string, audit: readonly AttemptFinding[], rendered: readonly SliceFinding[]): void {
+  if (rendered.length === 0) return;
+  const merged = [...audit, ...rendered.map((finding) => ({ code: `png_zip:${finding.code}`, path: `slice-${finding.slice}` }))].slice(0, MAX_ATTEMPT_FINDINGS);
+  recordExportAuditFindings(getSqlite(), attemptId, merged);
+}
 
 export class ExportServiceError extends Error {
   readonly name = "ExportServiceError";
@@ -91,7 +107,8 @@ async function runExport(input: RunInput): Promise<void> {
     const audit = await auditRenderedTree({ projectId: context.identity.projectId, projectDir: renderRoot, entrypoint: context.project.entrypoint, revision: context.identity.revision, digest: context.identity.digest, treeDigest: renderManifest.tree_digest, safeFix: false, deck: context.project.type === "slide_deck", ...(graphicCanvas === undefined ? {} : { canvas: graphicCanvas }), signal: input.controller.signal });
     const auditUnknowns = audit.checks.filter((check) => check.reason !== null).map((check) => ({ code: `design_audit:${check.code}:${check.status}`, path: null }));
     const auditFindings = audit.checks.flatMap((check) => check.findings.map((finding) => ({ code: finding.check_code, path: finding.source.rel_path }))).slice(0, 200 - auditUnknowns.length);
-    recordExportAuditFindings(db, input.attemptId, [...auditFindings, ...auditUnknowns]);
+    const attemptFindings: readonly AttemptFinding[] = [...auditFindings, ...auditUnknowns];
+    recordExportAuditFindings(db, input.attemptId, attemptFindings);
     const mustFixCount = audit.checks.flatMap((check) => check.findings).filter((finding) => finding.severity === "must_fix").length;
     if (mustFixCount > 0) throw new ExportServiceError("design_audit_failed", `Design audit found ${mustFixCount} must-fix finding${mustFixCount === 1 ? "" : "s"}`);
     await resolveStaticClosure(renderRoot, context.project.entrypoint, renderManifest);
@@ -99,7 +116,9 @@ async function runExport(input: RunInput): Promise<void> {
     advanceExportAttempt(db, { attemptId: input.attemptId, status: "running", stage: "rendering", inputClosureDigest: inputDigest, designSystemDigest: context.identity.designSystemDigest });
     emit(context.identity, input, "running", { stage: "rendering", completed: 2, total: 6 }, null); await input.hooks.phase?.(input.attemptId, "after_snapshot", input.controller.signal);
     input.controller.signal.throwIfAborted();
-    const validation = await renderOutput(input, renderRoot, stagedOutput, renderManifest, inputDigest);
+    const rendered = await renderOutput(input, renderRoot, stagedOutput, renderManifest, inputDigest);
+    const validation = rendered.validation;
+    recordRenderFindings(input.attemptId, attemptFindings, rendered.findings);
     await input.hooks.phase?.(input.attemptId, "after_partial_render", input.controller.signal); await input.hooks.phase?.(input.attemptId, "after_render", input.controller.signal); advance(input, "validating", "validating");
     const outputBytes = new Uint8Array(await readFile(stagedOutput)); const outputDigest = sha256(outputBytes); const outputInfo = await stat(stagedOutput);
     await input.hooks.phase?.(input.attemptId, "after_validation", input.controller.signal);
@@ -121,33 +140,36 @@ async function runExport(input: RunInput): Promise<void> {
   } catch (error) {
     if (stageRoot !== null) await rm(stageRoot, { recursive: true, force: true });
     if (publishedRoot !== null) await rm(publishedRoot, { recursive: true, force: true });
-    const cancelled = input.controller.signal.aborted || db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(input.attemptId)?.requested === 1; const reason: ExportStopReason = cancelled ? "user_cancelled" : error instanceof ExportServiceError && error.code === "source_changed" ? "source_changed" : error instanceof ExportServiceError && error.code === "design_audit_failed" ? "validation_failed" : "render_failed";
+    const cancelled = input.controller.signal.aborted || db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(input.attemptId)?.requested === 1; const reason: ExportStopReason = cancelled ? "user_cancelled" : error instanceof ExportServiceError && error.code === "source_changed" ? "source_changed" : error instanceof ExportServiceError && error.code === "design_audit_failed" ? "validation_failed" : error instanceof ExportError && (error.code === "platform_lint_failed" || error.code === "platform_package_incomplete" || error.code === "invalid_asset_destination") ? "validation_failed" : "render_failed";
     failExportAttempt(db, { jobId: input.jobId, attemptId: input.attemptId, status: cancelled ? "cancelled" : "failed", reason, message: error instanceof Error ? error.message : String(error) });
     emit(context.identity, input, cancelled ? "cancelled" : "failed", { stage: "rendering", completed: 2, total: 6 }, reason);
   }
 }
 
-async function renderOutput(input: RunInput, renderRoot: string, outputPath: string, manifest: CanonicalTreeManifest, inputDigest: string): Promise<ExportValidation> {
+type RenderedOutput = { readonly validation: ExportValidation; readonly findings: readonly SliceFinding[] };
+
+async function renderOutput(input: RunInput, renderRoot: string, outputPath: string, manifest: CanonicalTreeManifest, inputDigest: string): Promise<RenderedOutput> {
   const { context } = input;
+  const only = (validation: ExportValidation): RenderedOutput => ({ validation, findings: [] });
   switch (context.format) {
     case "html_zip": {
       const session = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: context.project.type === "slide_deck", signal: input.controller.signal }); await session.close();
       const archiveManifest = buildHtmlArchiveManifest({ schema_version: 1, entrypoint: context.project.entrypoint, project_revision: context.identity.revision, project_digest: context.identity.digest, input_closure_digest: inputDigest }, manifest.files.map((file) => ({ path: file.path, size: file.size, sha256: file.sha256 })));
-      await writeFile(path.join(renderRoot, HTML_EXPORT_MANIFEST), canonicalJson(archiveManifest)); await zipDirectory(renderRoot, outputPath); await validateHtmlArchive(new Uint8Array(await readFile(outputPath)), archiveManifest); return { entries: archiveManifest.entries.length };
+      await writeFile(path.join(renderRoot, HTML_EXPORT_MANIFEST), canonicalJson(archiveManifest)); await zipDirectory(renderRoot, outputPath); await validateHtmlArchive(new Uint8Array(await readFile(outputPath)), archiveManifest); return only({ entries: archiveManifest.entries.length });
     }
-    case "png": return renderToPng({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, width: context.options.png_width ?? 1280, height: context.options.png_height ?? 720, dpr: context.options.png_dpr ?? 1, deck: context.project.type === "slide_deck", signal: input.controller.signal });
-    case "pdf": return renderDeckToPdf({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, paper: context.options.pdf_paper, selector: context.project.type === "graphic" ? "[data-graphic-artboard]" : "[data-slide]", title: `${context.project.name} r${context.identity.revision}`, signal: input.controller.signal });
-    case "pptx": { await renderDeckToPptx({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, size: context.options.pptx_size, signal: input.controller.signal }); const slides = parse(await readFile(path.join(renderRoot, context.project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length; return validatePptxPackage(new Uint8Array(await readFile(outputPath)), slides); }
-    case "handoff": { const bundle = path.join(path.dirname(renderRoot), "handoff"); await renderHandoffBundle({ stagedProjectDir: renderRoot, stagingDir: bundle, entrypoint: context.project.entrypoint, tokensSrcPath: null, tokensFileName: null, designSystemName: context.project.design_system_name, project: { id: context.project.id, name: context.project.name, type: context.project.type, entrypoint: context.project.entrypoint }, isDeck: context.project.type === "slide_deck", signal: input.controller.signal }); await zipDirectory(bundle, outputPath); return validateHandoffPackage(new Uint8Array(await readFile(outputPath)), context.project.entrypoint); }
+    case "png": return only(await renderToPng({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, width: context.options.png_width ?? 1280, height: context.options.png_height ?? 720, dpr: context.options.png_dpr ?? 1, deck: context.project.type === "slide_deck", signal: input.controller.signal }));
+    case "pdf": return only(await renderDeckToPdf({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, paper: context.options.pdf_paper, selector: context.project.type === "graphic" ? "[data-graphic-artboard]" : "[data-slide]", title: `${context.project.name} r${context.identity.revision}`, signal: input.controller.signal }));
+    case "pptx": { await renderDeckToPptx({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, size: context.options.pptx_size, signal: input.controller.signal }); const slides = parse(await readFile(path.join(renderRoot, context.project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length; return only(await validatePptxPackage(new Uint8Array(await readFile(outputPath)), slides)); }
+    case "handoff": { const bundle = path.join(path.dirname(renderRoot), "handoff"); await renderHandoffBundle({ stagedProjectDir: renderRoot, stagingDir: bundle, entrypoint: context.project.entrypoint, tokensSrcPath: null, tokensFileName: null, designSystemName: context.project.design_system_name, project: { id: context.project.id, name: context.project.name, type: context.project.type, entrypoint: context.project.entrypoint }, isDeck: context.project.type === "slide_deck", signal: input.controller.signal }); await zipDirectory(bundle, outputPath); return only(await validateHandoffPackage(new Uint8Array(await readFile(outputPath)), context.project.entrypoint)); }
     case "cafe24_package":
     case "imweb_package": {
       const browserSession = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: false, signal: input.controller.signal });
-      try { return await renderPlatformPackage({ stagedDir: renderRoot, outputPath, format: context.format, project: context.project, graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, browserSession, receiptWriter: async () => undefined, signal: input.controller.signal }); }
+      try { return only(await renderPlatformPackage({ stagedDir: renderRoot, outputPath, format: context.format, project: context.project, graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, browserSession, receiptWriter: async () => undefined, signal: input.controller.signal })); }
       finally { await browserSession.close(); }
     }
     case "png_zip": {
       const browserSession = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: context.project.type === "slide_deck", signal: input.controller.signal });
-      try { return await renderPngZip({ stagedDir: renderRoot, outputPath, project: context.project, graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, browserSession, receiptWriter: async () => undefined, signal: input.controller.signal }); }
+      try { return await renderPngZipWithPage({ page: capturePageFromSession(browserSession.page), stagedDir: renderRoot, outputPath, deck: context.project.type === "slide_deck", graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, receiptWriter: async () => undefined, signal: input.controller.signal }); }
       finally { await browserSession.close(); }
     }
   }
@@ -168,6 +190,9 @@ async function exportContext(projectId: string, format: ExportFormat, options: E
     const sizes = projectOptions.graphic_set.kind === "banner_set" && projectOptions.graphic_set.frames !== undefined
       ? projectOptions.graphic_set.frames
       : Array.from({ length: projectOptions.graphic_set.frame_count }, () => canvas);
+    // Artboard paper prints one page per artboard, so a mixed-size set has no single page geometry (doc/14 T06).
+    try { assertUniformArtboardPages(sizes); }
+    catch (error) { throw error instanceof PdfExportError ? new ExportServiceError("invalid_graphic_export_options", error.message) : error; }
     const points = sizes.map((size) => pdfPointsForPaper("artboard", size));
     if (!pdfRasterBudgetFitsPages(points)) throw new ExportServiceError("pdf_resource_limit", "Graphic PDF exceeds the per-page or aggregate raster budget");
   }
