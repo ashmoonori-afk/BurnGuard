@@ -40,6 +40,8 @@ import {
   EXPORT_DISABLED_LABEL,
 } from "./export-options";
 import ExportOptionFields from "./ExportOptionFields";
+import { platformFindings } from "./export-delivery";
+import { platformFixRequest } from "@/lib/platform-fix-request";
 import { useExportOptionValues } from "./useExportOptionValues";
 
 const OPTION_ICON: Record<ExportFormat, LucideIcon> = {
@@ -55,12 +57,14 @@ const OPTION_ICON: Record<ExportFormat, LucideIcon> = {
 
 export type ExportQualityGate = { readonly mustFixCount: number } | null;
 
-export default function ExportMenu({ projectId, projectType, projectOptionsJson, qualityGate, onOpenQuality }: {
+export default function ExportMenu({ projectId, projectType, projectOptionsJson, qualityGate, onOpenQuality, platformFix }: {
   readonly projectId: string;
   readonly projectType: ProjectType;
   readonly projectOptionsJson: string | null;
   readonly qualityGate: ExportQualityGate;
   readonly onOpenQuality: () => void;
+  /** Sends lint findings through the chat composer; absent when the view has no session. */
+  readonly platformFix?: { readonly disabled: boolean; readonly onRequest: (prompt: string) => void };
 }) {
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
@@ -247,6 +251,16 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
               onCancel={(job) => actionMutation.mutate({ action: "cancel", job })}
               onDownload={(job) => actionMutation.mutate({ action: "download", job })}
               retryDisabled={createMutation.isPending || actionMutation.isPending}
+              {...(platformFix === undefined || platformFix.disabled
+                ? {}
+                : {
+                    onRequestFix: (job: ExportJob) => {
+                      const prompt = platformFixRequest(platformFindings(job));
+                      if (prompt === null) return;
+                      setOpen(false);
+                      platformFix.onRequest(prompt);
+                    },
+                  })}
             />
           </>
         )}

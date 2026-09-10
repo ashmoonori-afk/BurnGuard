@@ -1097,6 +1097,19 @@ export default function ProjectView() {
   };
 
 
+  /** Platform lint repair reuses the quality-repair send path, never a second workflow. */
+  const requestPlatformFix = async (prompt: string) => {
+    if (composerDisabled) return;
+    try {
+      const generation = (await loadComposerDraft(session.id).catch(() => null))?.generation;
+      await sendMessage(prompt, [], new AbortController().signal, generation);
+      setChatFocusKey((value) => value + 1);
+      setMobilePane("chat");
+    } catch (error) {
+      handleWriteError("수정 요청을 보내지 못했어요", error);
+    }
+  };
+
   const handleApplyTweak = (patch: Partial<Record<TweaksStyleKey, string | null>>) => {
     if (!activeRelPath || !tweaksTarget || tweaksMutation.isPending) return;
     setTweakReview(buildTweakChangePreview(tweaksTarget, patch));
@@ -1126,6 +1139,7 @@ export default function ProjectView() {
         onPresent={() => setPresentOpen(true)}
         qualityGate={qualityGate}
         onOpenQuality={openQuality}
+        platformFix={{ disabled: composerDisabled, onRequest: (prompt) => void requestPlatformFix(prompt) }}
         tabsSlot={
           <ArtifactTabs
             tabs={tabs}
