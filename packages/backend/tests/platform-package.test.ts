@@ -181,6 +181,19 @@ describe("imweb code widget package", () => {
 });
 
 describe("platform package boundaries", () => {
+  test.each(["cafe24_package", "imweb_package"] as const)("Given a lazy-loaded reference no rewriter can follow When %s is built Then it is reported instead of silently broken", async (format) => {
+    // Given
+    const main = '<section class="hero" id="hero"><div data-src="img/hero.png"></div><script>const late="img/hero@2x.png";</script></section>';
+
+    // When
+    const lint = await (await build(format, {}, main)).lint();
+
+    // Then
+    const dynamic = lint.findings.filter((finding) => finding.code === "platform_dynamic_reference");
+    expect(dynamic.map((finding) => finding.evidence).join(" ")).toContain("img/hero.png");
+    expect(dynamic.every((finding) => finding.severity === "warning")).toBe(true);
+  });
+
   test.each(["cafe24_package", "imweb_package"] as const)("Given private project documents When %s is built Then they never enter the archive", async (format) => {
     const built = await build(format);
     expect(built.names.some((name) => name.includes("docs/attachments") || name.includes("private-brief"))).toBe(false);

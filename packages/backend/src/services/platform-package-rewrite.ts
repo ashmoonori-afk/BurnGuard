@@ -167,6 +167,30 @@ export function extractPageContent(document: HTMLElement): PageContent {
   return { element: null, html: clone.toString() };
 }
 
+/**
+ * Finds references no static rewriter can follow — lazy-load `data-*` attributes and
+ * asset paths built inside scripts — so they are reported instead of silently broken (T27).
+ */
+export function findDynamicReferences(html: string, owner: string, assetPaths: ReadonlySet<string>): readonly string[] {
+  const document = parse(html, { comment: false });
+  const found = new Set<string>();
+  for (const element of document.querySelectorAll("*")) {
+    for (const [name, value] of Object.entries(element.attributes)) {
+      if (!name.toLowerCase().startsWith("data-") || typeof value !== "string") continue;
+      const target = resolveLocalReference(value, owner);
+      if (target !== null && assetPaths.has(target)) found.add(value.trim());
+    }
+  }
+  for (const script of document.querySelectorAll("script")) {
+    for (const match of script.text.matchAll(/["'`]([^"'`]{1,512})["'`]/gu)) {
+      const literal = match[1] ?? "";
+      const target = resolveLocalReference(literal, owner);
+      if (target !== null && assetPaths.has(target)) found.add(literal);
+    }
+  }
+  return [...found].sort();
+}
+
 export function stripHtmlComments(html: string): string {
   return html.replace(/<!--[\s\S]*?-->/gu, "");
 }

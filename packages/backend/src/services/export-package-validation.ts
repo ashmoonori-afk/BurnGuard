@@ -82,7 +82,8 @@ function validateImwebRoles(fragments: readonly string[], texts: ReadonlyMap<str
 
 function packageReferences(html: string): readonly string[] {
   const values = [
-    ...[...html.matchAll(/(?:src|href|poster)\s*=\s*(["'])(.*?)\1/giu)].map((match) => match[2] ?? ""),
+    // `data-*` lookalikes are excluded: a dynamic reference is a lint warning, not a broken package.
+    ...[...html.matchAll(/(?<![\w-])(?:src|href|poster)\s*=\s*(["'])(.*?)\1/giu)].map((match) => match[2] ?? ""),
     ...[...html.matchAll(/url\(\s*(["']?)([^"')]+)\1\s*\)/giu)].map((match) => match[2] ?? ""),
     ...[...html.matchAll(/srcset\s*=\s*(["'])(.*?)\1/giu)].flatMap((match) => (match[2] ?? "").split(",").map((candidate) => candidate.trim().split(/\s+/u)[0] ?? "")),
   ];

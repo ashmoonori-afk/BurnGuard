@@ -14,7 +14,7 @@ import { hasBlockingFinding, lintForPlatform, type PlatformLintFinding, type Pla
 import { buildCafe24Package } from "./platform-package-cafe24";
 import { encode, type PlatformBuildInput, type PlatformBuildResult, type StagedAsset } from "./platform-package-contract";
 import { buildImwebPackage } from "./platform-package-imweb";
-import { bucketFor, defaultAssetBaseUrl, normalizeBaseUrl, packageSlug } from "./platform-package-rewrite";
+import { bucketFor, defaultAssetBaseUrl, findDynamicReferences, normalizeBaseUrl, packageSlug } from "./platform-package-rewrite";
 import { GUIDE_PATH, LINT_PATH, PACKAGE_MANIFEST_PATH, PLATFORM_TRANSFORMATION_VERSION } from "./platform-package-roles";
 import { isProjectDocumentPath } from "./project-document-paths";
 import { buildSiteMap } from "./site-map";
@@ -64,7 +64,7 @@ export async function buildPlatformPackage(input: PlatformPackageBuild): Promise
   const staged = await stageSources(input.paths.staged, input.project.entrypoint);
   const buildInput: PlatformBuildInput = { entrypoint: input.project.entrypoint, slug, options: input.options, staged };
   const built: PlatformBuildResult = platform === "cafe24" ? buildCafe24Package(buildInput) : await buildImwebPackage(buildInput);
-  const findings: readonly PlatformLintFinding[] = [...built.findings, ...lintForPlatform({ platform, assets: built.assets, documents: built.documents })];
+  const findings: readonly PlatformLintFinding[] = [...built.findings, ...dynamicReferenceFindings(staged), ...lintForPlatform({ platform, assets: built.assets, documents: built.documents })];
   if (hasBlockingFinding(findings)) throw new ExportError("platform_lint_failed");
 
   const guide = PLATFORM_GUIDES[platform];
@@ -113,7 +113,17 @@ async function stageSources(stagedDir: string, entrypoint: string): Promise<Plat
   const fontDirectories = new Set(assets.filter((asset) => bucketFor(asset.rel_path) === "fonts").map((asset) => path.posix.dirname(asset.rel_path)));
   const noticePaths = tree.files.map((file) => file.path).filter((relPath) => fontDirectories.has(path.posix.dirname(relPath)) && NOTICE_FILE.test(path.posix.basename(relPath)) && !isProjectDocumentPath(relPath));
   const notices: readonly StagedAsset[] = await Promise.all(noticePaths.map(async (relPath) => ({ rel_path: relPath, bytes: await read(relPath) })));
-  return { pages, assets, notices };
+  return { pages, assets, notices, tree: tree.files.map((file) => file.path).filter((relPath) => !isProjectDocumentPath(relPath) && !pagePaths.has(relPath)) };
+}
+
+function dynamicReferenceFindings(staged: PlatformBuildInput["staged"]): readonly PlatformLintFinding[] {
+  const assetPaths = new Set(staged.tree);
+  return staged.pages.flatMap((page) => findDynamicReferences(page.html, page.rel_path, assetPaths).map((reference): PlatformLintFinding => ({
+    code: "platform_dynamic_reference",
+    severity: "warning",
+    path: page.rel_path,
+    evidence: `${reference} is referenced dynamically and keeps its authored path; point it at the published asset URL by hand.`,
+  })));
 }
 
 /** Renders the static Korean installation guide; the archive never carries prose authored anywhere else. */

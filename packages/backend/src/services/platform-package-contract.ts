@@ -12,7 +12,13 @@ export type PlatformBuildInput = {
   readonly entrypoint: string;
   readonly slug: string;
   readonly options: ExportOptions;
-  readonly staged: { readonly pages: readonly StagedPage[]; readonly assets: readonly StagedAsset[]; readonly notices: readonly StagedAsset[] };
+  readonly staged: {
+    readonly pages: readonly StagedPage[];
+    readonly assets: readonly StagedAsset[];
+    readonly notices: readonly StagedAsset[];
+    /** Every canonical file the project owns, used to recognise references the rewriter cannot follow. */
+    readonly tree: readonly string[];
+  };
 };
 
 export type PlatformBuildResult = {

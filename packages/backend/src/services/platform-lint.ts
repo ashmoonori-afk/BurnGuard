@@ -7,7 +7,7 @@ export type PlatformDocumentRole = "layout" | "page_fragment" | "common_code";
 export type PlatformLintCode =
   | "cafe24_jquery_duplicate" | "cafe24_disallowed_extension" | "cafe24_file_over_30mb" | "cafe24_folder_over_1000_files" | "cafe24_korean_asset_filename" | "cafe24_unresolved_link"
   | "imweb_page_over_1m_chars" | "imweb_page_over_500k_chars" | "imweb_local_font" | "imweb_form_or_iframe" | "imweb_image_needs_hosting" | "imweb_global_selector" | "imweb_duplicate_id" | "imweb_document_script"
-  | "platform_missing_asset" | "platform_invalid_markup" | "platform_unresolved_destination";
+  | "platform_missing_asset" | "platform_invalid_markup" | "platform_unresolved_destination" | "platform_dynamic_reference";
 
 export type PlatformLintFinding = {
   readonly code: PlatformLintCode;
