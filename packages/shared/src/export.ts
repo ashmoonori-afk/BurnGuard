@@ -7,6 +7,7 @@ export type PdfPaper = "a4" | "letter" | "widescreen-16x9";
 export type PptxSize = "16x9" | "4x3";
 
 export type ExportOptions = {
+  readonly skip_quality_check?: boolean;
   readonly pdf_paper?: PdfPaper;
   readonly png_width?: number;
   readonly png_height?: number;
@@ -17,7 +18,13 @@ export type ExportOptions = {
 export function parseExportOptions(format: ExportFormat, input: unknown): ExportOptions {
   const record = decodeContract(input);
   switch (format) {
-    case "html_zip":
+    case "html_zip": {
+      requireKeys(record, ["skip_quality_check"]);
+      const value = record["skip_quality_check"];
+      if (value === undefined) return {};
+      if (typeof value !== "boolean") invalid("skip_quality_check");
+      return { skip_quality_check: value };
+    }
     case "handoff":
       requireKeys(record, []);
       return {};
