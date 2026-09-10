@@ -18,7 +18,7 @@ import { renderHandoffBundle } from "./export-handoff-render";
 import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "./export-html-validation";
 import { formatExtension } from "./export-naming";
 import { validateHandoffPackage, validatePptxPackage } from "./export-package-validation";
-import { renderDeckToPdf } from "./export-pdf";
+import { assertUniformArtboardPages, PdfExportError, renderDeckToPdf } from "./export-pdf";
 import { pdfPointsForPaper, pdfRasterBudgetFitsPages } from "./export-pdf-contract";
 import { ExportError } from "./export-errors";
 import { renderPlatformPackage } from "./export-platform-package";
@@ -190,6 +190,9 @@ async function exportContext(projectId: string, format: ExportFormat, options: E
     const sizes = projectOptions.graphic_set.kind === "banner_set" && projectOptions.graphic_set.frames !== undefined
       ? projectOptions.graphic_set.frames
       : Array.from({ length: projectOptions.graphic_set.frame_count }, () => canvas);
+    // Artboard paper prints one page per artboard, so a mixed-size set has no single page geometry (doc/14 T06).
+    try { assertUniformArtboardPages(sizes); }
+    catch (error) { throw error instanceof PdfExportError ? new ExportServiceError("invalid_graphic_export_options", error.message) : error; }
     const points = sizes.map((size) => pdfPointsForPaper("artboard", size));
     if (!pdfRasterBudgetFitsPages(points)) throw new ExportServiceError("pdf_resource_limit", "Graphic PDF exceeds the per-page or aggregate raster budget");
   }
