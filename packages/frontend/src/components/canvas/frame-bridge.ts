@@ -106,9 +106,9 @@ interface BridgeResponse {
  * being asked. Add new event names here AND in BRIDGE_SCRIPT (or
  * deck-stage.ts for runtime-emitted events).
  */
-type FrameEventName = "active-slide-changed" | "navigate";
+type FrameEventName = "active-slide-changed" | "navigate" | "viewport-wheel";
 
-type FrameEventPayload<E extends FrameEventName> = E extends "navigate" ? { href: string } : { index: number };
+type FrameEventPayload<E extends FrameEventName> = E extends "viewport-wheel" ? { x: number; y: number; delta: number } : E extends "navigate" ? { href: string } : { index: number };
 
 interface FrameEvent<E extends FrameEventName = FrameEventName> {
   __bgFrameBridge: true;
@@ -663,6 +663,12 @@ const BRIDGE_SCRIPT = String.raw`(function () {
   // edit). Lets the parent drop its 5-Hz polling loop. Same envelope
   // tag (__bgFrameBridge) so the parent's single message listener
   // routes both kinds of payload.
+  window.addEventListener("wheel", function(event) {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: "viewport-wheel", payload: { x: event.clientX, y: event.clientY, delta: event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1) } }, "*");
+  }, { passive: false, capture: true });
+
   function notifyActiveSlide() {
     try {
       var slides = document.querySelectorAll("[data-slide]");

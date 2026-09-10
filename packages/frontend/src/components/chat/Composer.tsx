@@ -33,7 +33,7 @@ function sendStateMessage(state: ComposerSendState): string | null {
       return "전송 요청을 취소했어요. 다시 보낼 수 있어요.";
     case "failed":
       if (state.code === "unsupported_file_kind") return "지원하지 않는 형식이라 저장하지 않았어요. 해당 파일을 빼고 다시 보내 주세요.";
-      if (state.code === "unsupported_visual_source") return "URL·웹·스톡 소스는 지원하지 않아 저장하지 않았어요. 로컬 PDF 또는 PPTX를 업로드해 주세요.";
+      if (state.code === "unsupported_visual_source") return "URL·웹·스톡 소스는 지원하지 않아 저장하지 않았어요. 로컬 이미지, Word(.docx), PDF 또는 PPTX를 업로드해 주세요.";
       return apiErrorCopy(state);
     default: {
       const unreachable: never = state;
@@ -220,7 +220,7 @@ export default function Composer({
           type="file"
           multiple
           accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")}
-          aria-label="자료 파일 선택 (PDF, PPTX)"
+          aria-label="자료 파일 선택 (이미지, Word, PDF, PPTX)"
           className="hidden"
           onChange={(e) => {
             const picked = Array.from(e.target.files ?? []);

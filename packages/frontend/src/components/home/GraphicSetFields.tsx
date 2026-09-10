@@ -187,7 +187,7 @@ export function GraphicSetFields({
         <div className="space-y-3">
           <span className={PROJECT_LABEL_CLASS} id="detail-brief-label">상세페이지 브리프</span>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            답한 항목만 사용해요. 비워 두면 AI가 알아서 채우지 않고 그 부분을 건너뛰어요.
+            편하게 적어 주세요. AI가 핵심을 유지하며 제목과 본문으로 요약·윤문하고, 각 섹션에 맞는 이미지를 배치해요. 없는 수치나 후기는 만들지 않아요.
           </p>
           <ul aria-labelledby="detail-brief-label" className="space-y-3">
             {DETAIL_BRIEF_FIELDS.map((field) => {

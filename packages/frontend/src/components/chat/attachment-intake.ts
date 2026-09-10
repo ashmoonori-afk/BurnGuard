@@ -13,7 +13,7 @@ export const COMPOSER_ATTACHMENT_LIMITS = {
   maxBytesTotal: 25 * 1024 * 1024,
 } as const;
 
-export const COMPOSER_SUPPORTED_EXTENSIONS = [".pdf", ".pptx"] as const;
+export const COMPOSER_SUPPORTED_EXTENSIONS = [".pdf", ".pptx", ".docx", ".png", ".jpg", ".jpeg", ".webp"] as const;
 
 export type IntakeRejection =
   | "unsupported_kind"
@@ -88,7 +88,7 @@ export function visualSourceSendErrorCopy(error: unknown): string {
   switch (error.code) {
     case "invalid_attachments": return "첨부 자료를 확인할 수 없어요. 목록에서 제거한 뒤 다시 올려 주세요.";
     case "invalid_visual_sources": return "시각 자료 역할 정보가 올바르지 않아요. 역할을 다시 선택해 주세요.";
-    case "unsupported_visual_source": return "URL·웹·스톡 자료는 지원하지 않아요. 로컬 PDF 또는 PPTX를 올려 주세요.";
+    case "unsupported_visual_source": return "URL·웹·스톡 자료는 지원하지 않아요. 로컬 이미지, Word(.docx), PDF 또는 PPTX를 올려 주세요.";
     case "session_busy": return "이미 작업이 진행 중이에요. 완료된 뒤 다시 보내 주세요.";
     default: return apiErrorCopy(error);
   }

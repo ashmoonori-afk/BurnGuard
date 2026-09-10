@@ -23,6 +23,8 @@ import { embedCanvasImages } from "@/lib/canvas-images";
 import { canvasPoint } from "./canvas-coordinates";
 import { requestFrameScrollAtPoint } from "./frame-bridge";
 
+import { MIN_CANVAS_ZOOM, MAX_CANVAS_ZOOM, zoomCanvasAt } from "./canvas-zoom";
+
 const PLACEHOLDER_SRC = `<!doctype html>
 <html lang="ko">
 <head>
@@ -155,6 +157,33 @@ export default function Canvas({
   const stageRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const viewportRef = useRef({ zoom, pan });
+  viewportRef.current = { zoom, pan };
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const zoomAt = (x: number, y: number, delta: number) => {
+      const rect = stageRef.current?.getBoundingClientRect();
+      if (!rect || ![x, y, delta].every(Number.isFinite)) return;
+      const current = viewportRef.current;
+      const next = zoomCanvasAt(current.zoom, current.pan, { x: x - rect.left - rect.width / 2, y: y - rect.top - rect.height / 2 }, delta);
+      viewportRef.current = next; setZoom(next.zoom); setPan(next.pan);
+    };
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault(); event.stopPropagation();
+      zoomAt(event.clientX, event.clientY, event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? container.clientHeight : 1));
+    };
+    container.addEventListener("wheel", wheel, { passive: false, capture: true });
+    const unsubscribe = subscribeFrameEvent(iframeRef.current, "viewport-wheel", (payload) => {
+      if (!payload || ![payload.x, payload.y, payload.delta].every(value => typeof value === "number" && Number.isFinite(value))) return;
+      const frame = iframeRef.current;
+      const rect = frame?.getBoundingClientRect();
+      if (!rect || !frame || payload.x < 0 || payload.y < 0 || payload.x > frame.clientWidth || payload.y > frame.clientHeight) return;
+      zoomAt(rect.left + payload.x * rect.width / frame.clientWidth, rect.top + payload.y * rect.height / frame.clientHeight, payload.delta);
+    });
+    return () => { container.removeEventListener("wheel", wheel, true); unsubscribe(); };
+  }, [frameKey, src]);
   const [moving, setMoving] = useState(false);
   const [showSceneTools, setShowSceneTools] = useState(false);
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
@@ -299,7 +328,7 @@ export default function Canvas({
       <div ref={containerRef} className="relative flex-1 overflow-hidden bg-muted/70">
         <div ref={stageRef} className="absolute inset-3 rounded-md shadow-md ring-1 ring-border/60 max-[600px]:inset-2" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "center" }}
           onWheel={(event) => {
-            if (!mode || moving || !stageRef.current) return;
+            if (event.ctrlKey || event.metaKey || !mode || moving || !stageRef.current) return;
             const [x, y] = canvasPoint(stageRef.current, event.clientX, event.clientY);
             const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? stageRef.current.clientHeight : 1;
             void requestFrameScrollAtPoint(iframeRef.current, x, y, event.deltaX * unit / zoom, event.deltaY * unit / zoom);
@@ -423,10 +452,11 @@ export default function Canvas({
       <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-background px-3 py-1 text-xs" aria-label="미리보기 배율과 이동">
         <span className="min-w-0 truncate text-[11px] text-muted-foreground">{moving ? "화면을 드래그해서 이동해요" : activeRelPath ?? "캔버스"}</span>
         <div className="flex shrink-0 items-center gap-1">
-          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label="미리보기 축소" disabled={zoom <= 0.25} onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}>−</button>
-          <button type="button" className="h-8 min-w-12 rounded px-1 tabular-nums hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring" title="배율과 위치 초기화" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>{Math.round(zoom * 100)}%</button>
-          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label="미리보기 확대" disabled={zoom >= 3} onClick={() => setZoom((v) => Math.min(3, v + 0.25))}>+</button>
-          <button type="button" aria-pressed={moving} className={`ml-1 h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${moving ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setMoving((v) => !v)}>화면 이동</button>
+          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label="미리보기 축소" disabled={zoom <= MIN_CANVAS_ZOOM} onClick={() => setZoom((v) => Math.max(MIN_CANVAS_ZOOM, v / 1.25))}>−</button>
+          <button type="button" className="h-8 min-w-12 rounded px-1 tabular-nums hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring" title="배율과 위치 초기화" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>100% 초기화</button>
+          <label className="flex items-center gap-1"><input aria-label="아트보드 확대 비율" type="number" min="1" max="6400" value={Math.round(zoom * 100)} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) setZoom(Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, value / 100))); }} className="h-8 w-20 rounded border bg-background px-2 tabular-nums" />%</label>
+          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label="미리보기 확대" disabled={zoom >= MAX_CANVAS_ZOOM} onClick={() => setZoom((v) => Math.min(MAX_CANVAS_ZOOM, v * 1.25))}>+</button>
+          <button type="button" aria-pressed={moving} className={`ml-1 h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${moving ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setMoving((v) => !v)}>화면 이동</button><span className="text-muted-foreground">Ctrl/⌘ + 휠로 확대·축소</span>
           {sceneTools && <button type="button" aria-pressed={showSceneTools} className={`h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${showSceneTools ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setShowSceneTools((value) => !value)}>3D 장면</button>}
         </div>
       </div>

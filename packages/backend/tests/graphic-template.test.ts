@@ -94,6 +94,8 @@ describe("initial graphic template", () => {
       "detail-q6-journey",
       "detail-q7-risk",
       "detail-q8-urgency",
+      "detail-features",
+      "detail-payment-cta",
     ]);
     expect(sections[0]?.textContent).not.toContain("비밀 상품명");
   });

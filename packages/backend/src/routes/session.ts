@@ -100,11 +100,11 @@ sessionRoutes.post("/api/sessions/:id/documents", async (c) => {
   try {
     const form = await c.req.formData();
     const entries = form.getAll("files");
-    if (entries.length === 0 || entries.some((entry) => !(entry instanceof File)) || [...form.keys()].some((key) => key !== "files")) return c.json(fail("invalid_attachments", "Select PDF or PPTX files"), 400);
+    if (entries.length === 0 || entries.some((entry) => !(entry instanceof File)) || [...form.keys()].some((key) => key !== "files")) return c.json(fail("invalid_attachments", "Select image, DOCX, PDF or PPTX files"), 400);
     const files = entries.filter((entry): entry is File => entry instanceof File);
     return c.json(ok({ paths: await saveProjectDocuments(id, files) }));
   } catch (error) {
-    if (error instanceof UnsupportedAttachmentKindError) return c.json(fail(error.code, "PDF and PPTX files are supported"), 415);
+    if (error instanceof UnsupportedAttachmentKindError) return c.json(fail(error.code, "PNG, JPG, WebP, DOCX, PDF and PPTX files are supported"), 415);
     return c.json(fail("document_save_failed", "Could not save the original document; retry the upload"), 400);
   }
 });

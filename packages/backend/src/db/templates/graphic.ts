@@ -20,6 +20,8 @@ export function renderGraphic(
         ["detail-q6-journey", "Q6 · 제공 여정", "결제 후 받는 경험을 순서대로 보여주세요."],
         ["detail-q7-risk", "Q7 · 위험 줄이기", "환불과 지원 범위에는 실제 정책이 필요합니다."],
         ["detail-q8-urgency", "Q8 · 지금 행동할 이유", "실제 긴급성 정보가 필요합니다."],
+        ["detail-features", "구성과 혜택", "제품 구성과 사용자가 얻는 혜택을 정리하세요."],
+        ["detail-payment-cta", "마지막 안내", "구매 전 확인 사항과 마지막 행동 안내로 완성하세요."],
       ] as const;
       artboards = `<main data-graphic-artboard id="frame-1-product-detail" style="width:860px;height:${canvas.height}px">${sections.map(([id, heading, copy]) => `<section data-bg-node-id="${id}"><p class="question">${heading}</p><h2>${copy}</h2></section>`).join("")}</main>`;
       break;
@@ -49,9 +51,9 @@ export function renderGraphic(
   <style>
     h1, h2, h3 { font-family: "Space Grotesk", "Pretendard", sans-serif; }
     code, pre, .number { font-family: "IBM Plex Mono", "Pretendard", monospace; font-variant-numeric: tabular-nums; }
-    :root { color-scheme: light; }
+    :root { color-scheme: light; --page-background: #ffffff; }
     * { box-sizing: border-box; }
-    html, body { margin: 0; min-width: ${canvas.width}px; min-height: ${canvas.height}px; background: #d9e3f5; }
+    html, body { margin: 0; min-width: ${canvas.width}px; min-height: ${canvas.height}px; background: var(--page-background); }
     body { font-family: "DM Sans", "Pretendard", sans-serif; color: #14213d; }
     [data-graphic-artboard] {
       position: relative;
@@ -59,15 +61,15 @@ export function renderGraphic(
       padding: clamp(24px, 7vw, 96px);
       display: grid;
       align-content: end;
-      background: radial-gradient(circle at 82% 18%, rgba(0, 79, 255, 0.28), transparent 26%), linear-gradient(145deg, #f8fbff 0%, #dce8ff 100%);
+      background: var(--page-background);
     }
     [data-graphic-artboard] + [data-graphic-artboard] { margin-top: 32px; }
     .mark { position: absolute; inset: clamp(24px, 7vw, 96px) auto auto clamp(24px, 7vw, 96px); font-size: clamp(12px, 1.4vw, 18px); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #004fff; }
     h1 { min-width: 0; margin: 0; max-width: min(15ch, 100%); overflow-wrap: anywhere; font-size: clamp(36px, 8vw, 112px); line-height: 1.4; letter-spacing: -0.055em; }
     h1.long-title { max-width: 100%; font-size: clamp(12px, 2vw, 24px); line-height: 1.3; }
     p { margin: clamp(12px, 2vw, 28px) 0 0; max-width: 34em; font-size: clamp(14px, 2vw, 26px); line-height: 1.5; color: #405273; }
-    #frame-1-product-detail { padding: 0; display: block; }
-    #frame-1-product-detail section { min-height: 12.5%; padding: 72px; display: grid; align-content: center; border-bottom: 1px solid rgba(20, 33, 61, 0.15); }
+    #frame-1-product-detail { padding: 0; display: grid; grid-template-rows: repeat(10, minmax(0, 1fr)); align-content: stretch; }
+    #frame-1-product-detail section { min-height: 0; padding: clamp(12px, 4vw, 48px); display: grid; align-content: center; border-bottom: 1px solid rgba(20, 33, 61, 0.15); }
     #frame-1-product-detail h2 { max-width: 18em; font-size: 40px; line-height: 1.35; }
     #frame-1-product-detail .question { color: #004fff; font-weight: 700; }
   </style>

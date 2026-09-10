@@ -84,7 +84,10 @@ function rulesForKind(kind: GraphicSetKind, canvas: GraphicCanvasV1): readonly s
 
 function detailRules(canvas: GraphicCanvasV1): readonly string[] {
   return [
-    `Structure: one artboard of locked width ${canvas.width} CSS px and free height; every top-level section is a [data-bg-node-id] block short enough to fit one slice; no position: fixed or sticky; no critical text within 40 px of a section edge.`,
+    `Structure: one artboard of exactly ${canvas.width} × ${canvas.height} CSS px; every top-level section is a [data-bg-node-id] block short enough to fit one slice; no position: fixed or sticky; no critical text within 40 px of a section edge.`,
+    `Completion: author the entire ${canvas.height} CSS px height in this turn, from the hero through the final CTA/footer. Plan section heights whose sum equals ${canvas.height}; render and inspect top, middle, and bottom before finishing. Do not stop at the hero or a few sections, shorten the requested artboard, or pad the remainder with empty background, a giant spacer, or repeated filler. Redistribute substantive content and imagery across the full height.`,
+    "Images: every product-detail section must contain a relevant, visible image by default, including supporting sections and the final CTA. Plan an image and its placement for each section before authoring. Reuse appropriate user-supplied product photos; generate missing imagery exclusively with Codex image generation and reference the saved assets from index.html. Vary crops and compositions; do not substitute CSS shapes, gradients, icons, empty placeholders, or the same repeated photo for section imagery. Omit an image only when there is genuinely no meaningful visual or usable placement, and briefly explain that exception. Never fabricate visual proof, testimonials, or before/after evidence. Inspect that all referenced images actually load before finishing.",
+    "Brief editing: treat all detail_brief fields as raw source material, not final display copy. Use the LLM to summarize and polish even a full 500-character field into a concise section headline, supporting copy, and useful captions. Preserve concrete facts, benefits, constraints, and the user's intent; distribute remaining useful detail across the page instead of dumping the raw paragraph or dropping material facts. Do not ask the user to summarize it themselves or invent unsupported claims.",
     "Offer first: before writing any section, restate from detail_brief what the customer receives, which anxieties are removed, and why now. If the brief lacks it, write a marked placeholder and build the page around the offer, not around features.",
     "Hero: open with the persona's pain scene or arrival scene. Never open with the product name, a brand introduction, or a feature slogan such as AI-based, fast analysis, personalized, all-in-one, or first in Korea.",
     "Macro order: hook, evidence, expertise, mechanism, offer, then features last as supporting evidence.",
@@ -93,7 +96,7 @@ function detailRules(canvas: GraphicCanvasV1): readonly string[] {
     "Anxiety placement: at each scroll position name the customer's silent objection and answer it in that same section.",
     "Placeholders: evidence, testimonials, refund terms, and urgency values that are absent from detail_brief are rendered as visibly marked \"supply real data\" placeholders. Never invent numbers, reviews, or refund terms.",
     "Self-review: before finishing, re-read the copy as a suspicious version of the persona and rewrite every sentence that fails the \"so what\" test.",
-    "Iteration: when the user asks for a change, change one region (first screen, middle, or end) per turn unless the request names more, so the effect can be attributed.",
+    "Iteration: limit scope only for an explicitly localized edit. Initial creation, completion requests, and whole-page redesign must finish all sections through the final CTA in one turn; never stop after one region.",
   ];
 }
 

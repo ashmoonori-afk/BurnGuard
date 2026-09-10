@@ -34,11 +34,11 @@ export default function ColorPalette({ projectId, relPath, refreshKey, disabled,
   });
   return <div className="relative">
     <button type="button" title="컬러 팔레트" aria-expanded={open} aria-label="컬러 팔레트" onClick={() => setOpen((value) => !value)} className="flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11">
-      <Palette className="h-4 w-4" aria-hidden="true" /><span className="hidden min-[1500px]:inline">컬러 팔레트</span>
+      <Palette className="h-4 w-4" aria-hidden="true" /><span>배경·색상</span>
     </button>
     {open && <section aria-label="현재 페이지 색상" className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[85vw] rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-xl" onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); } }}>
-      <div className="mb-2 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">현재 페이지 색상</h2><button type="button" className="text-xs text-muted-foreground" onClick={() => setOpen(false)}>닫기</button></div>
-      <p className="mb-3 text-xs leading-relaxed text-muted-foreground">색을 눌러 고른 뒤 적용하세요. 이 페이지와 연결된 CSS의 같은 HEX 색상을 함께 바꿔요. 공유 CSS를 쓰는 다른 페이지에도 반영돼요.</p>
+      <div className="mb-2 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">배경색과 주요 색상</h2><button type="button" className="text-xs text-muted-foreground" onClick={() => setOpen(false)}>닫기</button></div>
+      <p className="mb-3 text-xs leading-relaxed text-muted-foreground">배경색(--page-background)이나 바꿀 색을 눌러 고른 뒤 적용하세요. 이 페이지와 연결된 CSS의 같은 HEX 색상을 함께 바꿔요. 공유 CSS를 쓰는 다른 페이지에도 반영돼요.</p>
       {palette.isLoading && <p role="status" className="text-xs">색상을 불러오는 중…</p>}
       {palette.error && <p role="alert" className="text-xs text-destructive">{apiErrorCopy(palette.error)} <button type="button" className="underline" onClick={() => void palette.refetch()}>다시 시도</button></p>}
       {palette.data && <div className="max-h-72 space-y-2 overflow-y-auto">

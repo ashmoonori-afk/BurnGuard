@@ -94,7 +94,7 @@ function statusCopy(state: DesignAuditViewState): string {
     case "error_cold": return "검사 결과를 불러오지 못했어요.";
     case "error_warm": return "최근 결과를 보여드려요. 새 검사는 완료되지\u00A0않았어요.";
     case "stale": return state.running ? "이전 결과를 보여드리며 현재 결과물을 검사하고\u00A0있어요." : "결과물이 바뀌어 이전 검사 결과를 보여드려요.";
-    case "must_fix": return state.running ? "최근 결과를 보여드리며 다시 검사하고\u00A0있어요." : "내보내기 전에 고쳐야 할 문제가 있어요.";
+    case "must_fix": return state.running ? "최근 결과를 보여드리며 다시 검사하고\u00A0있어요." : "개선을 권장하는 항목이 있어요. 내보내기는 그대로 가능해요.";
     case "recommended": return state.running ? "최근 결과를 보여드리며 다시 검사하고\u00A0있어요." : "고쳐야 할 문제는 없고 권장 개선이 있어요.";
     case "ready": return state.running ? "통과한 최근 결과를 보여드리며 다시 검사하고\u00A0있어요." : "현재 결과물이 모든 품질 검사를 통과했어요.";
     case "unavailable": return "렌더링 가능한 결과물이 아직 없어요.";

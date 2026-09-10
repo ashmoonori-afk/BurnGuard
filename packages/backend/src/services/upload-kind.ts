@@ -14,3 +14,10 @@ export function inferUploadKind(fileName: string, contentType?: string | null): 
   if (normalized.includes("application/vnd.openxmlformats-officedocument.presentationml.presentation")) return "pptx";
   return null;
 }
+
+/** Attachment intake is broader than design-system extraction. */
+export function inferAttachmentKind(name: string): "pdf" | "pptx" | "docx" | "image" | null {
+  if (/\.(png|jpe?g|webp)$/i.test(name)) return "image";
+  if (/\.docx$/i.test(name)) return "docx";
+  return inferUploadKind(name);
+}
