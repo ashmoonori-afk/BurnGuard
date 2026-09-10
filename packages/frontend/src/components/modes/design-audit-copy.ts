@@ -4,6 +4,8 @@ import type { DesignAuditErrorCode } from "@/lib/design-audit-state";
 export const DESIGN_AUDIT_CHECK_COPY = {
   text_overflow: "텍스트 넘침", element_overlap: "요소 겹침", minimum_text_size: "최소 글자 크기", contrast: "색상 대비",
   narrow_width: "좁은 화면", duplicate_node_id: "중복 요소 ID", missing_image: "이미지 참조", token_usage: "디자인 토큰 사용",
+  site_nav_mismatch: "페이지 탐색 불일치", site_missing_aria_current: "현재 페이지 표시", site_dangling_link: "없는 페이지 링크",
+  site_missing_shared_block: "공통 영역 표시", site_root_absolute_asset: "루트 기준 자산 경로",
 } as const satisfies Record<DesignAuditCheckCode, string>;
 
 export const DESIGN_AUDIT_STATUS_COPY = {
@@ -15,6 +17,9 @@ export const DESIGN_AUDIT_ACTION_COPY = {
   set_minimum_font_size: "글자 크기를 최소 기준 이상으로 조정하세요", increase_color_contrast: "전경과 배경의 대비를 높이세요",
   repair_narrow_layout: "좁은 화면 레이아웃을 조정하세요", assign_unique_node_ids: "요소마다 고유한 ID를 지정하세요",
   restore_image_reference: "유효한 이미지 참조를 복구하세요", replace_literal_with_token: "직접 입력한 값을 디자인 토큰으로 바꾸세요",
+  repair_site_navigation: "모든 페이지의 탐색 구조를 맞추세요", mark_current_page: "현재 페이지 링크를 표시하세요",
+  create_or_repair_site_link: "없는 페이지를 만들거나 링크를 고치세요", add_shared_blocks: "공통 영역과 콘텐츠 표시를 추가하세요",
+  relativize_asset_path: "자산 경로를 페이지 기준 상대 경로로 바꾸세요",
 } as const satisfies Record<DesignAuditTargetedAction, string>;
 
 export const DESIGN_AUDIT_UNKNOWN_COPY = {

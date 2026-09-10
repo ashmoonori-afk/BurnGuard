@@ -11,6 +11,10 @@ import { fingerprintHtmlNode, FilePatchError } from "./file-patch";
 import { launchChromium, openRenderSession, RenderSessionError } from "./export-render-session";
 import { registerExportBrowser } from "./export-browser-registry";
 import { parseStoredProjectOptions } from "./project-options";
+import { buildSiteMap } from "./site-map";
+import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
+
+export const DESIGN_AUDIT_POLICY_VERSION = "site-v1";
 
 export type AuditRenderedTreeInput = { readonly projectId: string; readonly projectDir: string; readonly entrypoint: string; readonly revision: number; readonly digest: string; readonly treeDigest?: string; readonly safeFix?: boolean; readonly deck?: boolean; readonly canvas?: { readonly width: number; readonly height: number }; readonly signal: AbortSignal };
 export class DesignAuditServiceError extends Error {
@@ -23,14 +27,26 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   const expectedTreeDigest = input.treeDigest ?? input.digest;
   if (manifest.tree_digest !== expectedTreeDigest) throw new DesignAuditServiceError("stale_artifact_identity", "Artifact identity changed before audit");
   const observations: DomAuditObservation[] = [];
+  let auditEntrypoints: readonly string[] = [input.entrypoint];
+  let siteFindings: readonly DesignAuditFinding[] = [];
+  let sharedChangeDivergence: readonly string[] = [];
+  if (!(input.deck ?? false) && input.canvas === undefined) {
+    const htmlFiles = manifest.files.filter((file) => /\.html?$/iu.test(file.path)).map((file) => ({ rel_path: file.path, category: "html" as const }));
+    const siteMap = await buildSiteMap(htmlFiles, input.entrypoint, (relPath) => readFile(resolveWithin(input.projectDir, relPath), "utf8"));
+    const pages = await Promise.all(siteMap.pages.map(async (page) => ({ rel_path: page.rel_path, html: await readFile(resolveWithin(input.projectDir, page.rel_path), "utf8") })));
+    auditEntrypoints = siteMap.pages.map((page) => page.rel_path);
+    const siteAudit = auditSiteStructure(siteMap, pages);
+    sharedChangeDivergence = siteAudit.divergent_pages;
+    siteFindings = siteAudit.findings.map((finding, index) => buildSiteFinding(finding, index));
+  }
   const viewports = input.canvas === undefined
     ? [{ width: 1280, height: 900, dpr: 1 }, { width: 375, height: 812, dpr: 1 }] as const
     : [{ width: input.canvas.width, height: input.canvas.height, dpr: 1 }] as const;
   const browser = await launchChromium(input.signal);
   const owner = registerExportBrowser(() => browser.close());
   try {
-    for (const viewport of viewports) {
-      const session = await openRenderSession({ stagedDir: input.projectDir, entrypoint: input.entrypoint, viewport, deck: input.deck ?? false, strict: false, signal: input.signal, browser });
+    for (const entrypoint of auditEntrypoints) for (const viewport of viewports) {
+      const session = await openRenderSession({ stagedDir: input.projectDir, entrypoint, viewport, deck: input.deck ?? false, strict: false, signal: input.signal, browser });
       try { observations.push(await inspectRenderedPage(session.page, input.canvas !== undefined)); } finally { await session.close(); }
     }
   } finally { await owner.close(); }
@@ -38,14 +54,19 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   if (current.tree_digest !== expectedTreeDigest) throw new DesignAuditServiceError("stale_artifact_identity", "Artifact identity changed during audit");
   const desktop = observations[0]; const narrow = observations[1] ?? desktop;
   if (desktop === undefined || narrow === undefined) throw new DesignAuditServiceError("audit_unavailable", "Rendered audit observations are unavailable");
-  const desktopFindings = desktop.findings.filter((finding) => finding.code !== "narrow_width"); const desktopKeys = new Set(desktopFindings.map((finding) => `${finding.code}:${finding.nodeId ?? ""}`));
-  const directNarrow = narrow.findings.filter((finding) => finding.code === "narrow_width"); const directNarrowNodes = new Set(directNarrow.flatMap((finding) => finding.nodeId === null ? [] : [finding.nodeId]));
-  const narrowDerived = narrow.findings.filter((finding) => (finding.code === "text_overflow" || finding.code === "element_overlap") && !desktopKeys.has(`${finding.code}:${finding.nodeId ?? ""}`) && (finding.nodeId === null || !directNarrowNodes.has(finding.nodeId))).map((finding): DomAuditFinding => ({ ...finding, code: "narrow_width", severity: "must_fix", action: "repair_narrow_layout", evidence: `Narrow viewport: ${finding.evidence}` }));
-  const raw = [...desktopFindings, ...directNarrow, ...narrowDerived];
-  const findings = await enrichFindings(raw.slice(0, 200), input, manifest);
+  const renderedFindings: DesignAuditFinding[] = [];
+  for (let index = 0; index < auditEntrypoints.length && renderedFindings.length + siteFindings.length < 200; index += 1) {
+    const pageDesktop = observations[index * viewports.length];
+    const pageNarrow = observations[index * viewports.length + 1] ?? pageDesktop;
+    const relPath = auditEntrypoints[index];
+    if (pageDesktop === undefined || pageNarrow === undefined || relPath === undefined) throw new DesignAuditServiceError("audit_unavailable", "Rendered page audit observations are unavailable");
+    const available = 200 - siteFindings.length - renderedFindings.length;
+    renderedFindings.push(...await enrichFindings(renderedRawFindings(pageDesktop, pageNarrow).slice(0, available), input, manifest, relPath));
+  }
+  const findings = [...renderedFindings, ...siteFindings].slice(0, 200);
   const checks = DESIGN_AUDIT_CHECK_CODES.map((code) => buildCheck(code, findings, code === "narrow_width" ? narrow : desktop));
   const overall = findings.some((finding) => finding.severity === "must_fix") ? "must_fix" : checks.every((check) => check.status === "pass") ? "ready" : "recommended";
-  return parseDesignAuditResult({ schema_version: 1, project_id: input.projectId, artifact_revision: input.revision, artifact_digest: input.digest, created_at: Date.now(), overall_status: overall, checks });
+  return parseDesignAuditResult({ schema_version: 1, project_id: input.projectId, artifact_revision: input.revision, artifact_digest: input.digest, created_at: Date.now(), overall_status: overall, checks, shared_change_divergence: sharedChangeDivergence });
 }
 
 export async function getProjectDesignAudit(projectId: string, force = false, signal: AbortSignal = new AbortController().signal): Promise<DesignAuditResult> {
@@ -59,7 +80,7 @@ export async function getProjectDesignAudit(projectId: string, force = false, si
   catch (error) { if (error instanceof CanonicalTreeManifestError) throw new DesignAuditServiceError("project_path_unavailable", "Project tree is unavailable for audit"); throw error; }
   if (project.current_digest === null || project.current_revision < 0 || manifest.tree_digest !== project.current_digest) throw new DesignAuditServiceError("stale_artifact_identity", "Current artifact identity is unavailable or stale");
   let cachePath: string;
-  try { cachePath = resolveWithin(projectDir, ".meta", "audits", `${project.current_revision}-${project.current_digest}.json`); }
+  try { cachePath = resolveWithin(projectDir, ".meta", "audits", `${project.current_revision}-${project.current_digest}-${DESIGN_AUDIT_POLICY_VERSION}.json`); }
   catch (error) { if (error instanceof PathBoundaryError) throw new DesignAuditServiceError("project_path_unavailable", "Project audit cache is outside managed storage"); throw error; }
   if (!force) {
     const cached = await readCache(cachePath);
@@ -77,6 +98,28 @@ export async function getProjectDesignAudit(projectId: string, force = false, si
   return result;
 }
 
+function buildSiteFinding(finding: SiteStructureFinding, index: number): DesignAuditFinding {
+  const action = siteTargetedAction(finding.code);
+  return {
+    id: `${finding.code}:${createHash("sha256").update(`${finding.rel_path}\0${finding.evidence}\0${index}`).digest("hex").slice(0, 24)}`,
+    check_code: finding.code,
+    severity: finding.severity,
+    source: { rel_path: finding.rel_path, node_bg_id: null },
+    evidence: finding.evidence,
+    targeted_action: action,
+  };
+}
+
+function siteTargetedAction(code: SiteStructureFinding["code"]): DesignAuditFinding["targeted_action"] {
+  switch (code) {
+    case "site_nav_mismatch": return "repair_site_navigation";
+    case "site_missing_aria_current": return "mark_current_page";
+    case "site_dangling_link": return "create_or_repair_site_link";
+    case "site_missing_shared_block": return "add_shared_blocks";
+    case "site_root_absolute_asset": return "relativize_asset_path";
+  }
+}
+
 function buildCheck(code: DesignAuditCheckCode, all: readonly DesignAuditFinding[], observation: DomAuditObservation): DesignAuditCheck {
   const findings = all.filter((finding) => finding.check_code === code);
   const status = findings.length > 0 ? "fail" : observation.measurable[code] ? "pass" : code === "token_usage" ? "skipped" : "unmeasurable";
@@ -84,17 +127,26 @@ function buildCheck(code: DesignAuditCheckCode, all: readonly DesignAuditFinding
   return { code, status, reason, findings };
 }
 
-async function enrichFindings(raw: readonly DomAuditFinding[], input: AuditRenderedTreeInput, manifest: CanonicalTreeManifest): Promise<readonly DesignAuditFinding[]> {
+function renderedRawFindings(desktop: DomAuditObservation, narrow: DomAuditObservation): readonly DomAuditFinding[] {
+  const desktopFindings = desktop.findings.filter((finding) => finding.code !== "narrow_width");
+  const desktopKeys = new Set(desktopFindings.map((finding) => `${finding.code}:${finding.nodeId ?? ""}`));
+  const directNarrow = narrow.findings.filter((finding) => finding.code === "narrow_width");
+  const directNarrowNodes = new Set(directNarrow.flatMap((finding) => finding.nodeId === null ? [] : [finding.nodeId]));
+  const narrowDerived = narrow.findings.filter((finding) => (finding.code === "text_overflow" || finding.code === "element_overlap") && !desktopKeys.has(`${finding.code}:${finding.nodeId ?? ""}`) && (finding.nodeId === null || !directNarrowNodes.has(finding.nodeId))).map((finding): DomAuditFinding => ({ ...finding, code: "narrow_width", severity: "must_fix", action: "repair_narrow_layout", evidence: `Narrow viewport: ${finding.evidence}` }));
+  return [...desktopFindings, ...directNarrow, ...narrowDerived];
+}
+
+async function enrichFindings(raw: readonly DomAuditFinding[], input: AuditRenderedTreeInput, manifest: CanonicalTreeManifest, relPath: string): Promise<readonly DesignAuditFinding[]> {
   const sorted = [...raw].sort((left, right) => `${DESIGN_AUDIT_CHECK_CODES.indexOf(left.code)}:${left.nodeId ?? ""}:${left.evidence}`.localeCompare(`${DESIGN_AUDIT_CHECK_CODES.indexOf(right.code)}:${right.nodeId ?? ""}:${right.evidence}`));
-  const htmlEntry = manifest.files.find((file) => file.path === input.entrypoint);
-  const html = htmlEntry === undefined ? null : await readFile(resolveWithin(input.projectDir, input.entrypoint), "utf8");
+  const htmlEntry = manifest.files.find((file) => file.path === relPath);
+  const html = htmlEntry === undefined ? null : await readFile(resolveWithin(input.projectDir, relPath), "utf8");
   return sorted.map((finding, index) => {
-    const source = { rel_path: input.entrypoint, node_bg_id: finding.nodeId };
-    const base = { id: `${finding.code}:${createHash("sha256").update(`${input.entrypoint}\0${finding.nodeId ?? ""}\0${finding.evidence}\0${index}`).digest("hex").slice(0, 24)}`, check_code: finding.code, severity: finding.severity, source, evidence: finding.evidence, ...(finding.measured === undefined ? {} : { measured: finding.measured }), ...(finding.threshold === undefined ? {} : { threshold: finding.threshold }), targeted_action: finding.action };
+    const source = { rel_path: relPath, node_bg_id: finding.nodeId };
+    const base = { id: `${finding.code}:${createHash("sha256").update(`${relPath}\0${finding.nodeId ?? ""}\0${finding.evidence}\0${index}`).digest("hex").slice(0, 24)}`, check_code: finding.code, severity: finding.severity, source, evidence: finding.evidence, ...(finding.measured === undefined ? {} : { measured: finding.measured }), ...(finding.threshold === undefined ? {} : { threshold: finding.threshold }), targeted_action: finding.action };
     if (input.safeFix === false || finding.code !== "minimum_text_size" || finding.nodeId === null || html === null || htmlEntry === undefined) return base;
     try {
       const node = fingerprintHtmlNode(html, finding.nodeId);
-      return { ...base, safe_fix: { kind: "patch_html_node" as const, rel_path: input.entrypoint, request: { expected_revision: input.revision, expected_artifact_digest: input.digest, expected_file_hash: htmlEntry.sha256, node_bg_id: finding.nodeId, node_fingerprint: node.fingerprint, styles: { "font-size": "12px" } } } };
+      return { ...base, safe_fix: { kind: "patch_html_node" as const, rel_path: relPath, request: { expected_revision: input.revision, expected_artifact_digest: input.digest, expected_file_hash: htmlEntry.sha256, node_bg_id: finding.nodeId, node_fingerprint: node.fingerprint, styles: { "font-size": "12px" } } } };
     } catch (error) { if (error instanceof FilePatchError) return base; throw error; }
   });
 }
