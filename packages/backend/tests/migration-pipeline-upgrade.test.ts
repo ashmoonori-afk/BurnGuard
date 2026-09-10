@@ -219,6 +219,25 @@ function namedIndexes(db: Database, tableName: string) {
     expect(() => db.exec("DELETE FROM learning_checkpoints WHERE id='trigger-cp'")).toThrow();
   });
 
+  test("Given an existing export row When the platform-format migration runs Then the row survives and the new CHECK is authoritative", async () => {
+    // Given
+    const db = database();
+    const directory = await migrationDirectory("0013_visual_source_role_origin.sql");
+    await runMigrationsFrom(db, directory);
+    db.exec("INSERT INTO projects(id,name,type,dir_path,backend_id,created_at,updated_at) VALUES ('platform-project','Platform','prototype','/tmp/platform','codex',1,1)");
+    db.exec("INSERT INTO exports(id,project_id,format,status,options_json,created_at) VALUES ('legacy-export','platform-project','html_zip','succeeded','{}',1)");
+    await cp(path.join(sourceDir, "0014_platform_export_formats.sql"), path.join(directory, "0014_platform_export_formats.sql"));
+
+    // When
+    await runMigrationsFrom(db, directory);
+
+    // Then
+    expect(db.query("SELECT id,format,status FROM exports WHERE id='legacy-export'").get()).toEqual({ id: "legacy-export", format: "html_zip", status: "succeeded" });
+    db.exec("INSERT INTO exports(id,project_id,format,status,options_json,created_at) VALUES ('platform-export','platform-project','cafe24_package','pending','{}',2)");
+    expect(() => db.exec("INSERT INTO exports(id,project_id,format,status,options_json,created_at) VALUES ('invalid-export','platform-project','svg','pending','{}',3)")).toThrow();
+    expect(db.query("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_exports_project'").get()).toEqual({ name: "idx_exports_project" });
+  });
+
   test("Given an installation with 0005 and 0006 already applied When the immutability upgrade runs Then delete protection is added without rewriting history", async () => {
     const db = database();
     const directory = await migrationDirectory("0006_catalog.sql");
