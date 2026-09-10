@@ -76,6 +76,7 @@ if (isDev) {
 let shuttingDown = false;
 const shutdown = async (): Promise<void> => {
   if (shuttingDown) return; shuttingDown = true; console.log("\n[burnguard] shutting down");
+  if (isDesktop) console.log('[burnguard-desktop] {"protocol":1,"event":"shutdown"}');
   // Turns first: an in-flight CLI subprocess owns the project directory and
   // would keep writing into it after the server is gone.
   server.stop(false); await interruptAllUserTurns(); await closeActiveExportBrowsers(); server.stop(true); profileOwner?.close(); process.exit(0);

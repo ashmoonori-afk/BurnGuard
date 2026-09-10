@@ -120,7 +120,16 @@ export async function seedCoreData() {
     .from(projectsTable)
     .limit(1);
 
-  if (existingProjects.length > 0) return;
+  if (existingProjects.length > 0) {
+    const fixtureIds = new Set(homeProjectFixtures.map((project) => project.id));
+    const knownProjects = await db
+      .select({ id: projectsTable.id, dirPath: projectsTable.dirPath })
+      .from(projectsTable);
+    for (const project of knownProjects) {
+      if (fixtureIds.has(project.id)) await copyBundledFonts(project.dirPath);
+    }
+    return;
+  }
 
   for (const project of homeProjectFixtures) {
     const dirPath = path.join(projectsDir, project.id);
