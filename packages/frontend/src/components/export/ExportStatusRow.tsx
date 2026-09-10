@@ -13,9 +13,11 @@ import { formatLabel, type ExportJob } from "@/api/export";
 import { exportJobState } from "./export-job-state";
 import {
   DELIVERY_STAGE_LABEL,
+  FINDING_SEVERITY_LABEL,
   PACKAGE_PUBLISH_NOTE,
   PACKAGE_READY_LABEL,
   exportDeliveryStage,
+  offersFixRequest,
   platformFindings,
 } from "./export-delivery";
 import { platformGuideView } from "./platform-guide";
@@ -79,7 +81,7 @@ export default function ExportStatusRow({
       : DELIVERY_STAGE_LABEL[stage];
   const Icon = state.cancelled ? Clock : STAGE_ICON[stage];
   const iconClass = `h-3.5 w-3.5 ${state.cancelled ? "text-muted-foreground" : STAGE_ICON_CLASS[stage]}`;
-  const canFix = stage === "failure" && findings.length > 0 && actions.onRequestFix !== undefined;
+  const canFix = offersFixRequest(job) && actions.onRequestFix !== undefined;
   return (
     <li className="space-y-1 rounded-md px-1 py-1 text-xs">
       <div className="flex items-center gap-2">
@@ -146,7 +148,7 @@ export default function ExportStatusRow({
               />
               <span className="text-pretty break-keep text-muted-foreground">
                 <span className="font-medium text-foreground">
-                  {finding.severity === "error" ? "고쳐야 함" : "확인 필요"} · {finding.page}
+                  {FINDING_SEVERITY_LABEL[finding.severity]} · {finding.page}
                 </span>{" "}
                 {finding.message}
               </span>

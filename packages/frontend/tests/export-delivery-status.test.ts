@@ -9,6 +9,7 @@ import {
   PACKAGE_PUBLISH_NOTE,
   PACKAGE_READY_LABEL,
   exportDeliveryStage,
+  offersFixRequest,
   platformFindings,
 } from "../src/components/export/export-delivery";
 import { platformFixRequest } from "../src/lib/platform-fix-request";
@@ -90,7 +91,7 @@ describe("package delivery copy", () => {
 describe("platform lint findings", () => {
   const findings: readonly ExportFinding[] = [
     { code: "imweb_image_needs_hosting", path: "pages/about.html" },
-    { code: "unresolved_link", path: "pages/contact.html" },
+    { code: "cafe24_unresolved_link", path: "pages/contact.html" },
     { code: "some_new_backend_code", path: null },
   ];
 
@@ -98,14 +99,37 @@ describe("platform lint findings", () => {
     const modeled = platformFindings(job({ latest_attempt: attempt({ status: "failed", stop_reason: "validation_failed", findings }) }));
 
     expect(modeled.map((finding) => finding.page)).toEqual(["about.html", "contact.html", "전체"]);
-    expect(modeled.map((finding) => finding.severity)).toEqual(["warning", "warning", "warning"]);
+    expect(modeled.map((finding) => finding.severity)).toEqual(["warning", "info", "warning"]);
     expect(modeled[0]?.message).toContain("게시판");
     expect(modeled[2]?.message).toContain("some_new_backend_code");
   });
 
-  test("Given a widget over the platform limit When modeled Then it is an error", () => {
+  test.each([
+    "cafe24_disallowed_extension",
+    "cafe24_file_over_30mb",
+    "cafe24_folder_over_1000_files",
+    "cafe24_korean_asset_filename",
+    "cafe24_jquery_duplicate",
+    "imweb_page_over_500k_chars",
+    "imweb_local_font",
+    "imweb_form_or_iframe",
+    "imweb_global_selector",
+    "imweb_duplicate_id",
+    "imweb_document_script",
+    "platform_dynamic_reference",
+    "png_zip:cut_through_content",
+  ] as const)("Given the backend code %s When modeled Then it is explained instead of echoed back", (code: string) => {
     const modeled = platformFindings(job({
-      latest_attempt: attempt({ status: "failed", stop_reason: "validation_failed", findings: [{ code: "imweb_widget_too_large", path: "pages/index.html" }] }),
+      latest_attempt: attempt({ status: "failed", stop_reason: "validation_failed", findings: [{ code, path: "pages/home.html" }] }),
+    }));
+
+    expect(modeled[0]?.severity).toBe("warning");
+    expect(modeled[0]?.message).not.toContain(code);
+  });
+
+  test("Given a page over the imweb code widget limit When modeled Then it is an error", () => {
+    const modeled = platformFindings(job({
+      latest_attempt: attempt({ status: "failed", stop_reason: "validation_failed", findings: [{ code: "imweb_page_over_1m_chars", path: "pages/index.html" }] }),
     }));
 
     expect(modeled[0]?.severity).toBe("error");
@@ -116,18 +140,35 @@ describe("platform lint findings", () => {
   });
 });
 
+describe("fix action availability", () => {
+  test("Given a failed imweb attempt carrying a platform lint finding When the row is decided Then the AI fix action is offered", () => {
+    expect(offersFixRequest(job({
+      format: "imweb_package",
+      status: "failed",
+      latest_attempt: attempt({ status: "failed", stop_reason: "validation_failed", findings: [{ code: "imweb_page_over_1m_chars", path: "pages/index.html" }] }),
+    }))).toBe(true);
+  });
+
+  test("Given a succeeded attempt with warnings When the row is decided Then no fix action is offered", () => {
+    expect(offersFixRequest(job({
+      status: "succeeded",
+      latest_attempt: attempt({ status: "validated", progress: { stage: "complete", completed: 6, total: 6 }, findings: [{ code: "cafe24_jquery_duplicate", path: "pages/home.html" }] }),
+    }))).toBe(false);
+  });
+});
+
 describe("AI fix request for platform findings", () => {
   test("Given lint findings When a fix request is built Then it carries code, page, and message only", () => {
     const request = platformFixRequest(platformFindings(job({
       latest_attempt: attempt({
         status: "failed",
         stop_reason: "validation_failed",
-        findings: [{ code: "unresolved_link", path: "pages/contact.html" }],
+        findings: [{ code: "cafe24_unresolved_link", path: "pages/contact.html" }],
       }),
     })));
 
     if (request === null) throw new TypeError("expected a fix request");
-    expect(request).toContain("unresolved_link");
+    expect(request).toContain("cafe24_unresolved_link");
     expect(request).toContain("contact.html");
     expect(request).not.toContain("job-1");
     expect(request).not.toContain("digest");
