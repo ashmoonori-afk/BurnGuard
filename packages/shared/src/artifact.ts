@@ -1,5 +1,12 @@
 import type { FileInfo } from "./harness";
 
+export type SitePage = {
+  readonly rel_path: string;
+  readonly title: string;
+  readonly is_home: boolean;
+  readonly nav_order: number;
+};
+
 export interface ArtifactSummary {
   project_id: string;
   entrypoint: string;
@@ -13,6 +20,8 @@ export interface ArtifactSummary {
   current_revision: number;
   current_digest: string;
   updated_at: number;
+  pages: readonly SitePage[];
+  site_overflow: boolean;
 }
 
 export interface FileTreeResponse {

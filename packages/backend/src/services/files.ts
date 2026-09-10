@@ -1,10 +1,13 @@
+import { readFile } from "node:fs/promises";
 import type { ArtifactSummary } from "@bg/shared/artifact";
 import type { FileInfo } from "@bg/shared/harness";
 import { getSqlite } from "../db/sqlite-client";
 import { ArtifactCoordinator } from "./artifact-coordinator";
 import { listProjectFiles as listProjectFilesFromDb } from "../db/files";
 import { getProjectDetail } from "../db/project-read-repository";
+import { resolveWithin } from "../security/path-boundary";
 import { indexProjectFiles } from "./managed-project-files";
+import { buildSiteMap } from "./site-map";
 
 export { indexProjectFiles, isTransientFilePath, resolveDrawFile, resolveProjectFile } from "./managed-project-files";
 
@@ -24,6 +27,9 @@ export async function buildArtifactSummary(projectId: string): Promise<ArtifactS
   const files = await listIndexedProjectFiles(projectId);
   const latestUpdated = files.reduce((maximum, file) => Math.max(maximum, file.updated_at ?? 0), project.updated_at);
   const entrypoint = pickEntrypoint(project.entrypoint, files);
+  const siteMap = entrypoint === null
+    ? { pages: [], overflow: false }
+    : await buildSiteMap(files, entrypoint, (relPath) => readFile(resolveWithin(project.dir_path, relPath), "utf8"));
   return {
     project_id: project.id,
     entrypoint: entrypoint ?? project.entrypoint,
@@ -34,6 +40,8 @@ export async function buildArtifactSummary(projectId: string): Promise<ArtifactS
     current_revision: project.current_revision,
     current_digest: digest,
     updated_at: latestUpdated,
+    pages: siteMap.pages,
+    site_overflow: siteMap.overflow,
   };
 }
 
