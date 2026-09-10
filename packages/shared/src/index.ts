@@ -17,6 +17,7 @@ export * from "./extraction-provenance";
 export * from "./file-patch";
 export * from "./graphic";
 export * from "./platform-presets";
+export * from "./platform-guides";
 export * from "./harness";
 export * from "./home";
 export * from "./learning-contract";
