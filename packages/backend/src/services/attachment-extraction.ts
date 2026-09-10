@@ -11,14 +11,15 @@ export type AttachmentExtractionInput = {
 
 export async function extractAttachmentUpload(input: AttachmentExtractionInput): Promise<void> {
   try {
-    if (input.sourcePath.toLowerCase().endsWith(".pdf")) await extractPdfAttachment(input.sourcePath, input.manifestPath);
+    const isPdf = input.sourcePath.toLowerCase().endsWith(".pdf");
+    if (isPdf) await extractPdfAttachment(input.sourcePath, input.manifestPath, input.extractedTextPath);
     else {
       const { runPythonUploadExtractor } = await import("./design-system-extract");
       await runPythonUploadExtractor({ sourcePath: input.sourcePath, manifestPath: input.manifestPath });
     }
     const { readUploadManifest } = await import("./extraction-upload");
     const manifest = await readUploadManifest(input.manifestPath);
-    await writeFile(input.extractedTextPath, renderAttachmentExtract(manifest, input.originalName), "utf8");
+    if (!isPdf) await writeFile(input.extractedTextPath, renderAttachmentExtract(manifest, input.originalName), "utf8");
   } catch (error) {
     await Promise.all([
       rm(input.sourcePath, { force: true }),
