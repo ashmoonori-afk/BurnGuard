@@ -2,6 +2,7 @@ import type { DesignAuditCheckCode, DesignAuditCheckStatus, DesignAuditTargetedA
 import type { DesignAuditErrorCode } from "@/lib/design-audit-state";
 
 export const DESIGN_AUDIT_CHECK_COPY = {
+  font_consistency: "글꼴 일관성", copy_review: "문안 기본 점검",
   text_overflow: "텍스트 넘침", element_overlap: "요소 겹침", minimum_text_size: "최소 글자 크기", contrast: "색상 대비",
   narrow_width: "좁은 화면", duplicate_node_id: "중복 요소 ID", missing_image: "이미지 참조", token_usage: "디자인 토큰 사용",
   site_nav_mismatch: "페이지 탐색 불일치", site_missing_aria_current: "현재 페이지 표시", site_dangling_link: "없는 페이지 링크",
@@ -13,6 +14,7 @@ export const DESIGN_AUDIT_STATUS_COPY = {
 } as const satisfies Record<DesignAuditCheckStatus, string>;
 
 export const DESIGN_AUDIT_ACTION_COPY = {
+  align_font_roles: "제목·본문별 글꼴을 공통 디자인 토큰으로 통일하세요", revise_copy: "임시 문구를 완성하고 원문 의미에 맞게 문안을 다듬으세요",
   expand_or_reflow_text: "텍스트 영역을 넓히거나 재배치하세요", separate_overlapping_elements: "겹친 요소를 분리하세요",
   set_minimum_font_size: "글자 크기를 최소 기준 이상으로 조정하세요", increase_color_contrast: "전경과 배경의 대비를 높이세요",
   repair_narrow_layout: "좁은 화면 레이아웃을 조정하세요", assign_unique_node_ids: "요소마다 고유한 ID를 지정하세요",

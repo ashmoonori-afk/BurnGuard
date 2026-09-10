@@ -4,7 +4,7 @@ export function isProjectImageUrl(value: string, documentUrl: string): boolean {
   if (value.startsWith("#")) return false;
   try {
     const document = new URL(documentUrl);
-    const root = document.pathname.match(/^\/api\/projects\/[^/]+\/fs\//)?.[0];
+    const root = document.pathname.match(/^\/api\/projects\/[^/]+\/(?:preview\/[^/]+\/)?fs\//)?.[0];
     const image = new URL(value, document);
     return root !== undefined && image.origin === document.origin && image.pathname.startsWith(root) && !/%(?:2f|5c)/i.test(image.pathname);
   } catch { return false; }
@@ -77,7 +77,11 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
           reader.onerror = () => reject(new Error("artifact_image_read_failed"));
           reader.readAsDataURL(blob);
         });
-      })().catch((error: unknown) => { resources.abort(); throw error; });
+      })().catch((error: unknown) => {
+        // A draft may reference an image/CSS file that the generator writes next.
+        if (/\/preview\//.test(new URL(documentUrl).pathname) && error !== null && typeof error === "object" && "httpStatus" in error && error.httpStatus === 404) return source;
+        resources.abort(); throw error;
+      });
       fetched.set(key, pending);
     }
     return pending;

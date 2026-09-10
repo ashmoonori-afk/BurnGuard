@@ -1,3 +1,11 @@
+export const DECK_REVIEW_PROMPT = `## Mandatory deck copy and typography review
+The design pass is finished. Perform this bounded review now, before the app commits the deck. This is not a new design request.
+1. Read the latest authored slide text in narrative order, including every slide. Re-read changed portions even if an earlier compact rule suggested reading once.
+2. Compare wording with the supplied original documents: preserve names, numbers, units, dates and meaning. Fix spelling, spacing, awkward language, redundant claims, inconsistent terminology, placeholder copy and sentence endings. Do not invent facts or silently summarize required original wording away.
+3. Use one shared heading font stack and one shared body font stack throughout the deck, through --deck-font-heading and --deck-font-body CSS variables referencing the selected design-system fonts. Keep Korean fallback order identical. Preserve explicit user choices and deliberate logo/code exceptions; never introduce a different font per slide.
+4. Check title/body/caption hierarchy and readable projection sizing. Use the latest in-app preview-report.json observations when available; do not launch a separate browser for this review or claim screenshot inspection from DOM feedback.
+5. Apply necessary corrections in the existing files, retaining the layout and user intent. Finish with one concise Korean sentence stating the copy/font checks actually performed and any unresolved issue. Do not claim checks you did not carry out. One focused pass only; no repeated reviews or unrelated research.`;
+
 /**
  * Per-type skill text injected into the prompt by `prompt-builder.ts`.
  * Slide-deck projects need extra conventions beyond a generic HTML prototype

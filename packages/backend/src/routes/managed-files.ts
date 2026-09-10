@@ -13,11 +13,29 @@ import { FilePatchError, fingerprintHtmlNode, htmlWithEditableIds } from "../ser
 import { rawFileHeaders } from "../security/raw-file-response";
 import { isProjectDocumentPath } from "../services/project-document-paths";
 import { readProjectDocument } from "../services/project-documents";
+import { readTurnPreview, recordTurnPreview } from "../services/turn-preview";
 
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
 function fail(code: string, message: string, details?: unknown): ApiErrorBody { return { error: { code, message, details } }; }
 
 export const managedFileRoutes = new Hono();
+
+managedFileRoutes.get("/api/projects/:id/preview/:previewId/fs/*", async (c) => {
+  try {
+    const prefix = `/api/projects/${c.req.param("id")}/preview/${c.req.param("previewId")}/fs/`;
+    const relPath = decodeURIComponent(c.req.path.slice(prefix.length));
+    const bytes = await readTurnPreview(c.req.param("id"), c.req.param("previewId"), relPath);
+    if (bytes === null) return c.json(fail("preview_expired", "Live preview has ended"), 404);
+    const type = contentType(relPath);
+    return new Response(bytes, { headers: { ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(relPath) }), "Content-Type": type, "Cache-Control": "no-store" } });
+  } catch { return c.json(fail("preview_not_ready", "Preview file is being updated"), 404); }
+});
+
+managedFileRoutes.post("/api/projects/:id/preview/:previewId/report", async (c) => {
+  const value: unknown = await c.req.json().catch(() => null);
+  const saved = await recordTurnPreview(c.req.param("id"), c.req.param("previewId"), value);
+  return saved ? c.json(ok({ saved: true })) : c.json(fail("preview_report_invalid", "Preview report is stale or invalid"), 409);
+});
 
 managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
   const projectId = c.req.param("id");

@@ -53,7 +53,8 @@ describe("buildPrompt", () => {
       const metadata = JSON.parse(prompt.match(/<burnguard-model-guidance-v1>\n([^\n]+)\n<\/burnguard-model-guidance-v1>/)![1]!);
       expect(metadata).toEqual({ schema_version: 1, profile: selected.profile, model: selected.model, provider: selected.provider, effort: "low" });
       expect(prompt.endsWith(`## Request\n${text}`)).toBe(true);
-      expect(prompt).toContain("Do not touch anything outside this directory.");
+      expect(prompt).toContain("Read-only attachment copies and ../preview-report.json explicitly supplied by this harness are authorized inputs outside the output directory. Never modify them.");
+      expect(prompt).not.toContain("Do not use Read, Glob, or Bash against the original binary");
       expect(generation.effort).toBe("low");
       expect(prompt.indexOf("<burnguard-model-guidance-v1>")).toBeLessThan(prompt.indexOf("## Delivery"));
     }
@@ -483,7 +484,7 @@ header { padding: var(--space-md); }
       );
 
       expect(prompt).toContain(
-        "source_path: deck.pptx (binary attachment; do not Read/Glob/Bash this file directly)",
+        "source_path: deck.pptx (read-only document; use a PDF/document reader or local extraction tool to inspect the original whenever needed)",
       );
       expect(prompt).toContain(
         "extracted_text_path: deck.pptx.extracted.md (safe text version for Read)",
@@ -497,11 +498,9 @@ header { padding: var(--space-md); }
       );
       expect(prompt).toContain("use this compact summary first for planning");
       expect(prompt).toContain(
-        "if an extracted_text_path is listed and you need slide/page wording, Read that file instead of the original binary file.",
+        "Read extracted_text_path for wording when available; inspect source_path for original layout, images, or missing text.",
       );
-      expect(prompt).toContain(
-        "do not use Read, Glob, or Bash against the original .pptx/.pdf attachment path.",
-      );
+      expect(prompt).not.toContain("do not use Read, Glob, or Bash against the original");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

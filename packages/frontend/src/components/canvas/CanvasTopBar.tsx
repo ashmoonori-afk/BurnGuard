@@ -21,6 +21,7 @@ export default function CanvasTopBar({
   undoPending = false,
   onUndo,
   colorPalette,
+  readOnly = false,
 }: {
   mode: CanvasMode | null;
   onModeChange: (m: CanvasMode | null) => void;
@@ -34,6 +35,7 @@ export default function CanvasTopBar({
   undoPending?: boolean;
   onUndo?: () => void;
   colorPalette?: ReactNode;
+  readOnly?: boolean;
 }) {
   return (
     <div className="z-20 shrink-0 border-b border-border bg-background px-2 py-1.5">
@@ -50,6 +52,7 @@ export default function CanvasTopBar({
               onClick={() => onModeChange(active ? null : m.id)}
               aria-pressed={active}
               aria-label={m.label}
+              disabled={readOnly}
               title={active ? "다시 누르면 모드 끄기" : m.hint}
               className={cn(
                 "flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11",
@@ -72,7 +75,7 @@ export default function CanvasTopBar({
           className="h-9 w-9 max-[900px]:h-11 max-[900px]:w-11"
           aria-label="마지막 저장 실행 취소"
           onClick={onUndo}
-          disabled={!canUndo || undoPending || !onUndo}
+          disabled={readOnly || !canUndo || undoPending || !onUndo}
           title={
             canUndo
               ? "마지막 저장 실행 취소 (편집 / 스타일)"

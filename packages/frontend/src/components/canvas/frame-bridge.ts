@@ -67,6 +67,7 @@ export interface FrameBgHit {
 }
 
 type BridgeAction =
+  | "preview-report"
   | "scroll-at-point"
   | "hit-select"
   | "hit-comment"
@@ -285,6 +286,10 @@ export async function requestFrameCountSelector(
     selector,
   }).catch(() => 0);
   return typeof count === "number" && Number.isSafeInteger(count) && count >= 0 ? count : 0;
+}
+
+export async function requestFramePreviewReport(iframe: HTMLIFrameElement | null): Promise<unknown> {
+  return requestFrameBridge(iframe, "preview-report");
 }
 
 export async function requestFrameRectForBgId(
@@ -603,6 +608,9 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       } catch (e) {
         response = null;
       }
+    } else if (data.action === "preview-report") {
+      var previewImages = Array.prototype.slice.call(document.images, 0, 10000);
+      response = { width: window.innerWidth, height: window.innerHeight, images: previewImages.length, brokenImages: previewImages.filter(function (img) { return img.complete && img.naturalWidth === 0; }).length, pendingImages: previewImages.filter(function (img) { return !img.complete; }).length, horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth) };
     } else if (data.action === "count-selector") {
       try {
         response = payload.selector ? document.querySelectorAll(String(payload.selector)).length : 0;

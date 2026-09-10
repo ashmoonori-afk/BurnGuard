@@ -34,6 +34,8 @@ export function parsePersistedNormalizedEvent(value: string, id: string): Normal
     }
     case "tool.permission_decided":
       return { ...base, type, turnId: text(item, "turnId", id), toolCallId: text(item, "toolCallId", id), decision: decision(item, id) };
+    case "artifact.preview":
+      return { ...base, type, projectId: text(item, "projectId", id), previewId: text(item, "previewId", id), path: text(item, "path", id), version: integer(item, "version", id), active: truth(item, "active", id) };
     case "artifact.operation":
       return { ...base, type, operationId: text(item, "operationId", id), revision: integer(item, "revision", id), digest: text(item, "digest", id), changedPaths: texts(item, "changedPaths", id), outcome: operationOutcome(item, id) };
     case "export.attempt":

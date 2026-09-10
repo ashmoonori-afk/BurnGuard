@@ -1,12 +1,12 @@
 import type { PatchFileRequest } from "./file-patch";
 
-export const DESIGN_AUDIT_CHECK_CODES = ["text_overflow", "element_overlap", "minimum_text_size", "contrast", "narrow_width", "duplicate_node_id", "missing_image", "token_usage", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset"] as const;
+export const DESIGN_AUDIT_CHECK_CODES = ["text_overflow", "element_overlap", "minimum_text_size", "contrast", "narrow_width", "duplicate_node_id", "missing_image", "token_usage", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset", "font_consistency", "copy_review"] as const;
 export type DesignAuditCheckCode = (typeof DESIGN_AUDIT_CHECK_CODES)[number];
 export type DesignAuditCheckStatus = "pass" | "fail" | "skipped" | "unmeasurable";
 export type DesignAuditOverallStatus = "ready" | "must_fix" | "recommended";
 export type DesignAuditUnknownReason = "no_measurable_candidates" | "unresolvable_rendering" | "tokens_not_exposed";
 export type DesignAuditSeverity = "must_fix" | "recommended";
-export type DesignAuditTargetedAction = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path";
+export type DesignAuditTargetedAction = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path" | "align_font_roles" | "revise_copy";
 
 export type DesignAuditSafeFix = { readonly kind: "patch_html_node"; readonly rel_path: string; readonly request: PatchFileRequest };
 export type DesignAuditFinding = {
@@ -25,8 +25,9 @@ export type DesignAuditResult = { readonly schema_version: 1; readonly project_i
 
 const SHA256 = /^[0-9a-f]{64}$/u;
 const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))(?!.*\\)[^\0]{1,512}$/u;
-const SEVERITIES: Readonly<Record<DesignAuditCheckCode, DesignAuditSeverity>> = { text_overflow: "must_fix", element_overlap: "recommended", minimum_text_size: "recommended", contrast: "must_fix", narrow_width: "must_fix", duplicate_node_id: "must_fix", missing_image: "must_fix", token_usage: "recommended", site_nav_mismatch: "recommended", site_missing_aria_current: "recommended", site_dangling_link: "recommended", site_missing_shared_block: "recommended", site_root_absolute_asset: "recommended" };
+const SEVERITIES: Readonly<Record<DesignAuditCheckCode, DesignAuditSeverity>> = { text_overflow: "must_fix", element_overlap: "recommended", minimum_text_size: "recommended", contrast: "must_fix", narrow_width: "must_fix", duplicate_node_id: "must_fix", missing_image: "must_fix", token_usage: "recommended", site_nav_mismatch: "recommended", site_missing_aria_current: "recommended", site_dangling_link: "recommended", site_missing_shared_block: "recommended", site_root_absolute_asset: "recommended", font_consistency: "recommended", copy_review: "recommended" };
 const ACTIONS: Readonly<Record<DesignAuditCheckCode, DesignAuditTargetedAction>> = {
+  font_consistency: "align_font_roles", copy_review: "revise_copy",
   text_overflow: "expand_or_reflow_text", element_overlap: "separate_overlapping_elements", minimum_text_size: "set_minimum_font_size", contrast: "increase_color_contrast", narrow_width: "repair_narrow_layout", duplicate_node_id: "assign_unique_node_ids", missing_image: "restore_image_reference", token_usage: "replace_literal_with_token", site_nav_mismatch: "repair_site_navigation", site_missing_aria_current: "mark_current_page", site_dangling_link: "create_or_repair_site_link", site_missing_shared_block: "add_shared_blocks", site_root_absolute_asset: "relativize_asset_path",
 };
 
@@ -104,8 +105,8 @@ function parseSafeFix(context: { readonly input: unknown; readonly code: DesignA
   if (raw["kind"] !== "patch_html_node" || raw["rel_path"] !== relPath) invalid(path);
   const request = record(raw["request"], `${path}.request`, ["expected_revision", "expected_artifact_digest", "expected_file_hash", "node_bg_id", "node_fingerprint", "styles"]);
   const styles = record(request["styles"], `${path}.request.styles`, ["font-size"]);
-  if (request["node_bg_id"] !== nodeBgId || styles["font-size"] !== "12px") invalid(`${path}.request`);
-  const parsed: PatchFileRequest = { expected_revision: safeInteger(request["expected_revision"], `${path}.request.expected_revision`), expected_artifact_digest: hash(request["expected_artifact_digest"], `${path}.request.expected_artifact_digest`), expected_file_hash: hash(request["expected_file_hash"], `${path}.request.expected_file_hash`), node_bg_id: nodeBgId, node_fingerprint: hash(request["node_fingerprint"], `${path}.request.node_fingerprint`), styles: { "font-size": "12px" } };
+  if (request["node_bg_id"] !== nodeBgId || (styles["font-size"] !== "12px" && styles["font-size"] !== "24px")) invalid(`${path}.request`);
+  const parsed: PatchFileRequest = { expected_revision: safeInteger(request["expected_revision"], `${path}.request.expected_revision`), expected_artifact_digest: hash(request["expected_artifact_digest"], `${path}.request.expected_artifact_digest`), expected_file_hash: hash(request["expected_file_hash"], `${path}.request.expected_file_hash`), node_bg_id: nodeBgId, node_fingerprint: hash(request["node_fingerprint"], `${path}.request.node_fingerprint`), styles: { "font-size": styles["font-size"] } };
   return { kind: "patch_html_node", rel_path: relPath, request: parsed };
 }
 

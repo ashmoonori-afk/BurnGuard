@@ -20,6 +20,57 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
   };
   await page.route(eventPattern, guard);
   try {
+    await scenario("creation-canvas-live-preview", async () => {
+      await page.addInitScript(() => {
+        const Native = window.EventSource;
+        window.__creationCanvasStreams = [];
+        window.EventSource = class extends Native { constructor(...args) { super(...args); window.__creationCanvasStreams.push(this); } };
+      });
+      const fixture = await createFixture(page, base, ownedHome, "Live preview fixture");
+      await page.frameLocator('iframe[title="캔버스"]').locator("#fixture-hero").waitFor();
+      let version = 1;
+      let releaseNext;
+      const nextReady = new Promise(resolve => { releaseNext = resolve; });
+      const previewRoot = `${base}/api/projects/${fixture.id}/preview/fixture-preview`;
+      const draftRoute = async route => {
+        if (route.request().url().endsWith("/report")) return route.fulfill({ status: 200, contentType: "application/json", body: '{"data":{"saved":true}}' });
+        if (route.request().url().endsWith("/fs/index.html")) {
+          if (version === 2) await nextReady;
+          return route.fulfill({ status: 200, contentType: "text/html", body: `<!doctype html><html><head><link rel="stylesheet" href="draft.css"></head><body><h1 id="live-heading">Section ${version}</h1><img src="coming.svg"></body></html>` });
+        }
+        if (route.request().url().endsWith("draft.css")) return route.fulfill({ status: 200, contentType: "text/css", body: "h1{color:rgb(0,0,255)}" });
+        return version === 1 ? route.fulfill({ status: 404 }) : route.fulfill({ status: 200, contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="blue"/></svg>' });
+      };
+      await page.route(`${previewRoot}/**`, draftRoute);
+      const emit = async (events, sequence) => page.evaluate(({ sessionId, events, sequence }) => {
+        const stream = window.__creationCanvasStreams.findLast(item => item.url.includes(`/sessions/${sessionId}/stream`) && item.readyState !== EventSource.CLOSED);
+        if (!stream) throw new Error("fixture stream unavailable");
+        events.forEach((event, index) => stream.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ sequence: sequence + index, event: { ...event, id: `live-fixture-${sequence + index}`, ts: Date.now() } }) })));
+      }, { sessionId: fixture.sessionId, events, sequence });
+      const preview = { type: "artifact.preview", projectId: fixture.id, previewId: "fixture-preview", path: "index.html", version: 1, active: true };
+      try {
+        await emit([{ type: "status.running" }, preview], 10000);
+        const frame = page.frameLocator('iframe[title="캔버스"]');
+        await frame.getByText("Section 1", { exact: true }).waitFor();
+        assert.equal(await frame.locator("#live-heading").evaluate(el => getComputedStyle(el).color), "rgb(0, 0, 255)");
+        assert.ok(await page.getByRole("button", { name: "편집", exact: true }).isDisabled());
+        version = 2;
+        const requested = page.waitForRequest(request => request.url() === `${previewRoot}/fs/index.html`);
+        await emit([{ ...preview, version: 2 }], 10002);
+        await requested;
+        assert.equal(await frame.getByText("Section 1", { exact: true }).count(), 1, "previous render remains visible while the next one is loading");
+        const reportRequest = page.waitForRequest(request => request.url() === `${previewRoot}/report` && request.postDataJSON().version === 2);
+        releaseNext();
+        await frame.getByText("Section 2", { exact: true }).waitFor();
+        assert.ok(await frame.locator("img").evaluate(el => el.complete && el.naturalWidth > 0));
+        const report = (await reportRequest).postDataJSON();
+        assert.equal(report.images, 1); assert.equal(report.brokenImages, 0);
+        await shot(page, "creation-canvas-live-preview");
+        await emit([{ ...preview, version: 3, active: false }, { type: "status.idle", stopReason: "interrupted" }], 10003);
+        await frame.locator("#fixture-hero").waitFor();
+        assert.ok(await page.getByRole("button", { name: "편집", exact: true }).isEnabled());
+      } finally { releaseNext(); await page.unroute(`${previewRoot}/**`, draftRoute); }
+    });
     await scenario("creation-canvas-project-import", async () => {
       await page.goto(base);
       const zip = new JSZip();
@@ -163,7 +214,7 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       assert.equal(captured.generation.effort, effortValue);
       assert.equal(captured.generation.vanilla, vanilla);
       assert.ok(captured.text.includes("명시적인 확인을 받을 때까지 이미지 생성 도구를 호출하거나 파일을 변경하지 마세요"));
-      assert.ok(captured.text.includes("직접 브라우저로 렌더링하고 스크린샷을 확인하세요"));
+      assert.ok(captured.text.includes("내장 캔버스의 최신 preview-report.json"));
       const target = JSON.parse(captured.text.split("\n")[1]);
       assert.equal(target.file, "index.html");
       assert.equal(target.request, draft);

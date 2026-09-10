@@ -75,6 +75,16 @@ export type NormalizedEvent =
   | {
       id: string;
       ts: number;
+      type: "artifact.preview";
+      projectId: string;
+      previewId: string;
+      path: string;
+      version: number;
+      active: boolean;
+    }
+  | {
+      id: string;
+      ts: number;
       type: "artifact.operation";
       operationId: string;
       revision: number;

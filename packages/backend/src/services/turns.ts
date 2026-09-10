@@ -12,13 +12,14 @@ import {
 import { getProjectDetail, getSessionInfo } from "../db/seed";
 import { getSqlite } from "../db/sqlite-client";
 import { broker, sequencedBroker } from "./broker";
-import { buildSessionContext } from "./context";
+import { buildSessionContext, selectContextAttachments } from "./context";
 import { writePreTurnSnapshot, writeTurnCheckpoint } from "./checkpoints";
 import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
 import { appendSessionTrace } from "./trace";
 import { detectBackends } from "./backends";
 import { resolveGenerationOptions } from "./generation-options";
 import { buildPrompt } from "../harness/prompt-builder";
+import { DECK_REVIEW_PROMPT } from "../harness/skills/deck-skill";
 import { runAdapterTurn } from "../adapters/registry";
 import { loadConfig } from "../config";
 import { isDirectionOperationActive } from "./direction-operation-registry";
@@ -26,6 +27,7 @@ import { buildVisualSourceManifest } from "./visual-source-manifest";
 import { captureImmutableAttachments, verifyImmutableAttachments } from "./immutable-attachment-guard";
 import { redactPrivateAttachmentPaths, withPrivateAttachmentInputs } from "./stage-attachment-inputs";
 import { sanitizeTurnEvent } from "./turn-error-sanitizer";
+import { startTurnPreview } from "./turn-preview";
 
 export function assertGraphicStarterReplaced(before: string, after: string): void {
   if (before.includes('data-bg-node-id="graphic-copy"') && before.includes("Start with one clear visual message.") && before === after) throw new Error("graphic_starter_unchanged");
@@ -233,6 +235,8 @@ async function runUserTurnInternal(
   );
   const sessionContext = await buildSessionContext(sessionId);
   if (!sessionContext) throw new Error("session_not_found");
+  // Previously submitted documents remain available after navigation/restart.
+  const contextPayload = { ...payload, attachments: selectContextAttachments(sessionContext.attachments, payload.attachments ?? [], payload.text) };
   const visualSources = await buildVisualSourceManifest({
     projectDir: sessionContext.project.project_dir,
     attachments: sessionContext.attachments,
@@ -307,8 +311,9 @@ async function runUserTurnInternal(
   try { await writePreTurnSnapshot(project.id, turnId); }
   catch (error) { await appendSessionTrace(sessionId, { level: "checkpoint_snapshot_failed", turnId, error: error instanceof Error ? error.message : String(error) }); }
   let operationPrepared = false;
+  let stopPreview: (() => Promise<void>) | undefined;
   const terminalEvents: NormalizedEvent[] = [];
-  const selectedAttachments = sessionContext.attachments.filter((attachment) => payload.attachments?.includes(attachment.file_path) ?? false);
+  const selectedAttachments = sessionContext.attachments.filter((attachment) => contextPayload.attachments.includes(attachment.file_path));
   const forbiddenSha256 = new Set(selectedAttachments.filter((attachment) => attachment.source_role === "immutable_reference").flatMap((attachment) => attachment.sha256 === null ? [] : [attachment.sha256]));
   try {
     await coordinator.run({
@@ -317,6 +322,7 @@ async function runUserTurnInternal(
       publicationPolicy: { forbiddenSha256 },
       onPrepared: () => { operationPrepared = true; onPrepared(); },
       mutate: async (stageDir) => {
+        stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
         const graphicBefore = graphicEntrypoint === null ? null : await readFile(graphicEntrypoint, "utf8");
         const waitsForInterrupt = process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "abort";
@@ -325,11 +331,11 @@ async function runUserTurnInternal(
         await appendSessionTrace(sessionId, { level: "adapter_stage_dir", turnId, operationId, projectDir: stageDir });
         const immutableSnapshots = await captureImmutableAttachments(selectedAttachments);
         try {
-          await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: payload.attachments ?? [], immutableSnapshots }, async (stageInputs) => {
-            const prompt = await buildPrompt(sessionContext, payload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation });
+          await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: contextPayload.attachments, immutableSnapshots }, async (stageInputs) => {
+            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation });
             await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId, binary: binaryPath });
             let providerFailed = false;
-            const result = await (dependencies.runAdapter ?? runAdapterTurn)(backendId, {
+            const adapterInput: Parameters<typeof runAdapterTurn>[1] = {
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,
               generation,
               ...(generation.provider === "commandcode" ? { commandcodeApiKey: config.commandcodeApiKey ?? undefined } : {}),
@@ -349,8 +355,18 @@ async function runUserTurnInternal(
                 for (const decision of activeTurn.decisionQueue.splice(0)) handler(decision);
                 return () => { if (activeTurn.decisionHandler === handler) activeTurn.decisionHandler = null; };
               },
-            });
+            };
+            const runAdapter = dependencies.runAdapter ?? runAdapterTurn;
+            const result = await runAdapter(backendId, adapterInput);
             if (result.exitCode !== 0 || providerFailed) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
+            if (project.type === "slide_deck") {
+              const toolCallId = ulid();
+              await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "덱 문안·글꼴 점검", input: { scope: "all_slides" } });
+              const review = await runAdapter(backendId, { ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}`, signal: AbortSignal.any([activeTurn.abortController.signal, AbortSignal.timeout(120_000)]) });
+              const reviewed = review.exitCode === 0 && !providerFailed;
+              await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴 점검", ok: reviewed });
+              if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
+            }
           });
         } finally {
           await verifyImmutableAttachments(immutableSnapshots);
@@ -375,6 +391,8 @@ async function runUserTurnInternal(
     }
     await setSessionStatus(sessionId, "idle");
     return;
+  } finally {
+    await stopPreview?.();
   }
 
   const postTurnListing = await listDirSafe(projectDir);
