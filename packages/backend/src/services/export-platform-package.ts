@@ -24,11 +24,15 @@ export { PLATFORM_TRANSFORMATION_VERSION };
 
 export type PlatformPackagePaths = { readonly staged: string; readonly scratch: string; readonly output: string };
 export type PlatformPackageProject = { readonly name: string; readonly entrypoint: string; readonly revision: number; readonly digest: string };
+/** Lint results the caller persists on the export attempt; the archive's lint.json keeps the full evidence. */
+export type PlatformFindingReport = (findings: readonly { readonly code: string; readonly path: string | null }[]) => void;
+
 export type PlatformPackageBuild = {
   readonly paths: PlatformPackagePaths;
   readonly format: "cafe24_package" | "imweb_package";
   readonly project: PlatformPackageProject;
   readonly options: ExportOptions;
+  readonly onFindings?: PlatformFindingReport;
 };
 
 export type PlatformPackageContext = {
@@ -40,6 +44,7 @@ export type PlatformPackageContext = {
   readonly options: ExportOptions;
   readonly browserSession: RenderSession;
   readonly receiptWriter: (validation: ExportValidation) => Promise<void>;
+  readonly onFindings?: PlatformFindingReport;
   readonly signal: AbortSignal;
 };
 
@@ -54,6 +59,7 @@ export async function renderPlatformPackage(context: PlatformPackageContext): Pr
     format: context.format,
     project: { name: context.project.name, entrypoint: context.project.entrypoint, revision: context.project.current_revision, digest: context.project.current_digest },
     options: context.options,
+    ...(context.onFindings === undefined ? {} : { onFindings: context.onFindings }),
   });
 }
 
@@ -65,6 +71,8 @@ export async function buildPlatformPackage(input: PlatformPackageBuild): Promise
   const buildInput: PlatformBuildInput = { entrypoint: input.project.entrypoint, slug, options: input.options, staged };
   const built: PlatformBuildResult = platform === "cafe24" ? buildCafe24Package(buildInput) : await buildImwebPackage(buildInput);
   const findings: readonly PlatformLintFinding[] = [...built.findings, ...dynamicReferenceFindings(staged), ...lintForPlatform({ platform, assets: built.assets, documents: built.documents })];
+  // Reported before the blocking check so a failed export carries the finding that stopped it, not only the archive that was never written.
+  input.onFindings?.(findings.map((finding) => ({ code: finding.code, path: finding.path })));
   if (hasBlockingFinding(findings)) throw new ExportError("platform_lint_failed");
 
   const guide = PLATFORM_GUIDES[platform];

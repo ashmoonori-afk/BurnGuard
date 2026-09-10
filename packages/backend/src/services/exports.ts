@@ -53,6 +53,24 @@ export function recordRenderFindings(attemptId: string, audit: readonly AttemptF
   recordExportAuditFindings(getSqlite(), attemptId, merged);
 }
 
+/**
+ * Platform lint reports while the attempt is still running, and on a blocking finding it reports before the
+ * failure is written, so the already persisted audit set is read back and appended to instead of replaced.
+ */
+export function recordPlatformFindings(attemptId: string, platform: readonly AttemptFinding[]): void {
+  if (platform.length === 0) return;
+  const db = getSqlite();
+  const persisted = JSON.parse(db.query<{ readonly findings_json: string }, [string]>("SELECT findings_json FROM export_attempts WHERE id=?").get(attemptId)?.findings_json ?? "[]") as readonly AttemptFinding[];
+  recordExportAuditFindings(db, attemptId, [...persisted, ...platform].slice(0, MAX_ATTEMPT_FINDINGS));
+}
+
+/** Maps a render failure onto the attempt stop reason; cancellation is decided by the attempt row, not by the error. */
+export function exportStopReason(error: unknown): ExportStopReason {
+  if (error instanceof ExportServiceError) return error.code === "source_changed" ? "source_changed" : error.code === "design_audit_failed" ? "validation_failed" : "render_failed";
+  if (error instanceof ExportError) return error.code === "platform_lint_failed" || error.code === "platform_package_incomplete" || error.code === "invalid_asset_destination" ? "validation_failed" : "render_failed";
+  return "render_failed";
+}
+
 export class ExportServiceError extends Error {
   readonly name = "ExportServiceError";
   constructor(readonly code: "project_not_found" | "source_changed" | "format_requires_deck" | "format_requires_web" | "format_requires_frames" | "pdf_resource_limit" | "attempt_not_found" | "design_audit_failed" | "invalid_graphic_export_options", message: string) { super(message); }
@@ -146,7 +164,7 @@ async function runExport(input: RunInput): Promise<void> {
   } catch (error) {
     if (stageRoot !== null) await rm(stageRoot, { recursive: true, force: true });
     if (publishedRoot !== null) await rm(publishedRoot, { recursive: true, force: true });
-    const cancelled = input.controller.signal.aborted || db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(input.attemptId)?.requested === 1; const reason: ExportStopReason = cancelled ? "user_cancelled" : error instanceof ExportServiceError && error.code === "source_changed" ? "source_changed" : error instanceof ExportServiceError && error.code === "design_audit_failed" ? "validation_failed" : error instanceof ExportError && (error.code === "platform_lint_failed" || error.code === "platform_package_incomplete" || error.code === "invalid_asset_destination") ? "validation_failed" : "render_failed";
+    const cancelled = input.controller.signal.aborted || db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(input.attemptId)?.requested === 1; const reason: ExportStopReason = cancelled ? "user_cancelled" : exportStopReason(error);
     failExportAttempt(db, { jobId: input.jobId, attemptId: input.attemptId, status: cancelled ? "cancelled" : "failed", reason, message: error instanceof Error ? error.message : String(error) });
     emit(context.identity, input, cancelled ? "cancelled" : "failed", { stage: "rendering", completed: 2, total: 6 }, reason);
   }
@@ -172,7 +190,7 @@ async function renderOutput(input: RunInput, renderRoot: string, outputPath: str
     case "cafe24_package":
     case "imweb_package": {
       const browserSession = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: false, signal: input.controller.signal });
-      try { return only(await renderPlatformPackage({ stagedDir: renderRoot, outputPath, format: context.format, project: context.project, graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, browserSession, receiptWriter: async () => undefined, signal: input.controller.signal })); }
+      try { return only(await renderPlatformPackage({ stagedDir: renderRoot, outputPath, format: context.format, project: context.project, graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, browserSession, receiptWriter: async () => undefined, onFindings: (findings) => { recordPlatformFindings(input.attemptId, findings); }, signal: input.controller.signal })); }
       finally { await browserSession.close(); }
     }
     case "png_zip": {
