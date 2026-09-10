@@ -452,6 +452,8 @@ export async function seedTutorialsOnce(): Promise<void> {
     PROMPT_SAMPLES.map((sample) => sample.name),
   );
   const existingByName = new Map(existing.map((row) => [row.name, row]));
+  const names = new Set(existing.map((row) => row.name));
+
   for (const row of existing) {
     if (
       row.name.startsWith(PROMPT_SAMPLE_TAG) &&
@@ -464,10 +466,7 @@ export async function seedTutorialsOnce(): Promise<void> {
     }
   }
 
-  const existingPrototype = existingByName.get(PROTOTYPE_TUTORIAL_NAME);
-  if (existingPrototype) {
-    await copyBundledFonts(existingPrototype.dirPath);
-  } else {
+  if (!names.has(PROTOTYPE_TUTORIAL_NAME)) {
     await writeTutorialProject({
       name: PROTOTYPE_TUTORIAL_NAME,
       type: "prototype",
@@ -475,10 +474,7 @@ export async function seedTutorialsOnce(): Promise<void> {
       html: PROTOTYPE_TUTORIAL_HTML,
     });
   }
-  const existingDeck = existingByName.get(DECK_TUTORIAL_NAME);
-  if (existingDeck) {
-    await copyBundledFonts(existingDeck.dirPath);
-  } else {
+  if (!names.has(DECK_TUTORIAL_NAME)) {
     await writeTutorialProject({
       name: DECK_TUTORIAL_NAME,
       type: "slide_deck",
@@ -905,10 +901,7 @@ async function syncPromptSampleProject(input: {
   const coordinator = new ArtifactCoordinator(getSqlite());
   if (input.currentDigest === null) { await coordinator.initialize(input.id, input.dirPath); return; }
   const current = await readFile(path.join(input.dirPath, input.entrypoint), "utf8").catch(() => null);
-  if (current === input.html) {
-    await copyBundledFonts(input.dirPath);
-    return;
-  }
+  if (current === input.html) return;
   const userOperations = getSqlite().query<{ readonly count: number }, [string]>("SELECT COUNT(*) count FROM artifact_operations WHERE project_id=? AND status='committed' AND json_extract(replay_json,'$.kind')!='initialize'").get(input.id)?.count ?? 0;
   if (userOperations > 0) return;
   try {
