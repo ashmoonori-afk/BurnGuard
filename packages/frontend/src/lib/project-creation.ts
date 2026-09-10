@@ -14,9 +14,19 @@ import type {
   DesignBriefV1,
   DesignBriefVisualMood,
   DesignSystemSummary,
+  GraphicDetailBriefV1,
+  GraphicFrameV1,
+  GraphicSetKind,
+  GraphicSetV1,
   ProjectType,
 } from "@bg/shared";
-import { DESIGN_BRIEF_PAGE_LIMIT, GRAPHIC_CANVAS_LIMITS } from "@bg/shared";
+import {
+  DESIGN_BRIEF_PAGE_LIMIT,
+  GRAPHIC_CANVAS_LIMITS,
+  UpgradeContractError,
+  parseGraphicSetV1,
+} from "@bg/shared";
+import { DETAIL_BRIEF_FIELDS } from "@/lib/graphic-set-form";
 
 export const BRIEF_LOCALE = "ko";
 export const AUDIENCE_MAX_LENGTH = 200;
@@ -83,6 +93,11 @@ export type ProjectDraft = {
   readonly copyAsIs: boolean;
   readonly sectionCount?: number;
   readonly pages: readonly string[];
+  readonly graphicKind: GraphicSetKind;
+  readonly frameCount: number;
+  readonly frames: readonly GraphicFrameV1[];
+  readonly presetId: string | null;
+  readonly detailBrief: GraphicDetailBriefV1;
 };
 
 export type BriefForm = Omit<
@@ -104,6 +119,11 @@ export const INITIAL_BRIEF_FORM: BriefForm = {
   copyAsIs: false,
   sectionCount: 6,
   pages: [],
+  graphicKind: "single",
+  frameCount: 1,
+  frames: [],
+  presetId: null,
+  detailBrief: {},
 };
 
 export const PROJECT_LABEL_CLASS = "text-xs font-medium text-foreground/80";
@@ -120,7 +140,8 @@ export type DraftProblem =
   | "design_system_not_selectable"
   | "graphic_width_invalid"
   | "graphic_height_invalid"
-  | "graphic_pixel_limit";
+  | "graphic_pixel_limit"
+  | "graphic_set_invalid";
 
 export type BuildResult =
   | { readonly ok: true; readonly request: CreateProjectRequest }
@@ -136,9 +157,37 @@ export const PROBLEM_MESSAGE: Record<DraftProblem, string> = {
   design_system_not_selectable:
     "선택한 디자인 시스템은 지금 사용할 수 없어요. 목록에서 다시 골라 주세요.",
   graphic_width_invalid: "너비는 320~4096 사이의 정수로 입력해 주세요.",
-  graphic_height_invalid: "높이는 240~4096 사이의 정수로 입력해 주세요.",
+  graphic_height_invalid: "높이는 240~16,384 사이의 정수로 입력해 주세요. 상세페이지처럼 긴 이미지도 이 범위 안에서 만들어요.",
   graphic_pixel_limit: "전체 픽셀은 1,600만 이하가 되도록 크기를 줄여 주세요.",
+  graphic_set_invalid: "그래픽 종류와 장수, 입력한 내용을 다시 확인해 주세요. 배너 세트만 프레임별 크기를, 상세페이지만 상세 브리프를 사용할 수 있어요.",
 };
+
+/**
+ * The panel builds exactly the payload the backend parses, then runs the shared
+ * parser on it: an impossible combination is refused here instead of at create.
+ */
+function buildGraphicSet(draft: ProjectDraft): GraphicSetV1 | null {
+  const detailBrief = Object.fromEntries(
+    DETAIL_BRIEF_FIELDS.flatMap((field) => {
+      const value = (draft.detailBrief[field.key] ?? "").trim();
+      return value === "" ? [] : [[field.key, value]];
+    }),
+  ) as GraphicDetailBriefV1;
+  const candidate = {
+    schema_version: 1,
+    kind: draft.graphicKind,
+    frame_count: draft.frameCount,
+    ...(draft.frames.length === 0 ? {} : { frames: draft.frames }),
+    ...(draft.presetId === null ? {} : { preset_id: draft.presetId }),
+    ...(Object.keys(detailBrief).length === 0 ? {} : { detail_brief: detailBrief }),
+  };
+  try {
+    return parseGraphicSetV1(candidate);
+  } catch (error) {
+    if (error instanceof UpgradeContractError) return null;
+    throw error;
+  }
+}
 
 export function isOriginalSampleSystem(id: string | null): boolean {
   return /^sample-system-original-(sonnel|foliover|oddward|velune)$/.test(id ?? "");
@@ -215,6 +264,11 @@ export function buildCreateProjectRequest(
     }
   }
 
+  const graphicSet = draft.type === "graphic" ? buildGraphicSet(draft) : null;
+  if (draft.type === "graphic" && graphicSet === null) {
+    return { ok: false, problem: "graphic_set_invalid" };
+  }
+
   const selectable = selectableDesignSystems(systems, draft.type);
   const designSystemId = keepSelectedDesignSystemId(
     draft.designSystemId,
@@ -263,13 +317,14 @@ export function buildCreateProjectRequest(
         ...(draft.type === "from_template"
           ? { copy_as_is: draft.copyAsIs }
           : {}),
-        ...(draft.type === "graphic"
+        ...(draft.type === "graphic" && graphicSet !== null
           ? {
               graphic_canvas: {
                 schema_version: 1 as const,
                 width: draft.graphicWidth,
                 height: draft.graphicHeight,
               },
+              graphic_set: graphicSet,
             }
           : {}),
         design_brief: brief,

@@ -18,6 +18,7 @@ import ProjectBriefFields, {
   ToggleRow,
 } from "@/components/home/ProjectBriefFields";
 import { GraphicCanvasFields } from "@/components/home/GraphicCanvasFields";
+import { GraphicSetFields } from "@/components/home/GraphicSetFields";
 import { apiErrorCopy } from "@/lib/error-copy";
 import {
   INITIAL_BRIEF_FORM,
@@ -236,6 +237,14 @@ export default function NewProjectPanel({
               graphicWidth: size.width,
               graphicHeight: size.height,
             }))}
+          />
+        )}
+
+        {isGraphic && !isOriginal && (
+          <GraphicSetFields
+            form={form}
+            disabled={disabled}
+            onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
           />
         )}
 
