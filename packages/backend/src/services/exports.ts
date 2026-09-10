@@ -20,6 +20,7 @@ import { formatExtension } from "./export-naming";
 import { validateHandoffPackage, validatePptxPackage } from "./export-package-validation";
 import { renderDeckToPdf } from "./export-pdf";
 import { pdfPointsForPaper, pdfRasterBudgetFitsPages } from "./export-pdf-contract";
+import { ExportError } from "./export-errors";
 import { renderPlatformPackage } from "./export-platform-package";
 import { renderPngZip } from "./export-png-zip";
 import { renderToPng } from "./export-png";
@@ -121,7 +122,7 @@ async function runExport(input: RunInput): Promise<void> {
   } catch (error) {
     if (stageRoot !== null) await rm(stageRoot, { recursive: true, force: true });
     if (publishedRoot !== null) await rm(publishedRoot, { recursive: true, force: true });
-    const cancelled = input.controller.signal.aborted || db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(input.attemptId)?.requested === 1; const reason: ExportStopReason = cancelled ? "user_cancelled" : error instanceof ExportServiceError && error.code === "source_changed" ? "source_changed" : error instanceof ExportServiceError && error.code === "design_audit_failed" ? "validation_failed" : "render_failed";
+    const cancelled = input.controller.signal.aborted || db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(input.attemptId)?.requested === 1; const reason: ExportStopReason = cancelled ? "user_cancelled" : error instanceof ExportServiceError && error.code === "source_changed" ? "source_changed" : error instanceof ExportServiceError && error.code === "design_audit_failed" ? "validation_failed" : error instanceof ExportError && (error.code === "platform_lint_failed" || error.code === "platform_package_incomplete" || error.code === "invalid_asset_destination") ? "validation_failed" : "render_failed";
     failExportAttempt(db, { jobId: input.jobId, attemptId: input.attemptId, status: cancelled ? "cancelled" : "failed", reason, message: error instanceof Error ? error.message : String(error) });
     emit(context.identity, input, cancelled ? "cancelled" : "failed", { stage: "rendering", completed: 2, total: 6 }, reason);
   }
