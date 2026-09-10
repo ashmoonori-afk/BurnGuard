@@ -20,8 +20,9 @@ describe("formatExtension / formatMime", () => {
     );
   });
 
-  test("html_zip and handoff both map to .zip / application/zip", () => {
-    for (const f of ["html_zip", "handoff"] as const) {
+  test("Given archive formats When named Then extension and MIME remain ZIP", () => {
+    // Given / When / Then
+    for (const f of ["html_zip", "handoff", "cafe24_package", "imweb_package", "png_zip"] as const) {
       expect(formatExtension(f)).toBe("zip");
       expect(formatMime(f)).toBe("application/zip");
     }
@@ -90,6 +91,10 @@ describe("buildDownloadFilename", () => {
         job: { ...base.job, format: "handoff" },
       }),
     ).toBe("Quarterly-Review-Deck-handoff-2025-04-23.zip");
+
+    expect(buildDownloadFilename({ projectName: "Shop", revision: 4, format: "cafe24_package" })).toBe("Shop-cafe24-r4.zip");
+    expect(buildDownloadFilename({ projectName: "Shop", revision: 4, format: "imweb_package" })).toBe("Shop-imweb-r4.zip");
+    expect(buildDownloadFilename({ projectName: "Cards", revision: 4, format: "png_zip" })).toBe("Cards-frames-r4.zip");
   });
 
   test("uses the creation timestamp when completed_at is missing", () => {

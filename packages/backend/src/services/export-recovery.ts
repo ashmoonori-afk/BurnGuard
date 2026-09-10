@@ -2,7 +2,7 @@ import { mkdir, readFile, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { Database } from "bun:sqlite";
 import { ulid } from "ulid";
-import { parseExportOptions, type NormalizedEvent } from "@bg/shared";
+import { parseExportOptions, type ExportFormat, type NormalizedEvent } from "@bg/shared";
 import { advanceExportAttempt, failExportAttempt, markExportAttemptCorrupt } from "../db/export-lifecycle-repository";
 import { completeExportAttemptWithEvent } from "./export-events";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
@@ -19,7 +19,7 @@ export async function reconcileExportState(db: Database, root?: string): Promise
   await cleanOrphanStages(db, exportRoot);
 }
 
-type RecoveryRow = { readonly attempt_id: string; readonly job_id: string; readonly parent_attempt_id: string | null; readonly status: string; readonly project_revision: number; readonly project_digest: string; readonly canonical_options_json: string; readonly options_digest: string; readonly input_closure_digest: string | null; readonly design_system_digest: string | null; readonly renderer_digest: string; readonly capture_digest: string; readonly output_digest: string | null; readonly receipt_digest: string | null; readonly format: "html_zip" | "pdf" | "png" | "pptx" | "handoff"; readonly project_id: string };
+type RecoveryRow = { readonly attempt_id: string; readonly job_id: string; readonly parent_attempt_id: string | null; readonly status: string; readonly project_revision: number; readonly project_digest: string; readonly canonical_options_json: string; readonly options_digest: string; readonly input_closure_digest: string | null; readonly design_system_digest: string | null; readonly renderer_digest: string; readonly capture_digest: string; readonly output_digest: string | null; readonly receipt_digest: string | null; readonly format: ExportFormat; readonly project_id: string };
 async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Promise<void> {
   const safeId = assertSafeName(row.attempt_id); const stage = resolveWithin(root, ".staging", safeId); const published = resolveWithin(root, "attempts", safeId);
   const cancelRequested = () => db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(row.attempt_id)?.requested === 1;
@@ -49,7 +49,7 @@ async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Pro
     if (row.output_digest !== null && row.output_digest !== outputDigest || row.receipt_digest !== null && row.receipt_digest !== expectedReceipt || receipt.output_size !== output.byteLength) throw new TypeError("Recovery digest or size mismatch");
     if (row.status === "validated") return;
     if (cancelRequested()) { await cancel(); return; }
-    if (source === stage) { await rm(path.join(stage, "render"), { recursive: true, force: true }); await rm(path.join(stage, "handoff"), { recursive: true, force: true }); await mkdir(path.dirname(published), { recursive: true }); await rm(published, { recursive: true, force: true }); await rename(stage, published); }
+    if (source === stage) { for (const scratch of ["render", "handoff", "platform", "frames"] as const) await rm(path.join(stage, scratch), { recursive: true, force: true }); await mkdir(path.dirname(published), { recursive: true }); await rm(published, { recursive: true, force: true }); await rename(stage, published); }
     const finalOutput = resolveWithin(published, receipt.output_file); const info = await stat(finalOutput);
     if (cancelRequested()) { await cancel(); return; }
     advanceExportAttempt(db, { attemptId: row.attempt_id, status: "recovering", stage: "publishing" });

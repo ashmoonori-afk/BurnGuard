@@ -7,6 +7,7 @@ import { getExportAttemptDetail, getExportJob } from "../src/db/exports";
 import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { renderInitialArtifact } from "../src/db/templates";
+import { copyBundledFonts } from "../src/data/bundled-fonts";
 import { artifactRoutes } from "../src/routes/artifacts";
 import { projectsDir } from "../src/lib/paths";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
@@ -23,18 +24,21 @@ const sessionId = `${projectId}-session`;
 const projectDir = path.join(projectsDir, projectId);
 const canvas = { schema_version: 1, width: 1200, height: 628 } as const;
 const projectName = "Functional Graphic 1200x628";
+const limitProjectId = `${projectId}-pdf-limit`;
 
 beforeAll(async () => {
   await runMigrations();
   await mkdir(projectDir, { recursive: true });
+  await copyBundledFonts(projectDir);
   await writeFile(path.join(projectDir, "index.html"), renderInitialArtifact({ name: projectName, type: "graphic", options: { graphic_canvas: canvas } }));
   getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,options_json,created_at,updated_at) VALUES (?,?, 'graphic',?,'index.html','codex',?,1,1)").run(projectId, projectName, projectDir, JSON.stringify({ use_speaker_notes: false, copy_as_is: false, design_brief: { schema_version: 1, output_type: "graphic", audience: "Campaign visitors", objective: "Announce the autumn launch", content_source: "none", locale: "en-US", brand_mode: "none", visual_mood: "premium", density: "balanced", output_size: "custom" }, graphic_canvas: canvas }));
   getSqlite().prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(sessionId, projectId);
+  getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,options_json,created_at,updated_at) VALUES (?,?,'graphic',?,'index.html','codex',?,1,1)").run(limitProjectId, "Oversized PDF", limitProjectId, JSON.stringify({ graphic_canvas: { schema_version: 1, width: 1080, height: 1080 }, graphic_set: { schema_version: 1, kind: "card_news", frame_count: 40 } }));
   await new ArtifactCoordinator(getSqlite()).initialize(projectId, projectDir);
 });
 
 afterAll(async () => {
-  getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId);
+  getSqlite().prepare("DELETE FROM projects WHERE id IN (?,?)").run(projectId, limitProjectId);
   await rm(projectDir, { recursive: true, force: true });
 });
 
@@ -54,6 +58,58 @@ describe("graphic PNG export invariant", () => {
       expect(error.code).toBe("invalid_graphic_export_options");
     }
     expect(exportCount()).toBe(before);
+    expect(activeExportBrowserCount()).toBe(0);
+  });
+
+  test("Given a single-frame graphic When PNG ZIP is requested Then the frame guard rejects before authority creation", async () => {
+    // Given
+    const before = exportCount();
+
+    // When
+    const response = await artifactRoutes.request(`http://local/api/projects/${projectId}/exports`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ format: "png_zip", options: {} }),
+    });
+
+    // Then
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "format_requires_frames" } });
+    expect(exportCount()).toBe(before);
+    expect(activeExportBrowserCount()).toBe(0);
+  });
+
+  test("Given a non-detail graphic When JPEG slices are requested Then the kind-option pair is rejected", async () => {
+    // Given / When
+    const response = await artifactRoutes.request(`http://local/api/projects/${projectId}/exports`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ format: "png_zip", options: { slice_format: "jpeg" } }),
+    });
+
+    // Then
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "invalid_export_options" } });
+    expect(activeExportBrowserCount()).toBe(0);
+  });
+
+  test("Given a single-frame graphic When service PNG ZIP is requested Then authority is not created", async () => {
+    // Given
+    const before = exportCount();
+
+    // When / Then
+    await expect(enqueueProjectExport(projectId, "png_zip", { slice_height: 5000, slice_format: "png" })).rejects.toMatchObject({ code: "format_requires_frames" });
+    expect(exportCount()).toBe(before);
+    expect(activeExportBrowserCount()).toBe(0);
+  });
+
+  test("Given forty 1080 artboards When artboard PDF is requested Then aggregate overflow fails before rendering", async () => {
+    // Given
+    const before = getSqlite().query<{ readonly count: number }, [string]>("SELECT COUNT(*) count FROM exports WHERE project_id=?").get(limitProjectId)?.count ?? 0;
+
+    // When / Then
+    await expect(enqueueProjectExport(limitProjectId, "pdf", { pdf_paper: "artboard" })).rejects.toMatchObject({ code: "pdf_resource_limit" });
+    expect(getSqlite().query<{ readonly count: number }, [string]>("SELECT COUNT(*) count FROM exports WHERE project_id=?").get(limitProjectId)?.count).toBe(before);
     expect(activeExportBrowserCount()).toBe(0);
   });
 

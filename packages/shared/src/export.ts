@@ -1,9 +1,17 @@
 import { UpgradeContractError, decodeContract } from "./contract-parser";
 export { UpgradeContractError };
 
-export type ExportFormat = "html_zip" | "pdf" | "png" | "pptx" | "handoff";
+export type ExportFormat =
+  | "html_zip"
+  | "pdf"
+  | "png"
+  | "pptx"
+  | "handoff"
+  | "png_zip"
+  | "cafe24_package"
+  | "imweb_package";
 export type ExportStatus = "pending" | "running" | "succeeded" | "failed";
-export type PdfPaper = "a4" | "letter" | "widescreen-16x9";
+export type PdfPaper = "a4" | "letter" | "widescreen-16x9" | "artboard";
 export type PptxSize = "16x9" | "4x3";
 
 export type ExportOptions = {
@@ -12,6 +20,10 @@ export type ExportOptions = {
   readonly png_height?: number;
   readonly png_dpr?: 1 | 2;
   readonly pptx_size?: PptxSize;
+  readonly asset_base_url?: string;
+  readonly slice_height?: 3000 | 5000;
+  readonly slice_format?: "png" | "jpeg";
+  readonly jpeg_quality?: number;
 };
 
 export function parseExportOptions(format: ExportFormat, input: unknown): ExportOptions {
@@ -21,10 +33,18 @@ export function parseExportOptions(format: ExportFormat, input: unknown): Export
     case "handoff":
       requireKeys(record, []);
       return {};
+    case "cafe24_package":
+    case "imweb_package": {
+      requireKeys(record, ["asset_base_url"]);
+      const assetBaseUrl = record["asset_base_url"];
+      if (assetBaseUrl === undefined) return {};
+      if (!isSafeAssetBaseUrl(assetBaseUrl)) invalid("asset_base_url");
+      return { asset_base_url: assetBaseUrl };
+    }
     case "pdf": {
       requireKeys(record, ["pdf_paper"]);
       const value = record["pdf_paper"] ?? "a4";
-      if (value !== "a4" && value !== "letter" && value !== "widescreen-16x9") invalid("pdf_paper");
+      if (value !== "a4" && value !== "letter" && value !== "widescreen-16x9" && value !== "artboard") invalid("pdf_paper");
       return { pdf_paper: value };
     }
     case "png": {
@@ -42,6 +62,41 @@ export function parseExportOptions(format: ExportFormat, input: unknown): Export
       if (value !== "16x9" && value !== "4x3") invalid("pptx_size");
       return { pptx_size: value };
     }
+    case "png_zip": {
+      requireKeys(record, ["slice_height", "slice_format", "jpeg_quality"]);
+      const sliceHeight = record["slice_height"] ?? 5000;
+      if (sliceHeight !== 3000 && sliceHeight !== 5000) invalid("slice_height");
+      const sliceFormat = record["slice_format"] ?? "png";
+      if (sliceFormat !== "png" && sliceFormat !== "jpeg") invalid("slice_format");
+      const jpegQuality = record["jpeg_quality"];
+      if (jpegQuality !== undefined && sliceFormat !== "jpeg") invalid("jpeg_quality");
+      if (jpegQuality !== undefined && (typeof jpegQuality !== "number" || !Number.isSafeInteger(jpegQuality) || jpegQuality < 60 || jpegQuality > 95)) invalid("jpeg_quality");
+      return sliceFormat === "jpeg"
+        ? { slice_height: sliceHeight, slice_format: sliceFormat, jpeg_quality: jpegQuality ?? 85 }
+        : { slice_height: sliceHeight, slice_format: sliceFormat };
+    }
+  }
+}
+
+function isSafeAssetBaseUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 2048) return false;
+  if (/[\\?#]/u.test(value) || [...value].some((character) => character.charCodeAt(0) <= 31 || character.charCodeAt(0) === 127) || /%2f|%5c/iu.test(value)) return false;
+  const pathValue = value.startsWith("/") ? value : value.replace(/^https:\/\/[^/]+/iu, "");
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(pathValue);
+  } catch (error) {
+    if (error instanceof URIError) return false;
+    throw error;
+  }
+  if (decodedPath.split("/").some((segment) => segment === "..")) return false;
+  if (value.startsWith("/")) return !value.startsWith("//");
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.username === "" && url.password === "" && url.search === "" && url.hash === "";
+  } catch (error) {
+    if (error instanceof TypeError) return false;
+    throw error;
   }
 }
 

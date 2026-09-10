@@ -19,6 +19,12 @@ describe("PDF_PRINT_CSS", () => {
     expect(PDF_PRINT_CSS).toMatch(/last-of-type[^}]*page-break-after:\s*auto/);
   });
 
+  test("Given graphic artboards When print CSS is applied Then they use the same page isolation contract as slides", () => {
+    // Given / When / Then
+    expect(PDF_PRINT_CSS).toContain("[data-graphic-artboard]");
+    expect(PDF_PRINT_CSS).toContain("[data-bg-export-page]");
+  });
+
   test("does not declare an @page rule (page size is driven by the paper option)", () => {
     // The @page { size: A4 landscape } rule used to live here. After
     // P4 export audit fix 7, the user picks paper / orientation per

@@ -16,8 +16,12 @@ import { resolveStaticClosure } from "./export-closure";
 import { completeExportAttemptWithEvent, publishExportAttemptEvent, publishPersistedExportAttemptEvent } from "./export-events";
 import { renderHandoffBundle } from "./export-handoff-render";
 import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "./export-html-validation";
+import { formatExtension } from "./export-naming";
 import { validateHandoffPackage, validatePptxPackage } from "./export-package-validation";
 import { renderDeckToPdf } from "./export-pdf";
+import { pdfPointsForPaper, pdfRasterBudgetFitsPages } from "./export-pdf-contract";
+import { renderPlatformPackage } from "./export-platform-package";
+import { renderPngZip } from "./export-png-zip";
 import { renderToPng } from "./export-png";
 import { renderDeckToPptx } from "./export-pptx-render";
 import { canonicalJson, parseExportReceipt, receiptDigest, sha256, type ExportReceipt } from "./export-receipt";
@@ -35,7 +39,7 @@ export type ExportHooks = { readonly phase?: (attemptId: string, phase: ExportPh
 
 export class ExportServiceError extends Error {
   readonly name = "ExportServiceError";
-  constructor(readonly code: "project_not_found" | "source_changed" | "format_requires_deck" | "attempt_not_found" | "design_audit_failed" | "invalid_graphic_export_options", message: string) { super(message); }
+  constructor(readonly code: "project_not_found" | "source_changed" | "format_requires_deck" | "format_requires_web" | "format_requires_frames" | "pdf_resource_limit" | "attempt_not_found" | "design_audit_failed" | "invalid_graphic_export_options", message: string) { super(message); }
 }
 
 export async function enqueueProjectExport(projectId: string, format: ExportFormat, options: ExportOptions, hooks: ExportHooks = {}) {
@@ -69,8 +73,7 @@ type RunInput = { readonly jobId: string; readonly attemptId: string; readonly c
 async function runExport(input: RunInput): Promise<void> {
   const { context } = input; const db = getSqlite();
   let stageRoot: string | null = null, publishedRoot: string | null = null;
-  const extension = context.format === "pdf" ? "pdf" : context.format === "png" ? "png" : context.format === "pptx" ? "pptx" : "zip";
-  const outputFile = `artifact.${extension}`;
+  const outputFile = `artifact.${formatExtension(context.format)}`;
   try {
     await mkdir(exportsDir, { recursive: true });
     stageRoot = resolveWithin(exportsDir, ".staging", assertSafeName(input.attemptId));
@@ -107,7 +110,7 @@ async function runExport(input: RunInput): Promise<void> {
     if (sha256(new Uint8Array(await readFile(stagedOutput))) !== outputDigest || receiptDigest(rereadReceipt) !== sha256(receiptJson)) throw new TypeError("Staged receipt verification failed");
     await input.hooks.phase?.(input.attemptId, "after_receipt", input.controller.signal);
     input.controller.signal.throwIfAborted();
-    advance(input, "validating", "publishing"); await rm(renderRoot, { recursive: true, force: true }); await mkdir(path.dirname(publishedRoot), { recursive: true }); await rm(publishedRoot, { recursive: true, force: true });
+    advance(input, "validating", "publishing"); for (const scratch of ["render", "handoff", "platform", "frames"] as const) await rm(path.join(stageRoot, scratch), { recursive: true, force: true }); await mkdir(path.dirname(publishedRoot), { recursive: true }); await rm(publishedRoot, { recursive: true, force: true });
     input.controller.signal.throwIfAborted();
     await rename(stageRoot, publishedRoot);
     await input.hooks.phase?.(input.attemptId, "after_publish_before_db", input.controller.signal);
@@ -133,17 +136,43 @@ async function renderOutput(input: RunInput, renderRoot: string, outputPath: str
       await writeFile(path.join(renderRoot, HTML_EXPORT_MANIFEST), canonicalJson(archiveManifest)); await zipDirectory(renderRoot, outputPath); await validateHtmlArchive(new Uint8Array(await readFile(outputPath)), archiveManifest); return { entries: archiveManifest.entries.length };
     }
     case "png": return renderToPng({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, width: context.options.png_width ?? 1280, height: context.options.png_height ?? 720, dpr: context.options.png_dpr ?? 1, deck: context.project.type === "slide_deck", signal: input.controller.signal });
-    case "pdf": return renderDeckToPdf({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, paper: context.options.pdf_paper, title: `${context.project.name} r${context.identity.revision}`, signal: input.controller.signal });
+    case "pdf": return renderDeckToPdf({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, paper: context.options.pdf_paper, selector: context.project.type === "graphic" ? "[data-graphic-artboard]" : "[data-slide]", title: `${context.project.name} r${context.identity.revision}`, signal: input.controller.signal });
     case "pptx": { await renderDeckToPptx({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, size: context.options.pptx_size, signal: input.controller.signal }); const slides = parse(await readFile(path.join(renderRoot, context.project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length; return validatePptxPackage(new Uint8Array(await readFile(outputPath)), slides); }
     case "handoff": { const bundle = path.join(path.dirname(renderRoot), "handoff"); await renderHandoffBundle({ stagedProjectDir: renderRoot, stagingDir: bundle, entrypoint: context.project.entrypoint, tokensSrcPath: null, tokensFileName: null, designSystemName: context.project.design_system_name, project: { id: context.project.id, name: context.project.name, type: context.project.type, entrypoint: context.project.entrypoint }, isDeck: context.project.type === "slide_deck", signal: input.controller.signal }); await zipDirectory(bundle, outputPath); return validateHandoffPackage(new Uint8Array(await readFile(outputPath)), context.project.entrypoint); }
+    case "cafe24_package":
+    case "imweb_package": {
+      const browserSession = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: false, signal: input.controller.signal });
+      try { return await renderPlatformPackage({ stagedDir: renderRoot, outputPath, format: context.format, project: context.project, graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, browserSession, receiptWriter: async () => undefined, signal: input.controller.signal }); }
+      finally { await browserSession.close(); }
+    }
+    case "png_zip": {
+      const browserSession = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: context.project.type === "slide_deck", signal: input.controller.signal });
+      try { return await renderPngZip({ stagedDir: renderRoot, outputPath, project: context.project, graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, browserSession, receiptWriter: async () => undefined, signal: input.controller.signal }); }
+      finally { await browserSession.close(); }
+    }
   }
 }
 
 async function exportContext(projectId: string, format: ExportFormat, options: ExportOptions): Promise<Context> {
   let project = await getProjectDetail(projectId); if (project === null) throw new ExportServiceError("project_not_found", "Project not found");
-  if ((format === "pdf" || format === "pptx") && project.type !== "slide_deck") throw new ExportServiceError("format_requires_deck", "Format requires a slide deck");
+  const projectOptions = parseStoredProjectOptions(project.options_json);
+  if (format === "pdf" && options.pdf_paper === "artboard" && project.type !== "graphic") throw new ExportServiceError("invalid_graphic_export_options", "Artboard paper is only valid for graphic projects");
+  if (format === "png_zip" && options.slice_format === "jpeg" && (project.type !== "graphic" || projectOptions.graphic_set.kind !== "product_detail")) throw new ExportServiceError("invalid_graphic_export_options", "JPEG slices are only valid for product detail graphics");
+  if ((format === "cafe24_package" || format === "imweb_package") && (project.type === "slide_deck" || project.type === "graphic")) throw new ExportServiceError("format_requires_web", "Platform packages require a web project");
+  if (format === "png_zip" && project.type !== "slide_deck" && (project.type !== "graphic" || (projectOptions.graphic_set.frame_count <= 1 && projectOptions.graphic_set.kind !== "product_detail"))) throw new ExportServiceError("format_requires_frames", "PNG ZIP requires a deck, multi-frame graphic, or product detail");
+  if (format === "pptx" && project.type !== "slide_deck") throw new ExportServiceError("format_requires_deck", "Format requires a slide deck");
+  if (format === "pdf" && project.type !== "slide_deck" && !(project.type === "graphic" && options.pdf_paper === "artboard")) throw new ExportServiceError("format_requires_deck", "PDF requires a slide deck or graphic artboard");
+  if (format === "pdf" && project.type === "graphic") {
+    const canvas = projectOptions.graphic_canvas;
+    if (canvas === null) throw new ExportServiceError("invalid_graphic_export_options", "Graphic PDF requires a persisted canvas");
+    const sizes = projectOptions.graphic_set.kind === "banner_set" && projectOptions.graphic_set.frames !== undefined
+      ? projectOptions.graphic_set.frames
+      : Array.from({ length: projectOptions.graphic_set.frame_count }, () => canvas);
+    const points = sizes.map((size) => pdfPointsForPaper("artboard", size));
+    if (!pdfRasterBudgetFitsPages(points)) throw new ExportServiceError("pdf_resource_limit", "Graphic PDF exceeds the per-page or aggregate raster budget");
+  }
   if (project.type === "graphic" && format === "png") {
-    const canvas = parseStoredProjectOptions(project.options_json).graphic_canvas;
+    const canvas = projectOptions.graphic_canvas;
     if (
       canvas === null ||
       options.png_width !== canvas.width ||
@@ -159,7 +188,7 @@ async function exportContext(projectId: string, format: ExportFormat, options: E
   const source = resolveManagedPath(projectsDir, project.dir_path); if (project.current_digest === null) { await new ArtifactCoordinator(getSqlite()).initialize(project.id, source); project = await getProjectDetail(projectId); }
   if (project === null || project.current_digest === null) throw new ExportServiceError("source_changed", "Stable project identity unavailable");
   const designSystemDigest = await designDigest(project.design_system_id);
-  const rendererDigest = sha256(RENDERER_CONTRACT); const captureDigest = sha256(canonicalJson({ format, options, viewport: format === "png" ? { width: options.png_width, height: options.png_height, dpr: options.png_dpr } : { width: 1280, height: 720, dpr: 1 } }));
+  const rendererDigest = sha256(RENDERER_CONTRACT); const captureDigest = sha256(canonicalJson({ format, options, viewport: format === "png" || format === "png_zip" ? { width: projectOptions.graphic_canvas?.width ?? options.png_width ?? 1280, height: projectOptions.graphic_canvas?.height ?? options.png_height ?? 720, dpr: options.png_dpr ?? 1 } : { width: 1280, height: 720, dpr: 1 } }));
   return { identity: { projectId, revision: project.current_revision, digest: project.current_digest, designSystemDigest }, project, format, options, rendererDigest, captureDigest };
 }
 

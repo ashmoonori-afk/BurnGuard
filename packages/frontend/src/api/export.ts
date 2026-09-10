@@ -21,6 +21,12 @@ export function formatLabel(format: ExportFormat): string {
       return "HTML ZIP 파일";
     case "handoff":
       return "개발자 전달용";
+    case "png_zip":
+      return "프레임 ZIP";
+    case "cafe24_package":
+      return "카페24 패키지";
+    case "imweb_package":
+      return "아임웹 패키지";
   }
 }
 

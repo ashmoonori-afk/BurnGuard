@@ -6,6 +6,7 @@ import type {
   ArtifactSummary,
   ExportFormat,
   ExportJob,
+  ExportOptions,
   FileInfo,
 } from "@bg/shared";
 import { buildArtifactSummary, indexProjectFiles, listIndexedProjectFiles } from "../services/files";
@@ -13,6 +14,7 @@ import { getExportAttemptDetail, getExportJob, listExportAttempts, listProjectEx
 import { ExportLifecycleError } from "../db/export-lifecycle-repository";
 import { getProjectDetail } from "../db/project-read-repository";
 import { isCanonicalTreeRootMissing } from "../services/canonical-tree-manifest";
+import { parseStoredProjectOptions } from "../services/project-options";
 import type { ExportQaPhase } from "../services/export-qa-barrier";
 
 function ok<T>(data: T): ApiSuccess<T> {
@@ -28,7 +30,7 @@ function fail(
 }
 
 function isExportFormat(value: unknown): value is ExportFormat {
-  return value === "html_zip" || value === "pdf" || value === "png" || value === "pptx" || value === "handoff";
+  return value === "html_zip" || value === "pdf" || value === "png" || value === "pptx" || value === "handoff" || value === "cafe24_package" || value === "imweb_package" || value === "png_zip";
 }
 
 export const artifactRoutes = new Hono();
@@ -142,24 +144,26 @@ artifactRoutes.post("/api/projects/:id/exports", async (c) => {
   if (!isExportFormat(format)) {
     return c.json(fail("invalid_export_format", "Unsupported export format", { format }), 400);
   }
-  if ((format === "pdf" || format === "pptx") && project.type !== "slide_deck") {
-    return c.json(
-      fail(
-        "format_requires_deck",
-        `${format.toUpperCase()} export is only available for slide_deck projects`,
-        { projectType: project.type },
-      ),
-      400,
-    );
-  }
-
   const optionsRaw = body && typeof body === "object" && "options" in body ? Reflect.get(body, "options") : {};
-  let options;
+  let options: ExportOptions;
   try { options = parseExportOptions(format, optionsRaw); }
   catch (error) {
     if (error instanceof UpgradeContractError) return c.json(fail("invalid_export_options", "Export options are invalid", { path: error.path }), 400);
     throw error;
   }
+  const projectOptions = parseStoredProjectOptions(project.options_json);
+  if (format === "pdf" && options.pdf_paper === "artboard" && project.type !== "graphic") return c.json(fail("invalid_export_options", "Artboard paper is only valid for graphic projects", { path: "pdf_paper" }), 400);
+  if (format === "png_zip" && options.slice_format === "jpeg" && (project.type !== "graphic" || projectOptions.graphic_set.kind !== "product_detail")) return c.json(fail("invalid_export_options", "JPEG slices are only valid for product detail graphics", { path: "slice_format" }), 400);
+  if ((format === "cafe24_package" || format === "imweb_package") && (project.type === "slide_deck" || project.type === "graphic")) {
+    return c.json(fail("format_requires_web", "Platform packages require a web project", { projectType: project.type }), 400);
+  }
+  if (format === "png_zip" && project.type !== "slide_deck" && (project.type !== "graphic" || (projectOptions.graphic_set.frame_count <= 1 && projectOptions.graphic_set.kind !== "product_detail"))) {
+    return c.json(fail("format_requires_frames", "PNG ZIP requires a deck, multi-frame graphic, or product detail", { projectType: project.type }), 400);
+  }
+  if ((format === "pptx" || format === "pdf" && !(project.type === "graphic" && options.pdf_paper === "artboard")) && project.type !== "slide_deck") {
+    return c.json(fail("format_requires_deck", `${format.toUpperCase()} export requires a slide deck or graphic artboard`, { projectType: project.type }), 400);
+  }
+
   const { enqueueProjectExport, ExportServiceError } = await import("../services/exports");
   const { exportQaHooks } = await import("../services/export-qa-barrier");
   try {
@@ -167,9 +171,7 @@ artifactRoutes.post("/api/projects/:id/exports", async (c) => {
     if (job === null) return c.json(fail("export_create_failed", "Export job could not be created"), 500);
     return c.json(ok(job satisfies ExportJob), 202);
   } catch (error) {
-    if (error instanceof ExportServiceError && error.code === "invalid_graphic_export_options") {
-      return c.json(fail(error.code, error.message), 400);
-    }
+    if (error instanceof ExportServiceError && (error.code === "invalid_graphic_export_options" || error.code === "format_requires_web" || error.code === "format_requires_frames" || error.code === "pdf_resource_limit")) return c.json(fail(error.code, error.message), 400);
     throw error;
   }
 });

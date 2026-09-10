@@ -45,6 +45,9 @@ const OPTION_ICON: Record<ExportFormat, LucideIcon> = {
   png: Download,
   pptx: Presentation,
   handoff: PackagePlus,
+  png_zip: Download,
+  cafe24_package: PackagePlus,
+  imweb_package: PackagePlus,
 };
 
 export type ExportQualityGate = { readonly mustFixCount: number } | null;
