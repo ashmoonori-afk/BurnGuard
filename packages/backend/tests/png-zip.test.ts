@@ -60,6 +60,7 @@ function recorderPage(frames: readonly FrameMeasurement[], onCapture?: (request:
   const captures: CaptureRequest[] = [];
   const page: CapturePage = {
     awaitRenderReady: async () => undefined,
+    applyDeckPrintStyles: async () => undefined,
     measureFrames: async (selector) => { selectors.push(selector); return frames; },
     isolateFrame: async (_selector, index): Promise<FrameRect | null> => {
       isolated.push(index);
@@ -167,6 +168,36 @@ describe("graphic frame batch export", () => {
     // Then
     expect(recorder.selectors).toEqual(["[data-slide]"]);
     expect(recorder.captures).toHaveLength(2);
+  });
+
+  test("Given a deck runtime that hides inactive slides When exported Then slides are shown before they are measured", async () => {
+    // Given: the deck runtime keeps every non-active slide at display:none, so
+    // slides 2..N measure 0x0 until the deck print styles are applied.
+    let printed = false;
+    const visible = stackedFrames(3, 320, 180);
+    const hidden = visible.map((frame, index) => index === 0 ? frame : { ...frame, width: 0, height: 0, top: 0, bottom: 0 });
+    const recorder = recorderPage(visible);
+    const page: CapturePage = {
+      ...recorder.page,
+      applyDeckPrintStyles: async () => { printed = true; },
+      measureFrames: async (selector) => { recorder.selectors.push(selector); return printed ? visible : hidden; },
+    };
+
+    // When
+    await renderPngZipWithPage({
+      page,
+      stagedDir,
+      outputPath,
+      deck: true,
+      graphic_set: { schema_version: 1, kind: "single", frame_count: 1 },
+      options: pngOptions,
+      receiptWriter: async () => undefined,
+      signal: new AbortController().signal,
+    });
+
+    // Then
+    expect(printed).toBe(true);
+    expect(recorder.captures).toHaveLength(3);
   });
 
   test("Given a cancellation mid-batch When exported Then no archive survives and the scratch directory is removed", async () => {

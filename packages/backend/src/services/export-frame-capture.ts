@@ -1,4 +1,5 @@
 import type { Page } from "playwright-core";
+import { PDF_PRINT_CSS } from "./export-pdf-contract";
 
 /**
  * The narrow browser surface the frame and slice exporters need. The Playwright
@@ -12,6 +13,8 @@ export type CaptureRequest = { readonly clip: FrameRect; readonly format: "png" 
 
 export type CapturePage = {
   readonly awaitRenderReady: () => Promise<void>;
+  /** Lifts the deck runtime's hidden-slide rule so every slide has geometry (same stylesheet the PDF path uses). */
+  readonly applyDeckPrintStyles: () => Promise<void>;
   readonly measureFrames: (selector: string) => Promise<readonly FrameMeasurement[]>;
   readonly isolateFrame: (selector: string, index: number) => Promise<FrameRect | null>;
   readonly restoreFrames: (selector: string) => Promise<void>;
@@ -31,6 +34,9 @@ export function capturePageFromSession(page: Page): CapturePage {
         })));
         await new Promise<void>((resolve) => { requestAnimationFrame(() => { requestAnimationFrame(() => { resolve(); }); }); });
       });
+    },
+    applyDeckPrintStyles: async () => {
+      await page.addStyleTag({ content: PDF_PRINT_CSS });
     },
     measureFrames: async (selector) => await page.evaluate((elementSelector) => [...document.querySelectorAll<HTMLElement>(elementSelector)].map((element, index) => {
       const rect = element.getBoundingClientRect();

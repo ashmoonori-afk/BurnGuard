@@ -40,6 +40,7 @@ function pngBytes(width: number, height: number): Uint8Array {
 function cuttingPage(): CapturePage {
   return {
     awaitRenderReady: async () => undefined,
+    applyDeckPrintStyles: async () => undefined,
     measureFrames: async () => [],
     isolateFrame: async () => null,
     restoreFrames: async () => undefined,

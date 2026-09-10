@@ -188,6 +188,7 @@ function slicePage(measurement: SectionMeasurement, encode: (request: CaptureReq
   const flattened: number[] = [];
   const page: CapturePage = {
     awaitRenderReady: async () => undefined,
+    applyDeckPrintStyles: async () => undefined,
     measureFrames: async () => [],
     isolateFrame: async () => null,
     restoreFrames: async () => undefined,

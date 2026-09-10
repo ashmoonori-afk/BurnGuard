@@ -100,6 +100,7 @@ export async function renderPngZipWithPage(run: PngZipRun): Promise<PngZipResult
 
 async function captureFrames(batch: Batch): Promise<readonly SliceFinding[]> {
   const selector = batch.run.deck ? "[data-slide]" : "[data-graphic-artboard]";
+  if (batch.run.deck) await batch.run.page.applyDeckPrintStyles();
   const frames = await batch.run.page.measureFrames(selector);
   assertFrameContract(frames, batch);
   try {
