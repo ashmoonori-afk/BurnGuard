@@ -4,7 +4,7 @@
  * .nupkg, releases.osx.json feed) from the .app that `build-mac.ts` produced.
  * Publication is a separate release step; this only writes dist/releases.
  *
- * Release packaging requires signing and notarization credentials:
+ * Signing and notarization are optional; omit all three for free unsigned distribution:
  *   BG_MAC_SIGN_IDENTITY       Developer ID Application certificate subject
  *   BG_MAC_INSTALL_IDENTITY    Developer ID Installer certificate subject
  *   BG_MAC_NOTARY_PROFILE      notarytool keychain profile name
@@ -34,11 +34,14 @@ const requiredSigning = [
   ["BG_MAC_INSTALL_IDENTITY", "--signInstallIdentity"],
   ["BG_MAC_NOTARY_PROFILE", "--notaryProfile"],
 ] as const;
-for (const [environmentKey, argument] of requiredSigning) {
+const signingConfigured = requiredSigning.some(([key]) => Boolean(process.env[key]));
+for (const [environmentKey, argument] of signingConfigured ? requiredSigning : []) {
   const value = process.env[environmentKey];
-  if (!value) throw new Error(`[release] ${environmentKey} is required; refusing to publish an unsigned macOS package`);
+  if (!value) throw new Error(`[release] ${environmentKey} is required when signing is configured`);
   signing.push(argument, value);
 }
+
+if (!signingConfigured) console.log("[release] Building without Developer ID signing or notarization.");
 
 // `[osx]` is interpolated so the Bun shell never treats it as a glob.
 const platform = "[osx]";
@@ -48,9 +51,9 @@ await $`dotnet tool run vpk -- ${platform} pack --packId BurnGuard --packVersion
 
 const files: string[] = [];
 for await (const name of new Bun.Glob("*").scan({ cwd: output, onlyFiles: true })) {
-  if (name === "SHA256SUMS.txt") continue;
+  if (name === "SHA256SUMS-macos.txt") continue;
   const bytes = await readFile(path.join(output, name));
   files.push(`${new Bun.CryptoHasher("sha256").update(bytes).digest("hex")}  ${name}`);
 }
-await writeFile(path.join(output, "SHA256SUMS.txt"), files.sort().join("\n") + "\n");
+await writeFile(path.join(output, "SHA256SUMS-macos.txt"), files.sort().join("\n") + "\n");
 console.log(`[release] ${APP_VERSION}: macOS installer, portable app, and update feed ready in dist/releases`);
