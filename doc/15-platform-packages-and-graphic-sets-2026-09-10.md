@@ -109,6 +109,8 @@ Two fixes landed alongside this work. The quality panel now derives an `idle` st
 
 ## Validation
 
+End-to-end (`node scripts/qa/e2e-smoke.mjs`, Node driver with real Chrome against an isolated profile) at the branch head after merging `origin/main` 0.5.6: 36 scenarios, 27 pass. The three scenarios added in `scripts/qa/deliverables-fixtures.mjs` (multi-page dropdown and `dir/` index navigation, a real Cafe24 package export with the guide modal, the quality panel settling) pass inside the full run. The nine failures (`edit-mode-save`, `tweaks-escape-enter`, `redesign-create-project-persists`, `redesign-pinterest-dialog`, `redesign-mobile-workspace-switch`, `redesign-thumbnail-manual-retry`, `review-R23-indexeddb-draft-files-roles-tab-and-reload`, `creation-canvas-zoom-scroll-font`, `creation-canvas-comment-save-model-mock`) fail identically on `origin/main` with the same harness fixture change and are not caused by this work: the harness was written against the retired `Portfolio Playground` fixture, and its unexpected-POST guard now trips on the existing `POST /api/sessions/:id/documents` call.
+
 Evidence for this work is kept in the ignored `.omo/ulw-loop` session directory; tests use an isolated home profile and do not touch the user's projects.
 
 - Contracts and persistence: `packages/backend/tests/graphic-set-contract.test.ts`, `graphic-canvas-contract.test.ts`, `export-options.test.ts`, `export-naming.test.ts`, `export-validation.test.ts`, `graphic-migration.test.ts`, `export-recovery.test.ts`.
