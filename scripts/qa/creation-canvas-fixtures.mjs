@@ -1,5 +1,6 @@
 // Run only against e2e-smoke's owned temporary profile. Provider POSTs are intercepted;
 // mock transcript assertions below are UI delivery checks, never provider execution proof.
+import JSZip from "jszip";
 import assert from "node:assert/strict";
 import { mkdir, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -19,6 +20,23 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
   };
   await page.route(eventPattern, guard);
   try {
+    await scenario("creation-canvas-project-import", async () => {
+      await page.goto(base);
+      const zip = new JSZip();
+      zip.file("한국흑연/index.html", '<!doctype html><html><head><link rel="stylesheet" href="style.css"></head><body><h1 id="import-heading">한국흑연 가져오기</h1><img src="logo.svg"><a href="about.html">소개</a></body></html>');
+      zip.file("한국흑연/style.css", "h1{color:rgb(255, 0, 0)}");
+      zip.file("한국흑연/logo.svg", '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="blue"/></svg>');
+      zip.file("한국흑연/about.html", '<!doctype html><html><body><h1>회사 소개</h1></body></html>');
+      await page.getByRole("button", { name: "프로젝트 가져오기", exact: true }).click();
+      await page.getByLabel("ZIP 선택", { exact: true }).setInputFiles({ name: "한국흑연.zip", mimeType: "application/zip", buffer: await zip.generateAsync({ type: "nodebuffer" }) });
+      await page.getByRole("button", { name: "가져와서 열기", exact: true }).click();
+      await page.waitForURL(/\/projects\/[^/]+$/);
+      const frame = page.frameLocator('iframe[title="캔버스"]');
+      await frame.locator("#import-heading").waitFor();
+      assert.equal(await frame.locator("#import-heading").evaluate(el => getComputedStyle(el).color), "rgb(255, 0, 0)");
+      assert.ok(await frame.locator("img").evaluate(el => el.complete && el.naturalWidth > 0));
+      await shot(page, "creation-canvas-project-import");
+    });
     await scenario("creation-canvas-ctrl-wheel-zoom", async () => {
       await createFixture(page, base, ownedHome, "Zoom keyboard test");
       await page.frameLocator('iframe[title="캔버스"]').locator("#fixture-hero").waitFor();

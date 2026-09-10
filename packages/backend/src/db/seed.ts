@@ -299,6 +299,7 @@ export async function createProjectRecord(input: {
   optionsJson: string | null;
   entrypoint: string;
   thumbnailPath: string | null;
+  initializeArtifact?: (stage: string) => Promise<void>;
 }) {
   const db = getDb();
   const now = Date.now();
@@ -357,7 +358,8 @@ export async function createProjectRecord(input: {
 
   try {
     await new ArtifactCoordinator(getSqlite()).initializeProject(projectId, dirPath, async (stage) => {
-      if (original && originalFormat) await copyOriginalSample(original.slug, originalFormat.directory, stage);
+      if (input.initializeArtifact) await input.initializeArtifact(stage);
+      else if (original && originalFormat) await copyOriginalSample(original.slug, originalFormat.directory, stage);
       else {
         await copyBundledFonts(stage);
         await writeFile(path.join(stage, input.entrypoint), initialArtifact, "utf8");

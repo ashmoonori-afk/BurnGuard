@@ -22,6 +22,7 @@ import {
   ProjectInputError,
 } from "./home-project-input";
 import { serveProjectThumbnail } from "./project-thumbnail-handler";
+import { importProject, ProjectImportError } from "../services/project-import";
 
 const VALID_PROJECT_TABS = new Set(["recent", "mine", "examples"]);
 const VALID_SYSTEM_STATUSES = new Set<DesignSystemStatus>([
@@ -89,6 +90,19 @@ function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): Sett
 }
 
 export const homeRoutes = new Hono();
+
+homeRoutes.post("/api/projects/import", async (c) => {
+  try {
+    const form = await c.req.formData().catch(() => null);
+    if (!form) throw new ProjectImportError("invalid_project_import");
+    const imported = await importProject(form);
+    await ensureProjectWatcher(imported.id);
+    return c.json(ok(imported), 201);
+  } catch (error) {
+    if (error instanceof ProjectImportError) return c.json(fail(error.code, "프로젝트 파일을 가져오지 못했어요."), error.code === "project_import_limit" ? 413 : 400);
+    throw error;
+  }
+});
 
 homeRoutes.get("/api/projects", async (c) => {
   const tab = c.req.query("tab") ?? "recent";

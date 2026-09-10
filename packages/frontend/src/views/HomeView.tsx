@@ -26,6 +26,7 @@ import {
 } from "@/components/home/mappers";
 import ProjectCardSection from "@/components/home/ProjectCardSection";
 import ProjectCard from "@/components/home/ProjectCard";
+import ProjectImportDialog from "@/components/home/ProjectImportDialog";
 import NewProjectPanel from "@/components/home/NewProjectPanel";
 import PinterestImportDialog from "@/components/home/PinterestImportDialog";
 import DeleteDesignSystemDialog from "@/components/home/DeleteDesignSystemDialog";
@@ -71,6 +72,7 @@ export default function HomeView() {
   const creationType: ProjectType | null = requestedType === "other" || PROJECT_TYPES.some((type) => type.id === requestedType) ? requestedType as ProjectType : null;
   const createTriggerRef = useRef<HTMLButtonElement>(null);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [projectImportOpen, setProjectImportOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState("");
   const [systemQuery, setSystemQuery] = useState("");
   const [systemStatus, setSystemStatus] = useState<"all" | "draft" | "review" | "published">("all");
@@ -305,6 +307,7 @@ export default function HomeView() {
 
   return (
     <>
+      <ProjectImportDialog open={projectImportOpen} onOpenChange={setProjectImportOpen} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="mx-auto w-full max-w-[1440px] px-4 pb-8 pt-7 sm:px-8 sm:pt-10 lg:px-10">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-5">
@@ -313,7 +316,7 @@ export default function HomeView() {
             <h1 className="text-2xl font-semibold tracking-tight sm:text-[32px] sm:leading-tight">{HOME_TITLES[activeTab].title}</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{HOME_TITLES[activeTab].description}</p>
           </div>
-          <Button ref={createTriggerRef} variant="cta" className="h-11 gap-2 rounded-xl px-4" onClick={() => startProject()} aria-haspopup="dialog"><Plus className="h-4 w-4" aria-hidden="true" />새 프로젝트</Button>
+          <div className="flex gap-2"><Button variant="outline" className="h-11" onClick={() => setProjectImportOpen(true)}>프로젝트 가져오기</Button><Button ref={createTriggerRef} variant="cta" className="h-11 gap-2 rounded-xl px-4" onClick={() => startProject()} aria-haspopup="dialog"><Plus className="h-4 w-4" aria-hidden="true" />새 프로젝트</Button></div>
         </div>
         {detectionQuery.data?.backends.every((backend) => !backend.found) ? <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-sm text-muted-foreground">AI와 작업하려면 Claude Code 또는 Codex를 연결해 주세요. 예제와 편집 기능은 먼저 살펴볼 수 있어요.</p><Button variant="outline" size="sm" onClick={() => setCliMissingOpen(true)}>AI 연결 안내</Button></div> : null}
         {activeTab === "recent" || activeTab === "mine" ? <section aria-label="빠른 시작" className="mb-10 grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 xl:grid-cols-4">

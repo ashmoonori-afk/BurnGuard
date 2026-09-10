@@ -14,6 +14,7 @@ const JSON_BODY_BYTES = 1 * MiB;
 export const MAX_USER_MESSAGE_CHARS = 200_000;
 
 const MULTIPART_ROUTES = [
+  /^\/api\/projects\/import$/,
   /^\/api\/design-systems\/upload$/,
   /^\/api\/design-systems\/[^/]+\/fonts$/,
   /^\/api\/sessions\/[^/]+\/(?:events|documents)$/,
