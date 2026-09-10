@@ -53,6 +53,12 @@ function draft(overrides: Partial<ProjectDraft> = {}): ProjectDraft {
     graphicHeight: 1080,
     useSpeakerNotes: false,
     copyAsIs: false,
+    pages: [],
+    graphicKind: "single",
+    frameCount: 1,
+    frames: [],
+    presetId: null,
+    detailBrief: {},
     ...overrides,
   };
 }
@@ -143,6 +149,28 @@ describe("keepSelectedDesignSystemId", () => {
 });
 
 describe("buildCreateProjectRequest", () => {
+  test("Given safe prototype page selections When building a request Then pages are canonical and exclude implied home", () => {
+    // Given / When
+    const request = expectRequest(buildCreateProjectRequest(draft({ type: "prototype", pages: ["about.html", "services.html"] }), SYSTEMS));
+
+    // Then
+    expect(parseDesignBriefV1(request.options?.design_brief).pages).toEqual(["about.html", "services.html"]);
+  });
+
+  test("Given duplicate, unsafe, home, excessive, or non-prototype pages When building a request Then page selection is rejected", () => {
+    // Given
+    const invalid = [
+      draft({ type: "prototype", pages: ["about.html", "ABOUT.html"] }),
+      draft({ type: "prototype", pages: ["../about.html"] }),
+      draft({ type: "prototype", pages: ["index.html"] }),
+      draft({ type: "prototype", pages: Array.from({ length: 13 }, (_, index) => `page-${index}.html`) }),
+      draft({ type: "slide_deck", pages: ["about.html"] }),
+    ];
+
+    // When / Then
+    for (const value of invalid) expect(buildCreateProjectRequest(value, SYSTEMS)).toEqual({ ok: false, problem: "pages_invalid" });
+  });
+
   test("allows a normal project with no design system", () => {
     const request = expectRequest(
       buildCreateProjectRequest(draft({ type: "prototype" }), SYSTEMS),

@@ -10,8 +10,27 @@ const validations = {
   png: { width: 320, height: 240, statistics: { pixels: 76_800, visible_pixels: 76_800, differing_pixels: 100, dominant_ratio: 0.9, luminance_variance: 10, entropy: 0.2 } },
   pptx: { slides: 3, editable_text_nodes: 8 },
   handoff: { source_files: 3, nodes: 9 },
+  cafe24_package: { entries: 8 },
+  imweb_package: { entries: 6 },
+  png_zip: {
+    transformation_version: 1,
+    outputs: [
+      { rel_path: "01.png", width: 1080, height: 1080, image_format: "png", bytes: 100, sha256: digest, sequence: 1, source_region: { top: 0, bottom: 1080 } },
+      { rel_path: "02.png", width: 1080, height: 1080, image_format: "png", bytes: 120, sha256: digest, sequence: 2, source_region: { top: 1080, bottom: 2160 } },
+    ],
+    aggregate: { frames: 2, dpr: 1 },
+  },
 } as const;
-const options = { html_zip: {}, pdf: { pdf_paper: "letter" }, png: { png_width: 320, png_height: 240, png_dpr: 1 }, pptx: { pptx_size: "16x9" }, handoff: {} } as const;
+const options = {
+  html_zip: {},
+  pdf: { pdf_paper: "letter" },
+  png: { png_width: 320, png_height: 240, png_dpr: 1 },
+  pptx: { pptx_size: "16x9" },
+  handoff: {},
+  cafe24_package: {},
+  imweb_package: { asset_base_url: "https://cdn.example.com/assets/" },
+  png_zip: { slice_height: 5000, slice_format: "png" },
+} as const;
 type Format = keyof typeof validations;
 type MutablePdf = { pages: number; observations: Array<{ page: number; raster_width: number; raster_height: number; statistics: Record<string, number>; content_bounds: null | Record<string, number> }> };
 function receipt(format: Format): Record<string, unknown> { return { schema_version: 1, job_id: "job", attempt_id: "attempt", parent_attempt_id: null, format, project: { id: "p", revision: 7, digest }, options: options[format], output_file: format === "pdf" ? "artifact.pdf" : format === "png" ? "artifact.png" : format === "pptx" ? "artifact.pptx" : "artifact.zip", output_size: 3, digests: { input_closure: digest, design_system: null, options: sha256(canonicalJson(options[format])), renderer: digest, capture: digest, output: digest }, validation: validations[format] }; }
@@ -78,6 +97,16 @@ describe("authoritative export receipt boundary", () => {
     const digestForgery = receipt("pdf"); (digestForgery.digests as Record<string, unknown>).options = digest; cases.push(["options digest", digestForgery]);
     const filename = receipt("pdf"); filename.output_file = "nested/artifact.pdf"; cases.push(["output basename", filename]); const size = receipt("pdf"); size.output_size = 0; cases.push(["positive output size", size]); const uppercase = receipt("pdf"); (uppercase.digests as Record<string, unknown>).renderer = "A".repeat(64); cases.push(["lowercase digest", uppercase]);
     for (const [label, value] of cases) expect(() => parseExportReceipt(value), label).toThrow("invalid_receipt");
+  });
+  test("Given a PNG ZIP receipt When an output identity is forged Then the receipt is rejected", () => {
+    // Given
+    const value = receipt("png_zip");
+    const validation = structuredClone(validations.png_zip);
+    validation.outputs[1].sequence = 1;
+    value.validation = validation;
+
+    // When / Then
+    expect(() => parseExportReceipt(value)).toThrow("invalid_receipt");
   });
   test("rejects non-finite PDF statistics", () => { for (const field of ["dominant_ratio", "luminance_variance", "entropy"] as const) expect(() => parseExportReceipt(forgedPdf((v) => { v.observations[0]!.statistics[field] = Number.POSITIVE_INFINITY; })), field).toThrow("invalid_receipt"); });
 });

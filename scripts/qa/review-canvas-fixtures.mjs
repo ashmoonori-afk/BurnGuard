@@ -32,7 +32,7 @@ export async function runReviewCanvasFixtures(page, context, base, scenario) {
     if (pathname === `/api/design-systems/${SYSTEM}/previews`) return ok([]);
     if (pathname === `/api/projects/${PROJECT}`) return ok(projectFixture());
     if (pathname === `/api/projects/${PROJECT}/session`) return ok(sessionFixture());
-    if (pathname === `/api/projects/${PROJECT}/artifacts`) return ok({ project_id: PROJECT, entrypoint: "long.html", entrypoint_url: `/api/projects/${PROJECT}/fs/long.html`, design_system_id: SYSTEM, design_system_url: null, file_count: 5, current_revision: 1, current_digest: DIGEST, updated_at: AT });
+    if (pathname === `/api/projects/${PROJECT}/artifacts`) return ok({ project_id: PROJECT, entrypoint: "long.html", entrypoint_url: `/api/projects/${PROJECT}/fs/long.html`, pages: [{ rel_path: "long.html", title: "long", is_home: true, nav_order: 0 }], site_overflow: false, design_system_id: SYSTEM, design_system_url: null, file_count: 5, current_revision: 1, current_digest: DIGEST, updated_at: AT });
     if (pathname === `/api/projects/${PROJECT}/files`) return state.filesFail
       ? route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: { code: "fixture_temporary_failure", message: "PRIVATE_FIXTURE_FAILURE" } }) })
       : ok(fileFixtures(state.shortCount));

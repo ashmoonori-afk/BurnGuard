@@ -21,7 +21,8 @@ describe("pruneOldExports", () => {
     const ids = createExportAuthority(db, { projectId, revision: 1, digest: "a".repeat(64), designSystemDigest: null, format: "html_zip", options: {}, rendererDigest: "r", captureDigest: "c" });
     const root = path.join(exportsDir, "attempts", ids.attemptId), output = path.join(root, "artifact.zip");
     try {
-      await mkdir(root, { recursive: true }); await writeFile(output, "owned");
+      await mkdir(path.join(root, "frames"), { recursive: true }); await mkdir(path.join(root, "platform"), { recursive: true });
+      await writeFile(output, "owned"); await writeFile(path.join(root, "frames", "01.png"), "frame"); await writeFile(path.join(root, "platform", "GUIDE.html"), "guide");
       advanceExportAttempt(db, { attemptId: ids.attemptId, status: "validating", stage: "publishing" });
       completeExportAttempt(db, { ...ids, outputPath: output, size: 5, outputDigest: "o", receiptDigest: "r" });
       const deadline = db.query<{ deadline: number }, [string]>("SELECT json_extract(retention_json,'$.retained_until') deadline FROM export_attempts WHERE id=?").get(ids.attemptId)?.deadline;

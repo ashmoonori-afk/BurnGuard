@@ -12,6 +12,8 @@ export type DesignAuditGroups = {
 };
 export type DesignAuditViewState =
   | { readonly kind: "loading" }
+  /** No report, no error, and no request in flight: the spinner must not be shown. */
+  | { readonly kind: "idle" }
   | { readonly kind: "error_cold"; readonly errorCode: DesignAuditErrorCode }
   | { readonly kind: "error_warm"; readonly report: DesignAuditResult; readonly errorCode: DesignAuditErrorCode; readonly current: boolean }
   | { readonly kind: "stale"; readonly report: DesignAuditResult; readonly running: boolean }
@@ -82,7 +84,7 @@ export function designAuditViewState(input: ViewInput): DesignAuditViewState {
   if (!input.renderable) return { kind: "unavailable" };
   if (input.report === null) {
     if (input.errorCode !== null) return { kind: "error_cold", errorCode: input.errorCode };
-    return { kind: "loading" };
+    return input.pending || input.rerunning ? { kind: "loading" } : { kind: "idle" };
   }
   if (input.errorCode !== null) return { kind: "error_warm", report: input.report, errorCode: input.errorCode, current: isDesignAuditCurrent(input.report, input.currentDigest) };
   if (!isDesignAuditCurrent(input.report, input.currentDigest)) return { kind: "stale", report: input.report, running: input.rerunning || input.pending };

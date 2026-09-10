@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import type {
@@ -18,12 +18,15 @@ import ProjectBriefFields, {
   ToggleRow,
 } from "@/components/home/ProjectBriefFields";
 import { GraphicCanvasFields } from "@/components/home/GraphicCanvasFields";
+import { GraphicSetFields } from "@/components/home/GraphicSetFields";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { readCreationDraft, writeCreationDraft } from "@/lib/creation-draft";
 import {
   INITIAL_BRIEF_FORM,
   PROBLEM_MESSAGE,
   PROJECT_CONTROL_CLASS,
   PROJECT_LABEL_CLASS,
+  PROTOTYPE_PAGE_PRESETS,
   buildCreateProjectRequest,
   keepSelectedDesignSystemId,
   isOriginalSampleSystem,
@@ -65,7 +68,8 @@ export default function NewProjectPanel({
   const [backendId, setBackendId] = useState<BackendId>(defaultBackend);
   const [templateFormat, setTemplateFormat] = useState<"prototype" | "slide_deck" | "graphic">("prototype");
   const [generationByBackend, setGenerationByBackend] = useState(generationDefaults ?? {});
-  const [form, setForm] = useState<BriefForm>(INITIAL_BRIEF_FORM);
+  const [form, setForm] = useState<BriefForm>(() => readCreationDraft(type));
+  const draftTypeRef = useRef(type);
   const [pickedSystemId, setPickedSystemId] = useState<string | null>(null);
   const [items, setItems] = useState<readonly IntakeItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +122,17 @@ export default function NewProjectPanel({
     onPendingChange?.(disabled);
     return () => onPendingChange?.(false);
   }, [disabled, onPendingChange]);
+
+  // What the user typed is a draft: it survives navigation, reload, and a
+  // failed create, and each project type keeps its own.
+  useEffect(() => {
+    if (draftTypeRef.current === type) {
+      writeCreationDraft(type, form);
+      return;
+    }
+    draftTypeRef.current = type;
+    setForm(readCreationDraft(type));
+  }, [form, type]);
 
   function update<K extends keyof BriefForm>(key: K, value: BriefForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -238,7 +253,27 @@ export default function NewProjectPanel({
           />
         )}
 
-        {effectiveType === "prototype" && <div className="space-y-1.5"><label htmlFor="section-count" className={PROJECT_LABEL_CLASS}>세로 섹션 수</label><Input id="section-count" type="number" min={1} max={30} step={1} value={form.sectionCount ?? 6} disabled={disabled} onChange={(event) => update("sectionCount", event.target.valueAsNumber)} /><p className="text-xs text-muted-foreground">탐색 메뉴와 푸터를 제외한 본문 섹션 수예요.</p></div>}
+        {isGraphic && !isOriginal && (
+          <GraphicSetFields
+            form={form}
+            disabled={disabled}
+            onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
+          />
+        )}
+
+        {effectiveType === "prototype" && <>
+          <div className="space-y-1.5"><label htmlFor="section-count" className={PROJECT_LABEL_CLASS}>세로 섹션 수</label><Input id="section-count" type="number" min={1} max={30} step={1} value={form.sectionCount ?? 6} disabled={disabled} onChange={(event) => update("sectionCount", event.target.valueAsNumber)} /><p className="text-xs text-muted-foreground">탐색 메뉴와 푸터를 제외한 본문 섹션 수예요.</p></div>
+          <fieldset className="space-y-2" disabled={disabled}>
+            <legend className={PROJECT_LABEL_CLASS}>페이지 구성</legend>
+            <div className="flex flex-wrap gap-2">
+              {PROTOTYPE_PAGE_PRESETS.map((preset) => {
+                const selected = form.pages.includes(preset.relPath);
+                return <button key={preset.relPath} type="button" aria-pressed={selected} aria-label={`${preset.label} 페이지 ${selected ? "제외" : "추가"}`} onClick={() => update("pages", selected ? form.pages.filter((page) => page !== preset.relPath) : [...form.pages, preset.relPath])} className={selected ? "min-h-9 rounded-full border border-accent bg-accent-soft px-3 text-xs font-medium text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" : "min-h-9 rounded-full border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"}>{preset.label}</button>;
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">홈(index.html)은 자동으로 포함돼요.</p>
+          </fieldset>
+        </>}
         <div className="space-y-2"><label htmlFor="project-materials" className={PROJECT_LABEL_CLASS}>참고 자료 첨부</label><input id="project-materials" type="file" multiple accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")} disabled={disabled} onChange={(event) => { const picked = Array.from(event.target.files ?? []); setItems((current) => planAttachmentIntake(current, picked)); event.target.value = ""; }} className="block w-full text-sm" /><p className="text-xs text-muted-foreground">PDF·PPTX, 최대 8개 · 파일당 10 MB · 합계 25 MB. 프로젝트 생성 시 docs/attachments에 원본을 저장해요. 직접 전송할 때 AI에 전달하며, 첨부를 빼도 저장된 원본은 남아요.</p><ComposerAttachments items={items} sending={disabled} onRemove={(id) => setItems((current) => current.filter((item) => item.id !== id))} onRoleChange={(id, role) => setItems((current) => setAttachmentRole(current, id, role))} /></div>
         <ProjectBriefFields
           form={form}

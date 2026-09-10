@@ -286,6 +286,47 @@ limitations without coercing custom sizes.
 
 ---
 
+## ADR-015: Deliverable kinds, platform packages, and additive brief fields
+
+**Date**: 2026-09-10
+**Status**: Accepted
+
+**Context.** BurnGuard needs multi-frame graphics, long product-detail
+exports, and guided delivery to Cafe24 (카페24) and Imweb (아임웹) without
+adding another project type or promising an undocumented authenticated push.
+The persisted design brief also needs an optional page list, while ADR-013
+requires intentional versioning of persisted brief shapes. Platform dimensions
+and limits have mixed evidence quality, and Imweb cannot host BurnGuard's
+bundled fonts through the documented package flow.
+
+**Decision.** Add `png_zip`, `cafe24_package`, and `imweb_package` as export
+formats through migration 0014. Represent graphic deliverable kinds in the new
+versioned `options_json.graphic_set` block (`GraphicSetV1`, `schema_version: 1`)
+rather than adding a `ProjectType`; absence preserves the legacy `single` kind,
+and malformed or unsupported versions fail with a typed contract error. Add
+`DesignBriefV1.pages` as an optional additive field without introducing V2,
+consistent with ADR-013's versioning rule. Deliver platform support as guided
+downloadable packages with manual installation; defer direct push until a
+documented endpoint exists. Keep platform presets in one data module with
+`verified` or `unverified` status and a checked date; unverified vendor figures
+produce warnings rather than hard limits. Imweb packages use a system-font
+fallback by default and may offer Google Fonts links only as an explicit,
+guide-flagged opt-in exception to the runtime font policy in doc/05.
+
+**Consequences.**
+- Existing graphic projects remain readable without migration to a new project
+  type or brief version
+- Migration 0014 changes export-format persistence while leaving project-type
+  persistence unchanged
+- Package download is not represented as successful platform publication, and
+  Cafe24/Imweb credentials are not collected or stored
+- Platform claims remain auditable and cannot become blocking vendor rules
+  without verified evidence
+- Opting into Google Fonts for Imweb creates a disclosed runtime network
+  dependency and possible visual variance; the default package does not
+
+---
+
 ## Template for new ADRs
 
 ```

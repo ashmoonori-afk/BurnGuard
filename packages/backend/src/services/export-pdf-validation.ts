@@ -1,9 +1,9 @@
 import type { BrowserContext } from "playwright-core";
 import { getDocument } from "./export-native-modules";
-import { PDF_POINT_TOLERANCE } from "./export-pdf-contract";
+import { PDF_POINT_TOLERANCE, pdfRasterBudgetFitsPages } from "./export-pdf-contract";
 import { assertPdfRasterBudget, PdfRasterError, rasterizePdfPage, type PdfContentBounds, type PdfPixelStatistics, type PdfRasterObservation, type PdfRasterPage } from "./export-pdf-raster";
 
-const MAX_PAGES = 100; const MAX_DIMENSION_POINTS = 2_000; const MAX_OPERATORS = 1_000_000; const RASTER_TIMEOUT_MS = 60_000;
+const MAX_PAGES = 100; const MAX_DIMENSION_POINTS = 12_288; const MAX_OPERATORS = 1_000_000; const RASTER_TIMEOUT_MS = 60_000;
 export type PdfPageObservation = { readonly page: number; readonly width_points: number; readonly height_points: number; readonly operators: number; readonly raster_width: number; readonly raster_height: number; readonly statistics: PdfPixelStatistics; readonly content_bounds: PdfContentBounds | null };
 export type PdfValidation = { readonly pages: number; readonly title: string; readonly observations: readonly PdfPageObservation[] };
 export class PdfValidationError extends Error { readonly name = "PdfValidationError"; constructor(readonly code: "invalid_pdf" | "page_count" | "page_dimensions" | "metadata" | "blank_page" | "clipped_page" | "raster_limit" | "raster_aborted", message: string = code) { super(message); } }
@@ -13,14 +13,16 @@ type PdfDocument = { readonly numPages: number; readonly getMetadata: () => Prom
 type PdfLoading = { readonly promise: Promise<PdfDocument>; readonly destroy: () => Promise<void> };
 export type PdfValidationDeps = { readonly load: (bytes: Uint8Array) => PdfLoading; readonly raster: (page: PdfPage, signal: AbortSignal) => Promise<PdfRasterObservation>; readonly deadlineMs?: number };
 
-export async function validatePdf(input: { readonly bytes: Uint8Array; readonly context: BrowserContext; readonly expectedPages: number; readonly expectedWidthPoints: number; readonly expectedHeightPoints: number; readonly expectedTitle: string; readonly signal?: AbortSignal }, deps: PdfValidationDeps = defaults): Promise<PdfValidation> {
+export async function validatePdf(input: { readonly bytes: Uint8Array; readonly context: BrowserContext; readonly expectedPages: number; readonly expectedWidthPoints: number; readonly expectedHeightPoints: number; readonly expectedPagePoints?: readonly { readonly width: number; readonly height: number }[]; readonly expectedTitle: string; readonly signal?: AbortSignal }, deps: PdfValidationDeps = defaults): Promise<PdfValidation> {
   if (input.bytes.length < 8 || new TextDecoder().decode(input.bytes.subarray(0, 5)) !== "%PDF-") throw new PdfValidationError("invalid_pdf");
   if (input.expectedPages <= 0 || input.expectedPages > MAX_PAGES) throw new PdfValidationError("page_count");
-  if (input.expectedWidthPoints <= 0 || input.expectedHeightPoints <= 0 || input.expectedWidthPoints > MAX_DIMENSION_POINTS || input.expectedHeightPoints > MAX_DIMENSION_POINTS) throw new PdfValidationError("page_dimensions");
-  assertPdfRasterBudget(input.expectedWidthPoints, input.expectedHeightPoints, input.expectedPages); void input.context;
+  const expectedPoints = input.expectedPagePoints ?? Array.from({ length: input.expectedPages }, () => ({ width: input.expectedWidthPoints, height: input.expectedHeightPoints }));
+  if (expectedPoints.length !== input.expectedPages || expectedPoints.some((points) => points.width <= 0 || points.height <= 0 || points.width > MAX_DIMENSION_POINTS || points.height > MAX_DIMENSION_POINTS)) throw new PdfValidationError("page_dimensions");
+  if (!pdfRasterBudgetFitsPages(expectedPoints)) throw new PdfValidationError("raster_limit");
+  assertPdfRasterBudget(input.expectedWidthPoints, input.expectedHeightPoints, 1); void input.context;
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), deps.deadlineMs ?? RASTER_TIMEOUT_MS); const callerAbort = (): void => controller.abort(); let callerListener = false;
   if (input.signal?.aborted === true) controller.abort(); else if (input.signal !== undefined) { input.signal.addEventListener("abort", callerAbort, { once: true }); callerListener = true; }
-  let loading: PdfLoading | null = null; let document: PdfDocument | null = null; let loadingDestroyPromise: Promise<void> | null = null; let documentDestroyPromise: Promise<void> | null = null; let primaryError: unknown = null;
+  let loading: PdfLoading | null = null; let document: PdfDocument | null = null; let loadingDestroyPromise: Promise<void> | null = null; let documentDestroyPromise: Promise<void> | null = null; let primaryError: unknown = null; let result: PdfValidation | null = null; let cleanupError: unknown = null;
   const observe = (promise: Promise<void> | null): void => { if (promise !== null) void promise.catch(() => {}); };
   const destroyLoading = (): Promise<void> | null => { if (loading === null) return null; if (loadingDestroyPromise === null) { let resolve!: () => void; let reject!: (error: unknown) => void; loadingDestroyPromise = new Promise<void>((yes, no) => { resolve = yes; reject = no; }); observe(loadingDestroyPromise); try { void Promise.resolve(loading.destroy()).then(resolve, reject); } catch (error) { reject(error); } } return loadingDestroyPromise; };
   const destroyDocument = (): Promise<void> | null => { if (document === null) return null; if (documentDestroyPromise === null) { let resolve!: () => void; let reject!: (error: unknown) => void; documentDestroyPromise = new Promise<void>((yes, no) => { resolve = yes; reject = no; }); observe(documentDestroyPromise); try { void Promise.resolve(document.destroy()).then(resolve, reject); } catch (error) { reject(error); } } return documentDestroyPromise; };
@@ -33,19 +35,22 @@ export async function validatePdf(input: { readonly bytes: Uint8Array; readonly 
     for (let number = 1; number <= document.numPages; number += 1) {
       const ownedPage = await acquireOwnedPage(document.getPage(number), controller.signal); const page = ownedPage.page;
       try {
-        const viewport = page.getViewport({ scale: 1 }); if (!finiteDimension(viewport.width) || !finiteDimension(viewport.height) || Math.abs(viewport.width - input.expectedWidthPoints) > PDF_POINT_TOLERANCE || Math.abs(viewport.height - input.expectedHeightPoints) > PDF_POINT_TOLERANCE) throw new PdfValidationError("page_dimensions");
+        const viewport = page.getViewport({ scale: 1 }); const expected = expectedPoints[number - 1]; if (expected === undefined || !finiteDimension(viewport.width) || !finiteDimension(viewport.height) || Math.abs(viewport.width - expected.width) > PDF_POINT_TOLERANCE || Math.abs(viewport.height - expected.height) > PDF_POINT_TOLERANCE) throw new PdfValidationError("page_dimensions");
         const operators = (await bounded(page.getOperatorList(), controller.signal)).fnArray.length; if (!Number.isSafeInteger(operators) || operators < 0 || operators > MAX_OPERATORS) throw new PdfValidationError("raster_limit");
         const rasterPromise = deps.raster(page, controller.signal); let raster: PdfRasterObservation; try { raster = await bounded(rasterPromise, controller.signal); } catch (error) { if (controller.signal.aborted) await Promise.allSettled([rasterPromise]); throw error; } observations.push({ page: number, width_points: viewport.width, height_points: viewport.height, operators, ...raster });
       } finally { ownedPage.cleanup(); }
     }
-    return { pages: document.numPages, title, observations };
+    result = { pages: document.numPages, title, observations };
   } catch (error) {
     const mapped = mapError(error, controller.signal); primaryError = mapped; throw mapped;
   } finally {
     clearTimeout(timeout); controller.signal.removeEventListener("abort", abortOwned); if (callerListener) input.signal?.removeEventListener("abort", callerAbort);
     const outcomes = await awaitMemoizedDestruction(destroyDocument, destroyLoading);
-    if (primaryError === null) { const rejected = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === "rejected"); if (rejected !== undefined) throw rejected.reason; }
+    if (primaryError === null) { const rejected = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === "rejected"); if (rejected !== undefined) cleanupError = rejected.reason; }
   }
+  if (cleanupError !== null) throw cleanupError;
+  if (result === null) throw new PdfValidationError("invalid_pdf");
+  return result;
 }
 async function awaitMemoizedDestruction(destroyDocument: () => Promise<void> | null, destroyLoading: () => Promise<void> | null): Promise<PromiseSettledResult<void>[]> {
   const started = [destroyDocument(), destroyLoading()].filter((promise): promise is Promise<void> => promise !== null);

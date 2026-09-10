@@ -44,6 +44,8 @@
 
 New projects and bundled themes carry `fonts/fonts.css`, local WOFF2 files, and their licenses. The shared source is [`assets/fonts/`](../assets/fonts/README.md). Load the stylesheet before applying type tokens; do not depend on Google Fonts network requests at runtime.
 
+**Imweb package exception.** Imweb (아임웹) does not host uploaded font files through the documented code-widget flow, so an Imweb export cannot carry the bundled WOFF2 files. Imweb packages therefore default to a system-font fallback stack and emit no font link. Google Fonts links may be added only as an explicit, guide-flagged opt-in that discloses the resulting external request and possible visual variance; nothing else may rely on Google Fonts at runtime. This exception is recorded in [ADR-015](./07-decisions.md#adr-015-deliverable-kinds-platform-packages-and-additive-brief-fields) and its shipped state is described in [doc/15](./15-platform-packages-and-graphic-sets-2026-09-10.md).
+
 | Role | Default stack | Intended use |
 |---|---|---|
 | Body / UI | DM Sans, Pretendard, system-ui, sans-serif | English and Korean body copy; 16–18px, line-height 1.55–1.8 |

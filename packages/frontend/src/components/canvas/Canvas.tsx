@@ -11,6 +11,7 @@ import DrawLayer, {
 import EditLayer, { type EditTarget } from "./EditLayer";
 import TweaksLayer, { type TweaksStyleKey, type TweaksTarget } from "./TweaksLayer";
 import QualityLayer from "./QualityLayer";
+import GraphicFrameNavigator from "./GraphicFrameNavigator";
 import {
   buildSandboxedArtifactSrcDoc,
   requestFrameSetActiveSlide,
@@ -361,6 +362,12 @@ export default function Canvas({
           requestKey={loadedFrameKey ?? "not-loaded"}
           onRevealResult={onQualityRevealResult}
         />}
+        {graphicCanvas != null && (
+          <GraphicFrameNavigator
+            iframeRef={iframeRef}
+            requestKey={loadedFrameKey}
+          />
+        )}
         <DrawLayer
           ref={drawLayerRef}
           active={mode === "draw" && !drawLoading && !drawError}

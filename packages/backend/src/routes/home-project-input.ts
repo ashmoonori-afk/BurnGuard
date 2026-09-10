@@ -69,10 +69,12 @@ export function parseProjectInput(input: unknown): ParsedProjectInput {
   }
   let optionsJson: string | null = null;
   let graphicCanvasPresent = false;
+  let graphicSetPresent = false;
   if (input["options"] !== undefined) {
     try {
       const options = parseProjectOptions(input["options"]);
       graphicCanvasPresent = options.graphic_canvas !== null;
+      graphicSetPresent = isRecord(input["options"]) && "graphic_set" in input["options"];
       optionsJson = JSON.stringify(options);
     } catch (error) {
       if (error instanceof UpgradeContractError) {
@@ -85,7 +87,7 @@ export function parseProjectInput(input: unknown): ParsedProjectInput {
       throw error;
     }
   }
-  if ((type === "graphic") !== graphicCanvasPresent) {
+  if ((type === "graphic") !== graphicCanvasPresent || (type !== "graphic" && graphicSetPresent)) {
     throw new ProjectInputError(
       "invalid_project_options",
       type === "graphic"

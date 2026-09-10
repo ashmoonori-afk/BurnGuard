@@ -24,6 +24,7 @@ import { runReviewCanvasFixtures } from "./review-canvas-fixtures.mjs";
 import { runUiRedesignFixtures } from "./ui-redesign-fixtures.mjs";
 import { runCreationCanvasFixtures } from "./creation-canvas-fixtures.mjs";
 import { runSettingsRedesignFixtures } from "./settings-redesign-fixtures.mjs";
+import { runDeliverablesFixtures } from "./deliverables-fixtures.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
@@ -33,7 +34,10 @@ const CHANNEL = args.channel ?? "chrome";
 const SHOTS = path.resolve(args.shots ?? path.join(tmpdir(), "burnguard-e2e-shots"));
 const BASE = `http://127.0.0.1:${PORT}`;
 const READY = `[burnguard] listening on ${BASE}`;
-const FIXTURE_PROJECT = "Portfolio Playground";
+// A seeded original sample (packages/backend/src/db/seed-original-samples.ts): the
+// legacy "Portfolio Playground" fixture is skipped on a fresh install once the
+// original samples exist, so the harness works on the sample that is always seeded.
+const FIXTURE_PROJECT = "VELUNE · Web";
 const SCENARIO_TIMEOUT_MS = 120_000;
 let backendLog = "";
 
@@ -71,8 +75,7 @@ try {
 
   let projectUrl = null;
   await scenario("open-example-project", async () => {
-    // The seeded "Portfolio Playground" fixture is a plain project (no
-    // tutorial tag), so it lives on the 최근 tab, not on 예제.
+    // The seeded original sample lives on the 최근 tab, not on 예제.
     await page.getByRole("tab", { name: "최근 작업", exact: true }).click();
     const card = page.locator("a[href^='/projects/']").filter({ hasText: FIXTURE_PROJECT }).first();
     await card.waitFor({ timeout: 20_000 });
@@ -250,6 +253,7 @@ try {
   await runReviewCanvasFixtures(page, context, BASE, scenario);
   await runSettingsRedesignFixtures(page, BASE, scenario);
   await runCreationCanvasFixtures(page, BASE, scenario, { home, shot });
+  await runDeliverablesFixtures(page, BASE, scenario, { home, shot });
 } catch (error) {
   results.push({ name: "harness", ok: false, error: String(error?.stack ?? error) });
 } finally {

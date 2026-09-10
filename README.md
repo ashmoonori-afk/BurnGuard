@@ -17,8 +17,11 @@ BurnGuard is an AI design workspace that runs on your computer. Connect **Claude
 | What you want to make | What you can do in BurnGuard |
 |---|---|
 | Presentations | Create a slide deck, review each slide, then present it or export it as PDF or PPTX. |
-| Web designs | Create a homepage and linked subpages, navigate them in the preview, and edit HTML on canvas. Start from landing templates with matching design systems. |
+| Web designs | Create a multi-page website with a homepage and linked subpages, navigate them in the preview, and edit HTML on canvas. Start from landing templates with matching design systems. |
 | Graphics | Set the canvas dimensions, create a design, and export it as PNG. |
+| Card news (카드뉴스) and banner sets | Create a multi-frame set from a platform preset, review each frame, then export a PNG bundle (ZIP) or one PDF page per frame. |
+| Product detail pages (상세페이지) | Create one long marketplace-width page and export it as section-aware PNG or JPEG slices in a PNG bundle (ZIP). |
+| Cafe24 and Imweb pages | Export a Cafe24 (카페24) Smart Design package or an Imweb (아임웹) code-widget package and install it yourself using the guide bundled in the ZIP. |
 | Consistent designs | Connect a published design system's colors, typography, and rules to a project. |
 | Work from existing material | Choose a template or attach PDF/PPTX documents and assign reference roles. |
 | Interactive 3D | Add and adjust Three.js objects, or ask AI to create a scene; orbit and zoom in the preview. |
@@ -42,6 +45,8 @@ See the actual output beside your AI conversation. Choose editing, styles, comme
 Open **Quality → UX improvements** to review the current HTML structure and search 10 original patterns. Send a proposal to the existing AI conversation with an explicit click, preserving the selected model and effort. Product-owned anti-slop rules and model-specific execution guidance apply to generation; static heuristics do not certify usability or visual quality. [Guidance and verification scope](doc/design-craft.md).
 
 Edit text and images individually. Website ZIPs include the project HTML, CSS, JavaScript, images and bundled fonts: extract and upload to static hosting. Features that require an external API or server still need that service.
+
+A website can also be exported as a **Cafe24 Smart Design package** (a dedicated layout file, one fragment per page, and the rewritten asset tree) or an **Imweb code-widget package** (one scoped fragment per page plus shared header and footer code). Both archives contain a step-by-step Korean installation guide, which the app also shows beside the finished export. Multi-frame graphics export as a **PNG bundle (ZIP)**, one image per frame; a long product detail page exports as PNG or JPEG slices cut at section boundaries; and a graphic set can print as a PDF sized to its artboards. Cafe24 and Imweb packages were checked against vendor documentation only, not on a real shop, so review the package findings before installing.
 
 Select an element to resize or rotate it with canvas handles, or enter its width, height and aspect ratio. Typography and spacing live under **Advanced (고급)**. The **Color palette** beside Quality updates opaque HEX colors in the current HTML and its linked local CSS, with undo. **Fix issues automatically** sends the current findings to your selected AI and runs another quality check after the turn completes; unresolved and unmeasurable checks stay visible.
 
@@ -134,7 +139,7 @@ macOS builds use the same Velopack release channel: `bun run build:mac:release` 
 2. **Create with AI** — Select the model and effort, review the draft, then send it. Increase effort explicitly when the task needs more reasoning; LOW does not guarantee a particular response time.
 3. **Review the result** — Open generated files and inspect them on canvas. Conversation drafts and attachment roles are restored per session.
 4. **Refine directly** — Pan and zoom the canvas, scroll while editing styles, load installed fonts, and adjust 3D objects. Send a saved comment to AI with its file and target context, then follow the result in the conversation. Undo/Redo and quality checks remain available.
-5. **Export** — Choose a format supported by the project. Follow progress, cancellation, failure, and expiration states, then download an available result.
+5. **Export** — Choose a format supported by the project: HTML ZIP, PDF, PPTX, PNG, PNG bundle (ZIP), or a Cafe24 or Imweb platform package. Follow progress, cancellation, failure, and expiration states, then download an available result. A finished platform package is marked as downloaded, not as published.
 
 ![New project screen guiding users through project type and required details](doc/images/project-create.png)
 
@@ -194,7 +199,7 @@ Run tests from the repository root. The preload prepares an isolated temporary p
 
 ## Current scope
 
-- This is a single-user workspace that uses local CLIs. Cloud collaborative editing, hosting, and automatic deployment are outside its scope.
+- This is a single-user workspace that uses local CLIs. Cloud collaborative editing, hosting, and automatic deployment are outside its scope. Cafe24 and Imweb platform packages are installed manually by following the guide bundled with the package; BurnGuard never signs in to those platforms or uploads anything for you.
 - The research catalog supplies references and limitations for generation. It does not provide a separate research management UI or guarantee the quality of every source. See the [research documentation](doc/research.md).
 - External providers, Figma accounts, all user document types, macOS, Narrator, and full accessibility conformance require verification beyond local regression tests.
 - Per-file coverage gaps and the exact validation scope are recorded in the [previous review](doc/09-review-remediation-2026-09-08.md), [UI redesign](doc/10-ui-redesign-2026-09-09.md), and [creation and canvas update](doc/11-creation-tools-and-canvas-2026-09-09.md).

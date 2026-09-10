@@ -95,6 +95,17 @@ describe("design audit state", () => {
     expect(designAuditViewState({ renderable: true, report: recommended, pending: false, rerunning: false, errorCode: null, currentDigest: DIGEST_A }).kind).toBe("recommended");
     expect(designAuditViewState({ renderable: true, report: current, pending: false, rerunning: true, errorCode: null, currentDigest: DIGEST_A })).toMatchObject({ kind: "ready", running: true });
   });
+  test("Given no report, no error, and no request in flight When deriving Then the panel is idle, never loading", () => {
+    const settled = { renderable: true, report: null, pending: false, rerunning: false, errorCode: null, currentDigest: DIGEST_A } as const;
+    expect(designAuditViewState(settled).kind).toBe("idle");
+    expect(designAuditViewState({ ...settled, rerunning: true }).kind).toBe("loading");
+    const quality: QualityPanelBinding = { state: designAuditViewState(settled), pendingFindingId: null, focusedFindingId: null, revealResult: null, onRetry() {}, onOpenFile() {}, onReveal() {}, onApplySafeFix() {}, onAutoFix() {}, autoFixPending: false, autoFixDisabled: false };
+    const markup = renderToStaticMarkup(createElement(QualityPanel, { quality }));
+    expect(markup).toContain("다시 검사해 주세요");
+    expect(markup).not.toContain("검사하고");
+    const retryButton = markup.match(/<button[^>]*>[\s\S]*?<\/button>/g)?.find((button) => button.includes("다시 검사")) ?? "";
+    expect(retryButton).not.toContain('disabled=""');
+  });
   test("Given bounded and unknown API errors When mapping Then a closed machine code is returned", () => {
     expect(designAuditErrorCode(new ApiError("project_path_unavailable", "x", 503))).toBe("project_path_unavailable");
     expect(designAuditErrorCode(new ApiError("stale_revision", "raw", 409))).toBe("stale_revision");

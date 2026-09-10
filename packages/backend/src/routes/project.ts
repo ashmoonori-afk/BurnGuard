@@ -3,6 +3,7 @@ import type { ApiErrorBody, ApiSuccess, ProjectDetail, SessionInfo } from "@bg/s
 import { getSqlite } from "../db/sqlite-client";
 import { deleteProject, ProjectDeletionError } from "../services/project-deletion";
 import { getLatestProjectSession, getProjectDetail } from "../db/project-read-repository";
+import { parseStoredProjectOptions } from "../services/project-options";
 import { processProjectFilesystemSignal } from "../services/watchers";
 import { designDirectionRoutes } from "./design-directions";
 
@@ -27,7 +28,7 @@ projectRoutes.get("/api/projects/:id", async (c) => {
   if (!project) {
     return c.json(fail("project_not_found", "Project not found", { id }), 404);
   }
-  return c.json(ok(project satisfies ProjectDetail));
+  return c.json(ok({ ...project, options_json: JSON.stringify(parseStoredProjectOptions(project.options_json)) } satisfies ProjectDetail));
 });
 
 projectRoutes.get("/api/projects/:id/session", async (c) => {

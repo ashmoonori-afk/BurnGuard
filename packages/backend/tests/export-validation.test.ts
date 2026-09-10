@@ -74,6 +74,35 @@ describe("export validation contracts", () => {
     expect(() => parseExportOptions("pdf", { pptx_size: "4x3" })).toThrow();
   });
 
+  test("Given platform and frame formats When options parsed Then only their canonical options are accepted", () => {
+    // Given / When / Then
+    expect(parseExportOptions("cafe24_package", { asset_base_url: "/web/upload/burnguard/project/" })).toEqual({ asset_base_url: "/web/upload/burnguard/project/" });
+    expect(parseExportOptions("imweb_package", { asset_base_url: "https://cdn.example.com/assets/" })).toEqual({ asset_base_url: "https://cdn.example.com/assets/" });
+    expect(parseExportOptions("png_zip", {})).toEqual({ slice_height: 5000, slice_format: "png" });
+    expect(parseExportOptions("png_zip", { slice_height: 3000, slice_format: "jpeg", jpeg_quality: 60 })).toEqual({ slice_height: 3000, slice_format: "jpeg", jpeg_quality: 60 });
+    expect(parseExportOptions("pdf", { pdf_paper: "artboard" })).toEqual({ pdf_paper: "artboard" });
+    expect(() => parseExportOptions("png_zip", { jpeg_quality: 85 })).toThrow("invalid_field at jpeg_quality");
+    expect(() => parseExportOptions("cafe24_package", { slice_height: 3000 })).toThrow("invalid_field at slice_height");
+  });
+
+  test.each([
+    "http://example.com/assets",
+    "//example.com/assets",
+    "https://user:pass@example.com/assets",
+    "https://example.com/a/../b",
+    "https://example.com/a%2Fb",
+    "https://example.com/a%5Cb",
+    "https://example.com/a?query=1",
+    "https://example.com/a#fragment",
+    "javascript:alert(1)",
+    "/assets/../../secret",
+    "/assets/control\u0000",
+    `https://example.com/${"a".repeat(2049)}`,
+  ])("Given unsafe asset base URL %s When parsed Then it is rejected", (assetBaseUrl) => {
+    // When / Then
+    expect(() => parseExportOptions("cafe24_package", { asset_base_url: assetBaseUrl })).toThrow("invalid_field at asset_base_url");
+  });
+
   test("Given pending and validated attempts When parsed Then result digests are state-dependent", () => {
     expect(parseExportAttempt(attempt("pending")).status).toBe("pending");
     expect(parseExportAttempt(attempt("validated")).status).toBe("validated");

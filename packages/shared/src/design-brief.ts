@@ -33,6 +33,7 @@ export const DESIGN_BRIEF_DENSITIES = [
   "balanced",
   "dense",
 ] as const;
+export const DESIGN_BRIEF_PAGE_LIMIT = 12;
 export const DESIGN_BRIEF_OUTPUT_SIZES = [
   "responsive",
   "widescreen-16x9",
@@ -66,6 +67,7 @@ export type DesignBriefV1 = {
   readonly density: DesignBriefDensity;
   readonly output_size: DesignBriefOutputSize;
   readonly section_count?: number;
+  readonly pages?: readonly string[];
 };
 
 export function parseDesignBriefV1(input: unknown): DesignBriefV1 {
@@ -77,12 +79,15 @@ export function parseDesignBriefV1(input: unknown): DesignBriefV1 {
   if (!/^[a-z]{2}(?:-[A-Z]{2})?$/.test(locale)) {
     invalid("locale");
   }
+  const parsedOutputType = outputType(requiredString(record, "output_type"));
   const sectionCount = record.section_count;
-  if (sectionCount !== undefined && (record.output_type !== "prototype" || typeof sectionCount !== "number" || !Number.isSafeInteger(sectionCount) || sectionCount < 1 || sectionCount > 30)) invalid("section_count");
+  if (sectionCount !== undefined && (parsedOutputType !== "prototype" || typeof sectionCount !== "number" || !Number.isSafeInteger(sectionCount) || sectionCount < 1 || sectionCount > 30)) invalid("section_count");
+  const pages = parsePages(record.pages, parsedOutputType);
   return {
     ...(typeof sectionCount === "number" ? { section_count: sectionCount } : {}),
+    ...(pages === undefined ? {} : { pages }),
     schema_version: 1,
-    output_type: outputType(requiredString(record, "output_type")),
+    output_type: parsedOutputType,
     audience: boundedString(record, "audience", 200),
     objective: boundedString(record, "objective", 1000),
     content_source: contentSource(requiredString(record, "content_source")),
@@ -92,6 +97,15 @@ export function parseDesignBriefV1(input: unknown): DesignBriefV1 {
     density: density(requiredString(record, "density")),
     output_size: outputSize(requiredString(record, "output_size")),
   };
+}
+
+function parsePages(value: unknown, outputTypeValue: DesignBriefOutputType): readonly string[] | undefined {
+  if (value === undefined) return undefined;
+  if (outputTypeValue !== "prototype" || !Array.isArray(value) || value.length < 1 || value.length > DESIGN_BRIEF_PAGE_LIMIT) invalid("pages");
+  const pagePattern = /^(?:[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*\/)*[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*\.html$/iu;
+  if (!value.every((page): page is string => typeof page === "string" && pagePattern.test(page) && page.toLowerCase() !== "index.html")) invalid("pages");
+  if (new Set(value.map((page) => page.toLowerCase())).size !== value.length) invalid("pages");
+  return value;
 }
 
 function boundedString(

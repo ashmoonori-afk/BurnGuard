@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { getSqlite } from "../src/db/sqlite-client";
 import { buildPrompt } from "../src/harness/prompt-builder";
 import { DESIGN_CRAFT_RULES } from "../src/harness/design-craft";
+import { PROTOTYPE_NAVIGATION_CONTRACT } from "../src/harness/skills/prototype-skill";
 import { ensureLearningSchema } from "./learning-fixture";
 import {
   attachmentExtractedTextPath,
@@ -501,6 +502,32 @@ header { padding: var(--space-md); }
       expect(prompt).toContain(
         "do not use Read, Glob, or Bash against the original .pptx/.pdf attachment path.",
       );
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("Given a multi-page prototype and active page When full and compact prompts are built Then both contexts include one navigation contract", async () => {
+    // Given
+    const tempDir = await mkdtemp(path.join(tmpdir(), "burnguard-site-prompt-"));
+    try {
+      await writeFile(path.join(tempDir, "index.html"), '<title>Home</title><nav data-bg-shared="nav"><a href="about.html">About</a><a href="missing.html">Missing</a></nav><main data-bg-content><h1 data-bg-node-id="home-title">Home</h1></main>');
+      await writeFile(path.join(tempDir, "about.html"), '<title>About</title><nav data-bg-shared="nav"><a aria-current="page" href="about.html">About</a></nav><main data-bg-content><h1 data-bg-node-id="about-title">About</h1></main>');
+      const context = makeContext({ project_dir: tempDir }, { files: [
+        { rel_path: "index.html", category: "html" },
+        { rel_path: "about.html", category: "html" },
+      ] });
+
+      // When / Then
+      for (const contextMode of ["full", "compact"] as const) {
+        const prompt = await buildPrompt(context, { type: "user.message", text: "현재 페이지를 수정해줘", active_rel_path: "about.html" }, { contextMode });
+        expect(prompt).toContain("## Active page: about.html");
+        expect(prompt).toContain("## Site map");
+        expect(prompt).toContain("- 1. index.html (home)");
+        expect(prompt).toContain("MISSING: index.html -> missing.html");
+        expect(prompt.split(PROTOTYPE_NAVIGATION_CONTRACT.trim())).toHaveLength(2);
+        expect(prompt).toMatch(/## Active page: about\.html\nabout\.html —/u);
+      }
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

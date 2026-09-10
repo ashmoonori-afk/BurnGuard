@@ -14,6 +14,7 @@ export default function ProjectTopBar({
   canPresent,
   qualityGate,
   onOpenQuality,
+  platformFix,
   chatCollapsed,
   onToggleChat,
 }: {
@@ -23,6 +24,7 @@ export default function ProjectTopBar({
   canPresent: boolean;
   qualityGate: ExportQualityGate;
   onOpenQuality: () => void;
+  platformFix?: { readonly disabled: boolean; readonly onRequest: (prompt: string) => void };
   chatCollapsed?: boolean;
   onToggleChat?: () => void;
 }) {
@@ -67,7 +69,7 @@ export default function ProjectTopBar({
           <Play className="h-3.5 w-3.5" /> 발표
         </Button>)}
         <VercelShare key={project.id} projectId={project.id} />
-        <ExportMenu projectId={project.id} projectType={project.type} projectOptionsJson={project.options_json} qualityGate={qualityGate} onOpenQuality={onOpenQuality} />
+        <ExportMenu projectId={project.id} projectType={project.type} projectOptionsJson={project.options_json} qualityGate={qualityGate} onOpenQuality={onOpenQuality} {...(platformFix === undefined ? {} : { platformFix })} />
       </div>
       </div>
       {tabsSlot && <div className="h-10 min-w-0 overflow-hidden border-t border-border bg-muted/20 max-[900px]:h-11">{tabsSlot}</div>}

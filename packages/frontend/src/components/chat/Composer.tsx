@@ -52,6 +52,7 @@ export default function Composer({
   interruptPending = false,
   onInterrupt,
   initialText = "",
+  activePageLabel = null,
   projectFiles = [],
 }: {
   sessionId: string;
@@ -83,6 +84,7 @@ export default function Composer({
    * so a re-render can't clobber what the user has typed.
    */
   initialText?: string;
+  activePageLabel?: string | null;
   /** Indexed managed files are disclosed as editable-only source candidates. */
   projectFiles?: readonly FileInfo[];
 }) {
@@ -99,6 +101,13 @@ export default function Composer({
     }
   }, [backendId, draft, settings.data]);
   const { text, setText } = draft;
+  const appliedPrefill = useRef(initialText);
+  useEffect(() => {
+    if (initialText !== appliedPrefill.current) {
+      appliedPrefill.current = initialText;
+      setText(initialText);
+    }
+  }, [initialText, setText]);
   const [sendState, setSendState] = useState<ComposerSendState>({ kind: "idle" });
   const visualSources = useComposerVisualSources(() => {
     if (sendState.kind !== "processing") setSendState({ kind: "idle" });
@@ -158,6 +167,7 @@ export default function Composer({
         <label htmlFor={`composer-${sessionId}`} className="text-xs font-semibold text-foreground">작업 요청</label>
         <span className="text-[11px] text-muted-foreground">Ctrl / ⌘ + Enter</span>
       </div>
+      {activePageLabel !== null ? <div className="mb-2 w-fit max-w-full truncate rounded-full border border-border bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground" title={activePageLabel}>{activePageLabel}</div> : null}
       <ComposerAttachments
         items={visualSources.items}
         sending={sending}

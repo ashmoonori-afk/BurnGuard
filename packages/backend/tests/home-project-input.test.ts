@@ -48,7 +48,27 @@ describe("home project input boundary", () => {
         copy_as_is: false,
         design_brief: null,
         graphic_canvas: { schema_version: 1, width: 1200, height: 628 },
+        graphic_set: { schema_version: 1, kind: "single", frame_count: 1 },
       }),
+    });
+  });
+
+  test("Given a graphic-set creation request When parsed Then the set is persisted with the canvas", () => {
+    // Given / When
+    const parsed = parseProjectInput({
+      name: "카드 뉴스",
+      type: "graphic",
+      design_system_id: null,
+      backend_id: "codex",
+      options: {
+        graphic_canvas: { schema_version: 1, width: 1080, height: 1080 },
+        graphic_set: { schema_version: 1, kind: "card_news", frame_count: 6 },
+      },
+    });
+
+    // Then
+    expect(JSON.parse(parsed.optionsJson ?? "null")).toMatchObject({
+      graphic_set: { schema_version: 1, kind: "card_news", frame_count: 6 },
     });
   });
 
@@ -65,6 +85,13 @@ describe("home project input boundary", () => {
       design_system_id: null,
       backend_id: "claude-code",
       options: { graphic_canvas: { schema_version: 1, width: 1080, height: 1080 } },
+    },
+    {
+      name: "Prototype with stale graphic set",
+      type: "prototype",
+      design_system_id: null,
+      backend_id: "claude-code",
+      options: { graphic_set: { schema_version: 1, kind: "single", frame_count: 1 } },
     },
   ])("Given canvas/type mismatch When parsed Then project options reject it", (input) => {
     try {

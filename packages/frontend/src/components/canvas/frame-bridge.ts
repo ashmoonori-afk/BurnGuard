@@ -74,7 +74,9 @@ type BridgeAction =
   | "rect-selector"
   | "rect-bg"
   | "active-slide"
-  | "set-active-slide";
+  | "set-active-slide"
+  | "reveal-selector"
+  | "count-selector";
 
 /**
  * Default timeout per request. Bumped from the original 200 ms because
@@ -265,6 +267,26 @@ export async function requestFrameRectForSelector(
   })) as FrameRect | null;
 }
 
+/** Scrolls the matched element into view and answers with its rect. */
+export async function requestFrameRevealSelector(
+  iframe: HTMLIFrameElement | null,
+  selector: string,
+): Promise<FrameRect | null> {
+  return (await requestFrameBridge(iframe, "reveal-selector", {
+    selector,
+  }).catch(() => null)) as FrameRect | null;
+}
+
+export async function requestFrameCountSelector(
+  iframe: HTMLIFrameElement | null,
+  selector: string,
+): Promise<number> {
+  const count = await requestFrameBridge(iframe, "count-selector", {
+    selector,
+  }).catch(() => 0);
+  return typeof count === "number" && Number.isSafeInteger(count) && count >= 0 ? count : 0;
+}
+
 export async function requestFrameRectForBgId(
   iframe: HTMLIFrameElement | null,
   bgId: string,
@@ -433,9 +455,13 @@ const BRIDGE_SCRIPT = String.raw`(function () {
 
   function slideIndexOf(node) {
     if (!node || !node.closest) return null;
-    var slide = node.closest("[data-slide]");
+    // A graphic project has artboards instead of slides; either way the index
+    // is the frame the element belongs to, so comments and selections stay
+    // frame-local.
+    var slide = node.closest("[data-slide]") || node.closest("[data-graphic-artboard]");
     if (!slide) return null;
-    var slides = Array.prototype.slice.call(document.querySelectorAll("[data-slide]"));
+    var group = slide.hasAttribute("data-slide") ? "[data-slide]" : "[data-graphic-artboard]";
+    var slides = Array.prototype.slice.call(document.querySelectorAll(group));
     var idx = slides.indexOf(slide);
     return idx >= 0 ? idx : null;
   }
@@ -565,6 +591,24 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       } catch (e) {
         response = null;
       }
+    } else if (data.action === "reveal-selector") {
+      try {
+        var revealNode = payload.selector ? document.querySelector(String(payload.selector)) : null;
+        if (revealNode) {
+          revealNode.scrollIntoView({ block: "center", inline: "center" });
+          response = toRect(revealNode);
+        } else {
+          response = null;
+        }
+      } catch (e) {
+        response = null;
+      }
+    } else if (data.action === "count-selector") {
+      try {
+        response = payload.selector ? document.querySelectorAll(String(payload.selector)).length : 0;
+      } catch (e) {
+        response = 0;
+      }
     } else if (data.action === "rect-bg") {
       var bgRectNode = queryByBgId(payload.bgId);
       response = bgRectNode ? elementRect(bgRectNode) : null;
@@ -671,7 +715,10 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       if (href.charAt(0) === "#" || (destination.pathname === base.pathname && destination.search === base.search && destination.hash)) {
         event.preventDefault();
         scrollToFragment(destination.hash);
-      } else if (/\.html?$/i.test(destination.pathname)) {
+      } else if (/\.html?$/i.test(destination.pathname) || !/\.[^\/]*$/.test(destination.pathname.replace(/\/$/, ""))) {
+        // Mirrors resolveCanvasPageTarget: an .html file, or a directory-style
+        // path (trailing slash or extension-less last segment) that the parent
+        // resolves to dir/index.html. Asset links keep their default behavior.
         event.preventDefault();
         window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: "navigate", payload: { href: destination.href } }, "*");
       }

@@ -22,14 +22,13 @@ import {
 } from "./prompt-compact-skills";
 import { appendDesignBriefContext } from "./prompt-design-brief";
 import { appendDesignSystemContext } from "./prompt-design-system";
+import { appendGraphicOutputContext } from "./prompt-graphic-set";
 import { DESIGN_CRAFT_RULES } from "./design-craft";
 import { appendModelPromptContext } from "./prompt-model-context";
 import { appendReferenceLayoutContext } from "./prompt-reference-layout";
 import { appendVisualSourceContext } from "./prompt-visual-sources";
-import {
-  summarizeDeckHtml,
-  summarizePrototypeHtml,
-} from "./structure-extractor";
+import { summarizeDeckHtml } from "./structure-extractor";
+import { appendPrototypeSiteContext } from "./prompt-site-context";
 
 export { MAX_SKILL_CHARS } from "./prompt-design-system";
 
@@ -110,21 +109,7 @@ export async function buildPrompt(
     );
   }
   if (project.project_type === "graphic" && projectOptions.graphic_canvas !== null) {
-    const canvas = projectOptions.graphic_canvas;
-    lines.push("<burnguard-graphic-output-v1>");
-    lines.push(JSON.stringify({
-      schema_version: 1,
-      width_css_px: canvas.width,
-      height_css_px: canvas.height,
-      artboard_count: 1,
-      delivery_format: "png",
-    }));
-    lines.push("</burnguard-graphic-output-v1>");
-    lines.push(`- Exact canvas: ${canvas.width} × ${canvas.height} CSS px.`);
-    lines.push("- Author exactly one finite artboard; do not add slides, deck runtime, or a second artboard.");
-    lines.push("- Replace the starter in index.html with the authored fixed-size artboard so the canvas can render the result. Keep exactly one [data-graphic-artboard] element.");
-    lines.push("- PNG is the export format, not a replacement for index.html. If generating a raster image, save it inside the output directory and reference it from the authored index.html.");
-    lines.push("- Do not leave the starter message or a separate unreferenced PNG as the result. BurnGuard publishes the staged files after the turn finishes.");
+    appendGraphicOutputContext(lines, projectOptions.graphic_canvas, projectOptions.graphic_set);
   }
   lines.push("");
 
@@ -174,31 +159,17 @@ export async function buildPrompt(
     stageInputs: options.stageAttachmentInputs,
   });
 
-  // Structural summary of the entrypoint, when it's an HTML artifact we know
-  // how to parse. This is the main lever against runaway prompt-cache growth:
-  // Claude can plan from the map and then issue 1-2 surgical Reads instead of
-  // re-reading the full 100 KB+ file 6-8 times in a single agent loop.
-  if (
-    project.entrypoint.toLowerCase().endsWith(".html") &&
-    (project.project_type === "slide_deck" ||
-      project.project_type === "prototype")
-  ) {
-    const entrypointPath = path.isAbsolute(project.entrypoint)
-      ? project.entrypoint
-      : path.join(project.project_dir, project.entrypoint);
-    const summary =
-      project.project_type === "slide_deck"
-        ? await summarizeDeckHtml(entrypointPath)
-        : await summarizePrototypeHtml(entrypointPath);
-    if (summary) {
-      lines.push(
-        project.project_type === "slide_deck"
-          ? "## Deck structure (use this map; only Read sections you must change)"
-          : "## Prototype structure (use this map; only Read sections you must change)",
-      );
-      lines.push(summary);
-      lines.push("");
-    }
+  if (project.entrypoint.toLowerCase().endsWith(".html") && project.project_type === "prototype") {
+    await appendPrototypeSiteContext(lines, {
+      projectDir: project.project_dir,
+      entrypoint: project.entrypoint,
+      files: context.files,
+      ...(userEvent.active_rel_path === undefined ? {} : { activeRelPath: userEvent.active_rel_path }),
+    });
+  } else if (project.entrypoint.toLowerCase().endsWith(".html") && project.project_type === "slide_deck") {
+    const entrypointPath = path.isAbsolute(project.entrypoint) ? project.entrypoint : path.join(project.project_dir, project.entrypoint);
+    const summary = await summarizeDeckHtml(entrypointPath);
+    if (summary !== null) lines.push("## Deck structure (use this map; only Read sections you must change)", summary, "");
   }
 
   if (context.files.length > 0) {

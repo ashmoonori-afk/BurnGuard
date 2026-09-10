@@ -133,7 +133,7 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
         assert.equal(row.usage_input_tokens + row.usage_output_tokens, 0);
         assert.equal(db.prepare("SELECT COUNT(*) AS total FROM events WHERE session_id = ? AND type = 'user.message'").get(created.session_id).total, 0, "creating a project must not start a model turn");
       } finally { db.close(); }
-      assert.equal(blockedPosts.length, 0, "project creation unexpectedly tried another POST");
+      assert.deepEqual(blockedPosts, [], "project creation unexpectedly tried another POST");
       await page.setViewportSize({ width: 1440, height: 900 });
       const composer = page.getByRole("textbox", { name: "메시지 입력", exact: true });
       await composer.waitFor();
@@ -187,7 +187,7 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
       await shot(page, "redesign-pinterest-dialog");
       await dialog.getByRole("button", { name: "취소", exact: true }).click();
       await dialog.waitFor({ state: "hidden" });
-      assert.equal(blockedPosts.length, 0, "opening Pinterest intake must not fetch or publish a mood");
+      assert.deepEqual(blockedPosts, [], "opening Pinterest intake must not fetch or publish a mood");
     });
 
     await scenario("redesign-mobile-workspace-switch", async () => {
@@ -218,7 +218,7 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
       await page.getByRole("button", { name: "작업 화면", exact: true }).click();
       await workspace.waitFor({ state: "visible" });
       await shot(page, "redesign-mobile-workspace");
-      assert.equal(blockedPosts.length, 0, "switching panes must not send a model request");
+      assert.deepEqual(blockedPosts, [], "switching panes must not send a model request");
       await page.setViewportSize({ width: 1440, height: 900 });
     });
 

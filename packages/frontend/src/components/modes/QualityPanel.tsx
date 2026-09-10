@@ -81,7 +81,7 @@ function ColdState({ kind }: { readonly kind: DesignAuditViewState["kind"] }) {
 function reportFromState(state: DesignAuditViewState) {
   switch (state.kind) {
     case "error_warm": case "stale": case "must_fix": case "recommended": case "ready": return state.report;
-    case "loading": case "error_cold": case "unavailable": return null;
+    case "loading": case "idle": case "error_cold": case "unavailable": return null;
     default: return assertNever(state);
   }
 }
@@ -90,6 +90,7 @@ function statusCopy(state: DesignAuditViewState): string {
     // `\u00A0` binds only the Korean auxiliary units (`-고 있다`, `-지 않다`)
     // so an ending never orphans onto its own line in the narrow panel.
     case "loading": return "결과물을 처음 검사하고\u00A0있어요.";
+    case "idle": return "검사 결과가 아직 없어요. 다시 검사해 주세요.";
     case "error_cold": return "검사 결과를 불러오지 못했어요.";
     case "error_warm": return "최근 결과를 보여드려요. 새 검사는 완료되지\u00A0않았어요.";
     case "stale": return state.running ? "이전 결과를 보여드리며 현재 결과물을 검사하고\u00A0있어요." : "결과물이 바뀌어 이전 검사 결과를 보여드려요.";

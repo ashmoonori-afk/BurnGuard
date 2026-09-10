@@ -195,6 +195,29 @@ describe("export authority migration", () => {
     }
   });
 
+  test("Given a recoverable PNG ZIP stage When recovery publishes Then frame and platform scratch directories are removed", async () => {
+    // Given
+    const db = await migratedDatabase(); seedProject(db); const root = await mkdtemp(path.join(tmpdir(), "bg-export-frame-recovery-")); directories.push(root);
+    const options = { slice_height: 5000, slice_format: "png" } as const;
+    const renderer = "b".repeat(64); const capture = "c".repeat(64); const closure = "d".repeat(64);
+    const ids = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "png_zip", options, rendererDigest: renderer, captureDigest: capture });
+    db.prepare("UPDATE export_attempts SET status='recovering',input_closure_digest=? WHERE id=?").run(closure, ids.attemptId);
+    const stage = path.join(root, ".staging", ids.attemptId); await mkdir(path.join(stage, "frames"), { recursive: true }); await mkdir(path.join(stage, "platform"), { recursive: true });
+    const output = Uint8Array.from([1, 2, 3]); await writeFile(path.join(stage, "artifact.zip"), output); await writeFile(path.join(stage, "frames", "01.png"), "scratch"); await writeFile(path.join(stage, "platform", "GUIDE.html"), "scratch");
+    const receipt: ExportReceipt = { schema_version: 1, job_id: ids.jobId, attempt_id: ids.attemptId, parent_attempt_id: null, format: "png_zip", project: { id: "p", revision: 3, digest: "a".repeat(64) }, options, output_file: "artifact.zip", output_size: output.byteLength, digests: { input_closure: closure, design_system: null, options: sha256(canonicalJson(options)), renderer, capture, output: sha256(output) }, validation: { transformation_version: 1, outputs: [{ rel_path: "01.png", width: 1080, height: 1080, image_format: "png", bytes: 7, sha256: "e".repeat(64), sequence: 1, source_region: { top: 0, bottom: 1080 } }], aggregate: { frames: 1, dpr: 1 } } };
+    await writeFile(path.join(stage, "receipt.json"), canonicalJson(receipt));
+
+    // When
+    await reconcileExportState(db, root);
+
+    // Then
+    const published = path.join(root, "attempts", ids.attemptId);
+    expect(await Bun.file(path.join(published, "artifact.zip")).exists()).toBe(true);
+    expect(await Bun.file(path.join(published, "frames", "01.png")).exists()).toBe(false);
+    expect(await Bun.file(path.join(published, "platform", "GUIDE.html")).exists()).toBe(false);
+    expect(db.query("SELECT status FROM exports WHERE id=?").get(ids.jobId)).toEqual({ status: "succeeded" });
+  });
+
   test("Given publish completed before DB commit When startup reconciles Then authority converges once", async () => {
     const db = await migratedDatabase(); seedProject(db); const root = await mkdtemp(path.join(tmpdir(), "bg-export-recover-")); directories.push(root);
     const ids = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "png", options: { png_width: 320, png_height: 240, png_dpr: 1 }, rendererDigest: "b".repeat(64), captureDigest: "c".repeat(64) });

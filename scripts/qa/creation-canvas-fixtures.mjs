@@ -202,7 +202,7 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
   } finally { await page.unroute(eventPattern, guard); }
 }
 
-async function createFixture(page, base, ownedHome, name, pages = {}) {
+export async function createFixture(page, base, ownedHome, name, pages = {}) {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(base, { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: "최근 작업", exact: true }).waitFor();
