@@ -30,7 +30,7 @@ export function parseExportReceipt(input: unknown): ExportReceipt {
   const project = input["project"]; const digests = input["digests"];
   if (!isRecord(project) || !exact(project, ["id", "revision", "digest"]) || !isRecord(digests) || !exact(digests, ["input_closure", "design_system", "options", "renderer", "capture", "output"]) || !isRecord(input["options"])) fail("invalid_receipt");
   const format = input["format"];
-  if (format !== "html_zip" && format !== "pdf" && format !== "png" && format !== "pptx" && format !== "handoff") fail("invalid_receipt");
+  if (format !== "html_zip" && format !== "pdf" && format !== "png" && format !== "pptx" && format !== "handoff" && format !== "cafe24_package" && format !== "imweb_package" && format !== "png_zip") fail("invalid_receipt");
   const parent = input["parent_attempt_id"]; const design = digests["design_system"];
   if (!string(input["job_id"]) || !string(input["attempt_id"]) || (parent !== null && !string(parent)) || !string(project["id"]) || !integer(project["revision"]) || !digest(project["digest"]) || input["output_file"] !== `artifact.${formatExtension(format)}` || !positiveInteger(input["output_size"]) || !digest(digests["input_closure"]) || (design !== null && !digest(design)) || !digest(digests["options"]) || !digest(digests["renderer"]) || !digest(digests["capture"]) || !digest(digests["output"])) fail("invalid_receipt");
   try {

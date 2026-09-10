@@ -26,6 +26,14 @@ describe("pdfDimensionsForPaper", () => {
     expect(dims.width).toBe("13.333in");
     expect(dims.height).toBe("7.5in");
   });
+
+  test("Given an artboard paper and canvas pixels When mapped Then Chromium receives 0.75-point dimensions", () => {
+    // Given / When
+    const dims = pdfDimensionsForPaper("artboard", { width: 1080, height: 1350 });
+
+    // Then
+    expect(dims).toEqual({ width: "810pt", height: "1012.5pt" });
+  });
 });
 
 describe("pptxLayoutForSize", () => {

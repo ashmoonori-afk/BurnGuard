@@ -1,9 +1,12 @@
 import {
+  DEFAULT_GRAPHIC_SET,
   parseDesignBriefV1,
   parseGraphicCanvasV1,
+  parseGraphicSetV1,
   UpgradeContractError,
   type DesignBriefV1,
   type GraphicCanvasV1,
+  type GraphicSetV1,
 } from "@bg/shared";
 import { isRecord } from "@bg/shared/contract-parser";
 
@@ -12,6 +15,7 @@ export type ProjectOptions = {
   readonly copy_as_is: boolean;
   readonly design_brief: DesignBriefV1 | null;
   readonly graphic_canvas: GraphicCanvasV1 | null;
+  readonly graphic_set: GraphicSetV1;
 };
 
 const DEFAULT_OPTIONS: ProjectOptions = {
@@ -19,6 +23,7 @@ const DEFAULT_OPTIONS: ProjectOptions = {
   copy_as_is: false,
   design_brief: null,
   graphic_canvas: null,
+  graphic_set: DEFAULT_GRAPHIC_SET,
 };
 
 export function parseProjectOptions(input: unknown): ProjectOptions {
@@ -37,6 +42,10 @@ export function parseProjectOptions(input: unknown): ProjectOptions {
       input["graphic_canvas"] === undefined || input["graphic_canvas"] === null
         ? null
         : parseGraphicCanvasOption(input["graphic_canvas"]),
+    graphic_set:
+      input["graphic_set"] === undefined
+        ? DEFAULT_GRAPHIC_SET
+        : parseGraphicSetOption(input["graphic_set"]),
   };
 }
 
@@ -44,15 +53,27 @@ export function parseStoredProjectOptions(
   optionsJson: string | null,
 ): ProjectOptions {
   if (optionsJson === null) return DEFAULT_OPTIONS;
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(optionsJson);
+    parsed = JSON.parse(optionsJson);
+  } catch (error) {
+    if (error instanceof SyntaxError) return DEFAULT_OPTIONS;
+    throw error;
+  }
+  try {
     return parseProjectOptions(parsed);
   } catch (error) {
-    if (
-      error instanceof SyntaxError ||
-      error instanceof UpgradeContractError
-    ) {
-      return DEFAULT_OPTIONS;
+    if (error instanceof UpgradeContractError && !error.path.startsWith("options.graphic_set")) return DEFAULT_OPTIONS;
+    throw error;
+  }
+}
+
+function parseGraphicSetOption(input: unknown): GraphicSetV1 {
+  try {
+    return parseGraphicSetV1(input);
+  } catch (error) {
+    if (error instanceof UpgradeContractError) {
+      throw new UpgradeContractError(error.code, `options.graphic_set.${error.path}`);
     }
     throw error;
   }
