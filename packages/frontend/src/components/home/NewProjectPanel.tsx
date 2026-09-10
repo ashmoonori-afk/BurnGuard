@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import type {
@@ -18,7 +18,9 @@ import ProjectBriefFields, {
   ToggleRow,
 } from "@/components/home/ProjectBriefFields";
 import { GraphicCanvasFields } from "@/components/home/GraphicCanvasFields";
+import { GraphicSetFields } from "@/components/home/GraphicSetFields";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { readCreationDraft, writeCreationDraft } from "@/lib/creation-draft";
 import {
   INITIAL_BRIEF_FORM,
   PROBLEM_MESSAGE,
@@ -66,7 +68,8 @@ export default function NewProjectPanel({
   const [backendId, setBackendId] = useState<BackendId>(defaultBackend);
   const [templateFormat, setTemplateFormat] = useState<"prototype" | "slide_deck" | "graphic">("prototype");
   const [generationByBackend, setGenerationByBackend] = useState(generationDefaults ?? {});
-  const [form, setForm] = useState<BriefForm>(INITIAL_BRIEF_FORM);
+  const [form, setForm] = useState<BriefForm>(() => readCreationDraft(type));
+  const draftTypeRef = useRef(type);
   const [pickedSystemId, setPickedSystemId] = useState<string | null>(null);
   const [items, setItems] = useState<readonly IntakeItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +122,17 @@ export default function NewProjectPanel({
     onPendingChange?.(disabled);
     return () => onPendingChange?.(false);
   }, [disabled, onPendingChange]);
+
+  // What the user typed is a draft: it survives navigation, reload, and a
+  // failed create, and each project type keeps its own.
+  useEffect(() => {
+    if (draftTypeRef.current === type) {
+      writeCreationDraft(type, form);
+      return;
+    }
+    draftTypeRef.current = type;
+    setForm(readCreationDraft(type));
+  }, [form, type]);
 
   function update<K extends keyof BriefForm>(key: K, value: BriefForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -236,6 +250,14 @@ export default function NewProjectPanel({
               graphicWidth: size.width,
               graphicHeight: size.height,
             }))}
+          />
+        )}
+
+        {isGraphic && !isOriginal && (
+          <GraphicSetFields
+            form={form}
+            disabled={disabled}
+            onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
           />
         )}
 

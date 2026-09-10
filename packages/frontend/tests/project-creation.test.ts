@@ -54,6 +54,11 @@ function draft(overrides: Partial<ProjectDraft> = {}): ProjectDraft {
     useSpeakerNotes: false,
     copyAsIs: false,
     pages: [],
+    graphicKind: "single",
+    frameCount: 1,
+    frames: [],
+    presetId: null,
+    detailBrief: {},
     ...overrides,
   };
 }

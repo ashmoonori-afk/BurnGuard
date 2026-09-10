@@ -47,7 +47,7 @@ export function GraphicCanvasFields({
             type="number"
             inputMode="numeric"
             min={240}
-            max={4096}
+            max={16384}
             step={1}
             value={height}
             disabled={disabled}
