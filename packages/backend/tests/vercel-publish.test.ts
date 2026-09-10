@@ -61,3 +61,18 @@ test("Given provider responses, when checking deployment, then only validated UR
   await expect(requestVercel("/v13/deployments/dpl_abc", "secret", undefined, signal, undefined, respond({ id: "dpl_abc", url: "evil.example", readyState: "READY" }))).rejects.toThrow("publish_provider_failed");
   await expect(requestVercel("/v13/deployments/dpl_abc", "secret", undefined, signal, undefined, respond({ message: "private secret" }, 403))).rejects.toThrow("publish_auth_failed");
 });
+
+test("Given internal generation notes and font licenses When publishing Then notes stay private and website assets publish", async () => {
+  const zip = new JSZip();
+  const expected = { schema_version: 1 as const, entrypoint: "index.html", project_revision: 20, project_digest: "digest", input_closure_digest: "closure" };
+  const contents = { "index.html": '<html><body>Hello</body></html>', "assets/site.css": "body{color:black}", "assets/generated-assets.json": "{}", "assets/image-prompts.txt": "private prompt", "fonts/manifest.json": "{}", "fonts/DMSans-OFL.txt": "font license", "attachments/source.pdf": "private document", "secrets.js": "private credential" };
+  for (const [name, data] of Object.entries(contents)) zip.file(name, data);
+  zip.file("burnguard-export.json", JSON.stringify({ ...expected, entries: Object.entries(contents).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([path, data]) => ({ path, size: Buffer.byteLength(data), sha256: sha256(data) })) }));
+  const files = await deploymentFiles(await zip.generateAsync({ type: "uint8array" }), expected);
+  expect(files.map(file => file.file).sort()).toEqual(["assets/site.css", "fonts/DMSans-OFL.txt", "index.html"]);
+});
+
+test("Given a ready production alias When checking deployment Then the shared URL uses that alias", async () => {
+  const fetcher = (async () => Response.json({ id: "dpl_test", url: "preview.vercel.app", readyState: "READY", alias: ["https://invalid.example", "public-site.vercel.app"] })) as typeof fetch;
+  expect((await requestVercel("/v13/deployments/dpl_test", "test-token", undefined, new AbortController().signal, undefined, fetcher)).url).toBe("https://public-site.vercel.app");
+});
