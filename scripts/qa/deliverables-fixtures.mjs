@@ -53,11 +53,25 @@ export async function runDeliverablesFixtures(page, base, scenario, { home, shot
     const item = page.getByRole("menuitem", { name: new RegExp(`^${CAFE24_LABEL}`) });
     await item.waitFor({ timeout: 10_000 });
     assert.ok(!(await item.getAttribute("aria-disabled")) || (await item.getAttribute("aria-disabled")) === "false", "cafe24 package must be available for a web project");
+    const created = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === `/api/projects/${sampleId}/exports`);
     await item.click();
+    const createdJob = (await (await created).json()).data;
+    assert.equal(createdJob.format, "cafe24_package");
     // The real pipeline runs: audit, closure, site map, lint, smoke render, rewrite, zip, validate.
+    // The menu refetches the job list while a job is pending and on the export SSE event, so the
+    // terminal state arrives as a GET response: subscribe to that instead of a fixed UI timeout.
+    const terminal = await page.waitForResponse(async (response) => {
+      if (response.request().method() !== "GET" || new URL(response.url()).pathname !== `/api/projects/${sampleId}/exports`) return false;
+      try {
+        const rows = (await response.json()).data;
+        return Array.isArray(rows) && rows.some((row) => row.id === createdJob.id && (row.status === "succeeded" || row.status === "failed"));
+      } catch { return false; }
+    }, { timeout: 180_000 });
+    const finished = (await terminal.json()).data.find((row) => row.id === createdJob.id);
+    assert.equal(finished.status, "succeeded", `cafe24 export ended as ${finished.status}: ${finished.error_message ?? ""}`);
     // The status row labels its actions with the format's short label, so match the action suffix.
     const guideButton = page.getByRole("button", { name: /설치 가이드 보기$/ }).first();
-    await guideButton.waitFor({ timeout: 110_000 });
+    await guideButton.waitFor({ timeout: 15_000 });
     await page.getByRole("button", { name: /다운로드$/ }).first().waitFor();
     await guideButton.click();
     const dialog = page.getByRole("dialog");
