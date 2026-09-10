@@ -8,20 +8,22 @@ import {
 
 describe("graphic export menu model", () => {
   test("Given persisted graphic dimensions When modeled Then only exact DPR1 PNG is exposed", () => {
-    expect(buildExportMenuModel("graphic", JSON.stringify({
+    const model = buildExportMenuModel("graphic", JSON.stringify({
       use_speaker_notes: false,
       copy_as_is: false,
       design_brief: null,
       graphic_canvas: { schema_version: 1, width: 1200, height: 628 },
-    }))).toEqual({
-      ok: true,
-      options: [{
-        key: "graphic-png",
-        format: "png",
-        options: { png_width: 1200, png_height: 628, png_dpr: 1 },
-        label: "PNG · 1200×628",
-      }],
-    });
+    }));
+
+    expect(model.ok).toBe(true);
+    expect(model.options.filter((option) => option.format === "png")).toEqual([{
+      key: "graphic-png",
+      format: "png",
+      options: { png_width: 1200, png_height: 628, png_dpr: 1 },
+      label: "PNG · 1200×628",
+    }]);
+    expect(model.options.filter((option) => option.disabledReason === undefined).map((option) => option.format))
+      .toEqual(["png", "pdf"]);
   });
 
   test.each([null, "{", JSON.stringify({ graphic_canvas: null })])(
@@ -56,8 +58,9 @@ describe("graphic export menu model", () => {
     const model = buildExportMenuModel("prototype", null);
     expect(model.ok).toBe(true);
     if (!model.ok) throw new TypeError("expected normal export model");
-    expect(model.options.filter((option) => option.disabledReason === undefined).map((option) => option.format)).toEqual(["html_zip", "handoff"]);
+    expect(model.options.filter((option) => option.disabledReason === undefined).map((option) => option.format)).toEqual(["html_zip", "handoff", "cafe24_package", "imweb_package"]);
     expect(model.options.filter((option) => option.disabledReason === "deck_only").map((option) => option.format)).toEqual(["pdf", "pdf", "pdf", "pptx", "pptx"]);
+    expect(model.options.filter((option) => option.disabledReason === "frames_only").map((option) => option.format)).toEqual(["png_zip"]);
   });
 });
 

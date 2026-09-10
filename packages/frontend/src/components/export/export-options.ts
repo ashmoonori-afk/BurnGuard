@@ -1,16 +1,65 @@
 import {
+  DEFAULT_GRAPHIC_SET,
   type ExportFormat,
   type ExportOptions,
   type ProjectType,
 } from "@bg/shared";
-import { parseProjectGraphicCanvas } from "@/lib/graphic-project";
+import {
+  parseProjectGraphicCanvas,
+  parseProjectGraphicSet,
+} from "@/lib/graphic-project";
+import {
+  cafe24AssetBaseUrl,
+  deckFrameZipOption,
+  graphicExportOptions,
+  platformPackageOptions,
+} from "./export-option-entries";
+
+export { cafe24AssetBaseUrl };
+
+export type ExportOptionDisabledReason =
+  | "deck_only"
+  | "web_only"
+  | "frames_only"
+  | "mixed_frames";
+
+export const EXPORT_DISABLED_LABEL: Record<ExportOptionDisabledReason, string> = {
+  deck_only: "덱 전용",
+  web_only: "웹 전용",
+  frames_only: "프레임 전용",
+  mixed_frames: "크기 불일치",
+};
+
+export type ExportOptionField = {
+  readonly kind: "asset_base_url" | "slice";
+  readonly label: string;
+  readonly hint: string;
+  readonly placeholder?: string;
+};
+
+/** Values the user edits in the menu before starting an export. */
+export type ExportOptionValues = {
+  readonly assetBaseUrl: string;
+  readonly sliceHeight: 3000 | 5000;
+  readonly sliceFormat: "png" | "jpeg";
+  readonly jpegQuality: number;
+};
+
+export const DEFAULT_EXPORT_OPTION_VALUES: ExportOptionValues = {
+  assetBaseUrl: "",
+  sliceHeight: 5000,
+  sliceFormat: "png",
+  jpegQuality: 85,
+};
 
 export type ExportMenuOption = {
   readonly key: string;
   readonly format: ExportFormat;
   readonly options?: ExportOptions;
   readonly label: string;
-  readonly disabledReason?: "deck_only";
+  readonly fields?: readonly ExportOptionField[];
+  readonly note?: string;
+  readonly disabledReason?: ExportOptionDisabledReason;
 };
 
 export type ExportMenuModel =
@@ -45,17 +94,20 @@ export type ExportRetryRequest = {
   readonly options?: ExportOptions;
 };
 
+/**
+ * A retry re-sends the same choice, so whatever options the entry carries
+ * (asset base URL, slice format, artboard paper) ride along unchanged. Only a
+ * graphic project without a resolvable entry has no safe fallback.
+ */
 export function buildExportRetryRequest(
   projectType: ProjectType,
   format: ExportFormat,
   model: ExportMenuModel,
 ): ExportRetryRequest | null {
-  if (projectType !== "graphic") return { format };
-  if (!model.ok) return null;
-  const matches = model.options.filter((option) => option.format === format);
+  const matches = model.ok ? model.options.filter((option) => option.format === format) : [];
   const option = matches.length === 1 ? matches[0] : undefined;
-  if (option === undefined || option.options === undefined) return null;
-  return { format, options: option.options };
+  if (option?.options !== undefined) return { format, options: option.options };
+  return projectType === "graphic" ? null : { format };
 }
 
 const STANDARD_OPTIONS = [
@@ -71,17 +123,22 @@ const STANDARD_OPTIONS = [
 export function buildExportMenuModel(
   projectType: ProjectType,
   optionsJson: string | null,
+  values: ExportOptionValues = DEFAULT_EXPORT_OPTION_VALUES,
 ): ExportMenuModel {
   if (projectType !== "graphic") {
     return {
       ok: true,
-      options: projectType === "slide_deck"
-        ? STANDARD_OPTIONS
-        : STANDARD_OPTIONS.map((option) =>
-            option.format === "pdf" || option.format === "pptx"
-              ? { ...option, disabledReason: "deck_only" as const }
-              : option,
-          ),
+      options: [
+        ...(projectType === "slide_deck"
+          ? STANDARD_OPTIONS
+          : STANDARD_OPTIONS.map((option) =>
+              option.format === "pdf" || option.format === "pptx"
+                ? { ...option, disabledReason: "deck_only" as const }
+                : option,
+            )),
+        deckFrameZipOption(projectType),
+        ...platformPackageOptions(projectType, values),
+      ],
     };
   }
   const canvas = parseProjectGraphicCanvas(projectType, optionsJson);
@@ -92,17 +149,12 @@ export function buildExportMenuModel(
       message: "저장된 그래픽 크기를 확인할 수 없어 PNG 내보내기를 시작할 수 없어요.",
     };
   }
+  const set = parseProjectGraphicSet(projectType, optionsJson) ?? DEFAULT_GRAPHIC_SET;
   return {
     ok: true,
-    options: [{
-      key: "graphic-png",
-      format: "png",
-      options: {
-        png_width: canvas.width,
-        png_height: canvas.height,
-        png_dpr: 1,
-      },
-      label: `PNG · ${canvas.width}×${canvas.height}`,
-    }],
+    options: [
+      ...graphicExportOptions(canvas, set, values),
+      ...platformPackageOptions(projectType, values),
+    ],
   };
 }

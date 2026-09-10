@@ -37,7 +37,10 @@ import {
   buildExportMenuModel,
   classifyChromiumFailure,
   CHROMIUM_FAILURE_MESSAGE,
+  EXPORT_DISABLED_LABEL,
 } from "./export-options";
+import ExportOptionFields from "./ExportOptionFields";
+import { useExportOptionValues } from "./useExportOptionValues";
 
 const OPTION_ICON: Record<ExportFormat, LucideIcon> = {
   html_zip: FileDown,
@@ -62,6 +65,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
   const [open, setOpen] = useState(false);
+  const [optionValues, setOptionValues] = useExportOptionValues(projectId);
   const openQuality = () => {
     setOpen(false);
     onOpenQuality();
@@ -118,7 +122,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
   });
 
   const jobs = jobsQuery.data ?? [];
-  const menuModel = buildExportMenuModel(projectType, projectOptionsJson);
+  const menuModel = buildExportMenuModel(projectType, projectOptionsJson, optionValues);
 
   // Surface async failures via a toast — the createMutation onError only
   // catches synchronous create-call errors. Background pipeline failures
@@ -180,6 +184,12 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
             {menuModel.message}
           </p>
         )}
+        <ExportOptionFields
+          options={menuModel.options}
+          values={optionValues}
+          disabled={createMutation.isPending}
+          onChange={setOptionValues}
+        />
         {menuModel.options.map((option) => {
           const Icon = OPTION_ICON[option.format];
           const disabled =
@@ -205,10 +215,17 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
               }}
             >
               <Icon className="h-3.5 w-3.5" />
-              <span className="flex-1">{option.label}</span>
-              {option.disabledReason === "deck_only" && (
+              <span className="flex-1">
+                {option.label}
+                {option.note !== undefined && (
+                  <span className="mt-0.5 block text-pretty break-keep text-[10px] font-normal text-muted-foreground">
+                    {option.note}
+                  </span>
+                )}
+              </span>
+              {option.disabledReason !== undefined && (
                 <span className="text-[10px] text-muted-foreground">
-                  덱 전용
+                  {EXPORT_DISABLED_LABEL[option.disabledReason]}
                 </span>
               )}
             </DropdownMenuItem>
