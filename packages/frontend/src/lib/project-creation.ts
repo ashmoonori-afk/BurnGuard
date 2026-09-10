@@ -16,11 +16,18 @@ import type {
   DesignSystemSummary,
   ProjectType,
 } from "@bg/shared";
-import { GRAPHIC_CANVAS_LIMITS } from "@bg/shared";
+import { DESIGN_BRIEF_PAGE_LIMIT, GRAPHIC_CANVAS_LIMITS } from "@bg/shared";
 
 export const BRIEF_LOCALE = "ko";
 export const AUDIENCE_MAX_LENGTH = 200;
 export const OBJECTIVE_MAX_LENGTH = 1000;
+export const PROTOTYPE_PAGE_PRESETS = [
+  { label: "회사소개", relPath: "about.html" },
+  { label: "서비스", relPath: "services.html" },
+  { label: "포트폴리오", relPath: "portfolio.html" },
+  { label: "문의", relPath: "contact.html" },
+  { label: "공지", relPath: "notice.html" },
+] as const;
 export const GRAPHIC_PRESETS = [
   { label: "정사각형", width: 1080, height: 1080 },
   { label: "SNS", width: 1200, height: 628 },
@@ -75,6 +82,7 @@ export type ProjectDraft = {
   readonly useSpeakerNotes: boolean;
   readonly copyAsIs: boolean;
   readonly sectionCount?: number;
+  readonly pages: readonly string[];
 };
 
 export type BriefForm = Omit<
@@ -95,6 +103,7 @@ export const INITIAL_BRIEF_FORM: BriefForm = {
   useSpeakerNotes: false,
   copyAsIs: false,
   sectionCount: 6,
+  pages: [],
 };
 
 export const PROJECT_LABEL_CLASS = "text-xs font-medium text-foreground/80";
@@ -103,6 +112,7 @@ export const PROJECT_CONTROL_CLASS =
 
 export type DraftProblem =
   | "section_count_invalid"
+  | "pages_invalid"
   | "name_required"
   | "audience_invalid"
   | "objective_invalid"
@@ -117,6 +127,7 @@ export type BuildResult =
   | { readonly ok: false; readonly problem: DraftProblem };
 
 export const PROBLEM_MESSAGE: Record<DraftProblem, string> = {
+  pages_invalid: `페이지는 안전한 HTML 파일 이름으로 ${DESIGN_BRIEF_PAGE_LIMIT}개까지 선택해 주세요.`,
   section_count_invalid: "섹션 수는 1~30 사이의 정수로 입력해 주세요.",
   name_required: "프로젝트 이름을 입력해 주세요.",
   audience_invalid: `누가 보게 되는지 ${AUDIENCE_MAX_LENGTH}자 이내로 적어 주세요.`,
@@ -166,6 +177,11 @@ export function buildCreateProjectRequest(
   systems: readonly DesignSystemSummary[],
 ): BuildResult {
   if (draft.type === "prototype" && (!Number.isSafeInteger(draft.sectionCount ?? 6) || (draft.sectionCount ?? 6) < 1 || (draft.sectionCount ?? 6) > 30)) return { ok: false, problem: "section_count_invalid" };
+  const safePage = /^(?:[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*\/)*[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*\.html$/iu;
+  const pagesValid = draft.pages.length <= DESIGN_BRIEF_PAGE_LIMIT
+    && draft.pages.every((page) => safePage.test(page) && page.toLowerCase() !== "index.html")
+    && new Set(draft.pages.map((page) => page.toLowerCase())).size === draft.pages.length;
+  if ((draft.type !== "prototype" && draft.pages.length > 0) || !pagesValid) return { ok: false, problem: "pages_invalid" };
   const name = draft.name.trim();
   if (name.length === 0) return { ok: false, problem: "name_required" };
 
@@ -212,7 +228,10 @@ export function buildCreateProjectRequest(
   }
 
   const brief: DesignBriefV1 = {
-    ...(draft.type === "prototype" ? { section_count: draft.sectionCount ?? 6 } : {}),
+    ...(draft.type === "prototype" ? {
+      section_count: draft.sectionCount ?? 6,
+      ...(draft.pages.length === 0 ? {} : { pages: draft.pages }),
+    } : {}),
     schema_version: 1,
     output_type: draft.type,
     audience,

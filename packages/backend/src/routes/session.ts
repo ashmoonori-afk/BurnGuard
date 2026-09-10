@@ -11,7 +11,9 @@ import {
   parseVisualSourceUploadRequest,
   type ApiErrorBody,
   type ApiSuccess,
+  type GenerationOptions,
   type NormalizedEvent,
+  type UploadedVisualSourceSelection,
   type UserEvent,
   type VisualSourceUploadRequestV1,
 } from "@bg/shared";
@@ -43,6 +45,7 @@ import { getSqlite } from "../db/sqlite-client";
 import { assertSafeName } from "../security/path-boundary";
 import { MAX_USER_MESSAGE_CHARS } from "../security/request-limits";
 import { appendSessionTrace } from "../services/trace";
+import { indexProjectFiles } from "../services/files";
 import {
   interruptUserTurn,
   isUserTurnRunning,
@@ -74,6 +77,19 @@ async function persistAndPublishRoute(sessionId: string, event: NormalizedEvent)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+class ActivePageError extends Error {
+  readonly name = "ActivePageError";
+  constructor(readonly code: "invalid_active_page" | "active_page_unavailable") { super(code); }
+}
+
+async function parseActiveRelPath(value: unknown, projectId: string): Promise<string | undefined> {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") throw new ActivePageError("invalid_active_page");
+  const files = await indexProjectFiles(projectId) ?? [];
+  if (!files.some((file) => file.category === "html" && file.rel_path === value)) throw new ActivePageError("active_page_unavailable");
+  return value;
 }
 
 export const sessionRoutes = new Hono();
@@ -137,10 +153,16 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       typeof body.text === "string"
     ) {
       if (body.text.length > MAX_USER_MESSAGE_CHARS) return c.json(fail("message_too_long", `Message exceeds ${MAX_USER_MESSAGE_CHARS} characters`, { limit: MAX_USER_MESSAGE_CHARS }), 400);
-      let generation;
+      let generation: GenerationOptions;
       try { generation = resolveGeneration(body.generation === undefined ? undefined : parseGenerationOptions(body.generation)); }
       catch { return c.json(fail("invalid_generation_options", "Generation options are invalid"), 400); }
-      let visualSources;
+      let activeRelPath: string | undefined;
+      try { activeRelPath = await parseActiveRelPath(body.active_rel_path, session.project_id); }
+      catch (error) {
+        if (error instanceof ActivePageError) return c.json(fail(error.code, error.code === "invalid_active_page" ? "Active page path is invalid" : "Active page is not a current HTML file in this project"), error.code === "invalid_active_page" ? 400 : 409);
+        throw error;
+      }
+      let visualSources: readonly UploadedVisualSourceSelection[] | undefined;
       try { visualSources = parseUploadedVisualSourceSelections(body.visualSources); }
       catch (error) {
         if (error instanceof VisualSourceContractError) return c.json(fail(error.code, error.code === "unsupported_visual_source" ? "URL, web, and stock sources are unsupported" : "Visual source metadata is invalid"), error.code === "unsupported_visual_source" ? 415 : 400);
@@ -149,7 +171,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       if (body.attachments !== undefined && (!Array.isArray(body.attachments) || !body.attachments.every((value) => typeof value === "string"))) return c.json(fail("invalid_attachments", "Attachment selection is invalid"), 400);
       try {
         const canonical = await canonicalizeAttachmentRequest({ sessionId: id, requestedPaths: body.attachments ?? [], selections: visualSources });
-        payload = { type: "user.message", text: body.text, attachments: [...canonical.paths], visualSources: canonical.selections, generation };
+        payload = { type: "user.message", text: body.text, ...(activeRelPath === undefined ? {} : { active_rel_path: activeRelPath }), attachments: [...canonical.paths], visualSources: canonical.selections, generation };
       } catch (error) {
         if (error instanceof AttachmentRequestError) return c.json(fail(error.code, "Attachment selection is invalid"), 400);
         throw error;
@@ -166,9 +188,15 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
     const text = form.get("text");
     if (type === "user.message" && typeof text === "string") {
       if (text.length > MAX_USER_MESSAGE_CHARS) return c.json(fail("message_too_long", `Message exceeds ${MAX_USER_MESSAGE_CHARS} characters`, { limit: MAX_USER_MESSAGE_CHARS }), 400);
-      let generation;
+      let generation: GenerationOptions;
       try { const raw = form.get("generation"); generation = resolveGeneration(raw === null ? undefined : parseGenerationOptions(typeof raw === "string" ? JSON.parse(raw) : raw)); }
       catch { return c.json(fail("invalid_generation_options", "Generation options are invalid"), 400); }
+      let activeRelPath: string | undefined;
+      try { activeRelPath = await parseActiveRelPath(form.get("active_rel_path"), session.project_id); }
+      catch (error) {
+        if (error instanceof ActivePageError) return c.json(fail(error.code, error.code === "invalid_active_page" ? "Active page path is invalid" : "Active page is not a current HTML file in this project"), error.code === "invalid_active_page" ? 400 : 409);
+        throw error;
+      }
       const fileEntries = form
         .getAll("files")
         .filter((value): value is File => value instanceof File);
@@ -209,7 +237,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       const selections = attachmentPaths.map((attachmentPath, index) => ({ source_type: "uploaded_attachment" as const, attachment_path: attachmentPath, role: uploadSources.sources[index]?.role ?? "ordinary_content" }));
       try {
         const canonical = await canonicalizeAttachmentRequest({ sessionId: id, requestedPaths: attachmentPaths, selections });
-        payload = { type: "user.message", text, attachments: [...canonical.paths], visualSources: canonical.selections, generation };
+        payload = { type: "user.message", text, ...(activeRelPath === undefined ? {} : { active_rel_path: activeRelPath }), attachments: [...canonical.paths], visualSources: canonical.selections, generation };
       } catch (error) {
         await rollbackSessionAttachments(id, attachmentPaths);
         if (reservation !== null) releaseUserTurnReservation(reservation);

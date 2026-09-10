@@ -667,11 +667,14 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       var base;
       var destination;
       try { base = new URL(document.baseURI); destination = new URL(href, base); } catch (e) { return; }
-      if (destination.origin !== base.origin || !/^https?:$/.test(destination.protocol)) return;
+      if (destination.origin !== base.origin || !/^https?:$/.test(destination.protocol)) {
+        event.preventDefault();
+        return;
+      }
       if (href.charAt(0) === "#" || (destination.pathname === base.pathname && destination.search === base.search && destination.hash)) {
         event.preventDefault();
         scrollToFragment(destination.hash);
-      } else if (/\.html?$/i.test(destination.pathname)) {
+      } else {
         event.preventDefault();
         window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: "navigate", payload: { href: destination.href } }, "*");
       }

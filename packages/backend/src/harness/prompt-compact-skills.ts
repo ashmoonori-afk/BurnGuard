@@ -28,7 +28,8 @@ export const COMPACT_PROTOTYPE_SKILL_MD = `# Prototype compact contract
 - Prefer multiple targeted \`Edit\` calls over \`Write\`. \`Write\` re-emits the entire artifact and is the most expensive thing you can do.
 
 ## Structure & style
-- Keep \`index.html\` as home; each HTML page uses inline CSS and vanilla JS unless the user explicitly asks otherwise.
+- Keep \`index.html\` as home. Every self-contained page uses shared header/nav/footer markers, \`<main data-bg-content>\`, current-link \`aria-current="page"\`, and one top \`<style>\` split by \`/* @bg-shared-css */\` and \`/* @bg-page-css */\`; no root-absolute assets or jQuery.
+- Give subpages distinct content layouts but shared identity; propagate shared-block changes across the site map, and when \`## Active page\` exists edit it unless the request explicitly names another file (an explicit comment-edit file is authoritative).
 - Top-level semantic sections need \`data-section\` and unique \`data-bg-node-id\` values for visible text and editable parent sections.
 - Strong visual hierarchy, asymmetric sections outside true heroes, responsive down to 320 px, no hidden primary value.
 - Keep CSS in one top \`<style>\` block. Reference design-system CSS variables (see list above) and avoid new palettes, font stacks, or typefaces.`;

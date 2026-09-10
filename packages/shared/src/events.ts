@@ -142,6 +142,7 @@ export type UserEvent =
       type: "user.message";
       generation?: import("./generation").GenerationOptions;
       text: string;
+      active_rel_path?: string;
       attachments?: string[];
       visualSources?: readonly UploadedVisualSourceSelection[];
     }

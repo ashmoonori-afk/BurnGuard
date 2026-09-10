@@ -37,6 +37,7 @@ export default function ToastContainer() {
                   {t.body}
                 </div>
               )}
+              {t.action !== undefined ? <button type="button" className="mt-2 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { t.action?.onSelect(); dismiss(t.id); }}>{t.action.label}</button> : null}
             </div>
             <button
               onClick={() => dismiss(t.id)}

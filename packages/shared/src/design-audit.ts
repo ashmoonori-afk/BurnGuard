@@ -1,12 +1,12 @@
 import type { PatchFileRequest } from "./file-patch";
 
-export const DESIGN_AUDIT_CHECK_CODES = ["text_overflow", "element_overlap", "minimum_text_size", "contrast", "narrow_width", "duplicate_node_id", "missing_image", "token_usage"] as const;
+export const DESIGN_AUDIT_CHECK_CODES = ["text_overflow", "element_overlap", "minimum_text_size", "contrast", "narrow_width", "duplicate_node_id", "missing_image", "token_usage", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset"] as const;
 export type DesignAuditCheckCode = (typeof DESIGN_AUDIT_CHECK_CODES)[number];
 export type DesignAuditCheckStatus = "pass" | "fail" | "skipped" | "unmeasurable";
 export type DesignAuditOverallStatus = "ready" | "must_fix" | "recommended";
 export type DesignAuditUnknownReason = "no_measurable_candidates" | "unresolvable_rendering" | "tokens_not_exposed";
 export type DesignAuditSeverity = "must_fix" | "recommended";
-export type DesignAuditTargetedAction = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token";
+export type DesignAuditTargetedAction = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path";
 
 export type DesignAuditSafeFix = { readonly kind: "patch_html_node"; readonly rel_path: string; readonly request: PatchFileRequest };
 export type DesignAuditFinding = {
@@ -21,13 +21,13 @@ export type DesignAuditFinding = {
   readonly safe_fix?: DesignAuditSafeFix;
 };
 export type DesignAuditCheck = { readonly code: DesignAuditCheckCode; readonly status: DesignAuditCheckStatus; readonly reason: DesignAuditUnknownReason | null; readonly findings: readonly DesignAuditFinding[] };
-export type DesignAuditResult = { readonly schema_version: 1; readonly project_id: string; readonly artifact_revision: number; readonly artifact_digest: string; readonly created_at: number; readonly overall_status: DesignAuditOverallStatus; readonly checks: readonly DesignAuditCheck[] };
+export type DesignAuditResult = { readonly schema_version: 1; readonly project_id: string; readonly artifact_revision: number; readonly artifact_digest: string; readonly created_at: number; readonly overall_status: DesignAuditOverallStatus; readonly checks: readonly DesignAuditCheck[]; readonly shared_change_divergence?: readonly string[] };
 
 const SHA256 = /^[0-9a-f]{64}$/u;
 const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))(?!.*\\)[^\0]{1,512}$/u;
-const SEVERITIES: Readonly<Record<DesignAuditCheckCode, DesignAuditSeverity>> = { text_overflow: "must_fix", element_overlap: "recommended", minimum_text_size: "recommended", contrast: "must_fix", narrow_width: "must_fix", duplicate_node_id: "must_fix", missing_image: "must_fix", token_usage: "recommended" };
+const SEVERITIES: Readonly<Record<DesignAuditCheckCode, DesignAuditSeverity>> = { text_overflow: "must_fix", element_overlap: "recommended", minimum_text_size: "recommended", contrast: "must_fix", narrow_width: "must_fix", duplicate_node_id: "must_fix", missing_image: "must_fix", token_usage: "recommended", site_nav_mismatch: "recommended", site_missing_aria_current: "recommended", site_dangling_link: "recommended", site_missing_shared_block: "recommended", site_root_absolute_asset: "recommended" };
 const ACTIONS: Readonly<Record<DesignAuditCheckCode, DesignAuditTargetedAction>> = {
-  text_overflow: "expand_or_reflow_text", element_overlap: "separate_overlapping_elements", minimum_text_size: "set_minimum_font_size", contrast: "increase_color_contrast", narrow_width: "repair_narrow_layout", duplicate_node_id: "assign_unique_node_ids", missing_image: "restore_image_reference", token_usage: "replace_literal_with_token",
+  text_overflow: "expand_or_reflow_text", element_overlap: "separate_overlapping_elements", minimum_text_size: "set_minimum_font_size", contrast: "increase_color_contrast", narrow_width: "repair_narrow_layout", duplicate_node_id: "assign_unique_node_ids", missing_image: "restore_image_reference", token_usage: "replace_literal_with_token", site_nav_mismatch: "repair_site_navigation", site_missing_aria_current: "mark_current_page", site_dangling_link: "create_or_repair_site_link", site_missing_shared_block: "add_shared_blocks", site_root_absolute_asset: "relativize_asset_path",
 };
 
 export class DesignAuditContractError extends Error {
@@ -36,7 +36,8 @@ export class DesignAuditContractError extends Error {
 }
 
 export function parseDesignAuditResult(input: unknown): DesignAuditResult {
-  const root = record(input, "$", ["schema_version", "project_id", "artifact_revision", "artifact_digest", "created_at", "overall_status", "checks"]);
+  const root = plainRecord(input, "$");
+  exact(root, ["schema_version", "project_id", "artifact_revision", "artifact_digest", "created_at", "overall_status", "checks", "shared_change_divergence"], { path: "$", optional: ["shared_change_divergence"] });
   if (root["schema_version"] !== 1) invalid("schema_version");
   const projectId = boundedString(root["project_id"], "project_id", 200);
   const artifactRevision = safeInteger(root["artifact_revision"], "artifact_revision");
@@ -51,7 +52,14 @@ export function parseDesignAuditResult(input: unknown): DesignAuditResult {
   if (findings.some((finding) => finding.safe_fix !== undefined && (finding.safe_fix.request.expected_revision !== artifactRevision || finding.safe_fix.request.expected_artifact_digest !== artifactDigest))) invalid("checks.findings.safe_fix");
   const expected: DesignAuditOverallStatus = findings.some((finding) => finding.severity === "must_fix") ? "must_fix" : checks.every((check) => check.status === "pass") ? "ready" : "recommended";
   if (overallStatus !== expected) invalid("overall_status");
-  return { schema_version: 1, project_id: projectId, artifact_revision: artifactRevision, artifact_digest: artifactDigest, created_at: createdAt, overall_status: overallStatus, checks };
+  const divergenceValue = root["shared_change_divergence"];
+  let sharedChangeDivergence: readonly string[] | undefined;
+  if (divergenceValue !== undefined) {
+    if (!Array.isArray(divergenceValue) || divergenceValue.length > 24) invalid("shared_change_divergence");
+    sharedChangeDivergence = divergenceValue.map((value, index) => relativePath(value, `shared_change_divergence.${index}`));
+    if (new Set(sharedChangeDivergence).size !== sharedChangeDivergence.length) invalid("shared_change_divergence");
+  }
+  return { schema_version: 1, project_id: projectId, artifact_revision: artifactRevision, artifact_digest: artifactDigest, created_at: createdAt, overall_status: overallStatus, checks, ...(sharedChangeDivergence === undefined ? {} : { shared_change_divergence: sharedChangeDivergence }) };
 }
 
 function parseCheck(input: unknown, expectedCode: DesignAuditCheckCode, path: string): DesignAuditCheck {

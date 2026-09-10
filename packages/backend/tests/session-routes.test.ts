@@ -15,7 +15,7 @@ let root = "";
 const jsonHeaders = { "content-type": "application/json" };
 
 beforeAll(async () => {
-  await runMigrations(); root = await mkdtemp(path.join(tmpdir(), "burnguard-session-routes-")); await writeFile(path.join(root, "index.html"), "base");
+  await runMigrations(); root = await mkdtemp(path.join(tmpdir(), "burnguard-session-routes-")); await writeFile(path.join(root, "index.html"), "base"); await writeFile(path.join(root, "notes.txt"), "notes");
   getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, projectId, root);
   getSqlite().prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(sessionId, projectId);
 });
@@ -37,6 +37,18 @@ describe("production session route boundaries", () => {
     expect((await request("/api/sessions/missing/events", "POST", {})).status).toBe(404);
     expect((await request(`/api/sessions/${sessionId}/events`, "POST", {})).status).toBe(400);
     expect((await request(`/api/sessions/${sessionId}/events`, "POST", { type: "user.message", text: "x", operation_id: "unscoped" })).status).toBe(400);
+  });
+
+  test("Given stale, cross-project, and non-HTML active page targets When user messages are posted Then the route rejects them with a typed conflict", async () => {
+    // Given
+    const targets = ["missing.html", "../other/index.html", "notes.txt"];
+
+    // When / Then
+    for (const active_rel_path of targets) {
+      const response = await request(`/api/sessions/${sessionId}/events`, "POST", { type: "user.message", text: "edit", active_rel_path });
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ error: { code: "active_page_unavailable" } });
+    }
   });
 
   test("Given interrupt and backend requests When session state is idle Then exact status transitions remain bounded", async () => {
