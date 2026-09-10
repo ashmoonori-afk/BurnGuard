@@ -21,16 +21,17 @@ export function isPublicAsset(name: string): boolean {
     return /(?:^|[._ -])(?:secrets?|tokens?|credentials?|passwords?|api[._ -]*keys?|(?:access|refresh|auth|bearer)[._ -]*tokens?|private[._ -]*keys?)(?:[._ -]|$)/i.test(part.replace(/([a-z0-9])([A-Z])/g, "$1-$2"));
   })
     && !/[\\:%\x00-\x1f]/.test(name)
-    && /\.(?:html?|css|js|mjs|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|mp4|webm|mp3|wav)$/i.test(name)
+    && (/\.(?:html?|css|js|mjs|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|mp4|webm|mp3|wav)$/i.test(name) || /^fonts\/[a-z0-9_-]+-OFL\.txt$/i.test(name))
     && !/(?:^|\/)(?:[^/]*config[^/]*|credentials[^/]*)$/i.test(name);
 }
 
 export async function deploymentFiles(bytes: Uint8Array, expected: Omit<HtmlArchiveManifest, "entries">) {
   const manifest = await validateHtmlArchive(bytes, expected);
-  if (manifest.entries.reduce((n, file) => n + file.size, 0) > 100_000_000) throw new VercelPublishError("publish_size_limit");
-  if (manifest.entries.some((file) => !isPublicAsset(file.path))) throw new VercelPublishError("publish_unsafe_asset");
+  if (!isPublicAsset(manifest.entrypoint)) throw new VercelPublishError("publish_unsafe_asset");
+  const publicEntries = manifest.entries.filter((file) => isPublicAsset(file.path));
+  if (publicEntries.reduce((n, file) => n + file.size, 0) > 100_000_000) throw new VercelPublishError("publish_size_limit");
   const zip = await JSZip.loadAsync(bytes, { checkCRC32: true });
-  const files = await Promise.all(manifest.entries.map(async ({ path }) => ({ file: path, data: await zip.file(path)!.async("uint8array") })));
+  const files = await Promise.all(publicEntries.map(async ({ path }) => ({ file: path, data: await zip.file(path)!.async("uint8array") })));
   // Keep nested entrypoints in place so relative asset URLs retain their meaning.
   if (manifest.entrypoint !== "index.html") {
     if (manifest.entries.some((entry) => entry.path === "index.html")) throw new VercelPublishError("publish_entrypoint_conflict");
