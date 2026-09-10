@@ -15,6 +15,20 @@ const translucentFixture = `<!doctype html><html><head><style>:root{--ink:#111}b
 const fixture = `<!doctype html><html><head><style>:root{--brand:#123456}body{margin:0;background:#fff;color:#777}.clip{width:40px;height:10px;overflow:hidden}.a,.b{position:absolute;left:20px;top:80px;width:100px;height:40px}.wide{width:500px}</style></head><body><div class="clip" data-bg-node-id="clip">clipped text</div><div class="a" data-bg-node-id="a">alpha</div><div class="b" data-bg-node-id="b">beta</div><p data-bg-node-id="tiny" style="font-size:9px;color:#777">tiny</p><div class="wide" data-bg-node-id="wide">wide</div><div data-bg-node-id="dup">one</div><div data-bg-node-id="dup">two</div><img data-bg-node-id="image" src="missing.png"><div data-bg-node-id="literal" style="color:#ff0000">literal</div><div data-bg-node-id="gradient" style="background:linear-gradient(red,blue);color:white">gradient</div></body></html>`;
 
 describe("rendered design auditor", () => {
+  test("Given hidden later slides with inconsistent fonts and unfinished copy When the deck is audited Then all artboards are checked at projection size", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-audit-deck-"));
+    try {
+      await writeFile(path.join(root, "deck.html"), '<!doctype html><html><head><style>:root{--ink:#111}body{margin:0;font:32px Arial;color:#111;background:white}[data-slide]{width:1920px;height:1080px}[data-deck-ready] [data-slide]:not([data-active]){display:none}h1{font:52px Arial;margin:0}p{margin:0}</style></head><body><section data-slide><h1 data-bg-node-id="title-1">First</h1><p data-bg-node-id="body-1">Completed content</p></section><section data-slide><h1 data-bg-node-id="title-2">Second</h1><p data-bg-node-id="bad-copy" style="font:18px Georgia">Insert text here</p></section><script src="/runtime/deck-stage.js" defer></script></body></html>');
+      const manifest = await inspectCanonicalTree(root);
+      const report = await auditRenderedTree({ projectId: "deck-test", projectDir: root, entrypoint: "deck.html", revision: 0, digest: manifest.tree_digest, deck: true, signal: AbortSignal.timeout(45_000) });
+      expect(report.checks.find(check => check.code === "copy_review")?.findings.some(finding => finding.source.node_bg_id === "bad-copy")).toBe(true);
+      expect(report.checks.find(check => check.code === "font_consistency")?.status).toBe("fail");
+      const tiny = report.checks.find(check => check.code === "minimum_text_size")?.findings.find(finding => finding.source.node_bg_id === "bad-copy");
+      expect(tiny?.threshold).toBe(24);
+      expect(tiny?.safe_fix?.request.styles?.["font-size"]).toBe("24px");
+      expect(report.checks.find(check => check.code === "narrow_width")?.findings).toEqual([]);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }, 60_000);
   test("Given measurable defects When audited Then all checks are truthful and ordered", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "bg-audit-render-"));
     try {

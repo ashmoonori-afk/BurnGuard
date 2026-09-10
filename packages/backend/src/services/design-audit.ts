@@ -14,7 +14,7 @@ import { parseStoredProjectOptions } from "./project-options";
 import { buildSiteMap } from "./site-map";
 import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
 
-export const DESIGN_AUDIT_POLICY_VERSION = "site-v1";
+export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v2";
 
 export type AuditRenderedTreeInput = { readonly projectId: string; readonly projectDir: string; readonly entrypoint: string; readonly revision: number; readonly digest: string; readonly treeDigest?: string; readonly safeFix?: boolean; readonly deck?: boolean; readonly canvas?: { readonly width: number; readonly height: number }; readonly signal: AbortSignal };
 export class DesignAuditServiceError extends Error {
@@ -39,7 +39,7 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
     sharedChangeDivergence = siteAudit.divergent_pages;
     siteFindings = siteAudit.findings.map((finding, index) => buildSiteFinding(finding, index));
   }
-  const viewports = input.canvas === undefined
+  const viewports = input.deck ? [{ width: 1920, height: 1080, dpr: 1 } as const] : input.canvas === undefined
     ? [{ width: 1280, height: 900, dpr: 1 }, { width: 375, height: 812, dpr: 1 }] as const
     : [{ width: input.canvas.width, height: input.canvas.height, dpr: 1 }] as const;
   const browser = await launchChromium(input.signal);
@@ -47,7 +47,9 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   try {
     for (const entrypoint of auditEntrypoints) for (const viewport of viewports) {
       const session = await openRenderSession({ stagedDir: input.projectDir, entrypoint, viewport, deck: input.deck ?? false, strict: false, signal: input.signal, browser });
-      try { observations.push(await inspectRenderedPage(session.page, input.canvas !== undefined)); } finally { await session.close(); }
+      // Inspect every artboard in print order, including slides hidden by navigation.
+      if (input.deck) await session.page.addStyleTag({ content: "html,body{height:auto!important;overflow:visible!important} [data-slide]{display:block!important;position:relative!important;inset:auto!important;transform:none!important;margin:0!important;width:1920px!important;height:1080px!important}" });
+      try { observations.push(await inspectRenderedPage(session.page, input.canvas !== undefined || Boolean(input.deck))); } finally { await session.close(); }
     }
   } finally { await owner.close(); }
   const current = await inspectCanonicalTree(input.projectDir);
@@ -146,7 +148,7 @@ async function enrichFindings(raw: readonly DomAuditFinding[], input: AuditRende
     if (input.safeFix === false || finding.code !== "minimum_text_size" || finding.nodeId === null || html === null || htmlEntry === undefined) return base;
     try {
       const node = fingerprintHtmlNode(html, finding.nodeId);
-      return { ...base, safe_fix: { kind: "patch_html_node" as const, rel_path: relPath, request: { expected_revision: input.revision, expected_artifact_digest: input.digest, expected_file_hash: htmlEntry.sha256, node_bg_id: finding.nodeId, node_fingerprint: node.fingerprint, styles: { "font-size": "12px" } } } };
+      return { ...base, safe_fix: { kind: "patch_html_node" as const, rel_path: relPath, request: { expected_revision: input.revision, expected_artifact_digest: input.digest, expected_file_hash: htmlEntry.sha256, node_bg_id: finding.nodeId, node_fingerprint: node.fingerprint, styles: { "font-size": `${finding.threshold ?? 12}px` } } } };
     } catch (error) { if (error instanceof FilePatchError) return base; throw error; }
   });
 }

@@ -27,8 +27,8 @@ test("Given an image regeneration comment When sent Then prompt approval precede
   expect(text).toContain("원문을 지어내지 마세요");
   expect(text).toContain("명시적인 확인을 받을 때까지 이미지 생성 도구를 호출하거나 파일을 변경하지 마세요");
   expect(text).toContain("이미 승인된 수정 프롬프트는 다시 묻지 말고 실행하세요");
-  expect(text).toContain("수정한 현재 파일을 직접 브라우저로 렌더링하고 스크린샷을 확인하세요");
-  expect(text).toContain("허용된 다른 로컬 브라우저나 렌더링 도구");
+  expect(text).toContain("내장 캔버스의 최신 preview-report.json");
+  expect(text).not.toContain("직접 브라우저로 렌더링");
   expect(text).toContain("검증을 사용자에게 떠넘기거나 확인하지 않은 결과를 완료로 보고하지 마세요");
 });
 

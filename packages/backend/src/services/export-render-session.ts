@@ -6,6 +6,7 @@ import { resolveWithin } from "../security/path-boundary";
 import { isChromiumLaunchable } from "./chromium-capability";
 import { registerExportBrowser } from "./export-browser-registry";
 import { chromiumNodeCommand, launchChromiumViaNode } from "./chromium-node-launch";
+import { DECK_STAGE_JS } from "../runtime/deck-stage";
 
 export type RenderViewport = { readonly width: number; readonly height: number; readonly dpr: 1 | 2 };
 export type RenderFinding = { readonly code: "console_error" | "page_error" | "request_failed" | "remote_request" | "font_error"; readonly path: string | null };
@@ -29,6 +30,7 @@ export async function openRenderSession(input: { readonly stagedDir: string; rea
     page.on("pageerror", (error) => findings.push({ code: "page_error", path: error.message })); page.on("requestfailed", (request) => { const url = new URL(request.url()); findings.push({ code: "request_failed", path: url.protocol === "file:" ? safeFileFinding(url, input.stagedDir) : sanitizeUrl(url) }); });
     await page.route("**/*", async (route) => {
       const url = new URL(route.request().url());
+      if (input.deck && url.protocol === "file:" && /^(?:\/[a-z]:)?\/runtime\/deck-stage\.js$/i.test(url.pathname)) { await route.fulfill({ contentType: "application/javascript", body: DECK_STAGE_JS }); return; }
       if (url.protocol === "data:") { await route.continue(); return; }
       if (url.protocol === "file:") {
         try { resolveWithin(input.stagedDir, path.relative(input.stagedDir, fileURLToPath(url))); await route.continue(); return; }

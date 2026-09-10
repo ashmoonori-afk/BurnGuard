@@ -15,6 +15,7 @@ import GraphicFrameNavigator from "./GraphicFrameNavigator";
 import {
   buildSandboxedArtifactSrcDoc,
   requestFrameSetActiveSlide,
+  requestFramePreviewReport,
   subscribeFrameEvent,
 } from "./frame-bridge";
 import type { CanvasMode } from "@/components/modes/types";
@@ -106,6 +107,7 @@ export default function Canvas({
   onRetryDraws,
   sceneTools,
   colorPalette,
+  livePreview,
 }: {
   mode: CanvasMode | null;
   src?: string | null;
@@ -151,6 +153,7 @@ export default function Canvas({
   onRetryDraws?: () => void;
   sceneTools?: ReactNode;
   colorPalette?: ReactNode;
+  livePreview?: { version: number; reportUrl: string };
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -192,8 +195,9 @@ export default function Canvas({
   const restoreTargetSlideIdxRef = useRef<number | null>(null);
   const restoringSlideRef = useRef(false);
   const frameLoadKey = JSON.stringify([src, frameKey]);
-  const [frameDocument, setFrameDocument] = useState<{ key: string; html: string } | null>(null);
-  const frameSrcDoc = frameDocument?.key === frameLoadKey ? frameDocument.html : null;
+  const [frameDocument, setFrameDocument] = useState<{ key: string; src: string; html: string } | null>(null);
+  // Keep the previous render visible while its next version and assets load.
+  const frameSrcDoc = frameDocument && frameDocument.src === src ? frameDocument.html : null;
   const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null);
   // Surfaces fetch failures inline instead of falling back to the
   // placeholder with no signal (audit fix #6). Cleared on every src
@@ -219,7 +223,6 @@ export default function Canvas({
     }
 
     const controller = new AbortController();
-    setFrameDocument(null);
     setLoadError(null);
 
     void authorizedFetch(src, { signal: controller.signal, cache: "no-store" })
@@ -237,6 +240,7 @@ export default function Canvas({
         if (controller.signal.aborted) return;
         setFrameDocument({
           key: frameLoadKey,
+          src,
           html: buildSandboxedArtifactSrcDoc(
             html,
             new URL(src, window.location.href).toString(),
@@ -248,7 +252,6 @@ export default function Canvas({
       })
       .catch((err: Error & { httpStatus?: number }) => {
         if (controller.signal.aborted) return;
-        setFrameDocument(null);
         setLoadError({
           status: err.httpStatus,
           message: err.httpStatus === 404
@@ -318,6 +321,7 @@ export default function Canvas({
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/40 max-[900px]:min-h-48">
       <CanvasTopBar
         mode={mode}
+        readOnly={Boolean(livePreview)}
         onModeChange={onModeChange}
         onRefresh={onRefresh}
         canUndo={canUndo}
@@ -325,6 +329,7 @@ export default function Canvas({
         onUndo={onUndo}
         colorPalette={colorPalette}
       />
+      {livePreview && <div role="status" className="border-b border-border bg-accent/10 px-3 py-1 text-xs text-accent">생성 중 · 작업하는 내용이 자동으로 표시돼요. 저장이 끝나면 편집할 수 있어요.</div>}
       <div ref={containerRef} className="relative flex-1 overflow-hidden bg-muted/70">
         <div ref={stageRef} className="absolute inset-3 rounded-md shadow-md ring-1 ring-border/60 max-[600px]:inset-2" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "center" }}
           onWheel={(event) => {
@@ -336,7 +341,7 @@ export default function Canvas({
         {src ? (
           <iframe
             ref={iframeRef}
-            key={frameKey}
+            key={src}
             title="캔버스"
             srcDoc={frameSrcDoc ?? PLACEHOLDER_SRC}
             sandbox="allow-scripts allow-popups"
@@ -345,6 +350,12 @@ export default function Canvas({
             className="absolute inset-0 h-full w-full rounded-md border-0 bg-background"
             onLoad={() => {
               if (frameSrcDoc !== null) setLoadedFrameKey(frameKey ?? src);
+              if (livePreview && frameDocument?.key === frameLoadKey) {
+                void requestFramePreviewReport(iframeRef.current).then(async (report) => {
+                  if (!report || typeof report !== "object" || Array.isArray(report)) return;
+                  await authorizedFetch(livePreview.reportUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...report, version: livePreview.version }) });
+                }).catch(() => {});
+              }
             }}
           />
         ) : (
@@ -417,7 +428,7 @@ export default function Canvas({
             </div>
           </div>
         )}
-        {loadError && (
+        {loadError && !(livePreview && frameSrcDoc) && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center bg-background/80 backdrop-blur-sm">
             <div className="pointer-events-auto max-w-sm rounded border border-destructive/40 bg-background px-4 py-3 text-xs shadow-md">
               <div className="font-semibold text-destructive">

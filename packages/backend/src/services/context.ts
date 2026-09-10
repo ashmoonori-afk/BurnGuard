@@ -6,6 +6,22 @@ import { indexProjectFiles, listIndexedProjectFiles } from "./files";
 import { getLatestDirectionState } from "./design-direction-state";
 import { getSqlite } from "../db/sqlite-client";
 import { readConversationHistory } from "../db/conversation-history";
+import { ATTACHMENT_LIMITS } from "./attachments";
+
+export function selectContextAttachments(attachments: Awaited<ReturnType<typeof listSessionAttachments>>, requestedPaths: readonly string[], request: string): string[] {
+  const text = request.normalize("NFC").toLowerCase();
+  const priority = (item: (typeof attachments)[number]) => requestedPaths.includes(item.file_path) ? 3 : text.includes(item.original_name.normalize("NFC").toLowerCase()) ? 2 : item.mime_type === "application/pdf" ? 1 : 0;
+  const candidates = attachments.filter(item => item.turn_id !== null || requestedPaths.includes(item.file_path)).sort((a, b) => priority(b) - priority(a) || b.created_at - a.created_at || a.id.localeCompare(b.id));
+  const selected: string[] = [];
+  let bytes = 0;
+  // ponytail: retain the intake budget; a document library selector can replace name priority if projects outgrow it.
+  for (const item of candidates) {
+    if (selected.length >= ATTACHMENT_LIMITS.maxCount || item.size_bytes > ATTACHMENT_LIMITS.maxBytesPerFile || bytes + item.size_bytes > ATTACHMENT_LIMITS.maxBytesTotal) continue;
+    selected.push(item.file_path);
+    bytes += item.size_bytes;
+  }
+  return selected;
+}
 
 export async function buildSessionContext(sessionId: string) {
   const project = await getSessionProject(sessionId);

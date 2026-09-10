@@ -742,9 +742,7 @@ export default function ProjectView() {
       });
     }
 
-    // A CLI turn never emits file.changed — the backend collapses it into
-    // one committed artifact.operation, which is what refreshes the
-    // canvas and the file tabs after a turn (T2).
+    // Final publication refreshes authoritative files after the draft preview.
     if (event.type === "artifact.operation" && event.outcome === "committed") {
       turnTouchedFilesRef.current = true;
       if (id) {
@@ -792,6 +790,15 @@ export default function ProjectView() {
   const files: FileInfo[] = filesQuery.data ?? [];
   const artifacts = artifactsQuery.data ?? null;
   const session = stream.state?.session ?? null;
+  const latestPreview = [...events].reverse().find((event) => event.type === "artifact.preview");
+  const livePreview = session?.status === "running" && latestPreview?.type === "artifact.preview" && latestPreview.active && latestPreview.projectId === id ? latestPreview : null;
+  useEffect(() => {
+    if (!livePreview) return;
+    openFileAsTab(livePreview.path, setOpenFileTabs, setActiveTabId);
+    setMode(null);
+    setEditTarget(null);
+    setTweaksTarget(null);
+  }, [livePreview?.previewId, livePreview?.path]);
   const directionState = directionQuery.data ?? null;
   const directionActionPending =
     generateDirectionsMutation.isPending ||
@@ -880,6 +887,7 @@ export default function ProjectView() {
   const pendingPermissions = stream.state?.pending ?? [];
 
   const canvasSrc = useMemo(() => {
+    if (livePreview) return `/api/projects/${encodeURIComponent(livePreview.projectId)}/preview/${encodeURIComponent(livePreview.previewId)}/fs/${livePreview.path.split("/").map(encodeURIComponent).join("/")}`;
     const activeFile = tabs.find(
       (tab) => tab.id === activeTabId && tab.kind === "file" && tab.relPath,
     );
@@ -893,6 +901,7 @@ export default function ProjectView() {
     });
     return source && canvasNavigation && canvasNavigation.projectId === project?.id && canvasNavigation.relPath === activeFile?.relPath ? canvasNavigation.url : source;
   }, [
+    livePreview,
     activeTabId,
     canvasNavigation,
     artifacts?.entrypoint_url,
@@ -1285,10 +1294,11 @@ export default function ProjectView() {
                 }}
                 onRequestAI={async (text) => { await sendMessage(text, [], new AbortController().signal, (await loadComposerDraft(session.id).catch(() => null))?.generation); setChatFocusKey((value) => value + 1); setMobilePane("chat"); }}
               /></Suspense> : undefined}
-              mode={mode}
+              mode={livePreview ? null : mode}
               src={canvasSrc}
-              onNavigate={handleCanvasNavigate}
-              frameKey={`${canvasSrc ?? "entrypoint"}:${refreshTick}`}
+              livePreview={livePreview ? { version: livePreview.version, reportUrl: `/api/projects/${encodeURIComponent(livePreview.projectId)}/preview/${encodeURIComponent(livePreview.previewId)}/report` } : undefined}
+              onNavigate={livePreview ? undefined : handleCanvasNavigate}
+              frameKey={`${canvasSrc ?? "entrypoint"}:${livePreview?.version ?? refreshTick}`}
               onModeChange={setMode}
               onRefresh={() => {
                 if (!id) return;
@@ -1357,7 +1367,7 @@ export default function ProjectView() {
               }}
             />
             <ModePanel
-              mode={mode}
+              mode={livePreview ? null : mode}
               uxReview={{
                 projectId: id!,
                 relPath: activeRelPath,

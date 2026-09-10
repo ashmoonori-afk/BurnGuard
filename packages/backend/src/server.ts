@@ -160,6 +160,7 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
   if (method === "GET" && /^\/api\/projects\/[^/]+\/thumbnail$/.test(pathname)) return "home";
   if (/^\/api\/projects\/[^/]+\/three-scene$/.test(pathname)) return "three-scene";
   if (pathname.startsWith("/api/projects")) {
+    if (/^\/api\/projects\/[^/]+\/preview\/[^/]+\/(fs\/|report$)/.test(pathname)) return "managed-files";
     if (/\/checkpoints(?:\/|$)/.test(pathname)) return "session";
     if (/\/draws(?:\/|$)/.test(pathname) && (method === "GET" || method === "PUT")) return "managed-files";
     if (/\/fs(?:\/|$)/.test(pathname) && method === "GET" && !pathname.endsWith("/undo-info")) return "managed-files";

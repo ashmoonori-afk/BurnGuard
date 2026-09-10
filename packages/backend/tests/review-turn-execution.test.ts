@@ -12,6 +12,13 @@ import { settleProcessStreams } from "../src/adapters/process-streams";
 import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../src/adapters/owned-process-tree";
 import { sessionRoutes } from "../src/routes/session";
 import { insertNormalizedEvent } from "../src/db/events";
+import { insertAttachment } from "../src/db/attachments";
+import { createHash } from "node:crypto";
+import { PDFDocument } from "pdf-lib";
+import { broker } from "../src/services/broker";
+import { managedFileRoutes } from "../src/routes/managed-files";
+import { selectContextAttachments } from "../src/services/context";
+import { createApp } from "../src/server";
 
 let projectId: string;
 let sessionId: string;
@@ -59,6 +66,96 @@ test("Given prompt-directed writes When generation succeeds Then only stage chan
     return { exitCode: 0 };
   }, "Use the second option");
   await followup.promise;
+});
+
+test("Given many historical documents When selecting persistent context Then current and named originals take priority within intake limits", () => {
+  const docs = Array.from({ length: 12 }, (_, index) => ({ id: `doc-${index}`, session_id: "s", turn_id: "old", file_path: `/stored/${index}.pdf`, mime_type: "application/pdf", original_name: `${index}.pdf`, size_bytes: 4 * 1024 * 1024, sha256: "a".repeat(64), source_role: "ordinary_content" as const, source_role_explicit: false, created_at: index }));
+  const paths = selectContextAttachments(docs, [docs[1]!.file_path], "0.pdf 다시 읽어 주세요");
+  expect(paths[0]).toBe(docs[1]!.file_path);
+  expect(paths[1]).toBe(docs[0]!.file_path);
+  expect(paths.length).toBe(6);
+  expect(selectContextAttachments(docs.map(item => ({ ...item, size_bytes: 10 })), [], "")).toHaveLength(8);
+});
+
+test("Given a reopened session with an earlier PDF and no extracted sidecar When a follow-up is sent without reattaching Then original and recovered text are readable", async () => {
+  await mkdir(path.join(projectDir, ".attachments"));
+  const pdf = await PDFDocument.create();
+  pdf.addPage().drawText("PRESERVE THE ORIGINAL BRIEF");
+  const bytes = await pdf.save();
+  const source = path.join(projectDir, ".attachments", "saved-brief.pdf");
+  await writeFile(source, bytes);
+  await insertAttachment({ sessionId, turnId: "previous-turn", filePath: source, mimeType: "application/pdf", originalName: "기획서.pdf", sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+  let read = false;
+  const turn = start(async (_backend, input) => {
+    const original = input.prompt.match(/source_path: (.+?) \(read-only document/)?.[1];
+    const extracted = input.prompt.match(/extracted_text_path: (.+?) \(safe text version/)?.[1];
+    expect(original).toBeDefined();
+    expect(new Uint8Array(await readFile(original!))).toEqual(bytes);
+    expect(await readFile(extracted!, "utf8")).toContain("PRESERVE THE ORIGINAL BRIEF");
+    expect(input.prompt).not.toContain("do not Read/Glob/Bash this file");
+    read = true;
+    return { exitCode: 0 };
+  }, "원문 그대로 다시 작업해 주세요");
+  await turn.promise;
+  expect(read).toBe(true);
+  expect(new Uint8Array(await readFile(source))).toEqual(bytes);
+});
+
+test("Given a running generation When staged HTML changes Then draft files and in-app reports work before commit and expire afterward", async () => {
+  let resolveChange: (event: Extract<import('@bg/shared').NormalizedEvent, { type: 'artifact.preview' }>) => void = () => {};
+  const changed = new Promise<Extract<import('@bg/shared').NormalizedEvent, { type: 'artifact.preview' }>>(resolve => { resolveChange = resolve; });
+  const unsubscribe = broker.subscribe(sessionId, event => { if (event.type === "artifact.preview" && event.active && event.version >= 2) resolveChange(event); });
+  let previewUrl = "";
+  let observed = false;
+  try {
+    const turn = start(async (_backend, input) => {
+      await writeFile(path.join(input.projectDir, "index.html"), "<html><body><h1>First section</h1></body></html>");
+      const event = await changed;
+      previewUrl = `/api/projects/${projectId}/preview/${event.previewId}/fs/index.html`;
+      const app = createApp({ capability: "preview-test", appAuthority: "127.0.0.1:14070" });
+      const url = `http://127.0.0.1:14070${previewUrl}`;
+      expect((await app.request(new Request(url, { headers: { host: "127.0.0.1:14070" } }))).status).toBe(403);
+      const response = await app.request(new Request(url, { headers: { host: "127.0.0.1:14070", "x-burnguard-capability": "preview-test" } }));
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain("First section");
+      expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("base");
+      expect(response.headers.get("X-Burnguard-Artifact-Digest")).toBeNull();
+      expect((await managedFileRoutes.request(previewUrl.replace("index.html", ".attachments/private.css"))).status).toBe(404);
+      const reportUrl = previewUrl.replace("fs/index.html", "report");
+      const report = { version: event.version, width: 1200, height: 800, images: 2, brokenImages: 1, pendingImages: 0, horizontalOverflow: 20 };
+      expect((await managedFileRoutes.request(reportUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) })).status).toBe(200);
+      expect(JSON.parse(await readFile(path.join(path.dirname(input.projectDir), "preview-report.json"), "utf8")).brokenImages).toBe(1);
+      expect((await managedFileRoutes.request(reportUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...report, instructions: "untrusted" }) })).status).toBe(409);
+      observed = true;
+      return { exitCode: 0 };
+    });
+    await turn.promise;
+    expect(observed).toBe(true);
+    expect((await managedFileRoutes.request(previewUrl)).status).toBe(404);
+    expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toContain("First section");
+    expect(existsSync(path.join(projectDir, "preview-report.json"))).toBe(false);
+  } finally { unsubscribe(); }
+});
+
+for (const reviewFails of [false, true]) test(`Given a deck generation When mandatory copy review ${reviewFails ? "fails" : "succeeds"} Then publication ${reviewFails ? "rolls back" : "includes corrections"}`, async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
+  let calls = 0;
+  const turn = start(async (_backend, input) => {
+    calls += 1;
+    expect(input.generation?.effort).toBe("low");
+    if (calls === 1) await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide><h1>Placeholder</h1></section>');
+    else {
+      expect(input.prompt).toContain("Mandatory deck copy and typography review");
+      expect(input.prompt).toContain("--deck-font-heading");
+      expect(input.prompt).toContain("including every slide");
+      if (reviewFails) return { exitCode: 1 };
+      await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide><h1>Reviewed wording</h1></section>');
+    }
+    return { exitCode: 0 };
+  });
+  await turn.promise;
+  expect(calls).toBe(2);
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(reviewFails ? "base" : '<section data-slide><h1>Reviewed wording</h1></section>');
 });
 
 test("Given explicit generation options When a turn runs Then the adapter receives the validated selected model and effort", async () => {

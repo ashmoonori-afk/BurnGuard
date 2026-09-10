@@ -108,13 +108,25 @@ export async function withPrivateAttachmentInputs<T>(
       if (sourceBytes.byteLength !== attachment.size_bytes || sourceSha256 !== attachment.sha256) throw new StageAttachmentInputError();
       const sourcePath = path.join(privateDirectory, fileName);
       await writePrivateFile(sourcePath, sourceBytes);
-      const extractedTextPath = await materializeExtractedText({
+      let extractedTextPath = await materializeExtractedText({
         privateDirectory,
         projectDir: input.projectDir,
         attachmentPath: attachment.file_path,
         fileName,
         hooks: input.hooks,
       });
+      if (extractedTextPath === null && /\.pdf$/i.test(fileName)) {
+        // Recover legacy/missing sidecars from the verified private copy only.
+        const target = `${sourcePath}.extracted.md`;
+        try {
+          const { extractPdfAttachment } = await import("./attachment-pdf");
+          await extractPdfAttachment(sourcePath, `${sourcePath}.manifest.json`, target);
+          extractedTextPath = target;
+        } catch {
+          // A scanned/encrypted PDF can still be inspected with the PDF reader.
+          await rm(target, { force: true });
+        }
+      }
       sources.push({ attachmentId: attachment.id, attachmentPath: attachment.file_path, sourcePath, extractedTextPath, immutable: attachment.source_role === "immutable_reference", sourceSha256, sourceSize: sourceBytes.byteLength });
     }
     callbackStarted = true;
