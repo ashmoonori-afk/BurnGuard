@@ -26,14 +26,14 @@ No tag or public release is created by the local build script. Package signing i
 
 ## macOS packaging and updates
 
-macOS packages use the same Velopack tool and the same GitHub release. Build on macOS with Bun 1.3.14 and the .NET 8 SDK:
+macOS packages use the same Velopack tool and the same GitHub release. Build on macOS with Bun 1.3.14, Node 24 (an official nodejs.org build; a Homebrew Node is skipped because it is not relocatable) and the .NET 8 SDK:
 
 ```bash
 bun install --frozen-lockfile
 bun run build:mac:release
 ```
 
-`dist/releases/` then contains `BurnGuard-osx-Setup.pkg`, `BurnGuard-osx-Portable.zip`, the full `.nupkg`, the `releases.osx.json` feed, and SHA256 sums. The packed bundle is `BurnGuard.app` with `Contents/MacOS/UpdateMac` beside the engine; only that bundle can update itself. The bundle also carries the native canvas binding and PDF.js under `Contents/MacOS/node_modules`, which thumbnails, PNG export and PDF rasterization need. The plain `dist/mac/BurnGuard Design.app` and the DMG are development builds without an updater.
+`dist/releases/` then contains `BurnGuard-osx-Setup.pkg`, `BurnGuard-osx-Portable.zip`, the full `.nupkg`, the `releases.osx.json` feed, and SHA256 sums. The packed bundle is `BurnGuard.app` with `Contents/MacOS/UpdateMac` beside the engine; only that bundle can update itself. The bundle also carries the native canvas binding and PDF.js under `Contents/MacOS/node_modules`, which thumbnails, PNG export and PDF rasterization need, and a Node runtime under `Contents/MacOS/resources/node` that owns headless Chromium for thumbnails, exports and audits: as on Windows, Playwright's in-process launch under Bun stalls on macOS. The plain `dist/mac/BurnGuard Design.app` and the DMG are development builds without an updater.
 
 The **macOS release package** workflow runs on the same `v*` tag as the Windows workflow and attaches its assets to the same draft release (whichever job finishes first creates the draft). Publish the draft with both `releases.win.json` and `releases.osx.json` attached. Signing and notarization run when `BG_MAC_SIGN_IDENTITY`, `BG_MAC_INSTALL_IDENTITY` and `BG_MAC_NOTARY_PROFILE` are configured; unsigned packages are for verification only and Gatekeeper will warn on first launch.
 

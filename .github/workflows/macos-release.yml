@@ -17,6 +17,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.0
       - run: bun install --frozen-lockfile
       - name: Verify tagged version
         run: |
@@ -27,6 +30,8 @@ jobs:
       - run: bun test packages/backend/tests/mac-updates.test.ts packages/backend/tests/app-update-routes.test.ts --timeout 30000
       # Signing/notarization stay off until BG_MAC_* secrets exist; unsigned packages are for verification only.
       - run: bun run build:mac:release
+      - name: Verify the bundled Node renderer runtime
+        run: test -x "dist/mac/BurnGuard Design.app/Contents/MacOS/resources/node/node"
       - uses: actions/upload-artifact@v4
         with:
           name: BurnGuard-macOS

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   symlinkSync,
 } from "node:fs";
@@ -44,6 +45,18 @@ describe("resolveWithin", () => {
     mkdirSync(child);
 
     expect(resolveWithin(root, "child")).toBe(child);
+  });
+
+  test("keeps a root spelled under macOS /private when resolving below it", () => {
+    if (process.platform !== "darwin") return;
+    // Given: the canonical spelling of a temporary root, as realpath() returns it.
+    const root = realpathSync(makeTempDir("bg-path-root-"));
+    expect(root.startsWith("/private/")).toBe(true);
+    mkdirSync(path.join(root, "child"));
+
+    // When / Then: the result stays inside the root the caller passed.
+    expect(resolveWithin(root, "child")).toBe(path.join(root, "child"));
+    expect(resolveWithin(root, "new", "artifact.zip")).toBe(path.join(root, "new", "artifact.zip"));
   });
 
   test("rejects parent traversal", () => {

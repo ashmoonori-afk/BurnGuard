@@ -145,7 +145,7 @@ export async function spawnLaunchProbe(node = chromiumNodeCommand(), timeoutMs =
 }
 
 export async function runChromiumProbeProcess(): Promise<never> {
-  const { chromium } = await import("playwright-core");
+  const { chromium } = await import("./playwright-runtime");
   for (const options of [{ headless: true }, { headless: true, channel: "chrome" }, { headless: true, channel: "msedge" }]) {
     try { const browser = await chromium.launch(options); await browser.close(); process.stdout.write("usable"); process.exit(0); } catch {}
   }
