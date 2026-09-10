@@ -11,9 +11,15 @@ test("Given a real PDF attachment, when extracted with bundled PDF.js, then Pyth
   try {
     const pdf = await PDFDocument.create();
     pdf.addPage().drawText("Actual PDF attachment text");
+    for (let index = 2; index <= 9; index++) {
+      const page = pdf.addPage();
+      for (let line = 0; line < 20; line++) page.drawText(`Page ${index} line ${line} with meaningful planning content`, { y: 750 - line * 25, size: 10 });
+      page.drawText(`END_OF_PAGE_${index}`, { y: 200, size: 10 });
+    }
     await writeFile(input.sourcePath, await pdf.save());
     await extractAttachmentUpload(input);
     expect(await readFile(input.extractedTextPath, "utf8")).toContain("Actual PDF attachment text");
+    expect(await readFile(input.extractedTextPath, "utf8")).toContain("END_OF_PAGE_9");
     await writeFile(input.sourcePath, "%PDF-1.7\ninvalid");
     await expect(extractAttachmentUpload(input)).rejects.toMatchObject({ code: "pdf_invalid" });
     const blank = await PDFDocument.create(); blank.addPage();

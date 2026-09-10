@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PDFDocument } from "pdf-lib";
@@ -9,6 +9,7 @@ import { listSessionAttachments } from "../src/db/attachments";
 import { saveSessionAttachments } from "../src/services/attachments";
 import { canonicalizeAttachmentRequest } from "../src/services/attachment-request";
 import { withPrivateAttachmentInputs } from "../src/services/stage-attachment-inputs";
+import { appendAttachmentContext } from "../src/harness/prompt-attachments";
 
 test("Given an actual PDF upload, when saved and canonicalized, then private AI input contains its original and extracted text without calling AI", async () => {
   await runMigrations();
@@ -35,6 +36,16 @@ test("Given an actual PDF upload, when saved and canonicalized, then private AI 
       expect(await readFile(sources[0]!.sourcePath)).toEqual(Buffer.from(bytes));
       expect(sources[0]!.extractedTextPath).not.toBeNull();
       expect(await readFile(sources[0]!.extractedTextPath!, "utf8")).toContain("Real PDF intake through canonical private inputs");
+      const lines: string[] = [];
+      await appendAttachmentContext(lines, rows, canonical.paths, root, sources);
+      expect(lines.join("\n")).toContain(`extracted_text_path: ${sources[0]!.extractedTextPath}`);
+      expect(lines.join("\n")).toContain("Real PDF intake through canonical private inputs");
+      // Previously shipped PDF manifests omitted these arrays. The derivative
+      // must remain available even when that legacy summary cannot be parsed.
+      await writeFile(`${saved[0]}.summary.json`, JSON.stringify({ kind: "pdf", page_count: 1, pages: [], notes: [] }));
+      const legacyLines: string[] = [];
+      await appendAttachmentContext(legacyLines, rows, canonical.paths, root, sources);
+      expect(legacyLines.join("\n")).toContain(`extracted_text_path: ${sources[0]!.extractedTextPath}`);
     });
     expect(await readdir(operation)).toEqual([]);
     expect(db.query<{ status: string }, [string]>("SELECT status FROM sessions WHERE id=?").get(sessionId)?.status).toBe("idle");
