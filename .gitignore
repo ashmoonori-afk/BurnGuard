@@ -28,11 +28,6 @@ coverage/
 
 # Local draft notes
 reddit-launch-post-draft.md
-.omo/evidence/
-.omo/plans/
-.omo/senpi-task/
-.omo/ulw-loop/
-.omo/ulw-research/
 
 # Sample design-system uploads bucket — guards against committing
 # customer / IR / sensitive material dropped into this folder. Keep
@@ -40,3 +35,8 @@ reddit-launch-post-draft.md
 # (Surfaced by the 2026-04-24 IRIS pptx leak audit; see roadmap P4.7b.)
 design system sample/uploads/*
 !design system sample/uploads/.gitkeep
+
+# Local planning, agent work and reference files
+/devplan/
+/.omo/
+/ref/

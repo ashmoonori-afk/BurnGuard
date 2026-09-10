@@ -1,4 +1,0 @@
-$ bun run typecheck
-$ tsc --build
-
-EXIT_CODE=0

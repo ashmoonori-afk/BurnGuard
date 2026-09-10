@@ -1,7 +1,0 @@
-BG-01 real-surface curl QA
-server_pid: 1984
-hostile Host: HTTP/1.1 421 Misdirected Request
-hostile Origin mutation: HTTP/1.1 403 Forbidden
-authorized same-origin mutation: HTTP/1.1 200 OK
-public health: HTTP/1.1 200 OK
-cleanup: PASS - kill -0 1984 failed; QA server terminated; port 14070 connection refused with no LISTENING socket
