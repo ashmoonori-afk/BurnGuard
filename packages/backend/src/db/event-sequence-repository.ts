@@ -66,13 +66,16 @@ export function parsePersistedUserEvent(value: string, id: string): UserEvent {
   switch (type) {
     case "user.message": {
       const attachments = item["attachments"];
+      const activeRelPath = item["active_rel_path"];
       const common = { type, text: text(item, "text", id) };
       if (attachments !== undefined && (!Array.isArray(attachments) || !attachments.every((entry) => typeof entry === "string"))) throw new PipelineRepositoryError("corrupt_json", id);
       let visualSources;
       try { visualSources = parseUploadedVisualSourceSelections(item["visualSources"]); }
       catch (error) { if (error instanceof VisualSourceContractError) throw new PipelineRepositoryError("corrupt_json", id); throw error; }
+      if (activeRelPath !== undefined && typeof activeRelPath !== "string") throw new PipelineRepositoryError("corrupt_json", id);
       return {
         ...common,
+        ...(activeRelPath === undefined ? {} : { active_rel_path: activeRelPath }),
         ...(attachments === undefined ? {} : { attachments }),
         ...(visualSources === undefined ? {} : { visualSources }),
       };

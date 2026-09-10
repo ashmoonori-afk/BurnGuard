@@ -136,7 +136,7 @@ describe("sequence replay", () => {
     ];
     expect(variants.map((item) => parsePersistedNormalizedEvent(JSON.stringify(item), item.id).type)).toEqual(variants.map((item) => item.type));
     expect(parsePersistedUserEvent('{"type":"user.interrupt"}', "u")).toEqual({ type: "user.interrupt" });
-    expect(parsePersistedUserEvent('{"type":"user.message","text":"x","attachments":["a"]}', "m")).toMatchObject({ type: "user.message", attachments: ["a"] });
+    expect(parsePersistedUserEvent('{"type":"user.message","text":"x","active_rel_path":"about.html","attachments":["a"]}', "m")).toMatchObject({ type: "user.message", active_rel_path: "about.html", attachments: ["a"] });
     expect(parsePersistedUserEvent('{"type":"user.tool_decision","toolCallId":"c","decision":"deny","reason":"x"}', "t")).toMatchObject({ type: "user.tool_decision", decision: "deny" });
     expect(parseJsonArray("[]", "array")).toEqual([]);
     expect(() => parseJsonArray("{", "bad-array")).toThrow("corrupt_json");

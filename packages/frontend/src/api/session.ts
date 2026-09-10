@@ -43,6 +43,7 @@ export async function sendUserEvent(
     const form = new FormData();
     form.set("type", "user.message");
     form.set("text", event.text);
+    if (event.active_rel_path !== undefined) form.set("active_rel_path", event.active_rel_path);
     if (event.generation) form.set("generation", JSON.stringify(event.generation));
     const uploads = (event.files ?? []).map((source, index) => source instanceof File
       ? { id: `upload-${index}`, file: source, role: "ordinary_content" as const }
@@ -72,6 +73,7 @@ export async function sendUserEvent(
       body: JSON.stringify({
         type: "user.message",
         text: event.text,
+        active_rel_path: event.active_rel_path,
         generation: event.generation,
         attachments: event.attachments,
         visualSources: event.visualSources,

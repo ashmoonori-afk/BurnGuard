@@ -128,12 +128,14 @@ describe("multipart user event upload", () => {
     await sendUserEvent("session-1", {
       type: "user.message",
       text: "봐줘",
+      active_rel_path: "about.html",
       files: [{ id: "upload-deck", file: upload(), role: "immutable_reference" }],
     });
 
     const form = sentBody as FormData | null;
     expect(form?.get("type")).toBe("user.message");
     expect(form?.get("text")).toBe("봐줘");
+    expect(form?.get("active_rel_path")).toBe("about.html");
     expect(form?.getAll("files")).toHaveLength(1);
     expect(JSON.parse(String(form?.get("visual_sources")))).toEqual({
       schema_version: 1,
