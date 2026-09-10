@@ -6,16 +6,41 @@ Reviewed against repository commit `0641552` (0.5.4). This checklist covers the 
 
 Priority: **P0** resolves contract, correctness, or delivery blockers; **P1** delivers the main user flows; **P2** extends supported deliverables or improves usability. Dependencies determine implementation order. External platform claims retain their original verification status; this review does not upgrade them to newly verified facts.
 
+Decision log: [ADR-015](./07-decisions.md#adr-015-deliverable-kinds-platform-packages-and-additive-brief-fields) records the accepted architectural choices behind T01–T08.
+
 ### A. Resolve scope and specification conflicts first — P0
 
 - [ ] **T01 — Define the platform delivery promise. [Review addition]** Distinguish downloadable platform packages, guided manual installation, and authenticated direct publishing in requirements and UI. Do not mark the original direct-upload request complete when only a ZIP is delivered; record any agreed scope reduction explicitly. Reuse the existing Vercel precedent when evaluating a future authenticated channel. Covers sections 1, 3.4, 9.1, and 12.
+
+  **Decision (2026-09-10):** Deliver the direct-upload request as a downloadable guided package per platform plus a manual installation guide. Authenticated direct publishing to Cafe24 (카페24) and Imweb (아임웹) is deferred under T66 until a documented endpoint exists. The UI must keep "package downloaded" distinct from "published on the platform." Any future push follows the Vercel share precedent: tokens remain in memory only, and only verified export bytes are sent.
+
 - [ ] **T02 — Refresh repository facts and ownership. [Review addition]** Replace the obsolete HEAD reference and stale line citations, reconcile the blanket no-deployment/no-outbound statements with existing Vercel sharing and other current integrations, and reserve migration/ADR numbers from the implementation branch rather than assuming 0014/ADR-015 remain free. Record the implementation owner and evidence location for each phase.
+
+  **Decision (2026-09-10):** The reviewed HEAD is `0641552` (0.5.4); migration 0014 and ADR-015 are confirmed free on the implementation branch. Narrow "no outbound network" to "no outbound network from artifacts and no automatic deployment": the backend's only outbound paths are HTTPS design-system imports, the first-run Chromium download, and the user-initiated Vercel share. The implementation owner is branch `feat/deliverables-and-platform-publishing-20260910`. Verification evidence lives in the ignored `.omo/ulw-loop` session directory and will be summarized in doc/15 when implementation lands.
+
 - [ ] **T03 — Resolve persisted-schema evolution before merging fields.** Follow ADR-013's versioning requirement for the changed design brief, define legacy V1 reading/upgrading and unsupported-version behavior, and document how `GraphicSetV1` is introduced. Do not silently turn malformed or future graphic-set data into a different deliverable through the existing stored-options fallback. Covers sections 8.5, 10, and 12.6.
+
+  **Decision (2026-09-10):** Under ADR-013, `DesignBriefV1.pages` is an optional additive field; no V2 is introduced. `GraphicSetV1` is a new versioned `options_json.graphic_set` block with `schema_version: 1`. An absent `graphic_set` means kind `single`, preserving legacy projects. A malformed `graphic_set` or unknown `schema_version` raises a typed contract error and never falls back to a different deliverable.
+
 - [ ] **T04 — Separate product limits from platform recommendations. [Review addition]** Correct section 4.1's unverified Kakao hard cap and distinguish organic posts from paid-ad placements. A BurnGuard 40-frame resource limit must not be described as a verified vendor limit; unknown specifications produce warnings, while supported internal contracts remain enforceable.
+
+  **Decision (2026-09-10):** The 40-frame ceiling is a BurnGuard resource limit with `rule_source: "burnguard_default"`, not a verified Kakao limit. Presets distinguish organic posts from paid-ad placements. Unverified vendor figures produce warnings only; internal contracts, including `frame_count` 1–40 and pixel budgets, remain enforced.
+
 - [ ] **T05 — Correct geometry contradictions. [Review addition]** `860x18604` fits the pixel budget but exceeds the proposed 16384 height limit. Small banner presets such as `300x250`, `750x160`, and `112x112` also conflict with current canvas minimums. Specify valid dimensions per deliverable, integer validation, DPR-aware pixel budgets, and a separate policy for long pages without weakening existing single-image limits globally.
+
+  **Decision (2026-09-10):** `GRAPHIC_CANVAS_LIMITS.maxHeight` becomes 16384 while `maxPixels` remains 16,000,000, and dimensions must be integers. The single-PNG `png_height` bound remains 4096; `product_detail` exports only through `png_zip` slices. Long pages use the separate `slice_height` policy of 3000 or 5000, with every slice inside the 16-million-pixel budget at the chosen DPR. Presets below the 320x240 canvas minimum, including 300x250, 750x160, and 112x112, are unavailable in this release rather than resized.
+
 - [ ] **T06 — Reconcile content and format semantics. [Review addition]** Resolve section 4.2's “features after Q3” versus section 10's “features last”; define one authoritative Q1–Q8 sequence. Decide how a one-frame card set exports when `png_zip` currently requires more than one frame, how mixed-size banner PDFs work, and how the UI names ZIPs containing JPEG slices despite the internal `png_zip` identifier.
+
+  **Decision (2026-09-10):** The authoritative product-detail order is Q1 through Q8, then features, then the payment call to action; section 10 wins over section 4.2's "after Q3" wording. A one-frame graphic set uses the existing single-PNG export. `png_zip` requires `frame_count > 1` or kind `product_detail`. Artboard PDF requires uniform frame sizes and rejects mixed-size banner sets with a typed error. The user-facing `png_zip` label is "이미지 묶음 (ZIP)," while the receipt's `image_format` names PNG or JPEG and the internal ID remains `png_zip`.
+
 - [ ] **T07 — Resolve the remaining product choices.** Record defaults for classic Smart Design/Easy support, Cafe24 asset paths and blocking lint, secondary-kind order, detail-brief collection, and platform font fallbacks. Keep the user's Codex-only image-generation requirement; clarify whether other providers may compose HTML while generated imagery still uses Codex, rather than treating removal of the image gate as an undecided requirement. Covers section 12.
+
+  **Decision (2026-09-10):** Support classic Smart Design (스마트디자인) only and report Smart Design Easy as unsupported. The Cafe24 asset default is the user-editable root-relative path `/web/upload/burnguard/<project-slug>/`; every Cafe24 lint finding is a warning, while the Imweb 1,000,000-character finding is a blocking error. Secondary kinds land in this order: `banner_set`, `thumbnail`, then `print`. Collect all seven `detail_brief` fields in the creation panel, with chat as the fallback. Imweb packages default to a system-font fallback stack and offer Google Fonts links only as an explicit opt-in flagged in the guide; this is a recorded policy exception to doc/05. Retain the Codex-only image-generation gate for graphic projects unchanged. Cafe24 WOFF2 handling remains warning-only with no format conversion.
+
 - [ ] **T08 — Establish platform verification gates.** Obtain suitable test sites before claiming upload compatibility; recheck official sources for editor modes, plan gates, URL patterns, limits, asset uploads, fonts, widget behavior, and API access. Track source URL, placement, `verified_on`, and confidence per claim. Until verified, label affected exports as documentation-tested rather than platform-validated. Covers sections 2, 6, 7, and 13.
+
+  **Decision (2026-09-10):** Platform claims carry `status: "verified" | "unverified"` and `verified_on: "2026-09-09"` in one presets data module. Until T61 runs on real test sites, packages are labelled "documentation-tested," never "platform-validated." T33 and T61, which require real Cafe24 and Imweb shops, and T60 macOS runs are blocked by the environment on this branch.
 
 ### B. Shared contracts, persistence, and export lifecycle — P0/P1
 

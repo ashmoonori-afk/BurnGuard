@@ -5,6 +5,7 @@ This folder contains product and engineering documentation for BurnGuard. Some s
 ## Start Here
 
 - [Product introduction and setup](../README.md), also available in [Korean](../README.ko.md).
+- [Deliverables and platform publishing plan, September 9, 2026](./14-deliverables-and-platform-publishing-plan-2026-09-09.md): accepted defaults, implementation checklist, package-first Cafe24/Imweb delivery, graphic sets, and product-detail exports. Doc/15 will hold the implementation record when implementation lands.
 - [Windows updates and original samples](./13-windows-updates-and-original-samples.md): installer publication, safe update application, and four original collections across three formats.
 - [Windows native app, September 9, 2026](./12-windows-native-2026-09-09.md): portable WebView2 window, engine ownership, packaging, and verification.
 - [Generation and canvas update, September 9, 2026](./11-creation-tools-and-canvas-2026-09-09.md): models, LOW effort, source intake, 3D, fonts, comments, Pinterest, and validation boundaries.
@@ -46,6 +47,7 @@ The original milestones and screen specification below describe earlier plans; t
 | Original UI specification | [04-ui-spec.md](./04-ui-spec.md) |
 | Design system sample format | [05-design-system-format.md](./05-design-system-format.md) |
 | Phase status and remaining work | [06-milestones.md](./06-milestones.md) |
+| Deliverables and Cafe24/Imweb publishing plan | [14-deliverables-and-platform-publishing-plan-2026-09-09.md](./14-deliverables-and-platform-publishing-plan-2026-09-09.md) |
 | Engineering decisions | [07-decisions.md](./07-decisions.md) |
 | Dev setup and conventions | [CONTRIBUTING.md](./CONTRIBUTING.md) |
 
