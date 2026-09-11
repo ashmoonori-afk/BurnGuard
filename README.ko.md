@@ -76,6 +76,14 @@ HTML 파일을 열고 확대·3D 도구 옆 **차트**를 누르세요. 8종 중
 
 ### 디자인 시스템과 예제
 
+**21개 스타일과 13개 용도 분야를 모두 담은 원본 이미지 예제**를 제공합니다. 스타일과 이미지의 역할을 조합한 생성 예제이며, 실제 앱 화면은 아닙니다. [전체 갤러리와 생성에 사용한 프롬프트](doc/images/image-recipes/README.md).
+
+| 브랜드 · 제작물 | 수채화 · 학습 카드 | 인쇄 · 캠페인 |
+|---|---|---|
+| ![녹색과 시트러스 색상의 브랜드 제작물](doc/images/image-recipes/01-brand.png) | ![완두콩 수채화 관찰 그림](doc/images/image-recipes/08-watercolor.png) | ![주홍색 연의 인쇄 캠페인 이미지](doc/images/image-recipes/11-print.png) |
+| 클레이 · 피규어 | 플래시 · 스포츠 | 픽셀 · 연속 장면 |
+| ![손으로 빚은 찻주전자 캐릭터](doc/images/image-recipes/13-clay.png) | ![플래시로 포착한 배드민턴 동작](doc/images/image-recipes/17-flash.png) | ![온실 로봇의 세 장면 이야기](doc/images/image-recipes/20-pixel.png) |
+
 **SONNEL**(사운드 오브젝트), **FOLIOVER**(소재 저널), **ODDWARD**(실험적 스튜디오), **VELUNE**(조명) 컬렉션에서 시작할 수 있습니다. 각 예제는 웹사이트·6장 슬라이드·그래픽·디자인 시스템을 포함합니다. [예제 모음](samples/original/README.md).
 
 Google Fonts 6종과 Pretendard를 라이선스 고지와 함께 번들합니다. 스타일 패널에서 요청하면 설치된 글꼴도 불러옵니다. 로컬 글꼴 파일은 내보내기에 자동 포함되지 않습니다. [글꼴 목록](assets/fonts/README.md).

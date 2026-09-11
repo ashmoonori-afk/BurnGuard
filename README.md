@@ -76,6 +76,14 @@ The renderer is an original implementation with no added chart-library dependenc
 
 ### Design systems and examples
 
+**21 original image examples cover every visual treatment and all 13 purpose domains.** Each pairs a style with an image's job; these are generated creative examples, not application screenshots. [Full gallery and exact prompts](doc/images/image-recipes/README.md).
+
+| Brand · identity | Watercolor · learning | Print · campaign |
+|---|---|---|
+| ![Green and citrus stationery identity](doc/images/image-recipes/01-brand.png) | ![Watercolor pea-pod study](doc/images/image-recipes/08-watercolor.png) | ![Vermilion kite print campaign](doc/images/image-recipes/11-print.png) |
+| Clay · collectible | Flash · sports | Pixel art · sequence |
+| ![Handcrafted clay teapot creature](doc/images/image-recipes/13-clay.png) | ![Direct-flash badminton photograph](doc/images/image-recipes/17-flash.png) | ![Three-scene pixel gardening story](doc/images/image-recipes/20-pixel.png) |
+
 Start with **SONNEL** (tactile sound), **FOLIOVER** (material journal), **ODDWARD** (experimental studio) or **VELUNE** (sculptural lighting). Each original collection includes a website, six-slide deck, graphic and design system. [Explore the collections](samples/original/README.md).
 
 Six Google Fonts families and Pretendard are bundled locally with their license notices. The style panel can also load installed fonts when requested; local font files are not automatically embedded in exports. [Font catalog](assets/fonts/README.md).
