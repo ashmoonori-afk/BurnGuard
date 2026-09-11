@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
-import type { ApiErrorBody, ApiSuccess, DesignBriefV1, ProjectType } from "@bg/shared";
+import { parseGenerationStyle, UpgradeContractError, type GenerationStyle, type ApiErrorBody, type ApiSuccess, type DesignBriefV1, type ProjectType } from "@bg/shared";
 import { getLatestProjectSession, getProjectDetail } from "../db/project-read-repository";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
 import { PathBoundaryError, assertSafeName } from "../security/path-boundary";
@@ -68,7 +68,10 @@ designDirectionRoutes.post("/api/projects/:projectId/design-directions/generate"
   if (result.response !== undefined) return result.response;
   const value = result.value;
   if (value === undefined) return c.json(fail("project_session_not_found", "Project or session not found"), 404);
-  try { const started = await workflow.generate(value); void started.completion; return c.json(ok(started.state), 202); }
+  let preferences: GenerationStyle | undefined;
+  try { const text = await c.req.text(); if (text.trim() !== "") preferences = parseGenerationStyle(JSON.parse(text)); }
+  catch (error) { if (error instanceof SyntaxError || error instanceof UpgradeContractError) return c.json(fail("invalid_body", "Expected an image style and copy tone preset"), 400); throw error; }
+  try { const started = await workflow.generate(value, preferences); void started.completion; return c.json(ok(started.state), 202); }
   catch (error) { if (error instanceof DesignDirectionWorkflowError) return routeError(error); throw error; }
 });
 
@@ -98,6 +101,23 @@ designDirectionRoutes.post("/api/projects/:projectId/design-directions/select", 
   if (!isRecord(body) || !isText(body["generation_id"]) || !isRevision(body["expected_selection_revision"]) || !isText(body["direction_id"])) return c.json(fail("invalid_body", "Expected generation_id, expected_selection_revision, and direction_id"), 400);
   try { return c.json(ok(await workflow.select(value.sessionId, body["generation_id"], body["expected_selection_revision"], body["direction_id"]))); }
   catch (error) { if (error instanceof DesignDirectionWorkflowError) return routeError(error); throw error; }
+});
+
+designDirectionRoutes.post("/api/projects/:projectId/design-directions/preferences", async (c) => {
+  const result = await generationContext(c.req.param("projectId"));
+  if (result.response !== undefined) return result.response;
+  const value = result.value;
+  if (value === undefined) return c.json(fail("project_session_not_found", "Project or session not found"), 404);
+  const body = await c.req.json<unknown>().catch(() => null);
+  if (!isRecord(body) || Object.keys(body).some((key) => !["generation_id", "expected_selection_revision", "creative_preferences"].includes(key)) || !isText(body.generation_id) || !isRevision(body.expected_selection_revision)) return c.json(fail("invalid_body", "Expected generation identity and creative preferences"), 400);
+  try {
+    const preferences = parseGenerationStyle(body.creative_preferences);
+    return c.json(ok(await workflow.setPreferences(value.sessionId, body.generation_id, body.expected_selection_revision, preferences)));
+  } catch (error) {
+    if (error instanceof UpgradeContractError) return c.json(fail("invalid_body", "Unknown image style or copy tone preset"), 400);
+    if (error instanceof DesignDirectionWorkflowError) return routeError(error);
+    throw error;
+  }
 });
 
 designDirectionRoutes.post("/api/projects/:projectId/design-directions/undo-selection", async (c) => {

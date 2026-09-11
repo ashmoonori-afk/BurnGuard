@@ -1,8 +1,10 @@
-import type { DesignDirectionState } from "@bg/shared";
+import { useEffect, useState } from "react";
+import { DEFAULT_GENERATION_STYLE, type DesignDirectionState, type GenerationStyle } from "@bg/shared";
 import { Check, Compass, RotateCcw, StopCircle } from "lucide-react";
 import { ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { DirectionCard } from "./DirectionCard";
+import { GenerationStyleFields } from "./GenerationStyleFields";
 import { directionActions, directionProgress } from "@/lib/design-direction-state";
 
 type DirectionsViewProps = {
@@ -11,7 +13,9 @@ type DirectionsViewProps = {
   readonly actionPending: boolean;
   readonly cancelPending: boolean;
   readonly error: Error | null;
-  readonly onGenerate: () => void;
+  readonly onGenerate: (preferences: GenerationStyle) => void;
+  readonly onSavePreferences: (preferences: GenerationStyle) => void;
+  readonly preferencesSaving: boolean;
   readonly onCancel: () => void;
   readonly onRetry: () => void;
   readonly onSelect: (directionId: string) => void;
@@ -25,11 +29,17 @@ export function DirectionsView({
   cancelPending,
   error,
   onGenerate,
+  onSavePreferences,
+  preferencesSaving,
   onCancel,
   onRetry,
   onSelect,
   onUndo,
 }: DirectionsViewProps) {
+  const savedPreferences = state?.creative_preferences ?? DEFAULT_GENERATION_STYLE;
+  const [preferences, setPreferences] = useState(savedPreferences);
+  useEffect(() => { setPreferences(savedPreferences); }, [state?.generation_id, savedPreferences.image_style, savedPreferences.copy_tone]);
+  const preferencesChanged = preferences.image_style !== savedPreferences.image_style || preferences.copy_tone !== savedPreferences.copy_tone;
   const actions = directionActions(state);
   const selected =
     state?.directions.find((direction) => direction.id === state.selected_id) ?? null;
@@ -48,19 +58,21 @@ export function DirectionsView({
     return (
       <DirectionShell busy={actionPending}>
         <div className="grid min-h-full place-items-center px-4 py-12 text-center">
-          <div className="max-w-lg rounded-2xl border border-border bg-card px-6 py-10 shadow-sm sm:px-10">
+          <div className="w-full max-w-3xl rounded-2xl border border-border bg-card px-6 py-10 shadow-sm sm:px-10">
             <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-accent/10"><Compass className="h-7 w-7 text-accent" aria-hidden="true" /></div>
             <h1 className="text-xl font-semibold tracking-tight">프로젝트의 디자인 방향을 정해요</h1>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground [word-break:keep-all]">
               현재 콘텐츠를 바탕으로 서로 다른 구성과 스타일의 미리보기 3개를 만들어요.
             </p>
             <p className="mt-3 text-xs leading-6 text-muted-foreground">미리보기를 비교하고 원하는 방향을 선택하면 다음 AI 생성에 반영돼요.</p>
+            <GenerationStyleFields value={preferences} onChange={setPreferences} disabled={actionPending} />
+            <p className="mt-3 text-xs text-muted-foreground">방향을 만들 때 이미지 스타일과 어투도 함께 저장돼요. 아래 미리보기는 구성 예시예요.</p>
             <Button
               type="button"
               variant="cta"
               className="mt-6 min-h-11"
               disabled={actionPending}
-              onClick={onGenerate}
+              onClick={() => onGenerate(preferences)}
             >
               방향 3개 생성
             </Button>
@@ -109,6 +121,13 @@ export function DirectionsView({
           ) : null}
         </header>
 
+        <GenerationStyleFields value={preferences} onChange={setPreferences} disabled={loading || actionPending} />
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p role="status" className="text-xs text-muted-foreground">{preferencesSaving ? "설정을 저장하고 있어요." : preferencesChanged ? "변경한 설정을 저장해 주세요." : "저장된 설정을 다음 생성·수정에 적용해요."} 아래 미리보기는 구성 예시예요.</p>
+          <Button type="button" variant="outline" disabled={loading || actionPending || !preferencesChanged} onClick={() => onSavePreferences(preferences)}>
+            {preferencesSaving ? "저장 중" : "이미지·어투 설정 저장"}
+          </Button>
+        </div>
         {!loading ? <ContentOutline items={state.content_outline} /> : null}
 
         <section

@@ -33,3 +33,4 @@ export * from "./ux-review";
 export * from "./security";
 export * from "./updates";
 export type { VercelDeployment } from "./vercel";
+export * from "./generation-style";

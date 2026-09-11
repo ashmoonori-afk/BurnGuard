@@ -1,3 +1,4 @@
+import { parseGenerationStyle, type GenerationStyle } from "./generation-style";
 import {
   UpgradeContractError,
   decodeContract,
@@ -30,6 +31,7 @@ export type DesignDirectionSlot = {
 };
 
 export type DesignDirectionState = {
+  readonly creative_preferences?: GenerationStyle;
   readonly schema_version: 1;
   readonly project_id: string;
   readonly session_id: string;
@@ -46,7 +48,7 @@ export type DesignDirectionState = {
 
 export function parseDesignDirectionState(input: unknown): DesignDirectionState {
   const record = decodeContract(input);
-  exact(record, ["schema_version", "project_id", "session_id", "generation_id", "status", "content_outline", "directions", "selected_id", "selection_revision", "selection_history", "error", "updated_at"]);
+  exact(record, ["schema_version", "project_id", "session_id", "generation_id", "status", "content_outline", "directions", "selected_id", "selection_revision", "selection_history", "error", "updated_at"], ["creative_preferences"]);
   if (requiredNumber(record, "schema_version") !== 1) invalid("schema_version");
   const contentOutline = stringArray(record, "content_outline");
   if (contentOutline.length === 0 || contentOutline.length > 12 || contentOutline.some((entry) => entry.trim().length === 0)) invalid("content_outline");
@@ -68,6 +70,7 @@ export function parseDesignDirectionState(input: unknown): DesignDirectionState 
   const status = parseStatus(requiredString(record, "status"));
   validateAggregateStatus(status, directions);
   return {
+    ...(record.creative_preferences === undefined ? {} : { creative_preferences: parseGenerationStyle(record.creative_preferences) }),
     schema_version: 1,
     project_id: requiredString(record, "project_id"),
     session_id: requiredString(record, "session_id"),
@@ -114,5 +117,5 @@ function parseSlotStatus(value: string): DesignDirectionSlotStatus { switch (val
 function parseStatus(value: string): DesignDirectionStatus { switch (value) { case "loading": case "ready": case "partial": case "failed": case "cancelled": return value; default: return invalid("status"); } }
 function nullableString(record: UnknownRecord, key: string): string | null { const value = record[key]; if (value === null) return null; if (typeof value !== "string" || value.length === 0) invalid(key); return value; }
 function nonEmptyStrings(record: UnknownRecord, key: string): readonly string[] { const values = stringArray(record, key); if (values.length === 0 || values.length > 8) invalid(key); return values; }
-function exact(record: UnknownRecord, keys: readonly string[]): void { const allowed = new Set(keys); for (const key of Object.keys(record)) if (!allowed.has(key)) invalid(key); for (const key of keys) if (!(key in record)) throw new UpgradeContractError("missing_required_field", key); }
+function exact(record: UnknownRecord, keys: readonly string[], optional: readonly string[] = []): void { const allowed = new Set([...keys, ...optional]); for (const key of Object.keys(record)) if (!allowed.has(key)) invalid(key); for (const key of keys) if (!(key in record)) throw new UpgradeContractError("missing_required_field", key); }
 function invalid(path: string): never { throw new UpgradeContractError("invalid_field", path); }
