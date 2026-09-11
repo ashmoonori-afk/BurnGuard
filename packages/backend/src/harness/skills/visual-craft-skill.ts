@@ -149,11 +149,11 @@ No design system is selected, so this identity is the design system. Declare
 these tokens in :root, link fonts/fonts.css (bundled, no CDN), and reference
 tokens everywhere. Do not invent other colours or typefaces.
 
-- Display voice, pick one from the content: product/tech "Space Grotesk";
-  editorial/premium "DM Serif Display" with "Gowun Batang" Korean fallback;
-  poster/impact "Bebas Neue". --font-body: "DM Sans", "Pretendard", sans-serif;
-  --font-mono: "IBM Plex Mono", "Pretendard", monospace; append "Pretendard" as
-  the fallback of --font-display.
+- Display voice from the content: product/tech "Space Grotesk"; editorial
+  "DM Serif Display" + "Gowun Batang" (Korean); poster "Bebas Neue".
+  --font-body: "DM Sans"; --font-mono: "IBM Plex Mono"; "Pretendard" is the
+  fallback of every stack. Other bundled families (BUNDLED_FONT_REFERENCE):
+  Read fonts/fonts.md first.
 - Mode, pick one and keep it for the whole artifact:
   Paper (calm, editorial): --bg:#F6F1E8 --surface:#FFFDF9 --surface-2:#EFE6D8
   --ink:#18232D --ink-2:#52616C --ink-3:#8A949C --line:rgba(24,35,45,.10)

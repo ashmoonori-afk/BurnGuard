@@ -28,6 +28,7 @@ export async function appendDesignSystemContext(
     lines.push(`- readme: ${designSystem.readme_md_path}`);
   }
   lines.push("- Preserve display/body/mono font tokens and Korean fallbacks. Copy local fonts and licenses into artifact fonts/ and link fonts/fonts.css; no font CDNs. Use bundled DM Sans / Space Grotesk with Pretendard fallback and IBM Plex Mono when no brand face is specified. Keep supplied brand font files intact.");
+  lines.push("- Fonts (BUNDLED_FONT_REFERENCE): when the design system leaves a role unspecified, Read fonts/fonts.md in the project before picking a bundled family; it records traits, Korean coverage and pairings for every family in fonts/fonts.css.");
   lines.push("");
 
   if (contextMode === "compact") {
