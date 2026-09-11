@@ -121,6 +121,7 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       await page.getByRole("button", { name: "방향 정하기", exact: true }).click();
       const imageStyle = page.getByLabel("이미지 스타일 프리셋", { exact: true });
       const copyTone = page.getByLabel("문안 어투", { exact: true });
+      const imageRecipe = page.getByLabel("이미지 용도", { exact: true });
       await imageStyle.selectOption("studio");
       await copyTone.selectOption("friendly");
       const generated = page.waitForResponse(response => response.url().endsWith("/design-directions/generate") && response.request().method() === "POST");
@@ -129,21 +130,29 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       assert.equal(response.status(), 202);
       assert.deepEqual(response.request().postDataJSON(), { schema_version: 1, image_style: "studio", copy_tone: "friendly" });
       await page.getByText("3개 방향이 모두 준비됐어요. 비교한 뒤 하나를 선택하세요.", { exact: true }).waitFor();
-      await imageStyle.selectOption("collage");
+      await imageStyle.selectOption("watercolor");
       await copyTone.selectOption("professional");
+      await imageRecipe.selectOption("product_detail");
       const saved = page.waitForResponse(item => item.url().endsWith("/design-directions/preferences") && item.request().method() === "POST");
       await page.getByRole("button", { name: "이미지·어투 설정 저장", exact: true }).click();
       assert.equal((await saved).status(), 200);
       await page.reload({ waitUntil: "domcontentloaded" });
       await page.getByRole("button", { name: "방향 정하기", exact: true }).click();
       await imageStyle.waitFor();
-      assert.equal(await imageStyle.inputValue(), "collage");
+      assert.equal(await imageStyle.inputValue(), "watercolor");
       assert.equal(await copyTone.inputValue(), "professional");
+      assert.equal(await imageRecipe.inputValue(), "product_detail");
       const persisted = await page.request.get(`${base}/api/projects/${fixture.id}/design-directions`);
-      assert.deepEqual((await persisted.json()).data.creative_preferences, { schema_version: 1, image_style: "collage", copy_tone: "professional" });
+      assert.deepEqual((await persisted.json()).data.creative_preferences, { schema_version: 1, image_style: "watercolor", copy_tone: "professional", image_recipe: "product_detail" });
+      // Changing only the recipe must enable persistence as well.
+      await imageRecipe.selectOption("auto");
+      const recipeSaved = page.waitForResponse(item => item.url().endsWith("/design-directions/preferences") && item.request().method() === "POST");
+      await page.getByRole("button", { name: "이미지·어투 설정 저장", exact: true }).click();
+      assert.equal((await recipeSaved).status(), 200);
       await page.setViewportSize({ width: 680, height: 900 });
       assert.ok(await imageStyle.isVisible());
       assert.ok(await copyTone.isVisible());
+      assert.ok(await imageRecipe.isVisible());
       await shot(page, "creation-canvas-generation-style");
     });
 

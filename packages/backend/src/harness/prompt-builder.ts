@@ -31,6 +31,7 @@ import { appendReferenceLayoutContext } from "./prompt-reference-layout";
 import { appendVisualSourceContext } from "./prompt-visual-sources";
 import { summarizeDeckHtml } from "./structure-extractor";
 import { appendPrototypeSiteContext } from "./prompt-site-context";
+import { appendImageProduction } from "./prompt-image-production";
 
 export { MAX_SKILL_CHARS } from "./prompt-design-system";
 
@@ -143,6 +144,7 @@ export async function buildPrompt(
   }
 
   appendGenerationStyle(lines, directionState?.creative_preferences);
+  appendImageProduction(lines, directionState?.creative_preferences?.image_recipe);
   lines.push("<burnguard-research-context-v1>");
   lines.push(JSON.stringify(buildResearchPromptContext({
     projectType: project.project_type,

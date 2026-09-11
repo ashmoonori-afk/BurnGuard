@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { getSqlite } from "../src/db/sqlite-client";
 import { buildPrompt } from "../src/harness/prompt-builder";
 import { DESIGN_CRAFT_RULES, IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../src/harness/design-craft";
+import { IMAGE_PRODUCTION_RULES } from "../src/harness/prompt-image-production";
 import { PROTOTYPE_NAVIGATION_CONTRACT } from "../src/harness/skills/prototype-skill";
 import { ensureLearningSchema } from "./learning-fixture";
 import {
@@ -68,6 +69,8 @@ describe("buildPrompt", () => {
       for (const contextMode of ["compact", "full"] as const) {
         const prompt = await buildPrompt(makeContext({ project_type }), { type: "user.message", text: "Improve the selected element" }, { contextMode });
         expect(prompt.split(DESIGN_CRAFT_RULES)).toHaveLength(2);
+        expect(prompt.split(IMAGE_PRODUCTION_RULES)).toHaveLength(2);
+        expect(prompt.indexOf(IMAGE_PRODUCTION_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
         expect(prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
         expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
         expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeGreaterThan(prompt.indexOf("## Project"));

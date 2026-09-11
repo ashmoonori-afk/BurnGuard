@@ -37,3 +37,4 @@ export * from "./generation-style";
 export * from "./chart";
 export * from "./chart-render";
 export * from "./artifact-history";
+export * from "./image-prompt-recipes";

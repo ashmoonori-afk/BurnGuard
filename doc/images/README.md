@@ -1,5 +1,7 @@
 # README images
 
+The [image recipe gallery](image-recipes/README.md) contains 21 original examples spanning every image treatment and all 13 purpose domains. Its manifest records the exact prompts and generated assets separately from the cover and real interface screenshots below.
+
 `burnguard-cover.png` is an AI-generated product concept illustration for the BurnGuard README, not a screenshot of the application. It was regenerated on 2026-09-09 with the built-in `image_gen` tool, followed by one targeted text correction, and copied into this directory without image conversion or retouching. No fallback CLI was used.
 
 The cover is 1942 × 809 pixels (1,750,983 bytes). Its navy/cobalt studio composition references the actual editor layout and the bundled fictional ODDWARD sample artwork. It illustrates a conversation rail, editable canvas, linked website detail page, slide and graphic. The general layout is a concept; the screenshots below remain the evidence for the actual application interface.

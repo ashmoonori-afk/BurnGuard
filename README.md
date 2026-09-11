@@ -56,7 +56,7 @@ On Windows, `Start-BurnGuard.bat` opens the native app and builds it on first la
 ## Work beside the result
 
 1. **Start or import.** Choose a format/template and upload source material, or import an exported HTML project ZIP. Import automatically reads a bounded inventory of existing HTML/CSS and extracts supported docs into the next AI context. Attached originals are preserved under the project's `docs/attachments`; they are excluded from website publication.
-2. **Set direction.** Choose an image style preset and copy tone, then select the model and effort for the request.
+2. **Set direction.** Choose from 21 image treatments and 38 purpose recipes across 13 domains, or let each image's role determine its recipe. Set the copy tone, model and effort. [Image production guide](doc/image-production.md).
 3. **Generate.** Follow changes in the canvas while the request runs. Session drafts and source attachments remain available when you return.
 4. **Refine.** Select elements to resize or rotate them. Use Advanced for fonts and spacing, the palette for colors, or comments for a targeted AI edit. Pan and zoom with Ctrl/Cmd + wheel.
 5. **Review and export.** Quality and UX checks offer recommendations and an AI repair action. Their pass/fail status does not block export or publishing; file safety and request-authority checks still apply.
@@ -75,6 +75,14 @@ Open an HTML file and choose **Chart (차트)** beside the canvas zoom/3D contro
 The renderer is an original implementation with no added chart-library dependency. [Chart data contract, limits and examples](doc/charts.md).
 
 ### Design systems and examples
+
+**21 original image examples cover every visual treatment and all 13 purpose domains.** Each pairs a style with an image's job; these are generated creative examples, not application screenshots. [Full gallery and exact prompts](doc/images/image-recipes/README.md).
+
+| Brand · identity | Watercolor · learning | Print · campaign |
+|---|---|---|
+| ![Green and citrus stationery identity](doc/images/image-recipes/01-brand.png) | ![Watercolor pea-pod study](doc/images/image-recipes/08-watercolor.png) | ![Vermilion kite print campaign](doc/images/image-recipes/11-print.png) |
+| Clay · collectible | Flash · sports | Pixel art · sequence |
+| ![Handcrafted clay teapot creature](doc/images/image-recipes/13-clay.png) | ![Direct-flash badminton photograph](doc/images/image-recipes/17-flash.png) | ![Three-scene pixel gardening story](doc/images/image-recipes/20-pixel.png) |
 
 Start with **SONNEL** (tactile sound), **FOLIOVER** (material journal), **ODDWARD** (experimental studio) or **VELUNE** (sculptural lighting). Each original collection includes a website, six-slide deck, graphic and design system. [Explore the collections](samples/original/README.md).
 

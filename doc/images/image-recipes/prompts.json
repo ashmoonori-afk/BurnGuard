@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "generation_tool": "Codex built-in image_gen",
+  "note": "Original fictional creative examples. Images illustrate style/purpose combinations; they are not app screenshots, real products, factual evidence or a guarantee of model output quality.",
+  "shared_prompt": "Create one original finished square 1024x1024 image for a design-tool documentation gallery. This is a fictional creative example, not a real product or evidence. Fill the square with the artwork, with deliberate composition and a clear focal hierarchy. Do not include text, logos, watermarks, captions, labels, a title card or a surrounding sample-board border. Do not imitate a named artist, existing campaign or recognizable brand. Make the requested visual medium unmistakable. Output a single image.",
+  "examples": [
+    {
+      "id": "01-brand",
+      "style": "brand",
+      "recipe": "brand_objects",
+      "title": "접힌 선의 브랜드",
+      "asset": "01-brand.png",
+      "prompt": "Use case: product-mockup. An original stationery identity built around one simple blind-embossed folded-arc shape, shown on a forest-green document sleeve, a pale citrus notebook and an undyed linen pouch. Editorial top-down still life, carefully aligned but asymmetric, generous blue-grey desk surface, soft daylight from a high window. Repeat only the abstract identity mark coherently across the three physical objects; no lettering. Emphasize tactile print behavior and a consistent deep-green/citrus palette rather than ornamental effects.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2775095,
+        "sha256": "ca0f644cc14ec5ae1cc9d9acac785abc35f4b17f5cb3b809f892e9b2c1fd52b0"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "02-studio",
+      "style": "studio",
+      "recipe": "product_hero",
+      "title": "자두색 브루잉 타이머",
+      "asset": "02-studio.png",
+      "prompt": "Use case: product-mockup. Photorealistic studio hero photograph of an imaginary tabletop mechanical brewing timer, a low plum-purple ceramic cylinder with a narrow polished metal pointer and a subtly ridged turning rim, no numbers or brand. Three-quarter view slightly above the object, on a cool light-grey seamless surface. Broad rectangular softbox reflection, precise contact shadow, crisp material transition between ceramic and metal, visually readable controls, no props. The form should feel manufacturable and original.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 1858737,
+        "sha256": "a819d2240f4b5a3b6e6d0b7184939fd698053d3d6fafc82ab4c7bc799690f071"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "03-lifestyle",
+      "style": "lifestyle",
+      "recipe": "product_use",
+      "title": "창가의 접이식 독서대",
+      "asset": "03-lifestyle.png",
+      "prompt": "Use case: photorealistic-natural. A believable commuter using a compact cobalt-blue folding book stand on a train window ledge, with an open blank-page sketchbook held securely by its clips. Crop naturally around the adult reader's forearms and lap, realistic hand anatomy, linen sleeve creases and soft window reflections. Morning daylight, passing green countryside gently out of focus, candid off-center framing. Show the stand's useful angle and scale clearly; no legible text, no logos, no staged luxury props.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2019086,
+        "sha256": "7bf4b57d118068e1cfdf05eebe8870ef3abdfdf429cafcc02ee20e7642a6036f"
+      },
+      "attempts": 2,
+      "review_notes": "The right page contains a faint landscape sketch despite the blank-page request. Two attempts used the same prompt; the second output is retained as a lifestyle example, not an exact instruction-compliance example."
+    },
+    {
+      "id": "04-cinematic",
+      "style": "cinematic",
+      "recipe": "building",
+      "title": "비가 지난 작은 영화관",
+      "asset": "04-cinematic.png",
+      "prompt": "Use case: stylized-concept. Architectural concept visualization of a fictional neighborhood film house at blue hour after rain: a low red-brick volume, one broad illuminated amber entrance recess, translucent glass and a small sheltered courtyard. Ground-level camera with coherent verticals, wet paving reflections and a deep indigo sky. Compose the lit entrance as the focal point within layered foreground and background depth. Cinematic motivated light, realistic material scale, no sign lettering or famous architecture, no invented site documentation.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2561679,
+        "sha256": "f5d67b6d90857703888329be91a2ce10b3863fd220af1c4cb2be5933040ba874"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "05-three-d",
+      "style": "three_d",
+      "recipe": "exploded_object",
+      "title": "씨앗 도구의 가상 구조",
+      "asset": "05-three-d.png",
+      "prompt": "Use case: stylized-concept. A clean 3D product-development concept of an imaginary handheld seed dispenser, with sage-green outer shell, amber translucent seed chamber and two simple internal parts separated along one shared vertical assembly axis. Keep the components aligned and recognizable as one object, with generous spacing, physically plausible satin polymer and metal, soft shadows on a muted lilac background. This is a speculative industrial-design illustration, not a working engineering diagram. No labels, arrows, measurements or text.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 1595564,
+        "sha256": "074537108c13c56e4537cde1f1e165789a7804f01472af8565409e14d4ca9807"
+      },
+      "attempts": 1,
+      "review_notes": "One internal rotor is clearly separated, rather than two distinct internal pieces. This remains a speculative material/assembly concept, not a verified engineering diagram."
+    },
+    {
+      "id": "06-illustration",
+      "style": "illustration",
+      "recipe": "explain",
+      "title": "빗물이 정원으로",
+      "asset": "06-illustration.png",
+      "prompt": "Use case: illustration-story. An original editorial raster illustration explaining the idea of a rain-fed rooftop garden through one continuous scene: rain lands on a small roof, travels visibly into a planted basin, and nourishes a leafy tree below. Deliberate flat shapes, occasional textured brush edges, strong teal, rust and sky-blue palette, clear spatial relationships and generous negative space. This is a conceptual supporting illustration, not a quantified diagram. No arrows, labels, chart marks or text.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2855795,
+        "sha256": "83e32ff93153d5fabf0de78d5ffe154cf21479c04fc43f6d2c7bf96aa8e547a9"
+      },
+      "attempts": 1,
+      "review_notes": "The roof-to-basin-to-tree relationship is readable, but the image has more detail and less negative space than requested."
+    },
+    {
+      "id": "07-collage",
+      "style": "collage",
+      "recipe": "cultural_art",
+      "title": "종이로 흐르는 산과 물",
+      "asset": "07-collage.png",
+      "prompt": "Use case: illustration-story. Original landscape artwork made from layered dyed fibrous paper: indigo mountain silhouettes, a winding teal river, one coral sun and a small pale boat shape. A tactile contemporary paper interpretation of landscape painting, with visible fibers, torn and cut edges, genuine layer thickness and soft cast shadows. Let the river create a quiet reading path through an asymmetric square. It depicts an imagined landscape, not an actual map or copied traditional work. No calligraphy, seals or text.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 3095401,
+        "sha256": "0cd65171b18ab1ebcfd98b4ee5afb29e0eec85c0e764cf0f053d61f56924e00d"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "08-watercolor",
+      "style": "watercolor",
+      "recipe": "learning_card",
+      "title": "완두콩 관찰 그림",
+      "asset": "08-watercolor.png",
+      "prompt": "Use case: scientific-educational. A gentle watercolor study for a children's object-learning card: one opened green pea pod with recognizable round peas, accompanied by one closed pod and a small tendril. Translucent washes, controlled wet edges and a few dry-brush details, clean white watercolor paper, natural organic structure and clear separation between the objects. Leave open space for future editable labels but draw no labels, arrows, decorative frame or text. The image should be observational and inviting rather than cartoonish.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2175086,
+        "sha256": "f0ce3dc8d8e22ea71a2d513a261ff06943f392beda4afe257edd8749eab10d7f"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "09-ink",
+      "style": "ink",
+      "recipe": "publication",
+      "title": "물가를 지나는 새",
+      "asset": "09-ink.png",
+      "prompt": "Use case: illustration-story. Original ink illustration for a quiet literary book cover: a long-legged wading bird moves between dark reeds and open reflective water, with its body held in a clear elegant silhouette. Express motion through pressure-sensitive brush lines and concentrated ink pools, with large areas of untouched white paper and subtle grey washes. Strong low-centered composition leaves calm space above for later typography. No lettering, border, signature or imitation of a known artist.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2398627,
+        "sha256": "85fbe726762f389dc6137ce4b8566b7b084747887ce6644e27025c5279138e57"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "10-oil",
+      "style": "oil",
+      "recipe": "painted",
+      "title": "옥상의 바람",
+      "asset": "10-oil.png",
+      "prompt": "Use case: stylized-concept. An original oil painting of sunlit cloth sheets moving on a rooftop clothesline, with terracotta plant pots and a distant turquoise urban wall. Build volume through directional visible brush strokes and selective thick pigment on sunlit edges. Warm ochre light against cool blue-green shadow, believable perspective, a restrained everyday subject, not photorealistic and not a copy of any artist. Let the shifting cloth form the main visual rhythm. No people, text or signatures.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2965329,
+        "sha256": "9746aeb6db9bfaf7cdfc68edec2c8bd454a635adc10eb7ddb76a6c8a3ba35ab8"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "11-print",
+      "style": "print",
+      "recipe": "campaign",
+      "title": "바람을 붙잡는 연",
+      "asset": "11-print.png",
+      "prompt": "Use case: ads-marketing. Original campaign key art for a fictional outdoor kite workshop, with one oversized vermilion kite pulling diagonally against a fine dark string above a deep cobalt field and a low ochre horizon. Make the image visibly print-made: limited spot colors, purposeful translucent overprint, slightly uneven ink coverage and subtle registration variation. Strong abstracted silhouette with substantial open space for future editable event copy. No text, logos, cards or copied campaign motifs.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2888072,
+        "sha256": "57f51fdf8d713678b699174bf611835b9635ca086b138fe2f7411cef3197cc38"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "12-pencil",
+      "style": "pencil",
+      "recipe": "cast_sheet",
+      "title": "작은 배달부 캐릭터",
+      "asset": "12-pencil.png",
+      "prompt": "Use case: illustration-story. Original character study of a friendly adult courier with a round face, a loose utility jacket, a knit cap and an oversized soft backpack, shown in two distinct poses: standing at rest and leaning to inspect a small parcel. Graphite pencil linework with one muted orange wax-crayon accent on the cap, visible construction sensitivity but finished readable forms. Keep facial identity, outfit and proportions consistent between poses. Natural hands, no extra limbs, no text or numbered labels.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2893098,
+        "sha256": "7c076c60aadb95f0e0e5ea9608f8bd8a8f5ce8e29b029b111c423f2634b6be8e"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "13-clay",
+      "style": "clay",
+      "recipe": "collectible",
+      "title": "찻주전자 산책 피규어",
+      "asset": "13-clay.png",
+      "prompt": "Use case: stylized-concept. A charming original collectible creature shaped like a small lopsided teapot on two chunky feet, with a short spout and a simple lid, forest-green clay with one pale-pink handle. A handcrafted stop-motion miniature on a dusty blue tabletop, slight fingerprints, softened seams and subtle surface variations. Eye-level close three-quarter view, broad gentle side light and convincing contact shadows. One character only, sculptural and tactile, no packaging, no brand, no text.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2139457,
+        "sha256": "09a389af72a1435bce0a0e55b47a069a0dc427db165e0109c095d5123f71cffa"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "14-glass",
+      "style": "glass",
+      "recipe": "imagined_world",
+      "title": "유리 과수원",
+      "asset": "14-glass.png",
+      "prompt": "Use case: stylized-concept. An imagined miniature orchard made from translucent glass: three organically branched clear-green trees carry delicate amber glass fruit beside a narrow clear footbridge over dark teal water. Show material thickness, edge reflections, refraction and restrained caustics without excessive glow. Low close camera makes the world feel tangible, one believable directional studio light and dark quiet background. Fantastical but visually coherent, no people, text or diagram labels.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2647708,
+        "sha256": "15730702e4a9c0214346afdee5639e6a7846a82b4bc1a73dceaca2e51d4a4167"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "15-metal",
+      "style": "metal",
+      "recipe": "app_stage",
+      "title": "인터페이스를 위한 금속 오브젝트",
+      "asset": "15-metal.png",
+      "prompt": "Use case: product-mockup. A single original machined-metal sculptural control object for a music application's hero-image area: a brushed steel semicircular housing cradles a small dark anodized rolling cylinder, with precise beveled edges and a narrow blue reflection band. On a deep slate surface, dramatic but controlled softbox reflections explain the geometry. Leave clear surrounding negative space for actual HTML controls outside this image. This is supporting product artwork, not a screenshot or functioning interface. No screens, numbers, logos or text.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 1854645,
+        "sha256": "06b865356d3f272db8acaa56bdce58bea32eadda0e4e0bd0f13373c326ac8412"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "16-analog",
+      "style": "analog",
+      "recipe": "candid",
+      "title": "빨래방의 아침",
+      "asset": "16-analog.png",
+      "prompt": "Use case: photorealistic-natural. A candid fictional morning photograph inside a small laundromat, one adult in a soft yellow jacket quietly folding a blue towel beside a row of washing machines. Window light meets subdued fluorescent room light, natural gesture, real fabric folds and slightly worn surfaces. Moderate fine film grain, gentle highlight roll-off, restrained warm-green color response and an unforced waist-height composition. No readable signage or brand marks; do not make it look like a news photograph of a specific real person.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2199367,
+        "sha256": "a810569ff2c7ed060518cf9c56864f84a961c8bd4701b5d2a8f2b136d6902b9d"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "17-flash",
+      "style": "flash",
+      "recipe": "athletic",
+      "title": "셔틀을 향한 한 걸음",
+      "asset": "17-flash.png",
+      "prompt": "Use case: ads-marketing. Direct-flash sports photograph of an original adult badminton player at the decisive moment of a low side lunge, racket and gripping hand fully visible, body balanced over a bent supporting knee. Unbranded navy athletic clothes against a muted magenta indoor court. Crisp flash separation, believable cast shadow and controlled motion in the far background. Plausible joints, racket shape and equipment scale; preserve the face without smearing. No text, sponsor logos or victory claims.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 1958262,
+        "sha256": "1268e059bb209390b94178a067758718c84dfae1244fd75025db0a0786f72356"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "18-macro",
+      "style": "macro",
+      "recipe": "specimen",
+      "title": "고사리의 펼쳐지는 끝",
+      "asset": "18-macro.png",
+      "prompt": "Use case: photorealistic-natural. Extreme close-up of an unfurling fern tip with a few tiny dew droplets, natural botanical structure and fine surface hairs visible in the focal plane. Deep green shadows, a narrow soft highlight along the curled edge, dark uncluttered background and believable shallow depth of field. The image is a nature-study visual, no measurement or species-identification claim. Keep the curl recognizable rather than abstract blur. No labels, border or text.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2012996,
+        "sha256": "1c8efb1b34bb7f0b03a1b87f49ddf4a6fc5e046bb039ae7a93a416013dd4e486"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "19-monochrome",
+      "style": "monochrome",
+      "recipe": "portrait",
+      "title": "작업을 마친 도예가",
+      "asset": "19-monochrome.png",
+      "prompt": "Use case: photorealistic-natural. Black-and-white editorial portrait of a fictional adult woman ceramicist in a plain work coat, seated near a studio window, a little dry clay on her hands and sleeve. Shoulder-to-waist framing, attentive relaxed gaze, natural skin texture and fine tonal separation between face, coat and background. One soft directional light with deep but readable shadow, restrained grain, thoughtful asymmetry. No famous-person likeness, no tools obscuring the face, no lettering or signature.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 2024749,
+        "sha256": "e16cbe7a025a1092d19f14995161820b43c9da7db27ed16581b27f21f0186a60"
+      },
+      "attempts": 1,
+      "review_notes": "The portrait extends to the lap instead of ending strictly at the waist."
+    },
+    {
+      "id": "20-pixel",
+      "style": "pixel",
+      "recipe": "sequence",
+      "title": "온실 로봇의 작은 일",
+      "asset": "20-pixel.png",
+      "prompt": "Use case: illustration-story. One square pixel-art storyboard containing exactly three stacked horizontal scenes: a small original boxy gardening robot discovers a seed, carries it across a greenhouse path, then places it in a pot. Keep its yellow body, one blue visor and short legs consistent in every scene. A coherent visible pixel grid, limited green/yellow/navy palette, deliberate pixel clusters and clean silhouettes; distinct scene compositions show chronological action. Simple separators only, no text, speech bubbles, numbers or smooth photographic edges.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 1861280,
+        "sha256": "b65b14d611f839cd3a2cbc739aeb5a34164a87cf6fea16d5cc00f897f29dfa0b"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    },
+    {
+      "id": "21-low-poly",
+      "style": "low_poly",
+      "recipe": "tactile",
+      "title": "접힌 종이 새",
+      "asset": "21-low-poly.png",
+      "prompt": "Use case: stylized-concept. A single original folded-paper migratory bird suspended in a gentle turn, built from a small number of deliberate faceted planes, rust-red wing tops, pale blue underside and a charcoal beak. Make the material read as thick colored paper with visible folds and a few layered edges, rather than smooth plastic. Coherent directional lighting casts angular soft shadows against a calm petrol-blue background. Strong recognisable silhouette, elegant wing proportions, no string, labels, text or brand.",
+      "output": {
+        "width": 1254,
+        "height": 1254,
+        "bytes": 1871479,
+        "sha256": "63b82f09d30e1e757a34249f173dd6b5ea091a54b4db33a2b3e742e448933661"
+      },
+      "attempts": 1,
+      "review_notes": "Visually reviewed for the intended medium, subject, composition, obvious structural defects and unwanted text. No blocking issue observed."
+    }
+  ],
+  "generated_on": "2026-09-11",
+  "output_handling": "Original native PNG bytes copied without conversion, resizing or retouching. Requested 1024 by 1024; actual dimensions are recorded per output."
+}

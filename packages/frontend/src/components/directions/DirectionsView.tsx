@@ -38,8 +38,8 @@ export function DirectionsView({
 }: DirectionsViewProps) {
   const savedPreferences = state?.creative_preferences ?? DEFAULT_GENERATION_STYLE;
   const [preferences, setPreferences] = useState(savedPreferences);
-  useEffect(() => { setPreferences(savedPreferences); }, [state?.generation_id, savedPreferences.image_style, savedPreferences.copy_tone]);
-  const preferencesChanged = preferences.image_style !== savedPreferences.image_style || preferences.copy_tone !== savedPreferences.copy_tone;
+  useEffect(() => { setPreferences(savedPreferences); }, [state?.generation_id, savedPreferences.image_style, savedPreferences.copy_tone, savedPreferences.image_recipe]);
+  const preferencesChanged = preferences.image_style !== savedPreferences.image_style || preferences.copy_tone !== savedPreferences.copy_tone || (preferences.image_recipe ?? "auto") !== (savedPreferences.image_recipe ?? "auto");
   const actions = directionActions(state);
   const selected =
     state?.directions.find((direction) => direction.id === state.selected_id) ?? null;
@@ -121,10 +121,10 @@ export function DirectionsView({
           ) : null}
         </header>
 
-        <GenerationStyleFields value={preferences} onChange={setPreferences} disabled={loading || actionPending} />
+        <GenerationStyleFields value={preferences} onChange={setPreferences} disabled={loading || actionPending || preferencesSaving} />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p role="status" className="text-xs text-muted-foreground">{preferencesSaving ? "설정을 저장하고 있어요." : preferencesChanged ? "변경한 설정을 저장해 주세요." : "저장된 설정을 다음 생성·수정에 적용해요."} 아래 미리보기는 구성 예시예요.</p>
-          <Button type="button" variant="outline" disabled={loading || actionPending || !preferencesChanged} onClick={() => onSavePreferences(preferences)}>
+          <Button type="button" variant="outline" disabled={loading || actionPending || preferencesSaving || !preferencesChanged} onClick={() => onSavePreferences(preferences)}>
             {preferencesSaving ? "저장 중" : "이미지·어투 설정 저장"}
           </Button>
         </div>

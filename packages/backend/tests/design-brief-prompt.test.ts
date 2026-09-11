@@ -89,6 +89,8 @@ describe("design brief prompt context", () => {
       height_css_px: 628,
       artboard_count: 1,
       delivery_format: "png",
+      kind: "single",
+      frames: [{ sequence: 1, width_css_px: 1200, height_css_px: 628, purpose: "single" }],
     });
     expect(prompt).not.toContain("## Slide deck skill");
   });
