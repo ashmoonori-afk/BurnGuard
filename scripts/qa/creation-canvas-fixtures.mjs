@@ -20,6 +20,37 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
   };
   await page.route(eventPattern, guard);
   try {
+    await scenario("creation-canvas-generation-style", async () => {
+      const fixture = await createFixture(page, base, ownedHome, "Generation style fixture");
+      await page.getByRole("button", { name: "방향 정하기", exact: true }).click();
+      const imageStyle = page.getByLabel("이미지 스타일 프리셋", { exact: true });
+      const copyTone = page.getByLabel("문안 어투", { exact: true });
+      await imageStyle.selectOption("studio");
+      await copyTone.selectOption("friendly");
+      const generated = page.waitForResponse(response => response.url().endsWith("/design-directions/generate") && response.request().method() === "POST");
+      await page.getByRole("button", { name: "방향 3개 생성", exact: true }).click();
+      const response = await generated;
+      assert.equal(response.status(), 202);
+      assert.deepEqual(response.request().postDataJSON(), { schema_version: 1, image_style: "studio", copy_tone: "friendly" });
+      await page.getByText("3개 방향이 모두 준비됐어요. 비교한 뒤 하나를 선택하세요.", { exact: true }).waitFor();
+      await imageStyle.selectOption("collage");
+      await copyTone.selectOption("professional");
+      const saved = page.waitForResponse(item => item.url().endsWith("/design-directions/preferences") && item.request().method() === "POST");
+      await page.getByRole("button", { name: "이미지·어투 설정 저장", exact: true }).click();
+      assert.equal((await saved).status(), 200);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: "방향 정하기", exact: true }).click();
+      await imageStyle.waitFor();
+      assert.equal(await imageStyle.inputValue(), "collage");
+      assert.equal(await copyTone.inputValue(), "professional");
+      const persisted = await page.request.get(`${base}/api/projects/${fixture.id}/design-directions`);
+      assert.deepEqual((await persisted.json()).data.creative_preferences, { schema_version: 1, image_style: "collage", copy_tone: "professional" });
+      await page.setViewportSize({ width: 680, height: 900 });
+      assert.ok(await imageStyle.isVisible());
+      assert.ok(await copyTone.isVisible());
+      await shot(page, "creation-canvas-generation-style");
+    });
+
     await scenario("creation-canvas-live-preview", async () => {
       await page.addInitScript(() => {
         const Native = window.EventSource;

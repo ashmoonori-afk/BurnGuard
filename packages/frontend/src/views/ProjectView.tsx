@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ArtifactSummary,
   GenerationOptions,
+  GenerationStyle,
   Comment,
   DesignAuditFinding,
   DesignAuditResult,
@@ -54,6 +55,7 @@ import {
   getDesignDirectionState,
   retryDesignDirections,
   selectDesignDirection,
+  saveDirectionPreferences,
   undoDesignDirectionSelection,
 } from "@/api/design-directions";
 import {
@@ -263,7 +265,13 @@ export default function ProjectView() {
   );
 
   const generateDirectionsMutation = useMutation({
-    mutationFn: () => generateDesignDirections(id ?? ""),
+    mutationFn: (preferences: GenerationStyle) => generateDesignDirections(id ?? "", preferences),
+    onMutate: () => setDirectionActionError(null),
+    onSuccess: mergeDirectionCache,
+    onError: setDirectionActionError,
+  });
+  const saveDirectionPreferencesMutation = useMutation({
+    mutationFn: (input: Parameters<typeof saveDirectionPreferences>[1]) => saveDirectionPreferences(id ?? "", input),
     onMutate: () => setDirectionActionError(null),
     onSuccess: mergeDirectionCache,
     onError: setDirectionActionError,
@@ -801,6 +809,7 @@ export default function ProjectView() {
   }, [livePreview?.previewId, livePreview?.path]);
   const directionState = directionQuery.data ?? null;
   const directionActionPending =
+    sendPending || session?.status === "running" || saveDirectionPreferencesMutation.isPending ||
     generateDirectionsMutation.isPending ||
     cancelDirectionsMutation.isPending ||
     retryDirectionsMutation.isPending ||
@@ -1237,12 +1246,18 @@ export default function ProjectView() {
 
         {activeTab?.kind === "directions" && (
           <DirectionsView
+            key={id}
             state={directionState}
             recovering={directionQuery.isLoading}
             actionPending={directionActionPending}
             cancelPending={cancelDirectionsMutation.isPending}
             error={directionError}
-            onGenerate={() => generateDirectionsMutation.mutate()}
+            preferencesSaving={saveDirectionPreferencesMutation.isPending}
+            onGenerate={(preferences) => generateDirectionsMutation.mutate(preferences)}
+            onSavePreferences={(preferences) => {
+              if (directionState === null) return;
+              saveDirectionPreferencesMutation.mutate({ generation_id: directionState.generation_id, expected_selection_revision: directionState.selection_revision, creative_preferences: preferences });
+            }}
             onCancel={() => cancelDirectionsMutation.mutate()}
             onRetry={() => retryDirectionsMutation.mutate()}
             onSelect={(directionId) => {

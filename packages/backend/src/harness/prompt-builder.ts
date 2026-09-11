@@ -24,6 +24,7 @@ import { appendDesignBriefContext } from "./prompt-design-brief";
 import { appendDesignSystemContext } from "./prompt-design-system";
 import { appendGraphicOutputContext } from "./prompt-graphic-set";
 import { DESIGN_CRAFT_RULES } from "./design-craft";
+import { appendGenerationStyle } from "./prompt-generation-style";
 import { appendModelPromptContext } from "./prompt-model-context";
 import { appendReferenceLayoutContext } from "./prompt-reference-layout";
 import { appendVisualSourceContext } from "./prompt-visual-sources";
@@ -139,6 +140,7 @@ export async function buildPrompt(
     lines.push("");
   }
 
+  appendGenerationStyle(lines, directionState?.creative_preferences);
   lines.push("<burnguard-research-context-v1>");
   lines.push(JSON.stringify(buildResearchPromptContext({
     projectType: project.project_type,

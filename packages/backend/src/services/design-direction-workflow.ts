@@ -1,6 +1,6 @@
 import path from "node:path";
 import { ulid } from "ulid";
-import type { DesignBriefV1, DesignDirectionSlot, DesignDirectionState, ProjectType } from "@bg/shared";
+import { DEFAULT_GENERATION_STYLE, parseGenerationStyle, type GenerationStyle, type DesignBriefV1, type DesignDirectionSlot, type DesignDirectionState, type ProjectType } from "@bg/shared";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import {
   activeDirectionGeneration,
@@ -31,9 +31,10 @@ export class DesignDirectionWorkflow {
 
   constructor(private readonly renderer: DesignDirectionRenderer = new SvgDesignDirectionRenderer(), private readonly now: () => number = Date.now, private readonly id: () => string = ulid) {}
 
-  async generate(input: ProjectSession): Promise<StartedGeneration> {
+  async generate(input: ProjectSession, preferences?: GenerationStyle): Promise<StartedGeneration> {
     const generationId = assertSafeName(this.id());
-    const state = this.initialState(input, generationId);
+    const prior = await getLatestDirectionState(input.sessionId);
+    const state = { ...this.initialState(input, generationId), creative_preferences: parseGenerationStyle(preferences ?? prior?.creative_preferences ?? DEFAULT_GENERATION_STYLE) };
     return this.start(input, state, state.directions.map((slot) => slot.id));
   }
 
@@ -73,6 +74,15 @@ export class DesignDirectionWorkflow {
     const selected = this.snapshot(current, { selected_id: directionId, selection_revision: current.selection_revision + 1, selection_history: [...current.selection_history, current.selected_id] });
     await this.publishSnapshot(sessionId, selected, current);
     return selected;
+  }
+
+  async setPreferences(sessionId: string, generationId: string, revision: number, preferences: GenerationStyle): Promise<DesignDirectionState> {
+    const current = await this.requiredState(sessionId);
+    if (isDirectionOperationActive(sessionId)) throw new DesignDirectionWorkflowError("operation_active");
+    this.checkIdentity(current, generationId, revision);
+    const updated = this.snapshot(current, { creative_preferences: parseGenerationStyle(preferences), selection_revision: current.selection_revision + 1 });
+    await this.publishSnapshot(sessionId, updated, current);
+    return updated;
   }
 
   async undo(sessionId: string, generationId: string, revision: number): Promise<DesignDirectionState> {

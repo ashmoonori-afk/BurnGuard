@@ -77,6 +77,20 @@ class GateRenderer implements DesignDirectionRenderer {
 }
 
 describe("design direction workflow", () => {
+  test("Given saved image style and tone When reopened, selected, undone and regenerated Then preferences persist and stale saves cannot overwrite them", async () => {
+    const input = session("creative-preferences");
+    const workflow = new DesignDirectionWorkflow();
+    const preferences = { schema_version: 1, image_style: "studio", copy_tone: "friendly" } as const;
+    const ready = await (await workflow.generate(input, preferences)).completion;
+    expect((await new DesignDirectionWorkflow().recover(input.sessionId))?.creative_preferences).toEqual(preferences);
+    const changed = { ...preferences, image_style: "collage", copy_tone: "professional" } as const;
+    const saved = await workflow.setPreferences(input.sessionId, ready.generation_id, ready.selection_revision, changed);
+    await expect(workflow.setPreferences(input.sessionId, ready.generation_id, ready.selection_revision, preferences)).rejects.toMatchObject({ code: "revision_conflict" });
+    const selected = await workflow.select(input.sessionId, saved.generation_id, saved.selection_revision, "editorial");
+    const undone = await workflow.undo(input.sessionId, selected.generation_id, selected.selection_revision);
+    expect(undone.creative_preferences).toEqual(changed);
+    expect((await (await workflow.generate(input)).completion).creative_preferences).toEqual(changed);
+  });
   test("Given initial persistence failure When generation is retried Then the session reservation is released", async () => {
     const input = session("initial-failure");
     const workflow = new DesignDirectionWorkflow(undefined, () => 10, () => "generation-initial-failure");
@@ -99,6 +113,7 @@ describe("design direction workflow", () => {
     try {
       await expect(workflow.select(input.sessionId, started.state.generation_id, 0, "editorial")).rejects.toMatchObject({ code: "operation_active" });
       await expect(workflow.undo(input.sessionId, started.state.generation_id, 0)).rejects.toMatchObject({ code: "operation_active" });
+      await expect(workflow.setPreferences(input.sessionId, started.state.generation_id, 0, { schema_version: 1, image_style: "studio", copy_tone: "calm" })).rejects.toMatchObject({ code: "operation_active" });
       expect((await getLatestDirectionState(input.sessionId))?.selection_revision).toBe(0);
     } finally { await workflow.cancel(input.sessionId); }
   });

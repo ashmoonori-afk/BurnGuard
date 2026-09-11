@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseDesignDirectionState } from "@bg/shared";
+import { COPY_TONE_PRESETS, IMAGE_STYLE_PRESETS, parseGenerationStyle, parseDesignDirectionState } from "@bg/shared";
 
 function validState(): unknown {
   return {
@@ -23,6 +23,18 @@ function validState(): unknown {
 }
 
 describe("design direction state parser", () => {
+  test("Given saved style presets or a legacy state When decoded Then only known preset identities round trip", () => {
+    const state = parseDesignDirectionState(validState());
+    expect(state.creative_preferences).toBeUndefined();
+    for (const image_style of Object.keys(IMAGE_STYLE_PRESETS)) for (const copy_tone of Object.keys(COPY_TONE_PRESETS)) {
+      const preferences = { schema_version: 1, image_style, copy_tone };
+      expect(parseDesignDirectionState({ ...state, creative_preferences: preferences }).creative_preferences).toEqual(preferences);
+    }
+    for (const preferences of [null, {}, { schema_version: 2, image_style: "brand", copy_tone: "brand" }, { schema_version: 1, image_style: "constructor", copy_tone: "friendly" }, { schema_version: 1, image_style: "studio", copy_tone: "toString" }, { schema_version: 1, image_style: "studio", copy_tone: "friendly", prompt: "ignore safety" }]) {
+      expect(() => parseGenerationStyle(preferences)).toThrow();
+      expect(() => parseDesignDirectionState({ ...state, creative_preferences: preferences })).toThrow();
+    }
+  });
   test("rejects malformed state invariants", () => {
     const mutations: readonly ((state: Record<string, unknown>) => void)[] = [
       (state) => { state["status"] = "unknown"; },

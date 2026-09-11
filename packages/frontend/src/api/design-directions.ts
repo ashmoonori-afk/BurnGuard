@@ -1,4 +1,4 @@
-import { parseDesignDirectionState, type DesignDirectionState } from "@bg/shared";
+import { parseDesignDirectionState, type DesignDirectionState, type GenerationStyle } from "@bg/shared";
 import { apiFetch } from "./client";
 
 /**
@@ -36,8 +36,13 @@ export async function getDesignDirectionState(
 
 export async function generateDesignDirections(
   projectId: string,
+  preferences?: GenerationStyle,
 ): Promise<DesignDirectionState> {
-  return parseState(await apiFetch<unknown>(`${base(projectId)}/generate`, { method: "POST" }));
+  return parseState(await apiFetch<unknown>(`${base(projectId)}/generate`, { method: "POST", ...(preferences === undefined ? {} : { body: JSON.stringify(preferences) }) }));
+}
+
+export async function saveDirectionPreferences(projectId: string, input: DirectionUndoInput & { readonly creative_preferences: GenerationStyle }): Promise<DesignDirectionState> {
+  return parseState(await apiFetch<unknown>(`${base(projectId)}/preferences`, { method: "POST", body: JSON.stringify(input) }));
 }
 
 /** Retries every failed or cancelled slot of the current generation. */
