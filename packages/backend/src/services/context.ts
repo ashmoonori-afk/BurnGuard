@@ -7,6 +7,7 @@ import { getLatestDirectionState } from "./design-direction-state";
 import { getSqlite } from "../db/sqlite-client";
 import { readConversationHistory } from "../db/conversation-history";
 import { ATTACHMENT_LIMITS } from "./attachments";
+import { readImportContext } from "./project-import-init";
 
 export function selectContextAttachments(attachments: Awaited<ReturnType<typeof listSessionAttachments>>, requestedPaths: readonly string[], request: string): string[] {
   const text = request.normalize("NFC").toLowerCase();
@@ -49,6 +50,7 @@ export async function buildSessionContext(sessionId: string) {
     openComments: comments.filter((c) => c.resolved_at === null),
     designDirectionState,
     history: readConversationHistory(getSqlite(), sessionId),
+    importContext: await readImportContext(project.project_dir),
   };
 }
 

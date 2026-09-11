@@ -221,7 +221,7 @@ async function exportContext(projectId: string, format: ExportFormat, options: E
   const source = resolveManagedPath(projectsDir, project.dir_path); if (project.current_digest === null) { await new ArtifactCoordinator(getSqlite()).initialize(project.id, source); project = await getProjectDetail(projectId); }
   if (project === null || project.current_digest === null) throw new ExportServiceError("source_changed", "Stable project identity unavailable");
   const designSystemDigest = await designDigest(project.design_system_id);
-  const rendererDigest = sha256(RENDERER_CONTRACT); const captureDigest = sha256(canonicalJson({ format, options, viewport: format === "png" || format === "png_zip" ? { width: projectOptions.graphic_canvas?.width ?? options.png_width ?? 1280, height: projectOptions.graphic_canvas?.height ?? options.png_height ?? 720, dpr: options.png_dpr ?? 1 } : { width: 1280, height: 720, dpr: 1 } }));
+  const rendererDigest = sha256(RENDERER_CONTRACT + (format === "pptx" ? "|slide-png-notes/2" : "")); const captureDigest = sha256(canonicalJson({ format, options, viewport: format === "png" || format === "png_zip" ? { width: projectOptions.graphic_canvas?.width ?? options.png_width ?? 1280, height: projectOptions.graphic_canvas?.height ?? options.png_height ?? 720, dpr: options.png_dpr ?? 1 } : { width: 1280, height: 720, dpr: format === "pptx" ? 2 : 1 } }));
   return { identity: { projectId, revision: project.current_revision, digest: project.current_digest, designSystemDigest }, project, format, options, rendererDigest, captureDigest };
 }
 

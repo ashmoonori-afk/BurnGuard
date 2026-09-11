@@ -1,4 +1,5 @@
 import { ensureThreeSceneRuntime } from "./three-scene";
+import { ensureCharts } from "./charts";
 import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
@@ -373,6 +374,7 @@ async function runUserTurnInternal(
         }
         if (activeTurn.abortController.signal.aborted) throw new ArtifactOperationError("operation_cancelled", "Turn was interrupted");
         await ensureThreeSceneRuntime(stageDir);
+        await ensureCharts(stageDir);
         if (graphicEntrypoint !== null && graphicBefore !== null) {
           const info = await lstat(graphicEntrypoint);
           if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new Error("graphic_starter_unchanged");

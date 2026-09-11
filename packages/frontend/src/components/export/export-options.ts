@@ -115,8 +115,8 @@ const STANDARD_OPTIONS = [
   { key: "pdf-a4", format: "pdf", options: { pdf_paper: "a4" }, label: "PDF · A4 가로" },
   { key: "pdf-letter", format: "pdf", options: { pdf_paper: "letter" }, label: "PDF · 레터 가로" },
   { key: "pdf-widescreen", format: "pdf", options: { pdf_paper: "widescreen-16x9" }, label: "PDF · 16:9 와이드스크린" },
-  { key: "pptx-16x9", format: "pptx", options: { pptx_size: "16x9" }, label: "파워포인트 · 16:9" },
-  { key: "pptx-4x3", format: "pptx", options: { pptx_size: "4x3" }, label: "파워포인트 · 4:3" },
+  { key: "pptx-16x9", format: "pptx", options: { pptx_size: "16x9" }, label: "파워포인트 · 16:9", note: "디자인을 고해상도 이미지로 보존해요. 개별 요소 편집은 HTML에서, 문안은 발표자 노트에서 확인하세요." },
+  { key: "pptx-4x3", format: "pptx", options: { pptx_size: "4x3" }, label: "파워포인트 · 4:3", note: "디자인 비율을 유지하며 맞춰 넣어요. 비율이 다르면 여백이 생겨요. 개별 요소는 이미지로 저장됩니다." },
   { key: "handoff", format: "handoff", label: "개발자 전달용 (.zip)" },
 ] as const satisfies readonly ExportMenuOption[];
 

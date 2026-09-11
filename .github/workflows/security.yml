@@ -39,6 +39,9 @@ jobs:
           packages/backend/tests/mac-updates.test.ts
           packages/backend/tests/app-update-routes.test.ts
           packages/backend/tests/native-binding.test.ts
+          packages/backend/tests/charts.test.ts
+          packages/backend/tests/artifact-history.test.ts
+          packages/backend/tests/export-pptx.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts
       # Advisories with no upstream fix are allowlisted by id; remove an id as

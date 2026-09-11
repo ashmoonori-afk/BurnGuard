@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
 import JSZip from "jszip";
+import { parsePng } from "./export-png-validation";
 import { canonicalJson } from "./export-receipt";
 import type { PackageEntryRole } from "./platform-package-contract";
 import { CONTENTS_MARKER, GUIDE_PATH, IMWEB_FOOTER_PATH, IMWEB_HEADER_PATH, LAYOUT_DIRECTIVE, LAYOUT_PATH, LINT_PATH, PACKAGE_MANIFEST_PATH } from "./platform-package-roles";
 
 export class ExportPackageError extends Error {
   readonly name = "ExportPackageError";
-  constructor(readonly code: "invalid_package" | "missing_part" | "slide_mismatch" | "missing_editable_text" | "manifest_mismatch" | "unresolved_reference") { super(code); }
+  constructor(readonly code: "invalid_package" | "missing_part" | "slide_mismatch" | "missing_editable_text" | "missing_slide_content" | "manifest_mismatch" | "unresolved_reference") { super(code); }
 }
 
 export type PlatformPackageManifest = {
@@ -90,19 +91,27 @@ function packageReferences(html: string): readonly string[] {
   return values.map((value) => value.trim()).filter((value) => value !== "" && !value.startsWith("#") && !value.startsWith("data:"));
 }
 
-export async function validatePptxPackage(bytes: Uint8Array, expectedSlides: number): Promise<{ readonly slides: number; readonly editable_text_nodes: number }> {
+export async function validatePptxPackage(bytes: Uint8Array, expectedSlides: number): Promise<{ readonly slides: number; readonly editable_text_nodes: number; readonly raster_slides: number }> {
   const zip = await load(bytes); const names = safeNames(zip);
   for (const required of ["[Content_Types].xml", "ppt/presentation.xml", "ppt/_rels/presentation.xml.rels"]) if (!names.has(required)) fail("missing_part");
   const slides = [...names].filter((name) => /^ppt\/slides\/slide\d+\.xml$/u.test(name)).sort();
   if (slides.length !== expectedSlides) fail("slide_mismatch");
-  let editable = 0;
+  let editable = 0, raster = 0;
   for (const name of slides) {
     const source = await zip.file(name)?.async("string");
     if (source === undefined) fail("missing_part");
     editable += [...source.matchAll(/<a:t(?:\s[^>]*)?>[^<]+<\/a:t>/gu)].length;
+    const embeds = [...source.matchAll(/<a:blip\s[^>]*r:embed="([^"]+)"/gu)];
+    if (embeds.length === 1) {
+      const rels = await zip.file(name.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels")?.async("string");
+      const relation = rels?.match(/<Relationship\b[^>]+/gu)?.find(value => value.includes(`Id="${embeds[0]![1]}"`));
+      const target = /Target="\.\.\/media\/([^"/]+\.png)"/u.exec(relation ?? "")?.[1];
+      const image = target ? await zip.file(`ppt/media/${target}`)?.async("uint8array") : undefined;
+      if (image) { try { parsePng(image); raster++; } catch { fail("invalid_package"); } }
+    }
   }
-  if (editable === 0) fail("missing_editable_text");
-  return { slides: slides.length, editable_text_nodes: editable };
+  if (editable === 0 && raster !== slides.length) fail("missing_slide_content");
+  return { slides: slides.length, editable_text_nodes: editable, raster_slides: raster };
 }
 
 export async function validateHandoffPackage(bytes: Uint8Array, entrypoint: string): Promise<{ readonly source_files: number; readonly nodes: number }> {

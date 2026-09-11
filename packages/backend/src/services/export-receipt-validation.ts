@@ -26,7 +26,7 @@ export type ExportValidation =
   | PngZipValidation
   | PdfValidation
   | PngValidation
-  | { readonly slides: number; readonly editable_text_nodes: number }
+  | { readonly slides: number; readonly editable_text_nodes: number; readonly raster_slides?: number }
   | { readonly source_files: number; readonly nodes: number };
 
 const MAX_PAGES = 100; const MAX_POINTS = 12_288; const MAX_PNG_PIXELS = 16_000_000; const MAX_OPERATORS = 1_000_000;
@@ -40,7 +40,13 @@ export function parseExportValidation(format: ExportFormat, options: ExportOptio
       exact(input, ["entries"]); return { entries: positiveInt(input["entries"]) };
     case "png": return parsePng(input, options);
     case "png_zip": return parsePngZip(input, options);
-    case "pptx": exact(input, ["slides", "editable_text_nodes"]); return { slides: positiveInt(input["slides"]), editable_text_nodes: positiveInt(input["editable_text_nodes"]) };
+    case "pptx": {
+      const modern = Object.hasOwn(input, "raster_slides");
+      exact(input, ["slides", "editable_text_nodes", ...(modern ? ["raster_slides"] : [])]);
+      const slides = positiveInt(input["slides"]), editable = nonnegativeInt(input["editable_text_nodes"]), raster = modern ? nonnegativeInt(input["raster_slides"]) : 0;
+      if (raster > slides || (editable === 0 && raster !== slides)) fail();
+      return { slides, editable_text_nodes: editable, ...(modern ? { raster_slides: raster } : {}) };
+    }
     case "handoff": exact(input, ["source_files", "nodes"]); return { source_files: positiveInt(input["source_files"]), nodes: nonnegativeInt(input["nodes"]) };
     case "pdf": return parsePdf(input, options);
   }

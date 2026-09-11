@@ -1,148 +1,38 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { expect, test } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { EXTRACT_SLIDES_FN, PptxExportError, pptxLayoutForSize, writePptx } from "../src/services/export-pptx";
+import JSZip from "jszip";
+import { createCanvas } from "@napi-rs/canvas";
+import { PptxExportError, pptxLayoutForSize, writePptx } from "../src/services/export-pptx";
+import { validatePptxPackage } from "../src/services/export-package-validation";
+import { parseExportValidation } from "../src/services/export-receipt-validation";
 
-describe("writePptx", () => {
-  test("preserves typed failures and both editable layouts", () => {
-    expect(new PptxExportError("deck_not_ready", "not ready").code).toBe("deck_not_ready");
-    expect(pptxLayoutForSize("16x9")).toEqual({ name: "BG_16x9", width: 10, height: 5.625 });
-    expect(pptxLayoutForSize("4x3")).toEqual({ name: "BG_4x3", width: 10, height: 7.5 });
-  });
-
-  test("emits one slide per extract with editable text entries", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "burnguard-pptx-test-"));
-    const out = path.join(dir, "out.pptx");
-    try {
-      await writePptx(
-        [
-          {
-            width: 1280,
-            height: 720,
-            background: "101318",
-            text: [
-              {
-                text: "Hero headline",
-                x: 64,
-                y: 96,
-                w: 800,
-                h: 120,
-                fontSizePx: 96,
-                fontFamily: "Inter",
-                color: "FFFFFF",
-                bold: true,
-                italic: false,
-                align: "left",
-              },
-            ],
-          },
-          {
-            width: 1280,
-            height: 720,
-            background: null,
-            text: [
-              {
-                text: "Slide 2 body",
-                x: 120,
-                y: 300,
-                w: 900,
-                h: 80,
-                fontSizePx: 32,
-                fontFamily: "Inter",
-                color: "111111",
-                bold: false,
-                italic: false,
-                align: "center",
-              },
-            ],
-          },
-        ],
-        out,
-      );
-
-      const bytes = readFileSync(out);
-      // PPTX is a zip. First two bytes are "PK".
-      expect(bytes[0]).toBe(0x50);
-      expect(bytes[1]).toBe(0x4b);
-      // The hero text must appear somewhere in the XML (inside the zip).
-      // Raw bytes contain the deflated stream, so we check both raw bytes
-      // for the string (pptxgenjs may store some parts uncompressed) and
-      // at a minimum confirm the file is a plausible size (>1KB).
-      expect(bytes.byteLength).toBeGreaterThan(1024);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
+const png = new Uint8Array(createCanvas(2, 2).toBuffer("image/png"));
+test("Given rendered slides When saved as PPTX Then original image bytes and notes survive with contained geometry in both ratios", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "burnguard-pptx-"));
+  try {
+    for (const size of ["16x9", "4x3"] as const) {
+      const output = path.join(root, size + ".pptx");
+      await writePptx([{ width: 1280, height: 720, png, notes: "원문 <제목> & notes" }, { width: 960, height: 720, png, notes: "Second slide" }], output, size);
+      const bytes = await readFile(output), zip = await JSZip.loadAsync(bytes);
+      const result = await validatePptxPackage(bytes, 2);
+      expect(result).toEqual({ slides: 2, editable_text_nodes: 0, raster_slides: 2 });
+      expect(parseExportValidation("pptx", { pptx_size: size }, result)).toEqual(result);
+      const media = Object.keys(zip.files).filter(name => /^ppt\/media\/.*\.png$/.test(name));
+      for (const name of media) expect(await zip.file(name)!.async("uint8array")).toEqual(png);
+      const notes = await zip.file("ppt/notesSlides/notesSlide1.xml")!.async("string");
+      expect(notes).toContain("원문"); expect(notes).toContain("&amp;");
+      const xml = await zip.file("ppt/slides/slide1.xml")!.async("string");
+      expect(xml).toContain("<p:pic>");
+      expect(xml).not.toContain("<a:t>");
+      // A 16:9 image fits unchanged in a 4:3 slide; it gets vertical space, never stretched height.
+      expect(xml).toContain('cy="5143500"');
+      if (size === "4x3") expect(xml).toContain('y="857250"');
+      expect(pptxLayoutForSize(size).width).toBe(10);
     }
-  });
-
-  test("handles an empty extract without throwing", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "burnguard-pptx-test-"));
-    const out = path.join(dir, "empty.pptx");
-    try {
-      await writePptx([], out);
-      const bytes = readFileSync(out);
-      expect(bytes.byteLength).toBeGreaterThan(512);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("skips text boxes whose computed dimensions are zero or negative", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "burnguard-pptx-test-"));
-    const out = path.join(dir, "skipzero.pptx");
-    try {
-      await writePptx(
-        [
-          {
-            width: 1280,
-            height: 720,
-            background: null,
-            text: [
-              {
-                text: "zero-height",
-                x: 0,
-                y: 0,
-                w: 100,
-                h: 0,
-                fontSizePx: 24,
-                fontFamily: "Inter",
-                color: "000000",
-                bold: false,
-                italic: false,
-                align: "left",
-              },
-              {
-                text: "fine",
-                x: 0,
-                y: 0,
-                w: 100,
-                h: 40,
-                fontSizePx: 24,
-                fontFamily: "Inter",
-                color: "000000",
-                bold: false,
-                italic: false,
-                align: "left",
-              },
-            ],
-          },
-        ],
-        out,
-      );
-      const bytes = readFileSync(out);
-      expect(bytes.byteLength).toBeGreaterThan(512);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-});
-
-describe("EXTRACT_SLIDES_FN", () => {
-  test("is a valid JS function expression starting with () =>", () => {
-    expect(EXTRACT_SLIDES_FN.startsWith("() => {")).toBe(true);
-    // Must reference the slide selector so the extractor targets [data-slide].
-    expect(EXTRACT_SLIDES_FN).toContain("[data-slide]");
-    // Must use getComputedStyle for color/font resolution.
-    expect(EXTRACT_SLIDES_FN).toContain("getComputedStyle");
-  });
+    await expect(writePptx([], path.join(root, "empty.pptx"))).rejects.toBeInstanceOf(PptxExportError);
+    await expect(writePptx([{ width: NaN, height: 1, png, notes: "" }], path.join(root, "invalid.pptx"))).rejects.toThrow();
+    expect(() => parseExportValidation("pptx", { pptx_size: "16x9" }, { slides: 2, editable_text_nodes: 0, raster_slides: 1 })).toThrow();
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

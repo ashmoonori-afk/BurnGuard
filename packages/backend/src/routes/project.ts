@@ -6,6 +6,7 @@ import { getLatestProjectSession, getProjectDetail } from "../db/project-read-re
 import { parseStoredProjectOptions } from "../services/project-options";
 import { processProjectFilesystemSignal } from "../services/watchers";
 import { designDirectionRoutes } from "./design-directions";
+import { chartRoutes } from "./charts";
 
 function ok<T>(data: T): ApiSuccess<T> {
   return { data };
@@ -21,6 +22,7 @@ function fail(
 
 export const projectRoutes = new Hono();
 projectRoutes.route("/", designDirectionRoutes);
+projectRoutes.route("/", chartRoutes);
 
 projectRoutes.get("/api/projects/:id", async (c) => {
   const id = c.req.param("id");

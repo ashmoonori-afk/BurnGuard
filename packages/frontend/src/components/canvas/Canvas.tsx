@@ -21,6 +21,7 @@ import {
 import type { CanvasMode } from "@/components/modes/types";
 import { authorizedFetch } from "@/api/client";
 import { embedCanvasImages } from "@/lib/canvas-images";
+import { hydrateCanvasCharts } from "@/lib/canvas-charts";
 import { canvasPoint } from "./canvas-coordinates";
 import { requestFrameScrollAtPoint } from "./frame-bridge";
 
@@ -106,6 +107,8 @@ export default function Canvas({
   drawError = null,
   onRetryDraws,
   sceneTools,
+  chartTools,
+  historyTools,
   colorPalette,
   livePreview,
 }: {
@@ -152,6 +155,8 @@ export default function Canvas({
   drawError?: string | null;
   onRetryDraws?: () => void;
   sceneTools?: ReactNode;
+  chartTools?: ReactNode;
+  historyTools?: ReactNode;
   colorPalette?: ReactNode;
   livePreview?: { version: number; reportUrl: string };
 }) {
@@ -189,6 +194,7 @@ export default function Canvas({
   }, [frameKey, src]);
   const [moving, setMoving] = useState(false);
   const [showSceneTools, setShowSceneTools] = useState(false);
+  const [showChartTools, setShowChartTools] = useState(false);
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const slideByFileRef = useRef(new Map<string, number | null>());
   const lastFrameSlideRef = useRef<number | null>(null);
@@ -236,6 +242,7 @@ export default function Canvas({
         return response.text();
       })
       .then((html) => embedCanvasImages(html, new URL(src, window.location.href).href, controller.signal))
+      .then(hydrateCanvasCharts)
       .then((html) => {
         if (controller.signal.aborted) return;
         setFrameDocument({
@@ -328,6 +335,7 @@ export default function Canvas({
         undoPending={undoPending}
         onUndo={onUndo}
         colorPalette={colorPalette}
+        historyTools={historyTools}
       />
       {livePreview && <div role="status" className="border-b border-border bg-accent/10 px-3 py-1 text-xs text-accent">생성 중 · 작업하는 내용이 자동으로 표시돼요. 저장이 끝나면 편집할 수 있어요.</div>}
       <div ref={containerRef} className="relative flex-1 overflow-hidden bg-muted/70">
@@ -469,9 +477,11 @@ export default function Canvas({
           <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label="미리보기 확대" disabled={zoom >= MAX_CANVAS_ZOOM} onClick={() => setZoom((v) => Math.min(MAX_CANVAS_ZOOM, v * 1.25))}>+</button>
           <button type="button" aria-pressed={moving} className={`ml-1 h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${moving ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setMoving((v) => !v)}>화면 이동</button><span className="text-muted-foreground">Ctrl/⌘ + 휠로 확대·축소</span>
           {sceneTools && <button type="button" aria-pressed={showSceneTools} className={`h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${showSceneTools ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setShowSceneTools((value) => !value)}>3D 장면</button>}
+          {chartTools && <button type="button" aria-pressed={showChartTools} className={`h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${showChartTools ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => { setShowChartTools(value => !value); setShowSceneTools(false); }}>차트</button>}
         </div>
       </div>
       {showSceneTools && sceneTools}
+      {showChartTools && chartTools}
     </div>
   );
 }
