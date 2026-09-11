@@ -16,7 +16,7 @@ export default function UsageFooter({
     <div
       data-qa="usage-footer"
       title={`입력 ${exact(usage.input)} · 출력 ${exact(usage.output)} · 캐시 ${exact(usage.cached)} 토큰`}
-      className="sticky bottom-0 -mx-4 -mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-background/95 px-4 py-2 text-[10px] text-muted-foreground backdrop-blur"
+      className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-background/95 px-4 py-2 text-[10px] text-muted-foreground backdrop-blur"
     >
       <span>입력 {compact(usage.input)}</span>
       <span>출력 {compact(usage.output)}</span>
