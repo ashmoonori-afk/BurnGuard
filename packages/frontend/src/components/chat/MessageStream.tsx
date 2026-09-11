@@ -67,7 +67,7 @@ export default function MessageStream({
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="chat-scroll absolute inset-0 space-y-4 overflow-y-auto px-4 py-5"
+        className="chat-scroll absolute inset-0 space-y-4 overflow-y-auto px-4 pt-5"
       >
         {groups.length === 0 && (
           <div className="py-4">
