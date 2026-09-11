@@ -17,6 +17,7 @@ import { SUPPORTED_UPLOAD_KINDS, inferUploadKind } from "../src/services/upload-
 // intake gate — which runs entirely before extraction — is deterministic here.
 let extractorCalls: string[] = [];
 let extractorFailureName: string | null = null;
+const realExtraction = { ...await import("../src/services/attachment-extraction") };
 mock.module("../src/services/attachment-extraction", () => ({
   extractAttachmentUpload: async (input: { readonly originalName: string }) => {
     extractorCalls.push(input.originalName);
@@ -65,19 +66,20 @@ afterAll(async () => {
   getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId);
   await rm(root, { recursive: true, force: true });
   mock.restore();
+  mock.module("../src/services/attachment-extraction", () => realExtraction);
 });
 
 describe("session attachment intake", () => {
   test("Given a source kind the extractor cannot process When saving Then it throws a typed unsupported error and persists nothing", async () => {
     const before = attachmentRowCount();
 
-    const failure = await saveSessionAttachments(sessionId, [file("notes.txt", "text/plain")]).then(
+    const failure = await saveSessionAttachments(sessionId, [file("notes.rtf", "text/plain")]).then(
       () => null,
       (error: unknown) => error,
     );
 
     expect(failure).toBeInstanceOf(UnsupportedAttachmentKindError);
-    expect(failure).toMatchObject({ code: "unsupported_file_kind", fileNames: ["notes.txt"] });
+    expect(failure).toMatchObject({ code: "unsupported_file_kind", fileNames: ["notes.rtf"] });
     expect(attachmentRowCount()).toBe(before);
     expect(await storedFileNames()).toEqual([]);
     expect(extractorCalls).toEqual([]);
@@ -132,20 +134,20 @@ describe("session attachment intake", () => {
   });
 
   test("Given previously stored unsupported attachments When a new upload is rejected Then the stored rows survive", async () => {
-    const legacyPath = path.join(root, ".attachments", "legacy-note.txt");
+    const legacyPath = path.join(root, ".attachments", "legacy-note.rtf");
     insertAttachmentRecord({
       sessionId,
       filePath: legacyPath,
       mimeType: "text/plain",
-      originalName: "legacy-note.txt",
+      originalName: "legacy-note.rtf",
       sizeBytes: 4,
       sha256: "deadbeef",
     });
 
-    await saveSessionAttachments(sessionId, [file("legacy-note.txt", "text/plain")]).catch(() => null);
+    await saveSessionAttachments(sessionId, [file("legacy-note.rtf", "text/plain")]).catch(() => null);
 
     const legacy = getSqlite()
-      .query<{ readonly file_path: string }, [string]>("SELECT file_path FROM attachments WHERE session_id=? AND original_name='legacy-note.txt'")
+      .query<{ readonly file_path: string }, [string]>("SELECT file_path FROM attachments WHERE session_id=? AND original_name='legacy-note.rtf'")
       .all(sessionId);
     expect(legacy).toEqual([{ file_path: legacyPath }]);
   });
@@ -165,7 +167,7 @@ describe("session attachment intake", () => {
     expect([...SUPPORTED_UPLOAD_KINDS]).toEqual(["pdf", "pptx"]);
     expect(inferUploadKind("deck.pdf", null)).toBe("pdf");
     expect(inferUploadKind("deck.pptx", null)).toBe("pptx");
-    expect(inferUploadKind("notes.txt", "text/plain")).toBeNull();
+    expect(inferUploadKind("notes.rtf", "text/plain")).toBeNull();
     expect(inferUploadKind("image.png", "image/png")).toBeNull();
   });
 });
@@ -193,14 +195,14 @@ describe("session events multipart route", () => {
     const form = new FormData();
     form.set("type", "user.message");
     form.set("text", "이 파일 좀 봐줘");
-    form.append("files", file("notes.txt", "text/plain"));
+    form.append("files", file("notes.rtf", "text/plain"));
 
     const response = await sessionRoutes.request(`http://local/api/sessions/${sessionId}/events`, { method: "POST", body: form });
     const body = (await response.json()) as { readonly error: { readonly code: string; readonly details: { readonly files: readonly string[]; readonly supported_kinds: readonly string[] } } };
 
     expect(response.status).toBe(415);
     expect(body.error.code).toBe("unsupported_file_kind");
-    expect(body.error.details.files).toEqual(["notes.txt"]);
+    expect(body.error.details.files).toEqual(["notes.rtf"]);
     expect(body.error.details.supported_kinds).toEqual(["pdf", "pptx"]);
     expect(attachmentRowCount()).toBe(before);
   });

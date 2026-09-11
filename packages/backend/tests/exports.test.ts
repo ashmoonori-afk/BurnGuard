@@ -7,6 +7,9 @@ import { launchChromium } from "../src/services/export-render-session";
 import { DECK_STAGE_JS } from "../src/runtime/deck-stage";
 import { prepareSlideDeckExport } from "../src/services/export-stage";
 import { copyBundledFonts } from "../src/data/bundled-fonts";
+import JSZip from "jszip";
+import { chartSample, renderChart } from "@bg/shared";
+import { validatePptxPackage } from "../src/services/export-package-validation";
 
 describe("export path boundary", () => {
   test("rejects an entrypoint outside the staged project", async () => {
@@ -126,11 +129,14 @@ describe("deck export smoke (chromium-gated)", () => {
     } finally { await rm(dir, { recursive: true, force: true }); }
   }, 60_000);
 
-  test.skipIf(!SMOKE_OPT_IN)("PPTX: renderDeckToPptx produces a non-empty .pptx", async () => {
+  test.skipIf(!SMOKE_OPT_IN)("PPTX: preserves grid, gradient, images and SVG charts as distinct high-resolution slide captures", async () => {
     expect(chromiumAvailable).toBe(true);
     const dir = await stageDeck();
     const out = path.join(dir, "deck.pptx");
     try {
+      const chart = chartSample("bar", "pptx_chart");
+      const html = SMOKE_DECK_HTML.replace("</style>", '.slide{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center;background:linear-gradient(135deg,#dceaff,#f7c9de)}h1{font-size:64px;transform:rotate(-4deg);text-shadow:3px 3px #fff}</style>').replace('<h1 data-bg-node-id="one">One</h1>', `<h1 data-bg-node-id="one">첫 장 · 한국어</h1>${renderChart({ ...chart, width: 600, height: 400 })}`).replace('<h1 data-bg-node-id="two">Two</h1>', '<h1 data-bg-node-id="two">Two</h1><img width="220" height="220" src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'220\' height=\'220\'%3E%3Ccircle cx=\'110\' cy=\'110\' r=\'100\' fill=\'%23f06\'/%3E%3C/svg%3E">');
+      await writeFile(path.join(dir, "deck.html"), html);
       const { renderDeckToPptx } = await import("../src/services/export-pptx-render");
       await renderDeckToPptx({
         stagedDir: dir,
@@ -139,6 +145,15 @@ describe("deck export smoke (chromium-gated)", () => {
       });
       const info = await stat(out);
       expect(info.size).toBeGreaterThan(1024);
+      const bytes = await readFile(out);
+      expect(await validatePptxPackage(bytes, 3)).toEqual({ slides: 3, editable_text_nodes: 0, raster_slides: 3 });
+      const zip = await JSZip.loadAsync(bytes);
+      const media = Object.values(zip.files).filter(file => /^ppt\/media\/.*\.png$/.test(file.name));
+      expect(media).toHaveLength(3);
+      const images = await Promise.all(media.map(file => file.async("nodebuffer")));
+      for (const image of images) { expect(image.readUInt32BE(16)).toBe(2560); expect(image.readUInt32BE(20)).toBe(1440); }
+      expect(new Set(images.map(image => image.toString("base64"))).size).toBe(3);
+      expect(await zip.file("ppt/notesSlides/notesSlide1.xml")!.async("string")).toContain("한국어");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

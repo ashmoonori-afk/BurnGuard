@@ -5,6 +5,7 @@ This folder contains product and engineering documentation for BurnGuard. Some s
 ## Start Here
 
 - [Product introduction and setup](../README.md), also available in [Korean](../README.ko.md).
+- [Native charts](./charts.md): eight original chart types, data editing, generation contracts and portable SVG output.
 - [Platform packages and graphic sets, September 10, 2026](./15-platform-packages-and-graphic-sets-2026-09-10.md): implementation record for the plan below — site map and active page, graphic set kinds and presets, PNG bundle and slice exports, artboard PDF, Cafe24/Imweb packages, and what stays blocked or deferred.
 - [Deliverables and platform publishing plan, September 9, 2026](./14-deliverables-and-platform-publishing-plan-2026-09-09.md): accepted defaults, implementation checklist, package-first Cafe24/Imweb delivery, graphic sets, and product-detail exports.
 - [Windows updates and original samples](./13-windows-updates-and-original-samples.md): installer publication, safe update application, and four original collections across three formats.

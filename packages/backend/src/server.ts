@@ -164,7 +164,7 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
     if (/\/checkpoints(?:\/|$)/.test(pathname)) return "session";
     if (/\/draws(?:\/|$)/.test(pathname) && (method === "GET" || method === "PUT")) return "managed-files";
     if (/\/fs(?:\/|$)/.test(pathname) && method === "GET" && !pathname.endsWith("/undo-info")) return "managed-files";
-    if (/\/(?:fs|operations|palette)(?:\/|$)/.test(pathname)) return "artifact-operations";
+    if (/\/(?:fs|operations|palette|history)(?:\/|$)/.test(pathname)) return "artifact-operations";
     if (/\/(?:files|artifacts|refresh|exports|design-audit|ux-review)(?:\/|$)/.test(pathname)) return "artifacts";
     return "project";
   }

@@ -16,7 +16,8 @@ export function inferUploadKind(fileName: string, contentType?: string | null): 
 }
 
 /** Attachment intake is broader than design-system extraction. */
-export function inferAttachmentKind(name: string): "pdf" | "pptx" | "docx" | "image" | null {
+export function inferAttachmentKind(name: string): "pdf" | "pptx" | "docx" | "image" | "text" | null {
+  if (/\.(txt|md|csv)$/i.test(name)) return "text";
   if (/\.(png|jpe?g|webp)$/i.test(name)) return "image";
   if (/\.docx$/i.test(name)) return "docx";
   return inferUploadKind(name);

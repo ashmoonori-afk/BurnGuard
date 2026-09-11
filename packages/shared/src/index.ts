@@ -34,3 +34,6 @@ export * from "./security";
 export * from "./updates";
 export type { VercelDeployment } from "./vercel";
 export * from "./generation-style";
+export * from "./chart";
+export * from "./chart-render";
+export * from "./artifact-history";

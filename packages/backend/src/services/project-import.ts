@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
 import { parse } from "node-html-parser";
@@ -7,6 +7,11 @@ import { createProjectRecord } from "../db/seed";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { HTML_EXPORT_MANIFEST } from "./export-html-validation";
+import { importDocumentFiles, initializeImportedProject, isImportedDocument } from "./project-import-init";
+import { getSqlite } from "../db/sqlite-client";
+import { projectsDir } from "../lib/paths";
+import { localAssetReferences } from "./export-closure";
+import { isProjectDocumentPath } from "./project-document-paths";
 
 const MAX_UPLOAD = 48 * 1024 * 1024;
 const MAX_EXPANDED = 128 * 1024 * 1024;
@@ -57,9 +62,11 @@ export async function importProject(form: FormData) {
   const seen = new Set<string>();
   for (const entry of entries) {
     const key = entry.name.toLowerCase();
-    if (seen.has(key) || entry.name.split("/").some(part => part.startsWith(".")) || /(?:^|\/)(?:node_modules|docs|AGENTS\.md|CLAUDE\.md)(?:\/|$)/i.test(entry.name) || /\.(?:exe|dll|sh|bat|cmd|ps1|pem|key|p12|pfx)$/i.test(entry.name)) throw new ProjectImportError("invalid_project_import");
+    if (seen.has(key) || entry.name.split("/").some(part => part.startsWith(".")) || /(?:^|\/)(?:node_modules|AGENTS\.md|CLAUDE\.md)(?:\/|$)/i.test(entry.name) || /\.(?:exe|dll|sh|bat|cmd|ps1|pem|key|p12|pfx)$/i.test(entry.name)) throw new ProjectImportError("invalid_project_import");
     seen.add(key);
   }
+  let documents: File[];
+  try { documents = importDocumentFiles(entries); } catch { throw new ProjectImportError("project_import_limit"); }
   const manifest = entries.find(entry => entry.name === HTML_EXPORT_MANIFEST);
   let entrypoint = entries.some(entry => entry.name === "index.html") ? "index.html" : entries.some(entry => entry.name === "deck.html") ? "deck.html" : "";
   if (manifest) {
@@ -70,9 +77,11 @@ export async function importProject(form: FormData) {
   if (!entry || !/\.html?$/i.test(entrypoint)) throw new ProjectImportError("project_import_entrypoint");
   const html = parse(new TextDecoder().decode(entry.bytes));
   const type = html.querySelector("[data-slide]") ? "slide_deck" : "prototype";
+  // Explicitly referenced images remain authored assets; other docs stay private inputs.
+  const referencedImages = new Set(entries.filter(item => /\.(?:html?|css)$/i.test(item.name)).flatMap(item => localAssetReferences(new TextDecoder().decode(item.bytes), item.name)).filter(name => /\.(?:png|jpe?g|webp)$/i.test(name) && !isProjectDocumentPath(name)));
   const created = await createProjectRecord({ name: name.trim(), type, designSystemId: null, backendId: "codex", optionsJson: null, entrypoint, thumbnailPath: null,
     initializeArtifact: async stage => {
-      for (const item of entries.filter(item => item.name !== HTML_EXPORT_MANIFEST)) {
+      for (const item of entries.filter(item => item.name !== HTML_EXPORT_MANIFEST && (!isImportedDocument(item.name) || referencedImages.has(item.name)))) {
         const target = resolveWithin(stage, item.name);
         await mkdir(path.dirname(target), { recursive: true });
         await writeFile(target, item.bytes, { flag: "wx" });
@@ -80,7 +89,16 @@ export async function importProject(form: FormData) {
       await inspectCanonicalTree(stage);
     },
   });
-  return { id: created.id, session_id: created.session_id, entrypoint: created.entrypoint };
+  try {
+    const initialization = await initializeImportedProject(created, entries, documents);
+    return { id: created.id, session_id: created.session_id, entrypoint: created.entrypoint, initialization };
+  } catch {
+    const owned = resolveWithin(projectsDir, assertSafeName(created.id));
+    if (path.resolve(created.dir_path) !== owned) throw new ProjectImportError("invalid_project_import");
+    getSqlite().prepare("DELETE FROM projects WHERE id=?").run(created.id);
+    await rm(owned, { recursive: true, force: true });
+    throw new ProjectImportError("invalid_project_import");
+  }
 }
 
 function boundedZip(file: JSZip.JSZipObject, limit: number): Promise<Uint8Array> {

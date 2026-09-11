@@ -51,6 +51,17 @@ export async function resolveStaticClosure(root: string, entrypoint: string, man
   return { entrypoint, referenced_paths: [...references].sort(compareText) };
 }
 
+/** Best-effort inventory for imports; strict export validation still uses the full closure. */
+export function localAssetReferences(source: string, file: string): readonly string[] {
+  let values: readonly string[];
+  try { values = /\.css$/i.test(file) ? cssReferences(source, file) : htmlReferences(`<html><body>${source}</body></html>`, file); }
+  catch { return []; }
+  return values.flatMap(value => {
+    try { const resolved = resolveReference(value, file); return resolved ? [resolved] : []; }
+    catch { return []; }
+  });
+}
+
 function htmlReferences(source: string, file: string): readonly string[] {
   const document = parse(source);
   if (document.querySelector("html") === null || document.querySelector("body") === null) throw new ExportClosureError("malformed_html", file);

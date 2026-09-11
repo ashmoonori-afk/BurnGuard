@@ -9,11 +9,20 @@ import { FilePatchError } from "../services/file-patch";
 import { readProjectPalette, replaceProjectPalette } from "../services/project-palette";
 import { inspectCanonicalTree } from "../services/canonical-tree-manifest";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
+import { artifactHistory } from "../services/artifact-history";
 
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
 function fail(code: string, message: string, details?: unknown): ApiErrorBody { return { error: { code, message, details } }; }
 
 export const artifactOperationRoutes = new Hono();
+
+artifactOperationRoutes.get("/api/projects/:id/history", async c => {
+  const project = await getProjectDetail(c.req.param("id"));
+  if (!project) return c.json(fail("project_not_found", "Project not found"), 404);
+  if (!project.current_digest) return c.json(fail("artifact_identity_unavailable", "Artifact is not initialized"), 409);
+  try { return c.json(ok(artifactHistory(getSqlite(), project.id, project.current_revision, project.current_digest))); }
+  catch (error) { if (error instanceof PersistedArtifactOperationError) return c.json(fail(error.code, "History could not be read"), 409); throw error; }
+});
 
 artifactOperationRoutes.get("/api/projects/:id/palette", async (c) => {
   const project = await getProjectDetail(c.req.param("id"));
@@ -73,8 +82,8 @@ artifactOperationRoutes.get("/api/projects/:id/fs/*/undo-info", async (c) => {
     return c.json(fail("invalid_path", "File path is required"), 400);
   }
   try {
-    const row = listArtifactOperations(getSqlite(), projectId).find((operation) => operation.status === "committed" && operation.replay.kind !== "initialize");
-    return row === undefined ? c.json(ok({ can_undo: false, operation_id: null })) : c.json(ok({ can_undo: row.retention.replayable, operation_id: row.id }));
+    const operationId = project.current_digest ? artifactHistory(getSqlite(), projectId, project.current_revision, project.current_digest).undo_operation_id : null;
+    return c.json(ok({ can_undo: operationId !== null, operation_id: operationId }));
   } catch (error) {
     if (error instanceof PersistedArtifactOperationError) return c.json(fail(error.code, error.message), 409);
     throw error;
@@ -175,8 +184,7 @@ artifactOperationRoutes.patch("/api/projects/:id/fs/*", async (c) => {
   }
 });
 
-// Single-step file-level undo for the GUI patch path (audit fix #7).
-// POST restores the pre-patch content and clears the entry.
+// Compatibility route: one step along durable project history, including repeated undo.
 artifactOperationRoutes.post("/api/projects/:id/fs/*/undo", async (c) => {
   const projectId = c.req.param("id");
   const project = await getProjectDetail(projectId);
@@ -195,7 +203,7 @@ artifactOperationRoutes.post("/api/projects/:id/fs/*/undo", async (c) => {
     return c.json(fail("invalid_path", "File path is required"), 400);
   }
   let operationId: string | null = null;
-  try { operationId = listArtifactOperations(getSqlite(), projectId).find((operation) => operation.status === "committed" && operation.replay.kind !== "initialize")?.id ?? null; }
+  try { operationId = project.current_digest ? artifactHistory(getSqlite(), projectId, project.current_revision, project.current_digest).undo_operation_id : null; }
   catch (error) { if (error instanceof PersistedArtifactOperationError) return c.json(fail(error.code, error.message), 409); throw error; }
   if (operationId === null || project.current_digest === null) return c.json(fail("no_undo_available", "No prior patch is available to undo", { relPath }), 404);
   try {
@@ -231,7 +239,7 @@ artifactOperationRoutes.post("/api/projects/:id/operations/:operationId/undo", a
   const project = await getProjectDetail(projectId);
   if (project === null) return c.json(fail("project_not_found", "Project not found", { projectId }), 404);
   const body = await c.req.json<unknown>().catch(() => null);
-  if (typeof body !== "object" || body === null || !("expected_revision" in body) || !("expected_artifact_digest" in body) || typeof body.expected_revision !== "number" || typeof body.expected_artifact_digest !== "string") return c.json(fail("invalid_artifact_identity", "Expected artifact identity is required"), 400);
+  if (typeof body !== "object" || body === null || Array.isArray(body) || Object.keys(body).some(key => !["expected_revision", "expected_artifact_digest"].includes(key)) || !("expected_revision" in body) || !("expected_artifact_digest" in body) || typeof body.expected_revision !== "number" || !Number.isSafeInteger(body.expected_revision) || body.expected_revision < 0 || typeof body.expected_artifact_digest !== "string" || !/^[a-f0-9]{64}$/.test(body.expected_artifact_digest)) return c.json(fail("invalid_artifact_identity", "Expected artifact identity is required"), 400);
   try {
     const result = await new ArtifactCoordinator(getSqlite()).undo({ projectId, projectDir: project.dir_path, operationId: c.req.param("operationId"), expectedRevision: body.expected_revision, expectedArtifactDigest: body.expected_artifact_digest });
     return c.json(ok({ operation_id: result.id, status: result.status, base_revision: result.baseRevision, base_digest: result.baseDigest, result_revision: result.resultRevision, result_digest: result.resultDigest, diff: result.diff }));

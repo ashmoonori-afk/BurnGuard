@@ -21,6 +21,7 @@ export default function CanvasTopBar({
   undoPending = false,
   onUndo,
   colorPalette,
+  historyTools,
   readOnly = false,
 }: {
   mode: CanvasMode | null;
@@ -35,6 +36,7 @@ export default function CanvasTopBar({
   undoPending?: boolean;
   onUndo?: () => void;
   colorPalette?: ReactNode;
+  historyTools?: ReactNode;
   readOnly?: boolean;
 }) {
   return (
@@ -69,6 +71,7 @@ export default function CanvasTopBar({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-0.5 border-l border-border pl-1">
+        {historyTools}
         <Button
           variant="ghost"
           size="icon"
@@ -78,8 +81,8 @@ export default function CanvasTopBar({
           disabled={readOnly || !canUndo || undoPending || !onUndo}
           title={
             canUndo
-              ? "마지막 저장 실행 취소 (편집 / 스타일)"
-              : "현재 파일에서 실행 취소할 수정이 없어요"
+              ? "이전 저장 시점으로 · Ctrl/Cmd+Z"
+              : "실행 취소할 이전 저장 시점이 없어요"
           }
         >
           <Undo2 className="h-3.5 w-3.5" />

@@ -14,6 +14,7 @@ import {
   type SetStateAction,
 } from "react";
 const ThreeScenePanel = lazy(() => import("@/components/canvas/ThreeScenePanel"));
+const ChartPanel = lazy(() => import("@/components/canvas/ChartPanel"));
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ArtifactSummary,
@@ -43,7 +44,7 @@ import { ApiError } from "@/api/client";
 import { isStaleIdentityError, readFileIdentity } from "@/lib/artifact-identity";
 import { getProjectDesignAudit, retryProjectDesignAudit } from "@/api/design-audit";
 import { restoreCheckpoint } from "@/api/checkpoints";
-import { getFileUndoInfo, patchProjectFile, undoLastFilePatch } from "@/api/files";
+import { getArtifactHistory, restoreArtifactHistory, patchProjectFile } from "@/api/files";
 import {
   createProjectComment,
   listProjectComments,
@@ -72,6 +73,7 @@ import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { apiErrorCopy } from "@/lib/error-copy";
 import Canvas from "@/components/canvas/Canvas";
 import ColorPalette from "@/components/canvas/ColorPalette";
+import ArtifactHistory from "@/components/canvas/ArtifactHistory";
 import { qualityFixRequest } from "@/lib/quality-fix-request";
 import {
   deserializeDraws,
@@ -664,52 +666,6 @@ export default function ProjectView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [mode, drawBlocked]);
 
-  // Global Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z for Tweaks. Only fires when the
-  // user isn't typing into an input / textarea / contentEditable so the
-  // inspector's own value fields still undo natively.
-  useEffect(() => {
-    if (mode !== "tweaks" && mode !== "select") return;
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t) {
-        const tag = t.tagName;
-        if (
-          tag === "INPUT" ||
-          tag === "TEXTAREA" ||
-          t.isContentEditable
-        ) {
-          return;
-        }
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod || e.key.toLowerCase() !== "z") return;
-      e.preventDefault();
-      // Peek, don't pop: the frame only moves between the stacks once the
-      // server has accepted the inverse patch (see applyTweaksHistory). That
-      // makes a second keypress mid-flight read the same frame, so ignore it.
-      if (tweaksMutation.isPending) return;
-      if (e.shiftKey) {
-        const frame = tweaksRedoRef.current.at(-1);
-        if (!frame) return;
-        tweaksMutation.mutate({
-          relPath: frame.relPath,
-          patch: { node_bg_id: frame.bg_id, styles: frame.forward },
-          history: { kind: "redo" },
-        });
-      } else {
-        const frame = tweaksUndoRef.current.at(-1);
-        if (!frame) return;
-        tweaksMutation.mutate({
-          relPath: frame.relPath,
-          patch: { node_bg_id: frame.bg_id, styles: frame.inverse },
-          history: { kind: "undo" },
-        });
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [mode, tweaksMutation]);
-
   const handleLiveEvent = useCallback((event: NormalizedEvent) => {
     if (autoFixRef.current && (event.type === "status.idle" || event.type === "status.error")) {
       autoFixRef.current = false;
@@ -943,12 +899,7 @@ export default function ProjectView() {
     openFileAsTab(target.relPath, setOpenFileTabs, setActiveTabId);
   }, [activeTabId, canvasSrc, files, id, pushToast, tabs]);
 
-  // File-level single-step undo (audit fix #7). Tracks per-file undo
-  // availability and exposes it through the canvas top bar. Server
-  // keeps the previous content of the last patched file in memory and
-  // rolls back on POST /undo. The query key includes activeTabId so a
-  // tab switch refetches; the patch / tweaks mutations invalidate
-  // this key so a successful save flips canUndo from false → true.
+  // Durable project history; file-key invalidations refresh it after any canvas save.
   const undoActiveRelPath = useMemo<string | null>(() => {
     const activeFile = tabs.find(
       (tab) => tab.id === activeTabId && tab.kind === "file" && tab.relPath,
@@ -959,21 +910,29 @@ export default function ProjectView() {
     queryKey: ["project", id, "fs", undoActiveRelPath, "undo-info"] as const,
     queryFn: () => {
       if (!id || !undoActiveRelPath) {
-        return { can_undo: false, stored_at: null };
+        return null;
       }
-      return getFileUndoInfo(id, undoActiveRelPath);
+      return getArtifactHistory(id);
     },
     enabled: Boolean(id && undoActiveRelPath),
   });
+  const artifactRedo = useRef<{ revision: number; operations: string[] }>({ revision: -1, operations: [] });
   const undoMutation = useMutation({
-    mutationFn: () => {
-      if (!id || !undoActiveRelPath) {
+    mutationFn: (input: { operationId?: string; redo?: boolean; fromHistory?: boolean }) => {
+      const history = undoInfoQuery.data;
+      const operationId = input.operationId ?? history?.undo_operation_id;
+      if (!id || !undoActiveRelPath || !history || !operationId) {
         throw new Error("no_active_file");
       }
-      return undoLastFilePatch(id, undoActiveRelPath);
+      return restoreArtifactHistory(id, operationId, history);
     },
-    onSuccess: async () => {
+    onSuccess: async (result, input) => {
+      if (input.fromHistory || artifactRedo.current.revision !== undoInfoQuery.data?.current_revision) artifactRedo.current.operations = [];
+      if (input.redo) artifactRedo.current.operations.pop();
+      else if (!input.fromHistory) artifactRedo.current.operations.push(result.operation_id);
+      artifactRedo.current.revision = result.result_revision;
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["project", id] }),
         queryClient.invalidateQueries({
           queryKey: ["project", id, "fs", undoActiveRelPath, "undo-info"],
         }),
@@ -984,10 +943,11 @@ export default function ProjectView() {
         invalidateDesignAudit(),
       ]);
       setTweaksTarget(null);
+      tweaksUndoRef.current = []; tweaksRedoRef.current = [];
       setTweakReview(null);
       setMode((current) => current === "quality" ? current : null);
       setRefreshTick((value) => value + 1);
-      pushToast({ title: "마지막 저장을 실행 취소했어요", tone: "success" });
+      pushToast({ title: input.fromHistory ? "선택한 저장 시점으로 복원했어요" : input.redo ? "저장을 다시 실행했어요" : "이전 저장 시점으로 돌아갔어요", tone: "success" });
     },
     onError: (err) => {
       pushToast({
@@ -997,6 +957,21 @@ export default function ProjectView() {
       });
     },
   });
+
+  useEffect(() => {
+    if (!undoActiveRelPath || mode === "draw" || composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending) return;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (!event.isTrusted || event.defaultPrevented || event.repeat || !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z" || (target instanceof HTMLElement && (target.closest("input,textarea,select,[contenteditable],[role=dialog]") || target.isContentEditable))) return;
+      if (event.shiftKey) {
+        const operationId = artifactRedo.current.revision === undoInfoQuery.data?.current_revision ? artifactRedo.current.operations.at(-1) : undefined;
+        if (!operationId) return;
+        event.preventDefault(); undoMutation.mutate({ operationId, redo: true });
+      } else if (undoInfoQuery.data?.undo_operation_id) { event.preventDefault(); undoMutation.mutate({}); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undoActiveRelPath, mode, composerDisabled, undoMutation, undoInfoQuery.data, tweaksMutation.isPending, patchFileMutation.isPending]);
 
   useEffect(() => {
     if (!tabs.find((tab) => tab.id === activeTabId)) {
@@ -1309,6 +1284,14 @@ export default function ProjectView() {
                 }}
                 onRequestAI={async (text) => { await sendMessage(text, [], new AbortController().signal, (await loadComposerDraft(session.id).catch(() => null))?.generation); setChatFocusKey((value) => value + 1); setMobilePane("chat"); }}
               /></Suspense> : undefined}
+              chartTools={activeRelPath && /\.html?$/i.test(activeRelPath) ? <Suspense fallback={<p role="status" className="p-3 text-sm">차트 도구를 불러오는 중…</p>}><ChartPanel
+                key={activeRelPath}
+                projectId={id!}
+                relPath={activeRelPath}
+                disabled={composerDisabled}
+                onSaved={() => { setRefreshTick(value => value + 1); void queryClient.invalidateQueries({ queryKey: ["project", id] }); }}
+                onRequestAI={async text => { await sendMessage(text, [], new AbortController().signal, (await loadComposerDraft(session.id).catch(() => null))?.generation); setChatFocusKey(value => value + 1); setMobilePane("chat"); }}
+              /></Suspense> : undefined}
               mode={livePreview ? null : mode}
               src={canvasSrc}
               livePreview={livePreview ? { version: livePreview.version, reportUrl: `/api/projects/${encodeURIComponent(livePreview.projectId)}/preview/${encodeURIComponent(livePreview.previewId)}/report` } : undefined}
@@ -1319,9 +1302,10 @@ export default function ProjectView() {
                 if (!id) return;
                 refreshMutation.mutate();
               }}
-              canUndo={Boolean(undoInfoQuery.data?.can_undo)}
-              undoPending={undoMutation.isPending}
-              onUndo={() => undoMutation.mutate()}
+              historyTools={<ArtifactHistory history={undoInfoQuery.data} disabled={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} />}
+              canUndo={Boolean(undoInfoQuery.data?.undo_operation_id)}
+              undoPending={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending}
+              onUndo={() => undoMutation.mutate({})}
               qualityFocusedNodeId={auditFocus?.relPath === activeRelPath ? auditFocus.nodeBgId : null}
               onQualityRevealResult={handleQualityRevealResult}
               graphicCanvas={graphicCanvas}

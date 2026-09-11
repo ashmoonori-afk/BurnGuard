@@ -20,6 +20,102 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
   };
   await page.route(eventPattern, guard);
   try {
+    await scenario("creation-canvas-history", async () => {
+      const fixture = await createFixture(page, base, ownedHome, "History fixture", { "index.html": '<!doctype html><html><head><style>h1{color:#111111}</style></head><body><h1 id="fixture-hero" data-bg-node-id="fixture-hero">History</h1></body></html>' }, true);
+      const endpoint = `${base}/api/projects/${fixture.id}`;
+      const capability = await page.evaluate(async () => (await (await fetch("/api/bootstrap")).json()).data.capability);
+      let previous = "#111111";
+      for (const color of ["#224466", "#dd5500", "#118877"]) {
+        const history = (await (await page.request.get(`${endpoint}/history`)).json()).data;
+        const saved = await page.request.patch(`${endpoint}/palette`, { headers: { "x-burnguard-capability": capability, origin: base }, data: { rel_path: "index.html", expected_revision: history.current_revision, expected_artifact_digest: history.current_digest, color: previous, value: color } });
+        assert.equal(saved.status(), 200); previous = color;
+      }
+      const third = (await (await page.request.get(`${endpoint}/history`)).json()).data.current_revision;
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const undo = page.getByRole("button", { name: "마지막 저장 실행 취소", exact: true });
+      for (const color of ["#dd5500", "#224466"]) {
+        await page.waitForFunction(() => document.querySelector('button[aria-label="마지막 저장 실행 취소"]')?.disabled === false);
+        await undo.focus();
+        const response = page.waitForResponse(response => response.url().endsWith("/undo") && response.request().method() === "POST");
+        await page.keyboard.press("Control+z"); assert.equal((await response).status(), 200);
+        await page.waitForFunction(color => document.querySelector('iframe[title="캔버스"]')?.getAttribute("srcdoc")?.includes(color), color);
+      }
+      const revision = (await (await page.request.get(`${endpoint}/history`)).json()).data.current_revision;
+      const input = page.locator("textarea").first(); await input.focus(); await page.keyboard.type("draft"); await page.keyboard.press("Control+z");
+      assert.equal((await (await page.request.get(`${endpoint}/history`)).json()).data.current_revision, revision, "text undo must not restore project files");
+      for (const [key, color] of [["Control+Shift+z", "#dd5500"], ["Control+z", "#224466"]]) {
+        await page.waitForFunction(() => document.querySelector('button[aria-label="마지막 저장 실행 취소"]')?.disabled === false);
+        await undo.focus();
+        const response = page.waitForResponse(response => response.url().endsWith("/undo") && response.request().method() === "POST");
+        await page.keyboard.press(key); assert.equal((await response).status(), 200);
+        await page.waitForFunction(color => document.querySelector('iframe[title="캔버스"]')?.getAttribute("srcdoc")?.includes(color), color);
+      }
+      await page.getByRole("button", { name: "저장 이력", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: new RegExp(`^리비전 ${third} ·`) }).click();
+      await shot(page, "creation-canvas-history-picker");
+      const restored = page.waitForResponse(response => response.url().endsWith("/undo") && response.request().method() === "POST");
+      await dialog.getByRole("button", { name: "선택한 시점으로 복원", exact: true }).click();
+      assert.equal((await restored).status(), 200);
+      await page.waitForFunction(() => document.querySelector('iframe[title="캔버스"]')?.getAttribute("srcdoc")?.includes("#118877"));
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: "저장 이력", exact: true }).click();
+      assert.ok(await dialog.getByRole("button", { name: /^리비전/ }).count() >= 3);
+    });
+    await scenario("creation-canvas-charts", async () => {
+      const fixture = await createFixture(page, base, ownedHome, "Original charts fixture", { "index.html": '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><h1 id="fixture-hero">Original data charts</h1></body></html>' }, true);
+      await page.getByRole("button", { name: "차트", exact: true }).click();
+      const editor = page.getByRole("region", { name: "차트 편집기", exact: true });
+      const endpoint = `${base}/api/projects/${fixture.id}/charts?path=index.html`;
+      const frame = page.frameLocator('iframe[title="캔버스"]');
+      const initial = (await (await page.request.get(endpoint)).json()).data;
+      let count = 0;
+      for (const type of ["area", "line", "bar", "composed", "radar", "pie", "radial", "sankey"]) {
+        await editor.getByRole("button", { name: `${type} +`, exact: true }).click();
+        await editor.getByLabel("차트 제목", { exact: true }).fill(`${type} · Original study`);
+        const saved = page.waitForResponse(response => response.url() === endpoint && response.request().method() === "PUT");
+        await editor.getByRole("button", { name: "차트 저장", exact: true }).click();
+        assert.equal((await saved).status(), 200);
+        count++;
+        await frame.locator("figure[data-bg-chart] svg").nth(count - 1).waitFor();
+        await page.waitForFunction(expected => document.querySelectorAll('[aria-label="저장된 차트"] option').length === expected + 1, count);
+      }
+      const persisted = (await (await page.request.get(endpoint)).json()).data;
+      assert.equal(persisted.charts.length, 8);
+      const capability = await page.evaluate(async () => (await (await fetch("/api/bootstrap")).json()).data.capability);
+      const stale = await page.request.put(endpoint, { headers: { "x-burnguard-capability": capability, origin: base }, data: { chart: persisted.charts[0], expected_revision: initial.revision, expected_artifact_digest: initial.artifact_digest, expected_file_hash: initial.file_hash } });
+      assert.equal(stale.status(), 409);
+      await editor.getByLabel("저장된 차트", { exact: true }).selectOption(persisted.charts[2].id);
+      await editor.getByLabel("차트 데이터", { exact: true }).fill("항목\t매출\n1분기\t-10\n2분기\t\n3분기\t25");
+      await editor.getByLabel("차트 테마", { exact: true }).selectOption("midnight");
+      const saved = page.waitForResponse(response => response.url() === endpoint && response.request().method() === "PUT");
+      await editor.getByRole("button", { name: "차트 저장", exact: true }).click();
+      assert.equal((await saved).status(), 200);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: "차트", exact: true }).click();
+      await editor.getByLabel("저장된 차트", { exact: true }).selectOption(persisted.charts[2].id);
+      assert.equal(await editor.getByLabel("차트 테마", { exact: true }).inputValue(), "midnight");
+      assert.ok((await editor.getByLabel("차트 데이터", { exact: true }).inputValue()).includes("2분기\t\n"));
+      await shot(page, "creation-canvas-charts-editor");
+      await page.setViewportSize({ width: 680, height: 900 });
+      assert.ok(await editor.getByLabel("차트 데이터", { exact: true }).isVisible());
+      assert.ok(await editor.evaluate(element => element.scrollWidth <= element.clientWidth + 1));
+      const html = await (await page.request.get(`${base}/api/projects/${fixture.id}/fs/index.html`)).text();
+      const offline = await page.context().browser().newContext({ javaScriptEnabled: false, viewport: { width: 1600, height: 1900 } });
+      try {
+        await offline.route("**/*", route => route.abort());
+        const standalone = await offline.newPage();
+        const galleryCss = '<style>body{display:grid;grid-template-columns:1fr 1fr;gap:20px;background:#e5e8ed;padding:24px;font-family:Arial}h1{grid-column:1/-1}figure{min-width:0}svg{max-height:310px}details{display:none}</style>';
+        await standalone.setContent(html.replace("</head>", galleryCss + "</head>"), { waitUntil: "domcontentloaded", timeout: 15000 });
+        assert.equal(await standalone.locator("figure[data-bg-chart] svg").count(), 8);
+        assert.equal(await standalone.locator("table").count(), 8);
+        assert.equal(await standalone.locator('script:not([type="application/json"])').count(), 0);
+        for (const svg of await standalone.locator("svg").all()) {
+          const box = await svg.boundingBox(); assert.ok(box.width > 200 && box.height > 100);
+        }
+        await shot(standalone, "creation-canvas-charts-offline-gallery");
+      } finally { await offline.close(); }
+    });
     await scenario("creation-canvas-generation-style", async () => {
       const fixture = await createFixture(page, base, ownedHome, "Generation style fixture");
       await page.getByRole("button", { name: "방향 정하기", exact: true }).click();
@@ -328,12 +424,16 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
   } finally { await page.unroute(eventPattern, guard); }
 }
 
-export async function createFixture(page, base, ownedHome, name, pages = {}) {
+export async function createFixture(page, base, ownedHome, name, pages = {}, minimal = false) {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(base, { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: "최근 작업", exact: true }).waitFor();
   const capability = await page.evaluate(async () => (await (await fetch("/api/bootstrap")).json()).data.capability);
-  const response = await page.request.post(`${base}/api/projects`, { headers: { "x-burnguard-capability": capability, origin: base }, data: { name, type: "prototype", design_system_id: null, backend_id: "claude-code" } });
+  const headers = { "x-burnguard-capability": capability, origin: base };
+  const zip = new JSZip(); zip.file("index.html", '<h1 id="fixture-hero">Fixture</h1>');
+  const response = minimal
+    ? await page.request.post(`${base}/api/projects/import`, { headers, multipart: { name, source: "zip", files: { name: "fixture.zip", mimeType: "application/zip", buffer: await zip.generateAsync({ type: "nodebuffer" }) } } })
+    : await page.request.post(`${base}/api/projects`, { headers, data: { name, type: "prototype", design_system_id: null, backend_id: "claude-code" } });
   assert.equal(response.status(), 201, "owned fixture project creation failed");
   const project = (await response.json()).data;
   assert.match(project.id, /^[0-9A-HJKMNP-TV-Z]{26}$/);
