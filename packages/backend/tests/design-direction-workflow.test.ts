@@ -83,7 +83,7 @@ describe("design direction workflow", () => {
     const preferences = { schema_version: 1, image_style: "studio", copy_tone: "friendly" } as const;
     const ready = await (await workflow.generate(input, preferences)).completion;
     expect((await new DesignDirectionWorkflow().recover(input.sessionId))?.creative_preferences).toEqual(preferences);
-    const changed = { ...preferences, image_style: "collage", copy_tone: "professional" } as const;
+    const changed = { ...preferences, image_style: "collage", copy_tone: "professional", image_recipe: "product_detail" } as const;
     const saved = await workflow.setPreferences(input.sessionId, ready.generation_id, ready.selection_revision, changed);
     await expect(workflow.setPreferences(input.sessionId, ready.generation_id, ready.selection_revision, preferences)).rejects.toMatchObject({ code: "revision_conflict" });
     const selected = await workflow.select(input.sessionId, saved.generation_id, saved.selection_revision, "editorial");

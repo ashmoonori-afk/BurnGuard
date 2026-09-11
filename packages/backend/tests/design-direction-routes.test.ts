@@ -79,7 +79,7 @@ function nextTerminalState(): Promise<DesignDirectionState> {
 
 describe("design direction routes", () => {
   test("Given style choices When generated, saved and reopened Then the next model prompt receives them and invalid or stale updates fail", async () => {
-    const preferences = { schema_version: 1, image_style: "three_d", copy_tone: "concise" } as const;
+    const preferences = { schema_version: 1, image_style: "three_d", copy_tone: "concise", image_recipe: "collectible" } as const;
     const terminalEvent = nextTerminalState();
     expect((await request(`/api/projects/${projectId}/design-directions/generate`, "POST", preferences)).status).toBe(202);
     const ready = await terminalEvent;
@@ -87,6 +87,7 @@ describe("design direction routes", () => {
     const input = { generation_id: ready.generation_id, expected_selection_revision: ready.selection_revision, creative_preferences: { ...preferences, copy_tone: "friendly" } };
     const endpoint = `/api/projects/${projectId}/design-directions/preferences`;
     expect((await request(endpoint, "POST", { ...input, creative_preferences: { ...preferences, image_style: "unknown" } })).status).toBe(400);
+    expect((await request(endpoint, "POST", { ...input, creative_preferences: { ...preferences, image_recipe: "constructor" } })).status).toBe(400);
     expect((await request(endpoint, "POST", { ...input, unexpected: true })).status).toBe(400);
     expect((await request(endpoint, "POST", input)).status).toBe(200);
     expect((await request(endpoint, "POST", input)).status).toBe(409);
@@ -97,6 +98,9 @@ describe("design direction routes", () => {
     for (const contextMode of ["full", "compact"] as const) {
       const prompt = await buildPrompt(context, { type: "user.message", text: "Continue" }, { contextMode });
       expect(JSON.parse(prompt.match(/<burnguard-generation-style-v1>\n([^\n]+)\n<\/burnguard-generation-style-v1>/)![1]!)).toEqual(input.creative_preferences);
+      const catalog = prompt.match(/<burnguard-image-recipes-v1>\n([\s\S]*?)\n<\/burnguard-image-recipes-v1>/)![1]!;
+      expect(catalog.split("\n")).toHaveLength(1);
+      expect(catalog.startsWith("collectible |")).toBe(true);
     }
     getSqlite().prepare("UPDATE sessions SET status='running' WHERE id=?").run(sessionId);
     try { expect((await request(endpoint, "POST", { ...input, expected_selection_revision: 1 })).status).toBe(409); }
