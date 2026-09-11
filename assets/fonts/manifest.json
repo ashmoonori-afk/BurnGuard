@@ -274,28 +274,6 @@
       "reservedFontNames": []
     },
     {
-      "family": "Noto Sans KR",
-      "file": "NotoSansKR.woff2",
-      "weight": "100 900",
-      "category": "sans-serif",
-      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf",
-      "licenseFile": "NotoSansKR-OFL.txt",
-      "hangulSyllables": 11172,
-      "reservedFontNames": [
-        "Source"
-      ]
-    },
-    {
-      "family": "Noto Serif KR",
-      "file": "NotoSerifKR.woff2",
-      "weight": "200 900",
-      "category": "serif",
-      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/notoserifkr/NotoSerifKR%5Bwght%5D.ttf",
-      "licenseFile": "NotoSerifKR-OFL.txt",
-      "hangulSyllables": 11172,
-      "reservedFontNames": []
-    },
-    {
       "family": "Nanum Myeongjo",
       "file": "NanumMyeongjo.woff2",
       "weight": "400",

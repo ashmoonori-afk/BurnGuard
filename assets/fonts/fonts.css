@@ -207,22 +207,6 @@
 }
 
 @font-face {
-  font-family: 'Noto Sans KR';
-  src: url('./NotoSansKR.woff2') format('woff2');
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Noto Serif KR';
-  src: url('./NotoSerifKR.woff2') format('woff2');
-  font-style: normal;
-  font-weight: 200 900;
-  font-display: swap;
-}
-
-@font-face {
   font-family: 'Nanum Myeongjo';
   src: url('./NanumMyeongjo.woff2') format('woff2');
   font-style: normal;

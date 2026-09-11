@@ -43,7 +43,8 @@ interface BundledFontEntry {
 }
 
 const MIN_BUNDLED_FAMILIES = 27;
-const MAX_BUNDLE_BYTES = 30 * 1024 * 1024;
+// First boot seeds this folder into ~100 project/system dirs; 17.4 MiB took ~3 min to copy.
+const MAX_BUNDLE_BYTES = 10 * 1024 * 1024;
 const LICENSE_MARKERS = /SIL OPEN FONT LICENSE|Apache License|UBUNTU FONT LICENCE/;
 const TRUSTED_SOURCE = /^https:\/\/(raw\.githubusercontent\.com|github\.com)\//;
 

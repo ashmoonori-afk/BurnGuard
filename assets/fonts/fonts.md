@@ -17,23 +17,23 @@ missing-glyph boxes for rare syllables, so always give them a full-coverage fall
 
 | Role | Default | Alternatives (pick by voice) |
 |---|---|---|
-| Body, UI, Korean+English | Pretendard | Noto Sans KR (institutional), IBM Plex Sans KR (technical), Gowun Dodum (soft) |
+| Body, UI, Korean+English | Pretendard | IBM Plex Sans KR (technical), Gowun Dodum (soft) |
 | Body, Latin-only page | DM Sans | Figtree, Public Sans, Manrope, Plus Jakarta Sans, Geist |
-| Long-form reading, serif | Newsreader (Latin) + Noto Serif KR (Korean) | Lora, Gowun Batang, Nanum Myeongjo |
+| Long-form reading, serif | Newsreader (Latin) + Nanum Myeongjo (Korean) | Lora, Gowun Batang |
 | Product / tech display | Space Grotesk | Geist, Sora, Instrument Sans, Outfit |
 | Editorial / luxury display | DM Serif Display | Playfair Display, Bodoni Moda, Instrument Serif, Fraunces |
 | Poster / impact display | Bebas Neue | Anton, Syne, Black Han Sans, Gasoek One |
 | Friendly / rounded display | Urbanist | Jua, Do Hyeon, Gowun Dodum |
 | Handwritten accent | Nanum Pen Script | Single Day |
 | Code, tabular numbers | IBM Plex Mono | JetBrains Mono, Geist Mono |
-| Korean serif display with weight range | Noto Serif KR | Hahmlet (headings only) |
+| Korean serif display | Gowun Batang | Nanum Myeongjo; Hahmlet for a weight range (headings only) |
 
 Rules that apply to every choice:
 
 - Two families per artifact at most (display + body), plus mono only when code or
   tabular data appears. Weight contrast inside one variable family is a valid "pair".
 - Any Latin display face used on Korean text needs a full-coverage Korean family behind
-  it in the same `font-family` stack, e.g. `'Playfair Display', 'Noto Serif KR', serif`.
+  it in the same `font-family` stack, e.g. `'Playfair Display', 'Gowun Batang', serif`.
 - Korean body text: line-height 1.6-1.8, tracking 0 or slightly positive. Latin display
   above 48px: tracking -1% to -3%. Never apply negative tracking to Hangul.
 - Static families ship one weight (400 unless stated). Do not request `font-weight: 700`
@@ -108,7 +108,7 @@ Rules that apply to every choice:
 - File `Sora.woff2`, 48 KB, variable wght 100-800, Hangul 0.
 - Voice: squarish bowls, technical, crypto/dev-tool modern.
 - Use: developer-tool sites, technical deck headers, dark-theme UI.
-- Pair: JetBrains Mono, Space Grotesk (same mood), Noto Sans KR for Korean.
+- Pair: JetBrains Mono, Space Grotesk (same mood), Pretendard for Korean.
 - Avoid: editorial or lifestyle content.
 
 ### Urbanist
@@ -138,7 +138,7 @@ Rules that apply to every choice:
 - File `PlayfairDisplay.woff2`, 104 KB, variable wght 400-900, Hangul 0.
 - Voice: transitional high-contrast display; the reliable editorial default.
 - Use: magazine headlines, luxury hero, event invitations, testimonial slides.
-- Pair: Plus Jakarta Sans or Figtree body; Noto Serif KR for Korean.
+- Pair: Plus Jakarta Sans or Figtree body; Gowun Batang for Korean.
 - Avoid: sizes under 20px; use Lora or Newsreader for reading text.
 
 ### Lora
@@ -160,7 +160,7 @@ Rules that apply to every choice:
 - File `Newsreader.woff2`, 211 KB, variable opsz 6-72, wght 200-800, Hangul 0.
 - Voice: news-text serif that scales from caption to headline via optical size.
 - Use: long-form article body, editorial decks, newsletter graphics, reports.
-- Pair: Public Sans or Manrope; Noto Serif KR for Korean body.
+- Pair: Public Sans or Manrope; Nanum Myeongjo for Korean body.
 - Avoid: nothing; if you can only ship one Latin serif, this is it.
 
 ### Bodoni Moda
@@ -204,7 +204,7 @@ Rules that apply to every choice:
 - File `JetBrainsMono.woff2`, 70 KB, variable wght 100-800, Hangul 0.
 - Voice: tall x-height, generous spacing, designed for long code reading.
 - Use: code samples on developer pages, terminal decks, changelog slides.
-- Pair: Sora or Geist; Noto Sans KR for Korean comments.
+- Pair: Sora or Geist; Pretendard for Korean comments.
 - Avoid: nothing; use it whenever a bold mono weight is needed.
 
 ### Geist Mono
@@ -222,14 +222,6 @@ Rules that apply to every choice:
 - Use: every Korean body and UI role; append it as the fallback of any Latin stack.
 - Pair: anything; weight contrast inside Pretendard is a complete system on its own.
 - Avoid: nothing.
-
-### Noto Sans KR
-- File `NotoSansKR.woff2`, 3,817 KB, variable wght 100-900, Hangul 11,172.
-- Voice: institutional, maximally safe, slightly wider than Pretendard.
-- Use: government and public-sector pages, long Korean documents, anything needing the
-  most recognisable "standard" Korean sans.
-- Pair: Noto Serif KR headings; Public Sans or Inter-like Latin.
-- Avoid: using it alongside Pretendard in one artifact; pick one neutral sans.
 
 ### IBM Plex Sans KR
 - File `IBMPlexSansKR.woff2`, 548 KB, static 400, Hangul 11,172.
@@ -259,14 +251,6 @@ Rules that apply to every choice:
 - Pair: Lora or Newsreader Latin; Pretendard body for UI.
 - Avoid: playful or tech brands.
 
-### Noto Serif KR
-- File `NotoSerifKR.woff2`, 5,721 KB, variable wght 200-900, Hangul 11,172.
-- Voice: authoritative Korean serif; the only full-coverage Korean serif with a weight range.
-- Use: Korean long-form articles, reports, pull quotes, serif headings needing 700-900.
-- Pair: Playfair Display or Newsreader Latin; Noto Sans KR body.
-- Avoid: choosing it when a static 400 serif (Nanum Myeongjo, Gowun Batang) would do;
-  it is the largest file in the bundle.
-
 ### Nanum Pen Script
 - File `NanumPenScript.woff2`, 601 KB, static 400, Hangul 11,172.
 - Voice: ballpoint-pen handwriting; casual and personal.
@@ -287,8 +271,8 @@ Rules that apply to every choice:
 - File `Hahmlet.woff2`, 681 KB, variable wght 100-900, Hangul 2,788.
 - Voice: contemporary high-contrast Korean serif, magazine-like.
 - Use: Korean editorial display at large sizes, fashion and culture covers, title slides.
-- Pair: Bodoni Moda or Playfair Display Latin; Noto Serif KR as the fallback for body.
-- Avoid: body text (partial coverage); stack `'Hahmlet', 'Noto Serif KR', serif`.
+- Pair: Bodoni Moda or Playfair Display Latin; Gowun Batang as the fallback for body.
+- Avoid: body text (partial coverage); stack `'Hahmlet', 'Gowun Batang', serif`.
 
 ### Black Han Sans
 - File `BlackHanSans.woff2`, 186 KB, static 400 (black), Hangul 2,581.
@@ -315,7 +299,7 @@ Rules that apply to every choice:
 - File `GasoekOne.woff2`, 295 KB, static 400, Hangul 2,780.
 - Voice: extreme-weight display with a retro, cut-paper edge.
 - Use: single-word hero statements, cover slides, festival and street-culture graphics.
-- Pair: Syne or Anton Latin; Noto Sans KR body.
+- Pair: Syne or Anton Latin; Pretendard body.
 - Avoid: anything below 40px.
 
 ### Orbit
@@ -329,26 +313,30 @@ Rules that apply to every choice:
 
 | Family | Syllables | Body-safe |
 |---|---|---|
-| Pretendard, Noto Sans KR, IBM Plex Sans KR, Gowun Dodum, Gowun Batang, Nanum Myeongjo, Noto Serif KR, Nanum Pen Script, Single Day | 11,172 | yes |
+| Pretendard, IBM Plex Sans KR, Gowun Dodum, Gowun Batang, Nanum Myeongjo, Nanum Pen Script, Single Day | 11,172 | yes |
 | Hahmlet | 2,788 | headings only |
 | Gasoek One, Orbit | 2,780 | headings only |
 | Black Han Sans | 2,581 | headings only |
 | Do Hyeon | 2,437 | headings only |
 | Jua | 2,367 | headings only |
 
+Noto Sans KR and Noto Serif KR were evaluated (full coverage, variable) but not bundled:
+their 9.2 MiB would dominate the per-project copy; Pretendard, Gowun Batang and Nanum
+Myeongjo cover the same roles.
+
 Every Latin-only family has 0 Hangul syllables and must be stacked with one of the
 body-safe Korean families whenever the artifact contains Korean text.
 
 ## Licensing
 
-- All 39 families are under the SIL Open Font License 1.1; each `*.woff2` ships with its
+- All 37 families are under the SIL Open Font License 1.1; each `*.woff2` ships with its
   own `*-OFL.txt` (copyright notice + license text). Keep the license file next to the
   font whenever fonts are copied or exported. OFL fonts may be bundled with software and
   used in commercial documents; they may not be sold on their own.
 - The WOFF2 files are lossless repackagings of the upstream TTFs (no subsetting, no
   metadata block; only the DSIG signature table is removed, as the WOFF2 spec requires).
   Per the OFL FAQ this is not a "Modified Version", so families with Reserved Font Names
-  (Playfair Display, Lora, Nanum Myeongjo, Nanum Pen Script, Noto Sans KR, IBM Plex Sans
+  (Playfair Display, Lora, Nanum Myeongjo, Nanum Pen Script, IBM Plex Sans
   KR, IBM Plex Mono, DM Serif Display, Pretendard) keep their original names.
 - Do not subset or rename these files inside an artifact. Subsetting an OFL font with a
   Reserved Font Name would require renaming it.
@@ -362,8 +350,8 @@ body-safe Korean families whenever the artifact contains Korean text.
    (`pairings: [{display, body, korean, mood}]`) so the harness can inject one suggested
    pair per project mood instead of the agent improvising.
 2. Per-project font pruning on export: exports already close over referenced files, but
-   the local project copy carries all 17.4 MiB, and a first boot seeds it into ~92
-   directories (78 projects + 22 design systems), about 1.6 GB of writes. A post-generation step could delete
+   the local project copy carries all 8.1 MiB, and a first boot seeds it into ~92
+   directories (78 projects + 22 design systems), hundreds of MB of writes. A post-generation step could delete
    unreferenced `fonts/*.woff2` (and their license files) from the artifact, keeping the
    catalog intact in `assets/fonts/`.
 3. Hangul coverage audit in the design audit: extend `design-audit-dom` with a
@@ -380,10 +368,10 @@ body-safe Korean families whenever the artifact contains Korean text.
 7. Provenance hash pinning: add `sha256` per file to `manifest.json` and verify it in the
    bundled-fonts test so a re-download that silently changes upstream bytes is caught.
 8. Core/extended split: copy a core set (Pretendard, DM Sans, Space Grotesk, DM Serif
-   Display, IBM Plex Mono, Gowun Batang, Noto Sans KR) into every project and the rest on
-   demand, cutting the per-project copy from 17.4 MiB to ~6 MB and first-boot writes accordingly;
-   hard-linking the immutable `*.woff2` files (copy fallback across volumes) is the
-   alternative that keeps `fonts.css` byte-identical in every project.
+   Display, IBM Plex Mono, Gowun Batang) into every project and the rest on
+   demand, cutting the per-project copy from 8.1 MiB to ~3 MB and first-boot writes accordingly.
+   Hard-linking the `*.woff2` files is not an option: `canonical-tree-manifest.ts` rejects
+   any file with `nlink > 1` as an unsafe tree entry (artifact-authority contract).
 9. Size-policy ADR update: `doc/07-decisions.md` counts "~30 MB of font files" for the
    whole binary, but `design system sample/` already ships 31.9 MB of KoPub TTFs and this
-   bundle adds 17.4 MB. Record the real payload and set separate budgets.
+   bundle adds 8.1 MiB. Record the real payload and set separate budgets.
