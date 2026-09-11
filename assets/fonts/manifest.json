@@ -6,7 +6,9 @@
       "weight": "100 1000",
       "category": "sans-serif",
       "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/dmsans/DMSans%5Bopsz%2Cwght%5D.ttf",
-      "licenseFile": "DMSans-OFL.txt"
+      "licenseFile": "DMSans-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
     },
     {
       "family": "Space Grotesk",
@@ -14,7 +16,9 @@
       "weight": "300 700",
       "category": "sans-serif",
       "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf",
-      "licenseFile": "SpaceGrotesk-OFL.txt"
+      "licenseFile": "SpaceGrotesk-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
     },
     {
       "family": "DM Serif Display",
@@ -22,7 +26,11 @@
       "weight": "400",
       "category": "serif",
       "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/dmserifdisplay/DMSerifDisplay-Regular.ttf",
-      "licenseFile": "DMSerifDisplay-OFL.txt"
+      "licenseFile": "DMSerifDisplay-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": [
+        "Source"
+      ]
     },
     {
       "family": "Bebas Neue",
@@ -30,7 +38,9 @@
       "weight": "400",
       "category": "display",
       "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf",
-      "licenseFile": "BebasNeue-OFL.txt"
+      "licenseFile": "BebasNeue-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
     },
     {
       "family": "IBM Plex Mono",
@@ -38,7 +48,11 @@
       "weight": "400",
       "category": "monospace",
       "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexmono/IBMPlexMono-Regular.ttf",
-      "licenseFile": "IBMPlexMono-OFL.txt"
+      "licenseFile": "IBMPlexMono-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": [
+        "Plex"
+      ]
     },
     {
       "family": "Gowun Batang",
@@ -46,7 +60,9 @@
       "weight": "400",
       "category": "serif",
       "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/gowunbatang/GowunBatang-Regular.ttf",
-      "licenseFile": "GowunBatang-OFL.txt"
+      "licenseFile": "GowunBatang-OFL.txt",
+      "hangulSyllables": 11172,
+      "reservedFontNames": []
     },
     {
       "family": "Pretendard",
@@ -54,7 +70,331 @@
       "weight": "45 930",
       "category": "sans-serif",
       "source": "https://raw.githubusercontent.com/orioncactus/pretendard/main/packages/pretendard/dist/web/variable/woff2/PretendardVariable.woff2",
-      "licenseFile": "Pretendard-OFL.txt"
+      "licenseFile": "Pretendard-OFL.txt",
+      "hangulSyllables": 11172,
+      "reservedFontNames": [
+        "Pretendard",
+        "Source",
+        "Inter",
+        "M PLUS 1"
+      ]
+    },
+    {
+      "family": "Geist",
+      "file": "Geist.woff2",
+      "weight": "100 900",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/geist/Geist%5Bwght%5D.ttf",
+      "licenseFile": "Geist-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Plus Jakarta Sans",
+      "file": "PlusJakartaSans.woff2",
+      "weight": "200 800",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/plusjakartasans/PlusJakartaSans%5Bwght%5D.ttf",
+      "licenseFile": "PlusJakartaSans-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Figtree",
+      "file": "Figtree.woff2",
+      "weight": "300 900",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/figtree/Figtree%5Bwght%5D.ttf",
+      "licenseFile": "Figtree-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Manrope",
+      "file": "Manrope.woff2",
+      "weight": "200 800",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/manrope/Manrope%5Bwght%5D.ttf",
+      "licenseFile": "Manrope-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Outfit",
+      "file": "Outfit.woff2",
+      "weight": "100 900",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/outfit/Outfit%5Bwght%5D.ttf",
+      "licenseFile": "Outfit-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Instrument Sans",
+      "file": "InstrumentSans.woff2",
+      "weight": "400 700",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/instrumentsans/InstrumentSans%5Bwdth%2Cwght%5D.ttf",
+      "licenseFile": "InstrumentSans-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Public Sans",
+      "file": "PublicSans.woff2",
+      "weight": "100 900",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/publicsans/PublicSans%5Bwght%5D.ttf",
+      "licenseFile": "PublicSans-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Sora",
+      "file": "Sora.woff2",
+      "weight": "100 800",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/sora/Sora%5Bwght%5D.ttf",
+      "licenseFile": "Sora-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Urbanist",
+      "file": "Urbanist.woff2",
+      "weight": "100 900",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/urbanist/Urbanist%5Bwght%5D.ttf",
+      "licenseFile": "Urbanist-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Instrument Serif",
+      "file": "InstrumentSerif.woff2",
+      "weight": "400",
+      "category": "serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/instrumentserif/InstrumentSerif-Regular.ttf",
+      "licenseFile": "InstrumentSerif-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Playfair Display",
+      "file": "PlayfairDisplay.woff2",
+      "weight": "400 900",
+      "category": "serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf",
+      "licenseFile": "PlayfairDisplay-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": [
+        "Playfair Display"
+      ]
+    },
+    {
+      "family": "Lora",
+      "file": "Lora.woff2",
+      "weight": "400 700",
+      "category": "serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/lora/Lora%5Bwght%5D.ttf",
+      "licenseFile": "Lora-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": [
+        "Lora"
+      ]
+    },
+    {
+      "family": "Fraunces",
+      "file": "Fraunces.woff2",
+      "weight": "100 900",
+      "category": "serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/fraunces/Fraunces%5BSOFT%2CWONK%2Copsz%2Cwght%5D.ttf",
+      "licenseFile": "Fraunces-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Newsreader",
+      "file": "Newsreader.woff2",
+      "weight": "200 800",
+      "category": "serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/newsreader/Newsreader%5Bopsz%2Cwght%5D.ttf",
+      "licenseFile": "Newsreader-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Bodoni Moda",
+      "file": "BodoniModa.woff2",
+      "weight": "400 900",
+      "category": "serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/bodonimoda/BodoniModa%5Bopsz%2Cwght%5D.ttf",
+      "licenseFile": "BodoniModa-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Syne",
+      "file": "Syne.woff2",
+      "weight": "400 800",
+      "category": "display",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/syne/Syne%5Bwght%5D.ttf",
+      "licenseFile": "Syne-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Anton",
+      "file": "Anton.woff2",
+      "weight": "400",
+      "category": "display",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/anton/Anton-Regular.ttf",
+      "licenseFile": "Anton-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "JetBrains Mono",
+      "file": "JetBrainsMono.woff2",
+      "weight": "100 800",
+      "category": "monospace",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf",
+      "licenseFile": "JetBrainsMono-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Geist Mono",
+      "file": "GeistMono.woff2",
+      "weight": "100 900",
+      "category": "monospace",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/geistmono/GeistMono%5Bwght%5D.ttf",
+      "licenseFile": "GeistMono-OFL.txt",
+      "hangulSyllables": 0,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Nanum Myeongjo",
+      "file": "NanumMyeongjo.woff2",
+      "weight": "400",
+      "category": "serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/nanummyeongjo/NanumMyeongjo-Regular.ttf",
+      "licenseFile": "NanumMyeongjo-OFL.txt",
+      "hangulSyllables": 11172,
+      "reservedFontNames": [
+        "Nanum",
+        "Naver Nanum",
+        "NanumGothic",
+        "Naver NanumGothic",
+        "NanumMyeongjo"
+      ]
+    },
+    {
+      "family": "Gowun Dodum",
+      "file": "GowunDodum.woff2",
+      "weight": "400",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/gowundodum/GowunDodum-Regular.ttf",
+      "licenseFile": "GowunDodum-OFL.txt",
+      "hangulSyllables": 11172,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Hahmlet",
+      "file": "Hahmlet.woff2",
+      "weight": "100 900",
+      "category": "serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/hahmlet/Hahmlet%5Bwght%5D.ttf",
+      "licenseFile": "Hahmlet-OFL.txt",
+      "hangulSyllables": 2788,
+      "reservedFontNames": []
+    },
+    {
+      "family": "IBM Plex Sans KR",
+      "file": "IBMPlexSansKR.woff2",
+      "weight": "400",
+      "category": "sans-serif",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/ibmplexsanskr/IBMPlexSansKR-Regular.ttf",
+      "licenseFile": "IBMPlexSansKR-OFL.txt",
+      "hangulSyllables": 11172,
+      "reservedFontNames": [
+        "Plex"
+      ]
+    },
+    {
+      "family": "Black Han Sans",
+      "file": "BlackHanSans.woff2",
+      "weight": "400",
+      "category": "display",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/blackhansans/BlackHanSans-Regular.ttf",
+      "licenseFile": "BlackHanSans-OFL.txt",
+      "hangulSyllables": 2581,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Do Hyeon",
+      "file": "DoHyeon.woff2",
+      "weight": "400",
+      "category": "display",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/dohyeon/DoHyeon-Regular.ttf",
+      "licenseFile": "DoHyeon-OFL.txt",
+      "hangulSyllables": 2437,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Jua",
+      "file": "Jua.woff2",
+      "weight": "400",
+      "category": "display",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/jua/Jua-Regular.ttf",
+      "licenseFile": "Jua-OFL.txt",
+      "hangulSyllables": 2367,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Gasoek One",
+      "file": "GasoekOne.woff2",
+      "weight": "400",
+      "category": "display",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/gasoekone/GasoekOne-Regular.ttf",
+      "licenseFile": "GasoekOne-OFL.txt",
+      "hangulSyllables": 2780,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Nanum Pen Script",
+      "file": "NanumPenScript.woff2",
+      "weight": "400",
+      "category": "handwriting",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/nanumpenscript/NanumPenScript-Regular.ttf",
+      "licenseFile": "NanumPenScript-OFL.txt",
+      "hangulSyllables": 11172,
+      "reservedFontNames": [
+        "Nanum",
+        "Naver Nanum",
+        "NanumGothic",
+        "Naver"
+      ]
+    },
+    {
+      "family": "Orbit",
+      "file": "Orbit.woff2",
+      "weight": "400",
+      "category": "display",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/orbit/Orbit-Regular.ttf",
+      "licenseFile": "Orbit-OFL.txt",
+      "hangulSyllables": 2780,
+      "reservedFontNames": []
+    },
+    {
+      "family": "Single Day",
+      "file": "SingleDay.woff2",
+      "weight": "400",
+      "category": "handwriting",
+      "source": "https://raw.githubusercontent.com/google/fonts/8e44913e4ff26fc997e6856c1ec40ff4791c98c5/ofl/singleday/SingleDay-Regular.ttf",
+      "licenseFile": "SingleDay-OFL.txt",
+      "hangulSyllables": 11172,
+      "reservedFontNames": []
     }
   ]
 }

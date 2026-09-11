@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { copyBundledFonts } from "../src/data/bundled-fonts";
 import { createProjectRecord } from "../src/db/seed";
@@ -31,6 +31,47 @@ test("Given bundled local fonts, when initializing projects and copying over bra
   expect(await readFile(path.join(branded, "fonts/Pretendard-OFL.txt"), "utf8")).toContain("SIL OPEN FONT LICENSE");
   expect(isRuntimeSource("assets/fonts/fonts.css")).toBe(true);
   expect(isRuntimeSource("assets/fonts/../../secret")).toBe(false);
+});
+
+interface BundledFontEntry {
+  readonly family: string;
+  readonly file: string;
+  readonly weight: string;
+  readonly category: string;
+  readonly source: string;
+  readonly licenseFile: string;
+}
+
+const MIN_BUNDLED_FAMILIES = 27;
+// First boot seeds this folder into ~100 project/system dirs; 17.4 MiB took ~3 min to copy.
+const MAX_BUNDLE_BYTES = 10 * 1024 * 1024;
+const LICENSE_MARKERS = /SIL OPEN FONT LICENSE|Apache License|UBUNTU FONT LICENCE/;
+const TRUSTED_SOURCE = /^https:\/\/(raw\.githubusercontent\.com|github\.com)\//;
+
+test("Given the bundled font catalog, when manifest, fonts.css, files, licenses and fonts.md are cross-checked, then every family is consistent, licensed and documented", async () => {
+  const root = path.join(resolveRepoRoot(), "assets/fonts");
+  const manifest = JSON.parse(await readFile(path.join(root, "manifest.json"), "utf8")) as { readonly families: readonly BundledFontEntry[] };
+  const css = await readFile(path.join(root, "fonts.css"), "utf8");
+  const catalog = await readFile(path.join(root, "fonts.md"), "utf8");
+  const families = manifest.families;
+  expect(families.length).toBeGreaterThanOrEqual(MIN_BUNDLED_FAMILIES);
+  expect(css.match(/@font-face/g)?.length ?? 0).toBe(families.length);
+  expect(new Set(families.map((entry) => entry.family)).size).toBe(families.length);
+  expect(new Set(families.map((entry) => entry.file)).size).toBe(families.length);
+  let bundleBytes = 0;
+  for (const entry of families) {
+    expect(css).toContain(`font-family: '${entry.family}'`);
+    expect(css).toContain(`url('./${entry.file}')`);
+    expect(css).toContain(`font-weight: ${entry.weight};`);
+    expect(entry.file.endsWith(".woff2")).toBe(true);
+    const fontBytes = (await stat(path.join(root, entry.file))).size;
+    expect(fontBytes).toBeGreaterThan(0);
+    bundleBytes += fontBytes;
+    expect(LICENSE_MARKERS.test(await readFile(path.join(root, entry.licenseFile), "utf8"))).toBe(true);
+    expect(TRUSTED_SOURCE.test(entry.source)).toBe(true);
+    expect(catalog).toContain(`### ${entry.family}`);
+  }
+  expect(bundleBytes).toBeLessThanOrEqual(MAX_BUNDLE_BYTES);
 });
 
 test("Given an existing tutorial project When startup seeding runs again Then its live files are not mutated", async () => {
