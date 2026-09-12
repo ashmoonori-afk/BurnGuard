@@ -80,6 +80,8 @@ export function capturePageFromSession(page: Page): CapturePage {
     capture: async (request) => new Uint8Array(await page.screenshot({
       type: request.format,
       clip: request.clip,
+      // Clips use document coordinates; viewport capture would truncate tall frames/slices.
+      fullPage: true,
       animations: "disabled",
       ...(request.quality === undefined ? {} : { quality: request.quality }),
     })),

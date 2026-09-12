@@ -32,7 +32,7 @@ describe("pdfDimensionsForPaper", () => {
     const dims = pdfDimensionsForPaper("artboard", { width: 1080, height: 1350 });
 
     // Then
-    expect(dims).toEqual({ width: "810pt", height: "1012.5pt" });
+    expect(dims).toEqual({ width: "11.25in", height: "14.0625in" });
   });
 });
 
