@@ -223,7 +223,8 @@ export async function run({ page, context, base, home, check, shot, evidence }) 
     await writeFile(path.join(evidence,`${name}-index.html`),html);
     await save(`${name}-state`,{project,session,events,request,options,file:{sha256:sha256(html),bytes:Buffer.byteLength(html)},serialized});
     const frame = page.frameLocator('iframe[title="Canvas"]');
-    await frame.locator("[data-graphic-artboard]").first().waitFor({state:"attached",timeout:60000});
+    await page.locator('iframe[title="Canvas"][aria-busy="false"]').waitFor({ timeout: 60000 });
+    await frame.locator("[data-graphic-artboard]").first().waitFor({state:"visible",timeout:60000});
     const rendered = await frame.locator("[data-graphic-artboard]").evaluateAll(elements => elements.map(element => ({width:Number.parseFloat(getComputedStyle(element).width),height:Number.parseFloat(getComputedStyle(element).height)})));
     const intended = options.graphic_set.kind === "banner_set" ? options.graphic_set.frames.map(({width,height})=>({width,height})) : Array.from({length:options.graphic_set.frame_count},()=>({width:options.graphic_canvas.width,height:options.graphic_canvas.height}));
     await save(`${name}-geometry`,{intended,serialized,rendered});

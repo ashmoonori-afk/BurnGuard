@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Comment, GraphicCanvasV1 } from "@bg/shared";
 import CanvasTopBar from "./CanvasTopBar";
 import CommentLayer from "./CommentLayer";
@@ -180,13 +180,19 @@ export default function Canvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const frameLoadKey = JSON.stringify([src, frameKey]);
+  const [frameDocument, setFrameDocument] = useState<{ key: string; src: string; html: string } | null>(null);
+  // Retain the previous version while fetching, but never reuse its browsing
+  // context for a different document or a loading placeholder.
+  const frameSrcDoc = frameDocument && frameDocument.src === src ? frameDocument.html : null;
+  const frameDocumentKey = frameDocument && frameDocument.src === src ? frameDocument.key : `placeholder:${src ?? ""}`;
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const viewportRef = useRef({ zoom, pan });
   viewportRef.current = { zoom, pan };
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || iframeRef.current?.dataset.documentKey !== frameDocumentKey) return;
     const zoomAt = (x: number, y: number, delta: number) => {
       const rect = stageRef.current?.getBoundingClientRect();
       if (!rect || ![x, y, delta].every(Number.isFinite)) return;
@@ -208,7 +214,7 @@ export default function Canvas({
       zoomAt(rect.left + payload.x * rect.width / frame.clientWidth, rect.top + payload.y * rect.height / frame.clientHeight, payload.delta);
     });
     return () => { container.removeEventListener("wheel", wheel, true); unsubscribe(); };
-  }, [frameKey, src]);
+  }, [frameDocumentKey]);
   const [moving, setMoving] = useState(false);
   const [showSceneTools, setShowSceneTools] = useState(false);
   const [showChartTools, setShowChartTools] = useState(false);
@@ -217,15 +223,34 @@ export default function Canvas({
   const lastFrameSlideRef = useRef<number | null>(null);
   const restoreTargetSlideIdxRef = useRef<number | null>(null);
   const restoringSlideRef = useRef(false);
-  const frameLoadKey = JSON.stringify([src, frameKey]);
-  const [frameDocument, setFrameDocument] = useState<{ key: string; src: string; html: string } | null>(null);
-  // Keep the previous render visible while its next version and assets load.
-  const frameSrcDoc = frameDocument && frameDocument.src === src ? frameDocument.html : null;
   const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null);
   // Surfaces fetch failures inline instead of falling back to the
   // placeholder with no signal (audit fix #6). Cleared on every src
   // change so a successful Refresh recovers cleanly.
   const [loadError, setLoadError] = useState<{ status?: number } | null>(null);
+  const previewReportUrl = livePreview?.reportUrl;
+  const previewVersion = livePreview?.version;
+
+  useLayoutEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe || !src || iframe.dataset.documentKey !== frameDocumentKey) return;
+    let current = true;
+    const unsubscribe = subscribeFrameEvent(iframe, "document-loaded", (payload) => {
+      // A retained srcdoc can finish loading after the next fetch starts.
+      if (payload?.documentKey !== frameLoadKey) return;
+      setLoadedFrameKey(frameKey ?? src);
+      if (previewReportUrl && previewVersion !== undefined) {
+        void requestFramePreviewReport(iframe).then(async (report) => {
+          if (!current || !report || typeof report !== "object" || Array.isArray(report)) return;
+          await authorizedFetch(previewReportUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...report, version: previewVersion }) });
+        }).catch(() => {});
+      }
+    });
+    return () => {
+      current = false;
+      unsubscribe();
+    };
+  }, [frameDocumentKey, frameKey, frameLoadKey, src, previewReportUrl, previewVersion]);
 
   useEffect(() => {
     restoreTargetSlideIdxRef.current = src ? slideByFileRef.current.get(src) ?? null : null;
@@ -279,13 +304,13 @@ export default function Canvas({
     };
   }, [frameLoadKey, graphicCanvas, src]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Push-based: deck-stage's BRIDGE_SCRIPT broadcasts active-slide-
     // changed on every hashchange / data-active mutation, so we no
     // longer poll at 5 Hz forever (audit fix #1+#3 — that polling kept
     // burning CPU even on idle decks and even when src was null).
     const iframe = iframeRef.current;
-    if (!iframe || !src) return;
+    if (!iframe || !src || iframe.dataset.documentKey !== frameDocumentKey) return;
     const unsubscribe = subscribeFrameEvent(
       iframe,
       "active-slide-changed",
@@ -300,14 +325,16 @@ export default function Canvas({
       },
     );
     return unsubscribe;
-  }, [frameKey, onActiveSlideChange, src]);
+  }, [frameDocumentKey, onActiveSlideChange, src]);
 
-  useEffect(() => {
-    return subscribeFrameEvent(iframeRef.current, "navigate", (payload: unknown) => {
+  useLayoutEffect(() => {
+    const iframe = iframeRef.current;
+    if (iframe?.dataset.documentKey !== frameDocumentKey) return;
+    return subscribeFrameEvent(iframe, "navigate", (payload: unknown) => {
       if (payload === null || typeof payload !== "object" || !("href" in payload) || typeof payload.href !== "string") return;
       onNavigate?.(payload.href);
     });
-  }, [frameKey, src, onNavigate]);
+  }, [frameDocumentKey, onNavigate]);
 
   useEffect(() => {
     const restoreIdx = restoreTargetSlideIdxRef.current;
@@ -354,26 +381,20 @@ export default function Canvas({
         {src ? (
           <iframe
             ref={iframeRef}
-            key={src}
+            key={frameDocumentKey}
+            data-document-key={frameDocumentKey}
+            aria-busy={loadedFrameKey !== (frameKey ?? src)}
             title={t("workspace.canvas.title")}
             srcDoc={frameSrcDoc ?? placeholderSrc}
             sandbox="allow-scripts allow-popups"
             referrerPolicy="no-referrer"
             allow="fullscreen"
             className="absolute inset-0 h-full w-full rounded-md border-0 bg-background"
-            onLoad={() => {
-              if (frameSrcDoc !== null) setLoadedFrameKey(frameKey ?? src);
-              if (livePreview && frameDocument?.key === frameLoadKey) {
-                void requestFramePreviewReport(iframeRef.current).then(async (report) => {
-                  if (!report || typeof report !== "object" || Array.isArray(report)) return;
-                  await authorizedFetch(livePreview.reportUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...report, version: livePreview.version }) });
-                }).catch(() => {});
-              }
-            }}
           />
         ) : (
           <iframe
             ref={iframeRef}
+            data-document-key={frameDocumentKey}
             title={t("workspace.canvas.placeholderFrameTitle")}
             srcDoc={placeholderSrc}
             sandbox="allow-scripts allow-popups"

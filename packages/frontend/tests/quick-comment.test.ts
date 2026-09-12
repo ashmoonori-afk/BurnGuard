@@ -47,13 +47,40 @@ function frameRuntime(html: string) {
   if (!script) throw new Error("bridge_script_missing");
   const listeners = new Map<string, (event: Record<string, unknown>) => void>();
   const messages: { event?: string; payload: unknown }[] = [];
+  const frames: Array<() => void> = [];
   const parent = { postMessage: (data: { event?: string; payload: unknown }) => messages.push(data) };
+  const document = { readyState: "loading", baseURI: "http://localhost/file.html", addEventListener() {} };
   runInNewContext(script, {
+    URL,
+    requestAnimationFrame: (callback: () => void) => frames.push(callback),
     window: { parent, addEventListener: (name: string, listener: (event: Record<string, unknown>) => void) => listeners.set(name, listener) },
-    document: { readyState: "loading", addEventListener() {} },
+    document,
   });
-  return { listeners, messages };
+  return { listeners, messages, document, frames };
 }
+
+test("loaded canvas documents identify themselves instead of relying on an unversioned iframe load", () => {
+  const runtime = frameRuntime(buildSandboxedArtifactSrcDoc("<head></head>", "http://localhost/file.html", { quickCommentKey: "current" }));
+  expect(runtime.messages).toHaveLength(0);
+  runtime.document.readyState = "complete";
+  runtime.listeners.get("load")?.({});
+  expect(runtime.messages).toHaveLength(0);
+  runtime.frames[0]?.();
+  expect(runtime.messages).toEqual([{
+    __bgFrameBridge: true, type: "event", event: "document-loaded", payload: { documentKey: "current" },
+  }]);
+});
+
+test("local navigation is intercepted before document loading finishes", () => {
+  const runtime = frameRuntime(buildSandboxedArtifactSrcDoc("<head></head>", "http://localhost/file.html"));
+  let prevented = false;
+  const link = { hasAttribute: () => false, getAttribute: (name: string) => name === "href" ? "next.html" : null };
+  runtime.listeners.get("click")?.({ button: 0, target: { closest: () => link }, preventDefault() { prevented = true; } });
+  expect(prevented).toBe(true);
+  expect(runtime.messages).toEqual([{
+    __bgFrameBridge: true, type: "event", event: "navigate", payload: { href: "http://localhost/next.html" },
+  }]);
+});
 
 function exerciseFrameShortcut(html: string) {
   const { listeners, messages } = frameRuntime(html);
@@ -98,17 +125,14 @@ test("non-canvas bridge consumers do not capture Control+Space", () => {
 });
 
 test("production-minified bridge preserves keyboard runtime and source-checks iframe events and hit responses", async () => {
-  const entry = new URL("../src/components/canvas/frame-bridge.ts", import.meta.url).pathname;
-  const build = await Bun.build({
-    entrypoints: ["test-quick-comment-bridge"], target: "browser", format: "iife", minify: true,
-    plugins: [{ name: "bridge-test", setup(builder) {
-      builder.onResolve({ filter: /^test-quick-comment-bridge$/ }, () => ({ path: "entry", namespace: "bridge-test" }));
-      builder.onLoad({ filter: /.*/, namespace: "bridge-test" }, () => ({ contents: `import * as bridge from ${JSON.stringify(entry)}; globalThis.testBridge = bridge;`, loader: "ts" }));
-    } }],
-  });
-  expect(build.success).toBe(true);
-  const output = build.outputs[0];
-  if (!output) throw new Error("bridge_build_missing");
+  const compiler = Bun.spawn([
+    process.execPath, "build", `${import.meta.dir}/fixtures/quick-comment-browser.ts`,
+    "--target=browser", "--format=iife", "--minify",
+  ], { stdout: "pipe", stderr: "pipe" });
+  const [exitCode, script, errors] = await Promise.all([
+    compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text(),
+  ]);
+  if (exitCode !== 0) throw new Error(`Bridge bundle failed (${exitCode}): ${errors}`);
   const listeners = new Map<string, (event: unknown) => void>();
   const timers = new Map<number, () => void>();
   const context = {
@@ -120,7 +144,7 @@ test("production-minified bridge preserves keyboard runtime and source-checks if
     },
     testBridge: null as unknown as typeof import("../src/components/canvas/frame-bridge"),
   };
-  runInNewContext(await output.text(), context);
+  runInNewContext(script, context);
   exerciseFrameShortcut(context.testBridge.buildSandboxedArtifactSrcDoc("<head></head>", "http://localhost/file.html", { quickCommentKey: "current" }));
   const requests: { requestId: string; payload: unknown }[] = [];
   const source = { postMessage: (request: { requestId: string; payload: unknown }) => requests.push(request) };

@@ -1,12 +1,16 @@
 import { useT } from "@/i18n/t";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
+import { authorizedFetch } from "@/api/client";
+import { embedCanvasImages } from "@/lib/canvas-images";
+import { hydrateCanvasCharts } from "@/lib/canvas-charts";
+import { buildSandboxedArtifactSrcDoc, subscribeFrameEvent } from "@/components/canvas/frame-bridge";
+import { isCommentEditable } from "@/components/canvas/quick-comment";
 
 /**
- * Fullscreen deck playback overlay. Mounts a second iframe fed through
- * the backend `/fs/` route with `?present=1` — deck-stage picks that up
- * and sets `body[data-presenter]`, which the slide-deck template uses
- * to reveal speaker notes.
+ * Fullscreen deck playback in the same opaque srcdoc sandbox as the canvas.
+ * The parent acquires project assets with its authority; the frame bridge sets
+ * body[data-presenter] to reveal speaker notes without exposing credentials.
  *
  * The overlay requests real browser fullscreen on mount. When the user
  * exits fullscreen (Esc, F11, the x button), the overlay dismounts so
@@ -24,6 +28,32 @@ export default function PresentOverlay({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const presentationKey = useMemo(() => JSON.stringify([src, crypto.randomUUID()]), [src]);
+  const [frameDocument, setFrameDocument] = useState<{ key: string; html: string } | null>(null);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const url = new URL(src, window.location.href);
+    url.searchParams.set("present", "1");
+    setLoadError(false);
+    void authorizedFetch(url.href, { signal: controller.signal, cache: "no-store", redirect: "error" })
+      .then(async response => {
+        if (!response.ok) throw new Error("artifact_load_failed");
+        return response.text();
+      })
+      .then(html => embedCanvasImages(html, url.href, controller.signal))
+      .then(hydrateCanvasCharts)
+      .then(html => {
+        if (!controller.signal.aborted) setFrameDocument({ key: presentationKey, html: buildSandboxedArtifactSrcDoc(html, url.href, { presentationKey }) });
+      })
+      .catch(() => { if (!controller.signal.aborted) setLoadError(true); });
+    return () => controller.abort();
+  }, [src, presentationKey]);
+
+  useEffect(() => subscribeFrameEvent(iframeRef.current, "present-dismiss", payload => {
+    if (payload?.documentKey === presentationKey) onClose();
+  }), [presentationKey, onClose]);
 
   useEffect(() => {
     // Restore focus to whatever had it before the overlay opened once
@@ -72,7 +102,7 @@ export default function PresentOverlay({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !e.repeat && !e.isComposing && e.keyCode !== 229 && !e.defaultPrevented && !isCommentEditable(e.target instanceof Element ? e.target : null)) {
         e.preventDefault();
         onClose();
       }
@@ -93,12 +123,13 @@ export default function PresentOverlay({
         key={src}
         ref={iframeRef}
         title={t("canvas.present.title")}
-        src={withPresentFlag(src)}
+        srcDoc={frameDocument?.key === presentationKey ? frameDocument.html : ""}
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         onLoad={() => iframeRef.current?.focus()}
         className="absolute inset-0 h-full w-full border-0 bg-black"
       />
+      {loadError && <div role="alert" className="absolute inset-0 grid place-items-center text-sm text-white">{t("workspace.canvas.loadFailed")}</div>}
       <button
         type="button"
         onClick={onClose}
@@ -111,11 +142,6 @@ export default function PresentOverlay({
       </div>
     </div>
   );
-}
-
-function withPresentFlag(src: string): string {
-  if (src.includes("present=")) return src;
-  return src.includes("?") ? `${src}&present=1` : `${src}?present=1`;
 }
 
 function formatElapsed(ms: number): string {
