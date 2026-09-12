@@ -1,5 +1,7 @@
 import type { NormalizedEvent, SequencedEventEnvelope, SessionInfo, SessionSnapshot } from "@bg/shared";
 
+export const INTERRUPT_GRACE_MS = 5_000;
+
 export interface SessionEventState {
   readonly snapshot: SessionSnapshot;
   readonly envelopes: readonly SequencedEventEnvelope[];

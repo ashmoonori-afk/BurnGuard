@@ -117,6 +117,7 @@ import {
 } from "@/lib/design-audit-state";
 import { isSafeCanvasPagePath, resolveCanvasNavigation, resolveCanvasPageTarget, resolveCanvasSource } from "@/lib/canvas-source";
 import { t as globalT, useT, type MessageKey } from "@/i18n/t";
+import { INTERRUPT_GRACE_MS } from "@/lib/session-event-state";
 
 export default function ProjectView() {
   const t = useT();
@@ -785,7 +786,7 @@ export default function ProjectView() {
 
   // Turn clock. When the composer flips from idle to busy we stamp a
   // start time; a 1s ticker then drives re-renders so `canInterrupt`
-  // flips on exactly once the configured threshold has elapsed.
+  // flips on once the interrupt grace period has elapsed.
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
   const [nowTs, setNowTs] = useState(() => Date.now());
   useEffect(() => {
@@ -805,7 +806,7 @@ export default function ProjectView() {
   const turnElapsedMs =
     turnStartedAt == null ? null : Math.max(0, nowTs - turnStartedAt);
   const canInterrupt =
-    chatComposerDisabled && turnElapsedMs != null && turnElapsedMs >= 5_000;
+    chatComposerDisabled && turnElapsedMs != null && turnElapsedMs >= INTERRUPT_GRACE_MS;
 
   const interruptMutation = useMutation({
     mutationFn: () => {

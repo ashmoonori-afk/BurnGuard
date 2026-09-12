@@ -33,6 +33,7 @@ import {
 import { useUIStore } from "@/state/uiStore";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { appUpdateView } from "@/lib/app-update-state";
+import { INTERRUPT_GRACE_MS } from "@/lib/session-event-state";
 
 import { t, useT, type MessageKey } from "@/i18n/t";
 import { LOCALES, useLocaleStore } from "@/i18n/locale";
@@ -312,32 +313,11 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
             </div>
 
             <div className="space-y-1.5">
-              <label
-                htmlFor="abort-threshold"
-                className="text-xs font-medium text-muted-foreground"
-              >
+              <div className="text-xs font-medium text-muted-foreground">
                 {t("settings.abortThreshold")}
-              </label>
-              <Input
-                id="abort-threshold"
-                type="number"
-                min={0}
-                max={3600}
-                step={30}
-                value={Math.round(settings.chat_abort_threshold_ms / 1000)}
-                onChange={(e) => {
-                  const raw = Number.parseInt(e.target.value, 10);
-                  const clamped = Number.isFinite(raw)
-                    ? Math.max(0, Math.min(3600, raw))
-                    : 300;
-                  setSettings({
-                    ...settings,
-                    chat_abort_threshold_ms: clamped * 1000,
-                  });
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                {t("settings.abortHint")}
+              </div>
+              <p role="note" className="text-xs text-muted-foreground">
+                {t("settings.abortHint", { seconds: INTERRUPT_GRACE_MS / 1000 })}
               </p>
             </div>
 
