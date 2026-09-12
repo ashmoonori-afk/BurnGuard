@@ -25,6 +25,7 @@ import { runUiRedesignFixtures } from "./ui-redesign-fixtures.mjs";
 import { runCreationCanvasFixtures } from "./creation-canvas-fixtures.mjs";
 import { runSettingsRedesignFixtures } from "./settings-redesign-fixtures.mjs";
 import { runDeliverablesFixtures } from "./deliverables-fixtures.mjs";
+import { runClipboardPasteFixture } from "./clipboard-paste-fixtures.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
@@ -88,6 +89,8 @@ try {
     }
     await shot(page, "02-project");
   });
+
+  await scenario("clipboard-image-paste", () => runClipboardPasteFixture(page, context));
 
   await scenario("edit-mode-save", async () => {
     await modeButton(page, "편집").click();

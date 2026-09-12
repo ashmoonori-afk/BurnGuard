@@ -204,6 +204,13 @@ export default function Composer({
         rows={3}
         disabled={disabled || sending || !draft.ready}
         aria-label="메시지 입력"
+        onPaste={(e) => {
+          if (!draft.ready || disabled || sending) return;
+          const images = Array.from(e.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+          if (images.length === 0) return;
+          e.preventDefault();
+          visualSources.add(images);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
