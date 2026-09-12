@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -6,6 +6,10 @@ import path from "node:path";
 const temporaryParent = realpathSync(tmpdir());
 const fixtureRoot = mkdtempSync(path.join(temporaryParent, "burnguard-tests-"));
 process.env.BG_APP_ROOT = fixtureRoot;
+process.env.CODEX_HOME = path.join(fixtureRoot, ".codex");
+process.env.CLAUDE_CONFIG_DIR = path.join(fixtureRoot, ".claude");
+mkdirSync(process.env.CODEX_HOME);
+mkdirSync(process.env.CLAUDE_CONFIG_DIR);
 const { closeSqlite } = await import("../packages/backend/src/db/sqlite-client");
 const { runMigrations } = await import("../packages/backend/src/db/migrate-local");
 await runMigrations();
