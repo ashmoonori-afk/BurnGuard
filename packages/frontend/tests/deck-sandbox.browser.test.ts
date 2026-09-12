@@ -53,7 +53,8 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     const compiler = Bun.spawn([process.execPath, "build", `${import.meta.dir}/fixtures/deck-browser.tsx`, "--target=browser", "--format=iife", "--minify"], { stdout: "pipe", stderr: "pipe" });
     const [code, script, errors] = await Promise.all([compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text()]);
     if (code !== 0) throw new Error(errors);
-    browser = await chromium.launch({ channel: "chrome", headless: true });
+    // Use the Playwright-matched browser for iframe/fullscreen lifecycle coverage.
+    browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
     page.setDefaultTimeout(5000);
     const browserErrors: string[] = [];
@@ -63,7 +64,24 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     await page.evaluate(() => globalThis.deckTest.bootstrapApiAuthority());
     await action(page, base, requests);
     expect(browserErrors).toEqual([]);
-  } finally { await browser?.close(); await server.stop(true); }
+  } finally {
+    await browser?.close();
+    await server.stop(true);
+  }
+}
+
+function fullscreenExited(page: Page): Promise<void> {
+  const exited = page.evaluate(() => new Promise<void>((resolve, reject) => {
+    if (!document.fullscreenElement) { resolve(); return; }
+    const changed = () => {
+      if (document.fullscreenElement) return;
+      clearTimeout(timer); document.removeEventListener("fullscreenchange", changed); resolve();
+    };
+    const timer = setTimeout(() => { document.removeEventListener("fullscreenchange", changed); reject(new Error("fullscreen_exit_timeout")); }, 5000);
+    document.addEventListener("fullscreenchange", changed);
+  }));
+  exited.catch(() => {});
+  return exited;
 }
 
 test("local authored scripts run in the opaque sandbox in parser/defer order, without authority leakage", async () => {
@@ -122,16 +140,7 @@ test("presentation loads runtime and notes, forwards focused page Escape but pre
     await frame.locator("[data-slide] h1").first().waitFor();
     // Subscribe before dismissal: fullscreen exit is asynchronous and belongs to
     // this overlay, not the subsequent mount. This is page input, not OS Escape.
-    const exited = page.evaluate(() => new Promise<void>((resolve, reject) => {
-      if (!document.fullscreenElement) { resolve(); return; }
-      const changed = () => {
-        if (document.fullscreenElement) return;
-        clearTimeout(timer); document.removeEventListener("fullscreenchange", changed); resolve();
-      };
-      const timer = setTimeout(() => { document.removeEventListener("fullscreenchange", changed); reject(new Error("fullscreen_exit_timeout")); }, 5000);
-      document.addEventListener("fullscreenchange", changed);
-    }));
-    exited.catch(() => {});
+    const exited = fullscreenExited(page);
     await frame.locator("body").press("Escape");
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
     await exited;
@@ -155,7 +164,9 @@ test("presentation loads runtime and notes, forwards focused page Escape but pre
     await page.evaluate(() => window.postMessage({ __bgFrameBridge: true, type: "event", event: "present-dismiss", payload: { documentKey: "forged" } }, "*"));
     expect(await dialog.count()).toBe(1);
     await frame.locator("body").evaluate(() => Reflect.set(window, "cancelEscape", false));
+    const finalExit = fullscreenExited(page);
     await frame.locator("body").press("Escape");
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
+    await finalExit;
   });
 }, 30000);
