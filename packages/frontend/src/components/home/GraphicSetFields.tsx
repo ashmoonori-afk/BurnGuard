@@ -101,6 +101,10 @@ export function GraphicSetFields({
                   presetId: preset.id,
                   graphicWidth: preset.width,
                   graphicHeight: preset.height,
+                  // Resize the canvas-sized defaults, never an explicit custom/mixed set.
+                  ...(kind === "banner_set" && form.frames.every((frame) => frame.width === form.graphicWidth && frame.height === form.graphicHeight)
+                    ? { frames: form.frames.map((frame) => ({ ...frame, width: preset.width, height: preset.height })) }
+                    : {}),
                 })}
                 className={
                   form.presetId === preset.id

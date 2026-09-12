@@ -3,6 +3,19 @@ import { parse } from "node-html-parser";
 import { renderInitialArtifact } from "../src/db/templates";
 
 describe("initial graphic template", () => {
+  test.each([780, 860, 1000])("product-detail initializer retains requested width %i", (width) => {
+    const html = renderInitialArtifact({
+      name: "Product dimensions",
+      type: "graphic",
+      options: {
+        graphic_canvas: { schema_version: 1, width, height: 16_000 },
+        graphic_set: { schema_version: 1, kind: "product_detail", frame_count: 1 },
+      },
+    });
+    expect(parse(html).querySelectorAll("[data-graphic-artboard]").map(frame => frame.getAttribute("style")))
+      .toEqual([`width:${width}px;height:16000px`]);
+  });
+
   test("Given a graphic canvas When rendered Then one exact server-owned artboard is emitted", () => {
     const html = renderInitialArtifact({
       name: "행사 포스터",
