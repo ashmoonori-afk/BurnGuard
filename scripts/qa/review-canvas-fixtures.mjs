@@ -15,6 +15,22 @@ const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 export async function runReviewCanvasFixtures(page, context, base, scenario) {
   assert.equal(page.context(), context, "canvas fixtures require the caller's existing browser context");
   const receipts = [];
+  const browserErrors = [];
+  const network = [];
+  const onRequest = request => {
+    if (request.url().includes(`/api/projects/${PROJECT}/`)) network.push({ event: "request", url: request.url() });
+  };
+  const onResponse = response => {
+    if (response.url().includes(`/api/projects/${PROJECT}/`)) network.push({ event: "response", url: response.url(), status: response.status() });
+  };
+  const onRequestFailed = request => {
+    if (request.url().includes(`/api/projects/${PROJECT}/`)) network.push({ event: "failed", url: request.url(), error: request.failure() });
+  };
+  page.on("request", onRequest);
+  page.on("response", onResponse);
+  page.on("requestfailed", onRequestFailed);
+  const onPageError = (error) => { browserErrors.push(error.message); };
+  page.on("pageerror", onPageError);
   const state = { shortCount: 10, filesFail: false, slowRequested: null, releaseSlow: null, finishSlow: null, heldSlow: false };
   const viewport = page.viewportSize();
   const routePattern = `${base}/api/**`;
@@ -71,7 +87,15 @@ export async function runReviewCanvasFixtures(page, context, base, scenario) {
   };
   const run = async (name, callback) => {
     const check = async () => {
-      await callback();
+      try { await callback(); }
+      catch (error) {
+        const canvas = await page.evaluate(() => {
+          const frame = document.querySelector('iframe[title="캔버스"]');
+          if (!frame) return null;
+          return { documentKey: frame.dataset.documentKey, busy: frame.getAttribute("aria-busy"), srcdoc: frame.getAttribute("srcdoc")?.slice(0, 150) };
+        });
+        throw new Error(`${error.message}; canvas=${JSON.stringify(canvas)}; network=${JSON.stringify(network.slice(-40))}; browserErrors=${JSON.stringify(browserErrors)}`, { cause: error });
+      }
       receipts.push({ name, ok: true, evidence: "real-browser-with-synthetic-api" });
     };
     if (scenario) await scenario(name, check);
@@ -85,6 +109,7 @@ export async function runReviewCanvasFixtures(page, context, base, scenario) {
     await page.goto(`${base}/projects/${PROJECT}`, { waitUntil: "domcontentloaded" });
     try {
       await activeSlide(page, "long.html", 0);
+      await correctComment(page, "long-zero");
     } catch (error) {
       const state = await page.evaluate(() => ({
         headings: [...document.querySelectorAll("h1")].map((node) => node.textContent?.slice(0, 120)),
@@ -135,14 +160,22 @@ export async function runReviewCanvasFixtures(page, context, base, scenario) {
       await page.getByRole("button", { name: "디자인 파일", exact: true }).click();
       await page.getByRole("navigation", { name: "프로젝트 파일 탐색", exact: true }).getByRole("button", { name: /^short\.html(?:\s|$)/ }).click();
       await activeSlide(page, "short.html", 0);
+      await correctComment(page, "short-zero");
       const frame = page.frameLocator('iframe[title="캔버스"]');
       await frame.getByRole("button", { name: "마지막 장", exact: true }).click();
       await activeSlide(page, "short.html", 9);
       await correctComment(page, "short-nine");
       await page.getByRole("button", { name: "long.html", exact: true }).click();
       await activeSlide(page, "long.html", 0);
+      // The fresh DOM starts at zero before Canvas restores its remembered index.
+      // Wait for the parent comment state to acknowledge restoration before navigating.
+      await correctComment(page, "long-zero");
       await frame.getByRole("button", { name: "마지막 장", exact: true }).click();
-      await activeSlide(page, "long.html", 9);
+      try { await activeSlide(page, "long.html", 9); }
+      catch (error) {
+        const frameState = await frame.locator("body").evaluate((body) => ({ href: location.href, hash: location.hash, ready: document.readyState, active: body.querySelector("[data-active]")?.outerHTML, lastHandler: body.querySelector("#last")?.onclick?.toString() }));
+        throw new Error(`Deck navigation failed: ${JSON.stringify({ frameState, browserErrors })}`, { cause: error });
+      }
       await correctComment(page, "long-nine");
 
       // The remembered short-file index is now outside its new three-slide DOM.
@@ -195,6 +228,10 @@ export async function runReviewCanvasFixtures(page, context, base, scenario) {
     });
   } finally {
     state.releaseSlow?.();
+    page.off("pageerror", onPageError);
+    page.off("request", onRequest);
+    page.off("response", onResponse);
+    page.off("requestfailed", onRequestFailed);
     await page.goto("about:blank").catch(() => {});
     if (registered) await page.unroute(routePattern, routeHandler);
     if (viewport) await page.setViewportSize(viewport);

@@ -1,9 +1,11 @@
 // Run only against e2e-smoke's owned temporary profile. Provider POSTs are intercepted;
 // mock transcript assertions below are UI delivery checks, never provider execution proof.
-import JSZip from "jszip";
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { mkdir, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
+
+const JSZip = createRequire(new URL("../../packages/backend/package.json", import.meta.url))("jszip");
 
 export async function runCreationCanvasFixtures(page, base, scenario, { home, shot }) {
   const ownedHome = await realpath(home);
@@ -33,11 +35,23 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       const third = (await (await page.request.get(`${endpoint}/history`)).json()).data.current_revision;
       await page.reload({ waitUntil: "domcontentloaded" });
       const undo = page.getByRole("button", { name: "마지막 저장 실행 취소", exact: true });
+      const undoSettled = () => undo.evaluate(button => new Promise((resolve, reject) => {
+        if (!button.disabled) return resolve();
+        const observer = new MutationObserver(() => {
+          if (button.disabled) return;
+          observer.disconnect(); clearTimeout(timer); resolve();
+        });
+        // Save completion includes the backend's bounded Chromium capability
+        // probe and audit refresh, not only the earlier HTTP write response.
+        const timer = setTimeout(() => { observer.disconnect(); reject(new Error("History mutation did not settle")); }, 90_000);
+        observer.observe(button, { attributes: true, attributeFilter: ["disabled"] });
+      }));
       for (const color of ["#dd5500", "#224466"]) {
         await page.waitForFunction(() => document.querySelector('button[aria-label="마지막 저장 실행 취소"]')?.disabled === false);
         await undo.focus();
         const response = page.waitForResponse(response => response.url().endsWith("/undo") && response.request().method() === "POST");
         await page.keyboard.press("Control+z"); assert.equal((await response).status(), 200);
+        await undoSettled();
         await page.waitForFunction(color => document.querySelector('iframe[title="캔버스"]')?.getAttribute("srcdoc")?.includes(color), color);
       }
       const revision = (await (await page.request.get(`${endpoint}/history`)).json()).data.current_revision;
@@ -48,6 +62,7 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
         await undo.focus();
         const response = page.waitForResponse(response => response.url().endsWith("/undo") && response.request().method() === "POST");
         await page.keyboard.press(key); assert.equal((await response).status(), 200);
+        await undoSettled();
         await page.waitForFunction(color => document.querySelector('iframe[title="캔버스"]')?.getAttribute("srcdoc")?.includes(color), color);
       }
       await page.getByRole("button", { name: "저장 이력", exact: true }).click();
@@ -70,8 +85,8 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       const frame = page.frameLocator('iframe[title="캔버스"]');
       const initial = (await (await page.request.get(endpoint)).json()).data;
       let count = 0;
-      for (const type of ["area", "line", "bar", "composed", "radar", "pie", "radial", "sankey"]) {
-        await editor.getByRole("button", { name: `${type} +`, exact: true }).click();
+      for (const [type, label] of [["area", "영역"], ["line", "선"], ["bar", "막대"], ["composed", "혼합"], ["radar", "방사형"], ["pie", "원형"], ["radial", "원형 진행률"], ["sankey", "생키"]]) {
+        await editor.getByRole("button", { name: `${label} +`, exact: true }).click();
         await editor.getByLabel("차트 제목", { exact: true }).fill(`${type} · Original study`);
         const saved = page.waitForResponse(response => response.url() === endpoint && response.request().method() === "PUT");
         await editor.getByRole("button", { name: "차트 저장", exact: true }).click();
@@ -82,6 +97,7 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       }
       const persisted = (await (await page.request.get(endpoint)).json()).data;
       assert.equal(persisted.charts.length, 8);
+      assert.deepEqual(persisted.charts.map((chart) => chart.type), ["area", "line", "bar", "composed", "radar", "pie", "radial", "sankey"]);
       const capability = await page.evaluate(async () => (await (await fetch("/api/bootstrap")).json()).data.capability);
       const stale = await page.request.put(endpoint, { headers: { "x-burnguard-capability": capability, origin: base }, data: { chart: persisted.charts[0], expected_revision: initial.revision, expected_artifact_digest: initial.artifact_digest, expected_file_hash: initial.file_hash } });
       assert.equal(stale.status(), 409);
@@ -286,19 +302,38 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       assert.ok(heading);
       await page.mouse.click(heading.x + heading.width / 2, heading.y + heading.height / 2);
       const tools = page.getByRole("complementary", { name: "캔버스 도구 설정" });
-      await tools.getByText('data-bg-node-id="fixture-hero"', { exact: true }).waitFor();
+      await tools.locator("summary").filter({ hasText: "고급" }).click();
+      await tools.getByText("<h1> · fixture-hero", { exact: true }).waitFor();
       // Deterministic native fallback on Windows; no browser permission dialog is auto-approved.
       await page.evaluate(() => Object.defineProperty(window, "queryLocalFonts", { value: undefined, configurable: true }));
-      const fonts = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/settings/local-fonts");
-      await tools.getByRole("button", { name: "설치된 글꼴 불러오기", exact: true }).click();
-      const fontResponse = await fonts;
-      assert.equal(fontResponse.status(), 200, "native font enumeration must be available for this Windows QA run");
+      const fontUrl = `${base}/api/settings/local-fonts`;
+      const syntheticFonts = async (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { schema_version: 1, families: ["Arial"] } }) });
+      if (process.platform !== "win32") {
+        const unsupported = await page.request.get(fontUrl);
+        assert.equal(unsupported.status(), 503, "non-Windows native enumeration must report its unsupported boundary");
+        assert.equal((await unsupported.json()).error.code, "local_fonts_unavailable");
+        await page.route(fontUrl, syntheticFonts);
+      }
+      let fontResponse;
+      try {
+        const fonts = page.waitForResponse((response) => response.url() === fontUrl);
+        void fonts.catch(() => {});
+        await tools.getByRole("button", { name: "설치된 글꼴 불러오기", exact: true }).click();
+        fontResponse = await fonts;
+      } finally { if (process.platform !== "win32") await page.unroute(fontUrl, syntheticFonts); }
+      assert.equal(fontResponse.status(), 200, "font enumeration must populate the normal font selector");
+      console.log(JSON.stringify({ kind: "font-enumeration-evidence", source: process.platform === "win32" ? "live-windows-native-api" : "synthetic-api-after-live-unsupported-boundary", persistence: "live-backend" }));
       const families = (await fontResponse.json()).data.families;
       assert.ok(families.length > 0 && families.every((family) => !/[\\/\x00-\x1f]/.test(family)), "family names must exclude private paths");
       await tools.getByText(/설치된 글꼴 \d+개/).waitFor();
+      const previousDocument = await iframe.getAttribute("data-document-key");
       const patched = page.waitForResponse((response) => response.request().method() === "PATCH" && response.url().includes("/fs/"));
       await tools.getByText("글꼴", { exact: true }).locator("..").locator("select").selectOption(JSON.stringify(families[0]));
       assert.equal((await patched).status(), 200, "font-family must persist through the normal patch path");
+      await page.waitForFunction(previous => {
+        const canvas = document.querySelector('iframe[title="캔버스"]');
+        return canvas?.getAttribute("aria-busy") === "false" && canvas.getAttribute("data-document-key") !== previous;
+      }, previousDocument);
       await frame.locator("#fixture-hero").waitFor();
       const bounds = await iframe.boundingBox();
       await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
@@ -330,6 +365,7 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       const effort = chat.getByLabel("추론 강도", { exact: true });
       const effortValue = await effort.locator("option").last().getAttribute("value");
       await effort.selectOption(effortValue);
+      await chat.locator("summary").filter({ hasText: "연결 및 추가 설정" }).click();
       const vanilla = await chat.getByRole("checkbox", { name: /바닐라 모드/ }).isChecked();
       await page.locator('[aria-label="캔버스 도구"]').getByRole("button", { name: "코멘트", exact: true }).click();
       const heading = await page.frameLocator('iframe[title="캔버스"]').locator("#fixture-hero").boundingBox();
@@ -385,7 +421,7 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       await page.getByRole("button", { name: "3D 장면", exact: true }).click();
       const editor = page.getByRole("region", { name: "3D 장면 편집기" });
       await editor.getByRole("button", { name: "큐브 +", exact: true }).click();
-      await editor.getByLabel("3D position X", { exact: true }).fill("2");
+      await editor.getByLabel("3D 위치 X", { exact: true }).fill("2");
       await editor.getByLabel("3D 오브젝트 색상", { exact: true }).fill("#ff0000");
       assert.equal(await editor.locator("canvas").evaluate((canvas) => Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"))), true, "editor must have a real WebGL context");
       const saveResponse = page.waitForResponse((response) => response.request().method() === "PUT" && response.url().includes("/three-scene?"));
@@ -399,8 +435,8 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       await frame.locator("[data-bg-three] canvas").waitFor();
       assert.equal(await frame.locator("[data-bg-three] canvas").evaluate((canvas) => Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"))), true, "saved iframe must render a real WebGL scene");
       await page.getByRole("button", { name: "3D 장면", exact: true }).click();
-      await editor.getByLabel("3D position X", { exact: true }).waitFor();
-      assert.equal(await editor.getByLabel("3D position X", { exact: true }).inputValue(), "2");
+      await editor.getByLabel("3D 위치 X", { exact: true }).waitFor();
+      assert.equal(await editor.getByLabel("3D 위치 X", { exact: true }).inputValue(), "2");
       assert.equal(await editor.getByLabel("3D 오브젝트 색상", { exact: true }).inputValue(), "#ff0000");
       const undoResponse = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/undo"));
       await page.getByRole("button", { name: "마지막 저장 실행 취소", exact: true }).click();
@@ -416,10 +452,16 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
         "pages/페이지.html": '<!doctype html><html><head><meta charset="utf-8"></head><body><a href="../index.html">홈으로</a><h1 data-bg-node-id="about-heading">서비스 소개 페이지</h1><div style="height:1500px"></div><h2 id="details">서비스 상세</h2><div style="height:900px"></div></body></html>',
       });
       const frame = () => page.frameLocator('iframe[title="캔버스"]');
+      await page.locator('iframe[title="캔버스"][aria-busy="false"]').waitFor();
       await frame().getByRole("link", { name: "서비스 소개", exact: true }).click();
       await frame().getByRole("heading", { name: "서비스 소개 페이지", exact: true }).waitFor();
+      await page.locator('iframe[title="캔버스"][aria-busy="false"]').waitFor();
       await page.waitForFunction(() => document.querySelector('iframe[title="캔버스"]')?.getAttribute("srcdoc")?.includes("pages/%ed%8e%98%ec%9d%b4%ec%a7%80.html#details"));
-      assert.ok(await frame().locator("#details").evaluate((element) => Math.abs(element.getBoundingClientRect().top) < 5), "linked fragment must scroll within the subpage");
+      const fragmentState = await frame().locator("#details").evaluate((element) => ({
+        top: element.getBoundingClientRect().top, scrollY, height: document.documentElement.scrollHeight,
+        viewport: innerHeight, base: document.baseURI, href: location.href, ready: document.readyState,
+      }));
+      assert.ok(Math.abs(fragmentState.top) < 5, `linked fragment must scroll within the subpage: ${JSON.stringify(fragmentState)}`);
       assert.ok((await page.locator('iframe[title="캔버스"]').getAttribute("sandbox")).includes("allow-scripts"));
       assert.ok(!(await page.locator('iframe[title="캔버스"]').getAttribute("sandbox")).includes("allow-same-origin"));
       await shot(page, "creation-canvas-prototype-subpage");

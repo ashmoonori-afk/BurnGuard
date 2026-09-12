@@ -5,13 +5,21 @@ import { readFile, realpath } from "node:fs/promises";
 import { watch } from "node:fs";
 import path from "node:path";
 
-export async function runUiRedesignFixtures(page, base, scenario, { home, shot, fixtureProjectName }) {
+export async function runUiRedesignFixtures(page, base, runScenario, { home, shot, fixtureProjectName }) {
   const blockedPosts = [];
+  let preservingDocuments = false;
+  const scenario = (name, check) => runScenario(name, async () => {
+    blockedPosts.length = 0;
+    preservingDocuments = name === "redesign-create-project-persists";
+    try { await check(); } finally { preservingDocuments = false; }
+  });
   let homeFlowPassed = false;
   const localApi = `${base}/api/**`;
   const guard = async (route) => {
     const request = route.request();
-    if (request.method() === "POST" && new URL(request.url()).pathname !== "/api/projects") {
+    const pathname = new URL(request.url()).pathname;
+    const documentSave = preservingDocuments && /^\/api\/sessions\/[^/]+\/documents$/.test(pathname);
+    if (request.method() === "POST" && pathname !== "/api/projects" && !documentSave) {
       blockedPosts.push(new URL(request.url()).pathname);
       await route.abort("blockedbyclient");
       return;
@@ -97,6 +105,8 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
       const buttonBounds = await create.boundingBox();
       assert.ok(buttonBounds && buttonBounds.y >= 0 && buttonBounds.y + buttonBounds.height <= 740, "create action cannot be reached in dialog scrollport");
       const createdResponse = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/projects");
+      const documentsSaved = page.waitForResponse((response) => response.request().method() === "POST" && /\/api\/sessions\/[^/]+\/documents$/.test(new URL(response.url()).pathname));
+      void documentsSaved.catch(() => {});
       await create.click();
       const response = await createdResponse;
       assert.equal(response.status(), 201, "project creation must succeed on the real backend");
@@ -118,6 +128,13 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
       const ownedHome = await realpath(home);
       assert.ok(path.basename(ownedHome).startsWith("burnguard-e2e-home-"), "only an owned E2E profile can be inspected");
       const projectDir = path.join(ownedHome, ".burnguard", "data", "projects", created.id);
+      const documentResponse = await documentsSaved;
+      assert.equal(new URL(documentResponse.url()).pathname, `/api/sessions/${created.session_id}/documents`);
+      assert.equal(documentResponse.status(), 200, "original-document persistence must succeed without starting a model turn");
+      const { data: documents } = await documentResponse.json();
+      assert.equal(documents.paths.length, 1);
+      assert.match(documents.paths[0], /^docs\/attachments\/[a-f0-9]{64}-campaign-reference\.pdf$/);
+      assert.equal(await readFile(path.join(projectDir, documents.paths[0]), "utf8"), "%PDF-1.4\n% Local unsent intake fixture\n%%EOF");
       const html = await readFile(path.join(projectDir, "index.html"), "utf8");
       assert.ok(html.includes("브랜드 캠페인 웹디자인"), "created artifact must exist on disk");
       const { DatabaseSync } = await import("node:sqlite");
@@ -147,11 +164,16 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
       assert.equal(stored.generation.effort, "low");
       assert.equal(stored.items[0].role, "immutable_reference");
       assert.equal(stored.items[0].bytes, "%PDF-1.4\n% Local unsent intake fixture\n%%EOF");
+      const restoredDocuments = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === `/api/sessions/${created.session_id}/documents`);
+      void restoredDocuments.catch(() => {});
       await page.reload({ waitUntil: "domcontentloaded" });
       await page.getByLabel("campaign-reference.pdf 역할", { exact: true }).waitFor({ timeout: 10_000 });
       assert.equal(await page.getByLabel("campaign-reference.pdf 역할", { exact: true }).inputValue(), "immutable_reference");
       assert.equal(await composer.inputValue(), stored.text);
-      assert.equal(blockedPosts.length, 0, "restoring attachments must not send or upload them");
+      const restoredResponse = await restoredDocuments;
+      assert.equal(restoredResponse.status(), 200);
+      assert.deepEqual((await restoredResponse.json()).data.paths, documents.paths, "restoration must preserve the same original, not duplicate it");
+      assert.equal(blockedPosts.length, 0, "restoring attachments must not start a model turn");
       await shot(page, "redesign-created-workspace");
     });
 
@@ -230,14 +252,16 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
         targetUrl ??= route.request().url();
         if (route.request().url() !== targetUrl) return route.continue();
         attempts += 1;
-        if (attempts === 1) return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "thumbnail_unavailable", message: "Thumbnail could not be rendered" } }) });
+        // Current cards exhaust five bounded cold-render retries before manual recovery.
+        if (attempts <= 6) return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "thumbnail_unavailable", message: "Thumbnail could not be rendered" } }) });
         return route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") });
       };
       await page.route(thumbnailRoute, intercept);
       try {
         await page.goto(`${base}/?view=mine`, { waitUntil: "domcontentloaded" });
         const retry = page.getByRole("button", { name: /미리보기 다시 불러오기$/ }).first();
-        await retry.waitFor();
+        await retry.waitFor({ timeout: 90_000 });
+        assert.equal(attempts, 6, "manual recovery must follow the initial request and five bounded automatic retries");
         assert.ok(targetUrl, "a real card must request a thumbnail");
         const targetId = new URL(targetUrl).pathname.split("/")[3];
         const card = page.locator(`a[href='/projects/${targetId}']`).locator("..");
@@ -248,7 +272,7 @@ export async function runUiRedesignFixtures(page, base, scenario, { home, shot, 
           const image = document.querySelector(`a[href='/projects/${id}'] img`);
           return image instanceof HTMLImageElement && image.complete && image.naturalWidth === 1;
         }, targetId, { timeout: 15_000 });
-        assert.equal(attempts, 2, "one explicit retry must issue one new image request");
+        assert.equal(attempts, 7, "one explicit retry must issue one new image request");
         assert.equal(page.url(), before, "thumbnail retry must not open the project");
         assert.equal(await card.locator("a").evaluate((element) => document.activeElement === element), true, "retry must leave keyboard focus on the project card");
         assert.equal(await card.getByRole("button", { name: /미리보기 다시 불러오기$/ }).count(), 0);
