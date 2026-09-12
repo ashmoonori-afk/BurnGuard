@@ -36,7 +36,7 @@ Download a package from [GitHub Releases](https://github.com/ashmoonori-afk/Burn
 | AI generation | Installed and authenticated `claude` or `codex` CLI; your provider account |
 | Graphic generation | Authenticated Codex connection; generated creative images use Codex image generation |
 | Render previews and exports | Supported Chrome/Edge or Chromium installation; check Settings |
-| Read attachments | PDF, PPTX, DOCX and supported images; document extraction requirements are shown in Settings |
+| Read attachments | PDF, PPTX, DOCX, supported images and text (TXT/MD/CSV); document extraction requirements are shown in Settings |
 
 You can explore examples and edit the canvas before connecting AI. Scanned PDFs retain the original file; automatic OCR is not guaranteed. Vanilla mode excludes personal plugins and instructions while preserving BurnGuard's project context. CommandCode routing uses a key entered in Settings and still requires the Claude Code CLI.
 

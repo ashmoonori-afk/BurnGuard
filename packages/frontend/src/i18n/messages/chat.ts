@@ -70,14 +70,14 @@ export const chatMessages = defineMessages({
   "chat.attachments.tooMany": { ko: "최대 8개까지", en: "Maximum of 8 files", "zh-CN": "最多 8 个文件" },
   "chat.attachments.totalTooLarge": { ko: "전체 25MB 초과", en: "Exceeds 25 MB total", "zh-CN": "总大小超过 25 MB" },
   "chat.sources.summary": {
-    ko: "이미지 · Word · PDF · PPTX 첨부 안내",
-    en: "Attaching images, Word, PDF, and PPTX files",
-    "zh-CN": "图片、Word、PDF 和 PPTX 附件说明",
+    ko: "이미지 · 문서 · 텍스트 첨부 안내",
+    en: "Attaching images, documents, and text files",
+    "zh-CN": "图片、文档和文本附件说明",
   },
   "chat.sources.summaryWithCount": {
-    ko: "이미지 · Word · PDF · PPTX 첨부 안내 · 기존 자료 {count}개",
-    en: { one: "Attaching images, Word, PDF, and PPTX files · {count} existing file", other: "Attaching images, Word, PDF, and PPTX files · {count} existing files" },
-    "zh-CN": "图片、Word、PDF 和 PPTX 附件说明 · {count} 个现有资料",
+    ko: "이미지 · 문서 · 텍스트 첨부 안내 · 기존 자료 {count}개",
+    en: { one: "Attaching images, documents, and text files · {count} existing file", other: "Attaching images, documents, and text files · {count} existing files" },
+    "zh-CN": "图片、文档和文本附件说明 · {count} 个现有资料",
   },
   "chat.sources.limits": {
     ko: "최대 8개, 파일당 10MB, 전체 25MB까지 첨부할 수 있어요. 파일마다 일반 자료 또는 수정하지 않는 시각 참조를 선택해 주세요.",
@@ -97,9 +97,9 @@ export const chatMessages = defineMessages({
     "zh-CN": "现有文件可以修改。如需保留视觉参考的原件，请另行上传。",
   },
   "chat.sources.unsupportedHelp": {
-    ko: "URL·웹·스톡 이미지는 첨부할 수 없어요. 로컬 이미지, Word(.docx), PDF 또는 PPTX 파일을 사용해 주세요.",
-    en: "URLs, web images, and stock images cannot be attached. Use a local image, Word (.docx), PDF, or PPTX file.",
-    "zh-CN": "无法添加 URL、网络图片或图库图片。请使用本地图片、Word (.docx)、PDF 或 PPTX 文件。",
+    ko: "URL·웹·스톡 이미지는 첨부할 수 없어요. 로컬 이미지, Word(.docx), PDF, PPTX 또는 텍스트(TXT·MD·CSV) 파일을 사용해 주세요.",
+    en: "URLs, web images, and stock images cannot be attached. Use a local image, Word (.docx), PDF, PPTX, or text (TXT, MD, CSV) file.",
+    "zh-CN": "无法添加 URL、网络图片或图库图片。请使用本地图片、Word (.docx)、PDF、PPTX 或文本（TXT、MD、CSV）文件。",
   },
   "chat.send.genericError": {
     ko: "요청을 보내지 못했어요. 잠시 후 다시 시도해 주세요.",
@@ -117,9 +117,9 @@ export const chatMessages = defineMessages({
     "zh-CN": "视觉资料的用途信息无效。请重新选择。",
   },
   "chat.send.unsupportedSource": {
-    ko: "URL·웹·스톡 자료는 지원하지 않아요. 로컬 이미지, Word(.docx), PDF 또는 PPTX를 올려 주세요.",
-    en: "URLs, web sources, and stock materials are not supported. Upload a local image, Word (.docx), PDF, or PPTX file.",
-    "zh-CN": "不支持 URL、网络来源或图库资料。请上传本地图片、Word (.docx)、PDF 或 PPTX 文件。",
+    ko: "URL·웹·스톡 자료는 지원하지 않아요. 로컬 이미지, Word(.docx), PDF, PPTX 또는 텍스트(TXT·MD·CSV)를 올려 주세요.",
+    en: "URLs, web sources, and stock materials are not supported. Upload a local image, Word (.docx), PDF, PPTX, or text (TXT, MD, CSV) file.",
+    "zh-CN": "不支持 URL、网络来源或图库资料。请上传本地图片、Word (.docx)、PDF、PPTX 或文本（TXT、MD、CSV）文件。",
   },
   "chat.send.sessionBusy": {
     ko: "이미 작업이 진행 중이에요. 완료된 뒤 다시 보내 주세요.",

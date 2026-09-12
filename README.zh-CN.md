@@ -36,7 +36,7 @@ BurnGuard 是一个用于制作幻灯片、网站和平面作品的本地 AI 工
 | AI 生成 | 已安装并完成登录的 `claude` 或 `codex` CLI，以及你的服务商账户 |
 | 平面作品生成 | 已登录的 Codex 连接；新的创意图片使用 Codex 图片生成 |
 | 预览与导出渲染 | 受支持的 Chrome/Edge 或 Chromium；在设置中查看状态 |
-| 读取附件 | PDF、PPTX、DOCX 和受支持的图片；文档提取工具的要求显示在设置中 |
+| 读取附件 | PDF、PPTX、DOCX、TXT、MD、CSV 和受支持的图片；文档提取工具的要求显示在设置中 |
 
 连接 AI 之前也可以浏览示例并编辑画布。扫描版 PDF 会保留原文件，但不保证自动 OCR。原味模式排除个人插件和指令，同时保留 BurnGuard 的项目上下文。CommandCode 路由使用在设置中输入的密钥，仍然需要 Claude Code CLI。
 

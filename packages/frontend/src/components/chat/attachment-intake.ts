@@ -14,7 +14,7 @@ export const COMPOSER_ATTACHMENT_LIMITS = {
   maxBytesTotal: 25 * 1024 * 1024,
 } as const;
 
-export const COMPOSER_SUPPORTED_EXTENSIONS = [".pdf", ".pptx", ".docx", ".png", ".jpg", ".jpeg", ".webp"] as const;
+export const COMPOSER_SUPPORTED_EXTENSIONS = [".pdf", ".pptx", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".txt", ".md", ".csv"] as const;
 
 export type IntakeRejection =
   | "unsupported_kind"

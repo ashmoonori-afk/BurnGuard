@@ -32,10 +32,19 @@ describe("composer attachment intake", () => {
   });
 
   test("Given an empty queue When a source kind the extractor cannot process is added Then it is rejected as unsupported and never queued for send", () => {
-    const items = planAttachmentIntake([], [file("notes.txt", "text/plain")]);
+    const items = planAttachmentIntake([], [file("archive.zip", "application/zip")]);
 
     expect(items).toMatchObject([{ status: "rejected", reason: "unsupported_kind" }]);
     expect(readyAttachmentSources(items)).toEqual([]);
+  });
+
+  test("Given backend-supported text formats When attached Then all remain ready for send", () => {
+    const items = planAttachmentIntake([], [
+      new File(["Notes"], "notes.txt", { type: "text/plain" }),
+      new File(["# Brief"], "brief.md", { type: "text/markdown" }),
+      new File(["name,value\nA,1"], "data.csv", { type: "text/csv" }),
+    ]);
+    expect(readyAttachmentSources(items).map((entry) => entry.file.name)).toEqual(["notes.txt", "brief.md", "data.csv"]);
   });
 
   test("Given the queue is already at the backend count limit When one more supported source is added Then it is rejected without disturbing the queued files", () => {
@@ -66,13 +75,13 @@ describe("composer attachment intake", () => {
   });
 
   test("Given the backend extractor's supported kinds When the composer screens the same names Then the composer mirror matches the backend verdict", () => {
-    const probes = ["deck.pdf", "deck.PDF", "slides.pptx", "notes.txt", "photo.png", "archive.zip", "noextension"];
+    const probes = ["deck.pdf", "deck.PDF", "slides.pptx", "notes.txt", "brief.MD", "data.csv", "photo.png", "archive.zip", "noextension"];
 
     const composerVerdicts = probes.map((name) => readyAttachmentSources(planAttachmentIntake([], [file(name)])).length === 1);
     const backendVerdicts = probes.map((name) => inferAttachmentKind(name) !== null);
 
     expect(composerVerdicts).toEqual(backendVerdicts);
-    expect([...COMPOSER_SUPPORTED_EXTENSIONS]).toEqual([".pdf", ".pptx", ".docx", ".png", ".jpg", ".jpeg", ".webp"]);
+    expect([...COMPOSER_SUPPORTED_EXTENSIONS]).toEqual([".pdf", ".pptx", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".txt", ".md", ".csv"]);
   });
 });
 
