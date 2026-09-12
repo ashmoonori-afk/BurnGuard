@@ -742,11 +742,12 @@ export default function ProjectView() {
     }
   }, [sessionQuery.data?.backend_id]);
 
+  const loadedProjectId = projectQuery.data?.id;
+  const loadedEntrypoint = projectQuery.data?.entrypoint;
   useEffect(() => {
-    const project = projectQuery.data;
-    if (!project || !project.entrypoint) return;
-    openFileAsTab(project.entrypoint, setOpenFileTabs, setActiveTabId);
-  }, [projectQuery.data]);
+    if (!loadedProjectId || !loadedEntrypoint) return;
+    openFileAsTab(loadedEntrypoint, setOpenFileTabs, setActiveTabId);
+  }, [loadedProjectId, loadedEntrypoint]);
 
   const project = projectQuery.data ?? null;
   const graphicCanvas = useMemo(
