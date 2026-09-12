@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { parse } from "node-html-parser";
+import { parse, TextNode } from "node-html-parser";
 
 export class FilePatchError extends Error {
   readonly code:
@@ -10,7 +10,8 @@ export class FilePatchError extends Error {
     | "ambiguous_node_id"
     | "non_leaf_text_target"
     | "stale_node_fingerprint"
-    | "invalid_utf8";
+    | "invalid_utf8"
+    | "invalid_attribute_url";
 
   constructor(code: FilePatchError["code"], message: string) {
     super(message);
@@ -86,6 +87,7 @@ export function applyHtmlNodePatch(
   const target = targets[0];
   if (target === undefined) throw new FilePatchError("node_not_found", "node_not_found");
   const [start, end] = target.range;
+  validateAttributeUrls(input.attributes);
 
   if (input.text !== undefined) {
     if (target.querySelectorAll("*").some((node) => !/^(span|em|strong|br|i|b|u|s|small|sup|sub|mark|code)$/i.test(node.tagName))) {
@@ -129,6 +131,27 @@ export function applyHtmlNodePatch(
   }
 
   return `${html.slice(0, start)}${target.toString()}${html.slice(end)}`;
+}
+
+// The extraction policy covers these URL attributes too, but its inert-source
+// validator rejects legitimate editable links (including HTTPS). Keep the patch
+// gate limited to executable schemes/content rather than sanitizing whole HTML.
+const URL_ATTRIBUTES = new Set(["href", "src", "action", "formaction", "poster", "xlink:href"]);
+
+function validateAttributeUrls(attributes: PatchHtmlNodeInput["attributes"]): void {
+  for (const [name, value] of Object.entries(attributes ?? {})) {
+    if (value === null || !URL_ATTRIBUTES.has(name.trim().toLowerCase())) continue;
+    // setAttribute preserves entity references in serialized HTML. Decode them
+    // exactly as this parser does, then let WHATWG URL handle case, leading C0
+    // controls and embedded ASCII tabs/newlines as the browser does.
+    let url: URL;
+    try { url = new URL(new TextNode(value).text, "https://artifact.invalid/"); }
+    catch { throw new FilePatchError("invalid_attribute_url", "Invalid attribute URL"); }
+    const mime = url.protocol === "data:" ? url.pathname.replace(/[;,].*$/s, "").trim().toLowerCase() : "";
+    if (url.protocol === "javascript:" || url.protocol === "vbscript:" || mime === "text/html" || mime === "application/xhtml+xml") {
+      throw new FilePatchError("invalid_attribute_url", "Executable attribute URLs are not allowed");
+    }
+  }
 }
 
 export function fingerprintHtmlNode(html: string, nodeBgId: string): HtmlNodeFingerprint {
