@@ -1,22 +1,11 @@
-import { afterAll, beforeAll, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { hasSnapshot } from "../src/services/checkpoints";
-
-// Detection and the CLI adapter are the only parts of a turn that need a real
-// backend on PATH. Mocked at their narrowest seams so the pre-turn snapshot —
-// which the revert route depends on — can be observed end-to-end.
-mock.module("../src/services/backends", () => ({
-  detectBackends: async () => ({ backends: [{ id: "codex", found: true, version: "test", binary_path: "/nonexistent/codex" }] }),
-}));
-mock.module("../src/adapters/registry", () => ({
-  runAdapterTurn: async () => ({ exitCode: 0 }),
-}));
-
-const { startUserTurn } = await import("../src/services/turns");
+import { startUserTurn } from "../src/services/turns";
 
 const projectId = `turn-snapshot-${process.pid}`;
 const sessionId = `${projectId}-session`;
@@ -36,7 +25,10 @@ afterAll(async () => {
 });
 
 test("Given a user turn When it starts Then a pre-turn snapshot exists for the revert route", async () => {
-  const started = startUserTurn(sessionId, { type: "user.message", text: "스냅샷 확인" });
+  const started = startUserTurn(sessionId, { type: "user.message", text: "스냅샷 확인" }, undefined, {
+    detectBackends: async () => ({ backends: [{ id: "codex", found: true, version: "test", binary_path: "/nonexistent/codex" }] }),
+    runAdapter: async () => ({ exitCode: 0 }),
+  });
   expect(started).not.toBeNull();
   await started?.promise;
   expect(await hasSnapshot(projectId, started?.turnId ?? "")).toBe(true);

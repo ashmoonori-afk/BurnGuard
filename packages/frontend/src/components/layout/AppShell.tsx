@@ -3,8 +3,10 @@ import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
+import { useT } from "@/i18n/t";
 
 export default function AppShell({ children }: { children: ReactNode }) {
+  const t = useT();
   const location = useLocation();
   const isHome = location.pathname === "/";
   const isProject = location.pathname.startsWith("/projects/");
@@ -20,7 +22,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         isProject ? "h-dvh overflow-hidden" : "min-h-screen",
       )}
     >
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-accent-foreground">본문으로 건너뛰기</a>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:text-accent-foreground">{t("shell.skip")}</a>
       <div
         className={cn(
           "flex min-h-0 flex-1 max-lg:flex-col",

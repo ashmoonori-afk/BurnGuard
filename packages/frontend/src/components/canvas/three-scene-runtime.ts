@@ -1,12 +1,16 @@
+import { t } from "@/i18n/t";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { parseThreeScene, type ThreeSceneV1 } from "@bg/shared";
+import { useLocaleStore } from "@/i18n/locale";
 
 export function mountThreeScene(host: HTMLElement, initial: ThreeSceneV1, onSelect?: (id: string | null) => void) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.domElement.style.cssText = "width:100%;height:100%;display:block;touch-action:none";
-  renderer.domElement.setAttribute("aria-label", "3D 장면 — 드래그하여 회전, 휠로 확대·축소");
+  const updateLabel = () => renderer.domElement.setAttribute("aria-label", t("canvas.three.canvasLabel"));
+  updateLabel();
+  const unsubscribeLocale = useLocaleStore.subscribe(updateLabel);
   host.append(renderer.domElement);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
@@ -44,7 +48,7 @@ export function mountThreeScene(host: HTMLElement, initial: ThreeSceneV1, onSele
   renderer.domElement.addEventListener("pointerup", pointerUp);
   controls.addEventListener("change", render);
   update(initial); resize();
-  return { update, dispose() { observer.disconnect(); controls.removeEventListener("change", render); controls.dispose(); disposeObjects(); renderer.domElement.removeEventListener("pointerdown", pointerDown); renderer.domElement.removeEventListener("pointerup", pointerUp); renderer.dispose(); renderer.domElement.remove(); } };
+  return { update, dispose() { unsubscribeLocale(); observer.disconnect(); controls.removeEventListener("change", render); controls.dispose(); disposeObjects(); renderer.domElement.removeEventListener("pointerdown", pointerDown); renderer.domElement.removeEventListener("pointerup", pointerUp); renderer.dispose(); renderer.domElement.remove(); } };
 }
 
 function boot() {
@@ -52,7 +56,7 @@ function boot() {
     const config = host.querySelector('script[data-bg-three-config]');
     if (!config) return;
     try { mountThreeScene(host, parseThreeScene(JSON.parse(config.textContent || ""))); }
-    catch { const error = document.createElement("p"); error.textContent = "3D 장면을 표시하지 못했어요. WebGL 지원과 장면 설정을 확인해 주세요."; error.setAttribute("role", "alert"); host.append(error); }
+    catch { const error = document.createElement("p"); error.textContent = t("canvas.three.renderFailed"); error.setAttribute("role", "alert"); host.append(error); }
   });
 }
 if (typeof document !== "undefined") { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true }); else boot(); }

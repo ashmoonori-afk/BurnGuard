@@ -1,3 +1,4 @@
+import { useT } from "@/i18n/t";
 import {
   AlertTriangle,
   BookOpen,
@@ -14,8 +15,6 @@ import { exportJobState } from "./export-job-state";
 import {
   DELIVERY_STAGE_LABEL,
   FINDING_SEVERITY_LABEL,
-  PACKAGE_PUBLISH_NOTE,
-  PACKAGE_READY_LABEL,
   exportDeliveryStage,
   offersFixRequest,
   platformFindings,
@@ -64,6 +63,7 @@ export default function ExportStatusRow({
   readonly job: ExportJob;
   readonly actions: ExportRowActions;
 }) {
+  const t = useT();
   const state = exportJobState(job);
   const stage = exportDeliveryStage(job);
   const isPackage = platformGuideView(job.format) !== null;
@@ -73,11 +73,11 @@ export default function ExportStatusRow({
   const wordedByJobState =
     state.cancelled ||
     job.latest_attempt?.cancel_requested_at != null ||
-    (job.status === "succeeded" && !state.canDownload);
+    (!state.active && !state.canDownload);
   const label = wordedByJobState
     ? state.label
     : stage === "ready" && isPackage
-      ? PACKAGE_READY_LABEL
+      ? t("export.packageReady")
       : DELIVERY_STAGE_LABEL[stage];
   const Icon = state.cancelled ? Clock : STAGE_ICON[stage];
   const iconClass = `h-3.5 w-3.5 ${state.cancelled ? "text-muted-foreground" : STAGE_ICON_CLASS[stage]}`;
@@ -92,7 +92,7 @@ export default function ExportStatusRow({
             type="button"
             onClick={() => actions.onDownload?.(job)}
             disabled={actions.busy}
-            aria-label={`${formatLabel(job.format)} 다운로드`}
+            aria-label={t("export.downloadFormat", { name: formatLabel(job.format) })}
             className={`${ACTION_CLASS} text-accent`}
           >
             <Download className="h-3 w-3" aria-hidden="true" />
@@ -102,12 +102,16 @@ export default function ExportStatusRow({
         {isPackage && (
           <button
             type="button"
-            onClick={() => actions.onOpenGuide(job)}
-            aria-label={`${formatLabel(job.format)} 설치 가이드 보기`}
+            onClick={(event) => {
+              // Pointer activation does not focus buttons in every browser.
+              event.currentTarget.focus({ preventScroll: true });
+              actions.onOpenGuide(job);
+            }}
+            aria-label={t("export.guideFormat", { name: formatLabel(job.format) })}
             className={`${ACTION_CLASS} text-muted-foreground hover:text-foreground`}
           >
             <BookOpen className="h-3 w-3" aria-hidden="true" />
-            가이드 보기
+            {t("export.viewGuide")}
           </button>
         )}
         {state.canRetry && actions.onRetry !== undefined && (
@@ -115,11 +119,11 @@ export default function ExportStatusRow({
             type="button"
             onClick={() => actions.onRetry?.(job)}
             disabled={actions.busy}
-            aria-label={`${formatLabel(job.format)} 다시 시도`}
+            aria-label={t("export.retryFormat", { name: formatLabel(job.format) })}
             className={`${ACTION_CLASS} text-muted-foreground hover:text-foreground`}
           >
             <RotateCcw className="h-3 w-3" aria-hidden="true" />
-            다시 시도
+            {t("export.retry")}
           </button>
         )}
         <span className="text-[10px] text-muted-foreground" aria-live="polite">{label}</span>
@@ -128,15 +132,15 @@ export default function ExportStatusRow({
             type="button"
             disabled={actions.busy || job.latest_attempt?.cancel_requested_at != null}
             onClick={() => actions.onCancel?.(job)}
-            aria-label={`${formatLabel(job.format)} 취소`}
+            aria-label={t("export.cancelFormat", { name: formatLabel(job.format) })}
             className="min-h-8 rounded px-2 py-1 text-xs underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
-            취소
+            {t("export.cancel")}
           </button>
         )}
       </div>
       {isPackage && stage === "ready" && job.status === "succeeded" && (
-        <p className="text-pretty break-keep pl-6 text-[10px] text-muted-foreground">{PACKAGE_PUBLISH_NOTE}</p>
+        <p className="text-pretty break-keep pl-6 text-[10px] text-muted-foreground">{t("export.packageNote")}</p>
       )}
       {findings.length > 0 && (
         <ul className="space-y-0.5 pl-6">
@@ -164,7 +168,7 @@ export default function ExportStatusRow({
           className={`${ACTION_CLASS} ml-6 text-accent`}
         >
           <Sparkles className="h-3 w-3" aria-hidden="true" />
-          AI에게 수정 요청
+          {t("export.requestFix")}
         </button>
       )}
     </li>

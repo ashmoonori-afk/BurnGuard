@@ -138,24 +138,32 @@ function navigationBridge(baseHref: string, readyState = "complete") {
   const listeners = new Map<string, (event?: unknown) => void>();
   const messages: Array<{ event: string; payload: unknown }> = [];
   const scrolled: string[] = [];
+  const frames: Array<() => void> = [];
   const location = { href: "about:srcdoc", hash: "" };
+  const document = {
+    baseURI: baseHref, readyState, querySelectorAll: () => [],
+    addEventListener: (name: string, listener: () => void) => listeners.set(name, listener),
+    getElementById: (id: string) => ["문의", "details"].includes(id) ? { scrollIntoView: () => scrolled.push(id) } : null,
+    getElementsByName: () => [],
+  };
   runInNewContext(script, {
     URL, location, HashChangeEvent: class {},
+    requestAnimationFrame: (callback: () => void) => frames.push(callback),
     window: {
       parent: { postMessage: (message: { event: string; payload: unknown }) => messages.push(message) },
       addEventListener: (name: string, listener: (event?: unknown) => void) => listeners.set(name, listener),
       dispatchEvent() {}, scrollTo: () => scrolled.push("top"),
     },
-    document: {
-      baseURI: baseHref, readyState, querySelectorAll: () => [],
-      addEventListener: (name: string, listener: () => void) => listeners.set(name, listener),
-      getElementById: (id: string) => ["문의", "details"].includes(id) ? { scrollIntoView: () => scrolled.push(id) } : null,
-      getElementsByName: () => [],
-    },
+    document,
     history: { replaceState(_state: unknown, _title: string, href: string) { location.href = href; location.hash = new URL(href).hash; } },
   });
   return {
-    messages, scrolled, location, loaded: () => listeners.get("DOMContentLoaded")!(),
+    messages, scrolled, location, loaded: () => {
+      document.readyState = "complete";
+      listeners.get("DOMContentLoaded")?.();
+      listeners.get("load")?.();
+      for (const callback of frames.splice(0)) callback();
+    },
     click(href: string, event: Record<string, unknown> = {}, attributes: Record<string, string> = {}) {
       let prevented = false;
       const linkAttributes = { href, ...attributes };

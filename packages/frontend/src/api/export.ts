@@ -1,3 +1,4 @@
+import { t } from "@/i18n/t";
 import type { ExportFormat, ExportJob, ExportOptions } from "@bg/shared";
 import { apiFetch, ApiError, authorizedFetch } from "./client";
 import { getProject } from "./project";
@@ -16,17 +17,17 @@ export function formatLabel(format: ExportFormat): string {
     case "png":
       return "PNG";
     case "pptx":
-      return "파워포인트";
+      return t("export.format.pptx");
     case "html_zip":
-      return "HTML ZIP 파일";
+      return t("export.format.html_zip");
     case "handoff":
-      return "개발자 전달용";
+      return t("export.format.handoff");
     case "png_zip":
-      return "프레임 ZIP";
+      return t("export.format.png_zip");
     case "cafe24_package":
-      return "카페24 패키지";
+      return t("export.format.cafe24_package");
     case "imweb_package":
-      return "아임웹 패키지";
+      return t("export.format.imweb_package");
   }
 }
 
@@ -65,7 +66,7 @@ export async function readExportDownload(id: string): Promise<{ blob: Blob; file
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null);
     const code = body && typeof body === "object" && "error" in body && body.error && typeof body.error === "object" && "code" in body.error && typeof body.error.code === "string" ? body.error.code : "export_not_ready";
-    throw new ApiError(code, "Export download unavailable", response.status);
+    throw new ApiError(code, t("export.downloadUnavailable"), response.status);
   }
   const disposition = response.headers.get("content-disposition") ?? "";
   const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];

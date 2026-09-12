@@ -1,3 +1,4 @@
+import { useT } from "@/i18n/t";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -66,6 +67,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
   /** Sends lint findings through the chat composer; absent when the view has no session. */
   readonly platformFix?: { readonly disabled: boolean; readonly onRequest: (prompt: string) => void };
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
   const [open, setOpen] = useState(false);
@@ -97,11 +99,11 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
       void queryClient.invalidateQueries({
         queryKey: ["project", projectId, "exports"],
       });
-      pushToast({ title: "내보내기를 예약했어요", tone: "info" });
+      pushToast({ title: t("export.queued"), tone: "info" });
     },
     onError: (err) => {
       pushToast({
-        title: "내보내기를 시작하지 못했어요",
+        title: t("export.startFailed"),
         body: apiErrorCopy(err),
         tone: "error",
       });
@@ -120,8 +122,8 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
-    onSuccess: (_data, { action }) => { if (action !== "download") pushToast({ title: action === "cancel" ? "취소 요청을 보냈어요" : "같은 설정으로 다시 내보내요", tone: "info" }); },
-    onError: (error) => pushToast({ title: "내보내기 요청을 완료하지 못했어요", body: apiErrorCopy(error), tone: "error" }),
+    onSuccess: (_data, { action }) => { if (action !== "download") pushToast({ title: action === "cancel" ? t("export.cancelRequested") : t("export.retryRequested"), tone: "info" }); },
+    onError: (error) => pushToast({ title: t("export.requestFailed"), body: apiErrorCopy(error), tone: "error" }),
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: ["project", projectId, "exports"] }); },
   });
 
@@ -151,9 +153,9 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
         const chromiumFailure = classifyChromiumFailure(job.error_message);
         const auditFailed = isDesignAuditExportFailure(job);
         pushToast({
-          title: `내보내기에 실패했어요 (${formatLabel(job.format)})`,
+          title: t("export.failedFormat", { name: formatLabel(job.format) }),
           body: auditFailed
-            ? "내보내기 전 품질 점검에서 고쳐야 할 문제가 발견됐어요."
+            ? t("export.auditFailed")
             : chromiumFailure !== null
               ? CHROMIUM_FAILURE_MESSAGE[chromiumFailure]
               : apiErrorCopy({ code: job.latest_attempt?.stop_reason }),
@@ -161,7 +163,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
         });
       }
     }
-  }, [jobs, pushToast, jobsQuery.status]);
+  }, [jobs, pushToast, jobsQuery.status, t]);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -170,18 +172,18 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
           variant="cta"
           size="sm"
           className="min-h-10 gap-2 px-4 focus:ring-2 focus:ring-ring focus:ring-offset-1 max-[900px]:min-h-11"
-          aria-label="내보내기"
+          aria-label={t("export.title")}
         >
-          <Download className="h-3.5 w-3.5" /> 내보내기
+          <Download className="h-3.5 w-3.5" /> {t("export.title")}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent data-export-menu-content align="end" className="z-[100] w-80 max-w-[calc(100vw-24px)] p-2">
-        <DropdownMenuLabel>내보내기 형식</DropdownMenuLabel>
+      <DropdownMenuContent data-export-menu-content align="end" className="z-[100] max-h-[var(--radix-dropdown-menu-content-available-height)] w-80 max-w-[calc(100vw-24px)] overflow-y-auto p-2">
+        <DropdownMenuLabel>{t("export.formats")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {jobsQuery.isError && <div role="alert" className="p-2 text-xs"><p>내보내기 목록을 불러오지 못했어요.</p><button type="button" className="mt-2 underline" onClick={() => void jobsQuery.refetch()}>다시 시도</button></div>}
+        {jobsQuery.isError && <div role="alert" className="p-2 text-xs"><p>{t("export.listFailed")}</p><button type="button" className="mt-2 underline" onClick={() => void jobsQuery.refetch()}>{t("export.retry")}</button></div>}
         {qualityGate !== null && <div className="mx-2 mb-2 rounded-md border border-destructive/30 bg-destructive/10 p-2">
-          <p className="text-pretty break-keep text-xs text-foreground">개선 권장사항 {qualityGate.mustFixCount}개가 있어요. 현재 상태 그대로 내보낼 수 있어요.</p>
-          <Button type="button" variant="outline" size="sm" className="mt-2 h-8 w-full max-[900px]:min-h-11" onClick={openQuality}>품질 점검 열기</Button>
+          <p className="text-pretty break-keep text-xs text-foreground">{t("export.qualityRecommendations", { count: qualityGate.mustFixCount })}</p>
+          <Button type="button" variant="outline" size="sm" className="mt-2 h-8 w-full max-[900px]:min-h-11" onClick={openQuality}>{t("export.openQuality")}</Button>
         </div>}
         {!menuModel.ok && (
           <p className="mx-2 rounded-md border border-warning/30 bg-warning/15 p-2 text-pretty break-keep text-xs">
@@ -231,8 +233,8 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
           );
         })}
         {jobs.some(isDesignAuditExportFailure) && <div className="mx-2 mt-2 rounded-md bg-warning/15 p-2">
-          <p className="break-keep text-xs">최근 내보내기가 품질 점검에서 중단됐어요.</p>
-          <Button type="button" variant="outline" size="sm" className="mt-2 h-8 w-full max-[900px]:min-h-11" onClick={openQuality}>품질 점검 열기</Button>
+          <p className="break-keep text-xs">{t("export.auditStopped")}</p>
+          <Button type="button" variant="outline" size="sm" className="mt-2 h-8 w-full max-[900px]:min-h-11" onClick={openQuality}>{t("export.openQuality")}</Button>
         </div>}
         {jobs.length > 0 && (
           <>

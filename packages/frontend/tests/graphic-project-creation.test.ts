@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { chromium } from "../../backend/node_modules/playwright-core";
+import { renderInitialArtifact } from "../../backend/src/db/templates";
 import { parseDesignBriefV1, type CreateProjectRequest } from "@bg/shared";
 import {
   buildCreateProjectRequest,
@@ -182,6 +184,59 @@ describe("graphic set creation", () => {
 });
 
 describe("graphic set form choices", () => {
+  test("platform clicks size default banners through the creation/render seam without replacing mixed frames", async () => {
+    const compiler = Bun.spawn([
+      process.execPath, "build", `${import.meta.dir}/fixtures/graphic-creation-browser.ts`,
+      "--target=browser", "--format=iife",
+    ], { stdout: "pipe", stderr: "pipe" });
+    const [exitCode, script, errors] = await Promise.all([
+      compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text(),
+    ]);
+    if (exitCode !== 0) throw new Error(`Graphic fixture bundle failed (${exitCode}): ${errors}`);
+    const browser = await chromium.launch({ channel: "chrome", headless: true });
+    try {
+      const page = await browser.newPage();
+      const rendered = await browser.newPage();
+      await page.setContent('<div id="root"></div>');
+      await page.addScriptTag({ content: script });
+      const mount = (frames: ProjectDraft["frames"]) => page.evaluate(frames => {
+        (globalThis as typeof globalThis & { mountGraphic(frames: ProjectDraft["frames"]): void }).mountGraphic(frames);
+      }, frames);
+      const readRequest = async () => expectRequest(JSON.parse(await page.locator("#request").innerText()) as BuildResult);
+      const sizes = async (request: CreateProjectRequest) => {
+        await rendered.setContent(renderInitialArtifact({ name: request.name, type: "graphic", options: request.options }));
+        return rendered.locator("[data-graphic-artboard]").evaluateAll(elements => elements.map(element => ({
+          width: parseFloat(getComputedStyle(element).width), height: parseFloat(getComputedStyle(element).height),
+        })));
+      };
+      const choices = presetChoicesFor("banner_set");
+      await mount([{ width: 1080, height: 1080, label: "Default" }]);
+      const buttons = page.locator('[aria-labelledby="graphic-preset-label"] button');
+      expect(await buttons.count()).toBe(16);
+      for (const [index, { preset, available }] of choices.entries()) {
+        if (!available) {
+          expect(await buttons.nth(index).isDisabled()).toBe(true);
+          continue;
+        }
+        await buttons.nth(index).click();
+        const request = await readRequest();
+        expect(request.options?.graphic_set?.preset_id).toBe(preset.id);
+        expect(request.options?.graphic_set?.frames).toEqual([{ width: preset.width, height: preset.height, label: "Default" }]);
+        expect(await sizes(request)).toEqual([{ width: preset.width, height: preset.height }]);
+      }
+      // One explicit frame even matches the old canvas: a mixed set must stay intact.
+      const mixed = [{ width: 1080, height: 1080, label: "Square" }, { width: 1200, height: 628, label: "Wide" }];
+      await mount(mixed);
+      await buttons.nth(2).click();
+      const request = await readRequest();
+      expect(request.options?.graphic_canvas).toEqual({ schema_version: 1, width: 1080, height: 1920 });
+      expect(request.options?.graphic_set?.frames).toEqual(mixed);
+      expect(await sizes(request)).toEqual(mixed.map(({ width, height }) => ({ width, height })));
+    } finally {
+      await browser.close();
+    }
+  }, 60_000);
+
   test("Given a card news kind When defaults are read Then six frames are proposed", () => {
     expect(defaultFrameCount("card_news")).toBe(6);
     expect(defaultFrameCount("product_detail")).toBe(1);

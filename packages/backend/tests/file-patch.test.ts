@@ -105,6 +105,45 @@ describe("applyHtmlNodePatch", () => {
     expect(out2).toContain("&lt;img");
   });
 
+  test.each([
+    "javascript:alert(1)", "JaVaScRiPt:alert(1)", " \u0000\tjavascript:alert(1)",
+    "java\tscript:alert(1)", "java\nscript:alert(1)", "java\rscript:alert(1)",
+    "&#106;avascript:alert(1)", "javascript&colon;alert(1)", "java&#x09;script:alert(1)",
+    "vbscript:msgbox(1)", "data:text/html,<h1>active</h1>",
+    "DATA:TEXT/HTML;charset=utf-8;base64,PGgxPmFjdGl2ZTwvaDE+",
+    "data:application/xhtml+xml,<html/>",
+  ])("rejects browser-interpreted unsafe URL %j before producing a patch", (value) => {
+    for (const name of ["href", "HREF", "src", "SRC", "xlink:href", "action", "formaction", "poster"]) {
+      expect(() => applyHtmlNodePatch(FIXTURE, {
+        node_bg_id: "hero-title", text: "Must not change", styles: { color: "red" },
+        attributes: { title: "Must not change", [name]: value },
+      })).toThrow(expect.objectContaining({ code: "invalid_attribute_url" }));
+    }
+  });
+
+  test.each([
+    "", "#details", "../images/photo.svg", "/pages/home.html", "//example.test/path",
+    "https://example.test/path?x=1&y=2", "http://example.test/path", "mailto:a@example.test", "tel:+1234",
+    "ftp://example.test/file", "blob:https://example.test/id", "data:text/plain,download",
+    "java%73cript:relative.html", "./javascript:relative.html", "#javascript:fragment",
+  ])("preserves legitimate URL %j without rewriting surrounding HTML", (value) => {
+    const html = '<!-- keep -->\r\n<a data-bg-node-id="link" href="old">Link</a>\r\n<script>untouched()</script>';
+    const patched = applyHtmlNodePatch(html, { node_bg_id: "link", attributes: { href: value } });
+    expect(patched).toStartWith('<!-- keep -->\r\n<a data-bg-node-id="link"');
+    expect(patched).toEndWith('</a>\r\n<script>untouched()</script>');
+    expect(patched).toContain(value);
+  });
+
+  test("preserves safe image data sources, attribute removals and non-URL text", () => {
+    const html = '<img data-bg-node-id="image" src="old.svg" alt="Old">';
+    for (const src of ["data:image/png;base64,aGVsbG8=", "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"]) {
+      const patched = applyHtmlNodePatch(html, { node_bg_id: "image", attributes: { src, alt: "javascript: is text" } });
+      expect(patched).toContain(src);
+      expect(patched).toContain('alt="javascript: is text"');
+    }
+    expect(applyHtmlNodePatch(html, { node_bg_id: "image", attributes: { src: null } })).not.toContain("src=");
+  });
+
   test("sets, updates, and removes attributes", () => {
     const out = applyHtmlNodePatch(FIXTURE, {
       node_bg_id: "hero-title",

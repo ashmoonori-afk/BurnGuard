@@ -1,6 +1,7 @@
 import type { VisualSourceRole } from "@bg/shared";
 import { ApiError } from "@/api/client";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { t, type MessageKey } from "@/i18n/t";
 
 /**
  * Mirrors the backend intake contract for early feedback only. The backend
@@ -13,7 +14,7 @@ export const COMPOSER_ATTACHMENT_LIMITS = {
   maxBytesTotal: 25 * 1024 * 1024,
 } as const;
 
-export const COMPOSER_SUPPORTED_EXTENSIONS = [".pdf", ".pptx", ".docx", ".png", ".jpg", ".jpeg", ".webp"] as const;
+export const COMPOSER_SUPPORTED_EXTENSIONS = [".pdf", ".pptx", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".txt", ".md", ".csv"] as const;
 
 export type IntakeRejection =
   | "unsupported_kind"
@@ -83,15 +84,17 @@ export function setAttachmentRole(
  * An aborted request reports cancellation. Any other observed error stays
  * retryable without inferring server-side extraction progress.
  */
+const VISUAL_SOURCE_ERROR_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
+  invalid_attachments: "chat.send.invalidAttachments",
+  invalid_visual_sources: "chat.send.invalidRoles",
+  unsupported_visual_source: "chat.send.unsupportedSource",
+  session_busy: "chat.send.sessionBusy",
+};
+
 export function visualSourceSendErrorCopy(error: unknown): string {
-  if (!(error instanceof ApiError)) return "요청을 보내지 못했어요. 잠시 후 다시 시도해 주세요.";
-  switch (error.code) {
-    case "invalid_attachments": return "첨부 자료를 확인할 수 없어요. 목록에서 제거한 뒤 다시 올려 주세요.";
-    case "invalid_visual_sources": return "시각 자료 역할 정보가 올바르지 않아요. 역할을 다시 선택해 주세요.";
-    case "unsupported_visual_source": return "URL·웹·스톡 자료는 지원하지 않아요. 로컬 이미지, Word(.docx), PDF 또는 PPTX를 올려 주세요.";
-    case "session_busy": return "이미 작업이 진행 중이에요. 완료된 뒤 다시 보내 주세요.";
-    default: return apiErrorCopy(error);
-  }
+  if (!(error instanceof ApiError)) return t("chat.send.genericError");
+  const key = VISUAL_SOURCE_ERROR_KEYS[error.code];
+  return key ? t(key) : apiErrorCopy(error);
 }
 
 export function resolveSendOutcome(error: unknown): SendOutcome {

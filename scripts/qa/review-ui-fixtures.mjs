@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { createHash } from "node:crypto";
 
 const PROJECT_A = "review-ui-project-a";
 const PROJECT_B = "review-ui-project-b";
@@ -19,6 +20,7 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
     bootstrapFails: false, settingsFails: false, playwrightFails: false, systemBExists: false, projectDirectoryMissingAt: null,
     settings: settingsFixture(), snapshotSequence: 10, usage: { input: 100, output: 20, cached: 5, cache_write: 0 },
     pending: [], history: historyFixture(), stream: [], decisions: [], sent: [], snapshots: 0, streams: [], snapshotWaiters: new Set(),
+    documents: new Map(), documentSaves: [],
   };
   const sse = await startSseFixture(state, base);
   const routePattern = `${base}/api/**`;
@@ -71,7 +73,8 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
       if (!suffix) return ok(projectFixture(id));
       if (suffix === "/session") return ok(sessionFixture(sessionId, id, state.usage));
       if (suffix === "/artifacts") return ok({ project_id: id, entrypoint: "", entrypoint_url: null, pages: [], site_overflow: false, design_system_id: SYSTEM_A, design_system_url: null, file_count: 0, current_revision: 0, current_digest: digest, updated_at: AT });
-      if (["/files", "/comments", "/exports"].includes(suffix)) return ok([]);
+      if (suffix === "/files") return ok([...state.documents.values()].filter((file) => file.sessionId === sessionId).map(({ rel_path, hash, bytes }) => ({ rel_path, hash, category: "document", size_bytes: Buffer.byteLength(bytes), updated_at: AT })));
+      if (["/comments", "/exports"].includes(suffix)) return ok([]);
       if (["/design-directions", "/design-audit"].includes(suffix)) return ok(null);
       return fail(404, "fixture_project_route_missing");
     }
@@ -79,6 +82,21 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
     if (session) {
       const [, id, suffix] = session;
       const projectId = id === SESSION_B ? PROJECT_B : PROJECT_A;
+      if (suffix === "/documents" && method === "POST") {
+        assert.equal(request.headers()["x-burnguard-capability"], AUTHORITY);
+        const form = await new Response(request.postDataBuffer(), { headers: { "content-type": request.headers()["content-type"] } }).formData();
+        assert.ok([...form.keys()].every((key) => key === "files"), "document preservation must not include a model request");
+        const paths = [];
+        for (const file of form.getAll("files")) {
+          const bytes = await file.text();
+          const hash = createHash("sha256").update(bytes).digest("hex");
+          const rel_path = `docs/attachments/${hash}-${file.name}`;
+          state.documents.set(`${id}/${rel_path}`, { sessionId: id, rel_path, hash, name: file.name, bytes });
+          paths.push(rel_path);
+        }
+        state.documentSaves.push({ sessionId: id, paths });
+        return ok({ paths });
+      }
       if (suffix === "/snapshot") {
         state.snapshots += 1;
         // A failed project query must remain visible while another required
@@ -253,7 +271,12 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
       const fileName = "review-reference.pdf";
       const fileBytes = "%PDF-1.4\nREVIEW_FIXTURE_PDF_BYTES\n%%EOF";
       await page.getByRole("textbox", { name: "메시지 입력", exact: true }).fill(draftText);
-      await page.getByLabel("자료 파일 선택 (PDF, PPTX)", { exact: true }).setInputFiles({ name: fileName, mimeType: "application/pdf", buffer: Buffer.from(fileBytes) });
+      const preserved = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === `/api/sessions/${SESSION_A}/documents`);
+      void preserved.catch(() => {});
+      await page.locator('[data-qa="composer"] input[type="file"]').setInputFiles({ name: fileName, mimeType: "application/pdf", buffer: Buffer.from(fileBytes) });
+      assert.equal((await preserved).status(), 200);
+      assert.deepEqual([...state.documents.values()].map(({ sessionId, name, bytes }) => ({ sessionId, name, bytes })), [{ sessionId: SESSION_A, name: fileName, bytes: fileBytes }]);
+      assert.equal(state.sent.length, 0, "preserving an original must not submit a model turn");
       await page.getByRole("combobox", { name: `${fileName} 역할`, exact: true }).selectOption("immutable_reference");
       await waitDraft(page, SESSION_A, draftText, fileName, "immutable_reference");
       const chat = page.getByRole("complementary", { name: "AI 대화와 코멘트", exact: true });
@@ -271,6 +294,10 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
       assert.equal(await page.getByRole("combobox", { name: `${fileName} 역할`, exact: true }).count(), 0);
       await openProject();
       await page.getByRole("combobox", { name: `${fileName} 역할`, exact: true }).waitFor();
+      await page.getByRole("button", { name: "보내기 (Cmd/Ctrl+Enter)", exact: true }).click({ trial: true });
+      assert.equal(state.sent.length, 0, "tab changes and restoration must not submit a model turn");
+      assert.equal(state.documents.size, 1, "restoration must preserve the same original without duplicating it");
+      assert.ok(state.documentSaves.length >= 3, "original preservation must complete on attachment and draft restoration");
       await page.getByRole("textbox", { name: "메시지 입력", exact: true }).press("Control+Enter");
       await page.waitForFunction(() => document.querySelector('textarea[aria-label="메시지 입력"]')?.value === "");
       const sent = state.sent.at(-1);

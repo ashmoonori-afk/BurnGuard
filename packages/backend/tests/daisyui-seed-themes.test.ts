@@ -29,8 +29,6 @@ const canonicalTokensPath = path.join(
   "design system sample",
   "colors_and_type.css",
 );
-const attribution =
-  "/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */";
 
 describe("bundled daisyUI-derived design systems", () => {
   test("register the curated themes and ship the complete seed shape", async () => {
@@ -64,7 +62,7 @@ describe("bundled daisyUI-derived design systems", () => {
           ),
           "utf8",
         );
-        expect(css.startsWith(attribution)).toBe(true);
+        expect(css).toBe(await readFile(path.join(themesRoot, slug, "colors_and_type.css"), "utf8"));
         expect(css.toLowerCase()).not.toContain("oklch(");
 
         const tokens = await extractCssCustomProperties(css);

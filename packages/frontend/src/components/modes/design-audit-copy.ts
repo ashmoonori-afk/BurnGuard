@@ -1,39 +1,40 @@
+import { t } from "@/i18n/t";
 import type { DesignAuditCheckCode, DesignAuditCheckStatus, DesignAuditTargetedAction, DesignAuditUnknownReason } from "@bg/shared";
 import type { DesignAuditErrorCode } from "@/lib/design-audit-state";
 
 export const DESIGN_AUDIT_CHECK_COPY = {
-  font_consistency: "글꼴 일관성", copy_review: "문안 기본 점검",
-  text_overflow: "텍스트 넘침", element_overlap: "요소 겹침", minimum_text_size: "최소 글자 크기", contrast: "색상 대비",
-  narrow_width: "좁은 화면", duplicate_node_id: "중복 요소 ID", missing_image: "이미지 참조", token_usage: "디자인 토큰 사용",
-  site_nav_mismatch: "페이지 탐색 불일치", site_missing_aria_current: "현재 페이지 표시", site_dangling_link: "없는 페이지 링크",
-  site_missing_shared_block: "공통 영역 표시", site_root_absolute_asset: "루트 기준 자산 경로",
+  get font_consistency() { return t("modes.audit.check.fontConsistency"); }, get copy_review() { return t("modes.audit.check.copyReview"); },
+  get text_overflow() { return t("modes.audit.check.textOverflow"); }, get element_overlap() { return t("modes.audit.check.elementOverlap"); }, get minimum_text_size() { return t("modes.audit.check.minimumTextSize"); }, get contrast() { return t("modes.audit.check.contrast"); },
+  get narrow_width() { return t("modes.audit.check.narrowWidth"); }, get duplicate_node_id() { return t("modes.audit.check.duplicateNodeId"); }, get missing_image() { return t("modes.audit.check.missingImage"); }, get token_usage() { return t("modes.audit.check.tokenUsage"); },
+  get site_nav_mismatch() { return t("modes.audit.check.siteNavMismatch"); }, get site_missing_aria_current() { return t("modes.audit.check.currentPage"); }, get site_dangling_link() { return t("modes.audit.check.danglingLink"); },
+  get site_missing_shared_block() { return t("modes.audit.check.sharedBlock"); }, get site_root_absolute_asset() { return t("modes.audit.check.absoluteAsset"); },
 } as const satisfies Record<DesignAuditCheckCode, string>;
 
 export const DESIGN_AUDIT_STATUS_COPY = {
-  pass: "통과", fail: "문제 발견", skipped: "검사 건너뜀", unmeasurable: "측정할 수 없음",
+  get pass() { return t("modes.audit.status.pass"); }, get fail() { return t("modes.audit.status.fail"); }, get skipped() { return t("modes.audit.status.skipped"); }, get unmeasurable() { return t("modes.audit.status.unmeasurable"); },
 } as const satisfies Record<DesignAuditCheckStatus, string>;
 
 export const DESIGN_AUDIT_ACTION_COPY = {
-  align_font_roles: "제목·본문별 글꼴을 공통 디자인 토큰으로 통일하세요", revise_copy: "임시 문구를 완성하고 원문 의미에 맞게 문안을 다듬으세요",
-  expand_or_reflow_text: "텍스트 영역을 넓히거나 재배치하세요", separate_overlapping_elements: "겹친 요소를 분리하세요",
-  set_minimum_font_size: "글자 크기를 최소 기준 이상으로 조정하세요", increase_color_contrast: "전경과 배경의 대비를 높이세요",
-  repair_narrow_layout: "좁은 화면 레이아웃을 조정하세요", assign_unique_node_ids: "요소마다 고유한 ID를 지정하세요",
-  restore_image_reference: "유효한 이미지 참조를 복구하세요", replace_literal_with_token: "직접 입력한 값을 디자인 토큰으로 바꾸세요",
-  repair_site_navigation: "모든 페이지의 탐색 구조를 맞추세요", mark_current_page: "현재 페이지 링크를 표시하세요",
-  create_or_repair_site_link: "없는 페이지를 만들거나 링크를 고치세요", add_shared_blocks: "공통 영역과 콘텐츠 표시를 추가하세요",
-  relativize_asset_path: "자산 경로를 페이지 기준 상대 경로로 바꾸세요",
+  get align_font_roles() { return t("modes.audit.action.alignFonts"); }, get revise_copy() { return t("modes.audit.action.reviseCopy"); },
+  get expand_or_reflow_text() { return t("modes.audit.action.reflowText"); }, get separate_overlapping_elements() { return t("modes.audit.action.separateElements"); },
+  get set_minimum_font_size() { return t("modes.audit.action.minimumFontSize"); }, get increase_color_contrast() { return t("modes.audit.action.contrast"); },
+  get repair_narrow_layout() { return t("modes.audit.action.narrowLayout"); }, get assign_unique_node_ids() { return t("modes.audit.action.uniqueIds"); },
+  get restore_image_reference() { return t("modes.audit.action.imageReference"); }, get replace_literal_with_token() { return t("modes.audit.action.useToken"); },
+  get repair_site_navigation() { return t("modes.audit.action.siteNavigation"); }, get mark_current_page() { return t("modes.audit.action.currentPage"); },
+  get create_or_repair_site_link() { return t("modes.audit.action.siteLink"); }, get add_shared_blocks() { return t("modes.audit.action.sharedBlocks"); },
+  get relativize_asset_path() { return t("modes.audit.action.assetPath"); },
 } as const satisfies Record<DesignAuditTargetedAction, string>;
 
 export const DESIGN_AUDIT_UNKNOWN_COPY = {
-  no_measurable_candidates: "측정할 수 있는 대상이 없어요", unresolvable_rendering: "렌더링 결과를 확인할 수 없어요",
-  tokens_not_exposed: "사용된 디자인 토큰 정보가 노출되지 않았어요",
+  get no_measurable_candidates() { return t("modes.audit.unknown.noCandidates"); }, get unresolvable_rendering() { return t("modes.audit.unknown.rendering"); },
+  get tokens_not_exposed() { return t("modes.audit.unknown.tokens"); },
 } as const satisfies Record<DesignAuditUnknownReason, string>;
 
 export const DESIGN_AUDIT_ERROR_COPY = {
-  project_not_found: "프로젝트를 찾을 수 없어요.", project_path_unavailable: "프로젝트 파일 경로에 접근할 수 없어요.",
-  stale_artifact_identity: "결과물이 변경됐어요. 다시 검사해 주세요.", audit_unavailable: "지금은 렌더링 품질 검사를 실행할 수 없어요.",
-  stale_revision: "결과물이 변경됐어요. 다시 검사해 주세요.", stale_artifact_digest: "결과물이 변경됐어요. 다시 검사해 주세요.",
-  stale_file_hash: "수정할 파일이 변경됐어요. 다시 검사해 주세요.", stale_node_fingerprint: "수정할 요소가 변경됐어요. 다시 검사해 주세요.",
-  file_not_found: "수정할 파일을 찾을 수 없어요. 다시 검사해 주세요.", node_not_found: "수정할 요소를 찾을 수 없어요. 다시 검사해 주세요.",
-  network_error: "품질 검사 서버에 연결할 수 없어요.", unknown_error: "요청을 완료하지 못했어요. 다시 시도해 주세요.",
+  get project_not_found() { return t("modes.audit.error.projectNotFound"); }, get project_path_unavailable() { return t("modes.audit.error.projectPath"); },
+  get stale_artifact_identity() { return t("modes.audit.error.staleArtifact"); }, get audit_unavailable() { return t("modes.audit.error.unavailable"); },
+  get stale_revision() { return t("modes.audit.error.staleArtifact"); }, get stale_artifact_digest() { return t("modes.audit.error.staleArtifact"); },
+  get stale_file_hash() { return t("modes.audit.error.staleFile"); }, get stale_node_fingerprint() { return t("modes.audit.error.staleNode"); },
+  get file_not_found() { return t("modes.audit.error.fileNotFound"); }, get node_not_found() { return t("modes.audit.error.nodeNotFound"); },
+  get network_error() { return t("modes.audit.error.network"); }, get unknown_error() { return t("modes.audit.error.unknown"); },
 } as const satisfies Record<DesignAuditErrorCode, string>;

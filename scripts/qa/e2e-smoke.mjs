@@ -7,9 +7,9 @@
 // T3), so the driver runs on Node while the backend under test still runs
 // on Bun exactly as users run it.
 //
-// Usage:  node scripts/qa/e2e-smoke.mjs [--port 14173] [--channel chrome|msedge]
+// Usage:  node scripts/qa/e2e-smoke.mjs [--port 14173] [--channel chrome|msedge|bundled]
 //                                       [--shots <dir>] [--keep-home] [--bun <bun.exe>]
-//                                       [--only review-R26] (independent review fixtures)
+//                                       [--only core|review-R26] (core or independent fixtures)
 // Exit code 0 when every scenario passes, 1 otherwise. Prints a JSON
 // summary on the last line so CI can parse it.
 
@@ -25,12 +25,13 @@ import { runUiRedesignFixtures } from "./ui-redesign-fixtures.mjs";
 import { runCreationCanvasFixtures } from "./creation-canvas-fixtures.mjs";
 import { runSettingsRedesignFixtures } from "./settings-redesign-fixtures.mjs";
 import { runDeliverablesFixtures } from "./deliverables-fixtures.mjs";
+import { runClipboardPasteFixture } from "./clipboard-paste-fixtures.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
 const args = parseArgs(process.argv.slice(2));
 const PORT = Number(args.port ?? 14173);
-const CHANNEL = args.channel ?? "chrome";
+const CHANNEL = args.channel === "bundled" ? undefined : args.channel ?? "chrome";
 const SHOTS = path.resolve(args.shots ?? path.join(tmpdir(), "burnguard-e2e-shots"));
 const BASE = `http://127.0.0.1:${PORT}`;
 const READY = `[burnguard] listening on ${BASE}`;
@@ -89,27 +90,14 @@ try {
     await shot(page, "02-project");
   });
 
+  await scenario("clipboard-image-paste", () => runClipboardPasteFixture(page, context));
+
   await scenario("edit-mode-save", async () => {
     await modeButton(page, "편집").click();
-    // The canvas is a sandboxed srcdoc frame, which a driver cannot reliably
-    // query from the outside, so the click is aimed by geometry and the
-    // assertions read the srcdoc attribute instead of the frame's DOM.
-    const box = await canvasBox(page);
     const panel = page.locator("aside").last();
     const textarea = panel.locator("textarea").first();
-    // Only elements the harness annotated are editable, and where they land
-    // depends on the fixture and on font loading, so sweep the canvas instead
-    // of assuming one point hits.
-    let opened = false;
-    for (const fy of [0.25, 0.4, 0.12, 0.55, 0.7, 0.85]) {
-      for (const fx of [0.5, 0.3, 0.7]) {
-        await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
-        opened = await textarea.waitFor({ timeout: 1_500 }).then(() => true, () => false);
-        if (opened) break;
-      }
-      if (opened) break;
-    }
-    if (!opened) throw new Error("edit panel never opened for any canvas position");
+    await selectFixtureHeading(page);
+    await textarea.waitFor();
     const before = await textarea.inputValue();
     const marker = ` E2E-${Date.now().toString(36)}`;
     await textarea.fill(before + marker);
@@ -182,14 +170,11 @@ try {
 
   await scenario("tweaks-escape-enter", async () => {
     await modeButton(page, "스타일").click();
-    const box = await canvasBox(page);
-    const input = page.locator("aside").last().getByLabel("font-size", { exact: false });
-    let opened = false;
-    for (const fy of [0.25, 0.4, 0.12, 0.55, 0.7, 0.85]) {
-      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * fy);
-      if (await input.waitFor({ timeout: 1000 }).then(() => true, () => false)) { opened = true; break; }
-    }
-    if (!opened) throw new Error("style element selection failed");
+    await selectFixtureHeading(page);
+    const panel = page.locator("aside").last();
+    await panel.locator("summary").filter({ hasText: "고급" }).click();
+    const input = panel.getByLabel("font-size", { exact: false });
+    await input.waitFor();
     const writes = [];
     const onRequest = (request) => { if (request.method() === "PATCH" && request.url().includes("/fs/")) writes.push(request); };
     page.on("request", onRequest);
@@ -232,7 +217,7 @@ try {
     await page.setViewportSize({ width: 1440, height: 900 });
   });
 
-  await runUiRedesignFixtures(page, BASE, scenario, { home, shot, fixtureProjectName: FIXTURE_PROJECT });
+  if (args.only !== "core") await runUiRedesignFixtures(page, BASE, scenario, { home, shot, fixtureProjectName: FIXTURE_PROJECT });
 
   await scenario("delete-project", async () => {
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
@@ -249,20 +234,41 @@ try {
     await card.waitFor({ state: "detached", timeout: 15_000 });
     await shot(page, "06-deleted");
   });
-  await runReviewUiFixtures(page, context, BASE, scenario);
-  await runReviewCanvasFixtures(page, context, BASE, scenario);
-  await runSettingsRedesignFixtures(page, BASE, scenario);
-  await runCreationCanvasFixtures(page, BASE, scenario, { home, shot });
-  await runDeliverablesFixtures(page, BASE, scenario, { home, shot });
+  if (args.only !== "core") {
+    // Independent groups share backend/context, not long-lived browsing state.
+    // Retain scenario order, assertions, and native locator clicks.
+    for (const runFixtures of [
+      fixturePage => runReviewUiFixtures(fixturePage, context, BASE, scenario),
+      fixturePage => runReviewCanvasFixtures(fixturePage, context, BASE, scenario),
+      fixturePage => runSettingsRedesignFixtures(fixturePage, BASE, scenario),
+      fixturePage => runCreationCanvasFixtures(fixturePage, BASE, scenario, { home, shot }),
+      fixturePage => runDeliverablesFixtures(fixturePage, BASE, scenario, { home, shot }),
+    ]) {
+      const fixturePage = await context.newPage();
+      failurePage = fixturePage;
+      try {
+        await installProbes(fixturePage);
+        await runFixtures(fixturePage);
+      } finally {
+        await fixturePage.close();
+        failurePage = page;
+      }
+    }
+  }
 } catch (error) {
   results.push({ name: "harness", ok: false, error: String(error?.stack ?? error) });
 } finally {
-  if (browser) await browser.close().catch(() => {});
+  if (browser) await browser.close().catch((error) => {
+    results.push({ name: "browser-cleanup", ok: false, error: String(error) });
+  });
   if (backend) await stopBackend(backend);
   if (home && !args["keep-home"]) {
     const ownedHome = await realpath(home);
-    if (path.dirname(ownedHome) !== temporaryParent || !path.basename(ownedHome).startsWith("burnguard-e2e-home-")) throw new Error("Refusing unowned fixture cleanup");
-    await rm(ownedHome, { recursive: true, force: true });
+    if (path.dirname(ownedHome) !== temporaryParent || !path.basename(ownedHome).startsWith("burnguard-e2e-home-")) {
+      results.push({ name: "profile-cleanup", ok: false, error: "Refusing unowned fixture cleanup" });
+    } else {
+      await rm(ownedHome, { recursive: true, force: true });
+    }
   }
 }
 
@@ -272,13 +278,15 @@ for (const r of results) {
 }
 await writeFile(path.join(SHOTS, "backend.log"), backendLog).catch(() => {});
 console.log(`shots: ${SHOTS}`);
-console.log(JSON.stringify({ ok: failed.length === 0, selection: args.only ?? null, passed: results.length - failed.length, failed: failed.length, results }));
+const summary = { ok: failed.length === 0, selection: args.only ?? null, passed: results.length - failed.length, failed: failed.length, results };
+await writeFile(path.join(SHOTS, "results.json"), JSON.stringify(summary, null, 2));
+console.log(JSON.stringify(summary));
 process.exit(failed.length === 0 ? 0 : 1);
 
 // ---------------------------------------------------------------- helpers
 
 async function scenario(name, run) {
-  if (args.only && !name.includes(String(args.only))) return;
+  if (args.only && args.only !== "core" && !name.includes(String(args.only))) return;
   const started = Date.now();
   let deadline;
   try {
@@ -293,12 +301,16 @@ async function scenario(name, run) {
     results.push({ name, ok: false, ms: Date.now() - started, error: String(error?.stack ?? error) });
     console.log(JSON.stringify({ ...results.at(-1), error: String(error.message) }));
     await shot(failurePage, `fail-${name}`).catch(() => {});
+    // Do not let a timed-out action race later scenarios. The outer finally
+    // closes its browser and backend before the run returns a failure.
+    throw error;
   } finally {
     clearTimeout(deadline);
   }
 }
 
 async function startBackend(homeDir) {
+  await mkdir(path.join(homeDir, ".codex"));
   const env = {
     ...process.env,
     BG_APP_ROOT: path.join(homeDir, ".burnguard"),
@@ -354,6 +366,7 @@ async function withDeadline(promise, milliseconds, onTimeout = () => {}) {
 
 async function installProbes(page) {
   await page.addInitScript(() => {
+    if (window !== window.top) return;
     window.__bgToasts = [];
     const seen = new WeakSet();
     const observer = new MutationObserver(() => {
@@ -363,7 +376,7 @@ async function installProbes(page) {
         window.__bgToasts.push(node.innerText);
       }
     });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    observer.observe(document, { childList: true, subtree: true });
   });
 }
 
@@ -387,6 +400,20 @@ async function canvasBox(page) {
   const box = await page.locator("iframe").first().boundingBox();
   if (!box) throw new Error("canvas iframe has no bounding box");
   return box;
+}
+
+async function selectFixtureHeading(page) {
+  const heading = page.frameLocator("iframe").locator('[data-bg-node-id="hero-title"]');
+  await heading.waitFor({ state: "visible" });
+  const box = await heading.boundingBox();
+  const frame = await canvasBox(page);
+  if (!box) throw new Error("fixture heading has no bounding box");
+  const left = Math.max(box.x, frame.x);
+  const right = Math.min(box.x + box.width, frame.x + frame.width);
+  const top = Math.max(box.y, frame.y);
+  const bottom = Math.min(box.y + box.height, frame.y + frame.height);
+  if (right <= left || bottom <= top) throw new Error("fixture heading is outside the visible canvas");
+  await page.mouse.click((left + right) / 2, (top + bottom) / 2);
 }
 
 async function waitForArtifactFrame(page) {

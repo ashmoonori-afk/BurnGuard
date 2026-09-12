@@ -6,7 +6,7 @@
 
 BurnGuard는 슬라이드·웹사이트·그래픽을 만드는 로컬 AI 작업 공간입니다. Windows와 macOS 네이티브 앱에서 Claude Code 또는 Codex CLI를 연결하고, 모델을 선택해 미리보기 옆에서 작업합니다. **추론 강도 LOW와 바닐라 모드가 기본값**입니다. 프로젝트·첨부 원본·디자인 시스템은 내 컴퓨터에 저장하고, 생성 요청은 선택한 제공업체로 보냅니다.
 
-[English](README.md) · [다운로드](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [시작하기](#시작하기) · [문서](doc/README.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · [다운로드](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [시작하기](#시작하기) · [문서](doc/README.md)
 
 > 현재 소스 기준 안내입니다. 공개 데스크톱 릴리즈에는 일부 기능이 아직 포함되지 않을 수 있습니다. 표지는 생성 이미지이며, 작업 화면은 별도 샘플 프로필에서 촬영했습니다.
 
@@ -36,7 +36,7 @@ BurnGuard는 슬라이드·웹사이트·그래픽을 만드는 로컬 AI 작업
 | AI 생성 | 설치 및 로그인이 완료된 `claude` 또는 `codex` CLI와 사용자 계정 |
 | 그래픽 생성 | 로그인된 Codex 연결. 새 창작 이미지에는 Codex 이미지 생성을 사용해요. |
 | 미리보기·내보내기 렌더링 | 지원되는 Chrome·Edge 또는 Chromium. 설정에서 상태를 확인하세요. |
-| 자료 첨부 | PDF·PPTX·DOCX와 지원 이미지. 문서 추출 도구 요구사항은 설정에서 확인하세요. |
+| 자료 첨부 | PDF·PPTX·DOCX·TXT·MD·CSV와 지원 이미지. 문서 추출 도구 요구사항은 설정에서 확인하세요. |
 
 AI 연결 전에도 예제와 캔버스를 살펴볼 수 있습니다. 스캔 PDF는 원본을 보존하지만 자동 OCR을 보장하지 않습니다. 바닐라 모드는 개인 플러그인·지시문을 제외하고 프로젝트 맥락을 유지합니다. CommandCode는 설정에 키를 입력해 연결하며 Claude Code CLI가 필요합니다.
 
@@ -86,7 +86,7 @@ HTML 파일을 열고 확대·3D 도구 옆 **차트**를 누르세요. 8종 중
 
 **SONNEL**(사운드 오브젝트), **FOLIOVER**(소재 저널), **ODDWARD**(실험적 스튜디오), **VELUNE**(조명) 컬렉션에서 시작할 수 있습니다. 각 예제는 웹사이트·6장 슬라이드·그래픽·디자인 시스템을 포함합니다. [예제 모음](samples/original/README.md).
 
-Google Fonts 6종과 Pretendard를 라이선스 고지와 함께 번들합니다. 스타일 패널에서 요청하면 설치된 글꼴도 불러옵니다. 로컬 글꼴 파일은 내보내기에 자동 포함되지 않습니다. [글꼴 목록](assets/fonts/README.md).
+Google Fonts 36종과 Pretendard, 총 37개 글꼴 패밀리를 라이선스 고지와 함께 번들합니다. 스타일 패널에서 요청하면 설치된 글꼴도 불러옵니다. 로컬 글꼴 파일은 내보내기에 자동 포함되지 않습니다. [글꼴 목록](assets/fonts/README.md).
 
 지원 파일·URL·Figma 자료를 디자인 시스템으로 가져오세요. Pinterest 무드 추출은 공개 핀 URL 최대 12개를 받고, 이미지에서 읽은 색상과 추론한 무드·대체 글꼴을 구분합니다. 가져온 시스템은 검토·게시한 뒤 프로젝트에 연결합니다.
 

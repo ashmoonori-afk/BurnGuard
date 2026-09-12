@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import { useT } from "@/i18n/t";
 import { Link } from "react-router-dom";
 import {
   Dialog,
@@ -37,6 +38,7 @@ export default function DeleteDesignSystemDialog({
       }
     | null;
 }) {
+  const t = useT();
   const hasBlocker = Boolean(blocker);
 
   return (
@@ -48,15 +50,15 @@ export default function DeleteDesignSystemDialog({
           </div>
           <DialogTitle className="break-keep leading-snug">
             {hasBlocker
-              ? "아직 삭제할 수 없어요"
-              : `“${systemName}” 디자인 시스템을 삭제할까요?`}
+              ? t("home.deleteBlocked")
+              : t("home.deleteSystemTitle", { name: systemName })}
           </DialogTitle>
           <DialogDescription className="break-keep">
             {hasBlocker
               ? blocker?.reason === "is_template"
-                ? "기본으로 제공되는 템플릿 디자인 시스템이라 삭제할 수 없어요."
-                : "이 디자인 시스템을 쓰는 프로젝트가 아직 있어요. 아래 프로젝트를 먼저 삭제하거나 이 디자인 시스템을 그대로 두세요."
-              : "디자인 시스템 항목과 모든 미리보기 카드, ~/.burnguard/data/systems 아래 표준 폴더가 영구 삭제돼요. 되돌릴 수 없어요."}
+                ? t("home.deleteTemplateBlocked")
+                : t("home.deleteSystemProjects")
+              : t("home.deleteSystemDescription")}
           </DialogDescription>
         </DialogHeader>
 
@@ -82,7 +84,7 @@ export default function DeleteDesignSystemDialog({
             onClick={() => onOpenChange(false)}
             disabled={isPending}
           >
-            {hasBlocker ? "닫기" : "취소"}
+            {hasBlocker ? t("home.close") : t("home.cancel")}
           </Button>
           {!hasBlocker ? (
             <Button
@@ -90,7 +92,7 @@ export default function DeleteDesignSystemDialog({
               onClick={onConfirm}
               disabled={isPending}
             >
-              {isPending ? "삭제하는 중..." : "삭제"}
+              {isPending ? t("home.deleting") : t("home.delete")}
             </Button>
           ) : null}
         </DialogFooter>

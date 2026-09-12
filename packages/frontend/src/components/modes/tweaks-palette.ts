@@ -5,19 +5,21 @@
  * — not parsed from the stylesheet — so the picker works in SSR /
  * test contexts where CSS variables haven't been evaluated.
  */
+import type { MessageKey } from "@/i18n/t";
+
 export interface PaletteSwatch {
   name: string;
   hex: string;
 }
 
 export interface PaletteGroup {
-  title: string;
+  title: MessageKey;
   swatches: PaletteSwatch[];
 }
 
 export const BRAND_PALETTE: PaletteGroup[] = [
   {
-    title: "Grey",
+    title: "modes.palette.grey",
     swatches: [
       { name: "white", hex: "#ffffff" },
       { name: "grey-50", hex: "#f1f3f5" },
@@ -35,7 +37,7 @@ export const BRAND_PALETTE: PaletteGroup[] = [
     ],
   },
   {
-    title: "Blue",
+    title: "modes.palette.blue",
     swatches: [
       { name: "blue-50", hex: "#ecf4ff" },
       { name: "blue-100", hex: "#ddebff" },
@@ -50,7 +52,7 @@ export const BRAND_PALETTE: PaletteGroup[] = [
     ],
   },
   {
-    title: "Accent",
+    title: "modes.palette.accent",
     swatches: [
       { name: "green-500", hex: "#00ce78" },
       { name: "red-500", hex: "#ff524c" },

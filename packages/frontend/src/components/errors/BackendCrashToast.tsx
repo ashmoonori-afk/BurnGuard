@@ -1,12 +1,14 @@
 import { X } from "lucide-react";
 import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n/t";
 
 /**
  * Global toast container. Sits above all content at bottom-right.
  * Call `useUIStore.getState().pushToast({...})` to enqueue.
  */
 export default function ToastContainer() {
+  const translate = useT();
   const toasts = useUIStore((s) => s.toasts);
   const dismiss = useUIStore((s) => s.dismissToast);
 
@@ -42,7 +44,7 @@ export default function ToastContainer() {
             <button
               onClick={() => dismiss(t.id)}
               className="text-muted-foreground hover:text-foreground"
-              aria-label="닫기"
+              aria-label={translate("shell.close")}
             >
               <X className="h-3.5 w-3.5" />
             </button>

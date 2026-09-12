@@ -1,3 +1,4 @@
+import { useT } from "@/i18n/t";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
@@ -29,6 +30,7 @@ export default function GraphicFrameNavigator({
   readonly requestKey: string | null;
   readonly onFrameChange?: (index: number) => void;
 }) {
+  const t = useT();
   const [count, setCount] = useState(0);
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<FrameRect | null>(null);
@@ -77,12 +79,11 @@ export default function GraphicFrameNavigator({
       ))}
       {bands.length > 0 && (
         <p className="pointer-events-none absolute left-2 top-2 rounded bg-background/80 px-2 py-1 text-[10px] text-muted-foreground">
-          9:16 안전 영역 밖(위·아래 250px)에는 중요한 글자를 두지 마세요.
-        </p>
+          {t("canvas.frames.safeZone")}</p>
       )}
       <div
         role="group"
-        aria-label="프레임 이동"
+        aria-label={t("canvas.frames.navigation")}
         onKeyDown={(event) => {
           if (event.key === "ArrowLeft") { event.preventDefault(); setIndex((value) => Math.max(value - 1, 0)); }
           if (event.key === "ArrowRight") { event.preventDefault(); setIndex((value) => Math.min(value + 1, count - 1)); }
@@ -92,19 +93,19 @@ export default function GraphicFrameNavigator({
         <button
           type="button"
           className={BUTTON_CLASS}
-          aria-label="이전 프레임"
+          aria-label={t("canvas.frames.previous")}
           disabled={index <= 0}
           onClick={() => setIndex((value) => Math.max(value - 1, 0))}
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </button>
         <span aria-live="polite" className="min-w-16 text-center text-[11px] tabular-nums text-foreground">
-          프레임 {index + 1} / {count}
+          {t("canvas.frames.position", { index: index + 1, count })}
         </span>
         <button
           type="button"
           className={BUTTON_CLASS}
-          aria-label="다음 프레임"
+          aria-label={t("canvas.frames.next")}
           disabled={index >= count - 1}
           onClick={() => setIndex((value) => Math.min(value + 1, count - 1))}
         >

@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Comment } from "@bg/shared";
 import { cn } from "@/lib/utils";
+import { useT, type MessageKey } from "@/i18n/t";
+import { localeTag, useLocaleStore } from "@/i18n/locale";
 
 export default function CommentPanel({
   comments,
@@ -23,6 +25,7 @@ export default function CommentPanel({
   onRequestEdit?: (comment: Comment, body: string) => Promise<void>;
   editDisabled?: boolean;
 }) {
+  const t = useT();
   const visible = activeRelPath
     ? comments.filter((c) => {
         if (c.rel_path !== activeRelPath) return false;
@@ -39,11 +42,10 @@ export default function CommentPanel({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-border px-3 py-2">
         <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          코멘트
+          {t("workspace.comments.heading")}
         </div>
         <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground [word-break:keep-all]">
-          캔버스를 클릭하면 그 자리에 핀이 생겨요. 핀은 활성 파일의 백분율
-          위치에 고정돼요.
+          {t("workspace.comments.help")}
         </p>
       </div>
 
@@ -52,9 +54,9 @@ export default function CommentPanel({
           <p className="px-1 pt-2 text-xs text-muted-foreground">
             {activeRelPath
               ? activeSlideIdx != null
-                ? "이 슬라이드에는 아직 열린 코멘트가 없어요."
-                : "이 파일에는 아직 열린 코멘트가 없어요."
-              : "코멘트를 남기려면 캔버스에서 파일을 여세요."}
+                ? t("workspace.comments.emptySlide")
+                : t("workspace.comments.emptyFile")
+              : t("workspace.comments.openFile")}
           </p>
         )}
 
@@ -80,7 +82,7 @@ export default function CommentPanel({
   );
 }
 
-function CommentItem({
+export function CommentItem({
   comment,
   index,
   focused,
@@ -89,6 +91,7 @@ function CommentItem({
   onToggleResolved,
   onRequestEdit,
   editDisabled,
+  autoFocus = false,
 }: {
   comment: Comment;
   index: number;
@@ -98,11 +101,25 @@ function CommentItem({
   onToggleResolved: () => void;
   onRequestEdit?: (body: string) => Promise<void>;
   editDisabled?: boolean;
+  autoFocus?: boolean;
 }) {
+  const t = useT();
+  const locale = useLocaleStore((state) => state.locale);
   const [draft, setDraft] = useState(comment.body);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    if (autoFocus) textareaRef.current?.focus();
+  }, [autoFocus]);
+  const pendingDraft = useRef({ body: comment.body, dirty: false });
+  const updateBodyRef = useRef(onUpdateBody);
+  updateBodyRef.current = onUpdateBody;
+  useEffect(() => () => {
+    // A quick popup can unmount on refresh/file changes without a native blur.
+    if (autoFocus && pendingDraft.current.dirty) updateBodyRef.current(pendingDraft.current.body);
+  }, [autoFocus]);
   const editingRef = useRef(false);
   const [sending, setSending] = useState(false);
-  const [sendStatus, setSendStatus] = useState("");
+  const [sendStatus, setSendStatus] = useState<MessageKey | null>(null);
   const resolved = comment.resolved_at !== null;
 
   useEffect(() => {
@@ -113,6 +130,7 @@ function CommentItem({
 
   const commitIfDirty = () => {
     if (draft !== comment.body) onUpdateBody(draft);
+    pendingDraft.current.dirty = false;
   };
 
   return (
@@ -141,14 +159,18 @@ function CommentItem({
           {comment.node_selector || "body"}
         </span>
         <span className="text-[10px] text-muted-foreground">
-          {resolved ? "해결됨" : "열림"}
+          {t(resolved ? "workspace.comments.resolved" : "workspace.comments.open")}
         </span>
       </button>
 
       <div className="p-2">
         <textarea
+          ref={textareaRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            pendingDraft.current = { body: e.target.value, dirty: true };
+            setDraft(e.target.value);
+          }}
           onFocus={() => {
             editingRef.current = true;
           }}
@@ -156,7 +178,7 @@ function CommentItem({
             commitIfDirty();
             editingRef.current = false;
           }}
-          placeholder="메모를 남겨 보세요..."
+          placeholder={t("workspace.comments.placeholder")}
           rows={2}
           className="w-full resize-none rounded border border-border bg-background p-1.5 text-xs"
         />
@@ -164,23 +186,23 @@ function CommentItem({
           disabled={editDisabled || sending || !draft.trim()}
           onMouseDown={(event) => event.preventDefault()}
           onClick={async () => {
-            setSending(true); setSendStatus("");
-            try { await onRequestEdit(draft); setSendStatus("AI에 수정 요청을 보냈어요. 대화에서 진행 상황과 변경 파일을 확인해 주세요."); }
-            catch { setSendStatus("수정 요청을 보내지 못했어요. 대화 상태를 확인하고 다시 시도해 주세요."); }
+            setSending(true); setSendStatus(null);
+            try { await onRequestEdit(draft); setSendStatus("workspace.comments.editSent"); }
+            catch { setSendStatus("workspace.comments.editSendError"); }
             finally { setSending(false); }
-          }}>{sending ? "보내는 중…" : "저장하고 AI로 수정"}</button>}
-        {draft !== comment.body && <p className="text-[10px] text-muted-foreground">수정 요청을 누르면 메모를 먼저 저장해요.</p>}
-        {sendStatus && <p role="status" className="mt-1 text-[10px] text-muted-foreground">{sendStatus}</p>}
+          }}>{t(sending ? "workspace.comments.sending" : "workspace.comments.saveAndEdit")}</button>}
+        {draft !== comment.body && <p className="text-[10px] text-muted-foreground">{t("workspace.comments.saveBeforeRequest")}</p>}
+        {sendStatus && <p role="status" className="mt-1 text-[10px] text-muted-foreground">{t(sendStatus)}</p>}
         <div className="mt-1.5 flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">
-            {new Date(comment.created_at).toLocaleString()}
+            {new Date(comment.created_at).toLocaleString(localeTag(locale))}
           </span>
           <button
             type="button"
             onClick={onToggleResolved}
             className="text-[10px] text-muted-foreground hover:text-foreground"
           >
-            {resolved ? "다시 열기" : "해결하기"}
+            {t(resolved ? "workspace.comments.reopen" : "workspace.comments.resolve")}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { Paperclip, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentEditDisplayText } from "@/components/modes/comment-edit-request";
+import { useT } from "@/i18n/t";
 
 export default function UserMessage({
   text,
@@ -15,6 +16,7 @@ export default function UserMessage({
   onRevert?: (turnId: string) => void;
   reverting?: boolean;
 }) {
+  const t = useT();
   const canRevert = Boolean(turnId && onRevert);
   return (
     <div className="group flex flex-col items-end gap-1">
@@ -22,7 +24,7 @@ export default function UserMessage({
         {commentEditDisplayText(text)}
         {attachmentCount && attachmentCount > 0 ? (
           <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Paperclip className="h-3 w-3" aria-hidden="true" /> 첨부 파일 {attachmentCount}개
+            <Paperclip className="h-3 w-3" aria-hidden="true" /> {t("chat.user.attachments", { count: attachmentCount })}
           </div>
         ) : null}
       </div>
@@ -31,20 +33,18 @@ export default function UserMessage({
           type="button"
           onClick={() => {
             if (!turnId || !onRevert || reverting) return;
-            const ok = window.confirm(
-              "이 턴 이전 상태로 되돌릴까요? 이후 변경된 파일은 사라져요.",
-            );
+            const ok = window.confirm(t("chat.user.revertConfirm"));
             if (ok) onRevert(turnId);
           }}
           disabled={reverting}
-          title="이 턴 이전 상태로 되돌리기"
+          title={t("chat.user.revertTitle")}
           className={cn(
             "inline-flex min-h-7 items-center justify-center gap-1 rounded px-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11",
             reverting && "opacity-100 animate-pulse",
           )}
         >
           <RotateCcw className="h-3 w-3" />
-          <span>이 턴 되돌리기</span>
+          <span>{reverting ? t("chat.user.reverting") : t("chat.user.revert")}</span>
         </button>
       )}
     </div>

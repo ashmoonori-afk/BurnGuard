@@ -1,4 +1,4 @@
-import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../owned-process-tree";
+import { ownedProcessSpawnOptions } from "../owned-process-tree";
 import { settleProcessStreams } from "../process-streams";
 
 /**
@@ -74,17 +74,8 @@ export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResul
     stdout: "pipe",
     stderr: "pipe",
     env: buildClaudeEnvironment(options),
-    signal: options.signal,
-    killSignal: "SIGKILL",
     ...ownedProcessSpawnOptions(),
   });
-
-  // Bun's `signal` option only kills the spawned root. On Windows that root
-  // is the `claude.cmd` wrapper, so the real CLI survives an interrupt and
-  // keeps writing into the project. Tear the whole owned tree down the
-  // moment the abort fires instead of waiting for the root to exit.
-  const onAbort = () => { void closeOwnedProcessTree(proc.pid).catch(() => {}); };
-  options.signal?.addEventListener("abort", onAbort, { once: true });
 
   const readers = [
     readLines(proc.stdout, options.onStdoutLine),
@@ -93,12 +84,7 @@ export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResul
       : readLines(proc.stderr, () => {}),
   ];
 
-  let exitCode: number;
-  try {
-    exitCode = await settleProcessStreams(proc, readers);
-  } finally {
-    options.signal?.removeEventListener("abort", onAbort);
-  }
+  const exitCode = await settleProcessStreams(proc, readers, options.signal);
   // eslint-disable-next-line no-console
   console.log(`[claude-code] exit=${exitCode}`);
   return { exitCode };

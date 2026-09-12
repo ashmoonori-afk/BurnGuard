@@ -6,7 +6,7 @@
 
 BurnGuard is a local AI workspace for slide decks, websites and graphics, with native Windows and macOS apps. Connect Claude Code or Codex CLI, select a model, and work beside a live preview. **LOW effort and vanilla mode are the defaults.** Projects, attachments and design systems stay on your computer; generation uses your chosen provider.
 
-[한국어](README.ko.md) · [Download](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [Get started](#get-started) · [Documentation](doc/README.md)
+[한국어](README.ko.md) · [简体中文](README.zh-CN.md) · [Download](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [Get started](#get-started) · [Documentation](doc/README.md)
 
 > This README describes the current source branch. A published desktop release may contain an earlier feature set. The cover is generated artwork; the workspace screenshots are from a separate sample profile.
 
@@ -36,7 +36,7 @@ Download a package from [GitHub Releases](https://github.com/ashmoonori-afk/Burn
 | AI generation | Installed and authenticated `claude` or `codex` CLI; your provider account |
 | Graphic generation | Authenticated Codex connection; generated creative images use Codex image generation |
 | Render previews and exports | Supported Chrome/Edge or Chromium installation; check Settings |
-| Read attachments | PDF, PPTX, DOCX and supported images; document extraction requirements are shown in Settings |
+| Read attachments | PDF, PPTX, DOCX, supported images and text (TXT/MD/CSV); document extraction requirements are shown in Settings |
 
 You can explore examples and edit the canvas before connecting AI. Scanned PDFs retain the original file; automatic OCR is not guaranteed. Vanilla mode excludes personal plugins and instructions while preserving BurnGuard's project context. CommandCode routing uses a key entered in Settings and still requires the Claude Code CLI.
 
@@ -86,7 +86,7 @@ The renderer is an original implementation with no added chart-library dependenc
 
 Start with **SONNEL** (tactile sound), **FOLIOVER** (material journal), **ODDWARD** (experimental studio) or **VELUNE** (sculptural lighting). Each original collection includes a website, six-slide deck, graphic and design system. [Explore the collections](samples/original/README.md).
 
-Six Google Fonts families and Pretendard are bundled locally with their license notices. The style panel can also load installed fonts when requested; local font files are not automatically embedded in exports. [Font catalog](assets/fonts/README.md).
+37 font families, 36 from Google Fonts plus Pretendard, are bundled locally with their license notices. The style panel can also load installed fonts when requested; local font files are not automatically embedded in exports. [Font catalog](assets/fonts/README.md).
 
 Import supported files, URLs or Figma sources into Design Systems. Pinterest mood import accepts up to 12 public pin URLs and distinguishes sampled colors from inferred mood and fallback typography. Review a system before publishing it for project use.
 

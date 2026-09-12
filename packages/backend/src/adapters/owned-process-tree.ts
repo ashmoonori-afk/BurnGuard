@@ -14,20 +14,56 @@ export async function closeOwnedProcessTree(processId: number): Promise<void> {
     if (result.exitCode !== 0 && isProcessPresent(processId)) warnCleanupIncomplete(processId);
     return;
   }
-  try {
-    process.kill(-processId, "SIGKILL");
-  } catch (error) {
-    if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
-  }
+  // Snapshot before signalling any ancestor: detached tools have their own
+  // process group and lose their ownership link when the CLI exits. Do not
+  // yield between discovering these exact descendants and signalling them.
+  const descendants = snapshotDescendants(processId);
+  for (const pid of descendants.reverse()) killIfPresent(pid);
+  killIfPresent(-processId);
   // Real elapsed time, not scheduler ticks: the previous setImmediate loop
   // drained in a couple of milliseconds and reported failure long before a
   // signalled process group had a chance to be reaped.
   const deadline = Date.now() + CLEANUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if (!isProcessGroupPresent(processId)) return;
+    if (!isProcessGroupPresent(processId) && !descendants.some(isProcessPresent)) return;
     await new Promise<void>((resolve) => setTimeout(resolve, CLEANUP_POLL_MS));
   }
-  if (isProcessGroupPresent(processId)) warnCleanupIncomplete(processId);
+  if (isProcessGroupPresent(processId) || descendants.some(isProcessPresent)) warnCleanupIncomplete(processId);
+}
+
+function snapshotDescendants(processId: number): number[] {
+  const result = Bun.spawnSync(["ps", "-axo", "pid=,ppid=,pgid="], { stdout: "pipe", stderr: "pipe", timeout: 1_000 });
+  if (result.exitCode !== 0) throw new Error(`Cannot snapshot owned process tree ${processId}: ${result.stderr.toString()}`);
+  const children = new Map<number, number[]>();
+  const owned = new Set([processId]);
+  for (const line of result.stdout.toString().trim().split("\n")) {
+    const [pid, parent, group] = line.trim().split(/\s+/).map(Number);
+    if (!pid || !parent) continue;
+    const siblings = children.get(parent) ?? [];
+    siblings.push(pid);
+    children.set(parent, siblings);
+    // Group members remain attributable even if the root exited naturally.
+    if (group === processId) owned.add(pid);
+  }
+  for (const pid of owned) {
+    for (const child of children.get(pid) ?? []) owned.add(child);
+  }
+  owned.delete(processId);
+  return [...owned];
+}
+
+function killIfPresent(pid: number): void {
+  try { process.kill(pid, "SIGKILL"); }
+  catch (error) {
+    if (error instanceof Error && "code" in error) {
+      if (error.code === "ESRCH") return;
+      if (error.code === "EPERM") {
+        console.warn(`[adapter] cannot signal process ${pid}: EPERM`);
+        return;
+      }
+    }
+    throw error;
+  }
 }
 
 /**

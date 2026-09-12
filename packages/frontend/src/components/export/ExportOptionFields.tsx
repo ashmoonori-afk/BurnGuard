@@ -1,3 +1,4 @@
+import { useT } from "@/i18n/t";
 import type {
   ExportMenuOption,
   ExportOptionField,
@@ -34,6 +35,7 @@ export default function ExportOptionFields({
   readonly disabled: boolean;
   readonly onChange: (values: ExportOptionValues) => void;
 }) {
+  const t = useT();
   const fields = uniqueFields(options);
   if (fields.length === 0) return null;
   return (
@@ -63,7 +65,7 @@ export default function ExportOptionFields({
             <span className="text-[11px] font-medium text-foreground/80">{field.label}</span>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label htmlFor="export-slice-height" className="text-[10px] text-muted-foreground">최대 높이</label>
+                <label htmlFor="export-slice-height" className="text-[10px] text-muted-foreground">{t("export.field.maxHeight")}</label>
                 <select
                   id="export-slice-height"
                   className={CONTROL_CLASS}
@@ -71,12 +73,12 @@ export default function ExportOptionFields({
                   disabled={disabled}
                   onChange={(event) => onChange({ ...values, sliceHeight: event.target.value === "3000" ? 3000 : 5000 })}
                 >
-                  <option value="5000">5000px · 스마트스토어</option>
-                  <option value="3000">3000px · 쿠팡</option>
+                  <option value="5000">{t("export.field.smartStore")}</option>
+                  <option value="3000">{t("export.field.coupang")}</option>
                 </select>
               </div>
               <div className="space-y-1">
-                <label htmlFor="export-slice-format" className="text-[10px] text-muted-foreground">이미지 형식</label>
+                <label htmlFor="export-slice-format" className="text-[10px] text-muted-foreground">{t("export.field.imageFormat")}</label>
                 <select
                   id="export-slice-format"
                   className={CONTROL_CLASS}
@@ -92,7 +94,7 @@ export default function ExportOptionFields({
             {values.sliceFormat === "jpeg" && (
               <div className="space-y-1">
                 <label htmlFor="export-jpeg-quality" className="text-[10px] text-muted-foreground">
-                  JPEG 품질 · {values.jpegQuality}
+                  {t("export.field.jpegQuality", { count: values.jpegQuality })}
                 </label>
                 <input
                   id="export-jpeg-quality"

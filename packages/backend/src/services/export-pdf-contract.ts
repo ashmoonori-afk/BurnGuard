@@ -31,7 +31,8 @@ export function pdfDimensionsForPaper(paper: PdfPaper, artboard?: PdfArtboardDim
     case "a4": return { format: "A4" };
     case "artboard": {
       const points = artboardPoints(artboard);
-      return { width: `${points.width}pt`, height: `${points.height}pt` };
+      // Playwright accepts inches, not pt; 72 points/in preserves 0.75 points/CSS pixel.
+      return { width: `${points.width / 72}in`, height: `${points.height / 72}in` };
     }
   }
 }

@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/i18n/t";
 
 export default function CliMissingModal({
   open,
@@ -19,6 +20,7 @@ export default function CliMissingModal({
   onOpenChange: (open: boolean) => void;
   detection: BackendDetectionResult;
 }) {
+  const t = useT();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -26,9 +28,9 @@ export default function CliMissingModal({
           <div className="h-10 w-10 rounded-md bg-destructive/10 text-destructive grid place-items-center mb-3">
             <AlertTriangle className="h-5 w-5" />
           </div>
-          <DialogTitle>LLM CLI를 찾을 수 없어요</DialogTitle>
+          <DialogTitle>{t("errors.cliMissing")}</DialogTitle>
           <DialogDescription>
-            BurnGuard Design에서 프로젝트를 만들려면 Claude Code 또는 Codex CLI를 설치해야 해요.
+            {t("errors.cliRequired")}
           </DialogDescription>
         </DialogHeader>
 
@@ -42,7 +44,7 @@ export default function CliMissingModal({
                     {b.id.replace("-", " ")}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {b.found ? `설치됨 (${b.version ?? "정상"})` : "찾을 수 없음"}
+                    {b.found ? t("errors.installed", { version: b.version ?? t("errors.healthy") }) : t("errors.notFound")}
                   </span>
                 </div>
                 {!b.found && url && (
@@ -52,7 +54,7 @@ export default function CliMissingModal({
                     rel="noreferrer"
                     className="text-xs text-accent inline-flex items-center gap-1 mt-1"
                   >
-                    <ExternalLink className="h-3 w-3" /> 설치 안내
+                    <ExternalLink className="h-3 w-3" /> {t("errors.installGuide")}
                   </a>
                 )}
               </li>
@@ -61,7 +63,7 @@ export default function CliMissingModal({
         </ul>
 
         <DialogFooter className="pt-2 border-t border-border">
-          <Button onClick={() => onOpenChange(false)}>확인</Button>
+          <Button onClick={() => onOpenChange(false)}>{t("errors.confirm")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

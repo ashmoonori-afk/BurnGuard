@@ -1,6 +1,6 @@
 // Deliverables and platform-publishing fixtures (doc/14 sections 8-9). Runs only
 // against e2e-smoke's owned temporary profile: one owned multi-page project for
-// navigation, and the seeded "VELUNE · Web" sample for a real Cafe24 package export.
+// navigation, and the seeded "ODDWARD · Web" sample for a real Cafe24 package export.
 import assert from "node:assert/strict";
 import path from "node:path";
 import { realpath } from "node:fs/promises";
@@ -41,8 +41,7 @@ export async function runDeliverablesFixtures(page, base, scenario, { home, shot
   let sampleId = null;
   await scenario("deliverables-cafe24-package-export", async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(base, { waitUntil: "domcontentloaded" });
-    await page.getByRole("tab", { name: "최근 작업", exact: true }).click();
+    await page.goto(`${base}/?view=examples`, { waitUntil: "domcontentloaded" });
     const card = page.locator("a[href^='/projects/']").filter({ hasText: SAMPLE_WEB }).first();
     await card.waitFor({ timeout: 20_000 });
     await card.click();
@@ -54,19 +53,24 @@ export async function runDeliverablesFixtures(page, base, scenario, { home, shot
     await item.waitFor({ timeout: 10_000 });
     assert.ok(!(await item.getAttribute("aria-disabled")) || (await item.getAttribute("aria-disabled")) === "false", "cafe24 package must be available for a web project");
     const created = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === `/api/projects/${sampleId}/exports`);
-    await item.click();
-    const createdJob = (await (await created).json()).data;
-    assert.equal(createdJob.format, "cafe24_package");
+    const createdJobPromise = created.then(async (response) => (await response.json()).data);
+    void createdJobPromise.catch(() => {});
     // The real pipeline runs: audit, closure, site map, lint, smoke render, rewrite, zip, validate.
     // The menu refetches the job list while a job is pending and on the export SSE event, so the
     // terminal state arrives as a GET response: subscribe to that instead of a fixed UI timeout.
-    const terminal = await page.waitForResponse(async (response) => {
+    const terminalResponse = page.waitForResponse(async (response) => {
       if (response.request().method() !== "GET" || new URL(response.url()).pathname !== `/api/projects/${sampleId}/exports`) return false;
       try {
         const rows = (await response.json()).data;
+        const createdJob = await createdJobPromise;
         return Array.isArray(rows) && rows.some((row) => row.id === createdJob.id && (row.status === "succeeded" || row.status === "failed"));
       } catch { return false; }
     }, { timeout: 180_000 });
+    void terminalResponse.catch(() => {});
+    await item.click();
+    const createdJob = await createdJobPromise;
+    assert.equal(createdJob.format, "cafe24_package");
+    const terminal = await terminalResponse;
     const finished = (await terminal.json()).data.find((row) => row.id === createdJob.id);
     assert.equal(finished.status, "succeeded", `cafe24 export ended as ${finished.status}: ${finished.error_message ?? ""}`);
     // The status row labels its actions with the format's short label, so match the action suffix.
@@ -90,7 +94,14 @@ export async function runDeliverablesFixtures(page, base, scenario, { home, shot
   });
 
   await scenario("deliverables-quality-panel-settles", async () => {
-    assert.ok(sampleId, "sample project id from the export scenario");
+    if (!sampleId) {
+      await page.goto(base, { waitUntil: "domcontentloaded" });
+      await page.getByRole("tab", { name: "최근 작업", exact: true }).waitFor();
+      const projects = await page.request.get(`${base}/api/projects`);
+      assert.equal(projects.status(), 200);
+      sampleId = (await projects.json()).data.find((project) => project.name.endsWith(SAMPLE_WEB))?.id;
+    }
+    assert.ok(sampleId, "the seeded web sample must exist independently of export scenario selection");
     await page.goto(`${base}/projects/${sampleId}`, { waitUntil: "domcontentloaded" });
     await page.locator('iframe[title="캔버스"]').waitFor({ timeout: 60_000 });
     await page.getByRole("button", { name: "품질 점검", exact: true }).click();

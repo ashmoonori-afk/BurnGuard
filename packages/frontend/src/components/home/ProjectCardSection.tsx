@@ -1,3 +1,4 @@
+import { useT } from "@/i18n/t";
 import { Button } from "@/components/ui/button";
 import { FolderOpen, Search } from "lucide-react";
 import CardGrid from "./CardGrid";
@@ -31,6 +32,7 @@ export default function ProjectCardSection({
   onStartProject,
   onDelete,
 }: ProjectCardSectionProps) {
+  const t = useT();
   if (isLoading) {
     return (
       <div
@@ -38,10 +40,10 @@ export default function ProjectCardSection({
         className="rounded-2xl border border-border bg-card px-6 py-14 text-center"
       >
         <p className="text-sm font-medium text-foreground">
-          프로젝트를 불러오는 중이에요.
+          {t("home.projectsLoading")}
         </p>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          잠시만 기다려 주세요.
+          {t("home.wait")}
         </p>
       </div>
     );
@@ -54,13 +56,13 @@ export default function ProjectCardSection({
         className="rounded-xl border border-destructive/30 bg-destructive/5 p-10 text-center"
       >
         <p className="text-sm font-medium text-foreground">
-          프로젝트를 불러오지 못했어요.
+          {t("home.projectsError")}
         </p>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          로컬 서버가 켜져 있는지 확인한 뒤 다시 시도해 주세요.
+          {t("home.serverRetry")}
         </p>
         <Button className="mt-4" variant="outline" onClick={onRetry}>
-          다시 시도
+          {t("home.retry")}
         </Button>
       </div>
     );
@@ -78,7 +80,7 @@ export default function ProjectCardSection({
           {emptyHint}
         </p>
         <Button className="mt-4" variant="cta" onClick={onStartProject}>
-          새 프로젝트 만들기
+          {t("home.createTitle")}
         </Button>
       </div>
     );
@@ -92,13 +94,13 @@ export default function ProjectCardSection({
       >
         <span className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl bg-muted text-muted-foreground"><Search className="h-6 w-6" aria-hidden="true" /></span>
         <p className="text-sm font-medium text-foreground">
-          ‘{query.trim()}’에 대한 검색 결과가 없어요.
+          {t("home.searchEmpty", { query: query.trim() })}
         </p>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          검색어를 지우면 전체 목록으로 돌아가요.
+          {t("home.clearSearchHint")}
         </p>
         <Button className="mt-4" variant="outline" onClick={onClearQuery}>
-          검색어 지우기
+          {t("home.clearSearch")}
         </Button>
       </div>
     );

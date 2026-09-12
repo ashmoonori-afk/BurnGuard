@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/i18n/t";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, Blocks, File, Image, MoreHorizontal, Palette, Presentation, RefreshCw, Trash2 } from "lucide-react";
 import { resolveThumbnailSource, thumbnailRetryDelay } from "./thumbnail-source";
@@ -15,6 +16,7 @@ import type { CardViewModel } from "./mappers";
 export default function ProjectCard(
   props: CardViewModel & { onDelete?: () => void },
 ) {
+  const t = useT();
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const [retryAttempt, setRetryAttempt] = useState(0);
   const projectLinkRef = useRef<HTMLAnchorElement>(null);
@@ -47,7 +49,7 @@ export default function ProjectCard(
           {thumbnailSource === null ? (
             <div className="flex flex-col items-center gap-3 text-slate-500">
               <span className="grid h-16 w-16 place-items-center rounded-2xl border border-white/80 bg-white/70"><Icon className="h-7 w-7" strokeWidth={1.5} aria-hidden="true" /></span>
-              <span className="text-xs">{thumbnailFailed ? retryDelay === null ? "미리보기를 불러오지 못했어요" : "미리보기를 준비하고 있어요" : "미리보기가 없어요"}</span>
+              <span className="text-xs">{thumbnailFailed ? retryDelay === null ? t("home.previewError") : t("home.previewPreparing") : t("home.previewEmpty")}</span>
             </div>
           ) : (
             <img
@@ -65,7 +67,7 @@ export default function ProjectCard(
             variant="outline"
             className="absolute top-2 left-2 bg-background/95 text-[10px] tracking-wider"
           >
-            템플릿
+            {t("home.type.from_template")}
           </Badge>
         )}
         <div data-qa="project-card-details" className="relative p-4 pr-10">
@@ -79,7 +81,7 @@ export default function ProjectCard(
         </div>
       </Link>
 
-      {thumbnailFailed && retryDelay === null && <button type="button" onClick={() => { setRetryAttempt(0); setFailedSource(null); projectLinkRef.current?.focus(); }} aria-label={`${props.name} 미리보기 다시 불러오기`} className="mt-2 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />미리보기 다시 불러오기</button>}
+      {thumbnailFailed && retryDelay === null && <button type="button" onClick={() => { setRetryAttempt(0); setFailedSource(null); projectLinkRef.current?.focus(); }} aria-label={t("home.previewRetryNamed", { name: props.name })} className="mt-2 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />{t("home.previewRetry")}</button>}
 
       {props.onDelete && (
         <div className="absolute top-2 right-2">
@@ -92,7 +94,7 @@ export default function ProjectCard(
                 }}
                 type="button"
                 className="grid h-11 w-11 place-items-center rounded-xl border border-border bg-card/95 text-muted-foreground shadow-app-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={`${props.name} 옵션 메뉴`}
+                aria-label={t("home.optionsNamed", { name: props.name })}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
@@ -106,7 +108,7 @@ export default function ProjectCard(
                 }}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                삭제
+                {t("home.delete")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

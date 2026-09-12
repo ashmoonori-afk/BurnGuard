@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { PDFDocument } from "pdf-lib";
+import { parse } from "node-html-parser";
 import { watch } from "node:fs";
 import {
   mkdir,
@@ -20,6 +21,7 @@ import { exportsDir, projectsDir, systemsDir } from "../src/lib/paths";
 import { PathBoundaryError } from "../src/security/path-boundary";
 import { createApp } from "../src/server";
 import { attachmentExtractedTextPath, attachmentSummaryPath, saveSessionAttachments } from "../src/services/attachments";
+import { CanonicalTreeManifestError } from "../src/services/canonical-tree-manifest";
 import {
   indexProjectFiles,
   resolveDrawFile,
@@ -299,7 +301,10 @@ describe("serve and deletion routes", () => {
     const download = await app.request(`/api/exports/${exportId}/download`);
 
     expect([project.status, session.status, file.status, emptyDraw.status, savedDraw.status, draw.status, download.status]).toEqual([200, 200, 200, 200, 200, 200, 409]);
-    expect(await file.text()).toBe("<h1>valid</h1>");
+    const servedHeading = parse(await file.text()).querySelector("h1");
+    expect(servedHeading?.text).toBe("valid");
+    expect(servedHeading?.getAttribute("data-bg-node-id")).toBe("bg-auto-0");
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("<h1>valid</h1>");
     expect(await emptyDraw.text()).toContain("<svg");
     expect(await draw.text()).toBe("<svg/>");
     expect(await download.text()).toContain("export_not_ready");
@@ -484,7 +489,7 @@ describe("attachments service", () => {
 
     await expect(
       saveSessionAttachments(sessionId, [await pdfFixture("../../secret.pdf")]),
-    ).rejects.toBeInstanceOf(PathBoundaryError);
+    ).rejects.toBeInstanceOf(CanonicalTreeManifestError);
     expect(await readdir(outside)).toEqual([]);
   });
 });

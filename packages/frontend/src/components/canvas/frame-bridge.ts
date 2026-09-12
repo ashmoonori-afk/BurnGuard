@@ -27,6 +27,7 @@
 import type { GraphicCanvasV1 } from "@bg/shared";
 import { artifactContentSecurityPolicy } from "@bg/shared/security";
 import { buildGraphicPreviewInjection } from "@/lib/graphic-preview";
+import { isCommentEditable, isQuickCommentShortcut } from "./quick-comment";
 
 export interface FrameRect {
   rotation?: number;
@@ -107,9 +108,9 @@ interface BridgeResponse {
  * being asked. Add new event names here AND in BRIDGE_SCRIPT (or
  * deck-stage.ts for runtime-emitted events).
  */
-type FrameEventName = "active-slide-changed" | "navigate" | "viewport-wheel";
+type FrameEventName = "document-loaded" | "present-dismiss" | "active-slide-changed" | "navigate" | "viewport-wheel" | "comment-pointer" | "comment-shortcut" | "comment-dismiss";
 
-type FrameEventPayload<E extends FrameEventName> = E extends "viewport-wheel" ? { x: number; y: number; delta: number } : E extends "navigate" ? { href: string } : { index: number };
+type FrameEventPayload<E extends FrameEventName> = E extends "document-loaded" | "present-dismiss" ? { documentKey: string } : E extends "comment-pointer" | "comment-shortcut" | "comment-dismiss" ? { documentKey: string; x: number | null; y: number | null } : E extends "viewport-wheel" ? { x: number; y: number; delta: number } : E extends "navigate" ? { href: string } : { index: number };
 
 interface FrameEvent<E extends FrameEventName = FrameEventName> {
   __bgFrameBridge: true;
@@ -196,6 +197,8 @@ export function subscribeFrameEvent<E extends FrameEventName>(
 
 export type SandboxedArtifactOptions = {
   readonly graphicCanvas?: GraphicCanvasV1;
+  readonly quickCommentKey?: string;
+  readonly presentationKey?: string;
 };
 
 export function buildSandboxedArtifactSrcDoc(
@@ -211,7 +214,9 @@ export function buildSandboxedArtifactSrcDoc(
   const graphicPreview = options?.graphicCanvas === undefined
     ? ""
     : buildGraphicPreviewInjection(options.graphicCanvas);
-  const scriptTag = `<script>${BRIDGE_SCRIPT}<\/script>`;
+  const commentKey = JSON.stringify(options?.quickCommentKey ?? null).replaceAll("<", "\\u003c");
+  const presentationKey = JSON.stringify(options?.presentationKey ?? null).replaceAll("<", "\\u003c");
+  const scriptTag = `<script>(function () { var quickCommentKey = ${commentKey}; var presentationKey = ${presentationKey}; ${BRIDGE_SCRIPT} })();</script>`;
   if (/<head[\s>]/i.test(html)) {
     return html.replace(/<head([^>]*)>/i, `<head$1>${baseTag}${graphicPreview}${scriptTag}`);
   }
@@ -666,6 +671,32 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     }, "*");
   });
 
+  var commentPointer = null;
+  var commentEditable = ${isCommentEditable.toString()};
+  var commentShortcut = ${isQuickCommentShortcut.toString()};
+  function notifyComment(eventName) {
+    if (quickCommentKey === null) return;
+    window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: eventName,
+      payload: { documentKey: quickCommentKey, x: commentPointer ? commentPointer.x : null, y: commentPointer ? commentPointer.y : null } }, "*");
+  }
+  window.addEventListener("pointermove", function (event) {
+    commentPointer = { x: event.clientX, y: event.clientY };
+    notifyComment("comment-pointer");
+  }, true);
+  window.addEventListener("pointerout", function (event) {
+    if (event.relatedTarget) return;
+    commentPointer = null;
+    notifyComment("comment-pointer");
+  }, true);
+  window.addEventListener("keydown", function (event) {
+    if (quickCommentKey === null) return;
+    var editable = commentEditable(event.target);
+    if (event.key === "Escape" && !event.repeat && !event.isComposing && !event.defaultPrevented && !editable) notifyComment("comment-dismiss");
+    if (!commentPointer || !commentShortcut(event, editable)) return;
+    event.preventDefault();
+    notifyComment("comment-shortcut");
+  });
+
   // Push: notify the parent of the active slide whenever it changes
   // (hashchange, deck-stage nav, MutationObserver-driven structural
   // edit). Lets the parent drop its 5-Hz polling loop. Same envelope
@@ -737,11 +768,16 @@ const BRIDGE_SCRIPT = String.raw`(function () {
         window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: "navigate", payload: { href: destination.href } }, "*");
       }
     });
+  }
+
+  function applyInitialFragment() {
     try {
       var hash = new URL(document.baseURI).hash;
       if (hash) scrollToFragment(hash);
     } catch (e) { /* no valid artifact base */ }
   }
+
+  initializeNavigation();
 
   // Watch for [data-slide] structural edits AND data-active attribute
   // toggles. Either one means the active slide may have changed.
@@ -755,12 +791,40 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     });
   }
 
+  if (presentationKey !== null) {
+    // srcdoc has no query string. Presenter mode is host state, not a rewritten
+    // Location API or a change to authored runtime code.
+    document.addEventListener("DOMContentLoaded", function () { document.body.setAttribute("data-presenter", ""); }, { once: true });
+    window.addEventListener("load", function () {
+      // Register after authored startup handlers, at window bubble phase, so
+      // their preventDefault/stopPropagation and editable/IME keys stay local.
+      window.addEventListener("keydown", function (event) {
+        if (event.key !== "Escape" || event.repeat || event.isComposing || event.keyCode === 229 || event.defaultPrevented || commentEditable(event.target)) return;
+        window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: "present-dismiss",
+          payload: { documentKey: presentationKey } }, "*");
+      });
+    }, { once: true });
+  }
+
+  function notifyDocumentLoaded() {
+    if (quickCommentKey === null) return;
+    window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: "document-loaded",
+      payload: { documentKey: quickCommentKey } }, "*");
+  }
+  function finishDocumentLoad() {
+    requestAnimationFrame(function () {
+      applyInitialFragment();
+      notifyDocumentLoaded();
+    });
+  }
+  if (document.readyState === "complete") finishDocumentLoad();
+  else window.addEventListener("load", finishDocumentLoad, { once: true });
+
   // Emit an initial state so the parent gets the first slide without
   // a request.
   if (document.readyState === "complete" || document.readyState === "interactive") {
-    initializeNavigation();
     notifyActiveSlide();
   } else {
-    document.addEventListener("DOMContentLoaded", function () { initializeNavigation(); notifyActiveSlide(); });
+    document.addEventListener("DOMContentLoaded", notifyActiveSlide, { once: true });
   }
 })();`;

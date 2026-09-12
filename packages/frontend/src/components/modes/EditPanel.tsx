@@ -1,3 +1,4 @@
+import { useT } from "@/i18n/t";
 import { useEffect, useState } from "react";
 import type { EditTarget } from "@/components/canvas/EditLayer";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ export default function EditPanel({
   onSave: (patch: EditPatch) => void;
   onClear: () => void;
 }) {
+  const t = useT();
   const [text, setText] = useState("");
   const [attrRows, setAttrRows] = useState<AttrRow[]>([]);
 
@@ -44,12 +46,10 @@ export default function EditPanel({
     return (
       <div className="p-4">
         <div className="mb-2 text-sm font-semibold">
-          편집
+          {t("modes.edit.title")}
         </div>
         <p className="text-sm leading-6 text-muted-foreground">
-          캔버스에 마우스를 올리면 편집할 수 있는 요소가 강조되고, 클릭하면
-          텍스트, 링크, 이미지 설명을 고칠 수 있어요. 편집을 지원하는 요소가
-          강조돼요.
+          {t("modes.edit.description")}
         </p>
       </div>
     );
@@ -91,25 +91,25 @@ export default function EditPanel({
       <div className="border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold">
-            편집
+            {t("modes.edit.title")}
           </span>
           <button
             type="button"
             onClick={onClear}
             className="min-h-9 rounded px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
           >
-            선택 해제
+            {t("modes.clearSelection")}
           </button>
         </div>
         <div className="mt-1 truncate text-xs font-medium">
-          {target.tag === "img" ? "이미지" : target.tag === "a" ? "링크" : "텍스트 요소"}
+          {target.tag === "img" ? t("modes.edit.image") : target.tag === "a" ? t("modes.edit.link") : t("modes.edit.textElement")}
           {target.text.trim() ? ` · ${target.text.trim()}` : ""}
         </div>
       </div>
 
       <section className="px-4 py-3">
         <label htmlFor="element-edit-text" className="text-xs font-medium text-muted-foreground">
-          텍스트 내용
+          {t("modes.edit.textContent")}
         </label>
         <textarea
           id="element-edit-text"
@@ -121,25 +121,25 @@ export default function EditPanel({
       </section>
 
       <details className="border-t border-border px-4 py-3">
-        <summary className="cursor-pointer text-xs leading-6">고급 속성</summary>
+        <summary className="cursor-pointer text-xs leading-6">{t("modes.edit.advancedAttributes")}</summary>
         <div className="my-2 break-all font-mono text-[10px] text-muted-foreground">
           &lt;{target.tag}&gt; · {target.bg_id}
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-            속성
+            {t("modes.edit.attributes")}
           </span>
           <button
             type="button"
             onClick={() => setAttrRows((prev) => [...prev, { key: "", value: "" }])}
             className="text-[10px] text-muted-foreground hover:text-foreground"
           >
-            + 추가
+            {t("modes.edit.addAttribute")}
           </button>
         </div>
         <div className="mt-1 flex flex-col gap-1">
           {attrRows.length === 0 && (
-            <p className="text-[10px] text-muted-foreground">속성이 없어요.</p>
+            <p className="text-[10px] text-muted-foreground">{t("modes.edit.noAttributes")}</p>
           )}
           {attrRows.map((row, idx) => (
             <div key={idx} className="flex gap-1">
@@ -150,8 +150,8 @@ export default function EditPanel({
                   next[idx] = { ...next[idx], key: e.target.value };
                   setAttrRows(next);
                 }}
-                placeholder="이름"
-                aria-label={`속성 ${idx + 1} 이름`}
+                placeholder={t("modes.edit.name")}
+                aria-label={t("modes.edit.attributeName", { number: idx + 1 })}
                 className="min-h-10 min-w-0 flex-1 rounded border border-border bg-background p-2 text-xs font-mono"
               />
               <input
@@ -161,15 +161,15 @@ export default function EditPanel({
                   next[idx] = { ...next[idx], value: e.target.value };
                   setAttrRows(next);
                 }}
-                placeholder="값"
-                aria-label={`속성 ${idx + 1} 값`}
+                placeholder={t("modes.edit.value")}
+                aria-label={t("modes.edit.attributeValue", { number: idx + 1 })}
                 className="min-h-10 min-w-0 flex-1 rounded border border-border bg-background p-2 text-xs font-mono"
               />
               <button
                 type="button"
                 onClick={() => setAttrRows(attrRows.filter((_, i) => i !== idx))}
                 className="min-h-10 min-w-9 rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="속성 삭제"
+                aria-label={t("modes.edit.deleteAttribute")}
               >
                 ×
               </button>
@@ -186,7 +186,7 @@ export default function EditPanel({
           variant="cta"
           className="min-h-11 w-full rounded-lg px-3 py-2 text-sm"
         >
-          {saving ? "저장하는 중..." : "저장"}
+          {saving ? t("modes.saving") : t("modes.save")}
         </Button>
       </div>
     </div>

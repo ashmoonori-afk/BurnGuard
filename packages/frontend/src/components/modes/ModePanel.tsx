@@ -1,3 +1,4 @@
+import { useT } from "@/i18n/t";
 import type { Comment } from "@bg/shared";
 import type { CanvasMode } from "./types";
 import type { EditTarget } from "@/components/canvas/EditLayer";
@@ -90,10 +91,11 @@ export default function ModePanel({
   quality: QualityPanelBinding;
   uxReview: UxReviewBinding;
 }) {
+  const t = useT();
   if (!mode) return null;
 
   return (
-    <aside aria-label="캔버스 도구 설정" className="flex min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1500px]:w-[288px] max-[1000px]:max-h-[40%] max-[1000px]:w-full max-[1000px]:shrink max-[1000px]:border-l-0 max-[1000px]:border-t">
+    <aside aria-label={t("modes.panel.settings")} className="flex min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1500px]:w-[288px] max-[1000px]:max-h-[40%] max-[1000px]:w-full max-[1000px]:shrink max-[1000px]:border-l-0 max-[1000px]:border-t">
       {(mode === "select" || mode === "tweaks") && (
         <TweaksPanel
           target={tweaksTarget}
@@ -126,7 +128,7 @@ export default function ModePanel({
         />
       )}
       {mode === "quality" && <Tabs defaultValue="quality" className="flex min-h-0 flex-1 flex-col">
-        <TabsList aria-label="결과물 검토" className="m-2 h-auto shrink-0"><TabsTrigger value="quality" className="min-h-11 flex-1">품질 검사</TabsTrigger><TabsTrigger value="ux" className="min-h-11 flex-1">UX 개선</TabsTrigger></TabsList>
+        <TabsList aria-label={t("modes.panel.review")} className="m-2 h-auto shrink-0"><TabsTrigger value="quality" className="min-h-11 flex-1">{t("modes.panel.quality")}</TabsTrigger><TabsTrigger value="ux" className="min-h-11 flex-1">{t("modes.panel.ux")}</TabsTrigger></TabsList>
         <TabsContent value="quality" className="min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col"><QualityPanel quality={quality} /></TabsContent>
         <TabsContent value="ux" className="min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col"><UxReviewPanel key={`${uxReview.projectId}:${uxReview.relPath}:${uxReview.digest}:${uxReview.revision}`} binding={uxReview} /></TabsContent>
       </Tabs>}

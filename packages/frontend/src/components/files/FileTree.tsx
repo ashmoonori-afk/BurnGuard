@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { FileInfo } from "@bg/shared";
 import { cn } from "@/lib/utils";
+import { useT, type MessageKey } from "@/i18n/t";
 
 export const fileDisplayPath = (path: string): string => path.replace(/^docs\/attachments\/[a-f0-9]{64}-/, "docs/attachments/");
 
@@ -20,14 +21,14 @@ const CATEGORY_ORDER: FileInfo["category"][] = [
   "other",
 ];
 
-const CATEGORY_LABEL: Record<FileInfo["category"], string> = {
-  folder: "폴더",
-  stylesheet: "스타일시트",
-  script: "스크립트",
-  html: "HTML",
-  asset: "에셋",
-  document: "문서",
-  other: "기타",
+const CATEGORY_LABEL: Record<FileInfo["category"], MessageKey> = {
+  folder: "files.category.folder",
+  stylesheet: "files.category.stylesheet",
+  script: "files.category.script",
+  html: "files.category.html",
+  asset: "files.category.asset",
+  document: "files.category.document",
+  other: "files.category.other",
 };
 
 function iconFor(category: FileInfo["category"]) {
@@ -62,6 +63,7 @@ export default function FileTree({
   activePath: string | null;
   onOpen: (file: FileInfo) => void;
 }) {
+  const t = useT();
   const byCategory = new Map<FileInfo["category"], FileInfo[]>();
   for (const f of files) {
     const list = byCategory.get(f.category) ?? [];
@@ -70,15 +72,15 @@ export default function FileTree({
   }
 
   return (
-    <nav aria-label="프로젝트 파일 탐색" className="space-y-5 p-3 text-sm">
+    <nav aria-label={t("files.browse")} className="space-y-5 p-3 text-sm">
       {CATEGORY_ORDER.map((cat) => {
         const list = byCategory.get(cat);
         if (!list || list.length === 0) return null;
         return (
           <section key={cat}>
             <div className="mb-2 flex items-center justify-between px-2 text-xs font-medium text-muted-foreground">
-              <span>{CATEGORY_LABEL[cat]}</span>
-              <span className="tabular-nums" aria-label={`${list.length}개`}>{list.length}</span>
+              <span>{t(CATEGORY_LABEL[cat])}</span>
+              <span className="tabular-nums" aria-label={t("files.itemCount", { count: list.length })}>{list.length}</span>
             </div>
             <ul className="space-y-1">
               {list.map((f) => {

@@ -1,8 +1,10 @@
+import { useT, type MessageKey } from "@/i18n/t";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { UX_PATTERNS, type UxReviewReport } from "@bg/shared";
 import { getUxReview } from "@/api/ux-review";
 import { Button } from "@/components/ui/button";
+import { UX_PATTERN_COPY } from "./ux-pattern-copy";
 
 export type UxReviewBinding = {
   projectId: string;
@@ -22,11 +24,12 @@ export function uxReviewRequest(report: UxReviewReport, title: string, guidance:
 }
 
 export default function UxReviewPanel({ binding }: { binding: UxReviewBinding }) {
+  const t = useT();
   const { projectId, relPath, digest, revision, disabled } = binding;
   const [filter, setFilter] = useState("");
   const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [message, setMessage] = useState<MessageKey | "">("");
+  const [error, setError] = useState<MessageKey | "">("");
   const requestRef = useRef<AbortController | null>(null);
   const bindingRef = useRef(binding);
   bindingRef.current = binding;
@@ -50,53 +53,53 @@ export default function UxReviewPanel({ binding }: { binding: UxReviewBinding })
       const latest = await getUxReview(projectId, relPath, controller.signal);
       if (controller.signal.aborted) return;
       if (!uxReviewIsCurrent(latest, bindingRef.current) || latest.artifact_digest !== report.artifact_digest || latest.artifact_revision !== report.artifact_revision) {
-        setError("결과물이 바뀌었어요. 다시 진단한 뒤 요청해 주세요.");
+        setError("modes.ux.changed");
         void query.refetch();
         return;
       }
       if (bindingRef.current.disabled) throw new Error("session_not_ready");
       await bindingRef.current.onRequestAI(uxReviewRequest(latest, title, guidance, nodeId), controller.signal);
-      if (!controller.signal.aborted) setMessage("AI 수정 요청을 보냈어요. 대화에서 진행 상황을 확인해 주세요.");
+      if (!controller.signal.aborted) setMessage("modes.ux.sent");
     } catch {
-      if (!controller.signal.aborted) setError("AI 수정 요청을 완료하지 못했어요. 대화 상태를 확인한 뒤 다시 시도해 주세요.");
+      if (!controller.signal.aborted) setError("modes.ux.requestFailed");
     } finally {
       requestRef.current = null;
       if (!controller.signal.aborted) setPending(false);
     }
   };
   return <div className="min-h-0 flex-1 overflow-y-auto p-3 text-xs [scrollbar-gutter:stable]">
-    <h2 className="text-sm font-semibold">UX 진단과 개선</h2>
-    <p className="mt-2 break-keep text-muted-foreground">로컬 HTML의 구조를 바탕으로 개선 후보를 찾아요. 실제 화면·모바일 동작·사용자 경험을 검증한 결과는 아니에요.</p>
-    {!supported ? <p role="status" className="mt-3">HTML 결과물을 열면 진단할 수 있어요.</p> : <>
-      <Button className="my-3 min-h-11" size="sm" variant="outline" disabled={disabled || pending || query.isFetching} onClick={() => { void query.refetch(); }}>다시 진단</Button>
-      {query.isFetching && <p role="status">현재 결과물을 진단하고 있어요.</p>}
-      {query.isError && <p role="alert">진단을 불러오지 못했어요. 현재 HTML 파일을 확인하고 다시 시도해 주세요.</p>}
-      {report && !current && <p role="status">이전 결과예요. 현재 결과물을 다시 진단해 주세요.</p>}
+    <h2 className="text-sm font-semibold">{t("modes.ux.title")}</h2>
+    <p className="mt-2 break-keep text-muted-foreground">{t("modes.ux.description")}</p>
+    {!supported ? <p role="status" className="mt-3">{t("modes.ux.openHtml")}</p> : <>
+      <Button className="my-3 min-h-11" size="sm" variant="outline" disabled={disabled || pending || query.isFetching} onClick={() => { void query.refetch(); }}>{t("modes.ux.retry")}</Button>
+      {query.isFetching && <p role="status">{t("modes.ux.reviewing")}</p>}
+      {query.isError && <p role="alert">{t("modes.ux.loadFailed")}</p>}
+      {report && !current && <p role="status">{t("modes.ux.stale")}</p>}
       {report && <>
-        <p className="mb-3 break-all text-muted-foreground">근거 파일: {report.source_path} · 버전 {report.artifact_revision}</p>
-        {report.findings.length === 0 && <p>정적 검사에서 개선 후보를 찾지 못했어요. 사용성 통과를 의미하지는 않아요.</p>}
+        <p className="mb-3 break-all text-muted-foreground">{t("modes.ux.source", { path: report.source_path, revision: report.artifact_revision })}</p>
+        {report.findings.length === 0 && <p>{t("modes.ux.noFindings")}</p>}
         <div className="space-y-3">{report.findings.map((finding) => <article key={finding.id} className="rounded-md border border-border p-3">
           <h3 className="font-semibold">{finding.title}</h3>
-          <p className="mt-1 text-muted-foreground">{finding.priority === "high" ? "우선 검토" : "개선 권장"}{finding.node_bg_id ? ` · 요소 ${finding.node_bg_id}` : " · 페이지"}</p>
-          <p className="mt-2 break-words">근거: {finding.evidence}</p>
-          <p className="mt-2 break-keep">제안: {finding.proposal}</p>
-          <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} onClick={() => { void request(finding.title, `관찰 근거: ${finding.evidence}\n개선 제안: ${finding.proposal}`, finding.node_bg_id); }}>이 제안으로 AI 수정 요청</Button>
+          <p className="mt-1 text-muted-foreground">{finding.priority === "high" ? t("modes.ux.highPriority") : t("modes.ux.recommended")}{finding.node_bg_id ? t("modes.ux.node", { id: finding.node_bg_id }) : t("modes.ux.page")}</p>
+          <p className="mt-2 break-words">{t("modes.ux.evidence", { evidence: finding.evidence })}</p>
+          <p className="mt-2 break-keep">{t("modes.ux.proposal", { proposal: finding.proposal })}</p>
+          <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} onClick={() => { void request(finding.title, `관찰 근거: ${finding.evidence}\n개선 제안: ${finding.proposal}`, finding.node_bg_id); }}>{t("modes.ux.requestProposal")}</Button>
         </article>)}</div>
-        <details className="my-3"><summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">진단 범위와 한계</summary><ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">{report.limitations.map((item) => <li key={item}>{item}</li>)}</ul></details>
+        <details className="my-3"><summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.ux.limitations")}</summary><ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">{report.limitations.map((item) => <li key={item}>{item}</li>)}</ul></details>
       </>}
     </>}
     <section className="mt-4 border-t border-border pt-3" aria-labelledby="ux-pattern-title">
-      <h3 id="ux-pattern-title" className="font-semibold">자체 UX 패턴 라이브러리</h3>
-      <p className="mt-1 text-muted-foreground">패턴을 검토하고 버튼을 누르면 현재 파일의 AI 수정 요청으로 보내요.</p>
-      <label className="my-2 block">패턴 검색<input type="search" value={filter} maxLength={100} onChange={(event) => setFilter(event.target.value)} className="mt-1 min-h-11 w-full rounded border border-input bg-background px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder="타이포그래피, 모바일 등" /></label>
-      <div className="space-y-2">{UX_PATTERNS.filter((pattern) => `${pattern.title} ${pattern.description}`.toLowerCase().includes(filter.trim().toLowerCase())).map((pattern) => <article key={pattern.id} className="rounded-md border border-border p-3">
-        <h4 className="font-semibold">{pattern.title}</h4><p className="mt-1 break-keep text-muted-foreground">{pattern.description}</p>
-        <details className="mt-2"><summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">수정 지침 보기</summary><p className="mt-1 break-keep">{pattern.guidance}</p></details>
-        <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} onClick={() => { void request(pattern.title, pattern.guidance); }}>이 패턴으로 AI 수정 요청</Button>
+      <h3 id="ux-pattern-title" className="font-semibold">{t("modes.ux.library")}</h3>
+      <p className="mt-1 text-muted-foreground">{t("modes.ux.libraryHint")}</p>
+      <label className="my-2 block">{t("modes.ux.search")}<input type="search" value={filter} maxLength={100} onChange={(event) => setFilter(event.target.value)} className="mt-1 min-h-11 w-full rounded border border-input bg-background px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder={t("modes.ux.searchPlaceholder")} /></label>
+      <div className="space-y-2">{UX_PATTERNS.filter((pattern) => `${t(UX_PATTERN_COPY[pattern.id].title)} ${t(UX_PATTERN_COPY[pattern.id].description)}`.toLowerCase().includes(filter.trim().toLowerCase())).map((pattern) => <article key={pattern.id} className="rounded-md border border-border p-3">
+        <h4 className="font-semibold">{t(UX_PATTERN_COPY[pattern.id].title)}</h4><p className="mt-1 break-keep text-muted-foreground">{t(UX_PATTERN_COPY[pattern.id].description)}</p>
+        <details className="mt-2"><summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.ux.showGuidance")}</summary><p className="mt-1 break-keep">{t(UX_PATTERN_COPY[pattern.id].guidance)}</p></details>
+        <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} onClick={() => { void request(pattern.title, pattern.guidance); }}>{t("modes.ux.requestPattern")}</Button>
       </article>)}</div>
     </section>
-    {pending && <p role="status" className="mt-3">현재 버전을 확인하고 AI에 요청하고 있어요.</p>}
-    {message && <p role="status" className="mt-3">{message}</p>}
-    {error && <p role="alert" className="mt-3 text-destructive">{error}</p>}
+    {pending && <p role="status" className="mt-3">{t("modes.ux.pending")}</p>}
+    {message && <p role="status" className="mt-3">{t(message)}</p>}
+    {error && <p role="alert" className="mt-3 text-destructive">{t(error)}</p>}
   </div>;
 }

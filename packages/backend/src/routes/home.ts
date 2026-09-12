@@ -5,9 +5,11 @@ import type {
   ApiSuccess,
   BackendDetectionResult,
   DesignSystemStatus,
+  LlmApiKeysPatch,
+  LlmConnectionId,
   SettingsSummary,
 } from "@bg/shared";
-import { APP_VERSION, parseGenerationOptions } from "@bg/shared";
+import { APP_VERSION, LLM_CONNECTIONS, parseGenerationOptions } from "@bg/shared";
 import { loadConfig, updateConfig, type AppConfig } from "../config";
 import {
   createProjectRecord,
@@ -15,7 +17,7 @@ import {
   listHomeProjects,
 } from "../db/seed";
 import { getPromptSampleBySlug, promptSampleDesignSystemId, seedTutorialsOnce } from "../db/seed-tutorials";
-import { detectBackends } from "../services/backends";
+import { CodexAuthenticationProbeError, detectBackends } from "../services/backends";
 import { ensureProjectWatcher } from "../services/watchers";
 import {
   parseProjectInput,
@@ -59,6 +61,10 @@ function isBackendId(
   return value === "claude-code" || value === "codex";
 }
 
+function isApiKeyValue(value: unknown): value is string | null {
+  return value === null || (typeof value === "string" && value.length <= 4096 && !/[\r\n]/.test(value));
+}
+
 function isTheme(value: unknown): value is SettingsSummary["theme"] {
   return value === "light" || value === "dark" || value === "auto";
 }
@@ -73,6 +79,10 @@ function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): Sett
   return {
     generation_defaults: config.generationDefaults,
     commandcode_api_key_set: Boolean(config.commandcodeApiKey),
+    llm_connections: LLM_CONNECTIONS.map((connection) => ({
+      ...connection,
+      api_key_set: Boolean(config.llmApiKeys[connection.id]),
+    })),
     user: {
       id: config.user.id,
       display_name: config.user.displayName,
@@ -147,7 +157,13 @@ homeRoutes.post("/api/projects", async (c) => {
   }
 
   if (input.type === "graphic") {
-    const detection = await detectBackends({ force: true });
+    let detection: BackendDetectionResult;
+    try { detection = await detectBackends({ force: true }); }
+    catch (error) {
+      if (!(error instanceof CodexAuthenticationProbeError)) throw error;
+      c.header("Cache-Control", "no-store");
+      return c.json(fail(error.code, error.message, error.diagnostics), 503);
+    }
     if (input.backendId !== "codex" || !detection.backends.some((backend) => backend.id === "codex" && backend.found && backend.authenticated === true)) return c.json(fail("graphic_requires_authenticated_codex", "그래픽 생성에는 로그인된 Codex 연결이 필요해요."), 409);
   }
 
@@ -166,8 +182,15 @@ homeRoutes.post("/api/projects", async (c) => {
 });
 
 homeRoutes.get("/api/backends/detect", async (c) => {
-  c.header("Cache-Control", "private, max-age=30");
-  return c.json(ok((await detectBackends()) as BackendDetectionResult));
+  try {
+    const detection = await detectBackends();
+    c.header("Cache-Control", "private, max-age=30");
+    return c.json(ok(detection));
+  } catch (error) {
+    if (!(error instanceof CodexAuthenticationProbeError)) throw error;
+    c.header("Cache-Control", "no-store");
+    return c.json(fail(error.code, error.message, error.diagnostics), 503);
+  }
 });
 
 // Re-runs the tutorial / prompt-sample seed. Idempotent — only the
@@ -220,6 +243,7 @@ homeRoutes.patch("/api/settings", async (c) => {
   }
 
   const changes: Pick<Partial<AppConfig>, "theme" | "defaultBackend" | "figmaPersonalAccessToken" | "commandcodeApiKey" | "generationDefaults"> & {
+    llmApiKeys?: LlmApiKeysPatch;
     chat?: Partial<AppConfig["chat"]>;
     user?: Partial<AppConfig["user"]>;
   } = {};
@@ -235,8 +259,16 @@ homeRoutes.patch("/api/settings", async (c) => {
   }
   if ("commandcode_api_key" in patch) {
     const value = patch.commandcode_api_key;
-    if (value !== null && (typeof value !== "string" || value.length > 4096 || /[\r\n]/.test(value))) return c.json(fail("invalid_commandcode_key", "API key is invalid"), 400);
+    if (!isApiKeyValue(value)) return c.json(fail("invalid_commandcode_key", "API key is invalid"), 400);
     changes.commandcodeApiKey = typeof value === "string" ? value.trim() || null : null;
+  }
+  if ("llm_api_keys" in patch) {
+    if (!isRecord(patch.llm_api_keys)) return c.json(fail("invalid_llm_api_keys", "LLM API keys are invalid"), 400);
+    changes.llmApiKeys = {};
+    for (const [id, value] of Object.entries(patch.llm_api_keys)) {
+      if (!LLM_CONNECTIONS.some((connection) => connection.id === id) || !isApiKeyValue(value)) return c.json(fail("invalid_llm_api_keys", "LLM API keys are invalid"), 400);
+      changes.llmApiKeys[id as LlmConnectionId] = typeof value === "string" ? value.trim() || null : null;
+    }
   }
   if ("theme" in patch) {
     if (!isTheme(patch.theme)) {
@@ -318,6 +350,7 @@ homeRoutes.patch("/api/settings", async (c) => {
     ...current,
     ...changes,
     generationDefaults: { ...current.generationDefaults, ...changes.generationDefaults },
+    llmApiKeys: { ...current.llmApiKeys, ...changes.llmApiKeys },
     chat: { ...current.chat, ...changes.chat },
     user: { ...current.user, ...changes.user },
   }));

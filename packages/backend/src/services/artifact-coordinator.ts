@@ -110,11 +110,12 @@ export class ArtifactCoordinator {
     const source = new TextDecoder("utf-8", { fatal: true }).decode(await readFile(path.join(input.projectDir, input.relPath)));
     const fingerprint = fingerprintHtmlNode(source, input.nodeBgId);
     if (fingerprint.fingerprint !== input.nodeFingerprint) throw new ArtifactOperationError("stale_node_fingerprint", "Expected node fingerprint is stale");
+    const patchedSource = applyHtmlNodePatch(source, { ...input.patch, node_bg_id: input.nodeBgId });
     return this.run({
       projectId: input.projectId, projectDir: input.projectDir, kind: "patch",
       expectedRevision: input.expectedRevision, expectedArtifactDigest: input.expectedArtifactDigest,
       expectedFileHash: input.expectedFileHash, nodeFingerprint: input.nodeFingerprint,
-      mutate: async (stage) => { await writeFile(path.join(stage, input.relPath), applyHtmlNodePatch(source, { ...input.patch, node_bg_id: input.nodeBgId })); },
+      mutate: async (stage) => { await writeFile(path.join(stage, input.relPath), patchedSource); },
     });
   }
 

@@ -23,7 +23,7 @@ export function renderGraphic(
         ["detail-features", "구성과 혜택", "제품 구성과 사용자가 얻는 혜택을 정리하세요."],
         ["detail-payment-cta", "마지막 안내", "구매 전 확인 사항과 마지막 행동 안내로 완성하세요."],
       ] as const;
-      artboards = `<main data-graphic-artboard id="frame-1-product-detail" style="width:860px;height:${canvas.height}px">${sections.map(([id, heading, copy]) => `<section data-bg-node-id="${id}"><p class="question">${heading}</p><h2>${copy}</h2></section>`).join("")}</main>`;
+      artboards = `<main data-graphic-artboard id="frame-1-product-detail" style="width:${canvas.width}px;height:${canvas.height}px">${sections.map(([id, heading, copy]) => `<section data-bg-node-id="${id}"><p class="question">${heading}</p><h2>${copy}</h2></section>`).join("")}</main>`;
       break;
     }
     case "banner_set": {

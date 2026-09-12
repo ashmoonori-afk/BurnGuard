@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { runInNewContext } from "node:vm";
 import { buildSandboxedArtifactSrcDoc } from "../src/components/canvas/frame-bridge";
 import { computeGraphicPreviewFit } from "../src/lib/graphic-preview";
 import { parseProjectGraphicCanvas } from "../src/lib/graphic-project";
@@ -8,6 +9,32 @@ const GRAPHIC_HTML = "<!doctype html><html><head><title>Graphic</title></head><b
 const BASE_HREF = "http://local/api/projects/p/fs/index.html";
 
 describe("graphic preview fit", () => {
+  test("a zero-size initial iframe refits after its first layout frame", () => {
+    const source = buildSandboxedArtifactSrcDoc(GRAPHIC_HTML, BASE_HREF, {
+      graphicCanvas: { schema_version: 1, width: 640, height: 480 },
+    });
+    const runtime = source.match(/<script data-bg-graphic-preview-runtime>([\s\S]*?)<\/script>/u)?.[1];
+    if (!runtime) throw new Error("Graphic runtime missing");
+    const frames: Array<() => void> = [];
+    const properties = new Map<string, string>();
+    const context = {
+      innerWidth: 0, innerHeight: 0,
+      requestAnimationFrame: (callback: () => void) => frames.push(callback),
+      window: { addEventListener() {} },
+      document: { readyState: "complete", documentElement: {
+        dataset: {}, style: { setProperty: (name: string, value: string) => properties.set(name, value) },
+      } },
+    };
+    runInNewContext(runtime, context);
+    expect(frames).toHaveLength(1);
+    context.innerWidth = 1076;
+    context.innerHeight = 685;
+    frames[0]?.();
+    expect(properties.get("--bg-graphic-preview-scale")).toBe("1");
+    expect(properties.get("--bg-graphic-preview-x")).toBe("218px");
+    expect(properties.get("--bg-graphic-preview-y")).toBe("102.5px");
+  });
+
   test.each([
     [{ width: 375, height: 315 }, { width: 1200, height: 628 }, { scale: 0.3125, x: 0, y: 59.375, renderedWidth: 375, renderedHeight: 196.25 }],
     [{ width: 375, height: 315 }, { width: 1080, height: 1920 }, { scale: 0.1640625, x: 98.90625, y: 0, renderedWidth: 177.1875, renderedHeight: 315 }],

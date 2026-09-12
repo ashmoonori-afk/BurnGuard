@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { t, useT } from "@/i18n/t";
 import ComposerAttachments from "./ComposerAttachments";
 import { VisualSourceCandidates } from "./VisualSourceCandidates";
 import {
@@ -28,12 +29,12 @@ function sendStateMessage(state: ComposerSendState): string | null {
     case "idle":
       return null;
     case "processing":
-      return "메시지와 첨부 자료를 보내고 있어요…";
+      return t("workspace.composer.processing");
     case "cancelled":
-      return "전송 요청을 취소했어요. 다시 보낼 수 있어요.";
+      return t("workspace.composer.cancelled");
     case "failed":
-      if (state.code === "unsupported_file_kind") return "지원하지 않는 형식이라 저장하지 않았어요. 해당 파일을 빼고 다시 보내 주세요.";
-      if (state.code === "unsupported_visual_source") return "URL·웹·스톡 소스는 지원하지 않아 저장하지 않았어요. 로컬 이미지, Word(.docx), PDF 또는 PPTX를 업로드해 주세요.";
+      if (state.code === "unsupported_file_kind") return t("workspace.composer.unsupportedFile");
+      if (state.code === "unsupported_visual_source") return t("workspace.composer.unsupportedVisualSource");
       return apiErrorCopy(state);
     default: {
       const unreachable: never = state;
@@ -88,6 +89,7 @@ export default function Composer({
   /** Indexed managed files are disclosed as editable-only source candidates. */
   projectFiles?: readonly FileInfo[];
 }) {
+  const translate = useT();
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
   const draft = useComposerDraft(sessionId, initialText);
   const documents = useComposerDocuments(sessionId, draft.ready, draft.items);
@@ -164,7 +166,7 @@ export default function Composer({
       onDrop={handleDrop}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <label htmlFor={`composer-${sessionId}`} className="text-xs font-semibold text-foreground">작업 요청</label>
+        <label htmlFor={`composer-${sessionId}`} className="text-xs font-semibold text-foreground">{translate("workspace.composer.requestLabel")}</label>
         <span className="text-[11px] text-muted-foreground">Ctrl / ⌘ + Enter</span>
       </div>
       {activePageLabel !== null ? <div className="mb-2 w-fit max-w-full truncate rounded-full border border-border bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground" title={activePageLabel}>{activePageLabel}</div> : null}
@@ -174,12 +176,12 @@ export default function Composer({
         onRoleChange={visualSources.setRole}
         onRemove={visualSources.remove}
       />
-      {!draft.ready && <p role="status" className="text-xs text-muted-foreground">작성 중이던 내용을 불러오고 있어요…</p>}
+      {!draft.ready && <p role="status" className="text-xs text-muted-foreground">{translate("workspace.composer.draftLoading")}</p>}
       {draft.ready && documents.status !== "empty" && <p role="status" className="mb-2 text-xs text-muted-foreground">
-        {documents.status === "saving" ? "원본을 프로젝트 docs/attachments에 저장하고 있어요…" : documents.status === "saved" ? "원본을 docs/attachments에 저장했어요. 첨부를 빼도 저장된 파일은 남아요." : "원본을 저장하지 못했어요. 다시 저장한 뒤 전송해 주세요."}
-        {documents.status === "error" && <Button type="button" size="sm" variant="ghost" onClick={documents.retry}>다시 저장</Button>}
+        {documents.status === "saving" ? translate("workspace.composer.documentsSaving") : documents.status === "saved" ? translate("workspace.composer.documentsSaved") : translate("workspace.composer.documentsError")}
+        {documents.status === "error" && <Button type="button" size="sm" variant="ghost" onClick={documents.retry}>{translate("workspace.composer.retrySave")}</Button>}
       </p>}
-      {draft.storageError && <p role="status" className="text-xs text-warning-foreground">이 브라우저에서 초안을 저장하지 못했어요. 페이지를 닫기 전에 메시지를 보내 주세요.</p>}
+      {draft.storageError && <p role="status" className="text-xs text-warning-foreground">{translate("workspace.composer.draftStorageError")}</p>}
 
       {statusMessage !== null && (
         <p
@@ -203,7 +205,14 @@ export default function Composer({
         placeholder={placeholder}
         rows={3}
         disabled={disabled || sending || !draft.ready}
-        aria-label="메시지 입력"
+        aria-label={translate("workspace.composer.messageInput")}
+        onPaste={(e) => {
+          if (!draft.ready || disabled || sending) return;
+          const images = Array.from(e.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+          if (images.length === 0) return;
+          e.preventDefault();
+          visualSources.add(images);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
@@ -220,7 +229,7 @@ export default function Composer({
           type="file"
           multiple
           accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")}
-          aria-label="자료 파일 선택 (이미지, Word, PDF, PPTX)"
+          aria-label={translate("workspace.composer.filePicker")}
           className="hidden"
           onChange={(e) => {
             const picked = Array.from(e.target.files ?? []);
@@ -234,8 +243,8 @@ export default function Composer({
           variant="ghost"
           size="icon"
           className="h-9 w-9 shrink-0 text-muted-foreground max-[900px]:h-11 max-[900px]:w-11"
-          title="설정 열기"
-          aria-label="설정 열기"
+          title={translate("workspace.composer.openSettings")}
+          aria-label={translate("workspace.composer.openSettings")}
           onClick={() => setSettingsOpen(true)}
         >
           <Settings2 className="h-3.5 w-3.5" />
@@ -244,11 +253,11 @@ export default function Composer({
           variant="outline"
           size="sm"
           className="h-9 gap-1.5 px-2.5 text-xs max-[900px]:h-11"
-          title="참고할 파일을 첨부합니다"
+          title={translate("workspace.composer.attachTitle")}
           disabled={disabled || sending || !draft.ready}
           onClick={() => fileInput.current?.click()}
         >
-          <Paperclip className="h-3.5 w-3.5" /> 자료 첨부
+          <Paperclip className="h-3.5 w-3.5" /> {translate("workspace.composer.attach")}
         </Button>
         <div className="flex-1" />
         {sending ? (
@@ -257,10 +266,10 @@ export default function Composer({
             size="sm"
             className="h-9 gap-1.5 px-3 text-xs max-[900px]:h-11"
             onClick={() => sendAbort.current?.abort()}
-            aria-label="전송 취소"
-            title="전송 요청을 취소합니다"
+            aria-label={translate("workspace.composer.cancelSend")}
+            title={translate("workspace.composer.cancelSendTitle")}
           >
-            <StopCircle className="h-3.5 w-3.5" aria-hidden="true" /> 전송 취소
+            <StopCircle className="h-3.5 w-3.5" aria-hidden="true" /> {translate("workspace.composer.cancelSend")}
           </Button>
         ) : disabled && canInterrupt ? (
           <Button
@@ -269,14 +278,14 @@ export default function Composer({
             className="h-9 gap-1.5 px-3 text-xs max-[900px]:h-11"
             disabled={interruptPending || !onInterrupt}
             onClick={() => onInterrupt?.()}
-            title="진행 중인 작업을 중단합니다"
+            title={translate("workspace.composer.interruptTitle")}
           >
             <StopCircle className="h-3.5 w-3.5" />
             {interruptPending
-              ? "중단하는 중..."
+              ? translate("workspace.composer.interrupting")
               : turnElapsedMs == null
-                ? "중단"
-                : `중단 · ${formatElapsed(turnElapsedMs)}`}
+                ? translate("workspace.composer.interrupt")
+                : translate("workspace.composer.interruptElapsed", { time: formatElapsed(turnElapsedMs) })}
           </Button>
         ) : (
           <Button
@@ -285,11 +294,11 @@ export default function Composer({
             className="h-9 gap-1.5 px-3 text-xs max-[900px]:h-11"
             disabled={!canSend}
             onClick={() => void send()}
-            aria-label={retrying ? "다시 보내기 (Cmd/Ctrl+Enter)" : "보내기 (Cmd/Ctrl+Enter)"}
-            title="보내기 (Cmd/Ctrl+Enter)"
+            aria-label={translate(retrying ? "workspace.composer.retrySendShortcut" : "workspace.composer.sendShortcut")}
+            title={translate("workspace.composer.sendShortcut")}
           >
             <Send className="h-3.5 w-3.5" aria-hidden="true" />{" "}
-            {retrying ? "다시 보내기" : "보내기"}
+            {translate(retrying ? "workspace.composer.retrySend" : "workspace.composer.send")}
           </Button>
         )}
       </div>

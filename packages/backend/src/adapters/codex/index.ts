@@ -1,7 +1,7 @@
 import { ulid } from "ulid";
 import type { AdapterRunInput, AdapterRunResult } from "../types";
 import { parseCodexLine, type CodexParserContext } from "./parser";
-import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../owned-process-tree";
+import { ownedProcessSpawnOptions } from "../owned-process-tree";
 import { settleProcessStreams } from "../process-streams";
 
 export function buildCodexCommand(binaryPath: string, generation?: AdapterRunInput["generation"], platform = process.platform): string[] {
@@ -61,16 +61,8 @@ export async function runCodexTurn(
     stdin: new Blob([input.prompt]),
     stdout: "pipe",
     stderr: "pipe",
-    signal: input.signal,
-    killSignal: "SIGKILL",
     ...ownedProcessSpawnOptions(),
   });
-
-  // Same reason as the Claude Code adapter: `signal` kills the spawned root
-  // only, which on Windows is the `codex.cmd` wrapper. Close the owned tree
-  // as soon as the abort fires so the CLI cannot outlive the interrupt.
-  const onAbort = () => { void closeOwnedProcessTree(proc.pid).catch(() => {}); };
-  input.signal?.addEventListener("abort", onAbort, { once: true });
 
   let exitCode: number;
   try {
@@ -101,9 +93,8 @@ export async function runCodexTurn(
         await input.onStderr?.(line);
       }),
     ];
-    exitCode = await settleProcessStreams(proc, readers);
+    exitCode = await settleProcessStreams(proc, readers, input.signal);
   } finally {
-    input.signal?.removeEventListener("abort", onAbort);
     // Always release the decision sink — see the matching comment in
     // the Claude Code adapter. A throw between subscribe and here
     // would otherwise leak the listener into the broker.

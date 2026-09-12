@@ -44,6 +44,42 @@ describe("production artifact mutation routes", () => {
     expect((await artifactOperationRoutes.request(`http://local/api/projects/${projectId}/fs/index.html/undo`, { method: "POST" })).status).toBe(404);
   });
 
+  test("Given unsafe URL attributes When PATCH is rejected Then bytes, identity and operation history remain unchanged", async () => {
+    const db = getSqlite();
+    const projectId = `unsafe-attribute-routes-${process.pid}`;
+    const root = await mkdtemp(path.join(tmpdir(), "burnguard-unsafe-attribute-routes-"));
+    try {
+      await writeFile(path.join(root, "index.html"), '<a data-bg-node-id="hero" href="#safe">Base</a>');
+      db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, projectId, root);
+      db.prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(`${projectId}-session`, projectId);
+      const base = await new ArtifactCoordinator(db).initialize(projectId, root);
+      const source = await readFile(path.join(root, "index.html"), "utf8");
+      const file = base.files[0];
+      if (file === undefined) throw new Error("fixture file missing");
+      const identity = { expected_revision: 0, expected_artifact_digest: base.tree_digest, expected_file_hash: file.sha256, node_bg_id: "hero", node_fingerprint: fingerprintHtmlNode(source, "hero").fingerprint };
+      const projectBefore = db.query("SELECT current_revision,current_digest FROM projects WHERE id=?").get(projectId);
+      const operationsBefore = db.query("SELECT * FROM artifact_operations WHERE project_id=? ORDER BY id").all(projectId);
+      for (const attributes of [
+        { href: "javascript:alert(1)" }, { src: "javascript:alert(1)" },
+        { href: "data:text/html,<script>alert(1)</script>" },
+        { HREF: "java&#x09;script&colon;alert(1)" }, { SRC: " \tJaVa\nScRiPt:alert(1)" },
+      ]) {
+        const response = await artifactOperationRoutes.request(`http://local/api/projects/${projectId}/fs/index.html`, {
+          method: "PATCH", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...identity, text: "Must not change", styles: { color: "red" }, attributes: { title: "Must not change", ...attributes } }),
+        });
+        expect(response.status).toBe(422);
+        expect(await response.json()).toMatchObject({ error: { code: "invalid_attribute_url" } });
+        expect(await readFile(path.join(root, "index.html"), "utf8")).toBe(source);
+        expect(db.query("SELECT current_revision,current_digest FROM projects WHERE id=?").get(projectId)).toEqual(projectBefore);
+        expect(db.query("SELECT * FROM artifact_operations WHERE project_id=? ORDER BY id").all(projectId)).toEqual(operationsBefore);
+      }
+    } finally {
+      db.prepare("DELETE FROM projects WHERE id=?").run(projectId);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("Given exact identity When patch, anchors, operation reads and undo use production routes Then durable receipts remain authoritative", async () => {
     const base = await new ArtifactCoordinator(getSqlite()).initialize(projectId, root);
     const source = await readFile(path.join(root, "index.html"), "utf8");

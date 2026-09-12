@@ -65,6 +65,8 @@ export interface BackendDetectionResult {
 export interface SettingsSummary {
   generation_defaults?: Partial<Record<BackendId, import("./generation").GenerationOptions>>;
   commandcode_api_key_set?: boolean;
+  /** Always returned by current servers; optional for older settings payloads. */
+  llm_connections?: import("./connections").LlmConnectionSummary[];
   user: {
     id: "local";
     display_name: string;
@@ -106,5 +108,6 @@ export type SettingsPatch = Partial<
      */
     figma_personal_access_token: string | null;
     commandcode_api_key: string | null;
+    llm_api_keys: import("./connections").LlmApiKeysPatch;
   }
 >;
