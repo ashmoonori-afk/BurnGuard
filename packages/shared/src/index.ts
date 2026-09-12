@@ -4,6 +4,7 @@ export * from "./artifact";
 export * from "./artifact-operation";
 export * from "./catalog-contract";
 export * from "./comment";
+export * from "./connections";
 export * from "./contract-parser";
 export * from "./design-system";
 export * from "./design-brief";

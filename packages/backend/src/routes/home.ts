@@ -5,9 +5,11 @@ import type {
   ApiSuccess,
   BackendDetectionResult,
   DesignSystemStatus,
+  LlmApiKeysPatch,
+  LlmConnectionId,
   SettingsSummary,
 } from "@bg/shared";
-import { APP_VERSION, parseGenerationOptions } from "@bg/shared";
+import { APP_VERSION, LLM_CONNECTIONS, parseGenerationOptions } from "@bg/shared";
 import { loadConfig, updateConfig, type AppConfig } from "../config";
 import {
   createProjectRecord,
@@ -59,6 +61,10 @@ function isBackendId(
   return value === "claude-code" || value === "codex";
 }
 
+function isApiKeyValue(value: unknown): value is string | null {
+  return value === null || (typeof value === "string" && value.length <= 4096 && !/[\r\n]/.test(value));
+}
+
 function isTheme(value: unknown): value is SettingsSummary["theme"] {
   return value === "light" || value === "dark" || value === "auto";
 }
@@ -73,6 +79,10 @@ function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): Sett
   return {
     generation_defaults: config.generationDefaults,
     commandcode_api_key_set: Boolean(config.commandcodeApiKey),
+    llm_connections: LLM_CONNECTIONS.map((connection) => ({
+      ...connection,
+      api_key_set: Boolean(config.llmApiKeys[connection.id]),
+    })),
     user: {
       id: config.user.id,
       display_name: config.user.displayName,
@@ -220,6 +230,7 @@ homeRoutes.patch("/api/settings", async (c) => {
   }
 
   const changes: Pick<Partial<AppConfig>, "theme" | "defaultBackend" | "figmaPersonalAccessToken" | "commandcodeApiKey" | "generationDefaults"> & {
+    llmApiKeys?: LlmApiKeysPatch;
     chat?: Partial<AppConfig["chat"]>;
     user?: Partial<AppConfig["user"]>;
   } = {};
@@ -235,8 +246,16 @@ homeRoutes.patch("/api/settings", async (c) => {
   }
   if ("commandcode_api_key" in patch) {
     const value = patch.commandcode_api_key;
-    if (value !== null && (typeof value !== "string" || value.length > 4096 || /[\r\n]/.test(value))) return c.json(fail("invalid_commandcode_key", "API key is invalid"), 400);
+    if (!isApiKeyValue(value)) return c.json(fail("invalid_commandcode_key", "API key is invalid"), 400);
     changes.commandcodeApiKey = typeof value === "string" ? value.trim() || null : null;
+  }
+  if ("llm_api_keys" in patch) {
+    if (!isRecord(patch.llm_api_keys)) return c.json(fail("invalid_llm_api_keys", "LLM API keys are invalid"), 400);
+    changes.llmApiKeys = {};
+    for (const [id, value] of Object.entries(patch.llm_api_keys)) {
+      if (!LLM_CONNECTIONS.some((connection) => connection.id === id) || !isApiKeyValue(value)) return c.json(fail("invalid_llm_api_keys", "LLM API keys are invalid"), 400);
+      changes.llmApiKeys[id as LlmConnectionId] = typeof value === "string" ? value.trim() || null : null;
+    }
   }
   if ("theme" in patch) {
     if (!isTheme(patch.theme)) {
@@ -318,6 +337,7 @@ homeRoutes.patch("/api/settings", async (c) => {
     ...current,
     ...changes,
     generationDefaults: { ...current.generationDefaults, ...changes.generationDefaults },
+    llmApiKeys: { ...current.llmApiKeys, ...changes.llmApiKeys },
     chat: { ...current.chat, ...changes.chat },
     user: { ...current.user, ...changes.user },
   }));

@@ -1,11 +1,12 @@
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import type { BackendId, ThemeMode } from "@bg/shared";
-import { APP_VERSION, parseGenerationOptions, type GenerationOptions } from "@bg/shared";
+import { APP_VERSION, LLM_CONNECTIONS, parseGenerationOptions, type GenerationOptions, type LlmConnectionId } from "@bg/shared";
 import { appRootDir, configFilePath } from "./lib/paths";
 
 export interface AppConfig {
   generationDefaults: Partial<Record<BackendId, GenerationOptions>>;
   commandcodeApiKey: string | null;
+  llmApiKeys: Record<LlmConnectionId, string | null>;
   defaultBackend: BackendId;
   theme: ThemeMode;
   port: number | null;
@@ -54,6 +55,7 @@ export interface AppConfig {
 export const defaultConfig: AppConfig = {
   generationDefaults: {},
   commandcodeApiKey: null,
+  llmApiKeys: { gemini: null, deepseek: null, xai: null },
   defaultBackend: "claude-code",
   theme: "light",
   port: null,
@@ -89,6 +91,12 @@ function mergeConfig(input: unknown): AppConfig {
   const chat = record(source.chat);
   const logs = record(source.logs);
   const user = record(source.user);
+  const llmApiKeys = { ...defaultConfig.llmApiKeys };
+  const storedLlmApiKeys = record(source.llmApiKeys);
+  for (const { id } of LLM_CONNECTIONS) {
+    const value = storedLlmApiKeys[id];
+    llmApiKeys[id] = typeof value === "string" ? value.trim() || null : null;
+  }
   const generationDefaults: AppConfig["generationDefaults"] = {};
   for (const backend of ["codex", "claude-code"] as const) {
     const value = record(source.generationDefaults)[backend];
@@ -96,6 +104,7 @@ function mergeConfig(input: unknown): AppConfig {
   }
   return {
     generationDefaults,
+    llmApiKeys,
     commandcodeApiKey: typeof source.commandcodeApiKey === "string" && source.commandcodeApiKey.trim() ? source.commandcodeApiKey.trim() : null,
     defaultBackend: source.defaultBackend === "codex" ? "codex" : "claude-code",
     theme: source.theme === "dark" || source.theme === "auto" ? source.theme : "light",
