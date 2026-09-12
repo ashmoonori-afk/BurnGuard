@@ -1,8 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { bootstrapApiAuthority } from "@/api/client";
+import { useT } from "@/i18n/t";
 
 /** Render recovery before API consumers mount, including while bootstrap is offline. */
 export default function Bootstrap({ children }: { children: ReactNode }) {
+  const t = useT();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   useEffect(() => {
@@ -20,8 +22,8 @@ export default function Bootstrap({ children }: { children: ReactNode }) {
   return <main className="grid min-h-dvh place-items-center bg-background p-6 text-foreground">
     <div className="max-w-md space-y-4 text-center" role={state === "error" ? "alert" : "status"}>
       <h1 className="text-xl font-semibold">BurnGuard</h1>
-      <p>{state === "loading" ? "작업 공간을 준비하고 있어요…" : "로컬 서버에 연결하지 못했어요. BurnGuard가 실행 중인지 확인한 뒤 다시 시도해 주세요."}</p>
-      {state === "error" && <button type="button" className="rounded-md bg-primary px-4 py-3 text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" onClick={() => setAttempt((value) => value + 1)}>다시 연결</button>}
+      <p>{t(state === "loading" ? "shell.loading" : "shell.offline")}</p>
+      {state === "error" && <button type="button" className="rounded-md bg-primary px-4 py-3 text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" onClick={() => setAttempt((value) => value + 1)}>{t("shell.reconnect")}</button>}
     </div>
   </main>;
 }

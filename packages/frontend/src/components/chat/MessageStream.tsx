@@ -7,6 +7,7 @@ import ToolBadge from "./blocks/ToolBadge";
 import ErrorCard from "./blocks/ErrorCard";
 import UsageFooter from "./blocks/UsageFooter";
 import UserMessage from "./blocks/UserMessage";
+import { useT } from "@/i18n/t";
 
 const STICK_THRESHOLD_PX = 80;
 
@@ -23,6 +24,7 @@ export default function MessageStream({
   onRevertTurn?: (turnId: string) => void;
   revertingTurnId?: string | null;
 }) {
+  const t = useT();
   const groups = useMemo(() => buildGroups(events), [events]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Sticky-bottom mode: when true, the next render snaps the scroll
@@ -74,8 +76,8 @@ export default function MessageStream({
             <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <MessageSquare className="h-5 w-5" aria-hidden="true" />
             </div>
-            <h2 className="text-sm font-semibold tracking-tight">무엇을 만들어 볼까요?</h2>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">목적과 원하는 내용을 알려 주세요. 완성된 결과를 보면서 계속 다듬을 수 있어요.</p>
+            <h2 className="text-sm font-semibold tracking-tight">{t("chat.stream.emptyTitle")}</h2>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{t("chat.stream.emptyBody")}</p>
 
           </div>
         )}
@@ -129,10 +131,10 @@ export default function MessageStream({
           type="button"
           onClick={jumpToBottom}
           className="absolute bottom-10 right-4 z-10 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-background/95 px-3 py-1.5 text-xs font-medium text-foreground shadow-sm backdrop-blur hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title="최신으로 이동"
+          title={t("chat.stream.jumpTitle")}
         >
           <ArrowDown className="h-3 w-3" />
-          새 메시지
+          {t("chat.stream.newMessage")}
         </button>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { useT, type MessageKey } from "@/i18n/t";
 import {
   useEffect,
   useRef,
@@ -48,13 +49,13 @@ export function buildTweakChangePreview(
 
 const BUNDLED_FONTS = ["DM Sans", "Space Grotesk", "DM Serif Display", "Bebas Neue", "IBM Plex Mono", "Gowun Batang", "Pretendard"];
 
-const FONT_WEIGHTS: Array<{ value: string; label: string }> = [
-  { value: "300", label: "Light (300)" },
-  { value: "400", label: "Normal (400)" },
-  { value: "500", label: "Medium (500)" },
-  { value: "600", label: "Semibold (600)" },
-  { value: "700", label: "Bold (700)" },
-  { value: "800", label: "Extrabold (800)" },
+const FONT_WEIGHTS: Array<{ value: string; label: MessageKey }> = [
+  { value: "300", label: "modes.tweaks.weight300" },
+  { value: "400", label: "modes.tweaks.weight400" },
+  { value: "500", label: "modes.tweaks.weight500" },
+  { value: "600", label: "modes.tweaks.weight600" },
+  { value: "700", label: "modes.tweaks.weight700" },
+  { value: "800", label: "modes.tweaks.weight800" },
 ];
 
 const TRANSPARENT_RE = /^rgba?\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)$/i;
@@ -89,21 +90,22 @@ export default function TweaksPanel({ target, saving, onApply, onResetAll, onCle
   onClear: () => void;
   review: TweakChangePreview | null;
 }) {
-  if (!target) return <div className="p-4"><h2 className="text-sm font-semibold">요소 선택</h2><p className="mt-2 text-xs leading-relaxed text-muted-foreground">요소를 누르면 크기 조절 박스가 나타나요. 손잡이를 끌거나 가로·세로·회전 값을 입력해 주세요.</p></div>;
+  const t = useT();
+  if (!target) return <div className="p-4"><h2 className="text-sm font-semibold">{t("modes.tweaks.select")}</h2><p className="mt-2 text-xs leading-relaxed text-muted-foreground">{t("modes.tweaks.selectHint")}</p></div>;
   return <div className="flex min-h-0 flex-col overflow-y-auto">
     <header className="flex items-center justify-between border-b border-border px-3 py-2">
-      <h2 className="text-sm font-semibold">선택한 요소</h2>
-      <button type="button" onClick={onClear} className="min-h-10 rounded px-2 text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">선택 해제</button>
+      <h2 className="text-sm font-semibold">{t("modes.tweaks.selected")}</h2>
+      <button type="button" onClick={onClear} className="min-h-10 rounded px-2 text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{t("modes.clearSelection")}</button>
     </header>
     <GeometryControls key={target.bg_id} target={target} saving={saving} onApply={onApply} />
     <details className="border-t border-border">
-      <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">고급</summary>
+      <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.tweaks.advanced")}</summary>
       <div className="flex items-center justify-between gap-2 px-3 pb-2">
         <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">&lt;{target.tag}&gt; · {target.bg_id}</span>
-        <button type="button" onClick={onResetAll} disabled={saving || Object.keys(target.inline).length === 0} className="min-h-10 shrink-0 rounded px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring">스타일 초기화</button>
+        <button type="button" onClick={onResetAll} disabled={saving || Object.keys(target.inline).length === 0} className="min-h-10 shrink-0 rounded px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring">{t("modes.tweaks.resetStyles")}</button>
       </div>
       <section className="border-t border-border px-3 py-3">
-        <SectionHeader>글꼴과 색상</SectionHeader>
+        <SectionHeader>{t("modes.tweaks.fontsColors")}</SectionHeader>
         <div className="mt-2 flex flex-col gap-2">
           <FontFamilyRow target={target} saving={saving} onApply={onApply} />
           <SizeRow target={target} styleKey="font-size" saving={saving} onApply={onApply} />
@@ -115,37 +117,37 @@ export default function TweaksPanel({ target, saving, onApply, onResetAll, onCle
         </div>
       </section>
       <section className="border-t border-border px-3 py-3">
-        <SectionHeader>여백과 모서리</SectionHeader>
+        <SectionHeader>{t("modes.tweaks.spacingCorners")}</SectionHeader>
         <div className="mt-2 flex flex-col gap-2">
           <SidesRow target={target} styleKey="padding" saving={saving} onApply={onApply} />
           <SidesRow target={target} styleKey="margin" saving={saving} onApply={onApply} />
           <SidesRow target={target} styleKey="border-radius" saving={saving} onApply={onApply} />
         </div>
       </section>
-      {review && <section aria-label="마지막 변경" className="border-t border-border px-3 py-3"><SectionHeader>마지막 변경</SectionHeader><p className="mt-2 break-all font-mono text-[11px] text-muted-foreground">{review.property}: {review.from} → {review.to}</p></section>}
+      {review && <section aria-label={t("modes.tweaks.lastChange")} className="border-t border-border px-3 py-3"><SectionHeader>{t("modes.tweaks.lastChange")}</SectionHeader><p className="mt-2 break-all font-mono text-[11px] text-muted-foreground">{review.property}: {review.from} → {review.to}</p></section>}
     </details>
   </div>;
 }
 
 function GeometryControls({ target, saving, onApply }: { target: TweaksTarget; saving: boolean; onApply: ApplyFn }) {
+  const t = useT();
   const { width, height, rotation } = targetDimensions(target);
   const locked = isAspectLocked(target);
-  return <section aria-label="크기와 회전" className="m-3 space-y-3 rounded-lg border border-border bg-card p-3">
+  return <section aria-label={t("modes.tweaks.geometry")} className="m-3 space-y-3 rounded-lg border border-border bg-card p-3">
     <div className="grid grid-cols-2 gap-3">
-      <GeometryNumber label="가로" unit="px" value={width} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, value, height, locked))} />
-      <GeometryNumber label="세로" unit="px" value={height} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, width, value, locked))} />
-      <GeometryNumber label="회전" unit="°" value={rotation} min={-360} max={360} disabled={saving} onCommit={value => onApply(rotationPatch(value))} />
-      <label className="block text-xs">비율
-        <select aria-label="비율" disabled={saving} value={locked ? "locked" : "free"} onChange={event => {
+      <GeometryNumber label={t("modes.width")} unit="px" value={width} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, value, height, locked))} />
+      <GeometryNumber label={t("modes.height")} unit="px" value={height} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, width, value, locked))} />
+      <GeometryNumber label={t("modes.rotation")} unit="°" value={rotation} min={-360} max={360} disabled={saving} onCommit={value => onApply(rotationPatch(value))} />
+      <label className="block text-xs">{t("modes.tweaks.ratio")}<select aria-label={t("modes.tweaks.ratio")} disabled={saving} value={locked ? "locked" : "free"} onChange={event => {
           const value = event.target.value;
           if (value === "free" || value === "locked") onApply({ "aspect-ratio": value === "free" ? "auto" : `${width} / ${height}` });
           else { const ratio = Number(value); onApply({ ...dimensionPatch(target, width, width / ratio, false), "aspect-ratio": `${ratio} / 1` }); }
         }} className="mt-1 min-h-10 w-full rounded border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <option value="free">자유롭게</option><option value="locked">현재 비율 유지</option><option value="1">1 : 1</option><option value="1.3333333333333333">4 : 3</option><option value="1.7777777777777777">16 : 9</option><option value="0.5625">9 : 16</option>
+          <option value="free">{t("modes.tweaks.freeRatio")}</option><option value="locked">{t("modes.tweaks.lockRatio")}</option><option value="1">1 : 1</option><option value="1.3333333333333333">4 : 3</option><option value="1.7777777777777777">16 : 9</option><option value="0.5625">9 : 16</option>
         </select>
       </label>
     </div>
-    <p className="text-[11px] leading-relaxed text-muted-foreground">손잡이를 끌어 크기·회전을 조절하세요.<br />Esc 취소 · Ctrl/⌘+Z 실행 취소</p>
+    <p className="text-[11px] leading-relaxed text-muted-foreground">{t("modes.tweaks.dragHint")}<br />{t("modes.tweaks.shortcuts")}</p>
   </section>;
 }
 
@@ -166,9 +168,10 @@ function GeometryNumber({ label, unit, value, min, max, disabled, onCommit }: { 
 }
 
 function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; saving: boolean; onApply: ApplyFn }) {
+  const t = useT();
   const [families, setFamilies] = useState<readonly string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<MessageKey | "">("");
   const inline = target.inline["font-family"] ?? "";
   const load = async () => {
     setLoading(true); setError("");
@@ -179,23 +182,23 @@ function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; savi
         ? parseLocalFonts({ schema_version: 1, families: [...new Set((await query.call(window)).map((font) => font.family))] })
         : parseLocalFonts(await apiFetch<unknown>("/api/settings/local-fonts"));
       setFamilies(result.families);
-    } catch { setError("글꼴 목록을 불러오지 못했어요. 브라우저의 글꼴 권한을 확인하거나 다시 시도해 주세요."); }
+    } catch { setError("modes.tweaks.fontLoadError"); }
     finally { setLoading(false); }
   };
   return <div className="space-y-1">
     <label className="flex items-center gap-2 text-[11px]">
-      <RowLabel>글꼴</RowLabel>
+      <RowLabel>{t("modes.tweaks.font")}</RowLabel>
       <select className={inputCls("min-w-0 flex-1")} value={inline} disabled={saving} onChange={(event) => onApply({ "font-family": event.target.value || null })}>
-        <option value="">상속 ({target.computed["font-family"] || "기본"})</option>
+        <option value="">{t("modes.tweaks.inheritedValue", { value: target.computed["font-family"] || t("modes.tweaks.default") })}</option>
         {inline && ![...BUNDLED_FONTS, ...families].some((family) => JSON.stringify(family) === inline) && <option value={inline}>{inline}</option>}
         {BUNDLED_FONTS.map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
         {families.filter((family) => !BUNDLED_FONTS.includes(family)).map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
       </select>
     </label>
-    <p className="text-[10px] text-muted-foreground">기본 7종은 새 프로젝트에 포함돼요. 기존 프로젝트에서는 글꼴 파일이 필요해요.</p>
-    <button type="button" className="text-[10px] underline" disabled={loading} onClick={() => void load()}>{loading ? "불러오는 중…" : "설치된 글꼴 불러오기"}</button>
-    {error && <p role="alert" className="text-[10px] text-destructive">{error}</p>}
-    {families.length > 0 && <p role="status" className="text-[10px] text-muted-foreground">설치된 글꼴 {families.length}개 · 다른 기기에는 같은 글꼴이 필요해요.</p>}
+    <p className="text-[10px] text-muted-foreground">{t("modes.tweaks.bundledFontsHint")}</p>
+    <button type="button" className="text-[10px] underline" disabled={loading} onClick={() => void load()}>{loading ? t("modes.tweaks.loadingFonts") : t("modes.tweaks.loadFonts")}</button>
+    {error && <p role="alert" className="text-[10px] text-destructive">{t(error)}</p>}
+    {families.length > 0 && <p role="status" className="text-[10px] text-muted-foreground">{t("modes.tweaks.installedFonts", { count: families.length })}</p>}
   </div>;
 }
 
@@ -296,12 +299,13 @@ function FontWeightRow({
   saving: boolean;
   onApply: ApplyFn;
 }) {
+  const t = useT();
   const inline = target.inline["font-weight"] ?? "";
   const computed = target.computed["font-weight"] ?? "";
 
   return (
     <label className="flex items-center gap-2 text-[11px]">
-      <RowLabel>글꼴 굵기</RowLabel>
+      <RowLabel>{t("modes.tweaks.fontWeight")}</RowLabel>
       <select
         value={inline}
         onChange={(e) => {
@@ -312,11 +316,11 @@ function FontWeightRow({
         className={inputCls("min-w-0 flex-1")}
       >
         <option value="">
-          {computed ? `상속 (${computed})` : "상속"}
+          {computed ? t("modes.tweaks.inheritedValue", { value: computed }) : t("modes.tweaks.inherit")}
         </option>
         {FONT_WEIGHTS.map((w) => (
           <option key={w.value} value={w.value}>
-            {w.label}
+            {t(w.label)}
           </option>
         ))}
       </select>
@@ -335,6 +339,7 @@ function ColorRow({
   saving: boolean;
   onApply: ApplyFn;
 }) {
+  const t = useT();
   const inline = target.inline[styleKey] ?? "";
   const computed = target.computed[styleKey] ?? "";
   const effective = inline || computed;
@@ -426,7 +431,7 @@ function ColorRow({
           {BRAND_PALETTE.map((group) => (
             <div key={group.title} className="mb-2 last:mb-0">
               <div className="mb-1 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                {group.title}
+                {t(group.title)}
               </div>
               <div className="grid grid-cols-8 gap-1">
                 {group.swatches.map((s) => (
@@ -460,9 +465,9 @@ function ColorRow({
                 "rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground",
                 !inline && "opacity-50 cursor-not-allowed",
               )}
-              title="이 인라인 덮어쓰기를 지워요"
+              title={t("modes.tweaks.clearOverride")}
             >
-              지우기
+              {t("modes.tweaks.clear")}
             </button>
           </div>
         </div>
@@ -482,6 +487,7 @@ function SidesRow({
   saving: boolean;
   onApply: ApplyFn;
 }) {
+  const t = useT();
   const inline = target.inline[styleKey] ?? "";
   const computed = target.computed[styleKey] ?? "";
   const initial = numericSidesFrom(inline || computed);
@@ -524,10 +530,10 @@ function SidesRow({
     <div className="flex items-center gap-2 text-[11px]">
       <RowLabel>{styleKey}</RowLabel>
       <div className="flex min-w-0 flex-1 items-center gap-1">
-        <SideInput title="위" value={sides.top} onCommit={commitSide("top")} disabled={saving} />
-        <SideInput title="오른쪽" value={sides.right} onCommit={commitSide("right")} disabled={saving} />
-        <SideInput title="아래" value={sides.bottom} onCommit={commitSide("bottom")} disabled={saving} />
-        <SideInput title="왼쪽" value={sides.left} onCommit={commitSide("left")} disabled={saving} />
+        <SideInput title={t("modes.tweaks.top")} value={sides.top} onCommit={commitSide("top")} disabled={saving} />
+        <SideInput title={t("modes.tweaks.right")} value={sides.right} onCommit={commitSide("right")} disabled={saving} />
+        <SideInput title={t("modes.tweaks.bottom")} value={sides.bottom} onCommit={commitSide("bottom")} disabled={saving} />
+        <SideInput title={t("modes.tweaks.left")} value={sides.left} onCommit={commitSide("left")} disabled={saving} />
       </div>
       <span className="w-6 shrink-0 text-[10px] text-muted-foreground">px</span>
     </div>

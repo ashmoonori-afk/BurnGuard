@@ -1,0 +1,27 @@
+import { defineMessages } from "../types";
+
+export const shellMessages = defineMessages({
+  "shell.loading": { ko: "작업 공간을 준비하고 있어요…", en: "Preparing your workspace…", "zh-CN": "正在准备工作区…" },
+  "shell.offline": { ko: "로컬 서버에 연결하지 못했어요. BurnGuard가 실행 중인지 확인한 뒤 다시 시도해 주세요.", en: "Could not connect to the local server. Make sure BurnGuard is running, then try again.", "zh-CN": "无法连接本地服务器。请确认 BurnGuard 正在运行后重试。" },
+  "shell.reconnect": { ko: "다시 연결", en: "Reconnect", "zh-CN": "重新连接" },
+  "shell.skip": { ko: "본문으로 건너뛰기", en: "Skip to main content", "zh-CN": "跳转到主要内容" },
+  "shell.recent": { ko: "최근 작업", en: "Recent work", "zh-CN": "最近的工作" },
+  "shell.mine": { ko: "내 프로젝트", en: "My projects", "zh-CN": "我的项目" },
+  "shell.examples": { ko: "예제 둘러보기", en: "Explore examples", "zh-CN": "浏览示例" },
+  "shell.systems": { ko: "디자인 시스템", en: "Design systems", "zh-CN": "设计系统" },
+  "shell.navigation": { ko: "워크스페이스 탐색", en: "Workspace navigation", "zh-CN": "工作区导航" },
+  "shell.home": { ko: "BurnGuard 홈", en: "BurnGuard home", "zh-CN": "BurnGuard 首页" },
+  "shell.tagline": { ko: "Design workspace", en: "Design workspace", "zh-CN": "设计工作区" },
+  "shell.settings": { ko: "설정", en: "Settings", "zh-CN": "设置" },
+  "shell.create": { ko: "새 프로젝트", en: "New project", "zh-CN": "新建项目" },
+  "shell.menu": { ko: "주 메뉴", en: "Main menu", "zh-CN": "主菜单" },
+  "shell.local": { ko: "내 컴퓨터의 작업 공간", en: "Your local workspace", "zh-CN": "此电脑上的工作区" },
+  "shell.localHint": { ko: "아이디어를 만들고, 다듬고,\n다음 작업으로 이어 가세요.", en: "Create and refine ideas,\nthen take the next step.", "zh-CN": "创造、完善灵感，\n开启下一步工作。" },
+  "shell.startExample": { ko: "예제로 시작하기", en: "Start with an example", "zh-CN": "从示例开始" },
+  "shell.me": { ko: "나", en: "Me", "zh-CN": "我" },
+  "shell.workspace": { ko: "내 워크스페이스", en: "My workspace", "zh-CN": "我的工作区" },
+  "shell.settingsConnections": { ko: "설정 및 연결", en: "Settings and connections", "zh-CN": "设置与连接" },
+  "shell.work": { ko: "내 작업", en: "My work", "zh-CN": "我的工作" },
+  "shell.systemWorkspace": { ko: "시스템 작업 공간", en: "System workspace", "zh-CN": "系统工作区" },
+  "shell.close": { ko: "닫기", en: "Close", "zh-CN": "关闭" },
+});

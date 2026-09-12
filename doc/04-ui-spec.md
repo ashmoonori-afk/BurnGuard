@@ -260,4 +260,18 @@ interface SelectorOverlayPanelProps {
 
 ## 9. Internationalization
 
-Phase 1 ships English only, but every string lives in `packages/frontend/src/i18n/en.json`. Korean follows in Phase 2 (the sample DS is Korean-centric, so Korean localization is a natural fit).
+Application UI supports Korean (`ko`), English (`en`), and Simplified Chinese
+(`zh-CN`). Typed message packs live in `packages/frontend/src/i18n/messages/`.
+Korean remains the initial default. Settings > Appearance applies language
+selection immediately and stores it locally under `burnguard.locale`, including
+for the bootstrap/offline screen. Language selection is independent of the
+settings Save and Cancel actions.
+
+Components subscribe through `useT()`; non-component copy helpers resolve `t()`
+when invoked rather than storing translated module-level values. Message keys
+and interpolation placeholders are shared across all three locales. Plural
+forms and dates follow the selected locale. The application updates the document
+language, while Korean-only keep-all wrapping does not constrain Chinese text.
+
+User input, agent replies, generated artifacts, project and file names, and
+persisted project content are not translated by the interface language switch.

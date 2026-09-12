@@ -1,6 +1,7 @@
 import { loadComposerDraft } from "@/components/chat/useComposerDraft";
 import type { ReadyAttachmentSource } from "@/components/chat/attachment-intake";
 import { saveAndRequestCommentEdit } from "@/components/modes/comment-edit-request";
+import { CommentItem } from "@/components/modes/CommentPanel";
 import {
   lazy,
   Suspense,
@@ -115,8 +116,10 @@ import {
   preferDesignAuditResult,
 } from "@/lib/design-audit-state";
 import { isSafeCanvasPagePath, resolveCanvasNavigation, resolveCanvasPageTarget, resolveCanvasSource } from "@/lib/canvas-source";
+import { t as globalT, useT, type MessageKey } from "@/i18n/t";
 
 export default function ProjectView() {
+  const t = useT();
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -176,7 +179,7 @@ export default function ProjectView() {
   const [drawShapes, setDrawShapes] = useState<DrawShape[]>([]);
   const [drawResetKey, setDrawResetKey] = useState("");
   const [drawLoading, setDrawLoading] = useState(false);
-  const [drawError, setDrawError] = useState<string | null>(null);
+  const [drawError, setDrawError] = useState<MessageKey | null>(null);
   const drawBlocked = drawLoading || drawError !== null;
   const [drawLoadAttempt, setDrawLoadAttempt] = useState(0);
   const drawSavesRef = useRef(new Map<string, Promise<unknown>>());
@@ -229,14 +232,14 @@ export default function ProjectView() {
   // Every artifact write carries the revision/digest the user was looking at.
   // A stale rejection means someone else moved the canvas: refetch identity
   // and ask for one retry instead of showing the raw backend message.
-  const handleWriteError = useCallback((title: string, error: unknown) => {
+  const handleWriteError = useCallback((title: MessageKey, error: unknown) => {
     if (isStaleIdentityError(error)) {
       void queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] });
-      pushToast({ title: "캔버스가 바뀌어서 다시 불러왔어요. 한 번 더 시도해 주세요", tone: "error" });
+      pushToast({ title: t("workspace.project.staleCanvas"), tone: "error" });
       return;
     }
-    pushToast({ title, body: apiErrorCopy(error), tone: "error" });
-  }, [id, pushToast, queryClient]);
+    pushToast({ title: t(title), body: apiErrorCopy(error), tone: "error" });
+  }, [id, pushToast, queryClient, t]);
   const commentsQuery = useQuery({
     queryKey: ["project", id, "comments"],
     queryFn: () => listProjectComments(id!),
@@ -337,10 +340,10 @@ export default function ProjectView() {
         invalidateDesignAudit(),
       ]);
       setRefreshTick((value) => value + 1);
-      pushToast({ title: "안전 수정을 적용했어요", tone: "success" });
+      pushToast({ title: t("workspace.project.safeFixApplied"), tone: "success" });
     },
     onError: (error) => {
-      pushToast({ title: "안전 수정을 적용하지 못했어요", body: DESIGN_AUDIT_ERROR_COPY[designAuditErrorCode(error)], tone: "error" });
+      pushToast({ title: t("workspace.project.safeFixFailed"), body: DESIGN_AUDIT_ERROR_COPY[designAuditErrorCode(error)], tone: "error" });
     },
   });
 
@@ -358,7 +361,7 @@ export default function ProjectView() {
     },
     onError: (error) => {
       pushToast({
-        title: "캔버스를 새로 고치지 못했어요",
+        title: t("workspace.project.refreshCanvasFailed"),
         body: apiErrorCopy(error),
         tone: "error",
       });
@@ -387,7 +390,7 @@ export default function ProjectView() {
       );
       setFocusedCommentId(created.id);
     },
-    onError: (error) => handleWriteError("코멘트를 만들지 못했어요", error),
+    onError: (error) => handleWriteError("workspace.project.createCommentFailed", error),
   });
 
   const updateCommentMutation = useMutation({
@@ -409,7 +412,7 @@ export default function ProjectView() {
     },
     onError: (error) => {
       pushToast({
-        title: "코멘트를 수정하지 못했어요",
+        title: t("workspace.project.updateCommentFailed"),
         body: apiErrorCopy(error),
         tone: "error",
       });
@@ -428,7 +431,7 @@ export default function ProjectView() {
     onError: (error) => {
       void stream.refreshSnapshot().catch(() => {});
       pushToast({
-        title: "권한 결정을 보내지 못했어요",
+        title: t("workspace.project.permissionFailed"),
         body: apiErrorCopy(error),
         tone: "error",
       });
@@ -464,7 +467,7 @@ export default function ProjectView() {
       void invalidateDesignAudit();
       setRefreshTick((value) => value + 1);
     },
-    onError: (error) => handleWriteError("스타일을 적용하지 못했어요", error),
+    onError: (error) => handleWriteError("workspace.project.applyStyleFailed", error),
   });
 
   const patchFileMutation = useMutation({
@@ -495,7 +498,7 @@ export default function ProjectView() {
       ]);
       setRefreshTick((value) => value + 1);
     },
-    onError: (error) => handleWriteError("편집을 저장하지 못했어요", error),
+    onError: (error) => handleWriteError("workspace.project.saveEditFailed", error),
   });
 
   useEffect(() => {
@@ -503,7 +506,7 @@ export default function ProjectView() {
     if (!(error instanceof ApiError) || error.status !== 404) {
       return;
     }
-    pushToast({ title: "프로젝트를 찾을 수 없어요", tone: "error" });
+    pushToast({ title: globalT("workspace.project.notFound"), tone: "error" });
     navigate("/", { replace: true });
   }, [navigate, projectQuery.error, pushToast]);
 
@@ -559,9 +562,9 @@ export default function ProjectView() {
         invalidateDesignAudit(),
       ]);
       setRefreshTick((value) => value + 1);
-      pushToast({ title: "이전 턴으로 되돌렸어요", tone: "info" });
+      pushToast({ title: t("workspace.project.turnRestored"), tone: "info" });
     },
-    onError: (error) => handleWriteError("턴을 되돌리지 못했어요", error),
+    onError: (error) => handleWriteError("workspace.project.restoreTurnFailed", error),
   });
 
   const putDrawsMutation = useMutation({
@@ -586,8 +589,8 @@ export default function ProjectView() {
       if (activeTabIdRef.current === variables.relPath) setDrawError(null);
     },
     onError: (err, variables) => {
-      if (activeTabIdRef.current === variables.relPath) setDrawError("그리기를 저장하지 못했어요. 현재 그리기는 화면에 남아 있어요. 다시 시도해 주세요.");
-      handleWriteError("그리기를 저장하지 못했어요", err);
+      if (activeTabIdRef.current === variables.relPath) setDrawError("workspace.project.drawSaveRetained");
+      handleWriteError("workspace.project.drawSaveFailed", err);
     },
   });
 
@@ -617,7 +620,7 @@ export default function ProjectView() {
         setDrawResetKey(`${id}:${relForDraws}:${Date.now()}`);
       } catch {
         if (cancelled) return;
-        setDrawError("저장된 그리기를 불러오지 못했어요. 다시 불러온 뒤 편집해 주세요.");
+        setDrawError("workspace.project.drawLoadFailed");
       } finally {
         if (!cancelled) setDrawLoading(false);
       }
@@ -811,7 +814,7 @@ export default function ProjectView() {
     },
     onError: (err) => {
       pushToast({
-        title: "작업을 중단하지 못했어요",
+        title: t("workspace.project.interruptFailed"),
         body: apiErrorCopy(err),
         tone: "error",
       });
@@ -831,13 +834,13 @@ export default function ProjectView() {
   const openQuality = useCallback(() => {
     const detail = projectQuery.data;
     if (!artifactsQuery.data?.entrypoint_url || !detail) {
-      pushToast({ title: "품질 점검을 열 수 없어요", body: "렌더링 가능한 결과물이 아직 없어요.", tone: "warn" });
+      pushToast({ title: t("workspace.project.qualityUnavailable"), body: t("workspace.project.noRenderableResult"), tone: "warn" });
       return;
     }
     if (!openFileTabs.some((tab) => tab.id === activeTabId)) openFileAsTab(detail.entrypoint, setOpenFileTabs, setActiveTabId);
     setMobilePane("workspace");
     setMode("quality");
-  }, [activeTabId, artifactsQuery.data?.entrypoint_url, openFileTabs, projectQuery.data, pushToast]);
+  }, [activeTabId, artifactsQuery.data?.entrypoint_url, openFileTabs, projectQuery.data, pushToast, t]);
   const qualityGate = auditReport !== null && isDesignAuditCurrent(auditReport, artifactsQuery.data?.current_digest ?? "") && auditReport.overall_status === "must_fix"
     ? { mustFixCount: groupDesignAuditResult(auditReport).mustFix.length } : null;
 
@@ -845,10 +848,7 @@ export default function ProjectView() {
     if (auditFocus?.nodeBgId === nodeBgId) setAuditRevealResult(found ? "found" : "not_found");
   }, [auditFocus?.nodeBgId]);
 
-  const tabs = useMemo(
-    () => buildTabs(project, openFileTabs),
-    [openFileTabs, project],
-  );
+  const tabs = buildTabs(project, openFileTabs);
   const pendingPermissions = stream.state?.pending ?? [];
 
   const canvasSrc = useMemo(() => {
@@ -884,10 +884,10 @@ export default function ProjectView() {
       const active = tabs.find((tab) => tab.id === activeTabId && tab.kind === "file")?.relPath;
       const canCreate = missing !== null && active !== undefined && isSafeCanvasPagePath(missing.relPath) && isSafeCanvasPagePath(active);
       pushToast({
-        title: "페이지를 열 수 없어요",
-        body: "현재 프로젝트에 있는 HTML 페이지 링크인지 확인해 주세요.",
+        title: t("workspace.project.pageUnavailable"),
+        body: t("workspace.project.pageUnavailableHelp"),
         tone: "warn",
-        ...(canCreate ? { action: { label: "이 페이지 만들기", onSelect: () => {
+        ...(canCreate ? { action: { label: t("workspace.project.createPage"), onSelect: () => {
           setComposerPrefill(`Create \`${missing.relPath}\` linked from \`${active}\`, sharing the same header/nav/footer`);
           setChatFocusKey((value) => value + 1);
           setMobilePane("chat");
@@ -897,7 +897,7 @@ export default function ProjectView() {
     }
     setCanvasNavigation({ ...target, projectId: id });
     openFileAsTab(target.relPath, setOpenFileTabs, setActiveTabId);
-  }, [activeTabId, canvasSrc, files, id, pushToast, tabs]);
+  }, [activeTabId, canvasSrc, files, id, pushToast, t, tabs]);
 
   // Durable project history; file-key invalidations refresh it after any canvas save.
   const undoActiveRelPath = useMemo<string | null>(() => {
@@ -947,11 +947,11 @@ export default function ProjectView() {
       setTweakReview(null);
       setMode((current) => current === "quality" ? current : null);
       setRefreshTick((value) => value + 1);
-      pushToast({ title: input.fromHistory ? "선택한 저장 시점으로 복원했어요" : input.redo ? "저장을 다시 실행했어요" : "이전 저장 시점으로 돌아갔어요", tone: "success" });
+      pushToast({ title: t(input.fromHistory ? "workspace.project.historyRestored" : input.redo ? "workspace.project.historyRedone" : "workspace.project.historyUndone"), tone: "success" });
     },
     onError: (err) => {
       pushToast({
-        title: "실행 취소하지 못했어요",
+        title: t("workspace.project.undoFailed"),
         body: apiErrorCopy(err),
         tone: "error",
       });
@@ -998,7 +998,7 @@ export default function ProjectView() {
   if (isLoading) {
     return (
       <div className="grid flex-1 place-items-center">
-        <div className="text-sm text-muted-foreground">프로젝트를 불러오는 중...</div>
+        <div className="text-sm text-muted-foreground">{t("workspace.project.loading")}</div>
       </div>
     );
   }
@@ -1007,11 +1007,11 @@ export default function ProjectView() {
     return (
       <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto p-6">
         <div className="max-w-md rounded-2xl border border-border bg-card p-7 text-center shadow-sm" role="alert">
-          <h1 className="text-lg font-semibold">프로젝트를 열 수 없어요</h1>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">{loadError ? apiErrorCopy(loadError) : "연결을 확인하고 다시 시도해 주세요."}</p>
+          <h1 className="text-lg font-semibold">{t("workspace.project.openFailed")}</h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">{loadError ? apiErrorCopy(loadError) : t("workspace.project.connectionHelp")}</p>
           <div className="mt-6 flex flex-wrap justify-center gap-2">
-            <button type="button" className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground" onClick={() => { void projectQuery.refetch(); void sessionQuery.refetch(); void filesQuery.refetch(); void artifactsQuery.refetch(); stream.retry(); }}>다시 시도</button>
-            <button type="button" className="min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted" onClick={() => navigate("/")}>홈으로</button>
+            <button type="button" className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground" onClick={() => { void projectQuery.refetch(); void sessionQuery.refetch(); void filesQuery.refetch(); void artifactsQuery.refetch(); stream.retry(); }}>{t("workspace.project.retry")}</button>
+            <button type="button" className="min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted" onClick={() => navigate("/")}>{t("workspace.project.home")}</button>
           </div>
         </div>
       </div>
@@ -1047,8 +1047,8 @@ export default function ProjectView() {
                 pushToast({
                   title:
                     error instanceof ApiError && error.status === 409
-                      ? "이미 실행 중인 턴이 있어요"
-                      : "메시지를 보내지 못했어요",
+                      ? t("workspace.project.turnBusy")
+                      : t("workspace.project.sendFailed"),
                   body: visualSourceSendErrorCopy(error),
                   tone: "error",
                 });
@@ -1085,7 +1085,7 @@ export default function ProjectView() {
     } catch (error) {
       autoFixRef.current = false;
       setAutoFixPending(false);
-      handleWriteError("자동 수정을 시작하지 못했어요", error);
+      handleWriteError("workspace.project.autoFixFailed", error);
     }
   };
 
@@ -1099,7 +1099,7 @@ export default function ProjectView() {
       setChatFocusKey((value) => value + 1);
       setMobilePane("chat");
     } catch (error) {
-      handleWriteError("수정 요청을 보내지 못했어요", error);
+      handleWriteError("workspace.project.editRequestFailed", error);
     }
   };
 
@@ -1118,8 +1118,8 @@ export default function ProjectView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {refreshError && <div role="alert" aria-label="작업 정보 새로고침 오류" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm"><span>최신 작업 정보를 불러오지 못했어요. 작성 중인 내용은 유지돼요.</span><button type="button" className="min-h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium" onClick={() => { for (const query of loadQueries) if (query.isError) void query.refetch(); }}>작업 정보 다시 불러오기</button></div>}
-      {stream.error && <div role="alert" className="flex items-center justify-between bg-warning/15 px-4 py-2 text-sm"><span>실시간 연결이 끊겼어요. 다시 연결하는 중이에요.</span><button type="button" className="rounded border px-3 py-2" onClick={stream.retry}>다시 연결</button></div>}
+      {refreshError && <div role="alert" aria-label={t("workspace.project.refreshErrorLabel")} className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm"><span>{t("workspace.project.refreshError")}</span><button type="button" className="min-h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium" onClick={() => { for (const query of loadQueries) if (query.isError) void query.refetch(); }}>{t("workspace.project.refreshData")}</button></div>}
+      {stream.error && <div role="alert" className="flex items-center justify-between bg-warning/15 px-4 py-2 text-sm"><span>{t("workspace.project.streamDisconnected")}</span><button type="button" className="rounded border px-3 py-2" onClick={stream.retry}>{t("workspace.project.reconnect")}</button></div>}
       <ProjectTopBar
         chatCollapsed={chatCollapsed}
         onToggleChat={() => setChatCollapsed((value) => !value)}
@@ -1149,9 +1149,9 @@ export default function ProjectView() {
           />
         }
       />
-      <div className="flex shrink-0 gap-2 border-b border-border bg-background p-2 min-[901px]:hidden" aria-label="작업 영역 전환">
-        <button type="button" aria-pressed={mobilePane === "workspace"} aria-controls="project-workspace-pane" onClick={() => setMobilePane("workspace")} className={cn("flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-medium", mobilePane === "workspace" ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted")}><Monitor className="h-4 w-4" aria-hidden="true" />작업 화면</button>
-        <button type="button" aria-pressed={mobilePane === "chat"} aria-controls="project-chat-pane" onClick={() => setMobilePane("chat")} className={cn("flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-medium", mobilePane === "chat" ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted")}><MessageSquare className="h-4 w-4" aria-hidden="true" />AI 대화{session.status === "running" && <span className="h-2 w-2 rounded-full bg-accent" aria-label="AI 작업 중" />}</button>
+      <div className="flex shrink-0 gap-2 border-b border-border bg-background p-2 min-[901px]:hidden" aria-label={t("workspace.project.paneSwitch")}>
+        <button type="button" aria-pressed={mobilePane === "workspace"} aria-controls="project-workspace-pane" onClick={() => setMobilePane("workspace")} className={cn("flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-medium", mobilePane === "workspace" ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted")}><Monitor className="h-4 w-4" aria-hidden="true" />{t("workspace.project.workspacePane")}</button>
+        <button type="button" aria-pressed={mobilePane === "chat"} aria-controls="project-chat-pane" onClick={() => setMobilePane("chat")} className={cn("flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-medium", mobilePane === "chat" ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted")}><MessageSquare className="h-4 w-4" aria-hidden="true" />{t("workspace.project.chatPane")}{session.status === "running" && <span className="h-2 w-2 rounded-full bg-accent" aria-label={t("workspace.project.aiWorking")} />}</button>
       </div>
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div id="project-chat-pane" className={cn("min-h-0 shrink-0 max-[900px]:flex-1", mobilePane !== "chat" && "max-[900px]:hidden", chatCollapsed && "min-[901px]:hidden")}>
@@ -1179,7 +1179,7 @@ export default function ProjectView() {
           interruptPending={interruptMutation.isPending}
           onInterrupt={() => interruptMutation.mutate()}
           composerInitialText={composerPrefill}
-          activePageLabel={activeRelPath !== null && activeRelPath !== project.entrypoint ? `보고 있는 페이지: ${activeRelPath}` : null}
+          activePageLabel={activeRelPath !== null && activeRelPath !== project.entrypoint ? t("workspace.project.viewingPage", { path: activeRelPath }) : null}
           statusSlot={
             <DirectionStatusBar
               state={directionState}
@@ -1257,7 +1257,7 @@ export default function ProjectView() {
           <div className="flex min-h-0 min-w-0 flex-1 max-[1000px]:flex-col">
             <Canvas
               colorPalette={activeRelPath && /\.html?$/i.test(activeRelPath) ? <div className="flex items-center gap-2">
-                {project.type === "prototype" && artifacts.pages.length > 1 ? <label className="flex items-center gap-1.5 text-xs text-muted-foreground">페이지<select aria-label="캔버스 페이지" value={activeRelPath} className="h-8 max-w-44 rounded-md border border-border bg-background px-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onChange={(event) => openFileAsTab(event.target.value, setOpenFileTabs, setActiveTabId)}>{artifacts.pages.map((page) => <option key={page.rel_path} value={page.rel_path}>{page.title}</option>)}</select></label> : null}
+                {project.type === "prototype" && artifacts.pages.length > 1 ? <label className="flex items-center gap-1.5 text-xs text-muted-foreground">{t("workspace.project.page")}<select aria-label={t("workspace.project.canvasPage")} value={activeRelPath} className="h-8 max-w-44 rounded-md border border-border bg-background px-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onChange={(event) => openFileAsTab(event.target.value, setOpenFileTabs, setActiveTabId)}>{artifacts.pages.map((page) => <option key={page.rel_path} value={page.rel_path}>{page.title}</option>)}</select></label> : null}
                 <ColorPalette
                   key={activeRelPath}
                   projectId={id!}
@@ -1273,7 +1273,7 @@ export default function ProjectView() {
                   }}
                 />
               </div> : undefined}
-              sceneTools={activeRelPath && /\.html?$/i.test(activeRelPath) ? <Suspense fallback={<p role="status" className="p-3 text-sm">3D 도구를 불러오는 중…</p>}><ThreeScenePanel
+              sceneTools={activeRelPath && /\.html?$/i.test(activeRelPath) ? <Suspense fallback={<p role="status" className="p-3 text-sm">{t("workspace.project.loading3dTools")}</p>}><ThreeScenePanel
                 key={activeRelPath}
                 projectId={id!}
                 relPath={activeRelPath}
@@ -1284,7 +1284,7 @@ export default function ProjectView() {
                 }}
                 onRequestAI={async (text) => { await sendMessage(text, [], new AbortController().signal, (await loadComposerDraft(session.id).catch(() => null))?.generation); setChatFocusKey((value) => value + 1); setMobilePane("chat"); }}
               /></Suspense> : undefined}
-              chartTools={activeRelPath && /\.html?$/i.test(activeRelPath) ? <Suspense fallback={<p role="status" className="p-3 text-sm">차트 도구를 불러오는 중…</p>}><ChartPanel
+              chartTools={activeRelPath && /\.html?$/i.test(activeRelPath) ? <Suspense fallback={<p role="status" className="p-3 text-sm">{t("workspace.project.loadingChartTools")}</p>}><ChartPanel
                 key={activeRelPath}
                 projectId={id!}
                 relPath={activeRelPath}
@@ -1320,6 +1320,25 @@ export default function ProjectView() {
                   ...input,
                 });
               }}
+              onQuickCreateComment={async (input) => {
+                if (!activeRelPath) throw new Error("comment_target_unavailable");
+                return createCommentMutation.mutateAsync({ rel_path: activeRelPath, ...input });
+              }}
+              renderQuickComment={(comment, close) => <CommentItem
+                key={comment.id}
+                comment={comment}
+                index={comments.filter((entry) => entry.rel_path === comment.rel_path && entry.resolved_at === null && (activeSlideIdx == null || (entry.slide_index ?? 0) === activeSlideIdx)).findIndex((entry) => entry.id === comment.id) + 1 || 1}
+                focused
+                autoFocus
+                onFocus={() => setFocusedCommentId(comment.id)}
+                onUpdateBody={(body) => updateCommentMutation.mutate({ commentId: comment.id, patch: { body } })}
+                onToggleResolved={() => {
+                  updateCommentMutation.mutate({ commentId: comment.id, patch: { resolved: comment.resolved_at === null } });
+                  close();
+                }}
+                onRequestEdit={(body) => requestCommentEdit(comment, body)}
+                editDisabled={composerDisabled}
+              />}
               onFocusComment={setFocusedCommentId}
               onActiveSlideChange={setActiveSlideIdx}
               editSelectedBgId={editTarget?.bg_id ?? null}
@@ -1335,7 +1354,7 @@ export default function ProjectView() {
               drawInitialShapes={drawShapes}
               drawResetKey={drawResetKey}
               drawLoading={drawLoading}
-              drawError={drawError}
+              drawError={drawError === null ? null : t(drawError)}
               onRetryDraws={() => {
                 if (putDrawsMutation.isPending) return;
                 if (putDrawsMutation.isError && putDrawsMutation.variables?.relPath === activeRelPath) {
@@ -1518,19 +1537,19 @@ function buildTabs(
   return [
     {
       id: "design-system",
-      title: project?.design_system_name ?? "디자인 시스템",
+      title: project?.design_system_name ?? globalT("workspace.project.designSystem"),
       kind: "design_system",
       closeable: false,
     },
     {
       id: "directions",
-      title: "방향 정하기",
+      title: globalT("workspace.project.directions"),
       kind: "directions",
       closeable: false,
     },
     {
       id: "design-files",
-      title: "디자인 파일",
+      title: globalT("workspace.project.designFiles"),
       kind: "design_files",
       closeable: false,
     },
@@ -1597,7 +1616,7 @@ function requireLoadedArtifacts(
   artifacts: ArtifactSummary | undefined,
 ): ArtifactSummary {
   if (!artifacts) {
-    throw new Error("캔버스 정보를 아직 불러오지 못했어요. 잠시 후 다시 시도해 주세요");
+    throw new Error("artifacts_not_loaded");
   }
   return artifacts;
 }

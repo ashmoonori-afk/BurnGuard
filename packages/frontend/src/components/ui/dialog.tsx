@@ -2,6 +2,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n/t";
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -29,8 +30,9 @@ const DialogContent = React.forwardRef<
     /** Hide the default top-right close (X) button, e.g. for dialogs whose decision must come from an explicit action button. */
     hideClose?: boolean;
   }
->(({ className, children, hideClose = false, ...props }, ref) => (
-  <DialogPortal>
+>(({ className, children, hideClose = false, ...props }, ref) => {
+  const t = useT();
+  return <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
@@ -45,12 +47,12 @@ const DialogContent = React.forwardRef<
       {!hideClose && (
         <DialogPrimitive.Close className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-lg text-muted-foreground ring-offset-background transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
           <X className="h-4 w-4" />
-          <span className="sr-only">닫기</span>
+          <span className="sr-only">{t("shell.close")}</span>
         </DialogPrimitive.Close>
       )}
     </DialogPrimitive.Content>
-  </DialogPortal>
-));
+  </DialogPortal>;
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({

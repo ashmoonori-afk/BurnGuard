@@ -1,3 +1,4 @@
+import { t } from "@/i18n/t";
 import type { ExportJob } from "@bg/shared";
 
 export function exportJobState(job: ExportJob) {
@@ -10,6 +11,6 @@ export function exportJobState(job: ExportJob) {
     active, cancelled,
     canDownload: job.status === "succeeded" && !unavailable && (attempt === null || terminal === "validated"),
     canRetry: job.status === "failed" || cancelled || unavailable,
-    label: cancelled ? "취소됨" : terminal === "corrupt" ? "파일 손상" : terminal === "expired" || unavailable ? "보관 기간 종료" : attempt?.cancel_requested_at ? "취소하는 중…" : job.status === "succeeded" ? "완료" : job.status === "failed" ? "실패" : job.status === "running" ? "만드는 중…" : "대기 중",
+    label: cancelled ? t("export.state.cancelled") : terminal === "corrupt" ? t("export.state.corrupt") : terminal === "expired" || unavailable ? t("export.state.expired") : attempt?.cancel_requested_at ? t("export.state.cancelling") : job.status === "succeeded" ? t("export.stage.ready") : job.status === "failed" ? t("export.stage.failure") : job.status === "running" ? t("export.state.running") : t("export.state.pending"),
   };
 }

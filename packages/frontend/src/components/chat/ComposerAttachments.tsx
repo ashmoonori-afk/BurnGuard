@@ -1,6 +1,7 @@
 import { Paperclip } from "lucide-react";
 import type { VisualSourceRole } from "@bg/shared";
 import { cn } from "@/lib/utils";
+import { t as translate, useT, type MessageKey } from "@/i18n/t";
 import type {
   IntakeItem,
   IntakeRejection,
@@ -19,6 +20,7 @@ export default function ComposerAttachments({
   onRemove,
   onRoleChange,
 }: ComposerAttachmentsProps) {
+  const t = useT();
   if (items.length === 0) {
     return null;
   }
@@ -26,7 +28,7 @@ export default function ComposerAttachments({
   return (
     <ul
       className="mb-2 max-h-44 space-y-2 overflow-y-auto"
-      aria-label="첨부 목록"
+      aria-label={t("chat.attachments.list")}
       aria-busy={sending}
       aria-live="polite"
     >
@@ -47,11 +49,11 @@ export default function ComposerAttachments({
               value={item.role}
               disabled={sending}
               onChange={(event) => onRoleChange(item.id, event.target.value === "immutable_reference" ? "immutable_reference" : "ordinary_content")}
-              aria-label={`${item.file.name} 역할`}
+              aria-label={t("chat.attachments.role", { name: item.file.name })}
               className="order-last w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent max-[900px]:min-h-11"
             >
-              <option value="ordinary_content">일반 자료</option>
-              <option value="immutable_reference">수정하지 않는 시각 참조</option>
+              <option value="ordinary_content">{t("chat.attachments.ordinary")}</option>
+              <option value="immutable_reference">{t("chat.attachments.immutable")}</option>
             </select>
           ) : (
             <span className="opacity-90">{rejectionLabel(item.reason)}</span>
@@ -59,7 +61,7 @@ export default function ComposerAttachments({
           <button
             type="button"
             className="ml-0.5 min-h-7 min-w-7 rounded text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 max-[900px]:min-h-11 max-[900px]:min-w-11"
-            aria-label={`${item.file.name} 첨부 취소`}
+            aria-label={t("chat.attachments.remove", { name: item.file.name })}
             disabled={sending}
             onClick={() => onRemove(item.id)}
           >
@@ -71,19 +73,13 @@ export default function ComposerAttachments({
   );
 }
 
+const REJECTION_MESSAGE_KEYS: Record<IntakeRejection, MessageKey> = {
+  unsupported_kind: "chat.attachments.unsupported",
+  too_large: "chat.attachments.tooLarge",
+  count_exceeded: "chat.attachments.tooMany",
+  total_exceeded: "chat.attachments.totalTooLarge",
+};
+
 function rejectionLabel(reason: IntakeRejection): string {
-  switch (reason) {
-    case "unsupported_kind":
-      return "지원하지 않는 형식";
-    case "too_large":
-      return "파일당 10MB 초과";
-    case "count_exceeded":
-      return "최대 8개까지";
-    case "total_exceeded":
-      return "전체 25MB 초과";
-    default: {
-      const unreachable: never = reason;
-      return unreachable;
-    }
-  }
+  return translate(REJECTION_MESSAGE_KEYS[reason]);
 }

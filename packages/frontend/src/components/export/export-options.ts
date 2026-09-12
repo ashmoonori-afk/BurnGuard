@@ -1,3 +1,4 @@
+import { t } from "@/i18n/t";
 import {
   DEFAULT_GRAPHIC_SET,
   type ExportFormat,
@@ -24,10 +25,10 @@ export type ExportOptionDisabledReason =
   | "mixed_frames";
 
 export const EXPORT_DISABLED_LABEL: Record<ExportOptionDisabledReason, string> = {
-  deck_only: "덱 전용",
-  web_only: "웹 전용",
-  frames_only: "프레임 전용",
-  mixed_frames: "크기 불일치",
+  get deck_only() { return t("export.disabled.deck_only"); },
+  get web_only() { return t("export.disabled.web_only"); },
+  get frames_only() { return t("export.disabled.frames_only"); },
+  get mixed_frames() { return t("export.disabled.mixed_frames"); },
 };
 
 export type ExportOptionField = {
@@ -85,8 +86,8 @@ export function classifyChromiumFailure(errorMessage: string | null): ChromiumFa
 }
 
 export const CHROMIUM_FAILURE_MESSAGE: Record<ChromiumFailure, string> = {
-  launch_timeout: "Chromium 렌더링을 완료하지 못했어요. 설정에서 Chromium 상태를 확인한 뒤 다시 시도해 주세요.",
-  not_installed: 'Chromium이 설치되어 있지 않아요. 설정 → "내보내기용 Chromium" → 설치를 실행한 뒤 다시 내보내 주세요.',
+  get launch_timeout() { return t("export.chromium.launch_timeout"); },
+  get not_installed() { return t("export.chromium.not_installed"); },
 };
 
 export type ExportRetryRequest = {
@@ -110,15 +111,17 @@ export function buildExportRetryRequest(
   return projectType === "graphic" ? null : { format };
 }
 
-const STANDARD_OPTIONS = [
-  { key: "html_zip", format: "html_zip", label: "HTML ZIP 파일" },
-  { key: "pdf-a4", format: "pdf", options: { pdf_paper: "a4" }, label: "PDF · A4 가로" },
-  { key: "pdf-letter", format: "pdf", options: { pdf_paper: "letter" }, label: "PDF · 레터 가로" },
-  { key: "pdf-widescreen", format: "pdf", options: { pdf_paper: "widescreen-16x9" }, label: "PDF · 16:9 와이드스크린" },
-  { key: "pptx-16x9", format: "pptx", options: { pptx_size: "16x9" }, label: "파워포인트 · 16:9", note: "디자인을 고해상도 이미지로 보존해요. 개별 요소 편집은 HTML에서, 문안은 발표자 노트에서 확인하세요." },
-  { key: "pptx-4x3", format: "pptx", options: { pptx_size: "4x3" }, label: "파워포인트 · 4:3", note: "디자인 비율을 유지하며 맞춰 넣어요. 비율이 다르면 여백이 생겨요. 개별 요소는 이미지로 저장됩니다." },
-  { key: "handoff", format: "handoff", label: "개발자 전달용 (.zip)" },
-] as const satisfies readonly ExportMenuOption[];
+function standardOptions(): readonly ExportMenuOption[] {
+  return [
+    { key: "html_zip", format: "html_zip", label: t("export.format.html_zip") },
+    { key: "pdf-a4", format: "pdf", options: { pdf_paper: "a4" }, label: t("export.option.pdfA4") },
+    { key: "pdf-letter", format: "pdf", options: { pdf_paper: "letter" }, label: t("export.option.pdfLetter") },
+    { key: "pdf-widescreen", format: "pdf", options: { pdf_paper: "widescreen-16x9" }, label: t("export.option.pdfWide") },
+    { key: "pptx-16x9", format: "pptx", options: { pptx_size: "16x9" }, label: t("export.option.pptxWide"), note: t("export.option.pptxWideNote") },
+    { key: "pptx-4x3", format: "pptx", options: { pptx_size: "4x3" }, label: t("export.option.pptxStandard"), note: t("export.option.pptxStandardNote") },
+    { key: "handoff", format: "handoff", label: t("export.option.handoff") },
+  ];
+}
 
 export function buildExportMenuModel(
   projectType: ProjectType,
@@ -130,8 +133,8 @@ export function buildExportMenuModel(
       ok: true,
       options: [
         ...(projectType === "slide_deck"
-          ? STANDARD_OPTIONS
-          : STANDARD_OPTIONS.map((option) =>
+          ? standardOptions()
+          : standardOptions().map((option) =>
               option.format === "pdf" || option.format === "pptx"
                 ? { ...option, disabledReason: "deck_only" as const }
                 : option,
@@ -146,7 +149,7 @@ export function buildExportMenuModel(
     return {
       ok: false,
       options: [],
-      message: "저장된 그래픽 크기를 확인할 수 없어 PNG 내보내기를 시작할 수 없어요.",
+      message: t("export.option.invalidCanvas"),
     };
   }
   const set = parseProjectGraphicSet(projectType, optionsJson) ?? DEFAULT_GRAPHIC_SET;

@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import { queryClient } from "@/api/queryClient";
 import App from "./App";
 import Bootstrap from "./components/Bootstrap";
+import { applyDocumentLocale, useLocaleStore } from "./i18n/locale";
 import "./index.css";
 
 async function main(): Promise<void> {
@@ -13,6 +14,7 @@ async function main(): Promise<void> {
     throw new Error("BurnGuard root element is missing.");
   }
 
+  applyDocumentLocale(useLocaleStore.getState().locale);
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
       <Bootstrap><QueryClientProvider client={queryClient}>

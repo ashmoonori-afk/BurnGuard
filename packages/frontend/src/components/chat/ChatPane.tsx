@@ -9,6 +9,7 @@ import type { ReadyAttachmentSource } from "./attachment-intake";
 import { switchSessionBackend } from "@/api/session";
 import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n/t";
 import { apiErrorCopy } from "@/lib/error-copy";
 
 type Tab = "chat" | "comments";
@@ -71,6 +72,7 @@ export default function ChatPane({
   onRequestCommentEdit?: (comment: Comment, body: string) => Promise<void>;
   commentEditDisabled?: boolean;
 }) {
+  const t = useT();
   const [tab, setTab] = useState<Tab>("chat");
   useEffect(() => { if (chatFocusKey) setTab("chat"); }, [chatFocusKey]);
   const queryClient = useQueryClient();
@@ -85,14 +87,14 @@ export default function ChatPane({
         updated,
       );
       pushToast({
-        title: "AI 모델을 바꿨어요",
-        body: `다음 턴부터 ${backendLabel(updated.backend_id)}를 사용해요.`,
+        title: t("chat.backend.changedTitle"),
+        body: t("chat.backend.changedBody", { name: backendLabel(updated.backend_id) }),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "AI 모델을 바꾸지 못했어요",
+        title: t("chat.backend.changeFailedTitle"),
         body: apiErrorCopy(err),
         tone: "error",
       });
@@ -103,15 +105,15 @@ export default function ChatPane({
   const openCommentCount = comments.filter((comment) => comment.resolved_at === null).length;
 
   return (
-    <aside aria-label="AI 대화와 코멘트" className="flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden bg-background min-[901px]:w-[340px] min-[901px]:border-r min-[901px]:border-border">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border px-3">
+    <aside aria-label={t("chat.pane.aria")} className="flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden bg-background min-[901px]:w-[340px] min-[901px]:border-r min-[901px]:border-border">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3">
         <ChatTab
           id="chat"
           active={tab}
           setActive={setTab}
           icon={<MessageSquare className="h-3.5 w-3.5" />}
         >
-          대화
+          {t("chat.tab.chat")}
         </ChatTab>
         <ChatTab
           id="comments"
@@ -119,7 +121,7 @@ export default function ChatPane({
           setActive={setTab}
           icon={<MessageCircleMore className="h-3.5 w-3.5" />}
         >
-          코멘트 {openCommentCount > 0 && <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{openCommentCount}</span>}
+          {t("chat.tab.comments")} {openCommentCount > 0 && <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{openCommentCount}</span>}
         </ChatTab>
         <div className="ml-auto shrink-0"><BackendToggle current={session.backend_id} disabled={switchBackend.isPending || sessionRunning} onSwitch={(next) => switchBackend.mutate(next)} /></div>
 
@@ -176,9 +178,10 @@ function BackendToggle({
   disabled: boolean;
   onSwitch: (next: BackendId) => void;
 }) {
+  const t = useT();
   const options: BackendId[] = ["claude-code", "codex"];
   return (
-    <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-0.5" role="group" aria-label="AI 모델 선택">
+    <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-0.5" role="group" aria-label={t("chat.backend.selection")}>
       {options.map((opt) => (
         <button
           key={opt}
@@ -191,10 +194,10 @@ function BackendToggle({
           aria-pressed={opt === current}
           title={
             disabled && opt !== current
-              ? "턴 실행 중에는 바꿀 수 없어요"
+              ? t("chat.backend.busy")
               : opt === current
-                ? `사용 중: ${backendLabel(opt)}`
-                : `다음 턴부터 ${backendLabel(opt)} 사용`
+                ? t("chat.backend.current", { name: backendLabel(opt) })
+                : t("chat.backend.next", { name: backendLabel(opt) })
           }
           className={cn(
             "min-h-8 rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11 max-[900px]:min-w-11",
@@ -234,7 +237,7 @@ function ChatTab({
       onClick={() => setActive(id)}
       aria-pressed={active === id}
       className={cn(
-        "flex min-h-11 items-center gap-1.5 border-b-2 -mb-px px-0.5 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 -mb-px px-0.5 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active === id
           ? "border-primary text-primary"
           : "border-transparent text-muted-foreground hover:text-foreground",

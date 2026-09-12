@@ -27,6 +27,7 @@
 import type { GraphicCanvasV1 } from "@bg/shared";
 import { artifactContentSecurityPolicy } from "@bg/shared/security";
 import { buildGraphicPreviewInjection } from "@/lib/graphic-preview";
+import { isCommentEditable, isQuickCommentShortcut } from "./quick-comment";
 
 export interface FrameRect {
   rotation?: number;
@@ -107,9 +108,9 @@ interface BridgeResponse {
  * being asked. Add new event names here AND in BRIDGE_SCRIPT (or
  * deck-stage.ts for runtime-emitted events).
  */
-type FrameEventName = "active-slide-changed" | "navigate" | "viewport-wheel";
+type FrameEventName = "active-slide-changed" | "navigate" | "viewport-wheel" | "comment-pointer" | "comment-shortcut" | "comment-dismiss";
 
-type FrameEventPayload<E extends FrameEventName> = E extends "viewport-wheel" ? { x: number; y: number; delta: number } : E extends "navigate" ? { href: string } : { index: number };
+type FrameEventPayload<E extends FrameEventName> = E extends "comment-pointer" | "comment-shortcut" | "comment-dismiss" ? { documentKey: string; x: number | null; y: number | null } : E extends "viewport-wheel" ? { x: number; y: number; delta: number } : E extends "navigate" ? { href: string } : { index: number };
 
 interface FrameEvent<E extends FrameEventName = FrameEventName> {
   __bgFrameBridge: true;
@@ -196,6 +197,7 @@ export function subscribeFrameEvent<E extends FrameEventName>(
 
 export type SandboxedArtifactOptions = {
   readonly graphicCanvas?: GraphicCanvasV1;
+  readonly quickCommentKey?: string;
 };
 
 export function buildSandboxedArtifactSrcDoc(
@@ -211,7 +213,8 @@ export function buildSandboxedArtifactSrcDoc(
   const graphicPreview = options?.graphicCanvas === undefined
     ? ""
     : buildGraphicPreviewInjection(options.graphicCanvas);
-  const scriptTag = `<script>${BRIDGE_SCRIPT}<\/script>`;
+  const commentKey = JSON.stringify(options?.quickCommentKey ?? null).replaceAll("<", "\\u003c");
+  const scriptTag = `<script>(function () { var quickCommentKey = ${commentKey}; ${BRIDGE_SCRIPT} })();</script>`;
   if (/<head[\s>]/i.test(html)) {
     return html.replace(/<head([^>]*)>/i, `<head$1>${baseTag}${graphicPreview}${scriptTag}`);
   }
@@ -664,6 +667,32 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       requestId: data.requestId,
       payload: response
     }, "*");
+  });
+
+  var commentPointer = null;
+  var commentEditable = ${isCommentEditable.toString()};
+  var commentShortcut = ${isQuickCommentShortcut.toString()};
+  function notifyComment(eventName) {
+    if (quickCommentKey === null) return;
+    window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: eventName,
+      payload: { documentKey: quickCommentKey, x: commentPointer ? commentPointer.x : null, y: commentPointer ? commentPointer.y : null } }, "*");
+  }
+  window.addEventListener("pointermove", function (event) {
+    commentPointer = { x: event.clientX, y: event.clientY };
+    notifyComment("comment-pointer");
+  }, true);
+  window.addEventListener("pointerout", function (event) {
+    if (event.relatedTarget) return;
+    commentPointer = null;
+    notifyComment("comment-pointer");
+  }, true);
+  window.addEventListener("keydown", function (event) {
+    if (quickCommentKey === null) return;
+    var editable = commentEditable(event.target);
+    if (event.key === "Escape" && !event.repeat && !event.isComposing && !event.defaultPrevented && !editable) notifyComment("comment-dismiss");
+    if (!commentPointer || !commentShortcut(event, editable)) return;
+    event.preventDefault();
+    notifyComment("comment-shortcut");
   });
 
   // Push: notify the parent of the active slide whenever it changes

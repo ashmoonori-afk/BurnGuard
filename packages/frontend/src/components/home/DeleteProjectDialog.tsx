@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import { useT } from "@/i18n/t";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ export default function DeleteProjectDialog({
   onConfirm: () => void;
   isPending?: boolean;
 }) {
+  const t = useT();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -30,10 +32,10 @@ export default function DeleteProjectDialog({
             <AlertTriangle className="h-5 w-5" />
           </div>
           <DialogTitle className="break-keep leading-snug">
-            &ldquo;{projectName}&rdquo; 프로젝트를 삭제할까요?
+            {t("home.deleteProjectTitle", { name: projectName })}
           </DialogTitle>
           <DialogDescription className="break-keep">
-            프로젝트와 대화 기록, 첨부 파일, 생성된 파일이 모두 영구 삭제돼요. 되돌릴 수 없어요.
+            {t("home.deleteProjectDescription")}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="pt-2 border-t border-border">
@@ -42,14 +44,14 @@ export default function DeleteProjectDialog({
             onClick={() => onOpenChange(false)}
             disabled={isPending}
           >
-            취소
+            {t("home.cancel")}
           </Button>
           <Button
             variant="destructive"
             onClick={onConfirm}
             disabled={isPending}
           >
-            {isPending ? "삭제하는 중..." : "삭제"}
+            {isPending ? t("home.deleting") : t("home.delete")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { Comment, GraphicCanvasV1 } from "@bg/shared";
 import CanvasTopBar from "./CanvasTopBar";
 import CommentLayer from "./CommentLayer";
+import QuickComment from "./QuickComment";
+import type { CommentPinInput } from "./quick-comment";
 import type { Ref, ReactNode } from "react";
 import DrawLayer, {
   type DrawLayerHandle,
@@ -26,9 +28,12 @@ import { canvasPoint } from "./canvas-coordinates";
 import { requestFrameScrollAtPoint } from "./frame-bridge";
 
 import { MIN_CANVAS_ZOOM, MAX_CANVAS_ZOOM, zoomCanvasAt } from "./canvas-zoom";
+import { useT } from "@/i18n/t";
+import { useLocaleStore } from "@/i18n/locale";
 
-const PLACEHOLDER_SRC = `<!doctype html>
-<html lang="ko">
+function buildPlaceholderSrc(locale: string, title: string, subtitle: string): string {
+  return `<!doctype html>
+<html lang="${locale}">
 <head>
   <meta charset="utf-8">
   <style>
@@ -63,11 +68,12 @@ const PLACEHOLDER_SRC = `<!doctype html>
 <body>
   <section class="wrap">
     <div class="eyebrow">BurnGuard Canvas</div>
-    <h1 class="title">아직 표시할 결과물이 없어요</h1>
-    <p class="subtitle">왼쪽 채팅에 만들고 싶은 것을 적어 보내면, 생성된 파일이 이 자리에 바로 나타나요.</p>
+    <h1 class="title">${title}</h1>
+    <p class="subtitle">${subtitle}</p>
   </section>
 </body>
 </html>`;
+}
 
 export default function Canvas({
   mode,
@@ -81,6 +87,8 @@ export default function Canvas({
   activeSlideIdx,
   focusedCommentId,
   onCreateComment,
+  onQuickCreateComment,
+  renderQuickComment,
   onFocusComment,
   editSelectedBgId,
   onSelectEditTarget,
@@ -128,6 +136,8 @@ export default function Canvas({
     node_selector: string;
     slide_index: number | null;
   }) => void;
+  onQuickCreateComment: (input: CommentPinInput) => Promise<Comment>;
+  renderQuickComment: (comment: Comment, close: () => void) => ReactNode;
   onFocusComment: (id: string | null) => void;
   editSelectedBgId: string | null;
   onSelectEditTarget: (target: EditTarget | null) => void;
@@ -160,6 +170,13 @@ export default function Canvas({
   colorPalette?: ReactNode;
   livePreview?: { version: number; reportUrl: string };
 }) {
+  const t = useT();
+  const locale = useLocaleStore((state) => state.locale);
+  const placeholderSrc = buildPlaceholderSrc(
+    locale,
+    t("workspace.canvas.placeholderTitle"),
+    t("workspace.canvas.placeholderSubtitle"),
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -208,10 +225,7 @@ export default function Canvas({
   // Surfaces fetch failures inline instead of falling back to the
   // placeholder with no signal (audit fix #6). Cleared on every src
   // change so a successful Refresh recovers cleanly.
-  const [loadError, setLoadError] = useState<{
-    status?: number;
-    message: string;
-  } | null>(null);
+  const [loadError, setLoadError] = useState<{ status?: number } | null>(null);
 
   useEffect(() => {
     restoreTargetSlideIdxRef.current = src ? slideByFileRef.current.get(src) ?? null : null;
@@ -251,22 +265,13 @@ export default function Canvas({
           html: buildSandboxedArtifactSrcDoc(
             html,
             new URL(src, window.location.href).toString(),
-            graphicCanvas === null || graphicCanvas === undefined
-              ? undefined
-              : { graphicCanvas },
+            { ...(graphicCanvas == null ? {} : { graphicCanvas }), quickCommentKey: frameLoadKey },
           ),
         });
       })
       .catch((err: Error & { httpStatus?: number }) => {
         if (controller.signal.aborted) return;
-        setLoadError({
-          status: err.httpStatus,
-          message: err.httpStatus === 404
-            ? "파일을 찾을 수 없어요. 파일 목록을 새로고침한 뒤 다시 선택해 주세요."
-            : err.httpStatus === 401 || err.httpStatus === 403
-              ? "페이지를 새로고침한 뒤 다시 시도해 주세요."
-              : "서버 연결과 파일 상태를 확인한 뒤 다시 시도해 주세요.",
-        });
+        setLoadError({ status: err.httpStatus });
       });
 
     return () => {
@@ -337,7 +342,7 @@ export default function Canvas({
         colorPalette={colorPalette}
         historyTools={historyTools}
       />
-      {livePreview && <div role="status" className="border-b border-border bg-accent/10 px-3 py-1 text-xs text-accent">생성 중 · 작업하는 내용이 자동으로 표시돼요. 저장이 끝나면 편집할 수 있어요.</div>}
+      {livePreview && <div role="status" className="border-b border-border bg-accent/10 px-3 py-1 text-xs text-accent">{t("workspace.canvas.livePreview")}</div>}
       <div ref={containerRef} className="relative flex-1 overflow-hidden bg-muted/70">
         <div ref={stageRef} className="absolute inset-3 rounded-md shadow-md ring-1 ring-border/60 max-[600px]:inset-2" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "center" }}
           onWheel={(event) => {
@@ -350,8 +355,8 @@ export default function Canvas({
           <iframe
             ref={iframeRef}
             key={src}
-            title="캔버스"
-            srcDoc={frameSrcDoc ?? PLACEHOLDER_SRC}
+            title={t("workspace.canvas.title")}
+            srcDoc={frameSrcDoc ?? placeholderSrc}
             sandbox="allow-scripts allow-popups"
             referrerPolicy="no-referrer"
             allow="fullscreen"
@@ -369,8 +374,8 @@ export default function Canvas({
         ) : (
           <iframe
             ref={iframeRef}
-            title="캔버스 자리 표시자"
-            srcDoc={PLACEHOLDER_SRC}
+            title={t("workspace.canvas.placeholderFrameTitle")}
+            srcDoc={placeholderSrc}
             sandbox="allow-scripts allow-popups"
             referrerPolicy="no-referrer"
             allow="fullscreen"
@@ -429,9 +434,9 @@ export default function Canvas({
         {mode === "draw" && (drawLoading || drawError) && (
           <div className="absolute inset-0 grid place-items-center bg-background/80">
             <div role={drawError ? "alert" : "status"} className="rounded border border-border bg-background p-4 text-xs">
-              {drawError ?? "저장된 그리기를 불러오고 있어요."}
+              {drawError ?? t("workspace.canvas.drawLoading")}
               {drawError && onRetryDraws && (
-                <button type="button" onClick={onRetryDraws} className="ml-3 underline">다시 시도</button>
+                <button type="button" onClick={onRetryDraws} className="ml-3 underline">{t("workspace.canvas.retry")}</button>
               )}
             </div>
           </div>
@@ -440,11 +445,15 @@ export default function Canvas({
           <div className="pointer-events-none absolute inset-0 grid place-items-center bg-background/80 backdrop-blur-sm">
             <div className="pointer-events-auto max-w-sm rounded border border-destructive/40 bg-background px-4 py-3 text-xs shadow-md">
               <div className="font-semibold text-destructive">
-                결과물을 불러오지 못했어요
+                {t("workspace.canvas.loadFailed")}
                 {loadError.status ? ` (HTTP ${loadError.status})` : ""}
               </div>
               <div className="mt-1 text-muted-foreground">
-                {loadError.message}
+                {t(loadError.status === 404
+                  ? "workspace.canvas.fileNotFound"
+                  : loadError.status === 401 || loadError.status === 403
+                    ? "workspace.canvas.unauthorized"
+                    : "workspace.canvas.connectionError")}
               </div>
               <button
                 type="button"
@@ -454,7 +463,7 @@ export default function Canvas({
                 }}
                 className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted"
               >
-                다시 시도
+                {t("workspace.canvas.retry")}
               </button>
             </div>
           </div>
@@ -468,18 +477,29 @@ export default function Canvas({
           onLostPointerCapture={() => { dragRef.current = null; }}
         />}
       </div>
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-background px-3 py-1 text-xs" aria-label="미리보기 배율과 이동">
-        <span className="min-w-0 truncate text-[11px] text-muted-foreground">{moving ? "화면을 드래그해서 이동해요" : activeRelPath ?? "캔버스"}</span>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-background px-3 py-1 text-xs" aria-label={t("workspace.canvas.viewportControls")}>
+        <span className="min-w-0 truncate text-[11px] text-muted-foreground">{moving ? t("workspace.canvas.dragToPan") : activeRelPath ?? t("workspace.canvas.title")}</span>
         <div className="flex shrink-0 items-center gap-1">
-          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label="미리보기 축소" disabled={zoom <= MIN_CANVAS_ZOOM} onClick={() => setZoom((v) => Math.max(MIN_CANVAS_ZOOM, v / 1.25))}>−</button>
-          <button type="button" className="h-8 min-w-12 rounded px-1 tabular-nums hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring" title="배율과 위치 초기화" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>100% 초기화</button>
-          <label className="flex items-center gap-1"><input aria-label="아트보드 확대 비율" type="number" min="1" max="6400" value={Math.round(zoom * 100)} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) setZoom(Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, value / 100))); }} className="h-8 w-20 rounded border bg-background px-2 tabular-nums" />%</label>
-          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label="미리보기 확대" disabled={zoom >= MAX_CANVAS_ZOOM} onClick={() => setZoom((v) => Math.min(MAX_CANVAS_ZOOM, v * 1.25))}>+</button>
-          <button type="button" aria-pressed={moving} className={`ml-1 h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${moving ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setMoving((v) => !v)}>화면 이동</button><span className="text-muted-foreground">Ctrl/⌘ + 휠로 확대·축소</span>
-          {sceneTools && <button type="button" aria-pressed={showSceneTools} className={`h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${showSceneTools ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setShowSceneTools((value) => !value)}>3D 장면</button>}
-          {chartTools && <button type="button" aria-pressed={showChartTools} className={`h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${showChartTools ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => { setShowChartTools(value => !value); setShowSceneTools(false); }}>차트</button>}
+          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label={t("workspace.canvas.zoomOut")} disabled={zoom <= MIN_CANVAS_ZOOM} onClick={() => setZoom((v) => Math.max(MIN_CANVAS_ZOOM, v / 1.25))}>−</button>
+          <button type="button" className="h-8 min-w-12 rounded px-1 tabular-nums hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring" title={t("workspace.canvas.resetViewportTitle")} onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>{t("workspace.canvas.resetViewport")}</button>
+          <label className="flex items-center gap-1"><input aria-label={t("workspace.canvas.zoomRatio")} type="number" min="1" max="6400" value={Math.round(zoom * 100)} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) setZoom(Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, value / 100))); }} className="h-8 w-20 rounded border bg-background px-2 tabular-nums" />%</label>
+          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label={t("workspace.canvas.zoomIn")} disabled={zoom >= MAX_CANVAS_ZOOM} onClick={() => setZoom((v) => Math.min(MAX_CANVAS_ZOOM, v * 1.25))}>+</button>
+          <button type="button" aria-pressed={moving} className={`ml-1 h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${moving ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setMoving((v) => !v)}>{t("workspace.canvas.pan")}</button><span className="text-muted-foreground">{t("workspace.canvas.zoomHint")}</span>
+          {sceneTools && <button type="button" aria-pressed={showSceneTools} className={`h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${showSceneTools ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setShowSceneTools((value) => !value)}>{t("workspace.canvas.scene3d")}</button>}
+          {chartTools && <button type="button" aria-pressed={showChartTools} className={`h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${showChartTools ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => { setShowChartTools(value => !value); setShowSceneTools(false); }}>{t("workspace.canvas.chart")}</button>}
         </div>
       </div>
+      {!livePreview && !loadError && activeRelPath && frameDocument?.key === frameLoadKey && loadedFrameKey === (frameKey ?? src) && (
+        <QuickComment
+          key={JSON.stringify([frameLoadKey, activeRelPath, activeSlideIdx])}
+          iframeRef={iframeRef}
+          containerRef={containerRef}
+          documentKey={frameLoadKey}
+          comments={comments}
+          onCreate={onQuickCreateComment}
+          renderComment={renderQuickComment}
+        />
+      )}
       {showSceneTools && sceneTools}
       {showChartTools && chartTools}
     </div>

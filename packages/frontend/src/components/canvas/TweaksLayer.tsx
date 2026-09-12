@@ -1,3 +1,4 @@
+import { useT } from "@/i18n/t";
 import { canvasPoint } from "./canvas-coordinates";
 import {
   useEffect,
@@ -56,6 +57,7 @@ export default function TweaksLayer({
   saving: boolean;
   onApply: (patch: Partial<Record<TweaksStyleKey, string | null>>) => void;
 }) {
+  const t = useT();
   const overlayRef = useRef<HTMLDivElement>(null);
   const requestSeqRef = useRef(0);
   const [hoverRect, setHoverRect] = useState<FrameRect | null>(null);
@@ -201,7 +203,7 @@ export default function TweaksLayer({
             rotate: `${(box.rotation ?? 0) + (drag.current?.kind === "rotate" && target ? Number.parseFloat(String(drag.current.patch.rotate ?? targetDimensions(target).rotation)) - targetDimensions(target).rotation : 0)}deg`,
           }}
         >
-          {([['e', '가로 크기 조절', '100%', '50%'], ['s', '세로 크기 조절', '50%', '100%'], ['se', '가로 세로 크기 조절', '100%', '100%'], ['rotate', '회전 조절', '50%', '-24px']] as const).map(([kind, label, left, top]) => (
+          {([['e', t("canvas.handles.width"), '100%', '50%'], ['s', t("canvas.handles.height"), '50%', '100%'], ['se', t("canvas.handles.size"), '100%', '100%'], ['rotate', t("canvas.handles.rotation"), '50%', '-24px']] as const).map(([kind, label, left, top]) => (
             <button key={kind} aria-label={label} disabled={saving} className="absolute h-3 w-3 border border-emerald-700 bg-white pointer-events-auto disabled:opacity-50" style={{ left, top, borderRadius: kind === 'rotate' ? '50%' : 0, transform: 'translate(-50%, -50%)', touchAction: 'none', cursor: kind === 'rotate' ? 'grab' : `${kind}-resize` }} onPointerDown={(event) => start(event, kind)} onPointerMove={move} onPointerUp={(event) => finish(event, true)} onPointerCancel={(event) => finish(event, false)} onClick={(event) => event.stopPropagation()} />
           ))}
         </div>

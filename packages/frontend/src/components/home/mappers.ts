@@ -5,6 +5,7 @@ import type {
   ProjectType,
 } from "@bg/shared";
 import { formatRelativeDay, projectTypeLabel } from "@/lib/format";
+import { t, type MessageKey } from "@/i18n/t";
 
 /**
  * View model consumed by the presentational Card component. Independent of
@@ -44,10 +45,10 @@ const PROJECT_TINTS: Record<string, string> = {
 
 const SYSTEM_TINTS = ["bg-amber-100", "bg-sky-100", "bg-emerald-100", "bg-violet-100"];
 
-const SYSTEM_STATUS_SUFFIX: Record<DesignSystemStatus, string> = {
-  draft: "디자인 시스템 · 초안",
-  review: "디자인 시스템 · 검토 중",
-  published: "디자인 시스템",
+const SYSTEM_STATUS_SUFFIX: Record<DesignSystemStatus, MessageKey> = {
+  draft: "home.systemDraft",
+  review: "home.systemReview",
+  published: "home.system",
 };
 
 export function projectToCard(p: ProjectSummary): CardViewModel {
@@ -72,11 +73,11 @@ export function projectToCard(p: ProjectSummary): CardViewModel {
  * of leaking the shared "템플릿" label onto a project card.
  */
 function projectTypeDisplayLabel(type: string): string {
-  return type === "from_template" ? "기타" : projectTypeLabel(type);
+  return projectTypeLabel(type === "from_template" ? "other" : type);
 }
 
 export function systemToCard(s: DesignSystemSummary, index = 0): CardViewModel {
-  const statusSuffix = SYSTEM_STATUS_SUFFIX[s.status];
+  const statusSuffix = t(SYSTEM_STATUS_SUFFIX[s.status]);
   return {
     id: s.id,
     name: s.name,

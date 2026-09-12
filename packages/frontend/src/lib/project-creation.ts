@@ -27,53 +27,54 @@ import {
   parseGraphicSetV1,
 } from "@bg/shared";
 import { DETAIL_BRIEF_FIELDS } from "@/lib/graphic-set-form";
+import { t, type MessageKey } from "@/i18n/t";
 
 export const BRIEF_LOCALE = "ko";
 export const AUDIENCE_MAX_LENGTH = 200;
 export const OBJECTIVE_MAX_LENGTH = 1000;
 export const PROTOTYPE_PAGE_PRESETS = [
-  { label: "회사소개", relPath: "about.html" },
-  { label: "서비스", relPath: "services.html" },
-  { label: "포트폴리오", relPath: "portfolio.html" },
-  { label: "문의", relPath: "contact.html" },
-  { label: "공지", relPath: "notice.html" },
+  { label: "home.page.about", relPath: "about.html" },
+  { label: "home.page.services", relPath: "services.html" },
+  { label: "home.page.portfolio", relPath: "portfolio.html" },
+  { label: "home.page.contact", relPath: "contact.html" },
+  { label: "home.page.notice", relPath: "notice.html" },
 ] as const;
 export const GRAPHIC_PRESETS = [
-  { label: "정사각형", width: 1080, height: 1080 },
-  { label: "SNS", width: 1200, height: 628 },
-  { label: "세로형", width: 1080, height: 1920 },
+  { label: "home.graphic.square", width: 1080, height: 1080 },
+  { label: "home.graphic.social", width: 1200, height: 628 },
+  { label: "home.graphic.portrait", width: 1080, height: 1920 },
 ] as const;
 
-export type BriefChoice<T> = { readonly value: T; readonly label: string };
+export type BriefChoice<T> = { readonly value: T; readonly label: MessageKey };
 
 export const CONTENT_SOURCE_CHOICES: readonly BriefChoice<DesignBriefContentSource>[] =
   [
-    { value: "none", label: "없음 · 새로 작성" },
-    { value: "attached", label: "첨부한 자료" },
-    { value: "template", label: "템플릿 내용" },
-    { value: "existing_files", label: "프로젝트에 있는 파일" },
+    { value: "none", label: "home.brief.source.none" },
+    { value: "attached", label: "home.brief.source.attached" },
+    { value: "template", label: "home.brief.source.template" },
+    { value: "existing_files", label: "home.brief.source.existing" },
   ];
 
 export const VISUAL_MOOD_CHOICES: readonly BriefChoice<DesignBriefVisualMood>[] =
   [
-    { value: "formal", label: "격식 있게" },
-    { value: "friendly", label: "친근하게" },
-    { value: "premium", label: "고급스럽게" },
+    { value: "formal", label: "home.brief.mood.formal" },
+    { value: "friendly", label: "home.brief.mood.friendly" },
+    { value: "premium", label: "home.brief.mood.premium" },
   ];
 
 export const DENSITY_CHOICES: readonly BriefChoice<DesignBriefDensity>[] = [
-  { value: "sparse", label: "여백 넉넉하게" },
-  { value: "balanced", label: "보통" },
-  { value: "dense", label: "정보 빽빽하게" },
+  { value: "sparse", label: "home.brief.density.sparse" },
+  { value: "balanced", label: "home.brief.density.balanced" },
+  { value: "dense", label: "home.brief.density.dense" },
 ];
 
 export const OUTPUT_SIZE_CHOICES: readonly BriefChoice<DesignBriefOutputSize>[] =
   [
-    { value: "responsive", label: "화면 크기에 맞춤" },
-    { value: "widescreen-16x9", label: "와이드 16:9" },
-    { value: "standard-4x3", label: "표준 4:3" },
-    { value: "a4", label: "A4 문서" },
-    { value: "letter", label: "레터 문서" },
+    { value: "responsive", label: "home.brief.size.responsive" },
+    { value: "widescreen-16x9", label: "home.brief.size.widescreen" },
+    { value: "standard-4x3", label: "home.brief.size.standard" },
+    { value: "a4", label: "home.brief.size.a4" },
+    { value: "letter", label: "home.brief.size.letter" },
   ];
 
 export type ProjectDraft = {
@@ -147,20 +148,26 @@ export type BuildResult =
   | { readonly ok: true; readonly request: CreateProjectRequest }
   | { readonly ok: false; readonly problem: DraftProblem };
 
-export const PROBLEM_MESSAGE: Record<DraftProblem, string> = {
-  pages_invalid: `페이지는 안전한 HTML 파일 이름으로 ${DESIGN_BRIEF_PAGE_LIMIT}개까지 선택해 주세요.`,
-  section_count_invalid: "섹션 수는 1~30 사이의 정수로 입력해 주세요.",
-  name_required: "프로젝트 이름을 입력해 주세요.",
-  audience_invalid: `누가 보게 되는지 ${AUDIENCE_MAX_LENGTH}자 이내로 적어 주세요.`,
-  objective_invalid: `무엇을 얻고 싶은지 ${OBJECTIVE_MAX_LENGTH}자 이내로 적어 주세요.`,
-  design_system_required: "사용할 템플릿을 선택해 주세요.",
-  design_system_not_selectable:
-    "선택한 디자인 시스템은 지금 사용할 수 없어요. 목록에서 다시 골라 주세요.",
-  graphic_width_invalid: "너비는 320~4096 사이의 정수로 입력해 주세요.",
-  graphic_height_invalid: "높이는 240~16,384 사이의 정수로 입력해 주세요. 상세페이지처럼 긴 이미지도 이 범위 안에서 만들어요.",
-  graphic_pixel_limit: "전체 픽셀은 1,600만 이하가 되도록 크기를 줄여 주세요.",
-  graphic_set_invalid: "그래픽 종류와 장수, 입력한 내용을 다시 확인해 주세요. 배너 세트만 프레임별 크기를, 상세페이지만 상세 브리프를 사용할 수 있어요.",
+export const PROBLEM_MESSAGE: Record<DraftProblem, MessageKey> = {
+  pages_invalid: "home.problem.pages",
+  section_count_invalid: "home.problem.sections",
+  name_required: "home.problem.name",
+  audience_invalid: "home.problem.audience",
+  objective_invalid: "home.problem.objective",
+  design_system_required: "home.problem.template",
+  design_system_not_selectable: "home.problem.system",
+  graphic_width_invalid: "home.problem.width",
+  graphic_height_invalid: "home.problem.height",
+  graphic_pixel_limit: "home.problem.pixels",
+  graphic_set_invalid: "home.problem.graphicSet",
 };
+
+export function draftProblemMessage(problem: DraftProblem): string {
+  const count = problem === "pages_invalid" ? DESIGN_BRIEF_PAGE_LIMIT
+    : problem === "audience_invalid" ? AUDIENCE_MAX_LENGTH
+    : problem === "objective_invalid" ? OBJECTIVE_MAX_LENGTH : undefined;
+  return t(PROBLEM_MESSAGE[problem], count === undefined ? undefined : { count: String(count) });
+}
 
 /**
  * The panel builds exactly the payload the backend parses, then runs the shared

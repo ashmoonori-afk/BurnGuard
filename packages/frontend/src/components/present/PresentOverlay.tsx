@@ -1,3 +1,4 @@
+import { useT } from "@/i18n/t";
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
@@ -18,6 +19,7 @@ export default function PresentOverlay({
   src: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const rootRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -85,12 +87,12 @@ export default function PresentOverlay({
       className="fixed inset-0 z-[9999] bg-black"
       role="dialog"
       aria-modal="true"
-      aria-label="프레젠테이션"
+      aria-label={t("canvas.present.title")}
     >
       <iframe
         key={src}
         ref={iframeRef}
-        title="프레젠테이션"
+        title={t("canvas.present.title")}
         src={withPresentFlag(src)}
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
@@ -101,10 +103,9 @@ export default function PresentOverlay({
         type="button"
         onClick={onClose}
         className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur transition-colors hover:bg-white/20"
-        title="프레젠테이션 종료 (Esc)"
+        title={t("canvas.present.exitHint")}
       >
-        <X className="h-3 w-3" /> 종료
-      </button>
+        <X className="h-3 w-3" /> {" "}{t("canvas.present.exit")}</button>
       <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/10 px-2.5 py-1 font-mono text-[11px] text-white backdrop-blur">
         {formatElapsed(elapsedMs)}
       </div>

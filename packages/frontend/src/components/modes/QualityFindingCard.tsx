@@ -1,3 +1,4 @@
+import { useT } from "@/i18n/t";
 import type { DesignAuditFinding } from "@bg/shared";
 import { AlertTriangle, Eye, FileCode2, ShieldCheck, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ export default function QualityFindingCard({ finding, actionContext, revealResul
   readonly onReveal: (finding: DesignAuditFinding) => void;
   readonly onApplySafeFix: (finding: DesignAuditFinding) => void;
 }) {
+  const t = useT();
   const actions = designAuditActionAvailability(finding, actionContext);
   const mustFix = finding.severity === "must_fix";
   return (
@@ -24,24 +26,24 @@ export default function QualityFindingCard({ finding, actionContext, revealResul
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-xs font-semibold">{DESIGN_AUDIT_CHECK_COPY[finding.check_code]}</div>
-          <div className="mt-0.5 text-[11px] text-muted-foreground">{mustFix ? "고쳐야 할 문제" : "권장 개선"}</div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">{mustFix ? t("modes.quality.mustFix") : t("modes.quality.recommended")}</div>
         </div>
       </div>
       <p className="mt-2 break-keep text-xs leading-relaxed">{DESIGN_AUDIT_ACTION_COPY[finding.targeted_action]}</p>
       <div className="mt-2 min-w-0 rounded bg-muted px-2 py-1.5 font-mono text-[10px] leading-relaxed text-muted-foreground" title={finding.evidence}>
-        <span className="block font-sans font-medium text-foreground">검사 근거</span>
+        <span className="block font-sans font-medium text-foreground">{t("modes.quality.evidence")}</span>
         <span className="block max-h-12 overflow-hidden break-words">{finding.evidence}</span>
-        {(finding.measured !== undefined || finding.threshold !== undefined) && <span className="mt-1 block">측정 {finding.measured ?? "-"} / 기준 {finding.threshold ?? "-"}</span>}
+        {(finding.measured !== undefined || finding.threshold !== undefined) && <span className="mt-1 block">{t("modes.quality.measurement", { measured: finding.measured ?? "-", threshold: finding.threshold ?? "-" })}</span>}
       </div>
       <div className="mt-2 min-w-0 truncate font-mono text-[10px] text-muted-foreground" title={`${finding.source.rel_path}${finding.source.node_bg_id ? ` · ${finding.source.node_bg_id}` : ""}`}>
-        {finding.source.rel_path}{finding.source.node_bg_id ? ` · ${finding.source.node_bg_id}` : " · 강조할 위치 정보 없음"}
+        {finding.source.rel_path}{finding.source.node_bg_id ? ` · ${finding.source.node_bg_id}` : t("modes.quality.noLocation")}
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {actions.canOpenFile && <Button type="button" variant="outline" size="sm" className="h-8 px-2 max-[900px]:min-h-11" onClick={() => onOpenFile(finding)}><FileCode2 />파일 열기</Button>}
-        {actions.canReveal && <Button type="button" variant="outline" size="sm" className="h-8 px-2 max-[900px]:min-h-11" onClick={() => onReveal(finding)}><Eye />위치 보기</Button>}
-        {finding.safe_fix && <Button type="button" variant="outline" size="sm" className="h-8 px-2 max-[900px]:min-h-11" disabled={!actions.canApplySafeFix} title={!actionContext.current ? "현재 결과가 아니어서 안전 수정을 적용할 수 없어요" : actionContext.running ? "검사가 끝난 뒤 안전 수정을 적용할 수 있어요" : actions.applying ? "안전 수정을 적용하고 있어요" : actionContext.pendingFindingId !== null ? "다른 안전 수정을 적용하고 있어요" : undefined} onClick={() => onApplySafeFix(finding)}><ShieldCheck />{actions.applying ? "적용 중" : "안전 수정 적용"}</Button>}
+        {actions.canOpenFile && <Button type="button" variant="outline" size="sm" className="h-8 px-2 max-[900px]:min-h-11" onClick={() => onOpenFile(finding)}><FileCode2 />{t("modes.quality.openFile")}</Button>}
+        {actions.canReveal && <Button type="button" variant="outline" size="sm" className="h-8 px-2 max-[900px]:min-h-11" onClick={() => onReveal(finding)}><Eye />{t("modes.quality.reveal")}</Button>}
+        {finding.safe_fix && <Button type="button" variant="outline" size="sm" className="h-8 px-2 max-[900px]:min-h-11" disabled={!actions.canApplySafeFix} title={!actionContext.current ? t("modes.quality.staleFix") : actionContext.running ? t("modes.quality.waitForCheck") : actions.applying ? t("modes.quality.applyingFix") : actionContext.pendingFindingId !== null ? t("modes.quality.otherFix") : undefined} onClick={() => onApplySafeFix(finding)}><ShieldCheck />{actions.applying ? t("modes.quality.applying") : t("modes.quality.applyFix")}</Button>}
       </div>
-      {revealResult !== null && <p className="mt-2 break-keep text-[11px] text-muted-foreground">{revealResult === "found" ? "캔버스에서 위치를 강조했어요." : "현재 렌더링에서 위치를 찾지 못했어요."}</p>}
+      {revealResult !== null && <p className="mt-2 break-keep text-[11px] text-muted-foreground">{revealResult === "found" ? t("modes.quality.revealed") : t("modes.quality.notFound")}</p>}
     </article>
   );
 }

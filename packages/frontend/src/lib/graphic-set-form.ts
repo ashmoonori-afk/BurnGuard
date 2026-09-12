@@ -9,19 +9,20 @@ import {
   type GraphicSetKind,
   type PlatformPreset,
 } from "@bg/shared";
+import type { MessageKey } from "@/i18n/t";
 
 export type GraphicKindChoice = {
   readonly value: GraphicSetKind;
-  readonly label: string;
+  readonly label: MessageKey;
 };
 
 export const GRAPHIC_KIND_CHOICES: readonly GraphicKindChoice[] = [
-  { value: "single", label: "낱장 이미지" },
-  { value: "card_news", label: "카드뉴스" },
-  { value: "product_detail", label: "상세페이지" },
-  { value: "banner_set", label: "배너 세트" },
-  { value: "thumbnail", label: "썸네일" },
-  { value: "print", label: "인쇄물" },
+  { value: "single", label: "home.graphic.kind.single" },
+  { value: "card_news", label: "home.graphic.kind.card_news" },
+  { value: "product_detail", label: "home.graphic.kind.product_detail" },
+  { value: "banner_set", label: "home.graphic.kind.banner_set" },
+  { value: "thumbnail", label: "home.graphic.kind.thumbnail" },
+  { value: "print", label: "home.graphic.kind.print" },
 ];
 
 export const GRAPHIC_FRAME_COUNT_LIMIT = { minimum: 1, maximum: 40 } as const;
@@ -32,6 +33,7 @@ export function defaultFrameCount(kind: GraphicSetKind): number {
 
 export type PresetChoice = {
   readonly preset: PlatformPreset;
+  readonly label: MessageKey;
   /** A preset smaller than the canvas minimum is shown but never resized to fit. */
   readonly available: boolean;
 };
@@ -39,6 +41,7 @@ export type PresetChoice = {
 export function presetChoicesFor(kind: GraphicSetKind): readonly PresetChoice[] {
   return PLATFORM_PRESETS.filter((preset) => preset.kind === kind).map((preset) => ({
     preset,
+    label: `home.preset.${preset.id}`,
     available:
       preset.width >= GRAPHIC_CANVAS_LIMITS.minWidth &&
       preset.height >= GRAPHIC_CANVAS_LIMITS.minHeight &&
@@ -51,19 +54,19 @@ export type DetailBriefKey = keyof GraphicDetailBriefV1;
 
 export type DetailBriefField = {
   readonly key: DetailBriefKey;
-  readonly label: string;
-  readonly hint: string;
+  readonly label: MessageKey;
+  readonly hint: MessageKey;
 };
 
 export const DETAIL_BRIEF_MAX_LENGTH = 500;
 
 /** One line per customer question Q1 to Q8 of doc/14 section 4.2. */
 export const DETAIL_BRIEF_FIELDS: readonly DetailBriefField[] = [
-  { key: "persona_pain", label: "고객의 고민 장면", hint: "이게 내 얘기인가? 제품 이름 대신 고객이 겪는 구체적인 상황을 적어 주세요." },
-  { key: "arrival_scene", label: "도착 장면", hint: "사면 뭘 얻나? 실제로 만들어 줄 수 있는 결과 장면을 적어 주세요." },
-  { key: "mechanism", label: "방식과 차별점", hint: "왜 이 방법인가? 기존 방식의 문제와 이 방식이 푸는 원리를 적어 주세요." },
-  { key: "evidence", label: "근거", hint: "정말 되나? 숫자, 후기, 실제 화면 등 보여 줄 수 있는 증거를 적어 주세요." },
-  { key: "journey", label: "받는 과정", hint: "정확히 뭘 받나? 무엇이 먼저 오고 다음에 무엇이 오는지 순서대로 적어 주세요." },
-  { key: "risk_reducers", label: "불안 제거", hint: "실패하면? 환불 규정과 지원 범위를 정확히 적어 주세요." },
-  { key: "urgency", label: "지금 사야 할 이유", hint: "왜 지금? 마감, 수량, 가격 변경 같은 구체적인 이유를 적어 주세요." },
+  { key: "persona_pain", label: "home.detail.persona_pain", hint: "home.detail.persona_painHint" },
+  { key: "arrival_scene", label: "home.detail.arrival_scene", hint: "home.detail.arrival_sceneHint" },
+  { key: "mechanism", label: "home.detail.mechanism", hint: "home.detail.mechanismHint" },
+  { key: "evidence", label: "home.detail.evidence", hint: "home.detail.evidenceHint" },
+  { key: "journey", label: "home.detail.journey", hint: "home.detail.journeyHint" },
+  { key: "risk_reducers", label: "home.detail.risk_reducers", hint: "home.detail.risk_reducersHint" },
+  { key: "urgency", label: "home.detail.urgency", hint: "home.detail.urgencyHint" },
 ];

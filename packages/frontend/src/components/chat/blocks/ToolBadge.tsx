@@ -1,5 +1,12 @@
 import { cn } from "@/lib/utils";
 import { Loader2, Check, AlertCircle, Wrench } from "lucide-react";
+import { useT, type MessageKey } from "@/i18n/t";
+
+const TOOL_STATE_MESSAGE_KEYS: Record<"running" | "finished" | "error", MessageKey> = {
+  running: "chat.tool.running",
+  finished: "chat.tool.finished",
+  error: "chat.tool.error",
+};
 
 export default function ToolBadge({
   tool,
@@ -8,10 +15,10 @@ export default function ToolBadge({
   tool: string;
   state: "running" | "finished" | "error";
 }) {
+  const t = useT();
   const Icon =
     state === "running" ? Loader2 : state === "finished" ? Check : AlertCircle;
-  const label =
-    state === "running" ? "실행 중" : state === "finished" ? "완료" : "오류";
+  const label = t(TOOL_STATE_MESSAGE_KEYS[state]);
   return (
     <div
       className={cn(

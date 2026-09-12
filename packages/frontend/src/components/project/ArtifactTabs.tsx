@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { Compass, FileCode, Folder, Palette, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ArtifactTab } from "@/types/project";
+import { useT } from "@/i18n/t";
 
 export default function ArtifactTabs({
   tabs,
@@ -14,6 +15,7 @@ export default function ArtifactTabs({
   onSelect: (id: string) => void;
   onClose?: (id: string) => void;
 }) {
+  const t = useT();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [overflowing, setOverflowing] = useState(false);
@@ -43,13 +45,17 @@ export default function ArtifactTabs({
     if (container === null) return;
     const observer = new ResizeObserver(() => revealActiveTab());
     observer.observe(container);
+    // Translated labels can resize the strip without resizing its scrollport.
+    for (const group of Object.values(groupRefs.current)) {
+      if (group) observer.observe(group);
+    }
     return () => observer.disconnect();
   }, [revealActiveTab, tabs.length]);
 
   return (
     <div
       ref={scrollRef}
-      aria-label="프로젝트 작업 탭"
+      aria-label={t("files.tabs.label")}
       className={cn(
         "relative flex h-full w-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden px-2",
         // Edge fade + snap only while the strip actually overflows, so a
@@ -65,6 +71,8 @@ export default function ArtifactTabs({
       }}
     >
       {tabs.map((tab) => {
+        const title = tab.kind === "design_files" ? t("files.tabs.designFiles")
+          : tab.kind === "directions" ? t("files.tabs.directions") : tab.title;
         const Icon = tabIcon(tab.kind);
         const isActive = tab.id === activeId;
         return (
@@ -78,7 +86,7 @@ export default function ArtifactTabs({
             <button
               type="button"
               onClick={() => onSelect(tab.id)}
-              title={tab.relPath ?? tab.title}
+              title={tab.relPath ?? title}
               aria-pressed={isActive}
               className={cn(
                 "flex h-full items-center gap-2 border-b-2 px-4 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
@@ -89,14 +97,14 @@ export default function ArtifactTabs({
               )}
             >
               <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span className="max-w-[180px] truncate">{tab.title}</span>
+              <span className="max-w-[180px] truncate">{title}</span>
             </button>
             {tab.closeable ? (
               <button
                 type="button"
                 onClick={() => onClose?.(tab.id)}
                 className="mr-1 max-[900px]:min-h-11 max-[900px]:min-w-11 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                aria-label={`${tab.title} 탭 닫기`}
+                aria-label={t("files.tabs.close", { name: title })}
               >
                 <X className="h-3 w-3" aria-hidden="true" />
               </button>

@@ -3,6 +3,7 @@
  * dispatch; this module owns which entries each project shape offers and
  * which options each entry sends.
  */
+import { t } from "@/i18n/t";
 import type { GraphicCanvasV1, GraphicSetV1, ProjectType } from "@bg/shared";
 import type {
   ExportMenuOption,
@@ -20,26 +21,23 @@ export function cafe24AssetBaseUrl(slug: string): string {
 
 const CAFE24_URL_FIELD: ExportOptionField = {
   kind: "asset_base_url",
-  label: "에셋 주소",
-  hint: "파일업로더나 FTP로 올릴 web/ 경로예요. 비워 두면 기본 경로를 씁니다.",
-  placeholder: `${CAFE24_ASSET_PREFIX}<슬러그>/`,
+  get label() { return t("export.field.assetUrl"); },
+  get hint() { return t("export.field.cafe24Hint"); },
+  get placeholder() { return `${CAFE24_ASSET_PREFIX}${t("export.field.slugPlaceholder")}`; },
 };
 
 const IMWEB_URL_FIELD: ExportOptionField = {
   kind: "asset_base_url",
-  label: "에셋 주소 (선택)",
-  hint: "큰 이미지는 게시판 글에 첨부해 얻은 URL을 넣어 주세요. 비워 두면 작은 이미지는 조각 안에 포함해요.",
+  get label() { return t("export.field.assetUrlOptional"); },
+  get hint() { return t("export.field.imwebHint"); },
   placeholder: "https://...",
 };
 
 const SLICE_FIELD: ExportOptionField = {
   kind: "slice",
-  label: "이미지 조각",
-  hint: "스마트스토어는 5000px, 쿠팡은 3000px 이하를 권장해요. 용량 제한이 있으면 JPEG로 바꾸세요.",
+  get label() { return t("export.field.slice"); },
+  get hint() { return t("export.field.sliceHint"); },
 };
-
-const MIXED_FRAMES_NOTE =
-  "프레임 크기가 서로 달라 한 PDF로 묶을 수 없어요. 프레임마다 PNG는 만들 수 있으니 PNG 묶음 (ZIP)으로 내보내 주세요.";
 
 function isWebProject(projectType: ProjectType): boolean {
   return projectType === "prototype" || projectType === "from_template" || projectType === "other";
@@ -59,7 +57,7 @@ export function platformPackageOptions(
     {
       key: "cafe24_package",
       format: "cafe24_package",
-      label: "카페24 스마트디자인 패키지",
+      label: t("export.option.cafe24"),
       options: { asset_base_url: entered === "" ? cafe24AssetBaseUrl("") : entered },
       fields: [CAFE24_URL_FIELD],
       ...disabled,
@@ -67,7 +65,7 @@ export function platformPackageOptions(
     {
       key: "imweb_package",
       format: "imweb_package",
-      label: "아임웹 코드위젯 패키지",
+      label: t("export.option.imweb"),
       ...(entered === "" ? {} : { options: { asset_base_url: entered } }),
       fields: [IMWEB_URL_FIELD],
       ...disabled,
@@ -80,7 +78,7 @@ export function deckFrameZipOption(projectType: ProjectType): ExportMenuOption {
   return {
     key: "png_zip",
     format: "png_zip",
-    label: "PNG 묶음 (ZIP)",
+    label: t("export.option.pngZip"),
     ...(projectType === "slide_deck" ? {} : { disabledReason: "frames_only" as const }),
   };
 }
@@ -89,7 +87,7 @@ function slicedFrameZipOption(values: ExportOptionValues): ExportMenuOption {
   return {
     key: "png_zip",
     format: "png_zip",
-    label: "PNG 묶음 (ZIP)",
+    label: t("export.option.pngZip"),
     options: {
       slice_height: values.sliceHeight,
       slice_format: values.sliceFormat,
@@ -125,14 +123,14 @@ export function graphicExportOptions(
     ...(set.kind === "product_detail"
       ? [slicedFrameZipOption(values)]
       : set.frame_count > 1
-        ? [{ key: "png_zip", format: "png_zip" as const, label: "PNG 묶음 (ZIP)" }]
+        ? [{ key: "png_zip", format: "png_zip" as const, label: t("export.option.pngZip") }]
         : []),
     {
       key: "graphic-pdf-artboard",
       format: "pdf",
       options: { pdf_paper: "artboard" },
-      label: "PDF · 아트보드 크기",
-      ...(uniform ? {} : { disabledReason: "mixed_frames" as const, note: MIXED_FRAMES_NOTE }),
+      label: t("export.option.pdfArtboard"),
+      ...(uniform ? {} : { disabledReason: "mixed_frames" as const, note: t("export.option.mixedFrames") }),
     },
   ];
 }

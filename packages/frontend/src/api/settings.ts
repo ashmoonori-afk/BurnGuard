@@ -1,5 +1,6 @@
 import type { AppUpdateStatus, PlaywrightInstallStatus, PythonSettings } from "@bg/shared";
 import { apiFetch } from "./client";
+import { t } from "@/i18n/t";
 
 export async function getAppUpdateStatus(): Promise<AppUpdateStatus> {
   return apiFetch<AppUpdateStatus>("/api/settings/updates");
@@ -24,7 +25,7 @@ export function waitForAppRestart(): Promise<void> {
       if (error) reject(error);
       else resolve();
     };
-    const deadline = setTimeout(() => finish(new Error("업데이트가 적용되는 동안 연결이 끊겼어요. BurnGuard를 다시 열어 주세요.")), 120_000);
+    const deadline = setTimeout(() => finish(new Error(t("settings.updateDisconnected"))), 120_000);
     const interval = setInterval(async () => {
       if (inFlight) return;
       inFlight = true;

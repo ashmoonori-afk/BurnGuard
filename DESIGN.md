@@ -71,6 +71,13 @@ for icons, borders, and large or bold labels.
   checkpoint; reset and undo remain visible and reversible.
 - **CommentPanel**: contextual feedback tied to an artifact path and optional
   slide index. Resolved comments leave the active queue.
+- **QuickComment**: Control+Space over a loaded canvas opens the existing memo
+  editor beside the pointer, without changing canvas mode. Its viewport portal
+  stays unscaled and inside screen edges. Creation shows an immediate pending
+  state, then focuses the memo; repeated keys never create additional pins.
+  Escape closes and saves the draft. Refresh/file changes dismiss stale context
+  while preserving edited text through the existing comment save path. Editable
+  controls retain Control+Space, including inside the opaque-origin sandbox.
 - **ChatPane**: intent entry and streaming state. Chat must not obscure the
   artifact or imply a completed update before the backend event arrives.
   Each queued PDF/PPTX owns a stable item identity and an explicit ordinary
@@ -139,6 +146,13 @@ remove non-essential transitions and preserve the same visible state changes.
   `title` or accessible description.
 
 ## Evidence expectations
+
+Interface language is a local preference: Korean, English, or Simplified Chinese.
+Changing it updates application chrome without rewriting user or generated
+content. Language controls use endonyms and visible selected states. Keep-all
+wrapping is Korean-only; Chinese must wrap between characters, and longer English
+labels must remain usable in narrow panels. Locale-aware dates follow this
+preference rather than the operating system language.
 
 Every new behavior needs a focused RED -> GREEN proof and a real app scenario.
 Visual review covers desktop and narrow viewport screenshots, keyboard focus,

@@ -1,3 +1,4 @@
+import { t, useT } from "@/i18n/t";
 import type { DesignDirectionSlot } from "@bg/shared";
 import { AlertCircle, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ export function DirectionCard({
   selectable,
   onSelect,
 }: DirectionCardProps) {
+  const t = useT();
   const pending = direction.status === "pending";
   const styleFactsId = `direction-style-facts-${direction.order}`;
   return (
@@ -30,7 +32,7 @@ export function DirectionCard({
         {direction.status === "ready" && direction.preview_url !== null ? (
           <img
             src={direction.preview_url}
-            alt={`${direction.title} 디자인 방향 미리보기`}
+            alt={t("directions.previewAlt", { name: direction.title })}
             width={640}
             height={360}
             className="h-full w-full object-contain"
@@ -40,7 +42,7 @@ export function DirectionCard({
             {pending ? (
               <span className="inline-flex items-center gap-2">
                 <LoaderCircle className="h-4 w-4" aria-hidden="true" />
-                미리보기를 만들고 있어요
+                {t("directions.previewCreating")}
               </span>
             ) : (
               <span className="inline-flex items-center gap-2">
@@ -66,7 +68,7 @@ export function DirectionCard({
         <ul
           id={styleFactsId}
           className="mt-3 flex flex-wrap gap-1.5"
-          aria-label="스타일 특징"
+          aria-label={t("directions.styleFacts")}
         >
           {direction.style_facts.map((fact) => (
             <li
@@ -90,11 +92,11 @@ export function DirectionCard({
             disabled={!selectable || selected}
             onClick={() => onSelect(direction.id)}
           >
-            {selected ? "선택됨" : "이 방향 선택"}
+            {selected ? t("directions.selected") : t("directions.select")}
           </Button>
         ) : direction.status === "failed" || direction.status === "cancelled" ? (
           <p className="mt-4 flex min-h-11 items-center rounded-md border border-border bg-muted/50 px-3 text-xs leading-relaxed text-muted-foreground [word-break:keep-all]">
-            위의 다시 만들기에서 이 방향을 재시도할 수 있어요.
+            {t("directions.retryHint")}
           </p>
         ) : null}
       </div>
@@ -107,19 +109,19 @@ function slotFailure(
   error: string | null,
 ): string {
   if (error === "Direction generation was interrupted; retry unfinished directions.") {
-    return "앱이 다시 시작되어 생성을 마치지 못했어요.";
+    return t("directions.previewInterrupted");
   }
   if (error === "Direction generation was cancelled; retry this direction.") {
-    return "요청에 따라 미리보기 생성을 취소했어요.";
+    return t("directions.previewCancelled");
   }
   switch (status) {
     case "failed":
     case "cancelled":
-      return "미리보기 생성 중 오류가 발생했어요.";
+      return t("directions.previewFailed");
     case "pending":
-      return "미리보기를 기다리고 있어요.";
+      return t("directions.previewPending");
     case "ready":
-      return "미리보기가 준비됐어요.";
+      return t("directions.previewReady");
     default: {
       const unreachable: never = status;
       return unreachable;

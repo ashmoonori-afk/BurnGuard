@@ -1,3 +1,4 @@
+import { useT } from "@/i18n/t";
 import { useState } from "react";
 import type { ExportJob } from "@/api/export";
 import ExportStatusRow from "./ExportStatusRow";
@@ -18,12 +19,13 @@ export default function ExportStatusList({
   onRequestFix?: (job: ExportJob) => void;
   retryDisabled?: boolean;
 }) {
+  const t = useT();
   const [guideJob, setGuideJob] = useState<ExportJob | null>(null);
   if (jobs.length === 0) return null;
   return (
     <div className="px-2 py-1.5">
       <div className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        최근 내보내기
+        {t("export.recent")}
       </div>
       <ul className="space-y-1">
         {jobs.slice(0, 5).map((job) => (

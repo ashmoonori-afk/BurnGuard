@@ -3,6 +3,7 @@
  * no state and never talks to the network, so NewProjectPanel stays the
  * only place that decides whether a project can be created.
  */
+import { useT } from "@/i18n/t";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -34,19 +35,20 @@ export default function ProjectBriefFields({
   onChange: BriefFieldChange;
   showOutputSize?: boolean;
 }) {
+  const t = useT();
   return (
     <div className="space-y-4 border-t border-border pt-5">
       <div className="text-xs font-semibold text-muted-foreground">
-        03 · 누구를 위한 작업인가요?
+        {t("home.brief.heading")}
       </div>
 
       <div className="space-y-1.5">
         <label htmlFor="brief-audience" className={PROJECT_LABEL_CLASS}>
-          누가 보게 되나요?
+          {t("home.brief.audience")}
         </label>
         <Input
           id="brief-audience"
-          placeholder="예: 국내 투자 심사역"
+          placeholder={t("home.brief.audiencePlaceholder")}
           maxLength={AUDIENCE_MAX_LENGTH}
           value={form.audience}
           required
@@ -57,12 +59,12 @@ export default function ProjectBriefFields({
 
       <div className="space-y-1.5">
         <label htmlFor="brief-objective" className={PROJECT_LABEL_CLASS}>
-          무엇을 얻고 싶나요?
+          {t("home.brief.objective")}
         </label>
         <textarea
           id="brief-objective"
           rows={2}
-          placeholder="예: 다음 분기 예산 승인 받기"
+          placeholder={t("home.brief.objectivePlaceholder")}
           maxLength={OBJECTIVE_MAX_LENGTH}
           value={form.objective}
           required
@@ -73,11 +75,11 @@ export default function ProjectBriefFields({
       </div>
 
       <details className="rounded-xl border border-border bg-muted/30 p-4">
-        <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">상세 설정 <span className="ml-1 text-xs font-normal text-muted-foreground">자료 · 스타일 · 크기</span></summary>
+        <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("home.brief.details")} <span className="ml-1 text-xs font-normal text-muted-foreground">{t("home.brief.detailsHint")}</span></summary>
         <div className="mt-4 space-y-4">
       <ChoiceField
         id="brief-content-source"
-        label="자료는 어디서 오나요?"
+        label={t("home.brief.source")}
         choices={CONTENT_SOURCE_CHOICES}
         value={form.contentSource}
         disabled={disabled}
@@ -87,7 +89,7 @@ export default function ProjectBriefFields({
       <div className="grid grid-cols-2 gap-3">
         <ChoiceField
           id="brief-visual-mood"
-          label="분위기"
+          label={t("home.brief.mood")}
           choices={VISUAL_MOOD_CHOICES}
           value={form.visualMood}
           disabled={disabled}
@@ -95,7 +97,7 @@ export default function ProjectBriefFields({
         />
         <ChoiceField
           id="brief-density"
-          label="정보 밀도"
+          label={t("home.brief.density")}
           choices={DENSITY_CHOICES}
           value={form.density}
           disabled={disabled}
@@ -106,7 +108,7 @@ export default function ProjectBriefFields({
       {showOutputSize && (
         <ChoiceField
           id="brief-output-size"
-          label="출력 크기"
+          label={t("home.brief.size")}
           choices={OUTPUT_SIZE_CHOICES}
           value={form.outputSize}
           disabled={disabled}
@@ -134,6 +136,7 @@ function ChoiceField<T extends string>({
   disabled: boolean;
   onSelect: (value: T) => void;
 }) {
+  const t = useT();
   return (
     <div className="space-y-1.5">
       <label htmlFor={id} className={PROJECT_LABEL_CLASS}>
@@ -151,7 +154,7 @@ function ChoiceField<T extends string>({
       >
         {choices.map((c) => (
           <option key={c.value} value={c.value}>
-            {c.label}
+            {t(c.label)}
           </option>
         ))}
       </select>
