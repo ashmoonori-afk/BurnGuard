@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -48,4 +48,19 @@ test("Given a process that already exited When its owned tree is closed Then cle
   const processId = proc.pid;
   await proc.exited;
   expect(await closeOwnedProcessTree(processId)).toBeUndefined();
+});
+
+test("POSIX cleanup reports a permission boundary without rejecting an asynchronous abort handler", async () => {
+  if (process.platform === "win32") return;
+  const kill = spyOn(process, "kill").mockImplementation((_pid, signal) => {
+    throw Object.assign(new Error("signal failure"), { code: signal === "SIGKILL" ? "EPERM" : "ESRCH" });
+  });
+  const warning = spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    expect(await closeOwnedProcessTree(1_000_000_000)).toBeUndefined();
+    expect(warning.mock.calls.some(([message]) => String(message).includes("EPERM"))).toBe(true);
+  } finally {
+    kill.mockRestore();
+    warning.mockRestore();
+  }
 });

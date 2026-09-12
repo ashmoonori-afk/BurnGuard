@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Browser } from "playwright-core";
+import type { Browser, BrowserContext, Page } from "playwright-core";
 import { chromium } from "./playwright-runtime";
 import { resolveRepoRoot } from "../lib/paths";
 import { registerExportBrowser } from "./export-browser-registry";
@@ -64,7 +64,9 @@ export async function launchChromiumViaNode(options: { readonly channel?: string
   finally { clearTimeout(timer); }
 }
 
-type NativeBrowser = Browser & { _connectToBrowserType: (type: typeof chromium, options: object, logger: undefined) => void; _shouldCloseConnectionOnClose: boolean; _didClose: () => void };
+type NativePage = Page & { _onClose: () => void };
+type NativeContext = Omit<BrowserContext, "pages"> & { _onClose: () => void; pages: () => NativePage[] };
+type NativeBrowser = Omit<Browser, "contexts"> & { _connectToBrowserType: (type: typeof chromium, options: object, logger: undefined) => void; _shouldCloseConnectionOnClose: boolean; _didClose: () => void; contexts: () => NativeContext[] };
 type NativeConnection = {
   onmessage: (message: unknown) => void;
   markAsRemote: () => void;
@@ -83,11 +85,21 @@ async function connectNativeWebSocket(endpoint: string, signal: AbortSignal): Pr
   const socket = new WebSocket(endpoint);
   let browser: NativeBrowser | undefined;
   const abort = () => { connection.close("Chromium connection aborted"); socket.close(); };
-  const closed = () => { signal.removeEventListener("abort", abort); connection.close("Chromium connection closed"); browser?._didClose(); };
+  const closed = () => { signal.removeEventListener("abort", abort); connection.close("Chromium connection closed"); };
   socket.addEventListener("close", closed, { once: true });
   socket.addEventListener("error", abort, { once: true });
   signal.addEventListener("abort", abort, { once: true });
-  connection.on("close", () => socket.close());
+  connection.on("close", () => {
+    // Match Playwright's connectToBrowser disconnect cascade. Closing only the
+    // protocol leaves page target scopes open, so in-flight route commands
+    // reject out of event callbacks instead of settling through safeRace.
+    for (const context of browser?.contexts() ?? []) {
+      for (const page of context.pages()) page._onClose();
+      context._onClose();
+    }
+    socket.close();
+    queueMicrotask(() => { if (browser?.isConnected()) browser._didClose(); });
+  });
   socket.addEventListener("message", (event) => {
     try { connection.dispatch(JSON.parse(String(event.data))); }
     catch { abort(); }
