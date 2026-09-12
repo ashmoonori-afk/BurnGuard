@@ -1,5 +1,27 @@
 import { parse } from "node-html-parser";
 import { AcquisitionLimitError, DEFAULT_ACQUISITION_LIMITS, throwIfAcquisitionAborted, type AcquisitionLimits } from "./extraction-acquisition";
+import { assertAcquirableSourceMarkup, assertInertSourceMarkup, ExtractionSafetyError, removeSourceMarkupReferences } from "./extraction-safety";
+
+export function sanitizeSourceHtml(html: string): string {
+  // Do not let parser serialization repair a source the acquisition gate rejects.
+  const normalized = html.toLowerCase();
+  if (!["<html", "<body", "</body>", "</html>"].every(tag => normalized.includes(tag))) {
+    throw new ExtractionSafetyError("unsafe_source_content", "Malformed html source is not accepted");
+  }
+  const root = parse(html, { lowerCaseTagName: true });
+  // Public HTTPS navigation is text evidence, not a resource to fetch or ship.
+  // Leave other schemes and all resource URLs for the strict acquisition gate.
+  for (const anchor of root.querySelectorAll("a[href]")) {
+    const href = anchor.getAttribute("href") ?? "";
+    if (!URL.canParse(href)) continue;
+    const url = new URL(href);
+    if (url.protocol === "https:" && url.username === "" && url.password === "") anchor.removeAttribute("href");
+  }
+  assertAcquirableSourceMarkup(root.toString(), "html");
+  const stored = removeSourceMarkupReferences(root.toString());
+  assertInertSourceMarkup(stored, "html");
+  return stored;
+}
 
 export type HtmlComponentSamples = {
   readonly buttons: string[];

@@ -41,10 +41,8 @@ import {
   type ExtractionProvenanceSidecar,
 } from "./extraction-provenance";
 import {
-  assertAcquirableSourceMarkup,
   assertInertSourceMarkup,
   ExtractionSafetyError,
-  removeSourceMarkupReferences,
   safeSourceReference,
 } from "./extraction-safety";
 
@@ -93,7 +91,7 @@ import {
   isColorTokenValue,
   upsertCssCustomProperty,
 } from "./extraction-css";
-import { collectCandidateWebsitePages, extractHtmlComponentSamples } from "./extraction-html";
+import { collectCandidateWebsitePages, extractHtmlComponentSamples, sanitizeSourceHtml } from "./extraction-html";
 import { analyzeLocalTree, type SourceAnalysis } from "./extraction-local-tree";
 import {
   contentTypeForDesignSystemFile,
@@ -705,9 +703,7 @@ async function ingestWebsiteSource(
   });
   url = homepage.finalUrl;
   const html = homepage.text;
-  assertAcquirableSourceMarkup(html, "html");
-  const storedHomepageHtml = removeSourceMarkupReferences(html);
-  assertInertSourceMarkup(storedHomepageHtml, "html");
+  const storedHomepageHtml = sanitizeSourceHtml(html);
 
   const websiteDir = path.join(ingestDir, "website");
   const uploadsDir = path.join(websiteDir, "uploads", "linked-css");
@@ -744,11 +740,9 @@ async function ingestWebsiteSource(
         userAgent: `BurnGuard/${APP_VERSION} design-system-import`,
       });
       if (pageHtmlByUrl.has(pageFetch.finalUrl.toString())) continue;
-      assertAcquirableSourceMarkup(pageFetch.text, "html");
+      const storedPageHtml = sanitizeSourceHtml(pageFetch.text);
       pageHtmlByUrl.set(pageFetch.finalUrl.toString(), pageFetch.text);
       const fileName = `page-${pageHtmlByUrl.size}.html`;
-      const storedPageHtml = removeSourceMarkupReferences(pageFetch.text);
-      assertInertSourceMarkup(storedPageHtml, "html");
       await writeFile(path.join(pagesDir, fileName), storedPageHtml, "utf8");
     } catch (error) {
       if (error instanceof ExtractionAcquisitionError) throw error;
@@ -1483,7 +1477,11 @@ async function writeCanonicalDesignSystem(input: {
     for (const file of input.analysis.uiKitFiles.slice(0, MAX_UPLOAD_UI_KIT_PAGES)) {
       throwIfAcquisitionAborted(input.signal);
       const dest = path.join(uiKitDir, safeFileName(file.fileName));
-      await copyFile(file.absolutePath, dest);
+      if (input.sourceType === "github" && path.extname(dest).toLowerCase() === ".html") {
+        await writeFile(dest, sanitizeSourceHtml(await readFile(file.absolutePath, "utf8")), "utf8");
+      } else {
+        await copyFile(file.absolutePath, dest);
+      }
       generated.add(toSystemRelPath(input.systemDir, dest));
     }
   }
