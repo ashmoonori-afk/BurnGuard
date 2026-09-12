@@ -73,7 +73,7 @@ export default function ExportStatusRow({
   const wordedByJobState =
     state.cancelled ||
     job.latest_attempt?.cancel_requested_at != null ||
-    (job.status === "succeeded" && !state.canDownload);
+    (!state.active && !state.canDownload);
   const label = wordedByJobState
     ? state.label
     : stage === "ready" && isPackage
@@ -102,7 +102,11 @@ export default function ExportStatusRow({
         {isPackage && (
           <button
             type="button"
-            onClick={() => actions.onOpenGuide(job)}
+            onClick={(event) => {
+              // Pointer activation does not focus buttons in every browser.
+              event.currentTarget.focus({ preventScroll: true });
+              actions.onOpenGuide(job);
+            }}
             aria-label={t("export.guideFormat", { name: formatLabel(job.format) })}
             className={`${ACTION_CLASS} text-muted-foreground hover:text-foreground`}
           >

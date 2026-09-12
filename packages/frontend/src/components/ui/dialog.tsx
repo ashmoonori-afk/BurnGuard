@@ -29,11 +29,13 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     /** Hide the default top-right close (X) button, e.g. for dialogs whose decision must come from an explicit action button. */
     hideClose?: boolean;
+    /** Override the overlay layer together with content for dialogs opened from elevated portals. */
+    overlayClassName?: string;
   }
->(({ className, children, hideClose = false, ...props }, ref) => {
+>(({ className, children, hideClose = false, overlayClassName, ...props }, ref) => {
   const t = useT();
   return <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay className={overlayClassName} />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(

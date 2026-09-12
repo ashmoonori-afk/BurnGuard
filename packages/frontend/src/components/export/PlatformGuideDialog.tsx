@@ -1,4 +1,5 @@
 import { useT } from "@/i18n/t";
+import { useRef } from "react";
 import type { ExportFormat } from "@bg/shared";
 import {
   Dialog,
@@ -37,12 +38,26 @@ export default function PlatformGuideDialog({
   readonly onOpenChange: (open: boolean) => void;
 }) {
   const t = useT();
+  const openerRef = useRef<HTMLElement | null>(null);
   const guide = platformGuideView(format);
   if (guide === null) return null;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-        <DialogHeader>
+      <DialogContent
+        className="!z-[110] max-h-[85vh] max-w-lg overflow-y-auto"
+        overlayClassName="!z-[110]"
+        onOpenAutoFocus={() => {
+          // The status-row button is outside DialogTrigger; capture it before
+          // Radix moves focus into the guide, leaving its focus trap intact.
+          const opener = document.activeElement;
+          openerRef.current = opener instanceof HTMLElement ? opener : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          openerRef.current?.focus({ preventScroll: true });
+        }}
+      >
+        <DialogHeader className="pr-8">
           <DialogTitle>{guide.title}</DialogTitle>
           <DialogDescription className="text-pretty break-keep">{guide.summary}</DialogDescription>
         </DialogHeader>

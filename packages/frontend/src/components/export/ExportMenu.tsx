@@ -177,7 +177,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
           <Download className="h-3.5 w-3.5" /> {t("export.title")}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent data-export-menu-content align="end" className="z-[100] w-80 max-w-[calc(100vw-24px)] p-2">
+      <DropdownMenuContent data-export-menu-content align="end" className="z-[100] max-h-[var(--radix-dropdown-menu-content-available-height)] w-80 max-w-[calc(100vw-24px)] overflow-y-auto p-2">
         <DropdownMenuLabel>{t("export.formats")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {jobsQuery.isError && <div role="alert" className="p-2 text-xs"><p>{t("export.listFailed")}</p><button type="button" className="mt-2 underline" onClick={() => void jobsQuery.refetch()}>{t("export.retry")}</button></div>}

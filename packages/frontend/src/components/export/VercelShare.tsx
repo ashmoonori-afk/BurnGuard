@@ -1,8 +1,8 @@
 import { useT, type MessageKey } from "@/i18n/t";
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Share2 } from "lucide-react";
-import type { VercelDeployment } from "@bg/shared";
+import type { ExportJob, VercelDeployment } from "@bg/shared";
 import { apiFetch, ApiError } from "@/api/client";
 import { createExport, getExport } from "@/api/export";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ const errors: Record<string, MessageKey> = {
 
 export default function VercelShare({ projectId }: { projectId: string }) {
   const t = useT();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [token, setToken] = useState("");
   const [teamId, setTeamId] = useState("");
@@ -27,9 +28,20 @@ export default function VercelShare({ projectId }: { projectId: string }) {
   const [deployment, setDeployment] = useState<VercelDeployment | null>(null);
   const job = useQuery({ queryKey: ["share-export", jobId], queryFn: () => getExport(jobId!), enabled: open && !!jobId,
     refetchInterval: (query) => query.state.status === "error" ? false : query.state.data && ["succeeded", "failed"].includes(query.state.data.status) ? false : 1500 });
+  useEffect(() => {
+    const current = job.data;
+    if (!current || current.project_id !== projectId) return;
+    queryClient.setQueryData<ExportJob[]>(["project", projectId, "exports"], (items) =>
+      items?.some((item) => item.id === current.id)
+        ? items.map((item) => item.id === current.id ? current : item)
+        : [current, ...(items ?? [])]);
+  }, [job.data, projectId, queryClient]);
   async function prepare() {
     setBusy(true); setMessage(null); setDeployment(null);
-    try { setJobId((await createExport(projectId, "html_zip", { skip_quality_check: true })).id); }
+    try {
+      setJobId((await createExport(projectId, "html_zip", { skip_quality_check: true })).id);
+      void queryClient.invalidateQueries({ queryKey: ["project", projectId, "exports"] });
+    }
     catch { setMessage("export.share.prepareFailed"); }
     finally { setBusy(false); }
   }

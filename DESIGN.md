@@ -113,6 +113,11 @@ for icons, borders, and large or bold labels.
 - Keyboard: every toolbar action and inspector control is reachable in order;
   focus is visible with the accent ring.
 - Reduced motion: state changes remain understandable without transitions.
+- Platform export guides keep their originating menu mounted and restore focus
+  to its guide button without scrolling. Both the guide overlay and content use
+  layer 110, above the export menu's layer 100; content follows the overlay in
+  portal paint order. This override is local, not a global dialog-layer increase
+  that could cover dropdowns or other nested portals opened inside dialogs.
 
 ## Motion
 
