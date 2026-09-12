@@ -17,7 +17,7 @@ import {
   listHomeProjects,
 } from "../db/seed";
 import { getPromptSampleBySlug, promptSampleDesignSystemId, seedTutorialsOnce } from "../db/seed-tutorials";
-import { detectBackends } from "../services/backends";
+import { CodexAuthenticationProbeError, detectBackends } from "../services/backends";
 import { ensureProjectWatcher } from "../services/watchers";
 import {
   parseProjectInput,
@@ -157,7 +157,13 @@ homeRoutes.post("/api/projects", async (c) => {
   }
 
   if (input.type === "graphic") {
-    const detection = await detectBackends({ force: true });
+    let detection: BackendDetectionResult;
+    try { detection = await detectBackends({ force: true }); }
+    catch (error) {
+      if (!(error instanceof CodexAuthenticationProbeError)) throw error;
+      c.header("Cache-Control", "no-store");
+      return c.json(fail(error.code, error.message, error.diagnostics), 503);
+    }
     if (input.backendId !== "codex" || !detection.backends.some((backend) => backend.id === "codex" && backend.found && backend.authenticated === true)) return c.json(fail("graphic_requires_authenticated_codex", "그래픽 생성에는 로그인된 Codex 연결이 필요해요."), 409);
   }
 
@@ -176,8 +182,15 @@ homeRoutes.post("/api/projects", async (c) => {
 });
 
 homeRoutes.get("/api/backends/detect", async (c) => {
-  c.header("Cache-Control", "private, max-age=30");
-  return c.json(ok((await detectBackends()) as BackendDetectionResult));
+  try {
+    const detection = await detectBackends();
+    c.header("Cache-Control", "private, max-age=30");
+    return c.json(ok(detection));
+  } catch (error) {
+    if (!(error instanceof CodexAuthenticationProbeError)) throw error;
+    c.header("Cache-Control", "no-store");
+    return c.json(fail(error.code, error.message, error.diagnostics), 503);
+  }
 });
 
 // Re-runs the tutorial / prompt-sample seed. Idempotent — only the

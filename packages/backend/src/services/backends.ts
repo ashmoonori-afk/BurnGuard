@@ -8,12 +8,42 @@ const VERSION_PROBE_TIMEOUT_MS = 5_000;
 let cachedValue: BackendDetectionResult | null = null;
 let cachedAt = 0;
 
+export class CodexAuthenticationProbeError extends Error {
+  readonly code = "codex_authentication_probe_failed";
+  constructor(readonly diagnostics: { reason: "timeout" | "execution_failed" | "unexpected_response"; exit_code: number | null; elapsed_ms: number }) {
+    super("Codex login status could not be checked. Please try again.");
+    this.name = "CodexAuthenticationProbeError";
+  }
+}
+
+/** Only an explicit CLI login/logout response confirms authentication state. */
 export async function probeCodexAuthentication(binaryPath: string): Promise<boolean> {
+  const started = performance.now();
+  const controller = new AbortController();
+  let proc: ReturnType<typeof Bun.spawn> | undefined;
+  let exitCode: number | null = null;
+  const failure = (reason: CodexAuthenticationProbeError["diagnostics"]["reason"]) => new CodexAuthenticationProbeError({ reason, exit_code: exitCode, elapsed_ms: Math.round(performance.now() - started) });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => { controller.abort(); reject(failure("timeout")); }, 5_000);
+  });
   try {
-    const proc = Bun.spawn({ cmd: [binaryPath, "login", "status"], stdout: "pipe", stderr: "pipe", signal: AbortSignal.timeout(5_000) });
-    const [stdout, stderr, exit] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
-    return exit === 0 && /logged in using/i.test(`${stdout}\n${stderr}`);
-  } catch { return false; }
+    const child = Bun.spawn({ cmd: [binaryPath, "login", "status"], stdin: "ignore", stdout: "pipe", stderr: "pipe", signal: controller.signal, killSignal: "SIGKILL" });
+    proc = child;
+    const [stdout, stderr, exit] = await Promise.race([Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]), timeout]);
+    exitCode = exit;
+    const lines = `${stdout}\n${stderr}`.split(/\r?\n/).map((line) => line.trim());
+    if (exit === 0 && lines.some((line) => /^logged in using\s+\S/i.test(line))) return true;
+    if (exit === 1 && lines.some((line) => /^not logged in$/i.test(line))) return false;
+    throw failure(exit === 0 ? "unexpected_response" : "execution_failed");
+  } catch (error) {
+    // Never retain raw CLI output, spawn errors, or credentials in diagnostics.
+    if (error instanceof CodexAuthenticationProbeError) throw error;
+    throw failure(controller.signal.aborted ? "timeout" : "execution_failed");
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (controller.signal.aborted && proc) await proc.exited;
+  }
 }
 
 /** Read model metadata only; authentication and personal instructions never enter the API. */
@@ -101,8 +131,14 @@ export async function detectBackends(options: { force?: boolean } = {}): Promise
   ]);
 
   const codex = backends.find((backend) => backend.id === "codex");
-  const [authenticated, models] = await Promise.all([codex?.binary_path ? probeCodexAuthentication(codex.binary_path) : false, readCodexModels()]);
-  cachedValue = { backends: backends.map((backend) => backend.id === "codex" ? { ...backend, authenticated, models } : { ...backend, models: CLAUDE_MODELS }) };
-  cachedAt = Date.now();
-  return cachedValue;
+  try {
+    const [authenticated, models] = await Promise.all([codex?.binary_path ? probeCodexAuthentication(codex.binary_path) : false, readCodexModels()]);
+    cachedValue = { backends: backends.map((backend) => backend.id === "codex" ? { ...backend, authenticated, models } : { ...backend, models: CLAUDE_MODELS }) };
+    cachedAt = Date.now();
+    return cachedValue;
+  } catch (error) {
+    // A failed fresh check confirms neither logout nor the previous cached login.
+    cachedValue = null;
+    throw error;
+  }
 }
