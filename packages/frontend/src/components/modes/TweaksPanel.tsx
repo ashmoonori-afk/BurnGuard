@@ -18,9 +18,11 @@ import { BRAND_PALETTE } from "./tweaks-palette";
 import {
   composeSides,
   normalizeHex,
+  normalizeSideDraft,
   numericFromLength,
   parseSides,
   type Sides,
+  type SideStyle,
 } from "./tweaks-utils";
 
 type ApplyFn = (patch: Partial<Record<TweaksStyleKey, string | null>>) => void;
@@ -483,7 +485,7 @@ function SidesRow({
   onApply,
 }: {
   target: TweaksTarget;
-  styleKey: TweaksStyleKey;
+  styleKey: SideStyle;
   saving: boolean;
   onApply: ApplyFn;
 }) {
@@ -498,19 +500,15 @@ function SidesRow({
   }, [inline, computed, target.bg_id, styleKey]);
 
   const commitSide = (side: keyof Sides) => (rawValue: string) => {
-    const trimmed = rawValue.trim();
-    if (trimmed !== "" && !/^-?\d*\.?\d+$/.test(trimmed)) {
-      // Reject non-numeric; drop back to the last accepted numeric.
-      setSides((prev) => ({ ...prev, [side]: prev[side] }));
-      return;
-    }
+    const trimmed = normalizeSideDraft(styleKey, rawValue);
+    if (trimmed === null) return sides[side];
     const next: Sides = { ...sides, [side]: trimmed };
     setSides(next);
     const allEmpty =
       !next.top && !next.right && !next.bottom && !next.left;
     if (allEmpty) {
       if (inline) onApply({ [styleKey]: null });
-      return;
+      return trimmed;
     }
     const withUnit: Sides = {
       top: next.top === "" ? "0px" : `${next.top}px`,
@@ -524,6 +522,7 @@ function SidesRow({
     } else if (!shorthand && inline) {
       onApply({ [styleKey]: null });
     }
+    return trimmed;
   };
 
   return (
@@ -548,13 +547,14 @@ function SideInput({
 }: {
   title: string;
   value: string;
-  onCommit: (v: string) => void;
+  onCommit: (v: string) => string;
   disabled: boolean;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => {
     setDraft(value);
   }, [value]);
+  const commit = () => setDraft(onCommit(draft));
   return (
     <input
       title={title}
@@ -563,11 +563,11 @@ function SideInput({
       inputMode="decimal"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={(e) => commitTweakOnBlur(e.currentTarget, () => onCommit(draft))}
+      onBlur={(e) => commitTweakOnBlur(e.currentTarget, commit)}
       onKeyDown={(e) =>
         handleEnterEscape(
           e,
-          () => onCommit(draft),
+          commit,
           () => setDraft(value),
         )
       }

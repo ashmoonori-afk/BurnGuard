@@ -11,6 +11,17 @@ export interface Sides {
   left: string;
 }
 
+export type SideStyle = "padding" | "margin" | "border-radius";
+
+export function normalizeSideDraft(style: SideStyle, input: string): string | null {
+  const trimmed = input.trim();
+  if (trimmed === "") return "";
+  if (!/^-?\d*\.?\d+$/.test(trimmed)) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) return null;
+  return String(style === "margin" ? value : Math.max(0, value));
+}
+
 /**
  * Parse a CSS box-model shorthand (padding / margin / border-radius) into
  * explicit 4-side values using CSS's standard collapsing rules:
