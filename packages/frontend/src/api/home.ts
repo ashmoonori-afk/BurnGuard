@@ -18,7 +18,7 @@ export async function listProjects(
 export async function listDesignSystems(
   status: "published" | "review" | "draft" = "published",
 ): Promise<DesignSystemSummary[]> {
-  return apiFetch<DesignSystemSummary[]>(`/api/design-systems?status=${status}`);
+  return apiFetch<DesignSystemSummary[]>(`/api/design-systems?status=${status}&lifecycle=active`);
 }
 
 export async function createProject(

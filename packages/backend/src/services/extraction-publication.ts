@@ -89,7 +89,13 @@ export async function validateExtractionBundle(
     }
     const extension = path.extname(relativePath).toLowerCase();
     if (extension === ".html" || extension === ".svg") {
-      assertInertSourceMarkup(await readFile(file, "utf8"), extension === ".svg" ? "svg" : "html");
+      const markup = await readFile(file, "utf8");
+      // Canonical previews may load only this bundle-local token sheet. Keep
+      // source/UI-kit validation strict and validate every other byte unchanged.
+      const inertMarkup = /^preview\/[^/]+\.html$/.test(relativePath)
+        ? markup.replace('<link rel="stylesheet" href="../colors_and_type.css">', "")
+        : markup;
+      assertInertSourceMarkup(inertMarkup, extension === ".svg" ? "svg" : "html");
     }
   }
   try {

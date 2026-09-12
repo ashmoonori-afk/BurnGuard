@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { isValidFontData } from "./font-validation";
 import { parse } from "node-html-parser";
 import {
   APP_VERSION,
@@ -585,6 +586,13 @@ export async function uploadDesignSystemFont(input: {
       `Font upload must be between 1 byte and ${MAX_FONT_UPLOAD_BYTES} bytes`,
     );
   }
+  const fontBytes = new Uint8Array(await input.file.arrayBuffer());
+  if (!(await isValidFontData(fontBytes))) {
+    throw new DesignSystemAssetEditError(
+      "invalid_font_upload",
+      "Uploaded file is not a valid font",
+    );
+  }
 
   const managedSystemDir = resolveDesignSystemRecordPath(input.systemId, detail.dir_path, detail.dir_path);
   const fontsDir = resolveWithin(managedSystemDir, "fonts");
@@ -594,7 +602,7 @@ export async function uploadDesignSystemFont(input: {
   const family = normalizeFontFamily(input.family) || humanizeSlug(path.basename(fileName, ext));
   const role = input.role ?? null;
 
-  await writeFile(fontPath, Buffer.from(await input.file.arrayBuffer()));
+  await writeFile(fontPath, fontBytes);
   await appendFontFaceRule(path.join(fontsDir, "fonts.css"), family, fileName);
 
   if (role && detail.tokens_css_path) {
@@ -1818,18 +1826,17 @@ function buildPreviewHtml(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(brandName)} ${escapeHtml(fileId)}</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
   <style>
     :root {
-      --bg: #ffffff;
-      --fg: #0f172a;
-      --muted: #64748b;
-      --border: #dbe4ee;
-      --accent: ${firstValue(analysis.cssVars, ["primary-blue", "brand-primary", "color-primary"], "#0057B8")};
+      --fg: var(--fg-1);
+      --muted: var(--fg-3);
+      --accent: var(--primary-blue);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: var(--font-sans);
       background: var(--bg);
       color: var(--fg);
       padding: 14px;
@@ -1839,11 +1846,11 @@ function buildPreviewHtml(
       border-radius: 12px;
       overflow: hidden;
       min-height: 220px;
-      background: linear-gradient(180deg, #fff, #f8fafc);
+      background: linear-gradient(180deg, var(--surface), var(--bg-subtle));
     }
     .bar {
       height: 10px;
-      background: linear-gradient(90deg, var(--accent), #0ea5e9);
+      background: linear-gradient(90deg, var(--accent), var(--aqua-60));
     }
     .content { padding: 14px; }
     .eyebrow {
@@ -1854,6 +1861,7 @@ function buildPreviewHtml(
       margin-bottom: 8px;
     }
     .title {
+      font-family: var(--font-display);
       font-size: 18px;
       font-weight: 600;
       line-height: 1.2;
@@ -1864,11 +1872,11 @@ function buildPreviewHtml(
     .chip { border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; font-size: 11px; }
     .stack { display: grid; gap: 10px; }
     .swatch { height: 28px; border-radius: 8px; border: 1px solid rgba(15,23,42,0.06); }
-    .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid transparent; font-size: 12px; font-weight: 600; }
-    .btn-primary { background: var(--accent); color: white; }
-    .btn-secondary { background: white; color: var(--fg); border-color: var(--border); }
+    .btn { font-family: inherit; display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid transparent; font-size: 12px; font-weight: 600; }
+    .btn-primary { background: var(--action-blue); color: var(--fg-on-brand); }
+    .btn-secondary { background: var(--surface); color: var(--fg); border-color: var(--border); }
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .field { border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 12px; background: white; }
+    .field { border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 12px; background: var(--surface); }
     table { width: 100%; border-collapse: collapse; font-size: 11px; }
     td, th { border-top: 1px solid var(--border); padding: 6px 4px; text-align: left; }
   </style>
@@ -1900,7 +1908,7 @@ function previewBody(
       "Design systems work best when everyday copy feels calm and readable.",
   );
   const sampleSpacing = analysis.spacingValues.slice(0, 6);
-  const sampleColors = analysis.colors.slice(0, 6);
+  const sampleColors = analysis.colors.slice(0, 6).map((_, index) => `var(--src-color-${index + 1})`);
   const sampleFontSizes = analysis.fontSizes.slice(0, 3);
   const sampleFontWeights = analysis.fontWeights.slice(0, 2);
   const sampleRadius = analysis.radii[0] ?? "4px";
@@ -1912,19 +1920,19 @@ function previewBody(
     case "brand-icons":
       return `<div class="eyebrow">Brand</div><div class="title">Icon direction</div><div class="muted">Quiet, geometric, interface-safe iconography.</div><div class="chips"><div class="chip">1.5px stroke</div><div class="chip">Low ornament</div><div class="chip">Grid aligned</div></div>`;
     case "colors-brand":
-      return `<div class="eyebrow">Color</div><div class="title">Brand colors</div><div class="stack">${(sampleColors.length > 0 ? sampleColors.slice(0, 3) : ["#0057B8", "#2563eb", "#0ea5e9"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div><div class="muted">${sampleColors.length > 0 ? "Source-derived swatches" : "Fallback swatches"}</div>`;
+      return `<div class="eyebrow">Color</div><div class="title">Brand colors</div><div class="stack">${(sampleColors.length > 0 ? sampleColors.slice(0, 3) : ["var(--primary-blue)", "var(--blue-60)", "var(--aqua-60)"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div><div class="muted">${sampleColors.length > 0 ? "Source-derived swatches" : "Fallback swatches"}</div>`;
     case "colors-neutrals":
-      return `<div class="eyebrow">Color</div><div class="title">Neutral scale</div><div class="stack">${(sampleColors.length >= 6 ? sampleColors.slice(3, 6) : ["#0f172a", "#64748b", "#f8fafc"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div>`;
+      return `<div class="eyebrow">Color</div><div class="title">Neutral scale</div><div class="stack">${(sampleColors.length >= 6 ? sampleColors.slice(3, 6) : ["var(--gray-10)", "var(--fg-3)", "var(--gray-100)"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div>`;
     case "colors-ramps":
-      return `<div class="eyebrow">Color</div><div class="title">Accent ramps</div><div class="grid">${(sampleColors.length > 0 ? sampleColors.slice(0, 4) : ["#dc2626", "#ea580c", "#16a34a", "#7c3aed"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div>`;
+      return `<div class="eyebrow">Color</div><div class="title">Accent ramps</div><div class="grid">${(sampleColors.length > 0 ? sampleColors.slice(0, 4) : ["var(--red-60)", "var(--orange-50)", "var(--green-60)", "var(--purple-60)"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div>`;
     case "colors-semantic":
       return `<div class="eyebrow">Color</div><div class="title">Semantic roles</div><div class="chips"><div class="chip">Success</div><div class="chip">Warning</div><div class="chip">Error</div><div class="chip">Info</div></div>`;
     case "colors-charts":
-      return `<div class="eyebrow">Color</div><div class="title">Chart palette</div><div class="grid">${(sampleColors.length > 0 ? sampleColors.slice(0, 4) : ["#1d4ed8", "#0891b2", "#16a34a", "#ea580c"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div>`;
+      return `<div class="eyebrow">Color</div><div class="title">Chart palette</div><div class="grid">${(sampleColors.length > 0 ? sampleColors.slice(0, 4) : ["var(--chart-1)", "var(--chart-2)", "var(--chart-4)", "var(--chart-6)"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div>`;
     case "type-display":
       return `<div class="eyebrow">Typography</div><div class="title" style="font-size:${escapeHtml(sampleFontSizes[0] ?? "26px")};font-weight:${escapeHtml(sampleFontWeights[0] ?? "700")}">${sampleHeading}</div><div class="muted">Primary display family candidate: ${firstFont}</div>`;
     case "type-headings":
-      return `<div class="eyebrow">Typography</div><div class="title">Heading hierarchy</div><div class="stack"><div style="font-size:${escapeHtml(sampleFontSizes[0] ?? "20px")};font-weight:${escapeHtml(sampleFontWeights[0] ?? "700")}">H1 Heading</div><div style="font-size:${escapeHtml(sampleFontSizes[1] ?? "16px")};font-weight:${escapeHtml(sampleFontWeights[1] ?? "600")}">H2 Heading</div><div class="muted">Structured, low-hype hierarchy.</div></div>`;
+      return `<div class="eyebrow">Typography</div><div class="title">Heading hierarchy</div><div class="stack" style="font-family:var(--font-display)"><div style="font-size:${escapeHtml(sampleFontSizes[0] ?? "20px")};font-weight:${escapeHtml(sampleFontWeights[0] ?? "700")}">H1 Heading</div><div style="font-size:${escapeHtml(sampleFontSizes[1] ?? "16px")};font-weight:${escapeHtml(sampleFontWeights[1] ?? "600")}">H2 Heading</div><div class="muted">Structured, low-hype hierarchy.</div></div>`;
     case "type-body":
       return `<div class="eyebrow">Typography</div><div class="title">Body copy</div><div class="muted">${sampleBody}</div>`;
     case "spacing":
