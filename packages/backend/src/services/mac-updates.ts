@@ -147,6 +147,8 @@ export function createAppUpdater(deps: AppUpdaterDependencies): AppUpdater {
   };
   let staged: { readonly asset: VelopackFeedAsset; readonly file: string } | null = null;
   let running: Promise<void> | null = null;
+  // Internal transition: keep the existing public ready/restart status contract.
+  let applying = false;
   const patch = (next: Partial<AppUpdateStatus>): void => { state = { ...state, ...next }; };
 
   async function run(): Promise<void> {
@@ -181,19 +183,29 @@ export function createAppUpdater(deps: AppUpdaterDependencies): AppUpdater {
   return {
     status: () => state,
     check() {
-      if (!deps.support.supported) return Promise.resolve();
+      if (!deps.support.supported || applying) return Promise.resolve();
       running ??= run().finally(() => { running = null; });
       return running;
     },
     async apply() {
       if (!deps.support.supported) return "unsupported";
+      if (applying) return "applying";
       if (staged === null || state.state !== "ready") return "not_ready";
-      if (!(await packageMatches(staged.file, staged.asset))) {
-        staged = null;
-        patch({ state: "error", error: "package_digest_mismatch", checked_at: Date.now() });
-        return "not_ready";
+      const candidate = staged;
+      applying = true;
+      try {
+        if (!(await packageMatches(candidate.file, candidate.asset))) {
+          staged = null;
+          patch({ state: "error", error: "package_digest_mismatch", checked_at: Date.now() });
+          applying = false;
+          return "not_ready";
+        }
+        deps.spawn([deps.updaterPath, "apply", "--package", candidate.file, "--waitPid", String(deps.waitPid ?? process.pid)]);
+      } catch (error) {
+        applying = false;
+        throw error;
       }
-      deps.spawn([deps.updaterPath, "apply", "--package", staged.file, "--waitPid", String(deps.waitPid ?? process.pid)]);
+      // Once spawned, retain ownership even if scheduling fails; never launch a second updater.
       (deps.scheduleShutdown ?? ((run) => { setTimeout(run, 250); }))(() => { void deps.shutdown(); });
       return "applying";
     },

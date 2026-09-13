@@ -1,6 +1,40 @@
 const CLEANUP_POLL_MS = 25;
 const CLEANUP_TIMEOUT_MS = 3_000;
 
+export class OwnedProcessTreeCleanupError extends Error {
+  constructor(readonly pid: number) { super(`Owned process tree ${pid} did not fully exit`); }
+}
+
+/** Capture before the first signal, including descendants outside the root's group. */
+export async function terminateOwnedProcessTree(child: { readonly pid: number; readonly exited: Promise<number> }, termGraceMs: number, killGraceMs: number): Promise<{ readonly exitCode: number; readonly killSent: boolean }> {
+  const pids = [...snapshotDescendants(child.pid).reverse(), child.pid];
+  let exitCode: number | undefined;
+  void child.exited.then((code) => { exitCode = code; });
+  const signalTree = (signal: "SIGTERM" | "SIGKILL"): void => {
+    // Positive, captured PIDs only: acquisition roots need not lead their process group.
+    for (const pid of pids) {
+      try { process.kill(pid, signal); }
+      catch (error) {
+        if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
+      }
+    }
+  };
+  const wait = async (timeoutMs: number): Promise<boolean> => {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      if (exitCode !== undefined && !pids.some(isProcessPresent)) return true;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return false;
+      await new Promise<void>((resolve) => setTimeout(resolve, Math.min(CLEANUP_POLL_MS, remaining)));
+    }
+  };
+  signalTree("SIGTERM");
+  if (await wait(termGraceMs)) return { exitCode: await child.exited, killSent: false };
+  signalTree("SIGKILL");
+  if (!(await wait(killGraceMs))) throw new OwnedProcessTreeCleanupError(child.pid);
+  return { exitCode: await child.exited, killSent: true };
+}
+
 export function ownedProcessSpawnOptions(): { readonly detached: boolean } {
   return { detached: process.platform !== "win32" };
 }
@@ -32,7 +66,10 @@ export async function closeOwnedProcessTree(processId: number): Promise<void> {
 }
 
 function snapshotDescendants(processId: number): number[] {
-  const result = Bun.spawnSync(["ps", "-axo", "pid=,ppid=,pgid="], { stdout: "pipe", stderr: "pipe", timeout: 1_000 });
+  const command = process.platform === "win32"
+    ? ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", 'Get-CimInstance Win32_Process | ForEach-Object { "{0} {1} 0" -f $_.ProcessId, $_.ParentProcessId }']
+    : ["ps", "-axo", "pid=,ppid=,pgid="];
+  const result = Bun.spawnSync(command, { stdout: "pipe", stderr: "pipe", timeout: process.platform === "win32" ? 5_000 : 1_000 });
   if (result.exitCode !== 0) throw new Error(`Cannot snapshot owned process tree ${processId}: ${result.stderr.toString()}`);
   const children = new Map<number, number[]>();
   const owned = new Set([processId]);

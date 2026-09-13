@@ -34,9 +34,11 @@ describe("application update routes", () => {
     expect(checked.status).toBe(200);
     expect((await checked.json()).data).toMatchObject({ state: "ready", available_version: "9.9.9" });
 
-    const applied = await settingsRoutes.request("http://local/api/settings/updates/apply", { method: "POST" });
-    expect(applied.status).toBe(202);
-    expect((await applied.json()).data).toEqual({ accepted: true });
+    const applied = await Promise.all(Array.from({ length: 4 }, () => settingsRoutes.request("http://local/api/settings/updates/apply", { method: "POST" })));
+    for (const response of applied) {
+      expect(response.status).toBe(202);
+      expect((await response.json()).data).toEqual({ accepted: true });
+    }
     expect(spawned).toEqual([["/bundle/UpdateMac", "apply", "--package", path.join(cacheDir, "updates", "BurnGuard-9.9.9-osx-full.nupkg"), "--waitPid", String(process.pid)]]);
     expect(shutdowns).toBe(1);
   });

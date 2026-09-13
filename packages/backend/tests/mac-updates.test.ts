@@ -99,6 +99,65 @@ describe("update support detection", () => {
 });
 
 describe("app updater flow", () => {
+  test("concurrent and repeated apply calls schedule exactly one updater and shutdown", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-updater-concurrent-"));
+    try {
+      const good = new TextEncoder().encode("pkg");
+      const sha = createHash("sha256").update(good).digest("hex");
+      const source = fakeSource([asset({ SHA256: sha })], { "BurnGuard-0.5.2-osx-full.nupkg": good });
+      const spawned: string[][] = [], scheduled: (() => void)[] = [];
+      let shutdowns = 0;
+      const updater = createAppUpdater({ currentVersion: "0.5.1", cacheDir: root, source, support: { supported: true, reason: null }, updaterPath: "/unused", spawn: (cmd) => { spawned.push([...cmd]); }, shutdown: async () => { shutdowns++; }, scheduleShutdown: (run) => { scheduled.push(run); } });
+      await updater.check();
+      expect(await Promise.all(Array.from({ length: 4 }, () => updater.apply()))).toEqual(["applying", "applying", "applying", "applying"]);
+      expect(await updater.apply()).toBe("applying");
+      expect(spawned).toHaveLength(1);
+      expect(scheduled).toHaveLength(1);
+      expect(shutdowns).toBe(0);
+      scheduled.forEach((run) => { run(); });
+      expect(shutdowns).toBe(1);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  test("check cannot replace the reserved staged asset while apply verifies its hash", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-updater-apply-check-"));
+    try {
+      const good = new TextEncoder().encode("pkg");
+      const sha = createHash("sha256").update(good).digest("hex");
+      let checks = 0;
+      const source: AppUpdateSource = { async fetchFeed() { checks++; return { Assets: checks === 1 ? [asset({ SHA256: sha })] : [] }; }, async openPackage() { return new Response(good); } };
+      const spawned: string[][] = [];
+      const updater = createAppUpdater({ currentVersion: "0.5.1", cacheDir: root, source, support: { supported: true, reason: null }, updaterPath: "/unused", spawn: (cmd) => { spawned.push([...cmd]); }, shutdown: async () => {}, scheduleShutdown: (run) => run() });
+      await updater.check();
+      // apply reaches its first real filesystem await before check is invoked; no timing delay.
+      const [result] = await Promise.all([updater.apply(), updater.check()]);
+      expect(result).toBe("applying");
+      expect(checks).toBe(1);
+      expect(spawned[0]?.[3]).toBe(path.join(root, "updates", "BurnGuard-0.5.2-osx-full.nupkg"));
+      await updater.check();
+      expect(checks).toBe(1);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  test("spawn failure releases applying reservation for a successful retry without scheduling shutdown", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-updater-spawn-failure-"));
+    try {
+      const good = new TextEncoder().encode("pkg");
+      const sha = createHash("sha256").update(good).digest("hex");
+      const failure = new Error("owned spawn failure");
+      let attempts = 0, shutdowns = 0;
+      const updater = createAppUpdater({ currentVersion: "0.5.1", cacheDir: root, source: fakeSource([asset({ SHA256: sha })], { "BurnGuard-0.5.2-osx-full.nupkg": good }), support: { supported: true, reason: null }, updaterPath: "/unused", spawn: () => { if (++attempts === 1) throw failure; }, shutdown: async () => { shutdowns++; }, scheduleShutdown: (run) => run() });
+      await updater.check();
+      await expect(updater.apply()).rejects.toBe(failure);
+      expect(shutdowns).toBe(0);
+      expect(updater.status().state).toBe("ready");
+      expect(await updater.apply()).toBe("applying");
+      expect(await updater.apply()).toBe("applying");
+      expect(attempts).toBe(2);
+      expect(shutdowns).toBe(1);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test("Given a newer full package When checked Then it is downloaded, verified and staged; equal versions stay idle; corrupt bytes fail closed", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "bg-updater-"));
     try {
@@ -174,6 +233,13 @@ describe("app updater flow", () => {
       });
       expect(spawned).toEqual([]);
       expect(shutdowns).toBe(0);
+      // A failed verification must not leave an applying reservation behind.
+      expect(await updater.apply()).toBe("not_ready");
+      await updater.check();
+      expect(updater.status().state).toBe("ready");
+      expect(await updater.apply()).toBe("applying");
+      expect(spawned).toHaveLength(1);
+      expect(shutdowns).toBe(1);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

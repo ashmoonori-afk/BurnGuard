@@ -1,3 +1,5 @@
+import { OwnedProcessTreeCleanupError, terminateOwnedProcessTree } from "../adapters/owned-process-tree";
+
 const TERM_GRACE_MS = 250;
 const KILL_GRACE_MS = 2_000;
 
@@ -153,24 +155,23 @@ export async function awaitChildWithAbort(
   const exactExit = child.exited;
   let notifyAbort: (() => void) | undefined;
   const aborted = new Promise<void>((resolve) => { notifyAbort = resolve; });
-  const onAbort = (): void => notifyAbort?.();
+  let cleanup: Promise<{ readonly exitCode: number; readonly killSent: boolean }> | undefined;
+  const onAbort = (): void => {
+    // The async helper snapshots and signals synchronously, before ancestry can be lost.
+    cleanup ??= terminateOwnedProcessTree(child, TERM_GRACE_MS, KILL_GRACE_MS);
+    // Observe rejection immediately; the exit path below still awaits and propagates it.
+    void cleanup.then(() => notifyAbort?.(), () => notifyAbort?.());
+  };
   signal.addEventListener("abort", onAbort, { once: true });
   try {
-    if (signal.aborted) notifyAbort?.();
-    const first = await Promise.race([
-      exactExit.then((exitCode) => ({ kind: "exited" as const, exitCode })),
-      aborted.then(() => ({ kind: "aborted" as const })),
-    ]);
-    if (first.kind === "exited") return receipt(child.pid, first.exitCode, false, false);
-
-    child.kill("SIGTERM");
-    const termExit = await awaitExitWithin(exactExit, TERM_GRACE_MS);
-    if (termExit !== null) throw acquisitionAbort(signal, receipt(child.pid, termExit, true, false));
-
-    child.kill("SIGKILL");
-    const killExit = await awaitExitWithin(exactExit, KILL_GRACE_MS);
-    if (killExit === null) throw new OwnedChildCleanupError(child.pid);
-    throw acquisitionAbort(signal, receipt(child.pid, killExit, true, true));
+    if (signal.aborted) onAbort();
+    await Promise.race([exactExit, aborted]);
+    if (cleanup === undefined) return receipt(child.pid, await exactExit, false, false);
+    const result = await cleanup;
+    throw acquisitionAbort(signal, receipt(child.pid, result.exitCode, true, result.killSent));
+  } catch (error) {
+    if (error instanceof OwnedProcessTreeCleanupError) throw new OwnedChildCleanupError(child.pid);
+    throw error;
   } finally {
     signal.removeEventListener("abort", onAbort);
   }
@@ -195,16 +196,6 @@ export async function abortable<T>(operation: Promise<T>, signal: AbortSignal, c
 export function acquisitionAbort(signal: AbortSignal, cleanupReceipt: OwnedCleanupReceipt | null = null): ExtractionAcquisitionError {
   const code = signal.reason instanceof ExtractionAcquisitionError ? signal.reason.code : "acquisition_aborted";
   return new ExtractionAcquisitionError(code, cleanupReceipt);
-}
-
-async function awaitExitWithin(exactExit: Promise<number>, timeoutMs: number): Promise<number | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); });
-  try {
-    return await Promise.race([exactExit, deadline]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
 }
 
 function receipt(pid: number, exitCode: number, termSent: boolean, killSent: boolean): OwnedChildCleanupReceipt {
