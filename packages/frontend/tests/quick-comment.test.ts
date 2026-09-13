@@ -12,12 +12,26 @@ const frame = {
   getBoundingClientRect: () => ({ left: 120, top: 70, right: 520, bottom: 370, width: 400, height: 300 }),
 } as HTMLIFrameElement;
 
-test("parent shortcut accepts only plain Control+Space, excluding repeats, composition and editable targets", () => {
-  expect(isQuickCommentShortcut(shortcut(), false)).toBe(true);
-  for (const overrides of [{ repeat: true }, { isComposing: true }, { defaultPrevented: true }, { ctrlKey: false }, { metaKey: true }, { altKey: true }, { shiftKey: true }, { key: "a", code: "KeyA" }]) {
-    expect(isQuickCommentShortcut(shortcut(overrides), false)).toBe(false);
-  }
-  expect(isQuickCommentShortcut(shortcut(), true)).toBe(false);
+const platforms = [
+  { platform: "MacIntel", altKey: true },
+  { platform: "MacPPC", altKey: true },
+  { platform: "Win32", altKey: false },
+  { platform: "Linux x86_64", altKey: false },
+];
+
+for (const { platform, altKey } of platforms) {
+  test(`${platform} parent accepts its chord and rejects other modifiers, repeats, IME and typing`, () => {
+    expect(isQuickCommentShortcut(shortcut({ altKey }), false, platform)).toBe(true);
+    expect(isQuickCommentShortcut(shortcut({ altKey, key: "\u00a0" }), false, platform)).toBe(true);
+    expect(isQuickCommentShortcut(shortcut({ altKey, code: "" }), false, platform)).toBe(true);
+    for (const overrides of [{ repeat: true }, { isComposing: true }, { defaultPrevented: true }, { ctrlKey: false }, { metaKey: true }, { altKey: !altKey }, { shiftKey: true }, { altKey: false, shiftKey: true }, { key: "a", code: "KeyA" }]) {
+      expect(isQuickCommentShortcut(shortcut({ altKey, ...overrides }), false, platform)).toBe(false);
+    }
+    expect(isQuickCommentShortcut(shortcut({ altKey }), true, platform)).toBe(false);
+  });
+}
+
+test("editable targets are excluded", () => {
   expect(isCommentEditable({ isContentEditable: true })).toBe(true);
   expect(isCommentEditable({ closest: selector => selector.includes("textarea") ? {} : null })).toBe(true);
   expect(isCommentEditable({ closest: () => null })).toBe(false);
@@ -42,7 +56,7 @@ test("popup remains inside viewport at screen edges and after narrow-viewport re
   expect(quickCommentPosition({ x: 350, y: 600 }, { width: 296, height: 240 }, { width: 320, height: 640 })).toEqual({ left: 12, top: 388 });
 });
 
-function frameRuntime(html: string) {
+function frameRuntime(html: string, platform = "Win32") {
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
   if (!script) throw new Error("bridge_script_missing");
   const listeners = new Map<string, (event: Record<string, unknown>) => void>();
@@ -52,6 +66,7 @@ function frameRuntime(html: string) {
   const document = { readyState: "loading", baseURI: "http://localhost/file.html", addEventListener() {} };
   runInNewContext(script, {
     URL,
+    navigator: { platform },
     requestAnimationFrame: (callback: () => void) => frames.push(callback),
     window: { parent, addEventListener: (name: string, listener: (event: Record<string, unknown>) => void) => listeners.set(name, listener) },
     document,
@@ -82,10 +97,10 @@ test("local navigation is intercepted before document loading finishes", () => {
   }]);
 });
 
-function exerciseFrameShortcut(html: string) {
-  const { listeners, messages } = frameRuntime(html);
+function exerciseFrameShortcut(html: string, { platform, altKey }: { platform: string; altKey: boolean }) {
+  const { listeners, messages } = frameRuntime(html, platform);
   let prevented = 0;
-  const press = (overrides = {}) => listeners.get("keydown")?.({ ...shortcut(), target: { closest: () => null }, preventDefault() { prevented++; }, ...overrides });
+  const press = (overrides = {}) => listeners.get("keydown")?.({ ...shortcut({ altKey }), target: { closest: () => null }, preventDefault() { prevented++; }, ...overrides });
   press();
   expect(messages).toHaveLength(0);
   listeners.get("pointermove")?.({ clientX: 200, clientY: 150 });
@@ -94,7 +109,7 @@ function exerciseFrameShortcut(html: string) {
   expect(messages.at(-1)).toMatchObject({ event: "comment-shortcut", payload: { documentKey: "current", x: 200, y: 150 } });
   expect(prevented).toBe(1);
   const count = messages.length;
-  for (const overrides of [{ repeat: true }, { isComposing: true }, { target: { closest: () => ({}) } }, { ctrlKey: false }]) press(overrides);
+  for (const overrides of [{ repeat: true }, { isComposing: true }, { defaultPrevented: true }, { target: { closest: () => ({}) } }, { ctrlKey: false }, { altKey: !altKey }, { metaKey: true }, { shiftKey: true }, { altKey: false, shiftKey: true }, { key: "a", code: "KeyA" }]) press(overrides);
   expect(messages).toHaveLength(count);
   expect(prevented).toBe(1);
   listeners.get("pointerout")?.({ relatedTarget: null });
@@ -103,9 +118,11 @@ function exerciseFrameShortcut(html: string) {
   expect(prevented).toBe(1);
 }
 
-test("opaque iframe tracks hover, forwards shortcut once, and ignores typing and pointer exit", () => {
-  exerciseFrameShortcut(buildSandboxedArtifactSrcDoc("<head></head>", "http://localhost/file.html", { quickCommentKey: "current" }));
-});
+for (const platform of platforms) {
+  test(`${platform.platform} opaque iframe forwards only its chord once and ignores typing and pointer exit`, () => {
+    exerciseFrameShortcut(buildSandboxedArtifactSrcDoc("<head></head>", "http://localhost/file.html", { quickCommentKey: "current" }), platform);
+  });
+}
 
 test("iframe Escape dismisses a popup without consuming authored Escape or text composition", () => {
   const { listeners, messages } = frameRuntime(buildSandboxedArtifactSrcDoc("<head></head>", "http://localhost/file.html", { quickCommentKey: "current" }));
@@ -117,11 +134,13 @@ test("iframe Escape dismisses a popup without consuming authored Escape or text 
   expect(messages).toHaveLength(1);
 });
 
-test("non-canvas bridge consumers do not capture Control+Space", () => {
-  const { listeners, messages } = frameRuntime(buildSandboxedArtifactSrcDoc("<head></head>", "http://localhost/file.html"));
-  listeners.get("pointermove")?.({ clientX: 200, clientY: 150 });
-  listeners.get("keydown")?.({ ...shortcut(), preventDefault() { throw new Error("shortcut_captured"); } });
-  expect(messages).toHaveLength(0);
+test("non-canvas bridge consumers do not capture either platform chord", () => {
+  for (const { platform, altKey } of platforms) {
+    const { listeners, messages } = frameRuntime(buildSandboxedArtifactSrcDoc("<head></head>", "http://localhost/file.html"), platform);
+    listeners.get("pointermove")?.({ clientX: 200, clientY: 150 });
+    listeners.get("keydown")?.({ ...shortcut({ altKey }), preventDefault() { throw new Error("shortcut_captured"); } });
+    expect(messages).toHaveLength(0);
+  }
 });
 
 test("production-minified bridge preserves keyboard runtime and source-checks iframe events and hit responses", async () => {
@@ -145,7 +164,9 @@ test("production-minified bridge preserves keyboard runtime and source-checks if
     testBridge: null as unknown as typeof import("../src/components/canvas/frame-bridge"),
   };
   runInNewContext(script, context);
-  exerciseFrameShortcut(context.testBridge.buildSandboxedArtifactSrcDoc("<head></head>", "http://localhost/file.html", { quickCommentKey: "current" }));
+  for (const platform of platforms) {
+    exerciseFrameShortcut(context.testBridge.buildSandboxedArtifactSrcDoc("<head></head>", "http://localhost/file.html", { quickCommentKey: "current" }), platform);
+  }
   const requests: { requestId: string; payload: unknown }[] = [];
   const source = { postMessage: (request: { requestId: string; payload: unknown }) => requests.push(request) };
   const iframe = { contentWindow: source } as unknown as HTMLIFrameElement;
