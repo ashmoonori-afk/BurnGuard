@@ -108,6 +108,16 @@ describe("network source loading", () => {
     // When / Then
     await expect(loadNetworkResearchSource({ source: { ...source, locator: "https://user:secret@example.test/", canonicalLocator: "https://user:secret@example.test/" }, maxBytes: 128, request: transport }, new AbortController().signal)).rejects.toBeInstanceOf(ResearchSourceLoadError);
     await expect(loadNetworkResearchSource({ source: { ...source, locator: "https://127.0.0.1/", canonicalLocator: "https://127.0.0.1/" }, maxBytes: 128, request: transport }, new AbortController().signal)).rejects.toBeInstanceOf(ResearchSourceLoadError);
-    await expect(loadNetworkResearchSource({ source, maxBytes: 128, request: transport }, new AbortController().signal)).rejects.toMatchObject({ code: "source_too_large" });
+    await expect(
+      loadNetworkResearchSource(
+        { source, maxBytes: 128, request: transport },
+        new AbortController().signal,
+        {
+          resolveAddresses: async () => [
+            { address: "93.184.216.34", family: 4 },
+          ],
+        },
+      ),
+    ).rejects.toMatchObject({ code: "source_too_large" });
   });
 });

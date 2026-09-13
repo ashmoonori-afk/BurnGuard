@@ -16,6 +16,7 @@ import QualityLayer from "./QualityLayer";
 import GraphicFrameNavigator from "./GraphicFrameNavigator";
 import {
   buildSandboxedArtifactSrcDoc,
+  openFrameExternalLink,
   requestFrameSetActiveSlide,
   requestFramePreviewReport,
   subscribeFrameEvent,
@@ -336,6 +337,12 @@ export default function Canvas({
     });
   }, [frameDocumentKey, onNavigate]);
 
+  useLayoutEffect(() => {
+    const iframe = iframeRef.current;
+    if (iframe?.dataset.documentKey !== frameDocumentKey) return;
+    return subscribeFrameEvent(iframe, "navigate-external", openFrameExternalLink);
+  }, [frameDocumentKey]);
+
   useEffect(() => {
     const restoreIdx = restoreTargetSlideIdxRef.current;
     if (!src || loadedFrameKey !== (frameKey ?? src) || restoreIdx == null) {
@@ -386,7 +393,7 @@ export default function Canvas({
             aria-busy={loadedFrameKey !== (frameKey ?? src)}
             title={t("workspace.canvas.title")}
             srcDoc={frameSrcDoc ?? placeholderSrc}
-            sandbox="allow-scripts allow-popups"
+            sandbox="allow-scripts"
             referrerPolicy="no-referrer"
             allow="fullscreen"
             className="absolute inset-0 h-full w-full rounded-md border-0 bg-background"
@@ -397,7 +404,7 @@ export default function Canvas({
             data-document-key={frameDocumentKey}
             title={t("workspace.canvas.placeholderFrameTitle")}
             srcDoc={placeholderSrc}
-            sandbox="allow-scripts allow-popups"
+            sandbox="allow-scripts"
             referrerPolicy="no-referrer"
             allow="fullscreen"
             className="absolute inset-0 h-full w-full rounded-md border-0 bg-background"

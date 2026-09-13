@@ -250,6 +250,8 @@ function isMissingFile(error: unknown): boolean {
 // Imported lazily so the project list, which only builds thumbnail URLs, never
 // pulls playwright-core into the process.
 async function renderThumbnailWithChromium(request: ThumbnailRenderRequest): Promise<void> {
+  // Use the shared render session's context-wide HTTP and WebSocket boundary;
+  // thumbnails must not create a second, less restricted browser context.
   const { renderToPng } = await import("./export-png");
   await renderToPng({
     stagedDir: request.stagedDir,

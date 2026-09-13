@@ -22,7 +22,9 @@ export function rawFileHeaders(request: Request, file: RawFileDescriptor): Recor
   }
   const mediaType = file.contentType.split(";")[0]?.trim().toLowerCase() ?? "";
   if (ACTIVE_CONTENT_TYPES.has(mediaType)) {
-    headers["Content-Security-Policy"] = artifactContentSecurityPolicy(new URL(request.url).origin);
+    const origin = new URL(request.url).origin;
+    headers["Content-Security-Policy"] =
+      `${artifactContentSecurityPolicy(origin)}; frame-ancestors ${origin}`;
   }
   return headers;
 }

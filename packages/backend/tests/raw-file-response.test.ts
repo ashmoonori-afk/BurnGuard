@@ -69,6 +69,7 @@ describe("raw file response headers", () => {
       const policy = directives(headers["Content-Security-Policy"] ?? null);
       expect(policy.get("connect-src")).toEqual(["http://localhost"]);
       expect(policy.get("form-action")).toEqual(["'none'"]);
+      expect(policy.get("frame-ancestors")).toEqual(["http://localhost"]);
       expect(policy.get("frame-src")).toEqual(["https://www.google.com/maps/embed", "https://www.google.com/maps/embed/"]);
       expect(policy.get("object-src")).toEqual(["'none'"]);
     }
@@ -99,6 +100,7 @@ describe("raw file routes", () => {
     expect(navigated.headers.get("x-content-type-options")).toBe("nosniff");
     expect(framed.headers.get("content-disposition")).toBeNull();
     expect(directives(framed.headers.get("content-security-policy")).get("connect-src")).toEqual(["http://localhost"]);
+    expect(directives(framed.headers.get("content-security-policy")).get("frame-ancestors")).toEqual(["http://localhost"]);
     expect(fetched.headers.get("content-disposition")).toBeNull();
     // The route may decorate elements with editable ids; the authored text must still flow through.
     expect(await fetched.text()).toContain("valid</h1>");
@@ -141,6 +143,7 @@ describe("raw file routes", () => {
     expect(navigated.headers.get("content-disposition")).toMatch(/^attachment;/);
     expect(framed.headers.get("content-disposition")).toBeNull();
     expect(directives(framed.headers.get("content-security-policy")).get("form-action")).toEqual(["'none'"]);
+    expect(directives(framed.headers.get("content-security-policy")).get("frame-ancestors")).toEqual(["http://localhost"]);
     expect(stylesheet.headers.get("x-content-type-options")).toBe("nosniff");
     expect(stylesheet.headers.get("content-disposition")).toBeNull();
   });

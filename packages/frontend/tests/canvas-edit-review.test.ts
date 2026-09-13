@@ -47,17 +47,31 @@ describe("canvas review regressions", () => {
     if (expected >= 0) expect(slides[expected]!.active).toBe(true);
   });
 
-  test("Given local HTML links When normally clicked Then navigation is tagged while authored and external actions remain intact", () => {
+  test("Given local and external links When normally clicked Then parent-owned navigation preserves both flows", () => {
     const bridge = navigationBridge("http://localhost/api/projects/p/fs/index.html");
     expect(bridge.click("pages/about.htm#details")).toBe(true);
     expect(bridge.messages.filter((message) => message.event === "navigate")).toEqual([
       { __bgFrameBridge: true, type: "event", event: "navigate", payload: { href: "http://localhost/api/projects/p/fs/pages/about.htm#details" } },
     ]);
-    for (const href of ["https://external.example/about.html", "//external.example/about.html", "javascript:void(0)", "mailto:hello@example.com", "assets/logo.svg", ""]) expect(bridge.click(href)).toBe(false);
+    for (const href of ["https://external.example/about.html", "//external.example/about.html"]) {
+      expect(bridge.click(href, { isTrusted: true })).toBe(true);
+    }
+    expect(
+      bridge.messages.filter(
+        (message) => message.event === "navigate-external",
+      ),
+    ).toHaveLength(2);
+    expect(
+      bridge.click("https://external.example/modified", {
+        ctrlKey: true,
+        isTrusted: true,
+      }),
+    ).toBe(true);
+    for (const href of ["javascript:void(0)", "mailto:hello@example.com", "assets/logo.svg", ""]) expect(bridge.click(href)).toBe(false);
     for (const event of [{ defaultPrevented: true }, { button: 1 }, { ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }]) expect(bridge.click("about.html", event)).toBe(false);
     expect(bridge.click("about.html", {}, { download: "" })).toBe(false);
-    expect(bridge.click("about.html", {}, { target: "_blank" })).toBe(false);
-    expect(bridge.messages.filter((message) => message.event === "navigate")).toHaveLength(1);
+    expect(bridge.click("about.html", {}, { target: "_blank" })).toBe(true);
+    expect(bridge.messages.filter((message) => message.event === "navigate")).toHaveLength(2);
   });
 
   test("Given a srcdoc with an initial fragment When loaded or an anchor is clicked Then it scrolls locally without loading the server page", () => {
