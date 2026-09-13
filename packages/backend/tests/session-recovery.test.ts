@@ -17,6 +17,7 @@ import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { EventBroker, SequencedEventBroker } from "../src/services/broker";
 import { PersistedArtifactOperationError } from "../src/services/artifact-operation-record";
 import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
+import { hasAgentControlFiles } from "../src/security/agent-control-files";
 
 let db: Database;
 let root: string;
@@ -76,6 +77,26 @@ describe("canonical managed artifact closure", () => {
       "preserve privately",
     );
     expect((await inspectCanonicalTree(root)).files.map((entry) => entry.path)).toEqual(["index.html"]);
+  });
+
+  test("Given nested agent control directories in a stage When publishing Then ordinary files publish without creating a later blocker", async () => {
+    const stage = await projectRoot();
+    await writeFile(path.join(stage, "index.html"), "next artifact");
+    await mkdir(path.join(stage, "nested", ".CLAUDE"), { recursive: true });
+    await mkdir(path.join(stage, "nested", ".codex"), { recursive: true });
+    await writeFile(path.join(stage, "nested", "content.txt"), "ordinary");
+    await writeFile(path.join(stage, "nested", ".CLAUDE", "settings.json"), "untrusted");
+    await writeFile(path.join(stage, "nested", ".codex", "config.toml"), "untrusted");
+
+    await publishManagedTree(stage, root);
+
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("next artifact");
+    expect(await readFile(path.join(root, "nested", "content.txt"), "utf8")).toBe("ordinary");
+    expect(await hasAgentControlFiles(root)).toBe(false);
+    expect((await inspectCanonicalTree(root)).files.map((entry) => entry.path)).toEqual([
+      "index.html",
+      "nested/content.txt",
+    ]);
   });
 
   test("Given hardlink aliases When inspecting Then aliases are rejected", async () => {

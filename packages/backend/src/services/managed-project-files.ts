@@ -4,7 +4,7 @@ import type { FileInfo } from "@bg/shared/harness";
 import { replaceManagedProjectFiles } from "../db/managed-file-repository";
 import { getProjectDetail } from "../db/project-read-repository";
 import { PathBoundaryError, assertSafeName, resolveWithin } from "../security/path-boundary";
-import { isAgentControlFilePath } from "../security/agent-control-files";
+import { isAgentControlPath } from "../security/agent-control-files";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { isProjectDocumentPath } from "./project-document-paths";
 
@@ -62,7 +62,7 @@ async function walk(root: string, current: string, output: FileInfo[]): Promise<
   for (const entry of await readdir(current, { withFileTypes: true })) {
     if (IGNORED_DIRS.has(entry.name)) continue;
     const relative = path.relative(root, path.join(current, entry.name)).replaceAll("\\", "/");
-    if (isAgentControlFilePath(relative)) continue;
+    if (isAgentControlPath(relative)) continue;
     if (isProjectDocumentPath(relative) && entry.name.startsWith(".")) continue;
     if (isTransientFilePath(relative)) continue;
     let absolute: string;

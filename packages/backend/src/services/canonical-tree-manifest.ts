@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
-import { isAgentControlFilePath } from "../security/agent-control-files";
+import { isAgentControlPath } from "../security/agent-control-files";
 import { isProjectDocumentPath } from "./project-document-paths";
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -73,7 +73,7 @@ export async function inspectCanonicalTree(
       if (
         OWNED_EPHEMERAL_FILES.has(relativePath) ||
         isProjectDocumentPath(relativePath) ||
-        isAgentControlFilePath(relativePath)
+        isAgentControlPath(relativePath)
       ) {
         continue;
       }

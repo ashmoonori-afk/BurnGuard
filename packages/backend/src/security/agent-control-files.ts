@@ -9,11 +9,25 @@ const AGENT_CONTROL_FILE_NAMES = new Set([
   "claude.md",
 ]);
 
+const AGENT_CONTROL_DIRECTORY_NAMES = new Set([".claude", ".codex"]);
+
 export function isAgentControlFilePath(relativePath: string): boolean {
   const name = relativePath.replaceAll("\\", "/").split("/").at(-1);
   return (
     name !== undefined &&
     AGENT_CONTROL_FILE_NAMES.has(name.normalize("NFC").toLowerCase())
+  );
+}
+
+export function isAgentControlPath(relativePath: string): boolean {
+  const components = relativePath
+    .replaceAll("\\", "/")
+    .split("/")
+    .map((component) => component.normalize("NFC").toLowerCase());
+  return (
+    components.some((component) =>
+      AGENT_CONTROL_DIRECTORY_NAMES.has(component),
+    ) || isAgentControlFilePath(relativePath)
   );
 }
 
@@ -32,7 +46,7 @@ export async function hasAgentControlFiles(root: string): Promise<boolean> {
       if (topLevel && OWNED_TOP_LEVEL_DIRECTORIES.has(name)) continue;
       if (
         entry.isDirectory() &&
-        (name === ".claude" || name === ".codex")
+        AGENT_CONTROL_DIRECTORY_NAMES.has(name)
       ) {
         return true;
       }

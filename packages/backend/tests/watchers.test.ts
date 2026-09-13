@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { getSqlite } from "../src/db/sqlite-client";
@@ -11,6 +11,7 @@ import { ensureAllProjectWatchers, ensureProjectWatcher, processProjectFilesyste
 import { listProjectIds } from "../src/db/project-read-repository";
 import { closeProjectWatcher, projectWatchers } from "../src/services/watcher-registry";
 import { logsDir } from "../src/lib/app-paths";
+import { indexProjectFiles } from "../src/services/managed-project-files";
 
 const roots: string[] = [];
 const projects: string[] = [];
@@ -41,12 +42,26 @@ describe("project watcher path filtering", () => {
     expect(shouldSkipPath(".meta/artifact-operations/op/stage/index.html")).toBe(true);
     expect(shouldSkipPath(".attachments/file")).toBe(true);
     expect(shouldSkipPath(".codex/config.toml")).toBe(true);
+    expect(shouldSkipPath("nested/.CLAUDE/settings.json")).toBe(true);
+    expect(shouldSkipPath("nested/.codex/config.toml")).toBe(true);
     expect(shouldSkipPath("CLAUDE.md")).toBe(true);
     expect(shouldSkipPath("nested/AGENTS.md")).toBe(true);
     expect(shouldSkipPath(".mcp.json")).toBe(true);
     expect(shouldSkipPath("index.html")).toBe(false);
     expect(isTransientFilePath(".index.html.123.456.tmp")).toBe(true);
     expect(isTransientFilePath("nested/index.html")).toBe(false);
+  });
+
+  test("Given a nested agent control directory When indexing Then neither its directory nor files appear", async () => {
+    const item = await fixture();
+    await mkdir(path.join(item.root, "nested", ".CoDeX"), { recursive: true });
+    await writeFile(path.join(item.root, "nested", ".CoDeX", "config.toml"), "untrusted");
+    await writeFile(path.join(item.root, "nested", "content.txt"), "ordinary");
+
+    const files = await indexProjectFiles(item.id);
+
+    expect(files?.map((file) => file.rel_path)).toContain("nested/content.txt");
+    expect(files?.some((file) => file.rel_path.toLowerCase().includes(".codex"))).toBe(false);
   });
 
   test("Given persisted projects When watchers start Then registry ownership is idempotent and closeable", async () => {

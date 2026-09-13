@@ -357,6 +357,7 @@ async function runUserTurnInternal(
   }
   let operationPrepared = false;
   let providerReportedFailure = false;
+  let providerErrorPublished = false;
   let stopPreview: (() => Promise<void>) | undefined;
   const terminalEvents: NormalizedEvent[] = [];
   const selectedAttachments = sessionContext.attachments.filter((attachment) => contextPayload.attachments.includes(attachment.file_path));
@@ -394,6 +395,7 @@ async function runUserTurnInternal(
                 if (event.type === "file.changed") return;
                 const scrubbedEvent = config.commandcodeApiKey ? JSON.parse(JSON.stringify(event, (_key, value: unknown) => typeof value === "string" ? value.split(config.commandcodeApiKey!).join("[redacted]") : value)) as NormalizedEvent : event;
                 const safeEvent = redactPrivateAttachmentPaths(scrubbedEvent, stageInputs);
+                if (safeEvent.type === "status.error") providerErrorPublished = true;
                 if (safeEvent.type === "chat.message_end" || safeEvent.type === "status.idle") { terminalEvents.push(safeEvent); return; }
                 const eventError = safeEvent.type === "status.error" ? Object.assign(new Error(safeEvent.message), safeEvent.code === undefined ? {} : { code: safeEvent.code }) : undefined;
                 await persistAndPublish(sessionId, safeEvent, eventError);
@@ -442,6 +444,9 @@ async function runUserTurnInternal(
     if (activeTurn.interrupted || activeTurn.abortController.signal.aborted) {
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "interrupted" });
     } else if (providerReportedFailure) {
+      if (!providerErrorPublished) {
+        await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.error", message: "turn_failed", recoverable: true }, error);
+      }
       for (const event of terminalEvents) await persistAndPublish(sessionId, event);
       if (
         !terminalEvents.some(

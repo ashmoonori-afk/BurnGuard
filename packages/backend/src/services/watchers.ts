@@ -6,7 +6,7 @@ import { waitForArtifactPublication } from "./artifact-publication-registry";
 import { appendSessionTrace } from "./trace";
 import { isTransientFilePath } from "./files";
 import { isProjectDocumentPath } from "./project-document-paths";
-import { isAgentControlFilePath } from "../security/agent-control-files";
+import { isAgentControlPath } from "../security/agent-control-files";
 import {
   RESERVED_PROJECT_WATCHER,
   projectSessionIds as sessionIdCache,
@@ -55,7 +55,7 @@ export async function ensureAllProjectWatchers(projectIds?: readonly string[]): 
 
 export function shouldSkipPath(relPath: string): boolean {
   const top = relPath.split("/")[0];
-  return top !== undefined && (IGNORED_TOP_LEVEL.has(top) || isTransientFilePath(relPath) || isProjectDocumentPath(relPath) || isAgentControlFilePath(relPath));
+  return top !== undefined && (IGNORED_TOP_LEVEL.has(top) || isTransientFilePath(relPath) || isProjectDocumentPath(relPath) || isAgentControlPath(relPath));
 }
 
 export async function processProjectFilesystemSignal(projectId: string, projectDir: string) {

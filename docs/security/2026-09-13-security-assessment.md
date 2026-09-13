@@ -93,8 +93,12 @@ These items were not hidden or represented as fixed:
 
 Final local evidence:
 
-- Expanded security boundary matrix: **256 passed, 2 existing opt-in skips, 0 failed**, 1,487 expectations across 30 files.
-- Final complete root run: **1,601 passed, 11 existing platform/opt-in skips, 2 external prerequisite failures**, 343,783 expectations across 208 files.
+- The first independent gate review rejected two boundary mismatches: nested `.claude`/`.codex` directories could enter publication, and resultless CLI failures could emit error-idle without an error notification. Both were reproduced before correction.
+- Nested control directories are now normalized and excluded at every depth by canonical publication, managed-file indexing and watcher filtering. A real staged publication retained its ordinary sibling file, created no control-file blocker and preserved the existing-user-file policy.
+- Actual Claude and Codex adapters were run through turn orchestration with a resultless nonzero executable. Each now produced exactly one bounded `status.error` and one error-idle without publishing child diagnostics.
+- Gate-correction RED: **30 passed, 3 failed** across the publication and actual-adapter tests; watcher/index RED: **4 passed, 2 failed**. Focused GREEN: **39 passed, 0 failed**, 142 expectations across 3 files.
+- Post-gate security regression set: **314 passed, 5 existing opt-in skips, 0 failed**, 1,294 expectations across 27 files.
+- Final complete root run: **1,605 passed, 11 existing platform/opt-in skips, 2 external prerequisite failures**, 343,797 expectations across 208 files.
 - The two enabled failures are unchanged QA harness cases requiring a hard-coded historical `omo-agent-toolkit` ULW session (`preflight` and `manifest-smoke`). They were not skipped, weakened or reported as passing.
 - Root typecheck: exit 0.
 - Frontend and Windows-target backend packaging: exit 0. The existing large-chunk and nonrelocatable local-Node warnings remain.
