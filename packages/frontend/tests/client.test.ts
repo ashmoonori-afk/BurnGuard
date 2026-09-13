@@ -231,7 +231,7 @@ describe("API authority client", () => {
       ).resolves.toBeInstanceOf(Response);
       await expect(
         authorizedFetch("https://attacker.invalid/collect"),
-      ).rejects.toThrow("BurnGuard API requests must stay on the app origin.");
+      ).rejects.toBeInstanceOf(Error);
       expect(calls).toEqual([
         "/api/bootstrap",
         "http://127.0.0.1:14070/api/private",

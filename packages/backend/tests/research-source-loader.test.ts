@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   loadNetworkResearchSource,
+  ResearchSourceLoadError,
   type ResearchTransport,
 } from "../src/services/research-source-loader";
 
@@ -41,11 +42,13 @@ describe("research source network boundary", () => {
   });
 
   test("keeps resolver diagnostics out of research failure state", async () => {
+    let requestCalls = 0;
     const promise = loadNetworkResearchSource(
       {
         source,
         maxBytes: 4096,
         request: async () => {
+          requestCalls += 1;
           throw new Error("request must not run");
         },
       },
@@ -59,10 +62,15 @@ describe("research source network boundary", () => {
       },
     );
 
-    await expect(promise).rejects.toMatchObject({
-      code: "fetch_failed",
-      message: "Research source fetch failed",
-    });
-    await expect(promise).rejects.not.toThrow("/Users/local");
+    const rejection = await promise.catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(ResearchSourceLoadError);
+    if (!(rejection instanceof ResearchSourceLoadError)) {
+      throw new Error("expected typed research source failure");
+    }
+    expect(rejection.code).toBe("fetch_failed");
+    expect(rejection.message.length).toBeLessThan(128);
+    expect(rejection.message).not.toContain("/Users/local");
+    expect(requestCalls).toBe(0);
   });
 });

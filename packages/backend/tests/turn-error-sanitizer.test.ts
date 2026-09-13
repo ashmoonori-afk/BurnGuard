@@ -45,12 +45,16 @@ describe("turn error event boundary", () => {
           body: JSON.stringify({ type: "user.message", text: "safe request" }),
         },
       );
-      const body = await response.text();
+      const body = (await response.json()) as {
+        readonly error: { readonly code: string };
+      };
+      const serialized = JSON.stringify(body);
 
       expect(response.status).toBe(500);
-      expect(body).not.toContain(root);
-      expect(body).not.toContain("/private/Users");
-      expect(body).toContain("Artifact operation preparation failed");
+      expect(body.error.code).toBe("artifact_prepare_failed");
+      expect(serialized.length).toBeLessThan(512);
+      expect(serialized).not.toContain(root);
+      expect(serialized).not.toContain("/private/Users");
     } finally {
       getSqlite()
         .prepare(
