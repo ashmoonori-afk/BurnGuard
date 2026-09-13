@@ -33,8 +33,17 @@ jobs:
           packages/backend/tests/app-shell-headers.test.ts
           packages/backend/tests/request-limits.test.ts
           packages/backend/tests/css-source-map-boundary.test.ts
+          packages/backend/tests/font-validation.test.ts
+          packages/backend/tests/owned-process-tree.test.ts
+          packages/backend/tests/research-source-loader.test.ts
+          packages/backend/tests/session-recovery.test.ts
+          packages/backend/tests/review-turn-execution.test.ts
+          packages/backend/tests/trace-security.test.ts
+          packages/backend/tests/watchers.test.ts
           packages/backend/tests/python-health.test.ts
           packages/backend/tests/turn-error-sanitizer.test.ts
+          packages/backend/tests/claude-code-parser.test.ts
+          packages/backend/tests/codex-parser.test.ts
           packages/backend/tests/config-storage.test.ts
           packages/backend/tests/mac-updates.test.ts
           packages/backend/tests/app-update-routes.test.ts
@@ -42,13 +51,18 @@ jobs:
           packages/backend/tests/charts.test.ts
           packages/backend/tests/image-prompt-recipes.test.ts
           packages/backend/tests/design-direction-contract.test.ts
+          packages/backend/tests/design-system-extract.test.ts
+          packages/backend/tests/project-import.test.ts
           packages/backend/tests/artifact-history.test.ts
           packages/backend/tests/export-pptx.test.ts
+          packages/backend/tests/chromium-node-launch.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts
-      # Advisories with no upstream fix are allowlisted by id; remove an id as
-      # soon as a fixed release exists. image-size (via pptxgenjs, image parsing
-      # never reached) and react-router v6 (fixed only in v7).
+      # Advisories with no compatible upstream fix are allowlisted by id.
+      # Remove image-size ids when a release after 2.0.2 exists; affected
+      # ICNS/JXL/HEIF inputs never reach PPTXGenJS here. Remove the router ids
+      # with the planned 7.18+ migration; this client-only app uses neither SSR
+      # hydration nor user-controlled navigation targets.
       - name: Dependency audit
         run: >-
           bun audit

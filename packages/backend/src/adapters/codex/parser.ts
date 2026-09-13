@@ -42,6 +42,7 @@ export function parseCodexLine(
         const mapped =
           mapCodexEnvelope(record, ctx) ?? mapStructured(record, ctx);
         if (mapped) return mapped;
+        if (typeof record.type === "string") return [];
       }
     } catch {
       // Malformed JSON — fall through to raw delta.

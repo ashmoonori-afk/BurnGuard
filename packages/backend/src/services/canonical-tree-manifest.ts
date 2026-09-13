@@ -2,11 +2,12 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
+import { isAgentControlPath } from "../security/agent-control-files";
 import { isProjectDocumentPath } from "./project-document-paths";
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const OWNED_EPHEMERAL_FILES = new Set([".burnguard-publication", ".burnguard-catalog"]);
-const EXCLUDED_PROJECT_DIRECTORIES = new Set([".meta", ".attachments", ".burnguard-inputs", ".git", ".omc", ".claude"]);
+const EXCLUDED_PROJECT_DIRECTORIES = new Set([".meta", ".attachments", ".burnguard-inputs", ".git", ".omc", ".claude", ".codex"]);
 
 export type CanonicalTreeEntry = {
   readonly path: string;
@@ -69,7 +70,13 @@ export async function inspectCanonicalTree(
       const relativePath = path.relative(root, target).split(path.sep).join("/");
       const topLevel = relativePath.split("/")[0];
       if (topLevel !== undefined && EXCLUDED_PROJECT_DIRECTORIES.has(topLevel)) continue;
-      if (OWNED_EPHEMERAL_FILES.has(relativePath) || isProjectDocumentPath(relativePath)) continue;
+      if (
+        OWNED_EPHEMERAL_FILES.has(relativePath) ||
+        isProjectDocumentPath(relativePath) ||
+        isAgentControlPath(relativePath)
+      ) {
+        continue;
+      }
       if (entry.isSymbolicLink() || info.isSymbolicLink()) throw new CanonicalTreeManifestError("unsafe_tree_entry", "Canonical tree cannot contain links");
       if (info.isDirectory()) {
         await visit(target);

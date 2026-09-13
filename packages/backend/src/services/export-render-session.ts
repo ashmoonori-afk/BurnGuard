@@ -25,10 +25,38 @@ export async function openRenderSession(input: { readonly stagedDir: string; rea
   const owner = input.browser === undefined ? registerExportBrowser(() => browser.close()) : { close: async () => { await context?.close(); } };
   const findings: RenderFinding[] = []; let abort: (() => void) | null = null;
   try {
-    context = await browser.newContext({ viewport: { width: input.viewport.width, height: input.viewport.height }, deviceScaleFactor: input.viewport.dpr }); const page = await context.newPage();
+    context = await browser.newContext({ serviceWorkers: "block", viewport: { width: input.viewport.width, height: input.viewport.height }, deviceScaleFactor: input.viewport.dpr }); const page = await context.newPage();
+    await context.addInitScript(() => {
+      const blockPopup = () => null;
+      Object.defineProperty(window, "open", {
+        configurable: false,
+        writable: false,
+        value: blockPopup,
+      });
+      addEventListener(
+        "click",
+        (event) => {
+          const target =
+            event.target instanceof Element
+              ? event.target.closest("a[target],area[target]")
+              : null;
+          if (target?.getAttribute("target")?.toLowerCase() === "_blank") {
+            event.preventDefault();
+          }
+        },
+        true,
+      );
+    });
     page.on("console", (message) => { if (message.type() === "error") findings.push({ code: "console_error", path: message.text() }); });
     page.on("pageerror", (error) => findings.push({ code: "page_error", path: error.message })); page.on("requestfailed", (request) => { const url = new URL(request.url()); findings.push({ code: "request_failed", path: url.protocol === "file:" ? safeFileFinding(url, input.stagedDir) : sanitizeUrl(url) }); });
-    await page.route("**/*", async (route) => {
+    // WebSockets bypass HTTP routing. Close the intercepted client side without
+    // ever calling connectToServer, including sockets opened by nested frames.
+    await context.routeWebSocket("**/*", async (socket) => {
+      findings.push({ code: "remote_request", path: sanitizeUrl(new URL(socket.url())) });
+      await socket.close({ code: 1008, reason: "Artifact network access is disabled" });
+    });
+    // Context routes also intercept a popup's first request, before its page event.
+    await context.route("**/*", async (route) => {
       const url = new URL(route.request().url());
       if (input.deck && url.protocol === "file:" && /^(?:\/[a-z]:)?\/runtime\/deck-stage\.js$/i.test(url.pathname)) { await route.fulfill({ contentType: "application/javascript", body: DECK_STAGE_JS }); return; }
       if (url.protocol === "data:") { await route.continue(); return; }
@@ -37,6 +65,11 @@ export async function openRenderSession(input: { readonly stagedDir: string; rea
         catch { findings.push({ code: "remote_request", path: "file:outside-artifact" }); }
       } else findings.push({ code: "remote_request", path: sanitizeUrl(url) });
       await route.abort("blockedbyclient");
+    });
+    context.on("page", (extraPage) => {
+      if (extraPage === page) return;
+      findings.push({ code: "remote_request", path: "popup:blocked" });
+      void extraPage.close().catch(() => { findings.push({ code: "page_error", path: "popup_close_failed" }); });
     });
     abort = (): void => { void owner.close(); }; input.signal.addEventListener("abort", abort, { once: true }); input.onPhase?.("browser_ready");
     const htmlPath = resolveWithin(input.stagedDir, input.entrypoint); await page.goto(`${pathToFileURL(htmlPath)}${input.deck ? "?print=1" : ""}`, { waitUntil: "load", timeout: 30_000 }); input.onPhase?.("navigated");

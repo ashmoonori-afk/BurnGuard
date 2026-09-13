@@ -44,16 +44,16 @@ import { materializeManagedTree } from "../services/artifact-tree-storage";
 import { getSqlite } from "../db/sqlite-client";
 import { assertSafeName } from "../security/path-boundary";
 import { MAX_USER_MESSAGE_CHARS } from "../security/request-limits";
+import { hasAgentControlFiles } from "../security/agent-control-files";
 import { appendSessionTrace } from "../services/trace";
 import { indexProjectFiles } from "../services/files";
 import {
   interruptUserTurn,
   isUserTurnRunning,
   releaseUserTurnReservation,
-  hasTurnCapacity,
-  reserveUserTurn,
+  admitUserTurn,
+  persistAndPublish,
   startReservedUserTurn,
-  type UserTurnReservation,
   submitToolDecisionToTurn,
 } from "../services/turns";
 
@@ -135,147 +135,175 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
   }
   const contentType = c.req.header("content-type") ?? "";
   const [config, detection, project] = await Promise.all([loadConfig(), detectBackends(), getProjectDetail(session.project_id)]);
-  if (!hasTurnCapacity(config.harness.maxConcurrentSessions)) {
-    return c.json(fail("turn_capacity_exhausted", "Too many turns are running; wait for one to finish", { limit: config.harness.maxConcurrentSessions }), 429);
-  }
-  const selectedBackend = detection.backends.find((backend) => backend.id === session.backend_id);
-  if (project?.type === "graphic" && (session.backend_id !== "codex" || selectedBackend?.authenticated !== true)) return c.json(fail("graphic_requires_authenticated_codex", "Graphic generation requires authenticated Codex"), 409);
-  const resolveGeneration = (value: unknown) => resolveGenerationOptions(session.backend_id, value, config, selectedBackend ?? { id: session.backend_id, found: false });
-  let payload: UserEvent | null = null;
-  let requestedOperationId: string | undefined;
-  let reservation: UserTurnReservation | null = null;
-
-  if (contentType.includes("application/json")) {
-    const body = await c.req.json<unknown>().catch(() => null);
-    if (
-      isRecord(body) &&
-      body.type === "user.message" &&
-      typeof body.text === "string"
-    ) {
-      if (body.text.length > MAX_USER_MESSAGE_CHARS) return c.json(fail("message_too_long", `Message exceeds ${MAX_USER_MESSAGE_CHARS} characters`, { limit: MAX_USER_MESSAGE_CHARS }), 400);
-      let generation: GenerationOptions;
-      try { generation = resolveGeneration(body.generation === undefined ? undefined : parseGenerationOptions(body.generation)); }
-      catch { return c.json(fail("invalid_generation_options", "Generation options are invalid"), 400); }
-      let activeRelPath: string | undefined;
-      try { activeRelPath = await parseActiveRelPath(body.active_rel_path, session.project_id); }
-      catch (error) {
-        if (error instanceof ActivePageError) return c.json(fail(error.code, error.code === "invalid_active_page" ? "Active page path is invalid" : "Active page is not a current HTML file in this project"), error.code === "invalid_active_page" ? 400 : 409);
-        throw error;
-      }
-      let visualSources: readonly UploadedVisualSourceSelection[] | undefined;
-      try { visualSources = parseUploadedVisualSourceSelections(body.visualSources); }
-      catch (error) {
-        if (error instanceof VisualSourceContractError) return c.json(fail(error.code, error.code === "unsupported_visual_source" ? "URL, web, and stock sources are unsupported" : "Visual source metadata is invalid"), error.code === "unsupported_visual_source" ? 415 : 400);
-        throw error;
-      }
-      if (body.attachments !== undefined && (!Array.isArray(body.attachments) || !body.attachments.every((value) => typeof value === "string"))) return c.json(fail("invalid_attachments", "Attachment selection is invalid"), 400);
-      try {
-        const canonical = await canonicalizeAttachmentRequest({ sessionId: id, requestedPaths: body.attachments ?? [], selections: visualSources });
-        payload = { type: "user.message", text: body.text, ...(activeRelPath === undefined ? {} : { active_rel_path: activeRelPath }), attachments: [...canonical.paths], visualSources: canonical.selections, generation };
-      } catch (error) {
-        if (error instanceof AttachmentRequestError) return c.json(fail(error.code, "Attachment selection is invalid"), 400);
-        throw error;
-      }
-      if (body.operation_id !== undefined) {
-        if (typeof body.operation_id !== "string" || process.env.BG_ARTIFACT_QA !== "1" || body.operation_id !== process.env.BG_ARTIFACT_TURN_OPERATION_ID) return c.json(fail("invalid_operation_id", "Scoped operation identity is invalid"), 400);
-        try { requestedOperationId = assertSafeName(body.operation_id); }
-        catch (error) { return c.json(fail("invalid_operation_id", error instanceof Error ? error.message : "Scoped operation identity is invalid"), 400); }
-      }
-    }
-  } else if (contentType.includes("multipart/form-data")) {
-    const form = await c.req.formData();
-    const type = form.get("type");
-    const text = form.get("text");
-    if (type === "user.message" && typeof text === "string") {
-      if (text.length > MAX_USER_MESSAGE_CHARS) return c.json(fail("message_too_long", `Message exceeds ${MAX_USER_MESSAGE_CHARS} characters`, { limit: MAX_USER_MESSAGE_CHARS }), 400);
-      let generation: GenerationOptions;
-      try { const raw = form.get("generation"); generation = resolveGeneration(raw === null ? undefined : parseGenerationOptions(typeof raw === "string" ? JSON.parse(raw) : raw)); }
-      catch { return c.json(fail("invalid_generation_options", "Generation options are invalid"), 400); }
-      let activeRelPath: string | undefined;
-      try { activeRelPath = await parseActiveRelPath(form.get("active_rel_path"), session.project_id); }
-      catch (error) {
-        if (error instanceof ActivePageError) return c.json(fail(error.code, error.code === "invalid_active_page" ? "Active page path is invalid" : "Active page is not a current HTML file in this project"), error.code === "invalid_active_page" ? 400 : 409);
-        throw error;
-      }
-      const fileEntries = form
-        .getAll("files")
-        .filter((value): value is File => value instanceof File);
-      let attachmentPaths: string[];
-      let uploadSources: VisualSourceUploadRequestV1;
-      try {
-        uploadSources = parseVisualSourceUploadRequest(form.get("visual_sources"), fileEntries.length);
-        reservation = reserveUserTurn(id);
-        if (reservation === null) return c.json(fail("session_busy", "A turn is already running for this session", { id }), 409);
-        attachmentPaths = await saveSessionAttachments(id, fileEntries.map((file, index) => ({
-          file,
-          role: uploadSources.sources[index]?.role ?? "ordinary_content",
-          roleExplicit: uploadSources.explicit,
-        })));
-      } catch (error) {
-        if (reservation !== null) releaseUserTurnReservation(reservation);
-        if (error instanceof VisualSourceContractError) {
-          return c.json(fail(error.code, error.code === "unsupported_visual_source" ? "URL, web, and stock sources are unsupported" : "Visual source metadata is invalid"), error.code === "unsupported_visual_source" ? 415 : 400);
-        }
-        if (error instanceof UnsupportedAttachmentKindError) {
-          return c.json(
-            fail(error.code, "Unsupported source kind", {
-              files: error.fileNames,
-              supported_kinds: SUPPORTED_UPLOAD_KINDS,
-            }),
-            415,
-          );
-        }
-        if (error instanceof Error && error.name === "AttachmentExtractionError" && "code" in error && typeof error.code === "string") {
-          const codes = new Set(["pdf_password_required", "pdf_invalid", "pdf_runtime_unavailable", "pdf_extraction_timeout", "pdf_size_limit", "pdf_page_limit", "pdf_text_limit", "attachment_extract_failed"]);
-          return c.json(fail(codes.has(error.code) ? error.code : "attachment_extract_failed", "Could not read the attachment. Its original remains in docs/attachments."), 422);
-        }
-        return c.json(
-          fail("invalid_attachments", "Attachment upload rejected"),
-          400,
-        );
-      }
-      const selections = attachmentPaths.map((attachmentPath, index) => ({ source_type: "uploaded_attachment" as const, attachment_path: attachmentPath, role: uploadSources.sources[index]?.role ?? "ordinary_content" }));
-      try {
-        const canonical = await canonicalizeAttachmentRequest({ sessionId: id, requestedPaths: attachmentPaths, selections });
-        payload = { type: "user.message", text, ...(activeRelPath === undefined ? {} : { active_rel_path: activeRelPath }), attachments: [...canonical.paths], visualSources: canonical.selections, generation };
-      } catch (error) {
-        await rollbackSessionAttachments(id, attachmentPaths);
-        if (reservation !== null) releaseUserTurnReservation(reservation);
-        if (error instanceof AttachmentRequestError) return c.json(fail(error.code, "Attachment selection is invalid"), 400);
-        throw error;
-      }
-    }
-  }
-
-  if (!payload || payload.type !== "user.message") {
+  if (project !== null && await hasAgentControlFiles(project.dir_path)) {
     return c.json(
-      fail("invalid_body", "Expected a user.message payload with text"),
-      400,
-    );
-  }
-
-  reservation ??= reserveUserTurn(id, requestedOperationId);
-  const turn = reservation === null ? null : startReservedUserTurn(reservation, payload);
-  if (!turn) {
-    return c.json(
-      fail("session_busy", "A turn is already running for this session", { id }),
+      fail(
+        "agent_control_files_present",
+        "Project contains AI tool control files",
+      ),
       409,
     );
   }
-
-  const completed = turn.promise.catch(async (error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    await persistAndPublishRoute(id, { id: ulid(), ts: Date.now(), type: "status.error", message, recoverable: true });
-    await persistAndPublishRoute(id, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "error" });
-    await setSessionStatus(id, "idle");
-  });
-  try { await turn.prepared; }
-  catch (error) {
-    await completed;
-    return c.json(fail("artifact_prepare_failed", error instanceof Error ? error.message : "Artifact operation preparation failed"), 500);
+  const admission = admitUserTurn(id, config.harness.maxConcurrentSessions);
+  if (admission.kind === "session_busy") return c.json(fail("session_busy", "A turn is already running for this session", { id }), 409);
+  if (admission.kind === "capacity_exhausted") {
+    return c.json(fail("turn_capacity_exhausted", "Too many turns are running; wait for one to finish", { limit: config.harness.maxConcurrentSessions }), 429);
   }
-  void completed;
-  return c.json(ok({ accepted: true, turn_id: turn.turnId, operation_id: turn.operationId }));
+  const reservation = admission.reservation;
+  let started = false;
+  try {
+    const selectedBackend = detection.backends.find((backend) => backend.id === session.backend_id);
+    if (project?.type === "graphic" && (session.backend_id !== "codex" || selectedBackend?.authenticated !== true)) return c.json(fail("graphic_requires_authenticated_codex", "Graphic generation requires authenticated Codex"), 409);
+    const resolveGeneration = (value: unknown) => resolveGenerationOptions(session.backend_id, value, config, selectedBackend ?? { id: session.backend_id, found: false });
+    let payload: UserEvent | null = null;
+    let requestedOperationId: string | undefined;
+
+    if (contentType.includes("application/json")) {
+      const body = await c.req.json<unknown>().catch(() => null);
+      if (
+        isRecord(body) &&
+        body.type === "user.message" &&
+        typeof body.text === "string"
+      ) {
+        if (body.text.length > MAX_USER_MESSAGE_CHARS) return c.json(fail("message_too_long", `Message exceeds ${MAX_USER_MESSAGE_CHARS} characters`, { limit: MAX_USER_MESSAGE_CHARS }), 400);
+        let generation: GenerationOptions;
+        try { generation = resolveGeneration(body.generation === undefined ? undefined : parseGenerationOptions(body.generation)); }
+        catch { return c.json(fail("invalid_generation_options", "Generation options are invalid"), 400); }
+        let activeRelPath: string | undefined;
+        try { activeRelPath = await parseActiveRelPath(body.active_rel_path, session.project_id); }
+        catch (error) {
+          if (error instanceof ActivePageError) return c.json(fail(error.code, error.code === "invalid_active_page" ? "Active page path is invalid" : "Active page is not a current HTML file in this project"), error.code === "invalid_active_page" ? 400 : 409);
+          throw error;
+        }
+        let visualSources: readonly UploadedVisualSourceSelection[] | undefined;
+        try { visualSources = parseUploadedVisualSourceSelections(body.visualSources); }
+        catch (error) {
+          if (error instanceof VisualSourceContractError) return c.json(fail(error.code, error.code === "unsupported_visual_source" ? "URL, web, and stock sources are unsupported" : "Visual source metadata is invalid"), error.code === "unsupported_visual_source" ? 415 : 400);
+          throw error;
+        }
+        if (body.attachments !== undefined && (!Array.isArray(body.attachments) || !body.attachments.every((value) => typeof value === "string"))) return c.json(fail("invalid_attachments", "Attachment selection is invalid"), 400);
+        try {
+          const canonical = await canonicalizeAttachmentRequest({ sessionId: id, requestedPaths: body.attachments ?? [], selections: visualSources });
+          payload = { type: "user.message", text: body.text, ...(activeRelPath === undefined ? {} : { active_rel_path: activeRelPath }), attachments: [...canonical.paths], visualSources: canonical.selections, generation };
+        } catch (error) {
+          if (error instanceof AttachmentRequestError) return c.json(fail(error.code, "Attachment selection is invalid"), 400);
+          throw error;
+        }
+        if (body.operation_id !== undefined) {
+          if (typeof body.operation_id !== "string" || process.env.BG_ARTIFACT_QA !== "1" || body.operation_id !== process.env.BG_ARTIFACT_TURN_OPERATION_ID) return c.json(fail("invalid_operation_id", "Scoped operation identity is invalid"), 400);
+          try { requestedOperationId = assertSafeName(body.operation_id); }
+          catch (error) { return c.json(fail("invalid_operation_id", error instanceof Error ? error.message : "Scoped operation identity is invalid"), 400); }
+        }
+      }
+    } else if (contentType.includes("multipart/form-data")) {
+      const form = await c.req.formData();
+      const type = form.get("type");
+      const text = form.get("text");
+      if (type === "user.message" && typeof text === "string") {
+        if (text.length > MAX_USER_MESSAGE_CHARS) return c.json(fail("message_too_long", `Message exceeds ${MAX_USER_MESSAGE_CHARS} characters`, { limit: MAX_USER_MESSAGE_CHARS }), 400);
+        let generation: GenerationOptions;
+        try { const raw = form.get("generation"); generation = resolveGeneration(raw === null ? undefined : parseGenerationOptions(typeof raw === "string" ? JSON.parse(raw) : raw)); }
+        catch { return c.json(fail("invalid_generation_options", "Generation options are invalid"), 400); }
+        let activeRelPath: string | undefined;
+        try { activeRelPath = await parseActiveRelPath(form.get("active_rel_path"), session.project_id); }
+        catch (error) {
+          if (error instanceof ActivePageError) return c.json(fail(error.code, error.code === "invalid_active_page" ? "Active page path is invalid" : "Active page is not a current HTML file in this project"), error.code === "invalid_active_page" ? 400 : 409);
+          throw error;
+        }
+        const fileEntries = form
+          .getAll("files")
+          .filter((value): value is File => value instanceof File);
+        let attachmentPaths: string[];
+        let uploadSources: VisualSourceUploadRequestV1;
+        try {
+          uploadSources = parseVisualSourceUploadRequest(form.get("visual_sources"), fileEntries.length);
+          attachmentPaths = await saveSessionAttachments(id, fileEntries.map((file, index) => ({
+            file,
+            role: uploadSources.sources[index]?.role ?? "ordinary_content",
+            roleExplicit: uploadSources.explicit,
+          })));
+        } catch (error) {
+          if (error instanceof VisualSourceContractError) {
+            return c.json(fail(error.code, error.code === "unsupported_visual_source" ? "URL, web, and stock sources are unsupported" : "Visual source metadata is invalid"), error.code === "unsupported_visual_source" ? 415 : 400);
+          }
+          if (error instanceof UnsupportedAttachmentKindError) {
+            return c.json(
+              fail(error.code, "Unsupported source kind", {
+                files: error.fileNames,
+                supported_kinds: SUPPORTED_UPLOAD_KINDS,
+              }),
+              415,
+            );
+          }
+          if (error instanceof Error && error.name === "AttachmentExtractionError" && "code" in error && typeof error.code === "string") {
+            const codes = new Set(["pdf_password_required", "pdf_invalid", "pdf_runtime_unavailable", "pdf_extraction_timeout", "pdf_size_limit", "pdf_page_limit", "pdf_text_limit", "attachment_extract_failed"]);
+            return c.json(fail(codes.has(error.code) ? error.code : "attachment_extract_failed", "Could not read the attachment. Its original remains in docs/attachments."), 422);
+          }
+          return c.json(
+            fail("invalid_attachments", "Attachment upload rejected"),
+            400,
+          );
+        }
+        const selections = attachmentPaths.map((attachmentPath, index) => ({ source_type: "uploaded_attachment" as const, attachment_path: attachmentPath, role: uploadSources.sources[index]?.role ?? "ordinary_content" }));
+        try {
+          const canonical = await canonicalizeAttachmentRequest({ sessionId: id, requestedPaths: attachmentPaths, selections });
+          payload = { type: "user.message", text, ...(activeRelPath === undefined ? {} : { active_rel_path: activeRelPath }), attachments: [...canonical.paths], visualSources: canonical.selections, generation };
+        } catch (error) {
+          await rollbackSessionAttachments(id, attachmentPaths);
+          if (error instanceof AttachmentRequestError) return c.json(fail(error.code, "Attachment selection is invalid"), 400);
+          throw error;
+        }
+      }
+    }
+
+    if (!payload || payload.type !== "user.message") {
+      return c.json(
+        fail("invalid_body", "Expected a user.message payload with text"),
+        400,
+      );
+    }
+
+    const turn = startReservedUserTurn({ ...reservation, operationId: requestedOperationId ?? reservation.operationId }, payload);
+    if (!turn) {
+      return c.json(
+        fail("session_busy", "A turn is already running for this session", { id }),
+        409,
+      );
+    }
+
+    started = true;
+    const completed = turn.promise.catch(async (error: unknown) => {
+      await persistAndPublish(
+        id,
+        {
+          id: ulid(),
+          ts: Date.now(),
+          type: "status.error",
+          code: "turn_failed",
+          message: "turn_failed",
+          recoverable: true,
+        },
+        error,
+      );
+      await persistAndPublishRoute(id, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "error" });
+      await setSessionStatus(id, "idle");
+    });
+    try { await turn.prepared; }
+    catch {
+      await completed;
+      return c.json(
+        fail(
+          "artifact_prepare_failed",
+          "Artifact operation preparation failed",
+        ),
+        500,
+      );
+    }
+    void completed;
+    return c.json(ok({ accepted: true, turn_id: turn.turnId, operation_id: turn.operationId }));
+  } finally {
+    if (!started) releaseUserTurnReservation(reservation);
+  }
 });
 
 sessionRoutes.post("/api/sessions/:id/interrupt", async (c) => {

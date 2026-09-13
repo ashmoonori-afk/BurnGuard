@@ -108,9 +108,9 @@ interface BridgeResponse {
  * being asked. Add new event names here AND in BRIDGE_SCRIPT (or
  * deck-stage.ts for runtime-emitted events).
  */
-type FrameEventName = "document-loaded" | "present-dismiss" | "active-slide-changed" | "navigate" | "viewport-wheel" | "comment-pointer" | "comment-shortcut" | "comment-dismiss";
+type FrameEventName = "document-loaded" | "present-dismiss" | "active-slide-changed" | "navigate" | "navigate-external" | "viewport-wheel" | "comment-pointer" | "comment-shortcut" | "comment-dismiss";
 
-type FrameEventPayload<E extends FrameEventName> = E extends "document-loaded" | "present-dismiss" ? { documentKey: string } : E extends "comment-pointer" | "comment-shortcut" | "comment-dismiss" ? { documentKey: string; x: number | null; y: number | null } : E extends "viewport-wheel" ? { x: number; y: number; delta: number } : E extends "navigate" ? { href: string } : { index: number };
+type FrameEventPayload<E extends FrameEventName> = E extends "document-loaded" | "present-dismiss" ? { documentKey: string } : E extends "comment-pointer" | "comment-shortcut" | "comment-dismiss" ? { documentKey: string; x: number | null; y: number | null } : E extends "viewport-wheel" ? { x: number; y: number; delta: number } : E extends "navigate" | "navigate-external" ? { href: string } : { index: number };
 
 interface FrameEvent<E extends FrameEventName = FrameEventName> {
   __bgFrameBridge: true;
@@ -193,6 +193,16 @@ export function subscribeFrameEvent<E extends FrameEventName>(
     if (ss && ss.size === 0) ps?.delete(event);
     if (ps && ps.size === 0) subscribers.delete(iframe);
   };
+}
+
+/** Parent-owned action: iframe messages are untrusted even after source matching. */
+export function openFrameExternalLink(payload: unknown): void {
+  if (!navigator.userActivation.isActive || payload === null || typeof payload !== "object" || !("href" in payload) || typeof payload.href !== "string") return;
+  let destination: URL;
+  try { destination = new URL(payload.href); } catch { return; }
+  // App navigation, including every /api spelling, never belongs in an external window.
+  if (!/^https?:$/.test(destination.protocol) || destination.origin === window.location.origin || destination.username || destination.password) return;
+  window.open(destination.href, "_blank", "noopener,noreferrer");
 }
 
 export type SandboxedArtifactOptions = {
@@ -746,17 +756,24 @@ const BRIDGE_SCRIPT = String.raw`(function () {
   function initializeNavigation() {
     // Window bubbling lets authored element/document handlers prevent navigation first.
     window.addEventListener("click", function (event) {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (event.defaultPrevented || event.button !== 0) return;
       var link = event.target && event.target.closest ? event.target.closest("a[href]") : null;
       if (!link || link.hasAttribute("download")) return;
       var target = (link.getAttribute("target") || "").toLowerCase();
-      if (target && target !== "_self") return;
+      // Native popups are disabled; local _blank links use the same parent navigation.
+      if (target && target !== "_self" && target !== "_blank") return;
       var href = (link.getAttribute("href") || "").trim();
       if (!href) return;
       var base;
       var destination;
       try { base = new URL(document.baseURI); destination = new URL(href, base); } catch (e) { return; }
-      if (destination.origin !== base.origin || !/^https?:$/.test(destination.protocol)) return;
+      if (!/^https?:$/.test(destination.protocol)) return;
+      if (destination.origin !== base.origin) {
+        event.preventDefault();
+        if (event.isTrusted) window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: "navigate-external", payload: { href: destination.href } }, "*");
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       if (href.charAt(0) === "#" || (destination.pathname === base.pathname && destination.search === base.search && destination.hash)) {
         event.preventDefault();
         scrollToFragment(destination.hash);

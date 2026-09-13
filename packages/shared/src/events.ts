@@ -7,6 +7,7 @@ export type TurnErrorCode =
   | "commandcode_unavailable"
   | "unsupported_generation_model_effort"
   | "backend_unavailable"
+  | "agent_control_files_present"
   | "path_unavailable"
   | "immutable_reference_mutated"
   | "immutable_reference_path_unavailable"

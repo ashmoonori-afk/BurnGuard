@@ -1,9 +1,14 @@
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { logsDir } from "../src/lib/paths";
 import { getSqlite } from "../src/db/sqlite-client";
 import { runMigrations } from "../src/db/migrate-local";
 import { broker, sequencedBroker } from "../src/services/broker";
 import { persistAndPublish } from "../src/services/turns";
 import { PathBoundaryError } from "../src/security/path-boundary";
+import { sessionRoutes } from "../src/routes/session";
 
 beforeAll(async () => {
   await runMigrations();
@@ -17,6 +22,96 @@ beforeEach(() => {
 });
 
 describe("turn error event boundary", () => {
+  test("Given artifact preparation fails with a private path When the route responds Then diagnostics stay server-side", async () => {
+    const root = await mkdtemp(
+      path.join(tmpdir(), "burnguard-private-prepare-"),
+    );
+    try {
+      await writeFile(path.join(root, "index.html"), "<h1>safe</h1>");
+      await mkdir(path.join(root, ".attachments"));
+      await symlink(
+        "/private/Users/local/private-project",
+        path.join(root, "escaped-link"),
+      );
+      getSqlite()
+        .prepare("UPDATE projects SET dir_path=? WHERE id='turn-error-project'")
+        .run(root);
+
+      const response = await sessionRoutes.request(
+        "http://local/api/sessions/turn-error-session/events",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ type: "user.message", text: "safe request" }),
+        },
+      );
+      const body = (await response.json()) as {
+        readonly error: { readonly code: string };
+      };
+      const serialized = JSON.stringify(body);
+
+      expect(response.status).toBe(500);
+      expect(body.error.code).toBe("artifact_prepare_failed");
+      expect(serialized.length).toBeLessThan(512);
+      expect(serialized).not.toContain(root);
+      expect(serialized).not.toContain("/private/Users");
+    } finally {
+      getSqlite()
+        .prepare(
+          "UPDATE projects SET dir_path='/tmp/project' WHERE id='turn-error-project'",
+        )
+        .run();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("Given a legacy project control file When generation is requested Then it is preserved and blocked before provider execution", async () => {
+    const root = await mkdtemp(
+      path.join(tmpdir(), "burnguard-agent-control-"),
+    );
+    try {
+      await writeFile(path.join(root, "index.html"), "<h1>safe</h1>");
+      await writeFile(
+        path.join(root, "CLAUDE.md"),
+        "untrusted project instructions",
+      );
+      getSqlite()
+        .prepare("UPDATE projects SET dir_path=? WHERE id='turn-error-project'")
+        .run(root);
+
+      const response = await sessionRoutes.request(
+        "http://local/api/sessions/turn-error-session/events",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ type: "user.message", text: "safe request" }),
+        },
+      );
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        error: { code: "agent_control_files_present" },
+      });
+      expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(
+        "untrusted project instructions",
+      );
+      expect(
+        getSqlite()
+          .query<{ count: number }, []>(
+            "SELECT COUNT(*) count FROM events WHERE session_id='turn-error-session'",
+          )
+          .get()?.count,
+      ).toBe(0);
+    } finally {
+      getSqlite()
+        .prepare(
+          "UPDATE projects SET dir_path='/tmp/project' WHERE id='turn-error-project'",
+        )
+        .run();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("Given parent symlink PathBoundaryError When persisted and published Then DB SSE and replay contain only typed bounded Korean copy", async () => {
     const raw = "/private/Users/alice/project/.attachments/source.pdf escaped root";
     const observed: unknown[] = [];
@@ -39,6 +134,8 @@ describe("turn error event boundary", () => {
 
   test("Given arbitrary POSIX Windows multiline and stack error When crossing boundary Then generic bounded copy replaces all diagnostics", async () => {
     const raw = "failed /private/a C:\\Users\\alice\\secret\nError: boom\n at internal (/srv/app.ts:4)";
+    const tracePath = path.join(logsDir, "turn-error-session.trace.log");
+    await rm(tracePath, { force: true });
     await persistAndPublish("turn-error-session", { id: "unknown-error", ts: 3, type: "status.error", message: raw, recoverable: true }, new Error(raw));
     const payload = getSqlite().query<{ readonly payload_json: string }, []>("SELECT payload_json FROM events WHERE id='unknown-error'").get()?.payload_json ?? "";
     expect(payload).not.toContain("/private/");
@@ -47,6 +144,11 @@ describe("turn error event boundary", () => {
     expect(payload).toContain("turn_failed");
     expect(payload).toContain("요청을 처리하지 못했어요");
     expect(payload.length).toBeLessThan(300);
+    const trace = await readFile(tracePath, "utf8");
+    expect(trace).not.toContain("/private/");
+    expect(trace).not.toContain("C:\\Users");
+    expect(trace).not.toContain("alice");
+    expect(trace).toContain('"name":"Error"');
   });
 
   test("Given ordinary user cancellation When crossing boundary Then interrupted idle semantics remain unchanged", async () => {

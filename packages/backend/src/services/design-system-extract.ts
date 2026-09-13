@@ -7,7 +7,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { devNull, tmpdir } from "node:os";
 import path from "node:path";
 import { isValidFontData } from "./font-validation";
 import { parse } from "node-html-parser";
@@ -97,7 +97,6 @@ import {
   contentTypeForDesignSystemFile,
   inferExtractionSourceType,
   isUnsafeImportHostname,
-  normalizeImportHostname,
   parseExtractionSourceUrl,
 } from "./extraction-path";
 import { isOwnedQaAdapterEntryUrl, isOwnedQaAdapterResourceUrl, qaAdapterConfiguration } from "./extraction-qa-adapter";
@@ -208,6 +207,9 @@ export async function extractDesignSystemFromSource(
   const lineage = validateExtractionLineage(input.lineage);
   const inferredSourceType = inferExtractionSourceType(sourceUrl);
   const sourceType = input.source_type ?? inferredSourceType;
+  if (input.source_type !== undefined && input.source_type !== inferredSourceType) {
+    throw new DesignSystemExtractError("invalid_source_url", "source_type must match the source URL provider");
+  }
   if (
     sourceType !== "github" &&
     sourceType !== "website" &&
@@ -639,19 +641,19 @@ async function ingestGitSource(
   preferredName?: string,
 ): Promise<SourceAnalysis> {
   const repoDir = path.join(ingestDir, "repo");
+  const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.toUpperCase().startsWith("GIT_") && name.toUpperCase() !== "SSH_ASKPASS"));
   const proc = Bun.spawn({
-    cmd: ["git", "clone", "--depth=1", sourceUrl, repoDir],
+    cmd: ["git", "-c", "credential.helper=", "-c", "http.followRedirects=false", "clone", "--depth=1", sourceUrl, repoDir],
+    cwd: ingestDir,
+    env: { ...environment, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_SYSTEM: devNull, GIT_CONFIG_GLOBAL: devNull, GIT_ALLOW_PROTOCOL: "https", GIT_TERMINAL_PROMPT: "0" },
     stdout: "ignore",
-    stderr: "pipe",
+    stderr: "ignore",
   });
-  const [stderr, exitCode] = await Promise.all([
-    new Response(proc.stderr).text(),
-    awaitChildWithAbort(proc, signal).then((receipt) => receipt.exitCode),
-  ]);
+  const { exitCode } = await awaitChildWithAbort(proc, signal);
   if (exitCode !== 0) {
     throw new DesignSystemExtractError(
       "git_clone_failed",
-      stderr.trim() || `git clone failed with exit code ${exitCode}`,
+      "The public repository could not be acquired",
     );
   }
 

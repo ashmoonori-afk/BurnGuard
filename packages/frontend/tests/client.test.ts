@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import type { UpdateDesignSystemRequest } from "@bg/shared";
 import {
   apiFetch,
+  authorizedFetch,
   bootstrapApiAuthority,
 } from "../src/api/client";
 import { catalogDetailRows, getDesignSystem, updateDesignSystemWithConflictReload } from "../src/api/design-system-metadata";
@@ -209,5 +210,38 @@ describe("API authority client", () => {
     const headers = new Headers(calls[1]?.headers);
     expect(headers.get("x-burnguard-capability")).toBe("launch-token");
     expect(headers.get("x-extra")).toBe("kept");
+  });
+
+  test("never sends the launch capability to a cross-origin URL", async () => {
+    const calls: string[] = [];
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "location");
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: new URL("http://127.0.0.1:14070/projects/example"),
+    });
+    globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return Response.json({ ok: true, data: { capability: "launch-token" } });
+    }) as typeof fetch;
+
+    try {
+      await bootstrapApiAuthority();
+      await expect(
+        authorizedFetch("http://127.0.0.1:14070/api/private"),
+      ).resolves.toBeInstanceOf(Response);
+      await expect(
+        authorizedFetch("https://attacker.invalid/collect"),
+      ).rejects.toBeInstanceOf(Error);
+      expect(calls).toEqual([
+        "/api/bootstrap",
+        "http://127.0.0.1:14070/api/private",
+      ]);
+    } finally {
+      if (descriptor === undefined) {
+        Reflect.deleteProperty(globalThis, "location");
+      } else {
+        Object.defineProperty(globalThis, "location", descriptor);
+      }
+    }
   });
 });

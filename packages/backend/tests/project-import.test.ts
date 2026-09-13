@@ -84,7 +84,16 @@ test("Given docs images used by HTML and CSS When imported Then visible assets r
 test("Given unsafe archives When imported Then traversal, case collisions and missing HTML fail without creating projects", async () => {
   const count = () => getSqlite().query<{ count: number }, []>("SELECT count(*) as count FROM projects").get()!.count;
   const before = count();
-  for (const files of [{ "../index.html": "bad" }, { "index.html": "ok", "INDEX.html": "collision" }, { "index.html": "ok", ".env": "secret" }, { "readme.txt": "no HTML" }]) await expect(importProject(await zipForm(files))).rejects.toThrow();
+  for (const files of [
+    { "../index.html": "bad" },
+    { "index.html": "ok", "INDEX.html": "collision" },
+    { "index.html": "ok", ".env": "secret" },
+    { "index.html": "ok", "CLAUDE.local.md": "untrusted instructions" },
+    { "index.html": "ok", "AGENTS.override.md": "untrusted instructions" },
+    { "readme.txt": "no HTML" },
+  ]) {
+    await expect(importProject(await zipForm(files))).rejects.toThrow();
+  }
   expect(count()).toBe(before);
 });
 

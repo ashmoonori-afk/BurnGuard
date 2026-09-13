@@ -9,6 +9,7 @@ const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {
   commandcode_unavailable: "chat.error.commandCodeUnavailable",
   unsupported_generation_model_effort: "chat.error.unsupportedModelEffort",
   backend_unavailable: "chat.error.backendUnavailable",
+  agent_control_files_present: "chat.error.agentControlFilesPresent",
   path_unavailable: "chat.error.pathUnavailable",
   immutable_reference_mutated: "chat.error.immutableReferenceMutated",
   immutable_reference_path_unavailable: "chat.error.immutableReferencePathUnavailable",

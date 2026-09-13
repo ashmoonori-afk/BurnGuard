@@ -197,6 +197,43 @@ for (const failure of ["exit", "event"] as const) {
   });
 }
 
+for (const backendId of ["claude-code", "codex"] as const) {
+  test.skipIf(process.platform === "win32")(`Given ${backendId} exits without a result When the turn reaches SSE Then one bounded error and one error-idle remain visible`, async () => {
+    getSqlite().prepare("UPDATE projects SET backend_id=? WHERE id=?").run(backendId, projectId);
+    getSqlite().prepare("UPDATE sessions SET backend_id=? WHERE id=?").run(backendId, sessionId);
+    const observed: import("@bg/shared").NormalizedEvent[] = [];
+    const unsubscribe = broker.subscribe(sessionId, (event) => { observed.push(event); });
+    try {
+      const turn = startUserTurn(sessionId, { type: "user.message", text: "Create" }, undefined, {
+        detectBackends: async () => ({
+          backends: [{
+            id: backendId,
+            found: true,
+            binary_path: "/usr/bin/false",
+            version: "test",
+          }],
+        }),
+      });
+      if (turn === null) throw new Error("turn reservation unavailable");
+      await turn.promise;
+    } finally {
+      unsubscribe();
+    }
+
+    expect(observed.filter((event) => event.type === "status.error")).toEqual([
+      expect.objectContaining({ code: "turn_failed", recoverable: true }),
+    ]);
+    expect(observed.filter((event) => event.type === "status.idle" && event.stopReason === "error")).toHaveLength(1);
+    expect(
+      getSqlite()
+        .query<{ readonly count: number }, []>(
+          "SELECT COUNT(*) count FROM events WHERE session_id=? AND type='status.error'",
+        )
+        .get(sessionId)?.count,
+    ).toBe(1);
+  });
+}
+
 test("Given stage writes in a running turn When interrupted Then live bytes and revision are preserved", async () => {
   let entered: () => void = () => {};
   const ready = new Promise<void>((resolve) => { entered = resolve; });

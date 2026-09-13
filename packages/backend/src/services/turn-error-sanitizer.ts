@@ -7,6 +7,7 @@ const COPY: Readonly<Record<TurnErrorCode, string>> = {
   commandcode_unavailable: "CommandCode 연결을 사용할 수 없어요. Claude Code 설치와 설정의 API 키를 확인해 주세요.",
   unsupported_generation_model_effort: "선택한 모델이나 추론 강도를 사용할 수 없어요. 모델을 다시 선택해 주세요.",
   backend_unavailable: "선택한 작업 도구를 사용할 수 없어요. 설치 상태를 확인해 주세요.",
+  agent_control_files_present: "프로젝트에 AI 도구 설정 파일이 있어 생성을 시작하지 않았어요. 파일명을 변경한 후 다시 시도해 주세요.",
   path_unavailable: "프로젝트 파일에 안전하게 접근할 수 없어요. 다시 시도해 주세요.",
   immutable_reference_mutated: "읽기 전용 참조 파일이 변경되어 작업을 중단했어요.",
   immutable_reference_path_unavailable: "읽기 전용 참조 파일에 안전하게 접근할 수 없어 작업을 중단했어요.",
@@ -39,6 +40,7 @@ function knownCode(candidate: string | undefined): TurnErrorCode | undefined {
     case "commandcode_unavailable":
     case "unsupported_generation_model_effort":
     case "backend_unavailable":
+    case "agent_control_files_present":
     case "immutable_reference_mutated":
     case "immutable_reference_path_unavailable":
     case "immutable_reference_escaped":

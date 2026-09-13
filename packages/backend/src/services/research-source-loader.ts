@@ -1,5 +1,12 @@
-import { isUnsafeImportHostname } from "./extraction-path";
+import { isIP } from "node:net";
+import { checkServerIdentity } from "node:tls";
+import {
+  isUnsafeImportHostname,
+  normalizeImportHostname,
+} from "./extraction-path";
 import { ExtractionSafetyError, parseSafeExtractionUrl } from "./extraction-safety";
+import { resolveSafeImportAddresses } from "./extraction-website";
+import { DesignSystemExtractError } from "./extraction-errors";
 import type { CanonicalResearchSource, FetchedResearchSource, ResearchSourceDocument } from "./research-orchestrator";
 
 export class ResearchSourceLoadError extends Error {
@@ -7,24 +14,38 @@ export class ResearchSourceLoadError extends Error {
   constructor(readonly code: "unsafe_source" | "fetch_failed" | "malformed_source" | "source_too_large", message: string) { super(message); }
 }
 
-export type ResearchTransport = (url: URL, init: { readonly redirect: "error"; readonly signal: AbortSignal; readonly headers: Readonly<Record<string, string>> }) => Promise<Response>;
+export type ResearchTransport = (url: URL, init: BunFetchRequestInit & { readonly redirect: "error"; readonly signal: AbortSignal }) => Promise<Response>;
 export type NetworkSourceInput = { readonly source: CanonicalResearchSource; readonly maxBytes: number; readonly request: ResearchTransport };
+type ResearchNetworkDependencies = {
+  readonly resolveAddresses?: typeof resolveSafeImportAddresses;
+};
 type SourceReadResult = { readonly done: false; readonly value: Uint8Array } | { readonly done: true; readonly value?: undefined };
 
-export async function loadNetworkResearchSource(input: NetworkSourceInput, signal: AbortSignal): Promise<FetchedResearchSource> {
+export async function loadNetworkResearchSource(input: NetworkSourceInput, signal: AbortSignal, dependencies: ResearchNetworkDependencies = {}): Promise<FetchedResearchSource> {
   const url = safeUrl(input.source.canonicalLocator);
   if (isUnsafeImportHostname(url.hostname)) throw new ResearchSourceLoadError("unsafe_source", `Blocked private or local research host: ${url.hostname}`);
   let response: Response;
   try {
-    response = await input.request(url, { redirect: "error", signal, headers: { accept: "application/json", "user-agent": "Burnguard-Research/1" } });
+    const addresses = await (dependencies.resolveAddresses ?? resolveSafeImportAddresses)(url, signal);
+    response = await requestPinnedResearchSource(input, url, addresses, signal);
   } catch (error) {
     if (signal.aborted) throw signal.reason;
     if (error instanceof ResearchSourceLoadError) throw error;
-    throw new ResearchSourceLoadError("fetch_failed", error instanceof Error ? error.message : "Research source fetch failed");
+    if (
+      error instanceof DesignSystemExtractError &&
+      error.code === "invalid_source_url"
+    ) {
+      throw new ResearchSourceLoadError(
+        "unsafe_source",
+        "Research source host must resolve to public addresses",
+      );
+    }
+    throw new ResearchSourceLoadError(
+      "fetch_failed",
+      "Research source fetch failed",
+    );
   }
   if (!response.ok) throw new ResearchSourceLoadError("fetch_failed", `Research source returned HTTP ${response.status}`);
-  const finalUrl = response.url.length === 0 ? url : safeUrl(response.url);
-  if (isUnsafeImportHostname(finalUrl.hostname)) throw new ResearchSourceLoadError("unsafe_source", `Blocked private or local redirect host: ${finalUrl.hostname}`);
   const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
   if (contentType !== "application/json") throw new ResearchSourceLoadError("malformed_source", "Research source must be application/json");
   const declared = response.headers.get("content-length");
@@ -33,7 +54,48 @@ export async function loadNetworkResearchSource(input: NetworkSourceInput, signa
   let raw: unknown;
   try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
   catch (error) { if (error instanceof SyntaxError || error instanceof TypeError) throw new ResearchSourceLoadError("malformed_source", "Research source is not valid UTF-8 JSON"); throw error; }
-  return { bytes, finalUrl: finalUrl.toString(), httpStatus: response.status, document: parseResearchSourceDocument(raw) };
+  return { bytes, finalUrl: url.toString(), httpStatus: response.status, document: parseResearchSourceDocument(raw) };
+}
+
+async function requestPinnedResearchSource(
+  input: NetworkSourceInput,
+  url: URL,
+  addresses: Awaited<ReturnType<typeof resolveSafeImportAddresses>>,
+  signal: AbortSignal,
+): Promise<Response> {
+  const hostname = normalizeImportHostname(url.hostname);
+  let failure: unknown;
+  for (const address of addresses) {
+    const target = new URL(url);
+    target.hostname =
+      address.family === 6 ? `[${address.address}]` : address.address;
+    try {
+      return await input.request(target, {
+        redirect: "error",
+        signal,
+        headers: {
+          accept: "application/json",
+          host: url.host,
+          "user-agent": "Burnguard-Research/1",
+        },
+        tls: {
+          rejectUnauthorized: true,
+          ...(isIP(hostname) === 0 ? { serverName: hostname } : {}),
+          checkServerIdentity: (_name, certificate) =>
+            checkServerIdentity(hostname, certificate),
+        },
+      });
+    } catch (error) {
+      failure = error;
+    }
+  }
+  throw (
+    failure ??
+    new ResearchSourceLoadError(
+      "fetch_failed",
+      "No validated research source address could be reached",
+    )
+  );
 }
 
 export function parseResearchSourceDocument(input: unknown): ResearchSourceDocument {

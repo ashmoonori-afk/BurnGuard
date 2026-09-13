@@ -23,6 +23,7 @@ import { buildPrompt } from "../harness/prompt-builder";
 import { DECK_REVIEW_PROMPT } from "../harness/skills/deck-skill";
 import { runAdapterTurn } from "../adapters/registry";
 import { loadConfig } from "../config";
+import { hasAgentControlFiles } from "../security/agent-control-files";
 import { isDirectionOperationActive } from "./direction-operation-registry";
 import { buildVisualSourceManifest } from "./visual-source-manifest";
 import { captureImmutableAttachments, verifyImmutableAttachments } from "./immutable-attachment-guard";
@@ -65,14 +66,22 @@ async function listDirSafe(dir: string): Promise<string[] | string> {
   try {
     return await readdir(dir);
   } catch (err) {
-    return `<error: ${err instanceof Error ? err.message : String(err)}>`;
+    const code =
+      err instanceof Error && "code" in err && typeof err.code === "string"
+        ? err.code
+        : "unavailable";
+    return `<error: ${code}>`;
   }
 }
 
 export async function persistAndPublish(sessionId: string, event: NormalizedEvent, cause?: unknown) {
   if (cause !== undefined) {
-    console.error("[turn] error diagnostic", cause);
-    await appendSessionTrace(sessionId, { level: "turn_error_diagnostic", error: diagnosticError(cause) });
+    const diagnostic = diagnosticError(cause);
+    console.error("[turn] error diagnostic", diagnostic);
+    await appendSessionTrace(sessionId, {
+      level: "turn_error_diagnostic",
+      error: diagnostic,
+    });
   }
   const safeEvent = sanitizeTurnEvent(event, cause);
   const persisted = persistNormalizedEvent(getSqlite(), sessionId, safeEvent);
@@ -85,8 +94,19 @@ export async function persistAndPublish(sessionId: string, event: NormalizedEven
 }
 
 function diagnosticError(error: unknown): Readonly<Record<string, unknown>> {
-  if (!(error instanceof Error)) return { value: String(error) };
-  return { name: error.name, message: error.message, stack: error.stack, ...("code" in error ? { code: error.code } : {}) };
+  if (!(error instanceof Error)) {
+    return { name: "NonErrorThrown", valueType: typeof error };
+  }
+  const name = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(error.name)
+    ? error.name
+    : "Error";
+  const code =
+    "code" in error &&
+    typeof error.code === "string" &&
+    /^[A-Za-z0-9_.-]{1,100}$/.test(error.code)
+      ? error.code
+      : undefined;
+  return { name, ...(code === undefined ? {} : { code }) };
 }
 
 /**
@@ -178,6 +198,19 @@ export type UserTurnReservation = {
 };
 
 export type TurnDependencies = { readonly runAdapter?: typeof runAdapterTurn; readonly detectBackends?: typeof detectBackends };
+
+export type UserTurnAdmission =
+  | { readonly kind: "reserved"; readonly reservation: UserTurnReservation }
+  | { readonly kind: "session_busy" }
+  | { readonly kind: "capacity_exhausted" };
+
+/** Check and acquire together, without yielding between global and per-session admission. */
+export function admitUserTurn(sessionId: string, maxConcurrentTurns: number): UserTurnAdmission {
+  if (activeTurns.has(sessionId) || isDirectionOperationActive(sessionId)) return { kind: "session_busy" };
+  if (!hasTurnCapacity(maxConcurrentTurns)) return { kind: "capacity_exhausted" };
+  const reservation = reserveUserTurn(sessionId);
+  return reservation === null ? { kind: "session_busy" } : { kind: "reserved", reservation };
+}
 
 export function reserveUserTurn(sessionId: string, requestedOperationId?: string): UserTurnReservation | null {
   if (activeTurns.has(sessionId) || isDirectionOperationActive(sessionId)) return null;
@@ -302,6 +335,11 @@ async function runUserTurnInternal(
   const projectDir = sessionContext.project.project_dir;
   const project = await getProjectDetail(sessionContext.project.project_id);
   if (project === null) throw new Error("project_not_found");
+  if (await hasAgentControlFiles(projectDir)) {
+    throw Object.assign(new Error("agent_control_files_present"), {
+      code: "agent_control_files_present",
+    });
+  }
   if (project.type === "graphic" && (backendId !== "codex" || backend.authenticated !== true)) throw new Error("graphic_requires_authenticated_codex");
   const generation = resolveGenerationOptions(backendId, payload.generation, config, backend);
   const coordinator = new ArtifactCoordinator(getSqlite());
@@ -310,8 +348,16 @@ async function runUserTurnInternal(
   // so it has to be taken here — before the adapter can touch the tree. A
   // failed snapshot costs the user the rollback, never the turn itself.
   try { await writePreTurnSnapshot(project.id, turnId); }
-  catch (error) { await appendSessionTrace(sessionId, { level: "checkpoint_snapshot_failed", turnId, error: error instanceof Error ? error.message : String(error) }); }
+  catch (error) {
+    await appendSessionTrace(sessionId, {
+      level: "checkpoint_snapshot_failed",
+      turnId,
+      error: diagnosticError(error),
+    });
+  }
   let operationPrepared = false;
+  let providerReportedFailure = false;
+  let providerErrorPublished = false;
   let stopPreview: (() => Promise<void>) | undefined;
   const terminalEvents: NormalizedEvent[] = [];
   const selectedAttachments = sessionContext.attachments.filter((attachment) => contextPayload.attachments.includes(attachment.file_path));
@@ -329,28 +375,38 @@ async function runUserTurnInternal(
         const waitsForInterrupt = process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "abort";
         if (waitsForInterrupt && !activeTurn.abortController.signal.aborted) await new Promise<void>((resolve) => activeTurn.abortController.signal.addEventListener("abort", () => resolve(), { once: true }));
         if (activeTurn.abortController.signal.aborted) throw new ArtifactOperationError("operation_cancelled", "Turn was interrupted");
-        await appendSessionTrace(sessionId, { level: "adapter_stage_dir", turnId, operationId, projectDir: stageDir });
+        await appendSessionTrace(sessionId, {
+          level: "adapter_stage_ready",
+          turnId,
+          operationId,
+        });
         const immutableSnapshots = await captureImmutableAttachments(selectedAttachments);
         try {
           await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: contextPayload.attachments, immutableSnapshots }, async (stageInputs) => {
             const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation });
-            await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId, binary: binaryPath });
-            let providerFailed = false;
+            await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId });
             const adapterInput: Parameters<typeof runAdapterTurn>[1] = {
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,
               generation,
               ...(generation.provider === "commandcode" ? { commandcodeApiKey: config.commandcodeApiKey ?? undefined } : {}),
               signal: activeTurn.abortController.signal, userEvent: payload,
               onEvent: async (event) => {
-                if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason === "error")) providerFailed = true;
+                if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason === "error")) providerReportedFailure = true;
                 if (event.type === "file.changed") return;
                 const scrubbedEvent = config.commandcodeApiKey ? JSON.parse(JSON.stringify(event, (_key, value: unknown) => typeof value === "string" ? value.split(config.commandcodeApiKey!).join("[redacted]") : value)) as NormalizedEvent : event;
                 const safeEvent = redactPrivateAttachmentPaths(scrubbedEvent, stageInputs);
+                if (safeEvent.type === "status.error") providerErrorPublished = true;
                 if (safeEvent.type === "chat.message_end" || safeEvent.type === "status.idle") { terminalEvents.push(safeEvent); return; }
                 const eventError = safeEvent.type === "status.error" ? Object.assign(new Error(safeEvent.message), safeEvent.code === undefined ? {} : { code: safeEvent.code }) : undefined;
                 await persistAndPublish(sessionId, safeEvent, eventError);
               },
-              onStderr: async (line) => { await appendSessionTrace(sessionId, { level: "stderr", turnId, line: config.commandcodeApiKey ? line.split(config.commandcodeApiKey).join("[redacted]") : line }); },
+              onStderr: async (line) => {
+                await appendSessionTrace(sessionId, {
+                  level: "stderr",
+                  turnId,
+                  bytes: Buffer.byteLength(line, "utf8"),
+                });
+              },
               onDecision: (handler) => {
                 activeTurn.decisionHandler = handler;
                 for (const decision of activeTurn.decisionQueue.splice(0)) handler(decision);
@@ -359,12 +415,12 @@ async function runUserTurnInternal(
             };
             const runAdapter = dependencies.runAdapter ?? runAdapterTurn;
             const result = await runAdapter(backendId, adapterInput);
-            if (result.exitCode !== 0 || providerFailed) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
+            if (result.exitCode !== 0 || providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
             if (project.type === "slide_deck") {
               const toolCallId = ulid();
               await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", input: { scope: "all_slides" } });
               const review = await runAdapter(backendId, { ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}`, signal: AbortSignal.any([activeTurn.abortController.signal, AbortSignal.timeout(120_000)]) });
-              const reviewed = review.exitCode === 0 && !providerFailed;
+              const reviewed = review.exitCode === 0 && !providerReportedFailure;
               await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", ok: reviewed });
               if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
             }
@@ -387,6 +443,24 @@ async function runUserTurnInternal(
     if (!operationPrepared) throw error;
     if (activeTurn.interrupted || activeTurn.abortController.signal.aborted) {
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "interrupted" });
+    } else if (providerReportedFailure) {
+      if (!providerErrorPublished) {
+        await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.error", message: "turn_failed", recoverable: true }, error);
+      }
+      for (const event of terminalEvents) await persistAndPublish(sessionId, event);
+      if (
+        !terminalEvents.some(
+          (event) =>
+            event.type === "status.idle" && event.stopReason === "error",
+        )
+      ) {
+        await persistAndPublish(sessionId, {
+          id: ulid(),
+          ts: Date.now(),
+          type: "status.idle",
+          stopReason: "error",
+        });
+      }
     } else {
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.error", message: "turn_failed", recoverable: true }, error);
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "error" });
@@ -400,11 +474,11 @@ async function runUserTurnInternal(
   const postTurnListing = await listDirSafe(projectDir);
   const spawnCwdListing = await listDirSafe(process.cwd());
   console.log(
-    `[turn] post-turn projectDir=${projectDir} contents=`,
+    "[turn] post-turn project entries=",
     postTurnListing,
   );
   console.log(
-    `[turn] post-turn process.cwd=${process.cwd()} contents=`,
+    "[turn] post-turn workspace entries=",
     Array.isArray(spawnCwdListing)
       ? spawnCwdListing.filter(
           (name) => name.endsWith(".html") || name.endsWith(".css"),
@@ -414,7 +488,6 @@ async function runUserTurnInternal(
   await appendSessionTrace(sessionId, {
     level: "post_turn_dir",
     turnId,
-    projectDir,
     entries: postTurnListing,
   });
 
@@ -427,6 +500,9 @@ async function runUserTurnInternal(
   await appendSessionTrace(sessionId, {
     level: "turn_complete",
     turnId,
-    checkpoint,
+    checkpoint:
+      checkpoint === null
+        ? null
+        : { turnId: checkpoint.turnId, createdAt: checkpoint.createdAt },
   });
 }

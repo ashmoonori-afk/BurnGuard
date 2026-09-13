@@ -4,10 +4,11 @@ import type { FileInfo } from "@bg/shared/harness";
 import { replaceManagedProjectFiles } from "../db/managed-file-repository";
 import { getProjectDetail } from "../db/project-read-repository";
 import { PathBoundaryError, assertSafeName, resolveWithin } from "../security/path-boundary";
+import { isAgentControlPath } from "../security/agent-control-files";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { isProjectDocumentPath } from "./project-document-paths";
 
-const IGNORED_DIRS = new Set([".attachments", ".burnguard-inputs", ".meta", ".git", ".omc", ".claude"]);
+const IGNORED_DIRS = new Set([".attachments", ".burnguard-inputs", ".meta", ".git", ".omc", ".claude", ".codex"]);
 
 export async function indexProjectFiles(projectId: string) {
   const project = await getProjectDetail(projectId);
@@ -61,6 +62,7 @@ async function walk(root: string, current: string, output: FileInfo[]): Promise<
   for (const entry of await readdir(current, { withFileTypes: true })) {
     if (IGNORED_DIRS.has(entry.name)) continue;
     const relative = path.relative(root, path.join(current, entry.name)).replaceAll("\\", "/");
+    if (isAgentControlPath(relative)) continue;
     if (isProjectDocumentPath(relative) && entry.name.startsWith(".")) continue;
     if (isTransientFilePath(relative)) continue;
     let absolute: string;

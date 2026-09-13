@@ -62,7 +62,7 @@ export async function importProject(form: FormData) {
   const seen = new Set<string>();
   for (const entry of entries) {
     const key = entry.name.toLowerCase();
-    if (seen.has(key) || entry.name.split("/").some(part => part.startsWith(".")) || /(?:^|\/)(?:node_modules|AGENTS\.md|CLAUDE\.md)(?:\/|$)/i.test(entry.name) || /\.(?:exe|dll|sh|bat|cmd|ps1|pem|key|p12|pfx)$/i.test(entry.name)) throw new ProjectImportError("invalid_project_import");
+    if (seen.has(key) || entry.name.split("/").some(part => part.startsWith(".")) || /(?:^|\/)(?:node_modules|AGENTS(?:\.override)?\.md|CLAUDE(?:\.local)?\.md)(?:\/|$)/i.test(entry.name) || /\.(?:exe|dll|sh|bat|cmd|ps1|pem|key|p12|pfx)$/i.test(entry.name)) throw new ProjectImportError("invalid_project_import");
     seen.add(key);
   }
   let documents: File[];

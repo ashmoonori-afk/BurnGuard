@@ -10,15 +10,20 @@ function ctx(): CodexParserContext {
 }
 
 describe("parseCodexLine — structured path", () => {
-  test("Given the CLI startup feature notice When emitted as an error item Then it is omitted while real errors and authored text remain", () => {
+  test("Given provider diagnostics When parsing errors Then only authored text can become chat content", () => {
     const warning = 'Under-development features enabled: skip_host_skill_discovery. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in C:\\Users\\fixture\\.codex\\config.toml.';
     const errorItem = (message: string) => JSON.stringify({ type: "item.completed", item: { type: "error", message } });
     expect(parseCodexLine(errorItem(warning), ctx())).toEqual([]);
     expect(parseCodexLine(warning, ctx())).toEqual([]);
     expect(parseCodexLine("Authentication failed", ctx())[0]).toMatchObject({ type: "chat.delta", text: "Authentication failed" });
     expect(parseCodexLine(`${warning}\nAuthentication failed`, ctx())).toHaveLength(1);
-    expect(parseCodexLine(errorItem("Authentication failed"), ctx())[0]).toMatchObject({ type: "chat.delta", text: "Authentication failed" });
-    expect(parseCodexLine(errorItem(`${warning}\nAuthentication failed`), ctx())).toHaveLength(1);
+    const privateDiagnostic =
+      "Authentication failed: sk-private at /Users/local/.codex/config.toml";
+    const events = parseCodexLine(errorItem(privateDiagnostic), ctx());
+    expect(events).toEqual([]);
+    expect(JSON.stringify(events)).not.toContain("sk-private");
+    expect(JSON.stringify(events)).not.toContain("/Users/local");
+    expect(parseCodexLine(errorItem(`${warning}\nAuthentication failed`), ctx())).toEqual([]);
     expect(parseCodexLine(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: warning } }), ctx())[0]).toMatchObject({ type: "chat.delta", text: warning });
   });
 
@@ -168,19 +173,37 @@ describe("parseCodexLine — structured path", () => {
     }
   });
 
-  test("Codex recoverable item errors remain visible without poisoning a successful turn", () => {
+  test("Codex recoverable item diagnostics do not poison a successful turn", () => {
     const c = ctx();
-    const [event] = parseCodexLine(
+    const events = parseCodexLine(
       JSON.stringify({
         type: "item.completed",
         item: { type: "error", message: "Skills were trimmed for this turn." },
       }),
       c,
     );
-    expect(event.type).toBe("chat.delta");
-    if (event.type === "chat.delta") {
-      expect(event.text).toBe("Skills were trimmed for this turn.");
-    }
+    expect(events).toEqual([]);
+  });
+
+  test("Codex turn.failed becomes one bounded terminal error sequence", () => {
+    const events = parseCodexLine(
+      JSON.stringify({
+        type: "turn.failed",
+        error: {
+          message:
+            "Authentication failed: sk-private at /Users/local/.codex/config.toml",
+        },
+      }),
+      ctx(),
+    );
+
+    expect(events.map((event) => event.type)).toEqual([
+      "chat.message_end",
+      "status.error",
+      "status.idle",
+    ]);
+    expect(JSON.stringify(events)).not.toContain("sk-private");
+    expect(JSON.stringify(events)).not.toContain("/Users/local");
   });
 
   test("Codex turn.completed emits usage and one terminal status sequence", () => {
@@ -248,10 +271,16 @@ describe("parseCodexLine — raw-mode fallthrough", () => {
     if (e.type === "chat.delta") expect(e.text).toBe(raw);
   });
 
-  test("JSON with an unknown type also falls through", () => {
+  test("JSON with an unknown structured type is ignored instead of becoming chat", () => {
     const c = ctx();
-    const [e] = parseCodexLine(JSON.stringify({ type: "new_and_exciting" }), c);
-    expect(e.type).toBe("chat.delta");
+    const events = parseCodexLine(
+      JSON.stringify({
+        type: "new_and_exciting",
+        diagnostic: "sk-private at /Users/local/.codex/config.toml",
+      }),
+      c,
+    );
+    expect(events).toEqual([]);
   });
 
   test("JSON without a type field falls through", () => {

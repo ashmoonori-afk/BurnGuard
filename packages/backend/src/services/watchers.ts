@@ -6,13 +6,14 @@ import { waitForArtifactPublication } from "./artifact-publication-registry";
 import { appendSessionTrace } from "./trace";
 import { isTransientFilePath } from "./files";
 import { isProjectDocumentPath } from "./project-document-paths";
+import { isAgentControlPath } from "../security/agent-control-files";
 import {
   RESERVED_PROJECT_WATCHER,
   projectSessionIds as sessionIdCache,
   projectWatchers as watchers,
 } from "./watcher-registry";
 
-const IGNORED_TOP_LEVEL = new Set([".meta", ".attachments", ".burnguard-inputs", ".git", ".omc", ".claude"]);
+const IGNORED_TOP_LEVEL = new Set([".meta", ".attachments", ".burnguard-inputs", ".git", ".omc", ".claude", ".codex"]);
 const pendingSignals = new Map<string, Promise<void>>();
 const dirtySignals = new Set<string>();
 
@@ -54,7 +55,7 @@ export async function ensureAllProjectWatchers(projectIds?: readonly string[]): 
 
 export function shouldSkipPath(relPath: string): boolean {
   const top = relPath.split("/")[0];
-  return top !== undefined && (IGNORED_TOP_LEVEL.has(top) || isTransientFilePath(relPath) || isProjectDocumentPath(relPath));
+  return top !== undefined && (IGNORED_TOP_LEVEL.has(top) || isTransientFilePath(relPath) || isProjectDocumentPath(relPath) || isAgentControlPath(relPath));
 }
 
 export async function processProjectFilesystemSignal(projectId: string, projectDir: string) {
