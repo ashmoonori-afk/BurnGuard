@@ -34,6 +34,7 @@ export const errorsMessages = defineMessages({
   "errors.operation_conflict": { ko: "다른 변경과 겹쳐 작업을 마치지 못했어요. 최신 파일을 확인한 뒤 다시 요청해 주세요.", en: "Conflicting changes prevented completion. Check the latest file and request again.", "zh-CN": "与其他更改冲突，无法完成任务。请检查最新文件后重新请求。" },
   "errors.operation_cancelled": { ko: "작업을 중단했어요. 필요하면 요청을 다시 보내 주세요.", en: "Work was stopped. Send the request again if needed.", "zh-CN": "任务已停止。如有需要，请重新发送请求。" },
   "errors.turn_failed": { ko: "AI 작업을 완료하지 못했어요. 요청 내용을 확인하고 다시 보내 주세요.", en: "The AI task could not be completed. Check your request and send it again.", "zh-CN": "AI 任务未能完成。请检查请求内容后重新发送。" },
+  "errors.agent_control_files_present": { ko: "프로젝트에 AI 도구 설정 파일이 있어 생성을 시작하지 않았어요. 파일명을 변경한 후 다시 시도해 주세요.", en: "Generation was not started because the project contains AI tool configuration files. Rename those files and try again.", "zh-CN": "项目包含 AI 工具配置文件，因此未开始生成。请重命名这些文件后重试。" },
   "errors.invalid_name": { ko: "이름을 확인해 주세요. 비어 있거나 너무 길면 저장할 수 없어요.", en: "Check the name. It cannot be empty or too long.", "zh-CN": "请检查名称。名称为空或过长时无法保存。" },
   "errors.invalid_backend": { ko: "선택한 백엔드를 지원하지 않아요. 다른 백엔드를 골라 주세요.", en: "The selected backend is unsupported. Choose another backend.", "zh-CN": "不支持所选后端。请选择其他后端。" },
   "errors.invalid_generation_options": { ko: "모델과 추론 강도 설정을 다시 선택해 주세요.", en: "Select the model and reasoning effort again.", "zh-CN": "请重新选择模型和推理强度。" },

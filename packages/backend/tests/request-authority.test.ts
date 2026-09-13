@@ -5,6 +5,7 @@ import {
   createRequestAuthority,
 } from "../src/security/request-authority";
 import { createApp } from "../src/server";
+import { getSqlite } from "../src/db/sqlite-client";
 
 const capability = "current-launch-capability";
 const previousCapability = "previous-launch-capability";
@@ -203,5 +204,57 @@ describe("request authority", () => {
         )
       ).status,
     ).toBe(404);
+  });
+
+  test("marks private JSON responses as non-storable and non-sniffable", async () => {
+    const app = createApp({
+      capability,
+      appAuthority: "127.0.0.1:14070",
+    });
+    const authorized = await app.request(
+      request("/api/settings", {
+        headers: {
+          cookie: `burnguard_capability=${capability}`,
+        },
+      }),
+    );
+    const denied = await app.request(request("/api/settings"));
+
+    for (const response of [authorized, denied]) {
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    }
+  });
+
+  test("marks authorized SSE responses as non-storable and non-sniffable", async () => {
+    const db = getSqlite();
+    db.prepare(
+      "INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES ('header-project','Header project','prototype','/tmp/header-project','index.html','codex',1,1)",
+    ).run();
+    db.prepare(
+      "INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES ('header-session','header-project','codex','idle',1,1,1)",
+    ).run();
+    try {
+      const response = await createApp({
+        capability,
+        appAuthority: "127.0.0.1:14070",
+      }).request(
+        request("/api/sessions/header-session/stream", {
+          headers: {
+            cookie: `burnguard_capability=${capability}`,
+          },
+        }),
+      );
+
+      expect(response.headers.get("content-type")).toStartWith(
+        "text/event-stream",
+      );
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      await response.body?.cancel();
+    } finally {
+      db.prepare("DELETE FROM sessions WHERE id='header-session'").run();
+      db.prepare("DELETE FROM projects WHERE id='header-project'").run();
+    }
   });
 });

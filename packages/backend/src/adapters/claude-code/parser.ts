@@ -157,22 +157,6 @@ export function parseStreamLine(
         obj.is_error === true ||
         obj.subtype === "error_max_turns" ||
         obj.subtype === "error";
-      if (isError) {
-        // Expired logins, rate limits and max-turn stops all arrive as an
-        // `is_error` result and nothing else. Without surfacing the CLI's
-        // own text the turn would end as a silent idle with an empty
-        // answer. Mirrors the codex parser's "error" item mapping.
-        const detail = String(obj.result ?? obj.error ?? obj.subtype ?? "turn_failed");
-        if (detail.length > 0) {
-          out.push({
-            id: ulid(),
-            ts,
-            type: "chat.delta",
-            turnId: ctx.turnId,
-            text: detail,
-          });
-        }
-      }
       out.push({
         id: ulid(),
         ts,

@@ -13,6 +13,17 @@ import { createRequestBodyLimit } from "./security/request-limits";
 
 export function createApp(authority?: RequestAuthorityOptions): Hono {
   const app = new Hono();
+  app.use("/api/*", async (c, next) => {
+    await next();
+    const contentType = c.res.headers.get("content-type") ?? "";
+    if (
+      contentType.startsWith("application/json") ||
+      contentType.startsWith("text/event-stream")
+    ) {
+      c.header("Cache-Control", "no-store");
+      c.header("X-Content-Type-Options", "nosniff");
+    }
+  });
   if (authority) {
     app.use("/api/*", createRequestAuthority(authority));
   }

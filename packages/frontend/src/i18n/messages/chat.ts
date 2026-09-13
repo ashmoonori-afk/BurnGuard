@@ -226,6 +226,11 @@ export const chatMessages = defineMessages({
     en: "The task was stopped. Send the request again if needed.",
     "zh-CN": "任务已终止。如有需要，请重新发送请求。",
   },
+  "chat.error.agentControlFilesPresent": {
+    ko: "프로젝트에 AI 도구 설정 파일이 있어 생성을 시작하지 않았어요. 해당 파일명을 변경한 후 다시 시도해 주세요.",
+    en: "Generation was not started because the project contains AI tool configuration files. Rename those files and try again.",
+    "zh-CN": "项目包含 AI 工具配置文件，因此未开始生成。请重命名这些文件后重试。",
+  },
   "chat.error.turnFailed": {
     ko: "AI 작업을 완료하지 못했어요. 요청 내용을 확인하고 다시 보내 주세요.",
     en: "The AI task could not be completed. Check your request and send it again.",

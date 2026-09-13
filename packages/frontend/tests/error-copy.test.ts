@@ -18,6 +18,7 @@ const KNOWN_CODES = [
   "is_template",
   "network_error",
   "session_busy",
+  "agent_control_files_present",
   "project_not_found",
   "invalid_source_url",
   "website_fetch_failed",

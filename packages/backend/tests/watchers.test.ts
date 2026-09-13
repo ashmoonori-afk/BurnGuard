@@ -40,6 +40,10 @@ describe("project watcher path filtering", () => {
     expect(shouldSkipPath(".index.html.123.456.tmp")).toBe(true);
     expect(shouldSkipPath(".meta/artifact-operations/op/stage/index.html")).toBe(true);
     expect(shouldSkipPath(".attachments/file")).toBe(true);
+    expect(shouldSkipPath(".codex/config.toml")).toBe(true);
+    expect(shouldSkipPath("CLAUDE.md")).toBe(true);
+    expect(shouldSkipPath("nested/AGENTS.md")).toBe(true);
+    expect(shouldSkipPath(".mcp.json")).toBe(true);
     expect(shouldSkipPath("index.html")).toBe(false);
     expect(isTransientFilePath(".index.html.123.456.tmp")).toBe(true);
     expect(isTransientFilePath("nested/index.html")).toBe(false);

@@ -58,6 +58,19 @@ export async function authorizedFetch(
   if (!launchCapability) {
     throw new Error("BurnGuard API authority is not initialized.");
   }
+  let target: URL;
+  const appLocation =
+    typeof location === "undefined"
+      ? new URL("http://burnguard.invalid/")
+      : location;
+  try {
+    target = new URL(path, appLocation.href);
+  } catch {
+    throw new Error("BurnGuard API requests must stay on the app origin.");
+  }
+  if (target.origin !== appLocation.origin) {
+    throw new Error("BurnGuard API requests must stay on the app origin.");
+  }
   const headers = new Headers(init?.headers ?? {});
   headers.set(BURNGUARD_CAPABILITY_HEADER, launchCapability);
   return fetch(path, { ...init, credentials: "same-origin", headers });

@@ -26,6 +26,29 @@ export function mapCodexEnvelope(
       return mapItem(obj.item, ctx, true);
     case "turn.completed":
       return mapTurnCompleted(obj.usage, ctx);
+    case "turn.failed":
+      return [
+        {
+          id: ulid(),
+          ts: Date.now(),
+          type: "chat.message_end",
+          turnId: ctx.turnId,
+        },
+        {
+          id: ulid(),
+          ts: Date.now(),
+          type: "status.error",
+          code: "turn_failed",
+          message: "turn_failed",
+          recoverable: true,
+        },
+        {
+          id: ulid(),
+          ts: Date.now(),
+          type: "status.idle",
+          stopReason: "error",
+        },
+      ];
     default:
       return null;
   }
@@ -49,13 +72,7 @@ function mapItem(
     const message = asString(value.message) ?? "Codex reported an error";
     // Codex sends this startup notice as an error item in some CLI versions.
     if (isCodexStartupNotice(message)) return [];
-    return [{
-      id: ulid(),
-      ts: Date.now(),
-      type: "chat.delta",
-      turnId: ctx.turnId,
-      text: message,
-    }];
+    return [];
   }
   if (itemType === "command_execution") {
     if (!completed) {

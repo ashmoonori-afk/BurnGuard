@@ -7,7 +7,7 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { runMigrations } from "../src/db/migrate-local";
 import { MAX_REQUEST_BODY_BYTES, MAX_USER_MESSAGE_CHARS, requestBodyLimitFor } from "../src/security/request-limits";
 import { createApp } from "../src/server";
-import { hasTurnCapacity, releaseUserTurnReservation, reserveUserTurn } from "../src/services/turns";
+import { hasTurnCapacity, isUserTurnRunning, releaseUserTurnReservation, reserveUserTurn } from "../src/services/turns";
 
 const MiB = 1024 * 1024;
 const tempDirs: string[] = [];
@@ -86,6 +86,82 @@ describe("request body limits", () => {
 });
 
 describe("global turn capacity", () => {
+  test("body parsing owns an atomic capacity slot and rejects concurrent admission", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-admission-")); tempDirs.push(root);
+    const first = insertProjectWithSession(root), second = insertProjectWithSession(root);
+    const held = [reserveUserTurn("admission-held-a"), reserveUserTurn("admission-held-b")];
+    let enter!: () => void, release!: () => void;
+    const entered = new Promise<void>((resolve) => { enter = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const body = new ReadableStream<Uint8Array>({ async pull(controller) {
+      enter(); await gate; controller.enqueue(new TextEncoder().encode("{}")); controller.close();
+    } }, { highWaterMark: 0 });
+    const app = createApp();
+    const pending = app.fetch(new Request(`http://localhost/api/sessions/${first.sessionId}/events`, {
+      method: "POST", headers: { "content-type": "application/json", "content-length": "2" }, body,
+    }));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([entered, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Body read not reached")), 5000); })]);
+      expect(isUserTurnRunning(first.sessionId)).toBe(true);
+      expect(hasTurnCapacity(3)).toBe(false);
+      const response = await app.request(`/api/sessions/${second.sessionId}/events`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      expect(response.status).toBe(429);
+      expect((await response.json()).error.code).toBe("turn_capacity_exhausted");
+    } finally {
+      clearTimeout(timer); release(); await pending;
+      for (const reservation of held) if (reservation) releaseUserTurnReservation(reservation);
+    }
+    expect(isUserTurnRunning(first.sessionId)).toBe(false);
+    expect(hasTurnCapacity(1)).toBe(true);
+  });
+
+  test("an occupied session remains a 409 even when all capacity is occupied", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-busy-")); tempDirs.push(root);
+    const { sessionId } = insertProjectWithSession(root);
+    const held = [reserveUserTurn(sessionId), reserveUserTurn("busy-a"), reserveUserTurn("busy-b")];
+    try {
+      const response = await createApp().request(`/api/sessions/${sessionId}/events`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      expect(response.status).toBe(409);
+      expect((await response.json()).error.code).toBe("session_busy");
+    } finally { for (const reservation of held) if (reservation) releaseUserTurnReservation(reservation); }
+  });
+
+  test("every rejected parse, validation and upload releases the reserved session and global slot", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-admission-release-")); tempDirs.push(root);
+    const { sessionId } = insertProjectWithSession(root);
+    const app = createApp(), url = `/api/sessions/${sessionId}/events`;
+    const invalidMessages = [
+      {}, { type: "other", text: "test" },
+      { type: "user.message", text: "x".repeat(MAX_USER_MESSAGE_CHARS + 1) },
+      { type: "user.message", text: "test", generation: { effort: "invalid" } },
+      { type: "user.message", text: "test", active_rel_path: "../outside.html" },
+      { type: "user.message", text: "test", visualSources: "invalid" },
+      { type: "user.message", text: "test", attachments: [42] },
+      { type: "user.message", text: "test", attachments: ["/outside"] },
+      { type: "user.message", text: "test", operation_id: "unauthorized" },
+    ];
+    for (const message of invalidMessages) {
+      const response = await app.request(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(message) });
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(isUserTurnRunning(sessionId)).toBe(false);
+      expect(hasTurnCapacity(1)).toBe(true);
+    }
+    const upload = new FormData(); upload.set("type", "user.message"); upload.set("text", "test");
+    upload.append("files", new File(["fixture"], "not-supported.exe"));
+    expect((await app.request(url, { method: "POST", body: upload })).status).toBe(415);
+    expect(isUserTurnRunning(sessionId)).toBe(false);
+    for (const request of [
+      { headers: { "content-type": "application/json" }, body: "{" },
+      { headers: { "content-type": "multipart/form-data" }, body: "broken" },
+      { headers: { "content-type": "text/plain" }, body: "test" },
+    ]) {
+      expect((await app.request(url, { method: "POST", ...request })).status).toBeGreaterThanOrEqual(400);
+      expect(isUserTurnRunning(sessionId)).toBe(false);
+      expect(hasTurnCapacity(1)).toBe(true);
+    }
+  });
+
   test("Given the configured concurrent-session ceiling When that many turns are active Then no further turn may be reserved anywhere", () => {
     const reservations = ["cap-a", "cap-b", "cap-c"].map((id) => reserveUserTurn(id));
     try {

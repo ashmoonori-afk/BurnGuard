@@ -143,7 +143,7 @@ async function removeEmptyManagedDirectories(root: string, current = root): Prom
 }
 
 function isExcluded(name: string): boolean {
-  return name === ".meta" || name === ".attachments" || name === ".burnguard-inputs" || name === ".git" || name === ".omc" || name === ".claude";
+  return name === ".meta" || name === ".attachments" || name === ".burnguard-inputs" || name === ".git" || name === ".omc" || name === ".claude" || name === ".codex";
 }
 
 function compareText(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }

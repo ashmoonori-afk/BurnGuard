@@ -10,6 +10,7 @@ import { subscribeBeforeBackfill } from "../src/services/sequenced-event-replay"
 import { runMigrationsFrom } from "../src/db/migrate";
 import type { NormalizedEvent, SequencedEventEnvelope } from "@bg/shared/events";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
+import { publishManagedTree } from "../src/services/artifact-tree-storage";
 import { diffManagedTrees, materializeManagedTree } from "../src/services/artifact-tree-storage";
 import { CanonicalTreeManifestError, inspectCanonicalTree, parseCanonicalTreeManifest } from "../src/services/canonical-tree-manifest";
 import { reconcileArtifactState } from "../src/services/artifact-recovery";
@@ -40,10 +41,40 @@ async function projectRoot(): Promise<string> {
 
 describe("canonical managed artifact closure", () => {
   test("Given owned control directories When inspecting Then only artifact bytes contribute", async () => {
-    for (const directory of [".meta", ".attachments", ".git", ".omc", ".claude"]) {
+    for (const directory of [".meta", ".attachments", ".git", ".omc", ".claude", ".codex"]) {
       await mkdir(path.join(root, directory), { recursive: true });
       await writeFile(path.join(root, directory, "owned"), directory);
     }
+    expect((await inspectCanonicalTree(root)).files.map((entry) => entry.path)).toEqual(["index.html"]);
+  });
+
+  test("Given project-scoped agent instructions When inspecting Then they cannot persist as artifact bytes", async () => {
+    await mkdir(path.join(root, "nested"), { recursive: true });
+    for (const relative of [
+      "CLAUDE.md",
+      "CLAUDE.local.md",
+      "AGENTS.md",
+      "AGENTS.override.md",
+      ".mcp.json",
+      "nested/CLAUDE.md",
+      "nested/AGENTS.md",
+    ]) {
+      await writeFile(path.join(root, relative), "untrusted instructions");
+    }
+
+    expect((await inspectCanonicalTree(root)).files.map((entry) => entry.path)).toEqual(["index.html"]);
+  });
+
+  test("Given an existing control file When publishing an artifact Then user bytes are preserved but never staged", async () => {
+    await writeFile(path.join(root, "CLAUDE.md"), "preserve privately");
+    const stage = await projectRoot();
+    await writeFile(path.join(stage, "index.html"), "next artifact");
+
+    await publishManagedTree(stage, root);
+
+    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(
+      "preserve privately",
+    );
     expect((await inspectCanonicalTree(root)).files.map((entry) => entry.path)).toEqual(["index.html"]);
   });
 
