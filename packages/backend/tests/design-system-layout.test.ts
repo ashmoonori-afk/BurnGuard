@@ -21,6 +21,8 @@ describe("Design system layout contract", () => {
       expect(parseDesignSystemLayout(layout)).toEqual(layout);
     }
     for (const key of Object.keys(SAMPLE_LAYOUTS) as (keyof typeof SAMPLE_LAYOUTS)[]) expect(missingDesignSystemLayout(sampleLayoutFiles(key).layout)).toEqual([]);
+    const catalogue = await readFile(path.join(resolveRepoRoot(), "design system themes", "catalogue.html"), "utf8");
+    expect(catalogue).not.toMatch(/:root\s*\{[^}]*--layout-/);
   });
 
   test("Given old installed systems, when reading rules, then missing rules are supplied without changing authored files", async () => {

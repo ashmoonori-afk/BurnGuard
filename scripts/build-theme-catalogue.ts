@@ -47,11 +47,11 @@ function scopedCss(slug: string, css: string): string {
     .replace(/@import\s+url\([^)]*\);\s*/g, "")
     // color-scheme belongs to the card, not the document.
     .replace(/color-scheme:\s*[^;]+;/g, "")
-    .replace(":root {", `[data-theme="${slug}"] {`)
+    .replace(/:root\s*\{/g, `[data-theme="${slug}"] {`)
     .trim();
 }
 
-/** Only original systems carry a layout contract; donors say so rather than showing blanks. */
+/** Every bundled system carries a layout contract. */
 function layoutBlock(css: string): string {
   if (!token(css, "layout-measure")) return '<p class="nolayout">NO LAYOUT CONTRACT</p>';
   const cells = ([
