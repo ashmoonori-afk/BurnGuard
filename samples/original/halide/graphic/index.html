@@ -33,8 +33,9 @@ h1{font-family:var(--font-display);font-size:118px;line-height:.92;letter-spacin
     </div>
   </div>
 </div>
-<script type="module">
-import { renderLiquidGlassRing } from "./liquid-glass/liquid-glass.js";
+<script src="./liquid-glass/liquid-glass.js"></script>
+<script>
+const { renderLiquidGlassRing } = LiquidGlass;
 
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });

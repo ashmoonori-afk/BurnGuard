@@ -44,8 +44,9 @@ p{color:var(--muted);max-width:60ch}
   <p>아래는 번들 모듈 <code>liquid-glass/liquid-glass.js</code>가 실제로 그린 결과입니다. 격자선이 링 안에서 휘고 바깥에서는 곧게 남는지 확인하세요.</p>
   <figure class="stage" style="margin:0"><canvas id="ring" width="720" height="520"></canvas></figure>
 </div>
-<script type="module">
-import { renderLiquidGlassRing } from "./liquid-glass/liquid-glass.js";
+<script src="./liquid-glass/liquid-glass.js"></script>
+<script>
+const { renderLiquidGlassRing } = LiquidGlass;
 const canvas = document.getElementById("ring");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 const w = canvas.width, h = canvas.height;

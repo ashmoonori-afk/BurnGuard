@@ -5,8 +5,14 @@
 A refracting glass ring for circular elements — avatars, icons, thumbnails. The background shows
 through it **and bends**, which is what separates it from a glassmorphism panel.
 
-Bundled at `liquid-glass/liquid-glass.js`. Framework-free ES module, no build step, runs in the
-browser and in Node because it only touches `{ data, width, height }`.
+Bundled at `liquid-glass/liquid-glass.js`. Framework-free, no build step, runs in the browser and in
+Node because it only touches `{ data, width, height }`.
+
+**Load it in a page with a plain `<script src>`, never `type="module"`.** A browser refuses module
+imports over `file://`, so an exported artifact that a user opens by double-clicking would render
+nothing at all. The classic script publishes `LiquidGlass` on the global and works from both
+`file://` and `http://`. In Node or a bundler, import the wrapper beside it, `liquid-glass.mjs`,
+which re-exports the same functions by name.
 
 ## When to use it
 
@@ -21,8 +27,9 @@ it cannot sit over pure CSS gradients painted by the browser after this runs.
 
 ```html
 <canvas id="ring" width="520" height="520"></canvas>
-<script type="module">
-  import { renderLiquidGlassRing } from "./liquid-glass/liquid-glass.js";
+<script src="./liquid-glass/liquid-glass.js"></script>
+<script>
+  const { renderLiquidGlassRing } = LiquidGlass;
 
   const canvas = document.getElementById("ring");
   const ctx = canvas.getContext("2d");

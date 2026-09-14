@@ -53,8 +53,9 @@ figure{margin:0}
   <p class="kicker" data-bg-node-id="slide-4-kicker">MATERIAL</p>
   <h2 data-bg-node-id="slide-4-title">유리의 몸체</h2>
   <p data-bg-node-id="slide-4-body">감쇠는 곱셈이 아니라 유리 색으로의 혼합입니다. 따뜻한 차콜 rgb(71 60 57)을 쓰고, 채널값을 서로 다르게 둡니다. 완전 중성 회색은 플라스틱으로 읽힙니다.</p></section>
-<script type="module">
-import { renderLiquidGlassRing } from "./liquid-glass/liquid-glass.js";
+<script src="./liquid-glass/liquid-glass.js"></script>
+<script>
+const { renderLiquidGlassRing } = LiquidGlass;
 function backdrop(ctx, w, h) {
   const g = ctx.createLinearGradient(0, 0, w, h);
   g.addColorStop(0, "#0e1520"); g.addColorStop(0.55, "#16323f"); g.addColorStop(1, "#1e2a3a");

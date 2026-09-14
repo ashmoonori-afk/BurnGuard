@@ -75,8 +75,9 @@ footer{padding-block:36px 56px;color:var(--muted);font-size:14px;display:flex;ju
 
 <footer class="wrap"><span data-bg-node-id="footer-brand">HALIDE OPTICAL STUDIO</span><span data-bg-node-id="footer-note">가상의 브랜드입니다.</span></footer>
 
-<script type="module">
-import { renderLiquidGlassRing } from "./liquid-glass/liquid-glass.js";
+<script src="./liquid-glass/liquid-glass.js"></script>
+<script>
+const { renderLiquidGlassRing } = LiquidGlass;
 
 /** Paint the backdrop every ring needs: a measured grid plus two strong crossing edges. */
 function backdrop(ctx, w, h) {

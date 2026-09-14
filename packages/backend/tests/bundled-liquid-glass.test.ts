@@ -11,10 +11,27 @@ import {
   lensProfile,
   refractedRadius,
   renderLiquidGlassRing,
-} from "../../../assets/liquid-glass/liquid-glass.js";
+} from "../../../assets/liquid-glass/liquid-glass.mjs";
 
 const rp = 120;
 const ring = { cx: 260, cy: 260, rp };
+
+test("Given the shipped sample When it loads the ring Then it stays openable straight from disk", async () => {
+  // A module import would fail over file://, so an exported artifact opened by double-clicking it
+  // would render nothing. Every sample surface must load the ring as a classic script.
+  const brand = path.join(resolveRepoRoot(), "samples", "original", "halide");
+  for (const rel of [
+    ["web", "index.html"],
+    ["slides", "deck.html"],
+    ["graphic", "index.html"],
+    ["design-system", "preview.html"],
+  ]) {
+    const html = await readFile(path.join(brand, ...rel), "utf8");
+    expect(html).toContain('<script src="./liquid-glass/liquid-glass.js"></script>');
+    expect(html).not.toMatch(/<script[^>]*type="module"/u);
+    expect(html).not.toMatch(/import\s+\{[^}]*\}\s+from\s+"\.\/liquid-glass/u);
+  }
+});
 
 test("Given the bundle When copied into an artifact Then the module and its catalog arrive together", async () => {
   const destination = await mkdtemp(path.join(tmpdir(), "bg-glass-"));
@@ -22,10 +39,16 @@ test("Given the bundle When copied into an artifact Then the module and its cata
     await copyBundledLiquidGlass(destination);
     const manifest = JSON.parse(await readFile(path.join(destination, "liquid-glass", "manifest.json"), "utf8"));
     expect(manifest.entry).toBe("liquid-glass.js");
+    expect(manifest.entry_module).toBe("liquid-glass.mjs");
     expect(manifest.catalog).toBe("liquid-glass.md");
     // Every export the manifest advertises actually exists in the shipped module.
-    const shipped = await import(path.join(destination, "liquid-glass", "liquid-glass.js"));
+    const shipped = await import(path.join(destination, "liquid-glass", "liquid-glass.mjs"));
     for (const name of manifest.exports) expect(typeof shipped[name]).not.toBe("undefined");
+    // The page entry must stay a CLASSIC script. A browser refuses module imports over file://, so
+    // any `import`/`export` here would leave an exported artifact blank when opened from disk.
+    const pageEntry = await readFile(path.join(destination, "liquid-glass", "liquid-glass.js"), "utf8");
+    expect(pageEntry).not.toMatch(/^\s*(?:import|export)\s/mu);
+    expect(pageEntry).toContain("LiquidGlass");
     // The catalog carries the sentinel the prompt refers to.
     const catalog = await readFile(path.join(destination, "liquid-glass", "liquid-glass.md"), "utf8");
     expect(catalog).toContain("BUNDLED_LIQUID_GLASS_REFERENCE");
