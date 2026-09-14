@@ -42,7 +42,7 @@ try {
   const headers = { Origin: base, "X-Burnguard-Capability": authority.capability };
   const projects = await (await request("/api/projects?tab=examples&limit=100", { headers })).json();
   assert.ok(projects.data.length > 0);
-  const systems = await (await request("/api/design-systems", { headers })).json();
+  const systems = await (await request("/api/design-systems?limit=100", { headers })).json();
   assert.ok(systems.data.length > 0);
   assert.ok((await readFile(path.join(profile, "burnguard.db"))).length > 0);
   checks.push("fresh-migrations-and-seeded-systems");
