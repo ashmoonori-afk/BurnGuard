@@ -15,6 +15,8 @@ test("Given bundled local fonts, when initializing projects and copying over bra
   for (const type of ["prototype", "graphic", "slide_deck"] as const) {
     const project = await createProjectRecord({ name: "Font starter", type, designSystemId: null, backendId: "codex", optionsJson: type === "graphic" ? JSON.stringify({ graphic_canvas: { schema_version: 1, width: 1080, height: 1350 } }) : null, entrypoint: type === "slide_deck" ? "deck.html" : "index.html", thumbnailPath: null });
     expect(await readFile(path.join(project.dir_path, "fonts/fonts.css"), "utf8")).toBe(css);
+    expect(await readFile(path.join(project.dir_path, "liquid-glass/liquid-glass.js"), "utf8"))
+      .toBe(await readFile(path.join(resolveRepoRoot(), "assets/liquid-glass/liquid-glass.js"), "utf8"));
     expect(await readFile(path.join(project.dir_path, project.entrypoint), "utf8")).toContain('href="fonts/fonts.css"');
     if (type === "slide_deck") {
       expect(await readFile(path.join(project.dir_path, "runtime/deck-stage.js"), "utf8")).toBe(DECK_STAGE_JS);

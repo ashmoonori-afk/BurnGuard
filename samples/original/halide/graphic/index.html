@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>HALIDE — 렌즈 포스터</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{--ink:#0e1520;--paper:#f2efea;--muted:#8fa3b0;--accent:#e8a24a;--accent-cool:#7fd9c3;--font-display:"Bebas Neue","Pretendard",sans-serif;--font-body:"DM Sans","Pretendard",sans-serif;--font-mono:"IBM Plex Mono",monospace}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--ink)}
+.artboard{position:relative;width:1080px;height:1350px;overflow:hidden;background:var(--ink);color:var(--paper);font-family:var(--font-body)}
+.artboard canvas{position:absolute;inset:0;display:block;width:1080px;height:1350px}
+.layer{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:84px 80px}
+.kicker{font-family:var(--font-mono);font-size:22px;letter-spacing:.16em;color:var(--accent-cool)}
+h1{font-family:var(--font-display);font-size:118px;line-height:.92;letter-spacing:.02em;margin:0 0 20px;text-shadow:0 2px 26px rgba(14,21,32,.55)}
+.lede{font-size:26px;line-height:1.66;color:var(--paper);max-width:20ch;word-break:keep-all;margin:0}
+.foot{display:flex;justify-content:space-between;align-items:flex-end;gap:24px}
+.spec{font-family:var(--font-mono);font-size:20px;letter-spacing:.06em;color:var(--muted);line-height:1.8}
+.spec b{color:var(--accent);font-weight:400}
+.badge{font-family:var(--font-display);font-size:30px;letter-spacing:.12em;border:2px solid var(--accent);border-radius:999px;padding:12px 26px}
+</style></head>
+<body>
+<div class="artboard" data-bg-node-id="artboard">
+  <canvas id="stage" width="1080" height="1350"></canvas>
+  <div class="layer">
+    <div>
+      <p class="kicker" data-bg-node-id="kicker">HALIDE OPTICAL · LENS SERIES 02</p>
+    </div>
+    <div>
+      <h1 data-bg-node-id="title">굴절은<br>배경을<br>가리지 않는다</h1>
+      <p class="lede" data-bg-node-id="lede">링 안에서 격자가 휘고, 링 바깥에서는 곧게 남습니다. 그 대비가 유리를 유리로 만듭니다.</p>
+    </div>
+    <div class="foot">
+      <p class="spec" data-bg-node-id="spec">RING OUTER <b>1.42</b><br>SHADOW OUTER <b>1.60</b><br>REFRACTION K <b>0.30</b></p>
+      <span class="badge" data-bg-node-id="badge">HALIDE</span>
+    </div>
+  </div>
+</div>
+<script src="./liquid-glass/liquid-glass.js"></script>
+<script>
+const { renderLiquidGlassRing } = LiquidGlass;
+
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
+const W = canvas.width, H = canvas.height;
+
+const g = ctx.createLinearGradient(0, 0, W, H);
+g.addColorStop(0, "#0e1520"); g.addColorStop(0.55, "#16323f"); g.addColorStop(1, "#1e2a3a");
+ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+ctx.strokeStyle = "rgba(127,217,195,0.18)"; ctx.lineWidth = 2;
+for (let x = 0; x <= W; x += 54) { ctx.beginPath(); ctx.moveTo(x + 1, 0); ctx.lineTo(x + 1, H); ctx.stroke(); }
+for (let y = 0; y <= H; y += 54) { ctx.beginPath(); ctx.moveTo(0, y + 1); ctx.lineTo(W, y + 1); ctx.stroke(); }
+ctx.fillStyle = "rgba(232,162,74,0.85)"; ctx.fillRect(0, 392, W, 8);
+ctx.fillStyle = "rgba(127,217,195,0.72)"; ctx.fillRect(560, 0, 7, H);
+
+const cx = 742, cy = 392, rp = 214;
+const disc = ctx.createLinearGradient(cx - rp, cy - rp, cx + rp, cy + rp);
+disc.addColorStop(0, "#f2efea"); disc.addColorStop(0.5, "#e8a24a"); disc.addColorStop(1, "#6e4b7a");
+ctx.fillStyle = disc; ctx.beginPath(); ctx.arc(cx, cy, rp, 0, Math.PI * 2); ctx.fill();
+
+const src = ctx.getImageData(0, 0, W, H);
+const out = renderLiquidGlassRing({ data: src.data, width: W, height: H }, { cx, cy, rp, see: 0.92, refraction: 0.3 });
+ctx.putImageData(new ImageData(out.data, out.width, out.height), 0, 0);
+</script>
+</body></html>

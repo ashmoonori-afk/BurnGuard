@@ -1,0 +1,28 @@
+:root {
+  /* Deep optical ground. The glass ring needs a backdrop with structure to bend. */
+  --ink: #0e1520;
+  --surface: #16323f;
+  --surface-raised: #1e2a3a;
+  --paper: #f2efea;
+  --muted: #8fa3b0;
+
+  /* Amber horizon and mint meridian: strong edges that make refraction legible. */
+  --accent: #e8a24a;
+  --accent-cool: #7fd9c3;
+  --plum: #6e4b7a;
+
+  /* Warm charcoal of the glass body. Channels differ on purpose; a neutral grey reads as plastic. */
+  --glass-body: rgb(71 60 57);
+
+  --font-display: "Bebas Neue", "Pretendard", sans-serif;
+  --font-body: "DM Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  --step-hero: clamp(48px, 7vw, 88px);
+  --step-title: clamp(30px, 3.6vw, 52px);
+  --step-body: 17px;
+  --step-caption: 13px;
+
+  --radius: 18px;
+  --gap: clamp(20px, 3vw, 40px);
+}
