@@ -8,11 +8,13 @@ export default function PreviewIframe({
   path,
   title,
   refreshKey = 0,
+  website = false,
 }: {
   systemId: string;
   path: string;
   title?: string;
   refreshKey?: number;
+  website?: boolean;
 }) {
   const t = useT();
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
@@ -42,7 +44,7 @@ export default function PreviewIframe({
       src={previewQuery.data}
       sandbox="allow-same-origin"
       referrerPolicy="no-referrer"
-      className="h-[280px] w-full rounded-lg border border-border bg-white sm:h-[320px]"
+      className={`w-full rounded-lg border border-border bg-white ${website ? "h-[min(70vh,760px)] min-h-[360px]" : "h-[280px] sm:h-[320px]"}`}
     />
   );
 }

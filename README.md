@@ -26,7 +26,9 @@ Open a system's overview to inspect its layout rules. **Direction setting and ge
 
 *The actual overview for an older installed Dark theme. Missing bundled rules are supplemented while existing authored rules are preserved.*
 
-The repository also includes a [website preview gallery](design%20system%20themes/previews/index.html): **41 static example pages** with **41 generated WebP illustrations**, covering editorial sites, shops, workspaces, cultural pages and more. These are reference examples to open from a source checkout, separate from the app's structural direction previews; the gallery and its images are excluded from desktop packages. [Theme token catalogue](design%20system%20themes/catalogue.html)
+Desktop packages include **41 website examples**, **41 generated WebP illustrations** and **41 website thumbnails captured in Chrome**. The design-system library and project onboarding show the thumbnails; each theme's overview has a dedicated, scrollable website preview. Explore editorial sites, shops, workspaces, cultural pages and more in the [website preview gallery](design%20system%20themes/previews/index.html). [Theme token catalogue](design%20system%20themes/catalogue.html)
+
+These examples illustrate the bundled themes' default designs. Existing system preview files take precedence; when they are missing, BurnGuard shows the bundled reference without overwriting edited system files or publication records. In the app, the examples use the shared local font store.
 
 **37 font families** ship with license notices. Bundled fonts use one shared local store, and canvas loads are reused across projects within the app window. New projects reference that store; standalone exports include the font files they need. [Font catalogue](assets/fonts/README.md) · [Design-system format](doc/05-design-system-format.md)
 
@@ -110,7 +112,7 @@ bun run catalogue
 bun run previews
 ```
 
-`previews` rebuilds the HTML and reuses the existing illustrations; it does not call an image provider.
+`previews` rebuilds the HTML and reuses the existing illustrations; it does not call an image provider. To refresh the committed website thumbnails afterward, optionally run `bun run previews:thumbnails` with Node.js and Chrome installed. It captures the actual pages in Chrome.
 
 ```sh
 bun run typecheck

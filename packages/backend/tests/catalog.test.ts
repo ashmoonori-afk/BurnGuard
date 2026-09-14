@@ -6,7 +6,7 @@ import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { systemsDir } from "../src/lib/paths";
 import { classifyApiRoute, createApp } from "../src/server";
-import { catalogPaths } from "../src/services/catalog-files";
+import { catalogPaths, inspectCatalogTree } from "../src/services/catalog-files";
 import { reconcileCatalogState } from "../src/services/catalog-lifecycle";
 import { canCreateSymlink } from "./helpers/platform";
 
@@ -216,6 +216,40 @@ describe("catalog query and metadata", () => {
     const result = await request("GET", `/api/design-systems/${systemId}`);
 
     expect(result).toMatchObject({ status: 200, json: { data: { id: systemId, metadata_revision: 0, content: { revision: 0 }, preview: { path: "README.md", fallback: true } } } });
+  });
+
+  test("Given an installed bundled system without preview files When browsing Then packaged website and thumbnail render without changing its receipt", async () => {
+    const systemId = await seedSystem("bundled-preview", { exactId: "builtin-theme-timber-hall", receipt: true });
+    const root = path.join(systemsDir, systemId);
+    const before = await inspectCatalogTree(root);
+    const rowBefore = getSqlite().query("SELECT * FROM design_systems WHERE id=?").get(systemId);
+    const receiptBefore = getSqlite().query("SELECT * FROM design_system_receipts WHERE design_system_id=?").get(systemId);
+    const base = `/api/design-systems/${systemId}`;
+    expect(await request("GET", base)).toMatchObject({ status: 200, json: { data: { preview: { path: "preview/website.html", fallback: true }, thumbnail_path: `${base}/files/preview/thumbnail.webp` } } });
+    expect(await request("GET", `${base}/previews`)).toEqual({ status: 200, json: { data: [{ path: "preview/website.html" }] } });
+    const framed = await app.request(`${base}/files/preview/website.html`, { headers: { "sec-fetch-dest": "iframe" } });
+    expect(framed.status).toBe(200);
+    expect(framed.headers.get("content-security-policy")).toContain("frame-ancestors");
+    expect(await framed.text()).toContain('href="./fonts.css"');
+    const navigated = await app.request(`${base}/files/preview/website.html`, { headers: { "sec-fetch-dest": "document" } });
+    expect(navigated.headers.get("content-disposition")).toContain("attachment");
+    for (const file of ["thumbnail.webp", "media/timber-hall.webp"]) {
+      const response = await app.request(`${base}/files/preview/${file}`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("image/webp");
+      expect(Buffer.from(await response.arrayBuffer()).toString("ascii", 8, 12)).toBe("WEBP");
+    }
+    const fonts = await app.request(`${base}/files/preview/fonts.css`);
+    expect(fonts.headers.get("content-type")).toContain("text/css");
+    expect(await fonts.text()).toMatch(/\/runtime\/fonts\/[a-f0-9]{64}\//);
+    expect((await app.request(`${base}/files/preview/media/dark.webp`)).status).toBe(404);
+    expect((await app.request(`${base}/files/preview/..%2F..%2FREADME.md`)).status).toBe(404);
+    expect(await inspectCatalogTree(root)).toEqual(before);
+    expect(getSqlite().query("SELECT * FROM design_systems WHERE id=?").get(systemId)).toEqual(rowBefore);
+    expect(getSqlite().query("SELECT * FROM design_system_receipts WHERE design_system_id=?").get(systemId)).toEqual(receiptBefore);
+    await mkdir(path.join(root, "preview"));
+    await writeFile(path.join(root, "preview/website.html"), "<h1>Authored preview</h1>");
+    expect(await (await app.request(`${base}/files/preview/website.html`)).text()).toBe("<h1>Authored preview</h1>");
   });
 
   test("Given persisted detail fields When catalog detail is read Then the complete runtime contract is returned", async () => {

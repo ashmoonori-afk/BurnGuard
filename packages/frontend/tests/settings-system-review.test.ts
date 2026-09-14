@@ -45,6 +45,19 @@ test("Given only one standard preview and a custom preview When grouped Then abs
   ]);
 });
 
+test("Given a website preview after component previews When grouped Then the website has its own first group and other previews remain", () => {
+  const groups = groupSystemPreviews([
+    { path: "preview/colors-brand.html" },
+    { path: "preview/mobile-header.html" },
+    { path: "preview/website.html" },
+  ]);
+  expect(groups.map((group) => group.items.map((item) => item.path))).toEqual([
+    ["preview/website.html"],
+    ["preview/colors-brand.html"],
+    ["preview/mobile-header.html"],
+  ]);
+});
+
 
 test("Given a selected project file When the file browser renders Then its current item and complete path are available to keyboard and screen-reader users", () => {
   const html = renderToStaticMarkup(createElement(FileTree, {

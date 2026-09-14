@@ -4,11 +4,24 @@ import path from "node:path";
 import { bundledDesignSystems } from "../src/data/bundled-design-systems";
 import { resolveRepoRoot } from "../src/lib/paths";
 import { buildThemePreviews } from "../../../scripts/build-theme-previews";
+import { hasBundledSystemPreview, readBundledSystemPreview } from "../src/services/bundled-system-preview";
 
 const previewsRoot = path.join(resolveRepoRoot(), "design system themes", "previews");
 const mediaRoot = path.join(previewsRoot, "media");
 
 describe("bundled design system website previews", () => {
+  test("Given every bundled website When the installed app reads it Then HTML media and real thumbnails are available through the same resource map", async () => {
+    await Promise.all(bundledDesignSystems.map(async ({ slug }) => {
+      const id = `builtin-theme-${slug}`;
+      expect(await hasBundledSystemPreview(id), slug).toBe(true);
+      expect((await readBundledSystemPreview(id, "preview/website.html"))?.toString()).toContain('href="./fonts.css"');
+      for (const file of ["preview/thumbnail.webp", `preview/media/${slug}.webp`]) expect((await readBundledSystemPreview(id, file))?.toString("ascii", 8, 12)).toBe("WEBP");
+    }));
+    expect(await hasBundledSystemPreview("manual-theme")).toBe(false);
+    expect(await readBundledSystemPreview("manual-theme", "preview/website.html")).toBeNull();
+    expect(await readBundledSystemPreview("builtin-theme-light", "../dark.html")).toBeNull();
+    expect(await readBundledSystemPreview("builtin-theme-light", "preview/media/dark.webp")).toBeNull();
+  }, 90_000);
   test("Given the theme registry, every theme has one page and one generated image", async () => {
     const slugs = bundledDesignSystems.map(({ slug }) => slug);
     const pages = (await readdir(previewsRoot))

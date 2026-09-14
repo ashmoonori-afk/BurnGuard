@@ -9,6 +9,7 @@ import { systemsDir } from "../lib/paths";
 import { CatalogFileError, catalogPaths, inspectCatalogTree } from "../services/catalog-files";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import { rawFileHeaders } from "../security/raw-file-response";
+import { BUNDLED_WEBSITE_PREVIEW, hasBundledSystemPreview, readBundledSystemPreview } from "../services/bundled-system-preview";
 import {
   CatalogLifecycleError, copyCatalogSystem, purgeCatalogSystem, restoreCatalogSystem, trashCatalogSystem,
 } from "../services/catalog-lifecycle";
@@ -33,6 +34,7 @@ catalogRoutes.get("/api/design-systems/:id/previews", async (c) => {
     const paths = await catalogPaths(systemsDir, id, row.dirPath);
     const tree = await inspectCatalogTree(paths.live);
     const previews: DesignSystemPreview[] = tree.files.filter((file) => /^(?:preview\/[^/]+|preview)\.html?$/i.test(file)).map((file) => ({ path: file }));
+    if (!previews.some(preview => preview.path === BUNDLED_WEBSITE_PREVIEW) && await hasBundledSystemPreview(id)) previews.unshift({ path: BUNDLED_WEBSITE_PREVIEW });
     return c.json(ok(previews));
   } catch (error) { return catalogError(c, error); }
 });
@@ -58,9 +60,11 @@ catalogRoutes.get("/api/design-systems/:id/files/*", async (c) => {
     relPath = rawPath.startsWith(prefix) ? decodeURIComponent(rawPath.slice(prefix.length)) : "";
     const paths = await catalogPaths(systemsDir, id, row.dirPath);
     const candidate = resolveWithin(paths.live, ...relPath.replaceAll("\\", "/").split("/").map(assertSafeName));
-    if (!(await stat(candidate)).isFile()) return c.json(fail("design_system_file_not_found", "Design system file not found"), 404);
+    const info = await stat(candidate).catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return null; throw error; });
+    const bundled = info === null ? await readBundledSystemPreview(id, relPath) : null;
+    if (!info?.isFile() && bundled === null) return c.json(fail("design_system_file_not_found", "Design system file not found"), 404);
     const type = catalogContentType(relPath);
-    return new Response(Bun.file(candidate), { headers: { ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(candidate) }), "Content-Type": type, "Cache-Control": "no-cache" } });
+    return new Response(bundled ?? Bun.file(candidate), { headers: { ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(candidate) }), "Content-Type": type, "Cache-Control": "no-cache" } });
   } catch (error) {
     if (error instanceof Error) return c.json(fail("design_system_file_not_found", "Design system file not found", { id, path: relPath }), 404);
     throw error;
@@ -181,6 +185,7 @@ function catalogContentType(file: string): string {
     case ".md": return "text/markdown; charset=utf-8";
     case ".svg": return "image/svg+xml";
     case ".png": return "image/png";
+    case ".webp": return "image/webp";
     case ".jpg": case ".jpeg": return "image/jpeg";
     case ".woff": return "font/woff";
     case ".woff2": return "font/woff2";

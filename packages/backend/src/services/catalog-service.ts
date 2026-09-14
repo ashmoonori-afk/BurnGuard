@@ -7,6 +7,7 @@ import {
 } from "../db/catalog-repository";
 import type { CatalogQuery } from "./catalog-query";
 import { catalogPaths, inspectCatalogTree } from "./catalog-files";
+import { BUNDLED_WEBSITE_PREVIEW, BUNDLED_WEBSITE_THUMBNAIL, hasBundledSystemPreview } from "./bundled-system-preview";
 
 export type CatalogResult = CatalogDesignSystemDetail;
 
@@ -49,9 +50,10 @@ async function catalogResult(db: Database, root: string, row: CatalogRow): Promi
   const activePath = row.lifecycle === "trashed" ? paths?.trash : paths?.live;
   const tree = activePath === undefined || activePath === null ? null : await inspectCatalogTree(activePath).catch(() => null);
   if (tree === null && warning === null) warning = { code: "partial_operation" };
+  const bundledPreview = tree !== null && row.lifecycle !== "trashed" && await hasBundledSystemPreview(row.id);
   const previewPath = typeof manifest?.["preview_path"] === "string"
     ? manifest["preview_path"]
-    : tree?.preview ?? fallbackManifestPreview(manifest);
+    : bundledPreview ? tree?.files.find(file => /^(?:index|preview(?:\/[^/]+)?)\.html?$/i.test(file)) ?? BUNDLED_WEBSITE_PREVIEW : tree?.preview ?? fallbackManifestPreview(manifest);
   const lineage = parseLineage(lineageReceipt);
   if (lineageReceipt !== null && lineage === null && warning === null) warning = { code: "corrupt_receipt" };
   const contentIdentity = receipt ?? lineageReceipt;
@@ -79,7 +81,7 @@ async function catalogResult(db: Database, root: string, row: CatalogRow): Promi
     created_at: row.createdAt,
     updated_at: row.updatedAt,
     is_template: row.isTemplate === 1,
-    thumbnail_path: row.thumbnailPath,
+    thumbnail_path: row.thumbnailPath ?? (bundledPreview ? `/api/design-systems/${encodeURIComponent(row.id)}/files/${BUNDLED_WEBSITE_THUMBNAIL}` : null),
     source_type: row.sourceType,
     source_uri: row.sourceUri,
     dir_path: row.lifecycle === "trashed" ? path.join(root, ".catalog-trash", row.id) : row.dirPath,

@@ -129,6 +129,7 @@ export const systemMessages = defineMessages({
   "system.preview.forms": { ko: "폼", en: "Forms", "zh-CN": "表单" },
   "system.preview.badgesTable": { ko: "배지와 표", en: "Badges and tables", "zh-CN": "徽章和表格" },
   "system.preview.other": { ko: "기타 미리보기", en: "Other previews", "zh-CN": "其他预览" },
+  "system.preview.website": { ko: "웹사이트 미리보기", en: "Website preview", "zh-CN": "网站预览" },
   "system.preview.listFailed": { ko: "미리보기 목록을 불러오지 못했어요.", en: "Could not load the preview list.", "zh-CN": "无法加载预览列表。" },
   "system.preview.checking": { ko: "미리보기를 확인하는 중이에요.", en: "Checking previews.", "zh-CN": "正在检查预览。" },
   "system.preview.empty": { ko: "아직 미리보기 자료가 없어요. 이 화면에서 레이아웃·색상·글꼴 규칙을 확인할 수 있어요.", en: "No preview assets yet. Layout, color and typography rules are available on this page.", "zh-CN": "暂无预览素材，可在此页面查看布局、颜色和字体规则。" },

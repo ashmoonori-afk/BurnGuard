@@ -49,6 +49,7 @@ jobs:
           packages/backend/tests/bundled-font-reference.test.ts
           packages/backend/tests/daisyui-seed-themes.test.ts
           packages/backend/tests/theme-previews.test.ts
+          packages/backend/tests/catalog.test.ts
           packages/backend/tests/package-resources.test.ts
           packages/backend/tests/original-samples.test.ts
           packages/backend/tests/owned-process-tree.test.ts
