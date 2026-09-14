@@ -40,9 +40,9 @@ try {
   assert.equal(bootstrap.status, 200);
   const { data: authority } = await bootstrap.json();
   const headers = { Origin: base, "X-Burnguard-Capability": authority.capability };
-  const projects = await (await request("/api/projects", { headers })).json();
+  const projects = await (await request("/api/projects?tab=examples&limit=100", { headers })).json();
   assert.ok(projects.data.length > 0);
-  const systems = await (await request("/api/design-systems", { headers })).json();
+  const systems = await (await request("/api/design-systems?limit=100", { headers })).json();
   assert.ok(systems.data.length > 0);
   assert.ok((await readFile(path.join(profile, "burnguard.db"))).length > 0);
   checks.push("fresh-migrations-and-seeded-systems");
@@ -56,7 +56,13 @@ try {
     assert.equal(session.backend_id, project.type === "graphic" ? "codex" : "claude-code");
     const html = await request(`/api/projects/${project.id}/fs/${detail.entrypoint}`, { headers });
     assert.equal(html.status, 200);
-    assert.match(await html.text(), /assets\/hero\.png/);
+    const sampleHtml = await html.text();
+    if (project.design_system_id === "sample-system-original-halide") {
+      assert.match(sampleHtml, /liquid-glass\/liquid-glass\.js/);
+      const glass = await request(`/api/projects/${project.id}/fs/liquid-glass/liquid-glass.js`, { headers });
+      assert.equal(glass.status, 200);
+      assert.match(await glass.text(), /renderLiquidGlassRing/);
+    } else assert.match(sampleHtml, /assets\/hero\.png/);
     const hero = await request(`/api/projects/${project.id}/fs/assets/hero.png`, { headers });
     assert.equal(hero.status, 200);
     assert.match(hero.headers.get("content-type"), /image\/png/);

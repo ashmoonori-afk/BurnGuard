@@ -10,7 +10,8 @@
  *   BG_MAC_NOTARY_PROFILE      notarytool keychain profile name
  */
 import { $ } from "bun";
-import { readFile, realpath, rm, writeFile } from "node:fs/promises";
+import assert from "node:assert/strict";
+import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { APP_VERSION } from "../packages/shared/src/app";
 
@@ -48,6 +49,28 @@ const platform = "[osx]";
 await $`dotnet tool restore`.cwd(root);
 // The pack id and feed channel pair with the Windows release so one GitHub release serves both feeds.
 await $`dotnet tool run vpk -- ${platform} pack --packId BurnGuard --packVersion ${APP_VERSION} --packDir ${bundle} --mainExe BurnGuard --packTitle BurnGuard --packAuthors BurnGuard --channel osx --icon ${path.join(root, "assets/icon.icns")} --outputDir ${output} ${signing}`.cwd(root);
+
+// Velopack 1.2.0's generated installer runs unsafe privileged cache cleanup.
+// Install the same portable app with a native component package and no scripts.
+const installerStage = await mkdtemp(path.join(distribution, "mac-installer-"));
+try {
+  await $`ditto -x -k ${path.join(output, "BurnGuard-osx-Portable.zip")} ${installerStage}`;
+  const installer = path.join(output, "BurnGuard-osx-Setup.pkg");
+  const safeInstaller = path.join(installerStage, "BurnGuard.pkg");
+  const installerSigning = signingConfigured ? ["--sign", process.env.BG_MAC_INSTALL_IDENTITY!] : [];
+  await $`pkgbuild --component ${path.join(installerStage, "BurnGuard.app")} --install-location /Applications --identifier com.burnguard.design --version ${APP_VERSION} ${installerSigning} ${safeInstaller}`;
+  const expanded = path.join(installerStage, "expanded");
+  await $`pkgutil --expand ${safeInstaller} ${expanded}`;
+  assert.ok(!(await readdir(expanded)).includes("Scripts"), "Installer must not execute privileged scripts");
+  assert.doesNotMatch(await readFile(path.join(expanded, "PackageInfo"), "utf8"), /<scripts\b/);
+  if (signingConfigured) {
+    await $`xcrun notarytool submit ${safeInstaller} --keychain-profile ${process.env.BG_MAC_NOTARY_PROFILE!} --wait`;
+    await $`xcrun stapler staple ${safeInstaller}`;
+  }
+  await $`ditto ${safeInstaller} ${installer}`;
+} finally {
+  await rm(installerStage, { recursive: true, force: true });
+}
 
 const files: string[] = [];
 for await (const name of new Bun.Glob("*").scan({ cwd: output, onlyFiles: true })) {
