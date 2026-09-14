@@ -1,5 +1,6 @@
 import type { GenerationEffort } from "@bg/shared";
 import { TASK_WORK_CONTRACT } from "./design-craft";
+import { TASK_PRESET_ADOPTIONS, type AdoptionTable } from "./task-preset-adoptions";
 
 /**
  * Static task-guidance presets selected by route, model and reasoning effort.
@@ -28,11 +29,14 @@ export interface ReviewedExample extends TextBlock {
   readonly reviewEvidenceId: string;
 }
 
+/** A preset is draft until an exact combination has been adopted against captured evidence. */
+export type PresetStatus = "draft" | "validated";
+
 export interface ModelPreset {
   readonly id: string;
   readonly wording: ModelWording;
-  /** P0 ships no empirically validated combination. */
-  readonly status: "draft";
+  /** Base entries stay draft; adoption is per exact combination, never per model. */
+  readonly status: PresetStatus;
 }
 
 export interface RouteRegistry {
@@ -47,13 +51,17 @@ type ExampleByPreset = Readonly<Record<string, ExampleByDeliverable>>;
 type Examples = Readonly<Partial<Record<Route, ExampleByPreset>>>;
 
 export interface PresetRegistry {
-  readonly version: 1;
+  readonly version: number;
   readonly shared: TextBlock;
   readonly deliverables: Readonly<Record<Deliverable, TextBlock>>;
   readonly wording: Readonly<Record<ModelWording, TextBlock>>;
   readonly efforts: Readonly<Record<GenerationEffort, TextBlock>>;
   readonly routes: Readonly<Record<Route, RouteRegistry>>;
   readonly examples: Examples;
+  /** Adopted combinations; absent means every combination stays draft. */
+  readonly adoptions?: AdoptionTable;
+  /** Only a QA registry turns reviewed development examples on. */
+  readonly developmentExamplesEnabled?: boolean;
 }
 
 const DELIVERABLES: Readonly<Record<Deliverable, TextBlock>> = {
@@ -169,4 +177,6 @@ export const TASK_PRESET_REGISTRY: PresetRegistry = {
   // P0 ships no reviewed example. An example is eligible only at LOW and only when present at an
   // exact route/preset/deliverable key with a nonempty reviewEvidenceId.
   examples: {},
+  adoptions: TASK_PRESET_ADOPTIONS,
+  developmentExamplesEnabled: false,
 };

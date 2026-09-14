@@ -2,6 +2,7 @@ import type { BackendId, GenerationOptions } from "@bg/shared";
 import { observeTaskPreset, type TaskPresetObservation } from "./task-preset-observation";
 import {
   TASK_PRESET_REGISTRY,
+  type PresetStatus,
   type Deliverable,
   type PresetRegistry,
   type ReviewedExample,
@@ -17,14 +18,14 @@ export const MAX_TASK_PRESET_CHARS = 4000;
 
 export interface SelectedTaskPreset {
   readonly schema_version: 1;
-  readonly registry_version: 1;
+  readonly registry_version: number;
   readonly route: Route;
   /** The server-resolved model ID, preserved verbatim even when an alias matched. */
   readonly model: string;
   readonly effort: GenerationOptions["effort"];
   readonly preset_id: string;
   readonly resolution: "exact" | "alias" | "provider_default";
-  readonly status: "draft";
+  readonly status: PresetStatus;
   readonly deliverable: Deliverable;
   readonly blocks: readonly TextBlock[];
   readonly example: ReviewedExample | null;
@@ -73,10 +74,18 @@ export function selectTaskPreset(
     }
   }
 
+  // An adoption applies only to this exact route, base preset, effort and deliverable. Anything
+  // else - another effort, another deliverable, another route - stays on the base draft preset.
+  const adopted = generation.effort === "low"
+    ? registry.adoptions?.[route]?.[preset.id]?.low?.[deliverable]
+    : undefined;
+  const effective = adopted?.enabled === true ? adopted : undefined;
+  const wording = effective ? effective.wording : preset.wording;
+
   const blocks: readonly TextBlock[] = [
     registry.shared,
     registry.deliverables[deliverable],
-    registry.wording[preset.wording],
+    registry.wording[wording],
     registry.efforts[generation.effort],
   ];
 
@@ -92,9 +101,9 @@ export function selectTaskPreset(
     route,
     model: generation.model,
     effort: generation.effort,
-    preset_id: preset.id,
+    preset_id: effective ? effective.revision_id : preset.id,
     resolution,
-    status: "draft",
+    status: effective ? effective.status : preset.status,
     deliverable,
     blocks,
     example,
