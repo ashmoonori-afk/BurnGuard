@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stone Court Theme — 웹사이트 미리보기</title>
+<link rel="stylesheet" href="../../assets/fonts/fonts.css">
+<style>
+/* Stone Court Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #F2F1EE;
+  --gray-90: #E5E4E2;
+  --gray-80: #D4D3D1;
+  --gray-70: #BFBEBD;
+  --gray-60: #A7A7A6;
+  --gray-50: #90908F;
+  --gray-40: #767777;
+  --gray-30: #5C5D5E;
+  --gray-20: #434445;
+  --gray-10: #292B2C;
+
+  /* Brand and accents */
+  --primary-blue: #455A64;
+  --action-blue: #455A64;
+  --red-60: #96362E;
+  --red-50: #A75851;
+  --red-10: #E1CFCB;
+  --orange-50: #834C16;
+  --orange-10: #DED3C7;
+  --yellow-30: #836512;
+  --yellow-10: #DAD2BE;
+  --green-60: #3D6B52;
+  --green-50: #5A806B;
+  --green-10: #D1D9D2;
+  --teal-50: #CFCEC8;
+  --teal-10: #ECEBE7;
+  --aqua-60: #455A64;
+  --aqua-10: #D3D6D5;
+  --blue-90: #272F33;
+  --blue-80: #303B41;
+  --blue-70: #394850;
+  --blue-60: #455A64;
+  --blue-50: #6F7E85;
+  --blue-30: #A6AFB1;
+  --blue-10: #D6D9D8;
+  --ultramarine-60: #364455;
+  --purple-60: #6B5F52;
+  --pink-60: #7D4E43;
+
+  /* Semantic */
+  --success: #3D6B52;
+  --warning-yellow: #836512;
+  --warning-orange: #834C16;
+  --error: #96362E;
+  --info: #455A64;
+
+  /* Surface and text */
+  --bg: #E6E5E1;
+  --bg-subtle: #DEDDD9;
+  --bg-muted: #D6D5D2;
+  --surface: #E2E1DD;
+  --surface-inverse: #1C1E20;
+  --fg-1: #1C1E20;
+  --fg-2: #404243;
+  --fg-3: #656665;
+  --fg-4: #898988;
+  --fg-on-dark: #F2F1EE;
+  --fg-on-brand: #FFFFFF;
+  --border: #CAC9C6;
+  --border-strong: #A1A19F;
+  --focus-ring: #455A64;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #6B5F52;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #CFCEC8;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #455A64;
+  --chart-2: #6B5F52;
+  --chart-3: #CFCEC8;
+  --chart-4: #3C4D55;
+  --chart-5: #3D6B52;
+  --chart-6: #836512;
+  --chart-7: #96362E;
+  --chart-8: #344147;
+  --chart-9: #848481;
+  --chart-10: #A19990;
+
+  /* Type families */
+  --font-display: "DM Serif Display", "Nanum Myeongjo", serif;
+  --font-serif: "Lora", "Nanum Myeongjo", serif;
+  --font-body: "Manrope", "Pretendard", sans-serif;
+  --font-sans: "Manrope", "Pretendard", sans-serif;
+  --font-mono: "Geist Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1240px;
+  --layout-measure: 60ch;
+  --layout-columns: 12;
+  --layout-gutter: 28px;
+  --layout-margin: clamp(24px, 5vw, 80px);
+  --layout-section-y: clamp(64px, 9vw, 144px);
+  --layout-rule: 1px;
+  --layout-bp-md: 820px;
+  --layout-bp-lg: 1140px;
+  --layout-hero: 3 / 2;
+  --layout-nav-h: 64px;
+
+  /* Family extensions */
+  --family-media-fit: contain;
+  --family-media-text-ratio: 1.0;
+  --family-spatial-image-bleed: 0%;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg-1);
+  font-family:var(--font-body);font-size:var(--fs-16);line-height:var(--lh-relaxed);
+  font-feature-settings:"tnum" 0}
+img,svg{display:block;max-width:100%}
+a{color:inherit}
+.wrap{max-width:var(--layout-max,1200px);margin-inline:auto;
+  padding-inline:var(--layout-margin,24px)}
+.bleed{width:100%}
+.eyebrow{font-family:var(--font-mono);font-size:var(--fs-12);
+  letter-spacing:var(--ls-eyebrow,.12em);text-transform:uppercase;color:var(--fg-3);margin:0}
+.display{font-family:var(--font-display);line-height:var(--lh-display,var(--lh-tight));
+  letter-spacing:var(--ls-display,var(--ls-tight));color:var(--fg-1);margin:0;
+  font-size:clamp(var(--fs-32),6vw,var(--fs-64))}
+.lede{font-family:var(--font-serif);font-size:var(--fs-20);color:var(--fg-2);
+  max-width:var(--layout-measure,60ch);margin:0}
+.body{font-size:var(--fs-16);color:var(--fg-2);max-width:var(--layout-measure,60ch)}
+.rule{border:0;border-top:var(--layout-rule,1px) solid var(--border);margin:0}
+.btn{display:inline-block;font-family:var(--font-sans);font-size:var(--fs-14);
+  font-weight:var(--fw-medium,500);padding:var(--sp-3) var(--sp-5);border:0;
+  border-radius:var(--r-4);background:var(--primary-blue);color:var(--fg-on-brand);
+  text-decoration:none;transition:opacity var(--dur-fast) var(--ease-standard)}
+.btn:hover{opacity:.88}
+.btn.ghost{background:transparent;color:var(--fg-1);
+  border:var(--layout-rule,1px) solid var(--border-strong)}
+.btn.pill{border-radius:var(--r-pill)}
+.tag{display:inline-block;font-family:var(--font-mono);font-size:var(--fs-12);
+  padding:var(--sp-1) var(--sp-2);border-radius:var(--r-2);
+  background:var(--bg-muted);color:var(--fg-2)}
+.fig{width:100%;height:100%;object-fit:cover}
+.media{overflow:hidden;background:var(--bg-muted);border-radius:var(--r-8)}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);
+  min-height:var(--layout-nav-h,64px);border-bottom:var(--layout-rule,1px) solid var(--border)}
+.nav .mark{font-family:var(--font-display);font-size:var(--fs-18);
+  letter-spacing:var(--ls-tight);color:var(--fg-1)}
+.nav ul{display:flex;gap:var(--sp-5);list-style:none;margin:0;padding:0;
+  font-family:var(--font-sans);font-size:var(--fs-14);color:var(--fg-2)}
+.foot{border-top:var(--layout-rule,1px) solid var(--border);
+  padding-block:var(--sp-8);margin-top:var(--sp-10);
+  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  display:flex;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap}
+.section{padding-block:var(--layout-section-y,64px)}
+.grid{display:grid;gap:var(--layout-gutter,24px)}
+.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stack{display:flex;flex-direction:column;gap:var(--sp-4)}
+.row{display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center}
+dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-4);margin:0}
+dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  letter-spacing:.06em;text-transform:uppercase}
+dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
+@media (max-width:820px){
+  .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
+  .nav ul{display:none}
+}
+</style></head>
+<body data-archetype="place">
+
+<style>
+.hero{width:calc(100% - ((100% - min(100%, var(--layout-max,1360px))) * (1 - 0%)));
+  margin-inline:auto;margin-top:var(--sp-6)}
+.hero .media{aspect-ratio:var(--layout-hero,16 / 9);border-radius:var(--r-8)}
+.hero .fig{object-fit:contain}
+.statement{max-width:var(--layout-measure,56ch);font-family:var(--font-display);
+  font-size:clamp(var(--fs-32),4.4vw,var(--fs-48));line-height:var(--lh-tight);
+  letter-spacing:var(--ls-tight);color:var(--fg-1);margin:0}
+.practical{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:var(--layout-gutter,24px);margin-top:var(--sp-8)}
+.practical h3{font-family:var(--font-mono);font-size:var(--fs-12);letter-spacing:.1em;
+  text-transform:uppercase;color:var(--fg-4);margin:0 0 var(--sp-3);
+  padding-bottom:var(--sp-2);border-bottom:var(--layout-rule,1px) solid var(--border)}
+.practical div p{margin:0 0 var(--sp-2);font-size:var(--fs-14);color:var(--fg-2);
+  display:flex;justify-content:space-between;gap:var(--sp-3)}
+.practical div p span:last-child{color:var(--fg-3);font-family:var(--font-mono);font-size:var(--fs-12)}
+.pair{display:grid;grid-template-columns:1.0 1fr;gap:var(--layout-gutter,24px);
+  align-items:center;margin-top:var(--layout-section-y,96px)}
+.pair .media{aspect-ratio:4 / 3}
+@media (max-width:800px){.practical,.pair{grid-template-columns:1fr}}
+</style>
+<header class="wrap nav">
+  <span class="mark">Stone Court</span>
+  <ul><li>공간</li><li>프로그램</li><li>방문</li></ul>
+</header>
+<main>
+  <section class="hero"><div class="media"><img class="fig" src="./media/stone-court.webp" alt="" loading="lazy" decoding="async"></div></section>
+  <section class="wrap section">
+    <p class="eyebrow">오래된 창고를 고쳐 쓰는 일</p>
+    <h1 class="statement" style="margin-top:var(--sp-4)">벽을 남기고 바닥을 바꾸면 방은 다시 쓰인다</h1>
+    <div class="practical">
+      <div><h3>여는 시간</h3>
+        <p><span>화–금</span><span>11:00–19:00</span></p>
+        <p><span>토·일</span><span>10:00–18:00</span></p>
+        <p><span>월요일</span><span>휴관</span></p></div>
+      <div><h3>찾아오는 길</h3>
+        <p><span>주소</span><span>서동 43-2</span></p>
+        <p><span>지하철</span><span>2호선 도보 7분</span></p>
+        <p><span>주차</span><span>건물 뒤 6면</span></p></div>
+      <div><h3>방문 안내</h3>
+        <p><span>입장</span><span>무료</span></p>
+        <p><span>단체</span><span>사전 연락</span></p>
+        <p><span>촬영</span><span>삼각대 불가</span></p></div>
+    </div>
+    <div class="pair">
+      <div class="media"><svg class="fig" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false"><rect x="0" y="0" width="100" height="100" fill="var(--bg-muted)"/>
+         <rect x="18" y="18" width="64" height="64" fill="var(--gray-60)" opacity="0.9"/>
+         <circle cx="50" cy="50" r="18" fill="var(--gray-40)"/></svg></div>
+      <div>
+        <p class="eyebrow">재료</p>
+        <p class="body" style="margin-top:var(--sp-3)">바닥은 원래의 콘크리트를 갈아내 그대로 두었고, 벽은 회칠 위에 아무것도 덧바르지 않았습니다. 목재는 철거한 서까래를 다시 켜서 썼습니다.</p>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="wrap foot"><span>Stone Court Theme</span><span>미리보기 · 토큰 기반 생성</span></footer>
+</body></html>

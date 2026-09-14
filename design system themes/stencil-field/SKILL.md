@@ -15,7 +15,7 @@ Read README.md first, then use colors_and_type.css as the single source of truth
 
 ## How this theme composes
 
-Open with a tall empty field. Set one statement across two lines at the largest size the viewport allows, in the wide display face, tightly leaded at 0.92 so the lines lock together as a block. Below it, run a saturated full-bleed media band edge to edge, and let the statement's last line dip into it. Chrome is a 13px wordmark at top-left and a single mark at top-right; nothing else competes. The green is used for links, focus and live state only — never as a fill behind large text. Rules are hairline, radius is zero, and the page's rhythm is statement, band, statement, band.
+Open with a tall empty field. Run a saturated full-bleed media band edge to edge, then set one statement across two lines at the largest size the viewport allows, in the wide display face, tightly leaded at 0.92 so the lines lock together as a block, and pull that block up until its first line crosses the band. Chrome is a 13px wordmark at top-left and a single mark at top-right; nothing else competes. The green is used for links, focus and live state only — never as a fill behind large text. Rules are hairline, radius is zero, and the page's rhythm is field, band, statement, field.
 
 ## Layout
 
@@ -32,7 +32,7 @@ with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Hero media 
 | `--family-creative-line-step` | `0px` | Successive display lines shift by `n x step` along the inline axis, starting at line zero. |
 | `--family-creative-type-image-overlap` | `24%` | How far a display block translates over preceding imagery, as a share of its own block-size. |
 
-The display block translates down by roughly a quarter of its own height so its final line crosses into the media band below. That single overlap is the whole trick of the system: type and image are one object at exactly one seam, and everywhere else they stay apart.
+The display block translates up by roughly a quarter of its own height, so its first line crosses back over the media band it follows. That single overlap is the whole trick of the system: type and image are one object at exactly one seam, and everywhere else they stay apart.
 
 ## Image direction
 
@@ -62,7 +62,7 @@ prompt basis.
 
 1. A tall empty field opens the page before any statement appears.
 2. The statement is two lines, at maximum scale, leaded tightly at 0.92.
-3. A full-bleed saturated media band follows, and the last display line dips into it.
+3. A full-bleed saturated media band precedes the statement, and the first display line crosses back over it.
 4. Chrome is a 13px wordmark and one mark, in opposite top corners.
 5. Green appears only on links, focus and live state — never as a large fill.
 6. Section spacing is visibly extreme, and radius is zero throughout.

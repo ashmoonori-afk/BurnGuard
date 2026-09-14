@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>웹사이트 미리보기 — 번들 디자인 시스템</title>
+<link rel="stylesheet" href="../../assets/fonts/fonts.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#131316;color:#e9e9ec;
+  font-family:"Public Sans","Pretendard",sans-serif;font-size:15px;line-height:1.6}
+.page{max-width:1200px;margin:0 auto;padding:48px 32px 96px}
+h1{font-size:32px;letter-spacing:-.01em;margin:0 0 8px}
+p.sub{color:#9a9aa4;max-width:70ch;margin:0 0 32px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.card{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:14px 16px;border:1px solid #2a2a30;border-radius:8px;background:#1a1a1e;
+  text-decoration:none;color:#e9e9ec}
+.card:hover{border-color:#3f6b8a}
+.slug{font-family:"IBM Plex Mono",monospace;font-size:13px}
+.kind{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:#8fc4e8}
+</style></head>
+<body><div class="page">
+<h1>웹사이트 미리보기</h1>
+<p class="sub">각 미리보기는 해당 디자인 시스템이 실제로 만들어낼 법한 사이트입니다. 구조는 그 시스템의 계열과 <code>--family-*</code> 토큰에서, 모든 표현은 그 시스템의 토큰에서 나옵니다.</p>
+<div class="grid">
+  <a class="card" href="./light.html">
+    <span class="slug">light</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./dark.html">
+    <span class="slug">dark</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./cupcake.html">
+    <span class="slug">cupcake</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./retro.html">
+    <span class="slug">retro</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./cyberpunk.html">
+    <span class="slug">cyberpunk</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./synthwave.html">
+    <span class="slug">synthwave</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./luxury.html">
+    <span class="slug">luxury</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./dracula.html">
+    <span class="slug">dracula</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./nord.html">
+    <span class="slug">nord</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./business.html">
+    <span class="slug">business</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./cobalt-atelier.html">
+    <span class="slug">cobalt-atelier</span>
+    <span class="kind">poster</span>
+  </a>
+  <a class="card" href="./signal-reel.html">
+    <span class="slug">signal-reel</span>
+    <span class="kind">poster</span>
+  </a>
+  <a class="card" href="./daylight-press.html">
+    <span class="slug">daylight-press</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./blueprint-manual.html">
+    <span class="slug">blueprint-manual</span>
+    <span class="kind">article</span>
+  </a>
+  <a class="card" href="./ledger-index.html">
+    <span class="slug">ledger-index</span>
+    <span class="kind">workspace</span>
+  </a>
+  <a class="card" href="./dune-editorial.html">
+    <span class="slug">dune-editorial</span>
+    <span class="kind">article</span>
+  </a>
+  <a class="card" href="./archive-folio.html">
+    <span class="slug">archive-folio</span>
+    <span class="kind">workspace</span>
+  </a>
+  <a class="card" href="./signal-console.html">
+    <span class="slug">signal-console</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./paper-instrument.html">
+    <span class="slug">paper-instrument</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./quiet-runtime.html">
+    <span class="slug">quiet-runtime</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./graphite-spec.html">
+    <span class="slug">graphite-spec</span>
+    <span class="kind">marketing</span>
+  </a>
+  <a class="card" href="./long-form-press.html">
+    <span class="slug">long-form-press</span>
+    <span class="kind">article</span>
+  </a>
+  <a class="card" href="./wide-gutter-review.html">
+    <span class="slug">wide-gutter-review</span>
+    <span class="kind">article</span>
+  </a>
+  <a class="card" href="./quarterly-folio.html">
+    <span class="slug">quarterly-folio</span>
+    <span class="kind">article</span>
+  </a>
+  <a class="card" href="./night-edition.html">
+    <span class="slug">night-edition</span>
+    <span class="kind">article</span>
+  </a>
+  <a class="card" href="./studio-counter.html">
+    <span class="slug">studio-counter</span>
+    <span class="kind">shop</span>
+  </a>
+  <a class="card" href="./atelier-counter.html">
+    <span class="slug">atelier-counter</span>
+    <span class="kind">shop</span>
+  </a>
+  <a class="card" href="./market-stack.html">
+    <span class="slug">market-stack</span>
+    <span class="kind">shop</span>
+  </a>
+  <a class="card" href="./vitrine-mono.html">
+    <span class="slug">vitrine-mono</span>
+    <span class="kind">shop</span>
+  </a>
+  <a class="card" href="./night-marquee.html">
+    <span class="slug">night-marquee</span>
+    <span class="kind">poster</span>
+  </a>
+  <a class="card" href="./stencil-field.html">
+    <span class="slug">stencil-field</span>
+    <span class="kind">poster</span>
+  </a>
+  <a class="card" href="./press-riso.html">
+    <span class="slug">press-riso</span>
+    <span class="kind">poster</span>
+  </a>
+  <a class="card" href="./exhibit-wall.html">
+    <span class="slug">exhibit-wall</span>
+    <span class="kind">poster</span>
+  </a>
+  <a class="card" href="./index-table.html">
+    <span class="slug">index-table</span>
+    <span class="kind">workspace</span>
+  </a>
+  <a class="card" href="./facet-archive.html">
+    <span class="slug">facet-archive</span>
+    <span class="kind">workspace</span>
+  </a>
+  <a class="card" href="./console-ledger.html">
+    <span class="slug">console-ledger</span>
+    <span class="kind">workspace</span>
+  </a>
+  <a class="card" href="./field-register.html">
+    <span class="slug">field-register</span>
+    <span class="kind">workspace</span>
+  </a>
+  <a class="card" href="./warm-vestibule.html">
+    <span class="slug">warm-vestibule</span>
+    <span class="kind">place</span>
+  </a>
+  <a class="card" href="./stone-court.html">
+    <span class="slug">stone-court</span>
+    <span class="kind">place</span>
+  </a>
+  <a class="card" href="./linen-retreat.html">
+    <span class="slug">linen-retreat</span>
+    <span class="kind">place</span>
+  </a>
+  <a class="card" href="./timber-hall.html">
+    <span class="slug">timber-hall</span>
+    <span class="kind">place</span>
+  </a>
+</div>
+</div></body></html>
