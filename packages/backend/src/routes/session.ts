@@ -134,7 +134,11 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
     return c.json(fail("session_not_found", "Session not found", { id }), 404);
   }
   const contentType = c.req.header("content-type") ?? "";
-  const [config, detection, project] = await Promise.all([loadConfig(), detectBackends(), getProjectDetail(session.project_id)]);
+  const [config, detection, project] = await Promise.all([
+    loadConfig(),
+    detectBackends({ requireCodexAuthentication: session.backend_id === "codex" }),
+    getProjectDetail(session.project_id),
+  ]);
   if (project !== null && await hasAgentControlFiles(project.dir_path)) {
     return c.json(
       fail(

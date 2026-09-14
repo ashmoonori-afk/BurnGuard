@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getSqlite } from "../src/db/sqlite-client";
 import { projectsDir } from "../src/lib/paths";
+import { createApp } from "../src/server";
 import { detectBackends } from "../src/services/backends";
 import { startUserTurn } from "../src/services/turns";
 
@@ -11,7 +12,7 @@ import { startUserTurn } from "../src/services/turns";
  * An unrelated Codex installation that cannot be probed must leave an explicitly selected
  * Claude backend usable; the Codex entry stays indeterminate rather than confirmed logged out.
  */
-test("Given an unprobeable Codex When a Claude prototype turn starts Then the Claude adapter still runs", async () => {
+test("Given an unprobeable Codex When a Claude request reaches HTTP admission and turn execution Then only the selected backend gates it", async () => {
   const projectId = `selection-${crypto.randomUUID()}`;
   const sessionId = `${projectId}-session`;
   const projectDir = path.join(projectsDir, projectId);
@@ -30,6 +31,24 @@ test("Given an unprobeable Codex When a Claude prototype turn starts Then the Cl
   );
   let adapterInvoked = false;
   try {
+    await expect(detectBackends({ force: true })).rejects.toMatchObject({ code: "codex_authentication_probe_failed" });
+    const capability = "backend-selection-fixture";
+    const app = createApp({ capability, appAuthority: "127.0.0.1:14070" });
+    // Stop at body validation to exercise real HTTP admission without invoking a provider.
+    for (const contentType of ["json", "multipart"] as const) {
+      const headers = new Headers({ host: "127.0.0.1:14070", origin: "http://127.0.0.1:14070", "x-burnguard-capability": capability });
+      let body: string | FormData;
+      if (contentType === "json") {
+        headers.set("content-type", "application/json");
+        body = JSON.stringify({ type: "unsupported" });
+      } else {
+        body = new FormData();
+        body.set("type", "unsupported");
+      }
+      const response = await app.request(`http://127.0.0.1:14070/api/sessions/${sessionId}/events`, { method: "POST", headers, body });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: { code: "invalid_body" } });
+    }
     const turn = startUserTurn(sessionId, { type: "user.message", text: "Edit the heading" }, undefined, {
       detectBackends,
       runAdapter: async () => {
