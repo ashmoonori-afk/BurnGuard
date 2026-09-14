@@ -16,6 +16,12 @@ The three 1440 × 900 screenshots were captured on 2026-09-09 using the reposito
 
 Source capture lane: `workspace-diagnosis`, 27 browser cases passed. Thumbnail publication readiness is reported separately: one sample was ready and three were unavailable at the capture deadline. These screenshots do not assert that every thumbnail renderer or external model worked.
 
+### Current README captures
+
+The root README uses unmodified captures selected from local QA evidence. The existing website, onboarding, slide and graphic sources are recorded in its “About the screenshots” table.
+
+`readme-layout-overview.png` was copied byte-for-byte from `.omo/evidence/design-system-layout/overview-desktop.png`, captured on 2026-09-14 at 1440 × 1000 pixels with the real local backend and an isolated QA profile. It shows the Dark theme's layout overview: grid geometry, dimensions, composition and responsive guidance. The profile contains an older installed theme, so the notice describes supplementing missing bundled layout rules while preserving authored rules. The diagram is a structural summary, not a generated website or a live model result. The complete image was inspected without cropping, retouching or conversion.
+
 ## Generation prompt
 
 ```text
