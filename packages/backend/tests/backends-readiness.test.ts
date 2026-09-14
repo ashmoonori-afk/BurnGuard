@@ -13,11 +13,29 @@ let binary: string;
 let which: ReturnType<typeof spyOn<typeof Bun, "which">>;
 const originalCodexHome = process.env.CODEX_HOME;
 
+/**
+ * Windows cannot execute an extensionless shebang script, and production already resolves
+ * `codex.cmd` there, so the fixture mirrors the real shape: a `.cmd` wrapper that launches the
+ * interpreter. That wrapper is also what makes the reaping case meaningful — the script runs as the
+ * wrapper's own child, which is the process tree a timed-out probe has to terminate.
+ */
+async function writeExecutableFixture(directory: string, name: string, source: string): Promise<string> {
+  if (process.platform === "win32") {
+    const scriptPath = path.join(directory, `${name}.mjs`);
+    await writeFile(scriptPath, source);
+    const commandPath = path.join(directory, `${name}.cmd`);
+    await writeFile(commandPath, `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`);
+    return commandPath;
+  }
+  const executable = path.join(directory, name);
+  await writeFile(executable, `#!${process.execPath}\n${source}`);
+  await chmod(executable, 0o755);
+  return executable;
+}
+
 beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), "bg-readiness-"));
-  binary = path.join(root, "codex");
-  await writeFile(binary, `#!${process.execPath}
-import { readFileSync, appendFileSync, writeFileSync } from "node:fs";
+  binary = await writeExecutableFixture(root, "codex", `import { readFileSync, appendFileSync, writeFileSync } from "node:fs";
 const root = ${JSON.stringify(root)};
 if (process.argv[2] === "--version") { console.log("fixture-cli"); process.exit(0); }
 if (process.argv.slice(2).join(" ") !== "login status") process.exit(99);
@@ -35,7 +53,6 @@ if (mode === "timeout") {
   process.exit(mode === "unexpected" ? 0 : 2);
 }
 `);
-  await chmod(binary, 0o755);
   await writeFile(path.join(root, "calls"), "");
   process.env.CODEX_HOME = root;
   which = spyOn(Bun, "which").mockImplementation((name) => name === "codex" ? binary : null);
