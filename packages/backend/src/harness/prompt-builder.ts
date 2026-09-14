@@ -28,6 +28,7 @@ import { CHART_AUTHORING_RULES } from "./chart-authoring";
 import { appendGenerationStyle } from "./prompt-generation-style";
 import { appendModelPromptContext } from "./prompt-model-context";
 import type { Deliverable } from "./prompt-task-presets";
+import type { TaskPresetObservation } from "./task-preset-observation";
 import { appendReferenceLayoutContext } from "./prompt-reference-layout";
 import { appendVisualSourceContext } from "./prompt-visual-sources";
 import { summarizeDeckHtml } from "./structure-extractor";
@@ -51,6 +52,8 @@ export interface PromptBuildOptions {
   contextMode?: PromptContextMode;
   visualSourceManifest?: VisualSourceManifestV1 | null;
   stageAttachmentInputs?: readonly StageAttachmentInput[];
+  /** Receives the guidance that was actually emitted, or null when none was. */
+  readonly onTaskGuidance?: (observation: TaskPresetObservation | null) => void;
 }
 
 /**
@@ -267,13 +270,7 @@ export async function buildPrompt(
   // A deck, prototype or graphic project already owns its structural contract, and the diagram
   // skill carries its own type sizes and dimensions. Stacking both leaks diagram sizing into the
   // enclosing deliverable, so a full diagram skill is emitted only for a standalone diagram.
-  const deliverable: Deliverable = project.project_type === "prototype"
-    ? "prototype"
-    : project.project_type === "slide_deck"
-      ? "slide_deck"
-      : project.project_type === "graphic"
-        ? "graphic"
-        : isDiagramRequest(userEvent.text) ? "diagram" : "generic";
+  const deliverable = resolveDeliverable(project.project_type, userEvent.text);
   if (deliverable === "diagram") {
     lines.push("## Diagram skill");
     lines.push(DIAGRAM_SKILL_MD.trim());
@@ -282,7 +279,10 @@ export async function buildPrompt(
 
   lines.push(DESIGN_CRAFT_RULES);
   lines.push(CHART_AUTHORING_RULES);
-  appendModelPromptContext(lines, options.backendId, options.generation, deliverable);
+  // Append first, then notify: optional chaining on the callback would otherwise short-circuit the
+  // whole expression and skip appending entirely whenever no observer is supplied.
+  const taskGuidance = appendModelPromptContext(lines, options.backendId, options.generation, deliverable);
+  options.onTaskGuidance?.(taskGuidance);
   lines.push("## Delivery");
   lines.push(
     `- Write or edit files inside \`${project.project_dir}\`. Read-only attachment copies and ../preview-report.json explicitly supplied by this harness are authorized inputs outside the output directory. Never modify them.`,
@@ -321,6 +321,19 @@ export async function buildPrompt(
 
 const DIAGRAM_REQUEST_PATTERN =
   /\b(?:diagram|flowchart|org(?:anization(?:al)?)? chart|process map|service topology|system topology)\b/i;
+
+/**
+ * The deliverable a turn is producing. An explicit project type always wins, so a deck, prototype
+ * or graphic keeps its own structural contract and a diagram stays embedded within it; only an
+ * open-ended project can resolve to a standalone diagram. Exported so the turn can record the same
+ * selection it shipped instead of re-deriving it and drifting.
+ */
+export function resolveDeliverable(projectType: string, requestText: string): Deliverable {
+  if (projectType === "prototype") return "prototype";
+  if (projectType === "slide_deck") return "slide_deck";
+  if (projectType === "graphic") return "graphic";
+  return isDiagramRequest(requestText) ? "diagram" : "generic";
+}
 
 function isDiagramRequest(request: string): boolean {
   return DIAGRAM_REQUEST_PATTERN.test(request);

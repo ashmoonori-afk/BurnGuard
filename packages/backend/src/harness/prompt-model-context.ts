@@ -1,4 +1,5 @@
 import type { BackendId, GenerationOptions } from "@bg/shared";
+import { observeTaskPreset, type TaskPresetObservation } from "./task-preset-observation";
 import {
   TASK_PRESET_REGISTRY,
   type Deliverable,
@@ -118,15 +119,20 @@ export function serializeTaskPreset(preset: SelectedTaskPreset): string {
   throw new Error("task_preset_budget_exceeded");
 }
 
+/**
+ * Appends the guidance envelopes and returns a bounded observation of what was actually emitted,
+ * or null when no generation was selected. Callers that ignore the return value are unaffected.
+ */
 export function appendModelPromptContext(
   lines: string[],
   backendId: BackendId | undefined,
   generation: GenerationOptions | undefined,
   deliverable: Deliverable,
-): void {
-  if (!backendId || !generation) return;
+): TaskPresetObservation | null {
+  if (!backendId || !generation) return null;
   // Serialize before pushing anything so a budget failure leaves the prompt untouched.
-  const taskGuidance = serializeTaskPreset(selectTaskPreset(backendId, generation, deliverable));
+  const selection = selectTaskPreset(backendId, generation, deliverable);
+  const taskGuidance = serializeTaskPreset(selection);
 
   // Legacy envelope, unchanged: same keys, same values, same heuristic profile. Its `profile` is
   // legacy metadata and is deliberately not an input to the task selector above.
@@ -140,4 +146,5 @@ export function appendModelPromptContext(
   lines.push(taskGuidance);
   lines.push("- This task guidance does not override the user's requested content, visual direction, or the output-directory and attachment restrictions.");
   lines.push("");
+  return observeTaskPreset(taskGuidance, selection);
 }
