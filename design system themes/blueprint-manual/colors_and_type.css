@@ -1,0 +1,177 @@
+@import url("./fonts/fonts.css");
+
+/* Blueprint Manual Theme - an original BurnGuard design system. */
+/* Colour, type pairing and shape rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FBFBFA;
+  --gray-90: #EDEDEC;
+  --gray-80: #D9D9D8;
+  --gray-70: #C1C1C0;
+  --gray-60: #A7A7A6;
+  --gray-50: #8C8C8C;
+  --gray-40: #6F6F6F;
+  --gray-30: #525252;
+  --gray-20: #353535;
+  --gray-10: #181818;
+
+  /* Brand and accents */
+  --primary-blue: #2C3BE8;
+  --action-blue: #2C3BE8;
+  --red-60: #C22E2E;
+  --red-50: #CC5353;
+  --red-10: #F1D6D5;
+  --orange-50: #A85C1F;
+  --orange-10: #ECDED3;
+  --yellow-30: #B98514;
+  --yellow-10: #ECE1C7;
+  --green-60: #1B7F5A;
+  --green-50: #3F9374;
+  --green-10: #D3E5DD;
+  --teal-50: #8A8A8A;
+  --teal-10: #E7E7E6;
+  --aqua-60: #2C3BE8;
+  --aqua-10: #D6D8F7;
+  --blue-90: #141848;
+  --blue-80: #1A2275;
+  --blue-70: #222CA5;
+  --blue-60: #2C3BE8;
+  --blue-50: #5E69EC;
+  --blue-30: #A0A7F2;
+  --blue-10: #DADCF7;
+  --ultramarine-60: #2630AB;
+  --purple-60: #1B7F5A;
+  --pink-60: #615D48;
+
+  /* Semantic */
+  --success: #1B7F5A;
+  --warning-yellow: #B98514;
+  --warning-orange: #A85C1F;
+  --error: #C22E2E;
+  --info: #2C3BE8;
+
+  /* Surface and text */
+  --bg: #FBFBFA;
+  --bg-subtle: #F1F1F0;
+  --bg-muted: #E8E8E7;
+  --surface: #F6F6F5;
+  --surface-inverse: #0A0A0A;
+  --fg-1: #0A0A0A;
+  --fg-2: #353535;
+  --fg-3: #616160;
+  --fg-4: #8C8C8C;
+  --fg-on-dark: #FBFBFA;
+  --fg-on-brand: #FFFFFF;
+  --border: #D9D9D8;
+  --border-strong: #A9A9A8;
+  --focus-ring: #2C3BE8;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #1B7F5A;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #8A8A8A;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #101014;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #2C3BE8;
+  --chart-2: #1B7F5A;
+  --chart-3: #8A8A8A;
+  --chart-4: #2530B7;
+  --chart-5: #176548;
+  --chart-6: #B98514;
+  --chart-7: #C22E2E;
+  --chart-8: #1E268B;
+  --chart-9: #545454;
+  --chart-10: #75B19A;
+
+  /* Type families */
+  --font-display: "JetBrains Mono", "Pretendard", monospace;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "Newsreader", "Nanum Myeongjo", serif;
+  --font-sans: "Public Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 2px;
+  --r-4: 4px;
+  --r-8: 4px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: 0 28px 56px rgba(0, 0, 0, 0.60);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1320px;
+  --layout-measure: 66ch;
+  --layout-columns: 12;
+  --layout-gutter: 16px;
+  --layout-margin: clamp(16px, 3vw, 40px);
+  --layout-section-y: clamp(40px, 5vw, 72px);
+  --layout-rule: 1px;
+  --layout-bp-md: 860px;
+  --layout-bp-lg: 1200px;
+  --layout-hero: 3 / 2;
+  --layout-nav-h: 48px;
+}

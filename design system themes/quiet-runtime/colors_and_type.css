@@ -1,0 +1,182 @@
+@import url("./fonts/fonts.css");
+
+/* Quiet Runtime Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #F7F6F4;
+  --gray-90: #EAE9E7;
+  --gray-80: #D8D7D6;
+  --gray-70: #C2C1C1;
+  --gray-60: #AAA9A9;
+  --gray-50: #929192;
+  --gray-40: #777678;
+  --gray-30: #5D5C5F;
+  --gray-20: #434245;
+  --gray-10: #28272C;
+
+  /* Brand and accents */
+  --primary-blue: #6E56CF;
+  --action-blue: #6E56CF;
+  --red-60: #C2453E;
+  --red-50: #CC655F;
+  --red-10: #EDD6D3;
+  --orange-50: #B05E14;
+  --orange-10: #EADBCC;
+  --yellow-30: #B08114;
+  --yellow-10: #E7DCC3;
+  --green-60: #3F8F5E;
+  --green-50: #5C9F76;
+  --green-10: #D6E3D9;
+  --teal-50: #A9A6B3;
+  --teal-10: #E9E8E8;
+  --aqua-60: #5B7C99;
+  --aqua-10: #DBE0E4;
+  --blue-90: #322B50;
+  --blue-80: #433773;
+  --blue-70: #55449A;
+  --blue-60: #6E56CF;
+  --blue-50: #8F7CD8;
+  --blue-30: #BBB0E4;
+  --blue-10: #E1DCEE;
+  --ultramarine-60: #51419B;
+  --purple-60: #5B7C99;
+  --pink-60: #866573;
+
+  /* Semantic */
+  --success: #3F8F5E;
+  --warning-yellow: #B08114;
+  --warning-orange: #B05E14;
+  --error: #C2453E;
+  --info: #567590;
+
+  /* Surface and text */
+  --bg: #F7F6F4;
+  --bg-subtle: #EEEDEB;
+  --bg-muted: #E5E4E3;
+  --surface: #F3F2F0;
+  --surface-inverse: #1B1A1F;
+  --fg-1: #1B1A1F;
+  --fg-2: #434245;
+  --fg-3: #6A696C;
+  --fg-4: #929192;
+  --fg-on-dark: #F7F6F4;
+  --fg-on-brand: #FFFFFF;
+  --border: #D8D7D6;
+  --border-strong: #ACABAC;
+  --focus-ring: #6E56CF;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #567590;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #A9A6B3;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #101014;
+  --fg-on-warning: #101014;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #6E56CF;
+  --chart-2: #5B7C99;
+  --chart-3: #A9A6B3;
+  --chart-4: #4D667E;
+  --chart-5: #3F8F5E;
+  --chart-6: #B08114;
+  --chart-7: #C2453E;
+  --chart-8: #4B3D85;
+  --chart-9: #6D6B75;
+  --chart-10: #99ADBD;
+
+  /* Type families */
+  --font-display: "Manrope", "Pretendard", sans-serif;
+  --font-serif: "Lora", "Gowun Batang", serif;
+  --font-body: "Manrope", "Pretendard", sans-serif;
+  --font-sans: "Manrope", "Pretendard", sans-serif;
+  --font-mono: "JetBrains Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 6px;
+  --r-4: 10px;
+  --r-8: 16px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1180px;
+  --layout-measure: 60ch;
+  --layout-columns: 12;
+  --layout-gutter: 20px;
+  --layout-margin: clamp(20px, 4vw, 56px);
+  --layout-section-y: clamp(48px, 6vw, 96px);
+  --layout-rule: 1px;
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1080px;
+  --layout-hero: 16 / 9;
+  --layout-nav-h: 60px;
+
+  /* Family extensions */
+  --family-ui-navigation-placement: side;
+  --family-ui-navigation-span: 2;
+  --family-ui-label-placement: above;
+}

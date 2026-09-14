@@ -1,0 +1,182 @@
+@import url("./fonts/fonts.css");
+
+/* Paper Instrument Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FCFCFB;
+  --gray-90: #EEEEEE;
+  --gray-80: #DCDCDC;
+  --gray-70: #C4C5C5;
+  --gray-60: #ABACAC;
+  --gray-50: #919294;
+  --gray-40: #757778;
+  --gray-30: #5A5B5E;
+  --gray-20: #3E3F42;
+  --gray-10: #222428;
+
+  /* Brand and accents */
+  --primary-blue: #1D4ED8;
+  --action-blue: #1D4ED8;
+  --red-60: #C53030;
+  --red-50: #CF5555;
+  --red-10: #F2D7D6;
+  --orange-50: #B45309;
+  --orange-10: #EFDECF;
+  --yellow-30: #B7791F;
+  --yellow-10: #EDDFCB;
+  --green-60: #2F855A;
+  --green-50: #509874;
+  --green-10: #D7E7DE;
+  --teal-50: #94A3B8;
+  --teal-10: #E9ECEF;
+  --aqua-60: #1D4ED8;
+  --aqua-10: #D4DDF5;
+  --blue-90: #17264F;
+  --blue-80: #183175;
+  --blue-70: #1A3D9F;
+  --blue-60: #1D4ED8;
+  --blue-50: #5378E0;
+  --blue-30: #9AAFEC;
+  --blue-10: #D8E0F5;
+  --ultramarine-60: #1C3CA1;
+  --purple-60: #475569;
+  --pink-60: #7C4551;
+
+  /* Semantic */
+  --success: #2F855A;
+  --warning-yellow: #B7791F;
+  --warning-orange: #B45309;
+  --error: #C53030;
+  --info: #1D4ED8;
+
+  /* Surface and text */
+  --bg: #FCFCFB;
+  --bg-subtle: #F3F3F2;
+  --bg-muted: #E9EAE9;
+  --surface: #F7F7F6;
+  --surface-inverse: #14161A;
+  --fg-1: #14161A;
+  --fg-2: #3E3F42;
+  --fg-3: #68696B;
+  --fg-4: #919294;
+  --fg-on-dark: #FCFCFB;
+  --fg-on-brand: #FFFFFF;
+  --border: #DCDCDC;
+  --border-strong: #ADAEAE;
+  --focus-ring: #1D4ED8;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #475569;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #94A3B8;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #101014;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #1D4ED8;
+  --chart-2: #475569;
+  --chart-3: #94A3B8;
+  --chart-4: #1B42AE;
+  --chart-5: #2F855A;
+  --chart-6: #B7791F;
+  --chart-7: #C53030;
+  --chart-8: #193688;
+  --chart-9: #5E6876;
+  --chart-10: #8F98A3;
+
+  /* Type families */
+  --font-display: "Instrument Sans", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "Instrument Sans", "Pretendard", sans-serif;
+  --font-sans: "Instrument Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 2px;
+  --r-4: 3px;
+  --r-8: 4px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1240px;
+  --layout-measure: 66ch;
+  --layout-columns: 12;
+  --layout-gutter: 24px;
+  --layout-margin: clamp(24px, 5vw, 72px);
+  --layout-section-y: clamp(72px, 9vw, 144px);
+  --layout-rule: 1px;
+  --layout-bp-md: 780px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 3 / 2;
+  --layout-nav-h: 64px;
+
+  /* Family extensions */
+  --family-ui-navigation-placement: top;
+  --family-ui-navigation-span: 2;
+  --family-ui-label-placement: beside;
+}

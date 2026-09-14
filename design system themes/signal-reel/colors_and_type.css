@@ -1,0 +1,177 @@
+@import url("./fonts/fonts.css");
+
+/* Signal Reel Theme - an original BurnGuard design system. */
+/* Colour, type pairing and shape rules composed for this theme. */
+
+:root {
+  color-scheme: dark;
+
+  /* Neutrals */
+  --gray-100: #000000;
+  --gray-90: #0F0F0E;
+  --gray-80: #222222;
+  --gray-70: #3B3A3A;
+  --gray-60: #565554;
+  --gray-50: #71706E;
+  --gray-40: #8E8D8B;
+  --gray-30: #ACAAA8;
+  --gray-20: #C9C7C5;
+  --gray-10: #E6E4E2;
+
+  /* Brand and accents */
+  --primary-blue: #E11414;
+  --action-blue: #E11414;
+  --red-60: #E11414;
+  --red-50: #E53C3C;
+  --red-10: #F1CBC8;
+  --orange-50: #B45A18;
+  --orange-10: #E9D7C9;
+  --yellow-30: #D8A320;
+  --yellow-10: #EFE1C2;
+  --green-60: #4FA24F;
+  --green-50: #6AAF69;
+  --green-10: #D7E4D3;
+  --teal-50: #B4B0AA;
+  --teal-10: #E9E7E3;
+  --aqua-60: #6FA8D6;
+  --aqua-10: #DDE6EB;
+  --blue-90: #3F0606;
+  --blue-80: #6C0A0A;
+  --blue-70: #9E0E0E;
+  --blue-60: #E11414;
+  --blue-50: #E64A49;
+  --blue-30: #EC918F;
+  --blue-10: #F2CFCD;
+  --ultramarine-60: #9C1621;
+  --purple-60: #7A0C0C;
+  --pink-60: #A50F0F;
+
+  /* Semantic */
+  --success: #4FA24F;
+  --warning-yellow: #D8A320;
+  --warning-orange: #B45A18;
+  --error: #E11414;
+  --info: #6FA8D6;
+
+  /* Surface and text */
+  --bg: #070707;
+  --bg-subtle: #111010;
+  --bg-muted: #1A1A1A;
+  --surface: #0C0C0C;
+  --surface-inverse: #F5F3F0;
+  --fg-1: #F5F3F0;
+  --fg-2: #CAC9C6;
+  --fg-3: #9F9E9C;
+  --fg-4: #747472;
+  --fg-on-dark: #F5F3F0;
+  --fg-on-brand: #FFFFFF;
+  --border: #282828;
+  --border-strong: #585756;
+  --focus-ring: #E11414;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #7A0C0C;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #B4B0AA;
+  --fg-on-accent: #101014;
+  --fg-on-info: #101014;
+  --fg-on-success: #101014;
+  --fg-on-warning: #101014;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #E11414;
+  --chart-2: #7A0C0C;
+  --chart-3: #B4B0AA;
+  --chart-4: #6FA8D6;
+  --chart-5: #4FA24F;
+  --chart-6: #D8A320;
+  --chart-7: #E54544;
+  --chart-8: #E97270;
+  --chart-9: #CFCCC7;
+  --chart-10: #AB6867;
+
+  /* Type families */
+  --font-display: "Anton", "Black Han Sans", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Gowun Batang", serif;
+  --font-body: "Public Sans", "Pretendard", sans-serif;
+  --font-sans: "Public Sans", "Pretendard", sans-serif;
+  --font-mono: "JetBrains Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: 0 16px 36px rgba(0, 0, 0, 0.52);
+  --shadow-4: 0 28px 56px rgba(0, 0, 0, 0.60);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: none;
+  --layout-measure: 52ch;
+  --layout-columns: 6;
+  --layout-gutter: 0px;
+  --layout-margin: clamp(16px, 3vw, 40px);
+  --layout-section-y: clamp(28px, 4vw, 64px);
+  --layout-rule: 0px;
+  --layout-bp-md: 720px;
+  --layout-bp-lg: 1080px;
+  --layout-hero: 21 / 9;
+  --layout-nav-h: 56px;
+}

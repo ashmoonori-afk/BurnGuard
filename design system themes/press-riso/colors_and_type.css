@@ -1,0 +1,182 @@
+@import url("./fonts/fonts.css");
+
+/* Press Riso Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FBF5E6;
+  --gray-90: #EDE7D9;
+  --gray-80: #DBD5C9;
+  --gray-70: #C4BFB4;
+  --gray-60: #ABA69C;
+  --gray-50: #928D85;
+  --gray-40: #77726C;
+  --gray-30: #5B5753;
+  --gray-20: #403C3A;
+  --gray-10: #252121;
+
+  /* Brand and accents */
+  --primary-blue: #D63A22;
+  --action-blue: #D63A22;
+  --red-60: #C02A1E;
+  --red-50: #CB4F42;
+  --red-10: #F0D0C2;
+  --orange-50: #B4541A;
+  --orange-10: #EED8C1;
+  --yellow-30: #9A6A0C;
+  --yellow-10: #E6D6B6;
+  --green-60: #2C7346;
+  --green-50: #4D8860;
+  --green-10: #D6DEC9;
+  --teal-50: #F0B417;
+  --teal-10: #F9E9C1;
+  --aqua-60: #1F3AA8;
+  --aqua-10: #D3D3DB;
+  --blue-90: #4C1E18;
+  --blue-80: #73261B;
+  --blue-70: #9D2E1E;
+  --blue-60: #D63A22;
+  --blue-50: #DF6751;
+  --blue-30: #EBA390;
+  --blue-10: #F5D7C7;
+  --ultramarine-60: #952F2A;
+  --purple-60: #1F3AA8;
+  --pink-60: #63336E;
+
+  /* Semantic */
+  --success: #2C7346;
+  --warning-yellow: #9A6A0C;
+  --warning-orange: #B4541A;
+  --error: #C02A1E;
+  --info: #1F3AA8;
+
+  /* Surface and text */
+  --bg: #FBF5E6;
+  --bg-subtle: #F2ECDE;
+  --bg-muted: #E9E3D5;
+  --surface: #F6F0E2;
+  --surface-inverse: #171314;
+  --fg-1: #171314;
+  --fg-2: #403C3A;
+  --fg-3: #696460;
+  --fg-4: #928D85;
+  --fg-on-dark: #FBF5E6;
+  --fg-on-brand: #FFFFFF;
+  --border: #DBD5C9;
+  --border-strong: #ADA89F;
+  --focus-ring: #1F3AA8;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #1F3AA8;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #F0B417;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #D63A22;
+  --chart-2: #1F3AA8;
+  --chart-3: #F0B417;
+  --chart-4: #1D3187;
+  --chart-5: #2C7346;
+  --chart-6: #9A6A0C;
+  --chart-7: #C02A1E;
+  --chart-8: #862A1C;
+  --chart-9: #957016;
+  --chart-10: #7785C1;
+
+  /* Type families */
+  --font-display: "Anton", "Pretendard", sans-serif;
+  --font-serif: "Lora", "Nanum Myeongjo", serif;
+  --font-body: "DM Sans", "Pretendard", sans-serif;
+  --font-sans: "DM Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1200px;
+  --layout-measure: 54ch;
+  --layout-columns: 12;
+  --layout-gutter: 20px;
+  --layout-margin: clamp(16px, 4vw, 40px);
+  --layout-section-y: clamp(48px, 6vw, 96px);
+  --layout-rule: 2px;
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1080px;
+  --layout-hero: 3 / 4;
+  --layout-nav-h: 52px;
+
+  /* Family extensions */
+  --family-creative-type-rotation: -3deg;
+  --family-creative-line-step: 0px;
+  --family-creative-type-image-overlap: 40%;
+}

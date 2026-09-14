@@ -1,0 +1,182 @@
+@import url("./fonts/fonts.css");
+
+/* Exhibit Wall Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #EDEBE6;
+  --gray-90: #E0DEDA;
+  --gray-80: #CFCEC9;
+  --gray-70: #BAB9B4;
+  --gray-60: #A3A29E;
+  --gray-50: #8C8A87;
+  --gray-40: #73716E;
+  --gray-30: #595855;
+  --gray-20: #403F3C;
+  --gray-10: #272623;
+
+  /* Brand and accents */
+  --primary-blue: #7A3F2E;
+  --action-blue: #7A3F2E;
+  --red-60: #9B3128;
+  --red-50: #AA524A;
+  --red-10: #DECAC4;
+  --orange-50: #8A4E16;
+  --orange-10: #DBCFC1;
+  --yellow-30: #8A6A16;
+  --yellow-10: #D7CFB8;
+  --green-60: #3F6B4C;
+  --green-50: #5B7F65;
+  --green-10: #CED4CA;
+  --teal-50: #C9C4BA;
+  --teal-10: #E7E4DE;
+  --aqua-60: #3B4A5A;
+  --aqua-10: #CDCECD;
+  --blue-90: #35241D;
+  --blue-80: #482B22;
+  --blue-70: #5D3427;
+  --blue-60: #7A3F2E;
+  --blue-50: #96685A;
+  --blue-30: #BA9F95;
+  --blue-10: #DBCFC9;
+  --ultramarine-60: #593232;
+  --purple-60: #3B4A5A;
+  --pink-60: #634045;
+
+  /* Semantic */
+  --success: #3F6B4C;
+  --warning-yellow: #8A6A16;
+  --warning-orange: #8A4E16;
+  --error: #9B3128;
+  --info: #3B4A5A;
+
+  /* Surface and text */
+  --bg: #EDEBE6;
+  --bg-subtle: #E5E3DE;
+  --bg-muted: #DCDAD5;
+  --surface: #E9E7E2;
+  --surface-inverse: #1A1917;
+  --fg-1: #1A1917;
+  --fg-2: #403F3C;
+  --fg-3: #666562;
+  --fg-4: #8C8A87;
+  --fg-on-dark: #EDEBE6;
+  --fg-on-brand: #FFFFFF;
+  --border: #CFCEC9;
+  --border-strong: #A5A4A0;
+  --focus-ring: #7A3F2E;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #3B4A5A;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #C9C4BA;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #7A3F2E;
+  --chart-2: #3B4A5A;
+  --chart-3: #C9C4BA;
+  --chart-4: #343F4B;
+  --chart-5: #3F6B4C;
+  --chart-6: #8A6A16;
+  --chart-7: #9B3128;
+  --chart-8: #522F24;
+  --chart-9: #807C76;
+  --chart-10: #828A92;
+
+  /* Type families */
+  --font-display: "Fraunces", "Nanum Myeongjo", serif;
+  --font-serif: "Fraunces", "Nanum Myeongjo", serif;
+  --font-body: "Manrope", "Pretendard", sans-serif;
+  --font-sans: "Manrope", "Pretendard", sans-serif;
+  --font-mono: "Geist Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1340px;
+  --layout-measure: 62ch;
+  --layout-columns: 12;
+  --layout-gutter: 32px;
+  --layout-margin: clamp(20px, 5vw, 72px);
+  --layout-section-y: clamp(64px, 9vw, 144px);
+  --layout-rule: 1px;
+  --layout-bp-md: 800px;
+  --layout-bp-lg: 1160px;
+  --layout-hero: 3 / 2;
+  --layout-nav-h: 60px;
+
+  /* Family extensions */
+  --family-creative-type-rotation: 0deg;
+  --family-creative-line-step: 3ch;
+  --family-creative-type-image-overlap: 0%;
+}

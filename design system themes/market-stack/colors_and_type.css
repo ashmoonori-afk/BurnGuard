@@ -1,0 +1,182 @@
+@import url("./fonts/fonts.css");
+
+/* Market Stack Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FFFDF8;
+  --gray-90: #F1EFEA;
+  --gray-80: #DEDDD8;
+  --gray-70: #C7C5C2;
+  --gray-60: #ADACA9;
+  --gray-50: #939290;
+  --gray-40: #777674;
+  --gray-30: #5B5B59;
+  --gray-20: #3F3F3E;
+  --gray-10: #232323;
+
+  /* Brand and accents */
+  --primary-blue: #E04E1B;
+  --action-blue: #E04E1B;
+  --red-60: #CE2D2D;
+  --red-50: #D75252;
+  --red-10: #F6D8D3;
+  --orange-50: #E04E1B;
+  --orange-10: #F9DED0;
+  --yellow-30: #D9A21B;
+  --yellow-10: #F7E9C7;
+  --green-60: #2E8B57;
+  --green-50: #4F9D71;
+  --green-10: #D9E8DB;
+  --teal-50: #F2C94C;
+  --teal-10: #FDF4D9;
+  --aqua-60: #2F5FD0;
+  --aqua-10: #DAE1F1;
+  --blue-90: #4E2517;
+  --blue-80: #763018;
+  --blue-70: #A33D19;
+  --blue-60: #E04E1B;
+  --blue-50: #E77850;
+  --blue-30: #F1B097;
+  --blue-10: #FAE1D5;
+  --ultramarine-60: #9B3C26;
+  --purple-60: #2F5FD0;
+  --pink-60: #724A8C;
+
+  /* Semantic */
+  --success: #2B8352;
+  --warning-yellow: #D9A21B;
+  --warning-orange: #E04E1B;
+  --error: #CE2D2D;
+  --info: #2F5FD0;
+
+  /* Surface and text */
+  --bg: #FFFDF8;
+  --bg-subtle: #F6F4EF;
+  --bg-muted: #ECEAE6;
+  --surface: #FAF8F3;
+  --surface-inverse: #151515;
+  --fg-1: #151515;
+  --fg-2: #3F3F3E;
+  --fg-3: #696967;
+  --fg-4: #939290;
+  --fg-on-dark: #FFFDF8;
+  --fg-on-brand: #101014;
+  --border: #DEDDD8;
+  --border-strong: #AFAEAB;
+  --focus-ring: #2F5FD0;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #2F5FD0;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #F2C94C;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #101014;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #E04E1B;
+  --chart-2: #2F5FD0;
+  --chart-3: #F2C94C;
+  --chart-4: #294FA7;
+  --chart-5: #2E8B57;
+  --chart-6: #D9A21B;
+  --chart-7: #CE2D2D;
+  --chart-8: #8B3618;
+  --chart-9: #957D35;
+  --chart-10: #829EE0;
+
+  /* Type families */
+  --font-display: "Outfit", "Pretendard", sans-serif;
+  --font-serif: "Lora", "Nanum Myeongjo", serif;
+  --font-body: "Plus Jakarta Sans", "Pretendard", sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Pretendard", sans-serif;
+  --font-mono: "JetBrains Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 800;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 8px;
+  --r-4: 14px;
+  --r-8: 24px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1240px;
+  --layout-measure: 56ch;
+  --layout-columns: 12;
+  --layout-gutter: 20px;
+  --layout-margin: clamp(16px, 4vw, 48px);
+  --layout-section-y: clamp(40px, 5vw, 80px);
+  --layout-rule: 2px;
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1080px;
+  --layout-hero: 1 / 1;
+  --layout-nav-h: 64px;
+
+  /* Family extensions */
+  --family-media-fit: cover;
+  --family-commerce-gallery-layout: stacked;
+  --family-commerce-purchase-position: sticky;
+}

@@ -1,0 +1,182 @@
+@import url("./fonts/fonts.css");
+
+/* Quarterly Folio Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #F4F1EA;
+  --gray-90: #E7E4DE;
+  --gray-80: #D5D2CD;
+  --gray-70: #BFBCB8;
+  --gray-60: #A6A4A1;
+  --gray-50: #8E8C8A;
+  --gray-40: #737171;
+  --gray-30: #595758;
+  --gray-20: #3E3D3F;
+  --gray-10: #232226;
+
+  /* Brand and accents */
+  --primary-blue: #1F4B3F;
+  --action-blue: #1F4B3F;
+  --red-60: #9B2C2C;
+  --red-50: #AB4F4E;
+  --red-10: #E4CEC8;
+  --orange-50: #8C4C12;
+  --orange-10: #E1D3C3;
+  --yellow-30: #8C6B12;
+  --yellow-10: #DDD4BA;
+  --green-60: #1F4B3F;
+  --green-50: #41665A;
+  --green-10: #CED3CB;
+  --teal-50: #C0B7A6;
+  --teal-10: #EBE7DE;
+  --aqua-60: #3A5A78;
+  --aqua-10: #D3D6D5;
+  --blue-90: #192424;
+  --blue-80: #1A2F2C;
+  --blue-70: #1C3B34;
+  --blue-60: #1F4B3F;
+  --blue-50: #527368;
+  --blue-30: #96A89F;
+  --blue-10: #D2D6CF;
+  --ultramarine-60: #1E3A3D;
+  --purple-60: #7C3A2E;
+  --pink-60: #89342D;
+
+  /* Semantic */
+  --success: #1F4B3F;
+  --warning-yellow: #8C6B12;
+  --warning-orange: #8C4C12;
+  --error: #9B2C2C;
+  --info: #3A5A78;
+
+  /* Surface and text */
+  --bg: #F4F1EA;
+  --bg-subtle: #EBE8E2;
+  --bg-muted: #E2DFD9;
+  --surface: #F0EDE6;
+  --surface-inverse: #16151A;
+  --fg-1: #16151A;
+  --fg-2: #3E3D3F;
+  --fg-3: #666465;
+  --fg-4: #8E8C8A;
+  --fg-on-dark: #F4F1EA;
+  --fg-on-brand: #FFFFFF;
+  --border: #D5D2CD;
+  --border-strong: #A9A6A3;
+  --focus-ring: #1F4B3F;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #7C3A2E;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #C0B7A6;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #1F4B3F;
+  --chart-2: #7C3A2E;
+  --chart-3: #C0B7A6;
+  --chart-4: #3A5A78;
+  --chart-5: #1D3F37;
+  --chart-6: #8C6B12;
+  --chart-7: #9B2C2C;
+  --chart-8: #1B342F;
+  --chart-9: #79736B;
+  --chart-10: #AC8379;
+
+  /* Type families */
+  --font-display: "Bodoni Moda", "Nanum Myeongjo", serif;
+  --font-serif: "Lora", "Nanum Myeongjo", serif;
+  --font-body: "Lora", "Nanum Myeongjo", serif;
+  --font-sans: "Public Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.7;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.18em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1080px;
+  --layout-measure: 64ch;
+  --layout-columns: 12;
+  --layout-gutter: 32px;
+  --layout-margin: clamp(24px, 6vw, 96px);
+  --layout-section-y: clamp(72px, 9vw, 152px);
+  --layout-rule: 1px;
+  --layout-bp-md: 740px;
+  --layout-bp-lg: 1000px;
+  --layout-hero: 5 / 4;
+  --layout-nav-h: 72px;
+
+  /* Family extensions */
+  --family-media-fit: contain;
+  --family-media-text-ratio: 1 / 1;
+  --family-editorial-paragraph-mode: indented;
+}

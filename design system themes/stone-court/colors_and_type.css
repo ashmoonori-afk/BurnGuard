@@ -1,0 +1,182 @@
+@import url("./fonts/fonts.css");
+
+/* Stone Court Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #F2F1EE;
+  --gray-90: #E5E4E2;
+  --gray-80: #D4D3D1;
+  --gray-70: #BFBEBD;
+  --gray-60: #A7A7A6;
+  --gray-50: #90908F;
+  --gray-40: #767777;
+  --gray-30: #5C5D5E;
+  --gray-20: #434445;
+  --gray-10: #292B2C;
+
+  /* Brand and accents */
+  --primary-blue: #455A64;
+  --action-blue: #455A64;
+  --red-60: #96362E;
+  --red-50: #A75851;
+  --red-10: #E1CFCB;
+  --orange-50: #834C16;
+  --orange-10: #DED3C7;
+  --yellow-30: #836512;
+  --yellow-10: #DAD2BE;
+  --green-60: #3D6B52;
+  --green-50: #5A806B;
+  --green-10: #D1D9D2;
+  --teal-50: #CFCEC8;
+  --teal-10: #ECEBE7;
+  --aqua-60: #455A64;
+  --aqua-10: #D3D6D5;
+  --blue-90: #272F33;
+  --blue-80: #303B41;
+  --blue-70: #394850;
+  --blue-60: #455A64;
+  --blue-50: #6F7E85;
+  --blue-30: #A6AFB1;
+  --blue-10: #D6D9D8;
+  --ultramarine-60: #364455;
+  --purple-60: #6B5F52;
+  --pink-60: #7D4E43;
+
+  /* Semantic */
+  --success: #3D6B52;
+  --warning-yellow: #836512;
+  --warning-orange: #834C16;
+  --error: #96362E;
+  --info: #455A64;
+
+  /* Surface and text */
+  --bg: #E6E5E1;
+  --bg-subtle: #DEDDD9;
+  --bg-muted: #D6D5D2;
+  --surface: #E2E1DD;
+  --surface-inverse: #1C1E20;
+  --fg-1: #1C1E20;
+  --fg-2: #404243;
+  --fg-3: #656665;
+  --fg-4: #898988;
+  --fg-on-dark: #F2F1EE;
+  --fg-on-brand: #FFFFFF;
+  --border: #CAC9C6;
+  --border-strong: #A1A19F;
+  --focus-ring: #455A64;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #6B5F52;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #CFCEC8;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #455A64;
+  --chart-2: #6B5F52;
+  --chart-3: #CFCEC8;
+  --chart-4: #3C4D55;
+  --chart-5: #3D6B52;
+  --chart-6: #836512;
+  --chart-7: #96362E;
+  --chart-8: #344147;
+  --chart-9: #848481;
+  --chart-10: #A19990;
+
+  /* Type families */
+  --font-display: "DM Serif Display", "Nanum Myeongjo", serif;
+  --font-serif: "Lora", "Nanum Myeongjo", serif;
+  --font-body: "Manrope", "Pretendard", sans-serif;
+  --font-sans: "Manrope", "Pretendard", sans-serif;
+  --font-mono: "Geist Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1240px;
+  --layout-measure: 60ch;
+  --layout-columns: 12;
+  --layout-gutter: 28px;
+  --layout-margin: clamp(24px, 5vw, 80px);
+  --layout-section-y: clamp(64px, 9vw, 144px);
+  --layout-rule: 1px;
+  --layout-bp-md: 820px;
+  --layout-bp-lg: 1140px;
+  --layout-hero: 3 / 2;
+  --layout-nav-h: 64px;
+
+  /* Family extensions */
+  --family-media-fit: contain;
+  --family-media-text-ratio: 1.0;
+  --family-spatial-image-bleed: 0%;
+}

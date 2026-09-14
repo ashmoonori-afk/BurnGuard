@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-Root build, development, and packaging orchestration across Bun, .NET 8, and Swift toolchains; earned this guide at score 10 for 8 executable root scripts (811 LOC) plus the QA tree and a distinct command domain. The 65-file QA harness under `qa/` has its own guide.
+Root build, development, and packaging orchestration across Bun, .NET 8, and Swift toolchains; earned this guide at score 10 for 9 executable root scripts plus the QA tree and a distinct command domain. The 65-file QA harness under `qa/` has its own guide.
 
 ## WHERE TO LOOK
 
@@ -13,6 +13,7 @@ Root build, development, and packaging orchestration across Bun, .NET 8, and Swi
 | Stage runtime assets | `package-runtime.ts` | `isRuntimeSource`/`stageRuntimeAssets`; ships `design system themes/`, `design system sample/` (minus `uploads/`), `samples/original/`, fonts, migrations, LICENSE, NOTICE |
 | Windows shell + release | `build-windows-native.ts`, `package-windows-release.ts` | .NET 8 SDK builds the `net48` csproj; WebView2 + Velopack `vpk pack`; Windows host required |
 | macOS app, DMG, release | `build-mac.ts`, `package-mac-release.ts` | macOS-gated; needs `build:frontend` first |
+| Regenerate the theme catalogue | `build-theme-catalogue.ts` | `bun run catalogue`; rewrites the committed `design system themes/catalogue.html` from the registry, so it is run deliberately and is not part of `bun run build` |
 | Test bootstrap | `test-preload.ts` | `bunfig.toml` preload: temp `BG_APP_ROOT`, migrations, owned cleanup |
 | QA acceptance harness | `qa/` | Evidence receipts, browser fixtures, HTTP scenarios - see `qa/AGENTS.md` |
 

@@ -1,0 +1,177 @@
+@import url("./fonts/fonts.css");
+
+/* Dune Editorial Theme - an original BurnGuard design system. */
+/* Colour, type pairing and shape rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #F3EDE2;
+  --gray-90: #E6E0D6;
+  --gray-80: #D5D0C6;
+  --gray-70: #C0BBB1;
+  --gray-60: #A9A49B;
+  --gray-50: #928D85;
+  --gray-40: #79746C;
+  --gray-30: #5F5B54;
+  --gray-20: #46423C;
+  --gray-10: #2D2923;
+
+  /* Brand and accents */
+  --primary-blue: #B08247;
+  --action-blue: #B08247;
+  --red-60: #A9453C;
+  --red-50: #B6635A;
+  --red-10: #E6CFC4;
+  --orange-50: #A9662F;
+  --orange-10: #E6D5C2;
+  --yellow-30: #C2903A;
+  --yellow-10: #E8D9BD;
+  --green-60: #5B7A57;
+  --green-50: #738C6D;
+  --green-10: #D8D8C9;
+  --teal-50: #C9B99F;
+  --teal-10: #EBE4D6;
+  --aqua-60: #5F7E92;
+  --aqua-10: #D8D9D4;
+  --blue-90: #483924;
+  --blue-80: #654D2E;
+  --blue-70: #856339;
+  --blue-60: #B08247;
+  --blue-50: #C09C6C;
+  --blue-30: #D6BE9E;
+  --blue-10: #E8DCC9;
+  --ultramarine-60: #7C5E42;
+  --purple-60: #6E7B70;
+  --pink-60: #87645A;
+
+  /* Semantic */
+  --success: #5B7A57;
+  --warning-yellow: #C2903A;
+  --warning-orange: #A9662F;
+  --error: #A9453C;
+  --info: #597689;
+
+  /* Surface and text */
+  --bg: #EFE7DA;
+  --bg-subtle: #E7DFD2;
+  --bg-muted: #DED7CA;
+  --surface: #EBE3D6;
+  --surface-inverse: #201C17;
+  --fg-1: #201C17;
+  --fg-2: #45413A;
+  --fg-3: #6B655D;
+  --fg-4: #908A80;
+  --fg-on-dark: #F3EDE2;
+  --fg-on-brand: #101014;
+  --border: #D2CBBF;
+  --border-strong: #A9A298;
+  --focus-ring: #8A6231;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #677469;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #C9B99F;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #101014;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #B08247;
+  --chart-2: #6E7B70;
+  --chart-3: #C9B99F;
+  --chart-4: #5F7E92;
+  --chart-5: #5B7A57;
+  --chart-6: #C2903A;
+  --chart-7: #A9453C;
+  --chart-8: #745733;
+  --chart-9: #827766;
+  --chart-10: #A3A99E;
+
+  /* Type families */
+  --font-display: "Syne", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Gowun Batang", serif;
+  --font-body: "Manrope", "Pretendard", sans-serif;
+  --font-sans: "Manrope", "Pretendard", sans-serif;
+  --font-mono: "Geist Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 2px;
+  --r-4: 4px;
+  --r-8: 8px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: 0 2px 6px rgba(0, 0, 0, 0.36);
+  --shadow-2: 0 8px 20px rgba(0, 0, 0, 0.44);
+  --shadow-3: 0 16px 36px rgba(0, 0, 0, 0.52);
+  --shadow-4: 0 28px 56px rgba(0, 0, 0, 0.60);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1320px;
+  --layout-measure: 56ch;
+  --layout-columns: 12;
+  --layout-gutter: 28px;
+  --layout-margin: clamp(20px, 4vw, 56px);
+  --layout-section-y: clamp(80px, 11vw, 180px);
+  --layout-rule: 1px;
+  --layout-bp-md: 800px;
+  --layout-bp-lg: 1160px;
+  --layout-hero: 3 / 2;
+  --layout-nav-h: 60px;
+}

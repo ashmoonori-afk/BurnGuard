@@ -1,0 +1,182 @@
+@import url("./fonts/fonts.css");
+
+/* Wide Gutter Review Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FFFFFF;
+  --gray-90: #F1F1F1;
+  --gray-80: #DEDEDE;
+  --gray-70: #C6C6C6;
+  --gray-60: #ABABAB;
+  --gray-50: #919191;
+  --gray-40: #747474;
+  --gray-30: #585858;
+  --gray-20: #3B3B3B;
+  --gray-10: #1E1E1E;
+
+  /* Brand and accents */
+  --primary-blue: #2C4BD8;
+  --action-blue: #2C4BD8;
+  --red-60: #B3261E;
+  --red-50: #C14D46;
+  --red-10: #F1D8D6;
+  --orange-50: #8E5416;
+  --orange-10: #EBE0D5;
+  --yellow-30: #8E7016;
+  --yellow-10: #E6E0CC;
+  --green-60: #356B47;
+  --green-50: #558364;
+  --green-10: #DBE4DE;
+  --teal-50: #AFAFAF;
+  --teal-10: #F1F1F1;
+  --aqua-60: #2C4BD8;
+  --aqua-10: #D9DFF8;
+  --blue-90: #182148;
+  --blue-80: #1D2C70;
+  --blue-70: #24399C;
+  --blue-60: #2C4BD8;
+  --blue-50: #5F76E1;
+  --blue-30: #A2B0EE;
+  --blue-10: #DDE2F9;
+  --ultramarine-60: #263AA1;
+  --purple-60: #7A6250;
+  --pink-60: #92493B;
+
+  /* Semantic */
+  --success: #356B47;
+  --warning-yellow: #8E7016;
+  --warning-orange: #8E5416;
+  --error: #B3261E;
+  --info: #2C4BD8;
+
+  /* Surface and text */
+  --bg: #FFFFFF;
+  --bg-subtle: #F5F5F5;
+  --bg-muted: #ECECEC;
+  --surface: #FAFAFA;
+  --surface-inverse: #101010;
+  --fg-1: #101010;
+  --fg-2: #3B3B3B;
+  --fg-3: #666666;
+  --fg-4: #919191;
+  --fg-on-dark: #FFFFFF;
+  --fg-on-brand: #FFFFFF;
+  --border: #DEDEDE;
+  --border-strong: #AEAEAE;
+  --focus-ring: #2C4BD8;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #7A6250;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #AFAFAF;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #2C4BD8;
+  --chart-2: #7A6250;
+  --chart-3: #AFAFAF;
+  --chart-4: #263EAC;
+  --chart-5: #356B47;
+  --chart-6: #8E7016;
+  --chart-7: #B3261E;
+  --chart-8: #203284;
+  --chart-9: #6C6C6C;
+  --chart-10: #AFA196;
+
+  /* Type families */
+  --font-display: "Instrument Serif", "Nanum Myeongjo", serif;
+  --font-serif: "Instrument Serif", "Nanum Myeongjo", serif;
+  --font-body: "Public Sans", "Pretendard", sans-serif;
+  --font-sans: "Public Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1440px;
+  --layout-measure: 46ch;
+  --layout-columns: 12;
+  --layout-gutter: 64px;
+  --layout-margin: clamp(20px, 3vw, 48px);
+  --layout-section-y: clamp(56px, 7vw, 112px);
+  --layout-rule: 1px;
+  --layout-bp-md: 880px;
+  --layout-bp-lg: 1240px;
+  --layout-hero: 4 / 5;
+  --layout-nav-h: 60px;
+
+  /* Family extensions */
+  --family-media-fit: cover;
+  --family-media-text-ratio: 2 / 1;
+  --family-editorial-paragraph-mode: spaced;
+}
