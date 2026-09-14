@@ -119,8 +119,14 @@ async function detectOne(id: "claude-code" | "codex", binaryNames: string[], ins
 
 /**
  * Cache UI probes briefly; turn start forces a fresh authentication check.
+ *
+ * `requireCodexAuthentication` defaults to true, so readiness, graphic creation and Codex turns
+ * keep rejecting an indeterminate probe. A caller that selected a different backend passes false:
+ * it still gets the detection, but the Codex entry carries no `authenticated` value at all —
+ * indeterminate, never confirmed logout — and the result is not cached, so no later request can
+ * reuse it as authorization.
  */
-export async function detectBackends(options: { force?: boolean } = {}): Promise<BackendDetectionResult> {
+export async function detectBackends(options: { force?: boolean; requireCodexAuthentication?: boolean } = {}): Promise<BackendDetectionResult> {
   if (!options.force && cachedValue && Date.now() - cachedAt < 30_000) {
     return cachedValue;
   }
@@ -139,6 +145,8 @@ export async function detectBackends(options: { force?: boolean } = {}): Promise
   } catch (error) {
     // A failed fresh check confirms neither logout nor the previous cached login.
     cachedValue = null;
-    throw error;
+    if ((options.requireCodexAuthentication ?? true) || !(error instanceof CodexAuthenticationProbeError)) throw error;
+    const models = await readCodexModels();
+    return { backends: backends.map((backend) => backend.id === "codex" ? { ...backend, models } : { ...backend, models: CLAUDE_MODELS }) };
   }
 }
