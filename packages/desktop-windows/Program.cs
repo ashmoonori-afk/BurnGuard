@@ -171,10 +171,11 @@ namespace BurnGuard.Desktop
                 status.Text = "BurnGuard를 준비하고 있어요. 처음 실행할 때는 샘플과 글꼴 준비에 시간이 걸릴 수 있어요.";
                 var startup = Stopwatch.StartNew();
                 StartService();
-                var completed = await Task.WhenAny(ready.Task, Task.Delay(TimeSpan.FromSeconds(120)));
+                // Cold profiles seed and validate every bundled sample before readiness.
+                var completed = await Task.WhenAny(ready.Task, Task.Delay(TimeSpan.FromSeconds(300)));
                 startupElapsedMs = startup.ElapsedMilliseconds;
                 if (closing) return;
-                if (completed != ready.Task) throw new TimeoutException("BurnGuard 서버가 120초 안에 시작되지 않았습니다.");
+                if (completed != ready.Task) throw new TimeoutException("BurnGuard 서버가 300초 안에 시작되지 않았습니다.");
                 origin = new Uri(await ready.Task);
                 string userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BurnGuard", "WebView2", identity);
                 if (report != null) userData = Path.Combine(Environment.GetEnvironmentVariable("BG_APP_ROOT"), "cache", "webview2");

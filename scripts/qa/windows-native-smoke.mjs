@@ -83,7 +83,7 @@ try {
 
 async function run(report) {
   child = spawn(path.join(app, release ? "current/BurnGuard.exe" : "BurnGuard.exe"), ["--smoke-test", "--smoke-report", report], { cwd: fixture, env, windowsHide: false, stdio: "ignore" });
-  const [code] = await bounded(once(child, "exit"), 180_000);
+  const [code] = await bounded(once(child, "exit"), 360_000);
   return code;
 }
 
