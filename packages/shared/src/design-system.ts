@@ -53,6 +53,7 @@ export interface DesignSystemColorToken {
 export interface DesignSystemTokensResponse {
   colors: DesignSystemColorToken[];
   token_file_path: string | null;
+  layout?: import("./design-system-layout").DesignSystemLayout;
 }
 
 export interface UpsertDesignSystemColorRequest {

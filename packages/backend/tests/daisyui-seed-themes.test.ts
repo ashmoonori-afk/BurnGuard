@@ -162,7 +162,8 @@ describe("bundled daisyUI-derived design systems", () => {
     const destinationRoot = await mkdtemp(path.join(tmpdir(), "bg-theme-seeds-"));
     try {
       const canonicalCss = await readFile(canonicalTokensPath, "utf8");
-      const requiredTokens = [...(await extractCssCustomProperties(canonicalCss)).keys()];
+      // Family decisions vary; the dedicated layout contract check covers required grid tokens.
+      const requiredTokens = [...(await extractCssCustomProperties(canonicalCss)).keys()].filter(token => !token.startsWith("family-"));
       expect(requiredTokens.length).toBeGreaterThan(0);
 
       await seedBundledDesignSystems(resolveRepoRoot(), destinationRoot);

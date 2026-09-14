@@ -175,3 +175,5 @@
   --layout-hero: 3 / 2;
   --layout-nav-h: 60px;
 }
+
+:root { --layout-structure: editorial; }

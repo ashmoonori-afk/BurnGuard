@@ -175,3 +175,5 @@
   --layout-hero: 16 / 9;
   --layout-nav-h: 72px;
 }
+
+:root { --layout-structure: offset; }

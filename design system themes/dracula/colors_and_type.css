@@ -162,3 +162,20 @@
   --dur-base: 200ms;
   --dur-slow: 320ms;
 }
+
+
+/* Layout is part of the design-system contract. */
+:root {
+  --layout-max: 1320px;
+  --layout-measure: 64ch;
+  --layout-columns: 12;
+  --layout-gutter: 24px;
+  --layout-margin: clamp(20px, 4vw, 64px);
+  --layout-section-y: clamp(56px, 8vw, 112px);
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 16 / 10;
+  --layout-structure: sidebar;
+  --family-ui-navigation-placement: side;
+  --family-ui-navigation-span: 2;
+}

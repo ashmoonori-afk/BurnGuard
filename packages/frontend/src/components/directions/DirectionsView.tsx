@@ -1,4 +1,7 @@
 import { t, useT } from "@/i18n/t";
+import { useQuery } from "@tanstack/react-query";
+import { getDesignSystemTokens } from "@/api/design-system";
+import { DesignSystemLayoutPanel } from "@/components/systems/DesignSystemLayoutPanel";
 import { useEffect, useState } from "react";
 import { DEFAULT_GENERATION_STYLE, type DesignDirectionState, type GenerationStyle } from "@bg/shared";
 import { Check, Compass, RotateCcw, StopCircle } from "lucide-react";
@@ -9,6 +12,7 @@ import { GenerationStyleFields } from "./GenerationStyleFields";
 import { directionActions, directionProgress } from "@/lib/design-direction-state";
 
 type DirectionsViewProps = {
+  readonly designSystemId?: string | null;
   readonly state: DesignDirectionState | null;
   readonly recovering: boolean;
   readonly actionPending: boolean;
@@ -24,6 +28,7 @@ type DirectionsViewProps = {
 };
 
 export function DirectionsView({
+  designSystemId,
   state,
   recovering,
   actionPending,
@@ -38,6 +43,9 @@ export function DirectionsView({
   onUndo,
 }: DirectionsViewProps) {
   const t = useT();
+  const systemQuery = useQuery({ queryKey: ["design-systems", "tokens", designSystemId], queryFn: () => getDesignSystemTokens(designSystemId!), enabled: !!designSystemId, retry: false });
+  const staleSystem = !!state && (state.design_system?.id !== (designSystemId ?? undefined) || (!!state.design_system && !!systemQuery.data?.layout && JSON.stringify(state.design_system.layout) !== JSON.stringify(systemQuery.data.layout)));
+  const systemPanel = designSystemId ? <DesignSystemLayoutPanel compact layout={systemQuery.data?.layout ?? (state?.design_system?.id === designSystemId ? state.design_system.layout : undefined)} loading={systemQuery.isPending} failed={systemQuery.isError} name={state?.design_system?.id === designSystemId ? state.design_system.name : undefined} /> : null;
   const savedPreferences = state?.creative_preferences ?? DEFAULT_GENERATION_STYLE;
   const [preferences, setPreferences] = useState(savedPreferences);
   useEffect(() => { setPreferences(savedPreferences); }, [state?.generation_id, savedPreferences.image_style, savedPreferences.copy_tone, savedPreferences.image_recipe]);
@@ -64,9 +72,10 @@ export function DirectionsView({
             <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-accent/10"><Compass className="h-7 w-7 text-accent" aria-hidden="true" /></div>
             <h1 className="text-xl font-semibold tracking-tight">{t("directions.introTitle")}</h1>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground [word-break:keep-all]">
-              {t("directions.introBody")}
+              {t(designSystemId ? "directions.systemIntro" : "directions.introBody")}
             </p>
             <p className="mt-3 text-xs leading-6 text-muted-foreground">{t("directions.introCompare")}</p>
+            {systemPanel}
             <GenerationStyleFields value={preferences} onChange={setPreferences} disabled={actionPending} />
             <p className="mt-3 text-xs text-muted-foreground">{t("directions.introPreferences")}</p>
             <Button
@@ -123,6 +132,8 @@ export function DirectionsView({
           ) : null}
         </header>
 
+        {systemPanel}
+        {staleSystem ? <div role="status" className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-4"><p className="text-sm">{t("directions.systemChanged")}</p><Button variant="outline" disabled={loading || actionPending} onClick={() => onGenerate(preferences)}>{t("directions.regenerateSystem")}</Button></div> : null}
         <GenerationStyleFields value={preferences} onChange={setPreferences} disabled={loading || actionPending || preferencesSaving} />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p role="status" className="text-xs text-muted-foreground">{preferencesSaving ? t("directions.preferencesSaving") : preferencesChanged ? t("directions.preferencesChanged") : t("directions.preferencesSaved")} {t("directions.layoutExample")}</p>
@@ -141,7 +152,7 @@ export function DirectionsView({
               key={direction.id}
               direction={direction}
               selected={state.selected_id === direction.id}
-              selectable={actions.canSelect && !actionPending}
+              selectable={actions.canSelect && !actionPending && !staleSystem}
               onSelect={onSelect}
             />
           ))}

@@ -180,3 +180,5 @@
   --family-media-text-ratio: 3 / 2;
   --family-editorial-paragraph-mode: indented;
 }
+
+:root { --layout-structure: editorial; }

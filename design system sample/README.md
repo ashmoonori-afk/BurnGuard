@@ -117,3 +117,17 @@ The Northvale brand uses **photography** and **typography** as its primary visua
 2. **Tokens are sample defaults.** Spacing, type scale, radii, shadows, and motion are reasonable defaults consistent with editorial-finance peers — they are starting points, not a real institution's authoritative tokens.
 3. **Mono → IBM Plex Mono (CDN).** No brand mono is supplied. Swap if a fork has one.
 4. **Logos are placeholders.** The six SVGs in `assets/logos/` are simple monograms; replace before shipping any real-brand artifact.
+
+
+## Layout
+
+The 12-column grid, 1200px maximum width, 62ch reading measure and 28px gutters are mandatory. Use the page margins, vertical section rhythm and 16 / 10 hero ratio from colors_and_type.css. Layout belongs to this system alongside palette and typography.
+
+## Composition
+
+Use an editorial finance masthead, a broad lead statement and a narrow reading measure. Align research figures, tables and supporting copy on one twelve-column grid; use rules and whitespace to distinguish sections.
+
+
+## Responsive
+
+Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
