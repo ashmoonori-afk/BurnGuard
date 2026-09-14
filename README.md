@@ -14,11 +14,19 @@ BurnGuard is a local design workspace for Windows and macOS. Bring your Claude C
 
 Choose a format, describe the project and select a registered design system during onboarding. Search the catalogue or refresh it to pick up newly registered systems. You can also start without one.
 
-The bundled catalogue includes **41 themes**, including **31 original themes** with distinct layout and composition rules. The selected system supplies typography, colors, spacing and layout requirements to generation, including compact prompts. Add your own systems from supported files, websites, repositories or Figma sources, then review and publish them for project use.
+The bundled catalogue includes **41 themes**, including **31 original themes**. Every bundled theme defines its grid, content width, spacing, composition and responsive behavior alongside typography and colors. The original sample systems and prompt presets carry layout rules too. Add your own systems from supported files, websites, repositories or Figma sources, then review and publish them for project use.
 
 ![Project onboarding with design-system search, refresh and selection controls](doc/images/readme-design-system-picker.png)
 
 *Design-system selection in the real application. Systems without a preview remain selectable by name.*
+
+Open a system's overview to inspect its layout rules. **Direction setting and generation use the same rules**, including compact prompts: the three direction previews vary message, evidence and action emphasis within the selected system's structure. These are structural summaries; rendered output can contain richer detail. Directions saved before the system was selected or its rules changed can be regenerated from the current system.
+
+![Design-system overview showing a grid diagram, width and spacing values, composition guidance and responsive rules](doc/images/readme-layout-overview.png)
+
+*The actual overview for an older installed Dark theme. Missing bundled rules are supplemented while existing authored rules are preserved.*
+
+The repository also includes a [website preview gallery](design%20system%20themes/previews/index.html): **41 static example pages** with **41 generated WebP illustrations**, covering editorial sites, shops, workspaces, cultural pages and more. These are reference examples to open from a source checkout, separate from the app's structural direction previews; the gallery and its images are excluded from desktop packages. [Theme token catalogue](design%20system%20themes/catalogue.html)
 
 **37 font families** ship with license notices. Bundled fonts use one shared local store, and canvas loads are reused across projects within the app window. New projects reference that store; standalone exports include the font files they need. [Font catalogue](assets/fonts/README.md) · [Design-system format](doc/05-design-system-format.md)
 
@@ -95,6 +103,15 @@ bun run scripts/dev-launcher.ts
 
 The launcher opens the frontend at `http://127.0.0.1:5173`; the backend uses `127.0.0.1:14070`. Stop it with Ctrl+C. On Windows, `Start-BurnGuard.bat` launches the native app and builds it when needed; that build requires Bun and the .NET 8 SDK. Use `--rebuild` after source changes.
 
+To inspect the repository's theme examples, open `design system themes/previews/index.html` in a browser. The pages use bundled local fonts and images. After editing theme tokens, rebuild the token catalogue and website previews:
+
+```sh
+bun run catalogue
+bun run previews
+```
+
+`previews` rebuilds the HTML and reuses the existing illustrations; it does not call an image provider.
+
 ```sh
 bun run typecheck
 bun run lint
@@ -113,6 +130,7 @@ The interface captures were selected from the repository's local `.omo/evidence`
 |---|---|
 | Website workspace | `fonts-2026-09-09/app-created-prototype.png` |
 | Design-system picker | `design-system-onboarding-20260914/onboarding-desktop.png` |
+| Layout overview | `design-system-layout/overview-desktop.png` |
 | Slide workspace | `updates-samples-2026-09-09/app-created-slide_deck.png` |
 | Graphic output | `fonts-2026-09-09/oddward-graphic-quality.png` |
 
