@@ -45,7 +45,7 @@ export function DirectionsView({
   const t = useT();
   const systemQuery = useQuery({ queryKey: ["design-systems", "tokens", designSystemId], queryFn: () => getDesignSystemTokens(designSystemId!), enabled: !!designSystemId, retry: false });
   const staleSystem = !!state && (state.design_system?.id !== (designSystemId ?? undefined) || (!!state.design_system && !!systemQuery.data?.layout && JSON.stringify(state.design_system.layout) !== JSON.stringify(systemQuery.data.layout)));
-  const systemPanel = designSystemId ? <DesignSystemLayoutPanel layout={systemQuery.data?.layout ?? (state?.design_system?.id === designSystemId ? state.design_system.layout : undefined)} loading={systemQuery.isPending} failed={systemQuery.isError} name={state?.design_system?.id === designSystemId ? state.design_system.name : undefined} /> : null;
+  const systemPanel = designSystemId ? <DesignSystemLayoutPanel compact layout={systemQuery.data?.layout ?? (state?.design_system?.id === designSystemId ? state.design_system.layout : undefined)} loading={systemQuery.isPending} failed={systemQuery.isError} name={state?.design_system?.id === designSystemId ? state.design_system.name : undefined} /> : null;
   const savedPreferences = state?.creative_preferences ?? DEFAULT_GENERATION_STYLE;
   const [preferences, setPreferences] = useState(savedPreferences);
   useEffect(() => { setPreferences(savedPreferences); }, [state?.generation_id, savedPreferences.image_style, savedPreferences.copy_tone, savedPreferences.image_recipe]);

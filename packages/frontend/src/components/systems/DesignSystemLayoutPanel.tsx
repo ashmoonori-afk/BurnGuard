@@ -8,10 +8,11 @@ const labels: Record<string, MessageKey> = {
 };
 const sections = { layout: "system.layout.title", composition: "system.layout.composition", responsive: "system.layout.responsive", family: "system.layout.family" } as const;
 
-export function DesignSystemLayoutPanel({ layout, name, loading = false, failed = false }: { readonly layout?: DesignSystemLayout; readonly name?: string; readonly loading?: boolean; readonly failed?: boolean }) {
+export function DesignSystemLayoutPanel({ layout, name, loading = false, failed = false, compact = false }: { readonly layout?: DesignSystemLayout; readonly name?: string; readonly loading?: boolean; readonly failed?: boolean; readonly compact?: boolean }) {
   const t = useT();
   const missing = layout ? missingDesignSystemLayout(layout) : [];
   const preview = layout && Object.keys(layout.tokens).length ? designSystemLayoutPreview(layout) : null;
+  const rules = layout?.sections.length ? <div className="mt-4 grid min-w-0 gap-4 md:grid-cols-2">{layout.sections.map(section => <div className="min-w-0" key={section.kind}><h3 className="text-sm font-semibold">{t(sections[section.kind])}</h3><p className="mt-1 whitespace-pre-line break-words text-sm leading-6 text-muted-foreground">{section.text}</p></div>)}</div> : null;
   return <section className="my-5 min-w-0 rounded-2xl border border-border bg-card p-5 text-left" aria-label={t("system.layout.title")}>
     <h2 className="text-lg font-semibold">{t("system.layout.title")}{name ? <span className="ml-2 text-sm font-normal text-muted-foreground">{name}</span> : null}</h2>
     <p className="mt-1 text-sm text-muted-foreground">{t("system.layout.help")}</p>
@@ -25,8 +26,8 @@ export function DesignSystemLayoutPanel({ layout, name, loading = false, failed 
         </svg>
         <figcaption className="text-xs leading-5 text-muted-foreground">{t("system.layout.diagram")}</figcaption>
       </figure>
-      <dl className="grid min-w-0 grid-cols-2 content-start gap-3">{Object.entries(labels).filter(([key]) => layout?.tokens[key]).map(([key, label]) => <div key={key} className="min-w-0 rounded-lg bg-muted/40 p-3"><dt className="text-xs text-muted-foreground">{t(label)}</dt><dd className="mt-1 break-words text-sm font-medium">{layout?.tokens[key]}</dd></div>)}</dl>
+      <dl className="grid min-w-0 grid-cols-2 content-start gap-3">{Object.entries(labels).filter(([key]) => layout?.tokens[key]).map(([key, label]) => <div key={key} className="min-w-0 rounded-lg bg-muted/40 p-3"><dt className="text-xs text-muted-foreground">{t(label)}</dt><dd className="mt-1 break-words text-sm font-medium">{layout?.tokens[key]?.replace(/^clamp\(([^,]+),[^,]+,\s*([^)]+)\)$/, "$1 – $2")}</dd></div>)}</dl>
     </div> : null}
-    {layout?.sections.length ? <div className="mt-4 grid min-w-0 gap-4 md:grid-cols-2">{layout.sections.map(section => <div className="min-w-0" key={section.kind}><h3 className="text-sm font-semibold">{t(sections[section.kind])}</h3><p className="mt-1 whitespace-pre-line break-words text-sm leading-6 text-muted-foreground">{section.text}</p></div>)}</div> : null}
+    {compact && rules ? <details className="mt-4"><summary className="cursor-pointer text-sm font-medium">{t("system.layout.details")}</summary>{rules}</details> : rules}
   </section>;
 }

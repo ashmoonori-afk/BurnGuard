@@ -52,6 +52,7 @@ function makeContext(
 }
 
 const FAKE_DESIGN_SYSTEM = {
+  id: "visual-craft-test-system",
   name: "Northvale",
   dir_path: "/missing/ds",
   skill_md_path: null,
