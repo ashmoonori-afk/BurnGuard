@@ -185,6 +185,8 @@
   --family-commerce-purchase-position: sticky;
 }
 
+:root { --layout-structure: split; }
+
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg-1);
@@ -243,7 +245,7 @@ dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--
   .nav ul{display:none}
 }
 </style></head>
-<body data-archetype="shop">
+<body data-archetype="shop" data-layout="split">
 
 <style>
 .shopnav{display:flex;justify-content:space-between;align-items:center;
@@ -272,7 +274,7 @@ dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--
   font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-3)}
 .spec div:last-child{border-bottom:0}
 .spec b{color:var(--fg-2);font-weight:var(--fw-regular,400)}
-@media (max-width:780px){.gallery{grid-template-columns:1fr}.detail{grid-template-columns:1fr}
+@media (max-width:820px){.gallery{grid-template-columns:1fr}.detail{grid-template-columns:1fr}
   .buy{position:static}}
 </style>
 <header class="wrap shopnav">

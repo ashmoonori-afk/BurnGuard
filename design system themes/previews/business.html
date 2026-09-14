@@ -167,6 +167,23 @@
   --dur-slow: 320ms;
 }
 
+
+/* Layout is part of the design-system contract. */
+:root {
+  --layout-max: 1440px;
+  --layout-measure: 60ch;
+  --layout-columns: 12;
+  --layout-gutter: 20px;
+  --layout-margin: clamp(20px, 4vw, 64px);
+  --layout-section-y: clamp(56px, 8vw, 112px);
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 16 / 10;
+  --layout-structure: sidebar;
+  --family-ui-navigation-placement: side;
+  --family-ui-navigation-span: 2;
+}
+
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg-1);
@@ -220,92 +237,148 @@ dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp
 dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
   letter-spacing:.06em;text-transform:uppercase}
 dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
-@media (max-width:820px){
+@media (max-width:760px){
   .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
   .nav ul{display:none}
 }
 </style></head>
-<body data-archetype="marketing">
+<body data-archetype="workspace" data-layout="sidebar">
 
 <style>
-.hero{padding-block:var(--layout-section-y,72px) var(--sp-10)}
-.hero .display{margin-bottom:var(--sp-5)}
-.hero .lede{margin-bottom:var(--sp-6)}
-.panel{margin-top:var(--sp-10);border:var(--layout-rule,1px) solid var(--border);
-  border-radius:var(--r-8);background:var(--surface);overflow:hidden;box-shadow:var(--shadow-2)}
-.hero-visual{height:clamp(260px,40vw,520px);margin-top:var(--sp-10)}
-.panel-head{display:flex;align-items:center;gap:var(--sp-2);
-  padding:var(--sp-3) var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
-  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-3)}
-.dot{width:8px;height:8px;border-radius:var(--r-pill);background:var(--border-strong)}
-.panel-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:0}
-.panel-rows{border-right:var(--layout-rule,1px) solid var(--border)}
-.prow{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);
-  padding:var(--sp-3) var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
-  font-size:var(--fs-14)}
-.prow:last-child{border-bottom:0}
-.prow b{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:var(--fw-medium,500)}
-.bars{display:flex;align-items:flex-end;gap:var(--sp-2);height:190px;padding:var(--sp-4)}
-.bars i{display:block;flex:1;border-radius:var(--r-2) var(--r-2) 0 0}
-.feature h3{font-family:var(--font-display);font-size:var(--fs-24);margin:0 0 var(--sp-2);color:var(--fg-1)}
-.feature p{margin:0;color:var(--fg-3);font-size:var(--fs-14)}
-.feature{padding:var(--sp-5);border:var(--layout-rule,1px) solid var(--border);
-  border-radius:var(--r-8);background:var(--surface)}
-.cta{border:var(--layout-rule,1px) solid var(--border-strong);border-radius:var(--r-8);
-  padding:var(--sp-8);background:var(--bg-subtle);display:flex;justify-content:space-between;
-  align-items:center;gap:var(--sp-5);flex-wrap:wrap}
-@media (max-width:820px){.panel-body{grid-template-columns:1fr}.panel-rows{border-right:0}}
+.shell{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,10fr);
+  gap:var(--layout-gutter,24px);min-height:100vh;max-width:var(--layout-max);margin-inline:auto;padding-inline:var(--layout-margin)}
+.rail{border-right:var(--layout-rule,1px) solid var(--border);background:var(--bg-subtle);
+  padding:var(--sp-5) var(--sp-4);display:block}
+.rail h2{font-family:var(--font-mono);font-size:var(--fs-12);letter-spacing:.08em;
+  text-transform:uppercase;color:var(--fg-4);margin:0 0 var(--sp-3)}
+.facet{display:flex;justify-content:space-between;gap:var(--sp-2);padding-block:var(--sp-2);
+  font-size:var(--fs-14);color:var(--fg-2);border-bottom:var(--layout-rule,1px) solid var(--border)}
+.facet b{font-family:var(--font-mono);font-weight:var(--fw-regular,400);color:var(--fg-4)}
+.facet.on{color:var(--fg-1)}
+.facet.on b{color:var(--primary-blue)}
+.main{padding:var(--sp-5) var(--layout-margin,20px);min-width:0;
+  display:flex;flex-direction:column}
+.main > .foot{margin-top:auto}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);
+  flex-wrap:wrap;margin-bottom:var(--sp-4)}
+.search{flex:1;min-width:200px;border:var(--layout-rule,1px) solid var(--border);
+  border-radius:var(--r-4);padding:var(--sp-2) var(--sp-3);background:var(--surface);
+  font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-3)}
+.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--layout-gutter,12px);
+  margin-bottom:var(--sp-5)}
+.data-visual{height:clamp(180px,24vw,320px);margin-bottom:var(--sp-5)}
+.stat{border:var(--layout-rule,1px) solid var(--border);border-radius:var(--r-4);
+  padding:var(--sp-3) var(--sp-4);background:var(--surface)}
+.stat dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  letter-spacing:.06em;text-transform:uppercase}
+.stat dd{margin:var(--sp-1) 0 0;font-family:var(--font-mono);font-size:var(--fs-24);
+  font-variant-numeric:tabular-nums;color:var(--fg-1)}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:var(--fs-14)}
+.table-scroll{overflow-x:auto}table{min-width:480px}
+thead th{position:sticky;top:0;background:var(--bg);text-align:left;
+  font-family:var(--font-mono);font-size:var(--fs-12);letter-spacing:.07em;
+  text-transform:uppercase;color:var(--fg-4);font-weight:var(--fw-regular,400);
+  padding:var(--sp-2) var(--sp-3);border-bottom:var(--layout-rule,1px) solid var(--border-strong)}
+tbody td{padding:var(--sp-2) var(--sp-3);color:var(--fg-2);
+  border-bottom:var(--layout-rule,1px) solid var(--border)}
+td.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--fg-1)}
+td.id{font-family:var(--font-mono);color:var(--fg-1)}
+.state{font-family:var(--font-mono);font-size:var(--fs-12);padding:var(--sp-1) var(--sp-2);
+  border-radius:var(--r-pill);background:var(--bg-muted)}
+@media (max-width:760px){.shell{grid-template-columns:1fr}.rail{display:flex;gap:var(--sp-3);overflow-x:auto;border-right:0;align-items:center}
+  .rail>*{flex-shrink:0}.main{padding-inline:0}
+  .summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
-<header class="wrap nav">
-  <span class="mark">Business Built-in</span>
-  <ul><li>제품</li><li>문서</li><li>가격</li><li>변경 이력</li></ul>
-  <a class="btn" href="#none">시작하기</a>
-</header>
-<main>
-  <section class="wrap hero">
-    <p class="eyebrow">버전 3.4 · 로컬 우선</p>
-    <h1 class="display">측정되는 것만<br>운영에 남는다</h1>
-    <p class="lede">파이프라인의 모든 단계가 수치로 남고, 실패한 단계는 원인까지 함께 기록됩니다. 설치 없이 로컬에서 실행하세요.</p>
-    <div class="row" style="margin-top:var(--sp-6)">
-      <a class="btn" href="#none">내려받기</a>
-      <a class="btn ghost" href="#none">문서 보기</a>
-    </div>
-    <div class="media hero-visual"><img class="fig" src="./media/business.webp" alt="" loading="lazy" decoding="async"></div>
-    <div class="panel">
-      <div class="panel-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
-        <span style="margin-left:var(--sp-3)">runtime · 127.0.0.1</span></div>
-      <div class="panel-body">
-        <div class="panel-rows">
-          <div class="prow"><span style="color:var(--fg-2)">요청 처리</span><b style="color:var(--success)">1,284</b></div><div class="prow"><span style="color:var(--fg-2)">대기열</span><b style="color:var(--warning-yellow)">37</b></div><div class="prow"><span style="color:var(--fg-2)">실패</span><b style="color:var(--error)">2</b></div>
-          <div class="prow"><span style="color:var(--fg-2)">평균 지연</span><b>142 ms</b></div>
-        </div>
-        <div class="bars">
-          <i style="height:38%;background:var(--chart-1)"></i><i style="height:62%;background:var(--chart-2)"></i><i style="height:45%;background:var(--chart-3)"></i><i style="height:88%;background:var(--chart-4)"></i><i style="height:54%;background:var(--chart-5)"></i><i style="height:72%;background:var(--chart-6)"></i><i style="height:96%;background:var(--chart-7)"></i><i style="height:60%;background:var(--chart-8)"></i>
-        </div>
+<div class="shell">
+  <aside class="rail">
+    <h2>구분</h2>
+    <div class="facet on"><span>전체</span><b>412</b></div><div class="facet"><span>정상</span><b>381</b></div><div class="facet"><span>지연</span><b>24</b></div><div class="facet"><span>실패</span><b>7</b></div>
+    <h2 style="margin-top:var(--sp-6)">지역</h2>
+    <div class="facet"><span>수도권</span><b>208</b></div><div class="facet"><span>영남</span><b>96</b></div><div class="facet"><span>호남</span><b>61</b></div><div class="facet"><span>기타</span><b>47</b></div>
+  </aside>
+  <main class="main">
+    <div class="toolbar">
+      <span class="eyebrow">운영 기록 · 최근 24시간</span>
+      <div class="row">
+        <span class="search">식별자 또는 지역으로 검색</span>
+        <span class="tag">정렬 · 최신</span>
       </div>
     </div>
-  </section>
-  <section class="wrap section">
-    <div class="grid cols-3">
-      <article class="feature"><h3>결정론적 실행</h3><p>같은 입력은 같은 결과를 만듭니다. 재현되지 않는 통과는 통과가 아닙니다.</p></article><article class="feature"><h3>경계에서만 검증</h3><p>신뢰 구간 안에서는 방어 코드를 두지 않고, 경계에서 한 번 검증합니다.</p></article><article class="feature"><h3>증거가 남는 배포</h3><p>모든 게시는 해시와 영수증을 남기고, 실패하면 이전 상태로 되돌아갑니다.</p></article>
-    </div>
-  </section>
-  <section class="wrap section" style="padding-top:0">
-    <hr class="rule" style="margin-bottom:var(--sp-8)">
-    <dl class="facts">
-      <div><dt>평균 부팅</dt><dd>0.8초</dd></div>
-      <div><dt>메모리</dt><dd>180 MB</dd></div>
-      <div><dt>외부 의존</dt><dd>없음</dd></div>
-      <div><dt>지원 플랫폼</dt><dd>Windows · macOS</dd></div>
+    <dl class="summary">
+      <div class="stat"><dt>총 실행</dt><dd>412</dd></div><div class="stat"><dt>성공률</dt><dd>92.5%</dd></div><div class="stat"><dt>평균 지연</dt><dd>142 ms</dd></div><div class="stat"><dt>대기</dt><dd>37</dd></div>
     </dl>
-  </section>
-  <section class="wrap section" style="padding-top:0">
-    <div class="cta">
-      <div><p class="eyebrow">지금 시작</p>
-        <p class="display" style="font-size:var(--fs-32);margin-top:var(--sp-2)">설치는 한 번, 실행은 로컬에서</p></div>
-      <a class="btn" href="#none">내려받기</a>
-    </div>
-  </section>
-</main>
-<footer class="wrap foot"><span>Business Built-in Theme</span><span>미리보기 · 토큰 기반 생성</span></footer>
+    <div class="media data-visual"><img class="fig" src="./media/business.webp" alt="" loading="lazy" decoding="async"></div>
+    <div class="table-scroll" role="region" aria-label="운영 기록 표" tabindex="0"><table>
+      <thead><tr><th>식별자</th><th>상태</th><th>지역</th><th style="text-align:right">처리량</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="id">SPX-1042</td>
+          <td><span class="state" style="color:var(--success)">정상</span></td>
+          <td>서울</td>
+          <td class="num">2,481</td></tr><tr>
+          <td class="id">SPX-1043</td>
+          <td><span class="state" style="color:var(--warning-yellow)">지연</span></td>
+          <td>부산</td>
+          <td class="num">1,120</td></tr><tr>
+          <td class="id">SPX-1051</td>
+          <td><span class="state" style="color:var(--success)">정상</span></td>
+          <td>대전</td>
+          <td class="num">3,004</td></tr><tr>
+          <td class="id">SPX-1067</td>
+          <td><span class="state" style="color:var(--error)">실패</span></td>
+          <td>광주</td>
+          <td class="num">0</td></tr><tr>
+          <td class="id">SPX-1072</td>
+          <td><span class="state" style="color:var(--success)">정상</span></td>
+          <td>인천</td>
+          <td class="num">1,894</td></tr><tr>
+          <td class="id">SPX-1080</td>
+          <td><span class="state" style="color:var(--info)">대기</span></td>
+          <td>제주</td>
+          <td class="num">412</td></tr><tr>
+          <td class="id">SPX-1091</td>
+          <td><span class="state" style="color:var(--success)">정상</span></td>
+          <td>서울</td>
+          <td class="num">2,760</td></tr><tr>
+          <td class="id">SPX-1104</td>
+          <td><span class="state" style="color:var(--success)">정상</span></td>
+          <td>수원</td>
+          <td class="num">1,338</td></tr><tr>
+          <td class="id">SPX-1110</td>
+          <td><span class="state" style="color:var(--warning-yellow)">지연</span></td>
+          <td>대구</td>
+          <td class="num">902</td></tr><tr>
+          <td class="id">SPX-1126</td>
+          <td><span class="state" style="color:var(--success)">정상</span></td>
+          <td>울산</td>
+          <td class="num">1,507</td></tr><tr>
+          <td class="id">SPX-1133</td>
+          <td><span class="state" style="color:var(--info)">대기</span></td>
+          <td>창원</td>
+          <td class="num">268</td></tr><tr>
+          <td class="id">SPX-1147</td>
+          <td><span class="state" style="color:var(--success)">정상</span></td>
+          <td>청주</td>
+          <td class="num">2,045</td></tr><tr>
+          <td class="id">SPX-1152</td>
+          <td><span class="state" style="color:var(--error)">실패</span></td>
+          <td>전주</td>
+          <td class="num">0</td></tr><tr>
+          <td class="id">SPX-1168</td>
+          <td><span class="state" style="color:var(--success)">정상</span></td>
+          <td>천안</td>
+          <td class="num">1,712</td></tr><tr>
+          <td class="id">SPX-1174</td>
+          <td><span class="state" style="color:var(--success)">정상</span></td>
+          <td>김해</td>
+          <td class="num">884</td></tr><tr>
+          <td class="id">SPX-1180</td>
+          <td><span class="state" style="color:var(--warning-yellow)">지연</span></td>
+          <td>포항</td>
+          <td class="num">639</td></tr>
+      </tbody>
+    </table></div>
+    <footer class="foot"><span>Business Built-in Theme</span><span>미리보기 · 토큰 기반 생성</span></footer>
+  </main>
+</div>
 </body></html>

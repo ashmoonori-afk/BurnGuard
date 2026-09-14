@@ -167,6 +167,23 @@
   --dur-slow: 320ms;
 }
 
+
+/* Layout is part of the design-system contract. */
+:root {
+  --layout-max: 1120px;
+  --layout-measure: 64ch;
+  --layout-columns: 12;
+  --layout-gutter: 32px;
+  --layout-margin: clamp(20px, 4vw, 64px);
+  --layout-section-y: clamp(56px, 8vw, 112px);
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 4 / 3;
+  --layout-structure: editorial;
+  --family-ui-navigation-placement: top;
+  --family-ui-navigation-span: 0;
+}
+
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg-1);
@@ -220,92 +237,79 @@ dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp
 dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
   letter-spacing:.06em;text-transform:uppercase}
 dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
-@media (max-width:820px){
+@media (max-width:760px){
   .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
   .nav ul{display:none}
 }
 </style></head>
-<body data-archetype="marketing">
+<body data-archetype="article" data-layout="editorial">
 
 <style>
-.hero{padding-block:var(--layout-section-y,72px) var(--sp-10)}
-.hero .display{margin-bottom:var(--sp-5)}
-.hero .lede{margin-bottom:var(--sp-6)}
-.panel{margin-top:var(--sp-10);border:var(--layout-rule,1px) solid var(--border);
-  border-radius:var(--r-8);background:var(--surface);overflow:hidden;box-shadow:var(--shadow-2)}
-.hero-visual{height:clamp(260px,40vw,520px);margin-top:var(--sp-10)}
-.panel-head{display:flex;align-items:center;gap:var(--sp-2);
-  padding:var(--sp-3) var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
-  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-3)}
-.dot{width:8px;height:8px;border-radius:var(--r-pill);background:var(--border-strong)}
-.panel-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:0}
-.panel-rows{border-right:var(--layout-rule,1px) solid var(--border)}
-.prow{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);
-  padding:var(--sp-3) var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
-  font-size:var(--fs-14)}
-.prow:last-child{border-bottom:0}
-.prow b{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:var(--fw-medium,500)}
-.bars{display:flex;align-items:flex-end;gap:var(--sp-2);height:190px;padding:var(--sp-4)}
-.bars i{display:block;flex:1;border-radius:var(--r-2) var(--r-2) 0 0}
-.feature h3{font-family:var(--font-display);font-size:var(--fs-24);margin:0 0 var(--sp-2);color:var(--fg-1)}
-.feature p{margin:0;color:var(--fg-3);font-size:var(--fs-14)}
-.feature{padding:var(--sp-5);border:var(--layout-rule,1px) solid var(--border);
-  border-radius:var(--r-8);background:var(--surface)}
-.cta{border:var(--layout-rule,1px) solid var(--border-strong);border-radius:var(--r-8);
-  padding:var(--sp-8);background:var(--bg-subtle);display:flex;justify-content:space-between;
-  align-items:center;gap:var(--sp-5);flex-wrap:wrap}
-@media (max-width:820px){.panel-body{grid-template-columns:1fr}.panel-rows{border-right:0}}
+.masthead{display:flex;justify-content:center;align-items:center;
+  min-height:var(--layout-nav-h,64px);border-bottom:var(--layout-rule,1px) solid var(--border)}
+.masthead .mark{font-family:var(--font-display);font-size:var(--fs-24);letter-spacing:var(--ls-tight)}
+.article-shell{display:grid;grid-template-columns:1fr;gap:var(--layout-gutter,24px)}
+.article-shell main{min-width:0}
+.contents{padding-block:var(--sp-8);border-right:var(--layout-rule,1px) solid var(--border);font-family:var(--font-mono);font-size:var(--fs-14)}
+.contents a{display:block;padding:var(--sp-3) var(--sp-2);overflow-wrap:anywhere}
+.article-hero{display:grid;grid-template-columns:1fr;gap:var(--layout-gutter,24px);align-items:center}
+.article-hero .hero-media{}
+.article-hero .headline-block{}
+
+.hero-media{aspect-ratio:var(--layout-hero,16 / 9);margin-block:var(--sp-8)}
+.hero-media .fig{object-fit:cover}
+.headline{max-width:var(--layout-measure,62ch)}
+.byline{display:flex;gap:var(--sp-4);flex-wrap:wrap;font-family:var(--font-mono);
+  font-size:var(--fs-12);color:var(--fg-4);margin-block:var(--sp-5);
+  padding-block:var(--sp-3);border-block:var(--layout-rule,1px) solid var(--border)}
+.prose{max-width:var(--layout-measure,62ch);font-family:var(--font-serif);
+  font-size:var(--fs-18);line-height:var(--lh-loose,var(--lh-relaxed));color:var(--fg-2)}
+.prose p{margin:0 0 var(--sp-4)}
+.prose p + p{}
+.pull{font-family:var(--font-display);font-size:var(--fs-32);line-height:var(--lh-tight);
+  color:var(--fg-1);margin-block:var(--sp-8);padding-left:var(--sp-5);
+  border-left:3px solid var(--primary-blue);max-width:var(--layout-measure,62ch)}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--layout-gutter,24px);align-items:start}
+.caption{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);margin-top:var(--sp-2)}
+.more{display:grid;gap:0;margin-top:var(--sp-10)}
+.more a{display:flex;justify-content:space-between;gap:var(--sp-4);text-decoration:none;
+  padding-block:var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
+  font-family:var(--font-serif);font-size:var(--fs-18);color:var(--fg-1)}
+.more a span{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4)}
+@media (max-width:760px){
+  .split,.article-shell,.article-hero{grid-template-columns:1fr}
+  .article-hero .hero-media,.article-hero .headline-block{grid-column:auto;grid-row:auto}
+  .article-hero .headline-block{order:-1}.article-hero .hero-media{margin-top:var(--sp-4)}
+  .contents{display:flex;flex-wrap:wrap;border-right:0;border-bottom:var(--layout-rule,1px) solid var(--border);padding-block:var(--sp-2)}}
 </style>
-<header class="wrap nav">
-  <span class="mark">Nord Built-in</span>
-  <ul><li>제품</li><li>문서</li><li>가격</li><li>변경 이력</li></ul>
-  <a class="btn" href="#none">시작하기</a>
-</header>
+<header class="wrap masthead"><span class="mark">Nord Built-in</span></header>
+<div class="wrap article-shell">
+
 <main>
-  <section class="wrap hero">
-    <p class="eyebrow">버전 3.4 · 로컬 우선</p>
-    <h1 class="display">측정되는 것만<br>운영에 남는다</h1>
-    <p class="lede">파이프라인의 모든 단계가 수치로 남고, 실패한 단계는 원인까지 함께 기록됩니다. 설치 없이 로컬에서 실행하세요.</p>
-    <div class="row" style="margin-top:var(--sp-6)">
-      <a class="btn" href="#none">내려받기</a>
-      <a class="btn ghost" href="#none">문서 보기</a>
-    </div>
-    <div class="media hero-visual"><img class="fig" src="./media/nord.webp" alt="" loading="lazy" decoding="async"></div>
-    <div class="panel">
-      <div class="panel-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
-        <span style="margin-left:var(--sp-3)">runtime · 127.0.0.1</span></div>
-      <div class="panel-body">
-        <div class="panel-rows">
-          <div class="prow"><span style="color:var(--fg-2)">요청 처리</span><b style="color:var(--success)">1,284</b></div><div class="prow"><span style="color:var(--fg-2)">대기열</span><b style="color:var(--warning-yellow)">37</b></div><div class="prow"><span style="color:var(--fg-2)">실패</span><b style="color:var(--error)">2</b></div>
-          <div class="prow"><span style="color:var(--fg-2)">평균 지연</span><b>142 ms</b></div>
-        </div>
-        <div class="bars">
-          <i style="height:38%;background:var(--chart-1)"></i><i style="height:62%;background:var(--chart-2)"></i><i style="height:45%;background:var(--chart-3)"></i><i style="height:88%;background:var(--chart-4)"></i><i style="height:54%;background:var(--chart-5)"></i><i style="height:72%;background:var(--chart-6)"></i><i style="height:96%;background:var(--chart-7)"></i><i style="height:60%;background:var(--chart-8)"></i>
-        </div>
-      </div>
+  <section class="article-hero" id="article-intro">
+  <div class="media hero-media"><img class="fig" src="./media/nord.webp" alt="" loading="lazy" decoding="async"></div>
+  <div class="headline-block">
+  <p class="eyebrow">에세이 · 작업 방식</p>
+  <h1 class="display headline" style="margin-top:var(--sp-3)">되돌릴 수 있는 만큼만<br>과감해질 수 있다</h1>
+  </div></section>
+  <div class="byline"><span>글 · 편집부</span><span>2026년 3월</span><span>읽는 데 7분</span></div>
+  <div class="prose" id="article-details"><p>작업의 속도를 결정하는 것은 도구가 아니라 되돌릴 수 있는 범위다. 한 번에 되돌릴 수 있는 단위가 작을수록 더 과감하게 시도할 수 있고, 시도가 많아질수록 결과는 빨리 수렴한다.</p><p>그래서 좋은 작업 환경은 빠른 환경이 아니라 취소가 싼 환경이다. 저장과 게시를 분리하고, 게시에는 영수증을 남기고, 영수증이 있으면 언제든 이전 상태로 돌아갈 수 있게 한다.</p><p>이 원칙은 화면에도 그대로 적용된다. 한 화면에서 수행할 수 있는 결정의 수를 줄이면 각 결정의 되돌림 비용이 내려가고, 사용자는 화면을 읽는 대신 사용하게 된다.</p></div>
+  <blockquote class="pull">취소가 싼 환경에서만 사람은 과감해진다.</blockquote>
+  <section class="split section" style="padding-bottom:0">
+    <figure style="margin:0">
+      <div class="media" style="aspect-ratio:4 / 3"><svg class="fig" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false"><rect x="0" y="0" width="100" height="100" fill="var(--bg-muted)"/>
+         <rect x="18" y="18" width="64" height="64" fill="var(--gray-60)" opacity="0.9"/>
+         <circle cx="50" cy="50" r="18" fill="var(--gray-40)"/></svg></div>
+      <figcaption class="caption">그림 1. 저장과 게시를 분리한 상태 전이</figcaption>
+    </figure>
+    <div class="prose">
+      <p>게시는 저장의 연장이 아니라 별개의 사건이다. 저장은 사용자의 손에서 끝나지만, 게시는 다른 사람이 볼 수 있는 상태를 만든다.</p>
+      <p>두 사건을 분리하면 편집 중의 불완전한 상태가 바깥으로 새지 않고, 게시 시점마다 검증할 수 있는 지점이 생긴다.</p>
     </div>
   </section>
-  <section class="wrap section">
-    <div class="grid cols-3">
-      <article class="feature"><h3>결정론적 실행</h3><p>같은 입력은 같은 결과를 만듭니다. 재현되지 않는 통과는 통과가 아닙니다.</p></article><article class="feature"><h3>경계에서만 검증</h3><p>신뢰 구간 안에서는 방어 코드를 두지 않고, 경계에서 한 번 검증합니다.</p></article><article class="feature"><h3>증거가 남는 배포</h3><p>모든 게시는 해시와 영수증을 남기고, 실패하면 이전 상태로 되돌아갑니다.</p></article>
-    </div>
-  </section>
-  <section class="wrap section" style="padding-top:0">
-    <hr class="rule" style="margin-bottom:var(--sp-8)">
-    <dl class="facts">
-      <div><dt>평균 부팅</dt><dd>0.8초</dd></div>
-      <div><dt>메모리</dt><dd>180 MB</dd></div>
-      <div><dt>외부 의존</dt><dd>없음</dd></div>
-      <div><dt>지원 플랫폼</dt><dd>Windows · macOS</dd></div>
-    </dl>
-  </section>
-  <section class="wrap section" style="padding-top:0">
-    <div class="cta">
-      <div><p class="eyebrow">지금 시작</p>
-        <p class="display" style="font-size:var(--fs-32);margin-top:var(--sp-2)">설치는 한 번, 실행은 로컬에서</p></div>
-      <a class="btn" href="#none">내려받기</a>
-    </div>
-  </section>
-</main>
+  <nav class="more" id="article-related">
+    <a href="#none">여백은 장식이 아니라 구조다<span>03</span></a><a href="#none">측정되지 않는 개선은 취향이다<span>02</span></a><a href="#none">작은 단위로 되돌리기<span>01</span></a>
+  </nav>
+</main></div>
 <footer class="wrap foot"><span>Nord Built-in Theme</span><span>미리보기 · 토큰 기반 생성</span></footer>
 </body></html>

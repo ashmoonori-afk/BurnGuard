@@ -18,30 +18,29 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { bundledDesignSystems } from "../packages/backend/src/data/bundled-design-systems";
 
 const repoRoot = path.resolve(import.meta.dir, "..");
 const themesRoot = path.join(repoRoot, "design system themes");
-const registryPath = path.join(repoRoot, "packages/backend/src/data/bundled-design-systems.ts");
 const outputRoot = path.join(themesRoot, "previews");
 
 type Archetype = "marketing" | "article" | "shop" | "poster" | "workspace" | "place";
 
 /**
- * Which kind of site each system would build. Donors have no documented composition, so they take
- * the marketing archetype, which exercises the widest range of their tokens.
+ * Content genre is authored here; layout, navigation, proportions and breakpoints come from tokens.
  */
 const ARCHETYPE: Record<string, Archetype> = {
   // Donor palettes.
-  light: "marketing", dark: "marketing", cupcake: "marketing", retro: "marketing",
-  cyberpunk: "marketing", synthwave: "marketing", luxury: "marketing", dracula: "marketing",
-  nord: "marketing", business: "marketing",
+  light: "marketing", dark: "workspace", cupcake: "marketing", retro: "article",
+  cyberpunk: "workspace", synthwave: "marketing", luxury: "article", dracula: "article",
+  nord: "article", business: "workspace",
   // Earlier originals, by the composition each one documents.
-  "cobalt-atelier": "poster", "signal-reel": "poster", "daylight-press": "marketing",
+  "cobalt-atelier": "poster", "signal-reel": "poster", "daylight-press": "article",
   "blueprint-manual": "article", "ledger-index": "workspace", "dune-editorial": "article",
   "archive-folio": "workspace",
   // Family systems.
   "signal-console": "marketing", "paper-instrument": "marketing",
-  "quiet-runtime": "marketing", "graphite-spec": "marketing",
+  "quiet-runtime": "workspace", "graphite-spec": "marketing",
   "long-form-press": "article", "wide-gutter-review": "article",
   "quarterly-folio": "article", "night-edition": "article",
   "studio-counter": "shop", "atelier-counter": "shop", "market-stack": "shop", "vitrine-mono": "shop",
@@ -58,12 +57,6 @@ type Theme = {
   readonly css: string;
   readonly token: (name: string, fallback?: string) => string;
 };
-
-async function registered(): Promise<readonly { slug: string; name: string }[]> {
-  const source = await readFile(registryPath, "utf8");
-  return [...source.matchAll(/\{\s*slug:\s*"([^"]+)",\s*name:\s*"([^"]+)"\s*\}/g)]
-    .map((m) => ({ slug: m[1]!, name: m[2]! }));
-}
 
 function scopedTokens(css: string): string {
   return css
@@ -104,7 +97,7 @@ function figure(kind: "wide" | "portrait" | "square" | "band", seed: number, ton
 }
 
 /** Primitives every archetype shares. Each declaration resolves to a theme token. */
-function baseCss(): string {
+function baseCss(theme: Theme): string {
   return `
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -159,7 +152,7 @@ dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp
 dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
   letter-spacing:.06em;text-transform:uppercase}
 dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
-@media (max-width:820px){
+@media (max-width:${theme.token("layout-bp-md", "820px")}){
   .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
   .nav ul{display:none}
 }`;
@@ -188,7 +181,23 @@ type Ctx = Theme & {
   hero: (kind: "wide" | "portrait" | "square" | "band", seed: number, tone?: "data" | "neutral") => string;
 };
 
+// CSS grid needs two dimensioned tracks, not the aspect-ratio syntax used by the tokens.
+function mediaTracks(value: string): string {
+  const parts = value.split("/").map(Number);
+  const [media = 1, text = 1] = parts;
+  if (parts.length > 2 || ![media, text].every(n => Number.isFinite(n) && n > 0)) throw new Error("Invalid media/text ratio");
+  return `minmax(0,${media}fr) minmax(0,${text}fr)`;
+}
+
+function navigationTracks(c: Ctx): string {
+  const columns = Number(c.token("layout-columns", "12"));
+  const span = Number(c.fam("family-ui-navigation-span", "2"));
+  if (!Number.isInteger(columns) || !Number.isInteger(span) || span < 1 || span >= columns) throw new Error(`${c.slug}: invalid navigation span`);
+  return `minmax(0,${span}fr) minmax(0,${columns - span}fr)`;
+}
+
 function marketing(c: Ctx): string {
+  const split = c.token("layout-structure") === "split";
   const panelRows = [
     ["요청 처리", "1,284", "success"],
     ["대기열", "37", "warning-yellow"],
@@ -197,11 +206,15 @@ function marketing(c: Ctx): string {
   return `
 <style>
 .hero{padding-block:var(--layout-section-y,72px) var(--sp-10)}
+.hero-lead{display:grid;grid-template-columns:${split ? "minmax(0,5fr) minmax(0,7fr)" : "1fr"};gap:var(--layout-gutter,24px);align-items:center}
+.hero-copy{${split ? "" : "text-align:center"}}
+.hero-copy .row{${split ? "" : "justify-content:center"}}
+.hero-copy .lede{${split ? "" : "margin-inline:auto"}}
 .hero .display{margin-bottom:var(--sp-5)}
 .hero .lede{margin-bottom:var(--sp-6)}
 .panel{margin-top:var(--sp-10);border:var(--layout-rule,1px) solid var(--border);
   border-radius:var(--r-8);background:var(--surface);overflow:hidden;box-shadow:var(--shadow-2)}
-.hero-visual{height:clamp(260px,40vw,520px);margin-top:var(--sp-10)}
+.hero-visual{aspect-ratio:var(--layout-hero,16 / 10);${split ? "" : "max-width:var(--layout-max);width:100%;margin-inline:auto"}}
 .panel-head{display:flex;align-items:center;gap:var(--sp-2);
   padding:var(--sp-3) var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
   font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-3)}
@@ -222,7 +235,7 @@ function marketing(c: Ctx): string {
 .cta{border:var(--layout-rule,1px) solid var(--border-strong);border-radius:var(--r-8);
   padding:var(--sp-8);background:var(--bg-subtle);display:flex;justify-content:space-between;
   align-items:center;gap:var(--sp-5);flex-wrap:wrap}
-@media (max-width:820px){.panel-body{grid-template-columns:1fr}.panel-rows{border-right:0}}
+@media (max-width:${c.token("layout-bp-md", "820px")}){.panel-body,.hero-lead{grid-template-columns:1fr}.panel-rows{border-right:0}}
 </style>
 <header class="wrap nav">
   <span class="mark">${escapeHtml(c.name.replace(/ Theme$/, ""))}</span>
@@ -231,6 +244,7 @@ function marketing(c: Ctx): string {
 </header>
 <main>
   <section class="wrap hero">
+    <div class="hero-lead"><div class="hero-copy">
     <p class="eyebrow">버전 3.4 · 로컬 우선</p>
     <h1 class="display">측정되는 것만<br>운영에 남는다</h1>
     <p class="lede">파이프라인의 모든 단계가 수치로 남고, 실패한 단계는 원인까지 함께 기록됩니다. 설치 없이 로컬에서 실행하세요.</p>
@@ -238,7 +252,7 @@ function marketing(c: Ctx): string {
       <a class="btn" href="#none">내려받기</a>
       <a class="btn ghost" href="#none">문서 보기</a>
     </div>
-    <div class="media hero-visual">${c.hero("wide", 0, "neutral")}</div>
+    </div><div class="media hero-visual">${c.hero("wide", 0, "neutral")}</div></div>
     <div class="panel">
       <div class="panel-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
         <span style="margin-left:var(--sp-3)">runtime · 127.0.0.1</span></div>
@@ -283,7 +297,10 @@ function marketing(c: Ctx): string {
 
 function article(c: Ctx): string {
   const fit = c.fam("family-media-fit", "cover");
-  const ratio = c.fam("family-media-text-ratio", "1");
+  const ratio = mediaTracks(c.fam("family-media-text-ratio", "1"));
+  const structure = c.token("layout-structure");
+  const side = structure === "sidebar";
+  const split = structure === "split" || structure === "offset";
   const indented = c.fam("family-editorial-paragraph-mode", "spaced") === "indented";
   const paragraphs = [
     "작업의 속도를 결정하는 것은 도구가 아니라 되돌릴 수 있는 범위다. 한 번에 되돌릴 수 있는 단위가 작을수록 더 과감하게 시도할 수 있고, 시도가 많아질수록 결과는 빨리 수렴한다.",
@@ -295,6 +312,14 @@ function article(c: Ctx): string {
 .masthead{display:flex;justify-content:center;align-items:center;
   min-height:var(--layout-nav-h,64px);border-bottom:var(--layout-rule,1px) solid var(--border)}
 .masthead .mark{font-family:var(--font-display);font-size:var(--fs-24);letter-spacing:var(--ls-tight)}
+.article-shell{display:grid;grid-template-columns:${side ? navigationTracks(c) : "1fr"};gap:var(--layout-gutter,24px)}
+.article-shell main{min-width:0}
+.contents{padding-block:var(--sp-8);border-right:var(--layout-rule,1px) solid var(--border);font-family:var(--font-mono);font-size:var(--fs-14)}
+.contents a{display:block;padding:var(--sp-3) var(--sp-2);overflow-wrap:anywhere}
+.article-hero{display:grid;grid-template-columns:${split ? "minmax(0,4fr) minmax(0,8fr)" : "1fr"};gap:var(--layout-gutter,24px);align-items:center}
+.article-hero .hero-media{${split ? "grid-column:2;grid-row:1" : ""}}
+.article-hero .headline-block{${split ? "grid-column:1;grid-row:1" : ""}}
+${structure === "offset" ? ".article-hero .hero-media{margin-top:var(--layout-section-y)}.masthead{justify-content:flex-start}" : ""}
 .hero-media{aspect-ratio:var(--layout-hero,16 / 9);margin-block:var(--sp-8)}
 .hero-media .fig{object-fit:${fit}}
 .headline{max-width:var(--layout-measure,62ch)}
@@ -308,22 +333,31 @@ function article(c: Ctx): string {
 .pull{font-family:var(--font-display);font-size:var(--fs-32);line-height:var(--lh-tight);
   color:var(--fg-1);margin-block:var(--sp-8);padding-left:var(--sp-5);
   border-left:3px solid var(--primary-blue);max-width:var(--layout-measure,62ch)}
-.split{display:grid;grid-template-columns:${ratio} 1fr;gap:var(--layout-gutter,24px);align-items:start}
+.split{display:grid;grid-template-columns:${ratio};gap:var(--layout-gutter,24px);align-items:start}
 .caption{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);margin-top:var(--sp-2)}
 .more{display:grid;gap:0;margin-top:var(--sp-10)}
 .more a{display:flex;justify-content:space-between;gap:var(--sp-4);text-decoration:none;
   padding-block:var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
   font-family:var(--font-serif);font-size:var(--fs-18);color:var(--fg-1)}
 .more a span{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4)}
-@media (max-width:820px){.split{grid-template-columns:1fr}}
+@media (max-width:${c.token("layout-bp-md", "820px")}){
+  .split,.article-shell,.article-hero{grid-template-columns:1fr}
+  .article-hero .hero-media,.article-hero .headline-block{grid-column:auto;grid-row:auto}
+  .article-hero .headline-block{order:-1}.article-hero .hero-media{margin-top:var(--sp-4)}
+  .contents{display:flex;flex-wrap:wrap;border-right:0;border-bottom:var(--layout-rule,1px) solid var(--border);padding-block:var(--sp-2)}}
 </style>
 <header class="wrap masthead"><span class="mark">${escapeHtml(c.name.replace(/ Theme$/, ""))}</span></header>
-<main class="wrap">
+<div class="wrap article-shell">
+${side ? '<nav class="contents" aria-label="목차"><a href="#article-intro">개요</a><a href="#article-details">본문</a><a href="#article-related">관련 문서</a></nav>' : ""}
+<main>
+  <section class="article-hero" id="article-intro">
   <div class="media hero-media">${c.hero("wide", 1, "neutral")}</div>
+  <div class="headline-block">
   <p class="eyebrow">에세이 · 작업 방식</p>
   <h1 class="display headline" style="margin-top:var(--sp-3)">되돌릴 수 있는 만큼만<br>과감해질 수 있다</h1>
+  </div></section>
   <div class="byline"><span>글 · 편집부</span><span>2026년 3월</span><span>읽는 데 7분</span></div>
-  <div class="prose">${paragraphs.map((p) => `<p>${p}</p>`).join("")}</div>
+  <div class="prose" id="article-details">${paragraphs.map((p) => `<p>${p}</p>`).join("")}</div>
   <blockquote class="pull">취소가 싼 환경에서만 사람은 과감해진다.</blockquote>
   <section class="split section" style="padding-bottom:0">
     <figure style="margin:0">
@@ -335,11 +369,11 @@ function article(c: Ctx): string {
       <p>두 사건을 분리하면 편집 중의 불완전한 상태가 바깥으로 새지 않고, 게시 시점마다 검증할 수 있는 지점이 생긴다.</p>
     </div>
   </section>
-  <nav class="more">
+  <nav class="more" id="article-related">
     ${[["여백은 장식이 아니라 구조다", "03"], ["측정되지 않는 개선은 취향이다", "02"], ["작은 단위로 되돌리기", "01"]]
       .map(([t, n]) => `<a href="#none">${t}<span>${n}</span></a>`).join("")}
   </nav>
-</main>
+</main></div>
 <footer class="wrap foot"><span>${escapeHtml(c.name)}</span><span>미리보기 · 토큰 기반 생성</span></footer>`;
 }
 
@@ -392,7 +426,7 @@ function shop(c: Ctx): string {
   font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-3)}
 .spec div:last-child{border-bottom:0}
 .spec b{color:var(--fg-2);font-weight:var(--fw-regular,400)}
-@media (max-width:780px){.gallery{grid-template-columns:1fr}.detail{grid-template-columns:1fr}
+@media (max-width:${c.token("layout-bp-md", "780px")}){.gallery{grid-template-columns:1fr}.detail{grid-template-columns:1fr}
   .buy{position:static}}
 </style>
 <header class="wrap shopnav">
@@ -426,6 +460,8 @@ function shop(c: Ctx): string {
 }
 
 function poster(c: Ctx): string {
+  const split = c.token("layout-structure") === "split";
+  const inset = c.slug === "cobalt-atelier";
   const rotation = c.fam("family-creative-type-rotation", "0deg");
   const step = c.fam("family-creative-line-step", "0px");
   const overlap = c.fam("family-creative-type-image-overlap", "0%");
@@ -444,6 +480,9 @@ function poster(c: Ctx): string {
   font-size:var(--fs-12);color:var(--fg-3);letter-spacing:.08em}
 .field{padding-block:var(--layout-section-y,96px) var(--sp-6);text-align:center}
 .band .media{border-radius:0;aspect-ratio:var(--layout-hero,21 / 9)}
+${inset ? ".band{max-width:var(--layout-max);margin-inline:auto;padding-inline:var(--layout-margin)}.over{text-align:left;padding-top:var(--sp-8)}" : ""}
+${split ? `.poster-main{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,4fr);gap:var(--layout-gutter);max-width:var(--layout-max);margin-inline:auto;padding-inline:var(--layout-margin)}
+.poster-main>.field,.poster-main>section:last-child{grid-column:1 / -1}.poster-main>.band{grid-column:2;grid-row:2}.poster-main>.over{grid-column:1;grid-row:2;padding-inline:0;overflow:hidden;text-align:left;margin-top:0}` : ""}
 .over{position:relative;z-index:1;text-align:center;
   margin-top:calc(-1 * ${fraction} * var(--statement-h));
   padding-bottom:calc(var(--sp-8) - ${fraction} * var(--statement-h))}
@@ -465,11 +504,14 @@ function poster(c: Ctx): string {
 .credits dd{margin:0;color:var(--fg-2)}
 .note{max-width:var(--layout-measure,46ch);margin:var(--sp-8) auto 0;text-align:center;
   font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-3)}
+@media (max-width:${c.token("layout-bp-md", "820px")}){
+  .poster-main{display:block}.statement{transform:none}.statement span:nth-child(n){margin-left:0}
+  .over{margin-top:0;padding-bottom:var(--sp-8)}}
 </style>
 <header class="wrap chrome">
   <span>${escapeHtml(c.name.replace(/ Theme$/, ""))}</span><span>메뉴</span>
 </header>
-<main>
+<main class="poster-main">
   <section class="wrap field"><p class="eyebrow">2026 봄 상영 · 단관</p></section>
   <section class="bleed band"><div class="media">${c.hero("band", 5, "neutral")}</div></section>
   <section class="wrap over">
@@ -487,7 +529,6 @@ function poster(c: Ctx): string {
 
 function workspace(c: Ctx): string {
   const side = c.fam("family-ui-navigation-placement", "side") === "side";
-  const span = c.fam("family-ui-navigation-span", "3");
   const fixed = c.fam("family-data-table-layout", "fixed");
   // A data system is judged on rhythm across many rows, so the preview carries a real run of them.
   const rows = [
@@ -510,8 +551,8 @@ function workspace(c: Ctx): string {
   ];
   return `
 <style>
-.shell{display:grid;grid-template-columns:${side ? `minmax(0,${span}fr) minmax(0,12fr)` : "1fr"};
-  gap:0;min-height:100vh}
+.shell{display:grid;grid-template-columns:${side ? navigationTracks(c) : "1fr"};
+  gap:var(--layout-gutter,24px);min-height:100vh;max-width:var(--layout-max);margin-inline:auto;padding-inline:var(--layout-margin)}
 .rail{border-right:var(--layout-rule,1px) solid var(--border);background:var(--bg-subtle);
   padding:var(--sp-5) var(--sp-4);display:${side ? "block" : "none"}}
 .rail h2{font-family:var(--font-mono);font-size:var(--fs-12);letter-spacing:.08em;
@@ -539,6 +580,7 @@ function workspace(c: Ctx): string {
 .stat dd{margin:var(--sp-1) 0 0;font-family:var(--font-mono);font-size:var(--fs-24);
   font-variant-numeric:tabular-nums;color:var(--fg-1)}
 table{width:100%;border-collapse:collapse;table-layout:${fixed};font-size:var(--fs-14)}
+.table-scroll{overflow-x:auto}table{min-width:480px}
 thead th{position:sticky;top:0;background:var(--bg);text-align:left;
   font-family:var(--font-mono);font-size:var(--fs-12);letter-spacing:.07em;
   text-transform:uppercase;color:var(--fg-4);font-weight:var(--fw-regular,400);
@@ -549,7 +591,8 @@ td.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align
 td.id{font-family:var(--font-mono);color:var(--fg-1)}
 .state{font-family:var(--font-mono);font-size:var(--fs-12);padding:var(--sp-1) var(--sp-2);
   border-radius:var(--r-pill);background:var(--bg-muted)}
-@media (max-width:820px){.shell{grid-template-columns:1fr}.rail{display:none}
+@media (max-width:${c.token("layout-bp-md", "820px")}){.shell{grid-template-columns:1fr}.rail{${side ? "display:flex;gap:var(--sp-3);overflow-x:auto;border-right:0;align-items:center" : "display:none"}}
+  .rail>*{flex-shrink:0}.main{padding-inline:0}
   .summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 <div class="shell">
@@ -574,7 +617,7 @@ td.id{font-family:var(--font-mono);color:var(--fg-1)}
         .map(([k, v]) => `<div class="stat"><dt>${k}</dt><dd>${v}</dd></div>`).join("")}
     </dl>
     <div class="media data-visual">${c.hero("wide", 8, "data")}</div>
-    <table>
+    <div class="table-scroll" role="region" aria-label="운영 기록 표" tabindex="0"><table>
       <thead><tr><th>식별자</th><th>상태</th><th>지역</th><th style="text-align:right">처리량</th></tr></thead>
       <tbody>
         ${rows.map(([id, state, region, count, tone]) => `<tr>
@@ -583,21 +626,22 @@ td.id{font-family:var(--font-mono);color:var(--fg-1)}
           <td>${region}</td>
           <td class="num">${count}</td></tr>`).join("")}
       </tbody>
-    </table>
+    </table></div>
     <footer class="foot"><span>${escapeHtml(c.name)}</span><span>미리보기 · 토큰 기반 생성</span></footer>
   </main>
 </div>`;
 }
 
 function place(c: Ctx): string {
-  const bleed = c.fam("family-spatial-image-bleed", "100%");
-  const ratio = c.fam("family-media-text-ratio", "1.6");
+  const bleed = Number.parseFloat(c.fam("family-spatial-image-bleed", "100%")) / 100;
+  if (!Number.isFinite(bleed) || bleed < 0 || bleed > 1) throw new Error(`${c.slug}: invalid image bleed`);
+  const ratio = mediaTracks(c.fam("family-media-text-ratio", "1.6"));
   const fit = c.fam("family-media-fit", "cover");
   return `
 <style>
-.hero{width:calc(100% - ((100% - min(100%, var(--layout-max,1360px))) * (1 - ${bleed})));
+.hero{width:calc(100% - ((100% - min(100% - 2 * var(--layout-margin), var(--layout-max,1360px) - 2 * var(--layout-margin))) * ${1 - bleed}));
   margin-inline:auto;margin-top:var(--sp-6)}
-.hero .media{aspect-ratio:var(--layout-hero,16 / 9);border-radius:${bleed === "100%" ? "0" : "var(--r-8)"}}
+.hero .media{aspect-ratio:var(--layout-hero,16 / 9);border-radius:${bleed === 1 ? "0" : "var(--r-8)"}}
 .hero .fig{object-fit:${fit}}
 .statement{max-width:var(--layout-measure,56ch);font-family:var(--font-display);
   font-size:clamp(var(--fs-32),4.4vw,var(--fs-48));line-height:var(--lh-tight);
@@ -610,10 +654,10 @@ function place(c: Ctx): string {
 .practical div p{margin:0 0 var(--sp-2);font-size:var(--fs-14);color:var(--fg-2);
   display:flex;justify-content:space-between;gap:var(--sp-3)}
 .practical div p span:last-child{color:var(--fg-3);font-family:var(--font-mono);font-size:var(--fs-12)}
-.pair{display:grid;grid-template-columns:${ratio} 1fr;gap:var(--layout-gutter,24px);
+.pair{display:grid;grid-template-columns:${ratio};gap:var(--layout-gutter,24px);
   align-items:center;margin-top:var(--layout-section-y,96px)}
 .pair .media{aspect-ratio:4 / 3}
-@media (max-width:800px){.practical,.pair{grid-template-columns:1fr}}
+@media (max-width:${c.token("layout-bp-md", "800px")}){.practical,.pair{grid-template-columns:1fr}}
 </style>
 <header class="wrap nav">
   <span class="mark">${escapeHtml(c.name.replace(/ Theme$/, ""))}</span>
@@ -667,9 +711,9 @@ function pageFor(theme: Theme): string {
 <link rel="stylesheet" href="../../assets/fonts/fonts.css">
 <style>
 ${scopedTokens(theme.css)}
-${baseCss()}
+${baseCss(theme)}
 </style></head>
-<body data-archetype="${theme.archetype}">
+<body data-archetype="${theme.archetype}" data-layout="${theme.token("layout-structure")}">
 ${RENDERERS[theme.archetype](ctx)}
 </body></html>
 `;
@@ -711,8 +755,8 @@ p.sub{color:#9a9aa4;max-width:70ch;margin:0 0 32px}
 `;
 }
 
-export async function buildThemePreviews(): Promise<string> {
-  const entries = (await registered()).filter(({ slug }) => existsSync(path.join(themesRoot, slug)));
+export async function buildThemePreviews(check = false): Promise<string> {
+  const entries = bundledDesignSystems;
   const themes: Theme[] = [];
   for (const { slug, name } of entries) {
     const css = await readFile(path.join(themesRoot, slug, "colors_and_type.css"), "utf8");
@@ -727,19 +771,28 @@ export async function buildThemePreviews(): Promise<string> {
     });
   }
 
+  const pages = new Map(themes.map(theme => [`${theme.slug}.html`, pageFor(theme)]));
+  pages.set("index.html", indexPage(themes));
+  if (check) {
+    const actual = (await readdir(outputRoot)).filter(file => file.endsWith(".html")).sort();
+    if (JSON.stringify(actual) !== JSON.stringify([...pages.keys()].sort())) throw new Error("Preview page list is stale; run bun run previews");
+    for (const [file, expected] of pages) {
+      if ((await readFile(path.join(outputRoot, file), "utf8")).replaceAll("\r\n", "\n") !== expected) throw new Error(`${file}: preview is stale; run bun run previews`);
+    }
+    return `${themes.length} previews + index are current`;
+  }
   // Remove only generated pages so a removed slug cannot leave stale HTML. The generated media
   // directory is an authored input and must survive every rebuild.
   await mkdir(outputRoot, { recursive: true });
   for (const file of await readdir(outputRoot)) {
     if (file.endsWith(".html")) await rm(path.join(outputRoot, file));
   }
-  for (const theme of themes) {
-    await writeFile(path.join(outputRoot, `${theme.slug}.html`), pageFor(theme), "utf8");
+  for (const [file, page] of pages) {
+    await writeFile(path.join(outputRoot, file), page, "utf8");
   }
-  await writeFile(path.join(outputRoot, "index.html"), indexPage(themes), "utf8");
 
   const written = (await readdir(outputRoot)).length;
   return `${outputRoot} — ${themes.length} previews + index (${written} files)`;
 }
 
-if (import.meta.main) console.log(await buildThemePreviews());
+if (import.meta.main) console.log(await buildThemePreviews(process.argv.includes("--check")));

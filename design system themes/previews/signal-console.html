@@ -185,6 +185,8 @@
   --family-ui-label-placement: above;
 }
 
+:root { --layout-structure: split; }
+
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg-1);
@@ -243,15 +245,19 @@ dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--
   .nav ul{display:none}
 }
 </style></head>
-<body data-archetype="marketing">
+<body data-archetype="marketing" data-layout="split">
 
 <style>
 .hero{padding-block:var(--layout-section-y,72px) var(--sp-10)}
+.hero-lead{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:var(--layout-gutter,24px);align-items:center}
+.hero-copy{}
+.hero-copy .row{}
+.hero-copy .lede{}
 .hero .display{margin-bottom:var(--sp-5)}
 .hero .lede{margin-bottom:var(--sp-6)}
 .panel{margin-top:var(--sp-10);border:var(--layout-rule,1px) solid var(--border);
   border-radius:var(--r-8);background:var(--surface);overflow:hidden;box-shadow:var(--shadow-2)}
-.hero-visual{height:clamp(260px,40vw,520px);margin-top:var(--sp-10)}
+.hero-visual{aspect-ratio:var(--layout-hero,16 / 10);}
 .panel-head{display:flex;align-items:center;gap:var(--sp-2);
   padding:var(--sp-3) var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
   font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-3)}
@@ -272,7 +278,7 @@ dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--
 .cta{border:var(--layout-rule,1px) solid var(--border-strong);border-radius:var(--r-8);
   padding:var(--sp-8);background:var(--bg-subtle);display:flex;justify-content:space-between;
   align-items:center;gap:var(--sp-5);flex-wrap:wrap}
-@media (max-width:820px){.panel-body{grid-template-columns:1fr}.panel-rows{border-right:0}}
+@media (max-width:820px){.panel-body,.hero-lead{grid-template-columns:1fr}.panel-rows{border-right:0}}
 </style>
 <header class="wrap nav">
   <span class="mark">Signal Console</span>
@@ -281,6 +287,7 @@ dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--
 </header>
 <main>
   <section class="wrap hero">
+    <div class="hero-lead"><div class="hero-copy">
     <p class="eyebrow">버전 3.4 · 로컬 우선</p>
     <h1 class="display">측정되는 것만<br>운영에 남는다</h1>
     <p class="lede">파이프라인의 모든 단계가 수치로 남고, 실패한 단계는 원인까지 함께 기록됩니다. 설치 없이 로컬에서 실행하세요.</p>
@@ -288,7 +295,7 @@ dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--
       <a class="btn" href="#none">내려받기</a>
       <a class="btn ghost" href="#none">문서 보기</a>
     </div>
-    <div class="media hero-visual"><img class="fig" src="./media/signal-console.webp" alt="" loading="lazy" decoding="async"></div>
+    </div><div class="media hero-visual"><img class="fig" src="./media/signal-console.webp" alt="" loading="lazy" decoding="async"></div></div>
     <div class="panel">
       <div class="panel-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
         <span style="margin-left:var(--sp-3)">runtime · 127.0.0.1</span></div>
