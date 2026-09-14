@@ -33,6 +33,8 @@ export default function GenerationControls({ backendId, value, onChange, disable
         {efforts.map((effort) => <option key={effort} value={effort}>{effort.toUpperCase()}</option>)}
       </select></label>
     </div>
+    {/* States that guidance follows the selection. Never surfaces preset ids, block text or prompt JSON. */}
+    <p className="text-[11px] text-muted-foreground">{t("settings.taskGuidanceAdapts")}</p>
     {compact ? <details className="text-muted-foreground">
       <summary className="cursor-pointer rounded py-1 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("settings.additional")}</summary>
       <div className="mt-1 space-y-3 rounded-lg bg-muted/40 p-2.5">{secondary}</div>

@@ -7,6 +7,10 @@ This folder contains product and engineering documentation for BurnGuard. Some s
 - [Product introduction and setup](../README.md), also available in [Korean](../README.ko.md).
 - [Native charts](./charts.md): eight original chart types, data editing, generation contracts and portable SVG output.
 - [Image production](./image-production.md): original purpose recipes, visual treatments, bounded prompt assembly and saved preferences.
+- [Project review and roadmap, final, September 11, 2026](./17-project-review-and-roadmap-2026-09-11.md): review of v0.5.9 across architecture, frontend, security, testing/CI, product/docs, simplicity, and global readiness, with measured test baselines and a phased roadmap for a multi-country SMB deliverable tool.
+- [Generation, edit, and export logic before and after, September 10, 2026](./16-generation-edit-export-before-after-2026-09-10.md): concern-by-concern comparison of 0641552 and 01c42be with evidence paths, remaining gaps, and the coverage that backs each row.
+- [Design task decomposition and prompt presets by model and reasoning effort, September 14, 2026](./18-design-task-and-reasoning-presets-plan-2026-09-14.md): task structure, draft presets selected by model and effort, shared-prompt conflict cleanup, and the evaluation design that separates prompt assembly from unmeasured model quality.
+- [Task preset implementation and evidence gates, September 14, 2026](./19-task-preset-implementation-2026-09-14.md): shipped prompt behavior, example eligibility and CI verification, comparison planning, and the live evaluation work that remains.
 - [Platform packages and graphic sets, September 10, 2026](./15-platform-packages-and-graphic-sets-2026-09-10.md): implementation record for the plan below — site map and active page, graphic set kinds and presets, PNG bundle and slice exports, artboard PDF, Cafe24/Imweb packages, and what stays blocked or deferred.
 - [Deliverables and platform publishing plan, September 9, 2026](./14-deliverables-and-platform-publishing-plan-2026-09-09.md): accepted defaults, implementation checklist, package-first Cafe24/Imweb delivery, graphic sets, and product-detail exports.
 - [Windows updates and original samples](./13-windows-updates-and-original-samples.md): installer publication, safe update application, and four original collections across three formats.
@@ -51,6 +55,10 @@ The original milestones and screen specification below describe earlier plans; t
 | Design system sample format | [05-design-system-format.md](./05-design-system-format.md) |
 | Phase status and remaining work | [06-milestones.md](./06-milestones.md) |
 | Deliverables and Cafe24/Imweb publishing plan | [14-deliverables-and-platform-publishing-plan-2026-09-09.md](./14-deliverables-and-platform-publishing-plan-2026-09-09.md) |
+| Current quality assessment, global readiness, and roadmap | [17-project-review-and-roadmap-2026-09-11.md](./17-project-review-and-roadmap-2026-09-11.md) |
+| What changed in generation, edit, and export (0.5.4 to 0.5.9) | [16-generation-edit-export-before-after-2026-09-10.md](./16-generation-edit-export-before-after-2026-09-10.md) |
+| Task guidance presets by model and reasoning effort | [18-design-task-and-reasoning-presets-plan-2026-09-14.md](./18-design-task-and-reasoning-presets-plan-2026-09-14.md) |
+| Implemented presets, evidence gates, and evaluation status | [19-task-preset-implementation-2026-09-14.md](./19-task-preset-implementation-2026-09-14.md) |
 | Engineering decisions | [07-decisions.md](./07-decisions.md) |
 | Dev setup and conventions | [CONTRIBUTING.md](./CONTRIBUTING.md) |
 

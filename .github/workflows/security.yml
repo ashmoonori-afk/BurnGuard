@@ -21,6 +21,17 @@ jobs:
       - run: bun run typecheck
       - run: bun run lint
       - run: bun run build:frontend
+      - name: Task guidance and reviewed example gate
+        run: >-
+          bun test --timeout 30000
+          packages/backend/tests/prompt-builder.test.ts
+          packages/backend/tests/generation-options.test.ts
+          packages/backend/tests/preset-observation.test.ts
+          packages/backend/tests/task-preset-adoption.test.ts
+          packages/backend/tests/task-preset-comparison.test.ts
+          packages/backend/tests/task-preset-evidence.test.ts
+          packages/backend/tests/visual-craft-skill.test.ts
+          packages/frontend/tests/generation-controls-guidance.test.ts
       # The full suite needs a prepared workstation (Chromium, Node bridge,
       # Python + pypdf); see doc/07-manual-smoke-test.md. This gate runs the
       # boundary tests that need none of that.

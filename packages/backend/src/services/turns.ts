@@ -20,6 +20,7 @@ import { appendSessionTrace } from "./trace";
 import { detectBackends } from "./backends";
 import { resolveGenerationOptions } from "./generation-options";
 import { buildPrompt } from "../harness/prompt-builder";
+import type { TaskPresetObservation } from "../harness/task-preset-observation";
 import { DECK_REVIEW_PROMPT } from "../harness/skills/deck-skill";
 import { runAdapterTurn } from "../adapters/registry";
 import { loadConfig } from "../config";
@@ -385,8 +386,11 @@ async function runUserTurnInternal(
         const immutableSnapshots = await captureImmutableAttachments(selectedAttachments);
         try {
           await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: contextPayload.attachments, immutableSnapshots }, async (stageInputs) => {
-            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation });
-            await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId });
+            // Observe the guidance that was actually emitted rather than re-deriving it, so the
+            // record cannot drift from the envelope the model received.
+            let shippedPreset: TaskPresetObservation | null = null;
+            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation, onTaskGuidance: (value) => { shippedPreset = value; } });
+            await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId, task_preset: shippedPreset });
             const adapterInput: Parameters<typeof runAdapterTurn>[1] = {
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,
               generation,
