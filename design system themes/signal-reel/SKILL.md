@@ -24,7 +24,7 @@ Media is full-bleed with no container and no gutter, and sections butt directly 
 
 ## Composition
 
-Work on a near-black ground with exactly one signal red, used for live state, the primary action and nothing else. The display face is oversized to the point of running past the frame: set it so lines are clipped by the viewport edge on purpose, which is the system's signature. Body copy holds to a short 52ch measure and sits well away from the display, so the two never compete. Sections are separated by wide dark space rather than by rules. Radius stays minimal and nothing is elevated — on this ground a shadow is invisible anyway, so depth is expressed by scale alone.
+Work on a near-black ground with exactly one signal red, used for live state, the primary action and nothing else. The display face is oversized to the point of running past the frame: set it so lines are clipped by the viewport edge on purpose, which is the system's signature. Body copy holds to a short 52ch measure and sits well away from the display, so the two never compete. Sections are separated by wide dark space rather than by rules. Radius is zero and nothing is elevated — on this ground a shadow is invisible anyway, so depth is expressed by scale alone.
 
 ## Image direction
 
@@ -59,7 +59,7 @@ design. Check the result against all of these:
 2. Display type is oversized enough to be clipped by the viewport edge on purpose.
 3. Body copy holds to a short 52ch measure, set well away from the display.
 4. Sections are separated by wide dark space, not by rules.
-5. Radius is minimal and nothing is elevated.
+5. Radius is zero and nothing is elevated.
 6. Imagery is near-monochrome and falls to black at its edges.
 
 ## Local typography

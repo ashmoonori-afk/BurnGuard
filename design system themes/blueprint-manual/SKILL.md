@@ -24,7 +24,7 @@ A two-track manual: a narrow text track of 4 columns holding justified body at -
 
 ## Composition
 
-Build the page as a technical manual. The ground is paper; the structure is blueprint line work — hairline rules, bounding boxes, leader lines and dimension marks drawn in the blue, never as decoration but always as annotation of something. Body copy is serif, justified, and runs to a long 66ch measure, because a manual is read in columns rather than scanned. Every figure carries a mono label in the form of a figure number and a short caption, placed outside the figure's frame. Headings are mono and letterspaced. Nothing is rounded, nothing is elevated, and no colour is used except the blue line work.
+Build the page as a technical manual. The ground is paper; the structure is blueprint line work — hairline rules, bounding boxes, leader lines and dimension marks drawn in the blue, never as decoration but always as annotation of something. Body copy is serif, justified, and runs to a long 66ch measure, because a manual is read in columns rather than scanned. Every figure carries a mono label in the form of a figure number and a short caption, placed outside the figure's frame. Headings are mono and letterspaced. Corners stay near-square at the 2-4px `--r-*` steps, nothing is elevated, and no colour is used except the blue line work.
 
 ## Image direction
 
@@ -60,7 +60,7 @@ design. Check the result against all of these:
 3. Body copy is justified serif at a 66ch measure.
 4. Every figure carries a mono figure number and caption placed outside its frame.
 5. Headings are mono and letterspaced.
-6. Radius is zero, nothing is elevated, and no colour except the blue appears.
+6. Radius stays at the 2-4px `--r-*` steps, nothing is elevated, and no colour except the blue appears.
 
 ## Local typography
 

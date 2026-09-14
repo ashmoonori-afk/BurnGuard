@@ -24,7 +24,7 @@ An asymmetric catalogue: an 8-column image track beside a 4-column information c
 
 ## Composition
 
-Set a dense archival index on white, with a small serif used for everything — headings, entries and notes alike — so hierarchy comes from position and weight rather than from a second typeface. Entries are separated by hairline dividers with tight vertical rhythm. A running information column holds dates, references and notes alongside the entries and stays with them down the page; it is the system's defining structure and must not collapse into the main column except at the smallest width. Running text holds to a 64ch measure. Radius and elevation are absent, and colour is reserved for links and the single action.
+Set a dense archival index on white, with a small serif used for everything — headings, entries and notes alike — so hierarchy comes from position and weight rather than from a second typeface. Entries are separated by hairline dividers with tight vertical rhythm. A running information column holds dates, references and notes alongside the entries and stays with them down the page; it is the system's defining structure and must not collapse into the main column except at the smallest width. Running text holds to a 64ch measure. Radius is zero on every surface and elevation is absent; colour is reserved for links and the single action.
 
 ## Image direction
 
@@ -60,7 +60,7 @@ design. Check the result against all of these:
 3. A running information column of dates and references stays beside the entries.
 4. That column collapses into the main column only at the smallest width.
 5. Running text holds to a 64ch measure.
-6. Radius and elevation are absent; colour is reserved for links and one action.
+6. Radius is zero on every surface and elevation is absent; colour is reserved for links and one action.
 
 ## Local typography
 

@@ -24,7 +24,7 @@ Hold a single wide column for the headline and let supporting blocks occupy 5 of
 
 ## Composition
 
-Flood the page with the cobalt field and let it carry the whole composition — it is the ground, not an accent, and no second large colour is introduced. A light serif display sits directly on the field at generous size with tight leading, and body copy holds to a 58ch measure so the field stays visible around it. Every label, caption and figure mark is mono, small, and uppercase, which is the only texture the page gets. Interactive elements are hard-edged blocks with no radius and no shadow; they read as cut apertures in the field rather than as raised controls. Imagery is inset into the field with a visible border of cobalt on all sides.
+Flood the page with the cobalt field and let it carry the whole composition — it is the ground, not an accent, and no second large colour is introduced. A light serif display sits directly on the field at generous size with tight leading, and body copy holds to a 58ch measure so the field stays visible around it. Every label, caption and figure mark is mono, small, and uppercase, which is the only texture the page gets. Interactive elements are near-square blocks — the small `--r-*` steps, never a pill — and carry no shadow, so they read as cut apertures in the field rather than as raised controls. Imagery is inset into the field with a visible border of cobalt on all sides.
 
 ## Image direction
 
@@ -58,7 +58,7 @@ design. Check the result against all of these:
 1. The cobalt field is the page ground, not an accent, and no second large colour appears.
 2. A light serif display sits directly on the field at generous size with tight leading.
 3. All labels and captions are small uppercase mono.
-4. Interactive elements are hard-edged blocks with no radius and no shadow.
+4. Interactive elements are near-square blocks at the small `--r-*` steps, never pills, and none is elevated.
 5. Images are inset with an equal cobalt border on all sides and never bleed.
 6. Body copy holds to a 58ch measure so the field stays visible around it.
 
