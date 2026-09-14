@@ -167,8 +167,8 @@
   --layout-measure: 52ch;
   --layout-columns: 6;
   --layout-gutter: 0px;
-  --layout-margin: 0px;
-  --layout-section-y: 0px;
+  --layout-margin: clamp(16px, 3vw, 40px);
+  --layout-section-y: clamp(28px, 4vw, 64px);
   --layout-rule: 0px;
   --layout-bp-md: 720px;
   --layout-bp-lg: 1080px;

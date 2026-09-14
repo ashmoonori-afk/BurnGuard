@@ -21,13 +21,13 @@ Layout is part of this system, not a per-page decision. Build every artifact on 
 | `--layout-measure` | 52ch | Reading measure for body copy |
 | `--layout-columns` | 6 | Base column count |
 | `--layout-gutter` | 0px | Space between columns |
-| `--layout-margin` | 0px | Page side margin |
-| `--layout-section-y` | 0px | Vertical rhythm between sections |
+| `--layout-margin` | clamp(16px, 3vw, 40px) | Page side margin |
+| `--layout-section-y` | clamp(28px, 4vw, 64px) | Vertical rhythm between sections |
 | `--layout-rule` | 0px | Divider weight |
 | `--layout-bp-md` / `--layout-bp-lg` | 720px / 1080px | Breakpoints |
 | `--layout-hero` | 21 / 9 | Hero aspect ratio |
 
-There is no container: media is full-bleed and sections butt directly against each other with no gutter and no rule. Type is positioned over the media, and the display line is allowed to crop at the viewport edge.
+Media is full-bleed with no container and no gutter, and sections butt directly against each other. Text blocks keep a small margin and section rhythm so a tight-leading display line never crops against the viewport edge. Type is positioned over the media, and the display line is allowed to crop at the viewport edge.
 
 ## Provenance
 

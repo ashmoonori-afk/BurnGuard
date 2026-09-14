@@ -20,7 +20,7 @@ Give the page a near-black ground and exactly one saturated red. Set the wordmar
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max` with `--layout-margin` at the sides, body copy holds to `--layout-measure`, sections are separated by `--layout-section-y`, and dividers use `--layout-rule`. The base grid is `--layout-columns` columns with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Hero media uses `--layout-hero`.
 
-There is no container: media is full-bleed and sections butt directly against each other with no gutter and no rule. Type is positioned over the media, and the display line is allowed to crop at the viewport edge.
+Media is full-bleed with no container and no gutter, and sections butt directly against each other. Text blocks keep a small margin and section rhythm so a tight-leading display line never crops against the viewport edge. Type is positioned over the media, and the display line is allowed to crop at the viewport edge.
 
 ## Local typography
 
