@@ -1,7 +1,7 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { extractDesignSystemFromSource } from "../src/services/design-system-extract";
 import { mkdir, mkdtemp, rm, truncate, writeFile } from "node:fs/promises";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import {
@@ -68,7 +68,7 @@ describe("Git extraction transport policy", () => {
             cmd: ["git", "-c", "credential.helper=", "-c", "http.followRedirects=false", "clone", "--depth=1", source_url, expect.stringMatching(/[/\\]ingest[/\\]repo$/)],
             cwd: expect.stringMatching(/[/\\]ingest$/),
             stderr: "ignore",
-            env: expect.objectContaining({ GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_SYSTEM: devNull, GIT_CONFIG_NOSYSTEM: "1", GIT_TERMINAL_PROMPT: "0", GIT_ALLOW_PROTOCOL: "https" }),
+            env: expect.objectContaining({ GIT_CONFIG_GLOBAL: expect.stringMatching(/[/\\]ingest[/\\]empty\.gitconfig$/), GIT_CONFIG_SYSTEM: expect.stringMatching(/[/\\]ingest[/\\]empty\.gitconfig$/), GIT_CONFIG_NOSYSTEM: "1", GIT_TERMINAL_PROMPT: "0", GIT_ALLOW_PROTOCOL: "https" }),
           }));
         }
       }
