@@ -180,3 +180,5 @@
   --family-media-text-ratio: 1.0;
   --family-spatial-image-bleed: 0%;
 }
+
+:root { --layout-structure: centered; }

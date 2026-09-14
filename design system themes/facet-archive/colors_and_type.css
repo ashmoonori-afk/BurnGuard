@@ -181,3 +181,5 @@
   --family-ui-label-placement: above;
   --family-data-table-layout: auto;
 }
+
+:root { --layout-structure: sidebar; }

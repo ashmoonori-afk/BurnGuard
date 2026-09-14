@@ -1,8 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { DesignDirectionLayout } from "@bg/shared";
+import { designSystemLayoutPreview, type DesignSystemLayout, type DesignDirectionLayout } from "@bg/shared";
 
 export type DirectionRenderInput = {
+  readonly systemLayout?: DesignSystemLayout;
   readonly layout: DesignDirectionLayout;
   readonly title: string;
   readonly summary: string;
@@ -28,6 +29,7 @@ export class SvgDesignDirectionRenderer implements DesignDirectionRenderer {
 }
 
 function renderSvg(input: DirectionRenderInput): string {
+  if (input.systemLayout) return renderSystemSvg(input, input.systemLayout);
   const point0 = input.outline[0] ?? "핵심 문제";
   const point1 = input.outline[1] ?? "해결 방향";
   const point2 = input.outline[2] ?? "다음 단계";
@@ -60,4 +62,12 @@ function ellipsize(value: string, maximumGraphemes: number): string {
 
 function escapeXml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
+}
+
+function renderSystemSvg(input: DirectionRenderInput, layout: DesignSystemLayout): string {
+  const preview = designSystemLayoutPreview(layout);
+  const emphasis = input.layout === "editorial" ? "message" : input.layout === "modular" ? "media" : "support";
+  const grid = Array.from({ length: preview.columns }, (_, index) => `<rect x="${preview.x + index * (preview.unit + preview.gap)}" y="64" width="${preview.unit}" height="244" fill="#e2e8f0" opacity=".45"/>`).join("");
+  const blocks = preview.blocks.map(block => `<rect data-role="${block.role}" x="${block.x}" y="${block.y}" width="${block.width}" height="${block.height}" fill="${block.role === emphasis ? "#64748b" : "#cbd5e1"}" stroke="#475569" stroke-width="1"/>`).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><title>${escapeXml(input.title)}</title><rect width="640" height="360" fill="#f8fafc"/><text data-run="title" data-width-budget="560" x="32" y="40" fill="#0f172a" font-family="sans-serif" font-size="20">${escapeXml(ellipsize(input.title, 26))}</text>${grid}${blocks}<text x="32" y="340" fill="#475569" font-family="sans-serif" font-size="12">${escapeXml(ellipsize(input.summary, 48))}</text></svg>`;
 }

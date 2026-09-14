@@ -1223,6 +1223,7 @@ export default function ProjectView() {
 
         {activeTab?.kind === "directions" && (
           <DirectionsView
+            designSystemId={project.design_system_id}
             key={id}
             state={directionState}
             recovering={directionQuery.isLoading}

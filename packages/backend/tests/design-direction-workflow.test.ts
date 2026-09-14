@@ -12,6 +12,7 @@ import { isDirectionOperationActive } from "../src/services/direction-operation-
 import { getLatestDirectionState, publishDirectionState } from "../src/services/design-direction-state";
 import { startUserTurn } from "../src/services/turns";
 import { buildSessionContext } from "../src/services/context";
+import { sampleLayoutFiles } from "../src/data/sample-layouts";
 
 const projectId = `direction-workflow-${process.pid}`;
 const root = await mkdtemp(path.join(tmpdir(), "burnguard-directions-"));
@@ -77,6 +78,21 @@ class GateRenderer implements DesignDirectionRenderer {
 }
 
 describe("design direction workflow", () => {
+  test("Given a selected system, then all directions and retried previews keep its saved layout", async () => {
+    const input = { ...session("system-layout"), designSystem: { id: "test-dashboard", name: "Dashboard", layout: sampleLayoutFiles("dashboard").layout } };
+    const layouts: DirectionRenderInput["systemLayout"][] = [];
+    let failed = false;
+    const renderer: DesignDirectionRenderer = { async render(input) { layouts.push(input.systemLayout); if (input.layout === "modular" && !failed) { failed = true; throw new Error("retry once"); } } };
+    const workflow = new DesignDirectionWorkflow(renderer);
+    const partial = await (await workflow.generate(input)).completion;
+    expect(parseDesignDirectionState(partial).design_system).toEqual(input.designSystem);
+    expect(partial.status).toBe("partial");
+    const ready = await (await workflow.retry({ ...input, designSystem: { ...input.designSystem, layout: sampleLayoutFiles("editorial").layout } })).completion;
+    expect(ready.status).toBe("ready");
+    expect(layouts).toHaveLength(4);
+    for (const layout of layouts) expect(layout).toEqual(input.designSystem.layout);
+    expect(() => parseDesignDirectionState({ ...ready, design_system: { ...input.designSystem, private_path: "invalid" } })).toThrow();
+  });
   test("Given saved image style and tone When reopened, selected, undone and regenerated Then preferences persist and stale saves cannot overwrite them", async () => {
     const input = session("creative-preferences");
     const workflow = new DesignDirectionWorkflow();

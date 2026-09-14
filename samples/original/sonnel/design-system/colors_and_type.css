@@ -2,3 +2,20 @@
 body{background:var(--paper);color:var(--ink);font:16px/1.7 var(--font-body)}h1,h2,h3{font-family:var(--display)}:focus-visible{outline:2px solid var(--ink);outline-offset:5px}
 
 body{font-family:var(--font-body)}h1,h2,h3{font-family:var(--font-display);font-weight:var(--weight);font-synthesis:none}h1[lang=ko],h2[lang=ko],h3[lang=ko]{line-height:1.12}
+
+
+/* Layout is part of the design-system contract. */
+:root {
+  --layout-max: 1200px;
+  --layout-measure: 58ch;
+  --layout-columns: 12;
+  --layout-gutter: 28px;
+  --layout-margin: clamp(20px, 4vw, 64px);
+  --layout-section-y: clamp(56px, 8vw, 112px);
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 16 / 10;
+  --layout-structure: split;
+  --family-ui-navigation-placement: top;
+  --family-ui-navigation-span: 0;
+}

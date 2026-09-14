@@ -1,3 +1,4 @@
+import { readDesignSystemLayout } from "./design-system-layout";
 import {
   copyFile,
   mkdir,
@@ -492,21 +493,22 @@ export async function readDesignSystemTokens(systemId: string) {
       "Design system not found",
     );
   }
+  const layout = await readDesignSystemLayout(detail);
   if (!detail.tokens_css_path) {
-    return { colors: [], token_file_path: null };
+    return { layout, colors: [], token_file_path: null };
   }
 
   const tokenPath = resolveDesignSystemRecordPath(systemId, detail.dir_path, detail.tokens_css_path);
   const css = await readFile(tokenPath, "utf8").catch(() => null);
   if (css === null) {
-    return { colors: [], token_file_path: tokenPath };
+    return { layout, colors: [], token_file_path: tokenPath };
   }
 
   const colors = [...(await extractCssCustomProperties(css)).entries()]
     .filter(([, value]) => isColorTokenValue(value))
     .map(([name, value]) => ({ name, value }));
 
-  return { colors, token_file_path: tokenPath };
+  return { layout, colors, token_file_path: tokenPath };
 }
 
 export async function upsertDesignSystemColorToken(

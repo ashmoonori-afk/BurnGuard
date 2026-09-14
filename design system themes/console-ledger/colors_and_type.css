@@ -181,3 +181,5 @@
   --family-ui-label-placement: beside;
   --family-data-table-layout: fixed;
 }
+
+:root { --layout-structure: editorial; }

@@ -180,3 +180,5 @@
   --family-ui-navigation-span: 2;
   --family-ui-label-placement: beside;
 }
+
+:root { --layout-structure: split; }
