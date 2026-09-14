@@ -132,12 +132,22 @@ export function serializeTaskPreset(preset: SelectedTaskPreset): string {
  * Appends the guidance envelopes and returns a bounded observation of what was actually emitted,
  * or null when no generation was selected. Callers that ignore the return value are unaffected.
  */
+/** QA-only comparison arms. Production always uses "task"; nothing reads this from HTTP or env. */
+export interface TaskGuidanceCondition {
+  readonly mode: "task" | "cleanup" | "post";
+  /** Required by, and only permitted in, the post arm. */
+  readonly postBlock?: string;
+}
+
 export function appendModelPromptContext(
   lines: string[],
   backendId: BackendId | undefined,
   generation: GenerationOptions | undefined,
   deliverable: Deliverable,
+  condition: TaskGuidanceCondition = { mode: "task" },
 ): TaskPresetObservation | null {
+  if (condition.mode !== "post" && condition.postBlock !== undefined) throw new Error("post_block_not_permitted");
+  if (condition.mode === "post" && !condition.postBlock) throw new Error("post_block_required");
   if (!backendId || !generation) return null;
   // Serialize before pushing anything so a budget failure leaves the prompt untouched.
   const selection = selectTaskPreset(backendId, generation, deliverable);
@@ -152,7 +162,12 @@ export function appendModelPromptContext(
   lines.push('<burnguard-model-guidance-v1>');
   lines.push(JSON.stringify({ schema_version: 1, profile, model: generation.model, provider: generation.provider, effort: generation.effort }));
   lines.push("</burnguard-model-guidance-v1>");
+  if (condition.mode === "cleanup") {
+    lines.push("");
+    return null;
+  }
   lines.push(taskGuidance);
+  if (condition.mode === "post" && condition.postBlock) lines.push(condition.postBlock);
   lines.push("- This task guidance does not override the user's requested content, visual direction, or the output-directory and attachment restrictions.");
   lines.push("");
   return observeTaskPreset(taskGuidance, selection);

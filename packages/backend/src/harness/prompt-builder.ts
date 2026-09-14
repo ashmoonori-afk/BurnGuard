@@ -26,7 +26,7 @@ import { appendGraphicOutputContext } from "./prompt-graphic-set";
 import { DESIGN_CRAFT_RULES } from "./design-craft";
 import { CHART_AUTHORING_RULES } from "./chart-authoring";
 import { appendGenerationStyle } from "./prompt-generation-style";
-import { appendModelPromptContext } from "./prompt-model-context";
+import { appendModelPromptContext, type TaskGuidanceCondition } from "./prompt-model-context";
 import type { Deliverable } from "./prompt-task-presets";
 import type { TaskPresetObservation } from "./task-preset-observation";
 import { appendReferenceLayoutContext } from "./prompt-reference-layout";
@@ -54,6 +54,8 @@ export interface PromptBuildOptions {
   stageAttachmentInputs?: readonly StageAttachmentInput[];
   /** Receives the guidance that was actually emitted, or null when none was. */
   readonly onTaskGuidance?: (observation: TaskPresetObservation | null) => void;
+  /** QA-only comparison arm; production leaves this unset. */
+  readonly taskGuidance?: TaskGuidanceCondition;
 }
 
 /**
@@ -281,7 +283,7 @@ export async function buildPrompt(
   lines.push(CHART_AUTHORING_RULES);
   // Append first, then notify: optional chaining on the callback would otherwise short-circuit the
   // whole expression and skip appending entirely whenever no observer is supplied.
-  const taskGuidance = appendModelPromptContext(lines, options.backendId, options.generation, deliverable);
+  const taskGuidance = appendModelPromptContext(lines, options.backendId, options.generation, deliverable, options.taskGuidance);
   options.onTaskGuidance?.(taskGuidance);
   lines.push("## Delivery");
   lines.push(
