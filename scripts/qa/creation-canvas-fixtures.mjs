@@ -172,6 +172,50 @@ export async function runCreationCanvasFixtures(page, base, scenario, { home, sh
       await shot(page, "creation-canvas-generation-style");
     });
 
+    await scenario("creation-canvas-loading", async () => {
+      const fixture = await createFixture(page, base, ownedHome, "Loading fixture", {}, true);
+      const endpoint = `${base}/api/projects/${fixture.id}`;
+      const frame = page.frameLocator('iframe[title="캔버스"]');
+      let release;
+      const ready = new Promise(resolve => { release = resolve; });
+      const assets = {
+        "photo.svg": ["image/svg+xml", '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="blue"/></svg>'],
+        "responsive.svg": ["image/svg+xml", '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"/>'],
+        "background.svg": ["image/svg+xml", '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"/>'],
+        "page.css": ["text/css", "#fixture-hero{color:rgb(0,0,255)}"],
+        "page.js": ["text/javascript", "document.body.dataset.loadedScript='yes'"],
+      };
+      const filesRoute = route => route.fulfill({ contentType: "application/json", body: '{"data":[]}' });
+      const resourceRoute = async route => {
+        const name = new URL(route.request().url()).pathname.split("/").at(-1);
+        if (name === "index.html") return route.fulfill({ contentType: "text/html", body: '<!doctype html><html><head><link rel="stylesheet" href="page.css"><style>body{background-image:url("background.svg")}</style></head><body><h1 id="fixture-hero">Loaded artifact</h1><img src="photo.svg"><img srcset="responsive.svg 1x"><script src="page.js"></script></body></html>' });
+        assert.ok(assets[name], "unexpected resource");
+        await ready;
+        return route.fulfill({ contentType: assets[name][0], body: assets[name][1] });
+      };
+      await page.route(`${endpoint}/files`, filesRoute);
+      await page.route(`${endpoint}/fs/*`, resourceRoute);
+      try {
+        // Every resource category must start before any category completes.
+        const requests = Object.keys(assets).map(name => page.waitForRequest(`${endpoint}/fs/${name}`));
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await Promise.all(requests);
+        await frame.getByRole("heading", { name: "미리보기를 준비하고 있어요", exact: true }).waitFor();
+        assert.equal(await frame.getByText("아직 표시할 결과물이 없어요", { exact: true }).count(), 0);
+        await shot(page, "creation-canvas-loading");
+        release();
+        await frame.locator('body[data-loaded-script="yes"]').waitFor();
+        assert.equal(await frame.locator("#fixture-hero").evaluate(el => getComputedStyle(el).color), "rgb(0, 0, 255)");
+        assert.ok(await frame.locator("img").evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0)));
+        assert.equal(await page.locator('iframe[title="캔버스"]').getAttribute("sandbox"), "allow-scripts");
+        await shot(page, "creation-canvas-loaded");
+      } finally {
+        release();
+        await page.unroute(`${endpoint}/files`, filesRoute);
+        await page.unroute(`${endpoint}/fs/*`, resourceRoute);
+      }
+    });
+
     await scenario("creation-canvas-live-preview", async () => {
       await page.addInitScript(() => {
         const Native = window.EventSource;

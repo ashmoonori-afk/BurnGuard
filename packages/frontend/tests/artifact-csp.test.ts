@@ -4,7 +4,6 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
-import { chromium } from "../../backend/node_modules/playwright-core";
 
 const BASE_HREF = "http://127.0.0.1:14070/api/projects/p/fs/index.html";
 
@@ -71,7 +70,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
       ? new Response(script, { headers: { "content-type": "application/javascript" } })
       : new Response('<!doctype html><body><script src="/bridge-fixture.js"></script></body>', { headers: { "content-type": "text/html" } });
   } });
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
+  const browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(30_000));
   const context = await browser.newContext();
   try {
     const page = await context.newPage();
@@ -132,7 +131,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
       });
       ack.catch(() => {});
       await frame.getByRole("link", { name: "External link" }).click({ modifiers });
-      const result = (await ack).text();
+      const result = (await ack.catch(error => { throw new Error(`External click failed for ${JSON.stringify(modifiers)}`, { cause: error }); })).text();
       // macOS Ctrl-left-click is a native context-menu gesture, not a click.
       if (macContextMenu) {
         expect(JSON.parse(result.slice("CONTEXT_ACK:".length))).toEqual({ opened: expected, internal: 0 });
