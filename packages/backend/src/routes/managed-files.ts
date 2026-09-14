@@ -1,4 +1,5 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { Hono } from "hono";
 import type { ApiErrorBody, ApiSuccess } from "@bg/shared";
@@ -19,6 +20,25 @@ function ok<T>(data: T): ApiSuccess<T> { return { data }; }
 function fail(code: string, message: string, details?: unknown): ApiErrorBody { return { error: { code, message, details } }; }
 
 export const managedFileRoutes = new Hono();
+
+async function inspectArtifactRead(projectId: string, projectDir: string) {
+  await new ArtifactCoordinator(getSqlite()).observeExternal(projectId, projectDir);
+  const manifest = await inspectCanonicalTree(projectDir);
+  return { manifest, project: await getProjectDetail(projectId) };
+}
+
+// Share only concurrent reads, never a settled snapshot. The next request still
+// observes external edits and runs canonical path/link/hash validation.
+const artifactReads = new Map<string, ReturnType<typeof inspectArtifactRead>>();
+async function artifactRead(projectId: string, projectDir: string) {
+  const key = JSON.stringify([projectId, projectDir]);
+  const active = artifactReads.get(key);
+  if (active) return active;
+  const pending = inspectArtifactRead(projectId, projectDir);
+  artifactReads.set(key, pending);
+  try { return await pending; }
+  finally { artifactReads.delete(key); }
+}
 
 managedFileRoutes.get("/api/projects/:id/preview/:previewId/fs/*", async (c) => {
   try {
@@ -56,25 +76,24 @@ managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
     if (error instanceof Error) return c.json(fail("file_not_found", "Project file not found", { projectId, relPath }), 404);
     throw error;
   }
-  const coordinator = new ArtifactCoordinator(getSqlite());
-  await coordinator.observeExternal(projectId, resolved.project.dir_path);
-  const project = await getProjectDetail(projectId);
-  const manifest = await inspectCanonicalTree(resolved.project.dir_path);
+  const { project, manifest } = await artifactRead(projectId, resolved.project.dir_path);
   const file = manifest.files.find((entry) => entry.path === resolved.relPath);
-  if (project === null || project.current_digest === null || file === undefined) return c.json(fail("artifact_identity_unavailable", "Artifact identity is unavailable"), 409);
+  if (project === null || project.current_digest !== manifest.tree_digest || file === undefined) return c.json(fail("artifact_identity_unavailable", "Artifact identity is unavailable"), 409);
+  const bytes = await readFile(resolved.absolutePath);
+  if (bytes.byteLength !== file.size || createHash("sha256").update(bytes).digest("hex") !== file.sha256) return c.json(fail("artifact_identity_unavailable", "Artifact changed while loading"), 409);
   const type = contentType(resolved.absolutePath);
   const headers: Record<string, string> = { ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(resolved.absolutePath) }), "Cache-Control": "no-cache", "Content-Type": type, ETag: `"${file.sha256}"`, "X-Burnguard-File-Hash": file.sha256, "X-Burnguard-Revision": String(project.current_revision), "X-Burnguard-Artifact-Digest": project.current_digest };
   const nodeBgId = c.req.query("node_bg_id");
   if (nodeBgId !== undefined) {
-    try { headers["X-Burnguard-Node-Fingerprint"] = fingerprintHtmlNode(await readFile(resolved.absolutePath, "utf8"), nodeBgId).fingerprint; }
+    try { headers["X-Burnguard-Node-Fingerprint"] = fingerprintHtmlNode(bytes.toString("utf8"), nodeBgId).fingerprint; }
     catch (error) {
       if (error instanceof FilePatchError) return c.json(fail(error.code, error.message), 422);
       throw error;
     }
   }
   const body = /\.html?$/i.test(resolved.absolutePath)
-    ? htmlWithEditableIds(await readFile(resolved.absolutePath, "utf8"))
-    : Bun.file(resolved.absolutePath);
+    ? htmlWithEditableIds(bytes.toString("utf8"))
+    : bytes;
   return new Response(body, { headers });
 });
 

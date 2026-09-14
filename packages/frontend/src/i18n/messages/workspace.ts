@@ -29,6 +29,8 @@ export const workspaceMessages = defineMessages({
   "workspace.composer.send": { ko: "보내기", en: "Send", "zh-CN": "发送" },
 
   "workspace.canvas.placeholderTitle": { ko: "아직 표시할 결과물이 없어요", en: "There's nothing to display yet", "zh-CN": "暂无可显示的成果" },
+  "workspace.canvas.loadingTitle": { ko: "미리보기를 준비하고 있어요", en: "Preparing your preview", "zh-CN": "正在准备预览" },
+  "workspace.canvas.loadingSubtitle": { ko: "페이지와 이미지, 스타일을 불러오고 있어요.", en: "Loading the page, images and styles.", "zh-CN": "正在加载页面、图像和样式。" },
   "workspace.canvas.placeholderSubtitle": { ko: "왼쪽 채팅에 만들고 싶은 것을 적어 보내면, 생성된 파일이 이 자리에 바로 나타나요.", en: "Describe what you want in the chat on the left, and the generated file will appear here.", "zh-CN": "在左侧对话中描述你想创建的内容，生成的文件就会显示在这里。" },
   "workspace.canvas.fileNotFound": { ko: "파일을 찾을 수 없어요. 파일 목록을 새로고침한 뒤 다시 선택해 주세요.", en: "The file couldn't be found. Refresh the file list and select it again.", "zh-CN": "找不到该文件。请刷新文件列表后重新选择。" },
   "workspace.canvas.unauthorized": { ko: "페이지를 새로고침한 뒤 다시 시도해 주세요.", en: "Refresh the page and try again.", "zh-CN": "请刷新页面后重试。" },

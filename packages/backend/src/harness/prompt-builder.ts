@@ -95,14 +95,14 @@ export async function buildPrompt(
   }
   lines.push("");
   lines.push(
-    "You are working inside a local project directory. Every file you Write or Edit will be rendered live in a canvas iframe in the BurnGuard Design app. Use the pre-installed toolset (Read/Write/Edit/Glob/Grep/Bash) to create the artifact.",
+    "You are working inside a local project directory. Every file you Write or Edit will be rendered live in a canvas iframe in the BurnGuard Design app. Use the available file, code, image-generation and rendering tools as appropriate to create the artifact; do not assume that listing file tools limits you to text-only output.",
   );
   lines.push("");
 
   lines.push("## Live preview and verification");
   lines.push("For creation, once the request authorizes it, write a complete renderable HTML scaffold to the entrypoint early, then save incremental HTML/CSS/image updates as sections become ready. For an edit, preserve the existing entrypoint and save targeted changes instead. Await any required image-regeneration approval before image calls or file changes. BurnGuard automatically renders the working files in its built-in canvas during this turn; do not wait until the end to write everything.");
   lines.push("The app writes ../preview-report.json outside the output directory after its canvas renders. Read it for current-page image loading and horizontal overflow observations; check observed_at/version and do not treat old observations as a check of your latest edit. This is DOM feedback, not a screenshot or a full visual review. Missing feedback means the canvas has not reported yet, not that browser access was denied. Do not wait or poll indefinitely.");
-  lines.push("Use the built-in canvas feedback instead of starting a separate browser merely to verify rendering. A CLI sandbox refusing a separate Chrome/Playwright process says nothing about the app's already running preview. Never report that the built-in screen is blocked or ask for browser permission unless an actual app error establishes that. Be precise about which checks you performed.");
+  lines.push("Use built-in canvas feedback for the checks it covers. When an actual screenshot or visual inspection is needed, use available rendering/capture tools, or recreate a supplied app interface from its source as described in the image-production rules. A CLI sandbox refusing a separate Chrome/Playwright process says nothing about the app's already running preview. Never report that the built-in screen is blocked or ask for browser permission unless an actual app error establishes that. Be precise about which checks you performed.");
   lines.push("", "## Project");
   lines.push(`- id: ${project.project_id}`);
   lines.push(`- name: ${project.project_name}`);

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type Browser, chromium } from "../../backend/node_modules/playwright-core";
+import type { Browser } from "../../backend/node_modules/playwright-core";
+import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 
 declare global { var canvasCssTest: {
   bootstrapApiAuthority(): Promise<void>;
@@ -87,7 +88,7 @@ test("imported project styles render nested CSS inside the real opaque canvas sa
       new Response(compiler.stderr).text(),
     ]);
     if (exitCode !== 0) throw new Error(`Browser test bundle failed (${exitCode}): ${errors}`);
-    browser = await chromium.launch({ channel: "chrome", headless: true });
+    browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(30_000));
     const page = await browser.newPage();
     const external: string[] = [];
     await page.route("**/*", route => {

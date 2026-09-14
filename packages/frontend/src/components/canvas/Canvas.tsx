@@ -79,6 +79,7 @@ function buildPlaceholderSrc(locale: string, title: string, subtitle: string): s
 export default function Canvas({
   mode,
   src,
+  loading = false,
   frameKey,
   onModeChange,
   onRefresh,
@@ -123,6 +124,7 @@ export default function Canvas({
 }: {
   mode: CanvasMode | null;
   src?: string | null;
+  loading?: boolean;
   frameKey?: string;
   onModeChange: (m: CanvasMode | null) => void;
   onRefresh: () => void;
@@ -175,8 +177,8 @@ export default function Canvas({
   const locale = useLocaleStore((state) => state.locale);
   const placeholderSrc = buildPlaceholderSrc(
     locale,
-    t("workspace.canvas.placeholderTitle"),
-    t("workspace.canvas.placeholderSubtitle"),
+    t(src || loading ? "workspace.canvas.loadingTitle" : "workspace.canvas.placeholderTitle"),
+    t(src || loading ? "workspace.canvas.loadingSubtitle" : "workspace.canvas.placeholderSubtitle"),
   );
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -269,9 +271,10 @@ export default function Canvas({
     }
 
     const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]);
     setLoadError(null);
 
-    void authorizedFetch(src, { signal: controller.signal, cache: "no-store" })
+    void authorizedFetch(src, { signal, cache: "no-store", redirect: "error" })
       .then(async (response) => {
         if (!response.ok) {
           throw Object.assign(
@@ -281,7 +284,7 @@ export default function Canvas({
         }
         return response.text();
       })
-      .then((html) => embedCanvasImages(html, new URL(src, window.location.href).href, controller.signal))
+      .then((html) => embedCanvasImages(html, new URL(src, window.location.href).href, signal))
       .then(hydrateCanvasCharts)
       .then((html) => {
         if (controller.signal.aborted) return;

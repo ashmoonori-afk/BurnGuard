@@ -13,7 +13,9 @@ export function isSafeCanvasPagePath(relPath: string): boolean {
 
 export function resolveCanvasSource({ projectId, activeRelPath, indexedRelPaths, entrypointUrl }: CanvasSourceInput): string | null {
   if (projectId !== null && activeRelPath !== null) {
-    if (indexedRelPaths?.length === 0) return null;
+    // Files and artifact summaries refresh independently; a positive artifact
+    // must not disappear while the file index still contains an older empty list.
+    if (indexedRelPaths?.length === 0) return entrypointUrl || null;
     return `/api/projects/${projectId}/fs/${encodePath(activeRelPath)}`;
   }
   if (!entrypointUrl || /\/fs\/?$/u.test(entrypointUrl)) return null;

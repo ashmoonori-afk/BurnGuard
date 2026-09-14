@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,6 +8,7 @@ import { runMigrations } from "../src/db/migrate-local";
 import { systemsDir } from "../src/lib/paths";
 import { rawFileHeaders } from "../src/security/raw-file-response";
 import { createApp } from "../src/server";
+import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 
 const tempDirs: string[] = [];
 const projectIds: string[] = [];
@@ -53,6 +54,31 @@ afterAll(async () => {
 });
 
 describe("raw file response headers", () => {
+  test("Given concurrent asset reads When loading Then one canonical observation is shared and later edits are revalidated", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "raw-batch-"));
+    tempDirs.push(root);
+    const names = Array.from({ length: 12 }, (_, index) => `asset-${index}.svg`);
+    await Promise.all(names.map(name => writeFile(path.join(root, name), `<svg><!--${name}--></svg>`)));
+    const projectId = insertProject(root);
+    const app = createApp();
+    await new ArtifactCoordinator(getSqlite()).initialize(projectId, root);
+    const observe = spyOn(ArtifactCoordinator.prototype, "observeExternal");
+    try {
+      const responses = await Promise.all(names.map(name => app.request(`/api/projects/${projectId}/fs/${name}`)));
+      expect(responses.map(response => response.status)).toEqual(names.map(() => 200));
+      expect(observe).toHaveBeenCalledTimes(1);
+      const oldHash = responses[0]!.headers.get("x-burnguard-file-hash");
+      const oldDigest = responses[0]!.headers.get("x-burnguard-artifact-digest");
+      await writeFile(path.join(root, names[0]!), "<svg>updated</svg>");
+      const next = await app.request(`/api/projects/${projectId}/fs/${names[0]}`);
+      expect(next.status).toBe(200);
+      expect(await next.text()).toBe("<svg>updated</svg>");
+      expect(observe).toHaveBeenCalledTimes(2);
+      expect(next.headers.get("x-burnguard-file-hash")).not.toBe(oldHash);
+      expect(next.headers.get("x-burnguard-artifact-digest")).not.toBe(oldDigest);
+    } finally { observe.mockRestore(); }
+  });
+
   const request = (dest: string | null) => new Request("http://localhost/api/projects/p/fs/index.html", dest === null ? {} : { headers: { "sec-fetch-dest": dest } });
 
   test("Given a top-level document navigation When raw HTML is served Then it is delivered as an attachment with nosniff", () => {

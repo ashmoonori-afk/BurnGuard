@@ -129,10 +129,13 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
       return content;
     }))).join("\n");
   };
-  await Promise.all(Array.from(document.querySelectorAll("img[src], input[type=image][src]")).map(async image => {
+  // Start independent resource groups together; a slow photo must not delay CSS,
+  // fonts or scripts. All requests still share the same bounds and cancellation.
+  await Promise.all([
+  ...Array.from(document.querySelectorAll("img[src], input[type=image][src]")).map(async image => {
     image.setAttribute("src", await resolve(image.getAttribute("src")!));
-  }));
-  await Promise.all(Array.from(document.querySelectorAll("img[srcset], source[srcset]")).map(async image => {
+  }),
+  ...Array.from(document.querySelectorAll("img[srcset], source[srcset]")).map(async image => {
     const srcset = image.getAttribute("srcset")!;
     // Data URLs contain commas and already work in the opaque frame.
     if (srcset.includes("data:")) return;
@@ -140,12 +143,12 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
       const match = candidate.trim().match(/^(\S+)(.*)$/);
       return match ? `${await resolve(match[1]!)}${match[2]}` : candidate;
     }))).join(", "));
-  }));
-  await Promise.all(Array.from(document.querySelectorAll("style, [style]")).map(async element => {
+  }),
+  ...Array.from(document.querySelectorAll("style, [style]")).map(async element => {
     if (element.tagName === "STYLE") element.textContent = (await embedStylesheet(element.textContent ?? "", documentUrl, [])).replace(/<\/style/gi, "<\\/style");
     if (element.hasAttribute("style")) element.setAttribute("style", await embedCssImages(element.getAttribute("style")!, url => resolve(url)));
-  }));
-  await Promise.all(Array.from(document.querySelectorAll('link[rel~="stylesheet"][href]')).map(async link => {
+  }),
+  ...Array.from(document.querySelectorAll('link[rel~="stylesheet"][href]')).map(async link => {
     const source = link.getAttribute("href")!;
     if (!isProjectImageUrl(source, documentUrl)) return;
     const css = await resolve(source, documentUrl, "css");
@@ -156,8 +159,8 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
     target.hash = "";
     style.textContent = (await embedStylesheet(css, target.href, [target.href])).replace(/<\/style/gi, "<\\/style");
     link.replaceWith(style);
-  }));
-  await Promise.all(Array.from(document.querySelectorAll<HTMLScriptElement>("script[src]")).map(async script => {
+  }),
+  ...Array.from(document.querySelectorAll<HTMLScriptElement>("script[src]")).map(async script => {
     const source = script.getAttribute("src") ?? "";
     const type = (script.getAttribute("type") ?? "").trim().toLowerCase();
     if (type && type !== "module" && !/^(?:text|application)\/(?:javascript|ecmascript)$/.test(type)) return;
@@ -187,7 +190,8 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
       document.write(${json(tag)}.replace(${json(marker)},url));
     })();`;
     script.replaceWith(bootstrap);
-  }));
+  }),
+  ]);
   boundedSignal.throwIfAborted();
   return fetched.size === 0 ? html : `<!doctype html>${document.documentElement.outerHTML}`;
 }

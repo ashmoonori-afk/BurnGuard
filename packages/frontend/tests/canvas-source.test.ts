@@ -7,10 +7,19 @@ describe("resolveCanvasSource", () => {
       projectId: "project-1",
       activeRelPath: "index.html",
       indexedRelPaths: [],
-      entrypointUrl: "/api/projects/project-1/fs/index.html",
+      entrypointUrl: null,
     });
 
     expect(source).toBeNull();
+  });
+
+  test("Given a refreshed artifact and a stale empty index When resolved Then the available artifact stays visible", () => {
+    expect(resolveCanvasSource({
+      projectId: "project-1",
+      activeRelPath: "index.html",
+      indexedRelPaths: [],
+      entrypointUrl: "/api/projects/project-1/fs/generated.html",
+    })).toBe("/api/projects/project-1/fs/generated.html");
   });
 
   test("Given an indexed nested active file When resolved Then its encoded project URL is returned", () => {

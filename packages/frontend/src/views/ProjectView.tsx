@@ -754,7 +754,7 @@ export default function ProjectView() {
     () => project === null
       ? null
       : parseProjectGraphicCanvas(project.type, project.options_json),
-    [project],
+    [project?.type, project?.options_json],
   );
   const files: FileInfo[] = filesQuery.data ?? [];
   const artifacts = artifactsQuery.data ?? null;
@@ -1258,6 +1258,7 @@ export default function ProjectView() {
         {activeTab?.kind === "file" && (
           <div className="flex min-h-0 min-w-0 flex-1 max-[1000px]:flex-col">
             <Canvas
+              loading={projectQuery.isPending || filesQuery.isPending || artifactsQuery.isPending || session?.status === "running"}
               colorPalette={activeRelPath && /\.html?$/i.test(activeRelPath) ? <div className="flex items-center gap-2">
                 {project.type === "prototype" && artifacts.pages.length > 1 ? <label className="flex items-center gap-1.5 text-xs text-muted-foreground">{t("workspace.project.page")}<select aria-label={t("workspace.project.canvasPage")} value={activeRelPath} className="h-8 max-w-44 rounded-md border border-border bg-background px-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onChange={(event) => openFileAsTab(event.target.value, setOpenFileTabs, setActiveTabId)}>{artifacts.pages.map((page) => <option key={page.rel_path} value={page.rel_path}>{page.title}</option>)}</select></label> : null}
                 <ColorPalette
