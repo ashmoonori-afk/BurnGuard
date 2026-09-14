@@ -123,5 +123,6 @@ export const settingsMessages = defineMessages({
   "settings.defaultModel": { ko: "기본 · {name}", en: "Default · {name}", "zh-CN": "默认 · {name}" },
   "settings.toolDefault": { ko: "도구 기본 모델", en: "Tool default model", "zh-CN": "工具默认模型" },
   "settings.effort": { ko: "추론 강도", en: "Reasoning effort", "zh-CN": "推理强度" },
+  "settings.taskGuidanceAdapts": { ko: "작업 안내는 선택한 모델과 추론 강도에 맞춰 자동으로 조정돼요.", en: "Task guidance adapts to the selected model and reasoning effort.", "zh-CN": "任务指引会根据所选模型与推理强度自动调整。" },
   "settings.additional": { ko: "연결 및 추가 설정", en: "Connection and additional settings", "zh-CN": "连接与更多设置" },
 });
