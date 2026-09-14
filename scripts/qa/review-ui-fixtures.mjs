@@ -54,7 +54,7 @@ export async function runReviewUiFixtures(page, context, base, scenario) {
     if (pathname === "/api/projects") return ok([projectFixture(PROJECT_A), projectFixture(PROJECT_B)]);
     if (pathname === "/api/design-systems") {
       const status = new URL(request.url()).searchParams.get("status");
-      return ok(status === "published" ? [systemFixture(SYSTEM_A)] : []);
+      return ok(status === null || status === "published" ? [systemFixture(SYSTEM_A)] : []);
     }
     const system = pathname.match(/^\/api\/design-systems\/([^/]+)(.*)$/);
     if (system) {

@@ -129,12 +129,8 @@ export default function HomeView() {
   const systemsQuery = useQuery({
     queryKey: ["design-systems", "all"],
     queryFn: async () => {
-      const [draft, review, published] = await Promise.all([
-        listDesignSystems("draft"),
-        listDesignSystems("review"),
-        listDesignSystems("published"),
-      ]);
-      return [...draft, ...review, ...published].sort(
+      const systems = await listDesignSystems("all");
+      return systems.sort(
         (a, b) => b.updated_at - a.updated_at,
       );
     },
@@ -487,7 +483,7 @@ export default function HomeView() {
             </div>
             {!graphicReady && <p className="mt-2 text-xs text-muted-foreground">{t("home.graphicAvailability")}</p>}
           </div>
-          {settingsQuery.isPending ? <p role="status" className="p-6 text-sm text-muted-foreground">{t("home.settingsLoading")}</p> : settingsQuery.isError ? <div role="alert" className="space-y-3 p-6"><p className="text-sm text-destructive">{t("home.settingsError")}</p><Button variant="outline" onClick={() => void settingsQuery.refetch()}>{t("home.settingsRetry")}</Button></div> : creationType !== null ? <NewProjectPanel generationDefaults={settingsQuery.data.generation_defaults} graphicReady={graphicReady} type={creationType} designSystems={systemsQuery.data ?? []} defaultBackend={settingsQuery.data.default_backend} systemsLoading={systemsQuery.isPending} systemsError={systemsQuery.error} onRetrySystems={() => void systemsQuery.refetch()} onPendingChange={setCreatingProject} onCreated={(project) => navigate(`/projects/${project.id}`)} /> : null}
+          {settingsQuery.isPending ? <p role="status" className="p-6 text-sm text-muted-foreground">{t("home.settingsLoading")}</p> : settingsQuery.isError ? <div role="alert" className="space-y-3 p-6"><p className="text-sm text-destructive">{t("home.settingsError")}</p><Button variant="outline" onClick={() => void settingsQuery.refetch()}>{t("home.settingsRetry")}</Button></div> : creationType !== null ? <NewProjectPanel generationDefaults={settingsQuery.data.generation_defaults} graphicReady={graphicReady} type={creationType} designSystems={systemsQuery.data ?? []} defaultBackend={settingsQuery.data.default_backend} systemsLoading={systemsQuery.isFetching} systemsError={systemsQuery.error} onRetrySystems={() => void systemsQuery.refetch()} onPendingChange={setCreatingProject} onCreated={(project) => navigate(`/projects/${project.id}`)} /> : null}
         </DialogContent>
       </Dialog>
 

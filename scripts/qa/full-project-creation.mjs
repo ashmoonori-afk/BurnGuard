@@ -70,10 +70,10 @@ export async function run({ page, context, base, home, check, shot, evidence }) 
     await visible(cards(view === 'systems' ? 'systems' : 'projects').first());
   };
   const form = async type => {
-    const lists = Promise.all(['draft', 'review', 'published'].map(status => page.waitForResponse(r => {
+    const lists = page.waitForResponse(r => {
       const url = new URL(r.url());
-      return url.pathname === '/api/design-systems' && url.searchParams.get('status') === status;
-    })));
+      return url.pathname === '/api/design-systems' && !url.searchParams.has('status');
+    });
     await Promise.all([lists, responseFor('/api/backends/detect'), page.goto(`${base}/?view=mine&create=${type}`)]);
     await visible(field('project-name'));
     // Waiting for this option also covers React's consumption of the list response.
@@ -112,6 +112,10 @@ export async function run({ page, context, base, home, check, shot, evidence }) 
     noTurn(); return observation;
   };
   const create = async (expectedType, expectedSystem = null, brand) => {
+    if (expectedSystem === null) {
+      await button('Choose design system').click();
+      await button('Start without a design system').click();
+    }
     assert.equal(await button('Create project').isEnabled(), true, `Create disabled: ${await page.getByRole('dialog').innerText()}`);
     const { data, request } = await mutate('/api/projects', 'POST', () => button('Create project').click(), 201);
     createdProjects.push(data);
@@ -200,7 +204,7 @@ export async function run({ page, context, base, home, check, shot, evidence }) 
       const before = mutations.filter(m => m.path === '/api/projects' && m.method === 'POST').length;
       for (const id of ['project-name', 'brief-audience', 'brief-objective']) {
         const previous = await field(id).inputValue(); await field(id).fill('   ');
-        assert.equal(await button('Create project').isDisabled(), true, `${id} whitespace must be invalid`);
+        assert.equal(await page.locator('form button[type=submit]').isDisabled(), true, `${id} whitespace must be invalid`);
         await field(id).fill(''); assert.equal(await field(id).evaluate(node => node.validity.valueMissing), true);
         await field(id).fill(previous);
       }
@@ -208,8 +212,8 @@ export async function run({ page, context, base, home, check, shot, evidence }) 
         await field(id).fill('x'.repeat(limit + 1)); assert.equal((await field(id).inputValue()).length, limit);
       }
       await fillBrief('Validation');
-      for (const value of ['0', '31', '1.5', '']) { await field('section-count').fill(value); assert.equal(await button('Create project').isDisabled(), true, `section count ${value}`); }
-      for (const value of ['1', '30', '8']) { await field('section-count').fill(value); assert.equal(await button('Create project').isEnabled(), true); }
+      for (const value of ['0', '31', '1.5', '']) { await field('section-count').fill(value); assert.equal(await page.locator('form button[type=submit]').isDisabled(), true, `section count ${value}`); }
+      for (const value of ['1', '30', '8']) { await field('section-count').fill(value); assert.equal(await page.locator('form button[type=submit]').isEnabled(), true); }
       assert.equal(mutations.filter(m => m.path === '/api/projects' && m.method === 'POST').length, before);
       return { required: ['name', 'audience', 'objective'], maxLengths: [200, 1000], invalidSections: [0, 31, 1.5, ''], validSections: [1, 30, 8], mutations: 0 };
     });
@@ -225,7 +229,7 @@ export async function run({ page, context, base, home, check, shot, evidence }) 
         for (const pages of [['../escape.html'], ['index.html'], ['about.html', 'ABOUT.html'], ['bad page.html'], Array.from({ length: 13 }, (_, index) => `page-${index}.html`)]) {
           await page.evaluate(({ key, draft, pages }) => localStorage.setItem(key, JSON.stringify({ ...draft, pages })), { key, draft, pages });
           await page.reload(); await visible(field('project-name'));
-          assert.equal(await button('Create project').isDisabled(), true, JSON.stringify(pages));
+          assert.equal(await page.locator('form button[type=submit]').isDisabled(), true, JSON.stringify(pages));
           observed.push({ pages, createDisabled: true, screenshot: await shot(`creation-invalid-pages-${observed.length}`) });
         }
         assert.equal(mutations.filter(m => m.path === '/api/projects' && m.method === 'POST').length, before);
@@ -260,7 +264,7 @@ export async function run({ page, context, base, home, check, shot, evidence }) 
     });
     for (const [type] of formats) await scenario(`from-template-original-${type}`, async () => {
       await form('from_template'); await fillBrief(`Basic template ${type}`);
-      assert.equal(await field('design-system').inputValue(), ''); assert.equal(await button('Create project').isDisabled(), true);
+      assert.equal(await field('design-system').inputValue(), ''); assert.equal(await button('Choose design system').isEnabled(), true);
       const id = 'sample-system-original-sonnel'; await field('design-system').selectOption(id); await field('template-format').selectOption(type);
       assert.equal(await page.getByRole('switch', { name: 'Copy template as is' }).count(), 0);
       if (type === 'graphic') {

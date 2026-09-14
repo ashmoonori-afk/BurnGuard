@@ -175,6 +175,8 @@ export async function run({ page, context, base, home, check, shot, evidence }) 
 
   async function create(name, expected = {}) {
     await enabledForm();
+    await submit().click();
+    await page.getByRole("button", { name: "Start without a design system", exact: true }).click();
     assert.equal(await submit().isEnabled(), true, "Valid graphic form must permit creation");
     await shot(`${name}-form`);
     const responseSignal = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/projects", {timeout:60000});

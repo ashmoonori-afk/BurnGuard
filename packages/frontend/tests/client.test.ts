@@ -6,7 +6,7 @@ import {
   bootstrapApiAuthority,
 } from "../src/api/client";
 import { catalogDetailRows, getDesignSystem, updateDesignSystemWithConflictReload } from "../src/api/design-system-metadata";
-import { deleteProject } from "../src/api/home";
+import { deleteProject, listDesignSystems } from "../src/api/home";
 
 const originalFetch = globalThis.fetch;
 
@@ -28,6 +28,26 @@ afterEach(() => {
 });
 
 describe("API authority client", () => {
+  test("Given more than one catalog page, When listing systems, Then external systems beyond the first page remain selectable", async () => {
+    const offsets: string[] = [];
+    globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/bootstrap") return Response.json({ data: { capability: "test-launch" } });
+      const url = new URL(String(input), "http://burnguard.invalid");
+      expect(url.searchParams.get("status")).toBe("published");
+      expect(url.searchParams.get("lifecycle")).toBe("active");
+      expect(url.searchParams.get("limit")).toBe("100");
+      const offset = url.searchParams.get("offset")!;
+      offsets.push(offset);
+      return Response.json({ data: offset === "0"
+        ? Array.from({ length: 100 }, (_, i) => ({ id: `external-${i}`, name: `External ${i}`, status: "published", is_template: false, thumbnail_path: null, updated_at: 1 }))
+        : [{ id: "external-latest", name: "Externally added", status: "published", is_template: false, thumbnail_path: null, updated_at: 2 }] });
+    }) as typeof fetch;
+    await bootstrapApiAuthority();
+    const systems = await listDesignSystems();
+    expect(offsets).toEqual(["0", "100"]);
+    expect(systems).toHaveLength(101);
+    expect(systems.at(-1)?.id).toBe("external-latest");
+  });
   test("bootstraps in memory and attaches the capability to API requests", async () => {
     const calls: Array<{ input: string; init?: RequestInit }> = [];
     globalThis.fetch = mock(

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chromium } from "../../backend/node_modules/playwright-core";
+import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 import { renderInitialArtifact } from "../../backend/src/db/templates";
 import { parseDesignBriefV1, type CreateProjectRequest } from "@bg/shared";
 import {
@@ -193,7 +193,7 @@ describe("graphic set form choices", () => {
       compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text(),
     ]);
     if (exitCode !== 0) throw new Error(`Graphic fixture bundle failed (${exitCode}): ${errors}`);
-    const browser = await chromium.launch({ channel: "chrome", headless: true });
+    const browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(60_000));
     try {
       const page = await browser.newPage();
       const rendered = await browser.newPage();
