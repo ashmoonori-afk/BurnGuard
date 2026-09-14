@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Market Stack Theme — 웹사이트 미리보기</title>
+<link rel="stylesheet" href="../../assets/fonts/fonts.css">
+<style>
+/* Market Stack Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FFFDF8;
+  --gray-90: #F1EFEA;
+  --gray-80: #DEDDD8;
+  --gray-70: #C7C5C2;
+  --gray-60: #ADACA9;
+  --gray-50: #939290;
+  --gray-40: #777674;
+  --gray-30: #5B5B59;
+  --gray-20: #3F3F3E;
+  --gray-10: #232323;
+
+  /* Brand and accents */
+  --primary-blue: #E04E1B;
+  --action-blue: #E04E1B;
+  --red-60: #CE2D2D;
+  --red-50: #D75252;
+  --red-10: #F6D8D3;
+  --orange-50: #E04E1B;
+  --orange-10: #F9DED0;
+  --yellow-30: #D9A21B;
+  --yellow-10: #F7E9C7;
+  --green-60: #2E8B57;
+  --green-50: #4F9D71;
+  --green-10: #D9E8DB;
+  --teal-50: #F2C94C;
+  --teal-10: #FDF4D9;
+  --aqua-60: #2F5FD0;
+  --aqua-10: #DAE1F1;
+  --blue-90: #4E2517;
+  --blue-80: #763018;
+  --blue-70: #A33D19;
+  --blue-60: #E04E1B;
+  --blue-50: #E77850;
+  --blue-30: #F1B097;
+  --blue-10: #FAE1D5;
+  --ultramarine-60: #9B3C26;
+  --purple-60: #2F5FD0;
+  --pink-60: #724A8C;
+
+  /* Semantic */
+  --success: #2B8352;
+  --warning-yellow: #D9A21B;
+  --warning-orange: #E04E1B;
+  --error: #CE2D2D;
+  --info: #2F5FD0;
+
+  /* Surface and text */
+  --bg: #FFFDF8;
+  --bg-subtle: #F6F4EF;
+  --bg-muted: #ECEAE6;
+  --surface: #FAF8F3;
+  --surface-inverse: #151515;
+  --fg-1: #151515;
+  --fg-2: #3F3F3E;
+  --fg-3: #696967;
+  --fg-4: #939290;
+  --fg-on-dark: #FFFDF8;
+  --fg-on-brand: #101014;
+  --border: #DEDDD8;
+  --border-strong: #AFAEAB;
+  --focus-ring: #2F5FD0;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #2F5FD0;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #F2C94C;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #101014;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #E04E1B;
+  --chart-2: #2F5FD0;
+  --chart-3: #F2C94C;
+  --chart-4: #294FA7;
+  --chart-5: #2E8B57;
+  --chart-6: #D9A21B;
+  --chart-7: #CE2D2D;
+  --chart-8: #8B3618;
+  --chart-9: #957D35;
+  --chart-10: #829EE0;
+
+  /* Type families */
+  --font-display: "Outfit", "Pretendard", sans-serif;
+  --font-serif: "Lora", "Nanum Myeongjo", serif;
+  --font-body: "Plus Jakarta Sans", "Pretendard", sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Pretendard", sans-serif;
+  --font-mono: "JetBrains Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 800;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 8px;
+  --r-4: 14px;
+  --r-8: 24px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1240px;
+  --layout-measure: 56ch;
+  --layout-columns: 12;
+  --layout-gutter: 20px;
+  --layout-margin: clamp(16px, 4vw, 48px);
+  --layout-section-y: clamp(40px, 5vw, 80px);
+  --layout-rule: 2px;
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1080px;
+  --layout-hero: 1 / 1;
+  --layout-nav-h: 64px;
+
+  /* Family extensions */
+  --family-media-fit: cover;
+  --family-commerce-gallery-layout: stacked;
+  --family-commerce-purchase-position: sticky;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg-1);
+  font-family:var(--font-body);font-size:var(--fs-16);line-height:var(--lh-relaxed);
+  font-feature-settings:"tnum" 0}
+img,svg{display:block;max-width:100%}
+a{color:inherit}
+.wrap{max-width:var(--layout-max,1200px);margin-inline:auto;
+  padding-inline:var(--layout-margin,24px)}
+.bleed{width:100%}
+.eyebrow{font-family:var(--font-mono);font-size:var(--fs-12);
+  letter-spacing:var(--ls-eyebrow,.12em);text-transform:uppercase;color:var(--fg-3);margin:0}
+.display{font-family:var(--font-display);line-height:var(--lh-display,var(--lh-tight));
+  letter-spacing:var(--ls-display,var(--ls-tight));color:var(--fg-1);margin:0;
+  font-size:clamp(var(--fs-32),6vw,var(--fs-64))}
+.lede{font-family:var(--font-serif);font-size:var(--fs-20);color:var(--fg-2);
+  max-width:var(--layout-measure,60ch);margin:0}
+.body{font-size:var(--fs-16);color:var(--fg-2);max-width:var(--layout-measure,60ch)}
+.rule{border:0;border-top:var(--layout-rule,1px) solid var(--border);margin:0}
+.btn{display:inline-block;font-family:var(--font-sans);font-size:var(--fs-14);
+  font-weight:var(--fw-medium,500);padding:var(--sp-3) var(--sp-5);border:0;
+  border-radius:var(--r-4);background:var(--primary-blue);color:var(--fg-on-brand);
+  text-decoration:none;transition:opacity var(--dur-fast) var(--ease-standard)}
+.btn:hover{opacity:.88}
+.btn.ghost{background:transparent;color:var(--fg-1);
+  border:var(--layout-rule,1px) solid var(--border-strong)}
+.btn.pill{border-radius:var(--r-pill)}
+.tag{display:inline-block;font-family:var(--font-mono);font-size:var(--fs-12);
+  padding:var(--sp-1) var(--sp-2);border-radius:var(--r-2);
+  background:var(--bg-muted);color:var(--fg-2)}
+.fig{width:100%;height:100%;object-fit:cover}
+.media{overflow:hidden;background:var(--bg-muted);border-radius:var(--r-8)}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);
+  min-height:var(--layout-nav-h,64px);border-bottom:var(--layout-rule,1px) solid var(--border)}
+.nav .mark{font-family:var(--font-display);font-size:var(--fs-18);
+  letter-spacing:var(--ls-tight);color:var(--fg-1)}
+.nav ul{display:flex;gap:var(--sp-5);list-style:none;margin:0;padding:0;
+  font-family:var(--font-sans);font-size:var(--fs-14);color:var(--fg-2)}
+.foot{border-top:var(--layout-rule,1px) solid var(--border);
+  padding-block:var(--sp-8);margin-top:var(--sp-10);
+  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  display:flex;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap}
+.section{padding-block:var(--layout-section-y,64px)}
+.grid{display:grid;gap:var(--layout-gutter,24px)}
+.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stack{display:flex;flex-direction:column;gap:var(--sp-4)}
+.row{display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center}
+dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-4);margin:0}
+dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  letter-spacing:.06em;text-transform:uppercase}
+dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
+@media (max-width:820px){
+  .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
+  .nav ul{display:none}
+}
+</style></head>
+<body data-archetype="shop">
+
+<style>
+.shopnav{display:flex;justify-content:space-between;align-items:center;
+  min-height:var(--layout-nav-h,56px);font-family:var(--font-mono);font-size:var(--fs-12);
+  color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase}
+.brandline{font-family:var(--font-display);line-height:.9;letter-spacing:var(--ls-tight);
+  font-size:clamp(var(--fs-48),12vw,9rem);color:var(--fg-1);margin:0;position:relative;z-index:1;
+  padding-block:var(--sp-6) var(--sp-4)}
+.gallery{display:grid;gap:var(--layout-gutter,16px);
+  grid-template-columns:1fr}
+.item .shot{aspect-ratio:16 / 9;border-radius:var(--r-4)}
+.item.wide{grid-column:1 / -1}
+.item.wide .shot{aspect-ratio:var(--layout-hero,16 / 9)}
+.item .fig{object-fit:cover}
+.meta{display:flex;justify-content:space-between;gap:var(--sp-3);
+  padding-block:var(--sp-3);font-family:var(--font-sans);font-size:var(--fs-14);color:var(--fg-2)}
+.price{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--fg-1)}
+.detail{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);
+  gap:var(--layout-gutter,24px);align-items:start;margin-top:var(--sp-10)}
+.buy{position:sticky;top:var(--sp-4);border:var(--layout-rule,1px) solid var(--border);
+  border-radius:var(--r-8);padding:var(--sp-5);background:var(--surface);display:grid;gap:var(--sp-3)}
+.buy .big{font-family:var(--font-display);font-size:var(--fs-32);color:var(--fg-1)}
+.spec{display:grid;gap:0;margin:0}
+.spec div{display:flex;justify-content:space-between;gap:var(--sp-3);
+  padding-block:var(--sp-2);border-bottom:var(--layout-rule,1px) solid var(--border);
+  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-3)}
+.spec div:last-child{border-bottom:0}
+.spec b{color:var(--fg-2);font-weight:var(--fw-regular,400)}
+@media (max-width:780px){.gallery{grid-template-columns:1fr}.detail{grid-template-columns:1fr}
+  .buy{position:static}}
+</style>
+<header class="wrap shopnav">
+  <span>Market Stack</span>
+  <span>검색 · 계정 · 장바구니 (2)</span>
+</header>
+<main class="wrap">
+  <h1 class="brandline">계절이 지나도<br>남는 것들</h1>
+  <div class="gallery">
+    <article class="item wide">
+      <div class="media shot"><img class="fig" src="./media/market-stack.webp" alt="" loading="lazy" decoding="async"></div>
+      <div class="meta"><span>겹이불 커버</span><span class="price">128,000원</span></div>
+    </article>
+    <article class="item wide">
+      <div class="media shot"><svg class="fig" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false"><rect x="0" y="0" width="160" height="90" fill="var(--bg-muted)"/>
+           <path d="M0 90 L54 30 L96 72 L132 40 L160 62 L160 90 Z" fill="var(--gray-60)" opacity="0.9"/>
+           <circle cx="122" cy="24" r="14" fill="var(--gray-40)"/></svg></div>
+      <div class="meta"><span>리넨 셔츠</span><span class="price">96,000원</span></div>
+    </article>
+    <article class="item wide">
+      <div class="media shot"><svg class="fig" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false"><rect x="0" y="0" width="160" height="90" fill="var(--bg-muted)"/>
+           <path d="M0 90 L54 30 L96 72 L132 40 L160 62 L160 90 Z" fill="var(--gray-60)" opacity="0.9"/>
+           <circle cx="122" cy="24" r="14" fill="var(--gray-40)"/></svg></div>
+      <div class="meta"><span>가죽 소품함</span><span class="price">72,000원</span></div>
+    </article>
+    <article class="item wide">
+      <div class="media shot"><svg class="fig" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false"><rect x="0" y="0" width="160" height="90" fill="var(--bg-muted)"/>
+           <path d="M0 90 L54 30 L96 72 L132 40 L160 62 L160 90 Z" fill="var(--gray-60)" opacity="0.9"/>
+           <circle cx="122" cy="24" r="14" fill="var(--gray-40)"/></svg></div>
+      <div class="meta"><span>무광 텀블러</span><span class="price">38,000원</span></div>
+    </article></div>
+  <section class="detail">
+    <div>
+      <p class="eyebrow">소재와 관리</p>
+      <p class="body" style="margin-top:var(--sp-3)">세탁 후에도 형태가 남도록 밀도를 높여 짰습니다. 첫 세탁에서 약간 줄어든 뒤 그 상태로 유지됩니다. 표백제와 건조기는 권하지 않습니다.</p>
+      <dl class="spec" style="margin-top:var(--sp-5)">
+        <div><span>소재</span><b>리넨 100%</b></div>
+        <div><span>중량</span><b>240 g/㎡</b></div>
+        <div><span>생산</span><b>국내 봉제</b></div>
+        <div><span>배송</span><b>2–4일</b></div>
+      </dl>
+    </div>
+    <aside class="buy">
+      <p class="eyebrow">겹이불 커버</p>
+      <p class="big">128,000원</p>
+      <p style="margin:0;font-size:var(--fs-14);color:var(--fg-3)">퀸 · 오트 / 재고 6</p>
+      <a class="btn" href="#none">장바구니에 담기</a>
+      <a class="btn ghost" href="#none">위시리스트</a>
+    </aside>
+  </section>
+</main>
+<footer class="wrap foot"><span>Market Stack Theme</span><span>미리보기 · 토큰 기반 생성</span></footer>
+</body></html>
