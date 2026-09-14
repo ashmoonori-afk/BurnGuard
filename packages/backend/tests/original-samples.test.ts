@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { originalSamples, originalSampleFormats, originalSampleSystemId, ORIGINAL_SAMPLE_TAG } from "../src/data/original-samples";
 import { seedOriginalSamplesOnce } from "../src/db/seed-original-samples";
@@ -8,6 +8,7 @@ import { getSqlite } from "../src/db/client";
 import { resolveRepoRoot } from "../src/lib/paths";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { createApp } from "../src/server";
+import { bundledFontFiles, bundledFontUrl } from "../src/data/bundled-fonts";
 
 test("Given original samples, when seeded and copied, then all formats have durable assets and deletion stays deleted", async () => {
   await seedOriginalSamplesOnce();
@@ -32,17 +33,22 @@ test("Given original samples, when seeded and copied, then all formats have dura
     const image = await app.request(`http://original.test${thumbnail}`, { headers });
     expect(image.status).toBe(200);
     expect(image.headers.get("content-type")).toContain("image/png");
-    for (const [file, mime] of [["fonts/fonts.css", "text/css"], ["fonts/PretendardVariable.woff2", "font/woff2"]]) {
-      const resource = await app.request(`http://original.test/api/design-systems/${systemId}/files/${file}`, { headers });
-      expect(resource.status).toBe(200);
-      expect(resource.headers.get("content-type")).toContain(mime);
-    }
+    const stylesheet = await app.request(`http://original.test/api/design-systems/${systemId}/files/fonts/fonts.css`, { headers });
+    expect(stylesheet.status).toBe(200);
+    expect(stylesheet.headers.get("content-type")).toContain("text/css");
+    const font = (await bundledFontFiles()).get("PretendardVariable.woff2")!;
+    expect(await stylesheet.text()).toContain(bundledFontUrl(font));
+    const resource = await app.request(`http://original.test${bundledFontUrl(font)}`);
+    expect(resource.status).toBe(200);
+    expect(resource.headers.get("content-type")).toBe("font/woff2");
+    expect(Buffer.from(await resource.arrayBuffer()).equals(font.bytes)).toBe(true);
     for (const format of originalSampleFormats) {
       const row = rows.find((item) => item.name === `${ORIGINAL_SAMPLE_TAG} ${sample.name} · ${format.label}`)!;
       expect(row.type).toBe(format.type);
       expect(db.prepare("SELECT backend_id FROM sessions WHERE project_id=?").get(row.id)).toEqual({ backend_id: format.type === "graphic" ? "codex" : "claude-code" });
       expect(row.entrypoint).toBe(format.entrypoint);
       expect((await inspectCanonicalTree(row.dir_path)).tree_digest).toBe(row.current_digest);
+      expect((await readdir(path.join(row.dir_path, "fonts"))).filter(name => name.endsWith(".woff2"))).toEqual([]);
       const source = path.join(resolveRepoRoot(), "samples/original", sample.slug);
       expect(await readFile(path.join(row.dir_path, "assets/hero.png"))).toEqual(await readFile(path.join(source, "assets/hero.png")));
       if (format.type === "graphic") expect(JSON.parse(row.options_json!).graphic_canvas).toEqual({ schema_version: 1, width: 1080, height: 1350 });
@@ -60,5 +66,5 @@ test("Given original samples, when seeded and copied, then all formats have dura
   await seedOriginalSamplesOnce();
   expect(db.prepare("SELECT 1 FROM projects WHERE name=?").get(deleted.name)).toBeNull();
   expect(await readFile(path.join(edited.dir_path, edited.entrypoint), "utf8")).toBe("user edited sample");
-// Every collection and full clone includes bundled font, glass-ring and image bytes.
+// Every collection and clone keeps shared font references, glass-ring and image bytes.
 }, 120_000);
