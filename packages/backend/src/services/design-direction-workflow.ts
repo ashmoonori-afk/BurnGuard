@@ -1,6 +1,6 @@
 import path from "node:path";
 import { ulid } from "ulid";
-import { DEFAULT_GENERATION_STYLE, parseGenerationStyle, type GenerationStyle, type DesignBriefV1, type DesignDirectionSlot, type DesignDirectionState, type ProjectType } from "@bg/shared";
+import { DEFAULT_GENERATION_STYLE, parseGenerationStyle, type GenerationStyle, type DirectionDesignSystem, type DesignBriefV1, type DesignDirectionSlot, type DesignDirectionState, type ProjectType } from "@bg/shared";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import {
   activeDirectionGeneration,
@@ -22,7 +22,7 @@ export class DesignDirectionWorkflowError extends Error {
   constructor(readonly code: "operation_active" | "operation_capacity" | "state_not_found" | "generation_conflict" | "revision_conflict" | "direction_not_ready" | "nothing_to_retry" | "nothing_to_undo" | "timestamp_overflow", message = code) { super(message); }
 }
 
-type ProjectSession = { readonly projectId: string; readonly sessionId: string; readonly projectDir: string; readonly projectName: string; readonly projectType: ProjectType; readonly designBrief: DesignBriefV1 | null };
+type ProjectSession = { readonly designSystem?: DirectionDesignSystem; readonly projectId: string; readonly sessionId: string; readonly projectDir: string; readonly projectName: string; readonly projectType: ProjectType; readonly designBrief: DesignBriefV1 | null };
 type StartedGeneration = { readonly state: DesignDirectionState; readonly completion: Promise<DesignDirectionState> };
 type ActiveCompletion = { readonly generationId: string; readonly promise: Promise<DesignDirectionState> };
 
@@ -121,7 +121,7 @@ export class DesignDirectionWorkflow {
       const signal = this.operationSignal(input.sessionId, state.generation_id);
       try {
         const outputPath = directionPreviewPath(input.projectDir, state.generation_id, slot.id);
-        await this.renderer.render({ layout: slot.layout_key, title: slot.title, summary: slot.summary, outline: state.content_outline, outputPath, signal });
+        await this.renderer.render({ layout: slot.layout_key, title: slot.title, summary: slot.summary, outline: state.content_outline, outputPath, signal, systemLayout: state.design_system?.layout });
         signal.throwIfAborted();
         replacement = { ...slot, status: "ready", preview_url: previewUrl(input.projectId, state.generation_id, slot.id), error: null };
       } catch (error) {
@@ -154,7 +154,7 @@ export class DesignDirectionWorkflow {
   }
 
   private initialState(input: ProjectSession, generationId: string): DesignDirectionState {
-    return { schema_version: 1, project_id: input.projectId, session_id: input.sessionId, generation_id: generationId, status: "loading", content_outline: contentOutline(input), directions: slotFixtures(), selected_id: null, selection_revision: 0, selection_history: [], error: null, updated_at: this.now() };
+    return { schema_version: 1, project_id: input.projectId, session_id: input.sessionId, generation_id: generationId, status: "loading", content_outline: contentOutline(input), directions: slotFixtures(input.designSystem), ...(input.designSystem ? { design_system: input.designSystem } : {}), selected_id: null, selection_revision: 0, selection_history: [], error: null, updated_at: this.now() };
   }
 
   private snapshot(current: DesignDirectionState, changes: Partial<DesignDirectionState>): DesignDirectionState {
@@ -175,7 +175,14 @@ function contentOutline(input: ProjectSession): readonly string[] {
   ];
 }
 
-function slotFixtures(): readonly DesignDirectionSlot[] { return [
+function slotFixtures(system?: DirectionDesignSystem): readonly DesignDirectionSlot[] {
+  if (system) return (["editorial", "modular", "narrative"] as const).map((key, order) => ({
+    id: key, order, layout_key: key, title: ["메시지 강조", "근거 강조", "행동 강조"][order]!,
+    summary: `${system.name}의 레이아웃을 유지하며 ${["핵심 메시지", "시각적 근거", "다음 행동"][order]}에 강조를 둡니다.`,
+    style_facts: [system.name, `${system.layout.tokens["--layout-columns"] ?? "미정"}열 · ${system.layout.tokens["--layout-max"] ?? "너비 미정"}`, "시스템 구성·폰트·색상 유지"],
+    status: "pending", preview_url: null, error: null,
+  }));
+  return [
   { id: "editorial", order: 0, layout_key: "editorial", title: "편집 서사", summary: "강한 제목과 여백으로 메시지를 압축합니다.", style_facts: ["비대칭 편집 그리드", "세리프 대형 제목", "크림과 적색 팔레트"], status: "pending", preview_url: null, error: null },
   { id: "modular", order: 1, layout_key: "modular", title: "모듈 시스템", summary: "정보를 비교 가능한 카드 체계로 정리합니다.", style_facts: ["12열 카드 그리드", "산세리프 정보 위계", "남색과 민트 팔레트"], status: "pending", preview_url: null, error: null },
   { id: "narrative", order: 2, layout_key: "narrative", title: "흐름 서사", summary: "시작부터 결론까지 시선의 경로를 만듭니다.", style_facts: ["곡선형 진행 구조", "단계별 강조 문구", "복숭아와 보라 팔레트"], status: "pending", preview_url: null, error: null },

@@ -271,3 +271,20 @@ a, .link {
   transition: border-color var(--dur-fast) var(--ease-standard);
 }
 a:hover, .link:hover { border-bottom-color: var(--action-blue); }
+
+
+/* Layout is part of the design-system contract. */
+:root {
+  --layout-max: 1200px;
+  --layout-measure: 62ch;
+  --layout-columns: 12;
+  --layout-gutter: 28px;
+  --layout-margin: clamp(20px, 4vw, 64px);
+  --layout-section-y: clamp(56px, 8vw, 112px);
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 16 / 10;
+  --layout-structure: editorial;
+  --family-ui-navigation-placement: top;
+  --family-ui-navigation-span: 0;
+}

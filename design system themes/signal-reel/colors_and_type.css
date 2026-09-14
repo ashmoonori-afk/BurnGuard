@@ -175,3 +175,5 @@
   --layout-hero: 21 / 9;
   --layout-nav-h: 56px;
 }
+
+:root { --layout-structure: split; }

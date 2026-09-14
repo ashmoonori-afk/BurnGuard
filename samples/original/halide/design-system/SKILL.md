@@ -32,3 +32,8 @@ an optics brand, so numbers are part of the visual language.
 Asymmetric. Place the primary lens off-centre and let the horizon line cross behind it so the
 refraction is visible at a glance. Leave the grid unbroken outside the ring: the contrast between a
 bent interior and a straight exterior is the whole effect.
+
+
+## Required layout
+
+Read Layout, Composition and Responsive in README.md and apply the --layout-* and --family-* tokens from colors_and_type.css before arranging content. Preserve the grid, reading measure, section rhythm, hero geometry and navigation placement; a palette/font swap on a generic layout is incomplete. Direction variants may change content emphasis, but must retain this structure unless the user explicitly overrides it. Check the rendered result at wide and narrow viewports and 200% zoom; fixed artboards retain their dimensions.

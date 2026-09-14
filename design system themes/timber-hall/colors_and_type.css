@@ -180,3 +180,5 @@
   --family-media-text-ratio: 1.6;
   --family-spatial-image-bleed: 100%;
 }
+
+:root { --layout-structure: split; }

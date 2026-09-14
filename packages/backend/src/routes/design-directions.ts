@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
-import { parseGenerationStyle, UpgradeContractError, type GenerationStyle, type ApiErrorBody, type ApiSuccess, type DesignBriefV1, type ProjectType } from "@bg/shared";
+import { parseGenerationStyle, UpgradeContractError, type GenerationStyle, type DirectionDesignSystem, type ApiErrorBody, type ApiSuccess, type DesignBriefV1, type ProjectType } from "@bg/shared";
 import { getLatestProjectSession, getProjectDetail } from "../db/project-read-repository";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
 import { PathBoundaryError, assertSafeName } from "../security/path-boundary";
@@ -9,6 +9,9 @@ import { isUserTurnRunning } from "../services/turns";
 import { getLatestDirectionState } from "../services/design-direction-state";
 import { DesignDirectionWorkflow, DesignDirectionWorkflowError, directionPreviewPath } from "../services/design-direction-workflow";
 import { parseStoredProjectOptions } from "../services/project-options";
+
+import { getDesignSystemDetail } from "../db/seed";
+import { readDesignSystemLayout } from "../services/design-system-layout";
 
 let workflow = new DesignDirectionWorkflow();
 export const designDirectionRoutes = new Hono();
@@ -19,7 +22,7 @@ export function replaceDesignDirectionWorkflowForTest(replacement: DesignDirecti
   return () => { if (workflow === replacement) workflow = previous; };
 }
 
-type RouteContext = { readonly projectId: string; readonly sessionId: string; readonly projectDir: string; readonly projectName: string; readonly projectType: ProjectType; readonly designBrief: DesignBriefV1 | null };
+type RouteContext = { readonly designSystemId: string | null; readonly designSystem?: DirectionDesignSystem; readonly projectId: string; readonly sessionId: string; readonly projectDir: string; readonly projectName: string; readonly projectType: ProjectType; readonly designBrief: DesignBriefV1 | null };
 type RouteContextResult = RouteContext | "path_unavailable" | null;
 
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
@@ -32,7 +35,7 @@ async function context(projectId: string): Promise<RouteContextResult> {
   const [project, session] = await Promise.all([getProjectDetail(projectId), getLatestProjectSession(projectId)]);
   if (project === null || session === null) return null;
   try {
-    return { projectId, sessionId: session.id, projectDir: resolveManagedPath(projectsDir, project.dir_path), projectName: project.name, projectType: project.type, designBrief: parseStoredProjectOptions(project.options_json).design_brief };
+    return { designSystemId: project.design_system_id, projectId, sessionId: session.id, projectDir: resolveManagedPath(projectsDir, project.dir_path), projectName: project.name, projectType: project.type, designBrief: parseStoredProjectOptions(project.options_json).design_brief };
   } catch (error) {
     if (error instanceof PathBoundaryError) return "path_unavailable";
     throw error;
@@ -47,12 +50,16 @@ function routeError(error: DesignDirectionWorkflowError): Response {
   return Response.json(fail(error.code, error.message), { status });
 }
 
-async function generationContext(projectId: string): Promise<{ readonly value?: RouteContext; readonly response?: Response }> {
+async function generationContext(projectId: string, includeSystem = false): Promise<{ readonly value?: RouteContext; readonly response?: Response }> {
   const value = await context(projectId);
   if (value === null) return { response: Response.json(fail("project_session_not_found", "Project or session not found"), { status: 404 }) };
   if (value === "path_unavailable") return { response: pathUnavailable() };
   const session = await getLatestProjectSession(projectId);
   if (session?.status === "running" || isUserTurnRunning(value.sessionId)) return { response: Response.json(fail("session_busy", "Cannot generate directions while a user turn is running"), { status: 409 }) };
+  if (includeSystem && value.designSystemId) {
+    const system = await getDesignSystemDetail(value.designSystemId);
+    if (system) return { value: { ...value, designSystem: { id: system.id, name: system.name, layout: await readDesignSystemLayout(system) } } };
+  }
   return { value };
 }
 
@@ -64,7 +71,7 @@ designDirectionRoutes.get("/api/projects/:projectId/design-directions", async (c
 });
 
 designDirectionRoutes.post("/api/projects/:projectId/design-directions/generate", async (c) => {
-  const result = await generationContext(c.req.param("projectId"));
+  const result = await generationContext(c.req.param("projectId"), true);
   if (result.response !== undefined) return result.response;
   const value = result.value;
   if (value === undefined) return c.json(fail("project_session_not_found", "Project or session not found"), 404);

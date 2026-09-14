@@ -11,6 +11,7 @@ type BuildContext = Parameters<typeof buildPrompt>[0];
 type ProjectType = BuildContext["project"]["project_type"];
 
 const FAKE_DESIGN_SYSTEM = {
+  id: "font-reference-test",
   name: "Northvale",
   dir_path: "/missing/ds",
   skill_md_path: null,
@@ -37,16 +38,17 @@ function makeContext(projectType: ProjectType, designSystem: BuildContext["desig
 
 describe("bundled font reference", () => {
   test("Given every original theme When full or compact guidance is assembled Then layout and family tokens survive excerpt limits", async () => {
-    for (const theme of bundledDesignSystems.slice(10)) {
+    for (const theme of bundledDesignSystems) {
       const cssPath = path.join(resolveRepoRoot(), "design system themes", theme.slug, "colors_and_type.css");
       const css = await readFile(cssPath, "utf8");
       const expected = Object.fromEntries([...css.matchAll(/--((?:layout|family)-[a-z0-9-]+)\s*:\s*([^;{}]+);/gi)].map(match => [`--${match[1]}`, match[2]!.trim()]));
       expect(Object.keys(expected).length).toBeGreaterThan(0);
       for (const contextMode of ["full", "compact"] as const) {
-        const designSystem = { ...FAKE_DESIGN_SYSTEM, tokens_css_path: cssPath };
+        const designSystem = { ...FAKE_DESIGN_SYSTEM, id: `builtin-theme-${theme.slug}`, dir_path: path.dirname(cssPath), tokens_css_path: cssPath, readme_md_path: path.join(path.dirname(cssPath), "README.md") };
         const prompt = await buildPrompt(makeContext("prototype", designSystem), { type: "user.message", text: "Build it" }, { contextMode });
         const contract = JSON.parse(prompt.match(/<selected_design_system_layout>\n([^\n]+)\n<\/selected_design_system_layout>/)![1]!);
-        expect(contract).toEqual({ schema_version: 1, tokens: expected });
+        expect(contract.tokens).toEqual(expected);
+        expect(contract.sections.map((section: { kind: string }) => section.kind)).toContain("responsive");
       }
     }
   });

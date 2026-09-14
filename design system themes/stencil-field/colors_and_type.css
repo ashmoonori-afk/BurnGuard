@@ -180,3 +180,5 @@
   --family-creative-line-step: 0px;
   --family-creative-type-image-overlap: 24%;
 }
+
+:root { --layout-structure: offset; }

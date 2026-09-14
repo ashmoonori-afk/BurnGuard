@@ -180,3 +180,5 @@
   --family-creative-line-step: 3ch;
   --family-creative-type-image-overlap: 0%;
 }
+
+:root { --layout-structure: offset; }

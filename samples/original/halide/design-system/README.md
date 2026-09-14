@@ -29,3 +29,17 @@ image is hand-painted, so it is an honest sample of what the asset produces.
 The brand, its copy, and everything depicted are invented. No real company, product, price or
 testimonial appears. Type is bundled locally (Bebas Neue, DM Sans, IBM Plex Mono) and loaded through
 `fonts/fonts.css`; there is no network dependency at runtime.
+
+
+## Layout
+
+The 12-column grid, 1240px maximum width, 56ch reading measure and 28px gutters are mandatory. Use the page margins, vertical section rhythm and 1 / 1 hero ratio from colors_and_type.css. Layout belongs to this system alongside palette and typography.
+
+## Composition
+
+Keep a circular optical stage centered in a square hero field, with supporting title and controls aligned to its edges. Continue with focused optical details and concise specifications. Preserve the live canvas geometry when present.
+
+
+## Responsive
+
+Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.

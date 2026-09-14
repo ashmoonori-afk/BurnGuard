@@ -20,3 +20,8 @@ If the user invokes this skill without any other guidance, ask them what they wa
 - **UI kit:** `ui_kits/website/` — header, hero, insights grid, market strip, callout band, footer.
 - **Voice:** institutional, restrained, third-person. Title-case headlines, sentence-case body, ALL-CAPS tracked eyebrows. No emoji. Tabular numerals everywhere.
 - **Visual rules:** white or near-white surfaces, dusty `#7399C6` brand blue used sparingly, `#186ADE` for interactive. No gradients, no textures, no playful shapes. Editorial layouts, generous whitespace, conservative radii (0/2/4/8). Lucide icons at 1.5px stroke.
+
+
+## Required layout
+
+Read Layout, Composition and Responsive in README.md and apply the --layout-* and --family-* tokens from colors_and_type.css before arranging content. Preserve the grid, reading measure, section rhythm, hero geometry and navigation placement; a palette/font swap on a generic layout is incomplete. Direction variants may change content emphasis, but must retain this structure unless the user explicitly overrides it. Check the rendered result at wide and narrow viewports and 200% zoom; fixed artboards retain their dimensions.
