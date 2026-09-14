@@ -1,5 +1,4 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import path from "node:path";
 import { Hono } from "hono";
 import type { ApiErrorBody, ApiSuccess } from "@bg/shared";
@@ -7,6 +6,7 @@ import { getSqlite } from "../db/sqlite-client";
 import { getProjectDetail } from "../db/project-read-repository";
 
 import { ArtifactCoordinator } from "../services/artifact-coordinator";
+import { readManagedFile } from "../services/artifact-tree-storage";
 import { ArtifactIdentityError, requireArtifactIdentity } from "../services/artifact-identity";
 import { inspectCanonicalTree } from "../services/canonical-tree-manifest";
 import { resolveDrawFile, resolveProjectFile } from "../services/managed-project-files";
@@ -79,8 +79,9 @@ managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
   const { project, manifest } = await artifactRead(projectId, resolved.project.dir_path);
   const file = manifest.files.find((entry) => entry.path === resolved.relPath);
   if (project === null || project.current_digest !== manifest.tree_digest || file === undefined) return c.json(fail("artifact_identity_unavailable", "Artifact identity is unavailable"), 409);
-  const bytes = await readFile(resolved.absolutePath);
-  if (bytes.byteLength !== file.size || createHash("sha256").update(bytes).digest("hex") !== file.sha256) return c.json(fail("artifact_identity_unavailable", "Artifact changed while loading"), 409);
+  let bytes: Buffer<ArrayBuffer>;
+  try { bytes = await readManagedFile(resolved.project.dir_path, file); }
+  catch { return c.json(fail("artifact_identity_unavailable", "Artifact changed while loading"), 409); }
   const type = contentType(resolved.absolutePath);
   const headers: Record<string, string> = { ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(resolved.absolutePath) }), "Cache-Control": "no-cache", "Content-Type": type, ETag: `"${file.sha256}"`, "X-Burnguard-File-Hash": file.sha256, "X-Burnguard-Revision": String(project.current_revision), "X-Burnguard-Artifact-Digest": project.current_digest };
   const nodeBgId = c.req.query("node_bg_id");

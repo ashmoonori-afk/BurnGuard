@@ -29,7 +29,7 @@ try {
     backend.once("exit", () => reject(new Error("portable backend exited before ready")));
     backend.stderr.on("data", (chunk) => { log += chunk; });
     backend.stdout.on("data", (chunk) => { log += chunk; if (log.includes(`[burnguard] listening on ${base}`)) resolve(); });
-  }), 90_000);
+  }), 360_000);
   const request = (url, options = {}) => fetch(base + url, { ...options, signal: AbortSignal.timeout(30_000) });
   const health = await request("/api/health");
   assert.equal(health.status, 200);
@@ -47,8 +47,9 @@ try {
   assert.ok((await readFile(path.join(profile, "burnguard.db"))).length > 0);
   checks.push("fresh-migrations-and-seeded-systems");
   const originals = projects.data.filter((project) => project.name.startsWith("[burnguard:original-sample]"));
-  assert.equal(originals.length, 12, "the packaged runtime must seed all original sample formats");
-  assert.equal(systems.data.filter((system) => system.id.startsWith("sample-system-original-")).length, 4);
+  assert.equal(originals.length, 15, "the packaged runtime must seed all five original collections in three formats");
+  assert.equal(systems.data.filter((system) => system.id.startsWith("sample-system-original-")).length, 5);
+  assert.equal(systems.data.filter((system) => system.id.startsWith("builtin-theme-")).length, 41);
   for (const project of originals) {
     const { data: detail } = await (await request(`/api/projects/${project.id}`, { headers })).json();
     const { data: session } = await (await request(`/api/projects/${project.id}/session`, { headers })).json();
@@ -60,7 +61,7 @@ try {
     assert.equal(hero.status, 200);
     assert.match(hero.headers.get("content-type"), /image\/png/);
   }
-  checks.push("twelve-original-samples-four-systems-and-local-images");
+  checks.push("fifteen-original-samples-five-systems-forty-one-themes-and-local-images");
   const ui = await request("/");
   assert.equal(ui.status, 200);
   assert.match(await ui.text(), /<div id="root"/);

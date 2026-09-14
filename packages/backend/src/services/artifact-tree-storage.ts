@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { mkdir, open, readFile, readdir, rename, rm, unlink, writeFile, type FileHandle } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, rename, rm, unlink, writeFile, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import type { CanonicalTreeEntry, CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { DEFAULT_CANONICAL_TREE_LIMITS, inspectCanonicalTree, validateCanonicalTree } from "./canonical-tree-manifest";
 import { isProjectDocumentPath } from "./project-document-paths";
+import { assertSafeName, resolveWithin } from "../security/path-boundary";
 
 export type ArtifactFileDiff = {
   readonly path: string;
@@ -60,7 +61,7 @@ export async function publishManagedTree(
   policy: PublicationPolicy = {},
 ): Promise<CanonicalTreeManifest> {
   const sourceManifest = await inspectCanonicalTree(source);
-  const opened = await openPublicationSources(source, sourceManifest, policy);
+  const opened = await openPublicationSources(source, sourceManifest.files, policy);
   try {
     const destinationManifest = await inspectCanonicalTree(destination);
     const sourcePaths = new Set(sourceManifest.files.map((file) => file.path));
@@ -88,23 +89,43 @@ export async function publishManagedTree(
   return validateCanonicalTree(destination, sourceManifest);
 }
 
+export async function readManagedFile(source: string, file: CanonicalTreeEntry, policy: PublicationPolicy = {}): Promise<Buffer<ArrayBuffer>> {
+  const opened = await openPublicationSources(source, [file], policy);
+  try { return Buffer.from(opened[0]!.bytes); }
+  finally { await opened[0]!.handle.close(); }
+}
+
+async function verifySourcePath(source: string, relativePath: string) {
+  const parts = relativePath.split("/").map(assertSafeName);
+  let current = source;
+  for (const part of ["", ...parts]) {
+    current = path.join(current, part);
+    const info = await lstat(current);
+    if (info.isSymbolicLink() || (current !== path.join(source, ...parts) && !info.isDirectory())) throw new Error("Publication source path changed");
+  }
+  resolveWithin(source, ...parts);
+  return lstat(current);
+}
+
 async function openPublicationSources(
   source: string,
-  manifest: CanonicalTreeManifest,
+  files: readonly CanonicalTreeEntry[],
   policy: PublicationPolicy,
 ): Promise<readonly { readonly file: CanonicalTreeEntry; readonly handle: FileHandle; readonly bytes: Uint8Array }[]> {
   const opened: { file: CanonicalTreeEntry; handle: FileHandle; bytes: Uint8Array }[] = [];
   try {
-    for (const file of manifest.files) {
+    for (const file of files) {
       await policy.beforeSourceOpen?.(file.path);
+      const original = await verifySourcePath(source, file.path);
       const handle = await open(path.join(source, file.path), constants.O_RDONLY | constants.O_NOFOLLOW);
       opened.push({ file, handle, bytes: new Uint8Array() });
       const before = await handle.stat();
-      if (!before.isFile() || before.size !== file.size || before.size > DEFAULT_CANONICAL_TREE_LIMITS.bytes) throw new Error("Publication source identity changed");
+      if (!before.isFile() || before.nlink !== 1 || before.dev !== original.dev || before.ino !== original.ino || before.size !== file.size || before.size > DEFAULT_CANONICAL_TREE_LIMITS.bytes) throw new Error("Publication source identity changed");
       await policy.beforeSourceRead?.(file.path);
       const bytes = await readHandleBytes(handle, file.size);
       const after = await handle.stat();
-      if (after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size || bytes.byteLength !== file.size) throw new Error("Publication source identity changed");
+      const current = await verifySourcePath(source, file.path);
+      if (after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.nlink !== 1 || current.dev !== before.dev || current.ino !== before.ino || current.nlink !== 1 || bytes.byteLength !== file.size) throw new Error("Publication source identity changed");
       const digest = createHash("sha256").update(bytes).digest("hex");
       if (policy.forbiddenSha256?.has(digest)) throw new ArtifactPublicationPolicyError();
       if (digest !== file.sha256) throw new Error("Publication source identity changed");

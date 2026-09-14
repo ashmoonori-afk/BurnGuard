@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { getSqlite } from "../src/db/sqlite-client";
@@ -9,6 +9,7 @@ import { systemsDir } from "../src/lib/paths";
 import { rawFileHeaders } from "../src/security/raw-file-response";
 import { createApp } from "../src/server";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
+import * as artifactStorage from "../src/services/artifact-tree-storage";
 
 const tempDirs: string[] = [];
 const projectIds: string[] = [];
@@ -110,6 +111,29 @@ describe("raw file response headers", () => {
 });
 
 describe("raw file routes", () => {
+  test.each(["beforeSourceOpen", "beforeSourceRead"] as const)("Given a same-byte external directory swap %s When reading a managed file Then the route refuses the changed identity", async (phase) => {
+    const root = await mkdtemp(path.join(tmpdir(), "raw-swap-"));
+    const outside = await mkdtemp(path.join(tmpdir(), "raw-outside-"));
+    tempDirs.push(root, outside);
+    await mkdir(path.join(root, "assets"));
+    await writeFile(path.join(root, "assets", "image.svg"), "<svg>same bytes</svg>");
+    await writeFile(path.join(outside, "image.svg"), "<svg>same bytes</svg>");
+    const projectId = insertProject(root);
+    await new ArtifactCoordinator(getSqlite()).initialize(projectId, root);
+    const originalRead = artifactStorage.readManagedFile;
+    const reader = spyOn(artifactStorage, "readManagedFile").mockImplementation((source, file) => originalRead(source, file, {
+      [phase]: async () => {
+        await rename(path.join(root, "assets"), path.join(root, "saved-assets"));
+        await symlink(outside, path.join(root, "assets"), process.platform === "win32" ? "junction" : "dir");
+      },
+    }));
+    try {
+      const response = await createApp().request(`/api/projects/${projectId}/fs/assets/image.svg`);
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({ error: { code: "artifact_identity_unavailable", message: "Artifact changed while loading" } });
+    } finally { reader.mockRestore(); }
+  });
+
   test("Given project HTML When navigated top-level Then the fs route attaches; when framed it renders with the artifact CSP", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "raw-fs-"));
     tempDirs.push(root);

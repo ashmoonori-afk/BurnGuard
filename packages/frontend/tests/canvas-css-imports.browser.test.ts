@@ -58,12 +58,14 @@ test("imported project styles render nested CSS inside the real opaque canvas sa
   files.set("css/not-css.txt", { body: "#probe{color:red}", type: "text/plain" });
   files.set("fonts/Figtree.woff2", { body: Bun.file(`${import.meta.dir}/../../../assets/fonts/Figtree.woff2`), type: "font/woff2" });
   const previewRoot = "/api/projects/css-import/preview/draft/fs/";
+  const sharedFont = `/runtime/fonts/${"a".repeat(64)}/Figtree.woff2`;
   const requests: { path: string; capability: string | null }[] = [];
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) {
     const pathname = new URL(request.url).pathname;
     if (pathname === "/") return new Response("<!doctype html><html><body></body></html>", { headers: { "content-type": "text/html" } });
     if (pathname === "/api/bootstrap") return Response.json({ data: { capability: "css-import-test" } });
     requests.push({ path: pathname, capability: request.headers.get("x-burnguard-capability") });
+    if (pathname === sharedFont) return new Response(Bun.file(`${import.meta.dir}/../../../assets/fonts/Figtree.woff2`), { headers: { "content-type": "font/woff2" } });
     const prefix = [root, previewRoot].find(prefix => pathname.startsWith(prefix));
     const relative = prefix ? decodeURIComponent(pathname.slice(prefix.length)) : undefined;
     if (relative === "css/pending.css") return new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode("/* pending */")); } }), { headers: { "content-type": "text/css" } });
@@ -98,6 +100,15 @@ test("imported project styles render nested CSS inside the real opaque canvas sa
     await page.goto(origin, { waitUntil: "load" });
     await page.addScriptTag({ content: script });
     await page.evaluate(() => globalThis.canvasCssTest.bootstrapApiAuthority());
+    const sharedLoads = await page.evaluate(async ({ origin, sharedFont }) => {
+      const html = `<style>@font-face{font-family:Shared;src:url('${sharedFont}')}</style>`;
+      const render = (project: string) => globalThis.canvasCssTest.embedCanvasImages(html, `${origin}/api/projects/${project}/fs/index.html`, new AbortController().signal);
+      const concurrent = await Promise.all([render("one"), render("two")]);
+      const later = await render("three");
+      return [...concurrent, later].every(result => result.includes("data:font/woff2;base64,"));
+    }, { origin, sharedFont });
+    expect(sharedLoads).toBe(true);
+    expect(requests.filter(request => request.path === sharedFont)).toEqual([{ path: sharedFont, capability: null }]);
     const mount = async (input: string, documentRoot = root) => {
       const embedded = await page.evaluate(async ({ input, url }) => {
         const api = globalThis.canvasCssTest;
@@ -177,7 +188,7 @@ test("imported project styles render nested CSS inside the real opaque canvas sa
     await pendingResponse;
     await page.evaluate(() => globalThis.cssImportAbort.abort());
     expect(await cancelled).toBe("AbortError");
-    expect(requests.every(request => request.capability === "css-import-test")).toBe(true);
+    expect(requests.filter(request => request.path !== sharedFont).every(request => request.capability === "css-import-test")).toBe(true);
     expect(external).toEqual([]);
   } finally {
     await browser?.close();

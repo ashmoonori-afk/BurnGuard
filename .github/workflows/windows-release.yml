@@ -42,4 +42,9 @@ jobs:
         shell: pwsh
         run: |
           $assets = (Get-ChildItem dist/releases -File).FullName
-          gh release create $env:GITHUB_REF_NAME @assets --draft --verify-tag --title "BurnGuard $env:GITHUB_REF_NAME" --notes 'Windows installer, portable app, and automatic update feed. Publish this draft after checking the package.'
+          gh release view $env:GITHUB_REF_NAME *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:GITHUB_REF_NAME @assets --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME @assets --draft --verify-tag --title "BurnGuard $env:GITHUB_REF_NAME" --notes 'Windows installer, portable app, and automatic update feed. Publish this draft after checking the package.'
+          }

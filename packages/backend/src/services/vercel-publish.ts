@@ -21,7 +21,7 @@ export function isPublicAsset(name: string): boolean {
     return /(?:^|[._ -])(?:secrets?|tokens?|credentials?|passwords?|api[._ -]*keys?|(?:access|refresh|auth|bearer)[._ -]*tokens?|private[._ -]*keys?)(?:[._ -]|$)/i.test(part.replace(/([a-z0-9])([A-Z])/g, "$1-$2"));
   })
     && !/[\\:%\x00-\x1f]/.test(name)
-    && (/\.(?:html?|css|js|mjs|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|mp4|webm|mp3|wav)$/i.test(name) || /^fonts\/[a-z0-9_-]+-OFL\.txt$/i.test(name))
+    && (/\.(?:html?|css|js|mjs|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|mp4|webm|mp3|wav)$/i.test(name) || /^fonts\/(?:bundled\/)?[a-z0-9_-]+-OFL\.txt$/i.test(name))
     && !/(?:^|\/)(?:[^/]*config[^/]*|credentials[^/]*)$/i.test(name);
 }
 
