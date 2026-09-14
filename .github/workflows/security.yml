@@ -45,6 +45,9 @@ jobs:
           packages/backend/tests/request-limits.test.ts
           packages/backend/tests/css-source-map-boundary.test.ts
           packages/backend/tests/font-validation.test.ts
+          packages/backend/tests/bundled-fonts.test.ts
+          packages/backend/tests/bundled-font-reference.test.ts
+          packages/backend/tests/daisyui-seed-themes.test.ts
           packages/backend/tests/owned-process-tree.test.ts
           packages/backend/tests/research-source-loader.test.ts
           packages/backend/tests/session-recovery.test.ts
