@@ -16,7 +16,7 @@ export function DesignSystemLayoutPanel({ layout, name, loading = false, failed 
   return <section className="my-5 min-w-0 rounded-2xl border border-border bg-card p-5 text-left" aria-label={t("system.layout.title")}>
     <h2 className="text-lg font-semibold">{t("system.layout.title")}{name ? <span className="ml-2 text-sm font-normal text-muted-foreground">{name}</span> : null}</h2>
     <p className="mt-1 text-sm text-muted-foreground">{t("system.layout.help")}</p>
-    {loading || failed ? <p role={failed ? "alert" : "status"} className="mt-3 text-sm">{t(failed ? "system.loadFailed" : "system.colorsLoading")}</p> : !layout || missing.length ? <p role="status" className="mt-3 text-sm text-muted-foreground">{t("system.layout.incomplete")}{missing.length ? ` (${missing.map(key => key.startsWith("--") ? t(labels[key] ?? "system.layout.family") : t(sections[key as keyof typeof sections])).join(", ")})` : ""}</p> : null}
+    {loading || failed ? <p role={failed ? "alert" : "status"} className="mt-3 text-sm">{t(failed ? "system.loadFailed" : "system.layout.loading")}</p> : !layout || missing.length ? <p role="status" className="mt-3 text-sm text-muted-foreground">{t("system.layout.incomplete")}{missing.length ? ` (${missing.map(key => key.startsWith("--") ? t(labels[key] ?? "system.layout.family") : t(sections[key as keyof typeof sections])).join(", ")})` : ""}</p> : null}
     {layout?.supplemented ? <p className="mt-3 text-xs text-muted-foreground">{t("system.layout.supplemented")}</p> : null}
     {preview ? <div className="mt-4 grid min-w-0 gap-5 lg:grid-cols-2">
       <figure className="min-w-0 rounded-xl bg-muted/40 p-3">

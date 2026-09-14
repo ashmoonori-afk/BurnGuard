@@ -1,6 +1,7 @@
 import { defineMessages } from "../types";
 
 export const systemMessages = defineMessages({
+  "system.layout.loading": { ko: "레이아웃 규칙을 불러오는 중이에요.", en: "Loading layout rules…", "zh-CN": "正在加载布局规则…" },
   "system.layout.details": { ko: "구성·반응형 규칙 펼치기", en: "Composition and responsive rules", "zh-CN": "展开构图与响应式规则" },
   "system.layout.title": {"ko": "레이아웃과 구성", "en": "Layout and composition", "zh-CN": "布局与构图"},
   "system.layout.help": {"ko": "이 시스템의 그리드와 배치 규칙을 결과물과 방향 시안에 함께 적용합니다.", "en": "This system defines the grid and composition for outputs and direction previews.", "zh-CN": "此系统的网格和构图规则同时用于作品与方向预览。"},
