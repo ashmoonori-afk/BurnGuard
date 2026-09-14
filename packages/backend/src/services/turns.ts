@@ -309,7 +309,9 @@ async function runUserTurnInternal(
     type: "status.running",
   });
 
-  const detection = await (dependencies.detectBackends ?? detectBackends)({ force: true });
+  // Graphic projects are rejected below unless they selected Codex, so only a Codex turn depends
+  // on the authentication answer. Other backends stay usable while a Codex probe is indeterminate.
+  const detection = await (dependencies.detectBackends ?? detectBackends)({ force: true, requireCodexAuthentication: backendId === "codex" });
   const backend = detection.backends.find((b) => b.id === backendId);
 
   if (!backend?.found || !backend.binary_path) {

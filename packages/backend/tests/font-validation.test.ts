@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { GlobalFonts } from "@napi-rs/canvas";
 import { hasBoundedFontTables, isValidFontData } from "../src/services/font-validation";
 
@@ -104,7 +105,8 @@ test("WOFF preflight checks aggregate expanded bytes, table ranges and count bef
 test("every shipped WOFF2 remains within the directory budget", async () => {
   let count = 0;
   const directory = new URL("../../../assets/fonts/", import.meta.url);
-  for await (const file of new Bun.Glob("*.woff2").scan(directory.pathname)) {
+  // A file URL pathname is `/C:/...` on Windows, which is not a filesystem path Bun.Glob can scan.
+  for await (const file of new Bun.Glob("*.woff2").scan(fileURLToPath(directory))) {
     expect(hasBoundedFontTables(await readFile(new URL(file, directory)))).toBe(true);
     count++;
   }

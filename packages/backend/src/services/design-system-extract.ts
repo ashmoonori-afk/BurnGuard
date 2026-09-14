@@ -7,7 +7,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { isValidFontData } from "./font-validation";
 import { parse } from "node-html-parser";
@@ -634,6 +634,18 @@ export async function uploadDesignSystemFont(input: {
   };
 }
 
+/**
+ * Git for Windows rejects the platform null device (`\\.\nul`) while loading configuration and
+ * exits 128 before acquisition starts, so the acquisition directory owns an empty configuration
+ * file instead. Pointing both config variables at a regular empty file keeps inherited global and
+ * system configuration — rewrites, credential helpers, askpass — out of the child on every platform.
+ */
+async function writeEmptyGitConfig(ingestDir: string): Promise<string> {
+  const configPath = path.join(ingestDir, "empty.gitconfig");
+  await writeFile(configPath, "", "utf8");
+  return configPath;
+}
+
 async function ingestGitSource(
   sourceUrl: string,
   ingestDir: string,
@@ -642,10 +654,11 @@ async function ingestGitSource(
 ): Promise<SourceAnalysis> {
   const repoDir = path.join(ingestDir, "repo");
   const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.toUpperCase().startsWith("GIT_") && name.toUpperCase() !== "SSH_ASKPASS"));
+  const emptyConfig = await writeEmptyGitConfig(ingestDir);
   const proc = Bun.spawn({
     cmd: ["git", "-c", "credential.helper=", "-c", "http.followRedirects=false", "clone", "--depth=1", sourceUrl, repoDir],
     cwd: ingestDir,
-    env: { ...environment, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_SYSTEM: devNull, GIT_CONFIG_GLOBAL: devNull, GIT_ALLOW_PROTOCOL: "https", GIT_TERMINAL_PROMPT: "0" },
+    env: { ...environment, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_SYSTEM: emptyConfig, GIT_CONFIG_GLOBAL: emptyConfig, GIT_ALLOW_PROTOCOL: "https", GIT_TERMINAL_PROMPT: "0" },
     stdout: "ignore",
     stderr: "ignore",
   });
