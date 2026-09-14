@@ -14,8 +14,10 @@ test("Given original samples, when seeded and copied, then all formats have dura
   const db = getSqlite();
   const app = createApp({ capability: "original-samples-test", appAuthority: "original.test" });
   const headers = { Host: "original.test", "x-burnguard-capability": "original-samples-test" };
+  // Derived from the registry: adding a brand must extend the expectation, not slip past it.
+  const expectedProjects = originalSamples.length * originalSampleFormats.length;
   const rows = db.query<{ id: string; name: string; type: string; dir_path: string; entrypoint: string; current_digest: string; options_json: string | null }, []>("SELECT * FROM projects WHERE name LIKE '[burnguard:original-sample]%'").all();
-  expect(rows).toHaveLength(12);
+  expect(rows).toHaveLength(expectedProjects);
   for (const sample of originalSamples) {
     const system = db.prepare("SELECT status,is_template FROM design_systems WHERE id=?").get(originalSampleSystemId(sample.slug));
     expect(system).toEqual({ status: "published", is_template: 1 });
@@ -49,7 +51,7 @@ test("Given original samples, when seeded and copied, then all formats have dura
       expect(await readFile(path.join(clone.dir_path, "assets/hero.png"))).toEqual(await readFile(path.join(row.dir_path, "assets/hero.png")));
     }
   }
-  expect((await listHomeProjects("examples", 100, 0)).items.filter((row) => row.name.startsWith(ORIGINAL_SAMPLE_TAG))).toHaveLength(12);
+  expect((await listHomeProjects("examples", 100, 0)).items.filter((row) => row.name.startsWith(ORIGINAL_SAMPLE_TAG))).toHaveLength(expectedProjects);
   expect((await listHomeProjects("mine", 100, 0)).items.filter((row) => row.name.startsWith(ORIGINAL_SAMPLE_TAG))).toHaveLength(0);
   const deleted = rows[0]!;
   const edited = rows[1]!;
@@ -58,5 +60,5 @@ test("Given original samples, when seeded and copied, then all formats have dura
   await seedOriginalSamplesOnce();
   expect(db.prepare("SELECT 1 FROM projects WHERE name=?").get(deleted.name)).toBeNull();
   expect(await readFile(path.join(edited.dir_path, edited.entrypoint), "utf8")).toBe("user edited sample");
-// Four collections and twelve full clones include bundled font and image bytes.
+// Every collection and full clone includes bundled font, glass-ring and image bytes.
 }, 120_000);

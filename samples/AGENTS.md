@@ -2,14 +2,14 @@
 
 ## OVERVIEW
 
-Shipped sample corpus: four fictional brands × three finished formats (33 files) seeded into every user's workspace on first run; earned this guide at score 8 for file count plus a folder contract that backend code reads by path.
+Shipped sample corpus: five fictional brands × three finished formats seeded into every user's workspace on first run; earned this guide at score 8 for file count plus a folder contract that backend code reads by path.
 
 ## STRUCTURE
 
 ```text
 samples/original/
 ├── README.md                 # brand directions, image provenance, font licensing
-└── <slug>/                   # sonnel | foliover | oddward | velune
+└── <slug>/                   # sonnel | foliover | oddward | velune | halide
     ├── design-system/        # colors_and_type.css, README.md, SKILL.md, preview.html
     ├── web/index.html        # prototype
     ├── slides/deck.html      # slide_deck (inlines the backend deck runtime)

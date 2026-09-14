@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "name": "liquid-glass",
+  "description": "Refracting glass ring for circular elements, rendered with 2D image operations only.",
+  "entry": "liquid-glass.js",
+  "catalog": "liquid-glass.md",
+  "exports": [
+    "renderLiquidGlassRing",
+    "refractedRadius",
+    "lensProfile",
+    "RING_OUTER",
+    "SHADOW_OUTER",
+    "GLASS_COLOR"
+  ],
+  "runtimes": [
+    "browser",
+    "node"
+  ],
+  "bands": {
+    "content": [
+      0,
+      1
+    ],
+    "glass": [
+      1,
+      1.42
+    ],
+    "shadow": [
+      1.42,
+      1.6
+    ]
+  },
+  "defaults": {
+    "ringOuter": 1.42,
+    "refraction": 0.3,
+    "see": 0.88,
+    "glass": [
+      71,
+      60,
+      57
+    ]
+  },
+  "limits": {
+    "refractionFold": 0.42,
+    "refractionFoldNote": "The radial remap stays monotonic up to this strength and self-intersects beyond it."
+  },
+  "license": "Part of BurnGuard; no third-party assets.",
+  "entry_module": "liquid-glass.mjs",
+  "loading": "Classic script for pages (works from file:// and http://); import the .mjs wrapper in Node or a bundler."
+}

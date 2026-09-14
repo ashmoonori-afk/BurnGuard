@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HALIDE — 광학 스튜디오</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root{--ink:#0e1520;--surface:#16323f;--surface-raised:#1e2a3a;--paper:#f2efea;--muted:#8fa3b0;--accent:#e8a24a;--accent-cool:#7fd9c3;--plum:#6e4b7a;--font-display:"Bebas Neue","Pretendard",sans-serif;--font-body:"DM Sans","Pretendard",sans-serif;--font-mono:"IBM Plex Mono",monospace;--radius:18px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--font-body);font-size:17px;line-height:1.75;word-break:keep-all}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,p{margin-top:0}
+img{display:block;width:100%;object-fit:cover}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:clamp(20px,4vw,48px)}
+header[data-section]{position:sticky;top:0;z-index:5;backdrop-filter:none;background:rgba(14,21,32,.92);border-bottom:1px solid rgba(143,163,176,.18)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:24px;padding-block:18px}
+.mark{font-family:var(--font-display);font-size:26px;letter-spacing:.14em}
+nav{display:flex;gap:22px;font-size:14px;color:var(--muted)}
+nav a[aria-current="page"]{color:var(--accent)}
+.cta{font-family:var(--font-mono);font-size:13px;border:1px solid var(--accent);color:var(--accent);padding:9px 16px;border-radius:999px}
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,520px);gap:clamp(24px,4vw,56px);align-items:center;padding-block:clamp(48px,8vw,104px)}
+h1{font-family:var(--font-display);font-size:clamp(52px,8vw,104px);line-height:.94;letter-spacing:.03em;margin-bottom:18px}
+.lede{color:var(--muted);max-width:46ch}
+.meta{font-family:var(--font-mono);font-size:13px;color:var(--accent-cool);letter-spacing:.06em;margin-bottom:14px}
+.stage{position:relative;border-radius:var(--radius);overflow:hidden;background:var(--surface-raised)}
+.stage canvas{display:block;width:100%;height:auto}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(16px,2.4vw,28px);padding-bottom:clamp(48px,7vw,88px)}
+.card{background:var(--surface-raised);border-radius:var(--radius);padding:22px;border:1px solid rgba(143,163,176,.14)}
+.card canvas{display:block;width:100%;height:auto;border-radius:12px;margin-bottom:16px}
+.card h3{font-family:var(--font-display);font-size:24px;letter-spacing:.06em;margin-bottom:6px}
+.card p{font-size:15px;color:var(--muted);margin-bottom:0}
+.band{border-top:1px solid rgba(143,163,176,.18);border-bottom:1px solid rgba(143,163,176,.18);padding-block:clamp(40px,6vw,72px);margin-bottom:clamp(48px,7vw,88px)}
+.band h2{font-family:var(--font-display);font-size:clamp(30px,4vw,52px);letter-spacing:.04em;margin-bottom:14px}
+dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:22px;margin:0}
+dt{font-family:var(--font-mono);font-size:12px;color:var(--accent-cool);letter-spacing:.08em;margin-bottom:6px}
+dd{margin:0;color:var(--muted);font-size:15px}
+footer{padding-block:36px 56px;color:var(--muted);font-size:14px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+@media(max-width:860px){.hero{grid-template-columns:minmax(0,1fr)}.grid3{grid-template-columns:minmax(0,1fr)}nav{display:none}}
+</style></head>
+<body>
+<header data-section="header"><div class="wrap bar">
+  <span class="mark" data-bg-node-id="brand">HALIDE</span>
+  <nav><a href="./index.html" aria-current="page">렌즈</a><a href="./index.html">공정</a><a href="./index.html">스튜디오</a></nav>
+  <a class="cta" href="./index.html" data-bg-node-id="nav-cta">상담 요청</a>
+</div></header>
+
+<main data-bg-content>
+  <section class="wrap hero" data-section="hero">
+    <div>
+      <p class="meta" data-bg-node-id="hero-meta">HALIDE OPTICAL · EST. 2019</p>
+      <h1 data-bg-node-id="hero-title">굴절을<br>설계합니다</h1>
+      <p class="lede" data-bg-node-id="hero-lede">유리는 배경을 가리지 않습니다. 휘게 할 뿐입니다. 할라이드는 원형 요소 둘레의 굴절을 직접 계산해, 뒤에 놓인 격자와 수평선이 링을 지날 때 어떻게 휘는지를 설계합니다.</p>
+    </div>
+    <figure class="stage" style="margin:0">
+      <canvas data-glass-ring width="760" height="560" data-rp="168" data-see="0.92" data-refraction="0.3"></canvas>
+    </figure>
+  </section>
+
+  <section class="wrap grid3" data-section="lenses">
+    <article class="card"><canvas data-glass-ring width="420" height="320" data-rp="92" data-see="0.9" data-refraction="0.22"></canvas>
+      <h3 data-bg-node-id="card-1-title">얕은 굴절</h3><p data-bg-node-id="card-1-body">K 0.22. 배경이 거의 그대로 읽히면서 두께만 드러납니다.</p></article>
+    <article class="card"><canvas data-glass-ring width="420" height="320" data-rp="92" data-see="0.9" data-refraction="0.3"></canvas>
+      <h3 data-bg-node-id="card-2-title">표준 굴절</h3><p data-bg-node-id="card-2-body">K 0.30. 격자선이 링 안에서 분명히 휘고 바깥은 곧게 남습니다.</p></article>
+    <article class="card"><canvas data-glass-ring width="420" height="320" data-rp="92" data-see="0.9" data-refraction="0.42"></canvas>
+      <h3 data-bg-node-id="card-3-title">한계 굴절</h3><p data-bg-node-id="card-3-body">K 0.42. 접힘이 시작되는 경계값이며 이보다 키우면 선이 끊깁니다.</p></article>
+  </section>
+
+  <section class="band" data-section="spec"><div class="wrap">
+    <h2 data-bg-node-id="spec-title">측정값</h2>
+    <dl>
+      <div><dt>RING OUTER</dt><dd data-bg-node-id="spec-1">내용물 반지름의 1.42배까지가 유리 구간입니다.</dd></div>
+      <div><dt>SHADOW OUTER</dt><dd data-bg-node-id="spec-2">1.60배 바깥은 원본 배경을 그대로 둡니다.</dd></div>
+      <div><dt>GLASS BODY</dt><dd data-bg-node-id="spec-3">따뜻한 차콜 rgb(71 60 57). 완전 중성 회색은 플라스틱으로 읽힙니다.</dd></div>
+      <div><dt>FOLD LIMIT</dt><dd data-bg-node-id="spec-4">K 0.42에서 반경 리맵이 단조성을 잃습니다.</dd></div>
+    </dl>
+  </div></section>
+</main>
+
+<footer class="wrap"><span data-bg-node-id="footer-brand">HALIDE OPTICAL STUDIO</span><span data-bg-node-id="footer-note">가상의 브랜드입니다.</span></footer>
+
+<script src="./liquid-glass/liquid-glass.js"></script>
+<script>
+const { renderLiquidGlassRing } = LiquidGlass;
+
+/** Paint the backdrop every ring needs: a measured grid plus two strong crossing edges. */
+function backdrop(ctx, w, h) {
+  const g = ctx.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, "#0e1520"); g.addColorStop(0.55, "#16323f"); g.addColorStop(1, "#1e2a3a");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = "rgba(127,217,195,0.20)"; ctx.lineWidth = 1;
+  for (let x = 0; x <= w; x += 32) { ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, h); ctx.stroke(); }
+  for (let y = 0; y <= h; y += 32) { ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(w, y + 0.5); ctx.stroke(); }
+  ctx.fillStyle = "rgba(232,162,74,0.85)"; ctx.fillRect(0, Math.round(h * 0.66), w, Math.max(3, Math.round(h / 150)));
+  ctx.fillStyle = "rgba(127,217,195,0.75)"; ctx.fillRect(Math.round(w * 0.74), 0, Math.max(3, Math.round(w / 200)), h);
+}
+
+for (const canvas of document.querySelectorAll("canvas[data-glass-ring]")) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const w = canvas.width, h = canvas.height;
+  const cx = Math.round(w * 0.44), cy = Math.round(h * 0.5);
+  const rp = Number(canvas.dataset.rp);
+  backdrop(ctx, w, h);
+  const disc = ctx.createLinearGradient(cx - rp, cy - rp, cx + rp, cy + rp);
+  disc.addColorStop(0, "#f2efea"); disc.addColorStop(0.5, "#e8a24a"); disc.addColorStop(1, "#6e4b7a");
+  ctx.fillStyle = disc; ctx.beginPath(); ctx.arc(cx, cy, rp, 0, Math.PI * 2); ctx.fill();
+  const src = ctx.getImageData(0, 0, w, h);
+  const out = renderLiquidGlassRing({ data: src.data, width: w, height: h }, {
+    cx, cy, rp, see: Number(canvas.dataset.see), refraction: Number(canvas.dataset.refraction),
+  });
+  ctx.putImageData(new ImageData(out.data, out.width, out.height), 0, 0);
+}
+</script>
+</body></html>

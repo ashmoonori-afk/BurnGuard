@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HALIDE — 디자인 시스템</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="colors_and_type.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--font-body);font-size:var(--step-body);line-height:1.7;word-break:keep-all}
+.wrap{max-width:1080px;margin:0 auto;padding:clamp(28px,5vw,64px)}
+h1{font-family:var(--font-display);font-size:var(--step-hero);letter-spacing:.04em;line-height:.95;margin:0 0 10px}
+h2{font-family:var(--font-display);font-size:var(--step-title);letter-spacing:.04em;margin:56px 0 18px}
+.kicker{font-family:var(--font-mono);font-size:var(--step-caption);letter-spacing:.14em;color:var(--accent-cool);margin:0 0 14px}
+p{color:var(--muted);max-width:60ch}
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.sw{border-radius:var(--radius);padding:16px;min-height:104px;display:flex;flex-direction:column;justify-content:flex-end;font-family:var(--font-mono);font-size:12px;letter-spacing:.05em;border:1px solid rgba(143,163,176,.16)}
+.type div{margin-bottom:14px}
+.stage{border-radius:var(--radius);overflow:hidden;background:var(--surface-raised);max-width:720px}
+.stage canvas{display:block;width:100%;height:auto}
+</style></head>
+<body><div class="wrap">
+  <p class="kicker">HALIDE OPTICAL · DESIGN SYSTEM</p>
+  <h1>굴절을 설계합니다</h1>
+  <p>원형 요소 둘레의 고투명 유리 링이 이 시스템의 정체성입니다. 링은 배경을 가리지 않고 휘게 합니다.</p>
+
+  <h2>팔레트</h2>
+  <div class="swatches">
+    <div class="sw" style="background:var(--ink)">--ink<br>#0E1520</div>
+    <div class="sw" style="background:var(--surface)">--surface<br>#16323F</div>
+    <div class="sw" style="background:var(--surface-raised)">--surface-raised<br>#1E2A3A</div>
+    <div class="sw" style="background:var(--accent);color:#22160a">--accent<br>#E8A24A</div>
+    <div class="sw" style="background:var(--accent-cool);color:#0c2a24">--accent-cool<br>#7FD9C3</div>
+    <div class="sw" style="background:var(--plum)">--plum<br>#6E4B7A</div>
+    <div class="sw" style="background:var(--glass-body)">--glass-body<br>rgb(71 60 57)</div>
+    <div class="sw" style="background:var(--paper);color:#12202b">--paper<br>#F2EFEA</div>
+  </div>
+
+  <h2>타이포그래피</h2>
+  <div class="type">
+    <div style="font-family:var(--font-display);font-size:var(--step-title);letter-spacing:.05em">BEBAS NEUE · DISPLAY 96</div>
+    <div style="font-family:var(--font-body)">DM Sans · 본문 17px — 굴절은 배경을 가리지 않습니다.</div>
+    <div style="font-family:var(--font-mono);color:var(--accent-cool)">IBM Plex Mono · RING 1.42 / SHADOW 1.60 / K 0.30</div>
+  </div>
+
+  <h2>유리 링</h2>
+  <p>아래는 번들 모듈 <code>liquid-glass/liquid-glass.js</code>가 실제로 그린 결과입니다. 격자선이 링 안에서 휘고 바깥에서는 곧게 남는지 확인하세요.</p>
+  <figure class="stage" style="margin:0"><canvas id="ring" width="720" height="520"></canvas></figure>
+</div>
+<script src="./liquid-glass/liquid-glass.js"></script>
+<script>
+const { renderLiquidGlassRing } = LiquidGlass;
+const canvas = document.getElementById("ring");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
+const w = canvas.width, h = canvas.height;
+const g = ctx.createLinearGradient(0, 0, w, h);
+g.addColorStop(0, "#0e1520"); g.addColorStop(0.55, "#16323f"); g.addColorStop(1, "#1e2a3a");
+ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+ctx.strokeStyle = "rgba(127,217,195,0.20)"; ctx.lineWidth = 1;
+for (let x = 0; x <= w; x += 32) { ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, h); ctx.stroke(); }
+for (let y = 0; y <= h; y += 32) { ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(w, y + 0.5); ctx.stroke(); }
+ctx.fillStyle = "rgba(232,162,74,0.85)"; ctx.fillRect(0, 344, w, 4);
+ctx.fillStyle = "rgba(127,217,195,0.75)"; ctx.fillRect(534, 0, 4, h);
+const cx = 316, cy = 260, rp = 150;
+const disc = ctx.createLinearGradient(cx - rp, cy - rp, cx + rp, cy + rp);
+disc.addColorStop(0, "#f2efea"); disc.addColorStop(0.5, "#e8a24a"); disc.addColorStop(1, "#6e4b7a");
+ctx.fillStyle = disc; ctx.beginPath(); ctx.arc(cx, cy, rp, 0, Math.PI * 2); ctx.fill();
+const src = ctx.getImageData(0, 0, w, h);
+const out = renderLiquidGlassRing({ data: src.data, width: w, height: h }, { cx, cy, rp, see: 0.92, refraction: 0.3 });
+ctx.putImageData(new ImageData(out.data, out.width, out.height), 0, 0);
+</script>
+</body></html>
