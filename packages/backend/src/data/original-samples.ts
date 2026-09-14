@@ -1,6 +1,7 @@
 import { cp } from "node:fs/promises";
 import path from "node:path";
 import { copyBundledFonts } from "./bundled-fonts";
+import { copyBundledLiquidGlass } from "./bundled-liquid-glass";
 import { resolveRepoRoot } from "../lib/paths";
 
 export const ORIGINAL_SAMPLE_TAG = "[burnguard:original-sample]";
@@ -25,4 +26,5 @@ export async function copyOriginalSample(slug: string, directory: string, destin
   await cp(path.join(source, directory), destination, { recursive: true });
   await cp(path.join(source, "assets"), path.join(destination, "assets"), { recursive: true });
   await copyBundledFonts(destination, repoRoot);
+  await copyBundledLiquidGlass(destination, repoRoot);
 }
