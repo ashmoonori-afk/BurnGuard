@@ -191,6 +191,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             }
         }
         try process.run()
+        // Cold profiles seed and validate every bundled sample before readiness.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 300) { [weak self] in
+            guard let self, !self.closing, self.origin == nil else { return }
+            self.fail("BurnGuard 서버가 300초 안에 시작되지 않았습니다.")
+        }
     }
 
     private func consumeServiceOutput(_ data: Data) {
