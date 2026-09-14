@@ -116,6 +116,7 @@ async function runExport(input: RunInput): Promise<void> {
     const source = resolveManagedPath(projectsDir, context.project.dir_path); const live = await inspectCanonicalTree(source);
     if (live.tree_digest !== context.identity.digest) throw new ExportServiceError("source_changed", "Live project digest differs from stable identity");
     await materializeManagedTree(source, renderRoot); await validateCanonicalTree(renderRoot, live);
+    await (await import("./export-stage")).prepareBundledFontExport(renderRoot);
     if (context.project.type === "slide_deck") await prepareSlideDeckExport(renderRoot, context.project.entrypoint);
     const renderManifest = await inspectCanonicalTree(renderRoot);
     // Quality checks are advisory and run only from the quality panel.

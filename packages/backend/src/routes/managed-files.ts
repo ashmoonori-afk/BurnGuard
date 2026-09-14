@@ -79,7 +79,7 @@ managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
   const { project, manifest } = await artifactRead(projectId, resolved.project.dir_path);
   const file = manifest.files.find((entry) => entry.path === resolved.relPath);
   if (project === null || project.current_digest !== manifest.tree_digest || file === undefined) return c.json(fail("artifact_identity_unavailable", "Artifact identity is unavailable"), 409);
-  let bytes: Buffer;
+  let bytes: Buffer<ArrayBuffer>;
   try { bytes = await readManagedFile(resolved.project.dir_path, file); }
   catch { return c.json(fail("artifact_identity_unavailable", "Artifact changed while loading"), 409); }
   const type = contentType(resolved.absolutePath);

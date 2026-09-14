@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { copyBundledFonts } from "../src/data/bundled-fonts";
+import { bundledFontFiles, bundledFontUrl, copyBundledFonts } from "../src/data/bundled-fonts";
 import { createProjectRecord } from "../src/db/seed";
 import { PROTOTYPE_TUTORIAL_NAME, seedTutorialsOnce } from "../src/db/seed-tutorials";
 import { appRootDir, resolveRepoRoot } from "../src/lib/paths";
@@ -9,12 +9,44 @@ import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { getSqlite } from "../src/db/client";
 import { DECK_STAGE_JS } from "../src/runtime/deck-stage";
 import { isRuntimeSource } from "../../../scripts/package-runtime";
+import { createApp } from "../src/server";
+import { prepareBundledFontExport } from "../src/services/export-stage";
+import { resolveStaticClosure } from "../src/services/export-closure";
+import { isPublicAsset } from "../src/services/vercel-publish";
+
+test("Given shared fonts When two projects load and one exports Then storage is shared, immutable public URLs are exact, and the export is self-contained", async () => {
+  const roots = ["shared-font-one", "shared-font-two"].map(name => path.join(appRootDir, name));
+  const bundle = await bundledFontFiles();
+  const font = [...bundle.values()].find(file => file.name.endsWith(".woff2"))!;
+  await Promise.all(roots.map(root => copyBundledFonts(root)));
+  const app = createApp();
+  const response = await app.request(bundledFontUrl(font));
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+  expect(response.headers.get("access-control-allow-origin")).toBe("*");
+  expect(Buffer.from(await response.arrayBuffer()).equals(font.bytes)).toBe(true);
+  for (const url of [bundledFontUrl(font).replace(font.sha256, "0".repeat(64)), `/runtime/fonts/${font.sha256}/fonts.css`, `/runtime/fonts/${font.sha256}/unknown.woff2`]) expect((await app.request(url)).status).toBe(404);
+  for (const root of roots) expect((await readdir(path.join(root, "fonts"))).filter(name => name.endsWith(".woff2"))).toEqual([]);
+  const exported = roots[0]!;
+  await writeFile(path.join(exported, "index.html"), '<!doctype html><html><head><link rel="stylesheet" href="fonts/fonts.css"></head><body>Font export</body></html>');
+  await prepareBundledFontExport(exported);
+  expect(await readFile(path.join(exported, "fonts/fonts.css"), "utf8")).not.toContain("/runtime/fonts/");
+  const closure = await resolveStaticClosure(exported, "index.html", await inspectCanonicalTree(exported));
+  expect(closure.referenced_paths).toContain(`fonts/bundled/${font.sha256}-${font.name}`);
+  expect((await readFile(path.join(exported, `fonts/bundled/${font.sha256}-${font.name}`))).equals(font.bytes)).toBe(true);
+  expect(await readFile(path.join(exported, "fonts/bundled/Pretendard-OFL.txt"), "utf8")).toContain("SIL OPEN FONT LICENSE");
+  expect(isPublicAsset("fonts/bundled/Pretendard-OFL.txt")).toBe(true);
+  expect((await readdir(path.join(roots[1]!, "fonts"))).filter(name => name.endsWith(".woff2"))).toEqual([]);
+});
 
 test("Given bundled local fonts, when initializing projects and copying over brand assets, then font bytes are durable and supplied files survive", async () => {
-  const css = await readFile(path.join(resolveRepoRoot(), "assets/fonts/fonts.css"), "utf8");
+  const bundle = await bundledFontFiles();
+  expect(await bundledFontFiles()).toBe(bundle);
   for (const type of ["prototype", "graphic", "slide_deck"] as const) {
     const project = await createProjectRecord({ name: "Font starter", type, designSystemId: null, backendId: "codex", optionsJson: type === "graphic" ? JSON.stringify({ graphic_canvas: { schema_version: 1, width: 1080, height: 1350 } }) : null, entrypoint: type === "slide_deck" ? "deck.html" : "index.html", thumbnailPath: null });
-    expect(await readFile(path.join(project.dir_path, "fonts/fonts.css"), "utf8")).toBe(css);
+    const css = await readFile(path.join(project.dir_path, "fonts/fonts.css"), "utf8");
+    for (const file of bundle.values()) if (file.name.endsWith(".woff2")) expect(css).toContain(bundledFontUrl(file));
+    expect((await readdir(path.join(project.dir_path, "fonts"))).some(name => name.endsWith(".woff2"))).toBe(false);
     expect(await readFile(path.join(project.dir_path, "liquid-glass/liquid-glass.js"), "utf8"))
       .toBe(await readFile(path.join(resolveRepoRoot(), "assets/liquid-glass/liquid-glass.js"), "utf8"));
     expect(await readFile(path.join(project.dir_path, project.entrypoint), "utf8")).toContain('href="fonts/fonts.css"');
@@ -30,7 +62,7 @@ test("Given bundled local fonts, when initializing projects and copying over bra
   await writeFile(path.join(branded, "fonts/fonts.css"), "existing brand CSS");
   await copyBundledFonts(branded);
   expect(await readFile(path.join(branded, "fonts/fonts.css"), "utf8")).toBe("existing brand CSS");
-  expect(await readFile(path.join(branded, "fonts/Pretendard-OFL.txt"), "utf8")).toContain("SIL OPEN FONT LICENSE");
+  expect(bundle.get("Pretendard-OFL.txt")!.bytes.toString("utf8")).toContain("SIL OPEN FONT LICENSE");
   expect(isRuntimeSource("assets/fonts/fonts.css")).toBe(true);
   expect(isRuntimeSource("assets/fonts/../../secret")).toBe(false);
 });
@@ -80,7 +112,7 @@ test("Given an existing tutorial project When startup seeding runs again Then it
   await seedTutorialsOnce();
   const project = getSqlite().query<{ readonly dirPath: string }, [string]>("SELECT dir_path dirPath FROM projects WHERE name=?").get(PROTOTYPE_TUTORIAL_NAME);
   if (project === null) throw new Error("tutorial fixture was not seeded");
-  const missingFont = path.join(project.dirPath, "fonts", "Pretendard-OFL.txt");
+  const missingFont = path.join(project.dirPath, "fonts", "fonts.md");
   await rm(missingFont);
 
   await seedTutorialsOnce();

@@ -7,6 +7,7 @@ import { isChromiumLaunchable } from "./chromium-capability";
 import { registerExportBrowser } from "./export-browser-registry";
 import { chromiumNodeCommand, launchChromiumViaNode } from "./chromium-node-launch";
 import { DECK_STAGE_JS } from "../runtime/deck-stage";
+import { readBundledFontUrl } from "../data/bundled-fonts";
 
 export type RenderViewport = { readonly width: number; readonly height: number; readonly dpr: 1 | 2 };
 export type RenderFinding = { readonly code: "console_error" | "page_error" | "request_failed" | "remote_request" | "font_error"; readonly path: string | null };
@@ -58,6 +59,10 @@ export async function openRenderSession(input: { readonly stagedDir: string; rea
     // Context routes also intercept a popup's first request, before its page event.
     await context.route("**/*", async (route) => {
       const url = new URL(route.request().url());
+      if (url.protocol === "file:") {
+        const font = await readBundledFontUrl(url.pathname.replace(/^\/[a-z]:/i, ""));
+        if (font) { await route.fulfill({ contentType: "font/woff2", body: font.bytes }); return; }
+      }
       if (input.deck && url.protocol === "file:" && /^(?:\/[a-z]:)?\/runtime\/deck-stage\.js$/i.test(url.pathname)) { await route.fulfill({ contentType: "application/javascript", body: DECK_STAGE_JS }); return; }
       if (url.protocol === "data:") { await route.continue(); return; }
       if (url.protocol === "file:") {

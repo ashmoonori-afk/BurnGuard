@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { buildPrompt } from "../src/harness/prompt-builder";
 import { resolveRepoRoot } from "../src/lib/paths";
+import { bundledDesignSystems } from "../src/data/bundled-design-systems";
 
 const FONT_POINTER_SENTINEL = "BUNDLED_FONT_REFERENCE";
 
@@ -35,6 +36,21 @@ function makeContext(projectType: ProjectType, designSystem: BuildContext["desig
 }
 
 describe("bundled font reference", () => {
+  test("Given every original theme When full or compact guidance is assembled Then layout and family tokens survive excerpt limits", async () => {
+    for (const theme of bundledDesignSystems.slice(10)) {
+      const cssPath = path.join(resolveRepoRoot(), "design system themes", theme.slug, "colors_and_type.css");
+      const css = await readFile(cssPath, "utf8");
+      const expected = Object.fromEntries([...css.matchAll(/--((?:layout|family)-[a-z0-9-]+)\s*:\s*([^;{}]+);/gi)].map(match => [`--${match[1]}`, match[2]!.trim()]));
+      expect(Object.keys(expected).length).toBeGreaterThan(0);
+      for (const contextMode of ["full", "compact"] as const) {
+        const designSystem = { ...FAKE_DESIGN_SYSTEM, tokens_css_path: cssPath };
+        const prompt = await buildPrompt(makeContext("prototype", designSystem), { type: "user.message", text: "Build it" }, { contextMode });
+        const contract = JSON.parse(prompt.match(/<selected_design_system_layout>\n([^\n]+)\n<\/selected_design_system_layout>/)![1]!);
+        expect(contract).toEqual({ schema_version: 1, tokens: expected });
+      }
+    }
+  });
+
   test("Given the shipped font catalog, when read, then it carries the on-demand pointer sentinel next to fonts.css", async () => {
     const catalog = await readFile(path.join(resolveRepoRoot(), "assets/fonts/fonts.md"), "utf8");
     expect(catalog).toContain(`<!-- ${FONT_POINTER_SENTINEL} -->`);

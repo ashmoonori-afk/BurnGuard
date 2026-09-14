@@ -1,46 +1,88 @@
-import { cp, mkdir, readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { resolveRepoRoot } from "../lib/paths";
+import { cacheDir, resolveRepoRoot } from "../lib/paths";
+import { readManagedFile } from "../services/artifact-tree-storage";
+import { resolveWithin } from "../security/path-boundary";
 
-/** The bundle is a flat directory and fixed for the life of the process; list it once, not per call. */
-const listings = new Map<string, Promise<readonly string[]>>();
+type BundledFontFile = { readonly name: string; readonly bytes: Buffer; readonly sha256: string };
+const bundles = new Map<string, Promise<ReadonlyMap<string, BundledFontFile>>>();
+const fontStore = path.join(cacheDir, "bundled-fonts");
 
-function bundleListing(source: string): Promise<readonly string[]> {
-  let listed = listings.get(source);
-  if (!listed) {
-    listed = readdir(source);
-    listings.set(source, listed);
+/** Seed one persistent shared store; keep old hashes usable after app/font updates. */
+export function bundledFontFiles(repoRoot = resolveRepoRoot()): Promise<ReadonlyMap<string, BundledFontFile>> {
+  let pending = bundles.get(repoRoot);
+  if (!pending) {
+    pending = (async () => {
+      const source = path.join(repoRoot, "assets/fonts");
+      await mkdir(fontStore, { recursive: true });
+      if ((await lstat(fontStore)).isSymbolicLink()) throw new Error("Shared font store is unsafe");
+      const entries = await Promise.all((await readdir(source)).map(async name => {
+        const bytes = await readFile(path.join(source, name));
+        return [name, { name, bytes, sha256: createHash("sha256").update(bytes).digest("hex") }] as const;
+      }));
+      for (const [, file] of entries) {
+        if (!file.name.endsWith(".woff2")) continue;
+        const name = `${file.sha256}-${file.name}`;
+        await writeFile(resolveWithin(fontStore, name), file.bytes, { flag: "wx" }).catch(async (error: NodeJS.ErrnoException) => {
+          if (error.code !== "EEXIST") throw error;
+          await readManagedFile(fontStore, { path: name, size: file.bytes.length, sha256: file.sha256 });
+        });
+      }
+      return new Map(entries);
+    })();
+    bundles.set(repoRoot, pending);
+    void pending.catch(() => { bundles.delete(repoRoot); });
   }
-  return listed;
+  return pending;
 }
 
-/**
- * New artifact/system initialization only; supplied brand font files retain priority.
- *
- * Every design system, tutorial and project stage links `fonts/fonts.css`, so the bundle has to sit
- * beside each of them, and managed trees may not share bytes by link - `canonical-tree-manifest`
- * rejects any entry with more than one link. Copying the whole bundle on every call meant each
- * artifact stage rewrote ~8 MB it had already inherited, so the destination is listed first and only
- * the files it is actually missing are written. A complete destination costs two directory reads.
- */
+export function bundledFontUrl(file: BundledFontFile): string {
+  return `/runtime/fonts/${file.sha256}/${file.name}`;
+}
+
+/** Public lookup accepts only exact content-addressed font names in the installed bundle. */
+export async function readBundledFontUrl(urlPath: string): Promise<BundledFontFile | null> {
+  const match = /^\/runtime\/fonts\/([a-f0-9]{64})\/([A-Za-z0-9_.-]+\.woff2)$/.exec(urlPath);
+  if (!match) return null;
+  const file = (await bundledFontFiles()).get(match[2]!);
+  if (file?.sha256 === match[1]) return file;
+  try {
+    const name = `${match[1]}-${match[2]}`;
+    const info = await lstat(resolveWithin(fontStore, name));
+    if (!info.isFile() || info.size > 4 * 1024 * 1024) return null;
+    const bytes = await readManagedFile(fontStore, { path: name, size: info.size, sha256: match[1]! });
+    if (bytes.toString("ascii", 0, 4) !== "wOF2") return null;
+    return { name: match[2]!, bytes, sha256: match[1]! };
+  } catch { return null; }
+}
+
+/** Initialization only: brand fonts survive; common binaries stay in the installed bundle. */
 export async function copyBundledFonts(destination: string, repoRoot = resolveRepoRoot()): Promise<void> {
-  const source = path.join(repoRoot, "assets", "fonts");
+  const bundle = await bundledFontFiles(repoRoot);
   const target = path.join(destination, "fonts");
-  const [names, existing] = await Promise.all([
-    bundleListing(source),
-    readdir(target).catch(() => null),
-  ]);
-
-  if (existing) {
-    const present = new Set(existing);
-    const missing = names.filter((name) => !present.has(name));
-    if (missing.length === 0) return;
-    await Promise.all(
-      missing.map((name) => cp(path.join(source, name), path.join(target, name), { force: false })),
-    );
-    return;
+  await mkdir(target, { recursive: true });
+  const originalCss = bundle.get("fonts.css")!.bytes.toString("utf8");
+  const sharedCss = originalCss.replace(/url\('\.\/([^']+)'\)/g, (source, name: string) => {
+    const file = bundle.get(name);
+    return file && name.endsWith(".woff2") ? `url('${bundledFontUrl(file)}')` : source;
+  });
+  for (const file of bundle.values()) {
+    if (file.name !== "fonts.css" && file.name !== "fonts.md") continue;
+    const bytes = file.name === "fonts.css" ? sharedCss : file.bytes;
+    await writeFile(path.join(target, file.name), bytes, { flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "EEXIST") throw error;
+    });
   }
-
-  await mkdir(path.dirname(target), { recursive: true });
-  await cp(source, target, { recursive: true, force: false });
+  // Convert only the known legacy stylesheet in an unpublished template stage.
+  if (await readFile(path.join(target, "fonts.css"), "utf8") !== originalCss) return;
+  await writeFile(path.join(target, "fonts.css"), sharedCss);
+  for (const file of bundle.values()) {
+    if (!file.name.endsWith(".woff2")) continue;
+    const copied = await readFile(path.join(target, file.name)).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (copied?.equals(file.bytes)) await rm(path.join(target, file.name));
+  }
 }

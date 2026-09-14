@@ -1,4 +1,37 @@
 import { authorizedFetch } from "@/api/client";
+import { requestBundledFont } from "@/api/fonts";
+
+// Public content-addressed fonts are shared by every canvas in this app window.
+const bundledFonts = new Map<string, Promise<string>>();
+
+function isBundledFontUrl(value: string, base: string): boolean {
+  try {
+    const target = new URL(value, base);
+    return target.origin === new URL(base).origin && !target.search && !target.hash
+      && /^\/runtime\/fonts\/[a-f0-9]{64}\/[A-Za-z0-9_.-]+\.woff2$/.test(target.pathname);
+  } catch { return false; }
+}
+
+async function sharedFontData(url: string): Promise<string> {
+  let pending = bundledFonts.get(url);
+  if (!pending) {
+    if (bundledFonts.size >= 64) throw new Error("artifact_font_limit");
+    pending = (async () => {
+      const response = await requestBundledFont(url);
+      if (!response.ok || response.headers.get("content-type") !== "font/woff2") throw new Error("artifact_font_load_failed");
+      const blob = await readCanvasImage(response, { remaining: 4 * 1024 * 1024 }, () => {});
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("artifact_font_read_failed"));
+        reader.readAsDataURL(blob);
+      });
+    })();
+    bundledFonts.set(url, pending);
+    void pending.catch(() => { bundledFonts.delete(url); });
+  }
+  return pending;
+}
 
 export function isProjectImageUrl(value: string, documentUrl: string): boolean {
   if (value.startsWith("#")) return false;
@@ -54,10 +87,15 @@ export async function readCanvasImage(response: Response, budget: { remaining: n
 export async function embedCanvasImages(html: string, documentUrl: string, signal: AbortSignal): Promise<string> {
   const document = new DOMParser().parseFromString(html, "text/html");
   const fetched = new Map<string, Promise<string>>();
+  let sharedFontUsed = false;
   const resources = new AbortController();
   const boundedSignal = AbortSignal.any([signal, resources.signal, AbortSignal.timeout(15000)]);
   const budget = { remaining: 32 * 1024 * 1024 };
   const resolve = async (source: string, base = documentUrl, kind: "asset" | "css" | "script" = "asset"): Promise<string> => {
+    if (kind === "asset" && isBundledFontUrl(source, base)) {
+      sharedFontUsed = true;
+      return sharedFontData(new URL(source, base).href);
+    }
     if (!source || !isProjectImageUrl(source, base)) return source;
     const target = new URL(source, base);
     if (kind !== "asset") target.hash = "";
@@ -193,5 +231,5 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
   }),
   ]);
   boundedSignal.throwIfAborted();
-  return fetched.size === 0 ? html : `<!doctype html>${document.documentElement.outerHTML}`;
+  return fetched.size === 0 && !sharedFontUsed ? html : `<!doctype html>${document.documentElement.outerHTML}`;
 }

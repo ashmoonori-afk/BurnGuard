@@ -89,7 +89,7 @@ export async function publishManagedTree(
   return validateCanonicalTree(destination, sourceManifest);
 }
 
-export async function readManagedFile(source: string, file: CanonicalTreeEntry, policy: PublicationPolicy = {}): Promise<Buffer> {
+export async function readManagedFile(source: string, file: CanonicalTreeEntry, policy: PublicationPolicy = {}): Promise<Buffer<ArrayBuffer>> {
   const opened = await openPublicationSources(source, [file], policy);
   try { return Buffer.from(opened[0]!.bytes); }
   finally { await opened[0]!.handle.close(); }
