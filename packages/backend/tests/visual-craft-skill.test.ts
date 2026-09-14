@@ -15,11 +15,19 @@ import {
 type BuildContext = Parameters<typeof buildPrompt>[0];
 type ProjectType = BuildContext["project"]["project_type"];
 
+const CRAFT_BY_TYPE: Record<string, string> = {
+  prototype: PROTOTYPE_VISUAL_CRAFT,
+  slide_deck: DECK_VISUAL_CRAFT,
+  graphic: GRAPHIC_VISUAL_CRAFT,
+};
+
 const TYPE_SENTINELS: Record<string, string> = {
   prototype: "PROTOTYPE_VISUAL_CRAFT",
   slide_deck: "DECK_VISUAL_CRAFT",
   graphic: "GRAPHIC_VISUAL_CRAFT",
 };
+
+const IDENTITY_SENTINEL = "DEFAULT_VISUAL_IDENTITY";
 
 function makeContext(
   projectType: ProjectType,
@@ -51,8 +59,31 @@ const FAKE_DESIGN_SYSTEM = {
   readme_md_path: null,
 } as unknown as NonNullable<BuildContext["designSystem"]>;
 
+/**
+ * Returns the slice of `prompt` occupying the position of `block`, so the
+ * caller can assert equality against the exported shipped string rather than
+ * mere containment.
+ */
+function sliceShippedBlock(prompt: string, block: string): string {
+  const shipped = block.trim();
+  const heading = shipped.slice(0, shipped.indexOf("\n"));
+  const start = prompt.indexOf(heading);
+  expect(start).toBeGreaterThanOrEqual(0);
+  return prompt.slice(start, start + shipped.length);
+}
+
+function countOccurrences(haystack: string, needle: string): number {
+  let count = 0;
+  let index = haystack.indexOf(needle);
+  while (index !== -1) {
+    count += 1;
+    index = haystack.indexOf(needle, index + needle.length);
+  }
+  return count;
+}
+
 describe("visual craft skill", () => {
-  test("ships the core and the matching per-type craft block in both context modes", async () => {
+  test("ships the core and the matching per-type craft block verbatim in both context modes", async () => {
     for (const projectType of ["prototype", "slide_deck", "graphic"] as const) {
       for (const contextMode of ["full", "compact"] as const) {
         const prompt = await buildPrompt(
@@ -60,35 +91,46 @@ describe("visual craft skill", () => {
           { type: "user.message", text: "Build it" },
           { contextMode },
         );
-        expect(prompt).toContain("## Visual craft");
-        expect(prompt).toContain("VISUAL_CRAFT_CORE");
+        expect(sliceShippedBlock(prompt, VISUAL_CRAFT_CORE)).toBe(VISUAL_CRAFT_CORE.trim());
+        const craft = CRAFT_BY_TYPE[projectType]!;
+        expect(sliceShippedBlock(prompt, craft)).toBe(craft.trim());
+      }
+    }
+  });
+
+  test("never leaks another deliverable type's craft sentinel into a selection", async () => {
+    for (const projectType of ["prototype", "slide_deck", "graphic"] as const) {
+      for (const contextMode of ["full", "compact"] as const) {
+        const prompt = await buildPrompt(
+          makeContext(projectType),
+          { type: "user.message", text: "Build it" },
+          { contextMode },
+        );
         for (const [type, sentinel] of Object.entries(TYPE_SENTINELS)) {
-          if (type === projectType) {
-            expect(prompt).toContain(sentinel);
-          } else {
-            expect(prompt).not.toContain(sentinel);
-          }
+          expect(countOccurrences(prompt, sentinel)).toBe(type === projectType ? 1 : 0);
         }
       }
     }
   });
 
-  test("injects the default visual identity only when no design system is selected", async () => {
-    for (const contextMode of ["full", "compact"] as const) {
-      const bare = await buildPrompt(
-        makeContext("prototype"),
-        { type: "user.message", text: "Build it" },
-        { contextMode },
-      );
-      expect(bare).toContain("## Default visual identity");
-      expect(bare).toContain("DEFAULT_VISUAL_IDENTITY");
+  test("injects exactly one default visual identity only when no design system is selected", async () => {
+    for (const projectType of ["prototype", "slide_deck", "graphic"] as const) {
+      for (const contextMode of ["full", "compact"] as const) {
+        const bare = await buildPrompt(
+          makeContext(projectType),
+          { type: "user.message", text: "Build it" },
+          { contextMode },
+        );
+        expect(countOccurrences(bare, IDENTITY_SENTINEL)).toBe(1);
+        expect(sliceShippedBlock(bare, DEFAULT_VISUAL_IDENTITY)).toBe(DEFAULT_VISUAL_IDENTITY.trim());
 
-      const branded = await buildPrompt(
-        makeContext("prototype", FAKE_DESIGN_SYSTEM),
-        { type: "user.message", text: "Build it" },
-        { contextMode },
-      );
-      expect(branded).not.toContain("DEFAULT_VISUAL_IDENTITY");
+        const branded = await buildPrompt(
+          makeContext(projectType, FAKE_DESIGN_SYSTEM),
+          { type: "user.message", text: "Build it" },
+          { contextMode },
+        );
+        expect(countOccurrences(branded, IDENTITY_SENTINEL)).toBe(0);
+      }
     }
   });
 
@@ -108,6 +150,7 @@ describe("visual craft skill", () => {
       DECK_VISUAL_CRAFT.length,
       GRAPHIC_VISUAL_CRAFT.length,
     );
+    expect(MAX_VISUAL_CRAFT_CHARS).toBe(6400);
     expect(
       VISUAL_CRAFT_CORE.length + largestPerType + DEFAULT_VISUAL_IDENTITY.length,
     ).toBeLessThanOrEqual(MAX_VISUAL_CRAFT_CHARS);
@@ -124,7 +167,8 @@ describe("visual craft skill", () => {
       expect(COMPACT_DECK_SKILL_MD).toContain(declaration);
       expect(DECK_SKILL_MD).toContain(declaration);
     }
-    expect(DECK_VISUAL_CRAFT).toContain("--deck-type-caption");
+    expect(DECK_VISUAL_CRAFT).toContain("--deck-type-caption (24px)");
+    expect(DECK_VISUAL_CRAFT).toContain("--deck-pad-slide");
   });
 
   test("diagram skill carries its visual craft section within budget", () => {
@@ -132,8 +176,10 @@ describe("visual craft skill", () => {
     expect(DIAGRAM_SKILL_MD.length).toBeLessThanOrEqual(MAX_SKILL_CHARS);
   });
 
-  test("compact prototype skill uses the WCAG 320 px reflow floor", () => {
+  test("the 320 px reflow floor lives in the prototype surfaces", () => {
     expect(COMPACT_PROTOTYPE_SKILL_MD).toContain("320");
     expect(COMPACT_PROTOTYPE_SKILL_MD).not.toContain("360 px");
+    expect(PROTOTYPE_VISUAL_CRAFT).toContain("320px");
+    expect(VISUAL_CRAFT_CORE).not.toContain("320");
   });
 });

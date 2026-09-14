@@ -1,3 +1,13 @@
+/**
+ * The one task-structure block shared by every route, model and effort. It references the existing
+ * mandatory contracts rather than reprinting them, so each of those keeps a single owner and a
+ * single emitted copy. Structurally typed to keep the preset registry free of a circular import.
+ */
+export const TASK_WORK_CONTRACT: { readonly id: string; readonly text: string } = {
+  id: "task-work-v1",
+  text: "Use the brief, selected direction, explicit request and target as inputs. For creation, establish requirements, assign each requested unit a purpose, choose its composition, implement, check and correct, then deliver. Each work unit has a target, inputs, output, constraints and completion evidence. For a localized edit use inspect target, edit, verify; preserve unrelated content. File existence and research creation_mode describe captured state, not permission to classify the request as an edit. Apply all shared delivery, source, approval and completion contracts; an early save never bypasses approval. Summarize important decisions briefly, not private reasoning. Deliver the result and actual observations first; keep unavailable checks unverified.",
+};
+
 /** Shared by every model, project type and context mode. */
 export const IMAGE_ARTBOARD_COMPLETION_CHECKS = `Mandatory image and artboard verification before completion:
 - Inventory visible image placements across every page, section, slide and artboard, including img, picture/srcset and CSS backgrounds. Use distinct content imagery for each placement. The same photo or illustration is still a duplicate after renaming, copying, cropping, mirroring, recoloring or applying filters. Repeated brand logos and functional icons are identity/UI assets; repeated content imagery requires an explicit user request, including across banner sizes.

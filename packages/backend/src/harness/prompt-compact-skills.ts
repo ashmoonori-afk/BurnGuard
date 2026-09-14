@@ -2,10 +2,10 @@ export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 
 ## Token budget rules (READ THESE FIRST)
 - The "## Deck structure" section above is your map. Use it to plan instead of Reading the full file.
-- **Read \`deck.html\` at most ONCE per turn.** Re-reading the same file is forbidden — keep findings in working memory across tool calls.
+- Use the structure summary above and bounded reads of the target; avoid unnecessary full-file rereads. Reinspect changed regions after edits and read the necessary surrounding context to diagnose failures.
 - When you do need a slide's exact markup, use \`Grep\` for \`data-bg-node-id="slide-N"\` to find the line, then \`Read\` with \`offset\`/\`limit\` covering that slide only — never the whole file.
 - Prefer multiple targeted \`Edit\` calls (small \`old_string\`/\`new_string\`) over a \`Write\` of the whole file. \`Write\` re-emits the entire 100 KB+ artifact and is the most expensive thing you can do.
-- For multi-slide redesigns, plan all edits before executing, then issue them as a batch. Do not Read between Edits.
+- For multi-slide redesigns, plan all edits before executing. Batch independent targeted edits when their inputs are current; inspect results and reread affected regions before dependent edits.
 
 ## Structure
 - Every slide is a top-level \`<section data-slide>\` directly under \`<body>\`. Preserve order unless the user asks for narrative change.
@@ -23,7 +23,7 @@ export const COMPACT_PROTOTYPE_SKILL_MD = `# Prototype compact contract
 
 ## Token budget rules (READ THESE FIRST)
 - The "## Prototype structure" section above is your map. Use it to plan instead of Reading the full file.
-- Read each target HTML file at most once per turn; keep findings in working memory across tool calls.
+- Use the structure summary above and bounded reads of the target; avoid unnecessary full-file rereads. Reinspect changed regions after edits and read the necessary surrounding context to diagnose failures.
 - When you need a section's exact markup, use \`Grep\` for \`data-section="..."\` (or \`data-bg-node-id\`) to find the line, then \`Read\` with \`offset\`/\`limit\` covering that section only.
 - Prefer multiple targeted \`Edit\` calls over \`Write\`. \`Write\` re-emits the entire artifact and is the most expensive thing you can do.
 

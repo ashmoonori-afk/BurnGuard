@@ -27,6 +27,7 @@ import { DESIGN_CRAFT_RULES } from "./design-craft";
 import { CHART_AUTHORING_RULES } from "./chart-authoring";
 import { appendGenerationStyle } from "./prompt-generation-style";
 import { appendModelPromptContext } from "./prompt-model-context";
+import type { Deliverable } from "./prompt-task-presets";
 import { appendReferenceLayoutContext } from "./prompt-reference-layout";
 import { appendVisualSourceContext } from "./prompt-visual-sources";
 import { summarizeDeckHtml } from "./structure-extractor";
@@ -94,7 +95,7 @@ export async function buildPrompt(
   lines.push("");
 
   lines.push("## Live preview and verification");
-  lines.push("Write a complete, renderable HTML scaffold to the entrypoint early, then save incremental HTML/CSS/image updates as sections become ready. BurnGuard automatically renders the working files in its built-in canvas during this turn; do not wait until the end to write everything.");
+  lines.push("For creation, once the request authorizes it, write a complete renderable HTML scaffold to the entrypoint early, then save incremental HTML/CSS/image updates as sections become ready. For an edit, preserve the existing entrypoint and save targeted changes instead. Await any required image-regeneration approval before image calls or file changes. BurnGuard automatically renders the working files in its built-in canvas during this turn; do not wait until the end to write everything.");
   lines.push("The app writes ../preview-report.json outside the output directory after its canvas renders. Read it for current-page image loading and horizontal overflow observations; check observed_at/version and do not treat old observations as a check of your latest edit. This is DOM feedback, not a screenshot or a full visual review. Missing feedback means the canvas has not reported yet, not that browser access was denied. Do not wait or poll indefinitely.");
   lines.push("Use the built-in canvas feedback instead of starting a separate browser merely to verify rendering. A CLI sandbox refusing a separate Chrome/Playwright process says nothing about the app's already running preview. Never report that the built-in screen is blocked or ask for browser permission unless an actual app error establishes that. Be precise about which checks you performed.");
   lines.push("", "## Project");
@@ -152,6 +153,7 @@ export async function buildPrompt(
     hasCapturedFiles: context.files.length > 0,
   })));
   lines.push("</burnguard-research-context-v1>");
+  lines.push("Its creation_mode describes the captured state of the project directory. The explicit request and target decide whether this turn creates or modifies; existing starter files alone never make a request an edit.");
   lines.push("");
   appendDesignBriefContext(lines, projectOptions.design_brief);
   await appendVisualSourceContext(lines, {
@@ -262,7 +264,17 @@ export async function buildPrompt(
     }
   }
 
-  if (isDiagramRequest(userEvent.text)) {
+  // A deck, prototype or graphic project already owns its structural contract, and the diagram
+  // skill carries its own type sizes and dimensions. Stacking both leaks diagram sizing into the
+  // enclosing deliverable, so a full diagram skill is emitted only for a standalone diagram.
+  const deliverable: Deliverable = project.project_type === "prototype"
+    ? "prototype"
+    : project.project_type === "slide_deck"
+      ? "slide_deck"
+      : project.project_type === "graphic"
+        ? "graphic"
+        : isDiagramRequest(userEvent.text) ? "diagram" : "generic";
+  if (deliverable === "diagram") {
     lines.push("## Diagram skill");
     lines.push(DIAGRAM_SKILL_MD.trim());
     lines.push("");
@@ -270,7 +282,7 @@ export async function buildPrompt(
 
   lines.push(DESIGN_CRAFT_RULES);
   lines.push(CHART_AUTHORING_RULES);
-  appendModelPromptContext(lines, options.backendId, options.generation);
+  appendModelPromptContext(lines, options.backendId, options.generation, deliverable);
   lines.push("## Delivery");
   lines.push(
     `- Write or edit files inside \`${project.project_dir}\`. Read-only attachment copies and ../preview-report.json explicitly supplied by this harness are authorized inputs outside the output directory. Never modify them.`,

@@ -7,6 +7,16 @@ import { buildPrompt } from "../src/harness/prompt-builder";
 import { DESIGN_CRAFT_RULES, IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../src/harness/design-craft";
 import { IMAGE_PRODUCTION_RULES } from "../src/harness/prompt-image-production";
 import { PROTOTYPE_NAVIGATION_CONTRACT } from "../src/harness/skills/prototype-skill";
+import { COMPACT_DECK_SKILL_MD } from "../src/harness/prompt-compact-skills";
+import { DECK_SKILL_MD } from "../src/harness/skills/deck-skill";
+import {
+  MAX_TASK_PRESET_CHARS,
+  selectTaskPreset,
+  serializeTaskPreset,
+  type SelectedTaskPreset,
+} from "../src/harness/prompt-model-context";
+import type { Deliverable } from "../src/harness/prompt-task-presets";
+import { GENERATION_EFFORTS, type GenerationEffort, type GenerationOptions } from "@bg/shared";
 import { ensureLearningSchema } from "./learning-fixture";
 import {
   attachmentExtractedTextPath,
@@ -159,11 +169,11 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("Keep this turn token-light");
     expect(prompt).toContain("# Slide deck compact contract");
     expect(prompt).toContain("top-level `<section data-slide");
-    // Compact skill must spell out token-budget rules so Claude doesn't fall
-    // back to its default "Read the whole file before editing" instinct.
-    expect(prompt).toContain("Token budget rules");
-    expect(prompt).toContain("Read `deck.html` at most ONCE per turn");
-    expect(prompt).toContain("offset");
+    // Shipped-copy equality: the compact contract that ships is exactly the one assembled, and the
+    // full deck skill never appears beside it. Asserting the exported constant keeps the contract
+    // free to reword its guidance without this test pinning editorial prose.
+    expect(prompt).toContain(COMPACT_DECK_SKILL_MD.trim());
+    expect(prompt).not.toContain(DECK_SKILL_MD.trim());
     expect(prompt).not.toContain("## Layout archetypes");
     expect(prompt).not.toContain("Default pitch deck is 15 slides");
   });
@@ -535,5 +545,151 @@ header { padding: var(--space-md); }
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("task guidance presets", () => {
+  const options = (model: string, effort: GenerationEffort, provider: "native" | "commandcode" = "native"): GenerationOptions =>
+    ({ model, effort, provider, vanilla: false });
+  const DELIVERABLES: Deliverable[] = ["prototype", "slide_deck", "graphic", "diagram", "generic"];
+  const blockIds = (preset: SelectedTaskPreset) => preset.blocks.map((block) => block.id);
+
+  test("Given identical inputs When selecting twice Then the selection is deterministic", () => {
+    const first = selectTaskPreset("codex", options("gpt-5.6-luna", "low"), "prototype");
+    const second = selectTaskPreset("codex", options("gpt-5.6-luna", "low"), "prototype");
+    expect(first).toEqual(second);
+    expect(serializeTaskPreset(first)).toBe(serializeTaskPreset(second));
+  });
+
+  test("Given registered ids and aliases When selecting Then exact precedes alias precedes fallback", () => {
+    const exact = selectTaskPreset("codex", options("gpt-5.6-luna", "low"), "prototype");
+    expect(exact.resolution).toBe("exact");
+    expect(exact.preset_id).toBe("codex/native/gpt-5.6-luna/v1");
+
+    // An alias resolves to the canonical preset while the caller's original model survives verbatim.
+    const alias = selectTaskPreset("claude-code", options("sonnet", "low"), "prototype");
+    expect(alias.resolution).toBe("alias");
+    expect(alias.preset_id).toBe("claude-code/native/claude-sonnet-4-6/v1");
+    expect(alias.model).toBe("sonnet");
+
+    const fallback = selectTaskPreset("codex", options("gpt-daybreak-blue-latest", "low"), "prototype");
+    expect(fallback.resolution).toBe("provider_default");
+    expect(fallback.preset_id).toBe("codex/native/default/v1");
+  });
+
+  test("Given differing model or effort When selecting Then only those blocks change", () => {
+    const luna = selectTaskPreset("codex", options("gpt-5.6-luna", "low"), "prototype");
+    const spark = selectTaskPreset("codex", options("gpt-5.3-codex-spark", "low"), "prototype");
+    const lunaHigh = selectTaskPreset("codex", options("gpt-5.6-luna", "high"), "prototype");
+
+    expect(blockIds(luna)[2]).not.toBe(blockIds(spark)[2]);
+    expect(luna.blocks[2].text).not.toBe(spark.blocks[2].text);
+    expect(blockIds(luna)[3]).not.toBe(blockIds(lunaHigh)[3]);
+    // Shared and deliverable blocks are byte-identical across every model and effort.
+    expect(luna.blocks.slice(0, 2)).toEqual(spark.blocks.slice(0, 2));
+    expect(luna.blocks.slice(0, 2)).toEqual(lunaHigh.blocks.slice(0, 2));
+
+    const efforts = GENERATION_EFFORTS.map((effort) => selectTaskPreset("codex", options("gpt-5.6-luna", effort), "prototype"));
+    expect(new Set(efforts.map((preset) => preset.blocks[3].id)).size).toBe(GENERATION_EFFORTS.length);
+    expect(new Set(efforts.map((preset) => preset.blocks[3].text)).size).toBe(GENERATION_EFFORTS.length);
+  });
+
+  test("Given unknown ids When selecting Then the name never downgrades the preset", () => {
+    for (const model of ["future-mini", "small-opus-next", "totally-unknown"]) {
+      const preset = selectTaskPreset("codex", options(model, "high"), "generic");
+      expect(preset.resolution).toBe("provider_default");
+      expect(preset.model).toBe(model);
+      expect(preset.effort).toBe("high");
+    }
+  });
+
+  test("Given the same model on different routes When selecting Then routes are not conflated", () => {
+    const native = selectTaskPreset("claude-code", options("claude-sonnet-4-6", "low"), "slide_deck");
+    const command = selectTaskPreset("claude-code", options("claude-sonnet-4-6", "low", "commandcode"), "slide_deck");
+    expect(native.route).not.toBe(command.route);
+    expect(native.preset_id).not.toBe(command.preset_id);
+    expect(() => selectTaskPreset("codex", options("claude-sonnet-4-6", "low", "commandcode"), "slide_deck")).toThrow("commandcode_unavailable");
+  });
+
+  test("Given every shipped combination When serializing Then the envelope stays within budget", () => {
+    const worstCaseModel = "m".repeat(120);
+    const models: [Parameters<typeof selectTaskPreset>[0], string, "native" | "commandcode"][] = [
+      ["codex", "gpt-5.6-luna", "native"], ["codex", "gpt-5.3-codex-spark", "native"],
+      ["codex", "gpt-5.6-terra", "native"], ["codex", "gpt-5.6-sol", "native"],
+      ["codex", "gpt-5.5", "native"], ["codex", "gpt-6-astra", "native"], ["codex", worstCaseModel, "native"],
+      ["claude-code", "claude-sonnet-4-6", "native"], ["claude-code", "claude-opus-4-6", "native"],
+      ["claude-code", "sonnet", "native"], ["claude-code", "opus", "native"], ["claude-code", worstCaseModel, "native"],
+      ["claude-code", "claude-sonnet-4-6", "commandcode"], ["claude-code", worstCaseModel, "commandcode"],
+    ];
+    let checked = 0;
+    for (const [backend, model, provider] of models) {
+      for (const deliverable of DELIVERABLES) {
+        for (const effort of GENERATION_EFFORTS) {
+          const serialized = serializeTaskPreset(selectTaskPreset(backend, options(model, effort, provider), deliverable));
+          expect(serialized.length).toBeLessThanOrEqual(MAX_TASK_PRESET_CHARS);
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBe(models.length * DELIVERABLES.length * GENERATION_EFFORTS.length);
+  });
+
+  test("Given an oversized envelope When serializing Then the example drops before anything mandatory", () => {
+    const base = selectTaskPreset("codex", options("gpt-5.6-luna", "low"), "prototype");
+    const padding = MAX_TASK_PRESET_CHARS - serializeTaskPreset(base).length + 1;
+    const oversized: SelectedTaskPreset = {
+      ...base,
+      example: { id: "example-synthetic-v1", text: "x".repeat(padding), reviewEvidenceId: "synthetic-case" },
+    };
+    const serialized = serializeTaskPreset(oversized);
+    expect(serialized.length).toBeLessThanOrEqual(MAX_TASK_PRESET_CHARS);
+    expect(JSON.parse(serialized.split("\n")[1]).example).toBeNull();
+    // Every mandatory block survives the elision.
+    expect(JSON.parse(serialized.split("\n")[1]).blocks.map((block: { id: string }) => block.id)).toEqual(blockIds(base));
+
+    const unfixable: SelectedTaskPreset = {
+      ...base,
+      blocks: [...base.blocks, { id: "oversized-v1", text: "y".repeat(MAX_TASK_PRESET_CHARS) }],
+    };
+    expect(() => serializeTaskPreset(unfixable)).toThrow("task_preset_budget_exceeded");
+  });
+
+  test("Given an assembled prompt When reading envelopes Then legacy v1 is unchanged beside the new tag", async () => {
+    const prompt = await buildPrompt(
+      makeContext({ project_type: "slide_deck", entrypoint: "deck.html" }),
+      { type: "user.message", text: "build the deck" },
+      { backendId: "codex", generation: options("gpt-5.6-luna", "low") },
+    );
+    const legacy = JSON.parse(prompt.split("<burnguard-model-guidance-v1>\n")[1].split("\n</burnguard-model-guidance-v1>")[0]);
+    expect(legacy).toEqual({ schema_version: 1, profile: "codex", model: "gpt-5.6-luna", provider: "native", effort: "low" });
+
+    const task = JSON.parse(prompt.split("<burnguard-task-guidance-v1>\n")[1].split("\n</burnguard-task-guidance-v1>")[0]);
+    expect(task.schema_version).toBe(1);
+    expect(task.deliverable).toBe("slide_deck");
+    expect(task.preset_id).toBe("codex/native/gpt-5.6-luna/v1");
+    expect(task.status).toBe("draft");
+    // Both envelopes appear exactly once, in order, before Delivery.
+    expect(prompt.split("<burnguard-model-guidance-v1>").length - 1).toBe(1);
+    expect(prompt.split("<burnguard-task-guidance-v1>").length - 1).toBe(1);
+    expect(prompt.indexOf("<burnguard-model-guidance-v1>")).toBeLessThan(prompt.indexOf("<burnguard-task-guidance-v1>"));
+    expect(prompt.indexOf("<burnguard-task-guidance-v1>")).toBeLessThan(prompt.indexOf("## Delivery"));
+  });
+
+  test("Given a diagram request When the project owns a deliverable Then skills do not stack", async () => {
+    const deck = await buildPrompt(
+      makeContext({ project_type: "slide_deck", entrypoint: "deck.html" }),
+      { type: "user.message", text: "add a flow diagram of the process" },
+      { backendId: "codex", generation: options("gpt-5.6-luna", "low") },
+    );
+    expect(deck).not.toContain("## Diagram skill");
+    expect(JSON.parse(deck.split("<burnguard-task-guidance-v1>\n")[1].split("\n</burnguard-task-guidance-v1>")[0]).deliverable).toBe("slide_deck");
+
+    const standalone = await buildPrompt(
+      makeContext({ project_type: "other", entrypoint: "index.html" }),
+      { type: "user.message", text: "add a flow diagram of the process" },
+      { backendId: "codex", generation: options("gpt-5.6-luna", "low") },
+    );
+    expect(standalone).toContain("## Diagram skill");
+    expect(JSON.parse(standalone.split("<burnguard-task-guidance-v1>\n")[1].split("\n</burnguard-task-guidance-v1>")[0]).deliverable).toBe("diagram");
   });
 });

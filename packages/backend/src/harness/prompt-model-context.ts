@@ -1,7 +1,135 @@
 import type { BackendId, GenerationOptions } from "@bg/shared";
+import {
+  TASK_PRESET_REGISTRY,
+  type Deliverable,
+  type PresetRegistry,
+  type ReviewedExample,
+  type Route,
+  type TextBlock,
+} from "./prompt-task-presets";
 
-export function appendModelPromptContext(lines: string[], backendId?: BackendId, generation?: GenerationOptions): void {
+/**
+ * Whole-envelope budget for the task-guidance addition, counted in UTF-16 code units. This bounds
+ * prompt growth only; it is not a token count and says nothing about quality.
+ */
+export const MAX_TASK_PRESET_CHARS = 4000;
+
+export interface SelectedTaskPreset {
+  readonly schema_version: 1;
+  readonly registry_version: 1;
+  readonly route: Route;
+  /** The server-resolved model ID, preserved verbatim even when an alias matched. */
+  readonly model: string;
+  readonly effort: GenerationOptions["effort"];
+  readonly preset_id: string;
+  readonly resolution: "exact" | "alias" | "provider_default";
+  readonly status: "draft";
+  readonly deliverable: Deliverable;
+  readonly blocks: readonly TextBlock[];
+  readonly example: ReviewedExample | null;
+}
+
+function resolveRoute(backendId: BackendId, generation: GenerationOptions): Route {
+  if (generation.provider === "commandcode") {
+    // CommandCode is a Claude route. Never silently remap a Codex selection onto it.
+    if (backendId !== "claude-code") throw new Error("commandcode_unavailable");
+    return "claude-code/commandcode";
+  }
+  return backendId === "claude-code" ? "claude-code/native" : "codex/native";
+}
+
+const own = <T,>(record: Readonly<Record<string, T>>, key: string): T | undefined =>
+  Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
+
+/**
+ * Pure selection of task guidance. Reads no files, environment, clock or provider metadata, and
+ * never normalizes or rewrites the caller's model or effort.
+ *
+ * Availability and authentication remain `resolveGenerationOptions`' job: this function composes
+ * wording for an already-validated selection and authorizes nothing. An unregistered ID takes the
+ * route default; it is never downgraded because its name happens to contain "mini" or "small".
+ */
+export function selectTaskPreset(
+  backendId: BackendId,
+  generation: GenerationOptions,
+  deliverable: Deliverable,
+  registry: PresetRegistry = TASK_PRESET_REGISTRY,
+): SelectedTaskPreset {
+  const route = resolveRoute(backendId, generation);
+  const routeRegistry = registry.routes[route];
+
+  let preset = own(routeRegistry.models, generation.model);
+  let resolution: SelectedTaskPreset["resolution"] = "exact";
+  if (preset === undefined) {
+    const aliasTarget = own(routeRegistry.aliases, generation.model);
+    const aliased = aliasTarget === undefined ? undefined : own(routeRegistry.models, aliasTarget);
+    if (aliased !== undefined) {
+      preset = aliased;
+      resolution = "alias";
+    } else {
+      preset = routeRegistry.fallback;
+      resolution = "provider_default";
+    }
+  }
+
+  const blocks: readonly TextBlock[] = [
+    registry.shared,
+    registry.deliverables[deliverable],
+    registry.wording[preset.wording],
+    registry.efforts[generation.effort],
+  ];
+
+  // An example is eligible only at LOW effort and only at an exact route/preset/deliverable key.
+  const candidate = generation.effort === "low"
+    ? registry.examples[route]?.[preset.id]?.[deliverable]
+    : undefined;
+  const example = candidate && candidate.reviewEvidenceId.length > 0 ? candidate : null;
+
+  return {
+    schema_version: 1,
+    registry_version: registry.version,
+    route,
+    model: generation.model,
+    effort: generation.effort,
+    preset_id: preset.id,
+    resolution,
+    status: "draft",
+    deliverable,
+    blocks,
+    example,
+  };
+}
+
+const envelope = (preset: SelectedTaskPreset): string =>
+  `<burnguard-task-guidance-v1>\n${JSON.stringify(preset)}\n</burnguard-task-guidance-v1>`;
+
+/**
+ * Serialize the selection, dropping the optional reviewed example first when the envelope exceeds
+ * the budget. Mandatory blocks are never trimmed and text is never sliced: an envelope that cannot
+ * fit without them throws, so an unreviewed prompt cannot silently exceed the stated cap.
+ */
+export function serializeTaskPreset(preset: SelectedTaskPreset): string {
+  const full = envelope(preset);
+  if (full.length <= MAX_TASK_PRESET_CHARS) return full;
+  if (preset.example !== null) {
+    const withoutExample = envelope({ ...preset, example: null });
+    if (withoutExample.length <= MAX_TASK_PRESET_CHARS) return withoutExample;
+  }
+  throw new Error("task_preset_budget_exceeded");
+}
+
+export function appendModelPromptContext(
+  lines: string[],
+  backendId: BackendId | undefined,
+  generation: GenerationOptions | undefined,
+  deliverable: Deliverable,
+): void {
   if (!backendId || !generation) return;
+  // Serialize before pushing anything so a budget failure leaves the prompt untouched.
+  const taskGuidance = serializeTaskPreset(selectTaskPreset(backendId, generation, deliverable));
+
+  // Legacy envelope, unchanged: same keys, same values, same heuristic profile. Its `profile` is
+  // legacy metadata and is deliberately not an input to the task selector above.
   const claude = generation.provider === "commandcode" || backendId === "claude-code";
   const profile = claude
     ? /(?:^|[-/])opus(?:[-/]|$)/i.test(generation.model) ? "claude-opus" : "claude"
@@ -9,11 +137,7 @@ export function appendModelPromptContext(lines: string[], backendId?: BackendId,
   lines.push('<burnguard-model-guidance-v1>');
   lines.push(JSON.stringify({ schema_version: 1, profile, model: generation.model, provider: generation.provider, effort: generation.effort }));
   lines.push("</burnguard-model-guidance-v1>");
-  lines.push("## Execution focus");
-  lines.push(claude
-    ? "- Work through the artifact in this order: inspect the relevant markup and tokens, apply the requested change, then check the changed result against the delivery rules."
-    : "- Target the requested artifact and its acceptance conditions directly. Use the existing structure to choose the smallest complete edit, then verify the result.");
-  if (profile === "claude-opus") lines.push("- Settle layout decisions using the selected direction and existing artifact; explore alternatives only when the user requests alternatives.");
-  lines.push("- These execution hints do not override the user's requested content, visual direction, or the output-directory and attachment restrictions.");
+  lines.push(taskGuidance);
+  lines.push("- This task guidance does not override the user's requested content, visual direction, or the output-directory and attachment restrictions.");
   lines.push("");
 }
