@@ -7,3 +7,20 @@
  --tracking-display:-.045em; --radius:0px; --rule:1px solid currentColor;
 }
 body{font-family:var(--font-body)}h1,h2,h3{font-family:var(--font-display);font-weight:var(--weight);font-synthesis:none}h1[lang=ko],h2[lang=ko],h3[lang=ko]{line-height:1.12}
+
+
+/* Layout is part of the design-system contract. */
+:root {
+  --layout-max: 1280px;
+  --layout-measure: 52ch;
+  --layout-columns: 12;
+  --layout-gutter: 32px;
+  --layout-margin: clamp(20px, 4vw, 64px);
+  --layout-section-y: clamp(56px, 8vw, 112px);
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 3 / 4;
+  --layout-structure: split;
+  --family-ui-navigation-placement: top;
+  --family-ui-navigation-span: 0;
+}

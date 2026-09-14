@@ -180,3 +180,5 @@
   --family-commerce-gallery-layout: paired;
   --family-commerce-purchase-position: flow;
 }
+
+:root { --layout-structure: split; }

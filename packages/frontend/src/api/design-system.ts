@@ -10,6 +10,7 @@ import type {
   DesignSystemPreview,
 } from "@bg/shared";
 import { apiFetch } from "./client";
+import { parseDesignSystemLayout } from "@bg/shared";
 
 export function extractPinterestMood(body: import("@bg/shared").CreatePinterestMoodRequest): Promise<import("@bg/shared").CreatePinterestMoodResponse> {
   return apiFetch("/api/design-systems/pinterest", { method: "POST", body: JSON.stringify(body) });
@@ -56,7 +57,8 @@ export async function uploadDesignSystem(
 export async function getDesignSystemTokens(
   id: string,
 ): Promise<DesignSystemTokensResponse> {
-  return apiFetch<DesignSystemTokensResponse>(`/api/design-systems/${id}/tokens`);
+  const response = await apiFetch<DesignSystemTokensResponse>(`/api/design-systems/${id}/tokens`);
+  return response.layout === undefined ? response : { ...response, layout: parseDesignSystemLayout(response.layout) };
 }
 
 export async function upsertDesignSystemColor(

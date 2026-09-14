@@ -1,4 +1,5 @@
 import { parseGenerationStyle, type GenerationStyle } from "./generation-style";
+import { parseDesignSystemLayout, type DesignSystemLayout } from "./design-system-layout";
 import {
   UpgradeContractError,
   decodeContract,
@@ -30,7 +31,9 @@ export type DesignDirectionSlot = {
   readonly error: string | null;
 };
 
+export type DirectionDesignSystem = { readonly id: string; readonly name: string; readonly layout: DesignSystemLayout };
 export type DesignDirectionState = {
+  readonly design_system?: DirectionDesignSystem;
   readonly creative_preferences?: GenerationStyle;
   readonly schema_version: 1;
   readonly project_id: string;
@@ -48,7 +51,7 @@ export type DesignDirectionState = {
 
 export function parseDesignDirectionState(input: unknown): DesignDirectionState {
   const record = decodeContract(input);
-  exact(record, ["schema_version", "project_id", "session_id", "generation_id", "status", "content_outline", "directions", "selected_id", "selection_revision", "selection_history", "error", "updated_at"], ["creative_preferences"]);
+  exact(record, ["schema_version", "project_id", "session_id", "generation_id", "status", "content_outline", "directions", "selected_id", "selection_revision", "selection_history", "error", "updated_at"], ["creative_preferences", "design_system"]);
   if (requiredNumber(record, "schema_version") !== 1) invalid("schema_version");
   const contentOutline = stringArray(record, "content_outline");
   if (contentOutline.length === 0 || contentOutline.length > 12 || contentOutline.some((entry) => entry.trim().length === 0)) invalid("content_outline");
@@ -70,6 +73,7 @@ export function parseDesignDirectionState(input: unknown): DesignDirectionState 
   const status = parseStatus(requiredString(record, "status"));
   validateAggregateStatus(status, directions);
   return {
+    ...(record.design_system === undefined ? {} : { design_system: parseDirectionDesignSystem(record.design_system) }),
     ...(record.creative_preferences === undefined ? {} : { creative_preferences: parseGenerationStyle(record.creative_preferences) }),
     schema_version: 1,
     project_id: requiredString(record, "project_id"),
@@ -84,6 +88,15 @@ export function parseDesignDirectionState(input: unknown): DesignDirectionState 
     error: nullableString(record, "error"),
     updated_at: requiredNumber(record, "updated_at"),
   };
+}
+
+function parseDirectionDesignSystem(value: unknown): DirectionDesignSystem {
+  if (!isRecord(value)) invalid("design_system");
+  exact(value, ["id", "name", "layout"]);
+  const id = requiredString(value, "id");
+  const name = requiredString(value, "name");
+  if (id.length > 200 || name.length > 500) invalid("design_system");
+  return { id, name, layout: parseDesignSystemLayout(value.layout) };
 }
 
 function parseSlot(value: unknown, index: number): DesignDirectionSlot {

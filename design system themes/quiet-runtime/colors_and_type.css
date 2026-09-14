@@ -180,3 +180,5 @@
   --family-ui-navigation-span: 2;
   --family-ui-label-placement: above;
 }
+
+:root { --layout-structure: sidebar; }

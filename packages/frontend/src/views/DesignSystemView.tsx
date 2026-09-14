@@ -9,6 +9,7 @@ import {
   upsertDesignSystemColor,
 } from "@/api/design-system";
 import { catalogDetailRows, getDesignSystem, updateDesignSystemWithConflictReload } from "@/api/design-system-metadata";
+import { DesignSystemLayoutPanel } from "@/components/systems/DesignSystemLayoutPanel";
 import SystemPreviewGrid from "@/components/systems/SystemPreviewGrid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -356,9 +357,10 @@ function DesignSystemEditor({ id }: { id: string }) {
           ) : null}
 
           <nav aria-label={t("system.sections")} className="mt-6 flex flex-wrap gap-2 border-t border-border pt-5">
-            {[{ id: "system-previews", label: t("system.previews") }, { id: "system-style-editor", label: t("system.colorsFonts") }, { id: "system-source-details", label: t("system.sourceDetails") }].map(({ id: sectionId, label }) => <Button key={sectionId} size="sm" variant="outline" onClick={() => { const section = document.getElementById(sectionId); if (section instanceof HTMLDetailsElement) section.open = true; section?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>{label}</Button>)}
+            {[{ id: "system-layout", label: t("system.layout.title") }, { id: "system-previews", label: t("system.previews") }, { id: "system-style-editor", label: t("system.colorsFonts") }, { id: "system-source-details", label: t("system.sourceDetails") }].map(({ id: sectionId, label }) => <Button key={sectionId} size="sm" variant="outline" onClick={() => { const section = document.getElementById(sectionId); if (section instanceof HTMLDetailsElement) section.open = true; section?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>{label}</Button>)}
           </nav>
         </div>
+        <div id="system-layout" className="scroll-mt-6"><DesignSystemLayoutPanel layout={tokensQuery.data?.layout} loading={tokensQuery.isPending} failed={tokensQuery.isError} /></div>
         <section id="system-previews" className="mt-6 scroll-mt-6 rounded-2xl border border-border bg-card">
           <div className="border-b border-border px-5 py-5 sm:px-7"><h2 className="text-lg font-semibold">{t("system.previews")}</h2><p className="mt-1 text-sm text-muted-foreground">{t("system.previewHelp")}</p></div>
           <SystemPreviewGrid systemId={id} onEditColors={() => colorEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} previewRefreshKey={previewRefreshKey} />

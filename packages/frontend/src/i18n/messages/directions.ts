@@ -1,6 +1,9 @@
 import { defineMessages } from "../types";
 
 export const directionsMessages = defineMessages({
+  "directions.systemIntro": { ko: "선택한 디자인 시스템의 레이아웃을 유지하며 메시지·근거·행동 중 무엇을 강조할지 비교해요.", en: "Keep the selected system's layout and compare emphasis on message, evidence and action.", "zh-CN": "保持所选系统的布局，比较信息、依据和行动的强调方式。" },
+  "directions.systemChanged": {"ko": "저장된 시안은 현재 시스템의 레이아웃과 다릅니다. 현재 규칙으로 다시 생성해 주세요.", "en": "Saved previews use different or older system rules. Regenerate with the current layout.", "zh-CN": "已保存的预览使用不同或较旧的系统规则，请按当前布局重新生成。"},
+  "directions.regenerateSystem": {"ko": "현재 레이아웃으로 다시 생성", "en": "Regenerate with current layout", "zh-CN": "按当前布局重新生成"},
   "directions.loadingSaved": { ko: "저장된 디자인 방향을 불러오고 있어요.", en: "Loading saved design directions.", "zh-CN": "正在加载已保存的设计方向。" },
   "directions.introTitle": { ko: "프로젝트의 디자인 방향을 정해요", en: "Choose a design direction for your project", "zh-CN": "确定项目的设计方向" },
   "directions.introBody": { ko: "현재 콘텐츠를 바탕으로 서로 다른 구성과 스타일의 미리보기 3개를 만들어요.", en: "Create three previews with different layouts and styles based on your current content.", "zh-CN": "根据当前内容生成三种不同布局和风格的预览。" },

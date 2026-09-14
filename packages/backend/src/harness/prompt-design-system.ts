@@ -1,3 +1,4 @@
+import { readDesignSystemLayout } from "../services/design-system-layout";
 import type { buildSessionContext } from "../services/context";
 import { readOptional } from "./prompt-file-reader";
 
@@ -34,13 +35,10 @@ export async function appendDesignSystemContext(
   lines.push("");
 
   const tokensCss = (designSystem.tokens_css_path ? await readOptional(designSystem.tokens_css_path) : "") ?? "";
-  const layoutTokens = Object.fromEntries([...tokensCss.matchAll(/--((?:layout|family)-[a-z0-9-]+)\s*:\s*([^;{}]+);/gi)]
-    .slice(0, 64).map(match => [`--${match[1]}`, match[2]!.trim().slice(0, 160)]));
-  if (Object.keys(layoutTokens).length) {
-    lines.push("<selected_design_system_layout>");
-    lines.push(JSON.stringify({ schema_version: 1, tokens: layoutTokens }));
-    lines.push("</selected_design_system_layout>");
-    lines.push("- REQUIRED: read this system's Layout, Family tokens and Composition rules before editing. Apply its grid, measure, margins, gutter, section rhythm, hero proportions and family structure using the supplied CSS variables. Do not replace the selected layout with a generic arrangement. Adapt only where the output format or viewport requires it; preserve the system's hierarchy and verify the rendered layout before completion. User-requested overrides take precedence.");
+  const layout = await readDesignSystemLayout(designSystem);
+  if (Object.keys(layout.tokens).length || layout.sections.length) {
+    lines.push("<selected_design_system_layout>", JSON.stringify(layout), "</selected_design_system_layout>");
+    lines.push("- REQUIRED: apply this system's Layout, Composition, Responsive and Family rules. Preserve its grid, reading measure, margins, gutter, section rhythm, hero proportions and navigation. Define supplied variables missing from older local CSS in the authored output; preserve user-authored overrides. A generic arrangement with matching fonts/colors is incomplete. These system rules take precedence over old direction previews; a selected direction controls content emphasis within this structure. Adapt to the viewport/output format, preserve fixed artboards and verify the rendered result. Explicit user overrides take precedence.");
     lines.push("");
   }
 

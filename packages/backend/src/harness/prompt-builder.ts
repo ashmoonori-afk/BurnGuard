@@ -145,7 +145,7 @@ export async function buildPrompt(
     lines.push(`- title: ${selectedDirection.title.slice(0, 200)}`);
     lines.push(`- layout: ${selectedDirection.layout_key}`);
     lines.push(`- style facts: ${selectedDirection.style_facts.slice(0, 8).map((fact) => fact.slice(0, 200)).join("; ")}`);
-    lines.push("- Follow this selected direction only; do not merge details from unselected directions.");
+    lines.push("- Follow the selected content emphasis only; do not merge unselected directions. The current selected design system owns layout, palette and typography. Ignore conflicting style facts from older direction previews or a previously selected system.");
     lines.push("");
   }
 

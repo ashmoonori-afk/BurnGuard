@@ -5,7 +5,10 @@ import path from "node:path";
 import { isRecord, parseDesignDirectionState, type DesignDirectionState, type SequencedEventEnvelope } from "@bg/shared";
 import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
-import { projectsDir } from "../src/lib/paths";
+import { projectsDir, systemsDir } from "../src/lib/paths";
+import { createDesignSystemRecord } from "../src/db/seed";
+import { sampleLayoutFiles } from "../src/data/sample-layouts";
+import { readDesignSystemTokens } from "../src/services/design-system-extract";
 import { designDirectionRoutes, replaceDesignDirectionWorkflowForTest } from "../src/routes/design-directions";
 import { projectRoutes } from "../src/routes/project";
 import { sequencedBroker } from "../src/services/broker";
@@ -78,6 +81,35 @@ function nextTerminalState(): Promise<DesignDirectionState> {
 }
 
 describe("design direction routes", () => {
+  test("Given a project's selected system, then API, durable directions and both prompt modes share its layout", async () => {
+    const id = `${projectId}-system`;
+    const dir = path.join(systemsDir, id);
+    const layout = sampleLayoutFiles("dashboard");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "colors_and_type.css"), layout.css);
+    await writeFile(path.join(dir, "README.md"), layout.readme);
+    await createDesignSystemRecord({ id, name: "Dashboard", description: null, status: "published", sourceType: "manual", sourceUri: null, dirPath: dir, tokensCssPath: path.join(dir, "colors_and_type.css"), readmeMdPath: path.join(dir, "README.md"), skillMdPath: null, thumbnailPath: null });
+    getSqlite().prepare("UPDATE projects SET design_system_id=? WHERE id=?").run(id, projectId);
+    try {
+      const terminalEvent = nextTerminalState();
+      expect((await request(`/api/projects/${projectId}/design-directions/generate`, "POST")).status).toBe(202);
+      const ready = await terminalEvent;
+      const tokens = await readDesignSystemTokens(id);
+      expect(ready.design_system?.layout).toEqual(tokens.layout);
+      const context = await buildSessionContext(sessionId);
+      if (!context) throw new Error("Missing layout context");
+      for (const contextMode of ["full", "compact"] as const) {
+        const prompt = await buildPrompt(context, { type: "user.message", text: "Build it" }, { contextMode });
+        expect(JSON.parse(prompt.match(/<selected_design_system_layout>\n([^\n]+)\n<\/selected_design_system_layout>/)![1]!)).toEqual(tokens.layout);
+      }
+      const svg = await (await request(ready.directions[0]!.preview_url!)).text();
+      expect(svg).toContain('data-role="navigation"');
+    } finally {
+      getSqlite().prepare("UPDATE projects SET design_system_id=NULL WHERE id=?").run(projectId);
+      getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(id);
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
   test("Given style choices When generated, saved and reopened Then the next model prompt receives them and invalid or stale updates fail", async () => {
     const preferences = { schema_version: 1, image_style: "three_d", copy_tone: "concise", image_recipe: "collectible" } as const;
     const terminalEvent = nextTerminalState();
