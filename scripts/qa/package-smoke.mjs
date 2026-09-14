@@ -40,7 +40,7 @@ try {
   assert.equal(bootstrap.status, 200);
   const { data: authority } = await bootstrap.json();
   const headers = { Origin: base, "X-Burnguard-Capability": authority.capability };
-  const projects = await (await request("/api/projects", { headers })).json();
+  const projects = await (await request("/api/projects?tab=examples&limit=100", { headers })).json();
   assert.ok(projects.data.length > 0);
   const systems = await (await request("/api/design-systems", { headers })).json();
   assert.ok(systems.data.length > 0);
