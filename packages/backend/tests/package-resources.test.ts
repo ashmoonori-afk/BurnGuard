@@ -18,5 +18,9 @@ describe("portable package resources", () => {
     const paths = ["design system sample/tokens.json", "design system sample/uploads/private.pptx", "design system themes/light/tokens.json", "packages/backend/src/db/migrations/0001_initial.sql", "LICENSE", "../private.json", ".env", "packages/backend/src/config.ts"];
     expect(paths.filter(isRuntimeSource)).toEqual([paths[0], paths[2], paths[3], paths[4]]);
     expect(isRuntimeSource("design system sample\\uploads\\private.pptx")).toBe(false);
+    for (const file of ["liquid-glass.js", "liquid-glass.mjs", "liquid-glass.md", "manifest.json"]) {
+      expect(isRuntimeSource(`assets/liquid-glass/${file}`)).toBe(true);
+    }
+    expect(isRuntimeSource("assets/liquid-glass/../../private.json")).toBe(false);
   });
 });
