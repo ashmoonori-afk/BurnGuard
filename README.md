@@ -1,107 +1,90 @@
-![BurnGuard — local AI design workspace](doc/images/burnguard-cover.png)
-
 # BurnGuard
 
-**Describe an idea, refine it on canvas, and take the files with you.**
+**Make websites, slides and graphics with AI. Refine them on canvas. Keep the files.**
 
-BurnGuard is a local AI workspace for slide decks, websites and graphics, available as native Windows and macOS apps. Connect Claude Code or Codex CLI, describe what you want to make, and refine it beside a live preview. Projects, attachments and design systems stay on your computer; AI generation uses your chosen provider.
+BurnGuard is a local design workspace for Windows and macOS. Bring your Claude Code or Codex connection, choose a design system, and work beside a live preview. Your projects and reusable design systems live on your computer; AI requests use your chosen provider.
 
-[한국어](README.ko.md) · [简体中文](README.zh-CN.md) · [Download](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [Get started](#get-started) · [Documentation](doc/README.md)
+[Download the app](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [Documentation](doc/README.md) · [한국어](README.ko.md) · [简体中文](README.zh-CN.md)
 
-## What you can make
+![BurnGuard website workspace with a conversation panel, model controls and the SONNEL sample in the canvas](doc/images/readme-website-workspace.png)
 
-| Format | Workflow and output |
-|---|---|
-| Slide decks | Generate and edit slides, review copy and typography, present, or export HTML, PDF and PPTX. |
-| Websites | Create linked pages with shared design tokens and page-specific layouts. Export an HTML/CSS/JS/assets ZIP or publish to your Vercel account. |
-| Graphics | Set artboard dimensions, create a poster or multi-frame set, and export PNG, a PNG bundle or PDF. |
-| Product detail pages | Build a long marketplace page with section imagery; export section-aware PNG/JPEG slices. |
-| Platform pages | Export Cafe24 Smart Design or Imweb code-widget packages with installation guides. Installation is manual. |
-| Data charts | Create area, line, bar, composed, radar, pie, radial and Sankey charts. Edit the data, theme and colors; keep portable SVG and source data in HTML. |
-| 3D scenes | Add and adjust bundled Three.js objects, or ask AI to edit the scene. |
+*The actual editor displaying the bundled SONNEL website. Choose a model on the left, inspect the result on the right, and move between preview, editing and comments.*
+
+## Start with a design direction
+
+Choose a format, describe the project and select a registered design system during onboarding. Search the catalogue or refresh it to pick up newly registered systems. You can also start without one.
+
+The bundled catalogue includes **41 themes**, including **31 original themes** with distinct layout and composition rules. The selected system supplies typography, colors, spacing and layout requirements to generation, including compact prompts. Add your own systems from supported files, websites, repositories or Figma sources, then review and publish them for project use.
+
+![Project onboarding with design-system search, refresh and selection controls](doc/images/readme-design-system-picker.png)
+
+*Design-system selection in the real application. Systems without a preview remain selectable by name.*
+
+**37 font families** ship with license notices. Bundled fonts use one shared local store, and canvas loads are reused across projects within the app window. New projects reference that store; standalone exports include the font files they need. [Font catalogue](assets/fonts/README.md) · [Design-system format](doc/05-design-system-format.md)
+
+## One workspace, several kinds of output
+
+| Make | Work with | Take away |
+|---|---|---|
+| Websites | Linked pages, shared styles, images and reusable components | HTML/CSS/JS/assets ZIP, or publish to your Vercel account |
+| Slide decks | Slide previews, typography, presentation mode and comments | HTML, PDF or PPTX |
+| Graphics | Custom artboard sizes, posters and multi-frame compositions | PNG, PNG bundle or PDF |
+| Product detail pages | Long pages with section imagery | Section-aware PNG/JPEG slices |
+| Platform pages | Cafe24 Smart Design or Imweb code-widget output | Packages with manual installation guides |
+
+![BurnGuard slide editor showing the SONNEL deck with presentation and export controls](doc/images/readme-slide-workspace.png)
+
+*The same workspace handles a slide deck, with presentation and export controls above the canvas.*
+
+PPTX exports contain a high-resolution image of each slide and its text in speaker notes. Individual elements remain editable in BurnGuard's HTML workspace; they are not exported as editable PowerPoint objects.
+
+## Refine the result where you see it
+
+- **Edit on canvas.** Select elements, adjust size and rotation, change typography and spacing, or work with colors. Saved revisions and undo help you return to an earlier result.
+- **Leave a targeted comment.** Pin feedback to a location and send an AI edit request. Hover over the canvas and press **Ctrl+Space** on Windows/Linux or **Control+Option+Space** on macOS for a quick comment.
+- **Add source material.** Attach supported PDFs, slide decks, documents, images or text, or import an exported HTML project ZIP. Original attachments are retained separately from published website assets.
+- **Review before sharing.** Quality and UX panels identify issues and offer repair actions. Their findings are advisory; review the rendered result before exporting or publishing.
+
+### Images, charts and 3D
+
+Give images a role in the design: a product hero, campaign scene, explanatory illustration or background. BurnGuard includes **21 image treatments** and **38 purpose recipes** across 13 domains. Generation guidance calls for image production where the design needs it; the configured provider must support the requested generation. Graphic generation requires an authenticated Codex connection. [Image production guide](doc/image-production.md)
+
+<p align="center">
+  <img src="doc/images/readme-graphic-output.png" width="420" alt="Rendered ODDWARD sample poster with lime typography, a pink note and chrome sculpture artwork">
+</p>
+
+*A rendered ODDWARD sample graphic from the local QA evidence. The fictional sample's creative artwork is generated imagery; this is an output preview, not an application screenshot.*
+
+Add area, line, bar, composed, radar, pie, radial or Sankey charts from the **Chart** panel. Paste spreadsheet rows, edit colors and keep portable SVG with its source data in the HTML. The **3D** panel supports bundled Three.js objects and AI scene edits. [Chart guide](doc/charts.md)
+
+Explore **SONNEL**, **FOLIOVER**, **ODDWARD**, **VELUNE** and **HALIDE**. Each original collection includes a website, a six-slide deck, a graphic and a design system. [Sample collections](samples/original/README.md) · [Image recipe gallery](doc/images/image-recipes/README.md)
 
 ## Get started
 
-### Install the app
+1. **Install.** Download a Windows or macOS package from [GitHub Releases](https://github.com/ashmoonori-afk/BurnGuard/releases/latest). On Windows, use the installer or extract the complete portable ZIP and open `BurnGuard.exe`. On macOS, use the installer or move the portable app into Applications. Packages are currently unsigned.
+2. **Explore an example.** Open a bundled project and try the canvas before connecting an AI provider.
+3. **Connect your CLI.** Install and authenticate Claude Code or Codex CLI, then choose the connection and model in Settings. **LOW effort and vanilla mode are the defaults.** Vanilla mode excludes personal plugins and instructions while keeping BurnGuard's project context.
+4. **Create a project.** Pick a format and design system, add your brief and reference material, then generate and refine.
+5. **Export or share.** Download the project files, or use **Share → Prepare current output → Publish publicly** for a website on your Vercel account.
 
-Download the Windows or macOS package from [GitHub Releases](https://github.com/ashmoonori-afk/BurnGuard/releases/latest). On Windows, run the installer or extract the portable ZIP and open `BurnGuard.exe`. macOS packages are unsigned. Both desktop apps use the same local engine and support release-feed updates. See the [installation and update guide](doc/13-windows-updates-and-original-samples.md) for details, or [run from source](#run-from-source).
-
-### Connect AI when you're ready
-
-You can explore examples and edit the canvas before connecting AI. To generate content, install and authenticate Claude Code or Codex CLI, then choose your connection and model in Settings.
-
-| Capability | Requirement |
+| Requirement | Details |
 |---|---|
 | Windows desktop | Windows 10/11 x64, .NET Framework 4.8 and Microsoft Edge WebView2 Runtime |
-| AI generation | Installed and authenticated `claude` or `codex` CLI; your provider account |
-| Graphic generation | Authenticated Codex connection; generated creative images use Codex image generation |
-| Render previews and exports | Supported Chrome/Edge or Chromium installation; check Settings |
-| Read attachments | PDF, PPTX, DOCX, supported images and text (TXT/MD/CSV); document extraction requirements are shown in Settings |
+| AI generation | Installed, authenticated `claude` or `codex` CLI and the corresponding provider account |
+| Rendering and export | Supported Chrome/Edge or Chromium; availability is shown in Settings |
+| Updates | Windows and macOS release feeds; preserve your local profile when replacing a package |
 
-**LOW effort and vanilla mode are the defaults.** Vanilla mode excludes personal plugins and instructions while preserving BurnGuard's project context. CommandCode routing uses a key entered in Settings and still requires the Claude Code CLI.
+Vercel publishing requires your token and optional team ID. Hosting plans and visitor access follow your Vercel settings. Cafe24 and Imweb packages require manual installation; they have not been validated in a live customer shop.
 
-## Create and refine your first project
+## Your projects stay local
 
-1. **Start or import.** Choose a format or template and add source material, or import an exported HTML project ZIP. BurnGuard reads a bounded inventory of existing HTML/CSS and extracts supported documents for the next AI request. Attached originals are preserved under the project's `docs/attachments` and excluded from website publication. Scanned PDFs retain the original file; automatic OCR is not guaranteed.
-2. **Set direction.** Choose from 21 image treatments and 38 purpose recipes across 13 domains, or let each image's role determine its recipe. Set the copy tone, model and effort. [Image production guide](doc/image-production.md).
-3. **Generate.** Follow changes in the canvas while the request runs. Session drafts and source attachments remain available when you return.
-4. **Refine.** Select elements to resize or rotate them. Use Advanced for fonts and spacing, the palette for colors, or comments for a targeted AI edit. Pan and zoom with Ctrl/Cmd + wheel.
-5. **Review and export.** Quality and UX checks offer recommendations and an AI repair action. Their pass/fail status does not block export or publishing; file safety and request-authority checks still apply.
+BurnGuard keeps its database, projects, settings, systems and export cache in `~/.burnguard` (`%USERPROFILE%\.burnguard` on Windows). Keep this profile when upgrading the app.
 
-To leave a quick comment, hover over the canvas and press **Control+Option+Space on macOS** or **Control+Space on Windows/Linux**. The comment editor opens at your pointer. On macOS, Control+Space remains available for switching input sources.
+Generation sends selected context to your configured provider. Imports and publishing can also use the network. The local server binds to loopback, checks launch authority and isolates generated pages in a sandbox. [Security model](doc/01-architecture.md#7-security-and-safety-model)
 
-![BurnGuard editor with conversation and canvas](doc/images/workspace-editor.png)
+## Run from source
 
-## Export and share
-
-Choose the output that fits your project: HTML, PDF or PPTX for slides; an HTML/CSS/JS/assets ZIP for websites; or PNG and PDF for graphics. Product detail pages support section-aware PNG/JPEG slices.
-
-HTML and PDF preserve the rendered slide design. **PPTX contains a high-resolution image of each complete slide, with its text in speaker notes.** Edit individual elements in BurnGuard's HTML workspace, not as PowerPoint objects.
-
-Cafe24 Smart Design and Imweb code-widget packages include installation guides. Installation is manual, and the packages have not been verified in a live customer shop. External APIs and server features still need their own services.
-
-### Publish a website
-
-Choose **Share → Prepare current output**, enter your Vercel token and optional team ID, and select **Publish publicly**. Once the deployment is READY, copy the link. Quality findings remain advisory. Tokens stay in memory and are cleared when the dialog closes or deployment becomes ready. Hosting cost, plan eligibility and visitor access depend on your Vercel account settings; review those in Vercel before publishing.
-
-## Add charts, styles and reusable assets
-
-### Build a chart
-
-Open an HTML file and choose **Chart (차트)** beside the canvas zoom/3D controls. Pick one of the eight types, replace the clearly marked sample data with your own, and save. Paste tab-separated rows from a spreadsheet: the first row names the category and series; subsequent rows contain values. Sankey uses source, target and value columns.
-
-- Use the saved-chart selector to edit any chart in the file. Save uses the current file revision and supports multi-step undo. Use Ctrl/Cmd+Z in the workspace, or Save history to select a retained project revision. Text fields keep native undo; drawing keeps its own local history.
-- Choose a theme, source, units and colors; adjust dimensions under Advanced. Composed charts let each series use bars, lines or areas.
-- Ask AI to create a chart in its intended page/slide position, or save one and send a layout/data request from the chart panel.
-- Charts retain JSON data, inline SVG, native hover titles and an accessible data table. HTML displays them without chart scripts or a CDN. PNG/PDF capture the rendered SVG; they are not editable data-chart formats.
-
-The renderer is an original implementation with no added chart-library dependency. [Chart data contract, limits and examples](doc/charts.md).
-
-### Explore examples and design systems
-
-**21 original image examples cover every visual treatment and all 13 purpose domains.** Each pairs a style with an image's job; these are generated creative examples, not application screenshots. [Full gallery and exact prompts](doc/images/image-recipes/README.md).
-
-| Brand · identity | Watercolor · learning | Print · campaign |
-|---|---|---|
-| ![Green and citrus stationery identity](doc/images/image-recipes/01-brand.png) | ![Watercolor pea-pod study](doc/images/image-recipes/08-watercolor.png) | ![Vermilion kite print campaign](doc/images/image-recipes/11-print.png) |
-| Clay · collectible | Flash · sports | Pixel art · sequence |
-| ![Handcrafted clay teapot creature](doc/images/image-recipes/13-clay.png) | ![Direct-flash badminton photograph](doc/images/image-recipes/17-flash.png) | ![Three-scene pixel gardening story](doc/images/image-recipes/20-pixel.png) |
-
-Start with **SONNEL** (tactile sound), **FOLIOVER** (material journal), **ODDWARD** (experimental studio) or **VELUNE** (sculptural lighting). Each original collection includes a website, six-slide deck, graphic and design system. [Explore the collections](samples/original/README.md).
-
-37 font families, 36 from Google Fonts plus Pretendard, are bundled locally with their license notices. The style panel can also load installed fonts when requested; local font files are not automatically embedded in exports. [Font catalog](assets/fonts/README.md).
-
-Import supported files, URLs or Figma sources into Design Systems. Pinterest mood import accepts up to 12 public pin URLs and distinguishes sampled colors from inferred mood and fallback typography. Review a system before publishing it for project use.
-
-## Local data and security
-
-The default profile is `~/.burnguard` (`%USERPROFILE%\.burnguard` on Windows), containing the SQLite database, projects, systems, settings and export cache. Do not delete it when replacing an app package.
-
-Local storage does not mean offline generation: selected context goes to the provider configured in your CLI. Imports and publishing can also use the network. The server binds to loopback, verifies launch capability and Host/Origin, and isolates generated pages in a sandbox. Do not expose the local server to the internet. [Security model](doc/01-architecture.md#7-security-and-safety-model).
-
-## Development
-
-### Run from source
+Use **Bun 1.3.14**, as pinned in CI.
 
 ```sh
 git clone https://github.com/ashmoonori-afk/BurnGuard.git
@@ -110,36 +93,33 @@ bun install --frozen-lockfile
 bun run scripts/dev-launcher.ts
 ```
 
-Use Bun 1.3.14, as pinned in CI. The launcher opens the frontend at `http://127.0.0.1:5173`; the backend binds to `127.0.0.1:14070`. Stop it with Ctrl+C. If a port is occupied, identify the process before starting another instance.
-
-On Windows, `Start-BurnGuard.bat` opens the native app and builds it on first launch; Bun and the .NET 8 SDK are needed for that build. After source changes, use `Start-BurnGuard.bat --rebuild`. See [Development and native builds](doc/CONTRIBUTING.md).
-
-### Project structure
-
-| Package | Responsibility |
-|---|---|
-| `packages/frontend` | React 18/Vite UI, conversation, canvas and settings |
-| `packages/backend` | Bun/Hono, SQLite, generation, durable files and exports |
-| `packages/shared` | Versioned contracts, validation and portable chart rendering |
-| `packages/desktop-windows` | WinForms/WebView2 shell and updates |
-| `packages/desktop-mac` | AppKit/WKWebView shell and updates |
-
-### Validate changes
+The launcher opens the frontend at `http://127.0.0.1:5173`; the backend uses `127.0.0.1:14070`. Stop it with Ctrl+C. On Windows, `Start-BurnGuard.bat` launches the native app and builds it when needed; that build requires Bun and the .NET 8 SDK. Use `--rebuild` after source changes.
 
 ```sh
 bun run typecheck
 bun run lint
 bun run build:frontend
 bun test
-# Focused chart validation and isolated browser checks:
-bun test packages/backend/tests/charts.test.ts
-node scripts/qa/e2e-smoke.mjs --only creation-canvas-charts
 ```
 
-Run tests from the repository root so the preload creates an isolated temporary profile. Browser QA needs Node.js 22.13+ and Chrome/Edge; on Windows, pass `--bun <absolute-path-to-bun.exe>` if needed. It uses an owned fixture profile and does not submit real provider requests. Coverage (`bun run test:coverage`) is a separate gate from passing tests. Before each release publication, review the final source and packages with Daybreak and resolve blocking security findings.
+Run tests from the repository root so the preload provides an isolated temporary profile. Browser QA requires Node.js and Chrome/Edge; Windows runners may need an absolute Bun executable path. [Contributing and native builds](doc/CONTRIBUTING.md)
+
+<details>
+<summary>About the screenshots</summary>
+
+The interface captures were selected from the repository's local `.omo/evidence` QA records and copied without retouching. They show seeded examples and test input, not private customer projects or proof of a live provider run. Older captures may differ slightly from the current toolbar.
+
+| README image | Original evidence capture |
+|---|---|
+| Website workspace | `fonts-2026-09-09/app-created-prototype.png` |
+| Design-system picker | `design-system-onboarding-20260914/onboarding-desktop.png` |
+| Slide workspace | `updates-samples-2026-09-09/app-created-slide_deck.png` |
+| Graphic output | `fonts-2026-09-09/oddward-graphic-quality.png` |
+
+</details>
 
 ## Documentation and license
 
-[Documentation index](doc/README.md) · [Architecture](doc/01-architecture.md) · [Design systems](doc/05-design-system-format.md) · [Generation guidance](doc/design-craft.md) · [Brand identity](doc/brand-identity.md)
+[Documentation index](doc/README.md) · [Architecture](doc/01-architecture.md) · [Design guidance](doc/design-craft.md) · [Installation and updates](doc/13-windows-updates-and-original-samples.md)
 
-BurnGuard is licensed under **Apache-2.0**. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for existing third-party notices, and [image notes](doc/images/README.md) for artwork and screenshot provenance.
+BurnGuard is licensed under **Apache-2.0**. See [LICENSE](LICENSE), [NOTICE](NOTICE) and the [image provenance notes](doc/images/README.md).
