@@ -180,6 +180,8 @@
   --layout-nav-h: 60px;
 }
 
+:root { --layout-structure: editorial; }
+
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg-1);
@@ -233,17 +235,25 @@ dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp
 dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
   letter-spacing:.06em;text-transform:uppercase}
 dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
-@media (max-width:820px){
+@media (max-width:800px){
   .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
   .nav ul{display:none}
 }
 </style></head>
-<body data-archetype="article">
+<body data-archetype="article" data-layout="editorial">
 
 <style>
 .masthead{display:flex;justify-content:center;align-items:center;
   min-height:var(--layout-nav-h,64px);border-bottom:var(--layout-rule,1px) solid var(--border)}
 .masthead .mark{font-family:var(--font-display);font-size:var(--fs-24);letter-spacing:var(--ls-tight)}
+.article-shell{display:grid;grid-template-columns:1fr;gap:var(--layout-gutter,24px)}
+.article-shell main{min-width:0}
+.contents{padding-block:var(--sp-8);border-right:var(--layout-rule,1px) solid var(--border);font-family:var(--font-mono);font-size:var(--fs-14)}
+.contents a{display:block;padding:var(--sp-3) var(--sp-2);overflow-wrap:anywhere}
+.article-hero{display:grid;grid-template-columns:1fr;gap:var(--layout-gutter,24px);align-items:center}
+.article-hero .hero-media{}
+.article-hero .headline-block{}
+
 .hero-media{aspect-ratio:var(--layout-hero,16 / 9);margin-block:var(--sp-8)}
 .hero-media .fig{object-fit:cover}
 .headline{max-width:var(--layout-measure,62ch)}
@@ -257,22 +267,31 @@ dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--
 .pull{font-family:var(--font-display);font-size:var(--fs-32);line-height:var(--lh-tight);
   color:var(--fg-1);margin-block:var(--sp-8);padding-left:var(--sp-5);
   border-left:3px solid var(--primary-blue);max-width:var(--layout-measure,62ch)}
-.split{display:grid;grid-template-columns:1 1fr;gap:var(--layout-gutter,24px);align-items:start}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--layout-gutter,24px);align-items:start}
 .caption{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);margin-top:var(--sp-2)}
 .more{display:grid;gap:0;margin-top:var(--sp-10)}
 .more a{display:flex;justify-content:space-between;gap:var(--sp-4);text-decoration:none;
   padding-block:var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
   font-family:var(--font-serif);font-size:var(--fs-18);color:var(--fg-1)}
 .more a span{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4)}
-@media (max-width:820px){.split{grid-template-columns:1fr}}
+@media (max-width:800px){
+  .split,.article-shell,.article-hero{grid-template-columns:1fr}
+  .article-hero .hero-media,.article-hero .headline-block{grid-column:auto;grid-row:auto}
+  .article-hero .headline-block{order:-1}.article-hero .hero-media{margin-top:var(--sp-4)}
+  .contents{display:flex;flex-wrap:wrap;border-right:0;border-bottom:var(--layout-rule,1px) solid var(--border);padding-block:var(--sp-2)}}
 </style>
 <header class="wrap masthead"><span class="mark">Dune Editorial</span></header>
-<main class="wrap">
+<div class="wrap article-shell">
+
+<main>
+  <section class="article-hero" id="article-intro">
   <div class="media hero-media"><img class="fig" src="./media/dune-editorial.webp" alt="" loading="lazy" decoding="async"></div>
+  <div class="headline-block">
   <p class="eyebrow">에세이 · 작업 방식</p>
   <h1 class="display headline" style="margin-top:var(--sp-3)">되돌릴 수 있는 만큼만<br>과감해질 수 있다</h1>
+  </div></section>
   <div class="byline"><span>글 · 편집부</span><span>2026년 3월</span><span>읽는 데 7분</span></div>
-  <div class="prose"><p>작업의 속도를 결정하는 것은 도구가 아니라 되돌릴 수 있는 범위다. 한 번에 되돌릴 수 있는 단위가 작을수록 더 과감하게 시도할 수 있고, 시도가 많아질수록 결과는 빨리 수렴한다.</p><p>그래서 좋은 작업 환경은 빠른 환경이 아니라 취소가 싼 환경이다. 저장과 게시를 분리하고, 게시에는 영수증을 남기고, 영수증이 있으면 언제든 이전 상태로 돌아갈 수 있게 한다.</p><p>이 원칙은 화면에도 그대로 적용된다. 한 화면에서 수행할 수 있는 결정의 수를 줄이면 각 결정의 되돌림 비용이 내려가고, 사용자는 화면을 읽는 대신 사용하게 된다.</p></div>
+  <div class="prose" id="article-details"><p>작업의 속도를 결정하는 것은 도구가 아니라 되돌릴 수 있는 범위다. 한 번에 되돌릴 수 있는 단위가 작을수록 더 과감하게 시도할 수 있고, 시도가 많아질수록 결과는 빨리 수렴한다.</p><p>그래서 좋은 작업 환경은 빠른 환경이 아니라 취소가 싼 환경이다. 저장과 게시를 분리하고, 게시에는 영수증을 남기고, 영수증이 있으면 언제든 이전 상태로 돌아갈 수 있게 한다.</p><p>이 원칙은 화면에도 그대로 적용된다. 한 화면에서 수행할 수 있는 결정의 수를 줄이면 각 결정의 되돌림 비용이 내려가고, 사용자는 화면을 읽는 대신 사용하게 된다.</p></div>
   <blockquote class="pull">취소가 싼 환경에서만 사람은 과감해진다.</blockquote>
   <section class="split section" style="padding-bottom:0">
     <figure style="margin:0">
@@ -286,9 +305,9 @@ dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--
       <p>두 사건을 분리하면 편집 중의 불완전한 상태가 바깥으로 새지 않고, 게시 시점마다 검증할 수 있는 지점이 생긴다.</p>
     </div>
   </section>
-  <nav class="more">
+  <nav class="more" id="article-related">
     <a href="#none">여백은 장식이 아니라 구조다<span>03</span></a><a href="#none">측정되지 않는 개선은 취향이다<span>02</span></a><a href="#none">작은 단위로 되돌리기<span>01</span></a>
   </nav>
-</main>
+</main></div>
 <footer class="wrap foot"><span>Dune Editorial Theme</span><span>미리보기 · 토큰 기반 생성</span></footer>
 </body></html>

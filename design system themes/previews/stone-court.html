@@ -185,6 +185,8 @@
   --family-spatial-image-bleed: 0%;
 }
 
+:root { --layout-structure: centered; }
+
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg-1);
@@ -243,10 +245,10 @@ dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--
   .nav ul{display:none}
 }
 </style></head>
-<body data-archetype="place">
+<body data-archetype="place" data-layout="centered">
 
 <style>
-.hero{width:calc(100% - ((100% - min(100%, var(--layout-max,1360px))) * (1 - 0%)));
+.hero{width:calc(100% - ((100% - min(100% - 2 * var(--layout-margin), var(--layout-max,1360px) - 2 * var(--layout-margin))) * 1));
   margin-inline:auto;margin-top:var(--sp-6)}
 .hero .media{aspect-ratio:var(--layout-hero,16 / 9);border-radius:var(--r-8)}
 .hero .fig{object-fit:contain}
@@ -261,10 +263,10 @@ dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--
 .practical div p{margin:0 0 var(--sp-2);font-size:var(--fs-14);color:var(--fg-2);
   display:flex;justify-content:space-between;gap:var(--sp-3)}
 .practical div p span:last-child{color:var(--fg-3);font-family:var(--font-mono);font-size:var(--fs-12)}
-.pair{display:grid;grid-template-columns:1.0 1fr;gap:var(--layout-gutter,24px);
+.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--layout-gutter,24px);
   align-items:center;margin-top:var(--layout-section-y,96px)}
 .pair .media{aspect-ratio:4 / 3}
-@media (max-width:800px){.practical,.pair{grid-template-columns:1fr}}
+@media (max-width:820px){.practical,.pair{grid-template-columns:1fr}}
 </style>
 <header class="wrap nav">
   <span class="mark">Stone Court</span>
