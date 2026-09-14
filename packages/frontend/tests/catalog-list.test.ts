@@ -15,7 +15,7 @@ test("browser catalogs omit trash for every publication status", async () => {
     if (url.pathname === "/api/bootstrap") return Response.json({ data: { capability: "fixture-capability" } });
     const lifecycle = url.searchParams.get("lifecycle");
     return Response.json({
-      data: systems.filter((system) => system.status === url.searchParams.get("status")
+      data: systems.filter((system) => (!url.searchParams.has("status") || system.status === url.searchParams.get("status"))
         && (lifecycle === null || system.lifecycle === lifecycle)),
     });
   });
@@ -23,4 +23,5 @@ test("browser catalogs omit trash for every publication status", async () => {
   for (const status of ["draft", "review", "published"] as const) {
     expect((await listDesignSystems(status)).map((system) => system.id)).toEqual([`${status}-active`]);
   }
+  expect((await listDesignSystems("all")).map((system) => system.id)).toEqual(["draft-active", "review-active", "published-active"]);
 });

@@ -20,6 +20,7 @@ import ProjectBriefFields, {
 } from "@/components/home/ProjectBriefFields";
 import { GraphicCanvasFields } from "@/components/home/GraphicCanvasFields";
 import { GraphicSetFields } from "@/components/home/GraphicSetFields";
+import DesignSystemPicker from "./DesignSystemPicker";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { readCreationDraft, writeCreationDraft } from "@/lib/creation-draft";
 import {
@@ -73,6 +74,10 @@ export default function NewProjectPanel({
   const [form, setForm] = useState<BriefForm>(() => readCreationDraft(type));
   const draftTypeRef = useRef(type);
   const [pickedSystemId, setPickedSystemId] = useState<string | null>(null);
+  const [choosingSystem, setChoosingSystem] = useState(false);
+  const [withoutSystem, setWithoutSystem] = useState(false);
+  const returnFocusRef = useRef<HTMLButtonElement>(null);
+  const wasChoosingRef = useRef(false);
   const [items, setItems] = useState<readonly IntakeItem[]>([]);
   const [error, setError] = useState<Error | null>(null);
 
@@ -115,10 +120,23 @@ export default function NewProjectPanel({
   });
 
   const built = buildCreateProjectRequest(
-    { ...form, contentSource: items.some((item) => item.status === "ready") ? "attached" : form.contentSource, type: effectiveType, backendId: effectiveBackend, designSystemId, ...(isOriginal && isGraphic ? { graphicWidth: 1080, graphicHeight: 1350 } : {}) },
+    { ...form, contentSource: items.some((item) => item.status === "ready") ? "attached" : form.contentSource, type: effectiveType, backendId: effectiveBackend, designSystemId: pickedSystemId, ...(isOriginal && isGraphic ? { graphicWidth: 1080, graphicHeight: 1350 } : {}) },
     designSystems,
   );
   const disabled = createMutation.isPending;
+  const needsSystemChoice = !designSystemId && (!withoutSystem || isTemplate || pickedSystemId !== null);
+  const canContinue = built.ok || (!built.ok && (built.problem === "design_system_required" || built.problem === "design_system_not_selectable"));
+
+  useEffect(() => {
+    setChoosingSystem(false);
+    setPickedSystemId(null);
+    setWithoutSystem(false);
+  }, [type]);
+
+  useEffect(() => {
+    if (wasChoosingRef.current && !choosingSystem) returnFocusRef.current?.focus();
+    wasChoosingRef.current = choosingSystem;
+  }, [choosingSystem]);
 
   useEffect(() => {
     onPendingChange?.(disabled);
@@ -140,10 +158,18 @@ export default function NewProjectPanel({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  if (choosingSystem) return <DesignSystemPicker
+    systems={selectable} selectedId={designSystemId} loading={systemsLoading} error={systemsError} allowNone={!isTemplate}
+    onSelect={setPickedSystemId} onRefresh={onRetrySystems} onBack={() => setChoosingSystem(false)}
+    onApply={(id) => { setPickedSystemId(id); setWithoutSystem(id === null); setChoosingSystem(false); }}
+  />;
+
   return (
     <form className="p-6" onSubmit={(event) => {
       event.preventDefault();
-      if (!built.ok || disabled || (isGraphic && !graphicReady)) return;
+      if (!canContinue || disabled || (isGraphic && !graphicReady)) return;
+      if (needsSystemChoice) { setChoosingSystem(true); return; }
+      if (!built.ok || (designSystemId && (systemsLoading || systemsError))) return;
       setError(null);
       createMutation.mutate(built.request);
     }}>
@@ -179,7 +205,7 @@ export default function NewProjectPanel({
               systemsError !== null ||
               selectable.length === 0
             }
-            onChange={(e) => setPickedSystemId(e.target.value || null)}
+            onChange={(e) => { setPickedSystemId(e.target.value || null); setWithoutSystem(false); }}
             className={PROJECT_CONTROL_CLASS}
           >
             <option value="">
@@ -193,7 +219,7 @@ export default function NewProjectPanel({
                       : t("home.creation.noSystems")
                     : isTemplate
                       ? t("home.creation.selectTemplate")
-                      : t("home.creation.noSystem")}
+                      : t(withoutSystem ? "home.creation.noSystem" : "home.picker.later")}
             </option>
             {systemsLoading || systemsError
               ? null
@@ -203,6 +229,7 @@ export default function NewProjectPanel({
                   </option>
                 ))}
           </select>
+          <Button ref={returnFocusRef} type="button" variant="outline" className="w-full" disabled={disabled} onClick={() => setChoosingSystem(true)}>{t("home.picker.browse")}</Button>
           {systemsError ? (
             <button
               type="button"
@@ -310,9 +337,9 @@ export default function NewProjectPanel({
         className="mt-6 h-11 w-full gap-2 rounded-xl"
         type="submit"
         variant="cta"
-        disabled={!built.ok || disabled || (isGraphic && !graphicReady)}
+        disabled={!canContinue || disabled || (isGraphic && !graphicReady) || (!!designSystemId && (systemsLoading || systemsError !== null))}
       >
-        {createMutation.isPending ? t("home.creation.creating") : t("home.creation.create")}
+        {createMutation.isPending ? t("home.creation.creating") : t(needsSystemChoice ? "home.picker.next" : "home.creation.create")}
         <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Button>
 

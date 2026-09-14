@@ -197,7 +197,9 @@ function buildGraphicSet(draft: ProjectDraft): GraphicSetV1 | null {
 }
 
 export function isOriginalSampleSystem(id: string | null): boolean {
-  return /^sample-system-original-(sonnel|foliover|oddward|velune)$/.test(id ?? "");
+  // Original sample IDs share this namespace and the same three output formats.
+  // New samples registered by the backend must not need another UI brand allowlist.
+  return /^sample-system-original-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id ?? "");
 }
 
 /** Published original samples support each of their three actual formats. */

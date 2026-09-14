@@ -28,6 +28,90 @@ export async function runUiRedesignFixtures(page, base, runScenario, { home, sho
   };
   await page.route(localApi, guard);
   try {
+    await scenario("redesign-design-system-onboarding", async () => {
+      const loaded = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/design-systems", { timeout: 90_000 });
+      await page.goto(`${base}/?create=prototype`, { waitUntil: "domcontentloaded" });
+      const dialog = page.getByRole("dialog", { name: "새 프로젝트 만들기" });
+      const button = (name) => dialog.getByRole("button", { name, exact: true });
+      await dialog.locator("#project-name").fill("Theme onboarding fixture");
+      await dialog.locator("#brief-audience").fill("Project reviewers");
+      await dialog.locator("#brief-objective").fill("Choose a registered sample and keep this brief.");
+      await dialog.locator('#design-system option[value^="builtin-theme-"]').first().waitFor({ state: "attached", timeout: 90_000 });
+      const catalog = (await (await loaded).json()).data.filter((system) => system.status === "published");
+      const sample = catalog.find((system) => system.id.startsWith("builtin-theme-"));
+      assert.ok(sample, "registered theme must be available");
+      let state = "normal", projectPosts = 0;
+      const countPost = (request) => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/projects") projectPosts++; };
+      page.on("request", countPost);
+      const catalogPattern = `${base}/api/design-systems?*`;
+      const catalogRoute = async (route) => {
+        const url = new URL(route.request().url());
+        if (state === "error") return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "network_error", message: "Fixture unavailable" } }) });
+        let systems = !url.searchParams.has("status") || url.searchParams.get("status") === "published" ? catalog : [];
+        if (state === "added") systems = [...systems, { ...sample, id: "builtin-theme-next-session", name: "Next Session Theme", thumbnail_path: null }];
+        if (state === "removed") systems = systems.filter((system) => system.id !== sample.id);
+        if (state === "empty") systems = [];
+        return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: systems }) });
+      };
+      await page.route(catalogPattern, catalogRoute);
+      try {
+        await button("디자인 시스템 고르기").click();
+        const search = dialog.getByRole("searchbox", { name: "디자인 시스템 이름 검색" });
+        await search.waitFor();
+        assert.equal(await search.evaluate((input) => input === document.activeElement), true);
+        assert.equal(projectPosts, 0, "opening onboarding must not create a project");
+        await search.fill(sample.name);
+        await dialog.getByRole("radio", { name: sample.name, exact: true }).check();
+        await button("선택 적용").click();
+        assert.equal(await dialog.locator("#design-system").inputValue(), sample.id);
+        assert.equal(await dialog.locator("#project-name").inputValue(), "Theme onboarding fixture");
+        assert.equal(await dialog.locator("#brief-objective").inputValue(), "Choose a registered sample and keep this brief.");
+        assert.equal(await button("미리보기로 디자인 시스템 고르기").evaluate((element) => element === document.activeElement), true);
+        await button("미리보기로 디자인 시스템 고르기").click();
+        state = "added"; await button("새로고침").click();
+        await dialog.getByRole("radio", { name: "Next Session Theme", exact: true }).waitFor();
+        assert.equal(await dialog.getByRole("radio", { name: sample.name, exact: true }).isChecked(), true);
+        await page.setViewportSize({ width: 390, height: 740 });
+        await search.fill("Next Session");
+        assert.equal(await dialog.getByRole("radio").count(), 1);
+        await button("선택 적용").scrollIntoViewIfNeeded();
+        assert.equal(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1), true);
+        await shot(page, "onboarding-mobile");
+        await search.fill("no such theme"); await dialog.getByText("검색한 이름의 시스템이 없어요. 다른 이름으로 검색해 보세요.", { exact: true }).waitFor();
+        await search.fill("");
+        state = "removed"; await button("새로고침").click();
+        await dialog.getByRole("radio", { name: sample.name, exact: true }).waitFor({ state: "detached" });
+        assert.equal(await button("선택 적용").isDisabled(), true, "removed choice must not fall back");
+        state = "error"; await button("새로고침").click();
+        await dialog.getByRole("alert").waitFor();
+        assert.equal(await button("선택 적용").isDisabled(), true);
+        state = "empty"; await button("새로고침").click();
+        await dialog.getByText("아직 선택할 시스템이 없어요. 홈의 디자인 시스템에서 추가하고 게시한 뒤 새로고침해 주세요. 입력한 프로젝트 내용은 유지돼요.", { exact: true }).waitFor();
+        await button("디자인 시스템 없이 시작").click();
+        assert.equal(await dialog.locator("#design-system").inputValue(), "");
+        assert.equal(await button("프로젝트 만들기").isEnabled(), true);
+        assert.equal(projectPosts, 0, "choosing or skipping must wait for final creation");
+        await button("미리보기로 디자인 시스템 고르기").click();
+        state = "normal"; await button("새로고침").click();
+        await dialog.getByRole("radio", { name: sample.name, exact: true }).check();
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await search.fill(sample.name);
+        await shot(page, "onboarding-desktop");
+        await button("선택 적용").click();
+        const created = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/projects");
+        await button("프로젝트 만들기").click();
+        const response = await created;
+        assert.equal(response.status(), 201);
+        assert.equal(response.request().postDataJSON().design_system_id, sample.id);
+        assert.equal(projectPosts, 1);
+        const project = (await response.json()).data;
+        await page.waitForURL(`**/projects/${project.id}`);
+        assert.equal(blockedPosts.length, 0, "onboarding must not start a provider turn");
+      } finally {
+        page.off("request", countPost);
+        await page.unroute(catalogPattern, catalogRoute);
+      }
+    });
     await scenario("redesign-home-url-and-keyboard", async () => {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(`${base}/?view=mine`, { waitUntil: "domcontentloaded" });
@@ -100,6 +184,8 @@ export async function runUiRedesignFixtures(page, base, runScenario, { home, sho
       await waitForVisibleThumbnails(page);
       await shot(page, "redesign-create");
       await page.setViewportSize({ width: 390, height: 740 });
+      await dialog.getByRole("button", { name: "디자인 시스템 고르기", exact: true }).click();
+      await dialog.getByRole("button", { name: "디자인 시스템 없이 시작", exact: true }).click();
       const create = dialog.getByRole("button", { name: "프로젝트 만들기", exact: true });
       await create.scrollIntoViewIfNeeded();
       const buttonBounds = await create.boundingBox();
@@ -183,7 +269,7 @@ export async function runUiRedesignFixtures(page, base, runScenario, { home, sho
       await dialog.getByLabel("프로젝트 이름", { exact: true }).waitFor();
       assert.equal(await dialog.getByRole("button", { name: "그래픽", exact: true }).isDisabled(), true);
       await dialog.getByText("그래픽을 만들려면 설정에서 Codex를 연결하고 로그인해 주세요.", { exact: true }).waitFor();
-      assert.equal(await dialog.getByRole("button", { name: "프로젝트 만들기", exact: true }).isDisabled(), true);
+      assert.equal(await dialog.locator("form button[type=submit]").isDisabled(), true);
       const detection = await page.request.get(`${base}/api/backends/detect`);
       assert.equal(detection.status(), 200);
       const { data } = await detection.json();

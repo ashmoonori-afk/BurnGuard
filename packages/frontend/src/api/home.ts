@@ -7,7 +7,7 @@ import type {
   SettingsPatch,
   SettingsSummary,
 } from "@bg/shared";
-import { apiFetch } from "./client";
+import { ApiError, apiFetch } from "./client";
 
 export async function listProjects(
   tab: "recent" | "mine" | "examples" = "recent",
@@ -16,9 +16,17 @@ export async function listProjects(
 }
 
 export async function listDesignSystems(
-  status: "published" | "review" | "draft" = "published",
+  status: "published" | "review" | "draft" | "all" = "published",
 ): Promise<DesignSystemSummary[]> {
-  return apiFetch<DesignSystemSummary[]>(`/api/design-systems?status=${status}&lifecycle=active`);
+  const systems = new Map<string, DesignSystemSummary>();
+  // The catalog defaults to 50 items. Follow pages so imported systems stay selectable.
+  for (let offset = 0; offset <= 10_000; offset += 100) {
+    const filter = status === "all" ? "" : `status=${status}&`;
+    const page = await apiFetch<DesignSystemSummary[]>(`/api/design-systems?${filter}lifecycle=active&limit=100&offset=${offset}`);
+    for (const system of page) systems.set(system.id, system);
+    if (page.length < 100) return [...systems.values()];
+  }
+  throw new ApiError("network_error", "Design system catalog exceeds the supported page range.", 502);
 }
 
 export async function createProject(
