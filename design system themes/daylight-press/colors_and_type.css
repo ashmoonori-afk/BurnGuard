@@ -7,41 +7,41 @@
   color-scheme: light;
 
   /* Neutrals */
-  --gray-100: #FDFBF7;
-  --gray-90: #F0EEEA;
-  --gray-80: #DEDCD8;
-  --gray-70: #C7C5C2;
-  --gray-60: #AEADAA;
-  --gray-50: #969492;
-  --gray-40: #7A7A78;
-  --gray-30: #605F5E;
-  --gray-20: #444443;
-  --gray-10: #2A2929;
+  --gray-100: #FCFAF4;
+  --gray-90: #EEEDE7;
+  --gray-80: #DCDBD5;
+  --gray-70: #C6C4BF;
+  --gray-60: #ADACA7;
+  --gray-50: #94938F;
+  --gray-40: #7A7874;
+  --gray-30: #5E5D5A;
+  --gray-20: #444240;
+  --gray-10: #282725;
 
   /* Brand and accents */
   --primary-blue: #FFCF4A;
   --action-blue: #FFCF4A;
   --red-60: #C4483F;
   --red-50: #CE6860;
-  --red-10: #F3DBD6;
+  --red-10: #F2DAD3;
   --orange-50: #C4763C;
-  --orange-10: #F3E3D5;
+  --orange-10: #F2E2D3;
   --yellow-30: #E0A93B;
-  --yellow-10: #F7E9CE;
+  --yellow-10: #F6E8CB;
   --green-60: #598E56;
-  --green-50: #739F70;
-  --green-10: #DFE7DA;
+  --green-50: #739F6F;
+  --green-10: #DFE7D8;
   --teal-50: #D8CFC4;
-  --teal-10: #F6F3EE;
+  --teal-10: #F6F2EB;
   --aqua-60: #5D8FB8;
-  --aqua-10: #E0E8EC;
-  --blue-90: #5C4E29;
-  --blue-80: #897232;
-  --blue-70: #BB993C;
+  --aqua-10: #DFE7E9;
+  --blue-90: #5B4D26;
+  --blue-80: #887130;
+  --blue-70: #BB993B;
   --blue-60: #FFCF4A;
-  --blue-50: #FFDA74;
-  --blue-30: #FEE8AB;
-  --blue-10: #FDF4DB;
+  --blue-50: #FED973;
+  --blue-30: #FDE7A9;
+  --blue-10: #FCF3D9;
   --ultramarine-60: #AF9044;
   --purple-60: #6C8F6A;
   --pink-60: #917158;
@@ -54,19 +54,19 @@
   --info: #5D8FB8;
 
   /* Surface and text */
-  --bg: #FDFBF7;
-  --bg-subtle: #F4F2EE;
-  --bg-muted: #EBE9E5;
-  --surface: #F8F7F3;
-  --surface-inverse: #1C1C1C;
-  --fg-1: #1C1C1C;
-  --fg-2: #444443;
-  --fg-3: #6D6C6B;
-  --fg-4: #969492;
-  --fg-on-dark: #FDFBF7;
+  --bg: #FCFAF4;
+  --bg-subtle: #F3F1EB;
+  --bg-muted: #EAE8E2;
+  --surface: #F8F6F0;
+  --surface-inverse: #1B1A18;
+  --fg-1: #1B1A18;
+  --fg-2: #444240;
+  --fg-3: #6C6B67;
+  --fg-4: #94938F;
+  --fg-on-dark: #FCFAF4;
   --fg-on-brand: #101014;
-  --border: #DEDCD8;
-  --border-strong: #B0AFAD;
+  --border: #DCDBD5;
+  --border-strong: #B0AEA9;
   --focus-ring: #C79A16;
 
   /* Paired donor colors retained for accessible combinations */
@@ -87,9 +87,9 @@
   --chart-5: #598E56;
   --chart-6: #E0A93B;
   --chart-7: #C4483F;
-  --chart-8: #A08437;
-  --chart-9: #89847D;
-  --chart-10: #A6BAA2;
+  --chart-8: #9F8335;
+  --chart-9: #89837C;
+  --chart-10: #A6BAA1;
 
   /* Type families */
   --font-display: "Outfit", "Pretendard", sans-serif;
