@@ -7,10 +7,25 @@
  * is always a reviewed source-control change.
  */
 
+import { createHash } from "node:crypto";
+
 const SHA256 = /^[0-9a-f]{64}$/u;
 const ID = /^[a-z0-9][a-z0-9._-]{0,95}$/u;
 const GIT_OBJECT = /^[0-9a-f]{40}$/u;
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
+
+export const TASK_PRESET_AUDIT_POLICY = "task-presets-v1";
+const ROUTES = ["codex/native", "claude-code/native", "claude-code/commandcode"];
+const COMMON_CHECKS = [
+  "privacy", "authority", "source-preservation", "requirements", "dimensions", "images",
+  "clipping", "edit-scope", "truthful-validation", "visual-review",
+];
+/** Generic and standalone diagram examples need their own reviewed policy before promotion. */
+export const REQUIRED_EXAMPLE_CHECKS: Readonly<Record<string, readonly string[]>> = {
+  prototype: [...COMMON_CHECKS, "pages-and-links", "primary-action", "keyboard", "narrow-screen", "text-wrapping"],
+  slide_deck: [...COMMON_CHECKS, "slide-count-order", "projection-typography", "chart-units"],
+  graphic: [...COMMON_CHECKS, "frame-count-order", "safe-areas", "final-cta"],
+};
 
 /** Shapes that must never appear anywhere in a receipt, in any field. */
 const FORBIDDEN = [
@@ -168,8 +183,24 @@ export function parseExampleReviewReceipt(input: unknown): ReceiptParse {
 export function promotionRejections(input: unknown): readonly string[] {
   const parsed = parseExampleReviewReceipt(input);
   if (!parsed.ok) return parsed.errors;
-  const { split, validation } = parsed.receipt;
+  const { split, validation, source, target } = parsed.receipt;
   const rejections: string[] = [];
+
+  if (!ROUTES.includes(source.route) || !ROUTES.includes(target.route)) rejections.push("route: unsupported");
+  if (validation.audit_policy_version !== TASK_PRESET_AUDIT_POLICY) rejections.push("validation.audit_policy_version: unsupported");
+  const required = Object.prototype.hasOwnProperty.call(REQUIRED_EXAMPLE_CHECKS, target.deliverable)
+    ? REQUIRED_EXAMPLE_CHECKS[target.deliverable] : undefined;
+  if (!required) rejections.push("target.deliverable: unsupported policy");
+  const seen = new Set<string>();
+  for (const check of validation.mandatory) {
+    if (seen.has(check.check_id)) rejections.push("validation.mandatory: duplicate check");
+    seen.add(check.check_id);
+    if (!required?.includes(check.check_id)) rejections.push("validation.mandatory: unknown check");
+  }
+  for (const check of required ?? []) {
+    if (!seen.has(check)) rejections.push(`validation.mandatory.${check}: missing`);
+  }
+  if (validation.screenshots_sha256.length === 0) rejections.push("validation.screenshots_sha256: missing visual evidence");
 
   // Holdout cases evaluate the presets; teaching from them would contaminate the comparison.
   if (split !== "development") rejections.push("split: only a development case may teach");
@@ -181,5 +212,47 @@ export function promotionRejections(input: unknown): readonly string[] {
   if (!validation.human) rejections.push("validation.human: no human review");
   else if (validation.human.verdict !== "approved") rejections.push("validation.human.verdict: not approved");
 
+  return rejections;
+}
+
+/** Bind a corpus entry to its reviewed target and verify the bytes of every result/evidence object.
+ * Prompt and invocation hashes are identity metadata; raw prompts are deliberately not retained.
+ * File loading is supplied by the CI gate so this module stays independent of backend internals.
+ */
+export async function validateExampleEvidence(
+  example: { readonly id: string; readonly text: string; readonly reviewEvidenceId: string },
+  target: { readonly route: string; readonly preset_id: string; readonly deliverable: string },
+  input: unknown,
+  readObject: (digest: string) => Promise<Uint8Array>,
+): Promise<readonly string[]> {
+  const rejections = [...promotionRejections(input)];
+  if (rejections.length > 0) return rejections;
+  const parsed = parseExampleReviewReceipt(input);
+  if (!parsed.ok) return parsed.errors;
+  const receipt = parsed.receipt;
+  scanForbidden(example, "example", rejections);
+  if (example.text.trim().length === 0) rejections.push("example.text: empty");
+  if (receipt.evidence_id !== example.reviewEvidenceId) rejections.push("example.evidence_id: mismatch");
+  if (receipt.example.id !== example.id) rejections.push("example.id: mismatch");
+  const textHash = createHash("sha256").update(example.text, "utf8").digest("hex");
+  if (receipt.example.text_sha256 !== textHash) rejections.push("example.text_sha256: mismatch");
+  if (receipt.target.route !== target.route || receipt.target.preset_id !== target.preset_id
+    || receipt.target.deliverable !== target.deliverable) rejections.push("example.target: mismatch");
+  if (rejections.length > 0) return rejections;
+
+  const { artifact, validation } = receipt;
+  const objects = new Set([
+    artifact.tree_sha256, artifact.archive_sha256, validation.audit_object_sha256,
+    validation.observations_sha256, ...validation.screenshots_sha256,
+    ...validation.mandatory.map((check) => check.evidence_sha256),
+  ]);
+  for (const digest of objects) {
+    try {
+      const bytes = await readObject(digest);
+      if (createHash("sha256").update(bytes).digest("hex") !== digest) rejections.push("evidence_object: digest mismatch");
+    } catch {
+      rejections.push("evidence_object: unavailable");
+    }
+  }
   return rejections;
 }

@@ -68,3 +68,28 @@ test("Given the shipped registry When selecting Then nothing is validated yet", 
   expect(selected.status).toBe("draft");
   expect(selected.preset_id).toBe(BASE_PRESET_ID);
 });
+
+test("Given a populated corpus When development or adoption switches change Then examples follow the exact switch", () => {
+  const example = { id: "synthetic-example", text: "Reviewed fixture only.", reviewEvidenceId: `ex-${"a".repeat(64)}` };
+  const registry: PresetRegistry = {
+    ...TASK_PRESET_REGISTRY,
+    examples: { "codex/native": { [BASE_PRESET_ID]: { prototype: example } } },
+  };
+  expect(selectTaskPreset("codex", options("low"), "prototype", registry).example).toBeNull();
+  const development = { ...registry, developmentExamplesEnabled: true };
+  expect(selectTaskPreset("codex", options("low"), "prototype", development).example).toEqual(example);
+  expect(selectTaskPreset("codex", options("high"), "prototype", development).example).toBeNull();
+  expect(selectTaskPreset("codex", options("low"), "slide_deck", development).example).toBeNull();
+
+  for (const enabled of [true, false]) {
+    for (const exampleSetting of ["on", "off"] as const) {
+      const selected = selectTaskPreset("codex", options("low"), "prototype", {
+        ...development,
+        adoptions: withAdoptions(adoption({ enabled, example: exampleSetting })).adoptions,
+      });
+      expect(selected.example).toEqual(enabled && exampleSetting === "on" ? example : null);
+    }
+  }
+  // Removing the adoption in production also removes the example, without changing user options.
+  expect(selectTaskPreset("codex", options("low"), "prototype", { ...registry, adoptions: {} }).example).toBeNull();
+});

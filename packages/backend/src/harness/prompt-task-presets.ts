@@ -1,6 +1,7 @@
 import type { GenerationEffort } from "@bg/shared";
 import { TASK_WORK_CONTRACT } from "./design-craft";
 import { TASK_PRESET_ADOPTIONS, type AdoptionTable } from "./task-preset-adoptions";
+import { REVIEWED_TASK_EXAMPLES, type ReviewedExampleCorpus } from "./task-preset-examples";
 
 /**
  * Static task-guidance presets selected by route, model and reasoning effort.
@@ -46,10 +47,6 @@ export interface RouteRegistry {
   readonly fallback: ModelPreset;
 }
 
-type ExampleByDeliverable = Readonly<Partial<Record<Deliverable, ReviewedExample>>>;
-type ExampleByPreset = Readonly<Record<string, ExampleByDeliverable>>;
-type Examples = Readonly<Partial<Record<Route, ExampleByPreset>>>;
-
 export interface PresetRegistry {
   readonly version: number;
   readonly shared: TextBlock;
@@ -57,7 +54,7 @@ export interface PresetRegistry {
   readonly wording: Readonly<Record<ModelWording, TextBlock>>;
   readonly efforts: Readonly<Record<GenerationEffort, TextBlock>>;
   readonly routes: Readonly<Record<Route, RouteRegistry>>;
-  readonly examples: Examples;
+  readonly examples: ReviewedExampleCorpus;
   /** Adopted combinations; absent means every combination stays draft. */
   readonly adoptions?: AdoptionTable;
   /** Only a QA registry turns reviewed development examples on. */
@@ -174,9 +171,8 @@ export const TASK_PRESET_REGISTRY: PresetRegistry = {
       fallback: { id: "claude-code/commandcode/default/v1", wording: "default-commandcode", status: "draft" },
     },
   },
-  // P0 ships no reviewed example. An example is eligible only at LOW and only when present at an
-  // exact route/preset/deliverable key with a nonempty reviewEvidenceId.
-  examples: {},
+  // CI validates every corpus entry and its receipt before this static data can ship.
+  examples: REVIEWED_TASK_EXAMPLES,
   adoptions: TASK_PRESET_ADOPTIONS,
   developmentExamplesEnabled: false,
 };

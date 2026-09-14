@@ -89,8 +89,12 @@ export function selectTaskPreset(
     registry.efforts[generation.effort],
   ];
 
-  // An example is eligible only at LOW effort and only at an exact route/preset/deliverable key.
-  const candidate = generation.effort === "low"
+  // An explicit adoption (including off/disabled) overrides development mode. A rollback must
+  // never fall through to a development example. Corpus receipts are checked by the CI gate.
+  const examplesEnabled = adopted !== undefined
+    ? effective?.example === "on"
+    : registry.developmentExamplesEnabled === true;
+  const candidate = generation.effort === "low" && examplesEnabled
     ? registry.examples[route]?.[preset.id]?.[deliverable]
     : undefined;
   const example = candidate && candidate.reviewEvidenceId.length > 0 ? candidate : null;
@@ -163,6 +167,13 @@ export function appendModelPromptContext(
   lines.push(JSON.stringify({ schema_version: 1, profile, model: generation.model, provider: generation.provider, effort: generation.effort }));
   lines.push("</burnguard-model-guidance-v1>");
   if (condition.mode === "cleanup") {
+    // Keep the archived model guidance intact: this arm changes shared craft wording only.
+    lines.push("## Execution focus");
+    lines.push(claude
+      ? "- Work through the artifact in this order: inspect the relevant markup and tokens, apply the requested change, then check the changed result against the delivery rules."
+      : "- Target the requested artifact and its acceptance conditions directly. Use the existing structure to choose the smallest complete edit, then verify the result.");
+    if (profile === "claude-opus") lines.push("- Settle layout decisions using the selected direction and existing artifact; explore alternatives only when the user requests alternatives.");
+    lines.push("- These execution hints do not override the user's requested content, visual direction, or the output-directory and attachment restrictions.");
     lines.push("");
     return null;
   }

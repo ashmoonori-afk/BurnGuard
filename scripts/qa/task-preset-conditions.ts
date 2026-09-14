@@ -11,15 +11,17 @@ export interface TaskGuidanceCondition {
 /**
  * The five comparison arms from doc/18 section 10.
  *
- * An arm is chosen by CLI argument, never by editing source between runs and never by changing the
- * user's stored model, effort or brand. Arms differ only in the guidance assembled into the prompt;
- * audit, security and publication remain the real service in every arm.
+ * An arm is described by CLI argument, never by changing the user's stored model, effort or brand.
+ * These plans are not run results. A future executor must retain the service's authority boundaries.
  */
 export type ConditionId = "original-low" | "cleanup-low" | "task-low" | "post-low" | "same-model-high";
 
 export const CONDITION_IDS: readonly ConditionId[] = [
   "original-low", "cleanup-low", "task-low", "post-low", "same-model-high",
 ];
+
+/** Immutable pre-P0 source for reconstructing the full original control in an isolated checkout. */
+export const ORIGINAL_PROMPT_REVISION = "5ace81b40e25573e61f106a138149f3923144172";
 
 /**
  * The Post-Reasoning experimental wording. It asks for the result first and a short rationale after,

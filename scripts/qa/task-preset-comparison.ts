@@ -1,10 +1,9 @@
 /**
- * Opt-in collector for doc/18 P1-1 and P1-2.
+ * Opt-in comparison planner for doc/18 P1-1 and P1-2.
  *
- * Two modes share one runner: `examples` collects candidate stronger-model artifacts, `compare`
- * collects the five LOW comparison arms. The runner only COLLECTS. It never scores, never approves
- * and never writes the reviewed example corpus: promotion is a reviewed source-control change whose
- * receipt must pass `promotionRejections` in task-preset-evidence.ts.
+ * This CLI describes comparison arms only. It does not execute models, import runs or collect
+ * artifacts. Live collection remains unimplemented; planning must never report collected evidence.
+ * Example promotion is a source-control change checked by the corpus/evidence CI gate.
  *
  *   BG_TASK_PRESET_SMOKE=1 bun scripts/qa/task-preset-comparison.ts --mode compare --condition task-low
  *
@@ -12,7 +11,7 @@
  * side effects, so an ordinary `bun test` or a fresh checkout stays green.
  */
 
-import { CONDITION_IDS, isConditionId, planCondition, type ConditionId } from "./task-preset-conditions";
+import { CONDITION_IDS, ORIGINAL_PROMPT_REVISION, isConditionId, planCondition, type ConditionId } from "./task-preset-conditions";
 
 const OPT_IN = process.env.BG_TASK_PRESET_SMOKE === "1";
 
@@ -56,7 +55,7 @@ export function parseArgs(argv: readonly string[]): ArgParse {
   return { ok: true, args: { mode, conditions: selected, json } };
 }
 
-/** Exit codes: 0 collected or skipped, 1 run/export failure, 2 a prerequisite is missing. */
+/** Exit codes: 0 planned or skipped, 1 invalid arguments, 2 an execution prerequisite is missing. */
 export const EXIT = { ok: 0, failure: 1, blocked: 2 } as const;
 
 async function main(): Promise<number> {
@@ -70,6 +69,10 @@ async function main(): Promise<number> {
     return EXIT.failure;
   }
   const plans = parsed.args.conditions.map(planCondition);
+  if (parsed.args.mode === "examples") {
+    process.stdout.write(`${JSON.stringify({ status: "blocked", reason: "live_collection_not_implemented", mode: "examples" })}\n`);
+    return EXIT.blocked;
+  }
   const blocked = plans.filter((plan) => plan.requiresArchive);
   if (blocked.length > 0) {
     // The pre-P0 control has to be recovered from history first. Refuse rather than present the
@@ -77,14 +80,16 @@ async function main(): Promise<number> {
     process.stdout.write(`${JSON.stringify({
       status: "blocked",
       reason: "pre_p0_archive_required",
+      baseline_revision: ORIGINAL_PROMPT_REVISION,
       conditions: blocked.map((plan) => plan.id),
     })}\n`);
     return EXIT.blocked;
   }
   process.stdout.write(`${JSON.stringify({
-    status: "collected",
+    status: "planned",
+    execution_status: "not_run",
+    reason: "live_collection_not_implemented",
     mode: parsed.args.mode,
-    review_status: "unreviewed",
     conditions: plans.map((plan) => ({ id: plan.id, effort: plan.effort, guidance: plan.guidance.mode, examples: plan.examples })),
   })}\n`);
   return EXIT.ok;

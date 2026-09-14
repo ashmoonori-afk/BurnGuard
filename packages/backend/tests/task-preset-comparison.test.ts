@@ -3,6 +3,7 @@ import type { GenerationOptions } from "@bg/shared";
 import { appendModelPromptContext } from "../src/harness/prompt-model-context";
 import { parseArgs } from "../../../scripts/qa/task-preset-comparison";
 import { CONDITION_IDS, POST_REASONING_BLOCK, planCondition } from "../../../scripts/qa/task-preset-conditions";
+import { appendModelPromptContext as appendBaseline } from "./fixtures/task-preset-baseline-model-context";
 
 const options = (effort: GenerationOptions["effort"]): GenerationOptions =>
   ({ model: "gpt-5.6-luna", effort, provider: "native", vanilla: false });
@@ -46,7 +47,7 @@ test("Given a post block outside the post arm When assembling Then it is refused
 
 test("Given CLI arguments When parsed Then unsupported combinations are refused before anything runs", () => {
   expect(parseArgs(["--mode", "compare", "--condition", "task-low"])).toMatchObject({ ok: true });
-  // compare with no explicit condition collects every arm
+  // compare with no explicit condition plans every arm
   const all = parseArgs(["--mode", "compare"]);
   expect(all.ok && all.args.conditions.length).toBe(CONDITION_IDS.length);
 
@@ -60,6 +61,43 @@ test("Given CLI arguments When parsed Then unsupported combinations are refused 
     ["--oops", "value"],
   ]) {
     expect(parseArgs(argv).ok).toBe(false);
+  }
+});
+
+test("Given cleanup LOW When assembled on each route Then archived model guidance remains byte-identical", () => {
+  for (const backend of ["codex", "claude-code"] as const) {
+    for (const model of backend === "codex" ? ["gpt-5.6-luna"] : ["sonnet", "opus", "claude-opus-4-6"]) {
+      for (const provider of backend === "codex" ? ["native"] as const : ["native", "commandcode"] as const) {
+        const generation = { ...options("low"), model, provider };
+        const baseline: string[] = [];
+        const cleanup: string[] = [];
+        appendBaseline(baseline, backend, generation);
+        appendModelPromptContext(cleanup, backend, generation, "prototype", { mode: "cleanup" });
+        expect(cleanup).toEqual(baseline);
+      }
+    }
+  }
+});
+
+test("Given the real planner CLI When invoked Then planning never reports collected artifacts", () => {
+  const cases = [
+    { gate: "0", args: ["--mode", "compare"], status: "skipped", exit: 0 },
+    { gate: "1", args: ["--mode", "examples"], status: "blocked", exit: 2 },
+    { gate: "1", args: ["--mode", "compare"], status: "blocked", exit: 2 },
+    { gate: "1", args: ["--mode", "compare", "--condition", "task-low", "--condition", "post-low"], status: "planned", exit: 0 },
+  ];
+  for (const item of cases) {
+    const child = Bun.spawnSync([process.execPath, "scripts/qa/task-preset-comparison.ts", ...item.args], {
+      env: { ...process.env, BG_TASK_PRESET_SMOKE: item.gate }, stdout: "pipe", stderr: "pipe", timeout: 10000,
+    });
+    expect(child.exitCode).toBe(item.exit);
+    const result = JSON.parse(child.stdout.toString());
+    expect(result.status).toBe(item.status);
+    expect(result.status).not.toBe("collected");
+    if (item.status === "planned") {
+      expect(result.execution_status).toBe("not_run");
+      expect(result.conditions.map((condition: { id: string }) => condition.id)).toEqual(["task-low", "post-low"]);
+    }
   }
 });
 
