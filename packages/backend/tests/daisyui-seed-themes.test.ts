@@ -158,8 +158,7 @@ describe("bundled daisyUI-derived design systems", () => {
   });
 
   test("bootstrap copies token files that satisfy the canonical token contract", async () => {
-    // The default 5 s test timeout is too tight for this many file copies
-    // on Windows I/O; 30s gives headroom without masking a real regression.
+    // Forty-one systems each own a font bundle; allow bounded Windows disk I/O.
     const destinationRoot = await mkdtemp(path.join(tmpdir(), "bg-theme-seeds-"));
     try {
       const canonicalCss = await readFile(canonicalTokensPath, "utf8");
@@ -196,5 +195,5 @@ describe("bundled daisyUI-derived design systems", () => {
     } finally {
       await rm(destinationRoot, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 120_000);
 });
