@@ -1,0 +1,182 @@
+@import url("./fonts/fonts.css");
+
+/* Stencil Field Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #F7F7F5;
+  --gray-90: #E9E9E7;
+  --gray-80: #D6D6D4;
+  --gray-70: #BEBEBD;
+  --gray-60: #A4A4A3;
+  --gray-50: #8A8A8A;
+  --gray-40: #6E6E6E;
+  --gray-30: #525252;
+  --gray-20: #353536;
+  --gray-10: #19191A;
+
+  /* Brand and accents */
+  --primary-blue: #0F7A3C;
+  --action-blue: #0F7A3C;
+  --red-60: #B23A34;
+  --red-50: #BE5C57;
+  --red-10: #EBD5D2;
+  --orange-50: #8A4A12;
+  --orange-10: #E3D8CC;
+  --yellow-30: #8A6B12;
+  --yellow-10: #DFD8C3;
+  --green-60: #0F7A3C;
+  --green-50: #348E5A;
+  --green-10: #CDE0D4;
+  --teal-50: #D6D6D2;
+  --teal-10: #F1F1EF;
+  --aqua-60: #2A5A8C;
+  --aqua-10: #D2DBE2;
+  --blue-90: #0C2A19;
+  --blue-80: #0D4023;
+  --blue-70: #0E592E;
+  --blue-60: #0F7A3C;
+  --blue-50: #479868;
+  --blue-30: #91C0A4;
+  --blue-10: #D2E3D7;
+  --ultramarine-60: #13593B;
+  --purple-60: #0B0B0C;
+  --pink-60: #511F1D;
+
+  /* Semantic */
+  --success: #0F7A3C;
+  --warning-yellow: #8A6B12;
+  --warning-orange: #8A4A12;
+  --error: #B23A34;
+  --info: #2A5A8C;
+
+  /* Surface and text */
+  --bg: #F7F7F5;
+  --bg-subtle: #EEEEEC;
+  --bg-muted: #E4E4E2;
+  --surface: #F2F2F0;
+  --surface-inverse: #0B0B0C;
+  --fg-1: #0B0B0C;
+  --fg-2: #353536;
+  --fg-3: #606060;
+  --fg-4: #8A8A8A;
+  --fg-on-dark: #F7F7F5;
+  --fg-on-brand: #FFFFFF;
+  --border: #D6D6D4;
+  --border-strong: #A7A7A6;
+  --focus-ring: #0F7A3C;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #0B0B0C;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #D6D6D2;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #0F7A3C;
+  --chart-2: #0B0B0C;
+  --chart-3: #D6D6D2;
+  --chart-4: #2A5A8C;
+  --chart-5: #0E6231;
+  --chart-6: #8A6B12;
+  --chart-7: #B23A34;
+  --chart-8: #0D4B28;
+  --chart-9: #81817F;
+  --chart-10: #696969;
+
+  /* Type families */
+  --font-display: "Syne", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "Space Grotesk", "Pretendard", sans-serif;
+  --font-sans: "Space Grotesk", "Pretendard", sans-serif;
+  --font-mono: "JetBrains Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 800;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1600px;
+  --layout-measure: 60ch;
+  --layout-columns: 12;
+  --layout-gutter: 24px;
+  --layout-margin: clamp(16px, 3vw, 48px);
+  --layout-section-y: clamp(96px, 14vw, 224px);
+  --layout-rule: 1px;
+  --layout-bp-md: 820px;
+  --layout-bp-lg: 1240px;
+  --layout-hero: 21 / 9;
+  --layout-nav-h: 40px;
+
+  /* Family extensions */
+  --family-creative-type-rotation: 0deg;
+  --family-creative-line-step: 0px;
+  --family-creative-type-image-overlap: 24%;
+}

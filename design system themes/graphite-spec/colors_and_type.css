@@ -1,0 +1,182 @@
+@import url("./fonts/fonts.css");
+
+/* Graphite Spec Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: dark;
+
+  /* Neutrals */
+  --gray-100: #0E0F11;
+  --gray-90: #1A1B1E;
+  --gray-80: #2B2C2E;
+  --gray-70: #404143;
+  --gray-60: #57585A;
+  --gray-50: #6E6F71;
+  --gray-40: #87888A;
+  --gray-30: #A0A1A3;
+  --gray-20: #B9BABC;
+  --gray-10: #D2D3D5;
+
+  /* Brand and accents */
+  --primary-blue: #E8A33D;
+  --action-blue: #E8A33D;
+  --red-60: #D45B5B;
+  --red-50: #D67373;
+  --red-10: #DCC7CA;
+  --orange-50: #C4703A;
+  --orange-10: #D9CBC4;
+  --yellow-30: #E8A33D;
+  --yellow-10: #E0D2BE;
+  --green-60: #4E9A6B;
+  --green-50: #65A57E;
+  --green-10: #C4D3CD;
+  --teal-50: #6B7078;
+  --teal-10: #C9CBCF;
+  --aqua-60: #5E93B8;
+  --aqua-10: #C7D1DA;
+  --blue-90: #4B381D;
+  --blue-80: #775626;
+  --blue-70: #A77730;
+  --blue-60: #E8A33D;
+  --blue-50: #E6B165;
+  --blue-30: #E2C599;
+  --blue-10: #E0D5C8;
+  --ultramarine-60: #A0733C;
+  --purple-60: #4A6070;
+  --pink-60: #845E67;
+
+  /* Semantic */
+  --success: #4E9A6B;
+  --warning-yellow: #E8A33D;
+  --warning-orange: #C4703A;
+  --error: #D45B5B;
+  --info: #5E93B8;
+
+  /* Surface and text */
+  --bg: #18191C;
+  --bg-subtle: #202124;
+  --bg-muted: #28292C;
+  --surface: #1C1D20;
+  --surface-inverse: #DEDFE2;
+  --fg-1: #DEDFE2;
+  --fg-2: #BABBBE;
+  --fg-3: #97989B;
+  --fg-4: #737477;
+  --fg-on-dark: #DEDFE2;
+  --fg-on-brand: #101014;
+  --border: #343538;
+  --border-strong: #5B5C5F;
+  --focus-ring: #E8A33D;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #4A6070;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #6B7078;
+  --fg-on-accent: #FFFFFF;
+  --fg-on-info: #101014;
+  --fg-on-success: #101014;
+  --fg-on-warning: #101014;
+  --fg-on-error: #101014;
+
+  /* Charts */
+  --chart-1: #E8A33D;
+  --chart-2: #4A6070;
+  --chart-3: #6B7078;
+  --chart-4: #5E93B8;
+  --chart-5: #4E9A6B;
+  --chart-6: #E6B061;
+  --chart-7: #D45B5B;
+  --chart-8: #E4BC82;
+  --chart-9: #9B9FA5;
+  --chart-10: #85939E;
+
+  /* Type families */
+  --font-display: "IBM Plex Mono", "Pretendard", monospace;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "IBM Plex Mono", "Pretendard", monospace;
+  --font-sans: "Public Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1400px;
+  --layout-measure: 72ch;
+  --layout-columns: 12;
+  --layout-gutter: 16px;
+  --layout-margin: clamp(16px, 2.5vw, 40px);
+  --layout-section-y: clamp(36px, 4vw, 64px);
+  --layout-rule: 1px;
+  --layout-bp-md: 860px;
+  --layout-bp-lg: 1240px;
+  --layout-hero: 2 / 1;
+  --layout-nav-h: 44px;
+
+  /* Family extensions */
+  --family-ui-navigation-placement: top;
+  --family-ui-navigation-span: 2;
+  --family-ui-label-placement: beside;
+}

@@ -29,6 +29,46 @@ Layout is part of this system, not a per-page decision. Build every artifact on 
 
 A two-track manual: a narrow text track of 4 columns holding justified body at --layout-measure, beside a wide figure track of 8 columns. Figures are bordered panels with a rotated mono label in the outer margin; the rhythm is dense and continuous, not spaced out.
 
+## Composition
+
+Build the page as a technical manual. The ground is paper; the structure is blueprint line work — hairline rules, bounding boxes, leader lines and dimension marks drawn in the blue, never as decoration but always as annotation of something. Body copy is serif, justified, and runs to a long 66ch measure, because a manual is read in columns rather than scanned. Every figure carries a mono label in the form of a figure number and a short caption, placed outside the figure's frame. Headings are mono and letterspaced. Nothing is rounded, nothing is elevated, and no colour is used except the blue line work.
+
+## Image direction
+
+Every artifact on this system needs imagery of a specific kind; the palette alone will not
+reproduce the design. Generate it rather than sourcing it, and use these directions verbatim as the
+prompt basis.
+
+**Subject.** A described object — a component, an assembly, a tool, a mechanism — shown as a figure that the surrounding text refers to.
+
+**Treatment.** Either a clean orthographic line drawing or a flat record photograph on paper-white, in both cases free of styling. The image exists to be annotated.
+
+**Light.** Even and shadowless. A manual figure has no atmosphere; any shadow that is not describing form is noise.
+
+**Framing.** Contained on paper-white with clear margin for leader lines and dimension marks to reach into. Aspect follows the object, not a grid.
+
+**Relationship to the palette.** Paper-white with graphite line weight and the blueprint blue for annotation. No other colour appears.
+
+**Never:**
+- Atmospheric or styled photography; this is a figure, not a picture.
+- Coloured or gradient backgrounds.
+- Annotation baked into the image; labels are typeset, not drawn in.
+- Crops that leave no margin for leader lines.
+
+**Prompt skeleton.** `clean orthographic technical figure of a mechanical component on paper-white, even shadowless lighting, graphite line weight, contained with clear margin around the object, no styling, no colour, no annotation in the image`
+
+## Reproducing this system
+
+A builder with only this directory and an image generator should be able to rebuild the
+design. Check the result against all of these:
+
+1. The ground is paper and all structure is drawn as blueprint line work in the blue.
+2. Line work always annotates something; it is never decorative.
+3. Body copy is justified serif at a 66ch measure.
+4. Every figure carries a mono figure number and caption placed outside its frame.
+5. Headings are mono and letterspaced.
+6. Radius is zero, nothing is elevated, and no colour except the blue appears.
+
 ## Provenance
 
 Original system authored for BurnGuard. The palette, type pairing, scale, and shape rules were composed for this theme; no third-party theme, stylesheet, palette, or asset is included, and it carries no external license obligation.

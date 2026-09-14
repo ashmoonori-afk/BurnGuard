@@ -1,0 +1,182 @@
+@import url("./fonts/fonts.css");
+
+/* Studio Counter Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: dark;
+
+  /* Neutrals */
+  --gray-100: #08080A;
+  --gray-90: #161618;
+  --gray-80: #29292A;
+  --gray-70: #404041;
+  --gray-60: #5A5A5A;
+  --gray-50: #747373;
+  --gray-40: #908F8F;
+  --gray-30: #ACABAA;
+  --gray-20: #C8C7C6;
+  --gray-10: #E4E3E1;
+
+  /* Brand and accents */
+  --primary-blue: #F2F1EF;
+  --action-blue: #F2F1EF;
+  --red-60: #CF5148;
+  --red-50: #D56E66;
+  --red-10: #ECD4D1;
+  --orange-50: #B06A30;
+  --orange-10: #E6D9CD;
+  --yellow-30: #C8933A;
+  --yellow-10: #E9DCC7;
+  --green-60: #4E8F62;
+  --green-50: #689F79;
+  --green-10: #D4DFD6;
+  --teal-50: #4A4A4E;
+  --teal-10: #D4D3D2;
+  --aqua-60: #6D93B5;
+  --aqua-10: #DAE0E5;
+  --blue-90: #4A494A;
+  --blue-80: #787878;
+  --blue-70: #ACABAA;
+  --blue-60: #F2F1EF;
+  --blue-50: #F2F1EF;
+  --blue-30: #F2F1EF;
+  --blue-10: #F2F1EF;
+  --ultramarine-60: #A7A6B0;
+  --purple-60: #6B5E52;
+  --pink-60: #95594E;
+
+  /* Semantic */
+  --success: #4E8F62;
+  --warning-yellow: #C8933A;
+  --warning-orange: #B06A30;
+  --error: #C34C44;
+  --info: #6D93B5;
+
+  /* Surface and text */
+  --bg: #0D0D0F;
+  --bg-subtle: #161618;
+  --bg-muted: #1F1F21;
+  --surface: #121213;
+  --surface-inverse: #F2F1EF;
+  --fg-1: #F2F1EF;
+  --fg-2: #C9C8C7;
+  --fg-3: #A09F9E;
+  --fg-4: #767676;
+  --fg-on-dark: #F2F1EF;
+  --fg-on-brand: #101014;
+  --border: #2D2D2E;
+  --border-strong: #5B5B5B;
+  --focus-ring: #F2F1EF;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #6B5E52;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #4A4A4E;
+  --fg-on-accent: #FFFFFF;
+  --fg-on-info: #101014;
+  --fg-on-success: #101014;
+  --fg-on-warning: #101014;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #F2F1EF;
+  --chart-2: #6B5E52;
+  --chart-3: #4A4A4E;
+  --chart-4: #6D93B5;
+  --chart-5: #4E8F62;
+  --chart-6: #C8933A;
+  --chart-7: #CF5148;
+  --chart-8: #C0BFBE;
+  --chart-9: #919092;
+  --chart-10: #A19991;
+
+  /* Type families */
+  --font-display: "Public Sans", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "Public Sans", "Pretendard", sans-serif;
+  --font-sans: "Public Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.6875rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 1px;
+  --r-4: 2px;
+  --r-8: 2px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1600px;
+  --layout-measure: 52ch;
+  --layout-columns: 12;
+  --layout-gutter: 8px;
+  --layout-margin: 12px;
+  --layout-section-y: clamp(32px, 4vw, 64px);
+  --layout-rule: 1px;
+  --layout-bp-md: 820px;
+  --layout-bp-lg: 1200px;
+  --layout-hero: 4 / 5;
+  --layout-nav-h: 40px;
+
+  /* Family extensions */
+  --family-media-fit: cover;
+  --family-commerce-gallery-layout: paired;
+  --family-commerce-purchase-position: sticky;
+}

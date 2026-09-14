@@ -1,0 +1,183 @@
+@import url("./fonts/fonts.css");
+
+/* Index Table Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FCFCFB;
+  --gray-90: #EEEEED;
+  --gray-80: #DCDCDB;
+  --gray-70: #C4C4C4;
+  --gray-60: #ABABAB;
+  --gray-50: #919192;
+  --gray-40: #757576;
+  --gray-30: #5A5A5B;
+  --gray-20: #3E3E3F;
+  --gray-10: #222224;
+
+  /* Brand and accents */
+  --primary-blue: #2B4CC4;
+  --action-blue: #2B4CC4;
+  --red-60: #A8322A;
+  --red-50: #B75650;
+  --red-10: #EDD8D5;
+  --orange-50: #8A4712;
+  --orange-10: #E7DBD1;
+  --yellow-30: #8A6412;
+  --yellow-10: #E3DBC8;
+  --green-60: #2C6B46;
+  --green-50: #4D8263;
+  --green-10: #D7E2DA;
+  --teal-50: #DDDDD8;
+  --teal-10: #F6F6F5;
+  --aqua-60: #2B4CC4;
+  --aqua-10: #D6DCF1;
+  --blue-90: #1A2447;
+  --blue-80: #1F2F6A;
+  --blue-70: #243B90;
+  --blue-60: #2B4CC4;
+  --blue-50: #5D76D1;
+  --blue-30: #A0AFE3;
+  --blue-10: #DBE0F2;
+  --ultramarine-60: #253B94;
+  --purple-60: #4A5560;
+  --pink-60: #714649;
+
+  /* Semantic */
+  --success: #2C6B46;
+  --warning-yellow: #8A6412;
+  --warning-orange: #8A4712;
+  --error: #A8322A;
+  --info: #2B4CC4;
+
+  /* Surface and text */
+  --bg: #F4F4F2;
+  --bg-subtle: #EBEBE9;
+  --bg-muted: #E2E2E0;
+  --surface: #F0F0EE;
+  --surface-inverse: #141416;
+  --fg-1: #141416;
+  --fg-2: #3C3C3E;
+  --fg-3: #656565;
+  --fg-4: #8D8D8D;
+  --fg-on-dark: #FCFCFB;
+  --fg-on-brand: #FFFFFF;
+  --border: #D5D5D3;
+  --border-strong: #A8A8A7;
+  --focus-ring: #2B4CC4;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #4A5560;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #DDDDD8;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #2B4CC4;
+  --chart-2: #4A5560;
+  --chart-3: #DDDDD8;
+  --chart-4: #26409E;
+  --chart-5: #2C6B46;
+  --chart-6: #8A6412;
+  --chart-7: #A8322A;
+  --chart-8: #21347B;
+  --chart-9: #898987;
+  --chart-10: #91989E;
+
+  /* Type families */
+  --font-display: "Urbanist", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "Urbanist", "Pretendard", sans-serif;
+  --font-sans: "Urbanist", "Pretendard", sans-serif;
+  --font-mono: "JetBrains Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 2px;
+  --r-4: 3px;
+  --r-8: 4px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1680px;
+  --layout-measure: 70ch;
+  --layout-columns: 12;
+  --layout-gutter: 16px;
+  --layout-margin: clamp(12px, 2vw, 28px);
+  --layout-section-y: clamp(20px, 2.5vw, 40px);
+  --layout-rule: 1px;
+  --layout-bp-md: 840px;
+  --layout-bp-lg: 1240px;
+  --layout-hero: 3 / 1;
+  --layout-nav-h: 48px;
+
+  /* Family extensions */
+  --family-ui-navigation-placement: side;
+  --family-ui-navigation-span: 2;
+  --family-ui-label-placement: beside;
+  --family-data-table-layout: fixed;
+}

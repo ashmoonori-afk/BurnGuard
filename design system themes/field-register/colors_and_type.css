@@ -1,0 +1,183 @@
+@import url("./fonts/fonts.css");
+
+/* Field Register Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FAF9F6;
+  --gray-90: #EDECE9;
+  --gray-80: #DBDAD8;
+  --gray-70: #C4C4C2;
+  --gray-60: #ACACAB;
+  --gray-50: #939493;
+  --gray-40: #797979;
+  --gray-30: #5E5F60;
+  --gray-20: #434546;
+  --gray-10: #282A2C;
+
+  /* Brand and accents */
+  --primary-blue: #0F6B6B;
+  --action-blue: #0F6B6B;
+  --red-60: #A33128;
+  --red-50: #B3554D;
+  --red-10: #EAD5D1;
+  --orange-50: #8A4512;
+  --orange-10: #E6D9CD;
+  --yellow-30: #8A6212;
+  --yellow-10: #E1D8C4;
+  --green-60: #2F6B48;
+  --green-50: #4F8264;
+  --green-10: #D5DFD7;
+  --teal-50: #D9D7D0;
+  --teal-10: #F4F3EF;
+  --aqua-60: #0F6B6B;
+  --aqua-10: #D0DFDD;
+  --blue-90: #183334;
+  --blue-80: #154243;
+  --blue-70: #135454;
+  --blue-60: #0F6B6B;
+  --blue-50: #478D8C;
+  --blue-30: #93BBB9;
+  --blue-10: #D4E2E0;
+  --ultramarine-60: #134F5A;
+  --purple-60: #50565C;
+  --pink-60: #734646;
+
+  /* Semantic */
+  --success: #2F6B48;
+  --warning-yellow: #8A6212;
+  --warning-orange: #8A4512;
+  --error: #A33128;
+  --info: #0F6B6B;
+
+  /* Surface and text */
+  --bg: #F0EFEA;
+  --bg-subtle: #E7E7E2;
+  --bg-muted: #DFDEDA;
+  --surface: #ECEBE6;
+  --surface-inverse: #1B1D1F;
+  --fg-1: #1B1D1F;
+  --fg-2: #414344;
+  --fg-3: #686968;
+  --fg-4: #8E8E8D;
+  --fg-on-dark: #FAF9F6;
+  --fg-on-brand: #FFFFFF;
+  --border: #D2D2CE;
+  --border-strong: #A8A8A5;
+  --focus-ring: #0F6B6B;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #50565C;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #D9D7D0;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #0F6B6B;
+  --chart-2: #50565C;
+  --chart-3: #D9D7D0;
+  --chart-4: #125A5A;
+  --chart-5: #2F6B48;
+  --chart-6: #8A6212;
+  --chart-7: #A33128;
+  --chart-8: #144A4B;
+  --chart-9: #898986;
+  --chart-10: #94979A;
+
+  /* Type families */
+  --font-display: "IBM Plex Sans KR", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "IBM Plex Sans KR", "Pretendard", sans-serif;
+  --font-sans: "IBM Plex Sans KR", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 2px;
+  --r-4: 3px;
+  --r-8: 4px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1200px;
+  --layout-measure: 68ch;
+  --layout-columns: 12;
+  --layout-gutter: 16px;
+  --layout-margin: clamp(16px, 3vw, 32px);
+  --layout-section-y: clamp(24px, 3vw, 48px);
+  --layout-rule: 1px;
+  --layout-bp-md: 800px;
+  --layout-bp-lg: 1100px;
+  --layout-hero: 5 / 1;
+  --layout-nav-h: 52px;
+
+  /* Family extensions */
+  --family-ui-navigation-placement: side;
+  --family-ui-navigation-span: 3;
+  --family-ui-label-placement: beside;
+  --family-data-table-layout: fixed;
+}

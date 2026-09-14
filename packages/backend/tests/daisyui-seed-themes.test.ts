@@ -25,7 +25,7 @@ const DONOR_SLUGS = [
 ] as const;
 
 /** Original systems authored for BurnGuard; no donor palette, no third-party license. */
-const ORIGINAL_SLUGS = [
+const LEGACY_ORIGINAL_SLUGS = [
   "cobalt-atelier",
   "signal-reel",
   "daylight-press",
@@ -34,6 +34,40 @@ const ORIGINAL_SLUGS = [
   "dune-editorial",
   "archive-folio",
 ] as const;
+
+/**
+ * Original systems authored per design family. Beyond the layout contract they ship `--family-*`
+ * tokens for the structural decision their family turns on, so two artifacts on the same theme
+ * agree on more than colour.
+ */
+const FAMILY_ORIGINAL_SLUGS = [
+  "signal-console",
+  "paper-instrument",
+  "quiet-runtime",
+  "graphite-spec",
+  "long-form-press",
+  "wide-gutter-review",
+  "quarterly-folio",
+  "night-edition",
+  "studio-counter",
+  "atelier-counter",
+  "market-stack",
+  "vitrine-mono",
+  "night-marquee",
+  "stencil-field",
+  "press-riso",
+  "exhibit-wall",
+  "index-table",
+  "facet-archive",
+  "console-ledger",
+  "field-register",
+  "warm-vestibule",
+  "stone-court",
+  "linen-retreat",
+  "timber-hall",
+] as const;
+
+const ORIGINAL_SLUGS = [...LEGACY_ORIGINAL_SLUGS, ...FAMILY_ORIGINAL_SLUGS] as const;
 
 const THEME_SLUGS = [...DONOR_SLUGS, ...ORIGINAL_SLUGS] as const;
 
@@ -92,6 +126,34 @@ describe("bundled daisyUI-derived design systems", () => {
       const readme = await readFile(path.join(themesRoot, slug, "README.md"), "utf8");
       expect(readme, slug).toContain("## Layout");
       expect(readme, slug).toContain("--layout-measure");
+    }
+  });
+
+  test("carry enough direction to be rebuilt from the theme alone", async () => {
+    // The bar for an original system is that a reader with these three files and an image generator
+    // can rebuild the look. Tokens alone do not carry composition or imagery, so both are written
+    // down, and the self-check list is what makes the result verifiable rather than approximate.
+    for (const slug of ORIGINAL_SLUGS) {
+      const readme = await readFile(path.join(themesRoot, slug, "README.md"), "utf8");
+      for (const section of ["## Composition", "## Image direction", "## Reproducing this system"]) {
+        expect(readme, `${slug}: ${section}`).toContain(section);
+      }
+    }
+
+    // A family system additionally encodes the structural choice its family turns on.
+    for (const slug of FAMILY_ORIGINAL_SLUGS) {
+      const css = await readFile(path.join(themesRoot, slug, "colors_and_type.css"), "utf8");
+      const tokens = await extractCssCustomProperties(css);
+      const family = [...tokens.keys()].filter((token) => token.startsWith("family-"));
+      expect(family.length, `${slug}: --family-* tokens`).toBeGreaterThan(0);
+      for (const token of family) {
+        expect(tokens.get(token)?.trim(), `${slug}: --${token}`).not.toBe("");
+      }
+      const readme = await readFile(path.join(themesRoot, slug, "README.md"), "utf8");
+      expect(readme, slug).toContain("## Family tokens");
+      for (const token of family) {
+        expect(readme, `${slug}: --${token}`).toContain(`--${token}`);
+      }
     }
   });
 

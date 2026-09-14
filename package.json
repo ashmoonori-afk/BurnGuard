@@ -16,6 +16,7 @@
     "build:mac:dmg": "bun run build:frontend && bun run scripts/build-mac.ts -- --dmg",
     "build:mac:release": "bun run build:frontend && bun run scripts/build-mac.ts && bun run scripts/package-mac-release.ts",
     "build": "bun run build:frontend && bun run build:backend",
+    "catalogue": "bun run scripts/build-theme-catalogue.ts",
     "typecheck": "tsc --build",
     "test": "bun test --timeout 30000",
     "test:coverage": "bun test --coverage --timeout 30000",

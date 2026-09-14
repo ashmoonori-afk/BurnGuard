@@ -29,6 +29,46 @@ Layout is part of this system, not a per-page decision. Build every artifact on 
 
 An asymmetric catalogue: an 8-column image track beside a 4-column information column of definition pairs, divided by a hairline rule that runs the full height. Captions sit directly beneath their image at body size; density is high and spacing is tight.
 
+## Composition
+
+Set a dense archival index on white, with a small serif used for everything — headings, entries and notes alike — so hierarchy comes from position and weight rather than from a second typeface. Entries are separated by hairline dividers with tight vertical rhythm. A running information column holds dates, references and notes alongside the entries and stays with them down the page; it is the system's defining structure and must not collapse into the main column except at the smallest width. Running text holds to a 64ch measure. Radius and elevation are absent, and colour is reserved for links and the single action.
+
+## Image direction
+
+Every artifact on this system needs imagery of a specific kind; the palette alone will not
+reproduce the design. Generate it rather than sourcing it, and use these directions verbatim as the
+prompt basis.
+
+**Subject.** An archival item — a document, a photograph, a print, a page — reproduced as a record of the thing rather than as a picture.
+
+**Treatment.** Flat reproduction photography on white, square to the item, with the item's own edges, age and surface visible. No cleanup, no enhancement.
+
+**Light.** Even copy-stand lighting with no glare and no directional shadow. Colour accurate to the original.
+
+**Framing.** The item complete with a small white margin, aspect following the item. Placed small in the layout, since the index matters more than any one entry.
+
+**Relationship to the palette.** White ground with the item's own aged tones — paper yellowing, ink fade, emulsion shift. The interface adds nothing.
+
+**Never:**
+- Styled or angled photography of the item.
+- Digital cleanup that removes age, creases or edge wear.
+- Large hero placement; entries stay small in an index.
+- Added borders, shadows, or textures in the file.
+
+**Prompt skeleton.** `flat archival reproduction photograph of a document square to the camera on white, even copy-stand lighting with no glare, item complete with small white margin, accurate aged paper and ink tones, no retouching, no styling`
+
+## Reproducing this system
+
+A builder with only this directory and an image generator should be able to rebuild the
+design. Check the result against all of these:
+
+1. A small serif carries headings, entries and notes alike; no second typeface appears.
+2. Entries are separated by hairline dividers at a tight vertical rhythm.
+3. A running information column of dates and references stays beside the entries.
+4. That column collapses into the main column only at the smallest width.
+5. Running text holds to a 64ch measure.
+6. Radius and elevation are absent; colour is reserved for links and one action.
+
 ## Provenance
 
 Original system authored for BurnGuard. The palette, type pairing, scale, and shape rules were composed for this theme; no third-party theme, stylesheet, palette, or asset is included, and it carries no external license obligation.
