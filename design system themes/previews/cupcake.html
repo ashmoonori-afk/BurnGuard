@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cupcake Built-in Theme — 웹사이트 미리보기</title>
+<link rel="stylesheet" href="../../assets/fonts/fonts.css">
+<style>
+/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
+/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FAF7F5;
+  --gray-90: #262629;
+  --gray-80: #3F3F41;
+  --gray-70: #59585A;
+  --gray-60: #727172;
+  --gray-50: #8C8A8B;
+  --gray-40: #A5A3A3;
+  --gray-30: #BAB8B8;
+  --gray-20: #D0CDCC;
+  --gray-10: #E5E2E1;
+
+  /* Brand and accents */
+  --primary-blue: #44EBD3;
+  --action-blue: #44EBD3;
+  --red-60: #FE1C55;
+  --red-50: #FD4372;
+  --red-10: #FBD0D8;
+  --orange-50: #FFD6A7;
+  --orange-10: #FBF1E7;
+  --yellow-30: #EEAF00;
+  --yellow-10: #F8EAC9;
+  --green-60: #00BA7B;
+  --green-50: #2DC591;
+  --green-10: #CDECDF;
+  --teal-50: #FFD6A7;
+  --teal-10: #FBF1E7;
+  --aqua-60: #00A4F2;
+  --aqua-10: #CDE8F4;
+  --blue-90: #262629;
+  --blue-80: #3CB4A3;
+  --blue-70: #40CFBB;
+  --blue-60: #44EBD3;
+  --blue-50: #65EDD9;
+  --blue-30: #A8F2E6;
+  --blue-10: #DDF5F0;
+  --ultramarine-60: #44EBD3;
+  --purple-60: #F9CBE5;
+  --pink-60: #F9CBE5;
+
+  /* Semantic */
+  --success: #00BA7B;
+  --warning-yellow: #EEAF00;
+  --warning-orange: #FFD6A7;
+  --error: #FE1C55;
+  --info: #00A4F2;
+
+  /* Surface and text */
+  --bg: #FAF7F5;
+  --bg-subtle: #EFEAE6;
+  --bg-muted: #E7E2DF;
+  --surface: #FAF7F5;
+  --surface-inverse: #262629;
+  --fg-1: #291334;
+  --fg-2: #291334;
+  --fg-3: #291334;
+  --fg-4: #A5A3A3;
+  --fg-on-dark: #E4E4E7;
+  --fg-on-brand: #005D58;
+  --border: #E7E2DF;
+  --border-strong: #BAB8B8;
+  --focus-ring: #44EBD3;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #F9CBE5;
+  --fg-on-secondary: #A0004A;
+  --accent: #FFD6A7;
+  --fg-on-accent: #9F2D00;
+  --fg-on-info: #042E49;
+  --fg-on-success: #002C21;
+  --fg-on-warning: #411E03;
+  --fg-on-error: #4D0218;
+
+  /* Charts */
+  --chart-1: #44EBD3;
+  --chart-2: #F9CBE5;
+  --chart-3: #FFD6A7;
+  --chart-4: #00A4F2;
+  --chart-5: #00BA7B;
+  --chart-6: #EEAF00;
+  --chart-7: #FE1C55;
+  --chart-8: #9EDBDC;
+  --chart-9: #80BDCC;
+  --chart-10: #22D2A7;
+
+  /* Type families */
+  --font-display: "DM Serif Display", "Gowun Batang", "Pretendard", serif;
+  --font-serif: "DM Serif Display", "Gowun Batang", serif;
+  --font-body: "DM Sans", "Pretendard", sans-serif;
+  --font-sans: "DM Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 4px;
+  --r-4: 8px;
+  --r-8: 16px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.10);
+  --shadow-2: 0 4px 10px rgba(0, 0, 0, 0.14);
+  --shadow-3: 0 10px 24px rgba(0, 0, 0, 0.18);
+  --shadow-4: 0 20px 40px rgba(0, 0, 0, 0.24);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.2, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+}
+
+
+/* Layout is part of the design-system contract. */
+:root {
+  --layout-max: 1080px;
+  --layout-measure: 54ch;
+  --layout-columns: 12;
+  --layout-gutter: 24px;
+  --layout-margin: clamp(20px, 4vw, 64px);
+  --layout-section-y: clamp(56px, 8vw, 112px);
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 1 / 1;
+  --layout-structure: centered;
+  --family-ui-navigation-placement: top;
+  --family-ui-navigation-span: 0;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg-1);
+  font-family:var(--font-body);font-size:var(--fs-16);line-height:var(--lh-relaxed);
+  font-feature-settings:"tnum" 0}
+img,svg{display:block;max-width:100%}
+a{color:inherit}
+.wrap{max-width:var(--layout-max,1200px);margin-inline:auto;
+  padding-inline:var(--layout-margin,24px)}
+.bleed{width:100%}
+.eyebrow{font-family:var(--font-mono);font-size:var(--fs-12);
+  letter-spacing:var(--ls-eyebrow,.12em);text-transform:uppercase;color:var(--fg-3);margin:0}
+.display{font-family:var(--font-display);line-height:var(--lh-display,var(--lh-tight));
+  letter-spacing:var(--ls-display,var(--ls-tight));color:var(--fg-1);margin:0;
+  font-size:clamp(var(--fs-32),6vw,var(--fs-64))}
+.lede{font-family:var(--font-serif);font-size:var(--fs-20);color:var(--fg-2);
+  max-width:var(--layout-measure,60ch);margin:0}
+.body{font-size:var(--fs-16);color:var(--fg-2);max-width:var(--layout-measure,60ch)}
+.rule{border:0;border-top:var(--layout-rule,1px) solid var(--border);margin:0}
+.btn{display:inline-block;font-family:var(--font-sans);font-size:var(--fs-14);
+  font-weight:var(--fw-medium,500);padding:var(--sp-3) var(--sp-5);border:0;
+  border-radius:var(--r-4);background:var(--primary-blue);color:var(--fg-on-brand);
+  text-decoration:none;transition:opacity var(--dur-fast) var(--ease-standard)}
+.btn:hover{opacity:.88}
+.btn.ghost{background:transparent;color:var(--fg-1);
+  border:var(--layout-rule,1px) solid var(--border-strong)}
+.btn.pill{border-radius:var(--r-pill)}
+.tag{display:inline-block;font-family:var(--font-mono);font-size:var(--fs-12);
+  padding:var(--sp-1) var(--sp-2);border-radius:var(--r-2);
+  background:var(--bg-muted);color:var(--fg-2)}
+.fig{width:100%;height:100%;object-fit:cover}
+.media{overflow:hidden;background:var(--bg-muted);border-radius:var(--r-8)}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);
+  min-height:var(--layout-nav-h,64px);border-bottom:var(--layout-rule,1px) solid var(--border)}
+.nav .mark{font-family:var(--font-display);font-size:var(--fs-18);
+  letter-spacing:var(--ls-tight);color:var(--fg-1)}
+.nav ul{display:flex;gap:var(--sp-5);list-style:none;margin:0;padding:0;
+  font-family:var(--font-sans);font-size:var(--fs-14);color:var(--fg-2)}
+.foot{border-top:var(--layout-rule,1px) solid var(--border);
+  padding-block:var(--sp-8);margin-top:var(--sp-10);
+  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  display:flex;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap}
+.section{padding-block:var(--layout-section-y,64px)}
+.grid{display:grid;gap:var(--layout-gutter,24px)}
+.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stack{display:flex;flex-direction:column;gap:var(--sp-4)}
+.row{display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center}
+dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-4);margin:0}
+dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  letter-spacing:.06em;text-transform:uppercase}
+dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
+@media (max-width:760px){
+  .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
+  .nav ul{display:none}
+}
+</style></head>
+<body data-archetype="marketing" data-layout="centered">
+
+<style>
+.hero{padding-block:var(--layout-section-y,72px) var(--sp-10)}
+.hero-lead{display:grid;grid-template-columns:1fr;gap:var(--layout-gutter,24px);align-items:center}
+.hero-copy{text-align:center}
+.hero-copy .row{justify-content:center}
+.hero-copy .lede{margin-inline:auto}
+.hero .display{margin-bottom:var(--sp-5)}
+.hero .lede{margin-bottom:var(--sp-6)}
+.panel{margin-top:var(--sp-10);border:var(--layout-rule,1px) solid var(--border);
+  border-radius:var(--r-8);background:var(--surface);overflow:hidden;box-shadow:var(--shadow-2)}
+.hero-visual{aspect-ratio:var(--layout-hero,16 / 10);max-width:var(--layout-max);width:100%;margin-inline:auto}
+.panel-head{display:flex;align-items:center;gap:var(--sp-2);
+  padding:var(--sp-3) var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
+  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-3)}
+.dot{width:8px;height:8px;border-radius:var(--r-pill);background:var(--border-strong)}
+.panel-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:0}
+.panel-rows{border-right:var(--layout-rule,1px) solid var(--border)}
+.prow{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);
+  padding:var(--sp-3) var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
+  font-size:var(--fs-14)}
+.prow:last-child{border-bottom:0}
+.prow b{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:var(--fw-medium,500)}
+.bars{display:flex;align-items:flex-end;gap:var(--sp-2);height:190px;padding:var(--sp-4)}
+.bars i{display:block;flex:1;border-radius:var(--r-2) var(--r-2) 0 0}
+.feature h3{font-family:var(--font-display);font-size:var(--fs-24);margin:0 0 var(--sp-2);color:var(--fg-1)}
+.feature p{margin:0;color:var(--fg-3);font-size:var(--fs-14)}
+.feature{padding:var(--sp-5);border:var(--layout-rule,1px) solid var(--border);
+  border-radius:var(--r-8);background:var(--surface)}
+.cta{border:var(--layout-rule,1px) solid var(--border-strong);border-radius:var(--r-8);
+  padding:var(--sp-8);background:var(--bg-subtle);display:flex;justify-content:space-between;
+  align-items:center;gap:var(--sp-5);flex-wrap:wrap}
+@media (max-width:760px){.panel-body,.hero-lead{grid-template-columns:1fr}.panel-rows{border-right:0}}
+</style>
+<header class="wrap nav">
+  <span class="mark">Cupcake Built-in</span>
+  <ul><li>제품</li><li>문서</li><li>가격</li><li>변경 이력</li></ul>
+  <a class="btn" href="#none">시작하기</a>
+</header>
+<main>
+  <section class="wrap hero">
+    <div class="hero-lead"><div class="hero-copy">
+    <p class="eyebrow">버전 3.4 · 로컬 우선</p>
+    <h1 class="display">측정되는 것만<br>운영에 남는다</h1>
+    <p class="lede">파이프라인의 모든 단계가 수치로 남고, 실패한 단계는 원인까지 함께 기록됩니다. 설치 없이 로컬에서 실행하세요.</p>
+    <div class="row" style="margin-top:var(--sp-6)">
+      <a class="btn" href="#none">내려받기</a>
+      <a class="btn ghost" href="#none">문서 보기</a>
+    </div>
+    </div><div class="media hero-visual"><img class="fig" src="./media/cupcake.webp" alt="" loading="lazy" decoding="async"></div></div>
+    <div class="panel">
+      <div class="panel-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span style="margin-left:var(--sp-3)">runtime · 127.0.0.1</span></div>
+      <div class="panel-body">
+        <div class="panel-rows">
+          <div class="prow"><span style="color:var(--fg-2)">요청 처리</span><b style="color:var(--success)">1,284</b></div><div class="prow"><span style="color:var(--fg-2)">대기열</span><b style="color:var(--warning-yellow)">37</b></div><div class="prow"><span style="color:var(--fg-2)">실패</span><b style="color:var(--error)">2</b></div>
+          <div class="prow"><span style="color:var(--fg-2)">평균 지연</span><b>142 ms</b></div>
+        </div>
+        <div class="bars">
+          <i style="height:38%;background:var(--chart-1)"></i><i style="height:62%;background:var(--chart-2)"></i><i style="height:45%;background:var(--chart-3)"></i><i style="height:88%;background:var(--chart-4)"></i><i style="height:54%;background:var(--chart-5)"></i><i style="height:72%;background:var(--chart-6)"></i><i style="height:96%;background:var(--chart-7)"></i><i style="height:60%;background:var(--chart-8)"></i>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="wrap section">
+    <div class="grid cols-3">
+      <article class="feature"><h3>결정론적 실행</h3><p>같은 입력은 같은 결과를 만듭니다. 재현되지 않는 통과는 통과가 아닙니다.</p></article><article class="feature"><h3>경계에서만 검증</h3><p>신뢰 구간 안에서는 방어 코드를 두지 않고, 경계에서 한 번 검증합니다.</p></article><article class="feature"><h3>증거가 남는 배포</h3><p>모든 게시는 해시와 영수증을 남기고, 실패하면 이전 상태로 되돌아갑니다.</p></article>
+    </div>
+  </section>
+  <section class="wrap section" style="padding-top:0">
+    <hr class="rule" style="margin-bottom:var(--sp-8)">
+    <dl class="facts">
+      <div><dt>평균 부팅</dt><dd>0.8초</dd></div>
+      <div><dt>메모리</dt><dd>180 MB</dd></div>
+      <div><dt>외부 의존</dt><dd>없음</dd></div>
+      <div><dt>지원 플랫폼</dt><dd>Windows · macOS</dd></div>
+    </dl>
+  </section>
+  <section class="wrap section" style="padding-top:0">
+    <div class="cta">
+      <div><p class="eyebrow">지금 시작</p>
+        <p class="display" style="font-size:var(--fs-32);margin-top:var(--sp-2)">설치는 한 번, 실행은 로컬에서</p></div>
+      <a class="btn" href="#none">내려받기</a>
+    </div>
+  </section>
+</main>
+<footer class="wrap foot"><span>Cupcake Built-in Theme</span><span>미리보기 · 토큰 기반 생성</span></footer>
+</body></html>

@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stencil Field Theme — 웹사이트 미리보기</title>
+<link rel="stylesheet" href="../../assets/fonts/fonts.css">
+<style>
+/* Stencil Field Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #F7F7F5;
+  --gray-90: #E9E9E7;
+  --gray-80: #D6D6D4;
+  --gray-70: #BEBEBD;
+  --gray-60: #A4A4A3;
+  --gray-50: #8A8A8A;
+  --gray-40: #6E6E6E;
+  --gray-30: #525252;
+  --gray-20: #353536;
+  --gray-10: #19191A;
+
+  /* Brand and accents */
+  --primary-blue: #0F7A3C;
+  --action-blue: #0F7A3C;
+  --red-60: #B23A34;
+  --red-50: #BE5C57;
+  --red-10: #EBD5D2;
+  --orange-50: #8A4A12;
+  --orange-10: #E3D8CC;
+  --yellow-30: #8A6B12;
+  --yellow-10: #DFD8C3;
+  --green-60: #0F7A3C;
+  --green-50: #348E5A;
+  --green-10: #CDE0D4;
+  --teal-50: #D6D6D2;
+  --teal-10: #F1F1EF;
+  --aqua-60: #2A5A8C;
+  --aqua-10: #D2DBE2;
+  --blue-90: #0C2A19;
+  --blue-80: #0D4023;
+  --blue-70: #0E592E;
+  --blue-60: #0F7A3C;
+  --blue-50: #479868;
+  --blue-30: #91C0A4;
+  --blue-10: #D2E3D7;
+  --ultramarine-60: #13593B;
+  --purple-60: #0B0B0C;
+  --pink-60: #511F1D;
+
+  /* Semantic */
+  --success: #0F7A3C;
+  --warning-yellow: #8A6B12;
+  --warning-orange: #8A4A12;
+  --error: #B23A34;
+  --info: #2A5A8C;
+
+  /* Surface and text */
+  --bg: #F7F7F5;
+  --bg-subtle: #EEEEEC;
+  --bg-muted: #E4E4E2;
+  --surface: #F2F2F0;
+  --surface-inverse: #0B0B0C;
+  --fg-1: #0B0B0C;
+  --fg-2: #353536;
+  --fg-3: #606060;
+  --fg-4: #8A8A8A;
+  --fg-on-dark: #F7F7F5;
+  --fg-on-brand: #FFFFFF;
+  --border: #D6D6D4;
+  --border-strong: #A7A7A6;
+  --focus-ring: #0F7A3C;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #0B0B0C;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #D6D6D2;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #0F7A3C;
+  --chart-2: #0B0B0C;
+  --chart-3: #D6D6D2;
+  --chart-4: #2A5A8C;
+  --chart-5: #0E6231;
+  --chart-6: #8A6B12;
+  --chart-7: #B23A34;
+  --chart-8: #0D4B28;
+  --chart-9: #81817F;
+  --chart-10: #696969;
+
+  /* Type families */
+  --font-display: "Syne", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "Space Grotesk", "Pretendard", sans-serif;
+  --font-sans: "Space Grotesk", "Pretendard", sans-serif;
+  --font-mono: "JetBrains Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 800;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1600px;
+  --layout-measure: 60ch;
+  --layout-columns: 12;
+  --layout-gutter: 24px;
+  --layout-margin: clamp(16px, 3vw, 48px);
+  --layout-section-y: clamp(96px, 14vw, 224px);
+  --layout-rule: 1px;
+  --layout-bp-md: 820px;
+  --layout-bp-lg: 1240px;
+  --layout-hero: 21 / 9;
+  --layout-nav-h: 40px;
+
+  /* Family extensions */
+  --family-creative-type-rotation: 0deg;
+  --family-creative-line-step: 0px;
+  --family-creative-type-image-overlap: 24%;
+}
+
+:root { --layout-structure: offset; }
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg-1);
+  font-family:var(--font-body);font-size:var(--fs-16);line-height:var(--lh-relaxed);
+  font-feature-settings:"tnum" 0}
+img,svg{display:block;max-width:100%}
+a{color:inherit}
+.wrap{max-width:var(--layout-max,1200px);margin-inline:auto;
+  padding-inline:var(--layout-margin,24px)}
+.bleed{width:100%}
+.eyebrow{font-family:var(--font-mono);font-size:var(--fs-12);
+  letter-spacing:var(--ls-eyebrow,.12em);text-transform:uppercase;color:var(--fg-3);margin:0}
+.display{font-family:var(--font-display);line-height:var(--lh-display,var(--lh-tight));
+  letter-spacing:var(--ls-display,var(--ls-tight));color:var(--fg-1);margin:0;
+  font-size:clamp(var(--fs-32),6vw,var(--fs-64))}
+.lede{font-family:var(--font-serif);font-size:var(--fs-20);color:var(--fg-2);
+  max-width:var(--layout-measure,60ch);margin:0}
+.body{font-size:var(--fs-16);color:var(--fg-2);max-width:var(--layout-measure,60ch)}
+.rule{border:0;border-top:var(--layout-rule,1px) solid var(--border);margin:0}
+.btn{display:inline-block;font-family:var(--font-sans);font-size:var(--fs-14);
+  font-weight:var(--fw-medium,500);padding:var(--sp-3) var(--sp-5);border:0;
+  border-radius:var(--r-4);background:var(--primary-blue);color:var(--fg-on-brand);
+  text-decoration:none;transition:opacity var(--dur-fast) var(--ease-standard)}
+.btn:hover{opacity:.88}
+.btn.ghost{background:transparent;color:var(--fg-1);
+  border:var(--layout-rule,1px) solid var(--border-strong)}
+.btn.pill{border-radius:var(--r-pill)}
+.tag{display:inline-block;font-family:var(--font-mono);font-size:var(--fs-12);
+  padding:var(--sp-1) var(--sp-2);border-radius:var(--r-2);
+  background:var(--bg-muted);color:var(--fg-2)}
+.fig{width:100%;height:100%;object-fit:cover}
+.media{overflow:hidden;background:var(--bg-muted);border-radius:var(--r-8)}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);
+  min-height:var(--layout-nav-h,64px);border-bottom:var(--layout-rule,1px) solid var(--border)}
+.nav .mark{font-family:var(--font-display);font-size:var(--fs-18);
+  letter-spacing:var(--ls-tight);color:var(--fg-1)}
+.nav ul{display:flex;gap:var(--sp-5);list-style:none;margin:0;padding:0;
+  font-family:var(--font-sans);font-size:var(--fs-14);color:var(--fg-2)}
+.foot{border-top:var(--layout-rule,1px) solid var(--border);
+  padding-block:var(--sp-8);margin-top:var(--sp-10);
+  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  display:flex;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap}
+.section{padding-block:var(--layout-section-y,64px)}
+.grid{display:grid;gap:var(--layout-gutter,24px)}
+.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stack{display:flex;flex-direction:column;gap:var(--sp-4)}
+.row{display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center}
+dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-4);margin:0}
+dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  letter-spacing:.06em;text-transform:uppercase}
+dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
+@media (max-width:820px){
+  .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
+  .nav ul{display:none}
+}
+</style></head>
+<body data-archetype="poster" data-layout="offset">
+
+<style>
+.chrome{display:flex;justify-content:space-between;align-items:center;
+  min-height:var(--layout-nav-h,44px);font-family:var(--font-mono);
+  font-size:var(--fs-12);color:var(--fg-3);letter-spacing:.08em}
+.field{padding-block:var(--layout-section-y,96px) var(--sp-6);text-align:center}
+.band .media{border-radius:0;aspect-ratio:var(--layout-hero,21 / 9)}
+
+
+.over{position:relative;z-index:1;text-align:center;
+  margin-top:calc(-1 * 0.24 * var(--statement-h));
+  padding-bottom:calc(var(--sp-8) - 0.24 * var(--statement-h))}
+.statement{--statement-size:clamp(var(--fs-40),9vw,7rem);
+  display:inline-block;transform:rotate(0deg);
+  font-family:var(--font-display);line-height:var(--lh-display,.94);
+  letter-spacing:var(--ls-display,var(--ls-tight));color:var(--fg-1);margin:0;
+  font-size:var(--statement-size)}
+.field,.over{--statement-h:calc(2 * clamp(var(--fs-40),9vw,7rem) * var(--lh-display,.94))}
+.statement span{display:block}
+.statement span:nth-child(2){margin-left:calc(0px * 1)}
+.statement span:nth-child(3){margin-left:calc(0px * 2)}
+.credits{max-width:calc(var(--layout-measure,46ch) + 8ch);margin:var(--sp-10) auto 0;
+  display:grid;gap:0}
+.credits div{display:flex;justify-content:space-between;gap:var(--sp-8);
+  padding-block:var(--sp-2);font-family:var(--font-mono);font-size:var(--fs-12);
+  letter-spacing:.06em;border-bottom:var(--layout-rule,1px) solid var(--border)}
+.credits dt{color:var(--fg-4);text-transform:uppercase}
+.credits dd{margin:0;color:var(--fg-2)}
+.note{max-width:var(--layout-measure,46ch);margin:var(--sp-8) auto 0;text-align:center;
+  font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-3)}
+@media (max-width:820px){
+  .poster-main{display:block}.statement{transform:none}.statement span:nth-child(n){margin-left:0}
+  .over{margin-top:0;padding-bottom:var(--sp-8)}}
+</style>
+<header class="wrap chrome">
+  <span>Stencil Field</span><span>메뉴</span>
+</header>
+<main class="poster-main">
+  <section class="wrap field"><p class="eyebrow">2026 봄 상영 · 단관</p></section>
+  <section class="bleed band"><div class="media"><img class="fig" src="./media/stencil-field.webp" alt="" loading="lazy" decoding="async"></div></section>
+  <section class="wrap over">
+    <h1 class="statement"><span>흐린 날의</span><span>긴 산책</span></h1>
+  </section>
+  <section class="wrap">
+    <dl class="credits">
+      <div><dt>연출</dt><dd>임세린</dd></div><div><dt>촬영</dt><dd>박도현</dd></div><div><dt>미술</dt><dd>정하윤</dd></div><div><dt>음악</dt><dd>K. 리</dd></div><div><dt>제작</dt><dd>스튜디오 노트</dd></div>
+    </dl>
+    <p class="note">러닝타임 104분 · 전체 관람가 · 3월 12일부터 매일 19시 30분 한 회 상영</p>
+  </section>
+</main>
+<footer class="wrap foot"><span>Stencil Field Theme</span><span>미리보기 · 토큰 기반 생성</span></footer>
+</body></html>

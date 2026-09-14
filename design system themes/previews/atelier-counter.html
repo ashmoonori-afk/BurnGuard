@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Atelier Counter Theme — 웹사이트 미리보기</title>
+<link rel="stylesheet" href="../../assets/fonts/fonts.css">
+<style>
+/* Atelier Counter Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #F7F4EE;
+  --gray-90: #EAE7E1;
+  --gray-80: #D8D5D0;
+  --gray-70: #C2C0BB;
+  --gray-60: #AAA8A3;
+  --gray-50: #92908C;
+  --gray-40: #787672;
+  --gray-30: #5E5B58;
+  --gray-20: #43413F;
+  --gray-10: #292725;
+
+  /* Brand and accents */
+  --primary-blue: #7A2E2E;
+  --action-blue: #7A2E2E;
+  --red-60: #7A2E2E;
+  --red-50: #905251;
+  --red-10: #E0D0CB;
+  --orange-50: #96541C;
+  --orange-10: #E6D7C8;
+  --yellow-30: #96751C;
+  --yellow-10: #E2D8C0;
+  --green-60: #46664A;
+  --green-50: #627D64;
+  --green-10: #D7DAD0;
+  --teal-50: #C5B9A7;
+  --teal-10: #EEE9E1;
+  --aqua-60: #4A6076;
+  --aqua-10: #D8D9D8;
+  --blue-90: #36201E;
+  --blue-80: #492423;
+  --blue-70: #5E2827;
+  --blue-60: #7A2E2E;
+  --blue-50: #985E5C;
+  --blue-30: #C09D9A;
+  --blue-10: #E3D4CF;
+  --ultramarine-60: #592732;
+  --purple-60: #4A5A46;
+  --pink-60: #5E483C;
+
+  /* Semantic */
+  --success: #46664A;
+  --warning-yellow: #8D6E1A;
+  --warning-orange: #96541C;
+  --error: #7A2E2E;
+  --info: #4A6076;
+
+  /* Surface and text */
+  --bg: #F7F4EE;
+  --bg-subtle: #EEEBE5;
+  --bg-muted: #E5E3DD;
+  --surface: #F3F0EA;
+  --surface-inverse: #1C1A18;
+  --fg-1: #1C1A18;
+  --fg-2: #43413F;
+  --fg-3: #6B6865;
+  --fg-4: #92908C;
+  --fg-on-dark: #F7F4EE;
+  --fg-on-brand: #FFFFFF;
+  --border: #D8D5D0;
+  --border-strong: #ADAAA5;
+  --focus-ring: #7A2E2E;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #4A5A46;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #C5B9A7;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #7A2E2E;
+  --chart-2: #4A5A46;
+  --chart-3: #C5B9A7;
+  --chart-4: #4A6076;
+  --chart-5: #46664A;
+  --chart-6: #96751C;
+  --chart-7: #652A29;
+  --chart-8: #532625;
+  --chart-9: #7E766B;
+  --chart-10: #8F9889;
+
+  /* Type families */
+  --font-display: "Bodoni Moda", "Nanum Myeongjo", serif;
+  --font-serif: "Lora", "Nanum Myeongjo", serif;
+  --font-body: "Figtree", "Pretendard", sans-serif;
+  --font-sans: "Figtree", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.16em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1280px;
+  --layout-measure: 58ch;
+  --layout-columns: 12;
+  --layout-gutter: 24px;
+  --layout-margin: clamp(20px, 4vw, 64px);
+  --layout-section-y: clamp(56px, 7vw, 112px);
+  --layout-rule: 1px;
+  --layout-bp-md: 780px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 4 / 5;
+  --layout-nav-h: 64px;
+
+  /* Family extensions */
+  --family-media-fit: contain;
+  --family-commerce-gallery-layout: lead-and-pairs;
+  --family-commerce-purchase-position: flow;
+}
+
+:root { --layout-structure: split; }
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg-1);
+  font-family:var(--font-body);font-size:var(--fs-16);line-height:var(--lh-relaxed);
+  font-feature-settings:"tnum" 0}
+img,svg{display:block;max-width:100%}
+a{color:inherit}
+.wrap{max-width:var(--layout-max,1200px);margin-inline:auto;
+  padding-inline:var(--layout-margin,24px)}
+.bleed{width:100%}
+.eyebrow{font-family:var(--font-mono);font-size:var(--fs-12);
+  letter-spacing:var(--ls-eyebrow,.12em);text-transform:uppercase;color:var(--fg-3);margin:0}
+.display{font-family:var(--font-display);line-height:var(--lh-display,var(--lh-tight));
+  letter-spacing:var(--ls-display,var(--ls-tight));color:var(--fg-1);margin:0;
+  font-size:clamp(var(--fs-32),6vw,var(--fs-64))}
+.lede{font-family:var(--font-serif);font-size:var(--fs-20);color:var(--fg-2);
+  max-width:var(--layout-measure,60ch);margin:0}
+.body{font-size:var(--fs-16);color:var(--fg-2);max-width:var(--layout-measure,60ch)}
+.rule{border:0;border-top:var(--layout-rule,1px) solid var(--border);margin:0}
+.btn{display:inline-block;font-family:var(--font-sans);font-size:var(--fs-14);
+  font-weight:var(--fw-medium,500);padding:var(--sp-3) var(--sp-5);border:0;
+  border-radius:var(--r-4);background:var(--primary-blue);color:var(--fg-on-brand);
+  text-decoration:none;transition:opacity var(--dur-fast) var(--ease-standard)}
+.btn:hover{opacity:.88}
+.btn.ghost{background:transparent;color:var(--fg-1);
+  border:var(--layout-rule,1px) solid var(--border-strong)}
+.btn.pill{border-radius:var(--r-pill)}
+.tag{display:inline-block;font-family:var(--font-mono);font-size:var(--fs-12);
+  padding:var(--sp-1) var(--sp-2);border-radius:var(--r-2);
+  background:var(--bg-muted);color:var(--fg-2)}
+.fig{width:100%;height:100%;object-fit:cover}
+.media{overflow:hidden;background:var(--bg-muted);border-radius:var(--r-8)}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);
+  min-height:var(--layout-nav-h,64px);border-bottom:var(--layout-rule,1px) solid var(--border)}
+.nav .mark{font-family:var(--font-display);font-size:var(--fs-18);
+  letter-spacing:var(--ls-tight);color:var(--fg-1)}
+.nav ul{display:flex;gap:var(--sp-5);list-style:none;margin:0;padding:0;
+  font-family:var(--font-sans);font-size:var(--fs-14);color:var(--fg-2)}
+.foot{border-top:var(--layout-rule,1px) solid var(--border);
+  padding-block:var(--sp-8);margin-top:var(--sp-10);
+  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  display:flex;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap}
+.section{padding-block:var(--layout-section-y,64px)}
+.grid{display:grid;gap:var(--layout-gutter,24px)}
+.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stack{display:flex;flex-direction:column;gap:var(--sp-4)}
+.row{display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center}
+dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-4);margin:0}
+dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  letter-spacing:.06em;text-transform:uppercase}
+dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
+@media (max-width:780px){
+  .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
+  .nav ul{display:none}
+}
+</style></head>
+<body data-archetype="shop" data-layout="split">
+
+<style>
+.shopnav{display:flex;justify-content:space-between;align-items:center;
+  min-height:var(--layout-nav-h,56px);font-family:var(--font-mono);font-size:var(--fs-12);
+  color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase}
+.brandline{font-family:var(--font-display);line-height:.9;letter-spacing:var(--ls-tight);
+  font-size:clamp(var(--fs-48),12vw,9rem);color:var(--fg-1);margin:0;position:relative;z-index:1;
+  padding-block:var(--sp-6) var(--sp-4)}
+.gallery{display:grid;gap:var(--layout-gutter,16px);
+  grid-template-columns:repeat(2,minmax(0,1fr))}
+.item .shot{aspect-ratio:4 / 5;border-radius:var(--r-4)}
+.item.wide{grid-column:1 / -1}
+.item.wide .shot{aspect-ratio:var(--layout-hero,16 / 9)}
+.item .fig{object-fit:contain}
+.meta{display:flex;justify-content:space-between;gap:var(--sp-3);
+  padding-block:var(--sp-3);font-family:var(--font-sans);font-size:var(--fs-14);color:var(--fg-2)}
+.price{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--fg-1)}
+.detail{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);
+  gap:var(--layout-gutter,24px);align-items:start;margin-top:var(--sp-10)}
+.buy{border:var(--layout-rule,1px) solid var(--border);
+  border-radius:var(--r-8);padding:var(--sp-5);background:var(--surface);display:grid;gap:var(--sp-3)}
+.buy .big{font-family:var(--font-display);font-size:var(--fs-32);color:var(--fg-1)}
+.spec{display:grid;gap:0;margin:0}
+.spec div{display:flex;justify-content:space-between;gap:var(--sp-3);
+  padding-block:var(--sp-2);border-bottom:var(--layout-rule,1px) solid var(--border);
+  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-3)}
+.spec div:last-child{border-bottom:0}
+.spec b{color:var(--fg-2);font-weight:var(--fw-regular,400)}
+@media (max-width:780px){.gallery{grid-template-columns:1fr}.detail{grid-template-columns:1fr}
+  .buy{position:static}}
+</style>
+<header class="wrap shopnav">
+  <span>Atelier Counter</span>
+  <span>검색 · 계정 · 장바구니 (2)</span>
+</header>
+<main class="wrap">
+  <h1 class="brandline">계절이 지나도<br>남는 것들</h1>
+  <div class="gallery">
+    <article class="item wide">
+      <div class="media shot"><img class="fig" src="./media/atelier-counter.webp" alt="" loading="lazy" decoding="async"></div>
+      <div class="meta"><span>겹이불 커버</span><span class="price">128,000원</span></div>
+    </article>
+    <article class="item">
+      <div class="media shot"><svg class="fig" viewBox="0 0 90 120" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false"><rect x="0" y="0" width="90" height="120" fill="var(--bg-muted)"/>
+       <circle cx="45" cy="52" r="30" fill="var(--gray-60)" opacity="0.85"/>
+       <rect x="0" y="92" width="90" height="28" fill="var(--gray-40)" opacity="0.9"/></svg></div>
+      <div class="meta"><span>리넨 셔츠</span><span class="price">96,000원</span></div>
+    </article>
+    <article class="item">
+      <div class="media shot"><svg class="fig" viewBox="0 0 90 120" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false"><rect x="0" y="0" width="90" height="120" fill="var(--bg-muted)"/>
+       <circle cx="45" cy="52" r="30" fill="var(--gray-60)" opacity="0.85"/>
+       <rect x="0" y="92" width="90" height="28" fill="var(--gray-40)" opacity="0.9"/></svg></div>
+      <div class="meta"><span>가죽 소품함</span><span class="price">72,000원</span></div>
+    </article>
+    <article class="item">
+      <div class="media shot"><svg class="fig" viewBox="0 0 90 120" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false"><rect x="0" y="0" width="90" height="120" fill="var(--bg-muted)"/>
+       <circle cx="45" cy="52" r="30" fill="var(--gray-60)" opacity="0.85"/>
+       <rect x="0" y="92" width="90" height="28" fill="var(--gray-40)" opacity="0.9"/></svg></div>
+      <div class="meta"><span>무광 텀블러</span><span class="price">38,000원</span></div>
+    </article></div>
+  <section class="detail">
+    <div>
+      <p class="eyebrow">소재와 관리</p>
+      <p class="body" style="margin-top:var(--sp-3)">세탁 후에도 형태가 남도록 밀도를 높여 짰습니다. 첫 세탁에서 약간 줄어든 뒤 그 상태로 유지됩니다. 표백제와 건조기는 권하지 않습니다.</p>
+      <dl class="spec" style="margin-top:var(--sp-5)">
+        <div><span>소재</span><b>리넨 100%</b></div>
+        <div><span>중량</span><b>240 g/㎡</b></div>
+        <div><span>생산</span><b>국내 봉제</b></div>
+        <div><span>배송</span><b>2–4일</b></div>
+      </dl>
+    </div>
+    <aside class="buy">
+      <p class="eyebrow">겹이불 커버</p>
+      <p class="big">128,000원</p>
+      <p style="margin:0;font-size:var(--fs-14);color:var(--fg-3)">퀸 · 오트 / 재고 6</p>
+      <a class="btn" href="#none">장바구니에 담기</a>
+      <a class="btn ghost" href="#none">위시리스트</a>
+    </aside>
+  </section>
+</main>
+<footer class="wrap foot"><span>Atelier Counter Theme</span><span>미리보기 · 토큰 기반 생성</span></footer>
+</body></html>

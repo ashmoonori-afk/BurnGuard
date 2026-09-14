@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signal Reel Theme — 웹사이트 미리보기</title>
+<link rel="stylesheet" href="../../assets/fonts/fonts.css">
+<style>
+/* Signal Reel Theme - an original BurnGuard design system. */
+/* Colour, type pairing and shape rules composed for this theme. */
+
+:root {
+  color-scheme: dark;
+
+  /* Neutrals */
+  --gray-100: #000000;
+  --gray-90: #0F0F0E;
+  --gray-80: #222222;
+  --gray-70: #3B3A3A;
+  --gray-60: #565554;
+  --gray-50: #71706E;
+  --gray-40: #8E8D8B;
+  --gray-30: #ACAAA8;
+  --gray-20: #C9C7C5;
+  --gray-10: #E6E4E2;
+
+  /* Brand and accents */
+  --primary-blue: #E11414;
+  --action-blue: #E11414;
+  --red-60: #E11414;
+  --red-50: #E53C3C;
+  --red-10: #F1CBC8;
+  --orange-50: #B45A18;
+  --orange-10: #E9D7C9;
+  --yellow-30: #D8A320;
+  --yellow-10: #EFE1C2;
+  --green-60: #4FA24F;
+  --green-50: #6AAF69;
+  --green-10: #D7E4D3;
+  --teal-50: #B4B0AA;
+  --teal-10: #E9E7E3;
+  --aqua-60: #6FA8D6;
+  --aqua-10: #DDE6EB;
+  --blue-90: #3F0606;
+  --blue-80: #6C0A0A;
+  --blue-70: #9E0E0E;
+  --blue-60: #E11414;
+  --blue-50: #E64A49;
+  --blue-30: #EC918F;
+  --blue-10: #F2CFCD;
+  --ultramarine-60: #9C1621;
+  --purple-60: #7A0C0C;
+  --pink-60: #A50F0F;
+
+  /* Semantic */
+  --success: #4FA24F;
+  --warning-yellow: #D8A320;
+  --warning-orange: #B45A18;
+  --error: #E11414;
+  --info: #6FA8D6;
+
+  /* Surface and text */
+  --bg: #070707;
+  --bg-subtle: #111010;
+  --bg-muted: #1A1A1A;
+  --surface: #0C0C0C;
+  --surface-inverse: #F5F3F0;
+  --fg-1: #F5F3F0;
+  --fg-2: #CAC9C6;
+  --fg-3: #9F9E9C;
+  --fg-4: #747472;
+  --fg-on-dark: #F5F3F0;
+  --fg-on-brand: #FFFFFF;
+  --border: #282828;
+  --border-strong: #585756;
+  --focus-ring: #E11414;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #7A0C0C;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #B4B0AA;
+  --fg-on-accent: #101014;
+  --fg-on-info: #101014;
+  --fg-on-success: #101014;
+  --fg-on-warning: #101014;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #E11414;
+  --chart-2: #7A0C0C;
+  --chart-3: #B4B0AA;
+  --chart-4: #6FA8D6;
+  --chart-5: #4FA24F;
+  --chart-6: #D8A320;
+  --chart-7: #E54544;
+  --chart-8: #E97270;
+  --chart-9: #CFCCC7;
+  --chart-10: #AB6867;
+
+  /* Type families */
+  --font-display: "Anton", "Black Han Sans", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Gowun Batang", serif;
+  --font-body: "Public Sans", "Pretendard", sans-serif;
+  --font-sans: "Public Sans", "Pretendard", sans-serif;
+  --font-mono: "JetBrains Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: 0 16px 36px rgba(0, 0, 0, 0.52);
+  --shadow-4: 0 28px 56px rgba(0, 0, 0, 0.60);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: none;
+  --layout-measure: 52ch;
+  --layout-columns: 6;
+  --layout-gutter: 0px;
+  --layout-margin: clamp(16px, 3vw, 40px);
+  --layout-section-y: clamp(28px, 4vw, 64px);
+  --layout-rule: 0px;
+  --layout-bp-md: 720px;
+  --layout-bp-lg: 1080px;
+  --layout-hero: 21 / 9;
+  --layout-nav-h: 56px;
+}
+
+:root { --layout-structure: split; }
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg-1);
+  font-family:var(--font-body);font-size:var(--fs-16);line-height:var(--lh-relaxed);
+  font-feature-settings:"tnum" 0}
+img,svg{display:block;max-width:100%}
+a{color:inherit}
+.wrap{max-width:var(--layout-max,1200px);margin-inline:auto;
+  padding-inline:var(--layout-margin,24px)}
+.bleed{width:100%}
+.eyebrow{font-family:var(--font-mono);font-size:var(--fs-12);
+  letter-spacing:var(--ls-eyebrow,.12em);text-transform:uppercase;color:var(--fg-3);margin:0}
+.display{font-family:var(--font-display);line-height:var(--lh-display,var(--lh-tight));
+  letter-spacing:var(--ls-display,var(--ls-tight));color:var(--fg-1);margin:0;
+  font-size:clamp(var(--fs-32),6vw,var(--fs-64))}
+.lede{font-family:var(--font-serif);font-size:var(--fs-20);color:var(--fg-2);
+  max-width:var(--layout-measure,60ch);margin:0}
+.body{font-size:var(--fs-16);color:var(--fg-2);max-width:var(--layout-measure,60ch)}
+.rule{border:0;border-top:var(--layout-rule,1px) solid var(--border);margin:0}
+.btn{display:inline-block;font-family:var(--font-sans);font-size:var(--fs-14);
+  font-weight:var(--fw-medium,500);padding:var(--sp-3) var(--sp-5);border:0;
+  border-radius:var(--r-4);background:var(--primary-blue);color:var(--fg-on-brand);
+  text-decoration:none;transition:opacity var(--dur-fast) var(--ease-standard)}
+.btn:hover{opacity:.88}
+.btn.ghost{background:transparent;color:var(--fg-1);
+  border:var(--layout-rule,1px) solid var(--border-strong)}
+.btn.pill{border-radius:var(--r-pill)}
+.tag{display:inline-block;font-family:var(--font-mono);font-size:var(--fs-12);
+  padding:var(--sp-1) var(--sp-2);border-radius:var(--r-2);
+  background:var(--bg-muted);color:var(--fg-2)}
+.fig{width:100%;height:100%;object-fit:cover}
+.media{overflow:hidden;background:var(--bg-muted);border-radius:var(--r-8)}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);
+  min-height:var(--layout-nav-h,64px);border-bottom:var(--layout-rule,1px) solid var(--border)}
+.nav .mark{font-family:var(--font-display);font-size:var(--fs-18);
+  letter-spacing:var(--ls-tight);color:var(--fg-1)}
+.nav ul{display:flex;gap:var(--sp-5);list-style:none;margin:0;padding:0;
+  font-family:var(--font-sans);font-size:var(--fs-14);color:var(--fg-2)}
+.foot{border-top:var(--layout-rule,1px) solid var(--border);
+  padding-block:var(--sp-8);margin-top:var(--sp-10);
+  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  display:flex;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap}
+.section{padding-block:var(--layout-section-y,64px)}
+.grid{display:grid;gap:var(--layout-gutter,24px)}
+.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stack{display:flex;flex-direction:column;gap:var(--sp-4)}
+.row{display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center}
+dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-4);margin:0}
+dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  letter-spacing:.06em;text-transform:uppercase}
+dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
+@media (max-width:720px){
+  .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
+  .nav ul{display:none}
+}
+</style></head>
+<body data-archetype="poster" data-layout="split">
+
+<style>
+.chrome{display:flex;justify-content:space-between;align-items:center;
+  min-height:var(--layout-nav-h,44px);font-family:var(--font-mono);
+  font-size:var(--fs-12);color:var(--fg-3);letter-spacing:.08em}
+.field{padding-block:var(--layout-section-y,96px) var(--sp-6);text-align:center}
+.band .media{border-radius:0;aspect-ratio:var(--layout-hero,21 / 9)}
+
+.poster-main{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,4fr);gap:var(--layout-gutter);max-width:var(--layout-max);margin-inline:auto;padding-inline:var(--layout-margin)}
+.poster-main>.field,.poster-main>section:last-child{grid-column:1 / -1}.poster-main>.band{grid-column:2;grid-row:2}.poster-main>.over{grid-column:1;grid-row:2;padding-inline:0;overflow:hidden;text-align:left;margin-top:0}
+.over{position:relative;z-index:1;text-align:center;
+  margin-top:calc(-1 * 0 * var(--statement-h));
+  padding-bottom:calc(var(--sp-8) - 0 * var(--statement-h))}
+.statement{--statement-size:clamp(var(--fs-40),9vw,7rem);
+  display:inline-block;transform:rotate(0deg);
+  font-family:var(--font-display);line-height:var(--lh-display,.94);
+  letter-spacing:var(--ls-display,var(--ls-tight));color:var(--fg-1);margin:0;
+  font-size:var(--statement-size)}
+.field,.over{--statement-h:calc(2 * clamp(var(--fs-40),9vw,7rem) * var(--lh-display,.94))}
+.statement span{display:block}
+.statement span:nth-child(2){margin-left:calc(0px * 1)}
+.statement span:nth-child(3){margin-left:calc(0px * 2)}
+.credits{max-width:calc(var(--layout-measure,46ch) + 8ch);margin:var(--sp-10) auto 0;
+  display:grid;gap:0}
+.credits div{display:flex;justify-content:space-between;gap:var(--sp-8);
+  padding-block:var(--sp-2);font-family:var(--font-mono);font-size:var(--fs-12);
+  letter-spacing:.06em;border-bottom:var(--layout-rule,1px) solid var(--border)}
+.credits dt{color:var(--fg-4);text-transform:uppercase}
+.credits dd{margin:0;color:var(--fg-2)}
+.note{max-width:var(--layout-measure,46ch);margin:var(--sp-8) auto 0;text-align:center;
+  font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-3)}
+@media (max-width:720px){
+  .poster-main{display:block}.statement{transform:none}.statement span:nth-child(n){margin-left:0}
+  .over{margin-top:0;padding-bottom:var(--sp-8)}}
+</style>
+<header class="wrap chrome">
+  <span>Signal Reel</span><span>메뉴</span>
+</header>
+<main class="poster-main">
+  <section class="wrap field"><p class="eyebrow">2026 봄 상영 · 단관</p></section>
+  <section class="bleed band"><div class="media"><img class="fig" src="./media/signal-reel.webp" alt="" loading="lazy" decoding="async"></div></section>
+  <section class="wrap over">
+    <h1 class="statement"><span>흐린 날의</span><span>긴 산책</span></h1>
+  </section>
+  <section class="wrap">
+    <dl class="credits">
+      <div><dt>연출</dt><dd>임세린</dd></div><div><dt>촬영</dt><dd>박도현</dd></div><div><dt>미술</dt><dd>정하윤</dd></div><div><dt>음악</dt><dd>K. 리</dd></div><div><dt>제작</dt><dd>스튜디오 노트</dd></div>
+    </dl>
+    <p class="note">러닝타임 104분 · 전체 관람가 · 3월 12일부터 매일 19시 30분 한 회 상영</p>
+  </section>
+</main>
+<footer class="wrap foot"><span>Signal Reel Theme</span><span>미리보기 · 토큰 기반 생성</span></footer>
+</body></html>

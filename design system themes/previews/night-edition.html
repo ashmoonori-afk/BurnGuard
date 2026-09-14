@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Night Edition Theme — 웹사이트 미리보기</title>
+<link rel="stylesheet" href="../../assets/fonts/fonts.css">
+<style>
+/* Night Edition Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: dark;
+
+  /* Neutrals */
+  --gray-100: #0C0C0E;
+  --gray-90: #1A191B;
+  --gray-80: #2C2B2C;
+  --gray-70: #424141;
+  --gray-60: #5B5A59;
+  --gray-50: #747270;
+  --gray-40: #8E8D8A;
+  --gray-30: #AAA7A4;
+  --gray-20: #C4C2BD;
+  --gray-10: #E0DDD7;
+
+  /* Brand and accents */
+  --primary-blue: #D98E3A;
+  --action-blue: #D98E3A;
+  --red-60: #CF5B54;
+  --red-50: #D4756E;
+  --red-10: #E8D0CA;
+  --orange-50: #C0662F;
+  --orange-10: #E5D2C3;
+  --yellow-30: #D98E3A;
+  --yellow-10: #E9D6BF;
+  --green-60: #5A9468;
+  --green-50: #72A27C;
+  --green-10: #D3DBCE;
+  --teal-50: #6E6A64;
+  --teal-10: #D6D3CD;
+  --aqua-60: #6E9AB8;
+  --aqua-10: #D6DCDC;
+  --blue-90: #45301A;
+  --blue-80: #6E4A23;
+  --blue-70: #9C672D;
+  --blue-60: #D98E3A;
+  --blue-50: #DEA463;
+  --blue-30: #E4C299;
+  --blue-10: #EADBC9;
+  --ultramarine-60: #96663A;
+  --purple-60: #4D6B7A;
+  --pink-60: #84646A;
+
+  /* Semantic */
+  --success: #5A9468;
+  --warning-yellow: #D98E3A;
+  --warning-orange: #C0662F;
+  --error: #CF5B54;
+  --info: #6E9AB8;
+
+  /* Surface and text */
+  --bg: #121214;
+  --bg-subtle: #1B1B1C;
+  --bg-muted: #242325;
+  --surface: #161618;
+  --surface-inverse: #EDEAE4;
+  --fg-1: #EDEAE4;
+  --fg-2: #C6C3BF;
+  --fg-3: #9E9C99;
+  --fg-4: #777574;
+  --fg-on-dark: #EDEAE4;
+  --fg-on-brand: #101014;
+  --border: #313031;
+  --border-strong: #5C5B5B;
+  --focus-ring: #D98E3A;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #4D6B7A;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #6E6A64;
+  --fg-on-accent: #FFFFFF;
+  --fg-on-info: #101014;
+  --fg-on-success: #101014;
+  --fg-on-warning: #101014;
+  --fg-on-error: #101014;
+
+  /* Charts */
+  --chart-1: #D98E3A;
+  --chart-2: #4D6B7A;
+  --chart-3: #6E6A64;
+  --chart-4: #6E9AB8;
+  --chart-5: #5A9468;
+  --chart-6: #DDA25F;
+  --chart-7: #CF5B54;
+  --chart-8: #E1B581;
+  --chart-9: #A3A09A;
+  --chart-10: #8D9EA4;
+
+  /* Type families */
+  --font-display: "Newsreader", "Nanum Myeongjo", serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "Newsreader", "Nanum Myeongjo", serif;
+  --font-sans: "Manrope", "Pretendard", sans-serif;
+  --font-mono: "Geist Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 300;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.8;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 2px;
+  --r-8: 2px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1100px;
+  --layout-measure: 66ch;
+  --layout-columns: 12;
+  --layout-gutter: 24px;
+  --layout-margin: clamp(20px, 5vw, 72px);
+  --layout-section-y: clamp(60px, 8vw, 120px);
+  --layout-rule: 1px;
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1040px;
+  --layout-hero: 16 / 9;
+  --layout-nav-h: 64px;
+
+  /* Family extensions */
+  --family-media-fit: cover;
+  --family-media-text-ratio: 3 / 2;
+  --family-editorial-paragraph-mode: spaced;
+}
+
+:root { --layout-structure: editorial; }
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg-1);
+  font-family:var(--font-body);font-size:var(--fs-16);line-height:var(--lh-relaxed);
+  font-feature-settings:"tnum" 0}
+img,svg{display:block;max-width:100%}
+a{color:inherit}
+.wrap{max-width:var(--layout-max,1200px);margin-inline:auto;
+  padding-inline:var(--layout-margin,24px)}
+.bleed{width:100%}
+.eyebrow{font-family:var(--font-mono);font-size:var(--fs-12);
+  letter-spacing:var(--ls-eyebrow,.12em);text-transform:uppercase;color:var(--fg-3);margin:0}
+.display{font-family:var(--font-display);line-height:var(--lh-display,var(--lh-tight));
+  letter-spacing:var(--ls-display,var(--ls-tight));color:var(--fg-1);margin:0;
+  font-size:clamp(var(--fs-32),6vw,var(--fs-64))}
+.lede{font-family:var(--font-serif);font-size:var(--fs-20);color:var(--fg-2);
+  max-width:var(--layout-measure,60ch);margin:0}
+.body{font-size:var(--fs-16);color:var(--fg-2);max-width:var(--layout-measure,60ch)}
+.rule{border:0;border-top:var(--layout-rule,1px) solid var(--border);margin:0}
+.btn{display:inline-block;font-family:var(--font-sans);font-size:var(--fs-14);
+  font-weight:var(--fw-medium,500);padding:var(--sp-3) var(--sp-5);border:0;
+  border-radius:var(--r-4);background:var(--primary-blue);color:var(--fg-on-brand);
+  text-decoration:none;transition:opacity var(--dur-fast) var(--ease-standard)}
+.btn:hover{opacity:.88}
+.btn.ghost{background:transparent;color:var(--fg-1);
+  border:var(--layout-rule,1px) solid var(--border-strong)}
+.btn.pill{border-radius:var(--r-pill)}
+.tag{display:inline-block;font-family:var(--font-mono);font-size:var(--fs-12);
+  padding:var(--sp-1) var(--sp-2);border-radius:var(--r-2);
+  background:var(--bg-muted);color:var(--fg-2)}
+.fig{width:100%;height:100%;object-fit:cover}
+.media{overflow:hidden;background:var(--bg-muted);border-radius:var(--r-8)}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);
+  min-height:var(--layout-nav-h,64px);border-bottom:var(--layout-rule,1px) solid var(--border)}
+.nav .mark{font-family:var(--font-display);font-size:var(--fs-18);
+  letter-spacing:var(--ls-tight);color:var(--fg-1)}
+.nav ul{display:flex;gap:var(--sp-5);list-style:none;margin:0;padding:0;
+  font-family:var(--font-sans);font-size:var(--fs-14);color:var(--fg-2)}
+.foot{border-top:var(--layout-rule,1px) solid var(--border);
+  padding-block:var(--sp-8);margin-top:var(--sp-10);
+  font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  display:flex;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap}
+.section{padding-block:var(--layout-section-y,64px)}
+.grid{display:grid;gap:var(--layout-gutter,24px)}
+.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stack{display:flex;flex-direction:column;gap:var(--sp-4)}
+.row{display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center}
+dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-4);margin:0}
+dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
+  letter-spacing:.06em;text-transform:uppercase}
+dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
+@media (max-width:760px){
+  .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
+  .nav ul{display:none}
+}
+</style></head>
+<body data-archetype="article" data-layout="editorial">
+
+<style>
+.masthead{display:flex;justify-content:center;align-items:center;
+  min-height:var(--layout-nav-h,64px);border-bottom:var(--layout-rule,1px) solid var(--border)}
+.masthead .mark{font-family:var(--font-display);font-size:var(--fs-24);letter-spacing:var(--ls-tight)}
+.article-shell{display:grid;grid-template-columns:1fr;gap:var(--layout-gutter,24px)}
+.article-shell main{min-width:0}
+.contents{padding-block:var(--sp-8);border-right:var(--layout-rule,1px) solid var(--border);font-family:var(--font-mono);font-size:var(--fs-14)}
+.contents a{display:block;padding:var(--sp-3) var(--sp-2);overflow-wrap:anywhere}
+.article-hero{display:grid;grid-template-columns:1fr;gap:var(--layout-gutter,24px);align-items:center}
+.article-hero .hero-media{}
+.article-hero .headline-block{}
+
+.hero-media{aspect-ratio:var(--layout-hero,16 / 9);margin-block:var(--sp-8)}
+.hero-media .fig{object-fit:cover}
+.headline{max-width:var(--layout-measure,62ch)}
+.byline{display:flex;gap:var(--sp-4);flex-wrap:wrap;font-family:var(--font-mono);
+  font-size:var(--fs-12);color:var(--fg-4);margin-block:var(--sp-5);
+  padding-block:var(--sp-3);border-block:var(--layout-rule,1px) solid var(--border)}
+.prose{max-width:var(--layout-measure,62ch);font-family:var(--font-serif);
+  font-size:var(--fs-18);line-height:var(--lh-loose,var(--lh-relaxed));color:var(--fg-2)}
+.prose p{margin:0 0 var(--sp-4)}
+.prose p + p{}
+.pull{font-family:var(--font-display);font-size:var(--fs-32);line-height:var(--lh-tight);
+  color:var(--fg-1);margin-block:var(--sp-8);padding-left:var(--sp-5);
+  border-left:3px solid var(--primary-blue);max-width:var(--layout-measure,62ch)}
+.split{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:var(--layout-gutter,24px);align-items:start}
+.caption{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);margin-top:var(--sp-2)}
+.more{display:grid;gap:0;margin-top:var(--sp-10)}
+.more a{display:flex;justify-content:space-between;gap:var(--sp-4);text-decoration:none;
+  padding-block:var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
+  font-family:var(--font-serif);font-size:var(--fs-18);color:var(--fg-1)}
+.more a span{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4)}
+@media (max-width:760px){
+  .split,.article-shell,.article-hero{grid-template-columns:1fr}
+  .article-hero .hero-media,.article-hero .headline-block{grid-column:auto;grid-row:auto}
+  .article-hero .headline-block{order:-1}.article-hero .hero-media{margin-top:var(--sp-4)}
+  .contents{display:flex;flex-wrap:wrap;border-right:0;border-bottom:var(--layout-rule,1px) solid var(--border);padding-block:var(--sp-2)}}
+</style>
+<header class="wrap masthead"><span class="mark">Night Edition</span></header>
+<div class="wrap article-shell">
+
+<main>
+  <section class="article-hero" id="article-intro">
+  <div class="media hero-media"><img class="fig" src="./media/night-edition.webp" alt="" loading="lazy" decoding="async"></div>
+  <div class="headline-block">
+  <p class="eyebrow">에세이 · 작업 방식</p>
+  <h1 class="display headline" style="margin-top:var(--sp-3)">되돌릴 수 있는 만큼만<br>과감해질 수 있다</h1>
+  </div></section>
+  <div class="byline"><span>글 · 편집부</span><span>2026년 3월</span><span>읽는 데 7분</span></div>
+  <div class="prose" id="article-details"><p>작업의 속도를 결정하는 것은 도구가 아니라 되돌릴 수 있는 범위다. 한 번에 되돌릴 수 있는 단위가 작을수록 더 과감하게 시도할 수 있고, 시도가 많아질수록 결과는 빨리 수렴한다.</p><p>그래서 좋은 작업 환경은 빠른 환경이 아니라 취소가 싼 환경이다. 저장과 게시를 분리하고, 게시에는 영수증을 남기고, 영수증이 있으면 언제든 이전 상태로 돌아갈 수 있게 한다.</p><p>이 원칙은 화면에도 그대로 적용된다. 한 화면에서 수행할 수 있는 결정의 수를 줄이면 각 결정의 되돌림 비용이 내려가고, 사용자는 화면을 읽는 대신 사용하게 된다.</p></div>
+  <blockquote class="pull">취소가 싼 환경에서만 사람은 과감해진다.</blockquote>
+  <section class="split section" style="padding-bottom:0">
+    <figure style="margin:0">
+      <div class="media" style="aspect-ratio:4 / 3"><svg class="fig" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false"><rect x="0" y="0" width="100" height="100" fill="var(--bg-muted)"/>
+         <rect x="18" y="18" width="64" height="64" fill="var(--gray-60)" opacity="0.9"/>
+         <circle cx="50" cy="50" r="18" fill="var(--gray-40)"/></svg></div>
+      <figcaption class="caption">그림 1. 저장과 게시를 분리한 상태 전이</figcaption>
+    </figure>
+    <div class="prose">
+      <p>게시는 저장의 연장이 아니라 별개의 사건이다. 저장은 사용자의 손에서 끝나지만, 게시는 다른 사람이 볼 수 있는 상태를 만든다.</p>
+      <p>두 사건을 분리하면 편집 중의 불완전한 상태가 바깥으로 새지 않고, 게시 시점마다 검증할 수 있는 지점이 생긴다.</p>
+    </div>
+  </section>
+  <nav class="more" id="article-related">
+    <a href="#none">여백은 장식이 아니라 구조다<span>03</span></a><a href="#none">측정되지 않는 개선은 취향이다<span>02</span></a><a href="#none">작은 단위로 되돌리기<span>01</span></a>
+  </nav>
+</main></div>
+<footer class="wrap foot"><span>Night Edition Theme</span><span>미리보기 · 토큰 기반 생성</span></footer>
+</body></html>
