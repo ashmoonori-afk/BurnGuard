@@ -1,0 +1,177 @@
+@import url("./fonts/fonts.css");
+
+/* Daylight Press Theme - an original BurnGuard design system. */
+/* Colour, type pairing and shape rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FDFBF7;
+  --gray-90: #F0EEEA;
+  --gray-80: #DEDCD8;
+  --gray-70: #C7C5C2;
+  --gray-60: #AEADAA;
+  --gray-50: #969492;
+  --gray-40: #7A7A78;
+  --gray-30: #605F5E;
+  --gray-20: #444443;
+  --gray-10: #2A2929;
+
+  /* Brand and accents */
+  --primary-blue: #FFCF4A;
+  --action-blue: #FFCF4A;
+  --red-60: #C4483F;
+  --red-50: #CE6860;
+  --red-10: #F3DBD6;
+  --orange-50: #C4763C;
+  --orange-10: #F3E3D5;
+  --yellow-30: #E0A93B;
+  --yellow-10: #F7E9CE;
+  --green-60: #598E56;
+  --green-50: #739F70;
+  --green-10: #DFE7DA;
+  --teal-50: #D8CFC4;
+  --teal-10: #F6F3EE;
+  --aqua-60: #5D8FB8;
+  --aqua-10: #E0E8EC;
+  --blue-90: #5C4E29;
+  --blue-80: #897232;
+  --blue-70: #BB993C;
+  --blue-60: #FFCF4A;
+  --blue-50: #FFDA74;
+  --blue-30: #FEE8AB;
+  --blue-10: #FDF4DB;
+  --ultramarine-60: #AF9044;
+  --purple-60: #6C8F6A;
+  --pink-60: #917158;
+
+  /* Semantic */
+  --success: #598E56;
+  --warning-yellow: #E0A93B;
+  --warning-orange: #C4763C;
+  --error: #C4483F;
+  --info: #5D8FB8;
+
+  /* Surface and text */
+  --bg: #FDFBF7;
+  --bg-subtle: #F4F2EE;
+  --bg-muted: #EBE9E5;
+  --surface: #F8F7F3;
+  --surface-inverse: #1C1C1C;
+  --fg-1: #1C1C1C;
+  --fg-2: #444443;
+  --fg-3: #6D6C6B;
+  --fg-4: #969492;
+  --fg-on-dark: #FDFBF7;
+  --fg-on-brand: #101014;
+  --border: #DEDCD8;
+  --border-strong: #B0AFAD;
+  --focus-ring: #C79A16;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #6C8F6A;
+  --fg-on-secondary: #101014;
+  --accent: #D8CFC4;
+  --fg-on-accent: #101014;
+  --fg-on-info: #101014;
+  --fg-on-success: #101014;
+  --fg-on-warning: #101014;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #FFCF4A;
+  --chart-2: #6C8F6A;
+  --chart-3: #D8CFC4;
+  --chart-4: #5D8FB8;
+  --chart-5: #598E56;
+  --chart-6: #E0A93B;
+  --chart-7: #C4483F;
+  --chart-8: #A08437;
+  --chart-9: #89847D;
+  --chart-10: #A6BAA2;
+
+  /* Type families */
+  --font-display: "Outfit", "Pretendard", sans-serif;
+  --font-serif: "Lora", "Gowun Batang", serif;
+  --font-body: "DM Sans", "Pretendard", sans-serif;
+  --font-sans: "DM Sans", "Pretendard", sans-serif;
+  --font-mono: "Geist Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 6px;
+  --r-4: 12px;
+  --r-8: 24px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: 0 2px 6px rgba(0, 0, 0, 0.36);
+  --shadow-2: 0 8px 20px rgba(0, 0, 0, 0.44);
+  --shadow-3: 0 16px 36px rgba(0, 0, 0, 0.52);
+  --shadow-4: 0 28px 56px rgba(0, 0, 0, 0.60);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1080px;
+  --layout-measure: 62ch;
+  --layout-columns: 8;
+  --layout-gutter: 32px;
+  --layout-margin: clamp(24px, 6vw, 72px);
+  --layout-section-y: clamp(72px, 10vw, 160px);
+  --layout-rule: 1px;
+  --layout-bp-md: 768px;
+  --layout-bp-lg: 1024px;
+  --layout-hero: 4 / 3;
+  --layout-nav-h: 64px;
+}

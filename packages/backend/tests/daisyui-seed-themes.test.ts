@@ -10,7 +10,8 @@ import {
 import { resolveRepoRoot } from "../src/lib/paths";
 import { extractCssCustomProperties } from "../src/services/design-system-extract";
 
-const THEME_SLUGS = [
+/** Themes converted from the daisyUI donor palettes; these carry the MIT attribution. */
+const DONOR_SLUGS = [
   "light",
   "dark",
   "cupcake",
@@ -22,6 +23,19 @@ const THEME_SLUGS = [
   "nord",
   "business",
 ] as const;
+
+/** Original systems authored for BurnGuard; no donor palette, no third-party license. */
+const ORIGINAL_SLUGS = [
+  "cobalt-atelier",
+  "signal-reel",
+  "daylight-press",
+  "blueprint-manual",
+  "ledger-index",
+  "dune-editorial",
+  "archive-folio",
+] as const;
+
+const THEME_SLUGS = [...DONOR_SLUGS, ...ORIGINAL_SLUGS] as const;
 
 const themesRoot = path.join(resolveRepoRoot(), "design system themes");
 const canonicalTokensPath = path.join(
@@ -39,6 +53,45 @@ describe("bundled daisyUI-derived design systems", () => {
       for (const fileName of ["colors_and_type.css", "SKILL.md", "README.md"]) {
         expect((await stat(path.join(themeDir, fileName))).isFile()).toBe(true);
       }
+    }
+  });
+
+  test("state provenance truthfully per theme", async () => {
+    // A donor theme must keep its attribution, and an original must not borrow one it does not owe.
+    for (const slug of DONOR_SLUGS) {
+      const readme = await readFile(path.join(themesRoot, slug, "README.md"), "utf8");
+      expect(readme, slug).toContain("daisyUI");
+      expect(readme, slug).toContain("MIT License");
+    }
+    for (const slug of ORIGINAL_SLUGS) {
+      const readme = await readFile(path.join(themesRoot, slug, "README.md"), "utf8");
+      const css = await readFile(path.join(themesRoot, slug, "colors_and_type.css"), "utf8");
+      expect(readme, slug).toContain("Original system authored for BurnGuard");
+      for (const borrowed of ["daisyUI", "MIT License", "Copyright"]) {
+        expect(readme, `${slug}: ${borrowed}`).not.toContain(borrowed);
+        expect(css, `${slug}: ${borrowed}`).not.toContain(borrowed);
+      }
+    }
+  });
+
+  test("ship layout as tokens, not as a per-artifact decision", async () => {
+    // A design system is grid, measure and rhythm as much as colour and type. Without these an
+    // artifact has to invent a layout, and two artifacts on the same theme stop matching.
+    const required = [
+      "layout-max", "layout-measure", "layout-columns", "layout-gutter", "layout-margin",
+      "layout-section-y", "layout-rule", "layout-bp-md", "layout-bp-lg", "layout-hero",
+    ];
+    for (const slug of ORIGINAL_SLUGS) {
+      const css = await readFile(path.join(themesRoot, slug, "colors_and_type.css"), "utf8");
+      const tokens = await extractCssCustomProperties(css);
+      for (const token of required) {
+        expect(tokens.has(token), `${slug}: --${token}`).toBe(true);
+        expect(tokens.get(token)?.trim(), `${slug}: --${token}`).not.toBe("");
+      }
+      // The README has to document the grid it ships, so a reader can reproduce it.
+      const readme = await readFile(path.join(themesRoot, slug, "README.md"), "utf8");
+      expect(readme, slug).toContain("## Layout");
+      expect(readme, slug).toContain("--layout-measure");
     }
   });
 

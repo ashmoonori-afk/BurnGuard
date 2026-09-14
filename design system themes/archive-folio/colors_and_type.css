@@ -1,0 +1,177 @@
+@import url("./fonts/fonts.css");
+
+/* Archive Folio Theme - an original BurnGuard design system. */
+/* Colour, type pairing and shape rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FFFFFF;
+  --gray-90: #F1F1F1;
+  --gray-80: #DEDEDE;
+  --gray-70: #C6C6C6;
+  --gray-60: #ACACAC;
+  --gray-50: #929292;
+  --gray-40: #757575;
+  --gray-30: #585858;
+  --gray-20: #3C3C3C;
+  --gray-10: #1F1F1F;
+
+  /* Brand and accents */
+  --primary-blue: #2B2B2B;
+  --action-blue: #2B2B2B;
+  --red-60: #8E3030;
+  --red-50: #A25555;
+  --red-10: #EBDADA;
+  --orange-50: #8A5A27;
+  --orange-10: #EAE1D8;
+  --yellow-30: #8A7327;
+  --yellow-10: #E5E0CF;
+  --green-60: #40694A;
+  --green-50: #5F8167;
+  --green-10: #DDE4DE;
+  --teal-50: #A8A29A;
+  --teal-10: #EFEEED;
+  --aqua-60: #3E5C74;
+  --aqua-10: #DCE2E6;
+  --blue-90: #181818;
+  --blue-80: #1D1D1D;
+  --blue-70: #232323;
+  --blue-60: #2B2B2B;
+  --blue-50: #5E5E5E;
+  --blue-30: #A2A2A2;
+  --blue-10: #DDDDDD;
+  --ultramarine-60: #252530;
+  --purple-60: #7A6A55;
+  --pink-60: #825245;
+
+  /* Semantic */
+  --success: #40694A;
+  --warning-yellow: #8A7327;
+  --warning-orange: #8A5A27;
+  --error: #8E3030;
+  --info: #3E5C74;
+
+  /* Surface and text */
+  --bg: #FFFFFF;
+  --bg-subtle: #F5F5F5;
+  --bg-muted: #ECECEC;
+  --surface: #FAFAFA;
+  --surface-inverse: #111111;
+  --fg-1: #111111;
+  --fg-2: #3C3C3C;
+  --fg-3: #676767;
+  --fg-4: #929292;
+  --fg-on-dark: #FFFFFF;
+  --fg-on-brand: #FFFFFF;
+  --border: #DEDEDE;
+  --border-strong: #AEAEAE;
+  --focus-ring: #111111;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #7A6A55;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #A8A29A;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #2B2B2B;
+  --chart-2: #7A6A55;
+  --chart-3: #A8A29A;
+  --chart-4: #3E5C74;
+  --chart-5: #40694A;
+  --chart-6: #8A7327;
+  --chart-7: #8E3030;
+  --chart-8: #202020;
+  --chart-9: #696560;
+  --chart-10: #AFA699;
+
+  /* Type families */
+  --font-display: "Newsreader", "Nanum Myeongjo", serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "Newsreader", "Nanum Myeongjo", serif;
+  --font-sans: "Public Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1440px;
+  --layout-measure: 64ch;
+  --layout-columns: 12;
+  --layout-gutter: 20px;
+  --layout-margin: 16px;
+  --layout-section-y: clamp(28px, 3vw, 48px);
+  --layout-rule: 1px;
+  --layout-bp-md: 840px;
+  --layout-bp-lg: 1200px;
+  --layout-hero: 4 / 5;
+  --layout-nav-h: 40px;
+}

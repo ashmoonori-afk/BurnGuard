@@ -1,0 +1,177 @@
+@import url("./fonts/fonts.css");
+
+/* Cobalt Atelier Theme - an original BurnGuard design system. */
+/* Colour, type pairing and shape rules composed for this theme. */
+
+:root {
+  color-scheme: dark;
+
+  /* Neutrals */
+  --gray-100: #05121F;
+  --gray-90: #14202B;
+  --gray-80: #28323B;
+  --gray-70: #414950;
+  --gray-60: #5C6266;
+  --gray-50: #787C7C;
+  --gray-40: #969795;
+  --gray-30: #B4B3AD;
+  --gray-20: #D2CFC5;
+  --gray-10: #F0EADE;
+
+  /* Brand and accents */
+  --primary-blue: #F2C14E;
+  --action-blue: #F2C14E;
+  --red-60: #D9534F;
+  --red-50: #E0716B;
+  --red-10: #F8DACE;
+  --orange-50: #C2703A;
+  --orange-10: #F4E0CA;
+  --yellow-30: #E3B341;
+  --yellow-10: #F9E9C5;
+  --green-60: #5FA86B;
+  --green-50: #79B57F;
+  --green-10: #E2EAD3;
+  --teal-50: #3E7FCB;
+  --teal-10: #DCE2E4;
+  --aqua-60: #7FB2E8;
+  --aqua-10: #E8EBEA;
+  --blue-90: #47432C;
+  --blue-80: #776636;
+  --blue-70: #AB8C40;
+  --blue-60: #F2C14E;
+  --blue-50: #F5CE73;
+  --blue-30: #F9E0A5;
+  --blue-10: #FDEFD1;
+  --ultramarine-60: #A78747;
+  --purple-60: #8E2F2A;
+  --pink-60: #AE3E3A;
+
+  /* Semantic */
+  --success: #5FA86B;
+  --warning-yellow: #E3B341;
+  --warning-orange: #C2703A;
+  --error: #D9534F;
+  --info: #7FB2E8;
+
+  /* Surface and text */
+  --bg: #0B4FA6;
+  --bg-subtle: #1556A9;
+  --bg-muted: #1F5DAB;
+  --surface: #1052A7;
+  --surface-inverse: #FFF8EA;
+  --fg-1: #FFF8EA;
+  --fg-2: #D3DADE;
+  --fg-3: #BAC8D8;
+  --fg-4: #7B9DC5;
+  --fg-on-dark: #FFF8EA;
+  --fg-on-brand: #101014;
+  --border: #2D67B0;
+  --border-strong: #5E88BD;
+  --focus-ring: #F2C14E;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #8E2F2A;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #3E7FCB;
+  --fg-on-accent: #101014;
+  --fg-on-info: #101014;
+  --fg-on-success: #101014;
+  --fg-on-warning: #101014;
+  --fg-on-error: #101014;
+
+  /* Charts */
+  --chart-1: #F2C14E;
+  --chart-2: #8E2F2A;
+  --chart-3: #3E7FCB;
+  --chart-4: #7FB2E8;
+  --chart-5: #5FA86B;
+  --chart-6: #E3B341;
+  --chart-7: #D9534F;
+  --chart-8: #F7D890;
+  --chart-9: #8FB2D8;
+  --chart-10: #BB7F77;
+
+  /* Type families */
+  --font-display: "Instrument Serif", "Gowun Batang", "Pretendard", serif;
+  --font-serif: "Instrument Serif", "Gowun Batang", serif;
+  --font-body: "Instrument Sans", "Pretendard", sans-serif;
+  --font-sans: "Instrument Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 2px;
+  --r-4: 4px;
+  --r-8: 8px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: 0 2px 6px rgba(0, 0, 0, 0.36);
+  --shadow-2: 0 8px 20px rgba(0, 0, 0, 0.44);
+  --shadow-3: 0 16px 36px rgba(0, 0, 0, 0.52);
+  --shadow-4: 0 28px 56px rgba(0, 0, 0, 0.60);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1240px;
+  --layout-measure: 58ch;
+  --layout-columns: 12;
+  --layout-gutter: 24px;
+  --layout-margin: clamp(20px, 4vw, 64px);
+  --layout-section-y: clamp(64px, 9vw, 140px);
+  --layout-rule: 1px;
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 16 / 9;
+  --layout-nav-h: 72px;
+}

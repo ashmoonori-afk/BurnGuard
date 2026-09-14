@@ -1,0 +1,177 @@
+@import url("./fonts/fonts.css");
+
+/* Ledger Index Theme - an original BurnGuard design system. */
+/* Colour, type pairing and shape rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #F4F4F4;
+  --gray-90: #E5E5E5;
+  --gray-80: #D2D2D2;
+  --gray-70: #B9B9B9;
+  --gray-60: #9F9F9F;
+  --gray-50: #848484;
+  --gray-40: #666666;
+  --gray-30: #494949;
+  --gray-20: #2C2C2C;
+  --gray-10: #0F0F0F;
+
+  /* Brand and accents */
+  --primary-blue: #1A1A1A;
+  --action-blue: #1A1A1A;
+  --red-60: #8E2727;
+  --red-50: #A04C4C;
+  --red-10: #E2CFCF;
+  --orange-50: #8A5520;
+  --orange-10: #E1D7CE;
+  --yellow-30: #8A7320;
+  --yellow-10: #DDD8C5;
+  --green-60: #3F6B45;
+  --green-50: #5C8161;
+  --green-10: #D3DBD4;
+  --teal-50: #9A9A9A;
+  --teal-10: #E4E4E4;
+  --aqua-60: #3F5A6B;
+  --aqua-10: #D3D8DB;
+  --blue-90: #070707;
+  --blue-80: #0C0C0C;
+  --blue-70: #121212;
+  --blue-60: #1A1A1A;
+  --blue-50: #4E4E4E;
+  --blue-30: #949494;
+  --blue-10: #D1D1D1;
+  --ultramarine-60: #1A1A25;
+  --purple-60: #5B5B5B;
+  --pink-60: #704545;
+
+  /* Semantic */
+  --success: #3F6B45;
+  --warning-yellow: #8A7320;
+  --warning-orange: #8A5520;
+  --error: #8E2727;
+  --info: #3F5A6B;
+
+  /* Surface and text */
+  --bg: #F4F4F4;
+  --bg-subtle: #EAEAEA;
+  --bg-muted: #E0E0E0;
+  --surface: #EFEFEF;
+  --surface-inverse: #000000;
+  --fg-1: #000000;
+  --fg-2: #2C2C2C;
+  --fg-3: #585858;
+  --fg-4: #848484;
+  --fg-on-dark: #F4F4F4;
+  --fg-on-brand: #FFFFFF;
+  --border: #D2D2D2;
+  --border-strong: #A1A1A1;
+  --focus-ring: #000000;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #5B5B5B;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #9A9A9A;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #1A1A1A;
+  --chart-2: #5B5B5B;
+  --chart-3: #9A9A9A;
+  --chart-4: #3F5A6B;
+  --chart-5: #3F6B45;
+  --chart-6: #8A7320;
+  --chart-7: #8E2727;
+  --chart-8: #0F0F0F;
+  --chart-9: #595959;
+  --chart-10: #989898;
+
+  /* Type families */
+  --font-display: "Public Sans", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "Public Sans", "Pretendard", sans-serif;
+  --font-sans: "Public Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1400px;
+  --layout-measure: 48ch;
+  --layout-columns: 12;
+  --layout-gutter: 0px;
+  --layout-margin: 24px;
+  --layout-section-y: 0px;
+  --layout-rule: 1px;
+  --layout-bp-md: 800px;
+  --layout-bp-lg: 1180px;
+  --layout-hero: 1 / 1;
+  --layout-nav-h: 0px;
+}
