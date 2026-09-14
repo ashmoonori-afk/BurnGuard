@@ -10,6 +10,7 @@ export const originalSamples = [
   { slug: "foliover", name: "FOLIOVER", description: "An independent journal of materials and culture." },
   { slug: "oddward", name: "ODDWARD", description: "Experimental creative work with expressive typography." },
   { slug: "velune", name: "VELUNE", description: "Moonlit glass lighting in deep plum and opal mint." },
+  { slug: "halide", name: "HALIDE", description: "An optics studio built on refracting liquid glass rings." },
 ] as const;
 export const originalSampleFormats = [
   { type: "prototype", directory: "web", entrypoint: "index.html", label: "Web" },

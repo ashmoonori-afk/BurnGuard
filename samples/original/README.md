@@ -1,6 +1,6 @@
 # Original sample collection
 
-Four fictional brands, twelve finished examples, and four matching design systems were authored for BurnGuard. Each brand includes a responsive web design, a six-slide presentation, and a 1080×1350 graphic. Brands, copy, and pictured objects are invented sample content, not offers from operating businesses.
+Five fictional brands, fifteen finished examples, and five matching design systems were authored for BurnGuard. Each brand includes a responsive web design, a presentation, and a 1080×1350 graphic. Brands, copy, and pictured objects are invented sample content, not offers from operating businesses.
 
 | Brand | Direction | Content |
 |---|---|---|
@@ -8,6 +8,7 @@ Four fictional brands, twelve finished examples, and four matching design system
 | FOLIOVER | Material-culture editorial | A journal of overlooked objects, warm paper, forest and chartreuse |
 | ODDWARD | Experimental studio | Chrome sculpture, emphatic typography, black, lime and magenta |
 | VELUNE | Nocturnal lighting atelier | A moonlit mint/opal luminaire, deep plum, orchid and serif typography |
+| HALIDE | Optics studio | Refracting liquid glass rings over a measured grid, deep indigo, amber and mint |
 
 `assets/hero.png` in each brand folder is a newly generated 1536×1024 image. The seed process copies that shared asset into each project and design-system directory. HTML references `assets/hero.png`; relative links work inside the resulting self-contained app projects and exports. Decks inline BurnGuard's existing deck runtime. No reference-site images or text are bundled.
 
@@ -20,7 +21,12 @@ Generated image directions:
 - ODDWARD: an oversized inflated chrome knot on a lime plinth, with a magenta panel in a black gallery space.
 - VELUNE: an invented mint/opal glass crescent luminaire on a deep-plum stone base, in a nocturnal plum gallery with moonlight and cool lavender reflections.
 
-All four images were generated using the built-in ImageGen tool; no reference images were supplied. The wording, token systems and layouts are authored specifically for these samples. New examples are seeded once and remain deleted if the user removes them; an update does not overwrite edited copies.
+- HALIDE: not an ImageGen output. `samples/original/halide/assets/hero.png` is rendered by the bundled
+  `assets/liquid-glass/liquid-glass.js` module itself — the grid, amber horizon and mint meridian are
+  drawn to a canvas, a gradient disc is placed, and the refracting ring is composited over it. Nothing
+  in it is hand-painted, so it is an honest sample of what the shipped asset produces.
+
+The first four images were generated using the built-in ImageGen tool; no reference images were supplied. The wording, token systems and layouts are authored specifically for these samples. New examples are seeded once and remain deleted if the user removes them; an update does not overwrite edited copies.
 
 ## Typography
 The samples use locally bundled free fonts: Space Grotesk and IBM Plex Mono for SONNEL; DM Serif Display and Gowun Batang for FOLIOVER and VELUNE; Bebas Neue for ODDWARD; Pretendard for Korean body text, with DM Sans for VELUNE English body text. Each HTML loads fonts/fonts.css. The seeder copies the shared fonts directory into every project and system, keeping exports self-contained. Retain font licenses and provenance from fonts/README.md when distributing generated work. No Google Fonts network request is required at runtime.
