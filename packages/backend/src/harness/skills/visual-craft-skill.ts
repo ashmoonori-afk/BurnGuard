@@ -112,9 +112,9 @@ export const DECK_VISUAL_CRAFT = `## Deck craft (DECK_VISUAL_CRAFT)
   two columns, a diagram, a smaller support element).
 - Optional composition suggestions: one dominant element per slide with the
   rest supporting it, spanning much of the slide and filling 60-80% of its
-  height; a cover on a full-bleed dark or accent field with a --deck-type-hero
-  title, an eyebrow above and one context line below, mirrored by the closing
-  slide; a background device; running title top-left and mono slide number
+  height; when no cover is specified: flat ground, one --deck-type-hero title,
+  one --deck-type-caption eyebrow, and no optional context line or decoration,
+  mirrored by the closing slide; a background device; running title top-left and mono slide number
   bottom-right, both muted, with eyebrows and badges in the content area
   rather than the same corner; nested frames with a soft shadow for media.
 - Structure usually beats bullets: two columns, a big number in the display
@@ -137,16 +137,16 @@ dimensions declared for that frame.
 - Mandatory: size in px relative to the artboard (or % of its width); no
   viewport units, no scroll, no animation — the export captures one static
   frame.
-- Optional model when the brief leaves composition open: a field layer (a mesh
-  of 2-3 radial glows, a duotone gradient, or a paper tone with 3-5% grain), a
-  figure layer at --content-figure, or 40-70% of the short side, placed
-  off-centre on a
-  rule-of-thirds intersection, and a type layer of one headline at 8-14% of
-  the artboard height with a body line at 2-3%, plus an optional eyebrow and
-  mark, in at most two typefaces.
+- Off-centre by default: the figure takes --content-figure of the frame
+  against one edge and the remaining air stays in one unbroken field. Never
+  centre every frame, never split 50/50, and size type from the surface ramp
+  rather than from a fraction of the artboard height.
+- Type over a photograph needs the calmest region or a plate; never a
+  gradient scrim across the whole frame.
+- Across a set recut rather than rescale: each frame gets its own crop and its
+  own figure/type split. The same crop at two sizes is the tell.
 - Flat fields and white backgrounds are fine, and a layout the user directs
-  wins over anything suggested here. Optional format hints: portrait stacks
-  figure above type, square centres the figure, landscape splits 60/40.
+  wins over anything suggested here.
 `;
 
 export const DEFAULT_VISUAL_IDENTITY = `## Default visual identity (DEFAULT_VISUAL_IDENTITY)

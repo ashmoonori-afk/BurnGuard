@@ -65,7 +65,7 @@ export function renderGraphic(
     }
     [data-graphic-artboard] + [data-graphic-artboard] { margin-top: 32px; }
     .mark { position: absolute; inset: clamp(24px, 7vw, 96px) auto auto clamp(24px, 7vw, 96px); font-size: clamp(12px, 1.4vw, 18px); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #004fff; }
-    h1 { min-width: 0; margin: 0; max-width: min(15ch, 100%); overflow-wrap: anywhere; font-size: clamp(36px, 8vw, 112px); line-height: 1.4; letter-spacing: -0.055em; }
+    h1 { min-width: 0; margin: 0; max-width: min(15ch, 100%); word-break: keep-all; font-size: clamp(36px, 8vw, 112px); line-height: 1.4; letter-spacing: -0.055em; }
     h1.long-title { max-width: 100%; font-size: clamp(12px, 2vw, 24px); line-height: 1.3; }
     p { margin: clamp(12px, 2vw, 28px) 0 0; max-width: 34em; font-size: clamp(14px, 2vw, 26px); line-height: 1.5; color: #405273; }
     #frame-1-product-detail { padding: 0; display: grid; grid-template-rows: repeat(10, minmax(0, 1fr)); align-content: stretch; }
