@@ -58,15 +58,12 @@ come from its tokens.
   (7/5, 8/4) over 6/6, and filled grid cells using few large cards instead of
   many small ones. None of this is an acceptance condition.
 
-## Motion
-- Easing cubic-bezier(0.32, 0.72, 0, 1); 200-300ms hover, 500-800ms reveals;
-  transform and opacity only. Hover: cards lift 2px and deepen their shadow,
-  buttons shift fill, press scales to 0.98. Nothing decorative moves.
-
 ## Self-check before finishing
-Inspect the render at the output contract's own dimensions: every text
-readable and none under 12px, contrast met, nothing clipped or overflowing,
-hierarchy coherent, and everything the brief asked for present.
+Inspect the render at the output contract's own dimensions and fix what fails
+instead of reporting it: no text below the smallest step this surface declares
+(12px only where a surface declares no floor), contrast met, nothing clipped or
+overflowing past its frame, hierarchy coherent, everything the brief asked for
+present.
 `;
 
 export const PROTOTYPE_VISUAL_CRAFT = `## Website craft (PROTOTYPE_VISUAL_CRAFT)
@@ -90,8 +87,10 @@ with 24-32px gutters and 1200-1280px content width.
   sidebar, rows, an SVG chart) or an inline SVG illustration. Never a grey
   placeholder box, never "image here", never a remote URL. Draw wordmarks as
   text; never fabricate logos.
-- Give the page pacing by varying background tone, column count, or alignment
-  rather than repeating identical card rows.
+## Motion
+- Easing cubic-bezier(0.32, 0.72, 0, 1); 200-300ms hover, 500-800ms reveals;
+  transform and opacity only. Hover: cards lift 2px and deepen their shadow,
+  buttons shift fill, press scales to 0.98. Nothing decorative moves.
 - Test viewports, not fixed page or artboard dimensions: judge the render at
   desktop 1280 and narrow 375, and content must reflow with no horizontal
   scroll and nothing that carries the value hidden down to 320px.
@@ -99,12 +98,12 @@ with 24-32px gutters and 1200-1280px content width.
 
 export const DECK_VISUAL_CRAFT = `## Deck craft (DECK_VISUAL_CRAFT)
 
-- Mandatory: use the deck skill's projection tokens at their declared values,
-  or the slides surface's --slide-type-* and --slide-pad-* when one is
-  supplied, for every text element and never lower them in self-review. Eyebrows,
-  chrome, captions and chart labels are --deck-type-caption (24px), nothing
-  smaller. Size from those tokens (or calc() on them), never raw px or
-  viewport units.
+- Mandatory: when a slides surface is supplied, size every text element from its
+  --slide-type-* and set --deck-pad-slide and --deck-pad-block from its
+  --slide-pad-*; only with no surface do the deck skill's own projection tokens
+  apply. Never lower either in self-review. Eyebrows, chrome, captions and chart
+  labels are --deck-type-caption (24px), nothing smaller. Size from those tokens
+  (or calc() on them), never raw px or viewport units.
 - Mandatory: safe area — nothing inside --deck-pad-slide of the edge or off
   the artboard. Media and mocks are never stretched.
 - Mandatory: deliver exactly the requested slide count. Never add or drop a
@@ -129,8 +128,8 @@ export const GRAPHIC_VISUAL_CRAFT = `## Graphic craft (GRAPHIC_VISUAL_CRAFT)
 
 Each requested fixed artboard must read from across the room at exactly the
 dimensions declared for that frame.
-- Mandatory: a safe area of 6-8% of the short side on every edge, or
-  --content-safe when the content surface supplies it, holds all required
+- Mandatory: when a content surface is supplied the safe area is --content-safe
+  of the short side on every edge; with no surface, 6-8%. It holds all required
   content; only a deliberate full-bleed figure crosses it.
 - Mandatory: headline contrast 7:1 or better against its local background;
   put text on the calmest part of the background or on a translucent plate.
