@@ -179,3 +179,22 @@
   --family-ui-navigation-placement: top;
   --family-ui-navigation-span: 0;
 }
+
+/* Website regions; legacy layout and family tokens continue to govern body content. */
+:root {
+  --layout-nav-pattern: mega-feature;
+  --layout-nav-position: top;
+  --layout-nav-height: 88px;
+  --layout-nav-width: 1180px;
+  --layout-hero-pattern: product-panel;
+  --layout-hero-copy-ratio: 58%;
+  --layout-hero-media-ratio: 16 / 10;
+  --layout-hero-media-position: below;
+  --layout-hero-min-height: 620px;
+  --layout-hero-title-measure: 24ch;
+  --layout-hero-align: center;
+  --layout-hero-offset: 0px;
+  --layout-footer-pattern: contact-ledger;
+  --layout-footer-columns: 3;
+  --layout-footer-height: 460px;
+}

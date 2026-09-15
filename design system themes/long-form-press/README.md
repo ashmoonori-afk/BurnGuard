@@ -16,8 +16,7 @@ introducing component-local scales.
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build on these tokens rather than inventing a
-grid:
+Use the existing 12-column body grid, 1140px content maximum, 68ch reading measure and 28px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -28,11 +27,29 @@ grid:
 | `--layout-margin` | `clamp(20px, 5vw, 80px)` | Page side margin |
 | `--layout-section-y` | `clamp(64px, 8vw, 128px)` | Vertical rhythm between sections |
 | `--layout-rule` | `1px` | Divider weight |
-| `--layout-hero` | `3 / 2` | Hero aspect ratio |
+| `--layout-hero` | `3 / 2` | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-The text column is the spine: it holds `--layout-measure` and stays centred regardless of viewport. Images either match the measure exactly or break to full width; nothing sits at an in-between size. Section rhythm is page-like, closer to a printed chapter break than to a web section.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `side-rail` | Website navigation arrangement |
+| `--layout-nav-position` | `side` | Website navigation position |
+| `--layout-nav-height` | `80px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `200px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `split-reverse` | Opening composition |
+| `--layout-hero-copy-ratio` | `52%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `4 / 5` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `left` | Opening media placement |
+| `--layout-hero-min-height` | `680px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `14ch` | Maximum title line measure |
+| `--layout-hero-align` | `end` | Hero copy alignment |
+| `--layout-hero-offset` | `80px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `ruled-community` | Footer arrangement |
+| `--layout-footer-columns` | `3` | Desktop footer groups |
+| `--layout-footer-height` | `420px` | Footer minimum height; content may grow |
 
 ## Family tokens
+
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -44,7 +61,9 @@ Images are contained, never cropped, because in this system a photograph is a do
 
 ## Composition
 
-Set the whole system for reading. Body is serif at a generous measure with leading well above interface norms, and the eye should be able to run down the column without a single decorative interruption. Headings are the same serif at larger size, never a contrasting sans. The rust accent appears in links, drop caps and pull quotes only. Sans is reserved for captions, bylines and small navigation; mono for dates and figures. Rules are hairline and horizontal, used the way a printed page uses them. There is no card, no shadow, no radius anywhere.
+Navigation side-rail → hero split-reverse (52% copy zone, left media, 4 / 5, 680px minimum) → retain the existing theme-specific body hierarchy → footer ruled-community.
+
+Keep the continuous serif reading column, generous leading and indented paragraphs. Rust marks links and pull quotes; sans captions and mono dates support the prose. No cards or elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -58,7 +77,7 @@ prompt basis.
 
 **Light.** Available light, whatever the scene actually has. Overcast, window light, late afternoon. Never studio-lit, never artificially separated from the background.
 
-**Framing.** Wide enough to include context — the environment is part of the subject. A tight beauty crop is wrong for this system.
+**Framing.** For the website opening, place this theme's source art in the 4 / 5 frame at left specified by Hero; keep its subject, medium, light and grading. Keep the complete subject visible with contain or an inner figure; do not crop evidence, objects or architecture to fill the outer region. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Muted naturals that sit comfortably on warm paper: earth, stone, foliage, denim. Saturation restrained so the rust accent stays the strongest colour on the page.
 
@@ -72,15 +91,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the design. Check
-the result against all of these:
-
-1. Body is serif and the leading is visibly looser than an interface would use.
-2. Headings are the same serif family as body, differing only in size.
-3. Paragraphs are indented with no gap, except after a heading.
-4. Every image is either exactly the text measure or full width — never in between.
-5. The accent appears only in links, drop caps and pull quotes.
-6. No radius, no shadow and no card exists anywhere in the system.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep the continuous serif reading column, generous leading and indented paragraphs. Rust marks links and pull quotes; sans captions and mono dates support the prose. No cards or elevation.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -93,9 +108,33 @@ palette or asset is included, and it carries no external licence obligation.
 - Display: Newsreader; body: Newsreader; numbers/code: IBM Plex Mono with tabular numerals. Korean fallback: "Nanum Myeongjo" for serif text, "Pretendard" for captions and UI; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Place the image and text in a single column with the visual lead preserved; remove the desktop offset and keep readable text order. Convert the side rail into a compact top control with a native expandable navigation; release its desktop width. Mobile stacks logo, actions and legal information into ruled horizontal sections; the decorative band remains at the bottom. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `side-rail` at `side`, with `80px` minimum height and `200px` width (0px fills the available track). Use side navigation with a 200px maximum width and 80px header height. At compact widths, use compact icon/hamburger top bar and large vertical text menu. Convert the desktop rail to an overlay so content retains width.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [side-rail](https://www.navbar.gallery/navbar/big-dirty-agency). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `split-reverse`: copy share `52%`, media at `left` in a `4 / 5` frame, minimum height `680px`, title measure `14ch`, alignment `end` and desktop offset `80px`. Preserve a complete document or image on the left and a narrow right heading, with a second substantial paragraph aligned along the lower baseline. Retain object-fit: contain for the original artwork: the whole building, document or object must remain visible. Interpret oversized/cropped reference geometry through the frame and typography, not by clipping the artwork.
+
+Mobile: Below the theme's existing compact breakpoint: Place the image and text in a single column with the visual lead preserved; remove the desktop offset and keep readable text order. Convert the side rail into a compact top control with a native expandable navigation; release its desktop width. Mobile stacks logo, actions and legal information into ruled horizontal sections; the decorative band remains at the bottom.
+
+Structural reference: [split-reverse](https://supahero.io/hero/habito). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `ruled-community` with `3` desktop groups and `420px` minimum height. Reserve 420px as the desktop minimum closing height with 3 information columns or groups. Use a three-part community directory with a separate decorative baseline. Preserve real semantic links and a clear primary join action; use original local artwork.
+
+Mobile stacks logo, actions and legal information into ruled horizontal sections; the decorative band remains at the bottom. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [ruled-community](https://www.footer.design/sites/harvest-hall). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

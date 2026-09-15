@@ -179,3 +179,22 @@
   --family-ui-navigation-placement: top;
   --family-ui-navigation-span: 0;
 }
+
+/* Website regions; legacy layout and family tokens continue to govern body content. */
+:root {
+  --layout-nav-pattern: floating-island;
+  --layout-nav-position: overlay;
+  --layout-nav-height: 60px;
+  --layout-nav-width: 520px;
+  --layout-hero-pattern: framed-cover;
+  --layout-hero-copy-ratio: 40%;
+  --layout-hero-media-ratio: 3 / 4;
+  --layout-hero-media-position: background;
+  --layout-hero-min-height: 760px;
+  --layout-hero-title-measure: 13ch;
+  --layout-hero-align: center;
+  --layout-hero-offset: 88px;
+  --layout-footer-pattern: photo-strip;
+  --layout-footer-columns: 2;
+  --layout-footer-height: 540px;
+}

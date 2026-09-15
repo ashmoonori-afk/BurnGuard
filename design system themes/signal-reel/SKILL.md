@@ -9,16 +9,18 @@ Read README.md first, then use colors_and_type.css as the single source of truth
 ## Quick reference
 - Reference color, type, spacing, radius, elevation, and motion tokens by CSS variable name.
 - Preserve the paired foreground tokens whenever a semantic background is used.
-- Use the local display/body/mono fonts specified in README.md and colors_and_type.css. Copy fonts/ with licenses into outputs and link fonts/fonts.css; no CDN.
+- Use the local display/body/mono fonts specified in README.md and colors_and_type.css. Reference shared local fonts while working; include required font files and licenses on export. No CDN.
 - Keep components coherent with the theme's shape and contrast rather than adding unrelated decoration.
 
 ## How this theme composes
 
-Give the page a near-black ground and exactly one saturated red. Set the wordmark or headline enormous in the condensed display face and let it bleed off the edge rather than fitting inside a container. Navigation is small serif at the same red. Use no radius, no shadow, and no card - imagery goes edge to edge and the type sits directly on it.
+Navigation side-rail → hero filmstrip (86% copy zone, below media, 3 / 4, 700px minimum) → retain the existing theme-specific body hierarchy → footer scenic-overlay.
+
+Use near-black with signal red reserved for live state and the primary action. Large display type supplies scale; keep every meaningful label readable, with zero radius and no elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Layout
 
-Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max` with `--layout-margin` at the sides, body copy holds to `--layout-measure`, sections are separated by `--layout-section-y`, and dividers use `--layout-rule`. The base grid is `--layout-columns` columns with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Hero media uses `--layout-hero`.
+Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max` with `--layout-margin` at the sides, body copy holds to `--layout-measure`, sections are separated by `--layout-section-y`, and dividers use `--layout-rule`. The base grid is `--layout-columns` columns with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Secondary media defaults to `--layout-hero`; website opening media uses `--layout-hero-media-ratio` and the Hero section.
 
 Media is full-bleed with no container and no gutter, and sections butt directly against each other. Text blocks keep a small margin and section rhythm so a tight-leading display line never crops against the viewport edge. Type is positioned over the media, and the display line is allowed to crop at the viewport edge.
 
@@ -38,7 +40,7 @@ prompt basis.
 
 **Light.** Hard directional or stage light with most of the frame dark. Blown highlights are acceptable; flat even light is not.
 
-**Framing.** Wide crop with the subject off-centre and a large dark region, so an oversized display line can cross the frame without hiding the subject.
+**Framing.** For the website opening, place this theme's source art in the 3 / 4 frame at below specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Near-black with grey midtones and at most one red element. No other colour.
 
@@ -52,24 +54,38 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the
-design. Check the result against all of these:
-
-1. The ground is near-black and exactly one red appears, on live state and the primary action.
-2. Display type is oversized enough to be clipped by the viewport edge on purpose.
-3. Body copy holds to a short 52ch measure, set well away from the display.
-4. Sections are separated by wide dark space, not by rules.
-5. Radius is zero and nothing is elevated.
-6. Imagery is near-monochrome and falls to black at its edges.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Use near-black with signal red reserved for live state and the primary action. Large display type supplies scale; keep every meaningful label readable, with zero radius and no elevation.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Local typography
 
 - Display: Anton; body: Public Sans; numbers/code: JetBrains Mono with tabular numerals. Korean fallback: "Black Han Sans" for display, "Pretendard" for body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Required layout
 
-Read Layout, Composition and Responsive in README.md and apply the --layout-* and --family-* tokens from colors_and_type.css before arranging content. Preserve the grid, reading measure, section rhythm, hero geometry and navigation placement; a palette/font swap on a generic layout is incomplete. Direction variants may change content emphasis, but must retain this structure unless the user explicitly overrides it. Check the rendered result at wide and narrow viewports and 200% zoom; fixed artboards retain their dimensions.
+Read Navigation, Hero, Footer, Layout and Responsive in README.md before arranging content. Apply the named region patterns and every corresponding --layout-* value; use family tokens for the body. Preserve the theme identity and supplied art. Direction variants may change emphasis but retain these regions unless the user overrides them. Check wide and narrow rendering and 200% zoom.
+
+## Navigation
+
+Follow README.md's Navigation section and the corresponding --layout-* tokens. Use side navigation with a 184px maximum width and 80px header height. At compact widths, use compact icon/hamburger top bar and large vertical text menu. Convert the desktop rail to an overlay so content retains width.
+
+Reference: https://www.navbar.gallery/navbar/big-dirty-agency
+
+## Hero
+
+Follow README.md's Hero section and the corresponding --layout-* tokens. Introduce work as a cinematic horizontal strip after a centered masthead; a persistent narrow left rail replaces a conventional full-width header. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Reference: https://supahero.io/hero/did-global-cinema
+
+## Footer
+
+Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 640px as the desktop minimum closing height with 3 information columns or groups. Reserve a scenic field above a readable information zone on narrow screens. Use an original local background; do not depend on WebGL or video for access to navigation.
+
+Reference: https://www.footer.design/sites/eclipse-space

@@ -16,8 +16,7 @@ introducing component-local scales.
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build on these tokens rather than inventing a
-grid:
+Use the existing 12-column body grid, 1600px content maximum, 60ch reading measure and 24px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -28,11 +27,29 @@ grid:
 | `--layout-margin` | `clamp(16px, 3vw, 48px)` | Page side margin |
 | `--layout-section-y` | `clamp(96px, 14vw, 224px)` | Vertical rhythm between sections |
 | `--layout-rule` | `1px` | Divider weight |
-| `--layout-hero` | `21 / 9` | Hero aspect ratio |
+| `--layout-hero` | `21 / 9` | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-Section spacing is enormous — up to 224px — because the empty field above the statement is the composition, not leftover space. The hero is a wide 21:9 band that runs the full viewport width regardless of the content maximum.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `segmented-pill` | Website navigation arrangement |
+| `--layout-nav-position` | `top` | Website navigation position |
+| `--layout-nav-height` | `80px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `1120px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `masthead-crop` | Opening composition |
+| `--layout-hero-copy-ratio` | `90%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `16 / 9` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `background` | Opening media placement |
+| `--layout-hero-min-height` | `680px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `10ch` | Maximum title line measure |
+| `--layout-hero-align` | `center` | Hero copy alignment |
+| `--layout-hero-offset` | `64px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `ruled-community` | Footer arrangement |
+| `--layout-footer-columns` | `3` | Desktop footer groups |
+| `--layout-footer-height` | `440px` | Footer minimum height; content may grow |
 
 ## Family tokens
+
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -44,7 +61,9 @@ The display block translates up by roughly a quarter of its own height, so its f
 
 ## Composition
 
-Open with a tall empty field. Run a saturated full-bleed media band edge to edge, then set one statement across two lines at the largest size the viewport allows, in the wide display face, tightly leaded at 0.92 so the lines lock together as a block, and pull that block up until its first line crosses the band. Chrome is a 13px wordmark at top-left and a single mark at top-right; nothing else competes. The green is used for links, focus and live state only — never as a fill behind large text. Rules are hairline, radius is zero, and the page's rhythm is field, band, statement, field.
+Navigation segmented-pill → hero masthead-crop (90% copy zone, background media, 16 / 9, 680px minimum) → retain the existing theme-specific body hierarchy → footer ruled-community.
+
+Keep the spacious field, saturated media and wide display face. Green marks links or live states only; thin rules and a single deliberate image/type seam carry the structure. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -58,7 +77,7 @@ prompt basis.
 
 **Light.** Bright, wrapping, high-key light with specular highlights. The material should look self-luminous rather than lit from one side.
 
-**Framing.** Ultra-wide 21:9 crop taken from the middle of a larger surface, with no focal subject — the frame can be cut anywhere and still work as a band.
+**Framing.** For the website opening, place this theme's source art in the 16 / 9 frame at background specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** One dominant saturated hue occupying most of the frame, with its own highlights and shadows as the only variation. Different sections may use different hues, but never two competing hues in one frame.
 
@@ -72,15 +91,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the design. Check
-the result against all of these:
-
-1. A tall empty field opens the page before any statement appears.
-2. The statement is two lines, at maximum scale, leaded tightly at 0.92.
-3. A full-bleed saturated media band precedes the statement, and the first display line crosses back over it.
-4. Chrome is a 13px wordmark and one mark, in opposite top corners.
-5. Green appears only on links, focus and live state — never as a large fill.
-6. Section spacing is visibly extreme, and radius is zero throughout.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep the spacious field, saturated media and wide display face. Green marks links or live states only; thin rules and a single deliberate image/type seam carry the structure.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -93,9 +108,33 @@ palette or asset is included, and it carries no external licence obligation.
 - Display: Syne; body: Space Grotesk; numbers/code: JetBrains Mono with tabular numerals. Korean fallback: "Pretendard" for display and body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Reduce the oversized display to fit the viewport; move useful metadata into normal flow and keep the subject recognizable. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile stacks logo, actions and legal information into ruled horizontal sections; the decorative band remains at the bottom. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `segmented-pill` at `top`, with `80px` minimum height and `1120px` width (0px fills the available track). Use top navigation with a 1120px maximum width and 80px header height. Mobile screenshot has product CTA and close above large stacked product/ecosystem/company rows. Keep grouping and use stacked drill-down rows.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [segmented-pill](https://www.navbar.gallery/navbar/consensys). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `masthead-crop`: copy share `90%`, media at `background` in a `16 / 9` frame, minimum height `680px`, title measure `10ch`, alignment `center` and desktop offset `64px`. Retain a hard seam from a dominant media band to the statement; the portrait-centered reference informs scale, not permission to erase the seam. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Reduce the oversized display to fit the viewport; move useful metadata into normal flow and keep the subject recognizable.
+
+Structural reference: [masthead-crop](https://supahero.io/hero/lando-norris). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `ruled-community` with `3` desktop groups and `440px` minimum height. Reserve 440px as the desktop minimum closing height with 3 information columns or groups. Use a three-part community directory with a separate decorative baseline. Preserve real semantic links and a clear primary join action; use original local artwork.
+
+Mobile stacks logo, actions and legal information into ruled horizontal sections; the decorative band remains at the bottom. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [ruled-community](https://www.footer.design/sites/harvest-hall). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

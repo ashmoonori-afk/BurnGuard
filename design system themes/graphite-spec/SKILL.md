@@ -9,30 +9,33 @@ Read README.md first, then use colors_and_type.css as the single source of truth
 ## Quick reference
 - Reference colour, type, spacing, radius, elevation, layout and family tokens by CSS variable name.
 - Preserve the paired foreground tokens whenever a semantic background is used.
-- Use the local display/body/mono fonts specified in README.md and colors_and_type.css. Copy fonts/
-  with licenses into outputs and link fonts/fonts.css; no CDN.
+- Use the local display/body/mono fonts specified in README.md and colors_and_type.css. Reference shared local fonts while working; include required font files and licenses on export. No CDN.
 - Keep components coherent with the theme's shape and contrast rather than adding unrelated decoration.
 
 ## How this theme composes
 
-Set body in mono and accept the density that follows — this system is for material that is measured, not persuaded. Number every figure and put the number in the margin track. Amber marks the value under discussion: a highlighted row, a callout figure, a threshold. Everything else is graphite and bone. Radius is zero everywhere and elevation is never used; structure comes entirely from rules and alignment. Tables are first-class, not an afterthought.
+Navigation segmented-pill → hero specimen-poster (34% copy zone, background media, 5 / 4, 760px minimum) → retain the existing theme-specific body hierarchy → footer studio-address.
+
+Keep a measured mono body, numbered figures, margin annotations and first-class tables. Amber marks the discussed value; graphite, bone, zero radius and rules do the rest. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`
 with `--layout-margin` at the sides, body copy holds to `--layout-measure`, sections are separated by
 `--layout-section-y`, and dividers use `--layout-rule`. The base grid is `--layout-columns` columns
-with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Hero media uses `--layout-hero`.
+with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Secondary media defaults to `--layout-hero`; website opening media uses `--layout-hero-media-ratio` and the Hero section.
 
 ## Family tokens
 
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
+
 | Token | Value | Meaning |
 |---|---|---|
-| `--family-ui-navigation-placement` | `top` | `top` or `side` — whether primary navigation sits above the content or beside it at expanded widths. |
+| `--family-ui-navigation-placement` | `top` | `top` or `side` — whether embedded-workspace navigation sits above the content or beside it at expanded widths. |
 | `--family-ui-navigation-span` | `2` | Base-grid columns reserved for side navigation; inert when placement is `top`. |
 | `--family-ui-label-placement` | `beside` | `above` or `beside` — whether form labels stack over their control or sit in a second track. |
 
-Navigation is a compact top row at 44px with a rule beneath. Labels sit beside their control, matching the document's two-track annotation structure so a form reads like a spec table.
+Within the embedded work surface, navigation is a compact top row at 44px with a rule beneath. Labels sit beside their control, matching the document's two-track annotation structure so a form reads like a spec table.
 
 ## Image direction
 
@@ -46,7 +49,7 @@ prompt basis.
 
 **Light.** Not applicable to line work. For record photography, flat even illumination with no modelling — the goal is legibility of form, not atmosphere.
 
-**Framing.** Orthographic and squared to the frame. Include dimension lines, leader lines and figure labels as part of the image.
+**Framing.** For the website opening, place this theme's source art in the 5 / 4 frame at background specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Bone line work on graphite, with amber reserved for the single dimension or part being called out.
 
@@ -60,21 +63,38 @@ prompt basis.
 
 ## Reproducing this system
 
-1. Body copy is set in mono and the density is noticeably higher than a marketing page.
-2. Every figure carries a number, and the number sits in the margin track.
-3. Amber appears only on the value being called out — never as general decoration.
-4. Radius is zero on every element and no element has a shadow.
-5. Structure is legible from rules and alignment alone.
-6. A data table looks native to the system rather than bolted on.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep a measured mono body, numbered figures, margin annotations and first-class tables. Amber marks the discussed value; graphite, bone, zero radius and rules do the rest.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Local typography
 
 - Display: IBM Plex Mono; body: IBM Plex Mono; numbers/code: IBM Plex Mono with tabular numerals. Korean fallback: "Pretendard" for UI text; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Required layout
 
-Read Layout, Composition and Responsive in README.md and apply the --layout-* and --family-* tokens from colors_and_type.css before arranging content. Preserve the grid, reading measure, section rhythm, hero geometry and navigation placement; a palette/font swap on a generic layout is incomplete. Direction variants may change content emphasis, but must retain this structure unless the user explicitly overrides it. Check the rendered result at wide and narrow viewports and 200% zoom; fixed artboards retain their dimensions.
+Read Navigation, Hero, Footer, Layout and Responsive in README.md before arranging content. Apply the named region patterns and every corresponding --layout-* value; use family tokens for the body. Preserve the theme identity and supplied art. Direction variants may change emphasis but retain these regions unless the user overrides them. Check wide and narrow rendering and 200% zoom.
+
+## Navigation
+
+Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1280px maximum width and 72px header height. Mobile screenshot has product CTA and close above large stacked product/ecosystem/company rows. Keep grouping and use stacked drill-down rows.
+
+Reference: https://www.navbar.gallery/navbar/consensys
+
+## Hero
+
+Follow README.md's Hero section and the corresponding --layout-* tokens. Present one complete specimen against a broad neutral field with a small inset detail and separated metadata; retain disciplined technical labeling. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Reference: https://supahero.io/hero/haptikos
+
+## Footer
+
+Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 540px as the desktop minimum closing height with 4 information columns or groups. Use an asymmetrical studio directory whose location pair is a first-class structural feature. Do not collapse the whole footer to a generic four-column sitemap.
+
+Reference: https://www.footer.design/sites/reality-is

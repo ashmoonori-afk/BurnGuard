@@ -16,8 +16,7 @@ introducing component-local scales.
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build on these tokens rather than inventing a
-grid:
+Use the existing 12-column body grid, 1240px content maximum, 60ch reading measure and 28px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -28,11 +27,29 @@ grid:
 | `--layout-margin` | `clamp(24px, 5vw, 80px)` | Page side margin |
 | `--layout-section-y` | `clamp(64px, 9vw, 144px)` | Vertical rhythm between sections |
 | `--layout-rule` | `1px` | Divider weight |
-| `--layout-hero` | `3 / 2` | Hero aspect ratio |
+| `--layout-hero` | `3 / 2` | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-Large margins up to 80px hold the content away from the viewport edge, which is what makes the imagery read as contained plates rather than as a view. Wide 28px gutters keep the two-track sections airy.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `editorial-overlay` | Website navigation arrangement |
+| `--layout-nav-position` | `overlay` | Website navigation position |
+| `--layout-nav-height` | `88px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `1320px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `fullbleed-top` | Opening composition |
+| `--layout-hero-copy-ratio` | `28%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `16 / 9` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `background` | Opening media placement |
+| `--layout-hero-min-height` | `800px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `14ch` | Maximum title line measure |
+| `--layout-hero-align` | `start` | Hero copy alignment |
+| `--layout-hero-offset` | `0px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `studio-address` | Footer arrangement |
+| `--layout-footer-columns` | `4` | Desktop footer groups |
+| `--layout-footer-height` | `560px` | Footer minimum height; content may grow |
 
 ## Family tokens
+
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -44,7 +61,9 @@ Images are contained and do not bleed at all, because this system documents arch
 
 ## Composition
 
-Work on cool limestone with a didone statement voice and a neutral sans for everything read at length. Images are contained plates with real margin on all sides and never bleed; the ground must be visible around every one. Two-track sections split evenly between photograph and description. Captions sit under plates in 12px mono: location, year, material. The slate accent marks links and the primary action only. Rules are hairline, radius is zero, and the page is quiet enough that the only contrast is between stone and shadow.
+Navigation editorial-overlay → hero fullbleed-top (28% copy zone, background media, 16 / 9, 800px minimum) → retain the existing theme-specific body hierarchy → footer studio-address.
+
+Keep cool limestone, a didone statement voice and whole architectural plates with ground visible around them. Mono captions identify place, year and material; slate marks action. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -58,7 +77,7 @@ prompt basis.
 
 **Light.** Overcast or open-shade daylight with soft even shadows, or raking low sun where texture is the subject. Avoid harsh midday contrast.
 
-**Framing.** Landscape 3:2 with the structure fully inside the frame and clear space around it. The subject must be complete: no cropped corners, no cut-off roofline.
+**Framing.** For the website opening, place this theme's source art in the 16 / 9 frame at background specified by Hero; keep its subject, medium, light and grading. Keep the complete subject visible with contain or an inner figure; do not crop evidence, objects or architecture to fill the outer region. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Limestone, concrete grey, slate and weathered bronze. Cool neutral overall — the warm end of the spectrum belongs to a different system.
 
@@ -72,15 +91,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the design. Check
-the result against all of these:
-
-1. The ground is cool limestone and no warm cast appears anywhere.
-2. Every image is a contained plate with visible ground on all sides; nothing bleeds.
-3. Sections split evenly between photograph and description.
-4. Captions are 12px mono giving location, year and material.
-5. The slate accent marks only links and the primary action.
-6. Radius is zero, rules are hairline, and nothing is elevated.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep cool limestone, a didone statement voice and whole architectural plates with ground visible around them. Mono captions identify place, year and material; slate marks action.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -93,9 +108,33 @@ palette or asset is included, and it carries no external licence obligation.
 - Display: DM Serif Display; body: Manrope; numbers/code: Geist Mono with tabular numerals. Korean fallback: "Nanum Myeongjo" for display, "Pretendard" for body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Separate text onto a readable ground when the crop removes its safe area; keep the scene and all essential links in normal flow. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile stacks the link groups, keeps the two office addresses side by side, and moves the large wordmark below them. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `editorial-overlay` at `overlay`, with `88px` minimum height and `1320px` width (0px fills the available track). Use overlay navigation with a 1320px maximum width and 88px header height. At compact widths, use one vertical large-link list with close control. Stack links first; featured work and contact information follow.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [editorial-overlay](https://www.navbar.gallery/navbar/clonix). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `fullbleed-top`: copy share `28%`, media at `background` in a `16 / 9` frame, minimum height `800px`, title measure `14ch`, alignment `start` and desktop offset `0px`. Keep the whole building or room contained inside an expansive scenic field; limit opening copy to a small corner and leave architecture unobstructed. Retain object-fit: contain for the original artwork: the whole building, document or object must remain visible. Interpret oversized/cropped reference geometry through the frame and typography, not by clipping the artwork.
+
+Mobile: Below the theme's existing compact breakpoint: Separate text onto a readable ground when the crop removes its safe area; keep the scene and all essential links in normal flow.
+
+Structural reference: [fullbleed-top](https://supahero.io/hero/dream-design-laboratory). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `studio-address` with `4` desktop groups and `560px` minimum height. Reserve 560px as the desktop minimum closing height with 4 information columns or groups. Use an asymmetrical studio directory whose location pair is a first-class structural feature. Do not collapse the whole footer to a generic four-column sitemap.
+
+Mobile stacks the link groups, keeps the two office addresses side by side, and moves the large wordmark below them. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [studio-address](https://www.footer.design/sites/reality-is). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

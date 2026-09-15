@@ -16,8 +16,7 @@ introducing component-local scales.
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build on these tokens rather than inventing a
-grid:
+Use the existing 12-column body grid, 1920px content maximum, 64ch reading measure and 1px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -28,15 +27,33 @@ grid:
 | `--layout-margin` | `0px` | Page side margin |
 | `--layout-section-y` | `clamp(16px, 2vw, 32px)` | Vertical rhythm between sections |
 | `--layout-rule` | `1px` | Divider weight |
-| `--layout-hero` | `4 / 3` | Hero aspect ratio |
+| `--layout-hero` | `4 / 3` | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-Zero margin and a 1px gutter: the specimen grid runs to the viewport edge and the gutter reads as a rule between cells rather than as space. The maximum is the widest in the set because an archive should show as many specimens at once as the screen allows.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `enterprise-columns` | Website navigation arrangement |
+| `--layout-nav-position` | `top` | Website navigation position |
+| `--layout-nav-height` | `104px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `1360px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `media-bottom` | Opening composition |
+| `--layout-hero-copy-ratio` | `82%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `16 / 9` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `below` | Opening media placement |
+| `--layout-hero-min-height` | `640px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `13ch` | Maximum title line measure |
+| `--layout-hero-align` | `center` | Hero copy alignment |
+| `--layout-hero-offset` | `40px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `photo-strip` | Footer arrangement |
+| `--layout-footer-columns` | `2` | Desktop footer groups |
+| `--layout-footer-height` | `540px` | Footer minimum height; content may grow |
 
 ## Family tokens
 
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
+
 | Token | Value | Meaning |
 |---|---|---|
-| `--family-ui-navigation-placement` | `side` | `top` or `side` — whether primary navigation sits above the content or beside it at expanded widths. |
+| `--family-ui-navigation-placement` | `side` | `top` or `side` — whether embedded-workspace navigation sits above the content or beside it at expanded widths. |
 | `--family-ui-navigation-span` | `3` | Base-grid columns reserved for side navigation; inert when placement is `top`. |
 | `--family-ui-label-placement` | `above` | `above` or `beside` — whether form labels stack over their control or sit in a second track. |
 | `--family-data-table-layout` | `auto` | `auto` or `fixed` — the width-allocation algorithm for full-width data tables. |
@@ -45,7 +62,9 @@ A three-column facet rail, wider than a filter strip because facets here are typ
 
 ## Composition
 
-Frame a light specimen grid in dark chrome. The rail, header and footer are near-black; the grid cells carry the specimen on its own ground and are separated by a single 1px gutter so the whole grid reads as one ruled sheet. Each cell is labelled underneath with a name and a mono identifier — a specimen is worthless unlabelled. Facets are typed groups with counts, and a sort toggle sits at the rail's head. Emphasis is a pill in the neutral dark with light text; no colour fill exists. The one steel accent marks the active facet and focus only.
+Navigation enterprise-columns → hero media-bottom (82% copy zone, below media, 16 / 9, 640px minimum) → retain the existing theme-specific body hierarchy → footer photo-strip.
+
+Keep the light specimen grid inside dark chrome with a 1px ruling, named specimens and mono identifiers. Typed facets retain counts; steel marks active state and focus. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -59,7 +78,7 @@ prompt basis.
 
 **Light.** Even, slightly raking light — flat enough to be comparable across specimens, angled just enough to reveal surface relief.
 
-**Framing.** Standard 4:3 with the specimen centred, small even margin, and a consistent camera distance so specimens can be compared cell to cell.
+**Framing.** For the website opening, place this theme's source art in the 16 / 9 frame at below specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Neutral ground with the specimen's true colour. The ground should be light so the cells read as lit plates inside the dark chrome.
 
@@ -73,15 +92,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the design. Check
-the result against all of these:
-
-1. Dark chrome frames a light specimen grid that reaches the viewport edge.
-2. Cells are separated by a 1px gutter that reads as a rule, not as space.
-3. Every cell is labelled with a name and a mono identifier.
-4. Facets are typed groups with counts, and a sort toggle sits at the rail head.
-5. No colour fill exists; the steel accent marks only the active facet and focus.
-6. Radius is zero on everything except pills.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep the light specimen grid inside dark chrome with a 1px ruling, named specimens and mono identifiers. Typed facets retain counts; steel marks active state and focus.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -94,9 +109,33 @@ palette or asset is included, and it carries no external licence obligation.
 - Display: Space Grotesk; body: Space Grotesk; numbers/code: Geist Mono with tabular numerals. Korean fallback: "Pretendard" for display and body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Keep copy above the media; remove negative overlap when it would cover the heading and preserve the image's intended framing. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile puts the logo first, keeps the two link columns side by side underneath, then shows a tighter photograph crop below the credit line. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `enterprise-columns` at `top`, with `104px` minimum height and `1360px` width (0px fills the available track). Use top navigation with a 1360px maximum width and 104px header height. At compact widths, use category rows with chevrons under a compact brand/close bar. Collapse taxonomy columns into grouped disclosures.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [enterprise-columns](https://www.navbar.gallery/navbar/cloudflare). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `media-bottom`: copy share `82%`, media at `below` in a `16 / 9` frame, minimum height `640px`, title measure `13ch`, alignment `center` and desktop offset `40px`. Set a broad heading over a scene that begins beneath it, while a compact top taxonomy and lower photo strip create three clear horizontal levels. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Keep copy above the media; remove negative overlap when it would cover the heading and preserve the image's intended framing.
+
+Structural reference: [media-bottom](https://supahero.io/hero/eventbeds). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `photo-strip` with `2` desktop groups and `540px` minimum height. Reserve 540px as the desktop minimum closing height with 2 information columns or groups. Separate a useful navigation band from an original local photo strip. Decorative shapes must not obscure or intercept links. Do not copy the person's portrait or brand assets.
+
+Mobile puts the logo first, keeps the two link columns side by side underneath, then shows a tighter photograph crop below the credit line. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [photo-strip](https://www.footer.design/sites/carolyn-lee). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

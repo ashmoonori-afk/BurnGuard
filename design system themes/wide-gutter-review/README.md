@@ -16,8 +16,7 @@ introducing component-local scales.
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build on these tokens rather than inventing a
-grid:
+Use the existing 12-column body grid, 1440px content maximum, 46ch reading measure and 64px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -28,11 +27,29 @@ grid:
 | `--layout-margin` | `clamp(20px, 3vw, 48px)` | Page side margin |
 | `--layout-section-y` | `clamp(56px, 7vw, 112px)` | Vertical rhythm between sections |
 | `--layout-rule` | `1px` | Divider weight |
-| `--layout-hero` | `4 / 5` | Hero aspect ratio |
+| `--layout-hero` | `4 / 5` | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-Four columns carry text at a deliberately narrow `--layout-measure`; the remaining eight carry image. The 64px gutter is wide on purpose — it is the white interval that makes the two tracks read as separate voices. Below `--layout-bp-md` the tracks stack and the gutter becomes vertical rhythm.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `editorial-overlay` | Website navigation arrangement |
+| `--layout-nav-position` | `top` | Website navigation position |
+| `--layout-nav-height` | `84px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `1440px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `split-left` | Opening composition |
+| `--layout-hero-copy-ratio` | `54%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `4 / 3` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `right` | Opening media placement |
+| `--layout-hero-min-height` | `660px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `9ch` | Maximum title line measure |
+| `--layout-hero-align` | `start` | Hero copy alignment |
+| `--layout-hero-offset` | `48px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `contact-ledger` | Footer arrangement |
+| `--layout-footer-columns` | `3` | Desktop footer groups |
+| `--layout-footer-height` | `500px` | Footer minimum height; content may grow |
 
 ## Family tokens
+
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -44,7 +61,9 @@ The image track is twice the text track, gutter excluded. Images cover their fra
 
 ## Composition
 
-Run a narrow sans text spine down one side and a tall image plate down the other, and keep the wide gutter empty — resist filling it. Display is a high-contrast serif used at large size for titles only; body is sans at a narrow measure so the column reads quickly. The blue is used once per view, on the live link or the current item. Captions sit tight under their plate in mono at small size. Nothing is rounded and nothing is elevated; the page is flat and the structure is entirely positional.
+Navigation editorial-overlay → hero split-left (54% copy zone, right media, 4 / 3, 660px minimum) → retain the existing theme-specific body hierarchy → footer contact-ledger.
+
+Keep a narrow sans reading spine, high-contrast serif titles, mono captions and the empty wide gutter. Blue marks one live item; the page stays flat and square. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -58,12 +77,12 @@ prompt basis.
 
 **Light.** Controlled and directional, with real shadow shape. Studio or strong window light. Shadows are allowed to be dark.
 
-**Framing.** Portrait orientation at roughly 4:5, composed so the subject survives a cover crop. Leave no important detail at the frame edge.
+**Framing.** For the website opening, place this theme's source art in the 4 / 3 frame at right specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** White, black and one material colour per plate. The page is white, so images should not also be white-dominant or they will dissolve into the ground.
 
 **Never:**
-- Landscape-orientation images — the plate is vertical by design.
+- Discarding the subject to force a different frame; preserve the complete editorial subject within the named Hero geometry.
 - Busy multi-subject scenes that fight the narrow text track.
 - Pale, low-contrast images that disappear against white paper.
 - Adding a border or shadow to seat the image; it sits directly on the ground.
@@ -72,15 +91,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the design. Check
-the result against all of these:
-
-1. Text and image occupy separate tracks with a visibly wide empty gutter between them.
-2. The text measure is narrow — noticeably narrower than a normal article column.
-3. Display is serif; body is sans. They never swap roles.
-4. Images are vertical plates that cover their frame, sitting directly on white.
-5. The accent colour appears once per view at most.
-6. The layout is flat: no radius, no shadow, no container.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep a narrow sans reading spine, high-contrast serif titles, mono captions and the empty wide gutter. Blue marks one live item; the page stays flat and square.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -93,9 +108,33 @@ palette or asset is included, and it carries no external licence obligation.
 - Display: Instrument Serif; body: Public Sans; numbers/code: IBM Plex Mono with tabular numerals. Korean fallback: "Nanum Myeongjo" for serif display, "Pretendard" for body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Stack the copy above the image; retain a visible text/image boundary and allow actions to wrap. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile keeps small brand/company metadata in two columns, expands the signup rule across the width, stacks contact addresses, and shifts the large wordmark to the bottom. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `editorial-overlay` at `top`, with `84px` minimum height and `1440px` width (0px fills the available track). Use top navigation with a 1440px maximum width and 84px header height. At compact widths, use one vertical large-link list with close control. Stack links first; featured work and contact information follow.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [editorial-overlay](https://www.navbar.gallery/navbar/clonix). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `split-left`: copy share `54%`, media at `right` in a `4 / 3` frame, minimum height `660px`, title measure `9ch`, alignment `start` and desktop offset `48px`. Allow the giant left display and complete right subject to make one asymmetric spread; retain exceptionally broad gutters through the contact footer. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Stack the copy above the image; retain a visible text/image boundary and allow actions to wrap.
+
+Structural reference: [split-left](https://supahero.io/hero/karo). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `contact-ledger` with `3` desktop groups and `500px` minimum height. Reserve 500px as the desktop minimum closing height with 3 information columns or groups. Use whitespace and a vertically organized address ledger rather than many equal navigation columns. Give contact details readable minimum type sizes.
+
+Mobile keeps small brand/company metadata in two columns, expands the signup rule across the width, stacks contact addresses, and shifts the large wordmark to the bottom. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [contact-ledger](https://www.footer.design/sites/esr). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

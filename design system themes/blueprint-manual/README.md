@@ -13,7 +13,7 @@ The palette is expressed through BurnGuard's canonical neutral, brand, semantic,
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build every artifact on these tokens rather than inventing a grid:
+Use the existing 12-column body grid, 1320px content maximum, 66ch reading measure and 16px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -25,13 +25,31 @@ Layout is part of this system, not a per-page decision. Build every artifact on 
 | `--layout-section-y` | clamp(40px, 5vw, 72px) | Vertical rhythm between sections |
 | `--layout-rule` | 1px | Divider weight |
 | `--layout-bp-md` / `--layout-bp-lg` | 860px / 1200px | Breakpoints |
-| `--layout-hero` | 3 / 2 | Hero aspect ratio |
+| `--layout-hero` | 3 / 2 | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-A two-track manual: a narrow text track of 4 columns holding justified body at --layout-measure, beside a wide figure track of 8 columns. Figures are bordered panels with a rotated mono label in the outer margin; the rhythm is dense and continuous, not spaced out.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `enterprise-columns` | Website navigation arrangement |
+| `--layout-nav-position` | `top` | Website navigation position |
+| `--layout-nav-height` | `104px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `1440px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `specimen-poster` | Opening composition |
+| `--layout-hero-copy-ratio` | `92%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `4 / 3` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `background` | Opening media placement |
+| `--layout-hero-min-height` | `720px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `12ch` | Maximum title line measure |
+| `--layout-hero-align` | `start` | Hero copy alignment |
+| `--layout-hero-offset` | `36px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `contact-ledger` | Footer arrangement |
+| `--layout-footer-columns` | `3` | Desktop footer groups |
+| `--layout-footer-height` | `560px` | Footer minimum height; content may grow |
 
 ## Composition
 
-Build the page as a technical manual. The ground is paper; the structure is blueprint line work — hairline rules, bounding boxes, leader lines and dimension marks drawn in the blue, never as decoration but always as annotation of something. Body copy is serif, justified, and runs to a long 66ch measure, because a manual is read in columns rather than scanned. Every figure carries a mono label in the form of a figure number and a short caption, placed outside the figure's frame. Headings are mono and letterspaced. Corners stay near-square at the 2-4px `--r-*` steps, nothing is elevated, and no colour is used except the blue line work.
+Navigation enterprise-columns → hero specimen-poster (92% copy zone, background media, 4 / 3, 720px minimum) → retain the existing theme-specific body hierarchy → footer contact-ledger.
+
+Keep the paper ground, blueprint annotations, numbered figures, serif reading body and mono headings. Line work explains content; use near-square corners and no elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -45,7 +63,7 @@ prompt basis.
 
 **Light.** Even and shadowless. A manual figure has no atmosphere; any shadow that is not describing form is noise.
 
-**Framing.** Contained on paper-white with clear margin for leader lines and dimension marks to reach into. Aspect follows the object, not a grid.
+**Framing.** For the website opening, place this theme's source art in the 4 / 3 frame at background specified by Hero; keep its subject, medium, light and grading. Keep the complete subject visible with contain or an inner figure; do not crop evidence, objects or architecture to fill the outer region. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Paper-white with graphite line weight and the blueprint blue for annotation. No other colour appears.
 
@@ -59,15 +77,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the
-design. Check the result against all of these:
-
-1. The ground is paper and all structure is drawn as blueprint line work in the blue.
-2. Line work always annotates something; it is never decorative.
-3. Body copy is justified serif at a 66ch measure.
-4. Every figure carries a mono figure number and caption placed outside its frame.
-5. Headings are mono and letterspaced.
-6. Radius stays at the 2-4px `--r-*` steps, nothing is elevated, and no colour except the blue appears.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep the paper ground, blueprint annotations, numbered figures, serif reading body and mono headings. Line work explains content; use near-square corners and no elevation.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -78,9 +92,33 @@ Original system authored for BurnGuard. The palette, type pairing, scale, and sh
 - Display: JetBrains Mono; body: Newsreader; numbers/code: IBM Plex Mono with tabular numerals. Korean fallback: "Nanum Myeongjo" for serif body, "Pretendard" for UI; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Put useful labels in a normal-flow caption block below the complete specimen; decorative title size must not cause horizontal scroll. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile keeps small brand/company metadata in two columns, expands the signup rule across the width, stacks contact addresses, and shifts the large wordmark to the bottom. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `enterprise-columns` at `top`, with `104px` minimum height and `1440px` width (0px fills the available track). Use top navigation with a 1440px maximum width and 104px header height. At compact widths, use category rows with chevrons under a compact brand/close bar. Collapse taxonomy columns into grouped disclosures.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [enterprise-columns](https://www.navbar.gallery/navbar/cloudflare). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `specimen-poster`: copy share `92%`, media at `background` in a `4 / 3` frame, minimum height `720px`, title measure `12ch`, alignment `start` and desktop offset `36px`. Keep the technical specimen legible and dominant below an edge-wide title; metadata should remain small groups, never a second competing card grid. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Put useful labels in a normal-flow caption block below the complete specimen; decorative title size must not cause horizontal scroll.
+
+Structural reference: [specimen-poster](https://supahero.io/hero/35mm). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `contact-ledger` with `3` desktop groups and `560px` minimum height. Reserve 560px as the desktop minimum closing height with 3 information columns or groups. Use whitespace and a vertically organized address ledger rather than many equal navigation columns. Give contact details readable minimum type sizes.
+
+Mobile keeps small brand/company metadata in two columns, expands the signup rule across the width, stacks contact addresses, and shifts the large wordmark to the bottom. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [contact-ledger](https://www.footer.design/sites/esr). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
