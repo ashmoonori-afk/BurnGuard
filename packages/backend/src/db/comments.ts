@@ -7,6 +7,7 @@ import type {
 } from "@bg/shared";
 import { getDb } from "./client";
 import { commentsTable } from "./schema";
+import { parseCommentAnchor } from "@bg/shared";
 
 type CommentRow = typeof commentsTable.$inferSelect;
 
@@ -18,6 +19,7 @@ function toComment(row: CommentRow): Comment {
     node_selector: row.nodeSelector,
     x_pct: row.xPct,
     y_pct: row.yPct,
+    anchor: row.anchorJson === null ? null : parseCommentAnchor(JSON.parse(row.anchorJson)),
     slide_index: row.slideIndex,
     body: row.body,
     author_id: row.authorId,
@@ -52,6 +54,7 @@ export async function createProjectComment(
     nodeSelector: input.node_selector ?? "",
     xPct: input.x_pct,
     yPct: input.y_pct,
+    anchorJson: input.anchor ? JSON.stringify(input.anchor) : null,
     slideIndex: input.slide_index ?? null,
     body: input.body ?? "",
     authorId: "local",

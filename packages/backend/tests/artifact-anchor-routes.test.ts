@@ -7,6 +7,7 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { commentRoutes } from "../src/routes/comments";
 import { managedFileRoutes } from "../src/routes/managed-files";
+import type { Comment } from "@bg/shared";
 
 const projectId = `anchor-routes-${process.pid}`;
 let root = "";
@@ -25,6 +26,22 @@ afterAll(async () => { getSqlite().prepare("DELETE FROM projects WHERE id=?").ru
 function comment(body: unknown): Promise<Response> { return commentRoutes.request(`http://local/api/projects/${projectId}/comments`, { method: "POST", headers, body: JSON.stringify(body) }); }
 
 describe("production artifact anchor routes", () => {
+  test("Given node-relative comment coordinates When saved and read again Then exact anchors survive and malformed versions reject", async () => {
+    const input = { rel_path: "index.html", node_selector: '[data-bg-node-id="hero"]', x_pct: 12, y_pct: 8, artifact_revision: 0, artifact_digest: digest };
+    const anchor = { version: 1, x_pct: 37.5, y_pct: 64.25 };
+    const response = await comment({ ...input, anchor });
+    expect(response.status).toBe(201);
+    const created: { data: Comment } = await response.json();
+    const listed: { data: Comment[] } = await (await commentRoutes.request(`http://local/api/projects/${projectId}/comments`)).json();
+    expect(listed.data.find(row => row.id === created.data.id)?.anchor).toEqual(anchor);
+    for (const invalid of [{ ...anchor, version: 2 }, { ...anchor, x_pct: -1 }, { ...anchor, y_pct: 101 }, { ...anchor, x_pct: "37.5" }, { version: 1 }, { ...anchor, selector: "body" }, []]) {
+      const rejected = await comment({ ...input, anchor: invalid });
+      expect(rejected.status).toBe(400);
+      expect(await rejected.json()).toMatchObject({ error: { code: "invalid_comment_anchor" } });
+    }
+    const legacy: { data: Comment } = await (await comment(input)).json();
+    expect(legacy.data.anchor).toBeNull();
+  });
   test("Given source and draw boundaries When identity is exact Then headers and sidecar anchors are authoritative", async () => {
     expect((await managedFileRoutes.request("http://local/api/projects/missing/fs/index.html")).status).toBe(404);
     expect((await managedFileRoutes.request(`http://local/api/projects/${projectId}/fs/missing.html`)).status).toBe(404);

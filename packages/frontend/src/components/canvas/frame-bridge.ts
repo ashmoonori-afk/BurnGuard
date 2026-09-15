@@ -24,7 +24,7 @@
  *     ignored cheaply.
  */
 
-import type { GraphicCanvasV1 } from "@bg/shared";
+import type { Comment, CommentAnchorV1, GraphicCanvasV1 } from "@bg/shared";
 import { artifactContentSecurityPolicy } from "@bg/shared/security";
 import { buildGraphicPreviewInjection } from "@/lib/graphic-preview";
 import { isCommentEditable, isQuickCommentShortcut } from "./quick-comment";
@@ -54,7 +54,13 @@ export interface FrameSelectHit {
 export interface FrameCommentHit {
   selector: string;
   slideIndex: number | null;
+  x_pct: number;
+  y_pct: number;
+  anchor: CommentAnchorV1;
 }
+
+export interface FrameCommentPosition { id: string; x: number; y: number; visible: boolean }
+export interface FrameCommentPositions { documentKey: string; positions: FrameCommentPosition[] }
 
 export interface FrameBgHit {
   geometry?: { width: number; height: number };
@@ -72,6 +78,7 @@ type BridgeAction =
   | "scroll-at-point"
   | "hit-select"
   | "hit-comment"
+  | "watch-comments"
   | "hit-bg"
   | "rect-selector"
   | "rect-bg"
@@ -108,9 +115,9 @@ interface BridgeResponse {
  * being asked. Add new event names here AND in BRIDGE_SCRIPT (or
  * deck-stage.ts for runtime-emitted events).
  */
-type FrameEventName = "document-loaded" | "present-dismiss" | "active-slide-changed" | "navigate" | "navigate-external" | "viewport-wheel" | "comment-pointer" | "comment-shortcut" | "comment-dismiss";
+type FrameEventName = "document-loaded" | "present-dismiss" | "active-slide-changed" | "navigate" | "navigate-external" | "viewport-wheel" | "comment-pointer" | "comment-shortcut" | "comment-dismiss" | "comment-positions";
 
-type FrameEventPayload<E extends FrameEventName> = E extends "document-loaded" | "present-dismiss" ? { documentKey: string } : E extends "comment-pointer" | "comment-shortcut" | "comment-dismiss" ? { documentKey: string; x: number | null; y: number | null } : E extends "viewport-wheel" ? { x: number; y: number; delta: number } : E extends "navigate" | "navigate-external" ? { href: string } : { index: number };
+type FrameEventPayload<E extends FrameEventName> = E extends "comment-positions" ? FrameCommentPositions : E extends "document-loaded" | "present-dismiss" ? { documentKey: string } : E extends "comment-pointer" | "comment-shortcut" | "comment-dismiss" ? { documentKey: string; x: number | null; y: number | null } : E extends "viewport-wheel" ? { x: number; y: number; delta: number } : E extends "navigate" | "navigate-external" ? { href: string } : { index: number };
 
 interface FrameEvent<E extends FrameEventName = FrameEventName> {
   __bgFrameBridge: true;
@@ -272,6 +279,20 @@ export async function requestFrameBgAtPoint(
   return (await requestFrameBridge(iframe, "hit-bg", { x, y })) as
     | FrameBgHit
     | null;
+}
+
+export async function watchFrameComments(iframe: HTMLIFrameElement | null, comments: Comment[]): Promise<FrameCommentPositions | null> {
+  return await requestFrameBridge(iframe, "watch-comments", {
+    comments: comments.map(({ id, node_selector, x_pct, y_pct, anchor }) => ({ id, node_selector, x_pct, y_pct, anchor })),
+  }) as FrameCommentPositions | null;
+}
+
+export function readFrameCommentPositions(payload: unknown, documentKey: string): FrameCommentPosition[] | null {
+  if (!payload || typeof payload !== "object" || !("documentKey" in payload) || payload.documentKey !== documentKey ||
+    !("positions" in payload) || !Array.isArray(payload.positions) || payload.positions.length > 10000) return null;
+  return payload.positions.every(p => p && typeof p === "object" && typeof p.id === "string" &&
+    typeof p.x === "number" && Number.isFinite(p.x) && typeof p.y === "number" && Number.isFinite(p.y) && typeof p.visible === "boolean")
+    ? payload.positions : null;
 }
 
 export async function requestFrameRectForSelector(
@@ -486,6 +507,56 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     return idx >= 0 ? idx : null;
   }
 
+  function commentSelector(node) {
+    var parts = [];
+    for (var current = node; current && current.nodeType === 1; current = current.parentElement) {
+      var candidate = selectorOf(current);
+      try { if (candidate && document.querySelector(candidate) === current && document.querySelectorAll(candidate).length === 1) { parts.unshift(candidate); break; } } catch (e) {}
+      var tag = current.tagName.toLowerCase();
+      var siblings = current.parentElement ? Array.from(current.parentElement.children).filter(function (sibling) { return sibling.tagName === current.tagName; }) : [current];
+      parts.unshift(tag + ":nth-of-type(" + (siblings.indexOf(current) + 1) + ")");
+    }
+    return parts.join(" > ") || "body";
+  }
+
+  var watchedComments = [];
+  var commentFramePending = false;
+  var commentResizeObserver = null;
+  function commentPositions() {
+    return { documentKey: quickCommentKey, positions: watchedComments.map(function (comment) {
+      var node = null;
+      try { node = comment.node_selector ? document.querySelector(comment.node_selector) : null; } catch (e) {}
+      var rect = node ? node.getBoundingClientRect() : null;
+      var root = document.documentElement;
+      var x = comment.x_pct / 100 * (comment.anchor ? root.scrollWidth : window.innerWidth) - window.scrollX;
+      var y = comment.y_pct / 100 * (comment.anchor ? root.scrollHeight : window.innerHeight) - window.scrollY;
+      if (rect && (comment.anchor || (node !== document.body && node !== root))) {
+        // Legacy pins lack the original node-local point. Use their stored target,
+        // rather than continuing to pin them to unrelated viewport content.
+        x = rect.left + rect.width * (comment.anchor ? comment.anchor.x_pct / 100 : 0.5);
+        y = rect.top + rect.height * (comment.anchor ? comment.anchor.y_pct / 100 : 0.5);
+      }
+      var visible = x >= 0 && y >= 0 && x <= window.innerWidth && y <= window.innerHeight && (!rect || (rect.width > 0 && rect.height > 0));
+      for (var ancestor = node && node.parentElement; visible && ancestor; ancestor = ancestor.parentElement) {
+        var style = getComputedStyle(ancestor), clip = ancestor.getBoundingClientRect();
+        if (/(auto|scroll|hidden|clip)/.test(style.overflowX) && (x < clip.left || x > clip.right)) visible = false;
+        if (/(auto|scroll|hidden|clip)/.test(style.overflowY) && (y < clip.top || y > clip.bottom)) visible = false;
+      }
+      return { id: comment.id, x: x, y: y, visible: visible };
+    }) };
+  }
+  function queueCommentPositions() {
+    if (!watchedComments.length || commentFramePending) return;
+    commentFramePending = true;
+    requestAnimationFrame(function () {
+      commentFramePending = false;
+      window.parent.postMessage({ __bgFrameBridge: true, type: "event", event: "comment-positions", payload: commentPositions() }, "*");
+    });
+  }
+  window.addEventListener("scroll", queueCommentPositions, true);
+  window.addEventListener("resize", queueCommentPositions);
+  document.addEventListener("load", queueCommentPositions, true);
+
   function readComputed(node) {
     var out = {};
     if (!node || !window.getComputedStyle) return out;
@@ -554,7 +625,18 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     var payload = data.payload || {};
     var response = null;
 
-    if (data.action === "scroll-at-point") {
+    if (data.action === "watch-comments") {
+      watchedComments = Array.isArray(payload.comments) ? payload.comments.slice(0, 10000) : [];
+      if (commentResizeObserver) commentResizeObserver.disconnect();
+      if (typeof ResizeObserver !== "undefined" && watchedComments.length) {
+        commentResizeObserver = new ResizeObserver(queueCommentPositions);
+        commentResizeObserver.observe(document.documentElement);
+        watchedComments.forEach(function (comment) {
+          try { var node = document.querySelector(comment.node_selector); if (node) commentResizeObserver.observe(node); } catch (e) {}
+        });
+      }
+      response = commentPositions();
+    } else if (data.action === "scroll-at-point") {
       var dx = Number(payload.deltaX);
       var dy = Number(payload.deltaY);
       if (Number.isFinite(dx) && Number.isFinite(dy)) {
@@ -586,11 +668,16 @@ const BRIDGE_SCRIPT = String.raw`(function () {
         inline: readInline(inspectNode)
       } : null;
     } else if (data.action === "hit-comment") {
-      var commentNode = resolveTargetAtPoint(payload.x, payload.y);
-      response = commentNode ? {
-        selector: selectorOf(commentNode) || "body",
-        slideIndex: slideIndexOf(commentNode)
-      } : { selector: "body", slideIndex: null };
+      var commentNode = resolveTargetAtPoint(payload.x, payload.y) || document.body;
+      var commentRect = commentNode.getBoundingClientRect();
+      var percent = function (point, length) { return Math.max(0, Math.min(100, point / Math.max(1, length) * 100)); };
+      response = {
+        selector: commentSelector(commentNode),
+        slideIndex: slideIndexOf(commentNode),
+        x_pct: percent(payload.x + window.scrollX, document.documentElement.scrollWidth),
+        y_pct: percent(payload.y + window.scrollY, document.documentElement.scrollHeight),
+        anchor: { version: 1, x_pct: percent(payload.x - commentRect.left, commentRect.width), y_pct: percent(payload.y - commentRect.top, commentRect.height) }
+      };
     } else if (data.action === "hit-bg") {
       var rawNode = resolveTargetAtPoint(payload.x, payload.y);
       var bgNode = rawNode && rawNode.closest ? rawNode.closest("[data-bg-node-id]") : null;
@@ -693,6 +780,7 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     commentPointer = { x: event.clientX, y: event.clientY };
     notifyComment("comment-pointer");
   }, true);
+  window.addEventListener("pointerdown", function () { notifyComment("comment-dismiss"); }, true);
   window.addEventListener("pointerout", function (event) {
     if (event.relatedTarget) return;
     commentPointer = null;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { Comment } from "@bg/shared";
-import { requestFrameCommentAtPoint, subscribeFrameEvent } from "./frame-bridge";
+import { readFrameCommentPositions, requestFrameCommentAtPoint, subscribeFrameEvent } from "./frame-bridge";
 import { commentPointInFrame, frameCommentPointer, isCommentEditable, isQuickCommentShortcut, quickCommentPosition, type CommentPinInput, type CommentPoint } from "./quick-comment";
 import { useT } from "@/i18n/t";
 
@@ -13,13 +13,14 @@ interface QuickCommentRequest {
 }
 
 /** Mounted only for a loaded, writable frame and keyed by its document/file identity. */
-export default function QuickComment({ iframeRef, containerRef, documentKey, comments, onCreate, renderComment }: {
+export default function QuickComment({ iframeRef, containerRef, documentKey, comments, onCreate, renderComment, selected }: {
   iframeRef: RefObject<HTMLIFrameElement>;
   containerRef: RefObject<HTMLDivElement>;
   documentKey: string;
   comments: Comment[];
   onCreate: (input: CommentPinInput) => Promise<Comment>;
   renderComment: (comment: Comment, close: () => void) => ReactNode;
+  selected: { documentKey: string; comment: Comment; point: CommentPoint } | null;
 }) {
   const t = useT();
   const [popup, setPopup] = useState<QuickCommentRequest | null>(null);
@@ -39,6 +40,14 @@ export default function QuickComment({ iframeRef, containerRef, documentKey, com
   }, []);
 
   useEffect(() => {
+    if (!selected || selected.documentKey !== documentKey) return;
+    close();
+    const request = { point: selected.point, comment: selected.comment, error: false };
+    requestRef.current = request;
+    setPopup(request);
+  }, [close, documentKey, selected]);
+
+  useEffect(() => {
     const frame = iframeRef.current;
     const container = containerRef.current;
     if (!frame || !container) return;
@@ -56,14 +65,12 @@ export default function QuickComment({ iframeRef, containerRef, documentKey, com
       setPosition(quickCommentPosition(point, { width: Math.min(320, window.innerWidth - 24), height: 100 }, { width: window.innerWidth, height: window.innerHeight }));
       setPopup({ ...request });
       const isCurrent = () => mounted && requestRef.current === request && iframeRef.current === frame;
-      const x_pct = local.x / frame.clientWidth * 100;
-      const y_pct = local.y / frame.clientHeight * 100;
       void (async () => {
         try {
           const hit = await requestFrameCommentAtPoint(frame, local.x, local.y);
           if (!isCurrent()) return;
           if (!hit) throw new Error("comment_hit_unavailable");
-          const comment = await createRef.current({ x_pct, y_pct, node_selector: hit.selector, slide_index: hit.slideIndex });
+          const comment = await createRef.current({ x_pct: hit.x_pct, y_pct: hit.y_pct, anchor: hit.anchor, node_selector: hit.selector, slide_index: hit.slideIndex });
           if (!isCurrent()) return;
           request.comment = comment;
           setPopup({ ...request });
@@ -104,18 +111,34 @@ export default function QuickComment({ iframeRef, containerRef, documentKey, com
     const unsubscribeDismiss = subscribeFrameEvent(frame, "comment-dismiss", payload => {
       if (payload?.documentKey === documentKey && requestRef.current) close();
     });
+    const unsubscribePositions = subscribeFrameEvent(frame, "comment-positions", payload => {
+      const request = requestRef.current;
+      if (!request?.comment) return;
+      const pin = readFrameCommentPositions(payload, documentKey)?.find(p => p.id === request.comment?.id);
+      if (!pin) return;
+      const point = pin.visible ? frameCommentPointer({ documentKey, x: pin.x, y: pin.y }, documentKey, frame) : null;
+      if (!point) { close(); return; }
+      request.point = point;
+      setPopup({ ...request });
+    });
+    const outside = (event: PointerEvent) => {
+      if (requestRef.current && event.target instanceof Element && !popupRef.current?.contains(event.target) && !event.target.closest("[data-comment-id]")) close();
+    };
     window.addEventListener("pointermove", pointer, true);
     window.addEventListener("pointerout", leave, true);
     window.addEventListener("keydown", key, true);
+    window.addEventListener("pointerdown", outside, true);
     return () => {
       mounted = false;
       requestRef.current = null;
       window.removeEventListener("pointermove", pointer, true);
       window.removeEventListener("pointerout", leave, true);
       window.removeEventListener("keydown", key, true);
+      window.removeEventListener("pointerdown", outside, true);
       unsubscribePointer();
       unsubscribeShortcut();
       unsubscribeDismiss();
+      unsubscribePositions();
     };
   }, [close, containerRef, documentKey, iframeRef]);
 

@@ -12,6 +12,7 @@ import {
 } from "../db/comments";
 import { getProjectDetail } from "../db/project-read-repository";
 import { ArtifactIdentityError, requireArtifactIdentity } from "../services/artifact-identity";
+import { parseCommentAnchor } from "@bg/shared";
 
 function ok<T>(data: T): ApiSuccess<T> {
   return { data };
@@ -99,6 +100,8 @@ commentRoutes.post("/api/projects/:id/comments", async (c) => {
     );
   }
   let slideIndex: number | null | undefined;
+  const positionAnchor = body.anchor == null ? null : parseCommentAnchor(body.anchor);
+  if (body.anchor != null && !positionAnchor) return c.json(fail("invalid_comment_anchor", "Invalid comment position anchor"), 400);
   if (slide_index === undefined || slide_index === null) {
     slideIndex = slide_index;
   } else if (
@@ -126,6 +129,7 @@ commentRoutes.post("/api/projects/:id/comments", async (c) => {
     node_selector: typeof node_selector === "string" ? node_selector : undefined,
     x_pct,
     y_pct,
+    anchor: positionAnchor,
     slide_index: slideIndex,
     body: typeof commentBody === "string" ? commentBody : undefined,
     artifact_revision: anchor.revision,
