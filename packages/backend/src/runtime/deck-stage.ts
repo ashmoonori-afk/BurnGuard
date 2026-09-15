@@ -35,6 +35,8 @@ export const DECK_STAGE_JS = `(function() {
 
   function setActive(list, index) {
     for (var i = 0; i < list.length; i++) {
+      // Generated and newly inserted slides share the template's geometry.
+      list[i].classList.add("deck-slide");
       if (i === index) list[i].setAttribute(ACTIVE_ATTR, "");
       else list[i].removeAttribute(ACTIVE_ATTR);
     }
@@ -60,6 +62,9 @@ export const DECK_STAGE_JS = `(function() {
     if (all.length === 0) return;
 
     var current = Math.min(parseHashIndex(), all.length - 1);
+    var stageStyle = document.createElement("style");
+    stageStyle.textContent = "@media screen { body[data-deck-ready] [data-slide]:not([data-active]) { display: none; } }";
+    document.head.appendChild(stageStyle);
     setActive(all, current);
     writeHash(current);
     globalThis.__BURNGUARD_DECK_RUNTIME__ = { version: 1, slideCount: all.length };

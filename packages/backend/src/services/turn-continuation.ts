@@ -47,6 +47,12 @@ export async function runWithContinuation(
             else await input.onEvent(event);
           },
         });
+      } catch (error) {
+        input.signal?.throwIfAborted();
+        // Only owned timeout cancellation is retryable here; permission,
+        // filesystem and other unexpected exceptions must retain their authority.
+        if (!controller.signal.aborted) throw error;
+        result = { exitCode: 1 };
       } finally {
         clearTimeout(idle!); clearTimeout(deadline); watcher.close();
       }
