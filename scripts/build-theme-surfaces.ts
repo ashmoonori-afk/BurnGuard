@@ -17,6 +17,7 @@
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { deckReferenceFor, deckReferenceSection } from "../packages/backend/src/data/deck-references";
 import {
   CONTENT_TYPE_FLOOR_PX,
   DESIGN_SURFACE_FILES,
@@ -555,6 +556,7 @@ function surfaceCss(name: string, surface: DesignSurface, tokens: Readonly<Recor
 function readmeSections(
   tokens: Readonly<Record<DesignSurface, Readonly<Record<string, string>>>>,
   spec: SurfaceSpec,
+  slug: string,
 ): string {
   const slide = tokens.slides;
   const content = tokens.content;
@@ -562,6 +564,7 @@ function readmeSections(
   const bleed = content["--content-bleed"] === "1"
     ? "one deliberate full-bleed figure may cross the safe area because `--content-bleed` is `1`"
     : "nothing crosses the safe area because `--content-bleed` is `0`";
+  const reference = deckReferenceFor(slug);
   return [
     "## Surfaces",
     "",
@@ -577,6 +580,7 @@ function readmeSections(
     "",
     "## Slide deck",
     "",
+    ...(reference ? [deckReferenceSection(reference)] : [
     `Slides are fixed ${slide["--slide-w"]!.replace("px", "")} x ${slide["--slide-h"]!.replace("px", "")} CSS px artboards at ${slide["--slide-aspect"]}, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside \`--slide-pad-edge\` (${slide["--slide-pad-edge"]}), and \`--slide-type-caption\` (${slide["--slide-type-caption"]}) is the smallest type on any slide.`,
     "",
     `- Ground: ${spec.ground}; ${spec.signal}.`,
@@ -584,6 +588,7 @@ function readmeSections(
     `- Structure: ${spec.structure}. One takeaway per slide, titled at \`--slide-type-heading\` (${slide["--slide-type-heading"]}) with support at \`--slide-type-body\` (${slide["--slide-type-body"]}).`,
     `- Imagery: ${spec.figure}. At most one image per slide unless the request asks for a grid.`,
     `- Never: ${spec.never}.`,
+    ]),
     "",
     "## Content artboards",
     "",
@@ -607,6 +612,7 @@ const SKILL_SECTION = [
 
 /** Replaces everything from the generated `## Surfaces` heading onward, so reruns do not stack. */
 function withGeneratedTail(document: string, tail: string): string {
+  document = document.replace(/\r\n/g, "\n");
   const index = document.indexOf("\n## Surfaces\n");
   const head = (index === -1 ? document : document.slice(0, index + 1)).replace(/\s+$/, "");
   return `${head}\n\n${tail.replace(/\s+$/, "")}\n`;
@@ -645,6 +651,12 @@ async function build(): Promise<void> {
 
     const css = await readFile(path.join(system.dir, "colors_and_type.css"), "utf8");
     const tokens = surfaceTokens(layoutSignals(css));
+    const reference = deckReferenceFor(slug);
+    if (reference) Object.assign(tokens.slides, {
+      "--slide-columns": String(reference.columns),
+      "--slide-pad-edge": `${reference.edge}px`,
+      "--slide-type-hero": `${reference.hero}px`,
+    });
     for (const surface of DESIGN_SURFACES) {
       const unexpected = Object.keys(tokens[surface]).filter((token) => !REQUIRED_SURFACE_TOKENS[surface].includes(token));
       if (unexpected.length > 0) throw new Error(`${slug}: ${surface} surface declares unknown ${unexpected.join(", ")}`);
@@ -671,7 +683,7 @@ async function build(): Promise<void> {
     }
 
     const readmePath = path.join(system.dir, "README.md");
-    await writeFile(readmePath, withGeneratedTail(await readFile(readmePath, "utf8"), readmeSections(tokens, spec)), "utf8");
+    await writeFile(readmePath, withGeneratedTail(await readFile(readmePath, "utf8"), readmeSections(tokens, spec, slug)), "utf8");
     const skillPath = path.join(system.dir, "SKILL.md");
     await writeFile(skillPath, withGeneratedTail(await readFile(skillPath, "utf8"), SKILL_SECTION), "utf8");
   }

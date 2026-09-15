@@ -97,13 +97,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (84px), and `--slide-type-caption` (26px) is the smallest type on any slide.
+Reference adaptation: 068 - Burger King Brand Guidelines (pp. 1, 3, 4, 33, 65, 97). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: printed editorial bands on aged paper; the print palette colours a band or a heading, not small parts.
-- Cover: a specimen poster: an oversized wordmark with the object in front of it.
-- Structure: broad bands with small supporting figures; avoid uniform card rows. One takeaway per slide, titled at `--slide-type-heading` (56px) with support at `--slide-type-body` (34px).
-- Imagery: an object photographed as a print specimen, matte and unglossed. At most one image per slide unless the request asks for a grid.
-- Never: uniform card rows, digital gradients, thin modern grids.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Stacked oversized display title on a flat warm brand ground; deliberate colour changes between title lines.
+
+- Body: Guideline page: left 4/12 explanatory rail and right 8/12 large product or mark specimen; no extra containers.
+
+- Evidence: A clearly labelled correct/incorrect pair or a sparse application sheet at consistent scale; keep examples large enough for projection.
+
+- Closing: One warm colour field and a short bold action. Borrow hierarchy and composition, never the source brand's logo, font or illustrations.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

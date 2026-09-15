@@ -16,6 +16,10 @@ const WEBSITE_PREVIEW_PATH = "preview/website.html";
 
 const SECTIONS: PreviewSection[] = [
   {
+    group: "system.preview.slides",
+    items: [{ id: "slides", title: "system.preview.slides" }],
+  },
+  {
     group: "system.preview.website",
     items: [{ id: "website", title: "system.preview.website" }],
   },
@@ -67,7 +71,8 @@ export function groupSystemPreviews(previews: readonly DesignSystemPreview[]) {
     `preview/${item.id}.html`, { group: section.group, title: item.title },
   ] as const)));
   const groups = new Map<string, Array<{ path: string; title: string }>>();
-  const ordered = [...previews].sort((a, b) => Number(b.path === WEBSITE_PREVIEW_PATH) - Number(a.path === WEBSITE_PREVIEW_PATH));
+  const rank = (path: string) => path === WEBSITE_PREVIEW_PATH ? 0 : path === "preview/slides.html" ? 1 : 2;
+  const ordered = [...previews].sort((a, b) => rank(a.path) - rank(b.path));
   for (const preview of ordered) {
     const metadata = known.get(preview.path);
     const group = t(metadata?.group ?? "system.preview.other");
@@ -103,16 +108,17 @@ export default function SystemPreviewGrid({
   if (groups.length === 0) return <div role="status" className="px-4 py-6 text-sm text-muted-foreground sm:px-8">{t("system.preview.empty")}</div>;
   return (
     <div className="px-4 py-6 space-y-8 sm:px-8">
-      {groups.map((grp) => (
-        <section key={grp.group}>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-            {grp.group}<span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{grp.items.length}</span>
+      {groups.map((grp, index) => (
+        <section key={grp.group} className="grid gap-4 border-t border-border pt-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,4fr)]">
+          <h2 className="flex flex-col items-start gap-2 text-sm font-semibold">
+            <span className="font-mono text-xs text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
+            {grp.group}<span className="text-xs font-medium text-muted-foreground">{grp.items.length}</span>
           </h2>
-          <div className={`grid grid-cols-1 gap-4 ${grp.items[0]?.path === WEBSITE_PREVIEW_PATH ? "" : "lg:grid-cols-2"}`}>
+          <div className={`grid min-w-0 grid-cols-1 gap-4 ${grp.items[0]?.path === WEBSITE_PREVIEW_PATH || grp.items[0]?.path === "preview/slides.html" ? "" : "lg:grid-cols-2"}`}>
             {grp.items.map((it) => (
               <article
                 key={it.path}
-                className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-3"
+                className="min-w-0 overflow-hidden border-b border-border bg-card pb-3"
               >
                 <div className="mb-3">
                   <PreviewIframe
@@ -120,7 +126,7 @@ export default function SystemPreviewGrid({
                     path={it.path}
                     title={it.title}
                     refreshKey={previewRefreshKey}
-                    website={it.path === WEBSITE_PREVIEW_PATH}
+                    website={it.path === WEBSITE_PREVIEW_PATH || it.path === "preview/slides.html"}
                   />
                 </div>
                 <div className="flex items-start justify-between gap-3">

@@ -241,7 +241,7 @@ function DesignSystemEditor({ id }: { id: string }) {
     <div className="min-w-0 flex-1 overflow-y-auto bg-background">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
         <Link to="/?view=systems" className="mb-5 inline-flex min-h-9 items-center gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><ArrowLeft className="h-4 w-4" />{t("system.backToLibrary")}</Link>
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-7">
+        <div className="border-y border-border bg-card p-5 sm:p-7">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-medium text-muted-foreground">{t("system.title")}</span><Badge variant={system.status === "published" ? "accent" : "outline"}>{t(STATUS_LABELS[system.status])}</Badge>{system.is_template ? <Badge variant="outline">{t("system.template")}</Badge> : null}</div>
             {!editing ? (
@@ -268,7 +268,7 @@ function DesignSystemEditor({ id }: { id: string }) {
 
           {!editing ? (
             <>
-              <h1 className="mt-5 break-words text-2xl font-semibold tracking-tight sm:text-3xl">
+              <h1 className="mt-7 max-w-4xl break-words text-4xl font-normal tracking-tight sm:text-6xl">
                 {system.name}
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
@@ -360,7 +360,7 @@ function DesignSystemEditor({ id }: { id: string }) {
             {[{ id: "system-previews", label: t("system.previews") }, { id: "system-layout", label: t("system.layout.title") }, { id: "system-style-editor", label: t("system.colorsFonts") }, { id: "system-source-details", label: t("system.sourceDetails") }].map(({ id: sectionId, label }) => <Button key={sectionId} size="sm" variant="outline" onClick={() => { const section = document.getElementById(sectionId); if (section instanceof HTMLDetailsElement) section.open = true; section?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>{label}</Button>)}
           </nav>
         </div>
-        <section id="system-previews" className="mt-6 scroll-mt-6 rounded-2xl border border-border bg-card">
+        <section id="system-previews" className="mt-6 scroll-mt-6 border-y border-border bg-card">
           <div className="border-b border-border px-5 py-5 sm:px-7"><h2 className="text-lg font-semibold">{t("system.previews")}</h2><p className="mt-1 text-sm text-muted-foreground">{t("system.previewHelp")}</p></div>
           <SystemPreviewGrid systemId={id} onEditColors={() => colorEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} previewRefreshKey={previewRefreshKey} />
         </section>

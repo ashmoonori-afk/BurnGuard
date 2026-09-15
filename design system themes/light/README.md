@@ -97,13 +97,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (72px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+Reference adaptation: 173 - IBM Cost of a Data Breach Report 2023 (pp. 1, 2, 3, 20, 40, 59). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: the crisp neutral canvas, kept open; violet, pink or teal touches one element per frame.
-- Cover: a centred title over one uninterrupted wide scene with generous whitespace around it.
-- Structure: aligned evidence rows and a flat hierarchy; let the canvas stay open rather than filling it. One takeaway per slide, titled at `--slide-type-heading` (52px) with support at `--slide-type-body` (32px).
-- Imagery: one clean product or scene image, never a grey placeholder box. At most one image per slide unless the request asks for a grid.
-- Never: dense card rows, two accent hues in one frame, clutter crossing the safe area.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Quiet title in left 6/12; one analytical line motif in right 6/12, with generous whitespace.
+
+- Body: Research page: narrow finding column at left 3/12, one large chart at centre 6/12, methodology or comparison in right 3/12.
+
+- Evidence: A single readable chart leads; direct labels, units, period and source below. Two charts only when they share a comparison question.
+
+- Closing: A concise finding and a next-step column on a light ground. Printed footnotes become a dedicated appendix slide.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

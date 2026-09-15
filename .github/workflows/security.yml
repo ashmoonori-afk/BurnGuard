@@ -73,6 +73,7 @@ jobs:
           packages/backend/tests/graphic-capability.test.ts
           packages/backend/tests/settings-backend-persistence.test.ts
           packages/backend/tests/design-system-surfaces.test.ts
+          packages/backend/tests/deck-references.test.ts
           packages/backend/tests/surface-image-language.test.ts
           packages/backend/tests/graphic-contract-defects.test.ts
           packages/backend/tests/content-type-ladder.test.ts

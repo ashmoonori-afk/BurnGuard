@@ -6,12 +6,12 @@
   --slide-w: 1920px;
   --slide-h: 1080px;
   --slide-aspect: 16 / 9;
-  --slide-pad-edge: 72px;
+  --slide-pad-edge: 88px;
   --slide-pad-block: 32px;
-  --slide-columns: 6;
+  --slide-columns: 12;
   --slide-gutter: 16px;
   --slide-rule: 1px;
-  --slide-type-hero: 88px;
+  --slide-type-hero: 132px;
   --slide-type-heading: 56px;
   --slide-type-body: 34px;
   --slide-type-caption: 26px;

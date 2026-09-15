@@ -50,9 +50,11 @@ test("Given a website preview after component previews When grouped Then the web
     { path: "preview/colors-brand.html" },
     { path: "preview/mobile-header.html" },
     { path: "preview/website.html" },
+    { path: "preview/slides.html" },
   ]);
   expect(groups.map((group) => group.items.map((item) => item.path))).toEqual([
     ["preview/website.html"],
+    ["preview/slides.html"],
     ["preview/colors-brand.html"],
     ["preview/mobile-header.html"],
   ]);

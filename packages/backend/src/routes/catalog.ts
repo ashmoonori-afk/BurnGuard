@@ -9,7 +9,7 @@ import { systemsDir } from "../lib/paths";
 import { CatalogFileError, catalogPaths, inspectCatalogTree } from "../services/catalog-files";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import { rawFileHeaders } from "../security/raw-file-response";
-import { BUNDLED_WEBSITE_PREVIEW, hasBundledSystemPreview, readBundledSystemPreview } from "../services/bundled-system-preview";
+import { BUNDLED_SLIDES_PREVIEW, BUNDLED_WEBSITE_PREVIEW, hasBundledSlidesPreview, hasBundledSystemPreview, readBundledSystemPreview } from "../services/bundled-system-preview";
 import {
   CatalogLifecycleError, copyCatalogSystem, purgeCatalogSystem, restoreCatalogSystem, trashCatalogSystem,
 } from "../services/catalog-lifecycle";
@@ -35,6 +35,7 @@ catalogRoutes.get("/api/design-systems/:id/previews", async (c) => {
     const tree = await inspectCatalogTree(paths.live);
     const previews: DesignSystemPreview[] = tree.files.filter((file) => /^(?:preview\/[^/]+|preview)\.html?$/i.test(file)).map((file) => ({ path: file }));
     if (!previews.some(preview => preview.path === BUNDLED_WEBSITE_PREVIEW) && await hasBundledSystemPreview(id)) previews.unshift({ path: BUNDLED_WEBSITE_PREVIEW });
+    if (!previews.some(preview => preview.path === BUNDLED_SLIDES_PREVIEW) && hasBundledSlidesPreview(id)) previews.push({ path: BUNDLED_SLIDES_PREVIEW });
     return c.json(ok(previews));
   } catch (error) { return catalogError(c, error); }
 });

@@ -1,4 +1,6 @@
 import path from "node:path";
+import { createHash } from "node:crypto";
+import legacyDeckHashes from "../data/deck-legacy-hashes.json";
 import {
   CONTENT_TYPE_FLOOR_PX,
   DERIVED_SURFACE_TOKENS,
@@ -43,7 +45,19 @@ export async function readDesignSystemSurface(
       readDesignSystemSourceFile(source, relativeSurface),
       readDesignSystemSourceFile(source, "README.md"),
     ]);
-    resolved = supplementDesignSystemSurface(local, extractDesignSystemSurface(bundledCss, bundledReadme, surface));
+    const bundled = extractDesignSystemSurface(bundledCss, bundledReadme, surface);
+    // Only the exact shipped v0.5.15 values upgrade. Any user-authored change retains precedence;
+    // this is a read-time fallback, so managed files and their receipts remain untouched.
+    const legacy = surface === "slides" && system.id.startsWith("builtin-theme-")
+      ? legacyDeckHashes[system.id.slice("builtin-theme-".length) as keyof typeof legacyDeckHashes] : undefined;
+    const hash = (value: string) => createHash("sha256").update(value.replace(/\r\n/g, "\n")).digest("hex");
+    const upgradeTokens = legacy && hash(JSON.stringify(local.tokens)) === legacy.css;
+    const upgradeSection = legacy && hash(local.sections.find(section => section.kind === "slides")?.text ?? "") === legacy.section;
+    resolved = supplementDesignSystemSurface({
+      ...local,
+      tokens: upgradeTokens ? {} : local.tokens,
+      sections: upgradeSection ? local.sections.filter(section => section.kind !== "slides") : local.sections,
+    }, bundled);
   }
   return {
     contract: supplementDesignSystemSurface(resolved, {

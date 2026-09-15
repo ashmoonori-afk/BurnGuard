@@ -1,5 +1,7 @@
 # README images
 
+`deck-reference-compositions.webp` is a contact sheet of six actual slide-preview frames captured with Chrome on September 15, 2026, using an isolated local profile. It was assembled from screenshots with labels and WebP compression. The underlying images are existing BurnGuard theme artwork; no source PDF artwork is included. See [the implementation record](../23-deck-reference-systems-2026-09-15.md).
+
 The [image recipe gallery](image-recipes/README.md) contains 21 original examples spanning every image treatment and all 13 purpose domains. Its manifest records the exact prompts and generated assets separately from the cover and real interface screenshots below.
 
 `burnguard-cover.png` is an AI-generated product concept illustration for the BurnGuard README, not a screenshot of the application. It was regenerated on 2026-09-09 with the built-in `image_gen` tool, followed by one targeted text correction, and copied into this directory without image conversion or retouching. No fallback CLI was used.
