@@ -92,6 +92,8 @@ import {
   isColorTokenValue,
   upsertCssCustomProperty,
 } from "./extraction-css";
+import { DESIGN_SURFACE_FILES, DESIGN_SURFACES } from "@bg/shared";
+import { DERIVED_SURFACE_README_SECTIONS, renderDerivedSurfaceCss } from "./design-system-surface";
 import { collectCandidateWebsitePages, extractHtmlComponentSamples, sanitizeSourceHtml } from "./extraction-html";
 import { analyzeLocalTree, type SourceAnalysis } from "./extraction-local-tree";
 import {
@@ -1374,7 +1376,7 @@ async function writeCanonicalDesignSystem(input: {
 
   await writeText(
     path.join(input.systemDir, "README.md"),
-    buildReadme(input.brandName, input.sourceType, input.sourceUrl, input.analysis),
+    buildReadme(input.brandName, input.sourceType, input.sourceUrl, input.analysis) + DERIVED_SURFACE_README_SECTIONS,
     generated,
     input.systemDir,
   );
@@ -1390,6 +1392,14 @@ async function writeCanonicalDesignSystem(input: {
     generated,
     input.systemDir,
   );
+  for (const surface of DESIGN_SURFACES) {
+    await writeText(
+      path.join(input.systemDir, DESIGN_SURFACE_FILES[surface].split("/").join(path.sep)),
+      renderDerivedSurfaceCss(surface),
+      generated,
+      input.systemDir,
+    );
+  }
   await writeText(
     path.join(fontsDir, "fonts.css"),
     buildFontsCss(input.analysis.fontFamilies),

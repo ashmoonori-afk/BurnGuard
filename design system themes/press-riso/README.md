@@ -138,3 +138,35 @@ Use `window-stage` with `3` desktop groups and `580px` minimum height. Reserve 5
 Mobile centers the title and one visible link window in a vertical stack, retaining the ticker and three equal bottom glyph cells. Allow links to wrap and let the closing region grow with content.
 
 Structural reference: [window-stage](https://www.footer.design/sites/the-design-society). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
+
+## Surfaces
+
+This system has one contract per output geometry. Shared brand identity - colour, type families, spacing, radius, elevation and motion - stays in `colors_and_type.css` together with the website grid and the `--family-*` structural decisions, and the `## Composition` rules apply to all three surfaces. Each surface below owns only what its own geometry needs.
+
+| Surface | File | Owns | Used by |
+|---|---|---|---|
+| Website | `surfaces/website.css` | `--web-*` type ramp and block padding | Websites and prototypes |
+| Slides | `surfaces/slides.css` | `--slide-*` geometry, safe area and projection ramp | 1920x1080 slide decks |
+| Content | `surfaces/content.css` | `--content-*` safe area, figure, anchor and type ramp | Fixed artboards: card news, banners, product detail pages, thumbnails, posters |
+
+Content values are authored for a `--content-base` shorter side. Per artboard set `--content-short` to that frame's shorter side and `--content-scale: calc(var(--content-short) / var(--content-base))`, then size type as `max(12px, calc(var(--content-type-body) * var(--content-scale)))`. `--content-safe` is a fraction of the shorter side, so the safe inset is `calc(var(--content-short) * var(--content-safe))` on every edge.
+
+## Slide deck
+
+Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (80px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+
+- Ground: cream stock with flat riso inks; vermilion, ultramarine and sun-yellow hold fixed roles.
+- Cover: condensed large type with one three-degree rotation.
+- Structure: 2px rules and square corners, at most three inks on a frame. One takeaway per slide, titled at `--slide-type-heading` (52px) with support at `--slide-type-body` (32px).
+- Imagery: a graphic print rather than a photograph, with a small deliberate ink misregistration. At most one image per slide unless the request asks for a grid.
+- Never: smooth photographic gradients, perfect registration, glossy or 3D finishes.
+
+## Content artboards
+
+Each artboard is one fixed frame at the size the request declares. The requested kind's own rules come first - frame sizes, platform exclusion zones, print trim and bleed, and a product detail page's full-height section sequence with its closing call to action - and the rules below govern how each frame or section looks. Keep required content inside the safe inset (7% of the shorter side), place the primary figure at `--content-figure` (0.62) of the shorter side anchored center, and one deliberate full-bleed figure may cross the safe area because `--content-bleed` is `1`.
+
+- Frame: cream stock with flat riso inks; vermilion, ultramarine and sun-yellow hold fixed roles.
+- Composition: 2px rules and square corners, at most three inks on a frame. In a multi-frame set the first frame follows the cover rule above and the last carries the call to action; on a product detail page these rules apply per section.
+- Type: one claim per frame at `--content-type-hero` (124px at a 1080px shorter side, scaled by `--content-scale`), support at `--content-type-sub` (56px), and nothing below `--content-type-caption` (24px) or 12px once scaled.
+- Figure: a graphic print rather than a photograph, with a small deliberate ink misregistration.
+- Never: smooth photographic gradients, perfect registration, glossy or 3D finishes.

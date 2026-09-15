@@ -122,3 +122,35 @@ Use `contact-ledger` with `3` desktop groups and `560px` minimum height. Reserve
 Mobile keeps small brand/company metadata in two columns, expands the signup rule across the width, stacks contact addresses, and shifts the large wordmark to the bottom. Allow links to wrap and let the closing region grow with content.
 
 Structural reference: [contact-ledger](https://www.footer.design/sites/esr). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
+
+## Surfaces
+
+This system has one contract per output geometry. Shared brand identity - colour, type families, spacing, radius, elevation and motion - stays in `colors_and_type.css` together with the website grid and the `--family-*` structural decisions, and the `## Composition` rules apply to all three surfaces. Each surface below owns only what its own geometry needs.
+
+| Surface | File | Owns | Used by |
+|---|---|---|---|
+| Website | `surfaces/website.css` | `--web-*` type ramp and block padding | Websites and prototypes |
+| Slides | `surfaces/slides.css` | `--slide-*` geometry, safe area and projection ramp | 1920x1080 slide decks |
+| Content | `surfaces/content.css` | `--content-*` safe area, figure, anchor and type ramp | Fixed artboards: card news, banners, product detail pages, thumbnails, posters |
+
+Content values are authored for a `--content-base` shorter side. Per artboard set `--content-short` to that frame's shorter side and `--content-scale: calc(var(--content-short) / var(--content-base))`, then size type as `max(12px, calc(var(--content-type-body) * var(--content-scale)))`. `--content-safe` is a fraction of the shorter side, so the safe inset is `calc(var(--content-short) * var(--content-safe))` on every edge.
+
+## Slide deck
+
+Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (80px), and `--slide-type-caption` (26px) is the smallest type on any slide.
+
+- Ground: the paper ground with blueprint annotation; line work explains content; the blueprint line marks a numbered figure.
+- Cover: an edge-wide title above one dominant technical specimen.
+- Structure: numbered figures, mono headings and a serif reading body; near-square corners, no elevation. One takeaway per slide, titled at `--slide-type-heading` (60px) with support at `--slide-type-body` (34px).
+- Imagery: a described object shown as a figure the text refers to, with labels typeset rather than drawn in. At most one image per slide unless the request asks for a grid.
+- Never: atmospheric photography, coloured backgrounds, annotation baked into the image.
+
+## Content artboards
+
+Each artboard is one fixed frame at the size the request declares. The requested kind's own rules come first - frame sizes, platform exclusion zones, print trim and bleed, and a product detail page's full-height section sequence with its closing call to action - and the rules below govern how each frame or section looks. Keep required content inside the safe inset (7% of the shorter side), place the primary figure at `--content-figure` (0.40) of the shorter side anchored center, and one deliberate full-bleed figure may cross the safe area because `--content-bleed` is `1`.
+
+- Frame: the paper ground with blueprint annotation; line work explains content; the blueprint line marks a numbered figure.
+- Composition: numbered figures, mono headings and a serif reading body; near-square corners, no elevation. In a multi-frame set the first frame follows the cover rule above and the last carries the call to action; on a product detail page these rules apply per section.
+- Type: one claim per frame at `--content-type-hero` (136px at a 1080px shorter side, scaled by `--content-scale`), support at `--content-type-sub` (64px), and nothing below `--content-type-caption` (26px) or 12px once scaled.
+- Figure: a described object shown as a figure the text refers to, with labels typeset rather than drawn in.
+- Never: atmospheric photography, coloured backgrounds, annotation baked into the image.

@@ -99,8 +99,9 @@ with 24-32px gutters and 1200-1280px content width.
 
 export const DECK_VISUAL_CRAFT = `## Deck craft (DECK_VISUAL_CRAFT)
 
-- Mandatory: use the deck skill's projection tokens at their declared values
-  for every text element and never lower them in self-review. Eyebrows,
+- Mandatory: use the deck skill's projection tokens at their declared values,
+  or the slides surface's --slide-type-* and --slide-pad-* when one is
+  supplied, for every text element and never lower them in self-review. Eyebrows,
   chrome, captions and chart labels are --deck-type-caption (24px), nothing
   smaller. Size from those tokens (or calc() on them), never raw px or
   viewport units.
@@ -128,8 +129,9 @@ export const GRAPHIC_VISUAL_CRAFT = `## Graphic craft (GRAPHIC_VISUAL_CRAFT)
 
 Each requested fixed artboard must read from across the room at exactly the
 dimensions declared for that frame.
-- Mandatory: a safe area of 6-8% of the short side on every edge holds all
-  required content; only a deliberate full-bleed figure crosses it.
+- Mandatory: a safe area of 6-8% of the short side on every edge, or
+  --content-safe when the content surface supplies it, holds all required
+  content; only a deliberate full-bleed figure crosses it.
 - Mandatory: headline contrast 7:1 or better against its local background;
   put text on the calmest part of the background or on a translucent plate.
 - Mandatory: size in px relative to the artboard (or % of its width); no
@@ -137,7 +139,8 @@ dimensions declared for that frame.
   frame.
 - Optional model when the brief leaves composition open: a field layer (a mesh
   of 2-3 radial glows, a duotone gradient, or a paper tone with 3-5% grain), a
-  figure layer at 40-70% of the short side placed off-centre on a
+  figure layer at --content-figure, or 40-70% of the short side, placed
+  off-centre on a
   rule-of-thirds intersection, and a type layer of one headline at 8-14% of
   the artboard height with a body line at 2-3%, plus an optional eyebrow and
   mark, in at most two typefaces.

@@ -5,6 +5,7 @@ This folder contains product and engineering documentation for BurnGuard. Some s
 ## Start Here
 
 - [Product introduction and setup](../README.md), also available in [Korean](../README.ko.md).
+- [Design system surfaces, September 15, 2026](./22-design-system-surfaces-2026-09-15.md): one contract per output geometry - website, slides and content - with per-theme tokens, prompt selection and fallbacks.
 - [Theme reference layouts, September 15, 2026](./21-theme-reference-layouts-2026-09-15.md): 41 distinct navigation, hero and footer combinations, exact source references, geometry and responsive adaptations.
 - [Native charts](./charts.md): eight original chart types, data editing, generation contracts and portable SVG output.
 - [Image production](./image-production.md): original purpose recipes, visual treatments, bounded prompt assembly and saved preferences.
@@ -55,6 +56,7 @@ The original milestones and screen specification below describe earlier plans; t
 | Original UI specification | [04-ui-spec.md](./04-ui-spec.md) |
 | Design system sample format | [05-design-system-format.md](./05-design-system-format.md) |
 | Bundled navigation, hero and footer reference layouts | [21-theme-reference-layouts-2026-09-15.md](./21-theme-reference-layouts-2026-09-15.md) |
+| Per-surface design-system contracts (website, slides, content) | [22-design-system-surfaces-2026-09-15.md](./22-design-system-surfaces-2026-09-15.md) |
 | Phase status and remaining work | [06-milestones.md](./06-milestones.md) |
 | Deliverables and Cafe24/Imweb publishing plan | [14-deliverables-and-platform-publishing-plan-2026-09-09.md](./14-deliverables-and-platform-publishing-plan-2026-09-09.md) |
 | Current quality assessment, global readiness, and roadmap | [17-project-review-and-roadmap-2026-09-11.md](./17-project-review-and-roadmap-2026-09-11.md) |

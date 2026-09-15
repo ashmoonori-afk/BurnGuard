@@ -13,6 +13,7 @@ Root build, development, and packaging orchestration across Bun, .NET 8, and Swi
 | Stage runtime assets | `package-runtime.ts` | `isRuntimeSource`/`stageRuntimeAssets`; ships `design system themes/`, `design system sample/` (minus `uploads/`), `samples/original/`, fonts, migrations, LICENSE, NOTICE |
 | Windows shell + release | `build-windows-native.ts`, `package-windows-release.ts` | .NET 8 SDK builds the `net48` csproj; WebView2 + Velopack `vpk pack`; Windows host required |
 | macOS app, DMG, release | `build-mac.ts`, `package-mac-release.ts` | macOS-gated; needs `build:frontend` first |
+| Regenerate design-system surfaces | `build-theme-surfaces.ts` | `bun run surfaces`; rewrites `surfaces/*.css` and the three generated README sections for every shipped design system from its own layout tokens plus an authored spec, so it is run deliberately and is not part of `bun run build` |
 | Regenerate the theme catalogue | `build-theme-catalogue.ts` | `bun run catalogue`; rewrites the committed `design system themes/catalogue.html` from the registry, so it is run deliberately and is not part of `bun run build` |
 | Test bootstrap | `test-preload.ts` | `bunfig.toml` preload: temp `BG_APP_ROOT`, migrations, owned cleanup |
 | QA acceptance harness | `qa/` | Evidence receipts, browser fixtures, HTTP scenarios - see `qa/AGENTS.md` |

@@ -43,3 +43,35 @@ Keep a circular optical stage centered in a square hero field, with supporting t
 ## Responsive
 
 Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+
+## Surfaces
+
+This system has one contract per output geometry. Shared brand identity - colour, type families, spacing, radius, elevation and motion - stays in `colors_and_type.css` together with the website grid and the `--family-*` structural decisions, and the `## Composition` rules apply to all three surfaces. Each surface below owns only what its own geometry needs.
+
+| Surface | File | Owns | Used by |
+|---|---|---|---|
+| Website | `surfaces/website.css` | `--web-*` type ramp and block padding | Websites and prototypes |
+| Slides | `surfaces/slides.css` | `--slide-*` geometry, safe area and projection ramp | 1920x1080 slide decks |
+| Content | `surfaces/content.css` | `--content-*` safe area, figure, anchor and type ramp | Fixed artboards: card news, banners, product detail pages, thumbnails, posters |
+
+Content values are authored for a `--content-base` shorter side. Per artboard set `--content-short` to that frame's shorter side and `--content-scale: calc(var(--content-short) / var(--content-base))`, then size type as `max(12px, calc(var(--content-type-body) * var(--content-scale)))`. `--content-safe` is a fraction of the shorter side, so the safe inset is `calc(var(--content-short) * var(--content-safe))` on every edge.
+
+## Slide deck
+
+Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (72px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+
+- Ground: the optical stage centred on a square field; the refracting ring is the only bright event.
+- Cover: a circular optical stage with the title aligned to its edges.
+- Structure: focused optical details and concise specifications; preserve the stage geometry. One takeaway per slide, titled at `--slide-type-heading` (52px) with support at `--slide-type-body` (32px).
+- Imagery: an optical ring or refraction study, not a blurred glass panel. At most one image per slide unless the request asks for a grid.
+- Never: flat blur passed off as refraction, off-centre stages, busy backgrounds.
+
+## Content artboards
+
+Each artboard is one fixed frame at the size the request declares. The requested kind's own rules come first - frame sizes, platform exclusion zones, print trim and bleed, and a product detail page's full-height section sequence with its closing call to action - and the rules below govern how each frame or section looks. Keep required content inside the safe inset (7% of the shorter side), place the primary figure at `--content-figure` (0.56) of the shorter side anchored bottom, and nothing crosses the safe area because `--content-bleed` is `0`.
+
+- Frame: the optical stage centred on a square field; the refracting ring is the only bright event.
+- Composition: focused optical details and concise specifications; preserve the stage geometry. In a multi-frame set the first frame follows the cover rule above and the last carries the call to action; on a product detail page these rules apply per section.
+- Type: one claim per frame at `--content-type-hero` (120px at a 1080px shorter side, scaled by `--content-scale`), support at `--content-type-sub` (56px), and nothing below `--content-type-caption` (24px) or 12px once scaled.
+- Figure: an optical ring or refraction study, not a blurred glass panel.
+- Never: flat blur passed off as refraction, off-centre stages, busy backgrounds.

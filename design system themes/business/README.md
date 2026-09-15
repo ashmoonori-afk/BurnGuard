@@ -82,3 +82,35 @@ Use `retail-accordion` with `4` desktop groups and `500px` minimum height. Reser
 Mobile replaces the three link columns with three ruled rows showing plus disclosure marks; locale/legal is centered beneath, above the cropped wordmark. Allow links to wrap and let the closing region grow with content.
 
 Structural reference: [retail-accordion](https://www.footer.design/sites/outway). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
+
+## Surfaces
+
+This system has one contract per output geometry. Shared brand identity - colour, type families, spacing, radius, elevation and motion - stays in `colors_and_type.css` together with the website grid and the `--family-*` structural decisions, and the `## Composition` rules apply to all three surfaces. Each surface below owns only what its own geometry needs.
+
+| Surface | File | Owns | Used by |
+|---|---|---|---|
+| Website | `surfaces/website.css` | `--web-*` type ramp and block padding | Websites and prototypes |
+| Slides | `surfaces/slides.css` | `--slide-*` geometry, safe area and projection ramp | 1920x1080 slide decks |
+| Content | `surfaces/content.css` | `--content-*` safe area, figure, anchor and type ramp | Fixed artboards: card news, banners, product detail pages, thumbnails, posters |
+
+Content values are authored for a `--content-base` shorter side. Per artboard set `--content-short` to that frame's shorter side and `--content-scale: calc(var(--content-short) / var(--content-base))`, then size type as `max(12px, calc(var(--content-type-body) * var(--content-scale)))`. `--content-safe` is a fraction of the shorter side, so the safe inset is `calc(var(--content-short) * var(--content-safe))` on every edge.
+
+## Slide deck
+
+Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (80px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+
+- Ground: the sober charcoal ground; muted blue marks the decision value.
+- Cover: the main statement across the top with evidence left and the action stack right.
+- Structure: metrics, filters and one table in decision order, with numeric columns aligned. One takeaway per slide, titled at `--slide-type-heading` (56px) with support at `--slide-type-body` (32px).
+- Imagery: a wide evidence panel or chart; stay text-first so PPTX export survives. At most one image per slide unless the request asks for a grid.
+- Never: decorative photography, misaligned numeric columns, effects that only survive raster capture.
+
+## Content artboards
+
+Each artboard is one fixed frame at the size the request declares. The requested kind's own rules come first - frame sizes, platform exclusion zones, print trim and bleed, and a product detail page's full-height section sequence with its closing call to action - and the rules below govern how each frame or section looks. Keep required content inside the safe inset (7% of the shorter side), place the primary figure at `--content-figure` (0.49) of the shorter side anchored bottom, and nothing crosses the safe area because `--content-bleed` is `0`.
+
+- Frame: the sober charcoal ground; muted blue marks the decision value.
+- Composition: metrics, filters and one table in decision order, with numeric columns aligned. In a multi-frame set the first frame follows the cover rule above and the last carries the call to action; on a product detail page these rules apply per section.
+- Type: one claim per frame at `--content-type-hero` (124px at a 1080px shorter side, scaled by `--content-scale`), support at `--content-type-sub` (60px), and nothing below `--content-type-caption` (24px) or 12px once scaled.
+- Figure: a wide evidence panel or chart; stay text-first so PPTX export survives.
+- Never: decorative photography, misaligned numeric columns, effects that only survive raster capture.

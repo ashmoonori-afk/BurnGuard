@@ -10,7 +10,11 @@
 {system_id}/
 ├── README.md               # Brand narrative + content/visual rules
 ├── SKILL.md                # Agent-Skill manifest (Claude Code compatible)
-├── colors_and_type.css     # All design tokens (CSS custom properties)
+├── colors_and_type.css     # Shared brand tokens + website grid (CSS custom properties)
+├── surfaces/               # Per-surface tokens; see 22-design-system-surfaces-2026-09-15.md
+│   ├── website.css         # --web-* type ramp and block padding
+│   ├── slides.css          # --slide-* fixed 1920x1080 geometry and projection ramp
+│   └── content.css         # --content-* fixed artboard safe area, figure and ramp
 ├── fonts/
 │   ├── fonts.css           # @font-face declarations
 │   └── *.ttf|woff2|otf     # Font files (only when licensing permits)
@@ -37,6 +41,8 @@
 │   └── website/
 └── uploads/                # Extraction sources (optional)
 ```
+
+`README.md` additionally carries `## Surfaces`, `## Slide deck` and `## Content artboards`, and `SKILL.md` a `## Surfaces` pointer. [22-design-system-surfaces-2026-09-15.md](./22-design-system-surfaces-2026-09-15.md) is the authority for what each surface owns.
 
 ## 3. `SKILL.md` frontmatter
 

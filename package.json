@@ -17,6 +17,7 @@
     "build:mac:release": "bun run build:frontend && bun run scripts/build-mac.ts && bun run scripts/package-mac-release.ts",
     "build": "bun run build:frontend && bun run build:backend",
     "catalogue": "bun run scripts/build-theme-catalogue.ts",
+    "surfaces": "bun run scripts/build-theme-surfaces.ts",
     "previews": "bun run scripts/build-theme-previews.ts",
     "previews:thumbnails": "node scripts/build-theme-preview-thumbnails.mjs",
     "typecheck": "tsc --build",

@@ -9,6 +9,7 @@ export * from "./contract-parser";
 export * from "./design-system";
 export * from "./design-system-layout";
 export * from "./design-system-layout-preview";
+export * from "./design-surface";
 export * from "./design-brief";
 export * from "./design-direction";
 export * from "./design-audit";

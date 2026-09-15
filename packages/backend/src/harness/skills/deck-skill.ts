@@ -66,7 +66,7 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
 
 ## Projection scale
 
-- Declare and use \`--deck-type-hero: 80px; --deck-type-heading: 52px; --deck-type-body: 32px; --deck-type-caption: 24px\` and \`--deck-pad-slide: 72px; --deck-pad-block: 32px\`.
+- Declare and use \`--deck-type-hero: 80px; --deck-type-heading: 52px; --deck-type-body: 32px; --deck-type-caption: 24px\` and \`--deck-pad-slide: 72px; --deck-pad-block: 32px\`. When a slides surface supplies \`--slide-type-*\` and \`--slide-pad-*\`, take these values from it instead; never below 24px.
 - Set \`.deck-slide { font-size: var(--deck-type-body) }\` so unstyled text
   inherits the scale; every other \`font-size\` is \`var(--deck-type-*)\` (or a
   \`calc()\` that scales one up), never a raw px value.
