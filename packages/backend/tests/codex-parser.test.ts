@@ -20,10 +20,10 @@ describe("parseCodexLine — structured path", () => {
     const privateDiagnostic =
       "Authentication failed: sk-private at /Users/local/.codex/config.toml";
     const events = parseCodexLine(errorItem(privateDiagnostic), ctx());
-    expect(events).toEqual([]);
+    expect(events).toContainEqual(expect.objectContaining({ type: "tool.finished", ok: false }));
     expect(JSON.stringify(events)).not.toContain("sk-private");
     expect(JSON.stringify(events)).not.toContain("/Users/local");
-    expect(parseCodexLine(errorItem(`${warning}\nAuthentication failed`), ctx())).toEqual([]);
+    expect(parseCodexLine(errorItem(`${warning}\nAuthentication failed`), ctx())).toContainEqual(expect.objectContaining({ type: "tool.finished", ok: false }));
     expect(parseCodexLine(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: warning } }), ctx())[0]).toMatchObject({ type: "chat.delta", text: warning });
   });
 

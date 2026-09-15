@@ -103,6 +103,7 @@ export default function MessageStream({
                 <ToolBadge
                   key={g.started.id}
                   tool={g.started.tool}
+                  input={g.started.input}
                   state={
                     g.finished
                       ? g.finished.ok
