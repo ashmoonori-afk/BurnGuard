@@ -33,6 +33,8 @@ import { redactPrivateAttachmentPaths, withPrivateAttachmentInputs } from "./sta
 import { sanitizeTurnEvent } from "./turn-error-sanitizer";
 import { startTurnPreview } from "./turn-preview";
 import { findHtmlEncodingIssues } from "./generated-html-encoding";
+import { runWithContinuation } from "./turn-continuation";
+import { needsGenerationPhases, runGenerationPhases } from "./turn-phases";
 
 export function assertGraphicStarterReplaced(before: string, after: string): void {
   if (before.includes('data-bg-node-id="graphic-copy"') && before.includes("Start with one clear visual message.") && before === after) throw new Error("graphic_starter_unchanged");
@@ -378,6 +380,7 @@ async function runUserTurnInternal(
         stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
         const graphicBefore = graphicEntrypoint === null ? null : await readFile(graphicEntrypoint, "utf8");
+        const deckStarter = project.type === "slide_deck" && (await readFile(path.join(stageDir, project.entrypoint), "utf8")).includes("Send your first prompt in chat to expand this deck.");
         const waitsForInterrupt = process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "abort";
         if (waitsForInterrupt && !activeTurn.abortController.signal.aborted) await new Promise<void>((resolve) => activeTurn.abortController.signal.addEventListener("abort", () => resolve(), { once: true }));
         if (activeTurn.abortController.signal.aborted) throw new ArtifactOperationError("operation_cancelled", "Turn was interrupted");
@@ -423,12 +426,22 @@ async function runUserTurnInternal(
               },
             };
             const runAdapter = dependencies.runAdapter ?? runAdapterTurn;
-            const result = await runAdapter(backendId, adapterInput);
+            const result = needsGenerationPhases(project.type, payload.text, deckStarter)
+              ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input))
+              : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), async () => {
+              try {
+                const entry = await readFile(path.join(stageDir, project.entrypoint), "utf8");
+                return entry.trim().length > 0 && !entry.includes("Send your first prompt in chat to expand this deck.") && !entry.includes("Start with one clear visual message.");
+              } catch (error) {
+                if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+                throw error;
+              }
+            });
             if (result.exitCode !== 0 || providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
             if (project.type === "slide_deck") {
               const toolCallId = ulid();
               await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", input: { scope: "all_slides" } });
-              const review = await runAdapter(backendId, { ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}`, signal: AbortSignal.any([activeTurn.abortController.signal, AbortSignal.timeout(120_000)]) });
+              const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}` }, (input) => runAdapter(backendId, input), async () => true, { idleMs: 120_000, toolMs: 120_000, attemptMs: 120_000, attempts: 3 });
               const reviewed = review.exitCode === 0 && !providerReportedFailure;
               await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", ok: reviewed });
               if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");

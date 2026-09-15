@@ -71,8 +71,9 @@ function mapItem(
   if (itemType === "error" && completed) {
     const message = asString(value.message) ?? "Codex reported an error";
     // Codex sends this startup notice as an error item in some CLI versions.
-    if (isCodexStartupNotice(message)) return [];
-    return [];
+    if (isCodexStartupNotice(message) || message === "Skills were trimmed for this turn.") return [];
+    return [{ id: ulid(), ts: Date.now(), type: "tool.started", turnId: ctx.turnId, toolCallId: itemId, tool: "generation_tool_failed", input: {} },
+      { id: ulid(), ts: Date.now(), type: "tool.finished", turnId: ctx.turnId, toolCallId: itemId, tool: "generation_tool_failed", ok: false }];
   }
   if (itemType === "command_execution") {
     if (!completed) {
@@ -101,7 +102,16 @@ function mapItem(
     }];
   }
   if (itemType === "file_change" && completed) {
-    return mapFileChanges(value.changes, ctx);
+    const ok = asString(value.status) !== "failed";
+    if (ok) return mapFileChanges(value.changes, ctx);
+    return [{ id: ulid(), ts: Date.now(), type: "tool.started", turnId: ctx.turnId, toolCallId: itemId, tool: "generation_save", input: {} },
+      { id: ulid(), ts: Date.now(), type: "tool.finished", turnId: ctx.turnId, toolCallId: itemId, tool: "generation_save", ok },
+      ...(ok ? mapFileChanges(value.changes, ctx) : [])];
+  }
+  if (itemType && ["mcp_tool_call", "custom_tool_call", "image_generation", "image_generation_call"].includes(itemType)) {
+    return completed
+      ? [{ id: ulid(), ts: Date.now(), type: "tool.finished", turnId: ctx.turnId, toolCallId: itemId, tool: itemType, ok: value.status !== "failed" && value.is_error !== true }]
+      : [{ id: ulid(), ts: Date.now(), type: "tool.started", turnId: ctx.turnId, toolCallId: itemId, tool: itemType, input: {} }];
   }
   return [];
 }

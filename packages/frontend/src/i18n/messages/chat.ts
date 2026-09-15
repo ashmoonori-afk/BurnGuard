@@ -1,6 +1,12 @@
 import { defineMessages } from "../types";
 
 export const chatMessages = defineMessages({
+  "chat.tool.phasePlan": { ko: "1단계 · 목차와 기본 구조 저장", en: "Phase 1 · Save outline and structure", "zh-CN": "阶段 1 · 保存大纲与基本结构" },
+  "chat.tool.phaseContent": { ko: "묶음 작성·저장", en: "Write and save batch", "zh-CN": "编写并保存当前批次" },
+  "chat.tool.resumeStalled": { ko: "응답이 멈춰 저장된 작업에서 자동 재개", en: "Response stalled — automatically resuming saved work", "zh-CN": "响应停滞，正在从已保存的工作自动恢复" },
+  "chat.tool.resumeIncomplete": { ko: "작업이 미완료되어 기존 파일에서 자동 재개", en: "Work incomplete — automatically resuming existing files", "zh-CN": "工作未完成，正在从现有文件自动恢复" },
+  "chat.tool.providerFailed": { ko: "작업 도구 실행 실패 · 기존 결과는 유지", en: "Tool execution failed; existing result preserved", "zh-CN": "工具执行失败，现有结果已保留" },
+  "chat.tool.saveArtifact": { ko: "결과 파일 저장", en: "Save result files", "zh-CN": "保存结果文件" },
   "chat.pane.aria": {
     ko: "AI 대화와 코멘트",
     en: "AI chat and comments",
