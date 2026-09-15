@@ -226,7 +226,16 @@ describe("catalog query and metadata", () => {
     const receiptBefore = getSqlite().query("SELECT * FROM design_system_receipts WHERE design_system_id=?").get(systemId);
     const base = `/api/design-systems/${systemId}`;
     expect(await request("GET", base)).toMatchObject({ status: 200, json: { data: { preview: { path: "preview/website.html", fallback: true }, thumbnail_path: `${base}/files/preview/thumbnail.webp` } } });
-    expect(await request("GET", `${base}/previews`)).toEqual({ status: 200, json: { data: [{ path: "preview/website.html" }] } });
+    expect(await request("GET", `${base}/previews`)).toEqual({ status: 200, json: { data: [{ path: "preview/website.html" }, { path: "preview/slides.html" }] } });
+    const slides = await app.request(`${base}/files/preview/slides.html`, { headers: { "sec-fetch-dest": "iframe" } });
+    expect(slides.status).toBe(200);
+    expect(slides.headers.get("content-security-policy")).toContain("frame-ancestors");
+    expect((await slides.text()).match(/data-slide-kind=/g)).toHaveLength(4);
+    const slideHead = await app.request(`${base}/files/preview/slides.html`, { method: "HEAD" });
+    expect(slideHead.status).toBe(200);
+    expect(await slideHead.text()).toBe("");
+    const slideNavigation = await app.request(`${base}/files/preview/slides.html`, { headers: { "sec-fetch-dest": "document" } });
+    expect(slideNavigation.headers.get("content-disposition")).toContain("attachment");
     const framed = await app.request(`${base}/files/preview/website.html`, { headers: { "sec-fetch-dest": "iframe" } });
     expect(framed.status).toBe(200);
     expect(framed.headers.get("content-security-policy")).toContain("frame-ancestors");
@@ -250,6 +259,8 @@ describe("catalog query and metadata", () => {
     await mkdir(path.join(root, "preview"));
     await writeFile(path.join(root, "preview/website.html"), "<h1>Authored preview</h1>");
     expect(await (await app.request(`${base}/files/preview/website.html`)).text()).toBe("<h1>Authored preview</h1>");
+    await writeFile(path.join(root, "preview/slides.html"), "<h1>Authored slides</h1>");
+    expect(await (await app.request(`${base}/files/preview/slides.html`)).text()).toBe("<h1>Authored slides</h1>");
   });
 
   test("Given persisted detail fields When catalog detail is read Then the complete runtime contract is returned", async () => {
