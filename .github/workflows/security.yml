@@ -64,6 +64,7 @@ jobs:
           packages/backend/tests/turn-phases.test.ts
           packages/backend/tests/generation-output.test.ts
           packages/backend/tests/deck-stage.test.ts
+          packages/frontend/tests/deck-preview.test.ts
           packages/frontend/tests/generation-progress.test.ts
           packages/backend/tests/trace-security.test.ts
           packages/backend/tests/watchers.test.ts
