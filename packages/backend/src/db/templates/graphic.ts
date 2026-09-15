@@ -28,7 +28,7 @@ export function renderGraphic(
     }
     case "banner_set": {
       if (graphicSet.frames === undefined) throw new TypeError("Banner template requires frames");
-      artboards = graphicSet.frames.map((frame, index) => `<section data-graphic-artboard id="frame-${index + 1}-banner" style="width:${frame.width}px;height:${frame.height}px"><div class="mark" data-bg-node-id="frame-${index + 1}-mark">${escapeHtml(frame.label)}</div><h1${titleClass} data-bg-node-id="frame-${index + 1}-title">${title}</h1><p data-bg-node-id="frame-${index + 1}-copy">하나의 메시지를 이 배너 규격에 맞게 완성하세요.</p></section>`).join("");
+      artboards = graphicSet.frames.map((frame, index) => `<section data-graphic-artboard id="frame-${index + 1}-banner" style="width:${frame.width}px;height:${frame.height}px;--bg-frame-width:${frame.width}px"><div class="mark" data-bg-node-id="frame-${index + 1}-mark">${escapeHtml(frame.label)}</div><h1${titleClass} data-bg-node-id="frame-${index + 1}-title">${title}</h1><p data-bg-node-id="frame-${index + 1}-copy">하나의 메시지를 이 배너 규격에 맞게 완성하세요.</p></section>`).join("");
       break;
     }
     case "card_news":
@@ -44,8 +44,8 @@ export function renderGraphic(
   // A fixed artboard is not the viewport: a vw unit here resolves against the canvas iframe, so the
   // starter would render at one size in the preview and another in the exported PNG. Resolve the same
   // intended ratios against the artboard width the caller already gave us.
-  const framePx = (min: number, ratio: number, max: number): number =>
-    Math.round(Math.min(max, Math.max(min, canvas.width * ratio)));
+  const framePx = (min: number, ratio: number, max: number): string =>
+    `clamp(${min}px, calc(var(--bg-frame-width, ${canvas.width}px) * ${ratio}), ${max}px)`;
   return `<!doctype html>
 <html lang="ko">
 <head>
@@ -63,18 +63,18 @@ export function renderGraphic(
     [data-graphic-artboard] {
       position: relative;
       overflow: hidden;
-      padding: ${framePx(24, 0.07, 96)}px;
+      padding: ${framePx(24, 0.07, 96)};
       display: grid;
       align-content: end;
       background: var(--page-background);
     }
     [data-graphic-artboard] + [data-graphic-artboard] { margin-top: 32px; }
-    .mark { position: absolute; inset: ${framePx(24, 0.07, 96)}px auto auto ${framePx(24, 0.07, 96)}px; font-size: ${framePx(12, 0.014, 18)}px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #004fff; }
-    h1 { min-width: 0; margin: 0; max-width: min(15ch, 100%); word-break: keep-all; font-size: ${framePx(36, 0.08, 112)}px; line-height: 1.4; letter-spacing: -0.055em; }
-    h1.long-title { max-width: 100%; font-size: ${framePx(12, 0.02, 24)}px; line-height: 1.3; }
-    p { margin: ${framePx(12, 0.02, 28)}px 0 0; max-width: 34em; font-size: ${framePx(14, 0.02, 26)}px; line-height: 1.5; color: #405273; }
+    .mark { position: absolute; inset: ${framePx(24, 0.07, 96)} auto auto ${framePx(24, 0.07, 96)}; font-size: ${framePx(12, 0.014, 18)}; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #004fff; }
+    h1 { min-width: 0; margin: 0; max-width: min(15ch, 100%); word-break: keep-all; overflow-wrap: break-word; font-size: ${framePx(36, 0.08, 112)}; line-height: 1.4; letter-spacing: -0.055em; }
+    h1.long-title { max-width: 100%; font-size: ${framePx(12, 0.02, 24)}; line-height: 1.3; }
+    p { margin: ${framePx(12, 0.02, 28)} 0 0; max-width: 34em; font-size: ${framePx(14, 0.02, 26)}; line-height: 1.5; color: #405273; }
     #frame-1-product-detail { padding: 0; display: grid; grid-template-rows: repeat(10, minmax(0, 1fr)); align-content: stretch; }
-    #frame-1-product-detail section { min-height: 0; padding: ${framePx(12, 0.04, 48)}px; display: grid; align-content: center; border-bottom: 1px solid rgba(20, 33, 61, 0.15); }
+    #frame-1-product-detail section { min-height: 0; padding: ${framePx(12, 0.04, 48)}; display: grid; align-content: center; border-bottom: 1px solid rgba(20, 33, 61, 0.15); }
     #frame-1-product-detail h2 { max-width: 18em; font-size: 40px; line-height: 1.35; }
     #frame-1-product-detail .question { color: #004fff; font-weight: 700; }
   </style>

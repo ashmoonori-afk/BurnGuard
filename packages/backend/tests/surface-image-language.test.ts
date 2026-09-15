@@ -56,6 +56,15 @@ async function imageDirectionFields(slug: string): Promise<Map<string, string>> 
 describe("Theme image language on fixed surfaces", () => {
   const THEMES = ["night-marquee", "signal-console", "index-table"] as const;
 
+  test("Given an optional imagery section, then its enforcement only appears when authored", async () => {
+    for (const projectType of ["graphic", "slide_deck"] as const) for (const contextMode of ["full", "compact"] as const) {
+      const absent = await buildPrompt(context("light", projectType), { type: "user.message", text: "Make it" }, { contextMode });
+      const present = await buildPrompt(context("night-marquee", projectType), { type: "user.message", text: "Make it" }, { contextMode });
+      expect(absent).not.toContain("<selected_design_system_imagery_rules>");
+      expect(present).toContain("<selected_design_system_imagery_rules>");
+    }
+  });
+
   test("Given a graphic project, then the theme's own subject, treatment and light reach the model", async () => {
     for (const slug of THEMES) {
       const fields = await imageDirectionFields(slug);
