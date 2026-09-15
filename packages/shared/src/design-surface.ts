@@ -128,7 +128,30 @@ export const DERIVED_SURFACE_TOKENS: Readonly<Record<DesignSurface, Readonly<Rec
 /** Absolute floor for scaled content type, matching the craft self-check's readability floor. */
 export const CONTENT_TYPE_FLOOR_PX = 12;
 
-export const SURFACE_SECTION_KINDS = ["slides", "content"] as const;
+/**
+ * How many type steps a content frame can actually carry.
+ *
+ * The ramp is authored at `--content-base` and scaled by the frame's shorter side, so on a banner the
+ * 12px floor collapses the lower steps onto each other: every shipped theme prints body and caption at
+ * exactly 12px on a 250px short side. Measured across all 41 themes, four steps stay distinct only at
+ * 433px and above, three at 250px and above. The ladder therefore drops a step instead of emitting two
+ * that render identically - fewer sizes on a small frame, not smaller ones.
+ */
+export const CONTENT_TYPE_LADDER = [
+  { min_short_ratio: 440 / 1080, steps: ["hero", "sub", "body", "caption"] },
+  { min_short_ratio: 250 / 1080, steps: ["hero", "sub", "caption"] },
+  { min_short_ratio: 0, steps: ["hero", "caption"] },
+] as const;
+
+export type ContentTypeStep = (typeof CONTENT_TYPE_LADDER)[number]["steps"][number];
+
+/** The type steps a frame of this shorter side may use, against the system's authored base. */
+export function contentTypeStepsFor(shortSideCssPx: number, baseCssPx: number): readonly ContentTypeStep[] {
+  const ratio = shortSideCssPx / baseCssPx;
+  return (CONTENT_TYPE_LADDER.find((rung) => ratio >= rung.min_short_ratio) ?? CONTENT_TYPE_LADDER[2]).steps;
+}
+
+export const SURFACE_SECTION_KINDS = ["slides", "content", "imagery"] as const;
 export type SurfaceSectionKind = (typeof SURFACE_SECTION_KINDS)[number];
 
 /**
@@ -139,9 +162,43 @@ export type SurfaceSectionKind = (typeof SURFACE_SECTION_KINDS)[number];
  */
 const SURFACE_SECTION_HEADINGS: Readonly<Record<DesignSurface, readonly { readonly heading: string; readonly kind: SurfaceSectionKind }[]>> = {
   website: [],
-  slides: [{ heading: "Slide deck", kind: "slides" }],
-  content: [{ heading: "Content artboards", kind: "content" }],
+  slides: [{ heading: "Slide deck", kind: "slides" }, { heading: "Image direction", kind: "imagery" }],
+  content: [{ heading: "Content artboards", kind: "content" }, { heading: "Image direction", kind: "imagery" }],
 };
+
+/**
+ * Labelled fields dropped from a section before it ships to a fixed surface.
+ *
+ * A theme's image direction is the strongest thing that separates its artboards from another theme's -
+ * subject, treatment, light, palette behaviour - and all of it is geometry-free. Its `Framing` field is
+ * not: several themes phrase framing against the website opening's hero region, and on a fixed frame
+ * the framing is the surface's own job through --content-anchor, --content-figure and --slide-pad-edge.
+ */
+const EXCLUDED_SECTION_FIELDS: Readonly<Record<SurfaceSectionKind, readonly string[]>> = {
+  slides: [],
+  content: [],
+  imagery: ["Framing"],
+};
+
+/**
+ * Sections a surface is incomplete without. Imagery is deliberately absent: the donor themes ship no
+ * `## Image direction`, and a theme that authors none is honestly imageless rather than broken.
+ */
+const REQUIRED_SURFACE_SECTIONS: Readonly<Record<DesignSurface, readonly SurfaceSectionKind[]>> = {
+  website: [],
+  slides: ["slides"],
+  content: ["content"],
+};
+
+/** Drops whole labelled paragraphs (`**Label.** ...`) from an authored section. */
+function stripFields(text: string, labels: readonly string[]): string {
+  if (labels.length === 0) return text;
+  return text
+    .split(/\r?\n\s*\r?\n/)
+    .filter((paragraph) => !labels.some((label) => new RegExp(`^\\*\\*${label}[.:]\\*\\*`).test(paragraph.trimStart())))
+    .join("\n\n")
+    .trim();
+}
 
 export type DesignSystemSurface = {
   readonly schema_version: 1;
@@ -189,7 +246,8 @@ export function extractDesignSystemSurface(
   const body = readme.replace(/```[\s\S]*?```/g, "");
   for (const { heading, kind } of SURFACE_SECTION_HEADINGS[surface]) {
     const match = new RegExp("^##\\s+" + heading + "\\s*\\r?\\n([\\s\\S]*?)(?=^##\\s|$(?![\\s\\S]))", "im").exec(body);
-    const text = match?.[1]?.replace(/^\|.*$/gm, "").trim().slice(0, MAX_SECTION_CHARS) ?? "";
+    const captured = match?.[1]?.replace(/^\|.*$/gm, "").trim() ?? "";
+    const text = stripFields(captured, EXCLUDED_SECTION_FIELDS[kind]).slice(0, MAX_SECTION_CHARS);
     if (text) sections.push({ kind, text });
   }
   return { schema_version: 1, surface, tokens, sections, supplied: [] };
@@ -229,9 +287,8 @@ export function supplementDesignSystemSurface(
 export function missingDesignSystemSurface(surface: DesignSystemSurface): readonly string[] {
   return [
     ...REQUIRED_SURFACE_TOKENS[surface.surface].filter((name) => !surface.tokens[name]),
-    ...SURFACE_SECTION_HEADINGS[surface.surface]
-      .filter(({ kind }) => !surface.sections.some((section) => section.kind === kind))
-      .map(({ kind }) => kind),
+    ...REQUIRED_SURFACE_SECTIONS[surface.surface]
+      .filter((kind) => !surface.sections.some((section) => section.kind === kind)),
   ];
 }
 

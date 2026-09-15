@@ -3,8 +3,18 @@ import type { GraphicCanvasV1, GraphicDetailBriefV1, GraphicSetKind, GraphicSetV
 const DETAIL_BRIEF_FIELDS = ["persona_pain", "arrival_scene", "mechanism", "evidence", "journey", "risk_reducers", "urgency"] as const;
 const QUESTION_ORDER = ["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "features", "payment_cta"] as const;
 const FORBIDDEN_HERO_OPENINGS = ["product name", "brand introduction", "feature slogan", "AI-based", "AI-powered", "fast analysis", "personalized", "all-in-one", "first in Korea"] as const;
-/** Facebook Stories keeps roughly 14 percent of a 9:16 frame free of text at top and bottom. */
-const STORY_SAFE_ZONE_CSS_PX = { top: 250, bottom: 250 } as const;
+/**
+ * Meta keeps the top and bottom edges of a 9:16 story frame free of text and logos. Expressed as a
+ * ratio of the frame height, not an absolute, because a platform zone scales with the export: an
+ * absolute 250px protects half of what it should on a 2160x3840 render.
+ */
+const STORY_SAFE_ZONE_RATIO = 250 / 1920;
+/**
+ * Kinds that actually render inside platform story or feed chrome. A marketplace product-detail page
+ * is taller than 9:16 by arithmetic (12000 * 9 >= 860 * 16) but has no such chrome, and reserving its
+ * first and last 250px for one would cost a real section.
+ */
+const STORY_SAFE_ZONE_KINDS: readonly GraphicSetKind[] = ["card_news", "single", "thumbnail"];
 
 type Frame = { readonly sequence: number; readonly width_css_px: number; readonly height_css_px: number; readonly purpose: string; readonly label?: string };
 
@@ -12,7 +22,10 @@ type Frame = { readonly sequence: number; readonly width_css_px: number; readonl
 export function appendGraphicOutputContext(lines: string[], canvas: GraphicCanvasV1, graphicSet: GraphicSetV1): void {
   const frames = buildFrames(canvas, graphicSet);
   const deliveryFormat = graphicSet.frame_count > 1 || graphicSet.kind === "product_detail" ? "png_zip" : "png";
-  const safeZone = frames.some((frame) => frame.height_css_px * 9 >= frame.width_css_px * 16) ? { safe_zone_css_px: STORY_SAFE_ZONE_CSS_PX } : {};
+  const storyShaped = STORY_SAFE_ZONE_KINDS.includes(graphicSet.kind)
+    && frames.some((frame) => frame.height_css_px * 9 >= frame.width_css_px * 16);
+  const zone = Math.round(canvas.height * STORY_SAFE_ZONE_RATIO);
+  const safeZone = storyShaped ? { safe_zone_css_px: { top: zone, bottom: zone } } : {};
   const detail = graphicSet.kind === "product_detail" ? { question_order: QUESTION_ORDER, forbidden_hero_openings: FORBIDDEN_HERO_OPENINGS } : {};
   lines.push("<burnguard-graphic-output-v1>");
   lines.push(JSON.stringify({
@@ -62,7 +75,7 @@ function rulesForKind(kind: GraphicSetKind, canvas: GraphicCanvasV1): readonly s
         `Author exactly ${canvas.width} × ${canvas.height} CSS px per artboard and exactly as many [data-graphic-artboard] sections as artboard_count, in declared order.`,
         "Every artboard is the same size; the first artboard is the cover and the last artboard is the call to action.",
         "One message per artboard: a single claim, no second topic, no continuation of the previous sentence.",
-        "When the frame is 9:16, keep the top and bottom 250 CSS px free of text and logos.",
+        `When the frame is 9:16, keep the top and bottom ${Math.round(canvas.height * STORY_SAFE_ZONE_RATIO)} CSS px free of text and logos; that zone scales with the frame.`,
         "Give each artboard the id frame-{sequence}-{purpose} so the exporter keeps the declared order.",
       ];
     case "banner_set":
