@@ -432,14 +432,7 @@ async function runUserTurnInternal(
               if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
             }
             const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
-            if (encodingIssues.length > 0) {
-              const toolCallId = ulid();
-              await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "텍스트 인코딩 점검", input: { files: encodingIssues.length } });
-              const repair = await runAdapter(backendId, { ...adapterInput, turnId: `${turnId}-encoding-repair`, prompt: `${prompt}\n\n<burnguard-text-encoding-repair-v1>\n${JSON.stringify(encodingIssues.slice(0, 20)).replaceAll("<", "\\u003c")}\n</burnguard-text-encoding-repair-v1>\nThe saved HTML contains invalid UTF-8 bytes or raw C1 control characters. Repair the listed files and check all generated HTML using explicit UTF-8 reads/writes. Restore intended wording and broken HTML delimiters from the original request/source; do not reverse-transcode or merely delete invalid characters. Preserve layout, images and unrelated content. Do not generate new images or claim completion before reading the final saved text.`, signal: AbortSignal.any([activeTurn.abortController.signal, AbortSignal.timeout(120_000)]) });
-              const repaired = repair.exitCode === 0 && !providerReportedFailure && (await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length === 0;
-              await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "텍스트 인코딩 점검", ok: repaired });
-              if (!repaired) throw new ArtifactOperationError("turn_failed", "Generated HTML encoding repair did not complete");
-            }
+            if (encodingIssues.length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
           });
         } finally {
           await verifyImmutableAttachments(immutableSnapshots);

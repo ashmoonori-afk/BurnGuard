@@ -45,39 +45,42 @@ function start(runAdapter: NonNullable<TurnDependencies["runAdapter"]>, text = "
   return turn;
 }
 
-test("Given an ANSI read of generated Korean HTML When finalizing Then one UTF-8 repair preserves the original or leaves the prior artifact intact", async () => {
-  const clean = '<!doctype html><html lang="ko"><meta charset="utf-8"><body><h1>생각의 흐름 그대로</h1><a>내 OS용 다운로드 ↓</a><p>中文 日本語 café 🖼️</p></body></html>';
+test("Given invalid generated HTML When finalizing Then no repair adapter runs and the prior English pages and assets remain intact", async () => {
+  const english = '<!doctype html><html lang="en"><meta charset="utf-8"><body><h1>Keep my English website</h1></body></html>';
+  const multilingual = '<html><meta charset="utf-8"><body><p>생각의 흐름 그대로 中文 日本語 café 🖼️</p></body></html>';
+  const image = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 255]);
+  await new ArtifactCoordinator(getSqlite()).run({ projectId, projectDir, kind: "turn", expectedRevision: 0, expectedArtifactDigest: digest, mutate: async (stage) => {
+    await writeFile(path.join(stage, "index.html"), english, "utf8");
+    await mkdir(path.join(stage, "sub"));
+    await writeFile(path.join(stage, "sub", "notice.htm"), multilingual, "utf8");
+    await writeFile(path.join(stage, "image.png"), image);
+  } });
+  const before = await inspectCanonicalTree(projectDir);
   // Exact .NET CP949 GetString(UTF8.GetBytes(Korean HTML)) -> WriteAllText output.
   // TextDecoder("euc-kr") differs between Bun and Node, so keep the actual Windows bytes.
-  const corrupted = Buffer.from("PGgxPj/slbfsu5Y/Pz/rqK7sq6sg5rS566qDP+a/oT88YnI+76eN65qu67G2Pz/vp53rqK3qtYU/woA/7Iew7KSILjwvaDE+PGE+Pz9PUz8/P+OFvOyKq+a/oeySleuxtiA/Py9hPg==", "base64").toString("utf8");
-  expect(corrupted).not.toBe(clean);
-  for (const shouldRepair of [true, false]) {
+  const corrupted = Buffer.from("PGgxPj/slbfsu5Y/Pz/rqK7sq6sg5rS566qDP+a/oT88YnI+76eN65qu67G2Pz/vp53rqK3qtYU/woA/7Iew7KSILjwvaDE+PGE+Pz9PUz8/P+OFvOyKq+a/oeySleuxtiA/Py9hPg==", "base64");
+  for (const [relative, bytes] of [["index.html", corrupted], ["sub/notice.htm", Uint8Array.from([60, 112, 62, 255])]] as const) {
     let calls = 0;
     const turn = start(async (_backend, input) => {
       calls += 1;
-      const target = path.join(input.projectDir, "index.html");
       if (calls === 1) {
-        await writeFile(target, corrupted, "utf8");
-        await writeFile(path.join(input.projectDir, "image.png"), Uint8Array.from([137, 80, 78, 71, 255]));
-        await mkdir(path.join(input.projectDir, "sub"), { recursive: true });
-        await writeFile(path.join(input.projectDir, "sub", "notice.htm"), Uint8Array.from([60, 112, 62, 255]));
+        await writeFile(path.join(input.projectDir, relative), bytes);
       } else {
-        expect(calls).toBe(2);
-        const issues = JSON.parse(input.prompt.match(/<burnguard-text-encoding-repair-v1>\n([^\n]+)\n<\/burnguard-text-encoding-repair-v1>/)![1]!);
-        expect(issues).toEqual([{ path: "index.html", code: "invalid_html_control" }, { path: "sub/notice.htm", code: "invalid_utf8" }]);
-        expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(shouldRepair ? "base" : clean);
-        if (shouldRepair) {
-          await writeFile(target, clean, "utf8");
-          await writeFile(path.join(input.projectDir, "sub", "notice.htm"), clean, "utf8");
-        }
+        // A clean exit and valid UTF-8 must not authorize an unsolicited rewrite.
+        await writeFile(path.join(input.projectDir, relative), "<html><body>Unrequested rewrite</body></html>");
+        await writeFile(path.join(input.projectDir, "image.png"), "replaced image");
       }
       return { exitCode: 0 };
     });
     await turn.promise;
-    expect(calls).toBe(2);
-    expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(clean);
-    expect(await readFile(path.join(projectDir, "sub", "notice.htm"), "utf8")).toBe(clean);
-    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: shouldRepair ? "committed" : "failed" });
+    expect(calls).toBe(1);
+    expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(english);
+    expect(await readFile(path.join(projectDir, "sub", "notice.htm"), "utf8")).toBe(multilingual);
+    expect(new Uint8Array(await readFile(path.join(projectDir, "image.png")))).toEqual(image);
+    expect(await inspectCanonicalTree(projectDir)).toEqual(before);
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+    const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
+    expect(JSON.parse(error!.payload_json).code).toBe("publication_failed");
   }
 });
 
