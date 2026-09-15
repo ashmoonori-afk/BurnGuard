@@ -128,6 +128,29 @@ export const DERIVED_SURFACE_TOKENS: Readonly<Record<DesignSurface, Readonly<Rec
 /** Absolute floor for scaled content type, matching the craft self-check's readability floor. */
 export const CONTENT_TYPE_FLOOR_PX = 12;
 
+/**
+ * How many type steps a content frame can actually carry.
+ *
+ * The ramp is authored at `--content-base` and scaled by the frame's shorter side, so on a banner the
+ * 12px floor collapses the lower steps onto each other: every shipped theme prints body and caption at
+ * exactly 12px on a 250px short side. Measured across all 41 themes, four steps stay distinct only at
+ * 433px and above, three at 250px and above. The ladder therefore drops a step instead of emitting two
+ * that render identically - fewer sizes on a small frame, not smaller ones.
+ */
+export const CONTENT_TYPE_LADDER = [
+  { min_short_ratio: 440 / 1080, steps: ["hero", "sub", "body", "caption"] },
+  { min_short_ratio: 250 / 1080, steps: ["hero", "sub", "caption"] },
+  { min_short_ratio: 0, steps: ["hero", "caption"] },
+] as const;
+
+export type ContentTypeStep = (typeof CONTENT_TYPE_LADDER)[number]["steps"][number];
+
+/** The type steps a frame of this shorter side may use, against the system's authored base. */
+export function contentTypeStepsFor(shortSideCssPx: number, baseCssPx: number): readonly ContentTypeStep[] {
+  const ratio = shortSideCssPx / baseCssPx;
+  return (CONTENT_TYPE_LADDER.find((rung) => ratio >= rung.min_short_ratio) ?? CONTENT_TYPE_LADDER[2]).steps;
+}
+
 export const SURFACE_SECTION_KINDS = ["slides", "content", "imagery"] as const;
 export type SurfaceSectionKind = (typeof SURFACE_SECTION_KINDS)[number];
 
