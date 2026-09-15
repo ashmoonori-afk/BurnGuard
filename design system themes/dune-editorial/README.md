@@ -137,13 +137,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (88px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+Reference adaptation: 127 - The RealReal Resale Report 2024 (pp. 1, 2, 3, 4, 6, 11, 16, 21). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: sand neutrals at a wide editorial rhythm; terracotta carries one action or rule.
-- Cover: a tall image on one side with a narrow serif column on the other.
-- Structure: a grotesque name with a serif speaking voice, hairline rules and wide margins. One takeaway per slide, titled at `--slide-type-heading` (52px) with support at `--slide-type-body` (32px).
-- Imagery: landscape and natural surface at scale, horizon-led and free of people. At most one image per slide unless the request asks for a grid.
-- Never: cool or blue-dominant landscapes, dominant figures, harsh midday light.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Editorial portrait or product image fills the frame; a restrained title sits in the image's quiet region.
+
+- Body: Fashion spread: full-height image in left 6/12 and concise editorial narrative in right 6/12; alternate the image side.
+
+- Evidence: One isolated product at large scale with edge annotations, or two unequal images with a compact factual comparison below.
+
+- Closing: Full-frame editorial image and one short takeaway. Crop around the subject; never put long copy over a face.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

@@ -153,13 +153,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (88px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+Reference adaptation: 181 - FREITAG Impact Report 2023 (pp. 1, 2, 4, 25, 49, 73). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: graphite and bone at zero radius; amber marks the value under discussion.
-- Cover: a measured specimen with the title set against the field edge.
-- Structure: a measured mono body, numbered figures, margin annotation and first-class tables. One takeaway per slide, titled at `--slide-type-heading` (52px) with support at `--slide-type-body` (32px).
-- Imagery: technical drawing and measured artifacts; line work rather than photography. At most one image per slide unless the request asks for a grid.
-- Never: perspective renders, colour beyond the amber callout, soft shadows.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Visible construction grid with a two-line title crossing its central cells; one flat brand-accent ground.
+
+- Body: Ruled report sheet: a full-width title rail above unequal text, photograph and annotation cells. Keep grid lines continuous.
+
+- Evidence: Process photograph spans 8/12; left 4/12 carries the claim and a small data table; one accent note aligns to a grid intersection.
+
+- Closing: An open construction grid with one action cell. Split dense printed report pages into several slides, never miniaturise them.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

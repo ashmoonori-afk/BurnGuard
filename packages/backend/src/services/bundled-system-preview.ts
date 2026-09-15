@@ -4,8 +4,16 @@ import { bundledFontStylesheet } from "../data/bundled-fonts";
 import { resolveRepoRoot } from "../lib/paths";
 import { readManagedFile } from "./artifact-tree-storage";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
+import { readDesignSystemSourceFile } from "./design-system-layout";
+import { renderDeckReferencePreview } from "./deck-reference-preview";
+import { deckReferenceFor } from "../data/deck-references";
 
 export const BUNDLED_WEBSITE_PREVIEW = "preview/website.html";
+export const BUNDLED_SLIDES_PREVIEW = "preview/slides.html";
+export const hasBundledSlidesPreview = (id: string): boolean => {
+  const theme = themeFor(id);
+  return theme !== undefined && deckReferenceFor(theme.slug) !== undefined;
+};
 export const BUNDLED_WEBSITE_THUMBNAIL = "preview/thumbnail.webp";
 const manifests = new Map<string, ReturnType<typeof inspectCanonicalTree>>();
 const themeFor = (id: string) => bundledDesignSystems.find(theme => bundledDesignSystemId(theme.slug) === id);
@@ -35,6 +43,13 @@ export async function hasBundledSystemPreview(id: string, repoRoot = resolveRepo
 export async function readBundledSystemPreview(id: string, relative: string, repoRoot = resolveRepoRoot()): Promise<Buffer<ArrayBuffer> | null> {
   const theme = themeFor(id);
   if (!theme) return null;
+  if (relative === BUNDLED_SLIDES_PREVIEW) {
+    const root = path.join(repoRoot, "design system themes", theme.slug);
+    const [css, slides] = await Promise.all([readDesignSystemSourceFile(root, "colors_and_type.css"), readDesignSystemSourceFile(root, "surfaces/slides.css")]);
+    if (!css || !slides) return null;
+    const html = renderDeckReferencePreview(theme.slug, theme.name, css, slides);
+    return html === null ? null : Buffer.from(html);
+  }
   const file = relative === BUNDLED_WEBSITE_PREVIEW ? `${theme.slug}.html`
     : relative === BUNDLED_WEBSITE_THUMBNAIL ? `thumbnails/${theme.slug}.webp`
     : relative === `preview/media/${theme.slug}.webp` ? `media/${theme.slug}.webp` : null;

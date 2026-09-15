@@ -97,13 +97,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (92px), and `--slide-type-caption` (26px) is the smallest type on any slide.
+Reference adaptation: 197 - Holographik Quantum Spa Brand Guidelines (pp. 1, 2, 4, 20, 40, 59, 78). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: the dark documentation ground; purple or pink marks an active term.
-- Cover: a display masthead with the subject silhouette below it.
-- Structure: continuous prose blocks and inset code examples; do not box every line. One takeaway per slide, titled at `--slide-type-heading` (60px) with support at `--slide-type-body` (34px).
-- Imagery: a cropped masthead image, or a code surface rendered as a real element. At most one image per slide unless the request asks for a grid.
-- Never: boxing every paragraph, four-column sitemaps, bright fills.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: A luminous, blurred atmospheric field with a restrained title; keep the centre open instead of adding UI chrome.
+
+- Body: Precision specimen: instructions in left 3/12; a large isolated typography, mark or material specimen in right 9/12, separated by a hairline.
+
+- Evidence: Use a ruled 2-by-2 specimen sheet only for genuine variants; annotate each at projection-readable size.
+
+- Closing: Return to the atmospheric field with a small aligned title; alternate immersive chapters and exact specimen sheets.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

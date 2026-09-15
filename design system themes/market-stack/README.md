@@ -153,13 +153,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (84px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+Reference adaptation: 172 - Zip Brand Guidelines (pp. 1, 2, 3, 4, 5, 9, 13, 17). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: the bright ground with soft large shapes; orange carries the action, blue the link, yellow only a badge fill.
-- Cover: a square product plate with the price set as the headline.
-- Structure: square plates and prices as headlines, with crops consistent across the set. One takeaway per slide, titled at `--slide-type-heading` (48px) with support at `--slide-type-body` (32px).
-- Imagery: one product straight on filling its square frame: cheerful everyday goods. At most one image per slide unless the request asks for a grid.
-- Never: dark moody treatments, inconsistent crops within a set, multi-product scenes.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Large title in left 8/12, opposite brand-ground panel in right 4/12 with a gently slanted boundary.
+
+- Body: Merchant specimen: short explanation in left third and an isolated product or checkout example in the remaining two thirds.
+
+- Evidence: Compare actual product applications in a vertical specimen stack; maintain common scale and labels, not decorative dashboards.
+
+- Closing: Two unequal brand-colour planes with one clear action on the larger plane; alternate title, human image and specimen frames.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

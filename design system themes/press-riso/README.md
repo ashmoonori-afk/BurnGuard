@@ -153,13 +153,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (80px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+Reference adaptation: 108 - Nike Impact Report FY23 (pp. 1, 2, 3, 4, 53, 106, 158). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: cream stock with flat riso inks; vermilion, ultramarine and sun-yellow hold fixed roles.
-- Cover: condensed large type with one three-degree rotation.
-- Structure: 2px rules and square corners, at most three inks on a frame. One takeaway per slide, titled at `--slide-type-heading` (52px) with support at `--slide-type-body` (32px).
-- Imagery: a graphic print rather than a photograph, with a small deliberate ink misregistration. At most one image per slide unless the request asks for a grid.
-- Never: smooth photographic gradients, perfect registration, glossy or 3D finishes.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Full-bleed human action photograph; short bold title on tightly fitted contrast strips.
+
+- Body: Impact claim in left 6/12, tall coloured chart field in right 6/12; align the target label to the chart's reference line.
+
+- Evidence: A few large bars with direct values and one outsized target number; sources remain readable. Alternate photo stories with evidence frames.
+
+- Closing: A human photograph and one compact commitment. Recompose printed multi-column reports into one claim per 16:9 slide.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

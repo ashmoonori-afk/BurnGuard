@@ -153,13 +153,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (72px), and `--slide-type-caption` (26px) is the smallest type on any slide.
+Reference adaptation: 122 - Palantir Q4 2023 Deck (pp. 1, 3, 4, 9, 18, 27, 35). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: the ink ground, at the same hour as its imagery; the warm signal marks the active item or reading progress.
-- Cover: a type marquee over a wide night field.
-- Structure: a readable serif body at loose leading; images supply the only bright areas. One takeaway per slide, titled at `--slide-type-heading` (60px) with support at `--slide-type-body` (34px).
-- Imagery: night and low-light subjects that belong to the same hour as the page. At most one image per slide unless the request asks for a grid.
-- Never: bright daytime scenes, lifted hazy blacks, cool blue night grading.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Three horizontal ruled bands: period, identity and oversized business title; one small progress marker sequence.
+
+- Body: Financial update: tightly aligned horizontal result rows, or two equal analytical panels with shared baselines.
+
+- Evidence: Two comparable bar charts in paired panels, direct value labels and a shared scale; one current-period accent. Move dense reconciliations to an appendix.
+
+- Closing: Two period/outlook panels and a compact next action; use actual supplied figures only, never invent financial results.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

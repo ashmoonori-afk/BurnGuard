@@ -153,13 +153,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (84px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+Reference adaptation: 101 - Building a brand like Patagonia (pp. 1, 2, 3, 4, 8, 15, 22, 29). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: a narrow sans spine beside an empty wide gutter; blue marks one live item.
-- Cover: a high-contrast serif title with the plate to its side.
-- Structure: mono captions on flat square surfaces; the wide gutter stays empty. One takeaway per slide, titled at `--slide-type-heading` (56px) with support at `--slide-type-body` (32px).
-- Imagery: one considered subject per plate, presented whole rather than snapped. At most one image per slide unless the request asks for a grid.
-- Never: busy multi-subject scenes, pale low-contrast plates, filling the gutter.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Material photograph in left 5/12, editorial title in right 7/12; a shallow accent band crosses the lower frame.
+
+- Body: Framed image and argument in alternating unequal halves, connected by fine horizontal rules; chapter slides may use centred type on a dark ground.
+
+- Evidence: A large quotation with a smaller contextual photograph anchored bottom-right, or a source column beside an example image.
+
+- Closing: A quiet framed image, one commitment and a readable source rail; avoid decorative chart panels in an editorial story.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

@@ -153,13 +153,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (104px), and `--slide-type-caption` (26px) is the smallest type on any slide.
+Reference adaptation: 199 - Figma CONFIG2025 Conference Deck (pp. 1, 2, 3, 4, 7, 10, 12). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: one cinematic still with achromatic chrome; small letterspaced credits are the only chrome allowed.
-- Cover: a title stack placed in the empty region of the held frame.
-- Structure: dark space and scale carry the atmosphere; no raised surfaces anywhere. One takeaway per slide, titled at `--slide-type-heading` (60px) with support at `--slide-type-body` (34px).
-- Imagery: a single human moment held still, lifted out of a longer sequence. At most one image per slide unless the request asks for a grid.
-- Never: bright high-key frames, frames with no empty region for the title, posed studio smiles.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Oversized left-aligned type in 8/12; cropped geometric forms occupy the opposite corner or bottom band.
+
+- Body: Speaker/event content uses one horizontal portrait band with aligned labels. Alternate black, light and brand-accent chapter grounds.
+
+- Evidence: Use a 7/5 split: three short statements left, a large example above a caption block right; geometric bands establish hierarchy.
+
+- Closing: One oversized takeaway and one cropped geometric block; never repeat the speaker grid as a default body layout.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

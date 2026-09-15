@@ -153,13 +153,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (96px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+Reference adaptation: 160 - Brand Guidelines by Source (pp. 1, 2, 3, 4, 9, 17, 25, 32). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: goods as exhibits in shared-edge ruled cells; position and rule weight carry emphasis; radius stays at zero.
-- Cover: a masthead crop with the object fully contained beneath it.
-- Structure: mono specifications under each object, shared edges, nothing raised. One takeaway per slide, titled at `--slide-type-heading` (52px) with support at `--slide-type-body` (32px).
-- Imagery: one object documented straight on or in strict profile, as a record shot. At most one image per slide unless the request asks for a grid.
-- Never: angled hero shots, coloured backdrops, props or styling context.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Huge two-line title in upper-left 9/12; thin rules divide a shallow lower specimen strip and a narrow image column.
+
+- Body: Manual spread: label and short instructions occupy left 3/12, one large specimen occupies right 9/12. Use continuous fine rules, no rounded card grid.
+
+- Evidence: Show colour as differently sized circular swatches, type as one oversized specimen plus a baseline strip, images as a deliberate contact sheet.
+
+- Closing: Sparse ruled frame with the next action at upper left. Carry the same indexed rail-and-specimen hierarchy into the system overview.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

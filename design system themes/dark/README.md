@@ -97,13 +97,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (72px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+Reference adaptation: 164 - Perplexity Ads Pitch Deck (pp. 1, 3, 4, 9, 17, 25). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: the dark workspace ground; steel blue marks the live metric or control and nothing else.
-- Cover: a centred statement with the wide background field behind it.
-- Structure: compact metric rows and contextual controls on the slide grid, one operational takeaway per frame. One takeaway per slide, titled at `--slide-type-heading` (52px) with support at `--slide-type-body` (32px).
-- Imagery: an interface panel or scenic field dark enough for type to cross it. At most one image per slide unless the request asks for a grid.
-- Never: bright daylight imagery, filled panels competing with the metric, a second accent hue.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Full-bleed atmospheric image; large claim in the lower-left 7/12, quiet context above.
+
+- Body: Product proof: explanation in left 4/12, one real screenshot in right 8/12. Alternate with a dark chapter carrying only a short claim.
+
+- Evidence: One large product demonstration below a single-line takeaway; use a caption rail, not floating cards.
+
+- Closing: Return to the opening image language with one next action; keep at least half the frame quiet.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 

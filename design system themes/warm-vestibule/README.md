@@ -153,13 +153,19 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (80px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+Reference adaptation: 085 - Ace & Tate Responsibility Report 2020 (pp. 1, 2, 3, 4, 13, 25, 37, 49). Layout only; retain this system's own colours, fonts and image direction.
 
-- Ground: putty, timber, clay and olive taken from the interior; the place leads; no cart, price or promotional device appears.
-- Cover: a full-bleed interior with the title over its calmest region.
-- Structure: plain practical lists on unraised square surfaces. One takeaway per slide, titled at `--slide-type-heading` (52px) with support at `--slide-type-body` (32px).
-- Imagery: an interior or architectural space with no people in it. At most one image per slide unless the request asks for a grid.
-- Never: people in frame, cool fluorescent casts, tilted verticals or wide-angle distortion.
+1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
+
+- Cover: Large editorial title crosses a soft organic brand-colour field, leaving a clear reading zone.
+
+- Body: Organic chapter shape occupies left 6/12; concise narrative in right 6/12. Alternate large quotations and restrained report pages.
+
+- Evidence: Place one impact number in a clear negative-space island, with explanations in a separate column; never distort a chart with decorative blobs.
+
+- Closing: Repeat the organic field with one brief commitment and a quiet signature; preserve the theme's own type families.
+
+Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 
 ## Content artboards
 
