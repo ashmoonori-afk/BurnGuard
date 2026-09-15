@@ -8,8 +8,8 @@ export type GeminiParserContext = StreamParserContext;
  * Gemini CLI `--output-format stream-json` lines.
  *
  * Only the shapes this adapter actually consumes are mapped; every other tagged line is dropped and
- * untagged output falls through to a raw delta (see `normalizeStreamLine`). The CLI's schema is not
- * a stable published contract, so the parser reads defensively rather than asserting a shape.
+ * untagged diagnostics are discarded. The role and completion fields follow the published
+ * google-gemini/gemini-cli packages/core/src/output/types.ts contract.
  */
 export function parseGeminiLine(line: string, ctx: GeminiParserContext): NormalizedEvent[] {
   return normalizeStreamLine(line, ctx, mapGeminiRecord);
@@ -20,12 +20,13 @@ function mapGeminiRecord(record: Record<string, unknown>, ctx: StreamParserConte
   if (type === null) return null;
 
   if (type === "assistant" || type === "content" || type === "message") {
+    if (type === "message" && record.role !== "assistant") return [];
     const text = extractText(record);
     return text ? [textDelta(text, ctx)] : [];
   }
 
   if (type === "result" || type === "done" || type === "turn_complete") {
-    const failed = record.is_error === true || record.error !== undefined
+    const failed = record.status === "error" || record.is_error === true || record.error !== undefined
       || (typeof record.subtype === "string" && record.subtype !== "success");
     return [{
       id: ulid(),
@@ -33,6 +34,10 @@ function mapGeminiRecord(record: Record<string, unknown>, ctx: StreamParserConte
       type: "status.idle",
       stopReason: failed ? "error" : "end_turn",
     }];
+  }
+
+  if (type === "error" && record.severity === "error") {
+    return [{ id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "error" }];
   }
 
   return null;

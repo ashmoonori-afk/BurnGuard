@@ -4,7 +4,6 @@ import { runClaudeCodeTurn } from "./claude-code";
 import { runCodexTurn } from "./codex";
 import { runCopilotTurn } from "./copilot";
 import { runGeminiTurn } from "./gemini";
-import { runGrokTurn } from "./grok";
 
 /**
  * Backends this registry can actually dispatch. Kept beside the switch so a provider added to the
@@ -27,8 +26,6 @@ export async function runAdapterTurn(
       return runGeminiTurn(input);
     case "copilot":
       return runCopilotTurn(input);
-    case "grok":
-      return runGrokTurn(input);
     default:
       throw new Error(`Unknown backend: ${backendId}`);
   }

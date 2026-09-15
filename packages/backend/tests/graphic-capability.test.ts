@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { GEMINI_MODELS, type BackendDetection } from "@bg/shared";
 import { backendCanEverGenerateGraphics, ensureGraphicCapableBackend, isGraphicCapableBackend } from "../src/services/graphic-capability";
 
-const IMAGE_MODEL = GEMINI_MODELS.find((model) => model.image_generation === true)!.id;
+const IMAGE_MODEL = "fixture-image-tool";
+const FIXTURE_MODELS = [...GEMINI_MODELS, { id: IMAGE_MODEL, label: "Fixture", efforts: ["low"] as const, image_generation: true }];
 const TEXT_MODEL = GEMINI_MODELS.find((model) => model.image_generation !== true)!.id;
 
 const codex = (over: Partial<BackendDetection> = {}): BackendDetection => ({
@@ -17,7 +18,7 @@ const gemini = (over: Partial<BackendDetection> = {}): BackendDetection => ({
   id: "gemini",
   found: true,
   image_generation: false,
-  models: GEMINI_MODELS,
+  models: FIXTURE_MODELS,
   ...over,
 });
 

@@ -13,12 +13,8 @@ export type KnownLineMapper = (
 ) => NormalizedEvent[] | null;
 
 /**
- * Normalizes one stdout line from a CLI that streams JSON, text, or a mixture of both.
- *
- * The contract mirrors the Codex adapter: a recognised structured line becomes its mapped events, a
- * structured line with an unknown `type` is dropped as chrome, and everything else falls through to
- * `chat.delta` so nothing a provider prints is silently lost. A provider that changes its schema
- * therefore degrades to raw text instead of breaking the turn.
+ * Accept only recognized structured events. Unknown schemas and malformed or plain diagnostic
+ * lines are not assistant content and must never be persisted as chat.
  */
 export function normalizeStreamLine(
   line: string,
@@ -40,11 +36,12 @@ export function normalizeStreamLine(
         if (typeof record.type === "string") return [];
       }
     } catch {
-      // Malformed JSON — fall through to a raw delta rather than wedging the stream.
+      // A malformed line is discarded without interrupting stream drainage.
     }
   }
 
-  return [textDelta(line, ctx)];
+  // Structured providers must never turn diagnostics, malformed envelopes, or prompt echoes into chat.
+  return [];
 }
 
 export function textDelta(text: string, ctx: StreamParserContext): NormalizedEvent {

@@ -20,7 +20,7 @@ export function buildGeminiCommand(
   return [
     binaryPath,
     "--output-format", "stream-json",
-    "--approval-mode", "yolo",
+    "--approval-mode", "auto_edit",
     ...(generation?.model ? ["--model", generation.model] : []),
     "--prompt", "",
   ];

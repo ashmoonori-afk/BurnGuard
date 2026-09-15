@@ -37,7 +37,12 @@ beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), "bg-readiness-"));
   binary = await writeExecutableFixture(root, "codex", `import { readFileSync, appendFileSync, writeFileSync } from "node:fs";
 const root = ${JSON.stringify(root)};
-if (process.argv[2] === "--version") { console.log("fixture-cli"); process.exit(0); }
+if (process.argv[2] === "--version") {
+  if (readFileSync(root + "/mode", "utf8") === "version-timeout") {
+    writeFileSync(root + "/version-pid", String(process.pid));
+    setInterval(() => {}, 60_000);
+  } else { console.log("fixture-cli 1.2.3"); process.exit(0); }
+} else {
 if (process.argv.slice(2).join(" ") !== "login status") process.exit(99);
 appendFileSync(root + "/calls", "probe\\n");
 const mode = readFileSync(root + "/mode", "utf8");
@@ -51,6 +56,7 @@ if (mode === "timeout") {
 } else {
   console.error("PRIVATE_PROBE_SENTINEL");
   process.exit(mode === "unexpected" ? 0 : 2);
+}
 }
 `);
   await writeFile(path.join(root, "calls"), "");
@@ -96,7 +102,7 @@ test("a failed force probe is indeterminate, never cached logout or stale author
   expect(codex(await detectBackends()).authenticated).toBe(false); // Confirmed logout still caches.
   expect(await calls()).toBe(before + 2);
   expect(codex(await detectBackends({ force: true })).authenticated).toBe(true);
-});
+}, 20_000);
 
 for (const value of ["error", "unexpected"] as const) test(`${value} output is not confirmed logout and diagnostics contain no CLI output`, async () => {
   await mode(value);
@@ -115,6 +121,15 @@ test("a timed-out probe is bounded, classified separately, and its process is re
   const pid = Number(await readFile(path.join(root, "pid"), "utf8"));
   expect(() => process.kill(pid, 0)).toThrow();
 }, 10_000);
+
+test("Given a version probe timeout, then detection waits for its wrapper child to be reaped", async () => {
+  await mode("version-timeout");
+  const result = await detectBackends({ force: true, requireCodexAuthentication: false });
+  expect(codex(result).found).toBe(true);
+  expect(codex(result).version).toBeUndefined();
+  const pid = Number(await readFile(path.join(root, "version-pid"), "utf8"));
+  expect(() => process.kill(pid, 0)).toThrow();
+}, 20_000);
 
 test("turn start forces a fresh check and an indeterminate probe never invokes the adapter", async () => {
   const projectId = `readiness-${crypto.randomUUID()}`;
@@ -172,4 +187,4 @@ test("readiness and graphic creation expose uncached 503 on probe failure, retai
   expect(loggedOut.status).toBe(409);
   expect((await loggedOut.json()).error.code).toBe("graphic_requires_authenticated_codex");
   expect(getSqlite().query("SELECT COUNT(*) AS count FROM projects").get()).toEqual(projectsBefore);
-});
+}, 20_000);

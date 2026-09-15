@@ -27,11 +27,10 @@ export const COMMANDCODE_MODELS: readonly GenerationModel[] = [
   { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", efforts: ["low", "medium", "high"] },
   { id: "claude-opus-4-6", label: "Claude Opus 4.6", efforts: ["low", "medium", "high"] },
 ];
-/** Gemini CLI models. Image generation is a property of the model, not of the CLI. */
+/** Coding models supported by the CLI; a raster API model alone supplies no CLI image tool. */
 export const GEMINI_MODELS: readonly GenerationModel[] = [
   { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", efforts: ["low", "medium", "high"], image_generation: false },
   { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", efforts: ["low", "medium"], image_generation: false },
-  { id: "gemini-2.5-flash-image", label: "Gemini 2.5 Flash Image", efforts: ["low"], image_generation: true },
 ];
 /**
  * GitHub Copilot CLI models: deliberately empty. The CLI selects a model from the account's
@@ -39,11 +38,6 @@ export const GEMINI_MODELS: readonly GenerationModel[] = [
  * shipping ids that a real run would reject.
  */
 export const COPILOT_MODELS: readonly GenerationModel[] = [];
-/** Grok CLI models. */
-export const GROK_MODELS: readonly GenerationModel[] = [
-  { id: "grok-4-latest", label: "Grok 4", efforts: ["low", "medium", "high"] },
-  { id: "grok-code-fast-1", label: "Grok Code Fast", efforts: ["low"] },
-];
 
 /** Capability of the selected model, falling back to the backend when the model does not state one. */
 export function supportsImageGeneration(

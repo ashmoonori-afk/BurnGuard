@@ -1,7 +1,9 @@
-import { CLAUDE_MODELS, COPILOT_MODELS, GEMINI_MODELS, GENERATION_EFFORTS, GROK_MODELS, type BackendDetectionResult, type BackendId, type GenerationModel } from "@bg/shared";
+import { CLAUDE_MODELS, COPILOT_MODELS, GEMINI_MODELS, GENERATION_EFFORTS, type BackendDetectionResult, type BackendId, type GenerationModel } from "@bg/shared";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import { ownedProcessSpawnOptions } from "../adapters/owned-process-tree";
+import { settleProcessStreams } from "../adapters/process-streams";
 
 const VERSION_PROBE_TIMEOUT_MS = 5_000;
 
@@ -92,21 +94,24 @@ export async function readCodexModels(): Promise<GenerationModel[]> {
  */
 async function probeVersion(binaryPath: string): Promise<string | undefined> {
   const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<undefined>((resolve) => { timer = setTimeout(() => { controller.abort(); resolve(undefined); }, VERSION_PROBE_TIMEOUT_MS); });
+  const timer = setTimeout(() => controller.abort(), VERSION_PROBE_TIMEOUT_MS);
   try {
     const proc = Bun.spawn({
       cmd: [binaryPath, "--version"],
+      stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      signal: controller.signal,
+      ...ownedProcessSpawnOptions(),
     });
-    const read = Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()])
-      .then(([stdout, stderr]) => stdout.trim() || stderr.trim() || undefined)
-      .catch(() => undefined);
-    return await Promise.race([read, timeout]);
+    let stdout = "";
+    let stderr = "";
+    const code = await settleProcessStreams(proc, [
+      new Response(proc.stdout).text().then(text => { stdout = text; }),
+      new Response(proc.stderr).text().then(text => { stderr = text; }),
+    ], controller.signal);
+    return !controller.signal.aborted && code === 0 ? /\b\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?\b/.exec(stdout || stderr)?.[0] : undefined;
   } finally {
-    if (timer !== undefined) clearTimeout(timer);
+    clearTimeout(timer);
   }
 }
 
@@ -119,7 +124,6 @@ const BACKEND_CATALOGUE: Readonly<Record<Exclude<BackendId, "codex">, { readonly
   "claude-code": { models: CLAUDE_MODELS, image_generation: false },
   gemini: { models: GEMINI_MODELS, image_generation: false },
   copilot: { models: COPILOT_MODELS, image_generation: false },
-  grok: { models: GROK_MODELS, image_generation: false },
 };
 
 async function detectOne(id: BackendId, binaryNames: string[], installHint: string) {
@@ -170,7 +174,6 @@ export async function detectBackends(options: { force?: boolean; requireCodexAut
     detectOne("codex", ["codex", "codex.cmd", "openai-codex"], "Install: https://github.com/openai/codex"),
     detectOne("gemini", ["gemini", "gemini.cmd"], "Install: https://github.com/google-gemini/gemini-cli"),
     detectOne("copilot", ["copilot", "copilot.cmd"], "Install: npm install -g @github/copilot"),
-    detectOne("grok", ["grok", "grok.cmd"], "Install: npm install -g @vibe-kit/grok-cli"),
   ]);
 
   const codex = backends.find((backend) => backend.id === "codex");

@@ -9,7 +9,6 @@ export const BACKEND_LABELS: Readonly<Record<BackendId, string>> = {
   codex: "Codex",
   gemini: "Gemini CLI",
   copilot: "GitHub Copilot",
-  grok: "Grok",
 };
 
 export function backendLabel(id: BackendId): string {

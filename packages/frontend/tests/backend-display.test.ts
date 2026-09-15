@@ -7,6 +7,7 @@ const found = (id: BackendDetection["id"], over: Partial<BackendDetection> = {})
   found: true,
   ...over,
 });
+const fixtureImageModels = [...GEMINI_MODELS, { id: "fixture-image-tool", label: "Fixture", efforts: ["low"] as const, image_generation: true }];
 
 /**
  * The picker used to name backends with an inline ternary that fell through to "Codex", so a new
@@ -26,7 +27,7 @@ describe("Backend display", () => {
 
   test("Given a graphic project, then it runs on a backend that can actually draw", () => {
     const codex = found("codex", { authenticated: true, image_generation: true });
-    const gemini = found("gemini", { models: GEMINI_MODELS });
+    const gemini = found("gemini", { models: fixtureImageModels });
     const claude = found("claude-code", { models: [{ id: "opus", label: "Opus", efforts: ["low"] }] });
 
     // Codex stays the choice whenever it is usable: that is today's behaviour.
@@ -42,7 +43,7 @@ describe("Backend display", () => {
 
   test("Given an undetected backend, then it is never chosen for a graphic project", () => {
     const missingCodex = { id: "codex", found: false, image_generation: true } as BackendDetection;
-    const gemini = found("gemini", { models: GEMINI_MODELS });
+    const gemini = found("gemini", { models: fixtureImageModels });
     expect(graphicBackendId([missingCodex, gemini], "codex")).toBe("gemini");
   });
 });
