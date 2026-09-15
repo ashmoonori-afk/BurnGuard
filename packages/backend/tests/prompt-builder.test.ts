@@ -80,6 +80,7 @@ describe("buildPrompt", () => {
         const prompt = await buildPrompt(makeContext({ project_type }), { type: "user.message", text: "Improve the selected element" }, { contextMode });
         expect(prompt.split(DESIGN_CRAFT_RULES)).toHaveLength(2);
         expect(prompt.split(IMAGE_PRODUCTION_RULES)).toHaveLength(2);
+        expect(prompt.split("<burnguard-text-encoding-v1>")).toHaveLength(2);
         expect(prompt.indexOf(IMAGE_PRODUCTION_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
         expect(prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
         expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
