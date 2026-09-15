@@ -14,19 +14,27 @@ BurnGuard is a local design workspace for Windows and macOS. Bring your Claude C
 
 Choose a format, describe the project and select a registered design system during onboarding. Search the catalogue or refresh it to pick up newly registered systems. You can also start without one.
 
-The bundled catalogue includes **41 themes**, including **31 original themes**. Every bundled theme defines its grid, content width, spacing, composition and responsive behavior alongside typography and colors. The original sample systems and prompt presets carry layout rules too. Add your own systems from supported files, websites, repositories or Figma sources, then review and publish them for project use.
+The bundled catalogue includes **41 themes**, including **31 original themes**. Each has a distinct navigation, hero and footer combination, with its own placement, proportions and responsive rules alongside typography and colors. These layouts adapt references from Supahero, Navbar Gallery and Footer Design; each theme records its sources. The original sample systems and prompt presets carry layout rules too. Add your own systems from supported files, websites, repositories or Figma sources, then review and publish them for project use. [Explore the 41 reference layouts](doc/21-theme-reference-layouts-2026-09-15.md)
 
 ![Project onboarding with design-system search, refresh and selection controls](doc/images/readme-design-system-picker.png)
 
 *Design-system selection in the real application. Systems without a preview remain selectable by name.*
 
-Open a system's overview to inspect its layout rules. **Direction setting and generation use the same rules**, including compact prompts: the three direction previews vary message, evidence and action emphasis within the selected system's structure. These are structural summaries; rendered output can contain richer detail. Directions saved before the system was selected or its rules changed can be regenerated from the current system.
+Open a system's overview to inspect its navigation, hero and footer rules. **Direction setting and generation use the same rules**, including compact prompts: the three direction previews vary message, evidence and action emphasis within the selected system's structure. These are structural summaries; rendered output can contain richer detail. Directions saved before the system was selected or its rules changed can be regenerated from the current system.
 
-![Design-system overview showing a grid diagram, width and spacing values, composition guidance and responsive rules](doc/images/readme-layout-overview.png)
+![Design-system overview showing concise navigation, hero and footer rules, a grid diagram and layout dimensions](doc/images/readme-layout-overview.png)
 
-*The actual overview for an older installed Dark theme. Missing bundled rules are supplemented while existing authored rules are preserved.*
+*The actual Cobalt Atelier overview. Navigation, hero and footer summaries stay visible; expand a region to read its full rules. Missing bundled rules are supplemented while existing authored rules are preserved.*
+
+![Direction setting using the same Cobalt Atelier layout rules with LOW reasoning effort selected](doc/images/readme-layout-direction.png)
+
+*The same layout rules in a real project's direction screen, before generation. This capture shows the configured guidance, not a measured model-quality result.*
 
 Desktop packages include **41 website examples**, **41 generated WebP illustrations** and **41 website thumbnails captured in Chrome**. The design-system library and project onboarding show the thumbnails; each theme's overview has a dedicated, scrollable website preview. Explore editorial sites, shops, workspaces, cultural pages and more in the [website preview gallery](design%20system%20themes/previews/index.html). [Theme token catalogue](design%20system%20themes/catalogue.html)
+
+![Design-system library showing actual website thumbnails in BurnGuard](doc/images/readme-design-system-library.png)
+
+*The actual design-system library with bundled website thumbnails.*
 
 These examples illustrate the bundled themes' default designs. Existing system preview files take precedence; when they are missing, BurnGuard shows the bundled reference without overwriting edited system files or publication records. In the app, the examples use the shared local font store.
 
@@ -51,7 +59,7 @@ PPTX exports contain a high-resolution image of each slide and its text in speak
 ## Refine the result where you see it
 
 - **Edit on canvas.** Select elements, adjust size and rotation, change typography and spacing, or work with colors. Saved revisions and undo help you return to an earlier result.
-- **Leave a targeted comment.** Pin feedback to a location and send an AI edit request. Hover over the canvas and press **Ctrl+Space** on Windows/Linux or **Control+Option+Space** on macOS for a quick comment.
+- **Leave a targeted comment.** Pin feedback to content and send an AI edit request. Pins stay attached while you scroll; click a saved pin to reopen its comment. Hover over the canvas and press **Ctrl+Space** on Windows/Linux or **Control+Option+Space** on macOS for a quick comment.
 - **Add source material.** Attach supported PDFs, slide decks, documents, images or text, or import an exported HTML project ZIP. Original attachments are retained separately from published website assets.
 - **Review before sharing.** Quality and UX panels identify issues and offer repair actions. Their findings are advisory; review the rendered result before exporting or publishing.
 
@@ -131,8 +139,10 @@ The interface captures were selected from the repository's local `.omo/evidence`
 | README image | Original evidence capture |
 |---|---|
 | Website workspace | `fonts-2026-09-09/app-created-prototype.png` |
-| Design-system picker | `design-system-onboarding-20260914/onboarding-desktop.png` |
-| Layout overview | `design-system-layout/overview-desktop.png` |
+| Design-system picker | `reference-layout-app/selected/onboarding.png` |
+| Design-system library | `reference-layout-app/selected/list.png` |
+| Layout overview | `reference-layout-app/selected/overview-desktop.png` |
+| Layout direction | `reference-layout-app/selected/direction-desktop.png` |
 | Slide workspace | `updates-samples-2026-09-09/app-created-slide_deck.png` |
 | Graphic output | `fonts-2026-09-09/oddward-graphic-quality.png` |
 
