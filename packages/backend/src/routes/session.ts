@@ -1,3 +1,4 @@
+import { backendCanEverGenerateGraphics } from "../services/graphic-capability";
 import { ulid } from "ulid";
 import { Hono } from "hono";
 import { parseGenerationOptions } from "@bg/shared";
@@ -157,7 +158,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
   let started = false;
   try {
     const selectedBackend = detection.backends.find((backend) => backend.id === session.backend_id);
-    if (project?.type === "graphic" && (session.backend_id !== "codex" || selectedBackend?.authenticated !== true)) return c.json(fail("graphic_requires_authenticated_codex", "Graphic generation requires authenticated Codex"), 409);
+    if (project?.type === "graphic" && !backendCanEverGenerateGraphics(selectedBackend)) return c.json(fail("graphic_requires_authenticated_codex", "Graphic generation requires an authenticated image-capable connection"), 409);
     const resolveGeneration = (value: unknown) => resolveGenerationOptions(session.backend_id, value, config, selectedBackend ?? { id: session.backend_id, found: false });
     let payload: UserEvent | null = null;
     let requestedOperationId: string | undefined;

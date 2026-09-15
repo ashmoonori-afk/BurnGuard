@@ -1,3 +1,5 @@
+import { BACKEND_IDS } from "@bg/shared";
+import { backendCanEverGenerateGraphics } from "../services/graphic-capability";
 import { Hono } from "hono";
 import type {
   ApiErrorBody,
@@ -58,7 +60,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isBackendId(
   value: unknown,
 ): value is SettingsSummary["default_backend"] {
-  return value === "claude-code" || value === "codex";
+  return BACKEND_IDS.some((id) => id === value);
 }
 
 function isApiKeyValue(value: unknown): value is string | null {
@@ -164,7 +166,7 @@ homeRoutes.post("/api/projects", async (c) => {
       c.header("Cache-Control", "no-store");
       return c.json(fail(error.code, error.message, error.diagnostics), 503);
     }
-    if (input.backendId !== "codex" || !detection.backends.some((backend) => backend.id === "codex" && backend.found && backend.authenticated === true)) return c.json(fail("graphic_requires_authenticated_codex", "그래픽 생성에는 로그인된 Codex 연결이 필요해요."), 409);
+    if (!backendCanEverGenerateGraphics(detection.backends.find((backend) => backend.id === input.backendId))) return c.json(fail("graphic_requires_authenticated_codex", "그래픽 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요."), 409);
   }
 
   const response = await createProjectRecord({
@@ -251,7 +253,7 @@ homeRoutes.patch("/api/settings", async (c) => {
     if (!isRecord(patch.generation_defaults) || Object.keys(patch.generation_defaults).some((key) => !isBackendId(key))) return c.json(fail("invalid_generation_options", "Generation defaults are invalid"), 400);
     changes.generationDefaults = {};
     try {
-      for (const backend of ["codex", "claude-code"] as const) {
+      for (const backend of BACKEND_IDS) {
         const value = patch.generation_defaults[backend];
         if (value !== undefined) changes.generationDefaults[backend] = parseGenerationOptions(value);
       }

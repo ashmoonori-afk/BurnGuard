@@ -1,9 +1,10 @@
+import type { BackendId } from "@bg/shared";
 import type { ProjectDetail, SessionInfo } from "@bg/shared";
 import { getSqlite } from "./sqlite-client";
 
 type ProjectRow = ProjectDetail;
 type SessionRow = {
-  readonly id: string; readonly project_id: string; readonly backend_id: "claude-code" | "codex";
+  readonly id: string; readonly project_id: string; readonly backend_id: BackendId;
   readonly status: "idle" | "running" | "awaiting_tool" | "error" | "terminated";
   readonly updated_at: number; readonly last_active_at: number; readonly input: number;
   readonly output: number; readonly cached: number; readonly cache_write: number;

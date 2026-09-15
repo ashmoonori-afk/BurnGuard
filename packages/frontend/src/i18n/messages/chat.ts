@@ -162,9 +162,9 @@ export const chatMessages = defineMessages({
     "zh-CN": "前往消息输入框",
   },
   "chat.error.graphicRequiresAuthenticatedCodex": {
-    ko: "그래픽 작업에는 인증된 Codex가 필요해요. Codex에 로그인한 뒤 다시 시도해 주세요.",
-    en: "Graphics work requires an authenticated Codex. Sign in to Codex and try again.",
-    "zh-CN": "图形任务需要已认证的 Codex。请登录 Codex 后重试。",
+    ko: "그래픽 작업에는 이미지 생성이 가능한 인증된 연결이 필요해요. 모델 선택과 로그인 상태를 확인해 주세요.",
+    en: "Graphics work requires an authenticated image-capable connection. Check the model selection and sign-in.",
+    "zh-CN": "图形任务需要已认证且支持图像生成的连接。请检查模型选择与登录状态。",
   },
   "chat.error.graphicStarterUnchanged": {
     ko: "그래픽 화면이 초기 상태로 남아 결과를 반영하지 않았어요. 다시 생성을 요청해 주세요.",

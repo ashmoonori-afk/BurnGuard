@@ -1,3 +1,4 @@
+import { BACKEND_IDS } from "@bg/shared";
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import type { BackendId, ThemeMode } from "@bg/shared";
 import { APP_VERSION, LLM_CONNECTIONS, parseGenerationOptions, type GenerationOptions, type LlmConnectionId } from "@bg/shared";
@@ -98,7 +99,7 @@ function mergeConfig(input: unknown): AppConfig {
     llmApiKeys[id] = typeof value === "string" ? value.trim() || null : null;
   }
   const generationDefaults: AppConfig["generationDefaults"] = {};
-  for (const backend of ["codex", "claude-code"] as const) {
+  for (const backend of BACKEND_IDS) {
     const value = record(source.generationDefaults)[backend];
     if (value !== undefined) { try { generationDefaults[backend] = parseGenerationOptions(value); } catch { /* Old or unsupported configuration uses safe defaults. */ } }
   }
@@ -106,7 +107,8 @@ function mergeConfig(input: unknown): AppConfig {
     generationDefaults,
     llmApiKeys,
     commandcodeApiKey: typeof source.commandcodeApiKey === "string" && source.commandcodeApiKey.trim() ? source.commandcodeApiKey.trim() : null,
-    defaultBackend: source.defaultBackend === "codex" ? "codex" : "claude-code",
+    // Every provider in the contract must survive a round trip; an unknown value falls back.
+    defaultBackend: BACKEND_IDS.find((id) => id === source.defaultBackend) ?? "claude-code",
     theme: source.theme === "dark" || source.theme === "auto" ? source.theme : "light",
     port: typeof source.port === "number" && Number.isInteger(source.port) && source.port >= 1024 && source.port <= 65535 ? source.port : null,
     autoOpenBrowser: typeof source.autoOpenBrowser === "boolean" ? source.autoOpenBrowser : defaultConfig.autoOpenBrowser,

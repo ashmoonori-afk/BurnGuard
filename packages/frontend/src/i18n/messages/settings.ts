@@ -29,6 +29,7 @@ export const settingsMessages = defineMessages({
   "settings.backendChecking": { ko: "사용할 수 있는 백엔드를 확인하는 중이에요.", en: "Checking available backends.", "zh-CN": "正在检查可用后端。" },
   "settings.backendFailed": { ko: "백엔드 상태를 확인하지 못했어요", en: "Could not check backend status", "zh-CN": "无法检查后端状态" },
   "settings.defaultBackend": { ko: "기본 생성 도구", en: "Default generation tool", "zh-CN": "默认生成工具" },
+  "settings.backendInstalled": { ko: "설치를 확인했어요.", en: "Installation confirmed.", "zh-CN": "已确认安装。" },
   "settings.codexAuthenticated": { ko: "Codex 로그인을 확인했어요.", en: "Codex sign-in confirmed.", "zh-CN": "已确认 Codex 登录状态。" },
   "settings.codexInstalled": { ko: "설치는 확인했어요. 그래픽 생성에는 Codex 로그인이 필요해요.", en: "Installation confirmed. Graphic generation requires Codex sign-in.", "zh-CN": "已确认安装。生成图形需要登录 Codex。" },
   "settings.claudeInstalled": { ko: "설치를 확인했어요. 로그인 또는 CommandCode API 키로 생성할 수 있어요.", en: "Installation confirmed. Generate using sign-in or a CommandCode API key.", "zh-CN": "已确认安装。登录或使用 CommandCode API 密钥即可生成。" },

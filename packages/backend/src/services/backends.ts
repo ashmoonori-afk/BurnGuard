@@ -1,7 +1,9 @@
-import { CLAUDE_MODELS, GENERATION_EFFORTS, type BackendDetectionResult, type GenerationModel } from "@bg/shared";
+import { CLAUDE_MODELS, COPILOT_MODELS, GEMINI_MODELS, GENERATION_EFFORTS, type BackendDetectionResult, type BackendId, type GenerationModel } from "@bg/shared";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import { ownedProcessSpawnOptions } from "../adapters/owned-process-tree";
+import { settleProcessStreams } from "../adapters/process-streams";
 
 const VERSION_PROBE_TIMEOUT_MS = 5_000;
 
@@ -92,25 +94,39 @@ export async function readCodexModels(): Promise<GenerationModel[]> {
  */
 async function probeVersion(binaryPath: string): Promise<string | undefined> {
   const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<undefined>((resolve) => { timer = setTimeout(() => { controller.abort(); resolve(undefined); }, VERSION_PROBE_TIMEOUT_MS); });
+  const timer = setTimeout(() => controller.abort(), VERSION_PROBE_TIMEOUT_MS);
   try {
     const proc = Bun.spawn({
       cmd: [binaryPath, "--version"],
+      stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      signal: controller.signal,
+      ...ownedProcessSpawnOptions(),
     });
-    const read = Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()])
-      .then(([stdout, stderr]) => stdout.trim() || stderr.trim() || undefined)
-      .catch(() => undefined);
-    return await Promise.race([read, timeout]);
+    let stdout = "";
+    let stderr = "";
+    const code = await settleProcessStreams(proc, [
+      new Response(proc.stdout).text().then(text => { stdout = text; }),
+      new Response(proc.stderr).text().then(text => { stderr = text; }),
+    ], controller.signal);
+    return !controller.signal.aborted && code === 0 ? /\b\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?\b/.exec(stdout || stderr)?.[0] : undefined;
   } finally {
-    if (timer !== undefined) clearTimeout(timer);
+    clearTimeout(timer);
   }
 }
 
-async function detectOne(id: "claude-code" | "codex", binaryNames: string[], installHint: string) {
+/**
+  * Static per-backend catalogue. Codex is absent on purpose: its models are read from its own cache
+  * at detection time. `image_generation` states whether the CLI can produce raster imagery at all;
+  * a model entry may override it, and the graphic gate reads the pair through `canGenerateGraphics`.
+  */
+const BACKEND_CATALOGUE: Readonly<Record<Exclude<BackendId, "codex">, { readonly models: readonly GenerationModel[]; readonly image_generation: boolean }>> = {
+  "claude-code": { models: CLAUDE_MODELS, image_generation: false },
+  gemini: { models: GEMINI_MODELS, image_generation: false },
+  copilot: { models: COPILOT_MODELS, image_generation: false },
+};
+
+async function detectOne(id: BackendId, binaryNames: string[], installHint: string) {
   for (const name of binaryNames) {
     const binaryPath = Bun.which(name);
     if (!binaryPath) continue;
@@ -156,12 +172,14 @@ export async function detectBackends(options: { force?: boolean; requireCodexAut
   const backends = await Promise.all([
     detectOne("claude-code", ["claude", "claude.cmd"], "Install: https://claude.com/code"),
     detectOne("codex", ["codex", "codex.cmd", "openai-codex"], "Install: https://github.com/openai/codex"),
+    detectOne("gemini", ["gemini", "gemini.cmd"], "Install: https://github.com/google-gemini/gemini-cli"),
+    detectOne("copilot", ["copilot", "copilot.cmd"], "Install: npm install -g @github/copilot"),
   ]);
 
   const codex = backends.find((backend) => backend.id === "codex");
   try {
     const [authenticated, models] = await Promise.all([codex?.binary_path ? probeCodexAuthentication(codex.binary_path) : false, readCodexModels()]);
-    cachedValue = { backends: backends.map((backend) => backend.id === "codex" ? { ...backend, authenticated, models } : { ...backend, models: CLAUDE_MODELS }) };
+    cachedValue = { backends: backends.map((backend) => withCatalogue(backend, authenticated, models)) };
     cachedAt = Date.now();
     return cachedValue;
   } catch (error) {
@@ -169,6 +187,26 @@ export async function detectBackends(options: { force?: boolean; requireCodexAut
     cachedValue = null;
     if ((options.requireCodexAuthentication ?? true) || !(error instanceof CodexAuthenticationProbeError)) throw error;
     const models = await readCodexModels();
-    return { backends: backends.map((backend) => backend.id === "codex" ? { ...backend, models } : { ...backend, models: CLAUDE_MODELS }) };
+    // An indeterminate Codex probe carries no `authenticated` value at all — never a confirmed logout.
+    return { backends: backends.map((backend) => withCatalogue(backend, undefined, models)) };
   }
+}
+
+/**
+ * Attaches each backend's model list and image capability. Codex reports the models it discovered
+ * plus the CLI-level image capability that has always made graphic projects work; every other
+ * backend takes its static catalogue entry.
+ */
+function withCatalogue(
+  backend: { readonly id: BackendId; readonly found: boolean; readonly version?: string; readonly binary_path?: string; readonly install_hint?: string },
+  authenticated: boolean | undefined,
+  codexModels: readonly GenerationModel[],
+) {
+  if (backend.id === "codex") {
+    return authenticated === undefined
+      ? { ...backend, models: codexModels, image_generation: true }
+      : { ...backend, authenticated, models: codexModels, image_generation: true };
+  }
+  const entry = BACKEND_CATALOGUE[backend.id];
+  return { ...backend, models: entry.models, image_generation: entry.image_generation };
 }

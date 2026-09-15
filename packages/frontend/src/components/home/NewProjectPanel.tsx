@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useT } from "@/i18n/t";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import type {
   BackendId,
@@ -12,7 +12,8 @@ import type {
 } from "@bg/shared";
 import { defaultGenerationOptions } from "@bg/shared";
 import GenerationControls from "@/components/settings/GenerationControls";
-import { createProject } from "@/api/home";
+import { createProject, detectBackends } from "@/api/home";
+import { backendLabel, graphicBackendId } from "@/lib/backend-display";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ProjectBriefFields, {
@@ -69,6 +70,7 @@ export default function NewProjectPanel({
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
   const [backendId, setBackendId] = useState<BackendId>(defaultBackend);
+  const detection = useQuery({ queryKey: ["backends", "detect"], queryFn: detectBackends });
   const [templateFormat, setTemplateFormat] = useState<"prototype" | "slide_deck" | "graphic">("prototype");
   const [generationByBackend, setGenerationByBackend] = useState(generationDefaults ?? {});
   const [form, setForm] = useState<BriefForm>(() => readCreationDraft(type));
@@ -93,7 +95,8 @@ export default function NewProjectPanel({
   const isOriginal = isOriginalSampleSystem(designSystemId);
   const effectiveType = isTemplate && isOriginal ? templateFormat : type;
   const isGraphic = effectiveType === "graphic";
-  const effectiveBackend = isGraphic ? "codex" : backendId;
+  const detectedBackends = detection.data?.backends ?? [];
+  const effectiveBackend = isGraphic ? graphicBackendId(detectedBackends, backendId) : backendId;
   const generation = generationByBackend[effectiveBackend] ?? defaultGenerationOptions(effectiveBackend);
 
   const createMutation = useMutation({
@@ -176,7 +179,7 @@ export default function NewProjectPanel({
       <h2 className="mb-3 text-xs font-semibold text-muted-foreground">{t("home.creation.basics")}</h2>
 
       <div className="space-y-4">
-        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={effectiveBackend} disabled={disabled || isGraphic} onChange={(event) => setBackendId(event.target.value === "codex" ? "codex" : "claude-code")}><option value="claude-code">Claude Code</option><option value="codex">Codex</option></select><GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
+        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={effectiveBackend} disabled={disabled || isGraphic} onChange={(event) => setBackendId(event.target.value as BackendId)}>{(detectedBackends.length > 0 ? detectedBackends : [{ id: "claude-code" as BackendId, found: true }, { id: "codex" as BackendId, found: true }]).map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendLabel(backend.id)}{backend.found ? "" : " —"}</option>)}</select><GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
         <div className="space-y-1.5">
           <label htmlFor="project-name" className={PROJECT_LABEL_CLASS}>
             {t("home.creation.name")}

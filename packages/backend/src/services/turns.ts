@@ -1,3 +1,4 @@
+import { ensureGraphicCapableBackend } from "./graphic-capability";
 import { ensureThreeSceneRuntime } from "./three-scene";
 import { ensureCharts } from "./charts";
 import { lstat, readFile, readdir } from "node:fs/promises";
@@ -344,8 +345,9 @@ async function runUserTurnInternal(
       code: "agent_control_files_present",
     });
   }
-  if (project.type === "graphic" && (backendId !== "codex" || backend.authenticated !== true)) throw new Error("graphic_requires_authenticated_codex");
   const generation = resolveGenerationOptions(backendId, payload.generation, config, backend);
+  // The selected model decides whether this backend can draw, so the gate follows resolution.
+  if (project.type === "graphic") ensureGraphicCapableBackend(backend, generation.model);
   const coordinator = new ArtifactCoordinator(getSqlite());
   const base = await coordinator.initialize(project.id, projectDir);
   // The revert route only offers a rollback when a pre-turn snapshot exists,

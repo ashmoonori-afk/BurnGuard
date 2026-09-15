@@ -50,6 +50,8 @@ export interface CreateProjectResponse {
 
 export interface BackendDetection {
   authenticated?: boolean;
+  /** The CLI can generate raster imagery at all; a model may still override this per entry. */
+  image_generation?: boolean;
   models?: readonly import("./generation").GenerationModel[];
   id: BackendId;
   found: boolean;
