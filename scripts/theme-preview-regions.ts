@@ -1,259 +1,97 @@
-<!doctype html>
-<html lang="ko"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Retro Built-in Theme — 웹사이트 미리보기</title>
-<link rel="stylesheet" href="../../assets/fonts/fonts.css">
-<style>
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/** Reference-derived page regions. Geometry and all paint remain owned by each theme's tokens. */
+type RegionTheme = {
+  name: string;
+  archetype: "marketing" | "article" | "shop" | "poster" | "workspace" | "place";
+  token: (name: string, fallback?: string) => string;
+};
 
-:root {
-  color-scheme: light;
+const CONTENT = {
+  marketing: ["만드는 일에 집중하세요", "아이디어를 정리하고, 다음 시도를 더 가볍게 시작하는 작업 공간입니다.", "제품 둘러보기", "제품", "작업", "시작하기"],
+  article: ["오래 들여다볼수록 보이는 것들", "한 번의 결론보다 오래 남는 질문을 모읍니다. 오늘의 관찰을 다음 이야기로 이어갑니다.", "이번 호 읽기", "이야기", "지난 호", "편집실"],
+  shop: ["계절이 지나도 남는 것들", "매일 손이 가는 소재와 오래 쓰이는 형태. 천천히 고른 물건을 소개합니다.", "컬렉션 보기", "컬렉션", "소재", "이용 안내"],
+  poster: ["흐린 날의 긴 산책", "봄의 저녁, 함께 보고 오래 이야기할 작품을 만납니다. 작은 극장에서 시작되는 새로운 장면.", "프로그램 보기", "프로그램", "참여자", "방문 안내"],
+  workspace: ["복잡한 흐름을 한눈에", "흩어진 기록을 연결하고 지금 필요한 신호를 찾아보세요. 일의 다음 단계가 분명해집니다.", "기록 살펴보기", "개요", "운영 기록", "도움말"],
+  place: ["하루의 속도가 달라지는 곳", "빛이 머무는 방과 계절을 닮은 재료. 잠시 멈춰 주변을 돌아볼 수 있는 공간입니다.", "공간 둘러보기", "공간", "프로그램", "찾아오기"],
+} as const;
 
-  /* Neutrals */
-  --gray-100: #ECE3CA;
-  --gray-90: #56524C;
-  --gray-80: #68635B;
-  --gray-70: #7A756A;
-  --gray-60: #8C8679;
-  --gray-50: #9E9888;
-  --gray-40: #B0A998;
-  --gray-30: #BFB7A4;
-  --gray-20: #CEC6B1;
-  --gray-10: #DDD4BD;
+const html = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+const brand = (theme: RegionTheme) => html(theme.name.replace(/(?: Built-in)? Theme$/, ""));
+const links = (theme: RegionTheme) => ["overview", "collection", "contact"].map((id, i) => `<a href="#${id}">${CONTENT[theme.archetype][i + 3]}</a>`).join("");
+const menu = (body: string, label = "메뉴") => `<details class="region-menu"><summary>${label}<span aria-hidden="true"> ＋</span></summary><div class="region-menu-panel">${body}</div></details>`;
 
-  /* Brand and accents */
-  --primary-blue: #FF9FA0;
-  --action-blue: #FF9FA0;
-  --red-60: #FF6266;
-  --red-50: #FC7978;
-  --red-10: #EFCCB8;
-  --orange-50: #D08700;
-  --orange-10: #E7D2A6;
-  --yellow-30: #F34700;
-  --yellow-10: #EDC7A6;
-  --green-60: #00776F;
-  --green-50: #2A8A7F;
-  --green-10: #C2D0BA;
-  --teal-50: #D08700;
-  --teal-10: #E7D2A6;
-  --aqua-60: #0082CE;
-  --aqua-10: #C2D2CB;
-  --blue-90: #56524C;
-  --blue-80: #D08988;
-  --blue-70: #E79494;
-  --blue-60: #FF9FA0;
-  --blue-50: #FCABA8;
-  --blue-30: #F5C4B7;
-  --blue-10: #EFD8C3;
-  --ultramarine-60: #FF9FA0;
-  --purple-60: #B7F6CD;
-  --pink-60: #B7F6CD;
-
-  /* Semantic */
-  --success: #00776F;
-  --warning-yellow: #F34700;
-  --warning-orange: #D08700;
-  --error: #FF6266;
-  --info: #0082CE;
-
-  /* Surface and text */
-  --bg: #ECE3CA;
-  --bg-subtle: #E4D8B4;
-  --bg-muted: #DBCA9B;
-  --surface: #ECE3CA;
-  --surface-inverse: #56524C;
-  --fg-1: #793205;
-  --fg-2: #793205;
-  --fg-3: #793205;
-  --fg-4: #B0A998;
-  --fg-on-dark: #D4D0CE;
-  --fg-on-brand: #801518;
-  --border: #DBCA9B;
-  --border-strong: #BFB7A4;
-  --focus-ring: #FF9FA0;
-
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #B7F6CD;
-  --fg-on-secondary: #00642E;
-  --accent: #D08700;
-  --fg-on-accent: #793205;
-  --fg-on-info: #FEF2C6;
-  --fg-on-success: #FEF2C6;
-  --fg-on-warning: #FEF2C6;
-  --fg-on-error: #7C2808;
-
-  /* Charts */
-  --chart-1: #FF9FA0;
-  --chart-2: #B7F6CD;
-  --chart-3: #D08700;
-  --chart-4: #0082CE;
-  --chart-5: #00776F;
-  --chart-6: #F34700;
-  --chart-7: #FF6266;
-  --chart-8: #DBCAB6;
-  --chart-9: #688467;
-  --chart-10: #808B88;
-
-  /* Type families */
-  --font-display: "DM Serif Display", "Gowun Batang", "Pretendard", serif;
-  --font-serif: "DM Serif Display", "Gowun Batang", serif;
-  --font-body: "DM Sans", "Pretendard", sans-serif;
-  --font-sans: "DM Sans", "Pretendard", sans-serif;
-  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
-
-  /* Type scale */
-  --fs-12: 0.75rem;
-  --fs-13: 0.8125rem;
-  --fs-14: 0.875rem;
-  --fs-16: 1rem;
-  --fs-18: 1.125rem;
-  --fs-20: 1.25rem;
-  --fs-24: 1.5rem;
-  --fs-28: 1.75rem;
-  --fs-32: 2rem;
-  --fs-40: 2.5rem;
-  --fs-48: 3rem;
-  --fs-64: 4rem;
-  --fs-80: 5rem;
-
-  /* Weight, leading, and tracking */
-  --fw-light: 300;
-  --fw-regular: 400;
-  --fw-medium: 500;
-  --fw-semibold: 600;
-  --fw-bold: 700;
-  --fw-black: 900;
-  --lh-tight: 1.1;
-  --lh-snug: 1.25;
-  --lh-normal: 1.45;
-  --lh-relaxed: 1.6;
-  --ls-tight: -0.02em;
-  --ls-normal: 0em;
-  --ls-wide: 0.02em;
-  --ls-eyebrow: 0.14em;
-
-  /* Spacing: 4px grid */
-  --sp-1: 4px;
-  --sp-2: 8px;
-  --sp-3: 12px;
-  --sp-4: 16px;
-  --sp-5: 20px;
-  --sp-6: 24px;
-  --sp-8: 32px;
-  --sp-10: 40px;
-  --sp-12: 48px;
-  --sp-16: 64px;
-  --sp-20: 80px;
-
-  /* Radii */
-  --r-0: 0px;
-  --r-2: 2px;
-  --r-4: 4px;
-  --r-8: 8px;
-  --r-pill: 999px;
-
-  /* Elevation */
-  --shadow-1: 1px 2px 0 rgba(121, 50, 5, 0.16);
-  --shadow-2: 2px 4px 0 rgba(121, 50, 5, 0.18);
-  --shadow-3: 4px 8px 0 rgba(121, 50, 5, 0.20);
-  --shadow-4: 8px 16px 0 rgba(121, 50, 5, 0.24);
-
-  /* Motion */
-  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-emphasis: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --dur-fast: 140ms;
-  --dur-base: 240ms;
-  --dur-slow: 380ms;
+export function navigationFor(theme: RegionTheme): string {
+  const mark = `<a class="region-brand" href="#overview">${brand(theme)}</a>`;
+  const entries = links(theme);
+  const groups = ["둘러보기", "더 알아보기", "함께하기"].map(label => `<div class="region-nav-group"><b>${label}</b>${entries}</div>`).join("");
+  const patterns: Record<string, string> = {
+    "floating-island": `${mark}<nav class="region-nav-links">${entries}</nav>${menu(entries)}`,
+    "mega-feature": `${mark}<nav class="region-nav-numbered">${["overview", "collection", "contact"].map((id, i) => `<a href="#${id}"><small>0${i + 1}</small>${CONTENT[theme.archetype][i + 3]}</a>`).join("")}</nav>${menu(`<p class="region-menu-intro">오늘의 선택에서<br>새로운 가능성까지.</p>${groups}`, "전체 보기")}`,
+    "icon-taxonomy": `${mark}<nav class="region-nav-chips">${["overview", "collection", "contact"].map((id, i) => `<a href="#${id}"><span aria-hidden="true">${["◈", "▤", "◎"][i]}</span>${CONTENT[theme.archetype][i + 3]}</a>`).join("")}</nav>${menu(groups, "탐색")}`,
+    "enterprise-columns": `<div class="region-utility"><span>한곳에서 연결되는 모든 작업</span><a href="#contact">도움말 ↗</a></div><div class="region-nav-main">${mark}<nav class="region-nav-links">${entries}</nav>${menu(groups, "전체 서비스")}</div>`,
+    "segmented-pill": `${mark}<nav class="region-nav-segments">${entries}</nav>${menu(`<div class="region-menu-index">${groups}</div>`, "더 보기")}`,
+    "side-rail": `${mark}<p class="region-rail-note">Independent ideas.<br>Everyday work.</p><nav class="region-nav-vertical">${entries}</nav><a class="region-rail-cta" href="#contact">새로운 이야기 ↗</a>`,
+    "profile-popover": `${mark}<div class="region-profile-links"><a href="#collection">작업</a><a href="#contact">안내</a></div>${menu(`<div class="region-profile-avatar" aria-hidden="true">${brand(theme).slice(0, 1)}</div><b>${brand(theme)}</b><p>작은 관찰에서 시작되는 새로운 일.</p>${entries}`, "소개")}`,
+    "editorial-overlay": `${mark}<a class="region-feature-link" href="#collection"><small>SELECTED / 01</small>${CONTENT[theme.archetype][4]} ↗</a>${menu(`<div class="region-overlay-feature">지금 주목하는<br>새로운 장면</div><nav>${entries}</nav><p>이야기는 이곳에서 이어집니다.</p>`, "둘러보기")}`,
+  };
+  const pattern = theme.token("layout-nav-pattern");
+  if (!patterns[pattern]) throw new Error(`Unknown navigation pattern: ${pattern}`);
+  return `<a class="region-skip" href="#main-content">본문으로 바로가기</a><header class="region-nav" data-nav-pattern="${pattern}" data-nav-position="${theme.token("layout-nav-position", "top")}" aria-label="주 메뉴">${patterns[pattern]}</header>`;
 }
 
-
-/* Layout is part of the design-system contract. */
-:root {
-  --layout-max: 1180px;
-  --layout-measure: 58ch;
-  --layout-columns: 12;
-  --layout-gutter: 28px;
-  --layout-margin: clamp(20px, 4vw, 64px);
-  --layout-section-y: clamp(56px, 8vw, 112px);
-  --layout-bp-md: 760px;
-  --layout-bp-lg: 1120px;
-  --layout-hero: 4 / 3;
-  --layout-structure: offset;
-  --family-ui-navigation-placement: top;
-  --family-ui-navigation-span: 0;
+export function heroFor(theme: RegionTheme, media: string): string {
+  const [title, description, action] = CONTENT[theme.archetype];
+  const copy = `<div class="region-copy"><p class="eyebrow">${brand(theme)} / ${theme.archetype.toUpperCase()}</p><h1>${title}</h1><p class="region-lede">${description}</p><a class="btn" href="#collection">${action} ↗</a></div>`;
+  const visual = (extra = "") => `<div class="region-visual ${extra}">${media}</div>`;
+  const label = `<div class="region-caption"><span>새롭게 바라보는 매일</span><span>01 / 2026</span></div>`;
+  const patterns: Record<string, string> = {
+    "split-left": `${copy}${visual()}`,
+    "centered-form": `${copy}<div class="region-action-card"><span class="tag">처음 오셨나요?</span>${menu(`<p>관심 있는 내용을 골라 둘러보세요.</p>${links(theme)}`, "어디부터 시작할까요?")}</div>${visual()}`,
+    "media-bottom": `${copy}<p class="region-side-note">우리의 다음 이야기는<br>지금 이곳에서 시작됩니다.</p>${visual()}${label}`,
+    "masthead-crop": `<p class="region-masthead" aria-hidden="true">${brand(theme)}</p>${copy}${visual()}${label}`,
+    "product-panel": `${copy}<div class="region-visual region-product-panel"><div class="region-window-bar"><span>● ● ●</span><span>${brand(theme)} / WORKSPACE</span></div>${media}<div class="region-product-status"><span>오늘의 기록 <b>24</b></span><span>진행 중 <b>08</b></span><span>완료 <b>16</b></span></div></div>`,
+    "specimen-poster": `<div class="region-specimen-index" aria-hidden="true">01<span>SPRING<br>EDITION</span></div>${copy}${visual()}<div class="region-specimen-stamp">새로운 시선<br>새로운 장면<br>2026</div>`,
+    "split-reverse": `${visual()}${copy}<div class="region-side-note">작은 차이에서 시작되는<br>조금 더 나은 하루.</div>`,
+    "filmstrip": `<div class="region-film-index">FRAME 001—024</div>${visual("region-film")}${copy}${label}`,
+    "framed-cover": `<div class="region-cover-label">${brand(theme)} · SELECTED STORIES</div>${copy}${visual()}${label}`,
+    "portfolio-peek": `<div class="region-portfolio-role">관찰하고<br>기록하고<br>다시 만듭니다.</div>${copy}${visual()}<a class="region-portfolio-next" href="#collection">선택한 작업 ↓</a>`,
+    "type-marquee": `<div class="region-ticker" aria-hidden="true"><span>IDEAS · PEOPLE · PLACES</span> · <span>${brand(theme)}</span></div>${copy}${visual()}${label}`,
+    "fullbleed-top": `${visual()}${copy}<a class="region-cover-scroll" href="#collection">아래로 둘러보기 ↓</a>`,
+  };
+  const pattern = theme.token("layout-hero-pattern");
+  if (!patterns[pattern]) throw new Error(`Unknown hero pattern: ${pattern}`);
+  return `<section class="region-hero" id="overview" data-hero-pattern="${pattern}" data-media-position="${theme.token("layout-hero-media-position", "right")}"><div class="region-stage">${patterns[pattern]}</div></section>`;
 }
 
-/* Website regions; legacy layout and family tokens continue to govern body content. */
-:root {
-  --layout-nav-pattern: editorial-overlay;
-  --layout-nav-position: top;
-  --layout-nav-height: 84px;
-  --layout-nav-width: 1240px;
-  --layout-hero-pattern: specimen-poster;
-  --layout-hero-copy-ratio: 78%;
-  --layout-hero-media-ratio: 4 / 3;
-  --layout-hero-media-position: background;
-  --layout-hero-min-height: 700px;
-  --layout-hero-title-measure: 12ch;
-  --layout-hero-align: center;
-  --layout-hero-offset: 48px;
-  --layout-footer-pattern: window-stage;
-  --layout-footer-columns: 3;
-  --layout-footer-height: 620px;
+export function footerFor(theme: RegionTheme, media: string): string {
+  const mark = `<a class="region-footer-brand" href="#overview">${brand(theme)}</a>`;
+  const legal = `<div class="region-legal"><span>© 2026 ${brand(theme)}</span><a href="#overview">맨 위로 ↑</a></div>`;
+  const columns = Number(theme.token("layout-footer-columns", "3"));
+  if (!Number.isInteger(columns) || columns < 1 || columns > 6) throw new Error("Invalid footer column count");
+  const groups = Array.from({ length: columns }, (_, i) => `<div class="region-footer-group"><h3>${["둘러보기", "이용 안내", "이야기", "연결", "프로그램", "자료실"][i]}</h3>${links(theme)}</div>`).join("");
+  const grid = `<nav class="region-footer-grid" aria-label="하단 메뉴">${groups}</nav>`;
+  const cta = `<div class="region-footer-cta"><h2>다음 이야기를<br>함께 시작해요.</h2><a class="btn" href="#overview">처음부터 둘러보기 ↗</a></div>`;
+  const patterns: Record<string, string> = {
+    "ruled-community": `<div class="region-ruled-cells">${mark}${cta}${grid}</div>${legal}<div class="region-community-band" aria-hidden="true">○ ＋ ◇ ○ ＋ ◇</div>`,
+    "window-stage": `<div class="region-stage-title">새로운 연결</div><div class="region-footer-windows"><div class="region-footer-window"><span>EXPLORE ↗</span>${grid}</div><div class="region-footer-window">${cta}</div></div><div class="region-footer-ticker">${brand(theme)} · KEEP IN TOUCH · ${brand(theme)}</div>${legal}`,
+    "studio-address": `<div class="region-studio-top">${mark}${grid}</div><div class="region-address-row"><div><span class="eyebrow">STUDIO 01</span><p>작업을 나누는 곳<br>평일 10:00–18:00</p></div><div><span class="eyebrow">STUDIO 02</span><p>이야기가 이어지는 곳<br>방문 전 안내 확인</p></div><a href="#collection">선택한 작업 ↗</a></div>${legal}`,
+    "photo-strip": `<div class="region-photo-top">${mark}${grid}</div><div class="region-footer-photo">${media}</div>${legal}`,
+    "centered-cta": `${cta}<nav class="region-footer-center-links" aria-label="하단 메뉴">${links(theme)}</nav><div class="region-footer-watermark">${brand(theme)}</div>${legal}`,
+    "scenic-overlay": `<div class="region-footer-scene">${media}<div class="region-scenic-content">${cta}${grid}</div></div>${legal}`,
+    "contact-ledger": `<div class="region-contact-ledger">${mark}<div><p class="eyebrow">LET'S KEEP IN TOUCH</p><p>새로운 소식과 다음 일정을<br>이곳에서 만나보세요.</p><a class="region-news-rule" href="#collection">최근 이야기 보기 ↗</a></div>${grid}</div>${legal}`,
+    "retail-accordion": `<div class="region-retail-top">${cta}<nav class="region-retail-groups" aria-label="하단 메뉴">${Array.from({ length: columns }, (_, i) => `<details open><summary>${["컬렉션", "고객 안내", "브랜드", "자료실", "소식", "연결"][i]}</summary><div>${links(theme)}</div></details>`).join("")}</nav></div><div class="region-retail-locale"><span>대한민국 · 한국어</span><a href="#contact">이용 안내</a></div>${mark}${legal}`,
+  };
+  const pattern = theme.token("layout-footer-pattern");
+  if (!patterns[pattern]) throw new Error(`Unknown footer pattern: ${pattern}`);
+  return `<footer class="region-footer" id="contact" data-footer-pattern="${pattern}">${patterns[pattern]}</footer>`;
 }
 
-*{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--fg-1);
-  font-family:var(--font-body);font-size:var(--fs-16);line-height:var(--lh-relaxed);
-  font-feature-settings:"tnum" 0}
-img,svg{display:block;max-width:100%}
-a{color:inherit}
-.wrap{max-width:var(--layout-max,1200px);margin-inline:auto;
-  padding-inline:var(--layout-margin,24px)}
-.bleed{width:100%}
-.eyebrow{font-family:var(--font-mono);font-size:var(--fs-12);
-  letter-spacing:var(--ls-eyebrow,.12em);text-transform:uppercase;color:var(--fg-3);margin:0}
-.display{font-family:var(--font-display);line-height:var(--lh-display,var(--lh-tight));
-  letter-spacing:var(--ls-display,var(--ls-tight));color:var(--fg-1);margin:0;
-  font-size:clamp(var(--fs-32),6vw,var(--fs-64))}
-.lede{font-family:var(--font-serif);font-size:var(--fs-20);color:var(--fg-2);
-  max-width:var(--layout-measure,60ch);margin:0}
-.body{font-size:var(--fs-16);color:var(--fg-2);max-width:var(--layout-measure,60ch)}
-.rule{border:0;border-top:var(--layout-rule,1px) solid var(--border);margin:0}
-.btn{display:inline-block;font-family:var(--font-sans);font-size:var(--fs-14);
-  font-weight:var(--fw-medium,500);padding:var(--sp-3) var(--sp-5);border:0;
-  border-radius:var(--r-4);background:var(--primary-blue);color:var(--fg-on-brand);
-  text-decoration:none;transition:opacity var(--dur-fast) var(--ease-standard)}
-.btn:hover{opacity:.88}
-.btn.ghost{background:transparent;color:var(--fg-1);
-  border:var(--layout-rule,1px) solid var(--border-strong)}
-.btn.pill{border-radius:var(--r-pill)}
-.tag{display:inline-block;font-family:var(--font-mono);font-size:var(--fs-12);
-  padding:var(--sp-1) var(--sp-2);border-radius:var(--r-2);
-  background:var(--bg-muted);color:var(--fg-2)}
-.fig{width:100%;height:100%;object-fit:cover}
-.media{overflow:hidden;background:var(--bg-muted);border-radius:var(--r-8)}
-.section{padding-block:var(--layout-section-y,64px)}
-.grid{display:grid;gap:var(--layout-gutter,24px)}
-.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
-.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
-.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
-.stack{display:flex;flex-direction:column;gap:var(--sp-4)}
-.row{display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center}
-dl.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-4);margin:0}
-dl.facts dt{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);
-  letter-spacing:.06em;text-transform:uppercase}
-dl.facts dd{margin:var(--sp-1) 0 0;font-family:var(--font-body);font-size:var(--fs-14);color:var(--fg-2)}
-@media (max-width:760px){
-  .cols-2,.cols-3,.cols-4,dl.facts{grid-template-columns:1fr}
-}
-
+export function regionCss(theme: RegionTheme): string {
+  const navWidth = theme.token("layout-nav-width", "0px");
+  return `
 body{position:relative;overflow-wrap:anywhere}
 #main-content,#collection{min-width:0}a:focus-visible,summary:focus-visible{outline:3px solid var(--primary-blue);outline-offset:4px}
 .region-skip{position:absolute;left:var(--sp-4);top:0;transform:translateY(-120%);z-index:20;background:var(--surface);padding:var(--sp-3)}.region-skip:focus{transform:none}
-.region-nav{position:relative;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--sp-5);min-height:var(--layout-nav-height,var(--layout-nav-h,72px));max-width:min(var(--layout-max),var(--layout-nav-width));margin-inline:auto;padding:var(--sp-3) var(--layout-margin);border-bottom:1px solid var(--border);background:var(--bg);width:100%;font-size:var(--fs-14)}
+.region-nav{position:relative;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:var(--sp-5);min-height:var(--layout-nav-height,var(--layout-nav-h,72px));max-width:${navWidth === "0px" || navWidth === "0" ? "var(--layout-max)" : "min(var(--layout-max),var(--layout-nav-width))"};margin-inline:auto;padding:var(--sp-3) var(--layout-margin);border-bottom:1px solid var(--border);background:var(--bg);width:100%;font-size:var(--fs-14)}
 .region-brand{text-decoration:none;font-family:var(--font-display);font-size:var(--fs-20);line-height:1.15;font-weight:var(--fw-semibold);max-width:15ch}
 .region-nav nav,.region-profile-links{display:flex;align-items:center;gap:var(--sp-5)}.region-nav a{text-decoration:none}.region-nav a:hover{text-decoration:underline;text-underline-offset:.3em}
 .region-menu summary{cursor:pointer;list-style:none;white-space:nowrap}.region-menu summary::-webkit-details-marker{display:none}.region-menu summary::marker{content:""}
@@ -297,68 +135,12 @@ body:has([data-nav-position="side"]){display:grid;grid-template-columns:var(--la
 [data-footer-pattern="centered-cta"]{text-align:center}.region-footer-center-links{display:flex;justify-content:center;gap:var(--sp-6);margin-top:var(--sp-8);flex-wrap:wrap;font-size:var(--fs-14)}.region-footer-watermark{font-family:var(--font-display);font-size:clamp(var(--fs-48),9vw,9rem);line-height:1.1;color:var(--fg-4);margin-top:var(--sp-10);letter-spacing:var(--ls-tight)}
 [data-footer-pattern="scenic-overlay"]{padding:0;background:var(--bg)}.region-footer-scene{position:relative;isolation:isolate;min-height:var(--layout-footer-height,480px);padding:var(--layout-margin);display:flex;align-items:flex-end}.region-footer-scene>.fig{position:absolute;inset:0;z-index:-1}.region-scenic-content{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--sp-10);padding:var(--sp-6);background:var(--bg);width:100%;margin-top:var(--sp-20)}[data-footer-pattern="scenic-overlay"]>.region-legal{margin:0;padding:var(--sp-5) var(--layout-margin)}
 .region-contact-ledger{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr);gap:var(--sp-8)}.region-contact-ledger p{font-size:var(--fs-14)}.region-news-rule{display:block;border-bottom:1px solid var(--border-strong);padding-block:var(--sp-5);font-size:var(--fs-14)}.region-retail-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:var(--sp-10)}.region-retail-groups{display:grid;grid-template-columns:repeat(var(--layout-footer-columns,3),minmax(0,1fr));gap:var(--sp-6)}.region-retail-groups summary{font-family:var(--font-mono);font-size:var(--fs-12);cursor:pointer;padding-block:var(--sp-3)}.region-retail-groups a{display:block;font-size:var(--fs-14);padding-block:var(--sp-2)}.region-retail-locale{display:flex;justify-content:space-between;gap:var(--sp-4);border-block:1px solid var(--border);padding-block:var(--sp-4);margin-block:var(--sp-8);font-size:var(--fs-12)}[data-footer-pattern="retail-accordion"]>.region-footer-brand{font-size:clamp(var(--fs-48),9vw,8rem);max-width:none}
-@media (max-width:760px){
+@media (max-width:${theme.token("layout-bp-md", "820px")}){
 body:has([data-nav-position="side"]){display:block}.region-nav{max-width:100%;padding-inline:var(--sp-4);gap:var(--sp-3)}.region-brand{font-size:var(--fs-16);max-width:13ch}.region-nav .region-nav-links{display:none}.region-nav-menu{margin-left:auto}.region-nav-numbered{gap:0!important;justify-content:space-between}.region-nav-numbered a{padding:var(--sp-3) var(--sp-2);font-size:var(--fs-12)}.region-nav-chips{gap:var(--sp-1)!important}.region-nav-chips a{display:block;font-size:var(--fs-12);padding:var(--sp-2)}.region-nav-chips span{display:none}.region-nav-segments{gap:0!important}.region-nav-segments a{font-size:var(--fs-12);padding:var(--sp-2)}.region-profile-links{gap:var(--sp-2)}.region-profile-links a{padding:var(--sp-2)}.region-feature-link{font-size:var(--fs-12)}.region-feature-link small{font-size:10px}.region-menu-panel{padding:var(--sp-5);gap:var(--sp-4)}.region-menu-panel nav{flex-wrap:wrap}.region-utility{font-size:10px}.region-nav-main{gap:var(--sp-2)}[data-nav-position="side"]{min-height:var(--layout-nav-height,var(--layout-nav-h,72px));width:100%;border-right:0}[data-nav-pattern="side-rail"]{flex-direction:row;flex-wrap:wrap;gap:var(--sp-3)}.region-rail-note{display:none}.region-nav-vertical{flex-direction:row;flex-wrap:wrap;gap:var(--sp-3)!important}.region-nav-vertical a{font-size:var(--fs-12);padding:var(--sp-2) 0}.region-rail-cta{padding:var(--sp-2);font-size:var(--fs-12);margin:0}[data-nav-pattern="editorial-overlay"] .region-menu-panel{grid-template-columns:1fr}.region-profile-links>a:first-child{display:none}
 .region-hero{padding-top:var(--sp-5)}.region-stage{min-height:0;gap:var(--sp-5)}.region-hero .region-stage{grid-template-columns:minmax(0,1fr)}.region-hero .region-copy,.region-hero .region-visual,.region-hero .region-side-note{grid-column:1;grid-row:auto;width:100%;max-width:100%;margin-top:0}.region-copy{order:0}.region-visual{order:1}.region-copy h1{font-size:clamp(var(--fs-32),9vw,var(--fs-48));max-width:var(--layout-hero-title-measure,16ch)}.region-lede{font-size:var(--fs-16)}.region-side-note{display:none}.region-caption{order:3}.region-action-card{flex-wrap:wrap;width:100%}.region-action-card .region-menu{flex:1}.region-masthead{font-size:clamp(var(--fs-32),12vw,var(--fs-48))}.region-product-panel{transform:none}.region-window-bar{font-size:10px}.region-hero[data-hero-pattern="specimen-poster"] .region-stage{padding:var(--sp-4)}.region-specimen-stamp{order:3}.region-film-index{writing-mode:horizontal-tb;text-align:start}.region-hero[data-hero-pattern="filmstrip"] .region-copy{order:2}.region-hero[data-hero-pattern="framed-cover"] .region-stage{padding:var(--sp-5)}.region-portfolio-next{order:3}.region-hero[data-media-position="background"] .region-stage{min-height:var(--layout-hero-min-height,520px);padding-inline:var(--layout-margin)}.region-hero[data-media-position="background"] .region-visual{width:auto;margin:0}.region-hero[data-media-position="background"] .region-copy{width:100%;padding:var(--sp-5)}.region-copy h1{transform:none!important}.region-hero[data-hero-pattern="type-marquee"] .region-copy h1{font-size:clamp(var(--fs-40),11vw,var(--fs-64))}
 .region-footer-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-5)}.region-ruled-cells,.region-footer-windows,.region-studio-top,.region-photo-top,.region-address-row,.region-scenic-content,.region-contact-ledger,.region-retail-top{grid-template-columns:minmax(0,1fr)}.region-ruled-cells>*{border-right:0;border-bottom:1px solid var(--border-strong);padding-inline:0}.region-ruled-cells>*:last-child{border-bottom:0}.region-footer-window:last-child{margin-top:0}.region-footer-windows{gap:var(--sp-4)}.region-footer-cta h2{font-size:var(--fs-32)}.region-footer-watermark{font-size:clamp(var(--fs-40),13vw,var(--fs-64))}.region-footer-scene{padding:var(--sp-5)}.region-scenic-content{padding:var(--sp-5);gap:var(--sp-8)}.region-retail-groups{grid-template-columns:minmax(0,1fr)}.region-retail-groups details{border-bottom:1px solid var(--border)}.region-retail-groups summary{font-size:var(--fs-14);padding-block:var(--sp-4)}.region-footer{min-height:0}.region-address-row{gap:var(--sp-5)}.region-footer-group a,.region-retail-groups a{padding-block:var(--sp-2)}
 .region-hero[data-hero-pattern] .region-stage{grid-template-columns:minmax(0,1fr)}.region-hero[data-hero-pattern] .region-copy,.region-hero[data-hero-pattern] .region-visual{grid-column:1;grid-row:auto;width:100%;max-width:100%}.region-menu-index{grid-template-columns:minmax(0,1fr)}.region-nav-group{min-width:0}
 [data-nav-position="overlay"],[data-nav-position="bottom"]{position:relative;inset:auto;transform:none;width:100%;margin-block:0}body:has([data-nav-position="bottom"]){padding-bottom:0}body:has([data-nav-position="overlay"]) .region-stage{padding-top:var(--sp-6)}[data-nav-position="bottom"] .region-menu-panel{top:100%;bottom:auto}
 [data-nav-pattern="segmented-pill"],[data-nav-pattern="mega-feature"],[data-nav-pattern="icon-taxonomy"]{flex-wrap:wrap}.region-nav-segments,.region-nav-numbered,.region-nav-chips{order:3;width:100%;justify-content:center!important}.region-nav-numbered{border-inline:0;border-top:1px solid var(--border)}.region-nav-segments a,.region-nav-numbered a,.region-nav-chips a{white-space:nowrap}.region-nav-segments a{padding:var(--sp-2) var(--sp-4)}
+}`;
 }
-</style></head>
-<body data-archetype="article" data-layout="offset">
-<a class="region-skip" href="#main-content">본문으로 바로가기</a><header class="region-nav" data-nav-pattern="editorial-overlay" data-nav-position="top" aria-label="주 메뉴"><a class="region-brand" href="#overview">Retro</a><a class="region-feature-link" href="#collection"><small>SELECTED / 01</small>지난 호 ↗</a><details class="region-menu"><summary>둘러보기<span aria-hidden="true"> ＋</span></summary><div class="region-menu-panel"><div class="region-overlay-feature">지금 주목하는<br>새로운 장면</div><nav><a href="#overview">이야기</a><a href="#collection">지난 호</a><a href="#contact">편집실</a></nav><p>이야기는 이곳에서 이어집니다.</p></div></details></header>
-<main id="main-content">
-<section class="region-hero" id="overview" data-hero-pattern="specimen-poster" data-media-position="background"><div class="region-stage"><div class="region-specimen-index" aria-hidden="true">01<span>SPRING<br>EDITION</span></div><div class="region-copy"><p class="eyebrow">Retro / ARTICLE</p><h1>오래 들여다볼수록 보이는 것들</h1><p class="region-lede">한 번의 결론보다 오래 남는 질문을 모읍니다. 오늘의 관찰을 다음 이야기로 이어갑니다.</p><a class="btn" href="#collection">이번 호 읽기 ↗</a></div><div class="region-visual "><img class="fig" src="./media/retro.webp" alt="" loading="lazy" decoding="async"></div><div class="region-specimen-stamp">새로운 시선<br>새로운 장면<br>2026</div></div></section>
-<div id="collection">
-<style>
-.article-shell{display:grid;grid-template-columns:1fr;gap:var(--layout-gutter,24px)}
-.article-body{min-width:0}
-.contents{padding-block:var(--sp-8);border-right:var(--layout-rule,1px) solid var(--border);font-family:var(--font-mono);font-size:var(--fs-14)}
-.contents a{display:block;padding:var(--sp-3) var(--sp-2);overflow-wrap:anywhere}
-.byline{display:flex;gap:var(--sp-4);flex-wrap:wrap;font-family:var(--font-mono);
-  font-size:var(--fs-12);color:var(--fg-4);margin-block:var(--sp-5);
-  padding-block:var(--sp-3);border-block:var(--layout-rule,1px) solid var(--border)}
-.prose{max-width:var(--layout-measure,62ch);font-family:var(--font-serif);
-  font-size:var(--fs-18);line-height:var(--lh-loose,var(--lh-relaxed));color:var(--fg-2)}
-.prose p{margin:0 0 var(--sp-4)}
-.prose p + p{}
-.pull{font-family:var(--font-display);font-size:var(--fs-32);line-height:var(--lh-tight);
-  color:var(--fg-1);margin-block:var(--sp-8);padding-left:var(--sp-5);
-  border-left:3px solid var(--primary-blue);max-width:var(--layout-measure,62ch)}
-.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--layout-gutter,24px);align-items:start}
-.caption{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4);margin-top:var(--sp-2)}
-.more{display:grid;gap:0;margin-top:var(--sp-10)}
-.more a{display:flex;justify-content:space-between;gap:var(--sp-4);text-decoration:none;
-  padding-block:var(--sp-4);border-bottom:var(--layout-rule,1px) solid var(--border);
-  font-family:var(--font-serif);font-size:var(--fs-18);color:var(--fg-1)}
-.more a span{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--fg-4)}
-@media (max-width:760px){
-  .split,.article-shell{grid-template-columns:1fr}
-  .contents{display:flex;flex-wrap:wrap;border-right:0;border-bottom:var(--layout-rule,1px) solid var(--border);padding-block:var(--sp-2)}}
-</style>
-<div class="wrap article-shell">
-
-<div class="article-body">
-  <div class="byline"><span>글 · 편집부</span><span>2026년 3월</span><span>읽는 데 7분</span></div>
-  <div class="prose" id="article-details"><p>작업의 속도를 결정하는 것은 도구가 아니라 되돌릴 수 있는 범위다. 한 번에 되돌릴 수 있는 단위가 작을수록 더 과감하게 시도할 수 있고, 시도가 많아질수록 결과는 빨리 수렴한다.</p><p>그래서 좋은 작업 환경은 빠른 환경이 아니라 취소가 싼 환경이다. 저장과 게시를 분리하고, 게시에는 영수증을 남기고, 영수증이 있으면 언제든 이전 상태로 돌아갈 수 있게 한다.</p><p>이 원칙은 화면에도 그대로 적용된다. 한 화면에서 수행할 수 있는 결정의 수를 줄이면 각 결정의 되돌림 비용이 내려가고, 사용자는 화면을 읽는 대신 사용하게 된다.</p></div>
-  <blockquote class="pull">취소가 싼 환경에서만 사람은 과감해진다.</blockquote>
-  <section class="split section" style="padding-bottom:0">
-    <figure style="margin:0">
-      <div class="media" style="aspect-ratio:4 / 3"><svg class="fig" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" role="presentation" focusable="false"><rect x="0" y="0" width="100" height="100" fill="var(--bg-muted)"/>
-         <rect x="18" y="18" width="64" height="64" fill="var(--gray-60)" opacity="0.9"/>
-         <circle cx="50" cy="50" r="18" fill="var(--gray-40)"/></svg></div>
-      <figcaption class="caption">그림 1. 저장과 게시를 분리한 상태 전이</figcaption>
-    </figure>
-    <div class="prose">
-      <p>게시는 저장의 연장이 아니라 별개의 사건이다. 저장은 사용자의 손에서 끝나지만, 게시는 다른 사람이 볼 수 있는 상태를 만든다.</p>
-      <p>두 사건을 분리하면 편집 중의 불완전한 상태가 바깥으로 새지 않고, 게시 시점마다 검증할 수 있는 지점이 생긴다.</p>
-    </div>
-  </section>
-  <nav class="more" id="article-related">
-    <a href="#contact">여백은 장식이 아니라 구조다<span>03</span></a><a href="#contact">측정되지 않는 개선은 취향이다<span>02</span></a><a href="#contact">작은 단위로 되돌리기<span>01</span></a>
-  </nav>
-</div></div></div>
-</main>
-<footer class="region-footer" id="contact" data-footer-pattern="window-stage"><div class="region-stage-title">새로운 연결</div><div class="region-footer-windows"><div class="region-footer-window"><span>EXPLORE ↗</span><nav class="region-footer-grid" aria-label="하단 메뉴"><div class="region-footer-group"><h3>둘러보기</h3><a href="#overview">이야기</a><a href="#collection">지난 호</a><a href="#contact">편집실</a></div><div class="region-footer-group"><h3>이용 안내</h3><a href="#overview">이야기</a><a href="#collection">지난 호</a><a href="#contact">편집실</a></div><div class="region-footer-group"><h3>이야기</h3><a href="#overview">이야기</a><a href="#collection">지난 호</a><a href="#contact">편집실</a></div></nav></div><div class="region-footer-window"><div class="region-footer-cta"><h2>다음 이야기를<br>함께 시작해요.</h2><a class="btn" href="#overview">처음부터 둘러보기 ↗</a></div></div></div><div class="region-footer-ticker">Retro · KEEP IN TOUCH · Retro</div><div class="region-legal"><span>© 2026 Retro</span><a href="#overview">맨 위로 ↑</a></div></footer>
-</body></html>
