@@ -72,5 +72,11 @@ describe("Graphic contract defects", () => {
     expect(template).toContain('lang="ko"');
     expect(template, "overflow-wrap: anywhere splits Hangul words").not.toContain("overflow-wrap: anywhere");
     expect(template, "Korean text needs word-break: keep-all").toContain("word-break: keep-all");
+    // A graphic artboard is a fixed-size element inside a canvas iframe, so a viewport unit resolves
+    // against the preview window rather than the artboard: the starter renders at one size in the
+    // canvas and another in the exported PNG. Both GRAPHIC_VISUAL_CRAFT and the content requirement
+    // forbid viewport units for exactly this reason.
+    const css = /<style>([\s\S]*?)<\/style>/.exec(template)?.[1] ?? template;
+    expect(css.match(/\b\d+(?:\.\d+)?v[wh]\b/g) ?? [], "viewport units inside a fixed artboard").toEqual([]);
   });
 });

@@ -41,6 +41,11 @@ export function renderGraphic(
       }).join("");
       break;
   }
+  // A fixed artboard is not the viewport: a vw unit here resolves against the canvas iframe, so the
+  // starter would render at one size in the preview and another in the exported PNG. Resolve the same
+  // intended ratios against the artboard width the caller already gave us.
+  const framePx = (min: number, ratio: number, max: number): number =>
+    Math.round(Math.min(max, Math.max(min, canvas.width * ratio)));
   return `<!doctype html>
 <html lang="ko">
 <head>
@@ -58,18 +63,18 @@ export function renderGraphic(
     [data-graphic-artboard] {
       position: relative;
       overflow: hidden;
-      padding: clamp(24px, 7vw, 96px);
+      padding: ${framePx(24, 0.07, 96)}px;
       display: grid;
       align-content: end;
       background: var(--page-background);
     }
     [data-graphic-artboard] + [data-graphic-artboard] { margin-top: 32px; }
-    .mark { position: absolute; inset: clamp(24px, 7vw, 96px) auto auto clamp(24px, 7vw, 96px); font-size: clamp(12px, 1.4vw, 18px); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #004fff; }
-    h1 { min-width: 0; margin: 0; max-width: min(15ch, 100%); word-break: keep-all; font-size: clamp(36px, 8vw, 112px); line-height: 1.4; letter-spacing: -0.055em; }
-    h1.long-title { max-width: 100%; font-size: clamp(12px, 2vw, 24px); line-height: 1.3; }
-    p { margin: clamp(12px, 2vw, 28px) 0 0; max-width: 34em; font-size: clamp(14px, 2vw, 26px); line-height: 1.5; color: #405273; }
+    .mark { position: absolute; inset: ${framePx(24, 0.07, 96)}px auto auto ${framePx(24, 0.07, 96)}px; font-size: ${framePx(12, 0.014, 18)}px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #004fff; }
+    h1 { min-width: 0; margin: 0; max-width: min(15ch, 100%); word-break: keep-all; font-size: ${framePx(36, 0.08, 112)}px; line-height: 1.4; letter-spacing: -0.055em; }
+    h1.long-title { max-width: 100%; font-size: ${framePx(12, 0.02, 24)}px; line-height: 1.3; }
+    p { margin: ${framePx(12, 0.02, 28)}px 0 0; max-width: 34em; font-size: ${framePx(14, 0.02, 26)}px; line-height: 1.5; color: #405273; }
     #frame-1-product-detail { padding: 0; display: grid; grid-template-rows: repeat(10, minmax(0, 1fr)); align-content: stretch; }
-    #frame-1-product-detail section { min-height: 0; padding: clamp(12px, 4vw, 48px); display: grid; align-content: center; border-bottom: 1px solid rgba(20, 33, 61, 0.15); }
+    #frame-1-product-detail section { min-height: 0; padding: ${framePx(12, 0.04, 48)}px; display: grid; align-content: center; border-bottom: 1px solid rgba(20, 33, 61, 0.15); }
     #frame-1-product-detail h2 { max-width: 18em; font-size: 40px; line-height: 1.35; }
     #frame-1-product-detail .question { color: #004fff; font-weight: 700; }
   </style>
