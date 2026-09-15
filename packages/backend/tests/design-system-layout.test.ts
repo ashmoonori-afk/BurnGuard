@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { designSystemLayoutPreview, extractDesignSystemLayout, missingDesignSystemLayout, parseDesignSystemLayout, supplementDesignSystemLayout } from "@bg/shared";
+import { LAYOUT_SECTION_KINDS, designSystemLayoutPreview, extractDesignSystemLayout, missingDesignSystemLayout, parseDesignSystemLayout, supplementDesignSystemLayout } from "@bg/shared";
 import { bundledDesignSystems } from "../src/data/bundled-design-systems";
 import { originalSamples } from "../src/data/original-samples";
 import { SAMPLE_LAYOUTS, sampleLayoutFiles } from "../src/data/sample-layouts";
@@ -64,6 +64,38 @@ describe("Design system layout contract", () => {
     expect(supplementDesignSystemLayout(authored, layout).tokens["--layout-max"]).toBe("900px");
   });
 
+  test("Given a version-one installed layout, then missing region rules supplement its authored composition without making new sections mandatory", () => {
+    const legacy = sampleLayoutFiles("split-saas").layout;
+    const authored = extractDesignSystemLayout(":root { --layout-nav-pattern: authored-nav; --layout-nav-h: 64px; --layout-hero: 16 / 10; }", "## Composition\nAUTHORED_COMPOSITION\n## Hero\nAUTHORED_HERO");
+    const regions = extractDesignSystemLayout(":root { --layout-nav-pattern: bundled-nav; --layout-hero-pattern: bundled-hero; --layout-footer-pattern: bundled-footer; --layout-nav-height: 96px; --layout-hero-media-ratio: 3 / 1; }", "## Navigation\nNAV_RULE\n## Hero\nHERO_RULE\n## Footer\nFOOTER_RULE");
+    const bundled = supplementDesignSystemLayout(legacy, regions);
+    const actual = supplementDesignSystemLayout(authored, bundled);
+    expect(parseDesignSystemLayout(legacy)).toEqual(legacy);
+    expect(missingDesignSystemLayout(legacy)).toEqual([]);
+    expect(parseDesignSystemLayout(actual)).toEqual(actual);
+    expect(actual.tokens["--layout-nav-pattern"]).toBe("authored-nav");
+    expect(actual.tokens["--layout-footer-pattern"]).toBe("bundled-footer");
+    expect(actual.tokens["--layout-nav-h"]).toBe("64px");
+    expect(actual.tokens["--layout-hero"]).toBe("16 / 10");
+    expect(actual.tokens["--layout-nav-height"]).toBe("96px");
+    expect(actual.tokens["--layout-hero-media-ratio"]).toBe("3 / 1");
+    const preview = designSystemLayoutPreview(actual);
+    expect(preview.blocks.find(block => block.role === "navigation")?.height).toBeCloseTo(96 * 544 / 1440);
+    const media = preview.blocks.find(block => block.role === "media")!;
+    expect(media.width / media.height).toBeCloseTo(3);
+    expect(actual.sections.find(section => section.kind === "composition")?.text).toBe("AUTHORED_COMPOSITION");
+    expect(actual.sections.filter(section => ["navigation", "hero", "footer"].includes(section.kind))).toEqual([
+      { kind: "navigation", text: "NAV_RULE" }, { kind: "hero", text: "AUTHORED_HERO" }, { kind: "footer", text: "FOOTER_RULE" },
+    ]);
+    expect(actual.supplemented).toBe(true);
+    const seven = { ...actual, sections: LAYOUT_SECTION_KINDS.map(kind => ({ kind, text: kind })) };
+    expect(parseDesignSystemLayout(seven)).toEqual(seven);
+    expect(() => parseDesignSystemLayout({ ...seven, sections: [...seven.sections, seven.sections[0]] })).toThrow();
+    expect(() => parseDesignSystemLayout({ ...actual, sections: [{ kind: "navigation", text: "one" }, { kind: "navigation", text: "two" }] })).toThrow();
+    expect(() => parseDesignSystemLayout({ ...actual, tokens: { "--layout-nav-pattern": "url(file:///private)" } })).toThrow();
+    expect(() => parseDesignSystemLayout({ ...actual, sections: [{ kind: "script", text: "hidden" }] })).toThrow();
+  });
+
   test("Given different system geometry, then summaries reflect the system and remain bounded", () => {
     const split = designSystemLayoutPreview(sampleLayoutFiles("split-saas").layout);
     const dashboard = designSystemLayoutPreview(sampleLayoutFiles("dashboard").layout);
@@ -78,6 +110,35 @@ describe("Design system layout contract", () => {
         expect(block.x + block.width).toBeLessThanOrEqual(640);
         expect(block.y + block.height).toBeLessThanOrEqual(360);
       }
+    }
+  });
+
+  test("Given region geometry, then overview and direction diagrams distinguish placement and footer columns inside the canvas", () => {
+    const base = { ...sampleLayoutFiles("split-saas").layout, tokens: { "--layout-max": "1280px", "--layout-columns": "12", "--layout-gutter": "24px", "--layout-nav-pattern": "fixture-nav", "--layout-hero-pattern": "fixture-hero", "--layout-footer-pattern": "fixture-footer", "--layout-hero-copy-ratio": "40%", "--layout-footer-columns": "4" } };
+    const previews = [];
+    for (const nav of ["top", "side", "overlay", "bottom"]) for (const media of ["left", "right", "background", "below"]) {
+      const preview = designSystemLayoutPreview({ ...base, tokens: { ...base.tokens, "--layout-nav-position": nav, "--layout-hero-media-position": media, "--layout-nav-width": "240px" } });
+      const message = preview.blocks.find(block => block.role === "message")!;
+      const image = preview.blocks.find(block => block.role === "media")!;
+      const navigation = preview.blocks.find(block => block.role === "navigation")!;
+      expect(preview.blocks.filter(block => block.role === "footer")).toHaveLength(4);
+      if (media === "left") expect(image.x + image.width).toBeLessThan(message.x);
+      if (media === "right") expect(message.x + message.width).toBeLessThan(image.x);
+      if (media === "below") expect(message.y + message.height).toBeLessThan(image.y);
+      if (media === "background") expect(message.x).toBeGreaterThanOrEqual(image.x);
+      if (nav === "side") expect(navigation.x + navigation.width).toBeLessThanOrEqual(image.x);
+      if (nav === "bottom") expect(navigation.y).toBeGreaterThan(image.y + image.height);
+      previews.push(preview);
+    }
+    expect(new Set(previews.map(preview => JSON.stringify(preview.blocks))).size).toBe(16);
+    previews.push(designSystemLayoutPreview({ ...base, tokens: { ...base.tokens, "--layout-max": "320px", "--layout-gutter": "80px", "--layout-nav-position": "side", "--layout-nav-width": "99999px", "--layout-hero-min-height": "1px", "--layout-footer-height": "99999px", "--layout-footer-columns": "99999" } }));
+    for (const preview of previews) for (const block of preview.blocks) {
+      expect(block.width).toBeGreaterThan(0);
+      expect(block.height).toBeGreaterThan(0);
+      expect(block.x).toBeGreaterThanOrEqual(0);
+      expect(block.y).toBeGreaterThanOrEqual(0);
+      expect(block.x + block.width).toBeLessThanOrEqual(640);
+      expect(block.y + block.height).toBeLessThanOrEqual(360);
     }
   });
 });

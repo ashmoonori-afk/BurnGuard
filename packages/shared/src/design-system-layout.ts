@@ -1,6 +1,6 @@
 import { isRecord, UpgradeContractError } from "./contract-parser";
 
-export const LAYOUT_SECTION_KINDS = ["layout", "composition", "responsive", "family"] as const;
+export const LAYOUT_SECTION_KINDS = ["layout", "composition", "responsive", "family", "navigation", "hero", "footer"] as const;
 export const REQUIRED_LAYOUT_TOKENS = ["--layout-max", "--layout-measure", "--layout-columns", "--layout-gutter", "--layout-margin", "--layout-section-y", "--layout-bp-md", "--layout-hero"] as const;
 export type DesignSystemLayout = {
   readonly schema_version: 1;
@@ -20,7 +20,7 @@ export function extractDesignSystemLayout(css: string, readme: string): DesignSy
     if ((name in tokens || Object.keys(tokens).length < 64) && TOKEN_NAME.test(name) && TOKEN_VALUE.test(value) && !/url\s*\(/i.test(value)) tokens[name] = value;
   }
   const sections: DesignSystemLayout["sections"][number][] = [];
-  for (const match of readme.replace(/```[\s\S]*?```/g, "").matchAll(/^##\s+(Layout|Composition|Responsive[^\r\n]*|Family tokens)\s*\r?\n([\s\S]*?)(?=^##\s|$(?![\s\S]))/gim)) {
+  for (const match of readme.replace(/```[\s\S]*?```/g, "").matchAll(/^##\s+(Layout|Composition|Responsive[^\r\n]*|Family tokens|Navigation|Hero|Footer)\s*\r?\n([\s\S]*?)(?=^##\s|$(?![\s\S]))/gim)) {
     const kind = match[1]!.toLowerCase().split(" ")[0] as DesignSystemLayout["sections"][number]["kind"];
     const text = match[2]!.replace(/^\|.*$/gm, "").trim().slice(0, 1800);
     if (text && !sections.some(section => section.kind === kind)) sections.push({ kind, text });
@@ -45,7 +45,7 @@ export function parseDesignSystemLayout(input: unknown): DesignSystemLayout {
   const invalid = (): never => { throw new UpgradeContractError("invalid_field", "design_system_layout"); };
   if (!isRecord(input) || Object.keys(input).some(key => !["schema_version", "tokens", "sections", "supplemented"].includes(key)) || input.schema_version !== 1 || typeof input.supplemented !== "boolean" || !isRecord(input.tokens) || !Array.isArray(input.sections)) return invalid();
   const tokens: Record<string, string> = {};
-  if (Object.keys(input.tokens).length > 64 || input.sections.length > 4) return invalid();
+  if (Object.keys(input.tokens).length > 64 || input.sections.length > LAYOUT_SECTION_KINDS.length) return invalid();
   for (const [key, value] of Object.entries(input.tokens)) {
     if (!TOKEN_NAME.test(key) || typeof value !== "string" || !TOKEN_VALUE.test(value) || /url\s*\(/i.test(value)) return invalid();
     tokens[key] = value;
