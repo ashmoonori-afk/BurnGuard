@@ -198,6 +198,7 @@ test("Given a running generation When staged HTML changes Then draft files and i
 
 for (const reviewFails of [false, true]) test(`Given a deck generation When mandatory copy review ${reviewFails ? "fails" : "succeeds"} Then publication ${reviewFails ? "rolls back" : "includes corrections"}`, async () => {
   getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
+  const runtime = '<script src="runtime/deck-stage.js"></script>';
   let calls = 0;
   const turn = start(async (_backend, input) => {
     calls += 1;
@@ -205,8 +206,8 @@ for (const reviewFails of [false, true]) test(`Given a deck generation When mand
     if (calls === 1) {
       const plan = input.prompt.match(/\.burnguard-inputs\/phases-[A-Z0-9]+\/plan\.json/)![0];
       await writeFile(path.join(input.projectDir, plan), JSON.stringify({ units: ["Title"] }));
-      await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide data-bg-unit="1"><h1>Placeholder</h1></section>');
-    } else if (calls === 2) await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide data-bg-unit="1" data-bg-complete="true"><h1>Draft</h1></section>');
+      await writeFile(path.join(input.projectDir, "index.html"), '<section class="deck-slide" data-slide data-bg-unit="1"><h1>Placeholder</h1></section>' + runtime);
+    } else if (calls === 2) await writeFile(path.join(input.projectDir, "index.html"), '<section class="deck-slide" data-slide data-bg-unit="1" data-bg-complete="true"><h1>Draft</h1></section>' + runtime);
     else {
       const { DECK_REVIEW_PROMPT } = await import("../src/harness/skills/deck-skill");
       const { IMAGE_ARTBOARD_COMPLETION_CHECKS } = await import("../src/harness/design-craft");
@@ -215,13 +216,40 @@ for (const reviewFails of [false, true]) test(`Given a deck generation When mand
       expect(input.prompt).toContain("--deck-font-heading");
       expect(input.prompt).toContain("including every slide");
       if (reviewFails) return { exitCode: 1 };
-      await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide><h1>Reviewed wording</h1></section>');
+      await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide><h1>Reviewed wording</h1></section>' + runtime);
     }
     return { exitCode: 0 };
   }, "Create a large slide deck");
   await turn.promise;
   expect(calls).toBe(reviewFails ? 5 : 3);
-  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(reviewFails ? "base" : '<section data-slide><h1>Reviewed wording</h1></section>');
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(reviewFails ? "base" : '<section data-slide><h1>Reviewed wording</h1></section>' + runtime);
+});
+
+test("Given a clean provider exit with empty content or missing imagery, then the saved output is repaired before publication", async () => {
+  let calls = 0;
+  const turn = start(async (_backend, input) => {
+    calls++;
+    await writeFile(path.join(input.projectDir, "index.html"), calls === 1 ? "<html><body><style>body{color:red}</style></body></html>" : calls === 2 ? '<h1>Product</h1><img src="missing.svg">' : "<h1>Finished content</h1>");
+    return { exitCode: 0 };
+  });
+  await turn.promise;
+  expect(calls).toBe(3);
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("<h1>Finished content</h1>");
+});
+
+test("Given a final deck review deletes a slide despite a clean exit, then it resumes instead of publishing the truncated deck", async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
+  let calls = 0;
+  const runtime = '<script src="runtime/deck-stage.js"></script>';
+  const turn = start(async (_backend, input) => {
+    calls++;
+    const slides = calls === 2 ? "<section data-slide>One</section>" : "<section data-slide>One</section><section data-slide>Two</section>";
+    await writeFile(path.join(input.projectDir, "index.html"), slides + runtime);
+    return { exitCode: 0 };
+  }, "Update wording");
+  await turn.promise;
+  expect(calls).toBe(3);
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toContain(">Two</section>");
 });
 
 test("Given explicit generation options When a turn runs Then the adapter receives the validated selected model and effort", async () => {

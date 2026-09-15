@@ -21,7 +21,7 @@ test("Given a five-unit deck and a failed final batch, then phases run sequentia
       if (phase.tool === "generation_phase_plan") {
         const plan = input.prompt.match(/\.burnguard-inputs\/phases-[A-Z0-9]+\/plan\.json/)![0];
         await writeFile(path.join(dir, plan), JSON.stringify({ units: ["A", "B", "C", "D", "E"] }));
-        await writeFile(path.join(dir, "deck.html"), Array.from({ length: 5 }, (_, i) => `<section data-slide data-bg-unit="${i + 1}">Pending</section>`).join(""));
+        await writeFile(path.join(dir, "deck.html"), Array.from({ length: 5 }, (_, i) => `<section class="deck-slide" data-slide data-bg-unit="${i + 1}">Pending</section>`).join("") + '<script src="runtime/deck-stage.js"></script>');
       } else {
         const root = parse(await readFile(path.join(dir, "deck.html"), "utf8"));
         if (progress.from === 5) {
@@ -29,11 +29,15 @@ test("Given a five-unit deck and a failed final batch, then phases run sequentia
           if (!retried) { retried = true; await writeFile(path.join(dir, "image.png"), "keep"); return { exitCode: 1 }; }
           expect(await readFile(path.join(dir, "image.png"), "utf8")).toBe("keep");
         }
-        for (let i = progress.from; i <= progress.to; i++) root.querySelector(`[data-bg-unit="${i}"]`)!.setAttribute("data-bg-complete", "true");
+        for (let i = progress.from; i <= progress.to; i++) {
+          const node = root.querySelector(`[data-bg-unit="${i}"]`)!;
+          node.setAttribute("data-bg-complete", "true");
+          node.set_content(`<h1>Completed content ${i}</h1>`);
+        }
         await writeFile(path.join(dir, "deck.html"), root.toString());
       }
       return { exitCode: 0 };
-    });
+    }, "slide_deck");
     expect(result.exitCode).toBe(0);
     expect(calls).toEqual([0, 1, 5, 5]);
     expect(events.filter(e => e.type === "status.idle")).toHaveLength(1);
@@ -58,4 +62,35 @@ test("Given an invalid plan, then the server bounds retries and never starts con
   expect(needsGenerationPhases("slide_deck", "제목만 수정", false)).toBe(false);
   expect(needsGenerationPhases("prototype", "여러 페이지로 만들어")).toBe(true);
   expect(needsGenerationPhases("prototype", "제목만 수정")).toBe(false);
+});
+
+test("Given malformed slides and falsely completed placeholders, then neither can advance the phase", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-phase-content-"));
+  const events: NormalizedEvent[] = [];
+  let plans = 0;
+  let batches = 0;
+  try {
+    const result = await runGenerationPhases({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "deck", userEvent: { type: "user.message", text: "deck" }, onEvent: async event => { events.push(event); } }, "deck.html", async input => {
+      const phase = events.filter(event => event.type === "tool.started" && event.tool.startsWith("generation_phase_")).at(-1);
+      if (phase?.type !== "tool.started") throw new Error("missing phase");
+      const file = path.join(dir, "deck.html");
+      if (phase.tool === "generation_phase_plan") {
+        plans++;
+        const plan = input.prompt.match(/\.burnguard-inputs\/phases-[A-Z0-9]+\/plan\.json/)![0];
+        await writeFile(path.join(dir, plan), JSON.stringify({ units: ["Overview"] }));
+        await writeFile(file, `<section ${plans === 1 ? "" : 'class="deck-slide"'} data-slide data-bg-unit="1">1 / 1</section><script src="runtime/deck-stage.js"></script>`);
+      } else {
+        batches++;
+        const root = parse(await readFile(file, "utf8"));
+        const node = root.querySelector("[data-bg-unit]")!;
+        node.setAttribute("data-bg-complete", "true");
+        if (batches > 1) node.set_content("<h1>Our product overview</h1>");
+        await writeFile(file, root.toString());
+      }
+      return { exitCode: 0 };
+    }, "slide_deck");
+    expect(result.exitCode).toBe(0);
+    expect(plans).toBe(2);
+    expect(batches).toBe(2);
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
