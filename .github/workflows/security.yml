@@ -66,6 +66,18 @@ jobs:
           packages/backend/tests/turn-error-sanitizer.test.ts
           packages/backend/tests/claude-code-parser.test.ts
           packages/backend/tests/codex-parser.test.ts
+          packages/backend/tests/backends-readiness.test.ts
+          packages/backend/tests/provider-runner-safety.test.ts
+          packages/backend/tests/provider-adapters.test.ts
+          packages/backend/tests/multi-provider-backends.test.ts
+          packages/backend/tests/graphic-capability.test.ts
+          packages/backend/tests/settings-backend-persistence.test.ts
+          packages/backend/tests/design-system-surfaces.test.ts
+          packages/backend/tests/surface-image-language.test.ts
+          packages/backend/tests/graphic-contract-defects.test.ts
+          packages/backend/tests/content-type-ladder.test.ts
+          packages/backend/tests/craft-block-authority.test.ts
+          packages/frontend/tests/backend-display.test.ts
           packages/backend/tests/config-storage.test.ts
           packages/backend/tests/mac-updates.test.ts
           packages/backend/tests/app-update-routes.test.ts
