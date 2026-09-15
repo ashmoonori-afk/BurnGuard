@@ -1,3 +1,4 @@
+import type { BackendId } from "@bg/shared";
 import { and, asc, eq, gt } from "drizzle-orm";
 import { ulid } from "ulid";
 import type { NormalizedEvent, SequencedEventEnvelope, UserEvent } from "@bg/shared/events";
@@ -121,7 +122,7 @@ export async function setSessionStatus(
 
 export async function setSessionBackend(
   sessionId: string,
-  backendId: "claude-code" | "codex",
+  backendId: BackendId,
 ) {
   const db = getDb();
   await db

@@ -1,5 +1,6 @@
 import { Check, XCircle, ExternalLink } from "lucide-react";
 import type { BackendDetectionResult, BackendId } from "@bg/shared";
+import { backendLabel } from "@/lib/backend-display";
 import { cn } from "@/lib/utils";
 import { useT } from "@/i18n/t";
 
@@ -43,7 +44,7 @@ export default function BackendSelector({
                   <XCircle className="h-4 w-4 text-muted-foreground shrink-0" />
                 )}
                 <span className="text-sm font-medium capitalize">
-                  {b.id === "claude-code" ? "Claude Code" : "Codex"}
+                  {backendLabel(b.id)}
                 </span>
                 {b.found && b.version && (
                   <span className="text-xs text-muted-foreground font-mono ml-auto">
@@ -53,13 +54,13 @@ export default function BackendSelector({
               </div>
               {b.found ? (
                 <div className="text-xs text-muted-foreground mt-2">
-                  {t(b.id === "codex" ? b.authenticated === true ? "settings.codexAuthenticated" : "settings.codexInstalled" : "settings.claudeInstalled")}
+                  {t(b.id === "codex" ? b.authenticated === true ? "settings.codexAuthenticated" : "settings.codexInstalled" : b.id === "claude-code" ? "settings.claudeInstalled" : "settings.backendInstalled")}
                 </div>
               ) : (
                 b.install_hint && (
                   <div className="text-xs text-muted-foreground mt-2 inline-flex items-center gap-1">
                     <ExternalLink className="h-3 w-3" />
-                    {t("settings.installBackend", { name: b.id === "claude-code" ? "Claude Code" : "Codex" })}{" "}{b.install_hint.match(/https?:\/\/\S+/)?.[0]}
+                    {t("settings.installBackend", { name: backendLabel(b.id) })}{" "}{b.install_hint.match(/https?:\/\/\S+/)?.[0]}
                   </div>
                 )
               )}

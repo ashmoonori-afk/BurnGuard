@@ -6,7 +6,9 @@ export const APP_NAME = "BurnGuard Design";
 // should always agree — verified manually at release time.
 export const APP_VERSION = "0.5.14";
 
-export type BackendId = "claude-code" | "codex";
+/** Every CLI provider this app can drive. Detection, the adapter registry and the picker all read it. */
+export const BACKEND_IDS = ["claude-code", "codex", "gemini", "copilot", "grok"] as const;
+export type BackendId = (typeof BACKEND_IDS)[number];
 export type ProjectType =
   | "prototype"
   | "slide_deck"

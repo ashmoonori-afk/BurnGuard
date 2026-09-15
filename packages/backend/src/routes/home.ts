@@ -1,3 +1,4 @@
+import { backendCanEverGenerateGraphics } from "../services/graphic-capability";
 import { Hono } from "hono";
 import type {
   ApiErrorBody,
@@ -164,7 +165,7 @@ homeRoutes.post("/api/projects", async (c) => {
       c.header("Cache-Control", "no-store");
       return c.json(fail(error.code, error.message, error.diagnostics), 503);
     }
-    if (input.backendId !== "codex" || !detection.backends.some((backend) => backend.id === "codex" && backend.found && backend.authenticated === true)) return c.json(fail("graphic_requires_authenticated_codex", "그래픽 생성에는 로그인된 Codex 연결이 필요해요."), 409);
+    if (!backendCanEverGenerateGraphics(detection.backends.find((backend) => backend.id === input.backendId))) return c.json(fail("graphic_requires_authenticated_codex", "그래픽 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요."), 409);
   }
 
   const response = await createProjectRecord({

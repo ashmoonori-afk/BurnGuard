@@ -1,3 +1,4 @@
+import { BACKEND_IDS } from "@bg/shared";
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -48,7 +49,7 @@ export const projectsTable = sqliteTable(
     dirPath: text("dir_path").notNull(),
     entrypoint: text("entrypoint").notNull().default("index.html"),
     thumbnailPath: text("thumbnail_path"),
-    backendId: text("backend_id", { enum: ["claude-code", "codex"] }).notNull(),
+    backendId: text("backend_id", { enum: BACKEND_IDS }).notNull(),
     optionsJson: text("options_json"),
     archivedAt: integer("archived_at"),
     createdAt: integer("created_at").notNull(),
@@ -67,7 +68,7 @@ export const sessionsTable = sqliteTable(
   {
     id: text("id").primaryKey(),
     projectId: text("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
-    backendId: text("backend_id", { enum: ["claude-code", "codex"] }).notNull(),
+    backendId: text("backend_id", { enum: BACKEND_IDS }).notNull(),
     backendSessionState: text("backend_session_state"),
     status: text("status", { enum: ["idle", "running", "awaiting_tool", "error", "terminated"] }).notNull().default("idle"),
     pid: integer("pid"),
