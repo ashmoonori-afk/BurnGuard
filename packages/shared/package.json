@@ -12,6 +12,7 @@
     "./artifact": "./src/artifact.ts",
     "./harness": "./src/harness.ts",
     "./design-system": "./src/design-system.ts",
+    "./design-surface": "./src/design-surface.ts",
     "./design-brief": "./src/design-brief.ts",
     "./design-direction": "./src/design-direction.ts",
     "./design-audit": "./src/design-audit.ts",

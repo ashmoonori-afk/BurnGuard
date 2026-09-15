@@ -122,3 +122,35 @@ Use `photo-strip` with `2` desktop groups and `600px` minimum height. Reserve 60
 Mobile puts the logo first, keeps the two link columns side by side underneath, then shows a tighter photograph crop below the credit line. Allow links to wrap and let the closing region grow with content.
 
 Structural reference: [photo-strip](https://www.footer.design/sites/carolyn-lee). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
+
+## Surfaces
+
+This system has one contract per output geometry. Shared brand identity - colour, type families, spacing, radius, elevation and motion - stays in `colors_and_type.css` together with the website grid and the `--family-*` structural decisions, and the `## Composition` rules apply to all three surfaces. Each surface below owns only what its own geometry needs.
+
+| Surface | File | Owns | Used by |
+|---|---|---|---|
+| Website | `surfaces/website.css` | `--web-*` type ramp and block padding | Websites and prototypes |
+| Slides | `surfaces/slides.css` | `--slide-*` geometry, safe area and projection ramp | 1920x1080 slide decks |
+| Content | `surfaces/content.css` | `--content-*` safe area, figure, anchor and type ramp | Fixed artboards: card news, banners, product detail pages, thumbnails, posters |
+
+Content values are authored for a `--content-base` shorter side. Per artboard set `--content-short` to that frame's shorter side and `--content-scale: calc(var(--content-short) / var(--content-base))`, then size type as `max(12px, calc(var(--content-type-body) * var(--content-scale)))`. `--content-safe` is a fraction of the shorter side, so the safe inset is `calc(var(--content-short) * var(--content-safe))` on every edge.
+
+## Slide deck
+
+Slides are fixed 1920 x 1080 CSS px artboards at 16 / 9, not pages: no navigation bar, no footer, no reading measure, no breakpoint, no hover. Nothing required sits outside `--slide-pad-edge` (88px), and `--slide-type-caption` (24px) is the smallest type on any slide.
+
+- Ground: sand neutrals at a wide editorial rhythm; terracotta carries one action or rule.
+- Cover: a tall image on one side with a narrow serif column on the other.
+- Structure: a grotesque name with a serif speaking voice, hairline rules and wide margins. One takeaway per slide, titled at `--slide-type-heading` (52px) with support at `--slide-type-body` (32px).
+- Imagery: landscape and natural surface at scale, horizon-led and free of people. At most one image per slide unless the request asks for a grid.
+- Never: cool or blue-dominant landscapes, dominant figures, harsh midday light.
+
+## Content artboards
+
+Each artboard is one fixed frame at the size the request declares. The requested kind's own rules come first - frame sizes, platform exclusion zones, print trim and bleed, and a product detail page's full-height section sequence with its closing call to action - and the rules below govern how each frame or section looks. Keep required content inside the safe inset (8% of the shorter side), place the primary figure at `--content-figure` (0.68) of the shorter side anchored left, and nothing crosses the safe area because `--content-bleed` is `0`.
+
+- Frame: sand neutrals at a wide editorial rhythm; terracotta carries one action or rule.
+- Composition: a grotesque name with a serif speaking voice, hairline rules and wide margins. In a multi-frame set the first frame follows the cover rule above and the last carries the call to action; on a product detail page these rules apply per section.
+- Type: one claim per frame at `--content-type-hero` (120px at a 1080px shorter side, scaled by `--content-scale`), support at `--content-type-sub` (56px), and nothing below `--content-type-caption` (24px) or 12px once scaled.
+- Figure: landscape and natural surface at scale, horizon-led and free of people.
+- Never: cool or blue-dominant landscapes, dominant figures, harsh midday light.

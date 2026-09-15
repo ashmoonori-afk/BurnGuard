@@ -98,3 +98,7 @@ Reference: https://supahero.io/hero/end-speciesism
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 580px as the desktop minimum closing height with 2 information columns or groups. Separate a useful navigation band from an original local photo strip. Decorative shapes must not obscure or intercept links. Do not copy the person's portrait or brand assets.
 
 Reference: https://www.footer.design/sites/carolyn-lee
+
+## Surfaces
+
+Pick the surface that matches the deliverable and declare its tokens in the authored CSS: `surfaces/website.css` (`--web-*`) for pages, `surfaces/slides.css` (`--slide-*`) for 1920x1080 decks, `surfaces/content.css` (`--content-*`) for fixed artboards. `README.md` carries the composition rules under `## Slide deck` and `## Content artboards`; never carry a website grid, navigation bar or reading measure into a fixed frame.

@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { BackendId, GenerationOptions, VisualSourceManifestV1 } from "@bg/shared";
+import { surfaceForProjectType } from "@bg/shared";
 import type { StageAttachmentInput } from "../services/stage-attachment-inputs";
 import type { UserEvent } from "@bg/shared/events";
 import type { buildSessionContext } from "../services/context";
@@ -208,7 +209,7 @@ export async function buildPrompt(
   }
 
   if (context.designSystem) {
-    await appendDesignSystemContext(lines, context.designSystem, contextMode);
+    await appendDesignSystemContext(lines, context.designSystem, contextMode, surfaceForProjectType(project.project_type));
   }
 
   if (userEvent.attachments && userEvent.attachments.length > 0) {

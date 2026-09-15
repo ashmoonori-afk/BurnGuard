@@ -98,3 +98,7 @@ Reference: https://supahero.io/hero/exat
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 600px as the desktop minimum closing height with 3 information columns or groups. Build the footer as title stage, compact link panels, then a three-cell brand band. Keep panels in normal document flow on narrow screens; animation is optional.
 
 Reference: https://www.footer.design/sites/the-design-society
+
+## Surfaces
+
+Pick the surface that matches the deliverable and declare its tokens in the authored CSS: `surfaces/website.css` (`--web-*`) for pages, `surfaces/slides.css` (`--slide-*`) for 1920x1080 decks, `surfaces/content.css` (`--content-*`) for fixed artboards. `README.md` carries the composition rules under `## Slide deck` and `## Content artboards`; never carry a website grid, navigation bar or reading measure into a fixed frame.

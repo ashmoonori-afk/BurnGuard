@@ -325,6 +325,35 @@ guide-flagged opt-in exception to the runtime font policy in doc/05.
 - Opting into Google Fonts for Imweb creates a disclosed runtime network
   dependency and possible visual variance; the default package does not
 
+## ADR-016: Design systems split into website, slides and content surfaces
+
+**Date**: 2026-09-15
+
+**Status**: Accepted
+
+**Context.** A design system carried one geometry: a website grid in `colors_and_type.css` plus the
+website region tokens and README sections added by doc/21. Slide decks and fixed content artboards
+received that website contract in every prompt, and took their real geometry from constants hardcoded in
+`deck-skill.ts` and `visual-craft-skill.ts` that were identical for all 41 bundled themes. Changing the
+theme changed colour and type on a deck or a card, and nothing else.
+
+**Decision.** A design system owns three surfaces - `website`, `slides`, `content` - selected from
+`project_type` and expressed as `surfaces/{website,slides,content}.css` plus `## Slide deck` and
+`## Content artboards` README sections. `packages/shared/src/design-surface.ts` is the contract: token
+names, the value kind each one accepts, and the derived defaults. The website grid stays in
+`colors_and_type.css` as `--layout-*` and `--family-*`. A fixed surface receives the brand half of the
+layout contract - the `composition` section and `--family-*` - and never its grid, regions or responsive
+rules. Per-kind graphic rules and the deck runtime/export token names keep precedence over a surface.
+Values resolve from the system, then the repository copy of a bundled system, then the derived defaults,
+and every filled key is reported in `supplied`.
+
+**Consequences.** A theme now changes deck and artboard geometry, not just its palette; the theme
+generator (`bun run surfaces`) owns 141 generated files across 47 shipped systems and must be rerun after
+a layout-token or spec change. An installation seeded before this change needs no migration because the
+supplement path fills it, but its own directory keeps no surface files until it is reseeded. A fourth
+surface, per-theme deck dimensions, and slide or content previews are all deliberately deferred: the
+first has no project type, the second needs a size contract shared with the audit and exporters, the
+third is preview tooling.
 ---
 
 ## Template for new ADRs

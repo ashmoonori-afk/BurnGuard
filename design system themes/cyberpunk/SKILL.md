@@ -41,3 +41,7 @@ Reference: https://supahero.io/hero/payy
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 520px as the desktop minimum closing height with 3 information columns or groups. Reserve a scenic field above a readable information zone on narrow screens. Use an original local background; do not depend on WebGL or video for access to navigation.
 
 Reference: https://www.footer.design/sites/eclipse-space
+
+## Surfaces
+
+Pick the surface that matches the deliverable and declare its tokens in the authored CSS: `surfaces/website.css` (`--web-*`) for pages, `surfaces/slides.css` (`--slide-*`) for 1920x1080 decks, `surfaces/content.css` (`--content-*`) for fixed artboards. `README.md` carries the composition rules under `## Slide deck` and `## Content artboards`; never carry a website grid, navigation bar or reading measure into a fixed frame.
