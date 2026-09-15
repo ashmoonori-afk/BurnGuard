@@ -16,8 +16,7 @@ introducing component-local scales.
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build on these tokens rather than inventing a
-grid:
+Use the existing 12-column body grid, 1200px content maximum, 68ch reading measure and 16px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -28,15 +27,33 @@ grid:
 | `--layout-margin` | `clamp(16px, 3vw, 32px)` | Page side margin |
 | `--layout-section-y` | `clamp(24px, 3vw, 48px)` | Vertical rhythm between sections |
 | `--layout-rule` | `1px` | Divider weight |
-| `--layout-hero` | `5 / 1` | Hero aspect ratio |
+| `--layout-hero` | `5 / 1` | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-A narrower maximum than the other systems in this family, because a record is entered one field at a time and a 1680px form is unusable. Label and field form two tracks that collapse to stacked rows below `--layout-bp-md`.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `enterprise-columns` | Website navigation arrangement |
+| `--layout-nav-position` | `top` | Website navigation position |
+| `--layout-nav-height` | `112px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `1400px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `split-left` | Opening composition |
+| `--layout-hero-copy-ratio` | `40%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `1 / 1` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `right` | Opening media placement |
+| `--layout-hero-min-height` | `600px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `18ch` | Maximum title line measure |
+| `--layout-hero-align` | `start` | Hero copy alignment |
+| `--layout-hero-offset` | `0px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `ruled-community` | Footer arrangement |
+| `--layout-footer-columns` | `3` | Desktop footer groups |
+| `--layout-footer-height` | `460px` | Footer minimum height; content may grow |
 
 ## Family tokens
 
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
+
 | Token | Value | Meaning |
 |---|---|---|
-| `--family-ui-navigation-placement` | `side` | `top` or `side` — whether primary navigation sits above the content or beside it at expanded widths. |
+| `--family-ui-navigation-placement` | `side` | `top` or `side` — whether embedded-workspace navigation sits above the content or beside it at expanded widths. |
 | `--family-ui-navigation-span` | `3` | Base-grid columns reserved for side navigation; inert when placement is `top`. |
 | `--family-ui-label-placement` | `beside` | `above` or `beside` — whether form labels stack over their control or sit in a second track. |
 | `--family-data-table-layout` | `fixed` | `auto` or `fixed` — the width-allocation algorithm for full-width data tables. |
@@ -45,7 +62,9 @@ A three-column rail carries section progress through a long record, so the opera
 
 ## Composition
 
-Set records on a paper-like warm ground with fields on white so the input surface is visibly the lighter one. Each row is a label track and a field track separated by the gutter, with a hairline under the row. Required state is marked by a word, not a colour or a symbol alone; validation messages sit under the field in 12px with an icon and text together, so state survives without colour. Section progress lives in a three-column rail. The teal accent marks focus, the primary action, and nothing else. Radius stays small at 2-4px; this is stationery, not a consumer app.
+Navigation enterprise-columns → hero split-left (40% copy zone, right media, 1 / 1, 600px minimum) → retain the existing theme-specific body hierarchy → footer ruled-community.
+
+Keep the warm paper ground, white fields, label/value rows and explicit required and validation text. Teal is for focus or action; retain the stationery character. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -59,13 +78,13 @@ prompt basis.
 
 **Light.** Available light, even and honest. Correct exposure matters; atmosphere does not.
 
-**Framing.** Wide 5:1 strips for banner context and 4:3 for attached evidence, always contained with a hairline border rather than bled.
+**Framing.** For the website opening, place this theme's source art in the 1 / 1 frame at right specified by Hero; keep its subject, medium, light and grading. Keep the complete subject visible with contain or an inner figure; do not crop evidence, objects or architecture to fill the outer region. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Muted and natural, with the warm paper ground surrounding it. Nothing saturated enough to compete with the validation colours.
 
 **Never:**
 - Stylised, graded, or staged photography — it undermines the evidentiary role.
-- Full-bleed placement; evidence is always contained inside a bordered frame.
+- Evidence without a containing hairline frame; the outer Hero region may expand while the record itself remains bounded.
 - Saturated colour that could be mistaken for a validation state.
 - Decorative stock imagery with no relationship to the record.
 
@@ -73,15 +92,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the design. Check
-the result against all of these:
-
-1. The page ground is warm and the input surfaces are lighter than it.
-2. Every row is a label track plus a field track with a hairline beneath.
-3. Required and invalid states are stated in words, never by colour alone.
-4. A three-column rail shows section progress through the record.
-5. Teal marks focus and the primary action and nothing else.
-6. Radius is 2-4px and no field is elevated.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep the warm paper ground, white fields, label/value rows and explicit required and validation text. Teal is for focus or action; retain the stationery character.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -94,9 +109,33 @@ palette or asset is included, and it carries no external licence obligation.
 - Display: IBM Plex Sans KR; body: IBM Plex Sans KR; numbers/code: IBM Plex Mono with tabular numerals. Korean fallback: "IBM Plex Sans KR" natively, then "Pretendard"; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Stack the copy above the image; retain a visible text/image boundary and allow actions to wrap. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile stacks logo, actions and legal information into ruled horizontal sections; the decorative band remains at the bottom. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `enterprise-columns` at `top`, with `112px` minimum height and `1400px` width (0px fills the available track). Use top navigation with a 1400px maximum width and 112px header height. At compact widths, use category rows with chevrons under a compact brand/close bar. Collapse taxonomy columns into grouped disclosures.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [enterprise-columns](https://www.navbar.gallery/navbar/cloudflare). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `split-left`: copy share `40%`, media at `right` in a `1 / 1` frame, minimum height `600px`, title measure `18ch`, alignment `start` and desktop offset `0px`. Balance a short left statement against one strong right specimen, separated by open space; reinforce field-note order with a ruled closing directory. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Stack the copy above the image; retain a visible text/image boundary and allow actions to wrap.
+
+Structural reference: [split-left](https://supahero.io/hero/dialweb). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `ruled-community` with `3` desktop groups and `460px` minimum height. Reserve 460px as the desktop minimum closing height with 3 information columns or groups. Use a three-part community directory with a separate decorative baseline. Preserve real semantic links and a clear primary join action; use original local artwork.
+
+Mobile stacks logo, actions and legal information into ruled horizontal sections; the decorative band remains at the bottom. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [ruled-community](https://www.footer.design/sites/harvest-hall). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

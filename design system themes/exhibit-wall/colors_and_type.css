@@ -182,3 +182,22 @@
 }
 
 :root { --layout-structure: offset; }
+
+/* Website regions; legacy layout and family tokens continue to govern body content. */
+:root {
+  --layout-nav-pattern: profile-popover;
+  --layout-nav-position: top;
+  --layout-nav-height: 72px;
+  --layout-nav-width: 1300px;
+  --layout-hero-pattern: portfolio-peek;
+  --layout-hero-copy-ratio: 46%;
+  --layout-hero-media-ratio: 4 / 5;
+  --layout-hero-media-position: below;
+  --layout-hero-min-height: 680px;
+  --layout-hero-title-measure: 15ch;
+  --layout-hero-align: start;
+  --layout-hero-offset: 72px;
+  --layout-footer-pattern: centered-cta;
+  --layout-footer-columns: 1;
+  --layout-footer-height: 400px;
+}

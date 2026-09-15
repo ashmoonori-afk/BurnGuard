@@ -16,8 +16,7 @@ introducing component-local scales.
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build on these tokens rather than inventing a
-grid:
+Use the existing 12-column body grid, 1360px content maximum, 56ch reading measure and 24px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -28,11 +27,29 @@ grid:
 | `--layout-margin` | `clamp(20px, 4vw, 56px)` | Page side margin |
 | `--layout-section-y` | `clamp(56px, 8vw, 128px)` | Vertical rhythm between sections |
 | `--layout-rule` | `1px` | Divider weight |
-| `--layout-hero` | `16 / 9` | Hero aspect ratio |
+| `--layout-hero` | `16 / 9` | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-A wide 16:9 hero that bleeds fully, followed by a calm band at the content maximum. Sections are generously spaced so the page breathes the way a room does.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `floating-island` | Website navigation arrangement |
+| `--layout-nav-position` | `overlay` | Website navigation position |
+| `--layout-nav-height` | `72px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `840px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `fullbleed-top` | Opening composition |
+| `--layout-hero-copy-ratio` | `62%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `16 / 9` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `background` | Opening media placement |
+| `--layout-hero-min-height` | `760px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `19ch` | Maximum title line measure |
+| `--layout-hero-align` | `start` | Hero copy alignment |
+| `--layout-hero-offset` | `32px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `scenic-overlay` | Footer arrangement |
+| `--layout-footer-columns` | `3` | Desktop footer groups |
+| `--layout-footer-height` | `600px` | Footer minimum height; content may grow |
 
 ## Family tokens
+
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -44,7 +61,9 @@ Imagery covers its frame and bleeds the full 100% to the viewport edge, because 
 
 ## Composition
 
-Let the photograph set the palette — putty, timber, clay, olive — and keep every token in the interface a neutral drawn from that range. Open with a full-bleed interior. Below it, a calm band at the content maximum carries one large grotesque statement at a 56ch measure, then practical columns: opening times, address, how to visit, set as plain labelled lists with hairlines between rows. Nothing is rounded, nothing is elevated, and no button is coloured except the single clay action. Small letterspaced eyebrows label sections. The system sells nothing: there is no price, no cart, no offer.
+Navigation floating-island → hero fullbleed-top (62% copy zone, background media, 16 / 9, 760px minimum) → retain the existing theme-specific body hierarchy → footer scenic-overlay.
+
+Keep putty, timber, clay and olive from the interior, plain practical lists and unraised square surfaces. The place leads; no cart, price or promotional offer. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -58,7 +77,7 @@ prompt basis.
 
 **Light.** Daylight from a window or an opening, warm and directional, with soft shadows describing depth. Time of day should read as late morning or afternoon.
 
-**Framing.** Wide 16:9 with a clear depth cue — a doorway, a receding wall, a foreground object — so the room reads as space and not as a flat surface. Verticals must be straight.
+**Framing.** For the website opening, place this theme's source art in the 16 / 9 frame at background specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Putty, timber, clay, charcoal and olive drawn from the real materials in frame. The interface palette is taken from the photograph, so the photograph must be warm and neutral.
 
@@ -72,15 +91,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the design. Check
-the result against all of these:
-
-1. The first element is a full-bleed interior photograph with no people in it.
-2. Interface colours are neutrals drawn from that photograph's material range.
-3. A calm band follows with one grotesque statement at a 56ch measure.
-4. Practical information appears as plain labelled columns with hairline rows.
-5. Only one clay action exists; nothing else is coloured, rounded or elevated.
-6. No price, cart, or offer appears anywhere.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep putty, timber, clay and olive from the interior, plain practical lists and unraised square surfaces. The place leads; no cart, price or promotional offer.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -93,9 +108,33 @@ palette or asset is included, and it carries no external licence obligation.
 - Display: Public Sans; body: Public Sans; numbers/code: JetBrains Mono with tabular numerals. Korean fallback: "Pretendard" for display and body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Separate text onto a readable ground when the crop removes its safe area; keep the scene and all essential links in normal flow. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile gives the scene its own tall area above a dark information region. Navigation becomes a two-column grid; a row of three small marks and the tagline follow. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `floating-island` at `overlay`, with `72px` minimum height and `840px` width (0px fills the available track). Use overlay navigation with a 840px maximum width and 72px header height. At compact widths, use an expanded dark vertical menu with brand and close control. Preserve compact header and expand links vertically.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [floating-island](https://www.navbar.gallery/navbar/supaste). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `fullbleed-top`: copy share `62%`, media at `background` in a `16 / 9` frame, minimum height `760px`, title measure `19ch`, alignment `start` and desktop offset `32px`. Give the existing warm room photograph the full first fold, placing the introduction near the upper-left with readable ground-backed text. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Separate text onto a readable ground when the crop removes its safe area; keep the scene and all essential links in normal flow.
+
+Structural reference: [fullbleed-top](https://supahero.io/hero/integratedbio). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `scenic-overlay` with `3` desktop groups and `600px` minimum height. Reserve 600px as the desktop minimum closing height with 3 information columns or groups. Reserve a scenic field above a readable information zone on narrow screens. Use an original local background; do not depend on WebGL or video for access to navigation.
+
+Mobile gives the scene its own tall area above a dark information region. Navigation becomes a two-column grid; a row of three small marks and the tagline follow. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [scenic-overlay](https://www.footer.design/sites/eclipse-space). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

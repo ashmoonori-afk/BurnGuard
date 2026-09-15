@@ -22,6 +22,7 @@ import type {
   GenerationOptions,
   GenerationStyle,
   Comment,
+  CreateCommentRequest,
   DesignAuditFinding,
   DesignAuditResult,
   DesignDirectionState,
@@ -370,13 +371,7 @@ export default function ProjectView() {
   });
 
   const createCommentMutation = useMutation({
-    mutationFn: (input: {
-      rel_path: string;
-      x_pct: number;
-      y_pct: number;
-      node_selector: string;
-      slide_index: number | null;
-    }) => {
+    mutationFn: (input: CreateCommentRequest) => {
       const artifact = requireLoadedArtifacts(artifactsQuery.data);
       return createProjectComment(id!, {
         ...input,

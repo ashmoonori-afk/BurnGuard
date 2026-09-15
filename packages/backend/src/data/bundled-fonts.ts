@@ -41,6 +41,14 @@ export function bundledFontUrl(file: BundledFontFile): string {
   return `/runtime/fonts/${file.sha256}/${file.name}`;
 }
 
+export async function bundledFontStylesheet(repoRoot = resolveRepoRoot()): Promise<string> {
+  const bundle = await bundledFontFiles(repoRoot);
+  return bundle.get("fonts.css")!.bytes.toString("utf8").replace(/url\('\.\/([^']+)'\)/g, (source, name: string) => {
+    const file = bundle.get(name);
+    return file && name.endsWith(".woff2") ? `url('${bundledFontUrl(file)}')` : source;
+  });
+}
+
 /** Public lookup accepts only exact content-addressed font names in the installed bundle. */
 export async function readBundledFontUrl(urlPath: string): Promise<BundledFontFile | null> {
   const match = /^\/runtime\/fonts\/([a-f0-9]{64})\/([A-Za-z0-9_.-]+\.woff2)$/.exec(urlPath);
@@ -63,10 +71,7 @@ export async function copyBundledFonts(destination: string, repoRoot = resolveRe
   const target = path.join(destination, "fonts");
   await mkdir(target, { recursive: true });
   const originalCss = bundle.get("fonts.css")!.bytes.toString("utf8");
-  const sharedCss = originalCss.replace(/url\('\.\/([^']+)'\)/g, (source, name: string) => {
-    const file = bundle.get(name);
-    return file && name.endsWith(".woff2") ? `url('${bundledFontUrl(file)}')` : source;
-  });
+  const sharedCss = await bundledFontStylesheet(repoRoot);
   for (const file of bundle.values()) {
     if (file.name !== "fonts.css" && file.name !== "fonts.md") continue;
     const bytes = file.name === "fonts.css" ? sharedCss : file.bytes;

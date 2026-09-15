@@ -3,7 +3,7 @@ import type { Comment, GraphicCanvasV1 } from "@bg/shared";
 import CanvasTopBar from "./CanvasTopBar";
 import CommentLayer from "./CommentLayer";
 import QuickComment from "./QuickComment";
-import type { CommentPinInput } from "./quick-comment";
+import type { CommentPinInput, CommentPoint } from "./quick-comment";
 import type { Ref, ReactNode } from "react";
 import DrawLayer, {
   type DrawLayerHandle,
@@ -133,12 +133,7 @@ export default function Canvas({
   activeRelPath: string | null;
   activeSlideIdx: number | null;
   focusedCommentId: string | null;
-  onCreateComment: (input: {
-    x_pct: number;
-    y_pct: number;
-    node_selector: string;
-    slide_index: number | null;
-  }) => void;
+  onCreateComment: (input: CommentPinInput) => void;
   onQuickCreateComment: (input: CommentPinInput) => Promise<Comment>;
   renderQuickComment: (comment: Comment, close: () => void) => ReactNode;
   onFocusComment: (id: string | null) => void;
@@ -183,6 +178,7 @@ export default function Canvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const [selectedComment, setSelectedComment] = useState<{ documentKey: string; comment: Comment; point: CommentPoint } | null>(null);
   const frameLoadKey = JSON.stringify([src, frameKey]);
   const [frameDocument, setFrameDocument] = useState<{ key: string; src: string; html: string } | null>(null);
   // Retain the previous version while fetching, but never reuse its browsing
@@ -422,6 +418,8 @@ export default function Canvas({
           focusedId={focusedCommentId}
           onCreate={onCreateComment}
           onFocus={onFocusComment}
+          onOpen={(comment, point) => setSelectedComment({ documentKey: frameLoadKey, comment, point })}
+          documentKey={loadedFrameKey === (frameKey ?? src) ? frameLoadKey : null}
         />
         <EditLayer
           active={mode === "edit"}
@@ -529,6 +527,7 @@ export default function Canvas({
           comments={comments}
           onCreate={onQuickCreateComment}
           renderComment={renderQuickComment}
+          selected={selectedComment}
         />
       )}
       {showSceneTools && sceneTools}

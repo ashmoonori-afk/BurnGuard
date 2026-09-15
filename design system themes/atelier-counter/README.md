@@ -16,8 +16,7 @@ introducing component-local scales.
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build on these tokens rather than inventing a
-grid:
+Use the existing 12-column body grid, 1280px content maximum, 58ch reading measure and 24px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -28,11 +27,29 @@ grid:
 | `--layout-margin` | `clamp(20px, 4vw, 64px)` | Page side margin |
 | `--layout-section-y` | `clamp(56px, 7vw, 112px)` | Vertical rhythm between sections |
 | `--layout-rule` | `1px` | Divider weight |
-| `--layout-hero` | `4 / 5` | Hero aspect ratio |
+| `--layout-hero` | `4 / 5` | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-Products sit as contained plates with real space around them, the way goods are placed on a counter rather than stacked on a shelf. A hairline rule separates product rows. The purchase panel sits in the column beneath the product description, not pinned.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `profile-popover` | Website navigation arrangement |
+| `--layout-nav-position` | `top` | Website navigation position |
+| `--layout-nav-height` | `76px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `1320px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `type-marquee` | Opening composition |
+| `--layout-hero-copy-ratio` | `84%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `4 / 5` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `background` | Opening media placement |
+| `--layout-hero-min-height` | `760px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `10ch` | Maximum title line measure |
+| `--layout-hero-align` | `start` | Hero copy alignment |
+| `--layout-hero-offset` | `64px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `photo-strip` | Footer arrangement |
+| `--layout-footer-columns` | `2` | Desktop footer groups |
+| `--layout-footer-height` | `520px` | Footer minimum height; content may grow |
 
 ## Family tokens
+
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -44,7 +61,9 @@ The gallery opens with one full-width lead plate and continues in pairs, which g
 
 ## Composition
 
-Work on warm bone paper with a didone brand voice reserved for the name and section openings, and a humanist sans for everything read at length. Product plates are contained on the paper with generous surrounding space. The oxblood accent marks price emphasis, sale state and the primary action, and appears nowhere else. Small letterspaced eyebrows label categories. Rules are hairline; nothing is rounded, nothing is elevated. Restraint is the merchandising strategy: one strong image, one clear price, one action.
+Navigation profile-popover → hero type-marquee (84% copy zone, background media, 4 / 5, 760px minimum) → retain the existing theme-specific body hierarchy → footer photo-strip.
+
+Keep warm bone paper, didone brand voice, contained product plates and a humanist reading face. Oxblood marks price or action; use hairline rows and no elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -58,7 +77,7 @@ prompt basis.
 
 **Light.** Broad soft frontal daylight with a faint contact shadow to seat the object. Almost no modelling; the silhouette matters more than the volume.
 
-**Framing.** Vertical 4:5 with comfortable margin inside the frame — the object never touches the frame edge, because it is contained rather than cropped.
+**Framing.** For the website opening, place this theme's source art in the 4 / 5 frame at background specified by Hero; keep its subject, medium, light and grading. Keep the complete subject visible with contain or an inner figure; do not crop evidence, objects or architecture to fill the outer region. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Bone and oat surroundings with the product's own colour as the single chroma. Warm cast throughout so it sits on the warm page.
 
@@ -72,15 +91,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the design. Check
-the result against all of these:
-
-1. Products are contained plates with generous space, never bleeding to the edge.
-2. The gallery opens with one lead image and continues in pairs.
-3. Didone is used only for the brand name and section openings; body is sans.
-4. The oxblood accent appears only on price emphasis and the primary action.
-5. The purchase panel sits in the flow of the column and never pins.
-6. Nothing is rounded and nothing carries a shadow.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep warm bone paper, didone brand voice, contained product plates and a humanist reading face. Oxblood marks price or action; use hairline rows and no elevation.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -93,9 +108,33 @@ palette or asset is included, and it carries no external licence obligation.
 - Display: Bodoni Moda; body: Figtree; numbers/code: IBM Plex Mono with tabular numerals. Korean fallback: "Nanum Myeongjo" for display, "Pretendard" for body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Scale display lettering within the viewport; keep a static readable ticker and honor reduced motion if any movement is introduced. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile puts the logo first, keeps the two link columns side by side underneath, then shows a tighter photograph crop below the credit line. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `profile-popover` at `top`, with `76px` minimum height and `1320px` width (0px fills the available track). Use top navigation with a 1320px maximum width and 76px header height. At compact widths, use the FAQ chip and a single-column FAQ card. Keep the anchored popover within viewport width and preserve direct CTA access.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [profile-popover](https://www.navbar.gallery/navbar/hosier-brown). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `type-marquee`: copy share `84%`, media at `background` in a `4 / 5` frame, minimum height `760px`, title measure `10ch`, alignment `start` and desktop offset `64px`. Layer very large display type beside or around a complete contained object; the original object must stay whole even when decorative type reaches the edges. Retain object-fit: contain for the original artwork: the whole building, document or object must remain visible. Interpret oversized/cropped reference geometry through the frame and typography, not by clipping the artwork.
+
+Mobile: Below the theme's existing compact breakpoint: Scale display lettering within the viewport; keep a static readable ticker and honor reduced motion if any movement is introduced.
+
+Structural reference: [type-marquee](https://supahero.io/hero/red-antler). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `photo-strip` with `2` desktop groups and `520px` minimum height. Reserve 520px as the desktop minimum closing height with 2 information columns or groups. Separate a useful navigation band from an original local photo strip. Decorative shapes must not obscure or intercept links. Do not copy the person's portrait or brand assets.
+
+Mobile puts the logo first, keeps the two link columns side by side underneath, then shows a tighter photograph crop below the credit line. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [photo-strip](https://www.footer.design/sites/carolyn-lee). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

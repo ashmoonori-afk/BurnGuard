@@ -9,22 +9,25 @@ Read README.md first, then use colors_and_type.css as the single source of truth
 ## Quick reference
 - Reference colour, type, spacing, radius, elevation, layout and family tokens by CSS variable name.
 - Preserve the paired foreground tokens whenever a semantic background is used.
-- Use the local display/body/mono fonts specified in README.md and colors_and_type.css. Copy fonts/
-  with licenses into outputs and link fonts/fonts.css; no CDN.
+- Use the local display/body/mono fonts specified in README.md and colors_and_type.css. Reference shared local fonts while working; include required font files and licenses on export. No CDN.
 - Keep components coherent with the theme's shape and contrast rather than adding unrelated decoration.
 
 ## How this theme composes
 
-Run a narrow sans text spine down one side and a tall image plate down the other, and keep the wide gutter empty — resist filling it. Display is a high-contrast serif used at large size for titles only; body is sans at a narrow measure so the column reads quickly. The blue is used once per view, on the live link or the current item. Captions sit tight under their plate in mono at small size. Nothing is rounded and nothing is elevated; the page is flat and the structure is entirely positional.
+Navigation editorial-overlay → hero split-left (54% copy zone, right media, 4 / 3, 660px minimum) → retain the existing theme-specific body hierarchy → footer contact-ledger.
+
+Keep a narrow sans reading spine, high-contrast serif titles, mono captions and the empty wide gutter. Blue marks one live item; the page stays flat and square. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`
 with `--layout-margin` at the sides, body copy holds to `--layout-measure`, sections are separated by
 `--layout-section-y`, and dividers use `--layout-rule`. The base grid is `--layout-columns` columns
-with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Hero media uses `--layout-hero`.
+with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Secondary media defaults to `--layout-hero`; website opening media uses `--layout-hero-media-ratio` and the Hero section.
 
 ## Family tokens
+
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -46,12 +49,12 @@ prompt basis.
 
 **Light.** Controlled and directional, with real shadow shape. Studio or strong window light. Shadows are allowed to be dark.
 
-**Framing.** Portrait orientation at roughly 4:5, composed so the subject survives a cover crop. Leave no important detail at the frame edge.
+**Framing.** For the website opening, place this theme's source art in the 4 / 3 frame at right specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** White, black and one material colour per plate. The page is white, so images should not also be white-dominant or they will dissolve into the ground.
 
 **Never:**
-- Landscape-orientation images — the plate is vertical by design.
+- Discarding the subject to force a different frame; preserve the complete editorial subject within the named Hero geometry.
 - Busy multi-subject scenes that fight the narrow text track.
 - Pale, low-contrast images that disappear against white paper.
 - Adding a border or shadow to seat the image; it sits directly on the ground.
@@ -60,21 +63,38 @@ prompt basis.
 
 ## Reproducing this system
 
-1. Text and image occupy separate tracks with a visibly wide empty gutter between them.
-2. The text measure is narrow — noticeably narrower than a normal article column.
-3. Display is serif; body is sans. They never swap roles.
-4. Images are vertical plates that cover their frame, sitting directly on white.
-5. The accent colour appears once per view at most.
-6. The layout is flat: no radius, no shadow, no container.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep a narrow sans reading spine, high-contrast serif titles, mono captions and the empty wide gutter. Blue marks one live item; the page stays flat and square.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Local typography
 
 - Display: Instrument Serif; body: Public Sans; numbers/code: IBM Plex Mono with tabular numerals. Korean fallback: "Nanum Myeongjo" for serif display, "Pretendard" for body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Required layout
 
-Read Layout, Composition and Responsive in README.md and apply the --layout-* and --family-* tokens from colors_and_type.css before arranging content. Preserve the grid, reading measure, section rhythm, hero geometry and navigation placement; a palette/font swap on a generic layout is incomplete. Direction variants may change content emphasis, but must retain this structure unless the user explicitly overrides it. Check the rendered result at wide and narrow viewports and 200% zoom; fixed artboards retain their dimensions.
+Read Navigation, Hero, Footer, Layout and Responsive in README.md before arranging content. Apply the named region patterns and every corresponding --layout-* value; use family tokens for the body. Preserve the theme identity and supplied art. Direction variants may change emphasis but retain these regions unless the user overrides them. Check wide and narrow rendering and 200% zoom.
+
+## Navigation
+
+Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1440px maximum width and 84px header height. At compact widths, use one vertical large-link list with close control. Stack links first; featured work and contact information follow.
+
+Reference: https://www.navbar.gallery/navbar/clonix
+
+## Hero
+
+Follow README.md's Hero section and the corresponding --layout-* tokens. Allow the giant left display and complete right subject to make one asymmetric spread; retain exceptionally broad gutters through the contact footer. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Reference: https://supahero.io/hero/karo
+
+## Footer
+
+Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 500px as the desktop minimum closing height with 3 information columns or groups. Use whitespace and a vertically organized address ledger rather than many equal navigation columns. Give contact details readable minimum type sizes.
+
+Reference: https://www.footer.design/sites/esr

@@ -16,8 +16,7 @@ introducing component-local scales.
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build on these tokens rather than inventing a
-grid:
+Use the existing 12-column body grid, 1680px content maximum, 70ch reading measure and 16px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -28,24 +27,44 @@ grid:
 | `--layout-margin` | `clamp(12px, 2vw, 28px)` | Page side margin |
 | `--layout-section-y` | `clamp(20px, 2.5vw, 40px)` | Vertical rhythm between sections |
 | `--layout-rule` | `1px` | Divider weight |
-| `--layout-hero` | `3 / 1` | Hero aspect ratio |
+| `--layout-hero` | `3 / 1` | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-A very wide maximum and small margins, because the dataset needs the width more than the page needs a frame. Section spacing is the tightest in the set — 40px at most — so rows dominate the vertical rhythm. The hero is a shallow 3:1 band, never a picture.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `side-rail` | Website navigation arrangement |
+| `--layout-nav-position` | `side` | Website navigation position |
+| `--layout-nav-height` | `88px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `232px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `framed-cover` | Opening composition |
+| `--layout-hero-copy-ratio` | `28%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `5 / 4` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `left` | Opening media placement |
+| `--layout-hero-min-height` | `620px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `18ch` | Maximum title line measure |
+| `--layout-hero-align` | `start` | Hero copy alignment |
+| `--layout-hero-offset` | `0px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `contact-ledger` | Footer arrangement |
+| `--layout-footer-columns` | `3` | Desktop footer groups |
+| `--layout-footer-height` | `520px` | Footer minimum height; content may grow |
 
 ## Family tokens
 
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
+
 | Token | Value | Meaning |
 |---|---|---|
-| `--family-ui-navigation-placement` | `side` | `top` or `side` — whether primary navigation sits above the content or beside it at expanded widths. |
+| `--family-ui-navigation-placement` | `side` | `top` or `side` — whether embedded-workspace navigation sits above the content or beside it at expanded widths. |
 | `--family-ui-navigation-span` | `2` | Base-grid columns reserved for side navigation; inert when placement is `top`. |
 | `--family-ui-label-placement` | `beside` | `above` or `beside` — whether form labels stack over their control or sit in a second track. |
 | `--family-data-table-layout` | `fixed` | `auto` or `fixed` — the width-allocation algorithm for full-width data tables. |
 
-Navigation sits beside the content in a two-column track, because filters are navigation here and must stay visible while rows scroll. Labels sit beside their controls so a filter panel stays short. The table layout is fixed: column widths must not jump as rows load, since a moving column is worse than a narrow one.
+Within the embedded work surface, navigation sits beside the content in a two-column track, because filters are navigation here and must stay visible while rows scroll. Labels sit beside their controls so a filter panel stays short. The table layout is fixed: column widths must not jump as rows load, since a moving column is worse than a narrow one.
 
 ## Composition
 
-Build the page as a table and treat everything else as chrome around it. A two-column filter rail holds facets, sort and search; the remaining width is rows. Column headers are 12px, letterspaced, and sticky. Rows are separated by hairlines, not by gaps or cards, and row height stays tight — dense is the intent, not a compromise. All emphasis is carried by pill tags in the neutral grey with coloured text, never by coloured row backgrounds. Numbers are mono with tabular figures so columns align. The blue is links, focus and the active filter state, and appears nowhere else.
+Navigation side-rail → hero framed-cover (28% copy zone, left media, 5 / 4, 620px minimum) → retain the existing theme-specific body hierarchy → footer contact-ledger.
+
+Keep fixed-width data columns, compact hairline rows and tabular mono numbers. Neutral tags carry coloured text; blue is reserved for links, focus and the active filter. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -59,12 +78,12 @@ prompt basis.
 
 **Light.** Completely even, no directional shadow, no depth. Anything that suggests a scene will break the column.
 
-**Framing.** Square 1:1 at small display size — assume 48 to 96px. The subject must survive being read at thumbnail scale, so it needs one clear shape and no fine detail.
+**Framing.** For the website opening, place this theme's source art in the 5 / 4 frame at left specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Light neutral ground with one dominant subject colour. Every thumbnail in a table must share the same ground so the column looks uniform.
 
 **Never:**
-- Full-width or hero-scale imagery; this system has no hero picture.
+- Decorative photography replacing the working data surface; an opening specimen must retain its identifier and relation to the dataset.
 - Varied backgrounds between rows — the column must look machine-produced.
 - Fine detail or small text inside the thumbnail.
 - Drop shadows, rounded photo corners baked into the file, or borders in the image.
@@ -73,15 +92,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the design. Check
-the result against all of these:
-
-1. The dominant element on the page is a table, not a card grid.
-2. A two-column filter rail sits beside the rows and stays visible while they scroll.
-3. Rows are separated by hairlines with no gaps, and row height is visibly tight.
-4. Emphasis is pill tags in neutral grey with coloured text; no row is colour-filled.
-5. Numbers are mono with tabular figures and columns do not shift on load.
-6. Blue appears only on links, focus and the active filter.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep fixed-width data columns, compact hairline rows and tabular mono numbers. Neutral tags carry coloured text; blue is reserved for links, focus and the active filter.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -94,9 +109,33 @@ palette or asset is included, and it carries no external licence obligation.
 - Display: Urbanist; body: Urbanist; numbers/code: JetBrains Mono with tabular numerals. Korean fallback: "Pretendard" for display and body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Retain an inset frame but reduce its padding; stack side cells below the dominant cover so the main image remains usable. Convert the side rail into a compact top control with a native expandable navigation; release its desktop width. Mobile keeps small brand/company metadata in two columns, expands the signup rule across the width, stacks contact addresses, and shifts the large wordmark to the bottom. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `side-rail` at `side`, with `88px` minimum height and `232px` width (0px fills the available track). Use side navigation with a 232px maximum width and 88px header height. At compact widths, use compact icon/hamburger top bar and large vertical text menu. Convert the desktop rail to an overlay so content retains width.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [side-rail](https://www.navbar.gallery/navbar/big-dirty-agency). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `framed-cover`: copy share `28%`, media at `left` in a `5 / 4` frame, minimum height `620px`, title measure `18ch`, alignment `start` and desktop offset `0px`. Combine a dominant image zone and narrow stacked side cells, with a small caption tab touching the media edge; keep the sidebar separate from this internal grid. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Retain an inset frame but reduce its padding; stack side cells below the dominant cover so the main image remains usable. Convert the side rail into a compact top control with a native expandable navigation; release its desktop width. Mobile keeps small brand/company metadata in two columns, expands the signup rule across the width, stacks contact addresses, and shifts the large wordmark to the bottom.
+
+Structural reference: [framed-cover](https://supahero.io/hero/colabs). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `contact-ledger` with `3` desktop groups and `520px` minimum height. Reserve 520px as the desktop minimum closing height with 3 information columns or groups. Use whitespace and a vertically organized address ledger rather than many equal navigation columns. Give contact details readable minimum type sizes.
+
+Mobile keeps small brand/company metadata in two columns, expands the signup rule across the width, stacks contact addresses, and shifts the large wordmark to the bottom. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [contact-ledger](https://www.footer.design/sites/esr). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

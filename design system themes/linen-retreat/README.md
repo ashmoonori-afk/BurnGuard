@@ -16,8 +16,7 @@ introducing component-local scales.
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build on these tokens rather than inventing a
-grid:
+Use the existing 12-column body grid, 1320px content maximum, 58ch reading measure and 24px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -28,11 +27,29 @@ grid:
 | `--layout-margin` | `clamp(20px, 4vw, 64px)` | Page side margin |
 | `--layout-section-y` | `clamp(56px, 8vw, 120px)` | Vertical rhythm between sections |
 | `--layout-rule` | `1px` | Divider weight |
-| `--layout-hero` | `4 / 3` | Hero aspect ratio |
+| `--layout-hero` | `4 / 3` | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-A softer 4:3 hero than the panoramic systems, because hospitality imagery is about a corner of a room rather than a vista. The partial bleed means the margin still exists at the frame edge, which is what keeps the page feeling enclosed.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `profile-popover` | Website navigation arrangement |
+| `--layout-nav-position` | `overlay` | Website navigation position |
+| `--layout-nav-height` | `68px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `980px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `fullbleed-top` | Opening composition |
+| `--layout-hero-copy-ratio` | `54%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `21 / 9` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `background` | Opening media placement |
+| `--layout-hero-min-height` | `700px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `17ch` | Maximum title line measure |
+| `--layout-hero-align` | `center` | Hero copy alignment |
+| `--layout-hero-offset` | `40px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `photo-strip` | Footer arrangement |
+| `--layout-footer-columns` | `2` | Desktop footer groups |
+| `--layout-footer-height` | `580px` | Footer minimum height; content may grow |
 
 ## Family tokens
+
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -44,7 +61,9 @@ Imagery extends 60% of the way from the content edge toward the viewport edge �
 
 ## Composition
 
-Set a linen ground with a high-contrast serif for display and a neutral geometric sans for reading. Imagery covers its frame and bleeds partway, always leaving a visible margin at the viewport edge. Eyebrows are small, heavily letterspaced, and uppercase; statements are serif at a 58ch measure with generous leading. Practical information — rooms, rates, arrival, what is nearby — is set as labelled columns with hairline rows, plain and unsold. The tan accent carries links and the single booking action. Radius is small but present at 2-6px, which is the only softness in the set.
+Navigation profile-popover → hero fullbleed-top (54% copy zone, background media, 21 / 9, 700px minimum) → retain the existing theme-specific body hierarchy → footer photo-strip.
+
+Keep linen, serif statements, heavily spaced eyebrows and the partial image bleed. Plain rooms, rates and arrival lists accompany one tan booking action; use restrained small radii. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -58,7 +77,7 @@ prompt basis.
 
 **Light.** Soft warm window light, early or late, with gentle gradation across the frame. Never flat, never contrasty.
 
-**Framing.** Standard 4:3, subject slightly off-centre with negative space on one side so type can sit beside it, and a crop that implies more room outside the frame.
+**Framing.** For the website opening, place this theme's source art in the 21 / 9 frame at background specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Linen, oat, tan, sage and warm shadow. Muted throughout; the strongest colour in frame should still be a neutral.
 
@@ -72,15 +91,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the design. Check
-the result against all of these:
-
-1. The ground is warm linen and the display voice is a high-contrast serif.
-2. Imagery bleeds partway and always leaves a visible margin at the viewport edge.
-3. Eyebrows are uppercase, small and heavily letterspaced.
-4. Practical information is labelled columns with hairline rows and no sales language.
-5. Tan carries links and one booking action; nothing else is coloured.
-6. Radius is small but present at 2-6px, and nothing is elevated.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep linen, serif statements, heavily spaced eyebrows and the partial image bleed. Plain rooms, rates and arrival lists accompany one tan booking action; use restrained small radii.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -93,9 +108,33 @@ palette or asset is included, and it carries no external licence obligation.
 - Display: Playfair Display; body: DM Sans; numbers/code: IBM Plex Mono with tabular numerals. Korean fallback: "Gowun Batang" for display, "Pretendard" for body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Separate text onto a readable ground when the crop removes its safe area; keep the scene and all essential links in normal flow. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile puts the logo first, keeps the two link columns side by side underneath, then shows a tighter photograph crop below the credit line. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `profile-popover` at `overlay`, with `68px` minimum height and `980px` width (0px fills the available track). Use overlay navigation with a 980px maximum width and 68px header height. At compact widths, use the FAQ chip and a single-column FAQ card. Keep the anchored popover within viewport width and preserve direct CTA access.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [profile-popover](https://www.navbar.gallery/navbar/hosier-brown). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `fullbleed-top`: copy share `54%`, media at `background` in a `21 / 9` frame, minimum height `700px`, title measure `17ch`, alignment `center` and desktop offset `40px`. Place a quiet centered title in a generous sky or ground zone above a panoramic scene; finish with a separate photograph and small paired link groups. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Separate text onto a readable ground when the crop removes its safe area; keep the scene and all essential links in normal flow.
+
+Structural reference: [fullbleed-top](https://supahero.io/hero/end-speciesism). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `photo-strip` with `2` desktop groups and `580px` minimum height. Reserve 580px as the desktop minimum closing height with 2 information columns or groups. Separate a useful navigation band from an original local photo strip. Decorative shapes must not obscure or intercept links. Do not copy the person's portrait or brand assets.
+
+Mobile puts the logo first, keeps the two link columns side by side underneath, then shows a tighter photograph crop below the credit line. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [photo-strip](https://www.footer.design/sites/carolyn-lee). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

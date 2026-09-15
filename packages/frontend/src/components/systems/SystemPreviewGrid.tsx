@@ -12,7 +12,13 @@ interface PreviewSection {
   items: Array<{ id: string; title: MessageKey }>;
 }
 
+const WEBSITE_PREVIEW_PATH = "preview/website.html";
+
 const SECTIONS: PreviewSection[] = [
+  {
+    group: "system.preview.website",
+    items: [{ id: "website", title: "system.preview.website" }],
+  },
   {
     group: "system.preview.brand",
     items: [
@@ -61,7 +67,8 @@ export function groupSystemPreviews(previews: readonly DesignSystemPreview[]) {
     `preview/${item.id}.html`, { group: section.group, title: item.title },
   ] as const)));
   const groups = new Map<string, Array<{ path: string; title: string }>>();
-  for (const preview of previews) {
+  const ordered = [...previews].sort((a, b) => Number(b.path === WEBSITE_PREVIEW_PATH) - Number(a.path === WEBSITE_PREVIEW_PATH));
+  for (const preview of ordered) {
     const metadata = known.get(preview.path);
     const group = t(metadata?.group ?? "system.preview.other");
     const title = metadata ? t(metadata.title) : preview.path.split("/").pop()!.replace(/\.html?$/i, "").replace(/[-_]/g, " ");
@@ -101,7 +108,7 @@ export default function SystemPreviewGrid({
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
             {grp.group}<span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{grp.items.length}</span>
           </h2>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className={`grid grid-cols-1 gap-4 ${grp.items[0]?.path === WEBSITE_PREVIEW_PATH ? "" : "lg:grid-cols-2"}`}>
             {grp.items.map((it) => (
               <article
                 key={it.path}
@@ -113,6 +120,7 @@ export default function SystemPreviewGrid({
                     path={it.path}
                     title={it.title}
                     refreshKey={previewRefreshKey}
+                    website={it.path === WEBSITE_PREVIEW_PATH}
                   />
                 </div>
                 <div className="flex items-start justify-between gap-3">

@@ -1,12 +1,8 @@
 import { canvasPoint } from "./canvas-coordinates";
+import type { CreateCommentRequest } from "@bg/shared";
 
 export interface CommentPoint { x: number; y: number }
-export interface CommentPinInput {
-  x_pct: number;
-  y_pct: number;
-  node_selector: string;
-  slide_index: number | null;
-}
+export type CommentPinInput = Omit<CreateCommentRequest, "rel_path" | "body" | "artifact_revision" | "artifact_digest">;
 
 // Also embedded in the opaque-origin frame bridge; keep these functions self-contained.
 export function isCommentEditable(target: { closest?: (selector: string) => unknown; isContentEditable?: boolean } | null): boolean {

@@ -86,8 +86,8 @@ describe("design direction routes", () => {
     const dir = path.join(systemsDir, id);
     const layout = sampleLayoutFiles("dashboard");
     await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, "colors_and_type.css"), layout.css);
-    await writeFile(path.join(dir, "README.md"), layout.readme);
+    await writeFile(path.join(dir, "colors_and_type.css"), `${layout.css}\n:root { --layout-nav-pattern: route-nav; --layout-hero-pattern: route-hero; --layout-footer-pattern: route-footer; --layout-footer-columns: 4; }`);
+    await writeFile(path.join(dir, "README.md"), `${layout.readme}\n## Navigation\nROUTE_NAV_RULE\n## Hero\nROUTE_HERO_RULE\n## Footer\nROUTE_FOOTER_RULE\n`);
     await createDesignSystemRecord({ id, name: "Dashboard", description: null, status: "published", sourceType: "manual", sourceUri: null, dirPath: dir, tokensCssPath: path.join(dir, "colors_and_type.css"), readmeMdPath: path.join(dir, "README.md"), skillMdPath: null, thumbnailPath: null });
     getSqlite().prepare("UPDATE projects SET design_system_id=? WHERE id=?").run(id, projectId);
     try {
@@ -96,6 +96,7 @@ describe("design direction routes", () => {
       const ready = await terminalEvent;
       const tokens = await readDesignSystemTokens(id);
       expect(ready.design_system?.layout).toEqual(tokens.layout);
+      expect(tokens.layout.sections.filter(section => ["navigation", "hero", "footer"].includes(section.kind))).toEqual([{ kind: "navigation", text: "ROUTE_NAV_RULE" }, { kind: "hero", text: "ROUTE_HERO_RULE" }, { kind: "footer", text: "ROUTE_FOOTER_RULE" }]);
       const context = await buildSessionContext(sessionId);
       if (!context) throw new Error("Missing layout context");
       for (const contextMode of ["full", "compact"] as const) {
@@ -104,6 +105,7 @@ describe("design direction routes", () => {
       }
       const svg = await (await request(ready.directions[0]!.preview_url!)).text();
       expect(svg).toContain('data-role="navigation"');
+      expect(svg.match(/data-role="footer"/g)).toHaveLength(4);
     } finally {
       getSqlite().prepare("UPDATE projects SET design_system_id=NULL WHERE id=?").run(projectId);
       getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(id);

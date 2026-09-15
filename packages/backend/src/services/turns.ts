@@ -31,6 +31,7 @@ import { captureImmutableAttachments, verifyImmutableAttachments } from "./immut
 import { redactPrivateAttachmentPaths, withPrivateAttachmentInputs } from "./stage-attachment-inputs";
 import { sanitizeTurnEvent } from "./turn-error-sanitizer";
 import { startTurnPreview } from "./turn-preview";
+import { findHtmlEncodingIssues } from "./generated-html-encoding";
 
 export function assertGraphicStarterReplaced(before: string, after: string): void {
   if (before.includes('data-bg-node-id="graphic-copy"') && before.includes("Start with one clear visual message.") && before === after) throw new Error("graphic_starter_unchanged");
@@ -430,6 +431,8 @@ async function runUserTurnInternal(
               await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", ok: reviewed });
               if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
             }
+            const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
+            if (encodingIssues.length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
           });
         } finally {
           await verifyImmutableAttachments(immutableSnapshots);

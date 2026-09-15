@@ -18,9 +18,11 @@ Source capture lane: `workspace-diagnosis`, 27 browser cases passed. Thumbnail p
 
 ### Current README captures
 
+`readme-design-system-library.png` and `readme-design-system-picker.png` were copied byte-for-byte from `.omo/evidence/reference-layout-app/selected/list.png` and `selected/onboarding.png`, captured on 2026-09-15 with the built application, real local API and a fresh isolated theme profile. They show the 41 bundled reference layouts and their current Chrome-captured website thumbnails. The captures contain no private projects, external provider results or image retouching.
+
 The root README uses unmodified captures selected from local QA evidence. The existing website, onboarding, slide and graphic sources are recorded in its “About the screenshots” table.
 
-`readme-layout-overview.png` was copied byte-for-byte from `.omo/evidence/design-system-layout/overview-desktop.png`, captured on 2026-09-14 at 1440 × 1000 pixels with the real local backend and an isolated QA profile. It shows the Dark theme's layout overview: grid geometry, dimensions, composition and responsive guidance. The profile contains an older installed theme, so the notice describes supplementing missing bundled layout rules while preserving authored rules. The diagram is a structural summary, not a generated website or a live model result. The complete image was inspected without cropping, retouching or conversion.
+`readme-layout-overview.png` and `readme-layout-direction.png` were copied byte-for-byte from `.omo/evidence/reference-layout-app/selected/overview-desktop.png` and `selected/direction-desktop.png`, captured on 2026-09-15. They show Cobalt Atelier's navigation, hero and footer summaries in its system overview and in a real isolated project's direction screen. Full region guidance is available through native disclosures. The diagram is a structural summary, not a generated website or measured model result. All four current captures were opened and inspected without cropping, retouching or conversion; each is below 500 KiB.
 
 ## Generation prompt
 

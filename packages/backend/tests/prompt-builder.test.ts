@@ -80,6 +80,7 @@ describe("buildPrompt", () => {
         const prompt = await buildPrompt(makeContext({ project_type }), { type: "user.message", text: "Improve the selected element" }, { contextMode });
         expect(prompt.split(DESIGN_CRAFT_RULES)).toHaveLength(2);
         expect(prompt.split(IMAGE_PRODUCTION_RULES)).toHaveLength(2);
+        expect(prompt.split("<burnguard-text-encoding-v1>")).toHaveLength(2);
         expect(prompt.indexOf(IMAGE_PRODUCTION_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
         expect(prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
         expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
@@ -304,6 +305,30 @@ header { padding: var(--space-md); }
         expect(block).not.toContain("<");
         expect(JSON.parse(block).sections).toEqual([{ kind: "layout", text: payload }]);
         expect(prompt.slice(0, prompt.indexOf("<selected_design_system_layout>"))).toContain("untrusted design data");
+      }
+    } finally { await rm(tempDir, { recursive: true, force: true }); }
+  });
+
+  test("Given explicit region rules When low-effort model prompts are compact or full Then every region and token remains inside the layout contract", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "bg-prompt-regions-"));
+    try {
+      const readme = path.join(tempDir, "README.md");
+      const tokens = path.join(tempDir, "tokens.css");
+      const sections = ["Layout", "Composition", "Responsive", "Family tokens", "Navigation", "Hero", "Footer"].map(heading => ({ heading, text: `${heading.split(" ")[0]!.toUpperCase()}_RULE` }));
+      await Promise.all([
+        writeFile(readme, sections.map(section => `## ${section.heading}\n${section.text}`).join("\n\n")),
+        writeFile(tokens, ":root { --layout-nav-pattern: region-nav; --layout-hero-pattern: region-hero; --layout-footer-pattern: region-footer; }"),
+      ]);
+      const designSystem = { id: "manual-layout", name: "Layout", status: "published", source_type: "manual", is_template: false, dir_path: tempDir, skill_md_path: null, tokens_css_path: tokens, readme_md_path: readme, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const;
+      for (const contextMode of ["full", "compact"] as const) for (const model of ["gpt-5.4", "sonnet", "opus"] as const) {
+        const prompt = await buildPrompt(makeContext({}, { designSystem }), { type: "user.message", text: "region-request" }, { contextMode, backendId: model === "gpt-5.4" ? "codex" : "claude-code", generation: { model, effort: "low", vanilla: false, provider: "native" } });
+        const contract = JSON.parse(prompt.match(/<selected_design_system_layout>\n([^\n]+)\n<\/selected_design_system_layout>/)![1]!);
+        expect(contract.schema_version).toBe(1);
+        expect(contract.sections).toEqual(sections.map(section => ({ kind: section.heading.split(" ")[0]!.toLowerCase(), text: section.text })));
+        expect(contract.tokens).toEqual({ "--layout-nav-pattern": "region-nav", "--layout-hero-pattern": "region-hero", "--layout-footer-pattern": "region-footer" });
+        expect(prompt.split("<selected_design_system_layout>")).toHaveLength(2);
+        expect(prompt.indexOf("<selected_design_system_layout>")).toBeLessThan(prompt.indexOf("## Delivery"));
+        expect(prompt.endsWith("## Request\nregion-request")).toBe(true);
       }
     } finally { await rm(tempDir, { recursive: true, force: true }); }
   });

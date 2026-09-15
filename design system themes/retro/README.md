@@ -22,18 +22,63 @@ Licensed under the MIT License, Copyright (c) 2020 Pouya Saadeghi. Source OKLCH 
 - Display: DM Serif Display; body: DM Sans; numbers/code: IBM Plex Mono with tabular numerals. Korean fallback: Gowun Batang for serif headings, Pretendard; finish with generic serif/sans-serif/monospace.
 - Body 16–18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32–64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Layout
 
-The 12-column grid, 1180px maximum width, 58ch reading measure and 28px gutters are mandatory. Use the page margins, vertical section rhythm and 4 / 3 hero ratio from colors_and_type.css. Layout belongs to this system alongside palette and typography.
+Use the existing 12-column body grid, 1180px content maximum, 58ch reading measure and 28px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
+
+Keep page margins and section rhythm from colors_and_type.css. The legacy --layout-hero ratio is a secondary-media fallback.
+
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `editorial-overlay` | Website navigation arrangement |
+| `--layout-nav-position` | `top` | Website navigation position |
+| `--layout-nav-height` | `84px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `1240px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `specimen-poster` | Opening composition |
+| `--layout-hero-copy-ratio` | `78%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `4 / 3` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `background` | Opening media placement |
+| `--layout-hero-min-height` | `700px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `12ch` | Maximum title line measure |
+| `--layout-hero-align` | `center` | Hero copy alignment |
+| `--layout-hero-offset` | `48px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `window-stage` | Footer arrangement |
+| `--layout-footer-columns` | `3` | Desktop footer groups |
+| `--layout-footer-height` | `620px` | Footer minimum height; content may grow |
 
 ## Composition
 
-Use an oversized left-aligned masthead and offset an eight-column image against a four-column caption. Alternate broad editorial bands and small supporting figures; avoid uniform card rows.
+Navigation editorial-overlay → hero specimen-poster (78% copy zone, background media, 4 / 3, 700px minimum) → retain the existing theme-specific body hierarchy → footer window-stage.
 
+Keep the printed editorial character, broad bands and small supporting figures; avoid uniform card rows. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Put useful labels in a normal-flow caption block below the complete specimen; decorative title size must not cause horizontal scroll. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile centers the title and one visible link window in a vertical stack, retaining the ticker and three equal bottom glyph cells. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `editorial-overlay` at `top`, with `84px` minimum height and `1240px` width (0px fills the available track). Use top navigation with a 1240px maximum width and 84px header height. At compact widths, use one vertical large-link list with close control. Stack links first; featured work and contact information follow.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [editorial-overlay](https://www.navbar.gallery/navbar/clonix). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `specimen-poster`: copy share `78%`, media at `background` in a `4 / 3` frame, minimum height `700px`, title measure `12ch`, alignment `center` and desktop offset `48px`. Place the beverage or original object in front of an enormous wordmark, then close with an intentionally playful three-cell window stage. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Put useful labels in a normal-flow caption block below the complete specimen; decorative title size must not cause horizontal scroll.
+
+Structural reference: [specimen-poster](https://supahero.io/hero/royal-beverage). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `window-stage` with `3` desktop groups and `620px` minimum height. Reserve 620px as the desktop minimum closing height with 3 information columns or groups. Build the footer as title stage, compact link panels, then a three-cell brand band. Keep panels in normal document flow on narrow screens; animation is optional.
+
+Mobile centers the title and one visible link window in a vertical stack, retaining the ticker and three equal bottom glyph cells. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [window-stage](https://www.footer.design/sites/the-design-society). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

@@ -13,7 +13,7 @@ The palette is expressed through BurnGuard's canonical neutral, brand, semantic,
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build every artifact on these tokens rather than inventing a grid:
+Use the existing 8-column body grid, 1080px content maximum, 62ch reading measure and 32px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -25,13 +25,31 @@ Layout is part of this system, not a per-page decision. Build every artifact on 
 | `--layout-section-y` | clamp(72px, 10vw, 160px) | Vertical rhythm between sections |
 | `--layout-rule` | 1px | Divider weight |
 | `--layout-bp-md` / `--layout-bp-lg` | 768px / 1024px | Breakpoints |
-| `--layout-hero` | 4 / 3 | Hero aspect ratio |
+| `--layout-hero` | 4 / 3 | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-Generous single-column flow with wide side margins; two-up image pairs at most. Vertical rhythm is deliberately large so the page breathes, and the primary action sits alone on its own line.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `mega-feature` | Website navigation arrangement |
+| `--layout-nav-position` | `top` | Website navigation position |
+| `--layout-nav-height` | `96px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `1280px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `framed-cover` | Opening composition |
+| `--layout-hero-copy-ratio` | `70%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `16 / 9` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `below` | Opening media placement |
+| `--layout-hero-min-height` | `640px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `20ch` | Maximum title line measure |
+| `--layout-hero-align` | `center` | Hero copy alignment |
+| `--layout-hero-offset` | `24px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `contact-ledger` | Footer arrangement |
+| `--layout-footer-columns` | `3` | Desktop footer groups |
+| `--layout-footer-height` | `440px` | Footer minimum height; content may grow |
 
 ## Composition
 
-Set everything on warm off-white paper with one buttercup accent reserved for the primary action and the active state. The display face is soft and lowercase — no uppercase display line exists in this system — and it sits at a friendly rather than a monumental scale. Body copy runs to a comfortable 62ch measure with generous leading. Actions are fully rounded pills, which is the only place roundness appears at that strength; cards and images take a smaller radius. Dividers are hairlines in a warm grey. The page should read as approachable and printed rather than engineered.
+Navigation mega-feature → hero framed-cover (70% copy zone, below media, 16 / 9, 640px minimum) → retain the existing theme-specific body hierarchy → footer contact-ledger.
+
+Use warm off-white paper, soft lowercase display type, buttercup only for action and active state, pill actions and warm hairline dividers. Keep the body approachable and printed. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -45,7 +63,7 @@ prompt basis.
 
 **Light.** Soft diffused daylight, slightly overexposed toward the highlights so the frame sits comfortably on the warm paper.
 
-**Framing.** Landscape or square with the subject close and a relaxed composition. Small radius applied at display time, never baked into the file.
+**Framing.** For the website opening, place this theme's source art in the 16 / 9 frame at below specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Warm off-white, buttercup, straw and soft neutrals. Any strong colour in frame should be warm.
 
@@ -59,15 +77,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the
-design. Check the result against all of these:
-
-1. The ground is warm off-white and buttercup appears only on the primary action and active state.
-2. The display face is lowercase throughout; no uppercase display line exists.
-3. Body copy runs to a 62ch measure with generous leading.
-4. Actions are fully rounded pills; cards and images take a smaller radius.
-5. Dividers are hairlines in warm grey.
-6. Imagery is warm, soft and lifted toward the highlights.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Use warm off-white paper, soft lowercase display type, buttercup only for action and active state, pill actions and warm hairline dividers. Keep the body approachable and printed.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -78,9 +92,33 @@ Original system authored for BurnGuard. The palette, type pairing, scale, and sh
 - Display: Outfit; body: DM Sans; numbers/code: Geist Mono with tabular numerals. Korean fallback: "Pretendard" for display and body, "Gowun Batang" for serif; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Retain an inset frame but reduce its padding; stack side cells below the dominant cover so the main image remains usable. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile keeps small brand/company metadata in two columns, expands the signup rule across the width, stacks contact addresses, and shifts the large wordmark to the bottom. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `mega-feature` at `top`, with `96px` minimum height and `1280px` width (0px fills the available track). Use top navigation with a 1280px maximum width and 96px header height. At compact widths, use brand plus close control and stacked product/service disclosures. Stack columns and move featured content below links.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [mega-feature](https://www.navbar.gallery/navbar/chesapeake-plywood). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `framed-cover`: copy share `70%`, media at `below` in a `16 / 9` frame, minimum height `640px`, title measure `20ch`, alignment `center` and desktop offset `24px`. Build a publication-style masthead above a bounded cover panel, then transition through a ruled compact contact colophon. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Retain an inset frame but reduce its padding; stack side cells below the dominant cover so the main image remains usable.
+
+Structural reference: [framed-cover](https://supahero.io/hero/spectrum-life). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `contact-ledger` with `3` desktop groups and `440px` minimum height. Reserve 440px as the desktop minimum closing height with 3 information columns or groups. Use whitespace and a vertically organized address ledger rather than many equal navigation columns. Give contact details readable minimum type sizes.
+
+Mobile keeps small brand/company metadata in two columns, expands the signup rule across the width, stacks contact addresses, and shifts the large wordmark to the bottom. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [contact-ledger](https://www.footer.design/sites/esr). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

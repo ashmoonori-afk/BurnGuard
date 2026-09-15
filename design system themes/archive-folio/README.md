@@ -13,7 +13,7 @@ The palette is expressed through BurnGuard's canonical neutral, brand, semantic,
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build every artifact on these tokens rather than inventing a grid:
+Use the existing 12-column body grid, 1440px content maximum, 64ch reading measure and 20px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -25,13 +25,31 @@ Layout is part of this system, not a per-page decision. Build every artifact on 
 | `--layout-section-y` | clamp(28px, 3vw, 48px) | Vertical rhythm between sections |
 | `--layout-rule` | 1px | Divider weight |
 | `--layout-bp-md` / `--layout-bp-lg` | 840px / 1200px | Breakpoints |
-| `--layout-hero` | 4 / 5 | Hero aspect ratio |
+| `--layout-hero` | 4 / 5 | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-An asymmetric catalogue: an 8-column image track beside a 4-column information column of definition pairs, divided by a hairline rule that runs the full height. Captions sit directly beneath their image at body size; density is high and spacing is tight.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `profile-popover` | Website navigation arrangement |
+| `--layout-nav-position` | `top` | Website navigation position |
+| `--layout-nav-height` | `64px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `1080px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `portfolio-peek` | Opening composition |
+| `--layout-hero-copy-ratio` | `44%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `4 / 3` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `below` | Opening media placement |
+| `--layout-hero-min-height` | `640px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `21ch` | Maximum title line measure |
+| `--layout-hero-align` | `center` | Hero copy alignment |
+| `--layout-hero-offset` | `44px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `studio-address` | Footer arrangement |
+| `--layout-footer-columns` | `4` | Desktop footer groups |
+| `--layout-footer-height` | `500px` | Footer minimum height; content may grow |
 
 ## Composition
 
-Set a dense archival index on white, with a small serif used for everything — headings, entries and notes alike — so hierarchy comes from position and weight rather than from a second typeface. Entries are separated by hairline dividers with tight vertical rhythm. A running information column holds dates, references and notes alongside the entries and stays with them down the page; it is the system's defining structure and must not collapse into the main column except at the smallest width. Running text holds to a 64ch measure. Radius is zero on every surface and elevation is absent; colour is reserved for links and the single action.
+Navigation profile-popover → hero portfolio-peek (44% copy zone, below media, 4 / 3, 640px minimum) → retain the existing theme-specific body hierarchy → footer studio-address.
+
+Keep dense serif entries, dates and notes alongside their records, hairline dividers and tight rhythm. Hierarchy comes from position and weight, with no radius or elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -45,29 +63,25 @@ prompt basis.
 
 **Light.** Even copy-stand lighting with no glare and no directional shadow. Colour accurate to the original.
 
-**Framing.** The item complete with a small white margin, aspect following the item. Placed small in the layout, since the index matters more than any one entry.
+**Framing.** For the website opening, place this theme's source art in the 4 / 3 frame at below specified by Hero; keep its subject, medium, light and grading. Keep the complete subject visible with contain or an inner figure; do not crop evidence, objects or architecture to fill the outer region. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** White ground with the item's own aged tones — paper yellowing, ink fade, emulsion shift. The interface adds nothing.
 
 **Never:**
 - Styled or angled photography of the item.
 - Digital cleanup that removes age, creases or edge wear.
-- Large hero placement; entries stay small in an index.
+- Enlarging an archive item without its identifying caption; keep body entries compact.
 - Added borders, shadows, or textures in the file.
 
 **Prompt skeleton.** `flat archival reproduction photograph of a document square to the camera on white, even copy-stand lighting with no glare, item complete with small white margin, accurate aged paper and ink tones, no retouching, no styling`
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the
-design. Check the result against all of these:
-
-1. A small serif carries headings, entries and notes alike; no second typeface appears.
-2. Entries are separated by hairline dividers at a tight vertical rhythm.
-3. A running information column of dates and references stays beside the entries.
-4. That column collapses into the main column only at the smallest width.
-5. Running text holds to a 64ch measure.
-6. Radius is zero on every surface and elevation is absent; colour is reserved for links and one action.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep dense serif entries, dates and notes alongside their records, hairline dividers and tight rhythm. Hierarchy comes from position and weight, with no radius or elevation.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -78,9 +92,33 @@ Original system authored for BurnGuard. The palette, type pairing, scale, and sh
 - Display: Newsreader; body: Newsreader; numbers/code: IBM Plex Mono with tabular numerals. Korean fallback: "Nanum Myeongjo" for serif text, "Pretendard" for UI labels; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Convert scattered or overlapping panels into a deliberate ordered list; preserve one dominant work and smaller supporting items. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile stacks the link groups, keeps the two office addresses side by side, and moves the large wordmark below them. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `profile-popover` at `top`, with `64px` minimum height and `1080px` width (0px fills the available track). Use top navigation with a 1080px maximum width and 64px header height. At compact widths, use the FAQ chip and a single-column FAQ card. Keep the anchored popover within viewport width and preserve direct CTA access.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [profile-popover](https://www.navbar.gallery/navbar/hosier-brown). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `portfolio-peek`: copy share `44%`, media at `below` in a `4 / 3` frame, minimum height `640px`, title measure `21ch`, alignment `center` and desktop offset `44px`. Keep the biographical statement narrow and centered, with a larger central work card and partially revealed neighboring work cards below. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Convert scattered or overlapping panels into a deliberate ordered list; preserve one dominant work and smaller supporting items.
+
+Structural reference: [portfolio-peek](https://supahero.io/hero/eric-jordan). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `studio-address` with `4` desktop groups and `500px` minimum height. Reserve 500px as the desktop minimum closing height with 4 information columns or groups. Use an asymmetrical studio directory whose location pair is a first-class structural feature. Do not collapse the whole footer to a generic four-column sitemap.
+
+Mobile stacks the link groups, keeps the two office addresses side by side, and moves the large wordmark below them. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [studio-address](https://www.footer.design/sites/reality-is). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

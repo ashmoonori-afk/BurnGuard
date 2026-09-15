@@ -1,15 +1,9 @@
 import { canvasPoint } from "./canvas-coordinates";
-import { useRef, type MouseEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type RefObject } from "react";
 import type { Comment } from "@bg/shared";
-import { requestFrameCommentAtPoint } from "./frame-bridge";
+import { readFrameCommentPositions, requestFrameCommentAtPoint, subscribeFrameEvent, watchFrameComments, type FrameCommentPosition } from "./frame-bridge";
 import { cn } from "@/lib/utils";
-
-interface PinInput {
-  x_pct: number;
-  y_pct: number;
-  node_selector: string;
-  slide_index: number | null;
-}
+import type { CommentPinInput, CommentPoint } from "./quick-comment";
 
 export default function CommentLayer({
   active,
@@ -20,6 +14,8 @@ export default function CommentLayer({
   focusedId,
   onCreate,
   onFocus,
+  onOpen,
+  documentKey,
 }: {
   active: boolean;
   comments: Comment[];
@@ -27,12 +23,15 @@ export default function CommentLayer({
   activeSlideIdx: number | null;
   iframeRef: RefObject<HTMLIFrameElement | null>;
   focusedId: string | null;
-  onCreate: (input: PinInput) => void;
+  onCreate: (input: CommentPinInput) => void;
   onFocus: (id: string | null) => void;
+  onOpen: (comment: Comment, point: CommentPoint) => void;
+  documentKey: string | null;
 }) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const [positions, setPositions] = useState<FrameCommentPosition[]>([]);
 
-  const visible = activeRelPath
+  const visible = useMemo(() => activeRelPath
     ? comments.filter((c) => {
         if (c.rel_path !== activeRelPath) return false;
         if (c.resolved_at !== null) return false;
@@ -42,49 +41,67 @@ export default function CommentLayer({
         }
         return true;
       })
-    : [];
+    : [], [activeRelPath, activeSlideIdx, comments]);
+
+  useEffect(() => {
+    setPositions([]);
+    const frame = iframeRef.current;
+    if (!frame || !documentKey) return;
+    let mounted = true;
+    const receive = (payload: unknown) => {
+      const next = readFrameCommentPositions(payload, documentKey);
+      if (mounted && next) setPositions(next);
+    };
+    const unsubscribe = subscribeFrameEvent(frame, "comment-positions", receive);
+    void watchFrameComments(frame, visible).then(receive).catch(() => {});
+    return () => {
+      mounted = false;
+      unsubscribe();
+      void watchFrameComments(frame, []).catch(() => {});
+    };
+  }, [documentKey, iframeRef, visible]);
 
   const handleClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!active || !overlayRef.current) return;
     if (e.target !== overlayRef.current) return;
 
     const [relX, relY] = canvasPoint(overlayRef.current, e.clientX, e.clientY);
-    const x_pct = (relX / overlayRef.current.clientWidth) * 100;
-    const y_pct = (relY / overlayRef.current.clientHeight) * 100;
-
     void requestFrameCommentAtPoint(iframeRef.current, relX, relY).then(
       (hit) => {
+        if (!hit) return;
         onCreate({
-          x_pct,
-          y_pct,
-          node_selector: hit?.selector ?? "body",
-          slide_index: hit?.slideIndex ?? null,
+          x_pct: hit.x_pct,
+          y_pct: hit.y_pct,
+          anchor: hit.anchor,
+          node_selector: hit.selector,
+          slide_index: hit.slideIndex,
         });
       },
-    );
+    ).catch(() => {});
   };
 
   return (
     <div
       ref={overlayRef}
-      className="absolute inset-0"
+      className="absolute inset-0 overflow-hidden"
       style={{
         pointerEvents: active ? "auto" : "none",
         cursor: active ? "crosshair" : "default",
       }}
       onClick={handleClick}
     >
-      {visible.map((comment, idx) => (
+      {visible.map((comment, idx) => {
+        const position = positions.find(p => p.id === comment.id);
+        return position?.visible && (
         <CommentPin
           key={comment.id}
           index={idx + 1}
           comment={comment}
+          position={position}
           focused={comment.id === focusedId}
-          onSelect={() =>
-            onFocus(comment.id === focusedId ? null : comment.id)
-          }
+          onSelect={(point) => { onFocus(comment.id); onOpen(comment, point); }}
         />
-      ))}
+      ); })}
     </div>
   );
 }
@@ -94,18 +111,22 @@ function CommentPin({
   index,
   focused,
   onSelect,
+  position,
 }: {
   comment: Comment;
   index: number;
   focused: boolean;
-  onSelect: () => void;
+  onSelect: (point: CommentPoint) => void;
+  position: FrameCommentPosition;
 }) {
   return (
     <button
       type="button"
+      data-comment-id={comment.id}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect();
+        const rect = e.currentTarget.getBoundingClientRect();
+        onSelect({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
       }}
       title={comment.body || "(no note)"}
       className={cn(
@@ -114,8 +135,8 @@ function CommentPin({
         focused && "ring-2 ring-accent/30 scale-110",
       )}
       style={{
-        left: `${comment.x_pct}%`,
-        top: `${comment.y_pct}%`,
+        left: position.x,
+        top: position.y,
         pointerEvents: "auto",
       }}
     >

@@ -16,8 +16,7 @@ introducing component-local scales.
 
 ## Layout
 
-Layout is part of this system, not a per-page decision. Build on these tokens rather than inventing a
-grid:
+Use the existing 12-column body grid, 1320px content maximum, 62ch reading measure and 20px gutters. Website Navigation, Hero and Footer below define the opening and closing geometry. They take priority over generic body or embedded-workspace defaults.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -28,23 +27,43 @@ grid:
 | `--layout-margin` | `clamp(20px, 3vw, 48px)` | Page side margin |
 | `--layout-section-y` | `clamp(56px, 7vw, 112px)` | Vertical rhythm between sections |
 | `--layout-rule` | `1px` | Divider weight |
-| `--layout-hero` | `16 / 10` | Hero aspect ratio |
+| `--layout-hero` | `16 / 10` | Secondary-media fallback ratio; the opening uses --layout-hero-media-ratio |
 
-Reserve the upper band for a product surface panel at `--layout-hero` and let the headline sit beneath it, not over it. Annotation labels live in the outer margin, connected to their subject by a single `--layout-rule` hairline. Sections are divided by rules, never by cards.
+| Website token | Value | Meaning |
+|---|---|---|
+| `--layout-nav-pattern` | `icon-taxonomy` | Website navigation arrangement |
+| `--layout-nav-position` | `top` | Website navigation position |
+| `--layout-nav-height` | `92px` | Website navigation minimum height; allow wrapping |
+| `--layout-nav-width` | `1380px` | Website navigation width; 0px uses available width |
+| `--layout-hero-pattern` | `product-panel` | Opening composition |
+| `--layout-hero-copy-ratio` | `50%` | Copy share in the hero composition |
+| `--layout-hero-media-ratio` | `16 / 10` | Opening media aspect ratio |
+| `--layout-hero-media-position` | `below` | Opening media placement |
+| `--layout-hero-min-height` | `600px` | Opening minimum height, not a clipping boundary |
+| `--layout-hero-title-measure` | `19ch` | Maximum title line measure |
+| `--layout-hero-align` | `start` | Hero copy alignment |
+| `--layout-hero-offset` | `0px` | Desktop composition offset; reset on small screens |
+| `--layout-footer-pattern` | `retail-accordion` | Footer arrangement |
+| `--layout-footer-columns` | `4` | Desktop footer groups |
+| `--layout-footer-height` | `440px` | Footer minimum height; content may grow |
 
 ## Family tokens
 
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
+
 | Token | Value | Meaning |
 |---|---|---|
-| `--family-ui-navigation-placement` | `top` | `top` or `side` — whether primary navigation sits above the content or beside it at expanded widths. |
+| `--family-ui-navigation-placement` | `top` | `top` or `side` — whether embedded-workspace navigation sits above the content or beside it at expanded widths. |
 | `--family-ui-navigation-span` | `2` | Base-grid columns reserved for side navigation; inert when placement is `top`. |
 | `--family-ui-label-placement` | `above` | `above` or `beside` — whether form labels stack over their control or sit in a second track. |
 
-Navigation is a single top row at `--layout-nav-h`; the span value is inert here and exists so a side-navigation variant stays expressible. Labels stack above their control so a dense form keeps one reading column.
+Within the embedded work surface, navigation is a single top row at `--layout-nav-h`; the span value is inert here and exists so a side-navigation variant stays expressible. Labels stack above their control so a dense form keeps one reading column.
 
 ## Composition
 
-Ground everything in near-black and spend the phosphor signal only where something is live: an active tab, a focused field, a running state, a link under the cursor. Everything else is neutral. Mono is structural — it labels panels, numbers figures, and annotates diagrams, and it never sets body copy. Put a real product surface in the hero: a terminal, a console, a panel with its own chrome, rendered as an element rather than a screenshot. Separate regions with a single hairline at `--border`; no card, no shadow, no rounded container. Radius stays at or below 3px so nothing reads as soft.
+Navigation icon-taxonomy → hero product-panel (50% copy zone, below media, 16 / 10, 600px minimum) → retain the existing theme-specific body hierarchy → footer retail-accordion.
+
+Keep near-black with phosphor reserved for live states. Mono labels and numbered annotations support a real product surface; use hairline regions, no shadows and radii at or below 3px. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Image direction
 
@@ -58,7 +77,7 @@ prompt basis.
 
 **Light.** Single cool key from one side against a very dark field, with controlled falloff. Small phosphor-green emissive points may appear as status indicators and are the only saturated colour in frame.
 
-**Framing.** Tight and frontal or a shallow three-quarter. Subject fills most of the frame, cropped by the edge rather than floating with air around it.
+**Framing.** For the website opening, place this theme's source art in the 16 / 10 frame at below specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Near-black ground with cool grey mid-tones; the only chroma is the phosphor green of indicator lights, matching `--primary-blue`. Treat any other hue as a defect.
 
@@ -72,15 +91,11 @@ prompt basis.
 
 ## Reproducing this system
 
-A builder with only this directory and an image generator should be able to rebuild the design. Check
-the result against all of these:
-
-1. The page reads near-black, and the only saturated colour anywhere is the phosphor signal.
-2. Every phosphor use marks a live or interactive state; none is decorative.
-3. Mono appears only as chrome, labels, figures or annotation — never as body copy.
-4. A product surface panel occupies the hero at the declared aspect ratio.
-5. No element has a radius above 3px, and no element carries a shadow.
-6. Regions are separated by hairlines at `--layout-rule`, not by cards.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep near-black with phosphor reserved for live states. Mono labels and numbered annotations support a real product surface; use hairline regions, no shadows and radii at or below 3px.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Provenance
 
@@ -93,9 +108,33 @@ palette or asset is included, and it carries no external licence obligation.
 - Display: Geist; body: Geist; numbers/code: Geist Mono with tabular numerals. Korean fallback: "Pretendard" for display and body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Responsive
 
-Below --layout-bp-md, collapse content to one column in reading order, place message before media and move any side navigation into a compact top row. Remove decorative offsets and keep tables in their own horizontal scroll region. Between medium and large breakpoints, reduce spans without changing the hierarchy. Above --layout-bp-lg, retain the full grid within --layout-max. At 200% zoom, allow labels and actions to wrap without clipping. Slides and graphics keep their fixed artboard dimensions; adapt content inside that canvas rather than applying website breakpoints to its size.
+Below the theme's existing compact breakpoint: Keep title, actions and interface panel in document order; allow the panel to scale proportionally rather than forcing desktop width. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile replaces the three link columns with three ruled rows showing plus disclosure marks; locale/legal is centered beneath, above the cropped wordmark. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
+## Navigation
+
+Use `icon-taxonomy` at `top`, with `92px` minimum height and `1380px` width (0px fills the available track). Use top navigation with a 1380px maximum width and 92px header height. At compact widths, use product/use-case/enterprise disclosure rows. Use single-column disclosures; keep the promotional card secondary.
+
+Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
+
+Structural reference: [icon-taxonomy](https://www.navbar.gallery/navbar/velt). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
+
+## Hero
+
+Use `product-panel`: copy share `50%`, media at `below` in a `16 / 10` frame, minimum height `600px`, title measure `19ch`, alignment `start` and desktop offset `0px`. Use a shallow introduction/action row above a wide interface panel; reserve navigation taxonomy for compact categorized groups. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Mobile: Below the theme's existing compact breakpoint: Keep title, actions and interface panel in document order; allow the panel to scale proportionally rather than forcing desktop width.
+
+Structural reference: [product-panel](https://supahero.io/hero/modify). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
+
+## Footer
+
+Use `retail-accordion` with `4` desktop groups and `440px` minimum height. Reserve 440px as the desktop minimum closing height with 4 information columns or groups. Use native details/summary for the narrow-screen navigation groups if disclosure is needed. The desktop gallery screenshot does not establish a working subscription form, so provide one only when backed by a real flow.
+
+Mobile replaces the three link columns with three ruled rows showing plus disclosure marks; locale/legal is centered beneath, above the cropped wordmark. Allow links to wrap and let the closing region grow with content.
+
+Structural reference: [retail-accordion](https://www.footer.design/sites/outway). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.

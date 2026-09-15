@@ -9,22 +9,25 @@ Read README.md first, then use colors_and_type.css as the single source of truth
 ## Quick reference
 - Reference colour, type, spacing, radius, elevation, layout and family tokens by CSS variable name.
 - Preserve the paired foreground tokens whenever a semantic background is used.
-- Use the local display/body/mono fonts specified in README.md and colors_and_type.css. Copy fonts/
-  with licenses into outputs and link fonts/fonts.css; no CDN.
+- Use the local display/body/mono fonts specified in README.md and colors_and_type.css. Reference shared local fonts while working; include required font files and licenses on export. No CDN.
 - Keep components coherent with the theme's shape and contrast rather than adding unrelated decoration.
 
 ## How this theme composes
 
-Work on cool limestone with a didone statement voice and a neutral sans for everything read at length. Images are contained plates with real margin on all sides and never bleed; the ground must be visible around every one. Two-track sections split evenly between photograph and description. Captions sit under plates in 12px mono: location, year, material. The slate accent marks links and the primary action only. Rules are hairline, radius is zero, and the page is quiet enough that the only contrast is between stone and shadow.
+Navigation editorial-overlay → hero fullbleed-top (28% copy zone, background media, 16 / 9, 800px minimum) → retain the existing theme-specific body hierarchy → footer studio-address.
+
+Keep cool limestone, a didone statement voice and whole architectural plates with ground visible around them. Mono captions identify place, year and material; slate marks action. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`
 with `--layout-margin` at the sides, body copy holds to `--layout-measure`, sections are separated by
 `--layout-section-y`, and dividers use `--layout-rule`. The base grid is `--layout-columns` columns
-with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Hero media uses `--layout-hero`.
+with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Secondary media defaults to `--layout-hero`; website opening media uses `--layout-hero-media-ratio` and the Hero section.
 
 ## Family tokens
+
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -46,7 +49,7 @@ prompt basis.
 
 **Light.** Overcast or open-shade daylight with soft even shadows, or raking low sun where texture is the subject. Avoid harsh midday contrast.
 
-**Framing.** Landscape 3:2 with the structure fully inside the frame and clear space around it. The subject must be complete: no cropped corners, no cut-off roofline.
+**Framing.** For the website opening, place this theme's source art in the 16 / 9 frame at background specified by Hero; keep its subject, medium, light and grading. Keep the complete subject visible with contain or an inner figure; do not crop evidence, objects or architecture to fill the outer region. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Limestone, concrete grey, slate and weathered bronze. Cool neutral overall — the warm end of the spectrum belongs to a different system.
 
@@ -60,21 +63,38 @@ prompt basis.
 
 ## Reproducing this system
 
-1. The ground is cool limestone and no warm cast appears anywhere.
-2. Every image is a contained plate with visible ground on all sides; nothing bleeds.
-3. Sections split evenly between photograph and description.
-4. Captions are 12px mono giving location, year and material.
-5. The slate accent marks only links and the primary action.
-6. Radius is zero, rules are hairline, and nothing is elevated.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep cool limestone, a didone statement voice and whole architectural plates with ground visible around them. Mono captions identify place, year and material; slate marks action.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Local typography
 
 - Display: DM Serif Display; body: Manrope; numbers/code: Geist Mono with tabular numerals. Korean fallback: "Nanum Myeongjo" for display, "Pretendard" for body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Required layout
 
-Read Layout, Composition and Responsive in README.md and apply the --layout-* and --family-* tokens from colors_and_type.css before arranging content. Preserve the grid, reading measure, section rhythm, hero geometry and navigation placement; a palette/font swap on a generic layout is incomplete. Direction variants may change content emphasis, but must retain this structure unless the user explicitly overrides it. Check the rendered result at wide and narrow viewports and 200% zoom; fixed artboards retain their dimensions.
+Read Navigation, Hero, Footer, Layout and Responsive in README.md before arranging content. Apply the named region patterns and every corresponding --layout-* value; use family tokens for the body. Preserve the theme identity and supplied art. Direction variants may change emphasis but retain these regions unless the user overrides them. Check wide and narrow rendering and 200% zoom.
+
+## Navigation
+
+Follow README.md's Navigation section and the corresponding --layout-* tokens. Use overlay navigation with a 1320px maximum width and 88px header height. At compact widths, use one vertical large-link list with close control. Stack links first; featured work and contact information follow.
+
+Reference: https://www.navbar.gallery/navbar/clonix
+
+## Hero
+
+Follow README.md's Hero section and the corresponding --layout-* tokens. Keep the whole building or room contained inside an expansive scenic field; limit opening copy to a small corner and leave architecture unobstructed. Retain object-fit: contain for the original artwork: the whole building, document or object must remain visible. Interpret oversized/cropped reference geometry through the frame and typography, not by clipping the artwork.
+
+Reference: https://supahero.io/hero/dream-design-laboratory
+
+## Footer
+
+Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 560px as the desktop minimum closing height with 4 information columns or groups. Use an asymmetrical studio directory whose location pair is a first-class structural feature. Do not collapse the whole footer to a generic four-column sitemap.
+
+Reference: https://www.footer.design/sites/reality-is

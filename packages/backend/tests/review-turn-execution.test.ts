@@ -45,6 +45,45 @@ function start(runAdapter: NonNullable<TurnDependencies["runAdapter"]>, text = "
   return turn;
 }
 
+test("Given invalid generated HTML When finalizing Then no repair adapter runs and the prior English pages and assets remain intact", async () => {
+  const english = '<!doctype html><html lang="en"><meta charset="utf-8"><body><h1>Keep my English website</h1></body></html>';
+  const multilingual = '<html><meta charset="utf-8"><body><p>생각의 흐름 그대로 中文 日本語 café 🖼️</p></body></html>';
+  const image = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 255]);
+  await new ArtifactCoordinator(getSqlite()).run({ projectId, projectDir, kind: "turn", expectedRevision: 0, expectedArtifactDigest: digest, mutate: async (stage) => {
+    await writeFile(path.join(stage, "index.html"), english, "utf8");
+    await mkdir(path.join(stage, "sub"));
+    await writeFile(path.join(stage, "sub", "notice.htm"), multilingual, "utf8");
+    await writeFile(path.join(stage, "image.png"), image);
+  } });
+  const before = await inspectCanonicalTree(projectDir);
+  // Exact .NET CP949 GetString(UTF8.GetBytes(Korean HTML)) -> WriteAllText output.
+  // TextDecoder("euc-kr") differs between Bun and Node, so keep the actual Windows bytes.
+  const corrupted = Buffer.from("PGgxPj/slbfsu5Y/Pz/rqK7sq6sg5rS566qDP+a/oT88YnI+76eN65qu67G2Pz/vp53rqK3qtYU/woA/7Iew7KSILjwvaDE+PGE+Pz9PUz8/P+OFvOyKq+a/oeySleuxtiA/Py9hPg==", "base64");
+  for (const [relative, bytes] of [["index.html", corrupted], ["sub/notice.htm", Uint8Array.from([60, 112, 62, 255])]] as const) {
+    let calls = 0;
+    const turn = start(async (_backend, input) => {
+      calls += 1;
+      if (calls === 1) {
+        await writeFile(path.join(input.projectDir, relative), bytes);
+      } else {
+        // A clean exit and valid UTF-8 must not authorize an unsolicited rewrite.
+        await writeFile(path.join(input.projectDir, relative), "<html><body>Unrequested rewrite</body></html>");
+        await writeFile(path.join(input.projectDir, "image.png"), "replaced image");
+      }
+      return { exitCode: 0 };
+    });
+    await turn.promise;
+    expect(calls).toBe(1);
+    expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(english);
+    expect(await readFile(path.join(projectDir, "sub", "notice.htm"), "utf8")).toBe(multilingual);
+    expect(new Uint8Array(await readFile(path.join(projectDir, "image.png")))).toEqual(image);
+    expect(await inspectCanonicalTree(projectDir)).toEqual(before);
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+    const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
+    expect(JSON.parse(error!.payload_json).code).toBe("publication_failed");
+  }
+});
+
 test("Given prompt-directed writes When generation succeeds Then only stage changes before commit", async () => {
   const turn = start(async (_backend, input) => {
     const target = input.prompt.match(/Write or edit files inside `([^`]+)`/)?.[1];

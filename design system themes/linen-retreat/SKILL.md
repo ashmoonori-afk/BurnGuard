@@ -9,22 +9,25 @@ Read README.md first, then use colors_and_type.css as the single source of truth
 ## Quick reference
 - Reference colour, type, spacing, radius, elevation, layout and family tokens by CSS variable name.
 - Preserve the paired foreground tokens whenever a semantic background is used.
-- Use the local display/body/mono fonts specified in README.md and colors_and_type.css. Copy fonts/
-  with licenses into outputs and link fonts/fonts.css; no CDN.
+- Use the local display/body/mono fonts specified in README.md and colors_and_type.css. Reference shared local fonts while working; include required font files and licenses on export. No CDN.
 - Keep components coherent with the theme's shape and contrast rather than adding unrelated decoration.
 
 ## How this theme composes
 
-Set a linen ground with a high-contrast serif for display and a neutral geometric sans for reading. Imagery covers its frame and bleeds partway, always leaving a visible margin at the viewport edge. Eyebrows are small, heavily letterspaced, and uppercase; statements are serif at a 58ch measure with generous leading. Practical information — rooms, rates, arrival, what is nearby — is set as labelled columns with hairline rows, plain and unsold. The tan accent carries links and the single booking action. Radius is small but present at 2-6px, which is the only softness in the set.
+Navigation profile-popover → hero fullbleed-top (54% copy zone, background media, 21 / 9, 700px minimum) → retain the existing theme-specific body hierarchy → footer photo-strip.
+
+Keep linen, serif statements, heavily spaced eyebrows and the partial image bleed. Plain rooms, rates and arrival lists accompany one tan booking action; use restrained small radii. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`
 with `--layout-margin` at the sides, body copy holds to `--layout-measure`, sections are separated by
 `--layout-section-y`, and dividers use `--layout-rule`. The base grid is `--layout-columns` columns
-with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Hero media uses `--layout-hero`.
+with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Secondary media defaults to `--layout-hero`; website opening media uses `--layout-hero-media-ratio` and the Hero section.
 
 ## Family tokens
+
+These are body-content and embedded-workspace defaults. The website shell uses Navigation, Hero and Footer instead; in particular, --family-ui-navigation-* describes navigation inside an embedded work surface and --family-media-text-ratio describes paired body sections.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -46,7 +49,7 @@ prompt basis.
 
 **Light.** Soft warm window light, early or late, with gentle gradation across the frame. Never flat, never contrasty.
 
-**Framing.** Standard 4:3, subject slightly off-centre with negative space on one side so type can sit beside it, and a crop that implies more room outside the frame.
+**Framing.** For the website opening, place this theme's source art in the 21 / 9 frame at background specified by Hero; keep its subject, medium, light and grading. Keep the principal subject readable and use negative space without changing the source-art identity. The source-image prompt may retain its original aspect ratio; adapt its display frame in CSS. Body images retain their family framing.
 
 **Relationship to the palette.** Linen, oat, tan, sage and warm shadow. Muted throughout; the strongest colour in frame should still be a neutral.
 
@@ -60,21 +63,38 @@ prompt basis.
 
 ## Reproducing this system
 
-1. The ground is warm linen and the display voice is a high-contrast serif.
-2. Imagery bleeds partway and always leaves a visible margin at the viewport edge.
-3. Eyebrows are uppercase, small and heavily letterspaced.
-4. Practical information is labelled columns with hairline rows and no sales language.
-5. Tan carries links and one booking action; nothing else is coloured.
-6. Radius is small but present at 2-6px, and nothing is elevated.
+1. Match this theme's Navigation, Hero and Footer patterns, geometry and reading order; check wide and narrow viewports.
+2. Preserve the original palette, font families and source-image direction; gallery references supply structure only.
+3. Keep linen, serif statements, heavily spaced eyebrows and the partial image bleed. Plain rooms, rates and arrival lists accompany one tan booking action; use restrained small radii.
+4. Apply body family tokens to the gallery, prose, tables or embedded workspace rather than using them to replace the website shell.
+5. Keep meaningful copy, controls and focus visible at 200% zoom; never clip text to fit a reference screenshot.
 
 ## Local typography
 
 - Display: Playfair Display; body: DM Sans; numbers/code: IBM Plex Mono with tabular numerals. Korean fallback: "Gowun Batang" for display, "Pretendard" for body; finish with generic serif/sans-serif/monospace.
 - Body 16-18px, line-height 1.6; supporting copy at least 14px/1.5. Headings 32-64px responsive, line-height 1.15 (Korean 1.3); allow wrapping and 200% zoom without clipping.
 - Keep readable contrast (4.5:1 body, 3:1 large text), visible focus, and avoid ultra-light text. Use only supplied weights.
-- Copy the bundled fonts/ directory including licenses into each output and link fonts/fonts.css. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
+- Reference the shared local font stylesheet while working in BurnGuard; export packages include the required font files and licenses. No CDN, external font import, or system-only replacement. Preserve supplied brand fonts.
 
 
 ## Required layout
 
-Read Layout, Composition and Responsive in README.md and apply the --layout-* and --family-* tokens from colors_and_type.css before arranging content. Preserve the grid, reading measure, section rhythm, hero geometry and navigation placement; a palette/font swap on a generic layout is incomplete. Direction variants may change content emphasis, but must retain this structure unless the user explicitly overrides it. Check the rendered result at wide and narrow viewports and 200% zoom; fixed artboards retain their dimensions.
+Read Navigation, Hero, Footer, Layout and Responsive in README.md before arranging content. Apply the named region patterns and every corresponding --layout-* value; use family tokens for the body. Preserve the theme identity and supplied art. Direction variants may change emphasis but retain these regions unless the user overrides them. Check wide and narrow rendering and 200% zoom.
+
+## Navigation
+
+Follow README.md's Navigation section and the corresponding --layout-* tokens. Use overlay navigation with a 980px maximum width and 68px header height. At compact widths, use the FAQ chip and a single-column FAQ card. Keep the anchored popover within viewport width and preserve direct CTA access.
+
+Reference: https://www.navbar.gallery/navbar/hosier-brown
+
+## Hero
+
+Follow README.md's Hero section and the corresponding --layout-* tokens. Place a quiet centered title in a generous sky or ground zone above a panoramic scene; finish with a separate photograph and small paired link groups. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
+
+Reference: https://supahero.io/hero/end-speciesism
+
+## Footer
+
+Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 580px as the desktop minimum closing height with 2 information columns or groups. Separate a useful navigation band from an original local photo strip. Decorative shapes must not obscure or intercept links. Do not copy the person's portrait or brand assets.
+
+Reference: https://www.footer.design/sites/carolyn-lee

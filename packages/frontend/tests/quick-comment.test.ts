@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { runInNewContext } from "node:vm";
-import { buildSandboxedArtifactSrcDoc } from "../src/components/canvas/frame-bridge";
+import { buildSandboxedArtifactSrcDoc, readFrameCommentPositions } from "../src/components/canvas/frame-bridge";
 import { commentPointInFrame, frameCommentPointer, isCommentEditable, isQuickCommentShortcut, quickCommentPosition } from "../src/components/canvas/quick-comment";
 
 function shortcut(overrides: Partial<KeyboardEvent> = {}) {
@@ -36,6 +36,58 @@ test("editable targets are excluded", () => {
   expect(isCommentEditable({ closest: selector => selector.includes("textarea") ? {} : null })).toBe(true);
   expect(isCommentEditable({ closest: () => null })).toBe(false);
   expect(isCommentEditable(null)).toBe(false);
+});
+
+test("Given opaque frame position updates When the document or coordinates are invalid Then pins reject the update", () => {
+  const position = { id: "c1", x: 75, y: -12, visible: false };
+  expect(readFrameCommentPositions({ documentKey: "current", positions: [position] }, "current")).toEqual([position]);
+  for (const payload of [null, {}, { documentKey: "old", positions: [position] }, { documentKey: "current", positions: {} },
+    { documentKey: "current", positions: [{ ...position, x: NaN }] }, { documentKey: "current", positions: [{ ...position, visible: "yes" }] }]) {
+    expect(readFrameCommentPositions(payload, "current")).toBeNull();
+  }
+});
+
+test("Given a saved node-local pin When its document scrolls or its ancestor clips Then bridge coordinates follow the content", () => {
+  const html = buildSandboxedArtifactSrcDoc("<head></head>", "http://localhost/index.html", { quickCommentKey: "current" });
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  if (!script) throw new Error("bridge_script_missing");
+  const listeners = new Map<string, (event: unknown) => void>();
+  const frames: Array<() => void> = [];
+  const messages: Array<{ payload: unknown }> = [];
+  const parent = { postMessage: (data: { payload: unknown }) => messages.push(data) };
+  let top = 250, height = 100, clipped = false;
+  const root = { scrollWidth: 800, scrollHeight: 2000, parentElement: null, getBoundingClientRect: () => ({ left: 0, top: 0, right: 800, bottom: 2000 }) };
+  const scroller = { parentElement: root, getBoundingClientRect: () => ({ left: 0, top: 100, right: 800, bottom: 160 }) };
+  const node = { nodeType: 1, id: "hero", tagName: "IMG", parentElement: scroller, getAttribute: () => null,
+    getBoundingClientRect: () => ({ left: 200, top, width: 200, height }) };
+  const document = { readyState: "loading", baseURI: "http://localhost/index.html", documentElement: root, body: root,
+    addEventListener() {}, elementFromPoint: () => node, querySelector: (selector: string) => selector === "#hero" ? node : null,
+    querySelectorAll: (selector: string) => selector === "#hero" ? [node] : [] };
+  const frameWindow = { parent, innerWidth: 800, innerHeight: 600, scrollX: 0, scrollY: 0,
+    addEventListener: (name: string, listener: (event: unknown) => void) => listeners.set(name, listener) };
+  runInNewContext(script, { URL, document, window: frameWindow, navigator: { platform: "Win32" },
+    getComputedStyle: (element: unknown) => ({ overflowX: "visible", overflowY: clipped && element === scroller ? "auto" : "visible" }),
+    requestAnimationFrame: (callback: () => void) => frames.push(callback) });
+  const request = (action: string, payload: unknown, source: unknown = parent) => listeners.get("message")?.({ source,
+    data: { __bgFrameBridge: true, type: "request", requestId: "test", action, payload } });
+  request("hit-comment", { x: 250, y: 300 }, {});
+  expect(messages).toHaveLength(0);
+  request("hit-comment", { x: 250, y: 300 });
+  expect(messages.at(-1)?.payload).toEqual({ selector: "#hero", slideIndex: null, x_pct: 31.25, y_pct: 15, anchor: { version: 1, x_pct: 25, y_pct: 50 } });
+  const comment = { id: "c1", node_selector: "#hero", x_pct: 31.25, y_pct: 15, anchor: { version: 1, x_pct: 25, y_pct: 50 } };
+  request("watch-comments", { comments: [comment] });
+  expect(messages.at(-1)?.payload).toEqual({ documentKey: "current", positions: [{ id: "c1", x: 250, y: 300, visible: true }] });
+  const changed = (event: string) => { listeners.get(event)?.({}); frames.shift()?.(); return messages.at(-1)?.payload; };
+  frameWindow.scrollY = 120; top -= 120;
+  expect(changed("scroll")).toMatchObject({ positions: [{ x: 250, y: 180, visible: true }] });
+  clipped = true;
+  expect(changed("scroll")).toMatchObject({ positions: [{ y: 180, visible: false }] });
+  top = 60;
+  expect(changed("scroll")).toMatchObject({ positions: [{ y: 110, visible: true }] });
+  clipped = false; height = 200;
+  expect(changed("resize")).toMatchObject({ positions: [{ x: 250, y: 160, visible: true }] });
+  request("watch-comments", { comments: [{ ...comment, anchor: null }] });
+  expect(messages.at(-1)?.payload).toMatchObject({ positions: [{ x: 300, y: 160, visible: true }] });
 });
 
 test("hover coordinates round-trip across zoom and pan; stale and out-of-frame events are rejected", () => {
