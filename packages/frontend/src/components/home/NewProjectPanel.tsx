@@ -162,6 +162,7 @@ export default function NewProjectPanel({
   }
 
   if (choosingSystem) return <DesignSystemPicker
+    projectType={isTemplate ? templateFormat : type}
     systems={selectable} selectedId={designSystemId} loading={systemsLoading} error={systemsError} allowNone={!isTemplate}
     onSelect={setPickedSystemId} onRefresh={onRetrySystems} onBack={() => setChoosingSystem(false)}
     onApply={(id) => { setPickedSystemId(id); setWithoutSystem(id === null); setChoosingSystem(false); }}

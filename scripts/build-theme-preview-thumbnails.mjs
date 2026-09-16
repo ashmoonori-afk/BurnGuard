@@ -12,8 +12,9 @@ import { bundledDesignSystems } from "../packages/backend/src/data/bundled-desig
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const previews = path.join(root, "design system themes/previews");
 const output = path.join(previews, "thumbnails");
-const evidence = path.join(root, ".omo/evidence/bundled-website-previews");
-const viewport = { width: 1440, height: 960 };
+const slides = process.argv.includes("--slides");
+const evidence = path.join(root, ".omo/evidence", slides ? "bundled-slide-previews" : "bundled-website-previews");
+const viewport = slides ? { width: 1280, height: 720 } : { width: 1440, height: 960 };
 const quality = 70;
 const relative = (file) => path.relative(root, file).replaceAll(path.sep, "/");
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -51,8 +52,9 @@ try {
       page.on("console", (message) => { if (message.type() === "error") errors.push("console error"); });
       page.on("requestfailed", () => errors.push("request failed"));
       try {
-        const html = path.join(previews, `${slug}.html`);
+        const html = path.join(previews, slides ? "slides" : "", `${slug}.html`);
         await page.goto(pathToFileURL(html).href, { waitUntil: "load", timeout: 30_000 });
+        if (slides) await page.addStyleTag({ content: ".intro,.rules,.sheet:not(:has(.cover)){display:none!important}.sheet{margin:0!important}" });
         const ready = await page.evaluate(async () => {
           // Decode every image, including images whose lazy loading starts below the viewport.
           await Promise.all([...document.images].map(async (image) => { image.loading = "eager"; await image.decode(); }));
@@ -66,7 +68,7 @@ try {
         });
         assert.ok(ready.fonts.length > 0, `${slug}: local fonts not loaded`);
         assert.equal(ready.fontErrors, 0, `${slug}: font load failed`);
-        assert.ok(ready.images.length > 0 && ready.images.every((image) => image.width > 0 && image.height > 0), `${slug}: image missing`);
+        assert.ok((slides || ready.images.length > 0) && ready.images.every((image) => image.width > 0 && image.height > 0), `${slug}: image missing`);
         assert.equal(ready.overflow, false, `${slug}: horizontal overflow`);
         assert.equal(errors.length, 0, `${slug}: ${errors.join(", ")}`);
         assert.equal(external.length, 0, `${slug}: external resource requested`);
@@ -96,7 +98,7 @@ try {
   assert.equal(captures.length, bundledDesignSystems.length);
   await mkdir(output, { recursive: true });
   await mkdir(evidence, { recursive: true });
-  await Promise.all(captures.map(({ slug, bytes }) => writeFile(path.join(output, `${slug}.webp`), bytes)));
+  await Promise.all(captures.map(({ slug, bytes }) => writeFile(path.join(output, `${slides ? "slides-" : ""}${slug}.webp`), bytes)));
   await writeFile(path.join(evidence, "thumbnail-captures.json"), JSON.stringify({ schema: 1, browser: browser.version(), viewport, quality, externalRequests: external.length, fonts, captures: captures.map(({ receipt }) => receipt) }, null, 2) + "\n");
   process.stdout.write(JSON.stringify({ captured: captures.length, bytes: captures.reduce((total, capture) => total + capture.bytes.length, 0), viewport, externalRequests: external.length }) + "\n");
 } finally {

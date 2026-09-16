@@ -1,6 +1,12 @@
 import { defineMessages } from "../types";
 
 export const systemMessages = defineMessages({
+  "system.pin.current": { ko: "이 프로젝트의 디자인 기준: 버전 {revision}", en: "Project design baseline: version {revision}", "zh-CN": "项目设计基准：版本 {revision}" },
+  "system.pin.hint": { ko: "아래 시스템을 편집해도 프로젝트 기준은 유지돼요. 새 기준을 적용하면 다음 생성부터 사용해요.", en: "Editing the system below preserves this project's baseline. Apply an update to use it in future generations.", "zh-CN": "编辑下方系统不会改变项目基准。应用更新后，后续生成将使用新版本。" },
+  "system.pin.changed": { ko: "새 기준에서 바뀐 항목", en: "Changes in the new baseline", "zh-CN": "新基准中的变化" },
+  "system.pin.rules": { ko: "디자인 규칙", en: "Design rules", "zh-CN": "设计规则" },
+  "system.pin.tokens": { ko: "색상·글꼴 토큰", en: "Colour and type tokens", "zh-CN": "颜色与字体变量" },
+  "system.pin.apply": { ko: "이 프로젝트에 새 기준 적용", en: "Apply new baseline to this project", "zh-CN": "将新基准应用到此项目" },
   "system.layout.loading": { ko: "레이아웃 규칙을 불러오는 중이에요.", en: "Loading layout rules…", "zh-CN": "正在加载布局规则…" },
   "system.layout.details": { ko: "구성·반응형 규칙 펼치기", en: "Composition and responsive rules", "zh-CN": "展开构图与响应式规则" },
   "system.layout.title": {"ko": "레이아웃과 구성", "en": "Layout and composition", "zh-CN": "布局与构图"},

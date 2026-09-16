@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { ProjectSummary } from "@bg/shared";
+import type { DesignSystemSummary, ProjectSummary } from "@bg/shared";
 import type { CardViewModel } from "../src/components/home/mappers";
-import { filterHomeCards, projectToCard } from "../src/components/home/mappers";
+import { filterHomeCards, projectToCard, systemToCard } from "../src/components/home/mappers";
 
 const cards: readonly CardViewModel[] = [
   {
@@ -19,6 +19,18 @@ const cards: readonly CardViewModel[] = [
     tintClass: "bg-rose-100",
   },
 ];
+
+test("Given format previews When selecting a system Then only the requested format is shown", () => {
+  const system: DesignSystemSummary = {
+    id: "system", name: "System", status: "published", is_template: true, updated_at: 0,
+    thumbnail_path: "/brand.png", thumbnail_paths: { prototype: "/web.png", slide_deck: "/deck.png" },
+  };
+  expect(systemToCard(system, 0, "prototype").thumbnail).toBe("/web.png");
+  expect(systemToCard(system, 0, "slide_deck").thumbnail).toBe("/deck.png");
+  expect(systemToCard(system, 0, "graphic").thumbnail).toBeNull();
+  expect(systemToCard({ ...system, thumbnail_paths: undefined }, 0, "slide_deck").thumbnail).toBeNull();
+  expect(systemToCard(system).thumbnail).toBe("/brand.png");
+});
 
 describe("filterHomeCards", () => {
   test("Given a normalized title query When filtering Then only matching titles remain", () => {

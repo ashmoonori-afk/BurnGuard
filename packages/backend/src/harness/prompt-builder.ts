@@ -39,7 +39,7 @@ import { appendImageProduction } from "./prompt-image-production";
 export { MAX_SKILL_CHARS } from "./prompt-design-system";
 
 type BuiltSessionContext = NonNullable<Awaited<ReturnType<typeof buildSessionContext>>>;
-type SessionContext = Omit<BuiltSessionContext, "history" | "importContext"> & Partial<Pick<BuiltSessionContext, "history" | "importContext">>;
+type SessionContext = Omit<BuiltSessionContext, "history" | "importContext" | "designSystemPin"> & Partial<Pick<BuiltSessionContext, "history" | "importContext" | "designSystemPin">>;
 
 const MAX_FILES_LISTED = 60;
 
@@ -208,8 +208,12 @@ export async function buildPrompt(
     lines.push("");
   }
 
-  if (context.designSystem) {
-    await appendDesignSystemContext(lines, context.designSystem, contextMode, surfaceForProjectType(project.project_type));
+  if (context.designSystem || context.designSystemPin) {
+    if (context.designSystemPin) {
+      lines.push("<pinned_design_system>", JSON.stringify({ revision: context.designSystemPin.revision, digest: context.designSystemPin.digest }),
+        "Use this project-pinned design system. Do not substitute a newer live system without an explicit project update.",
+        context.designSystemPin.context, "</pinned_design_system>");
+    } else if (context.designSystem) await appendDesignSystemContext(lines, context.designSystem, contextMode, surfaceForProjectType(project.project_type));
   }
 
   if (userEvent.attachments && userEvent.attachments.length > 0) {

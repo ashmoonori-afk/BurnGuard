@@ -114,9 +114,25 @@ export async function validatePptxPackage(bytes: Uint8Array, expectedSlides: num
   return { slides: slides.length, editable_text_nodes: editable, raster_slides: raster };
 }
 
-export async function validateHandoffPackage(bytes: Uint8Array, entrypoint: string): Promise<{ readonly source_files: number; readonly nodes: number }> {
+export async function validateHandoffPackage(bytes: Uint8Array, entrypoint: string, pin?: { readonly digest: string; readonly revision: number } | null): Promise<{ readonly source_files: number; readonly nodes: number }> {
   const zip = await load(bytes); const names = safeNames(zip);
-  for (const required of ["README.txt", "spec.json", `source/${entrypoint}`]) if (!names.has(required)) fail("missing_part");
+  for (const required of ["README.txt", "spec.json", "review.json", "preview.png", `source/${entrypoint}`]) if (!names.has(required)) fail("missing_part");
+  const png = await zip.file("preview.png")!.async("uint8array");
+  const dimensions = parsePng(png);
+  if (dimensions.width !== 1280 || dimensions.height !== 720) fail("invalid_package");
+  let review: unknown;
+  try { review = JSON.parse(await zip.file("review.json")!.async("string")); } catch { fail("invalid_package"); }
+  if (!isRecord(review) || review["schema_version"] !== 1 || review["scope"] !== "entrypoint_at_1280x720_only" ||
+      review["visual_review"] !== "not_performed" || review["responsive_review"] !== "not_performed" ||
+      !isRecord(review["measurements"]) || !Array.isArray(review["measurements"]["findings"])) fail("invalid_package");
+  if (pin) {
+    const rules = await zip.file("design-system.md")?.async("string");
+    const tokens = await zip.file("tokens/colors_and_type.css")?.async("string");
+    if (rules === undefined || tokens === undefined) fail("missing_part");
+    const digest = createHash("sha256").update(JSON.stringify([rules, tokens])).digest("hex");
+    const identity = review["design_system"];
+    if (digest !== pin.digest || !isRecord(identity) || identity["digest"] !== pin.digest || identity["revision"] !== pin.revision) fail("manifest_mismatch");
+  } else if (review["design_system"] !== null) fail("manifest_mismatch");
   const source = await zip.file("spec.json")?.async("string"); if (source === undefined) fail("missing_part");
   let value: unknown; try { value = JSON.parse(source); } catch { fail("invalid_package"); }
   if (!isRecord(value) || value["spec_version"] !== 1 || !Array.isArray(value["pages"])) fail("invalid_package");
