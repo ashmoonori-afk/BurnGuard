@@ -1,7 +1,7 @@
 import { ensureGraphicCapableBackend } from "./graphic-capability";
 import { ensureThreeSceneRuntime } from "./three-scene";
 import { ensureCharts } from "./charts";
-import { lstat, readFile, readdir } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
 import type { NormalizedEvent, UserEvent } from "@bg/shared";
@@ -37,6 +37,9 @@ import { runWithContinuation } from "./turn-continuation";
 import { needsGenerationPhases, runGenerationPhases } from "./turn-phases";
 import { reviewTurnDesign } from "./turn-design-review";
 import { parseStoredProjectOptions } from "./project-options";
+import { inspectCanonicalTree } from "./canonical-tree-manifest";
+import { manifestEntry, readManagedFile } from "./artifact-tree-storage";
+import { resolveWithin } from "../security/path-boundary";
 
 export function assertGraphicStarterReplaced(before: string, after: string): void {
   if (before.includes('data-bg-node-id="graphic-copy"') && before.includes("Start with one clear visual message.") && before === after) throw new Error("graphic_starter_unchanged");
@@ -473,6 +476,15 @@ async function runUserTurnInternal(
           await verifyImmutableAttachments(immutableSnapshots);
         }
         if (activeTurn.interrupted) {
+          const partial = await inspectCanonicalTree(stageDir);
+          if (!manifestEntry(partial, project.entrypoint)) {
+            const original = manifestEntry(base, project.entrypoint);
+            if (!original) throw new ArtifactOperationError("publication_failed", "Interrupted entrypoint is unavailable");
+            const bytes = await readManagedFile(path.join(path.dirname(stageDir), "snapshot"), original);
+            const target = resolveWithin(stageDir, ...project.entrypoint.split("/"));
+            await mkdir(path.dirname(target), { recursive: true });
+            await writeFile(target, bytes, { flag: "wx" });
+          }
           if ((await findHtmlEncodingIssues(stageDir)).length > 0) throw new ArtifactOperationError("publication_failed", "Interrupted HTML encoding is invalid");
           return;
         }
