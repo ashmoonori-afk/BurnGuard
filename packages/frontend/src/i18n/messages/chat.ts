@@ -1,6 +1,8 @@
 import { defineMessages } from "../types";
 
 export const chatMessages = defineMessages({
+  "chat.tool.designReview": { ko: "디자인 검사·수정 (최대 2회)", en: "Design checks and repairs (up to 2)", "zh-CN": "设计检查与修复（最多2次）" },
+  "chat.tool.reviewIncomplete": { ko: "남은 문제 또는 검사 미완료 · 품질 탭에서 확인", en: "Issues remain or checks incomplete · See Quality", "zh-CN": "仍有问题或检查未完成 · 请查看质量面板" },
   "chat.tool.phasePlan": { ko: "1단계 · 목차와 기본 구조 저장", en: "Phase 1 · Save outline and structure", "zh-CN": "阶段 1 · 保存大纲与基本结构" },
   "chat.tool.phaseContent": { ko: "묶음 작성·저장", en: "Write and save batch", "zh-CN": "编写并保存当前批次" },
   "chat.tool.resumeStalled": { ko: "응답이 멈춰 저장된 작업에서 자동 재개", en: "Response stalled — automatically resuming saved work", "zh-CN": "响应停滞，正在从已保存的工作自动恢复" },

@@ -1,0 +1,321 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Graphite Spec Theme · Slide compositions</title><link rel="stylesheet" href="../../../assets/fonts/fonts.css"><style>
+
+/* Graphite Spec Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: dark;
+
+  /* Neutrals */
+  --gray-100: #0E0F11;
+  --gray-90: #1A1B1E;
+  --gray-80: #2B2C2E;
+  --gray-70: #404143;
+  --gray-60: #57585A;
+  --gray-50: #6E6F71;
+  --gray-40: #87888A;
+  --gray-30: #A0A1A3;
+  --gray-20: #B9BABC;
+  --gray-10: #D2D3D5;
+
+  /* Brand and accents */
+  --primary-blue: #E8A33D;
+  --action-blue: #E8A33D;
+  --red-60: #D45B5B;
+  --red-50: #D67373;
+  --red-10: #DCC7CA;
+  --orange-50: #C4703A;
+  --orange-10: #D9CBC4;
+  --yellow-30: #E8A33D;
+  --yellow-10: #E0D2BE;
+  --green-60: #4E9A6B;
+  --green-50: #65A57E;
+  --green-10: #C4D3CD;
+  --teal-50: #6B7078;
+  --teal-10: #C9CBCF;
+  --aqua-60: #5E93B8;
+  --aqua-10: #C7D1DA;
+  --blue-90: #4B381D;
+  --blue-80: #775626;
+  --blue-70: #A77730;
+  --blue-60: #E8A33D;
+  --blue-50: #E6B165;
+  --blue-30: #E2C599;
+  --blue-10: #E0D5C8;
+  --ultramarine-60: #A0733C;
+  --purple-60: #4A6070;
+  --pink-60: #845E67;
+
+  /* Semantic */
+  --success: #4E9A6B;
+  --warning-yellow: #E8A33D;
+  --warning-orange: #C4703A;
+  --error: #D45B5B;
+  --info: #5E93B8;
+
+  /* Surface and text */
+  --bg: #18191C;
+  --bg-subtle: #202124;
+  --bg-muted: #28292C;
+  --surface: #1C1D20;
+  --surface-inverse: #DEDFE2;
+  --fg-1: #DEDFE2;
+  --fg-2: #BABBBE;
+  --fg-3: #97989B;
+  --fg-4: #737477;
+  --fg-on-dark: #DEDFE2;
+  --fg-on-brand: #101014;
+  --border: #343538;
+  --border-strong: #5B5C5F;
+  --focus-ring: #E8A33D;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #4A6070;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #6B7078;
+  --fg-on-accent: #FFFFFF;
+  --fg-on-info: #101014;
+  --fg-on-success: #101014;
+  --fg-on-warning: #101014;
+  --fg-on-error: #101014;
+
+  /* Charts */
+  --chart-1: #E8A33D;
+  --chart-2: #4A6070;
+  --chart-3: #6B7078;
+  --chart-4: #5E93B8;
+  --chart-5: #4E9A6B;
+  --chart-6: #E6B061;
+  --chart-7: #D45B5B;
+  --chart-8: #E4BC82;
+  --chart-9: #9B9FA5;
+  --chart-10: #85939E;
+
+  /* Type families */
+  --font-display: "IBM Plex Mono", "Pretendard", monospace;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "IBM Plex Mono", "Pretendard", monospace;
+  --font-sans: "Public Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 0px;
+  --r-4: 0px;
+  --r-8: 0px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1400px;
+  --layout-measure: 72ch;
+  --layout-columns: 12;
+  --layout-gutter: 16px;
+  --layout-margin: clamp(16px, 2.5vw, 40px);
+  --layout-section-y: clamp(36px, 4vw, 64px);
+  --layout-rule: 1px;
+  --layout-bp-md: 860px;
+  --layout-bp-lg: 1240px;
+  --layout-hero: 2 / 1;
+  --layout-nav-h: 44px;
+
+  /* Family extensions */
+  --family-ui-navigation-placement: top;
+  --family-ui-navigation-span: 2;
+  --family-ui-label-placement: beside;
+}
+
+:root { --layout-structure: split; }
+
+/* Website regions; legacy layout and family tokens continue to govern body content. */
+:root {
+  --layout-nav-pattern: segmented-pill;
+  --layout-nav-position: top;
+  --layout-nav-height: 72px;
+  --layout-nav-width: 1280px;
+  --layout-hero-pattern: specimen-poster;
+  --layout-hero-copy-ratio: 34%;
+  --layout-hero-media-ratio: 5 / 4;
+  --layout-hero-media-position: background;
+  --layout-hero-min-height: 760px;
+  --layout-hero-title-measure: 12ch;
+  --layout-hero-align: end;
+  --layout-hero-offset: 56px;
+  --layout-footer-pattern: studio-address;
+  --layout-footer-columns: 4;
+  --layout-footer-height: 540px;
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface,#f1f0ed);color:var(--fg-1,#202020);font-family:var(--font-body,var(--font-sans,sans-serif))}
+.intro,.rules{padding:20px;font:14px/1.6 var(--font-body,sans-serif)}
+.intro p{margin:4px 0}
+.intro strong{font-size:18px}
+.sheet{container-type:inline-size;margin:0 0 12px}
+.slide{position:relative;isolation:isolate;aspect-ratio:16/9;overflow:hidden;padding:var(--edge);background:var(--surface,#f1f0ed);display:grid;grid-template-columns:1fr 1fr;gap:2cqw;--edge:3.75cqw;--hero:6.666666666666667cqw;--heading:2.7083333333333335cqw;--body:1.6666666666666667cqw;--caption:1.25cqw;border:1px solid color-mix(in srgb,currentColor 25%,transparent)}
+h1,h2,p,figure{margin:0}
+h1,h2{font-family:var(--font-display,var(--font-sans,sans-serif));font-weight:600;line-height:1.03;letter-spacing:-.045em}
+h1{font-size:var(--hero)}
+h2{font-size:var(--heading)}
+p{font-size:var(--body);line-height:1.5;max-width:30ch}
+small,figcaption{font-size:var(--caption);line-height:1.45}
+small{display:block;letter-spacing:.035em}
+.title,.narrative{position:relative;z-index:2;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2.5cqw;min-width:0}
+.title small{margin-bottom:auto}
+.title p{margin-top:auto}
+.visual{width:100%;height:100%;min-height:0;object-fit:cover;display:block}
+.cover .visual{position:absolute;inset:0;z-index:-2}
+.cover:has(>.visual):not(.patagonia .cover):after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,#000b,#0001)}
+.cover:has(>.visual){color:white}
+.cover .title{grid-column:1/-1;max-width:85%}
+.body .visual{max-height:46cqw}
+.specimen{display:flex;flex-direction:column;justify-content:center;border-left:1px solid currentColor;padding-left:3cqw;gap:3cqw}
+.specimen>span{font:16cqw/1 var(--font-display,sans-serif)}
+.swatches{display:flex;gap:1cqw;align-items:end}
+.swatches i{display:block;background:var(--primary-blue,#555);width:7cqw;aspect-ratio:1;border-radius:50%}
+.swatches i:nth-child(2){background:var(--orange-50,#aaa);width:5cqw}
+.swatches i:nth-child(3){background:var(--green-50,#777);width:3cqw}
+.chart{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.bars{height:33cqw;display:flex;gap:3cqw;padding-top:4cqw;border-bottom:1px solid currentColor}
+.bars>div{flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;gap:1cqw}
+.bars i{width:70%;display:block;background:currentColor}
+.bars>div:last-child i{background:var(--primary-blue,#666)}
+.bars b{font-size:2.6cqw}
+.bars span{font-size:var(--caption)}
+.closing{grid-template-columns:1fr}
+.closing h2{font-size:var(--hero);max-width:12ch}
+.closing small{align-self:end}
+.geometry{display:flex;align-items:end;position:absolute;right:0;bottom:0;width:60%;height:28%}
+.geometry i{flex:1;height:100%;background:var(--primary-blue);border-radius:50% 50% 0 0}
+.geometry i:nth-child(2){background:var(--orange-50);border-radius:0}
+.geometry i:nth-child(3){background:var(--green-50);border-radius:50%}
+.config .cover,.config .closing{background:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.config .title{grid-column:1/-1;max-width:85%}
+.config .body{grid-template-columns:1fr;grid-template-rows:1fr 1.2fr}
+.config .narrative{gap:1cqw}
+.lineup{display:grid;grid-template-columns:repeat(3,1fr);gap:2cqw;min-height:0}
+.lineup figure{min-height:0;display:flex;flex-direction:column;gap:1cqw}
+.lineup img{height:14cqw}
+.quantum .cover .visual{filter:blur(1.6cqw);transform:scale(1.05)}
+.quantum .body,.source .body,.source .evidence{grid-template-columns:3fr 9fr}
+.specimen-grid{display:grid;grid-template-columns:1fr 1fr;align-content:center}
+.specimen-grid>*{border:1px solid color-mix(in srgb,currentColor 30%,transparent);padding:2cqw;font-size:8cqw}
+.specimen-grid small{font-size:var(--caption)}
+.source .cover{grid-template-columns:9fr 3fr;grid-template-rows:3fr 1fr;color:var(--fg-1,#222)}
+.source .cover .visual{position:static;z-index:0;grid-column:2;grid-row:1/3}
+.source .cover:after{display:none!important}
+.source .cover .title{grid-column:1;max-width:none}
+.source .cover .swatches{border-top:1px solid currentColor;padding-top:2cqw}
+.source .closing{background-image:linear-gradient(90deg,transparent 25%,#8884 25%,#8884 25.1%,transparent 25.1%),linear-gradient(transparent 75%,#8884 75%,#8884 75.2%,transparent 75.2%)}
+.contact{display:grid;grid-template-columns:3fr 2fr;gap:1cqw;min-height:0}
+.contact img:last-child{object-position:80%}
+.freitag .slide{background-image:linear-gradient(#8883 1px,transparent 1px),linear-gradient(90deg,#8883 1px,transparent 1px);background-size:8.333% 16.667%}
+.freitag .cover{background-color:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.freitag .cover .visual{display:none}
+.freitag .cover:after{display:none!important}
+.freitag .body{grid-template-columns:4fr 8fr}
+.freitag .narrative{border-top:1px solid currentColor;border-bottom:1px solid currentColor}
+.note{position:absolute;bottom:5cqw;right:5cqw;padding:2cqw;background:var(--surface);font-size:var(--body);border:1px solid currentColor}
+.ibm .evidence{grid-template-columns:3fr 6fr 3fr}
+.method{font-size:var(--body);border-left:1px solid currentColor;padding-left:2cqw;align-self:center}
+.ibm .cover .title{grid-column:1;max-width:none}
+.line-art{background:repeating-conic-gradient(from 50deg at 0 50%,transparent 0deg 2deg,var(--primary-blue) 2deg 2.2deg,transparent 2.2deg 4deg);opacity:.5}
+.zip .cover{background:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.zip .cover:after{background:var(--surface)!important;left:67%!important;transform:skew(6deg)}
+.zip .cover .visual{display:none}
+.zip .cover .title{grid-column:1;max-width:none}
+.applications{display:flex;flex-direction:column;justify-content:center;gap:3cqw}
+.applications>div{display:flex;flex-direction:column;gap:1cqw;font-size:var(--caption)}
+.applications strong{padding:2cqw;border:1px solid currentColor;font-size:var(--body)}
+.realreal .body{grid-template-columns:6fr 6fr}
+.realreal .body .visual{grid-column:1;grid-row:1}
+.realreal .body .narrative{grid-column:2}
+.realreal .evidence{grid-template-columns:4fr 8fr}
+.palantir .cover{display:flex;flex-direction:column}
+.period{font-size:6cqw;border-bottom:1px solid currentColor;padding-bottom:2cqw;display:flex;justify-content:space-between}
+.palantir .cover .title{flex:1;max-width:100%}
+.palantir .cover .title small,.palantir .cover .title p{display:none}
+.dots{font-size:4cqw;text-align:right;border-top:1px solid currentColor}
+.results{align-self:center}
+.results p{border-bottom:1px solid currentColor;padding:3cqw 0}
+.panel{border:1px solid currentColor;border-radius:1.5cqw;padding:2cqw;display:flex;align-items:center}
+.panel .chart{width:100%}
+.nike h1{background:var(--surface);color:var(--fg-1);padding:.5cqw;box-decoration-break:clone}
+.nike .evidence .chart{background:color-mix(in srgb,var(--primary-blue) 15%,var(--surface));padding:2cqw}
+.ace .cover{grid-template-columns:1fr}
+.organic{background:var(--primary-blue);border-radius:30% 70% 55% 45% / 50% 40% 60% 50%;color:var(--fg-on-brand,#fff);display:flex;align-items:center;justify-content:center;min-height:30cqw}
+.organic span{font-size:6cqw}
+.ace .cover .organic{position:absolute;inset:10% -10% -30% 25%;z-index:-1;opacity:.2}
+.ace .cover .title{max-width:85%}
+.island{align-self:center;border-radius:45% 55% 40% 60%;padding:5cqw 2cqw;background:color-mix(in srgb,var(--primary-blue) 18%,var(--surface));text-align:center}
+.island strong{font-size:12cqw}
+.burger .cover{grid-template-columns:1fr;background:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.burger .title{max-width:90%}
+.burger .body{grid-template-columns:4fr 8fr}
+.patagonia .cover{grid-template-columns:5fr 7fr}
+.patagonia .cover .visual{position:static;z-index:0}
+.patagonia .cover .title{grid-column:2;max-width:none;color:var(--fg-1)}
+.patagonia .cover:after{display:none!important}
+.patagonia .cover{background-image:linear-gradient(transparent 78%,color-mix(in srgb,var(--primary-blue) 25%,var(--surface)) 78%)}
+blockquote{font:5cqw/1.15 var(--font-serif,serif);margin:0;align-self:center}
+blockquote small{margin-top:3cqw}
+.patagonia .evidence .visual{height:65%;align-self:end}
+.rules summary{cursor:pointer}
+.rules li{margin:8px 0}
+</style></head><body class="freitag"><header class="intro"><strong>Graphite Spec Theme</strong><p>181 - FREITAG Impact Report 2023 · pp. 1, 2, 4, 25, 49, 73</p><p>Layout study · Original theme imagery · Illustrative copy and data</p></header><div class="sheet"><section class="slide cover" data-slide-kind="cover" aria-label="cover"><div class="title"><small>01 / Graphite Spec Theme</small><h1>Ideas into<br>lasting impact.</h1><p>A direction. A clear point of view.</p></div><img class="visual" src="../media/graphite-spec.webp" alt="Graphite Spec Theme — illustrative brand image"></section></div><div class="sheet"><section class="slide body" data-slide-kind="body" aria-label="body"><div class="narrative"><small>02 / Point of view</small><h2>Make room<br>for what matters.</h2><p>One clear idea, supported by a deliberate visual hierarchy.</p></div><img class="visual" src="../media/graphite-spec.webp" alt="Graphite Spec Theme — illustrative brand image"><aside class="note">A useful observation,<br>at the right point.</aside></section></div><div class="sheet"><section class="slide evidence" data-slide-kind="evidence" aria-label="evidence"><div class="narrative"><small>03 / Evidence</small><h2>Show the<br>difference.</h2><p>Keep the observation and its supporting evidence together.</p></div><div class="chart"><small>ILLUSTRATIVE DATA · NOT RESULTS</small><div class="bars"><div><b>38</b><i style="height:38%"></i><span>Before</span></div><div><b>56</b><i style="height:56%"></i><span>Today</span></div><div><b>78</b><i style="height:78%"></i><span>Next</span></div></div></div></section></div><div class="sheet"><section class="slide closing" data-slide-kind="closing" aria-label="closing"><h2>Make the<br>next move.</h2><small>04 / One clear next step →</small></section></div><details class="rules"><summary>Composition rules</summary><ul><li>Visible construction grid with a two-line title crossing its central cells; one flat brand-accent ground.</li><li>Ruled report sheet: a full-width title rail above unequal text, photograph and annotation cells. Keep grid lines continuous.</li><li>Process photograph spans 8/12; left 4/12 carries the claim and a small data table; one accent note aligns to a grid intersection.</li><li>An open construction grid with one action cell. Split dense printed report pages into several slides, never miniaturise them.</li></ul></details></body></html>

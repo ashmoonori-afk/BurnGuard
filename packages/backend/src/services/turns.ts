@@ -35,6 +35,8 @@ import { startTurnPreview } from "./turn-preview";
 import { findHtmlEncodingIssues } from "./generated-html-encoding";
 import { runWithContinuation } from "./turn-continuation";
 import { needsGenerationPhases, runGenerationPhases } from "./turn-phases";
+import { reviewTurnDesign } from "./turn-design-review";
+import { parseStoredProjectOptions } from "./project-options";
 
 export function assertGraphicStarterReplaced(before: string, after: string): void {
   if (before.includes('data-bg-node-id="graphic-copy"') && before.includes("Start with one clear visual message.") && before === after) throw new Error("graphic_starter_unchanged");
@@ -202,7 +204,7 @@ export type UserTurnReservation = {
   readonly operationId: string;
 };
 
-export type TurnDependencies = { readonly runAdapter?: typeof runAdapterTurn; readonly detectBackends?: typeof detectBackends };
+export type TurnDependencies = { readonly runAdapter?: typeof runAdapterTurn; readonly detectBackends?: typeof detectBackends; readonly reviewDesign?: typeof reviewTurnDesign };
 
 export type UserTurnAdmission =
   | { readonly kind: "reserved"; readonly reservation: UserTurnReservation }
@@ -267,6 +269,7 @@ async function runUserTurnInternal(
   }
 
   const backendId = session.backend_id;
+  await setSessionStatus(sessionId, "running");
   const attachmentCount = await assignAttachmentsToTurn(
     sessionId,
     payload.attachments ?? [],
@@ -288,8 +291,6 @@ async function runUserTurnInternal(
     payload,
     attachment_count: attachmentCount,
   });
-  await setSessionStatus(sessionId, "running");
-
   const startTs = Date.now();
 
   // Persist the user's own message as a normalized event so that replay
@@ -446,6 +447,17 @@ async function runUserTurnInternal(
               await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", ok: reviewed });
               if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
             }
+            await ensureThreeSceneRuntime(stageDir);
+            await ensureCharts(stageDir);
+            if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
+            const canvas = parseStoredProjectOptions(project.options_json).graphic_canvas;
+            const designReview = await (dependencies.reviewDesign ?? reviewTurnDesign)({
+              adapter: adapterInput, projectId: project.id, type: project.type, entrypoint: project.entrypoint,
+              revision: project.current_revision + 1, ...(canvas ? { canvas } : {}),
+              run: (input) => runAdapter(backendId, input),
+            });
+            if (designReview.status !== "checked" || designReview.result?.overall_status === "must_fix" || !designReview.result) throw new ArtifactOperationError("publication_failed", "Design checks are incomplete or required fixes remain");
+            if (providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Design repair did not complete");
             const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
             if (encodingIssues.length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
           });

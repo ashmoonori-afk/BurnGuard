@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { CatalogKind, CatalogLicense, CatalogProvenance, DesignSystemSourceType } from "@bg/shared";
+import type { CatalogKind, CatalogLicense, CatalogProvenance, DesignSystemSourceType, ProjectType } from "@bg/shared";
 
 export type CatalogRow = {
   readonly id: string; readonly name: string; readonly description: string | null;
@@ -65,6 +65,15 @@ export function getCatalogTags(db: Database, id: string): readonly string[] {
 
 export function getCatalogUsage(db: Database, id: string): readonly { readonly id: string; readonly name: string }[] {
   return db.query<{ readonly id: string; readonly name: string }, [string]>("SELECT id,name FROM projects WHERE design_system_id=? AND archived_at IS NULL ORDER BY id").all(id);
+}
+
+export function getCatalogPreviewProjects(db: Database, id: string) {
+  return db.query<{ id: string; type: ProjectType; current_revision: number; current_digest: string }, [string]>(`
+    SELECT id,type,current_revision,current_digest FROM (
+      SELECT id,type,current_revision,current_digest,
+        ROW_NUMBER() OVER (PARTITION BY type ORDER BY updated_at DESC,id) AS position
+      FROM projects WHERE design_system_id=? AND archived_at IS NULL AND current_digest IS NOT NULL
+    ) WHERE position=1`).all(id);
 }
 
 export function getContentReceipt(db: Database, id: string): CatalogReceiptRow | null {

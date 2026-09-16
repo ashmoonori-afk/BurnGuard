@@ -5,6 +5,7 @@ import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { systemsDir } from "../src/lib/paths";
 import { createApp } from "../src/server";
+import { projectThumbnailUrl } from "../src/services/project-thumbnails";
 
 const id = `preview-review-${process.pid}`;
 const root = path.resolve(systemsDir, id);
@@ -49,4 +50,29 @@ test("Given no preview folder When the system is listed Then the response is emp
   const response = await app.request(`http://preview.test/api/design-systems/${id}/previews`, { headers });
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ data: [] });
+});
+
+test("Given multiple output formats When reading the catalog Then previews use the latest non-archived rendered output of each type", async () => {
+  const db = getSqlite();
+  const insert = db.prepare(`INSERT INTO projects(id,name,type,design_system_id,dir_path,backend_id,created_at,updated_at,archived_at,current_revision,current_digest)
+    VALUES (?,? ,?,?,?,'codex',1,?,?,1,?)`);
+  const rows = [
+    { suffix: "web", type: "prototype", updated: 1, archived: null, digest: "a".repeat(64) },
+    { suffix: "old-deck", type: "slide_deck", updated: 1, archived: null, digest: "b".repeat(64) },
+    { suffix: "deck", type: "slide_deck", updated: 2, archived: null, digest: "c".repeat(64) },
+    { suffix: "archived", type: "slide_deck", updated: 3, archived: 3, digest: "d".repeat(64) },
+    { suffix: "empty", type: "slide_deck", updated: 4, archived: null, digest: null },
+  ];
+  try {
+    for (const row of rows) insert.run(`${id}-${row.suffix}`, row.suffix, row.type, id, root, row.updated, row.archived, row.digest);
+    const response = await app.request(`http://preview.test/api/design-systems/${id}`, { headers });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data.thumbnail_paths).toEqual({
+      prototype: projectThumbnailUrl({ id: `${id}-web`, current_revision: 1, current_digest: "a".repeat(64) }),
+      slide_deck: projectThumbnailUrl({ id: `${id}-deck`, current_revision: 1, current_digest: "c".repeat(64) }),
+    });
+  } finally {
+    for (const row of rows) db.prepare("DELETE FROM projects WHERE id=?").run(`${id}-${row.suffix}`);
+  }
 });

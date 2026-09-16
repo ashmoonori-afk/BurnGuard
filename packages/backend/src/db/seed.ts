@@ -359,6 +359,7 @@ export async function createProjectRecord(input: {
   });
 
   try {
+    await (await import("../services/project-design-system-pin")).ensureProjectDesignSystemPin(projectId);
     await new ArtifactCoordinator(getSqlite()).initializeProject(projectId, dirPath, async (stage) => {
       if (input.initializeArtifact) await input.initializeArtifact(stage);
       else if (original && originalFormat) await copyOriginalSample(original.slug, originalFormat.directory, stage);

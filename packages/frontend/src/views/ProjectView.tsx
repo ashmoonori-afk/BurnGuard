@@ -1,4 +1,5 @@
 import { loadComposerDraft } from "@/components/chat/useComposerDraft";
+import ProjectDesignSystemVersion from "@/components/systems/ProjectDesignSystemVersion";
 import type { ReadyAttachmentSource } from "@/components/chat/attachment-intake";
 import { saveAndRequestCommentEdit } from "@/components/modes/comment-edit-request";
 import { CommentItem } from "@/components/modes/CommentPanel";
@@ -1201,9 +1202,9 @@ export default function ProjectView() {
         <div id="project-workspace-pane" className={cn("flex min-h-0 min-w-0 flex-1", mobilePane !== "workspace" && "max-[900px]:hidden")}>
 
         {activeTab?.kind === "design_system" && (
-          <DesignSystemView
+          <div className="flex min-h-0 w-full flex-col overflow-auto"><ProjectDesignSystemVersion projectId={id!} disabled={composerDisabled} /><DesignSystemView
             systemIdOverride={project.design_system_id ?? undefined}
-          />
+          /></div>
         )}
 
         {activeTab?.kind === "design_files" && (
