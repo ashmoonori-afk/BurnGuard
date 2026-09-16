@@ -1,15 +1,32 @@
-import { useState } from "react";
-import type { DesignSystemSummary } from "@bg/shared";
+import { useEffect, useState } from "react";
+import type { DesignSystemSummary, ProjectType } from "@bg/shared";
 import { Palette, RefreshCw } from "lucide-react";
 import { useT } from "@/i18n/t";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { filterHomeCards, systemToCard } from "./mappers";
+import { thumbnailRetryDelay } from "./thumbnail-source";
+
+function PickerThumbnail({ source }: { source: string | null | undefined }) {
+  const t = useT();
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const delay = thumbnailRetryDelay(attempt);
+  useEffect(() => {
+    if (!failed || delay === null) return;
+    const timer = setTimeout(() => { setAttempt((value) => value + 1); setFailed(false); }, delay);
+    return () => clearTimeout(timer);
+  }, [failed, delay]);
+  return source && !failed
+    ? <img src={source} alt="" loading="lazy" decoding="async" className="h-full w-full object-contain" onError={() => setFailed(true)} />
+    : <div className="flex flex-col items-center gap-2 px-3 text-center text-xs text-muted-foreground"><Palette className="h-7 w-7" aria-hidden="true" />{t(source ? delay === null ? "home.previewError" : "home.previewPreparing" : "home.picker.noPreview")}</div>;
+}
 
 export default function DesignSystemPicker({
-  systems, selectedId, loading, error, allowNone, onSelect, onRefresh, onBack, onApply,
+  systems, projectType, selectedId, loading, error, allowNone, onSelect, onRefresh, onBack, onApply,
 }: {
   systems: readonly DesignSystemSummary[];
+  projectType: ProjectType;
   selectedId: string | null;
   loading: boolean;
   error: Error | null;
@@ -21,8 +38,8 @@ export default function DesignSystemPicker({
 }) {
   const t = useT();
   const [query, setQuery] = useState("");
-  const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(new Set());
-  const cards = filterHomeCards(systems.map(systemToCard), query);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const cards = filterHomeCards(systems.map((system, index) => systemToCard(system, index, projectType)), query);
   const selected = systems.find((system) => system.id === selectedId);
 
   return <section className="space-y-4 p-6" aria-labelledby="system-picker-title" aria-busy={loading}>
@@ -32,7 +49,7 @@ export default function DesignSystemPicker({
     </div>
     <div className="flex gap-2">
       <Input type="search" autoFocus aria-label={t("home.picker.search")} placeholder={t("home.picker.search")} value={query} onChange={(event) => setQuery(event.target.value)} />
-      <Button type="button" variant="outline" disabled={loading} onClick={() => { setFailedImages(new Set()); onRefresh(); }}>
+      <Button type="button" variant="outline" disabled={loading} onClick={() => { setRefreshKey((value) => value + 1); onRefresh(); }}>
         <RefreshCw className="mr-2 h-4 w-4 shrink-0" aria-hidden="true" />{t("home.picker.refresh")}
       </Button>
     </div>
@@ -42,10 +59,8 @@ export default function DesignSystemPicker({
     <fieldset disabled={loading || error !== null} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <legend className="sr-only">{t("home.picker.title")}</legend>
       {cards.map((card) => <label key={card.id} className={`relative min-w-0 cursor-pointer overflow-hidden rounded-xl border-2 transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${selectedId === card.id ? "border-accent bg-accent-soft" : "border-border bg-card hover:border-accent/50"}`}>
-        <div className="flex aspect-[16/10] items-center justify-center overflow-hidden bg-muted">
-          {card.thumbnail && !failedImages.has(card.thumbnail)
-            ? <img src={card.thumbnail} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" onError={() => setFailedImages((current) => new Set([...current, card.thumbnail!]))} />
-            : <div className="flex flex-col items-center gap-2 px-3 text-center text-xs text-muted-foreground"><Palette className="h-7 w-7" aria-hidden="true" />{t("home.picker.noPreview")}</div>}
+        <div className="flex aspect-video items-center justify-center overflow-hidden bg-muted">
+          <PickerThumbnail key={`${refreshKey}:${card.thumbnail}`} source={card.thumbnail} />
         </div>
         <div className="flex items-center gap-3 p-3">
           <input type="radio" name="onboarding-design-system" aria-label={card.name} value={card.id} checked={selectedId === card.id} onChange={() => onSelect(card.id)} className="h-4 w-4 shrink-0 accent-accent" />

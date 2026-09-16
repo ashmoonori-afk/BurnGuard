@@ -7,6 +7,7 @@ import { parseStoredProjectOptions } from "../services/project-options";
 import { processProjectFilesystemSignal } from "../services/watchers";
 import { designDirectionRoutes } from "./design-directions";
 import { chartRoutes } from "./charts";
+import { DesignSystemPinError, inspectProjectDesignSystemPin, refreshProjectDesignSystemPin } from "../services/project-design-system-pin";
 
 function ok<T>(data: T): ApiSuccess<T> {
   return { data };
@@ -23,6 +24,27 @@ function fail(
 export const projectRoutes = new Hono();
 projectRoutes.route("/", designDirectionRoutes);
 projectRoutes.route("/", chartRoutes);
+
+projectRoutes.get("/api/projects/:id/design-system-pin", async (c) => {
+  try { return c.json(ok(await inspectProjectDesignSystemPin(c.req.param("id")))); }
+  catch (error) {
+    if (error instanceof DesignSystemPinError) return c.json(fail(error.code, "Design system version unavailable"), 409);
+    throw error;
+  }
+});
+projectRoutes.post("/api/projects/:id/design-system-pin", async (c) => {
+  const body: unknown = await c.req.json().catch(() => null);
+  if (!body || typeof body !== "object" || Object.keys(body).length !== 2 ||
+    !("expected_digest" in body) || typeof body.expected_digest !== "string" || !/^[a-f0-9]{64}$/.test(body.expected_digest) ||
+    !("candidate_digest" in body) || typeof body.candidate_digest !== "string" || !/^[a-f0-9]{64}$/.test(body.candidate_digest)) return c.json(fail("invalid_body", "Expected version identities"), 400);
+  try {
+    await refreshProjectDesignSystemPin(c.req.param("id"), body.expected_digest, body.candidate_digest);
+    return c.json(ok(await inspectProjectDesignSystemPin(c.req.param("id"))));
+  } catch (error) {
+    if (error instanceof DesignSystemPinError) return c.json(fail(error.code, "Design system version changed or project is busy"), 409);
+    throw error;
+  }
+});
 
 projectRoutes.get("/api/projects/:id", async (c) => {
   const id = c.req.param("id");

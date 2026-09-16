@@ -8,6 +8,7 @@ import { getSqlite } from "../db/sqlite-client";
 import { readConversationHistory } from "../db/conversation-history";
 import { ATTACHMENT_LIMITS } from "./attachments";
 import { readImportContext } from "./project-import-init";
+import { ensureProjectDesignSystemPin } from "./project-design-system-pin";
 
 export function selectContextAttachments(attachments: Awaited<ReturnType<typeof listSessionAttachments>>, requestedPaths: readonly string[], request: string): string[] {
   const text = request.normalize("NFC").toLowerCase();
@@ -51,6 +52,7 @@ export async function buildSessionContext(sessionId: string) {
     designDirectionState,
     history: readConversationHistory(getSqlite(), sessionId),
     importContext: await readImportContext(project.project_dir),
+    designSystemPin: await ensureProjectDesignSystemPin(project.project_id),
   };
 }
 

@@ -2,12 +2,13 @@ import type { Database } from "bun:sqlite";
 import path from "node:path";
 import type { CatalogDesignSystemDetail } from "@bg/shared";
 import {
-  getCatalogRow, getCatalogTags, getCatalogUsage, getContentReceipt, getLineageReceipt, listCatalogRows,
+  getCatalogRow, getCatalogTags, getCatalogUsage, getCatalogPreviewProjects, getContentReceipt, getLineageReceipt, listCatalogRows,
   type CatalogReceiptRow, type CatalogRow,
 } from "../db/catalog-repository";
 import type { CatalogQuery } from "./catalog-query";
 import { catalogPaths, inspectCatalogTree } from "./catalog-files";
 import { BUNDLED_WEBSITE_PREVIEW, BUNDLED_WEBSITE_THUMBNAIL, hasBundledSystemPreview } from "./bundled-system-preview";
+import { projectThumbnailUrl } from "./project-thumbnails";
 
 export type CatalogResult = CatalogDesignSystemDetail;
 
@@ -82,6 +83,10 @@ async function catalogResult(db: Database, root: string, row: CatalogRow): Promi
     updated_at: row.updatedAt,
     is_template: row.isTemplate === 1,
     thumbnail_path: row.thumbnailPath ?? (bundledPreview ? `/api/design-systems/${encodeURIComponent(row.id)}/files/${BUNDLED_WEBSITE_THUMBNAIL}` : null),
+    thumbnail_paths: { ...(bundledPreview ? { prototype: `/api/design-systems/${encodeURIComponent(row.id)}/files/${BUNDLED_WEBSITE_THUMBNAIL}`, slide_deck: `/api/design-systems/${encodeURIComponent(row.id)}/files/preview/slides-thumbnail.webp` } : {}), ...Object.fromEntries(getCatalogPreviewProjects(db, row.id).flatMap((project) => {
+      const url = projectThumbnailUrl(project);
+      return url === null ? [] : [[project.type, url]];
+    })) },
     source_type: row.sourceType,
     source_uri: row.sourceUri,
     dir_path: row.lifecycle === "trashed" ? path.join(root, ".catalog-trash", row.id) : row.dirPath,

@@ -1,0 +1,321 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Paper Instrument Theme · Slide compositions</title><link rel="stylesheet" href="../../../assets/fonts/fonts.css"><style>
+
+/* Paper Instrument Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --gray-100: #FCFCFB;
+  --gray-90: #EEEEEE;
+  --gray-80: #DCDCDC;
+  --gray-70: #C4C5C5;
+  --gray-60: #ABACAC;
+  --gray-50: #919294;
+  --gray-40: #757778;
+  --gray-30: #5A5B5E;
+  --gray-20: #3E3F42;
+  --gray-10: #222428;
+
+  /* Brand and accents */
+  --primary-blue: #1D4ED8;
+  --action-blue: #1D4ED8;
+  --red-60: #C53030;
+  --red-50: #CF5555;
+  --red-10: #F2D7D6;
+  --orange-50: #B45309;
+  --orange-10: #EFDECF;
+  --yellow-30: #B7791F;
+  --yellow-10: #EDDFCB;
+  --green-60: #2F855A;
+  --green-50: #509874;
+  --green-10: #D7E7DE;
+  --teal-50: #94A3B8;
+  --teal-10: #E9ECEF;
+  --aqua-60: #1D4ED8;
+  --aqua-10: #D4DDF5;
+  --blue-90: #17264F;
+  --blue-80: #183175;
+  --blue-70: #1A3D9F;
+  --blue-60: #1D4ED8;
+  --blue-50: #5378E0;
+  --blue-30: #9AAFEC;
+  --blue-10: #D8E0F5;
+  --ultramarine-60: #1C3CA1;
+  --purple-60: #475569;
+  --pink-60: #7C4551;
+
+  /* Semantic */
+  --success: #2F855A;
+  --warning-yellow: #B7791F;
+  --warning-orange: #B45309;
+  --error: #C53030;
+  --info: #1D4ED8;
+
+  /* Surface and text */
+  --bg: #FCFCFB;
+  --bg-subtle: #F3F3F2;
+  --bg-muted: #E9EAE9;
+  --surface: #F7F7F6;
+  --surface-inverse: #14161A;
+  --fg-1: #14161A;
+  --fg-2: #3E3F42;
+  --fg-3: #68696B;
+  --fg-4: #919294;
+  --fg-on-dark: #FCFCFB;
+  --fg-on-brand: #FFFFFF;
+  --border: #DCDCDC;
+  --border-strong: #ADAEAE;
+  --focus-ring: #1D4ED8;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #475569;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #94A3B8;
+  --fg-on-accent: #101014;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #101014;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #1D4ED8;
+  --chart-2: #475569;
+  --chart-3: #94A3B8;
+  --chart-4: #1B42AE;
+  --chart-5: #2F855A;
+  --chart-6: #B7791F;
+  --chart-7: #C53030;
+  --chart-8: #193688;
+  --chart-9: #5E6876;
+  --chart-10: #8F98A3;
+
+  /* Type families */
+  --font-display: "Instrument Sans", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "Instrument Sans", "Pretendard", sans-serif;
+  --font-sans: "Instrument Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 2px;
+  --r-4: 3px;
+  --r-8: 4px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1240px;
+  --layout-measure: 66ch;
+  --layout-columns: 12;
+  --layout-gutter: 24px;
+  --layout-margin: clamp(24px, 5vw, 72px);
+  --layout-section-y: clamp(72px, 9vw, 144px);
+  --layout-rule: 1px;
+  --layout-bp-md: 780px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 3 / 2;
+  --layout-nav-h: 64px;
+
+  /* Family extensions */
+  --family-ui-navigation-placement: top;
+  --family-ui-navigation-span: 2;
+  --family-ui-label-placement: beside;
+}
+
+:root { --layout-structure: split; }
+
+/* Website regions; legacy layout and family tokens continue to govern body content. */
+:root {
+  --layout-nav-pattern: mega-feature;
+  --layout-nav-position: top;
+  --layout-nav-height: 96px;
+  --layout-nav-width: 1200px;
+  --layout-hero-pattern: framed-cover;
+  --layout-hero-copy-ratio: 80%;
+  --layout-hero-media-ratio: 3 / 2;
+  --layout-hero-media-position: right;
+  --layout-hero-min-height: 640px;
+  --layout-hero-title-measure: 16ch;
+  --layout-hero-align: start;
+  --layout-hero-offset: 24px;
+  --layout-footer-pattern: window-stage;
+  --layout-footer-columns: 3;
+  --layout-footer-height: 580px;
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface,#f1f0ed);color:var(--fg-1,#202020);font-family:var(--font-body,var(--font-sans,sans-serif))}
+.intro,.rules{padding:20px;font:14px/1.6 var(--font-body,sans-serif)}
+.intro p{margin:4px 0}
+.intro strong{font-size:18px}
+.sheet{container-type:inline-size;margin:0 0 12px}
+.slide{position:relative;isolation:isolate;aspect-ratio:16/9;overflow:hidden;padding:var(--edge);background:var(--surface,#f1f0ed);display:grid;grid-template-columns:1fr 1fr;gap:2cqw;--edge:3.75cqw;--hero:5.833333333333334cqw;--heading:2.916666666666667cqw;--body:1.7708333333333335cqw;--caption:1.3541666666666667cqw;border:1px solid color-mix(in srgb,currentColor 25%,transparent)}
+h1,h2,p,figure{margin:0}
+h1,h2{font-family:var(--font-display,var(--font-sans,sans-serif));font-weight:600;line-height:1.03;letter-spacing:-.045em}
+h1{font-size:var(--hero)}
+h2{font-size:var(--heading)}
+p{font-size:var(--body);line-height:1.5;max-width:30ch}
+small,figcaption{font-size:var(--caption);line-height:1.45}
+small{display:block;letter-spacing:.035em}
+.title,.narrative{position:relative;z-index:2;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2.5cqw;min-width:0}
+.title small{margin-bottom:auto}
+.title p{margin-top:auto}
+.visual{width:100%;height:100%;min-height:0;object-fit:cover;display:block}
+.cover .visual{position:absolute;inset:0;z-index:-2}
+.cover:has(>.visual):not(.patagonia .cover):after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,#000b,#0001)}
+.cover:has(>.visual){color:white}
+.cover .title{grid-column:1/-1;max-width:85%}
+.body .visual{max-height:46cqw}
+.specimen{display:flex;flex-direction:column;justify-content:center;border-left:1px solid currentColor;padding-left:3cqw;gap:3cqw}
+.specimen>span{font:16cqw/1 var(--font-display,sans-serif)}
+.swatches{display:flex;gap:1cqw;align-items:end}
+.swatches i{display:block;background:var(--primary-blue,#555);width:7cqw;aspect-ratio:1;border-radius:50%}
+.swatches i:nth-child(2){background:var(--orange-50,#aaa);width:5cqw}
+.swatches i:nth-child(3){background:var(--green-50,#777);width:3cqw}
+.chart{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.bars{height:33cqw;display:flex;gap:3cqw;padding-top:4cqw;border-bottom:1px solid currentColor}
+.bars>div{flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;gap:1cqw}
+.bars i{width:70%;display:block;background:currentColor}
+.bars>div:last-child i{background:var(--primary-blue,#666)}
+.bars b{font-size:2.6cqw}
+.bars span{font-size:var(--caption)}
+.closing{grid-template-columns:1fr}
+.closing h2{font-size:var(--hero);max-width:12ch}
+.closing small{align-self:end}
+.geometry{display:flex;align-items:end;position:absolute;right:0;bottom:0;width:60%;height:28%}
+.geometry i{flex:1;height:100%;background:var(--primary-blue);border-radius:50% 50% 0 0}
+.geometry i:nth-child(2){background:var(--orange-50);border-radius:0}
+.geometry i:nth-child(3){background:var(--green-50);border-radius:50%}
+.config .cover,.config .closing{background:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.config .title{grid-column:1/-1;max-width:85%}
+.config .body{grid-template-columns:1fr;grid-template-rows:1fr 1.2fr}
+.config .narrative{gap:1cqw}
+.lineup{display:grid;grid-template-columns:repeat(3,1fr);gap:2cqw;min-height:0}
+.lineup figure{min-height:0;display:flex;flex-direction:column;gap:1cqw}
+.lineup img{height:14cqw}
+.quantum .cover .visual{filter:blur(1.6cqw);transform:scale(1.05)}
+.quantum .body,.source .body,.source .evidence{grid-template-columns:3fr 9fr}
+.specimen-grid{display:grid;grid-template-columns:1fr 1fr;align-content:center}
+.specimen-grid>*{border:1px solid color-mix(in srgb,currentColor 30%,transparent);padding:2cqw;font-size:8cqw}
+.specimen-grid small{font-size:var(--caption)}
+.source .cover{grid-template-columns:9fr 3fr;grid-template-rows:3fr 1fr;color:var(--fg-1,#222)}
+.source .cover .visual{position:static;z-index:0;grid-column:2;grid-row:1/3}
+.source .cover:after{display:none!important}
+.source .cover .title{grid-column:1;max-width:none}
+.source .cover .swatches{border-top:1px solid currentColor;padding-top:2cqw}
+.source .closing{background-image:linear-gradient(90deg,transparent 25%,#8884 25%,#8884 25.1%,transparent 25.1%),linear-gradient(transparent 75%,#8884 75%,#8884 75.2%,transparent 75.2%)}
+.contact{display:grid;grid-template-columns:3fr 2fr;gap:1cqw;min-height:0}
+.contact img:last-child{object-position:80%}
+.freitag .slide{background-image:linear-gradient(#8883 1px,transparent 1px),linear-gradient(90deg,#8883 1px,transparent 1px);background-size:8.333% 16.667%}
+.freitag .cover{background-color:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.freitag .cover .visual{display:none}
+.freitag .cover:after{display:none!important}
+.freitag .body{grid-template-columns:4fr 8fr}
+.freitag .narrative{border-top:1px solid currentColor;border-bottom:1px solid currentColor}
+.note{position:absolute;bottom:5cqw;right:5cqw;padding:2cqw;background:var(--surface);font-size:var(--body);border:1px solid currentColor}
+.ibm .evidence{grid-template-columns:3fr 6fr 3fr}
+.method{font-size:var(--body);border-left:1px solid currentColor;padding-left:2cqw;align-self:center}
+.ibm .cover .title{grid-column:1;max-width:none}
+.line-art{background:repeating-conic-gradient(from 50deg at 0 50%,transparent 0deg 2deg,var(--primary-blue) 2deg 2.2deg,transparent 2.2deg 4deg);opacity:.5}
+.zip .cover{background:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.zip .cover:after{background:var(--surface)!important;left:67%!important;transform:skew(6deg)}
+.zip .cover .visual{display:none}
+.zip .cover .title{grid-column:1;max-width:none}
+.applications{display:flex;flex-direction:column;justify-content:center;gap:3cqw}
+.applications>div{display:flex;flex-direction:column;gap:1cqw;font-size:var(--caption)}
+.applications strong{padding:2cqw;border:1px solid currentColor;font-size:var(--body)}
+.realreal .body{grid-template-columns:6fr 6fr}
+.realreal .body .visual{grid-column:1;grid-row:1}
+.realreal .body .narrative{grid-column:2}
+.realreal .evidence{grid-template-columns:4fr 8fr}
+.palantir .cover{display:flex;flex-direction:column}
+.period{font-size:6cqw;border-bottom:1px solid currentColor;padding-bottom:2cqw;display:flex;justify-content:space-between}
+.palantir .cover .title{flex:1;max-width:100%}
+.palantir .cover .title small,.palantir .cover .title p{display:none}
+.dots{font-size:4cqw;text-align:right;border-top:1px solid currentColor}
+.results{align-self:center}
+.results p{border-bottom:1px solid currentColor;padding:3cqw 0}
+.panel{border:1px solid currentColor;border-radius:1.5cqw;padding:2cqw;display:flex;align-items:center}
+.panel .chart{width:100%}
+.nike h1{background:var(--surface);color:var(--fg-1);padding:.5cqw;box-decoration-break:clone}
+.nike .evidence .chart{background:color-mix(in srgb,var(--primary-blue) 15%,var(--surface));padding:2cqw}
+.ace .cover{grid-template-columns:1fr}
+.organic{background:var(--primary-blue);border-radius:30% 70% 55% 45% / 50% 40% 60% 50%;color:var(--fg-on-brand,#fff);display:flex;align-items:center;justify-content:center;min-height:30cqw}
+.organic span{font-size:6cqw}
+.ace .cover .organic{position:absolute;inset:10% -10% -30% 25%;z-index:-1;opacity:.2}
+.ace .cover .title{max-width:85%}
+.island{align-self:center;border-radius:45% 55% 40% 60%;padding:5cqw 2cqw;background:color-mix(in srgb,var(--primary-blue) 18%,var(--surface));text-align:center}
+.island strong{font-size:12cqw}
+.burger .cover{grid-template-columns:1fr;background:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.burger .title{max-width:90%}
+.burger .body{grid-template-columns:4fr 8fr}
+.patagonia .cover{grid-template-columns:5fr 7fr}
+.patagonia .cover .visual{position:static;z-index:0}
+.patagonia .cover .title{grid-column:2;max-width:none;color:var(--fg-1)}
+.patagonia .cover:after{display:none!important}
+.patagonia .cover{background-image:linear-gradient(transparent 78%,color-mix(in srgb,var(--primary-blue) 25%,var(--surface)) 78%)}
+blockquote{font:5cqw/1.15 var(--font-serif,serif);margin:0;align-self:center}
+blockquote small{margin-top:3cqw}
+.patagonia .evidence .visual{height:65%;align-self:end}
+.rules summary{cursor:pointer}
+.rules li{margin:8px 0}
+</style></head><body class="ibm"><header class="intro"><strong>Paper Instrument Theme</strong><p>173 - IBM Cost of a Data Breach Report 2023 · pp. 1, 2, 3, 20, 40, 59</p><p>Layout study · Original theme imagery · Illustrative copy and data</p></header><div class="sheet"><section class="slide cover" data-slide-kind="cover" aria-label="cover"><div class="title"><small>01 / Paper Instrument Theme</small><h1>Ideas into<br>lasting impact.</h1><p>A direction. A clear point of view.</p></div><div class="line-art" aria-hidden="true"></div></section></div><div class="sheet"><section class="slide body" data-slide-kind="body" aria-label="body"><div class="narrative"><small>02 / Point of view</small><h2>Make room<br>for what matters.</h2><p>One clear idea, supported by a deliberate visual hierarchy.</p></div><img class="visual" src="../media/paper-instrument.webp" alt="Paper Instrument Theme — illustrative brand image"></section></div><div class="sheet"><section class="slide evidence" data-slide-kind="evidence" aria-label="evidence"><div class="narrative"><small>03 / Evidence</small><h2>Show the<br>difference.</h2><p>Keep the observation and its supporting evidence together.</p></div><div class="chart"><small>ILLUSTRATIVE DATA · NOT RESULTS</small><div class="bars"><div><b>38</b><i style="height:38%"></i><span>Before</span></div><div><b>56</b><i style="height:56%"></i><span>Today</span></div><div><b>78</b><i style="height:78%"></i><span>Next</span></div></div></div><aside class="method"><small>METHOD</small><p>Compare the same measure over a consistent period.</p></aside></section></div><div class="sheet"><section class="slide closing" data-slide-kind="closing" aria-label="closing"><h2>Make the<br>next move.</h2><small>04 / One clear next step →</small></section></div><details class="rules"><summary>Composition rules</summary><ul><li>Quiet title in left 6/12; one analytical line motif in right 6/12, with generous whitespace.</li><li>Research page: narrow finding column at left 3/12, one large chart at centre 6/12, methodology or comparison in right 3/12.</li><li>A single readable chart leads; direct labels, units, period and source below. Two charts only when they share a comparison question.</li><li>A concise finding and a next-step column on a light ground. Printed footnotes become a dedicated appendix slide.</li></ul></details></body></html>

@@ -15,6 +15,7 @@ import { catalogPaths, inspectCatalogTree, validateCatalogReceiptTree } from "./
 import { resolveStaticClosure } from "./export-closure";
 import { completeExportAttemptWithEvent, publishExportAttemptEvent, publishPersistedExportAttemptEvent } from "./export-events";
 import { renderHandoffBundle } from "./export-handoff-render";
+import { ensureProjectDesignSystemPin } from "./project-design-system-pin";
 import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "./export-html-validation";
 import { formatExtension } from "./export-naming";
 import { validateHandoffPackage, validatePptxPackage } from "./export-package-validation";
@@ -100,7 +101,7 @@ export function cancelProjectExport(attemptId: string): boolean {
   return persisted;
 }
 
-type Context = { readonly identity: ExportIdentity; readonly project: NonNullable<Awaited<ReturnType<typeof getProjectDetail>>>; readonly format: ExportFormat; readonly options: ExportOptions; readonly rendererDigest: string; readonly captureDigest: string };
+type Context = { readonly designSystemPin: Awaited<ReturnType<typeof ensureProjectDesignSystemPin>>; readonly identity: ExportIdentity; readonly project: NonNullable<Awaited<ReturnType<typeof getProjectDetail>>>; readonly format: ExportFormat; readonly options: ExportOptions; readonly rendererDigest: string; readonly captureDigest: string };
 type RunInput = { readonly jobId: string; readonly attemptId: string; readonly context: Context; readonly controller: AbortController; readonly hooks: ExportHooks };
 
 async function runExport(input: RunInput): Promise<void> {
@@ -169,7 +170,7 @@ async function renderOutput(input: RunInput, renderRoot: string, outputPath: str
     case "png": return only(await renderToPng({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, width: context.options.png_width ?? 1280, height: context.options.png_height ?? 720, dpr: context.options.png_dpr ?? 1, deck: context.project.type === "slide_deck", signal: input.controller.signal }));
     case "pdf": return only(await renderDeckToPdf({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, paper: context.options.pdf_paper, selector: context.project.type === "graphic" ? "[data-graphic-artboard]" : "[data-slide]", title: `${context.project.name} r${context.identity.revision}`, signal: input.controller.signal }));
     case "pptx": { await renderDeckToPptx({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, size: context.options.pptx_size, signal: input.controller.signal }); const slides = parse(await readFile(path.join(renderRoot, context.project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length; return only(await validatePptxPackage(new Uint8Array(await readFile(outputPath)), slides)); }
-    case "handoff": { const bundle = path.join(path.dirname(renderRoot), "handoff"); await renderHandoffBundle({ stagedProjectDir: renderRoot, stagingDir: bundle, entrypoint: context.project.entrypoint, tokensSrcPath: null, tokensFileName: null, designSystemName: context.project.design_system_name, project: { id: context.project.id, name: context.project.name, type: context.project.type, entrypoint: context.project.entrypoint }, isDeck: context.project.type === "slide_deck", signal: input.controller.signal }); await zipDirectory(bundle, outputPath); return only(await validateHandoffPackage(new Uint8Array(await readFile(outputPath)), context.project.entrypoint)); }
+    case "handoff": { const bundle = path.join(path.dirname(renderRoot), "handoff"); await renderHandoffBundle({ stagedProjectDir: renderRoot, stagingDir: bundle, designSystemPin: context.designSystemPin, entrypoint: context.project.entrypoint, tokensSrcPath: null, tokensFileName: null, designSystemName: context.project.design_system_name, project: { id: context.project.id, name: context.project.name, type: context.project.type, entrypoint: context.project.entrypoint }, isDeck: context.project.type === "slide_deck", signal: input.controller.signal }); await zipDirectory(bundle, outputPath); return only(await validateHandoffPackage(new Uint8Array(await readFile(outputPath)), context.project.entrypoint, context.designSystemPin)); }
     case "cafe24_package":
     case "imweb_package": {
       const browserSession = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: false, signal: input.controller.signal });
@@ -221,9 +222,10 @@ async function exportContext(projectId: string, format: ExportFormat, options: E
   }
   const source = resolveManagedPath(projectsDir, project.dir_path); if (project.current_digest === null) { await new ArtifactCoordinator(getSqlite()).initialize(project.id, source); project = await getProjectDetail(projectId); }
   if (project === null || project.current_digest === null) throw new ExportServiceError("source_changed", "Stable project identity unavailable");
-  const designSystemDigest = await designDigest(project.design_system_id);
+  const designSystemPin = await ensureProjectDesignSystemPin(projectId);
+  const designSystemDigest = designSystemPin?.digest ?? await designDigest(project.design_system_id);
   const rendererDigest = sha256(RENDERER_CONTRACT + (format === "pptx" ? "|slide-png-notes/2" : "")); const captureDigest = sha256(canonicalJson({ format, options, viewport: format === "png" || format === "png_zip" ? { width: projectOptions.graphic_canvas?.width ?? options.png_width ?? 1280, height: projectOptions.graphic_canvas?.height ?? options.png_height ?? 720, dpr: options.png_dpr ?? 1 } : { width: 1280, height: 720, dpr: format === "pptx" ? 2 : 1 } }));
-  return { identity: { projectId, revision: project.current_revision, digest: project.current_digest, designSystemDigest }, project, format, options, rendererDigest, captureDigest };
+  return { identity: { projectId, revision: project.current_revision, digest: project.current_digest, designSystemDigest }, project, format, options, rendererDigest, captureDigest, designSystemPin };
 }
 
 async function designDigest(id: string | null): Promise<string | null> {

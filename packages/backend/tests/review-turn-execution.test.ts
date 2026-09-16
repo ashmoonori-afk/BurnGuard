@@ -37,13 +37,27 @@ beforeEach(async () => {
 });
 afterEach(async () => { getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId); await rm(projectDir, { recursive: true, force: true }); });
 
-function start(runAdapter: NonNullable<TurnDependencies["runAdapter"]>, text = "Create a result") {
+function start(runAdapter: NonNullable<TurnDependencies["runAdapter"]>, text = "Create a result", reviewDesign?: TurnDependencies["reviewDesign"]) {
   const turn = startUserTurn(sessionId, { type: "user.message", text }, undefined, {
     detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "fixture", version: "test" }] }), runAdapter,
+    reviewDesign: reviewDesign ?? (async () => ({ status: "checked", repairs: 0, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "ready", checks: [] } })),
   });
   if (turn === null) throw new Error("turn reservation unavailable");
   return turn;
 }
+
+test.each(["unavailable", "must_fix"] as const)("Given %s design checks When finalizing Then the prior artifact remains unchanged", async (status) => {
+  const before = await inspectCanonicalTree(projectDir);
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "index.html"), "<!doctype html><p>Updated</p>");
+    return { exitCode: 0 };
+  }, "Update a paragraph", async () => status === "unavailable"
+    ? { status: "unavailable", repairs: 0, result: null }
+    : { status: "checked", repairs: 2, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "must_fix", checks: [] } });
+  await turn.promise;
+  expect(await inspectCanonicalTree(projectDir)).toEqual(before);
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+});
 
 test("Given a deleted entrypoint after a failed write When continuing Then generated assets survive and only the repaired result is committed", async () => {
   let calls = 0;

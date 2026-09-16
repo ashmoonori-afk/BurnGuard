@@ -76,7 +76,7 @@ function projectTypeDisplayLabel(type: string): string {
   return projectTypeLabel(type === "from_template" ? "other" : type);
 }
 
-export function systemToCard(s: DesignSystemSummary, index = 0): CardViewModel {
+export function systemToCard(s: DesignSystemSummary, index = 0, type?: ProjectType): CardViewModel {
   const statusSuffix = t(SYSTEM_STATUS_SUFFIX[s.status]);
   return {
     id: s.id,
@@ -84,7 +84,9 @@ export function systemToCard(s: DesignSystemSummary, index = 0): CardViewModel {
     subtitle: `${statusSuffix} · ${formatRelativeDay(s.updated_at)}`,
     href: `/systems/${s.id}`,
     tintClass: SYSTEM_TINTS[index % SYSTEM_TINTS.length],
-    thumbnail: s.thumbnail_path,
+    thumbnail: type === undefined || type === "other" || type === "from_template"
+      ? s.thumbnail_path
+      : s.thumbnail_paths?.[type] ?? null,
     kind: "system",
     isTemplate: s.is_template,
   };

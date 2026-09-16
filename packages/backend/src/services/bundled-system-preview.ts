@@ -51,6 +51,7 @@ export async function readBundledSystemPreview(id: string, relative: string, rep
     return html === null ? null : Buffer.from(html);
   }
   const file = relative === BUNDLED_WEBSITE_PREVIEW ? `${theme.slug}.html`
+    : relative === "preview/slides-thumbnail.webp" ? `thumbnails/slides-${theme.slug}.webp`
     : relative === BUNDLED_WEBSITE_THUMBNAIL ? `thumbnails/${theme.slug}.webp`
     : relative === `preview/media/${theme.slug}.webp` ? `media/${theme.slug}.webp` : null;
   if (file === null) return relative === "preview/fonts.css" ? Buffer.from(await bundledFontStylesheet(repoRoot)) : null;

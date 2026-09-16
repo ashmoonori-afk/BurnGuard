@@ -263,7 +263,7 @@ export default function HomeView() {
   const filteredMineCards = filterHomeCards(mineCards, projectQuery);
   const filteredExampleCards = filterHomeCards(exampleCards, projectQuery);
   const systemCards = filterHomeCards(
-    (systemsQuery.data ?? []).filter((system) => systemStatus === "all" || system.status === systemStatus).map(systemToCard),
+    (systemsQuery.data ?? []).filter((system) => systemStatus === "all" || system.status === systemStatus).map((system, index) => systemToCard(system, index)),
     systemQuery,
   );
 
