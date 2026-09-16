@@ -350,6 +350,19 @@ test.each(["Create a result", "Create 29 slides"])("Given stage writes for %s Wh
   expect(getSqlite().query("SELECT current_revision FROM projects WHERE id=?").get(projectId)).toEqual({ current_revision: 2 });
 });
 
+test("Given a deleted entrypoint When the writer is interrupted Then the saved entrypoint is restored and new assets survive", async () => {
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "generated.png"), "partial image");
+    await rm(path.join(input.projectDir, "index.html"));
+    interruptUserTurn(sessionId);
+    return { exitCode: 1 };
+  });
+  await turn.promise;
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("base");
+  expect(await readFile(path.join(projectDir, "generated.png"), "utf8")).toBe("partial image");
+  expect(getSqlite().query("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+});
+
 test("Given a stopped writer with invalid UTF-8 When preserving progress Then corrupt bytes cannot replace the saved artifact", async () => {
   const turn = start(async (_backend, input) => {
     await writeFile(path.join(input.projectDir, "index.html"), Uint8Array.from([255]));
