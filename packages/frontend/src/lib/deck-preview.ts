@@ -2,7 +2,7 @@
 export const DECK_PREVIEW_INJECTION = `<style>
 html[data-bg-deck-fit],html[data-bg-deck-fit]>body { min-width:0!important; min-height:0!important; width:100%!important; height:100%!important; overflow:hidden!important; }
 [data-bg-slide-fit] { position:fixed!important; inset:auto!important; margin:0!important; left:var(--bg-slide-x)!important; top:var(--bg-slide-y)!important; transform:scale(var(--bg-slide-scale))!important; transform-origin:0 0!important; }
-</style><script>(function(){
+</style><script data-bg-deck-preview-runtime>(function(){
   function fit(){
     var slide=document.querySelector('[data-slide][data-active]');
     if(!slide) return;
