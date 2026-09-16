@@ -311,21 +311,54 @@ for (const backendId of ["claude-code", "codex"] as const) {
   });
 }
 
-test("Given stage writes in a running turn When interrupted Then live bytes and revision are preserved", async () => {
+test.each(["Create a result", "Create 29 slides"])("Given stage writes for %s When interrupted Then stopped progress is committed before preview closes and the next turn resumes it", async (request) => {
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
   let entered: () => void = () => {};
   const ready = new Promise<void>((resolve) => { entered = resolve; });
   const turn = start(async (_backend, input) => {
-    await writeFile(path.join(input.projectDir, "index.html"), "cancelled");
+    await writeFile(path.join(input.projectDir, "index.html"), "<html><body>partial progress</body></html>");
+    await writeFile(path.join(input.projectDir, "image.png"), "generated image");
     entered();
     await new Promise<void>((resolve) => { if (input.signal?.aborted) resolve(); else input.signal?.addEventListener("abort", () => resolve(), { once: true }); });
-    return { exitCode: 0 };
-  });
+    await writeFile(path.join(input.projectDir, "last.css"), "body{color:red}");
+    throw new DOMException("Stopped", "AbortError");
+  }, request);
   await ready;
   expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("base");
   expect(interruptUserTurn(sessionId)).toBe(true);
   await turn.promise;
+  unsubscribe();
+  const committed = events.findIndex(event => event.type === "artifact.operation" && event.outcome === "committed");
+  const closed = events.findIndex(event => event.type === "artifact.preview" && !event.active);
+  expect(committed).toBeGreaterThanOrEqual(0);
+  expect(closed).toBeGreaterThan(committed);
+  expect(events.filter(event => event.type === "status.idle").map(event => event.stopReason)).toEqual(["interrupted"]);
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toContain("partial progress");
+  expect(await readFile(path.join(projectDir, "last.css"), "utf8")).toBe("body{color:red}");
+  expect(getSqlite().query("SELECT current_revision FROM projects WHERE id=?").get(projectId)).toEqual({ current_revision: 1 });
+  expect(getSqlite().query("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+  const snapshot = await (await sessionRoutes.request(`/api/sessions/${sessionId}/snapshot`)).json();
+  expect(snapshot.data.session.status).toBe("idle");
+  const continued = start(async (_backend, input) => {
+    expect(await readFile(path.join(input.projectDir, "index.html"), "utf8")).toContain("partial progress");
+    expect(await readFile(path.join(input.projectDir, "image.png"), "utf8")).toBe("generated image");
+    await writeFile(path.join(input.projectDir, "index.html"), "<html><body>continued</body></html>");
+    return { exitCode: 0 };
+  });
+  await continued.promise;
+  expect(getSqlite().query("SELECT current_revision FROM projects WHERE id=?").get(projectId)).toEqual({ current_revision: 2 });
+});
+
+test("Given a stopped writer with invalid UTF-8 When preserving progress Then corrupt bytes cannot replace the saved artifact", async () => {
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "index.html"), Uint8Array.from([255]));
+    interruptUserTurn(sessionId);
+    return { exitCode: 1 };
+  });
+  await turn.promise;
   expect((await inspectCanonicalTree(projectDir)).tree_digest).toBe(digest);
-  expect(getSqlite().query("SELECT current_revision FROM projects WHERE id=?").get(projectId)).toEqual({ current_revision: 0 });
+  expect(getSqlite().query("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
 });
 
 test("Given a pending permission When decided twice Then one durable decision and a coherent snapshot are exposed", async () => {

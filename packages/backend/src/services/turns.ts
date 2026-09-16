@@ -404,6 +404,8 @@ async function runUserTurnInternal(
               ...(generation.provider === "commandcode" ? { commandcodeApiKey: config.commandcodeApiKey ?? undefined } : {}),
               signal: activeTurn.abortController.signal, userEvent: payload,
               onEvent: async (event) => {
+                // Cancellation is finalized only after the stopped writer's stage is saved.
+                if (activeTurn.interrupted && event.type === "status.error") return;
                 if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason === "error")) providerReportedFailure = true;
                 if (event.type === "file.changed") return;
                 const scrubbedEvent = config.commandcodeApiKey ? JSON.parse(JSON.stringify(event, (_key, value: unknown) => typeof value === "string" ? value.split(config.commandcodeApiKey!).join("[redacted]") : value)) as NormalizedEvent : event;
@@ -427,44 +429,53 @@ async function runUserTurnInternal(
               },
             };
             const runAdapter = dependencies.runAdapter ?? runAdapterTurn;
-            const result = needsGenerationPhases(project.type, payload.text, deckStarter)
-              ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input))
-              : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), async () => {
-              try {
-                const entry = await readFile(path.join(stageDir, project.entrypoint), "utf8");
-                return entry.trim().length > 0 && !entry.includes("Send your first prompt in chat to expand this deck.") && !entry.includes("Start with one clear visual message.");
-              } catch (error) {
-                if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
-                throw error;
+            try {
+              const result = needsGenerationPhases(project.type, payload.text, deckStarter)
+                ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input))
+                : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), async () => {
+                try {
+                  const entry = await readFile(path.join(stageDir, project.entrypoint), "utf8");
+                  return entry.trim().length > 0 && !entry.includes("Send your first prompt in chat to expand this deck.") && !entry.includes("Start with one clear visual message.");
+                } catch (error) {
+                  if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+                  throw error;
+                }
+              });
+              if (result.exitCode !== 0 || providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
+              if (project.type === "slide_deck") {
+                const toolCallId = ulid();
+                await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", input: { scope: "all_slides" } });
+                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}` }, (input) => runAdapter(backendId, input), async () => true, { idleMs: 120_000, toolMs: 120_000, attemptMs: 120_000, attempts: 3 });
+                const reviewed = review.exitCode === 0 && !providerReportedFailure;
+                await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", ok: reviewed });
+                if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
               }
-            });
-            if (result.exitCode !== 0 || providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
-            if (project.type === "slide_deck") {
-              const toolCallId = ulid();
-              await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", input: { scope: "all_slides" } });
-              const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}` }, (input) => runAdapter(backendId, input), async () => true, { idleMs: 120_000, toolMs: 120_000, attemptMs: 120_000, attempts: 3 });
-              const reviewed = review.exitCode === 0 && !providerReportedFailure;
-              await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", ok: reviewed });
-              if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
+              await ensureThreeSceneRuntime(stageDir);
+              await ensureCharts(stageDir);
+              if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
+              const canvas = parseStoredProjectOptions(project.options_json).graphic_canvas;
+              const designReview = await (dependencies.reviewDesign ?? reviewTurnDesign)({
+                adapter: adapterInput, projectId: project.id, type: project.type, entrypoint: project.entrypoint,
+                revision: project.current_revision + 1, ...(canvas ? { canvas } : {}),
+                run: (input) => runAdapter(backendId, input),
+              });
+              if (designReview.status !== "checked" || designReview.result?.overall_status === "must_fix" || !designReview.result) throw new ArtifactOperationError("publication_failed", "Design checks are incomplete or required fixes remain");
+              if (providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Design repair did not complete");
+              const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
+              if (encodingIssues.length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
+            } catch (error) {
+              if (!activeTurn.interrupted) throw error;
+              // The adapter has settled and stopped its owned writers. Keep its partial
+              // work; private-input cleanup and immutable/publication checks still run.
             }
-            await ensureThreeSceneRuntime(stageDir);
-            await ensureCharts(stageDir);
-            if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
-            const canvas = parseStoredProjectOptions(project.options_json).graphic_canvas;
-            const designReview = await (dependencies.reviewDesign ?? reviewTurnDesign)({
-              adapter: adapterInput, projectId: project.id, type: project.type, entrypoint: project.entrypoint,
-              revision: project.current_revision + 1, ...(canvas ? { canvas } : {}),
-              run: (input) => runAdapter(backendId, input),
-            });
-            if (designReview.status !== "checked" || designReview.result?.overall_status === "must_fix" || !designReview.result) throw new ArtifactOperationError("publication_failed", "Design checks are incomplete or required fixes remain");
-            if (providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Design repair did not complete");
-            const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
-            if (encodingIssues.length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
           });
         } finally {
           await verifyImmutableAttachments(immutableSnapshots);
         }
-        if (activeTurn.abortController.signal.aborted) throw new ArtifactOperationError("operation_cancelled", "Turn was interrupted");
+        if (activeTurn.interrupted) {
+          if ((await findHtmlEncodingIssues(stageDir)).length > 0) throw new ArtifactOperationError("publication_failed", "Interrupted HTML encoding is invalid");
+          return;
+        }
         await ensureThreeSceneRuntime(stageDir);
         await ensureCharts(stageDir);
         if (graphicEntrypoint !== null && graphicBefore !== null) {
@@ -474,10 +485,15 @@ async function runUserTurnInternal(
         }
       },
     });
-    for (const event of terminalEvents) await persistAndPublish(sessionId, event);
+    if (activeTurn.interrupted) {
+      await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "interrupted" });
+    } else for (const event of terminalEvents) await persistAndPublish(sessionId, event);
   } catch (error) {
     if (!operationPrepared) throw error;
     if (activeTurn.interrupted || activeTurn.abortController.signal.aborted) {
+      if (!(error instanceof ArtifactOperationError && error.code === "operation_cancelled")) {
+        await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.error", message: "turn_failed", recoverable: true }, error);
+      }
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "interrupted" });
     } else if (providerReportedFailure) {
       if (!providerErrorPublished) {
@@ -534,7 +550,7 @@ async function runUserTurnInternal(
     turnId,
   );
   await appendSessionTrace(sessionId, {
-    level: "turn_complete",
+    level: activeTurn.interrupted ? "turn_interrupted" : "turn_complete",
     turnId,
     checkpoint:
       checkpoint === null
