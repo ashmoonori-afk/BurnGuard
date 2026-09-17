@@ -35,6 +35,9 @@ import { startTurnPreview } from "./turn-preview";
 import { findHtmlEncodingIssues } from "./generated-html-encoding";
 import { runWithContinuation } from "./turn-continuation";
 import { needsGenerationPhases, runGenerationPhases } from "./turn-phases";
+import { generationOutputComplete } from "./generation-output";
+import { parse } from "node-html-parser";
+import { prepareSlideDeckExport } from "./export-stage";
 import { reviewTurnDesign } from "./turn-design-review";
 import { parseStoredProjectOptions } from "./project-options";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
@@ -381,6 +384,9 @@ async function runUserTurnInternal(
       publicationPolicy: { forbiddenSha256 },
       onPrepared: () => { operationPrepared = true; onPrepared(); },
       mutate: async (stageDir) => {
+        // Old projects carry a copied runtime. Refresh only the owned stage,
+        // so the preview receives engine fixes without touching live files.
+        if (project.type === "slide_deck") await prepareSlideDeckExport(stageDir, project.entrypoint);
         stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
         const graphicBefore = graphicEntrypoint === null ? null : await readFile(graphicEntrypoint, "utf8");
@@ -434,25 +440,19 @@ async function runUserTurnInternal(
             const runAdapter = dependencies.runAdapter ?? runAdapterTurn;
             try {
               const result = needsGenerationPhases(project.type, payload.text, deckStarter)
-                ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input))
-                : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), async () => {
-                try {
-                  const entry = await readFile(path.join(stageDir, project.entrypoint), "utf8");
-                  return entry.trim().length > 0 && !entry.includes("Send your first prompt in chat to expand this deck.") && !entry.includes("Start with one clear visual message.");
-                } catch (error) {
-                  if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
-                  throw error;
-                }
-              });
+                ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input), project.type)
+                : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type));
               if (result.exitCode !== 0 || providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
               if (project.type === "slide_deck") {
+                const expectedSlides = parse(await readFile(path.join(stageDir, project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length;
                 const toolCallId = ulid();
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", input: { scope: "all_slides" } });
-                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}` }, (input) => runAdapter(backendId, input), async () => true, { idleMs: 120_000, toolMs: 120_000, attemptMs: 120_000, attempts: 3 });
+                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}\nPreserve all ${expectedSlides} slides and completed content. Replace unfinished placeholders and repair missing local images before returning.` }, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, expectedSlides), { idleMs: 120_000, toolMs: 120_000, attemptMs: 120_000, attempts: 3 });
                 const reviewed = review.exitCode === 0 && !providerReportedFailure;
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", ok: reviewed });
                 if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
               }
+              if (!await generationOutputComplete(stageDir, project.entrypoint, project.type)) throw new ArtifactOperationError("turn_failed", "Generated content is incomplete");
               await ensureThreeSceneRuntime(stageDir);
               await ensureCharts(stageDir);
               if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");

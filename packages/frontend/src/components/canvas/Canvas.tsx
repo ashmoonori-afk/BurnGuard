@@ -49,7 +49,7 @@ function buildPlaceholderSrc(locale: string, title: string, subtitle: string): s
       min-height: 100vh;
       word-break: keep-all;
     }
-    .wrap { text-align: center; padding: 48px; max-width: 480px; }
+    .wrap { box-sizing: border-box; text-align: center; padding: clamp(8px, 4vmin, 48px); width: 480px; max-width: 100%; overflow-wrap: anywhere; }
     .eyebrow {
       color: #004fff;
       font-size: 11px;
@@ -57,10 +57,10 @@ function buildPlaceholderSrc(locale: string, title: string, subtitle: string): s
       text-transform: uppercase;
       margin-bottom: 16px;
     }
-    .title { font-size: 22px; font-weight: 700; margin: 0; }
+    .title { font-size: clamp(14px, 4vmin, 22px); font-weight: 700; margin: 0; }
     .subtitle {
       color: #5e646c;
-      font-size: 14px;
+      font-size: clamp(12px, 3vmin, 14px);
       line-height: 1.6;
       margin-top: 12px;
     }

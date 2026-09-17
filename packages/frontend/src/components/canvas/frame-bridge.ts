@@ -230,7 +230,7 @@ export function buildSandboxedArtifactSrcDoc(
   const policyTag = `<meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttr(artifactContentSecurityPolicy(new URL(baseHref).origin))}">`;
   const baseTag = `${policyTag}<base href="${escapeHtmlAttr(baseHref)}">`;
   const graphicPreview = options?.graphicCanvas === undefined
-    ? DECK_PREVIEW_INJECTION
+    ? (/\bdata-slide\b/.test(html) ? DECK_PREVIEW_INJECTION : "")
     : buildGraphicPreviewInjection(options.graphicCanvas);
   const commentKey = JSON.stringify(options?.quickCommentKey ?? null).replaceAll("<", "\\u003c");
   const presentationKey = JSON.stringify(options?.presentationKey ?? null).replaceAll("<", "\\u003c");

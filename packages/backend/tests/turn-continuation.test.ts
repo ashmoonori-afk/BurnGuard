@@ -68,6 +68,21 @@ test("Given repeated incomplete results, then retries are bounded and end in a v
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test("Given an adapter throwing on an owned timeout, then it resumes but unexpected exceptions remain failures", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-abort-throw-"));
+  let calls = 0;
+  const input: AdapterRunInput = { sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "task", userEvent: { type: "user.message", text: "task" }, onEvent: async () => {} };
+  try {
+    const result = await runWithContinuation(input, async attempt => {
+      if (++calls === 1) await new Promise<never>((_resolve, reject) => attempt.signal!.addEventListener("abort", () => reject(attempt.signal!.reason), { once: true }));
+      return { exitCode: 0 };
+    }, async () => true, { idleMs: 10, toolMs: 100, attemptMs: 1000, attempts: 3 });
+    expect(result.exitCode).toBe(0);
+    expect(calls).toBe(2);
+    await expect(runWithContinuation(input, async () => { throw new Error("permission denied"); }, async () => true)).rejects.toThrow("permission denied");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("Given a Codex save error, then it is visible without leaking diagnostics or declaring a file changed", () => {
   const ctx = { turnId: "t", projectDir: process.cwd(), toolNames: new Map<string, string>() };
   for (const item of [{ type: "error", message: "apply_patch failed in C:/private/token" }, { type: "file_change", status: "failed", changes: [{ path: "deck.html", kind: "delete" }] }]) {
