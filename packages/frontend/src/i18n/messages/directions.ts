@@ -66,7 +66,7 @@ export const directionsMessages = defineMessages({
   "directions.style.recipeDescription": { ko: "{name}에 맞는 구도·소재·검수 기준을 적용해요.", en: "Apply composition, materials, and review criteria suited to {name}.", "zh-CN": "应用适合“{name}”的构图、素材和检查标准。" },
   "directions.style.recipeNote": { ko: "위의 스타일과 함께 저장되며, 기존 이미지를 자동으로 다시 만들지는 않아요.", en: "Saved with the style above; existing images are not automatically regenerated.", "zh-CN": "与上方风格一同保存，不会自动重新生成已有图像。" },
   "directions.image.brand.label": { ko: "브랜드 기준", en: "Brand aligned", "zh-CN": "遵循品牌" },
-  "directions.image.brand.description": { ko: "선택한 디자인 시스템과 자료에 어울리는 이미지", en: "Images that suit the selected design system and references", "zh-CN": "符合所选设计系统和参考资料的图像" },
+  "directions.image.brand.description": { ko: "선택한 디자인 시스템과 자료에 어울리는 실사 사진 기본, 추상 이미지는 사용하지 않음", en: "Photorealistic by default, matched to the selected design system and references; no abstract imagery", "zh-CN": "默认写实摄影，符合所选设计系统和参考资料，不使用抽象图像" },
   "directions.image.studio.label": { ko: "스튜디오 제품사진", en: "Studio product photography", "zh-CN": "影棚产品摄影" },
   "directions.image.studio.description": { ko: "정돈된 배경, 부드러운 조명, 선명한 제품 디테일", en: "Clean backgrounds, soft lighting, and crisp product details", "zh-CN": "整洁背景、柔和光线和清晰的产品细节" },
   "directions.image.lifestyle.label": { ko: "라이프스타일 실사", en: "Lifestyle photography", "zh-CN": "生活方式实拍" },
