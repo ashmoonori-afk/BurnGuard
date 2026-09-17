@@ -28,6 +28,18 @@ In **Direction → Images and copy**, select an image style, copy tone and image
 
 The 21 treatments are brand-led, studio, lifestyle, cinematic, 3D object, editorial illustration, paper collage, watercolor, ink, oil painting, printmaking, pencil/crayon, clay, glass, metal, analog film, direct flash, macro, monochrome/duotone, pixel art and low-poly.
 
+## Realism default and the abstract-image prohibition
+
+Since 2026-09-17 every generated raster image defaults to photorealistic photography with a concrete subject, a real setting and one visible moment. The contract lives in `packages/backend/src/harness/prompt-image-realism.ts` and is emitted once per prompt through `DESIGN_CRAFT_RULES`, so every route, model and context mode receives the same copy.
+
+- Abstract imagery is prohibited unless the current request explicitly asks for it: gradient blobs, glowing particles, floating geometry, network lines, holograms, generic technology or space backdrops, ornamental 3D renders and purely decorative color or texture. A section with no obvious subject gets a real object, place, product or person from the brief instead.
+- Image prompts are written as a photographer's brief (subject and action, environment and time of day, camera distance and lens, aperture, light direction and softness, real materials, natural color, candid or off-center composition, text-safe area). The words `abstract`, `ultra-detailed`, `8k`, `trending`, `masterpiece`, `digital art`, `concept art`, `ethereal`, `surreal` and `dreamlike` are banned from image prompts.
+- The signatures of generated art are rejected at inspection time and trigger regeneration: perfect symmetry, a centered subject on an empty glowing backdrop, plastic skin, flawless surfaces, hypersaturated palettes, HDR halos, impossible reflections, floating or melting objects, garbled lettering, anatomy errors, cloned faces and tiled textures.
+- The 21 treatments now carry a family. Photographic presets (brand, studio, lifestyle, cinematic, analog film, direct flash, macro, monochrome) keep the contract in full. Rendered presets (3D object, glass, metal, low-poly, pixel art) and handmade presets (editorial illustration, collage, watercolor, ink, oil, printmaking, pencil, clay) are explicit user exceptions: they apply only when saved in **Direction → Images and copy** or requested in the message, and even then the image keeps a concrete subject and never becomes abstract decoration. The brand-led default is photographic.
+- In automatic recipe mode the model prefers photographic recipes; illustration, painted, tactile, character and imagined-world recipes are used only on request.
+
+`packages/backend/tests/image-realism-rules.test.ts` pins the contract: emitted once for every project type before delivery, families on every preset, the exception line for non-photographic styles, and the photographic requirement for product-detail sections.
+
 ## Write the actual prompt
 
 Start with the intended placement and the message the image must communicate. Describe the subject's visible action, identifying details, camera, scale, light, material, palette, crop and area reserved for copy. Use only decisions that affect the result. Preserve facts and approved assets; invent a new composition for each content-image placement.

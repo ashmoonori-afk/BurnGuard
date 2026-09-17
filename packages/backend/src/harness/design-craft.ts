@@ -1,3 +1,5 @@
+import { IMAGE_REALISM_RULES } from "./prompt-image-realism";
+
 /**
  * The one task-structure block shared by every route, model and effort. It references the existing
  * mandatory contracts rather than reprinting them, so each of those keeps a single owner and a
@@ -33,10 +35,12 @@ Typography consistency:
 - Preserve the selected design-system fonts. Use one shared heading font stack and one shared body font stack across all pages/slides, with consistent Korean fallbacks and role-based sizes/weights. Never pick a different font per section; allow a different logo/code font only when intentionally specified. Decks use --deck-font-heading and --deck-font-body tokens.
 
 Images and real locations:
-- Generate new creative raster imagery with Codex's built-in image generation tool whenever the content calls for it, even without an explicit image request. Do not substitute hand-drawn SVG, CSS art, canvas drawings, stock placeholders, or a screenshot of markup for creative imagery. Actual app captures and faithful source-based interface recreations follow the image-production rules and are allowed for explaining software. Reuse supplied assets when appropriate; existing icons, data charts and explanatory diagrams can remain code-based when they do not replace creative imagery.
+- Default to photorealistic photography for generated imagery and follow the image realism contract below. Generate new creative raster imagery with Codex's built-in image generation tool whenever the content calls for it, even without an explicit image request. Do not substitute hand-drawn SVG, CSS art, canvas drawings, stock placeholders, or a screenshot of markup for creative imagery. Actual app captures and faithful source-based interface recreations follow the image-production rules and are allowed for explaining software. Reuse supplied assets when appropriate; existing icons, data charts and explanatory diagrams can remain code-based when they do not replace creative imagery.
 - Keep the selected model for non-image work. For Claude or CommandCode, use an already available Codex image-generation delegate only if the current tools actually expose one; do not invent a delegate or silently switch the whole session. If Codex image generation is unavailable or fails, report that the image step requires an available, authenticated Codex image tool and leave it incomplete; never claim an image was generated without a successful tool result and usable output file. Save successful images inside the output directory and reference them from the artifact.
 - Real places, addresses and directions must use a real Google Maps or NAVER Maps embed, never an invented illustrated map, generated map image or decorative street grid. Use only a supplied or verified address, coordinates or place ID. Google Maps supports an official iframe embed (the Embed API requires a configured key); NAVER Maps uses its official JavaScript API and configured client ID, so do not put an ordinary NAVER share/search URL into an iframe and assume it works. Preserve provider attribution and do not invent credentials, locations or travel times.
 - BurnGuard currently permits Google Maps frames only at https://www.google.com/maps/embed and its subpaths. Remote NAVER scripts and arbitrary hosted frames are not enabled, so use Google's official embed when possible; do not claim NAVER can render until a compatible configured integration exists. Verify the map in the actual sandboxed canvas without weakening its security. If the address, provider configuration or embedding support is missing, state exactly what is missing and leave the map incomplete; a clearly labeled link to a verified place may accompany that explanation but is not a completed embed. Geographic maps are outside the inline-SVG diagram convention.
+
+${IMAGE_REALISM_RULES}
 
 ${IMAGE_ARTBOARD_COMPLETION_CHECKS}
 
