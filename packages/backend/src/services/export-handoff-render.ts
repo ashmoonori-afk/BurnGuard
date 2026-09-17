@@ -1,6 +1,8 @@
 import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { buildHandoffSpec, copyProjectIntoBundle, EXTRACT_HANDOFF_FN, HandoffExportError, type HandoffPage, type HandoffSpec } from "./export-handoff";
+import { inspectRenderedPage } from "./design-audit-dom";
+import type { DesignSystemPin } from "./project-design-system-pin";
 
 export async function renderHandoffBundle(input: {
   readonly stagedProjectDir: string;
@@ -12,6 +14,7 @@ export async function renderHandoffBundle(input: {
   readonly project: HandoffSpec["project"];
   readonly isDeck: boolean;
   readonly signal?: AbortSignal;
+  readonly designSystemPin?: DesignSystemPin | null;
 }): Promise<void> {
   await mkdir(input.stagingDir, { recursive: true });
   const bundleSourceDir = path.join(input.stagingDir, "source");
@@ -28,11 +31,24 @@ export async function renderHandoffBundle(input: {
     if (input.isDeck) await page.addStyleTag({ content: "[data-deck-nav],[data-deck-nav-style]{display:none!important}[data-slide]{display:block!important}" });
     const value: unknown = await page.evaluate(`(${EXTRACT_HANDOFF_FN})()`);
     if (!isHandoffExtract(value)) throw new HandoffExportError("render_failed", "Handoff extraction returned invalid pages");
-    const tokensFileInZip = input.tokensSrcPath !== null && input.tokensFileName !== null ? `tokens/${input.tokensFileName}` : null;
+    const tokensFileInZip = input.designSystemPin ? "tokens/colors_and_type.css" : input.tokensSrcPath !== null && input.tokensFileName !== null ? `tokens/${input.tokensFileName}` : null;
     const spec = buildHandoffSpec({ project: input.project, viewport: value.viewport, pages: value.pages, designSystem: { name: input.designSystemName, tokensFileInZip } });
     await writeFile(path.join(input.stagingDir, "spec.json"), JSON.stringify(spec, null, 2), "utf8");
+    const observed = await inspectRenderedPage(page, input.isDeck);
+    await page.screenshot({ path: path.join(input.stagingDir, "preview.png"), fullPage: false });
+    await writeFile(path.join(input.stagingDir, "review.json"), JSON.stringify({
+      schema_version: 1, scope: "entrypoint_at_1280x720_only",
+      visual_review: "not_performed", responsive_review: "not_performed",
+      measurements: observed,
+      design_system: input.designSystemPin ? { revision: input.designSystemPin.revision, digest: input.designSystemPin.digest } : null,
+    }, null, 2));
+    if (input.designSystemPin) {
+      await mkdir(path.join(input.stagingDir, "tokens"), { recursive: true });
+      await writeFile(path.join(input.stagingDir, "tokens", "colors_and_type.css"), input.designSystemPin.tokens);
+      await writeFile(path.join(input.stagingDir, "design-system.md"), input.designSystemPin.context);
+    }
     if (input.tokensSrcPath !== null && tokensFileInZip !== null) { const destination = path.join(input.stagingDir, tokensFileInZip); await mkdir(path.dirname(destination), { recursive: true }); try { await copyFile(input.tokensSrcPath, destination); } catch (error) { if (!(error instanceof Error) || !Reflect.has(error, "code") || Reflect.get(error, "code") !== "ENOENT") throw error; } }
-    await writeFile(path.join(input.stagingDir, "README.txt"), README.trim(), "utf8");
+    await writeFile(path.join(input.stagingDir, "README.txt"), `${README.trim()}\n\nEntrypoint: source/${input.entrypoint}\nProject type: ${input.project.type}\n`, "utf8");
   } finally { await session.close(); }
 }
 
@@ -45,5 +61,15 @@ const README = `BurnGuard Handoff bundle
 ========================
 source/ contains the validated project closure.
 spec.json contains editable node geometry and styles.
-tokens/ contains linked design tokens when available.
-README.txt describes this package.`;
+tokens/ contains the pinned colour and type tokens when available.
+design-system.md contains the pinned, format-specific design rules when available.
+preview.png is a capture of the entrypoint at 1280x720, not a whole-site visual approval.
+review.json contains measured findings and explicitly unverified checks.
+
+Implementation:
+1. Open source/ at the entrypoint below and compare it with preview.png.
+2. Reuse the pinned rules and tokens; adapt components to the target repository.
+3. Preserve links, interactions, slide order and responsive behaviour.
+4. Resolve remaining findings in review.json, then verify every page, mobile layout,
+   keyboard navigation, content accuracy and real integrations. Those checks are not
+   certified by this bundle. Do not describe this package as production-ready.`;

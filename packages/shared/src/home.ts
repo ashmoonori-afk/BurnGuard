@@ -24,6 +24,8 @@ export interface DesignSystemSummary {
   status: DesignSystemStatus;
   is_template: boolean;
   thumbnail_path: string | null;
+  /** Latest available output preview for each project format. */
+  thumbnail_paths?: Partial<Record<ProjectType, string>>;
   updated_at: number;
 }
 

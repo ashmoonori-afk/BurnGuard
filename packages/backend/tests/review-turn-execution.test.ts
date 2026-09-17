@@ -37,13 +37,27 @@ beforeEach(async () => {
 });
 afterEach(async () => { getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId); await rm(projectDir, { recursive: true, force: true }); });
 
-function start(runAdapter: NonNullable<TurnDependencies["runAdapter"]>, text = "Create a result") {
+function start(runAdapter: NonNullable<TurnDependencies["runAdapter"]>, text = "Create a result", reviewDesign?: TurnDependencies["reviewDesign"]) {
   const turn = startUserTurn(sessionId, { type: "user.message", text }, undefined, {
     detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "fixture", version: "test" }] }), runAdapter,
+    reviewDesign: reviewDesign ?? (async () => ({ status: "checked", repairs: 0, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "ready", checks: [] } })),
   });
   if (turn === null) throw new Error("turn reservation unavailable");
   return turn;
 }
+
+test.each(["unavailable", "must_fix"] as const)("Given %s design checks When finalizing Then the prior artifact remains unchanged", async (status) => {
+  const before = await inspectCanonicalTree(projectDir);
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "index.html"), "<!doctype html><p>Updated</p>");
+    return { exitCode: 0 };
+  }, "Update a paragraph", async () => status === "unavailable"
+    ? { status: "unavailable", repairs: 0, result: null }
+    : { status: "checked", repairs: 2, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "must_fix", checks: [] } });
+  await turn.promise;
+  expect(await inspectCanonicalTree(projectDir)).toEqual(before);
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+});
 
 test("Given a deleted entrypoint after a failed write When continuing Then generated assets survive and only the repaired result is committed", async () => {
   let calls = 0;
@@ -325,21 +339,67 @@ for (const backendId of ["claude-code", "codex"] as const) {
   });
 }
 
-test("Given stage writes in a running turn When interrupted Then live bytes and revision are preserved", async () => {
+test.each(["Create a result", "Create 29 slides"])("Given stage writes for %s When interrupted Then stopped progress is committed before preview closes and the next turn resumes it", async (request) => {
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
   let entered: () => void = () => {};
   const ready = new Promise<void>((resolve) => { entered = resolve; });
   const turn = start(async (_backend, input) => {
-    await writeFile(path.join(input.projectDir, "index.html"), "cancelled");
+    await writeFile(path.join(input.projectDir, "index.html"), "<html><body>partial progress</body></html>");
+    await writeFile(path.join(input.projectDir, "image.png"), "generated image");
     entered();
     await new Promise<void>((resolve) => { if (input.signal?.aborted) resolve(); else input.signal?.addEventListener("abort", () => resolve(), { once: true }); });
-    return { exitCode: 0 };
-  });
+    await writeFile(path.join(input.projectDir, "last.css"), "body{color:red}");
+    throw new DOMException("Stopped", "AbortError");
+  }, request);
   await ready;
   expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("base");
   expect(interruptUserTurn(sessionId)).toBe(true);
   await turn.promise;
+  unsubscribe();
+  const committed = events.findIndex(event => event.type === "artifact.operation" && event.outcome === "committed");
+  const closed = events.findIndex(event => event.type === "artifact.preview" && !event.active);
+  expect(committed).toBeGreaterThanOrEqual(0);
+  expect(closed).toBeGreaterThan(committed);
+  expect(events.filter(event => event.type === "status.idle").map(event => event.stopReason)).toEqual(["interrupted"]);
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toContain("partial progress");
+  expect(await readFile(path.join(projectDir, "last.css"), "utf8")).toBe("body{color:red}");
+  expect(getSqlite().query("SELECT current_revision FROM projects WHERE id=?").get(projectId)).toEqual({ current_revision: 1 });
+  expect(getSqlite().query("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+  const snapshot = await (await sessionRoutes.request(`/api/sessions/${sessionId}/snapshot`)).json();
+  expect(snapshot.data.session.status).toBe("idle");
+  const continued = start(async (_backend, input) => {
+    expect(await readFile(path.join(input.projectDir, "index.html"), "utf8")).toContain("partial progress");
+    expect(await readFile(path.join(input.projectDir, "image.png"), "utf8")).toBe("generated image");
+    await writeFile(path.join(input.projectDir, "index.html"), "<html><body>continued</body></html>");
+    return { exitCode: 0 };
+  });
+  await continued.promise;
+  expect(getSqlite().query("SELECT current_revision FROM projects WHERE id=?").get(projectId)).toEqual({ current_revision: 2 });
+});
+
+test("Given a deleted entrypoint When the writer is interrupted Then the saved entrypoint is restored and new assets survive", async () => {
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "generated.png"), "partial image");
+    await rm(path.join(input.projectDir, "index.html"));
+    interruptUserTurn(sessionId);
+    return { exitCode: 1 };
+  });
+  await turn.promise;
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("base");
+  expect(await readFile(path.join(projectDir, "generated.png"), "utf8")).toBe("partial image");
+  expect(getSqlite().query("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+});
+
+test("Given a stopped writer with invalid UTF-8 When preserving progress Then corrupt bytes cannot replace the saved artifact", async () => {
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "index.html"), Uint8Array.from([255]));
+    interruptUserTurn(sessionId);
+    return { exitCode: 1 };
+  });
+  await turn.promise;
   expect((await inspectCanonicalTree(projectDir)).tree_digest).toBe(digest);
-  expect(getSqlite().query("SELECT current_revision FROM projects WHERE id=?").get(projectId)).toEqual({ current_revision: 0 });
+  expect(getSqlite().query("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
 });
 
 test("Given a pending permission When decided twice Then one durable decision and a coherent snapshot are exposed", async () => {

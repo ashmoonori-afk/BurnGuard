@@ -3,6 +3,14 @@ import type { ProjectSummary } from "./home";
 import type { SessionStatus } from "./harness";
 import type { NormalizedEvent } from "./events";
 
+export interface ProjectDesignSystemPin {
+  readonly revision: number;
+  readonly digest: string;
+  readonly candidate_digest: string;
+  readonly rules_changed: boolean;
+  readonly tokens_changed: boolean;
+}
+
 export interface ProjectDetail extends ProjectSummary {
   dir_path: string;
   entrypoint: string;

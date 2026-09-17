@@ -27,7 +27,7 @@
 import type { Comment, CommentAnchorV1, GraphicCanvasV1 } from "@bg/shared";
 import { artifactContentSecurityPolicy } from "@bg/shared/security";
 import { buildGraphicPreviewInjection } from "@/lib/graphic-preview";
-import { buildDeckPreviewInjection } from "@/lib/deck-preview";
+import { DECK_PREVIEW_INJECTION } from "@/lib/deck-preview";
 import { isCommentEditable, isQuickCommentShortcut } from "./quick-comment";
 
 export interface FrameRect {
@@ -230,7 +230,7 @@ export function buildSandboxedArtifactSrcDoc(
   const policyTag = `<meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttr(artifactContentSecurityPolicy(new URL(baseHref).origin))}">`;
   const baseTag = `${policyTag}<base href="${escapeHtmlAttr(baseHref)}">`;
   const graphicPreview = options?.graphicCanvas === undefined
-    ? (/\bdata-slide\b/.test(html) ? buildDeckPreviewInjection() : "")
+    ? (/\bdata-slide\b/.test(html) ? DECK_PREVIEW_INJECTION : "")
     : buildGraphicPreviewInjection(options.graphicCanvas);
   const commentKey = JSON.stringify(options?.quickCommentKey ?? null).replaceAll("<", "\\u003c");
   const presentationKey = JSON.stringify(options?.presentationKey ?? null).replaceAll("<", "\\u003c");

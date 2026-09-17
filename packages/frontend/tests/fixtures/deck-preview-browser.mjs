@@ -14,7 +14,7 @@ try {
   async function fits(selector) {
     await frame.waitForFunction(selector => {
       const element = document.querySelector(selector);
-      if (!element || !document.documentElement.hasAttribute("data-bg-deck-preview")) return false;
+      if (!element || !document.documentElement.hasAttribute("data-bg-deck-fit")) return false;
       const box = element.getBoundingClientRect();
       return box.width > 0 && box.height > 0 && box.left >= -0.5 && box.top >= -0.5 && box.right <= innerWidth + 0.5 && box.bottom <= innerHeight + 0.5;
     }, selector);
