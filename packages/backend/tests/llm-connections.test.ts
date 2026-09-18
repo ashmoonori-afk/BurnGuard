@@ -109,23 +109,28 @@ describe("configuration-only LLM connections", () => {
   });
 
   for (const id of ids) {
-    test(`${id} remains unavailable for generation even after its key is saved`, async () => {
+    test(`${id} API connection remains unavailable for generation even after its key is saved`, async () => {
       expect((await patch({ llm_api_keys: { [id]: keys[id] } })).status).toBe(200);
       const before = await readFile(configFilePath, "utf8");
       const generation = { model: "", effort: "low", vanilla: true, provider: id };
       expect(() => shared.parseGenerationOptions(generation)).toThrow("invalid_generation_options");
+      // A Gemini CLI backend is separate from the unimplemented Gemini API connection.
       for (const [body, code] of [
-        [{ default_backend: id }, "invalid_backend"],
-        [{ generation_defaults: { [id]: shared.defaultGenerationOptions("claude-code") } }, "invalid_generation_options"],
+        ...(!shared.BACKEND_IDS.includes(id as shared.BackendId) ? [
+          [{ default_backend: id }, "invalid_backend"],
+          [{ generation_defaults: { [id]: shared.defaultGenerationOptions("claude-code") } }, "invalid_generation_options"],
+        ] as const : []),
         [{ generation_defaults: { "claude-code": generation } }, "invalid_generation_options"],
       ] as const) {
         const response = await patch(body);
         expect(response.status).toBe(400);
         expect((await response.json()).error.code).toBe(code);
       }
-      const project = await homeRoutes.request("http://local/api/projects", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Unsupported", type: "prototype", design_system_id: null, backend_id: id }) });
-      expect(project.status).toBe(400);
-      expect((await project.json()).error.code).toBe("invalid_backend");
+      if (!shared.BACKEND_IDS.includes(id as shared.BackendId)) {
+        const project = await homeRoutes.request("http://local/api/projects", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Unsupported", type: "prototype", design_system_id: null, backend_id: id }) });
+        expect(project.status).toBe(400);
+        expect((await project.json()).error.code).toBe("invalid_backend");
+      }
       expect(await readFile(configFilePath, "utf8")).toBe(before);
     });
   }

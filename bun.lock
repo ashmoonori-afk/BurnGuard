@@ -11,7 +11,7 @@
     },
     "packages/backend": {
       "name": "@bg/backend",
-      "version": "0.5.18",
+      "version": "0.5.19",
       "dependencies": {
         "@bg/shared": "workspace:*",
         "@napi-rs/canvas": "0.1.100",
@@ -34,7 +34,7 @@
     },
     "packages/frontend": {
       "name": "@bg/frontend",
-      "version": "0.5.18",
+      "version": "0.5.19",
       "dependencies": {
         "@bg/shared": "workspace:*",
         "@radix-ui/react-dialog": "^1.1.2",
@@ -68,7 +68,7 @@
     },
     "packages/shared": {
       "name": "@bg/shared",
-      "version": "0.5.18",
+      "version": "0.5.19",
     },
   },
   "overrides": {

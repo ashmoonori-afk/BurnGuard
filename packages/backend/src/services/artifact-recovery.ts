@@ -7,6 +7,7 @@ import { materializeManagedTree, publishManagedTree } from "./artifact-tree-stor
 import { inspectCanonicalTree, isCanonicalTreeRootMissing, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
+import { migrateDocumentOnlyRevision } from "./artifact-document-migration";
 
 type ProjectRow = { readonly id: string; readonly dir_path: string; readonly current_digest: string | null };
 type RecoveryRow = PersistedArtifactOperationRow & { readonly dir_path: string };
@@ -38,6 +39,10 @@ export async function reconcileArtifactState(db: Database): Promise<{ readonly o
     else {
       const actual = await inspectCanonicalTree(project.dir_path);
       if (actual.tree_digest !== project.current_digest) {
+        if (await migrateDocumentOnlyRevision(db, project, actual)) {
+          await coordinator.initialize(project.id, project.dir_path);
+          continue;
+        }
         await recoverCommittedBaseline(db, project);
         await coordinator.observeExternal(project.id, project.dir_path);
       }

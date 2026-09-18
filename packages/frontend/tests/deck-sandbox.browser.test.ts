@@ -3,6 +3,7 @@ import { chromium, type Browser, type Page } from "../../backend/node_modules/pl
 import { Hono } from "../../backend/node_modules/hono";
 import { createRequestAuthority } from "../../backend/src/security/request-authority";
 import { DECK_STAGE_JS } from "../../backend/src/runtime/deck-stage";
+import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 
 declare global { var deckTest: {
   bootstrapApiAuthority(): Promise<void>;
@@ -54,7 +55,9 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     const [code, script, errors] = await Promise.all([compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text()]);
     if (code !== 0) throw new Error(errors);
     // Use the Playwright-matched browser for iframe/fullscreen lifecycle coverage.
-    browser = await chromium.launch({ headless: true });
+    browser = process.platform === "win32"
+      ? await launchChromiumViaNode({}, AbortSignal.timeout(20_000))
+      : await chromium.launch({ headless: true });
     const page = await browser.newPage();
     page.setDefaultTimeout(5000);
     const browserErrors: string[] = [];

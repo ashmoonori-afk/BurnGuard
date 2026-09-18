@@ -5,6 +5,7 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { logsDir, projectsDir } from "../src/lib/paths";
 import { detectBackends } from "../src/services/backends";
 import { startUserTurn } from "../src/services/turns";
+import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 
 /**
  * P1-3 observation metadata. The trace has to record which task guidance a turn actually shipped -
@@ -31,6 +32,11 @@ test("Given a completed turn When reading its trace Then the shipped preset is i
     const turn = startUserTurn(sessionId, { type: "user.message", text: "Edit the heading" }, undefined, {
       detectBackends,
       runAdapter: async () => ({ exitCode: 0 }),
+      reviewDesign: async input => ({ status: "checked", repairs: 0, result: {
+        schema_version: 1, project_id: input.projectId, artifact_revision: input.revision,
+        artifact_digest: (await inspectCanonicalTree(input.adapter.projectDir)).tree_digest,
+        created_at: Date.now(), overall_status: "ready", checks: [],
+      } }),
     });
     if (!turn) throw new Error("Turn reservation unavailable");
     await Promise.allSettled([turn.prepared, turn.promise]);
