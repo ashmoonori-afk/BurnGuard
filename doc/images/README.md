@@ -1,6 +1,6 @@
 # README images
 
-`deck-reference-compositions.webp` is a contact sheet of six actual slide-preview frames captured with Chrome on September 15, 2026, using an isolated local profile. It was assembled from screenshots with labels and WebP compression. The underlying images are existing BurnGuard theme artwork; no source PDF artwork is included. See [the implementation record](../23-deck-reference-systems-2026-09-15.md).
+`deck-reference-compositions.webp` is a contact sheet of six actual slide-preview frames captured with Chrome on September 15, 2026, using an isolated local profile. It was assembled from screenshots with labels and WebP compression. The underlying images are existing BurnGuard theme artwork; no source PDF artwork is included. See the local implementation record `23-deck-reference-systems-2026-09-15.md` (not distributed).
 
 The [image recipe gallery](image-recipes/README.md) contains 21 original examples spanning every image treatment and all 13 purpose domains. Its manifest records the exact prompts and generated assets separately from the cover and real interface screenshots below.
 
