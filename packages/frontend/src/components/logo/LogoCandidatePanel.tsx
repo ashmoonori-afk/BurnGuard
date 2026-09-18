@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Check, RefreshCw } from "lucide-react";
-import { LOGO_FILES, type LogoActionV1, type LogoCandidateV1 } from "@bg/shared";
+import { LOGO_FILES, LOGO_MAX_ROUNDS, type LogoActionV1, type LogoCandidateV1 } from "@bg/shared";
 import { projectFileUrl, readProjectFileText } from "@/api/files";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n/t";
@@ -32,6 +32,8 @@ export default function LogoCandidatePanel({
   const manifest = manifestQuery.data ?? null;
   const round = manifest === null ? null : latestLogoRound(manifest);
   if (manifest === null || round === null) return null;
+  // The manifest contract caps history at LOGO_MAX_ROUNDS; past that a regenerate cannot append a round.
+  const exhausted = manifest.rounds.length >= LOGO_MAX_ROUNDS;
 
   return (
     <section aria-label={t("logo.candidates.title")} className="shrink-0 border-t border-border bg-muted/60 px-3 py-2">
@@ -44,7 +46,8 @@ export default function LogoCandidatePanel({
           variant="outline"
           size="sm"
           className="min-h-11 shrink-0"
-          disabled={disabled}
+          disabled={disabled || exhausted}
+          title={exhausted ? t("logo.candidates.exhausted", { count: LOGO_MAX_ROUNDS }) : undefined}
           onClick={() => onAction({ action: "regenerate" })}
         >
           <RefreshCw aria-hidden="true" />
@@ -65,7 +68,7 @@ export default function LogoCandidatePanel({
         ))}
       </ul>
       <p className="mt-2 text-xs leading-5 text-muted-foreground">
-        {disabled ? t("logo.candidates.busy") : t("logo.candidates.hint")}
+        {disabled ? t("logo.candidates.busy") : exhausted ? t("logo.candidates.exhausted", { count: LOGO_MAX_ROUNDS }) : t("logo.candidates.hint")}
       </p>
     </section>
   );
