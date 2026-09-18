@@ -9,6 +9,7 @@ import { broker, sequencedBroker } from "../src/services/broker";
 import { persistAndPublish } from "../src/services/turns";
 import { PathBoundaryError } from "../src/security/path-boundary";
 import { sessionRoutes } from "../src/routes/session";
+import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 
 beforeAll(async () => {
   await runMigrations();
@@ -22,7 +23,7 @@ beforeEach(() => {
 });
 
 describe("turn error event boundary", () => {
-  test("Given artifact preparation fails with a private path When the route responds Then diagnostics stay server-side", async () => {
+  test.skipIf(!canCreateSymlink())(`Given artifact preparation fails with a private path When the route responds Then diagnostics stay server-side (${SYMLINK_SKIP_REASON})`, async () => {
     const root = await mkdtemp(
       path.join(tmpdir(), "burnguard-private-prepare-"),
     );
