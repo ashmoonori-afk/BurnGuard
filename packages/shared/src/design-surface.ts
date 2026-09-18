@@ -225,6 +225,7 @@ export function surfaceForProjectType(projectType: ProjectType): DesignSurface {
     case "slide_deck":
       return "slides";
     case "graphic":
+    case "logo":
       return "content";
     default:
       return "website";

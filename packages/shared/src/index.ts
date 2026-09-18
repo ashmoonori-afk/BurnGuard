@@ -20,6 +20,7 @@ export * from "./extraction-domain";
 export * from "./extraction-provenance";
 export * from "./file-patch";
 export * from "./graphic";
+export * from "./logo";
 export * from "./platform-presets";
 export * from "./platform-guides";
 export * from "./harness";

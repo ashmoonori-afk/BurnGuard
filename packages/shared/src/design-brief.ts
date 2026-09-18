@@ -9,6 +9,7 @@ export const DESIGN_BRIEF_OUTPUT_TYPES = [
   "prototype",
   "slide_deck",
   "graphic",
+  "logo",
   "from_template",
   "other",
 ] as const;
@@ -123,6 +124,7 @@ function outputType(value: string): DesignBriefOutputType {
     case "prototype":
     case "slide_deck":
     case "graphic":
+    case "logo":
     case "from_template":
     case "other":
       return value;

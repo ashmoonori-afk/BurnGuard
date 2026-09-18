@@ -4,6 +4,8 @@ import type { UploadedVisualSourceSelection, VisualSourceManifestV1 } from "./vi
 export type TurnErrorCode =
   | "graphic_requires_authenticated_codex"
   | "graphic_starter_unchanged"
+  | "logo_requires_authenticated_codex"
+  | "logo_deliverables_missing"
   | "commandcode_unavailable"
   | "unsupported_generation_model_effort"
   | "backend_unavailable"
