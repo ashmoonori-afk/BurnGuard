@@ -42,7 +42,7 @@ This Font Software is licensed under the SIL Open Font License, Version 1.1.
 
 
 
- 
+
 
 
 
@@ -74,7 +74,7 @@ The requirement for fonts to remain under this license does not apply to any doc
 
 
 
- 
+
 
 
 
@@ -116,7 +116,7 @@ permission is granted by the corresponding Copyright Holder. This restriction on
 
 
 
- 
+
 
 
 
