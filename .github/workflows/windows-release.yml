@@ -29,6 +29,8 @@ jobs:
       - run: bun run typecheck
       - run: bun run lint
       - run: bun test packages/backend/tests/original-samples.test.ts packages/backend/tests/desktop-lifecycle.test.ts packages/backend/tests/artifact-document-migration.test.ts --timeout 30000
+      - name: Verify owned process cleanup in an isolated runner
+        run: bun test packages/backend/tests/owned-process-tree.test.ts --timeout 30000
       - run: dotnet run --project packages/desktop-windows/qa/UpdateChecks.csproj -c Release
       - run: bun run build:windows:release
       - uses: actions/upload-artifact@v4
