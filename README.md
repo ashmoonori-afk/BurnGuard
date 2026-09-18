@@ -14,7 +14,7 @@ BurnGuard is a local design workspace for Windows and macOS. Bring your Claude C
 
 Choose a format, describe the project and select a registered design system during onboarding. Search the catalogue or refresh it to pick up newly registered systems. You can also start without one.
 
-The bundled catalogue includes **41 themes**, including **31 original themes**. Each has a distinct navigation, hero and footer combination, with its own placement, proportions and responsive rules alongside typography and colors. These layouts adapt references from Supahero, Navbar Gallery and Footer Design; each theme records its sources. The original sample systems and prompt presets carry layout rules too. Add your own systems from supported files, websites, repositories or Figma sources, then review and publish them for project use. [Explore the 41 reference layouts](doc/21-theme-reference-layouts-2026-09-15.md)
+The bundled catalogue includes **41 themes**, including **31 original themes**. Each has a distinct navigation, hero and footer combination, with its own placement, proportions and responsive rules alongside typography and colors. These layouts adapt references from Supahero, Navbar Gallery and Footer Design; each theme records its sources. The original sample systems and prompt presets carry layout rules too. Add your own systems from supported files, websites, repositories or Figma sources, then review and publish them for project use. [Explore the 41 reference layouts](<design system themes/>)
 
 ![Project onboarding with design-system search, refresh and selection controls](doc/images/readme-design-system-picker.png)
 
@@ -38,7 +38,7 @@ Desktop packages include **41 website examples**, **41 generated WebP illustrati
 
 These examples illustrate the bundled themes' default designs. Existing system preview files take precedence; when they are missing, BurnGuard shows the bundled reference without overwriting edited system files or publication records. In the app, the examples use the shared local font store.
 
-**37 font families** ship with license notices. Bundled fonts use one shared local store, and canvas loads are reused across projects within the app window. New projects reference that store; standalone exports include the font files they need. [Font catalogue](assets/fonts/README.md) · [Design-system format](doc/05-design-system-format.md)
+**37 font families** ship with license notices. Bundled fonts use one shared local store, and canvas loads are reused across projects within the app window. New projects reference that store; standalone exports include the font files they need. [Font catalogue](assets/fonts/README.md) · [Design-system format](<design system sample/README.md>)
 
 ## One workspace, several kinds of output
 
@@ -148,8 +148,25 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 </details>
 
+## Changelog
+
+### 0.5.18
+
+- Fit oversized slide content to the artboard as content and images load.
+- Validate actual slide content, slide counts, runtime and local images before marking generation complete; continue unfinished output instead of accepting placeholders.
+- Default generated imagery to photorealistic subjects and avoid abstract decorative images.
+- Keep historical specifications 04–23 and reference notes local; simplify the public documentation index.
+
+### 0.5.17
+
+- Show slide or website thumbnails for the selected project format.
+- Preserve generated HTML and assets when generation is stopped, and restore the previous entrypoint if it was removed mid-write.
+- Pin project design rules, audit rendered output and include review evidence in handoff exports.
+
+[All releases](https://github.com/ashmoonori-afk/BurnGuard/releases)
+
 ## Documentation and license
 
-[Documentation index](doc/README.md) · [Architecture](doc/01-architecture.md) · [Design guidance](doc/design-craft.md) · [Installation and updates](doc/13-windows-updates-and-original-samples.md)
+[Documentation index](doc/README.md) · [Architecture](doc/01-architecture.md) · [Design guidance](doc/design-craft.md) · [Installation and updates](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)
 
 BurnGuard is licensed under **Apache-2.0**. See [LICENSE](LICENSE), [NOTICE](NOTICE) and the [image provenance notes](doc/images/README.md).

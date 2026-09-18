@@ -28,7 +28,7 @@ BurnGuard 是一个用于制作幻灯片、网站和平面作品的本地 AI 工
 
 ### 桌面应用
 
-从 [GitHub Releases](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) 下载安装包。Windows 上运行安装程序，或解压便携版 ZIP 后打开 `BurnGuard.exe`。macOS 安装包未签名。两个桌面外壳共用同一个本地引擎，都支持基于发布源的更新；参见[安装、打包与更新指南](doc/13-windows-updates-and-original-samples.md)。
+从 [GitHub Releases](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) 下载安装包。Windows 上运行安装程序，或解压便携版 ZIP 后打开 `BurnGuard.exe`。macOS 安装包未签名。两个桌面外壳共用同一个本地引擎，都支持基于发布源的更新；参见[安装、打包与更新指南](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)。
 
 | 功能 | 要求 |
 |---|---|
@@ -129,8 +129,25 @@ node scripts/qa/e2e-smoke.mjs --only creation-canvas-charts
 
 请在仓库根目录运行测试，这样预加载脚本才会创建隔离的临时配置目录。浏览器 QA 需要 Node.js 22.13+ 和 Chrome/Edge；Windows 上如有需要可传入 `--bun <bun.exe 的绝对路径>`。它使用自有的固定配置，不会向真实服务商发送请求。覆盖率（`bun run test:coverage`）是独立于测试通过的另一道门槛。每次发布前，用 Daybreak 审查最终源码和安装包，并解决阻断级安全问题。
 
+## 更新日志
+
+### 0.5.18
+
+- 内容和图片加载时，将超出尺寸的幻灯片内容缩放到画板内。
+- 完成前校验幻灯片内容、数量、运行时和本地图片；占位内容或未完成输出会继续生成。
+- 默认生成写实图片，避免抽象装饰图像。
+- 将 04–23 历史规格和 reference 笔记保留在本地，并整理公开文档目录。
+
+### 0.5.17
+
+- 按项目类型显示幻灯片或网站缩略图。
+- 停止生成时保留已写入的 HTML 和资源；入口文件若在写入期间被删除，则恢复先前文件。
+- 固定项目设计规则，检查渲染结果，并在交付导出中附带审核依据。
+
+[全部版本](https://github.com/ashmoonori-afk/BurnGuard/releases)
+
 ## 文档与许可证
 
-[文档索引](doc/README.md) · [架构](doc/01-architecture.md) · [设计系统](doc/05-design-system-format.md) · [生成指引](doc/design-craft.md) · [品牌识别](doc/brand-identity.md)
+[文档索引](doc/README.md) · [架构](doc/01-architecture.md) · [设计系统](<design system sample/README.md>) · [生成指引](doc/design-craft.md) · [品牌识别](doc/brand-identity.md)
 
 BurnGuard 采用 **Apache-2.0** 许可证。第三方声明见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)，图片和截图来源见[图片说明](doc/images/README.md)。

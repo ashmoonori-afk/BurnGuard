@@ -160,7 +160,7 @@ refactor: extract context-builder prompt renderer
 
 - One logical change per PR
 - PR description includes **what** and **why**, never just **what**
-- Link the relevant task from [06-milestones.md](./06-milestones.md) by task number (e.g. `closes 1.9`)
+- Link the relevant issue or identify the local milestone task.
 - All checks green before requesting review
 - Do not merge your own PR without at least self-review pass on the diff
 
@@ -187,7 +187,7 @@ When making an architectural decision that:
 - Narrows the design space for future work
 - Affects more than one package
 
-…add a new entry to [07-decisions.md](./07-decisions.md) as part of the same PR. ADRs are append-only; supersede rather than edit.
+…document the decision in the PR and add a new entry to the local architectural decision log. ADRs are append-only; supersede rather than edit.
 
 ### 6.4 Diagrams
 
@@ -241,7 +241,7 @@ If the PR touches the harness, also confirm:
 
 ## 10. Release Checklist
 
-Per phase (see [06-milestones.md §Delivery cadence](./06-milestones.md)):
+Per phase (see the project delivery plan):
 
 - [ ] All phase DoD items met
 - [ ] CHANGELOG updated (append-only, per version)
@@ -254,5 +254,5 @@ Per phase (see [06-milestones.md §Delivery cadence](./06-milestones.md)):
 ## 11. Getting Help
 
 - Open an issue with the `question` label for ambiguity
-- Check [07-decisions.md](./07-decisions.md) before challenging an architectural choice — chances are the rationale is already recorded
+- Check the local architectural decision log before challenging an architectural choice — chances are the rationale is already recorded
 - Attach `~/.burnguard/logs/session-{id}.log` when reporting harness bugs

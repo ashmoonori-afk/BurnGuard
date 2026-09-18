@@ -28,7 +28,7 @@ BurnGuard는 슬라이드·웹사이트·그래픽을 만드는 로컬 AI 작업
 
 ### 데스크톱 앱
 
-[GitHub Releases](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)에서 설치 파일을 받으세요. Windows는 설치 프로그램을 실행하거나 포터블 ZIP을 풀고 `BurnGuard.exe`를 엽니다. macOS 패키지는 미서명 배포입니다. 두 앱 모두 로컬 엔진과 릴리즈 피드 기반 업데이트를 사용합니다. [설치·패키징·업데이트 안내](doc/13-windows-updates-and-original-samples.md).
+[GitHub Releases](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)에서 설치 파일을 받으세요. Windows는 설치 프로그램을 실행하거나 포터블 ZIP을 풀고 `BurnGuard.exe`를 엽니다. macOS 패키지는 미서명 배포입니다. 두 앱 모두 로컬 엔진과 릴리즈 피드 기반 업데이트를 사용합니다. [설치·패키징·업데이트 안내](https://github.com/ashmoonori-afk/BurnGuard/releases/latest).
 
 | 기능 | 준비할 것 |
 |---|---|
@@ -115,8 +115,25 @@ node scripts/qa/e2e-smoke.mjs --only creation-canvas-charts
 
 테스트는 저장소 루트에서 실행해야 임시 프로필이 격리됩니다. 브라우저 QA에는 Node.js 22.13+와 Chrome·Edge가 필요합니다. Windows에서는 필요하면 `--bun <bun.exe 절대경로>`를 지정하세요. QA는 별도 프로필을 사용하며 실제 제공업체에 생성 요청을 보내지 않습니다. 커버리지는 테스트 통과와 별도 기준입니다. 공개 릴리즈 전에는 Daybreak로 최종 소스와 패키지를 보안 검토하고 차단 이슈를 해결합니다.
 
+## 변경 이력
+
+### 0.5.18
+
+- 콘텐츠와 이미지가 로드될 때 큰 슬라이드 결과물을 아트보드 안에 맞춥니다.
+- 실제 슬라이드 내용·장수·런타임·로컬 이미지를 검사하고, 플레이스홀더나 미완성 결과물은 생성을 이어갑니다.
+- 생성 이미지의 기본 방향을 실사로 설정하고 추상적인 장식 이미지를 피하도록 지침을 강화했습니다.
+- 04~23번 과거 명세와 reference 문서를 로컬에 보존하고 공개 문서 목록을 정리했습니다.
+
+### 0.5.17
+
+- 프로젝트 형식에 맞춰 슬라이드·웹사이트 썸네일을 표시합니다.
+- 생성 중단 시 작성된 HTML과 에셋을 보존하고, 작성 도중 진입 파일이 삭제됐다면 이전 파일을 복원합니다.
+- 프로젝트 디자인 규칙을 고정하고 렌더링 검사와 검토 근거가 포함된 전달용 내보내기를 지원합니다.
+
+[전체 릴리즈](https://github.com/ashmoonori-afk/BurnGuard/releases)
+
 ## 문서와 라이선스
 
-[문서 목록](doc/README.md) · [아키텍처](doc/01-architecture.md) · [디자인 시스템](doc/05-design-system-format.md) · [생성 지침](doc/design-craft.md) · [브랜드 가이드](doc/brand-identity.md)
+[문서 목록](doc/README.md) · [아키텍처](doc/01-architecture.md) · [디자인 시스템](<design system sample/README.md>) · [생성 지침](doc/design-craft.md) · [브랜드 가이드](doc/brand-identity.md)
 
 코드는 **Apache-2.0** 라이선스입니다. 기존 외부 구성요소 고지는 [LICENSE](LICENSE)와 [NOTICE](NOTICE), 이미지·화면 출처는 [이미지 안내](doc/images/README.md)를 참고하세요.

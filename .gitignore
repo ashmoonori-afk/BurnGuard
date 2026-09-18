@@ -40,3 +40,9 @@ design system sample/uploads/*
 /devplan/
 /.omo/
 /ref/
+
+# Local historical specifications and reference notes
+/doc/0[4-9]-*.md
+/doc/1[0-9]-*.md
+/doc/2[0-3]-*.md
+/doc/reference-*.md
