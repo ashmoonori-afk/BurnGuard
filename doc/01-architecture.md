@@ -81,8 +81,9 @@ Current export implementation:
 | `png_zip` | Implemented: one PNG per deck slide or graphic frame, or section-aware PNG/JPEG slices for a product detail page |
 | `cafe24_package` | Implemented: Cafe24 (카페24) Smart Design layout, per-page fragments, rewritten assets, guide, and lint report |
 | `imweb_package` | Implemented: Imweb (아임웹) code-widget fragments plus shared header and footer code, guide, and lint report |
+| `svg` | Implemented: the validated master vector of a logo project, copied unchanged; refused for every other project type |
 
-PDF accepts an `artboard` paper for graphic projects: each page uses the artboard's own pixel size converted to points, so a graphic set prints one page per artboard. A set whose artboards differ in size has no single page geometry and is rejected.
+PDF accepts an `artboard` paper for graphic projects: each page uses the artboard's own pixel size converted to points, so a graphic set prints one page per artboard. A set whose artboards differ in size has no single page geometry and is rejected. A logo project uses the same artboard paper for its 1920 x 1080 guideline pages; the download is named `<slug>-guidelines-r<revision>.pdf` (see [logo-design.md](logo-design.md)).
 
 The HTML zip export currently shells out to Windows PowerShell `Compress-Archive`.
 
