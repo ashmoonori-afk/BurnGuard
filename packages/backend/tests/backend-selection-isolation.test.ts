@@ -51,6 +51,7 @@ test("Given an unprobeable Codex When a Claude request reaches HTTP admission an
     }
     const turn = startUserTurn(sessionId, { type: "user.message", text: "Edit the heading" }, undefined, {
       detectBackends,
+      reviewDesign: async () => ({ status: "unavailable", repairs: 0, result: null }),
       runAdapter: async () => {
         adapterInvoked = true;
         return { exitCode: 0 };

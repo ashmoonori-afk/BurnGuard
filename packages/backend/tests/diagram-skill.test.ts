@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildPrompt, MAX_SKILL_CHARS } from "../src/harness/prompt-builder";
+import { buildPrompt, MAX_SKILL_CHARS, resolveDeliverable } from "../src/harness/prompt-builder";
 import { DIAGRAM_SKILL_MD } from "../src/harness/skills/diagram-skill";
 
 type BuildContext = Parameters<typeof buildPrompt>[0];
@@ -39,15 +39,16 @@ describe("diagram skill", () => {
     }
   });
 
-  test("selects the diagram skill for a diagram-shaped request", async () => {
+  test("Given a diagram request inside a prototype When selecting guidance Then the enclosing deliverable keeps its own contract", async () => {
     const prompt = await buildPrompt(makeContext(), {
       type: "user.message",
       text: "Create an architecture diagram for the service topology",
     });
 
-    expect(prompt).toContain("## Diagram skill");
-    expect(prompt).toContain("DIAGRAM_TYPE_ROUTER");
-    expect(prompt).toContain("DIAGRAM_COMPLEXITY_BUDGET");
+    expect(resolveDeliverable("prototype", "Create an architecture diagram")).toBe("prototype");
+    expect(resolveDeliverable("generic", "Create an architecture diagram")).toBe("diagram");
+    expect(prompt).not.toContain("DIAGRAM_TYPE_ROUTER");
+    expect(prompt).not.toContain("DIAGRAM_COMPLEXITY_BUDGET");
   });
 
   test("does not spend prompt budget on an unrelated request", async () => {

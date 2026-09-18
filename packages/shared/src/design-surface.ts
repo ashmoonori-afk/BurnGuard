@@ -244,7 +244,7 @@ export function extractDesignSystemSurface(
     if (isValidToken(surface, name, value)) tokens[name] = value;
   }
   const sections: { kind: SurfaceSectionKind; text: string }[] = [];
-  const body = readme.replace(/```[\s\S]*?```/g, "");
+  const body = readme.replace(/\r\n?/g, "\n").replace(/```[\s\S]*?```/g, "");
   for (const { heading, kind } of SURFACE_SECTION_HEADINGS[surface]) {
     const match = new RegExp("^##\\s+" + heading + "\\s*\\r?\\n([\\s\\S]*?)(?=^##\\s|$(?![\\s\\S]))", "im").exec(body);
     const captured = match?.[1]?.replace(/^\|.*$/gm, "").trim() ?? "";
