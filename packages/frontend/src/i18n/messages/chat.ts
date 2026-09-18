@@ -179,6 +179,16 @@ export const chatMessages = defineMessages({
     en: "The graphics canvas remained in its initial state, so no result was applied. Request generation again.",
     "zh-CN": "图形画面仍为初始状态，因此未应用结果。请重新请求生成。",
   },
+  "chat.error.logoRequiresAuthenticatedCodex": {
+    ko: "로고 작업에는 이미지 생성이 가능한 인증된 연결이 필요해요. 모델 선택과 로그인 상태를 확인해 주세요.",
+    en: "Logo work requires an authenticated image-capable connection. Check the model selection and sign-in.",
+    "zh-CN": "标志任务需要已认证且支持图像生成的连接。请检查模型选择与登录状态。",
+  },
+  "chat.error.logoDeliverablesMissing": {
+    ko: "로고 결과물이 완성되지 않아 반영하지 않았어요. 시안을 다시 만들거나 선택한 시안으로 다시 요청해 주세요.",
+    en: "The logo deliverables were incomplete, so nothing was applied. Generate concepts again or re-request the selected one.",
+    "zh-CN": "标志成果未完成，因此未应用。请重新生成方案，或再次提交所选方案。",
+  },
   "chat.error.commandCodeUnavailable": {
     ko: "설정에서 CommandCode API 키를 저장하고 Claude Code를 선택해 주세요.",
     en: "Save a CommandCode API key in Settings and select Claude Code.",

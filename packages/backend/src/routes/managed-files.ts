@@ -149,7 +149,7 @@ managedFileRoutes.get("/api/exports/:id/download", async (c) => {
     const download = await verifyExportDownload(id);
     const project = await getProjectDetail(download.projectId);
     const { buildContentDisposition, buildDownloadFilename, formatMime } = await import("../services/export-naming");
-    const filename = buildDownloadFilename({ projectName: project?.name ?? null, revision: download.revision, format: download.format });
+    const filename = buildDownloadFilename({ projectName: project?.name ?? null, revision: download.revision, format: download.format, projectType: project?.type });
     return new Response(Bun.file(download.path), { headers: { "Content-Disposition": buildContentDisposition(filename), "Content-Type": formatMime(download.format) } });
   } catch (error) {
     if (!(error instanceof ExportDownloadError)) throw error;

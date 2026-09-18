@@ -35,6 +35,8 @@ const ERROR_COPY: Record<string, MessageKey> = {
   invalid_llm_api_keys: "errors.invalid_llm_api_keys",
   unsupported_generation_model_effort: "errors.unsupported_generation_model_effort",
   graphic_starter_unchanged: "errors.graphic_starter_unchanged",
+  logo_requires_authenticated_codex: "errors.logo_requires_authenticated_codex",
+  logo_deliverables_missing: "errors.logo_deliverables_missing",
   invalid_project_options: "errors.invalid_project_options",
   forbidden: "errors.forbidden",
   has_active_projects: "errors.has_active_projects",

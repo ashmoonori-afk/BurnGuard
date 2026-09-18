@@ -3,10 +3,12 @@ import { buildPrompt, MAX_SKILL_CHARS } from "../src/harness/prompt-builder";
 import { COMPACT_DECK_SKILL_MD, COMPACT_PROTOTYPE_SKILL_MD } from "../src/harness/prompt-compact-skills";
 import { DECK_SKILL_MD } from "../src/harness/skills/deck-skill";
 import { DIAGRAM_SKILL_MD } from "../src/harness/skills/diagram-skill";
+import { LOGO_SKILL_MD } from "../src/harness/skills/logo-skill";
 import {
   DECK_VISUAL_CRAFT,
   DEFAULT_VISUAL_IDENTITY,
   GRAPHIC_VISUAL_CRAFT,
+  LOGO_VISUAL_CRAFT,
   MAX_VISUAL_CRAFT_CHARS,
   PROTOTYPE_VISUAL_CRAFT,
   VISUAL_CRAFT_CORE,
@@ -141,6 +143,7 @@ describe("visual craft skill", () => {
       PROTOTYPE_VISUAL_CRAFT,
       DECK_VISUAL_CRAFT,
       GRAPHIC_VISUAL_CRAFT,
+      LOGO_VISUAL_CRAFT,
       DEFAULT_VISUAL_IDENTITY,
     ];
     for (const block of blocks) {
@@ -150,6 +153,7 @@ describe("visual craft skill", () => {
       PROTOTYPE_VISUAL_CRAFT.length,
       DECK_VISUAL_CRAFT.length,
       GRAPHIC_VISUAL_CRAFT.length,
+      LOGO_VISUAL_CRAFT.length,
     );
     expect(MAX_VISUAL_CRAFT_CHARS).toBe(6400);
     expect(
@@ -170,6 +174,12 @@ describe("visual craft skill", () => {
     }
     expect(DECK_VISUAL_CRAFT).toContain("--deck-type-caption (24px)");
     expect(DECK_VISUAL_CRAFT).toContain("--deck-pad-slide");
+  });
+
+  test("logo skill ships its sentinel and evidence base within budget", () => {
+    expect(LOGO_SKILL_MD).toContain("LOGO_SKILL_MD");
+    expect(LOGO_SKILL_MD).toContain("naturalness");
+    expect(LOGO_SKILL_MD.length).toBeLessThanOrEqual(MAX_SKILL_CHARS);
   });
 
   test("diagram skill carries its visual craft section within budget", () => {

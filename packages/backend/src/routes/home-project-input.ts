@@ -70,11 +70,13 @@ export function parseProjectInput(input: unknown): ParsedProjectInput {
   let optionsJson: string | null = null;
   let graphicCanvasPresent = false;
   let graphicSetPresent = false;
+  let logoSetPresent = false;
   if (input["options"] !== undefined) {
     try {
       const options = parseProjectOptions(input["options"]);
       graphicCanvasPresent = options.graphic_canvas !== null;
       graphicSetPresent = isRecord(input["options"]) && "graphic_set" in input["options"];
+      logoSetPresent = options.logo_set !== null;
       optionsJson = JSON.stringify(options);
     } catch (error) {
       if (error instanceof UpgradeContractError) {
@@ -94,6 +96,15 @@ export function parseProjectInput(input: unknown): ParsedProjectInput {
         ? "graphic projects require options.graphic_canvas"
         : "graphic_canvas is only valid for graphic projects",
       { path: "options.graphic_canvas" },
+    );
+  }
+  if ((type === "logo") !== logoSetPresent) {
+    throw new ProjectInputError(
+      "invalid_project_options",
+      type === "logo"
+        ? "logo projects require options.logo_set"
+        : "logo_set is only valid for logo projects",
+      { path: "options.logo_set" },
     );
   }
   return {
@@ -117,6 +128,7 @@ function isProjectType(
     value === "prototype" ||
     value === "slide_deck" ||
     value === "graphic" ||
+    value === "logo" ||
     value === "from_template" ||
     value === "other"
   );

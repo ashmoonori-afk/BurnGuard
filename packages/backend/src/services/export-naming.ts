@@ -12,7 +12,7 @@
  *
  * Pure / data-only so the helpers can be unit-tested without the route.
  */
-import type { ExportFormat, ExportJob } from "@bg/shared";
+import type { ExportFormat, ExportJob, ProjectType } from "@bg/shared";
 
 export function formatExtension(format: ExportFormat): string {
   switch (format) {
@@ -20,6 +20,8 @@ export function formatExtension(format: ExportFormat): string {
       return "pdf";
     case "png":
       return "png";
+    case "svg":
+      return "svg";
     case "pptx":
       return "pptx";
     case "html_zip":
@@ -37,6 +39,8 @@ export function formatMime(format: ExportFormat): string {
       return "application/pdf";
     case "png":
       return "image/png";
+    case "svg":
+      return "image/svg+xml";
     case "pptx":
       return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
     case "html_zip":
@@ -59,6 +63,8 @@ export function formatFilenameTag(format: ExportFormat): string {
       return "deck";
     case "png":
       return "png";
+    case "svg":
+      return "logo";
     case "pptx":
       return "deck";
     case "html_zip":
@@ -72,6 +78,19 @@ export function formatFilenameTag(format: ExportFormat): string {
     case "png_zip":
       return "frames";
   }
+}
+
+/**
+ * A logo project ships a different deliverable under the same formats: its PDF is the brand
+ * guidelines rather than a deck, and its HTML archive is the guidelines site. The tag therefore
+ * depends on the (format, project type) pair, not on the format alone.
+ */
+function filenameTag(format: ExportFormat, projectType: ProjectType | undefined): string {
+  if (projectType === "logo") {
+    if (format === "pdf") return "guidelines";
+    if (format === "html_zip") return "guidelines-html";
+  }
+  return formatFilenameTag(format);
 }
 
 const FILENAME_MAX_LEN = 80;
@@ -106,15 +125,17 @@ export function buildDownloadFilename(input: {
   readonly projectName: string | null;
   readonly revision: number;
   readonly format: ExportFormat;
+  readonly projectType?: ProjectType | undefined;
 } | {
   readonly projectName: string | null;
   readonly job: Pick<ExportJob, "format" | "completed_at" | "created_at">;
+  readonly projectType?: ProjectType | undefined;
 }): string {
   const slug = slugifyProjectName(input.projectName ?? "export");
   if ("revision" in input) {
-    return `${slug}-${formatFilenameTag(input.format)}-r${input.revision}.${formatExtension(input.format)}`;
+    return `${slug}-${filenameTag(input.format, input.projectType)}-r${input.revision}.${formatExtension(input.format)}`;
   }
-  const tag = formatFilenameTag(input.job.format);
+  const tag = filenameTag(input.job.format, input.projectType);
   const ts = input.job.completed_at ?? input.job.created_at;
   return `${slug}-${tag}-${formatDate(ts)}.${formatExtension(input.job.format)}`;
 }

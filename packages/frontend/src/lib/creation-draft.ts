@@ -4,7 +4,7 @@
  * by an older build is read field by field, so an unknown or impossible value
  * falls back to the empty form instead of throwing.
  */
-import type { GraphicDetailBriefV1, GraphicFrameV1, ProjectType } from "@bg/shared";
+import { LOGO_TYPES, type GraphicDetailBriefV1, type GraphicFrameV1, type LogoType, type ProjectType } from "@bg/shared";
 import { DETAIL_BRIEF_FIELDS } from "@/lib/graphic-set-form";
 import { INITIAL_BRIEF_FORM, type BriefForm } from "@/lib/project-creation";
 
@@ -41,6 +41,11 @@ function detailBrief(value: unknown): GraphicDetailBriefV1 {
       return typeof answer === "string" ? [[field.key, answer]] : [];
     }),
   );
+}
+
+/** A logo type retired by a later build must not travel into the create request. */
+function logoType(value: unknown): LogoType {
+  return LOGO_TYPES.find((type) => type === value) ?? INITIAL_BRIEF_FORM.logoType;
 }
 
 export function serializeCreationDraft(form: BriefForm): string {
@@ -95,5 +100,11 @@ export function parseCreationDraft(raw: string | null): BriefForm {
     frames: frames(record["frames"], INITIAL_BRIEF_FORM.frames),
     presetId: typeof record["presetId"] === "string" ? record["presetId"] : INITIAL_BRIEF_FORM.presetId,
     detailBrief: detailBrief(record["detailBrief"]),
+    logoBrandName: sameShape(record["logoBrandName"], INITIAL_BRIEF_FORM.logoBrandName),
+    logoNiche: sameShape(record["logoNiche"], INITIAL_BRIEF_FORM.logoNiche),
+    logoCharacter: stringList(record["logoCharacter"], INITIAL_BRIEF_FORM.logoCharacter),
+    logoType: logoType(record["logoType"]),
+    logoSymbolKeywords: stringList(record["logoSymbolKeywords"], INITIAL_BRIEF_FORM.logoSymbolKeywords),
+    logoAvoid: sameShape(record["logoAvoid"], INITIAL_BRIEF_FORM.logoAvoid),
   };
 }

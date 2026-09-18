@@ -158,7 +158,10 @@ homeRoutes.post("/api/projects", async (c) => {
     throw error;
   }
 
-  if (input.type === "graphic") {
+  // A logo is drawn with the same image tool a graphic is, so both are refused up front unless the
+  // selected backend could draw with some model it offers.
+  if (input.type === "graphic" || input.type === "logo") {
+    const refusal = input.type === "logo" ? "logo_requires_authenticated_codex" : "graphic_requires_authenticated_codex";
     let detection: BackendDetectionResult;
     try { detection = await detectBackends({ force: true }); }
     catch (error) {
@@ -166,7 +169,7 @@ homeRoutes.post("/api/projects", async (c) => {
       c.header("Cache-Control", "no-store");
       return c.json(fail(error.code, error.message, error.diagnostics), 503);
     }
-    if (!backendCanEverGenerateGraphics(detection.backends.find((backend) => backend.id === input.backendId))) return c.json(fail("graphic_requires_authenticated_codex", "그래픽 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요."), 409);
+    if (!backendCanEverGenerateGraphics(detection.backends.find((backend) => backend.id === input.backendId))) return c.json(fail(refusal, input.type === "logo" ? "로고 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요." : "그래픽 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요."), 409);
   }
 
   const response = await createProjectRecord({

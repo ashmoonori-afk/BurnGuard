@@ -49,6 +49,7 @@ describe("home project input boundary", () => {
         design_brief: null,
         graphic_canvas: { schema_version: 1, width: 1200, height: 628 },
         graphic_set: { schema_version: 1, kind: "single", frame_count: 1 },
+        logo_set: null,
       }),
     });
   });

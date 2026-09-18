@@ -78,6 +78,7 @@ describe("projectToCard", () => {
     ["prototype", "웹디자인"],
     ["slide_deck", "슬라이드 덱"],
     ["graphic", "그래픽"],
+    ["logo", "로고 디자인"],
     ["other", "기타"],
   ] as const)(
     "Given a %s project When mapped Then its subtitle shows the real type label",
@@ -86,6 +87,12 @@ describe("projectToCard", () => {
       expect(card.subtitle.startsWith(label)).toBe(true);
     },
   );
+
+  test("Given a logo project When mapped Then it carries its own tint instead of the generic fallback", () => {
+    const card = projectToCard(projectSummary({ type: "logo" }));
+    expect(card.tintClass).toBe("bg-fuchsia-100");
+    expect(card.kind).toBe("logo");
+  });
 
   test("Given a project created from a template When mapped Then its subtitle falls back to 기타 instead of 템플릿", () => {
     const card = projectToCard(projectSummary({ type: "from_template" }));

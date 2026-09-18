@@ -28,6 +28,7 @@ const PROJECT_TYPE_LABEL: Record<string, MessageKey> = {
   prototype: "home.type.prototype",
   slide_deck: "home.type.slide_deck",
   graphic: "home.type.graphic",
+  logo: "home.type.logo",
   from_template: "home.type.from_template",
   other: "home.type.other",
 };

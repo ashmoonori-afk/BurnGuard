@@ -5,6 +5,7 @@ import {
   Download,
   FileDown,
   FileType2,
+  PenTool,
   Presentation,
   PackagePlus,
 } from "lucide-react";
@@ -54,6 +55,7 @@ const OPTION_ICON: Record<ExportFormat, LucideIcon> = {
   png_zip: Download,
   cafe24_package: PackagePlus,
   imweb_package: PackagePlus,
+  svg: PenTool,
 };
 
 export type ExportQualityGate = { readonly mustFixCount: number } | null;

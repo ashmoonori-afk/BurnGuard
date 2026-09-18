@@ -44,7 +44,7 @@ export const projectsTable = sqliteTable(
   {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    type: text("type", { enum: ["prototype", "slide_deck", "graphic", "from_template", "other"] }).notNull(),
+    type: text("type", { enum: ["prototype", "slide_deck", "graphic", "logo", "from_template", "other"] }).notNull(),
     designSystemId: text("design_system_id").references(() => designSystemsTable.id),
     dirPath: text("dir_path").notNull(),
     entrypoint: text("entrypoint").notNull().default("index.html"),
@@ -113,7 +113,7 @@ export const exportsTable = sqliteTable(
   {
     id: text("id").primaryKey(),
     projectId: text("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
-    format: text("format", { enum: ["html_zip", "pdf", "png", "pptx", "handoff", "cafe24_package", "imweb_package", "png_zip"] }).notNull(),
+    format: text("format", { enum: ["html_zip", "pdf", "png", "pptx", "handoff", "cafe24_package", "imweb_package", "png_zip", "svg"] }).notNull(),
     status: text("status", { enum: ["pending", "running", "succeeded", "failed"] }).notNull(),
     outputPath: text("output_path"),
     errorMessage: text("error_message"),
@@ -123,7 +123,7 @@ export const exportsTable = sqliteTable(
     completedAt: integer("completed_at"),
   },
   (table) => [
-    check("ck_exports_format", sql`${table.format} IN ('html_zip','pdf','png','pptx','handoff','cafe24_package','imweb_package','png_zip')`),
+    check("ck_exports_format", sql`${table.format} IN ('html_zip','pdf','png','pptx','handoff','cafe24_package','imweb_package','png_zip','svg')`),
     check("ck_exports_status", sql`${table.status} IN ('pending','running','succeeded','failed')`),
     index("idx_exports_project").on(table.projectId, table.createdAt),
   ],

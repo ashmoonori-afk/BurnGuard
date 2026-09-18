@@ -6,6 +6,8 @@ import { useT, type MessageKey } from "@/i18n/t";
 const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {
   graphic_requires_authenticated_codex: "chat.error.graphicRequiresAuthenticatedCodex",
   graphic_starter_unchanged: "chat.error.graphicStarterUnchanged",
+  logo_requires_authenticated_codex: "chat.error.logoRequiresAuthenticatedCodex",
+  logo_deliverables_missing: "chat.error.logoDeliverablesMissing",
   commandcode_unavailable: "chat.error.commandCodeUnavailable",
   unsupported_generation_model_effort: "chat.error.unsupportedModelEffort",
   backend_unavailable: "chat.error.backendUnavailable",

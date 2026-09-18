@@ -10,7 +10,8 @@ import { canvasMessages } from "./canvas";
 import { modesMessages } from "./modes";
 import { chatMessages } from "./chat";
 import { workspaceMessages } from "./workspace";
+import { logoMessages } from "./logo";
 
-export const messagePacks = [settingsMessages, shellMessages, errorsMessages, homeMessages, systemMessages, filesMessages, exportMessages, directionsMessages, canvasMessages, modesMessages, chatMessages, workspaceMessages] as const;
-export const messages = { ...settingsMessages, ...shellMessages, ...errorsMessages, ...homeMessages, ...systemMessages, ...filesMessages, ...exportMessages, ...directionsMessages, ...canvasMessages, ...modesMessages, ...chatMessages, ...workspaceMessages };
+export const messagePacks = [settingsMessages, shellMessages, errorsMessages, homeMessages, systemMessages, filesMessages, exportMessages, directionsMessages, canvasMessages, modesMessages, chatMessages, workspaceMessages, logoMessages] as const;
+export const messages = { ...settingsMessages, ...shellMessages, ...errorsMessages, ...homeMessages, ...systemMessages, ...filesMessages, ...exportMessages, ...directionsMessages, ...canvasMessages, ...modesMessages, ...chatMessages, ...workspaceMessages, ...logoMessages };
 export type MessageKey = keyof typeof messages;

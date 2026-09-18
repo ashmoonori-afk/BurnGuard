@@ -28,6 +28,7 @@ import type {
   DesignAuditResult,
   DesignDirectionState,
   FileInfo,
+  LogoActionV1,
   NormalizedEvent,
   PatchFileRequest,
   ProjectDetail,
@@ -110,6 +111,8 @@ import {
   preferDirectionState,
 } from "@/lib/design-direction-state";
 import { parseProjectGraphicCanvas } from "@/lib/graphic-project";
+import { logoActionMessage, parseProjectLogoCanvas } from "@/lib/logo-project";
+import LogoCandidatePanel from "@/components/logo/LogoCandidatePanel";
 import {
   designAuditErrorCode,
   designAuditViewState,
@@ -722,6 +725,11 @@ export default function ProjectView() {
         void queryClient.invalidateQueries({
           queryKey: ["project", id, "files"],
         });
+        // The explore turn writes the candidate manifest as part of the same
+        // publication, so the picker follows the turn instead of polling for it.
+        void queryClient.invalidateQueries({
+          queryKey: ["projects", id, "logo-manifest"],
+        });
       }
     }
 
@@ -751,6 +759,12 @@ export default function ProjectView() {
       ? null
       : parseProjectGraphicCanvas(project.type, project.options_json),
     [project?.type, project?.options_json],
+  );
+  // A logo has no persisted canvas: every artboard it writes is the fixed page of
+  // the shared contract, so the graphic preview and frame navigator are handed that.
+  const logoCanvas = useMemo(
+    () => project === null ? null : parseProjectLogoCanvas(project.type),
+    [project?.type],
   );
   const files: FileInfo[] = filesQuery.data ?? [];
   const artifacts = artifactsQuery.data ?? null;
@@ -1088,6 +1102,22 @@ export default function ProjectView() {
   };
 
 
+  /**
+   * Regenerating or picking a logo concept is an ordinary user message carrying the
+   * action sentinel, so the turn, its checkpoint and its history work like any other.
+   */
+  const requestLogoAction = async (action: LogoActionV1) => {
+    if (composerDisabled) return;
+    try {
+      const generation = (await loadComposerDraft(session.id).catch(() => null))?.generation;
+      await sendMessage(logoActionMessage(action), [], new AbortController().signal, generation);
+      setChatFocusKey((value) => value + 1);
+      setMobilePane("chat");
+    } catch (error) {
+      handleWriteError("workspace.project.editRequestFailed", error);
+    }
+  };
+
   /** Platform lint repair reuses the quality-repair send path, never a second workflow. */
   const requestPlatformFix = async (prompt: string) => {
     if (composerDisabled) return;
@@ -1179,12 +1209,21 @@ export default function ProjectView() {
           composerInitialText={composerPrefill}
           activePageLabel={activeRelPath !== null && activeRelPath !== project.entrypoint ? t("workspace.project.viewingPage", { path: activeRelPath }) : null}
           statusSlot={
+            <>
+            {project.type === "logo" && (
+              <LogoCandidatePanel
+                projectId={id!}
+                disabled={composerDisabled}
+                onAction={(action) => void requestLogoAction(action)}
+              />
+            )}
             <DirectionStatusBar
               state={directionState}
               cancelPending={cancelDirectionsMutation.isPending}
               onOpen={() => { setActiveTabId("directions"); setMobilePane("workspace"); }}
               onCancel={() => cancelDirectionsMutation.mutate()}
             />
+            </>
           }
           onSend={sendMessage}
           onOpenFile={(relPath) => {
@@ -1308,7 +1347,7 @@ export default function ProjectView() {
               onUndo={() => undoMutation.mutate({})}
               qualityFocusedNodeId={auditFocus?.relPath === activeRelPath ? auditFocus.nodeBgId : null}
               onQualityRevealResult={handleQualityRevealResult}
-              graphicCanvas={graphicCanvas}
+              graphicCanvas={graphicCanvas ?? logoCanvas}
               comments={comments}
               activeRelPath={activeRelPath}
               activeSlideIdx={activeSlideIdx}

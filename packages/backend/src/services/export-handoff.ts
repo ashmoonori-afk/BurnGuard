@@ -93,7 +93,7 @@ export interface HandoffSpec {
   project: {
     id: string;
     name: string;
-    type: "prototype" | "slide_deck" | "graphic" | "from_template" | "other";
+    type: "prototype" | "slide_deck" | "graphic" | "logo" | "from_template" | "other";
     entrypoint: string;
   };
   viewport: { width: number; height: number };

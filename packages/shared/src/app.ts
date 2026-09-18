@@ -13,6 +13,7 @@ export type ProjectType =
   | "prototype"
   | "slide_deck"
   | "graphic"
+  | "logo"
   | "from_template"
   | "other";
 export type DesignSystemStatus = "draft" | "review" | "published";

@@ -18,6 +18,8 @@ import type {
   GraphicFrameV1,
   GraphicSetKind,
   GraphicSetV1,
+  LogoSetV1,
+  LogoType,
   ProjectType,
 } from "@bg/shared";
 import {
@@ -25,6 +27,7 @@ import {
   GRAPHIC_CANVAS_LIMITS,
   UpgradeContractError,
   parseGraphicSetV1,
+  parseLogoSetV1,
 } from "@bg/shared";
 import { DETAIL_BRIEF_FIELDS } from "@/lib/graphic-set-form";
 import { t, type MessageKey } from "@/i18n/t";
@@ -99,6 +102,12 @@ export type ProjectDraft = {
   readonly frames: readonly GraphicFrameV1[];
   readonly presetId: string | null;
   readonly detailBrief: GraphicDetailBriefV1;
+  readonly logoBrandName: string;
+  readonly logoNiche: string;
+  readonly logoCharacter: readonly string[];
+  readonly logoType: LogoType;
+  readonly logoSymbolKeywords: readonly string[];
+  readonly logoAvoid: string;
 };
 
 export type BriefForm = Omit<
@@ -125,6 +134,12 @@ export const INITIAL_BRIEF_FORM: BriefForm = {
   frames: [],
   presetId: null,
   detailBrief: {},
+  logoBrandName: "",
+  logoNiche: "",
+  logoCharacter: [],
+  logoType: "auto",
+  logoSymbolKeywords: [],
+  logoAvoid: "",
 };
 
 export const PROJECT_LABEL_CLASS = "text-xs font-medium text-foreground/80";
@@ -142,7 +157,8 @@ export type DraftProblem =
   | "graphic_width_invalid"
   | "graphic_height_invalid"
   | "graphic_pixel_limit"
-  | "graphic_set_invalid";
+  | "graphic_set_invalid"
+  | "logo_set_invalid";
 
 export type BuildResult =
   | { readonly ok: true; readonly request: CreateProjectRequest }
@@ -160,7 +176,13 @@ export const PROBLEM_MESSAGE: Record<DraftProblem, MessageKey> = {
   graphic_height_invalid: "home.problem.height",
   graphic_pixel_limit: "home.problem.pixels",
   graphic_set_invalid: "home.problem.graphicSet",
+  logo_set_invalid: "home.problem.logoSet",
 };
+
+/** Graphics and logos are both drawn, so both are refused unless the backend can generate images. */
+export function requiresImageBackend(type: ProjectType): boolean {
+  return type === "graphic" || type === "logo";
+}
 
 export function draftProblemMessage(problem: DraftProblem): string {
   const count = problem === "pages_invalid" ? DESIGN_BRIEF_PAGE_LIMIT
@@ -190,6 +212,31 @@ function buildGraphicSet(draft: ProjectDraft): GraphicSetV1 | null {
   };
   try {
     return parseGraphicSetV1(candidate);
+  } catch (error) {
+    if (error instanceof UpgradeContractError) return null;
+    throw error;
+  }
+}
+
+/**
+ * Same contract-first rule as the graphic set: the panel builds exactly what the
+ * backend parses and runs the shared parser on it, so an unusable brief is refused
+ * here instead of coming back as a create failure.
+ */
+function buildLogoSet(draft: ProjectDraft): LogoSetV1 | null {
+  const symbolKeywords = draft.logoSymbolKeywords.map((keyword) => keyword.trim()).filter((keyword) => keyword !== "");
+  const avoid = draft.logoAvoid.trim();
+  const candidate = {
+    schema_version: 1,
+    brand_name: draft.logoBrandName,
+    niche: draft.logoNiche,
+    character: draft.logoCharacter,
+    logo_type: draft.logoType,
+    ...(symbolKeywords.length === 0 ? {} : { symbol_keywords: symbolKeywords }),
+    ...(avoid === "" ? {} : { avoid }),
+  };
+  try {
+    return parseLogoSetV1(candidate);
   } catch (error) {
     if (error instanceof UpgradeContractError) return null;
     throw error;
@@ -278,6 +325,11 @@ export function buildCreateProjectRequest(
     return { ok: false, problem: "graphic_set_invalid" };
   }
 
+  const logoSet = draft.type === "logo" ? buildLogoSet(draft) : null;
+  if (draft.type === "logo" && logoSet === null) {
+    return { ok: false, problem: "logo_set_invalid" };
+  }
+
   const selectable = selectableDesignSystems(systems, draft.type);
   const designSystemId = keepSelectedDesignSystemId(
     draft.designSystemId,
@@ -309,7 +361,9 @@ export function buildCreateProjectRequest(
           : "selected_design_system",
     visual_mood: draft.visualMood,
     density: draft.density,
-    output_size: draft.type === "graphic" ? "custom" : draft.outputSize,
+    // A graphic has its own canvas and a logo has the fixed 1920×1080 page, so
+    // neither takes an output size from the brief.
+    output_size: draft.type === "graphic" || draft.type === "logo" ? "custom" : draft.outputSize,
   };
 
   return {
@@ -336,6 +390,7 @@ export function buildCreateProjectRequest(
               graphic_set: graphicSet,
             }
           : {}),
+        ...(draft.type === "logo" && logoSet !== null ? { logo_set: logoSet } : {}),
         design_brief: brief,
       },
     },

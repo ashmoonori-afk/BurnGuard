@@ -3,10 +3,12 @@ import {
   parseDesignBriefV1,
   parseGraphicCanvasV1,
   parseGraphicSetV1,
+  parseLogoSetV1,
   UpgradeContractError,
   type DesignBriefV1,
   type GraphicCanvasV1,
   type GraphicSetV1,
+  type LogoSetV1,
 } from "@bg/shared";
 import { isRecord } from "@bg/shared/contract-parser";
 
@@ -16,6 +18,7 @@ export type ProjectOptions = {
   readonly design_brief: DesignBriefV1 | null;
   readonly graphic_canvas: GraphicCanvasV1 | null;
   readonly graphic_set: GraphicSetV1;
+  readonly logo_set: LogoSetV1 | null;
 };
 
 const DEFAULT_OPTIONS: ProjectOptions = {
@@ -24,6 +27,7 @@ const DEFAULT_OPTIONS: ProjectOptions = {
   design_brief: null,
   graphic_canvas: null,
   graphic_set: DEFAULT_GRAPHIC_SET,
+  logo_set: null,
 };
 
 export function parseProjectOptions(input: unknown): ProjectOptions {
@@ -46,6 +50,10 @@ export function parseProjectOptions(input: unknown): ProjectOptions {
       input["graphic_set"] === undefined
         ? DEFAULT_GRAPHIC_SET
         : parseGraphicSetOption(input["graphic_set"]),
+    logo_set:
+      input["logo_set"] === undefined || input["logo_set"] === null
+        ? null
+        : parseLogoSetOption(input["logo_set"]),
   };
 }
 
@@ -63,7 +71,20 @@ export function parseStoredProjectOptions(
   try {
     return parseProjectOptions(parsed);
   } catch (error) {
-    if (error instanceof UpgradeContractError && !error.path.startsWith("options.graphic_set")) return DEFAULT_OPTIONS;
+    // A corrupt set is the authoring contract itself: degrading it to a default would silently
+    // reshape the deliverable, so it stays fatal for both the graphic and the logo set.
+    if (error instanceof UpgradeContractError && !error.path.startsWith("options.graphic_set") && !error.path.startsWith("options.logo_set")) return DEFAULT_OPTIONS;
+    throw error;
+  }
+}
+
+function parseLogoSetOption(input: unknown): LogoSetV1 {
+  try {
+    return parseLogoSetV1(input);
+  } catch (error) {
+    if (error instanceof UpgradeContractError) {
+      throw new UpgradeContractError(error.code, `options.logo_set.${error.path}`);
+    }
     throw error;
   }
 }

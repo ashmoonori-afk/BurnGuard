@@ -17,6 +17,7 @@ Start with the [product introduction and setup](../README.md), available in [Kor
 - [Image production](image-production.md)
 - [Research catalog](research.md)
 - [Brand identity](brand-identity.md)
+- [Logo design deliverable](logo-design.md)
 - [Sample design system](<../design system sample/README.md>)
 - [Bundled themes](<../design system themes/>)
 - [Original sample collections](../samples/original/README.md)

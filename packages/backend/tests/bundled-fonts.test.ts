@@ -74,13 +74,16 @@ interface BundledFontEntry {
   readonly category: string;
   readonly source: string;
   readonly licenseFile: string;
+  readonly bytes: number;
+  readonly glyphCount: number;
+  readonly hangulSyllables: number;
 }
 
-const MIN_BUNDLED_FAMILIES = 27;
-// First boot seeds this folder into ~100 project/system dirs; 17.4 MiB took ~3 min to copy.
-const MAX_BUNDLE_BYTES = 10 * 1024 * 1024;
+const MIN_BUNDLED_FAMILIES = 72;
+// Font binaries live once in the shared store; keep the installed WOFF2 payload deliberate.
+const MAX_BUNDLE_BYTES = 22 * 1024 * 1024;
 const LICENSE_MARKERS = /SIL OPEN FONT LICENSE|Apache License|UBUNTU FONT LICENCE/;
-const TRUSTED_SOURCE = /^https:\/\/(raw\.githubusercontent\.com|github\.com)\//;
+const TRUSTED_SOURCE = /^https:\/\/(raw\.githubusercontent\.com|github\.com|seed\.line\.me|hangeul\.naver\.com|corp\.gmarket\.com|img\.cafe24\.com)\//;
 
 test("Given the bundled font catalog, when manifest, fonts.css, files, licenses and fonts.md are cross-checked, then every family is consistent, licensed and documented", async () => {
   const root = path.join(resolveRepoRoot(), "assets/fonts");
@@ -99,7 +102,10 @@ test("Given the bundled font catalog, when manifest, fonts.css, files, licenses 
     expect(css).toContain(`font-weight: ${entry.weight};`);
     expect(entry.file.endsWith(".woff2")).toBe(true);
     const fontBytes = (await stat(path.join(root, entry.file))).size;
-    expect(fontBytes).toBeGreaterThan(0);
+    expect(fontBytes).toBe(entry.bytes);
+    expect(entry.glyphCount).toBeGreaterThan(0);
+    expect(entry.hangulSyllables).toBeGreaterThanOrEqual(0);
+    expect(entry.hangulSyllables).toBeLessThanOrEqual(11_172);
     bundleBytes += fontBytes;
     expect(LICENSE_MARKERS.test(await readFile(path.join(root, entry.licenseFile), "utf8"))).toBe(true);
     expect(TRUSTED_SOURCE.test(entry.source)).toBe(true);

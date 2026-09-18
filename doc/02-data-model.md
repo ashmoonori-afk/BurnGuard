@@ -103,7 +103,7 @@ CREATE INDEX idx_ds_status ON design_systems(status);
 CREATE TABLE projects (
   id                TEXT PRIMARY KEY,
   name              TEXT NOT NULL,
-  type              TEXT NOT NULL CHECK(type IN ('prototype','slide_deck','from_template','other')),
+  type              TEXT NOT NULL CHECK(type IN ('prototype','slide_deck','graphic','logo','from_template','other')),
   design_system_id  TEXT REFERENCES design_systems(id),
   dir_path          TEXT NOT NULL,
   entrypoint        TEXT NOT NULL DEFAULT 'index.html',
@@ -121,7 +121,8 @@ CREATE INDEX idx_projects_ds ON projects(design_system_id);
 
 `options_json` stores snake-case project options. The current object may contain
 `use_speaker_notes` for slide decks, `copy_as_is` for template-based projects,
-and a versioned `design_brief` with output type, audience, objective, content
+`graphic_canvas` and `graphic_set` for graphic projects, `logo_set` for logo
+projects (brand name, niche, character, logo type, symbol keywords), and a versioned `design_brief` with output type, audience, objective, content
 source, locale, brand mode, visual mood, density, and output size. The HTTP
 boundary rejects unknown keys and malformed brief fields before persistence;
 readers treat malformed legacy JSON as absent options rather than injecting a

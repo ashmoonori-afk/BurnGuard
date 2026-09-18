@@ -105,6 +105,19 @@ function framesAreUniform(set: GraphicSetV1): boolean {
   return frames.every((frame) => frame.width === first.width && frame.height === first.height);
 }
 
+/**
+ * A logo ships three things and nothing else: the validated master SVG, the
+ * guidelines as a print-ready PDF at the artboard page, and the same guidelines
+ * as the HTML the PDF was made from (doc/23 D7).
+ */
+export function logoExportOptions(): readonly ExportMenuOption[] {
+  return [
+    { key: "logo-svg", format: "svg", options: {}, label: t("export.option.logoSvg") },
+    { key: "guidelines-pdf", format: "pdf", options: { pdf_paper: "artboard" }, label: t("export.option.guidelinesPdf") },
+    { key: "guidelines-html", format: "html_zip", options: {}, label: t("export.option.guidelinesHtml") },
+  ];
+}
+
 export function graphicExportOptions(
   canvas: GraphicCanvasV1,
   set: GraphicSetV1,

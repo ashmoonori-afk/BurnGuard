@@ -30,7 +30,7 @@ function fail(
 }
 
 function isExportFormat(value: unknown): value is ExportFormat {
-  return value === "html_zip" || value === "pdf" || value === "png" || value === "pptx" || value === "handoff" || value === "cafe24_package" || value === "imweb_package" || value === "png_zip";
+  return value === "html_zip" || value === "pdf" || value === "png" || value === "pptx" || value === "handoff" || value === "cafe24_package" || value === "imweb_package" || value === "png_zip" || value === "svg";
 }
 
 export const artifactRoutes = new Hono();
@@ -152,15 +152,17 @@ artifactRoutes.post("/api/projects/:id/exports", async (c) => {
     throw error;
   }
   const projectOptions = parseStoredProjectOptions(project.options_json);
-  if (format === "pdf" && options.pdf_paper === "artboard" && project.type !== "graphic") return c.json(fail("invalid_export_options", "Artboard paper is only valid for graphic projects", { path: "pdf_paper" }), 400);
+  if (format === "svg" && project.type !== "logo") return c.json(fail("format_requires_logo", "SVG export requires a logo project", { projectType: project.type }), 400);
+  if (project.type === "logo" && (format === "png" || format === "handoff")) return c.json(fail("format_requires_web", "Logo projects export the master SVG, the guidelines PDF, or the guidelines HTML archive", { projectType: project.type }), 400);
+  if (format === "pdf" && options.pdf_paper === "artboard" && project.type !== "graphic" && project.type !== "logo") return c.json(fail("invalid_export_options", "Artboard paper is only valid for graphic and logo projects", { path: "pdf_paper" }), 400);
   if (format === "png_zip" && options.slice_format === "jpeg" && (project.type !== "graphic" || projectOptions.graphic_set.kind !== "product_detail")) return c.json(fail("invalid_export_options", "JPEG slices are only valid for product detail graphics", { path: "slice_format" }), 400);
-  if ((format === "cafe24_package" || format === "imweb_package") && (project.type === "slide_deck" || project.type === "graphic")) {
+  if ((format === "cafe24_package" || format === "imweb_package") && (project.type === "slide_deck" || project.type === "graphic" || project.type === "logo")) {
     return c.json(fail("format_requires_web", "Platform packages require a web project", { projectType: project.type }), 400);
   }
   if (format === "png_zip" && project.type !== "slide_deck" && (project.type !== "graphic" || (projectOptions.graphic_set.frame_count <= 1 && projectOptions.graphic_set.kind !== "product_detail"))) {
     return c.json(fail("format_requires_frames", "PNG ZIP requires a deck, multi-frame graphic, or product detail", { projectType: project.type }), 400);
   }
-  if ((format === "pptx" || format === "pdf" && !(project.type === "graphic" && options.pdf_paper === "artboard")) && project.type !== "slide_deck") {
+  if ((format === "pptx" || format === "pdf" && !((project.type === "graphic" || project.type === "logo") && options.pdf_paper === "artboard")) && project.type !== "slide_deck") {
     return c.json(fail("format_requires_deck", `${format.toUpperCase()} export requires a slide deck or graphic artboard`, { projectType: project.type }), 400);
   }
 
@@ -171,7 +173,7 @@ artifactRoutes.post("/api/projects/:id/exports", async (c) => {
     if (job === null) return c.json(fail("export_create_failed", "Export job could not be created"), 500);
     return c.json(ok(job satisfies ExportJob), 202);
   } catch (error) {
-    if (error instanceof ExportServiceError && (error.code === "invalid_graphic_export_options" || error.code === "format_requires_web" || error.code === "format_requires_frames" || error.code === "pdf_resource_limit")) return c.json(fail(error.code, error.message), 400);
+    if (error instanceof ExportServiceError && (error.code === "invalid_graphic_export_options" || error.code === "format_requires_web" || error.code === "format_requires_frames" || error.code === "format_requires_logo" || error.code === "pdf_resource_limit")) return c.json(fail(error.code, error.message), 400);
     throw error;
   }
 });
