@@ -11,21 +11,23 @@ test("Given a fixed-size deck When the sandbox resizes or changes slides Then th
     await page.locator('iframe').evaluate((frame, srcdoc) => { frame.srcdoc = srcdoc; }, buildSandboxedArtifactSrcDoc(html, "http://127.0.0.1:14070/api/projects/test/fs/deck.html"));
     const frame = page.frames().find(frame => frame.parentFrame());
     if (!frame) throw new Error("missing_frame");
-    const check = async () => {
-      await frame.waitForFunction(() => {
+    const check = async (width: number, height: number) => {
+      await frame.waitForFunction(({ width, height }) => {
+        if (innerWidth !== width || innerHeight !== height) return false;
         const slide = document.querySelector('[data-slide][data-active]');
         if (!slide?.hasAttribute('data-bg-slide-fit')) return false;
         const rect = slide.getBoundingClientRect();
-        return rect.width > 0 && rect.x >= -1 && rect.y >= -1 && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1;
-      });
+        return rect.width > 0 && rect.x >= -1 && rect.y >= -1 && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1
+          && document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight;
+      }, { width, height });
       expect(await frame.evaluate(() => ({ x: document.documentElement.scrollWidth <= innerWidth, y: document.documentElement.scrollHeight <= innerHeight }))).toEqual({ x: true, y: true });
     };
-    await check();
+    await check(586, 365);
     expect(await frame.locator('[data-active]').evaluate(node => (node as HTMLElement).offsetWidth)).toBe(1920);
     await page.locator('iframe').evaluate(frame => { frame.style.width = '320px'; frame.style.height = '600px'; });
-    await check();
+    await check(320, 600);
     await frame.evaluate(() => { const slides = document.querySelectorAll('[data-slide]'); slides[0]!.removeAttribute('data-active'); slides[1]!.setAttribute('data-active', ''); });
-    await check();
+    await check(320, 600);
     expect(await frame.locator('nav').evaluate(node => getComputedStyle(node).transform)).toBe('none');
   } finally { await browser.close(); }
 }, 30_000);
