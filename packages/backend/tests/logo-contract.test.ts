@@ -129,6 +129,21 @@ describe("logo design-system patch", () => {
       logo_asset: "logo.svg",
     }))).toBe("colors.0.value");
   });
+
+  test("Given a readme section that smuggles a second top-level heading, When parsed, Then readme_section is rejected", () => {
+    expect(invalidPath(() => parseLogoDesignSystemPatchV1({
+      schema_version: 1,
+      colors: [],
+      readme_section: "## Logo\nMark\n\n## Typography\nInjected second section",
+      logo_asset: "logo.svg",
+    }))).toBe("readme_section");
+    expect(parseLogoDesignSystemPatchV1({
+      schema_version: 1,
+      colors: [],
+      readme_section: "## Logo\n\n### Clear space\n\nx = cap height.",
+      logo_asset: "logo.svg",
+    }).readme_section).toContain("### Clear space");
+  });
 });
 
 describe("logo surface and export options", () => {

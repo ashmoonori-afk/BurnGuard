@@ -212,6 +212,10 @@ export function parseLogoDesignSystemPatchV1(input: unknown): LogoDesignSystemPa
   if (new Set(colors.map((color) => color.name)).size !== colors.length) invalid("colors");
   const readmeSection = boundedString(record, "readme_section", 4000);
   if (!readmeSection.startsWith("## Logo")) invalid("readme_section");
+  // One section only: a second top-level heading would be merged into the README verbatim and
+  // duplicated on every re-apply.
+  const body = readmeSection.includes("\n") ? readmeSection.slice(readmeSection.indexOf("\n") + 1) : "";
+  if (/^#{1,2}(?:\s|$)/m.test(body)) invalid("readme_section");
   if (record.logo_asset !== LOGO_FILES.logo) invalid("logo_asset");
   return { schema_version: 1, colors, readme_section: readmeSection, logo_asset: LOGO_FILES.logo };
 }

@@ -4,7 +4,7 @@ import { ensureCharts } from "./charts";
 import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
-import { parseLogoAction, resolveLogoPhase, type NormalizedEvent, type UserEvent } from "@bg/shared";
+import type { NormalizedEvent, UserEvent } from "@bg/shared";
 import { assignAttachmentsToTurn } from "../db/attachments";
 import {
   persistNormalizedEvent,
@@ -40,7 +40,7 @@ import { parse } from "node-html-parser";
 import { prepareSlideDeckExport } from "./export-stage";
 import { reviewTurnDesign } from "./turn-design-review";
 import { parseStoredProjectOptions } from "./project-options";
-import { assertLogoDeliverables, LogoDeliverableError, readLogoManifest } from "./logo-deliverables";
+import { assertLogoDeliverables, captureLogoTurnExpectation, isLogoImageGeneration, LogoDeliverableError } from "./logo-deliverables";
 import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { manifestEntry, readManagedFile } from "./artifact-tree-storage";
@@ -397,8 +397,10 @@ async function runUserTurnInternal(
         stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
         const graphicBefore = graphicEntrypoint === null ? null : await readFile(graphicEntrypoint, "utf8");
-        const logoEntrypoint = project.type === "logo" ? path.join(stageDir, project.entrypoint) : null;
-        const logoStarter = logoEntrypoint === null ? null : await readFile(logoEntrypoint, "utf8");
+        // The logo gate's expectation is captured before the agent runs, so nothing the model writes
+        // during the turn can change which phase is checked or which candidate counts as selected.
+        const logoExpectation = project.type === "logo" ? await captureLogoTurnExpectation(stageDir, payload.text) : null;
+        let imageGenerations = 0;
         const deckStarter = project.type === "slide_deck" && (await readFile(path.join(stageDir, project.entrypoint), "utf8")).includes("Send your first prompt in chat to expand this deck.");
         const waitsForInterrupt = process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "abort";
         if (waitsForInterrupt && !activeTurn.abortController.signal.aborted) await new Promise<void>((resolve) => activeTurn.abortController.signal.addEventListener("abort", () => resolve(), { once: true }));
@@ -426,6 +428,7 @@ async function runUserTurnInternal(
                 if (activeTurn.interrupted && event.type === "status.error") return;
                 if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason === "error")) providerReportedFailure = true;
                 if (event.type === "file.changed") return;
+                if (isLogoImageGeneration(event)) imageGenerations += 1;
                 const scrubbedEvent = config.commandcodeApiKey ? JSON.parse(JSON.stringify(event, (_key, value: unknown) => typeof value === "string" ? value.split(config.commandcodeApiKey!).join("[redacted]") : value)) as NormalizedEvent : event;
                 const safeEvent = redactPrivateAttachmentPaths(scrubbedEvent, stageInputs);
                 if (safeEvent.type === "status.error") providerErrorPublished = true;
@@ -504,15 +507,11 @@ async function runUserTurnInternal(
           if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new Error("graphic_starter_unchanged");
           assertGraphicStarterReplaced(graphicBefore, await readFile(graphicEntrypoint, "utf8"));
         }
-        if (logoEntrypoint !== null && logoStarter !== null) {
-          const info = await lstat(logoEntrypoint);
+        if (logoExpectation !== null) {
+          const info = await lstat(path.join(stageDir, project.entrypoint));
           if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new LogoDeliverableError("guidelines_not_file");
-          // The phase is derived from what is on disk plus the sentinel the user sent, never from
-          // anything the model claims, so a stale stage cannot talk its way past the gate.
-          const action = parseLogoAction(payload.text);
-          const phase = resolveLogoPhase(await readLogoManifest(stageDir), action);
-          await assertLogoDeliverables(stageDir, phase, action, logoStarter);
-          logoFinalized = phase === "finalize";
+          await assertLogoDeliverables(stageDir, logoExpectation, { imageGenerations });
+          logoFinalized = logoExpectation.phase === "finalize";
         }
       },
     });

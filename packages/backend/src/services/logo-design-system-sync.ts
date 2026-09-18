@@ -79,21 +79,24 @@ export async function applyLogoDesignSystemPatch(input: {
   });
   if (asset === null) throw new LogoDesignSystemPatchError("logo_asset_missing");
 
-  for (const color of patch.colors) {
-    await upsertDesignSystemColorToken(input.designSystemId, { name: color.name, value: color.value });
-  }
-
+  // Resolve every destination and read every input before the first write, so a rejected path or
+  // an unreadable README cannot leave the colour tokens changed by a patch that then fails.
   const readmeFile = resolveWithin(systemDir, "README.md");
+  const assetsDir = resolveWithin(systemDir, "assets");
   const existing = await readFile(readmeFile, "utf8").catch((error: unknown) => {
     if (isMissing(error)) return "";
     throw error;
   });
   const section = mergeLogoSection(existing, patch.readme_section);
-  await writeFile(readmeFile, section.text, "utf8");
-
-  const assetsDir = resolveWithin(systemDir, "assets");
+  // An empty assets directory is not a visible change; it has to exist for the output path to resolve.
   await mkdir(assetsDir, { recursive: true });
-  await writeFile(resolveWithin(assetsDir, LOGO_FILES.logo), asset);
+  const assetOut = resolveWithin(assetsDir, LOGO_FILES.logo);
+
+  for (const color of patch.colors) {
+    await upsertDesignSystemColorToken(input.designSystemId, { name: color.name, value: color.value });
+  }
+  await writeFile(readmeFile, section.text, "utf8");
+  await writeFile(assetOut, asset);
 
   return { applied: true, colors: patch.colors.length, readme: section.readme, asset: true };
 }

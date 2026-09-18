@@ -1,15 +1,20 @@
-import { lstat, open, readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, readFile } from "node:fs/promises";
+import { crc32 } from "node:zlib";
 import { parse } from "node-html-parser";
 import {
-  LOGO_CANDIDATE_COUNT,
   LOGO_FILES,
-  LOGO_SOURCE_ATTRIBUTE,
+  LOGO_MAX_ROUNDS,
+  parseLogoAction,
   parseLogoManifestV1,
+  resolveLogoPhase,
   UpgradeContractError,
   type LogoActionV1,
   type LogoCandidateV1,
   type LogoManifestV1,
   type LogoPhase,
+  type LogoRoundV1,
+  type NormalizedEvent,
 } from "@bg/shared";
 import { LOGO_STARTER_NODE_ID, LOGO_STARTER_SENTENCE } from "../db/templates/logo";
 import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
@@ -42,9 +47,47 @@ export const REQUIRED_GUIDELINE_PAGES = 8;
  * artboard PDF export would refuse is rejected here, at the turn, instead of at download time.
  */
 export const MAX_GUIDELINE_PAGES = 13;
-const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-const FORBIDDEN_SVG_ELEMENTS = ["image", "script", "foreignObject", "text"] as const;
-const SOURCE_ATTRIBUTE = new RegExp(`\\s${LOGO_SOURCE_ATTRIBUTE}\\s*=\\s*["']([^"']*)["']`);
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const MAX_CANDIDATE_BYTES = 8 * 1024 * 1024;
+/** A candidate is a square mark; the image tool renders 1024 px, but a decoded square in this window counts. */
+const CANDIDATE_MIN_PX = 256;
+const CANDIDATE_MAX_PX = 4096;
+/** Tool names the Codex adapter emits for its built-in image tool (adapters/codex/event-mapping.ts). */
+export const LOGO_IMAGE_TOOLS: ReadonlySet<string> = new Set(["image_generation", "image_generation_call"]);
+
+/** A successful image-tool finish, the only provenance the gate trusts for a new candidate round. */
+export function isLogoImageGeneration(event: NormalizedEvent): boolean {
+  return event.type === "tool.finished" && event.ok && LOGO_IMAGE_TOOLS.has(event.tool);
+}
+
+export type LogoSelectedCandidate = {
+  readonly round: number;
+  readonly candidate_id: string;
+  readonly file: string;
+  readonly sha256: string;
+};
+
+/**
+ * What the turn is expected to produce, captured from the staged tree BEFORE the agent runs. The
+ * phase, the round to append and the selected candidate's bytes are all fixed here, so nothing the
+ * model writes during the turn can downgrade a finalize into an explore, pass off an old round as a
+ * regenerate, or swap the selected PNG under the same name.
+ */
+export type LogoTurnExpectation = {
+  readonly phase: LogoPhase;
+  readonly action: LogoActionV1 | null;
+  readonly priorManifest: LogoManifestV1 | null;
+  /** Every candidate file present before the turn, keyed "<round>:<candidate id>". */
+  readonly priorCandidates: ReadonlyMap<string, { readonly file: string; readonly sha256: string }>;
+  readonly priorGuidelines: string | null;
+  readonly nextRound: number;
+  readonly selected: LogoSelectedCandidate | null;
+};
+
+export type LogoTurnEvidence = {
+  /** Successful image-tool calls observed on this turn's event stream. */
+  readonly imageGenerations: number;
+};
 
 export async function readLogoManifest(dir: string): Promise<LogoManifestV1 | null> {
   const file = safePath(dir, LOGO_FILES.manifest, "manifest_path_unsafe");
@@ -68,37 +111,88 @@ export async function readLogoManifest(dir: string): Promise<LogoManifestV1 | nu
   }
 }
 
+export async function captureLogoTurnExpectation(dir: string, requestText: string): Promise<LogoTurnExpectation> {
+  const action = parseLogoAction(requestText);
+  // A manifest that no longer parses is treated as absent, exactly as the prompt treats it, so the
+  // turn starts over at round 1 rather than letting the agent "repair" history on its own terms.
+  const priorManifest = await readLogoManifest(dir).catch((error: unknown) => {
+    if (error instanceof LogoDeliverableError) return null;
+    throw error;
+  });
+  const phase = resolveLogoPhase(priorManifest, action);
+  if (action?.action === "select" && phase !== "finalize") throw new LogoDeliverableError("selection_unknown");
+  const rounds = priorManifest?.rounds ?? [];
+  if (phase === "explore" && rounds.length >= LOGO_MAX_ROUNDS) throw new LogoDeliverableError("rounds_exhausted");
+  const priorCandidates = new Map<string, { readonly file: string; readonly sha256: string }>();
+  for (const round of rounds) {
+    for (const candidate of round.candidates) {
+      const sha256 = await candidateHash(dir, candidate);
+      if (sha256 !== null) priorCandidates.set(`${round.round}:${candidate.id}`, { file: candidate.file, sha256 });
+    }
+  }
+  let selected: LogoSelectedCandidate | null = null;
+  if (phase === "finalize" && action?.action === "select") {
+    const candidate = rounds.find((round) => round.round === action.round)?.candidates.find((entry) => entry.id === action.candidate_id);
+    if (candidate === undefined) throw new LogoDeliverableError("selection_unknown");
+    const prior = priorCandidates.get(`${action.round}:${candidate.id}`);
+    if (prior === undefined) throw new LogoDeliverableError(`candidate_missing:${candidate.id}`);
+    selected = { round: action.round, candidate_id: candidate.id, file: candidate.file, sha256: prior.sha256 };
+  }
+  const priorGuidelines = await readGuidelines(dir).catch((error: unknown) => {
+    if (error instanceof LogoDeliverableError) return null;
+    throw error;
+  });
+  return { phase, action, priorManifest, priorCandidates, priorGuidelines, nextRound: rounds.length + 1, selected };
+}
+
 export async function assertLogoDeliverables(
   dir: string,
-  phase: LogoPhase,
-  action: LogoActionV1 | null,
-  starterHtml?: string,
+  expectation: LogoTurnExpectation,
+  evidence: LogoTurnEvidence,
 ): Promise<void> {
   const manifest = await readLogoManifest(dir);
   if (manifest === null) throw new LogoDeliverableError("manifest_missing");
+  const prior = expectation.priorManifest?.rounds ?? [];
 
-  if (phase === "explore") {
-    // Only the newest round is gated: an earlier round the user already rejected may have been
-    // pruned, but the round this turn produced has to be complete and openable.
-    const round = manifest.rounds[manifest.rounds.length - 1];
-    if (round === undefined || round.candidates.length !== LOGO_CANDIDATE_COUNT) throw new LogoDeliverableError("candidate_count");
-    for (const candidate of round.candidates) await assertCandidatePng(dir, candidate);
+  if (expectation.phase === "explore") {
+    // Exactly one round is appended; history and its files are immutable; every new candidate is a
+    // decodable square PNG whose bytes are new to the project; the image tool actually ran.
+    if (manifest.rounds.length !== prior.length + 1) throw new LogoDeliverableError("round_count");
+    assertRoundsUnchanged(prior, manifest.rounds.slice(0, prior.length));
+    await assertPriorCandidatesUnchanged(dir, expectation);
+    if (evidence.imageGenerations < 1) throw new LogoDeliverableError("image_generation_missing");
+    const round = manifest.rounds[prior.length];
+    if (round === undefined) throw new LogoDeliverableError("round_count");
+    const priorHashes = new Set([...expectation.priorCandidates.values()].map((entry) => entry.sha256));
+    const roundHashes = new Set<string>();
+    for (const candidate of round.candidates) {
+      const sha256 = await assertCandidatePng(dir, candidate);
+      if (priorHashes.has(sha256)) throw new LogoDeliverableError(`candidate_reused:${candidate.id}`);
+      if (roundHashes.has(sha256)) throw new LogoDeliverableError(`candidate_duplicate:${candidate.id}`);
+      roundHashes.add(sha256);
+    }
     const html = await readGuidelines(dir);
-    if (starterHtml !== undefined && isUntouchedStarter(starterHtml, html)) throw new LogoDeliverableError("starter_unchanged");
+    if (expectation.priorGuidelines !== null && html === expectation.priorGuidelines) {
+      throw new LogoDeliverableError(isStarter(html) ? "starter_unchanged" : "guidelines_unchanged");
+    }
     return;
   }
 
-  if (action === null || action.action !== "select") throw new LogoDeliverableError("selection_missing");
-  const candidate = manifest.rounds
-    .find((round) => round.round === action.round)
-    ?.candidates.find((entry) => entry.id === action.candidate_id);
-  if (candidate === undefined) throw new LogoDeliverableError("selection_unknown");
+  const selected = expectation.selected;
+  if (selected === null || expectation.action?.action !== "select") throw new LogoDeliverableError("selection_missing");
+  if (manifest.rounds.length !== prior.length) throw new LogoDeliverableError("rounds_changed");
+  assertRoundsUnchanged(prior, manifest.rounds);
   if (
     manifest.selected === null
-    || manifest.selected.round !== action.round
-    || manifest.selected.candidate_id !== action.candidate_id
+    || manifest.selected.round !== selected.round
+    || manifest.selected.candidate_id !== selected.candidate_id
   ) throw new LogoDeliverableError("selection_not_recorded");
-  await assertCandidatePng(dir, candidate);
+  const candidate = manifest.rounds
+    .find((round) => round.round === selected.round)
+    ?.candidates.find((entry) => entry.id === selected.candidate_id);
+  if (candidate === undefined) throw new LogoDeliverableError("selection_unknown");
+  if (await assertCandidatePng(dir, candidate) !== selected.sha256) throw new LogoDeliverableError("selected_candidate_changed");
+  await assertPriorCandidatesUnchanged(dir, expectation);
   await assertLogoSvgFile(dir, candidate.file);
   const html = await readGuidelines(dir);
   const pages = parse(html).querySelectorAll("[data-graphic-artboard]").length;
@@ -106,40 +200,26 @@ export async function assertLogoDeliverables(
   if (pages > MAX_GUIDELINE_PAGES) throw new LogoDeliverableError("guidelines_pages_over");
 }
 
+function assertRoundsUnchanged(prior: readonly LogoRoundV1[], current: readonly LogoRoundV1[]): void {
+  if (JSON.stringify(prior) !== JSON.stringify(current)) throw new LogoDeliverableError("rounds_changed");
+}
+
+async function assertPriorCandidatesUnchanged(dir: string, expectation: LogoTurnExpectation): Promise<void> {
+  for (const [key, entry] of expectation.priorCandidates) {
+    const sha256 = await candidateHash(dir, { file: entry.file });
+    if (sha256 !== entry.sha256) throw new LogoDeliverableError(`prior_candidate_changed:${key}`);
+  }
+}
+
 /**
- * The master vector contract. It lives here rather than in the export lane so the turn gate and the
- * SVG export validate exactly the same bytes against exactly the same rules.
+ * The master vector contract lives in logo-svg-validation.ts (an allowlist parser) and is re-exported
+ * here so the turn gate and the SVG export validate exactly the same bytes against the same rules.
  */
-export function validateLogoSvg(text: string): void {
-  if (Buffer.byteLength(text, "utf8") > MAX_SVG_BYTES) throw new LogoDeliverableError("svg_too_large");
-  const body = text.replace(/<!--[\s\S]*?-->/g, "");
-  // A DTD can declare entities the scan below never expands; a flat mark has no use for one.
-  if (/<!DOCTYPE/i.test(body)) throw new LogoDeliverableError("svg_doctype");
-  const root = rootSvgTag(body);
-  if (root === null) throw new LogoDeliverableError("svg_root_invalid");
-  if (!/\sviewBox\s*=/.test(root)) throw new LogoDeliverableError("svg_viewbox_missing");
-  for (const element of FORBIDDEN_SVG_ELEMENTS) {
-    if (new RegExp(`<\\s*${element}[\\s/>]`, "i").test(body)) throw new LogoDeliverableError(`svg_forbidden_element:${element}`);
-  }
-  if (/\s(?:xlink:)?href\s*=\s*["']?\s*(?:https?:|data:)/i.test(body)) throw new LogoDeliverableError("svg_external_reference");
-  for (const tag of body.matchAll(/<\s*use\b[^>]*>/gi)) {
-    const href = /\s(?:xlink:)?href\s*=\s*["']?([^"'\s>]*)/i.exec(tag[0])?.[1];
-    // A `<use>` may only reassemble this document; anything that is not a same-document fragment
-    // reference pulls bytes the validator never saw.
-    if (href !== undefined && !href.startsWith("#")) throw new LogoDeliverableError("svg_external_reference");
-  }
-  if (/url\s*\(/i.test(body)) throw new LogoDeliverableError("svg_url_reference");
-  if (/\son[a-zA-Z]+\s*=/.test(body)) throw new LogoDeliverableError("svg_event_handler");
-}
+export { logoSvgSource, validateLogoSvg } from "./logo-svg-validation";
+import { logoSvgSource, validateLogoSvg } from "./logo-svg-validation";
 
-/** The generated candidate the vector claims to reproduce, or null when the root does not say. */
-export function logoSvgSource(text: string): string | null {
-  const root = rootSvgTag(text.replace(/<!--[\s\S]*?-->/g, ""));
-  if (root === null) return null;
-  return SOURCE_ATTRIBUTE.exec(root)?.[1] ?? null;
-}
-
-async function assertCandidatePng(dir: string, candidate: LogoCandidateV1): Promise<void> {
+/** Verifies a candidate is a complete, decodable, square PNG and returns its sha256. */
+async function assertCandidatePng(dir: string, candidate: LogoCandidateV1): Promise<string> {
   const file = safePath(dir, candidate.file, `candidate_path_unsafe:${candidate.id}`);
   const info = await lstat(file).catch((error: unknown) => {
     if (isMissing(error)) return null;
@@ -148,14 +228,69 @@ async function assertCandidatePng(dir: string, candidate: LogoCandidateV1): Prom
   if (info === null) throw new LogoDeliverableError(`candidate_missing:${candidate.id}`);
   if (!info.isFile() || info.nlink !== 1) throw new LogoDeliverableError(`candidate_not_file:${candidate.id}`);
   if (info.size === 0) throw new LogoDeliverableError(`candidate_empty:${candidate.id}`);
-  const header = Buffer.alloc(PNG_MAGIC.length);
-  const handle = await open(file, "r");
-  try {
-    const { bytesRead } = await handle.read(header, 0, PNG_MAGIC.length, 0);
-    if (bytesRead !== PNG_MAGIC.length || !header.equals(PNG_MAGIC)) throw new LogoDeliverableError(`candidate_not_png:${candidate.id}`);
-  } finally {
-    await handle.close();
+  if (info.size > MAX_CANDIDATE_BYTES) throw new LogoDeliverableError(`candidate_too_large:${candidate.id}`);
+  const bytes = await readFile(file);
+  const png = inspectPng(bytes);
+  if (typeof png === "string") throw new LogoDeliverableError(`candidate_${png}:${candidate.id}`);
+  if (png.width !== png.height || png.width < CANDIDATE_MIN_PX || png.width > CANDIDATE_MAX_PX) {
+    throw new LogoDeliverableError(`candidate_geometry:${candidate.id}`);
   }
+  return sha256(bytes);
+}
+
+/** Pre-turn hash of a candidate file; null when it is absent or not a plain file, which is not an error yet. */
+async function candidateHash(dir: string, candidate: Pick<LogoCandidateV1, "file">): Promise<string | null> {
+  let file: string;
+  try {
+    file = resolveWithin(dir, ...candidate.file.split("/"));
+  } catch (error) {
+    if (error instanceof PathBoundaryError) return null;
+    throw error;
+  }
+  const info = await lstat(file).catch((error: unknown) => {
+    if (isMissing(error)) return null;
+    throw error;
+  });
+  if (info === null || !info.isFile() || info.nlink !== 1 || info.size === 0 || info.size > MAX_CANDIDATE_BYTES) return null;
+  return sha256(await readFile(file));
+}
+
+/**
+ * Structural PNG decode: signature, an IHDR first chunk, every chunk's CRC, at least one IDAT and an
+ * IEND that ends exactly at the last byte. A signature with no image data, or a file cut off before
+ * IEND, is "truncated"; anything else that is not a PNG is "not_png".
+ */
+function inspectPng(bytes: Buffer): { readonly width: number; readonly height: number } | "not_png" | "truncated" {
+  if (bytes.length < PNG_SIGNATURE.length || !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return "not_png";
+  let offset = PNG_SIGNATURE.length;
+  let width = 0;
+  let height = 0;
+  let sawIhdr = false;
+  let sawIdat = false;
+  while (offset + 8 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.toString("ascii", offset + 4, offset + 8);
+    const end = offset + 12 + length;
+    if (end > bytes.length) return "truncated";
+    if ((crc32(bytes.subarray(offset + 4, end - 4)) >>> 0) !== bytes.readUInt32BE(end - 4)) return "not_png";
+    if (!sawIhdr) {
+      if (type !== "IHDR" || length !== 13) return "not_png";
+      width = bytes.readUInt32BE(offset + 8);
+      height = bytes.readUInt32BE(offset + 12);
+      if (width === 0 || height === 0) return "not_png";
+      sawIhdr = true;
+    } else if (type === "IDAT") {
+      sawIdat = true;
+    } else if (type === "IEND") {
+      return sawIdat && end === bytes.length ? { width, height } : "truncated";
+    }
+    offset = end;
+  }
+  return "truncated";
+}
+
+function sha256(bytes: Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 async function assertLogoSvgFile(dir: string, expectedSource: string): Promise<void> {
@@ -186,10 +321,8 @@ async function readGuidelines(dir: string): Promise<string> {
   return await readFile(file, "utf8");
 }
 
-function isUntouchedStarter(starter: string, current: string): boolean {
-  return starter.includes(`data-bg-node-id="${LOGO_STARTER_NODE_ID}"`)
-    && starter.includes(LOGO_STARTER_SENTENCE)
-    && starter === current;
+function isStarter(html: string): boolean {
+  return html.includes(`data-bg-node-id="${LOGO_STARTER_NODE_ID}"`) && html.includes(LOGO_STARTER_SENTENCE);
 }
 
 function safePath(dir: string, relative: string, detail: string): string {
@@ -202,25 +335,6 @@ function safePath(dir: string, relative: string, detail: string): string {
 }
 
 /** The opening tag of the document's root element, only when that element is an `<svg>`. */
-function rootSvgTag(body: string): string | null {
-  let cursor = 0;
-  while (cursor < body.length) {
-    const start = body.indexOf("<", cursor);
-    if (start === -1) return null;
-    const marker = body[start + 1];
-    if (marker === "?" || marker === "!") {
-      const close = body.indexOf(">", start);
-      if (close === -1) return null;
-      cursor = close + 1;
-      continue;
-    }
-    const name = /^<\s*([A-Za-z][\w.:-]*)/.exec(body.slice(start))?.[1];
-    if (name === undefined || name.toLowerCase() !== "svg") return null;
-    const end = tagEnd(body, start);
-    return end === -1 ? null : body.slice(start, end + 1);
-  }
-  return null;
-}
 
 function tagEnd(body: string, start: number): number {
   let quote: string | null = null;

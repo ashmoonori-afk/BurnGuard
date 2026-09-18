@@ -2,19 +2,23 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { LOGO_SOURCE_ATTRIBUTE, type LogoActionV1, type LogoManifestV1 } from "@bg/shared";
+import { crc32, deflateSync } from "node:zlib";
+import { LOGO_MAX_ROUNDS, LOGO_PAGE, LOGO_SOURCE_ATTRIBUTE, type LogoManifestV1 } from "@bg/shared";
 import {
   assertLogoDeliverables,
+  captureLogoTurnExpectation,
+  isLogoImageGeneration,
   LogoDeliverableError,
   MAX_GUIDELINE_PAGES,
   REQUIRED_GUIDELINE_PAGES,
   readLogoManifest,
   validateLogoSvg,
 } from "../src/services/logo-deliverables";
-import { LOGO_PAGE } from "@bg/shared";
 import { pdfRasterBudgetFitsPages } from "../src/services/export-pdf-contract";
 
-const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x0d]);
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+/** The old positive fixture: a signature and two bytes, no IHDR, no image data. Must be refused. */
+const HEADER_ONLY = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x0d]);
 const STARTER = [
   "<!doctype html><html><body>",
   '<section data-graphic-artboard id="frame-1-logo-brief" style="width:1920px;height:1080px">',
@@ -22,6 +26,9 @@ const STARTER = [
   "<p>Four logo candidates will appear here after the first turn.</p>",
   "</section></body></html>",
 ].join("");
+const SELECT_2 = '<burnguard-logo-action-v1>{"action":"select","round":1,"candidate_id":"candidate-2"}</burnguard-logo-action-v1>';
+const REGENERATE = '<burnguard-logo-action-v1>{"action":"regenerate"}</burnguard-logo-action-v1>';
+const ONE_IMAGE = { imageGenerations: 1 };
 
 const directories: string[] = [];
 
@@ -33,6 +40,31 @@ async function stage(): Promise<string> {
   const directory = await mkdtemp(path.join(tmpdir(), "burnguard-logo-deliverables-"));
   directories.push(directory);
   return directory;
+}
+
+/** A real, decodable 8-bit grayscale PNG; `seed` changes the pixels so two fixtures never share bytes. */
+function png(width: number, height: number, seed: number): Buffer {
+  const raw = Buffer.alloc((width + 1) * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) raw[y * (width + 1) + 1 + x] = (x * 7 + y * 3 + seed) & 0xff;
+  }
+  const chunk = (type: string, data: Buffer): Buffer => {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length, 0);
+    const typed = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(typed) >>> 0, 0);
+    return Buffer.concat([length, typed, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  return Buffer.concat([PNG_SIGNATURE, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
+
+function candidateBytes(round: number, index: number): Buffer {
+  return png(256, 256, round * 16 + index);
 }
 
 function manifestOf(rounds: number, selected: LogoManifestV1["selected"] = null): LogoManifestV1 {
@@ -69,16 +101,16 @@ async function writeCandidates(
   await mkdir(roundDir, { recursive: true });
   for (let index = 1; index <= 4; index += 1) {
     const id = `candidate-${index}`;
-    const bytes = id in overrides ? overrides[id] : PNG_BYTES;
+    const bytes = id in overrides ? overrides[id] : candidateBytes(round, index);
     if (bytes === null || bytes === undefined) continue;
     await writeFile(path.join(roundDir, `${id}.png`), bytes);
   }
 }
 
-function guidelines(pages: number): string {
+function guidelines(pages: number, stamp = ""): string {
   const sections = Array.from(
     { length: pages },
-    (_, index) => `<section data-graphic-artboard id="page-${index + 1}" style="width:1920px;height:1080px"><h1>Page ${index + 1}</h1></section>`,
+    (_, index) => `<section data-graphic-artboard id="page-${index + 1}" style="width:1920px;height:1080px"><h1>Page ${index + 1}${stamp}</h1></section>`,
   ).join("");
   return `<!doctype html><html lang="ko"><body>${sections}</body></html>`;
 }
@@ -97,30 +129,33 @@ function svgDetail(text: string): string {
   return "ok";
 }
 
-async function exploreStage(options: { readonly rounds?: number; readonly pages?: number } = {}): Promise<string> {
+/** A project as it stands before the turn: `rounds` explored rounds and their candidate sheet. */
+async function priorProject(rounds: number, selected: LogoManifestV1["selected"] = null): Promise<string> {
   const dir = await stage();
-  const rounds = options.rounds ?? 2;
-  await writeManifest(dir, manifestOf(rounds));
+  if (rounds === 0) {
+    await writeFile(path.join(dir, "index.html"), STARTER);
+    return dir;
+  }
+  await writeManifest(dir, manifestOf(rounds, selected));
   for (let round = 1; round <= rounds; round += 1) await writeCandidates(dir, round);
-  await writeFile(path.join(dir, "index.html"), guidelines(options.pages ?? 1));
+  await writeFile(path.join(dir, "index.html"), guidelines(1, ` round ${rounds}`));
   return dir;
 }
 
-const selection: LogoActionV1 = { action: "select", round: 1, candidate_id: "candidate-2" };
+/** What a compliant explore turn leaves behind on top of `rounds - 1` prior rounds. */
+async function exploreResult(dir: string, rounds: number): Promise<void> {
+  await writeManifest(dir, manifestOf(rounds));
+  await writeCandidates(dir, rounds);
+  await writeFile(path.join(dir, "index.html"), guidelines(1, ` round ${rounds}`));
+}
 
-async function finalizeStage(options: {
-  readonly svg?: string | null;
-  readonly pages?: number;
-  readonly selected?: LogoManifestV1["selected"];
-} = {}): Promise<string> {
-  const dir = await stage();
+/** What a compliant finalize turn leaves behind after selecting round 1 candidate 2. */
+async function finalizeResult(dir: string, options: { readonly svg?: string | null; readonly pages?: number; readonly selected?: LogoManifestV1["selected"] } = {}): Promise<void> {
   const selected = options.selected === undefined ? { round: 1, candidate_id: "candidate-2" } : options.selected;
   await writeManifest(dir, manifestOf(1, selected));
-  await writeCandidates(dir, 1);
   await writeFile(path.join(dir, "index.html"), guidelines(options.pages ?? 8));
   const svg = options.svg === undefined ? logoSvg("explorations/round-1/candidate-2.png") : options.svg;
   if (svg !== null) await writeFile(path.join(dir, "logo.svg"), svg);
-  return dir;
 }
 
 describe("logo manifest reader", () => {
@@ -153,181 +188,263 @@ describe("logo manifest reader", () => {
   });
 });
 
-describe("logo explore deliverables", () => {
-  test("Given a complete explore round When asserted Then it passes", async () => {
-    const dir = await exploreStage();
-    await expect(assertLogoDeliverables(dir, "explore", null, STARTER)).resolves.toBeUndefined();
+describe("logo turn expectation (captured before the agent runs)", () => {
+  test("Given a fresh project When captured Then the phase is explore for round 1", async () => {
+    const expectation = await captureLogoTurnExpectation(await priorProject(0), "로고 만들어줘");
+    expect(expectation).toMatchObject({ phase: "explore", nextRound: 1, selected: null });
+    expect(expectation.priorGuidelines).toBe(STARTER);
   });
 
-  test("Given no manifest When asserted Then the turn is refused", async () => {
-    const dir = await stage();
-    await writeFile(path.join(dir, "index.html"), guidelines(1));
-    await expect(assertLogoDeliverables(dir, "explore", null, STARTER)).rejects.toMatchObject({
+  test("Given one explored round and a regenerate action When captured Then the next round is 2 and every prior candidate is hashed", async () => {
+    const expectation = await captureLogoTurnExpectation(await priorProject(1), REGENERATE);
+    expect(expectation).toMatchObject({ phase: "explore", nextRound: 2 });
+    expect(expectation.priorCandidates.size).toBe(4);
+  });
+
+  test("Given a corrupt manifest When captured Then the turn starts over at round 1 instead of trusting it", async () => {
+    const dir = await priorProject(1);
+    await writeManifest(dir, "{ not json");
+    expect(await captureLogoTurnExpectation(dir, REGENERATE)).toMatchObject({ phase: "explore", nextRound: 1 });
+  });
+
+  test("Given the round cap is reached When a regenerate is requested Then it is refused before the turn", async () => {
+    await expect(captureLogoTurnExpectation(await priorProject(LOGO_MAX_ROUNDS), REGENERATE)).rejects.toMatchObject({
       code: "logo_deliverables_missing",
-      detail: "manifest_missing",
+      detail: "rounds_exhausted",
     });
+  });
+
+  test("Given a select action When captured Then the phase is finalize and the selected bytes are pinned", async () => {
+    const expectation = await captureLogoTurnExpectation(await priorProject(1), SELECT_2);
+    expect(expectation.phase).toBe("finalize");
+    expect(expectation.selected).toMatchObject({ round: 1, candidate_id: "candidate-2", file: "explorations/round-1/candidate-2.png" });
+    expect(expectation.selected?.sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("Given a select action naming a candidate the project does not have When captured Then it is refused before the turn", async () => {
+    const stray = '<burnguard-logo-action-v1>{"action":"select","round":2,"candidate_id":"candidate-1"}</burnguard-logo-action-v1>';
+    await expect(captureLogoTurnExpectation(await priorProject(1), stray)).rejects.toMatchObject({ detail: "selection_unknown" });
+    const dir = await priorProject(1);
+    await rm(path.join(dir, "explorations", "round-1", "candidate-2.png"));
+    await expect(captureLogoTurnExpectation(dir, SELECT_2)).rejects.toMatchObject({ detail: "candidate_missing:candidate-2" });
+  });
+});
+
+describe("logo explore deliverables", () => {
+  test("Given a first round of four generated candidates When asserted Then it passes", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
+    await exploreResult(dir, 1);
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).resolves.toBeUndefined();
+  });
+
+  test("Given a regenerate that appends round 2 When asserted Then it passes", async () => {
+    const dir = await priorProject(1);
+    const expectation = await captureLogoTurnExpectation(dir, REGENERATE);
+    await exploreResult(dir, 2);
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).resolves.toBeUndefined();
+  });
+
+  test("Given no successful image-generation tool call in the turn When asserted Then the round is refused", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
+    await exploreResult(dir, 1);
+    await expect(assertLogoDeliverables(dir, expectation, { imageGenerations: 0 })).rejects.toMatchObject({
+      code: "logo_deliverables_missing",
+      detail: "image_generation_missing",
+    });
+  });
+
+  test("Given no manifest after the turn When asserted Then it is refused", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
+    await writeFile(path.join(dir, "index.html"), guidelines(1));
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "manifest_missing" });
+  });
+
+  test("Given a regenerate that left the old manifest and sheet in place When asserted Then the no-op is refused", async () => {
+    const dir = await priorProject(1);
+    const expectation = await captureLogoTurnExpectation(dir, REGENERATE);
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "round_count" });
+  });
+
+  test("Given a regenerate that rewrote round 1 instead of appending round 2 When asserted Then it is refused", async () => {
+    const dir = await priorProject(1);
+    const expectation = await captureLogoTurnExpectation(dir, REGENERATE);
+    const rewritten = manifestOf(2);
+    await writeManifest(dir, { ...rewritten, rounds: [{ ...rewritten.rounds[0]!, candidates: rewritten.rounds[0]!.candidates.map((c) => ({ ...c, rationale: "rewritten" })) }, rewritten.rounds[1]] });
+    await writeCandidates(dir, 2);
+    await writeFile(path.join(dir, "index.html"), guidelines(1, " round 2"));
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "rounds_changed" });
+  });
+
+  test("Given a prior candidate file was overwritten during a regenerate When asserted Then it is refused", async () => {
+    const dir = await priorProject(1);
+    const expectation = await captureLogoTurnExpectation(dir, REGENERATE);
+    await exploreResult(dir, 2);
+    await writeFile(path.join(dir, "explorations", "round-1", "candidate-3.png"), png(256, 256, 99));
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "prior_candidate_changed:1:candidate-3" });
+  });
+
+  test("Given a new round that reuses an earlier candidate's bytes When asserted Then it is refused", async () => {
+    const dir = await priorProject(1);
+    const expectation = await captureLogoTurnExpectation(dir, REGENERATE);
+    await writeManifest(dir, manifestOf(2));
+    await writeCandidates(dir, 2, { "candidate-1": candidateBytes(1, 4) });
+    await writeFile(path.join(dir, "index.html"), guidelines(1, " round 2"));
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "candidate_reused:candidate-1" });
+  });
+
+  test("Given two candidates in one round with identical bytes When asserted Then it is refused", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
+    await writeManifest(dir, manifestOf(1));
+    await writeCandidates(dir, 1, { "candidate-2": candidateBytes(1, 1) });
+    await writeFile(path.join(dir, "index.html"), guidelines(1));
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "candidate_duplicate:candidate-2" });
   });
 
   test("Given the last round missing a candidate file When asserted Then that candidate is named", async () => {
-    const dir = await stage();
+    const dir = await priorProject(1);
+    const expectation = await captureLogoTurnExpectation(dir, REGENERATE);
     await writeManifest(dir, manifestOf(2));
-    await writeCandidates(dir, 1);
     await writeCandidates(dir, 2, { "candidate-3": null });
-    await writeFile(path.join(dir, "index.html"), guidelines(1));
-    await expect(assertLogoDeliverables(dir, "explore", null, STARTER)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "candidate_missing:candidate-3",
-    });
+    await writeFile(path.join(dir, "index.html"), guidelines(1, " round 2"));
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "candidate_missing:candidate-3" });
   });
 
-  test("Given an earlier round is incomplete When asserted Then only the last round is gated", async () => {
-    const dir = await stage();
-    await writeManifest(dir, manifestOf(2));
-    await writeCandidates(dir, 1, { "candidate-1": null });
-    await writeCandidates(dir, 2);
-    await writeFile(path.join(dir, "index.html"), guidelines(1));
-    await expect(assertLogoDeliverables(dir, "explore", null, STARTER)).resolves.toBeUndefined();
-  });
-
-  test("Given an empty candidate file When asserted Then it is refused", async () => {
-    const dir = await stage();
+  test.each([
+    ["an empty file", Buffer.alloc(0), "candidate_empty:candidate-2"],
+    ["a non-PNG", Buffer.from("<svg xmlns='x'/>", "utf8"), "candidate_not_png:candidate-2"],
+    ["a signature with no image data", HEADER_ONLY, "candidate_truncated:candidate-2"],
+    ["a PNG cut off before IEND", png(256, 256, 5).subarray(0, 200), "candidate_truncated:candidate-2"],
+    ["a 100 px thumbnail", png(100, 100, 5), "candidate_geometry:candidate-2"],
+    ["a non-square image", png(256, 128, 5), "candidate_geometry:candidate-2"],
+  ])("Given %s as a candidate When asserted Then it is refused", async (_label, bytes, detail) => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
     await writeManifest(dir, manifestOf(1));
-    await writeCandidates(dir, 1, { "candidate-2": Buffer.alloc(0) });
+    await writeCandidates(dir, 1, { "candidate-2": bytes });
     await writeFile(path.join(dir, "index.html"), guidelines(1));
-    await expect(assertLogoDeliverables(dir, "explore", null, STARTER)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "candidate_empty:candidate-2",
-    });
-  });
-
-  test("Given a candidate that is not a PNG When asserted Then the magic bytes refuse it", async () => {
-    const dir = await stage();
-    await writeManifest(dir, manifestOf(1));
-    await writeCandidates(dir, 1, { "candidate-1": Buffer.from("<svg xmlns='x'/>", "utf8") });
-    await writeFile(path.join(dir, "index.html"), guidelines(1));
-    await expect(assertLogoDeliverables(dir, "explore", null, STARTER)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "candidate_not_png:candidate-1",
-    });
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ code: "logo_deliverables_missing", detail });
   });
 
   test("Given a directory in place of a candidate file When asserted Then it is refused", async () => {
-    const dir = await stage();
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
     await writeManifest(dir, manifestOf(1));
     await writeCandidates(dir, 1, { "candidate-4": null });
     await mkdir(path.join(dir, "explorations", "round-1", "candidate-4.png"), { recursive: true });
     await writeFile(path.join(dir, "index.html"), guidelines(1));
-    await expect(assertLogoDeliverables(dir, "explore", null, STARTER)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "candidate_not_file:candidate-4",
-    });
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "candidate_not_file:candidate-4" });
   });
 
   test("Given no guidelines entrypoint When asserted Then it is refused", async () => {
-    const dir = await stage();
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
     await writeManifest(dir, manifestOf(1));
     await writeCandidates(dir, 1);
-    await expect(assertLogoDeliverables(dir, "explore", null, STARTER)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "guidelines_missing",
-    });
+    await rm(path.join(dir, "index.html"));
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "guidelines_missing" });
   });
 
-  test("Given an untouched starter When asserted Then the no-op turn is refused", async () => {
-    const dir = await stage();
+  test("Given an untouched starter sheet When asserted Then the turn is refused", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
     await writeManifest(dir, manifestOf(1));
     await writeCandidates(dir, 1);
-    await writeFile(path.join(dir, "index.html"), STARTER);
-    await expect(assertLogoDeliverables(dir, "explore", null, STARTER)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "starter_unchanged",
-    });
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "starter_unchanged" });
+  });
+
+  test("Given a regenerate that appended a round but left last round's sheet When asserted Then it is refused", async () => {
+    const dir = await priorProject(1);
+    const expectation = await captureLogoTurnExpectation(dir, REGENERATE);
+    await writeManifest(dir, manifestOf(2));
+    await writeCandidates(dir, 2);
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "guidelines_unchanged" });
   });
 });
 
 describe("logo finalize deliverables", () => {
-  test("Given a complete finalize turn When asserted Then it passes", async () => {
-    const dir = await finalizeStage();
-    await expect(assertLogoDeliverables(dir, "finalize", selection)).resolves.toBeUndefined();
+  async function finalized(options: Parameters<typeof finalizeResult>[1] = {}) {
+    const dir = await priorProject(1);
+    const expectation = await captureLogoTurnExpectation(dir, SELECT_2);
+    await finalizeResult(dir, options);
+    return { dir, expectation };
+  }
+
+  test("Given a complete finalize turn When asserted Then it passes without needing an image-tool call", async () => {
+    const { dir, expectation } = await finalized();
+    await expect(assertLogoDeliverables(dir, expectation, { imageGenerations: 0 })).resolves.toBeUndefined();
   });
 
-  test("Given no select action When asserted Then the selection is required", async () => {
-    const dir = await finalizeStage();
-    await expect(assertLogoDeliverables(dir, "finalize", null)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "selection_missing",
-    });
-    await expect(assertLogoDeliverables(dir, "finalize", { action: "regenerate" })).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "selection_missing",
-    });
+  test("Given the agent dropped the selected round to look like an explore turn When asserted Then the finalize gate still applies", async () => {
+    const dir = await priorProject(2);
+    const select = '<burnguard-logo-action-v1>{"action":"select","round":2,"candidate_id":"candidate-1"}</burnguard-logo-action-v1>';
+    const expectation = await captureLogoTurnExpectation(dir, select);
+    expect(expectation.phase).toBe("finalize");
+    await writeManifest(dir, manifestOf(1));
+    await writeFile(path.join(dir, "index.html"), guidelines(1, " sheet"));
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "rounds_changed" });
   });
 
-  test("Given a selection the manifest does not contain When asserted Then it is refused", async () => {
-    const dir = await finalizeStage();
-    await expect(assertLogoDeliverables(dir, "finalize", { action: "select", round: 2, candidate_id: "candidate-1" })).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "selection_unknown",
-    });
+  test("Given the manifest gained or changed a round during finalize When asserted Then it is refused", async () => {
+    const { dir, expectation } = await finalized();
+    await writeManifest(dir, manifestOf(2, { round: 1, candidate_id: "candidate-2" }));
+    await writeCandidates(dir, 2);
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "rounds_changed" });
   });
 
   test("Given the manifest did not record the selection When asserted Then it is refused", async () => {
-    const unrecorded = await finalizeStage({ selected: null });
-    await expect(assertLogoDeliverables(unrecorded, "finalize", selection)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "selection_not_recorded",
-    });
-    const mismatched = await finalizeStage({ selected: { round: 1, candidate_id: "candidate-4" } });
-    await expect(assertLogoDeliverables(mismatched, "finalize", selection)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "selection_not_recorded",
-    });
+    const unrecorded = await finalized({ selected: null });
+    await expect(assertLogoDeliverables(unrecorded.dir, unrecorded.expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "selection_not_recorded" });
+    const mismatched = await finalized({ selected: { round: 1, candidate_id: "candidate-4" } });
+    await expect(assertLogoDeliverables(mismatched.dir, mismatched.expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "selection_not_recorded" });
+  });
+
+  test("Given the selected candidate PNG was replaced under the same name When asserted Then it is refused", async () => {
+    const { dir, expectation } = await finalized();
+    await writeFile(path.join(dir, "explorations", "round-1", "candidate-2.png"), png(256, 256, 77));
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "selected_candidate_changed" });
   });
 
   test("Given the selected candidate PNG is gone When asserted Then it is refused", async () => {
-    const dir = await finalizeStage();
+    const { dir, expectation } = await finalized();
     await rm(path.join(dir, "explorations", "round-1", "candidate-2.png"));
-    await expect(assertLogoDeliverables(dir, "finalize", selection)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "candidate_missing:candidate-2",
-    });
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "candidate_missing:candidate-2" });
   });
 
   test("Given no master SVG When asserted Then it is refused", async () => {
-    const dir = await finalizeStage({ svg: null });
-    await expect(assertLogoDeliverables(dir, "finalize", selection)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "svg_missing",
-    });
+    const { dir, expectation } = await finalized({ svg: null });
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "svg_missing" });
   });
 
   test("Given an SVG built from another candidate When asserted Then the source attribute must match", async () => {
-    const mismatched = await finalizeStage({ svg: logoSvg("explorations/round-1/candidate-3.png") });
-    await expect(assertLogoDeliverables(mismatched, "finalize", selection)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "svg_source_mismatch",
-    });
-    const missing = await finalizeStage({ svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><path d="M0 0H8V8H0Z"/></svg>' });
-    await expect(assertLogoDeliverables(missing, "finalize", selection)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "svg_source_missing",
-    });
+    const mismatched = await finalized({ svg: logoSvg("explorations/round-1/candidate-3.png") });
+    await expect(assertLogoDeliverables(mismatched.dir, mismatched.expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "svg_source_mismatch" });
+    const missing = await finalized({ svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><path d="M0 0H8V8H0Z"/></svg>' });
+    await expect(assertLogoDeliverables(missing.dir, missing.expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "svg_source_missing" });
   });
 
   test("Given fewer than eight guideline artboards When asserted Then it is refused", async () => {
-    const dir = await finalizeStage({ pages: 7 });
-    await expect(assertLogoDeliverables(dir, "finalize", selection)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "guidelines_pages",
-    });
+    const { dir, expectation } = await finalized({ pages: 7 });
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "guidelines_pages" });
   });
 
   test("Given an unsafe SVG on disk When asserted Then the validator detail surfaces", async () => {
-    const dir = await finalizeStage({ svg: logoSvg("explorations/round-1/candidate-2.png", '<script>alert(1)</script>') });
-    await expect(assertLogoDeliverables(dir, "finalize", selection)).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
-      detail: "svg_forbidden_element:script",
-    });
+    const { dir, expectation } = await finalized({ svg: logoSvg("explorations/round-1/candidate-2.png", "<script>alert(1)</script>") });
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "svg_forbidden_element:script" });
+  });
+});
+
+describe("logo image-generation evidence", () => {
+  const base = { id: "e", ts: 1, turnId: "t", toolCallId: "c" };
+  test("Given the adapter's image tool events Then only a successful finish counts", () => {
+    expect(isLogoImageGeneration({ ...base, type: "tool.finished", tool: "image_generation", ok: true })).toBe(true);
+    expect(isLogoImageGeneration({ ...base, type: "tool.finished", tool: "image_generation_call", ok: true })).toBe(true);
+    expect(isLogoImageGeneration({ ...base, type: "tool.finished", tool: "image_generation", ok: false })).toBe(false);
+    expect(isLogoImageGeneration({ ...base, type: "tool.started", tool: "image_generation", input: {} })).toBe(false);
+    expect(isLogoImageGeneration({ ...base, type: "tool.finished", tool: "command_execution", ok: true })).toBe(false);
   });
 });
 
@@ -372,12 +489,16 @@ describe("logo guideline page cap", () => {
   });
 
   test("Given exactly the maximum page count When asserted Then it passes", async () => {
-    const dir = await finalizeStage({ pages: MAX_GUIDELINE_PAGES });
-    await expect(assertLogoDeliverables(dir, "finalize", selection)).resolves.toBeUndefined();
+    const dir = await priorProject(1);
+    const expectation = await captureLogoTurnExpectation(dir, SELECT_2);
+    await finalizeResult(dir, { pages: MAX_GUIDELINE_PAGES });
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).resolves.toBeUndefined();
   });
 
   test("Given one page more than the PDF budget allows When asserted Then it is refused before export", async () => {
-    const dir = await finalizeStage({ pages: MAX_GUIDELINE_PAGES + 1 });
-    await expect(assertLogoDeliverables(dir, "finalize", selection)).rejects.toMatchObject({ detail: "guidelines_pages_over" });
+    const dir = await priorProject(1);
+    const expectation = await captureLogoTurnExpectation(dir, SELECT_2);
+    await finalizeResult(dir, { pages: MAX_GUIDELINE_PAGES + 1 });
+    await expect(assertLogoDeliverables(dir, expectation, ONE_IMAGE)).rejects.toMatchObject({ detail: "guidelines_pages_over" });
   });
 });
