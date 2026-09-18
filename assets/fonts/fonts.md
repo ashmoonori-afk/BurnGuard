@@ -17,14 +17,14 @@ missing-glyph boxes for rare syllables, so always give them a full-coverage fall
 
 | Role | Default | Alternatives (pick by voice) |
 |---|---|---|
-| Body, UI, Korean+English | Pretendard | IBM Plex Sans KR (technical), Gowun Dodum (soft) |
+| Body, UI, Korean+English | Pretendard | SUIT (compact), Noto Sans KR (pan-CJK), Asta Sans (technical) |
 | Body, Latin-only page | DM Sans | Figtree, Public Sans, Manrope, Plus Jakarta Sans, Geist |
 | Long-form reading, serif | Newsreader (Latin) + Nanum Myeongjo (Korean) | Lora, Gowun Batang |
 | Product / tech display | Space Grotesk | Geist, Sora, Instrument Sans, Outfit |
 | Editorial / luxury display | DM Serif Display | Playfair Display, Bodoni Moda, Instrument Serif, Fraunces |
-| Poster / impact display | Bebas Neue | Anton, Syne, Black Han Sans, Gasoek One |
+| Poster / impact display | Bebas Neue | Oswald, League Gothic, Hanna, Cafe24 Dongdong |
 | Friendly / rounded display | Urbanist | Jua, Do Hyeon, Gowun Dodum |
-| Handwritten accent | Nanum Pen Script | Single Day |
+| Handwritten accent | Nanum Pen Script | Caveat, Pacifico, Cafe24 Syongsyong |
 | Code, tabular numbers | IBM Plex Mono | JetBrains Mono, Geist Mono |
 | Korean serif display | Gowun Batang | Nanum Myeongjo; Hahmlet for a weight range (headings only) |
 
@@ -118,6 +118,66 @@ Rules that apply to every choice:
 - Pair: Bodoni Moda or Instrument Serif headings; Gowun Dodum for Korean.
 - Avoid: dense tables; wide letterforms cost horizontal space.
 
+### Inter
+- File `Inter.woff2`, 350,460 bytes, variable opsz/wght 100-900, Hangul 0.
+- Voice: neutral screen-native grotesk with exceptional legibility.
+- Logo and wordmark use: precise, restrained technology and service brands.
+- Pair: Cormorant or Libre Baskerville for contrast; SUIT for Korean.
+
+### Montserrat
+- File `Montserrat.woff2`, 215,968 bytes, variable wght 100-900, Hangul 0.
+- Voice: broad geometric sans inspired by urban signage.
+- Logo and wordmark use: confident all-caps real-estate, city and lifestyle marks.
+- Pair: Libre Baskerville body; Nanum Square for Korean.
+
+### Poppins
+- File `Poppins.woff2`, 51,540 bytes, static 400, Hangul 0.
+- Voice: circular geometric sans with a cheerful rhythm.
+- Logo and wordmark use: friendly consumer, education and app identities.
+- Pair: Cormorant headings; Cafe24 Dongdong for playful Korean display.
+
+### Work Sans
+- File `WorkSans.woff2`, 131,296 bytes, variable wght 100-900, Hangul 0.
+- Voice: practical humanist grotesk that stays clear at every size.
+- Logo and wordmark use: direct, approachable civic and product brands.
+- Pair: Abril Fatface display; Noto Sans KR for Korean.
+
+### Josefin Sans
+- File `JosefinSans.woff2`, 47,636 bytes, variable wght 100-700, Hangul 0.
+- Voice: elegant geometric sans with vintage proportions.
+- Logo and wordmark use: airy fashion, hospitality and boutique wordmarks.
+- Pair: Libre Baskerville body; Maru Buri for Korean.
+
+### Raleway
+- File `Raleway.woff2`, 129,484 bytes, variable wght 100-900, Hangul 0.
+- Voice: refined geometric sans with distinctive display details.
+- Logo and wordmark use: premium architecture, beauty and cultural identities.
+- Pair: Source Sans 3 body; Maru Buri for Korean.
+
+### Barlow
+- File `Barlow.woff2`, 38,456 bytes, static 400, Hangul 0.
+- Voice: slightly rounded grotesk influenced by transport lettering.
+- Logo and wordmark use: practical mobility, industrial and sports brands.
+- Pair: Oswald headings; Asta Sans for Korean.
+
+### IBM Plex Sans
+- File `IBMPlexSans.woff2`, 229,852 bytes, variable wdth/wght 100-700, Hangul 0.
+- Voice: engineered corporate grotesk with humanist warmth.
+- Logo and wordmark use: credible enterprise, research and developer brands.
+- Pair: IBM Plex Mono; IBM Plex Sans KR for Korean.
+
+### Source Sans 3
+- File `SourceSans3.woff2`, 169,416 bytes, variable wght 200-900, Hangul 0.
+- Voice: open, highly legible humanist sans.
+- Logo and wordmark use: accessible institutional and information-service marks.
+- Pair: Libre Baskerville or Cormorant; Noto Sans KR for Korean.
+
+### League Spartan
+- File `LeagueSpartan.woff2`, 41,104 bytes, variable wght 100-900, Hangul 0.
+- Voice: forceful geometric sans with compact, clean forms.
+- Logo and wordmark use: bold modern monograms and short all-caps names.
+- Pair: Libre Baskerville body; Nanum Square for Korean.
+
 ## Latin serif and display
 
 ### DM Serif Display
@@ -191,6 +251,86 @@ Rules that apply to every choice:
 - Pair: DM Sans body; Black Han Sans for Korean impact.
 - Avoid: sentences; there is no lowercase, so use it for short caps only.
 
+### Cormorant
+- File `Cormorant.woff2`, 171,400 bytes, variable wght 300-700, Hangul 0.
+- Voice: delicate high-contrast Garalde display serif.
+- Logo and wordmark use: luxury, fragrance, jewelry and editorial names.
+- Pair: Work Sans body; Maru Buri for Korean.
+
+### Libre Baskerville
+- File `LibreBaskerville.woff2`, 64,008 bytes, variable wght 400-700, Hangul 0.
+- Voice: sturdy transitional serif with heritage authority.
+- Logo and wordmark use: publishing, legal, academic and craft identities.
+- Pair: Source Sans 3 or Montserrat; Nanum Myeongjo for Korean.
+
+### Oswald
+- File `Oswald.woff2`, 72,104 bytes, variable wght 200-700, Hangul 0.
+- Voice: narrow reworked gothic built for headlines.
+- Logo and wordmark use: sports, media and vertical lockups needing compression.
+- Pair: Work Sans body; Hanna for Korean display.
+
+### Archivo
+- File `Archivo.woff2`, 189,368 bytes, variable wdth/wght 100-900, Hangul 0.
+- Voice: pragmatic grotesk with both width and weight flexibility.
+- Logo and wordmark use: adaptable systems, packaging and campaign marks.
+- Pair: Libre Baskerville body; Asta Sans for Korean.
+
+### Abril Fatface
+- File `AbrilFatface.woff2`, 20,736 bytes, static 400, Hangul 0.
+- Voice: dramatic fat-face serif with fashion-editorial contrast.
+- Logo and wordmark use: restaurants, magazines and expressive luxury names.
+- Pair: Work Sans body; Maru Buri for Korean.
+
+### Righteous
+- File `Righteous.woff2`, 16,824 bytes, static 400, Hangul 0.
+- Voice: rounded retro display sans with space-age geometry.
+- Logo and wordmark use: gaming, music and nostalgic tech marks.
+- Pair: Source Sans 3 body; Cafe24 Dongdong for Korean.
+
+### Alfa Slab One
+- File `AlfaSlabOne.woff2`, 34,660 bytes, static 400, Hangul 0.
+- Voice: very heavy slab serif with poster presence.
+- Logo and wordmark use: food, sports and rugged product badges.
+- Pair: Barlow body; Hanna for Korean display.
+
+### League Gothic
+- File `LeagueGothic.woff2`, 27,196 bytes, variable wdth, weight 400, Hangul 0.
+- Voice: tall condensed revival with classic editorial force.
+- Logo and wordmark use: narrow mastheads, posters and cinematic lockups.
+- Pair: Libre Baskerville body; Hanna for Korean display.
+
+## Latin script and handwriting
+
+### Pacifico
+- File `Pacifico.woff2`, 105,108 bytes, static 400, Hangul 0.
+- Voice: casual brush script with sunny mid-century energy.
+- Logo and wordmark use: cafes, travel and relaxed lifestyle signatures.
+- Pair: Work Sans body; never combine with another script.
+
+### Lobster
+- File `Lobster.woff2`, 103,148 bytes, static 400, Hangul 0.
+- Voice: bold connected script with compact sign-painter forms.
+- Logo and wordmark use: food, entertainment and retro storefront marks.
+- Pair: Source Sans 3 body; avoid long text.
+
+### Caveat
+- File `Caveat.woff2`, 173,468 bytes, variable wght 400-700, Hangul 0.
+- Voice: loose handwritten lettering with natural baseline movement.
+- Logo and wordmark use: personal, maker and annotation-style identities.
+- Pair: Inter or Work Sans body.
+
+### Dancing Script
+- File `DancingScript.woff2`, 59,856 bytes, variable wght 400-700, Hangul 0.
+- Voice: lively connected script with friendly flourishes.
+- Logo and wordmark use: events, gifting and approachable beauty marks.
+- Pair: Montserrat or Source Sans 3 body.
+
+### Great Vibes
+- File `GreatVibes.woff2`, 162,112 bytes, static 400, Hangul 0.
+- Voice: formal calligraphy with sweeping capitals.
+- Logo and wordmark use: weddings, premium hospitality and ceremonial marks.
+- Pair: Raleway body; reserve for short names at large sizes.
+
 ## Monospace
 
 ### IBM Plex Mono
@@ -215,6 +355,78 @@ Rules that apply to every choice:
 - Avoid: pairing with a second mono in the same artifact.
 
 ## Korean (full coverage: all 11,172 syllables)
+
+### Noto Sans KR
+- File `NotoSansKR.woff2`, 3,908,716 bytes, variable wght 100-900, Hangul 11,172.
+- Voice: neutral pan-CJK sans with broad language and symbol coverage.
+- Logo and wordmark use: dependable bilingual corporate and public-service marks.
+- Pair: Source Sans 3 Latin or use alone for multilingual systems.
+
+### SUIT
+- File `SUIT.woff2`, 629,376 bytes, variable wght 100-900, Hangul 11,172.
+- Voice: compact contemporary Korean UI sans.
+- Logo and wordmark use: crisp digital products, fintech and mobile services.
+- Pair: Inter or League Spartan Latin.
+
+### Asta Sans
+- File `AstaSans.woff2`, 1,055,224 bytes, variable wght 300-800, Hangul 11,172.
+- Voice: 42dot's structured technology sans, balancing squares and soft curves.
+- Logo and wordmark use: mobility, AI and future-facing platform identities.
+- Pair: Archivo or Barlow Latin.
+
+### Paperlogy
+- File `Paperlogy.woff2`, 433,604 bytes, static 400, Hangul 11,172.
+- Voice: clean presentation-oriented Korean sans with generous counters.
+- Logo and wordmark use: energetic content, education and creator brands.
+- Pair: Montserrat or Poppins Latin.
+
+### LINE Seed Sans KR
+- File `LINESeedSansKR.woff2`, 544,224 bytes, static 400, Hangul 11,172.
+- Voice: friendly geometric brand sans with balanced bilingual rhythm.
+- Logo and wordmark use: social, communication and consumer-service names.
+- Pair: Poppins or Work Sans Latin.
+
+### Nanum Gothic
+- File `NanumGothic.woff2`, 363,844 bytes, static 400, Hangul 11,172.
+- Voice: familiar open Korean sans with civic readability.
+- Logo and wordmark use: trustworthy community, education and information marks.
+- Pair: Source Sans 3 or Libre Baskerville Latin.
+
+### Nanum Square
+- File `NanumSquare.woff2`, 194,520 bytes, static 400, Hangul 11,172.
+- Voice: squared modern Korean sans with steady proportions.
+- Logo and wordmark use: straightforward corporate and platform identities.
+- Pair: League Spartan or Montserrat Latin.
+
+### Gmarket Sans
+- File `GmarketSans.woff2`, 512,232 bytes, static 500, Hangul 11,172.
+- Voice: geometric Korean sans with a bright retail personality.
+- Logo and wordmark use: commerce, promotion and youthful consumer brands.
+- Pair: Montserrat or Poppins Latin.
+
+### Maru Buri
+- File `MaruBuri.woff2`, 433,068 bytes, static 400, Hangul 11,172.
+- Voice: contemporary Korean serif with calligraphic horizontal strokes.
+- Logo and wordmark use: literary, cultural, hospitality and premium identities.
+- Pair: Cormorant or Raleway Latin.
+
+### Hanna
+- File `Hanna.woff2`, 116,260 bytes, static 400, Hangul 11,172.
+- Voice: chunky hand-cut Korean display face with strong personality.
+- Logo and wordmark use: food, local retail and playful title marks.
+- Pair: Alfa Slab One or Oswald Latin; keep copy short.
+
+### Cafe24 Dongdong
+- File `Cafe24Dongdong.woff2`, 1,153,756 bytes, static 700, Hangul 11,172.
+- Voice: bouncy heavy Korean display lettering.
+- Logo and wordmark use: cheerful retail, kids and event identities.
+- Pair: Righteous or Poppins Latin; use only at display sizes.
+
+### Cafe24 Syongsyong
+- File `Cafe24Syongsyong.woff2`, 493,852 bytes, static 400, Hangul 11,172.
+- Voice: quirky handwritten Korean with soft, irregular strokes.
+- Logo and wordmark use: handmade, social and character-led signatures.
+- Pair: Caveat or Work Sans Latin; never use for body copy.
 
 ### Pretendard
 - File `PretendardVariable.woff2`, 2,009 KB, variable wght 45-930, Hangul 11,172.
@@ -313,23 +525,22 @@ Rules that apply to every choice:
 
 | Family | Syllables | Body-safe |
 |---|---|---|
-| Pretendard, IBM Plex Sans KR, Gowun Dodum, Gowun Batang, Nanum Myeongjo, Nanum Pen Script, Single Day | 11,172 | yes |
+| Pretendard, Noto Sans KR, SUIT, Asta Sans, Paperlogy, LINE Seed Sans KR, Nanum Gothic, Nanum Square, Gmarket Sans, Maru Buri, Hanna, Cafe24 Dongdong, Cafe24 Syongsyong, IBM Plex Sans KR, Gowun Dodum, Gowun Batang, Nanum Myeongjo, Nanum Pen Script, Single Day | 11,172 | yes |
 | Hahmlet | 2,788 | headings only |
 | Gasoek One, Orbit | 2,780 | headings only |
 | Black Han Sans | 2,581 | headings only |
 | Do Hyeon | 2,437 | headings only |
 | Jua | 2,367 | headings only |
 
-Noto Sans KR and Noto Serif KR were evaluated (full coverage, variable) but not bundled:
-their 9.2 MiB would dominate the per-project copy; Pretendard, Gowun Batang and Nanum
-Myeongjo cover the same roles.
+Noto Serif KR was evaluated but not bundled: its variable file would push the shared
+store above the 22 MiB budget. Noto Sans KR is bundled for broad pan-CJK coverage.
 
 Every Latin-only family has 0 Hangul syllables and must be stacked with one of the
 body-safe Korean families whenever the artifact contains Korean text.
 
 ## Licensing
 
-- All 37 families are under the SIL Open Font License 1.1; each `*.woff2` ships with its
+- All 72 families are under the SIL Open Font License 1.1; each `*.woff2` ships with its
   own `*-OFL.txt` (copyright notice + license text). Keep the license file next to the
   font whenever fonts are copied or exported. OFL fonts may be bundled with software and
   used in commercial documents; they may not be sold on their own.
