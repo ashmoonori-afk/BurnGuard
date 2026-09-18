@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, readFile } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import { crc32, inflateSync } from "node:zlib";
 import { parse } from "node-html-parser";
 import {
@@ -87,7 +87,44 @@ export type LogoTurnExpectation = {
 export type LogoTurnEvidence = {
   /** Successful image-tool calls observed on this turn's event stream. */
   readonly imageGenerations: number;
+  /** sha256 of every image the image tool reported or wrote during its calls this turn. */
+  readonly imageOutputs: ReadonlySet<string>;
 };
+
+/** The image tool's start, which opens the window in which files it writes count as its outputs. */
+export function isLogoImageToolStart(event: NormalizedEvent): boolean {
+  return event.type === "tool.started" && LOGO_IMAGE_TOOLS.has(event.tool);
+}
+
+/** Hashes the adapter attached to an image tool's finish (`output.image_sha256`), if any. */
+export function imageOutputHashes(event: NormalizedEvent): readonly string[] {
+  if (event.type !== "tool.finished" || typeof event.output !== "object" || event.output === null) return [];
+  const list = (event.output as { readonly image_sha256?: unknown }).image_sha256;
+  return Array.isArray(list) ? list.filter((entry): entry is string => typeof entry === "string" && /^[0-9a-f]{64}$/.test(entry)) : [];
+}
+
+/** sha256 of every candidate PNG under each explorations round directory, keyed by its project-relative path. */
+export async function scanExplorationHashes(dir: string): Promise<Map<string, string>> {
+  const hashes = new Map<string, string>();
+  const rounds = await readdir(resolveWithin(dir, LOGO_FILES.explorations), { withFileTypes: true }).catch((error: unknown) => {
+    if (isMissing(error) || error instanceof PathBoundaryError) return null;
+    throw error;
+  });
+  for (const round of rounds ?? []) {
+    if (!round.isDirectory() || !/^round-\d{1,2}$/.test(round.name)) continue;
+    const files = await readdir(resolveWithin(dir, LOGO_FILES.explorations, round.name), { withFileTypes: true }).catch((error: unknown) => {
+      if (isMissing(error)) return null;
+      throw error;
+    });
+    for (const entry of files ?? []) {
+      if (!entry.isFile() || !/^candidate-[1-4]\.png$/.test(entry.name)) continue;
+      const file = `${LOGO_FILES.explorations}/${round.name}/${entry.name}`;
+      const sha256 = await candidateHash(dir, { file });
+      if (sha256 !== null) hashes.set(file, sha256);
+    }
+  }
+  return hashes;
+}
 
 export async function readLogoManifest(dir: string): Promise<LogoManifestV1 | null> {
   const file = safePath(dir, LOGO_FILES.manifest, "manifest_path_unsafe");
@@ -169,6 +206,8 @@ export async function assertLogoDeliverables(
       const sha256 = await assertCandidatePng(dir, candidate);
       if (priorHashes.has(sha256)) throw new LogoDeliverableError(`candidate_reused:${candidate.id}`);
       if (roundHashes.has(sha256)) throw new LogoDeliverableError(`candidate_duplicate:${candidate.id}`);
+      // Bytes the image tool neither reported nor wrote during a call this turn were made some other way.
+      if (!evidence.imageOutputs.has(sha256)) throw new LogoDeliverableError(`candidate_unprovenanced:${candidate.id}`);
       roundHashes.add(sha256);
     }
     const html = await readGuidelines(dir);

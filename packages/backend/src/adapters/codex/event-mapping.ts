@@ -3,6 +3,7 @@ import { ulid } from "ulid";
 import type { NormalizedEvent } from "@bg/shared";
 import { resolveWithin } from "../../security/path-boundary";
 import type { CodexParserContext } from "./parser";
+import { collectImageOutputHashes } from "./image-outputs";
 
 export function isCodexStartupNotice(message: string): boolean {
   return /^Under-development features enabled: [a-z0-9_, ]+\. Under-development features are incomplete and may behave unpredictably\. To suppress this warning, set `?suppress_unstable_features_warning = true`? in [^\r\n]+config\.toml`?\.?$/.test(message.trim());
@@ -109,9 +110,10 @@ function mapItem(
       ...(ok ? mapFileChanges(value.changes, ctx) : [])];
   }
   if (itemType && ["mcp_tool_call", "custom_tool_call", "image_generation", "image_generation_call"].includes(itemType)) {
-    return completed
-      ? [{ id: ulid(), ts: Date.now(), type: "tool.finished", turnId: ctx.turnId, toolCallId: itemId, tool: itemType, ok: value.status !== "failed" && value.is_error !== true }]
-      : [{ id: ulid(), ts: Date.now(), type: "tool.started", turnId: ctx.turnId, toolCallId: itemId, tool: itemType, input: {} }];
+    if (!completed) return [{ id: ulid(), ts: Date.now(), type: "tool.started", turnId: ctx.turnId, toolCallId: itemId, tool: itemType, input: {} }];
+    // The logo gate binds candidate bytes to what the image tool produced; carry only hashes, never the payload.
+    const imageSha256 = itemType === "image_generation" || itemType === "image_generation_call" ? collectImageOutputHashes(value, ctx.projectDir) : [];
+    return [{ id: ulid(), ts: Date.now(), type: "tool.finished", turnId: ctx.turnId, toolCallId: itemId, tool: itemType, ok: value.status !== "failed" && value.is_error !== true, ...(imageSha256.length > 0 ? { output: { image_sha256: imageSha256 } } : {}) }];
   }
   return [];
 }
