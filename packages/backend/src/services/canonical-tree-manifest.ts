@@ -159,7 +159,7 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function digestEntries(files: readonly CanonicalTreeEntry[]): string {
+export function digestEntries(files: readonly CanonicalTreeEntry[]): string {
   const hash = createHash("sha256");
   for (const file of files) hash.update(file.path).update("\0").update(String(file.size)).update("\0").update(file.sha256).update("\n");
   return hash.digest("hex");

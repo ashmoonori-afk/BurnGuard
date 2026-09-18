@@ -6,7 +6,9 @@ import { replaceArtifactFileIndexInTransaction } from "../db/artifact-file-index
 import { validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { materializeManagedTree } from "./artifact-tree-storage";
 
-export async function adoptExistingArtifact(db: Database, projectId: string, projectDir: string, revision: number, actual: CanonicalTreeManifest): Promise<string> {
+export async function adoptExistingArtifact(db: Database, projectId: string, projectDir: string, revision: number, actual: CanonicalTreeManifest, previousDigest: string | null = null): Promise<string> {
+  // A verified legacy identity migration advances revision; first adoption does not.
+  const resultRevision = previousDigest === null ? revision : revision + 1;
   const id = ulid(); const now = Date.now(); const ownedRoot = path.join(projectDir, ".meta", "artifact-operations", id);
   const snapshotPath = path.join(ownedRoot, "snapshot"); const stagePath = path.join(ownedRoot, "stage");
   let committed = false;
@@ -18,9 +20,9 @@ export async function adoptExistingArtifact(db: Database, projectId: string, pro
   const retention = { schema_version: 1, replayable: true, retained_until: now + 30 * 24 * 60 * 60 * 1000, pruned_at: null, prune_reason: null };
   const replay = { schema_version: 1, kind: "initialize", parent_operation_id: null, publication: "base" };
   db.transaction(() => {
-    const changed = db.prepare("UPDATE projects SET current_digest=? WHERE id=? AND current_revision=? AND current_digest IS NULL").run(actual.tree_digest, projectId, revision);
+    const changed = db.prepare("UPDATE projects SET current_digest=?,current_revision=? WHERE id=? AND current_revision=? AND current_digest IS ?").run(actual.tree_digest, resultRevision, projectId, revision, previousDigest);
     if (changed.changes !== 1) throw new Error("Project adoption authority changed");
-    db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,?, 'cancelled',?,?,?,?,?,'','','[]',?,?,?,?,?)").run(id, projectId, revision, actual.tree_digest, revision, actual.tree_digest, revision, JSON.stringify(snapshot), JSON.stringify(retention), JSON.stringify(replay), now, now);
+    db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,?, 'cancelled',?,?,?,?,?,'','','[]',?,?,?,?,?)").run(id, projectId, resultRevision, actual.tree_digest, resultRevision, actual.tree_digest, resultRevision, JSON.stringify(snapshot), JSON.stringify(retention), JSON.stringify(replay), now, now);
     replaceArtifactFileIndexInTransaction(db, projectId, actual);
   })();
   committed = true;
