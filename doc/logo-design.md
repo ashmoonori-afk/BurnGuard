@@ -32,6 +32,10 @@ When the project has a selected design system and the finalize turn wrote `desig
 
 The shipped logo skill distils published professional guidance: the seven logo types and when each fits, a seven-criterion value assessment (simplicity, memorability, timelessness, versatility, appropriateness, distinctiveness, structural integrity), geometric construction (circles and tangents, modular grids, golden-ratio proportions, optical correction), shape and symbol meanings, and the tests every mark must pass (grayscale, 16 px, one colour, silhouette, blur, backgrounds, competitor line-up). The guidelines document follows the structure of professional brand books: numbered sections, one rule per page, every rule demonstrated on the mark itself.
 
+## Sources
+
+The shipped method is distilled from the project's logo master guide and its reference list: the UCDA golden rules and the 99designs/ZillionDesigns seven-step process; George Bokhua's *Principles of Logo Design* (grids, golden ratio), Alina Wheeler's *Designing Brand Identity* and David Airey's *Logo Design Love* (process and deliverables); Paul Rand's writing; Henderson and Cote, "Guidelines for Selecting or Modifying Logos" (Journal of Marketing, 1998) and the 2023 Journal of Business Research figurativeness study for the evaluation dimensions; ZillionDesigns' deliverables and file-format checklists; and public brand manuals (hcma 2022, Asana 2026) for the guidelines structure. None of these are fetched at run time; the prompt carries only the distilled rules.
+
 ## Checks
 
 ```powershell

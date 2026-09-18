@@ -40,6 +40,15 @@ structural integrity. Present only candidates that hold on every criterion.
 - Typography: customise letterforms (weight, tracking, kerning, joins); match the face to the
   brand voice, not the subject cliche; one personality per lockup.
 
+## Evidence base
+Published research on logo perception (Henderson and Cote, Journal of Marketing 1998;
+figurativeness studies, Journal of Business Research 2023) scores a mark on three
+further dimensions: naturalness (how far the form depicts something recognisable),
+harmony (symmetry, balance, proportion) and elaborateness (complexity, activeness,
+depth). High harmony with moderate elaborateness and some naturalness is the most
+liked and best remembered profile; figurative marks are recalled better than purely
+abstract ones. With logo_type auto, let this break ties between candidate types.
+
 ## Tests every mark must pass
 grayscale, 16 px small-size, one-colour (embroidery, foil), upside-down silhouette,
 squint/blur, light, dark and photo backgrounds, competitor line-up, fresh eyes.

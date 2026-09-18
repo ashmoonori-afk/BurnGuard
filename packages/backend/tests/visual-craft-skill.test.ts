@@ -3,6 +3,7 @@ import { buildPrompt, MAX_SKILL_CHARS } from "../src/harness/prompt-builder";
 import { COMPACT_DECK_SKILL_MD, COMPACT_PROTOTYPE_SKILL_MD } from "../src/harness/prompt-compact-skills";
 import { DECK_SKILL_MD } from "../src/harness/skills/deck-skill";
 import { DIAGRAM_SKILL_MD } from "../src/harness/skills/diagram-skill";
+import { LOGO_SKILL_MD } from "../src/harness/skills/logo-skill";
 import {
   DECK_VISUAL_CRAFT,
   DEFAULT_VISUAL_IDENTITY,
@@ -173,6 +174,12 @@ describe("visual craft skill", () => {
     }
     expect(DECK_VISUAL_CRAFT).toContain("--deck-type-caption (24px)");
     expect(DECK_VISUAL_CRAFT).toContain("--deck-pad-slide");
+  });
+
+  test("logo skill ships its sentinel and evidence base within budget", () => {
+    expect(LOGO_SKILL_MD).toContain("LOGO_SKILL_MD");
+    expect(LOGO_SKILL_MD).toContain("naturalness");
+    expect(LOGO_SKILL_MD.length).toBeLessThanOrEqual(MAX_SKILL_CHARS);
   });
 
   test("diagram skill carries its visual craft section within budget", () => {
