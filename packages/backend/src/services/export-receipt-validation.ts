@@ -21,8 +21,12 @@ export type PngZipValidation = {
   readonly aggregate: { readonly frames: number; readonly dpr: 1 };
 };
 
+/** A logo SVG is published verbatim, so the receipt records the published bytes, not a render. */
+export type SvgValidation = { readonly root: "svg" | "xml"; readonly bytes: number; readonly source: string | null };
+
 export type ExportValidation =
   | { readonly entries: number }
+  | SvgValidation
   | PngZipValidation
   | PdfValidation
   | PngValidation
@@ -49,6 +53,12 @@ export function parseExportValidation(format: ExportFormat, options: ExportOptio
     }
     case "handoff": exact(input, ["source_files", "nodes"]); return { source_files: positiveInt(input["source_files"]), nodes: nonnegativeInt(input["nodes"]) };
     case "pdf": return parsePdf(input, options);
+    case "svg": {
+      exact(input, ["root", "bytes", "source"]);
+      const root = input["root"]; const source = input["source"];
+      if ((root !== "svg" && root !== "xml") || (source !== null && (typeof source !== "string" || source.length === 0))) fail();
+      return { root, bytes: positiveInt(input["bytes"]), source };
+    }
   }
 }
 function parsePngZip(input: Readonly<Record<string, unknown>>, options: ExportOptions): PngZipValidation {

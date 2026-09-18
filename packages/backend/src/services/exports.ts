@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "node-html-parser";
-import type { ExportFormat, ExportOptions, ExportProgress, ExportStopReason } from "@bg/shared";
+import { LOGO_PAGE, type ExportFormat, type ExportOptions, type ExportProgress, type ExportStopReason, type ProjectDetail } from "@bg/shared";
 import { getExportJob } from "../db/exports";
 import { createExportAuthority, createRetryAuthority, advanceExportAttempt, failExportAttempt, recordExportAuditFindings, requestExportCancellation, type ExportIdentity } from "../db/export-lifecycle-repository";
 import { getProjectDetail } from "../db/project-read-repository";
@@ -27,6 +27,7 @@ import { capturePageFromSession } from "./export-frame-capture";
 import { renderPngZipWithPage } from "./export-png-zip";
 import type { SliceFinding } from "./export-slice-plan";
 import { renderToPng } from "./export-png";
+import { renderLogoSvg } from "./export-svg";
 import { renderDeckToPptx } from "./export-pptx-render";
 import { canonicalJson, parseExportReceipt, receiptDigest, sha256, type ExportReceipt } from "./export-receipt";
 import type { ExportValidation } from "./export-receipt-validation";
@@ -73,7 +74,7 @@ export function exportStopReason(error: unknown): ExportStopReason {
 
 export class ExportServiceError extends Error {
   readonly name = "ExportServiceError";
-  constructor(readonly code: "project_not_found" | "source_changed" | "format_requires_deck" | "format_requires_web" | "format_requires_frames" | "pdf_resource_limit" | "attempt_not_found" | "design_audit_failed" | "invalid_graphic_export_options", message: string) { super(message); }
+  constructor(readonly code: "project_not_found" | "source_changed" | "format_requires_deck" | "format_requires_web" | "format_requires_frames" | "pdf_resource_limit" | "attempt_not_found" | "design_audit_failed" | "invalid_graphic_export_options" | "format_requires_logo", message: string) { super(message); }
 }
 
 export async function enqueueProjectExport(projectId: string, format: ExportFormat, options: ExportOptions, hooks: ExportHooks = {}) {
@@ -168,7 +169,8 @@ async function renderOutput(input: RunInput, renderRoot: string, outputPath: str
       await writeFile(path.join(renderRoot, HTML_EXPORT_MANIFEST), canonicalJson(archiveManifest)); await zipDirectory(renderRoot, outputPath); await validateHtmlArchive(new Uint8Array(await readFile(outputPath)), archiveManifest); return only({ entries: archiveManifest.entries.length });
     }
     case "png": return only(await renderToPng({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, width: context.options.png_width ?? 1280, height: context.options.png_height ?? 720, dpr: context.options.png_dpr ?? 1, deck: context.project.type === "slide_deck", signal: input.controller.signal }));
-    case "pdf": return only(await renderDeckToPdf({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, paper: context.options.pdf_paper, selector: context.project.type === "graphic" ? "[data-graphic-artboard]" : "[data-slide]", title: `${context.project.name} r${context.identity.revision}`, signal: input.controller.signal }));
+    case "svg": return only(await renderLogoSvg({ stagedDir: renderRoot, entrypointDir: path.dirname(context.project.entrypoint), outputPath }));
+    case "pdf": return only(await renderDeckToPdf({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, paper: context.options.pdf_paper, selector: context.project.type === "graphic" || context.project.type === "logo" ? "[data-graphic-artboard]" : "[data-slide]", title: `${context.project.name} r${context.identity.revision}`, signal: input.controller.signal }));
     case "pptx": { await renderDeckToPptx({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, size: context.options.pptx_size, signal: input.controller.signal }); const slides = parse(await readFile(path.join(renderRoot, context.project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length; return only(await validatePptxPackage(new Uint8Array(await readFile(outputPath)), slides)); }
     case "handoff": { const bundle = path.join(path.dirname(renderRoot), "handoff"); await renderHandoffBundle({ stagedProjectDir: renderRoot, stagingDir: bundle, designSystemPin: context.designSystemPin, entrypoint: context.project.entrypoint, tokensSrcPath: null, tokensFileName: null, designSystemName: context.project.design_system_name, project: { id: context.project.id, name: context.project.name, type: context.project.type, entrypoint: context.project.entrypoint }, isDeck: context.project.type === "slide_deck", signal: input.controller.signal }); await zipDirectory(bundle, outputPath); return only(await validateHandoffPackage(new Uint8Array(await readFile(outputPath)), context.project.entrypoint, context.designSystemPin)); }
     case "cafe24_package":
@@ -185,27 +187,31 @@ async function renderOutput(input: RunInput, renderRoot: string, outputPath: str
   }
 }
 
-async function exportContext(projectId: string, format: ExportFormat, options: ExportOptions): Promise<Context> {
-  let project = await getProjectDetail(projectId); if (project === null) throw new ExportServiceError("project_not_found", "Project not found");
+/**
+ * Format / project-type admission. It runs before any export authority row exists, so a rejected
+ * request leaves nothing behind; it is exported so the matrix can be exercised without a render.
+ */
+export async function assertExportAllowed(project: ProjectDetail, format: ExportFormat, options: ExportOptions): Promise<void> {
   const projectOptions = parseStoredProjectOptions(project.options_json);
-  if (format === "pdf" && options.pdf_paper === "artboard" && project.type !== "graphic") throw new ExportServiceError("invalid_graphic_export_options", "Artboard paper is only valid for graphic projects");
+  const logo = project.type === "logo";
+  if (format === "svg" && !logo) throw new ExportServiceError("format_requires_logo", "SVG export requires a logo project");
+  // A logo deliverable is the mark and its guidelines; a viewport screenshot or a source handoff of the guidelines page is neither.
+  if (logo && (format === "png" || format === "handoff")) throw new ExportServiceError("format_requires_web", "Logo projects export the master SVG, the guidelines PDF, or the guidelines HTML archive");
+  if (format === "pdf" && options.pdf_paper === "artboard" && project.type !== "graphic" && !logo) throw new ExportServiceError("invalid_graphic_export_options", "Artboard paper is only valid for graphic and logo projects");
   if (format === "png_zip" && options.slice_format === "jpeg" && (project.type !== "graphic" || projectOptions.graphic_set.kind !== "product_detail")) throw new ExportServiceError("invalid_graphic_export_options", "JPEG slices are only valid for product detail graphics");
-  if ((format === "cafe24_package" || format === "imweb_package") && (project.type === "slide_deck" || project.type === "graphic")) throw new ExportServiceError("format_requires_web", "Platform packages require a web project");
+  if ((format === "cafe24_package" || format === "imweb_package") && (project.type === "slide_deck" || project.type === "graphic" || logo)) throw new ExportServiceError("format_requires_web", "Platform packages require a web project");
   if (format === "png_zip" && project.type !== "slide_deck" && (project.type !== "graphic" || (projectOptions.graphic_set.frame_count <= 1 && projectOptions.graphic_set.kind !== "product_detail"))) throw new ExportServiceError("format_requires_frames", "PNG ZIP requires a deck, multi-frame graphic, or product detail");
   if (format === "pptx" && project.type !== "slide_deck") throw new ExportServiceError("format_requires_deck", "Format requires a slide deck");
-  if (format === "pdf" && project.type !== "slide_deck" && !(project.type === "graphic" && options.pdf_paper === "artboard")) throw new ExportServiceError("format_requires_deck", "PDF requires a slide deck or graphic artboard");
+  if (format === "pdf" && project.type !== "slide_deck" && !((project.type === "graphic" || logo) && options.pdf_paper === "artboard")) throw new ExportServiceError("format_requires_deck", "PDF requires a slide deck, graphic artboard, or logo guidelines");
   if (format === "pdf" && project.type === "graphic") {
     const canvas = projectOptions.graphic_canvas;
     if (canvas === null) throw new ExportServiceError("invalid_graphic_export_options", "Graphic PDF requires a persisted canvas");
     const sizes = projectOptions.graphic_set.kind === "banner_set" && projectOptions.graphic_set.frames !== undefined
       ? projectOptions.graphic_set.frames
       : Array.from({ length: projectOptions.graphic_set.frame_count }, () => canvas);
-    // Artboard paper prints one page per artboard, so a mixed-size set has no single page geometry (doc/14 T06).
-    try { assertUniformArtboardPages(sizes); }
-    catch (error) { throw error instanceof PdfExportError ? new ExportServiceError("invalid_graphic_export_options", error.message) : error; }
-    const points = sizes.map((size) => pdfPointsForPaper("artboard", size));
-    if (!pdfRasterBudgetFitsPages(points)) throw new ExportServiceError("pdf_resource_limit", "Graphic PDF exceeds the per-page or aggregate raster budget");
+    assertArtboardPdfPages(sizes, "Graphic PDF exceeds the per-page or aggregate raster budget");
   }
+  if (format === "pdf" && logo) assertArtboardPdfPages(await logoGuidelinesPages(project), "Logo guidelines PDF exceeds the per-page or aggregate raster budget");
   if (project.type === "graphic" && format === "png") {
     const canvas = projectOptions.graphic_canvas;
     if (
@@ -220,6 +226,32 @@ async function exportContext(projectId: string, format: ExportFormat, options: E
       );
     }
   }
+}
+
+/** Artboard paper prints one page per artboard, so a mixed-size set has no single page geometry (doc/14 T06). */
+function assertArtboardPdfPages(sizes: readonly { readonly width: number; readonly height: number }[], limitMessage: string): void {
+  try { assertUniformArtboardPages(sizes); }
+  catch (error) { throw error instanceof PdfExportError ? new ExportServiceError("invalid_graphic_export_options", error.message) : error; }
+  if (!pdfRasterBudgetFitsPages(sizes.map((size) => pdfPointsForPaper("artboard", size)))) throw new ExportServiceError("pdf_resource_limit", limitMessage);
+}
+
+/**
+ * A logo project has no persisted canvas: every guidelines page is the fixed LOGO_PAGE size, one
+ * page per artboard in the live entrypoint, which is what the raster budget has to cover.
+ */
+async function logoGuidelinesPages(project: ProjectDetail): Promise<readonly { readonly width: number; readonly height: number }[]> {
+  const entrypoint = resolveWithin(resolveManagedPath(projectsDir, project.dir_path), project.entrypoint);
+  let html = "";
+  try { html = await readFile(entrypoint, "utf8"); }
+  catch (error) { if (!(error instanceof Error) || Reflect.get(error, "code") !== "ENOENT") throw error; }
+  // A guidelines document always prints at least its first page; the count only bounds the budget.
+  return Array.from({ length: Math.max(1, parse(html).querySelectorAll("[data-graphic-artboard]").length) }, () => LOGO_PAGE);
+}
+
+async function exportContext(projectId: string, format: ExportFormat, options: ExportOptions): Promise<Context> {
+  let project = await getProjectDetail(projectId); if (project === null) throw new ExportServiceError("project_not_found", "Project not found");
+  await assertExportAllowed(project, format, options);
+  const projectOptions = parseStoredProjectOptions(project.options_json);
   const source = resolveManagedPath(projectsDir, project.dir_path); if (project.current_digest === null) { await new ArtifactCoordinator(getSqlite()).initialize(project.id, source); project = await getProjectDetail(projectId); }
   if (project === null || project.current_digest === null) throw new ExportServiceError("source_changed", "Stable project identity unavailable");
   const designSystemPin = await ensureProjectDesignSystemPin(projectId);
