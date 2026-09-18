@@ -179,7 +179,7 @@ function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; savi
     setLoading(true); setError("");
     try {
       const query = (window as Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> }).queryLocalFonts;
-      // Browser permission remains an explicit user gesture. Unsupported hosts use Windows' native family list.
+      // Browser permission remains an explicit user gesture. Unsupported hosts (the macOS WKWebView shell included) use the host OS family list.
       const result = query
         ? parseLocalFonts({ schema_version: 1, families: [...new Set((await query.call(window)).map((font) => font.family))] })
         : parseLocalFonts(await apiFetch<unknown>("/api/settings/local-fonts"));

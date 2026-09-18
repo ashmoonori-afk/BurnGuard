@@ -6,7 +6,7 @@ test("Given the local fonts endpoint When classified Then it keeps settings auth
   expect(classifyApiRoute("/api/settings/local-fonts", "GET")).toBe("settings");
 });
 
-test.skipIf(process.platform !== "win32")("Given Windows installed fonts When enumerated Then only family names are returned", async () => {
+test.skipIf(process.platform !== "win32" && process.platform !== "darwin")("Given host installed fonts When enumerated Then only family names are returned", async () => {
   const result = await getLocalFonts();
   expect(result.schema_version).toBe(1);
   expect(result.families.length).toBeGreaterThan(0);
