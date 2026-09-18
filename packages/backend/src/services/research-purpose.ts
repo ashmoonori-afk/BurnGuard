@@ -96,7 +96,8 @@ function creationMode(input: ResearchPurposeInput): CreationMode {
     case "from_template": return "template";
     case "prototype":
     case "slide_deck":
-    case "graphic": return input.hasCapturedFiles ? "existing" : "blank";
+    case "graphic":
+    case "logo": return input.hasCapturedFiles ? "existing" : "blank";
     case "other": return "other";
   }
 }

@@ -187,4 +187,9 @@ test("readiness and graphic creation expose uncached 503 on probe failure, retai
   expect(loggedOut.status).toBe(409);
   expect((await loggedOut.json()).error.code).toBe("graphic_requires_authenticated_codex");
   expect(getSqlite().query("SELECT COUNT(*) AS count FROM projects").get()).toEqual(projectsBefore);
+  const logoBody = JSON.stringify({ name: "로고 검증", type: "logo", backend_id: "codex", design_system_id: null, options: { logo_set: { schema_version: 1, brand_name: "누림", niche: "친환경 생활용품", character: ["단정한"], logo_type: "auto" } } });
+  const logoRefused = await homeRoutes.request("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: logoBody });
+  expect(logoRefused.status).toBe(409);
+  expect((await logoRefused.json()).error.code).toBe("logo_requires_authenticated_codex");
+  expect(getSqlite().query("SELECT COUNT(*) AS count FROM projects").get()).toEqual(projectsBefore);
 }, 20_000);

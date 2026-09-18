@@ -102,7 +102,7 @@ export const DERIVED_SURFACE_README_SECTIONS = [
   "|---|---|---|---|",
   "| Website | `surfaces/website.css` | `--web-*` type ramp and block padding | Websites and prototypes |",
   "| Slides | `surfaces/slides.css` | `--slide-*` geometry, safe area and projection ramp | 1920x1080 slide decks |",
-  "| Content | `surfaces/content.css` | `--content-*` safe area, figure, anchor and type ramp | Fixed artboards: card news, banners, product detail pages, thumbnails, posters |",
+  "| Content | `surfaces/content.css` | `--content-*` safe area, figure, anchor and type ramp | Fixed artboards: card news, banners, product detail pages, thumbnails, posters, logo guidelines |",
   "",
   `Content values are authored for a \`--content-base\` shorter side. Per artboard set \`--content-short\` to that frame's shorter side and \`--content-scale: calc(var(--content-short) / var(--content-base))\`, then size type as \`max(${CONTENT_TYPE_FLOOR_PX}px, calc(var(--content-type-body) * var(--content-scale)))\`. \`--content-safe\` is a fraction of the shorter side.`,
   "",

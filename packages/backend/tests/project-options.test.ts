@@ -32,6 +32,7 @@ describe("project options", () => {
       design_brief: validBrief,
       graphic_canvas: null,
       graphic_set: { schema_version: 1, kind: "single", frame_count: 1 },
+      logo_set: null,
     });
   });
 
@@ -80,6 +81,16 @@ describe("project options", () => {
       design_brief: null,
       graphic_canvas: null,
       graphic_set: { schema_version: 1, kind: "single", frame_count: 1 },
+      logo_set: null,
     });
+  });
+
+  test("Given malformed stored logo_set When read Then a typed contract error prevents fallback", () => {
+    // Given
+    const stored = JSON.stringify({ logo_set: { schema_version: 1, brand_name: "누림", niche: "생활용품", character: [], logo_type: "auto" } });
+
+    // When / Then
+    expect(() => parseStoredProjectOptions(stored)).toThrow(UpgradeContractError);
+    expect(() => parseStoredProjectOptions(stored)).toThrow("invalid_field at options.logo_set.character");
   });
 });

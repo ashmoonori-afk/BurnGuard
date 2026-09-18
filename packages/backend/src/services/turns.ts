@@ -1,10 +1,10 @@
-import { ensureGraphicCapableBackend } from "./graphic-capability";
+import { ensureGraphicCapableBackend, isGraphicCapableBackend } from "./graphic-capability";
 import { ensureThreeSceneRuntime } from "./three-scene";
 import { ensureCharts } from "./charts";
 import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
-import type { NormalizedEvent, UserEvent } from "@bg/shared";
+import { parseLogoAction, resolveLogoPhase, type NormalizedEvent, type UserEvent } from "@bg/shared";
 import { assignAttachmentsToTurn } from "../db/attachments";
 import {
   persistNormalizedEvent,
@@ -40,6 +40,8 @@ import { parse } from "node-html-parser";
 import { prepareSlideDeckExport } from "./export-stage";
 import { reviewTurnDesign } from "./turn-design-review";
 import { parseStoredProjectOptions } from "./project-options";
+import { assertLogoDeliverables, LogoDeliverableError, readLogoManifest } from "./logo-deliverables";
+import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { manifestEntry, readManagedFile } from "./artifact-tree-storage";
 import { resolveWithin } from "../security/path-boundary";
@@ -357,6 +359,9 @@ async function runUserTurnInternal(
   const generation = resolveGenerationOptions(backendId, payload.generation, config, backend);
   // The selected model decides whether this backend can draw, so the gate follows resolution.
   if (project.type === "graphic") ensureGraphicCapableBackend(backend, generation.model);
+  // A logo is drawn with the same image capability; only the refusal code differs, so the client
+  // can name the deliverable the user actually asked for.
+  if (project.type === "logo" && !isGraphicCapableBackend(backend, generation.model)) throw new Error("logo_requires_authenticated_codex");
   const coordinator = new ArtifactCoordinator(getSqlite());
   const base = await coordinator.initialize(project.id, projectDir);
   // The revert route only offers a rollback when a pre-turn snapshot exists,
@@ -374,6 +379,8 @@ async function runUserTurnInternal(
   let providerReportedFailure = false;
   let providerErrorPublished = false;
   let stopPreview: (() => Promise<void>) | undefined;
+  /** Set by the deliverable gate so the design-system patch only runs after a finished finalize. */
+  let logoFinalized = false;
   const terminalEvents: NormalizedEvent[] = [];
   const selectedAttachments = sessionContext.attachments.filter((attachment) => contextPayload.attachments.includes(attachment.file_path));
   const forbiddenSha256 = new Set(selectedAttachments.filter((attachment) => attachment.source_role === "immutable_reference").flatMap((attachment) => attachment.sha256 === null ? [] : [attachment.sha256]));
@@ -390,6 +397,8 @@ async function runUserTurnInternal(
         stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
         const graphicBefore = graphicEntrypoint === null ? null : await readFile(graphicEntrypoint, "utf8");
+        const logoEntrypoint = project.type === "logo" ? path.join(stageDir, project.entrypoint) : null;
+        const logoStarter = logoEntrypoint === null ? null : await readFile(logoEntrypoint, "utf8");
         const deckStarter = project.type === "slide_deck" && (await readFile(path.join(stageDir, project.entrypoint), "utf8")).includes("Send your first prompt in chat to expand this deck.");
         const waitsForInterrupt = process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "abort";
         if (waitsForInterrupt && !activeTurn.abortController.signal.aborted) await new Promise<void>((resolve) => activeTurn.abortController.signal.addEventListener("abort", () => resolve(), { once: true }));
@@ -495,11 +504,27 @@ async function runUserTurnInternal(
           if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new Error("graphic_starter_unchanged");
           assertGraphicStarterReplaced(graphicBefore, await readFile(graphicEntrypoint, "utf8"));
         }
+        if (logoEntrypoint !== null && logoStarter !== null) {
+          const info = await lstat(logoEntrypoint);
+          if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new LogoDeliverableError("guidelines_not_file");
+          // The phase is derived from what is on disk plus the sentinel the user sent, never from
+          // anything the model claims, so a stale stage cannot talk its way past the gate.
+          const action = parseLogoAction(payload.text);
+          const phase = resolveLogoPhase(await readLogoManifest(stageDir), action);
+          await assertLogoDeliverables(stageDir, phase, action, logoStarter);
+          logoFinalized = phase === "finalize";
+        }
       },
     });
     if (activeTurn.interrupted) {
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "interrupted" });
     } else for (const event of terminalEvents) await persistAndPublish(sessionId, event);
+    if (!activeTurn.interrupted && logoFinalized) {
+      // Guidelines feed the design system, but they are not the deliverable: a patch that cannot be
+      // applied is a warning on the trace, never a failed turn.
+      try { await applyLogoDesignSystemPatch({ projectDir, designSystemId: project.design_system_id }); }
+      catch (error) { await appendSessionTrace(sessionId, { level: "logo_design_system_patch_failed", turnId, error: diagnosticError(error) }); }
+    }
   } catch (error) {
     if (!operationPrepared) throw error;
     if (activeTurn.interrupted || activeTurn.abortController.signal.aborted) {

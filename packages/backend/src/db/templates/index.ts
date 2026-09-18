@@ -1,5 +1,6 @@
-import type { GraphicCanvasV1, GraphicSetV1, ProjectType } from "@bg/shared";
+import type { GraphicCanvasV1, GraphicSetV1, LogoSetV1, ProjectType } from "@bg/shared";
 import { renderGraphic } from "./graphic";
+import { renderLogo } from "./logo";
 import { renderPrototype } from "./prototype";
 import { renderSlideDeck, type SlideDeckOptions } from "./slide-deck";
 
@@ -9,6 +10,7 @@ export interface TemplateContext {
   readonly options?: SlideDeckOptions & {
     readonly graphic_canvas?: GraphicCanvasV1 | null;
     readonly graphic_set?: GraphicSetV1;
+    readonly logo_set?: LogoSetV1 | null;
   };
 }
 
@@ -22,6 +24,13 @@ export function renderInitialArtifact(ctx: TemplateContext): string {
         throw new TypeError("Graphic template requires graphic_canvas");
       }
       return renderGraphic(ctx.name, canvas, ctx.options?.graphic_set);
+    }
+    case "logo": {
+      const logoSet = ctx.options?.logo_set;
+      if (logoSet === undefined || logoSet === null) {
+        throw new TypeError("Logo template requires logo_set");
+      }
+      return renderLogo(ctx.name, logoSet);
     }
     case "prototype":
     case "from_template":

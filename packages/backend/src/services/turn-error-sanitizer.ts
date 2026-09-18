@@ -4,6 +4,8 @@ import { PathBoundaryError } from "../security/path-boundary";
 const COPY: Readonly<Record<TurnErrorCode, string>> = {
   graphic_requires_authenticated_codex: "그래픽 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요. 모델 선택과 로그인 상태를 확인해 주세요.",
   graphic_starter_unchanged: "그래픽 화면이 아직 초기 상태라 결과를 반영하지 않았어요. 다시 생성을 요청해 주세요.",
+  logo_requires_authenticated_codex: "로고 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요. 모델 선택과 로그인 상태를 확인해 주세요.",
+  logo_deliverables_missing: "로고 결과물이 아직 규격을 갖추지 못해 반영하지 않았어요. 다시 생성을 요청해 주세요.",
   commandcode_unavailable: "CommandCode 연결을 사용할 수 없어요. Claude Code 설치와 설정의 API 키를 확인해 주세요.",
   unsupported_generation_model_effort: "선택한 모델이나 추론 강도를 사용할 수 없어요. 모델을 다시 선택해 주세요.",
   backend_unavailable: "선택한 작업 도구를 사용할 수 없어요. 설치 상태를 확인해 주세요.",
@@ -37,6 +39,8 @@ function knownCode(candidate: string | undefined): TurnErrorCode | undefined {
   switch (candidate) {
     case "graphic_requires_authenticated_codex":
     case "graphic_starter_unchanged":
+    case "logo_requires_authenticated_codex":
+    case "logo_deliverables_missing":
     case "commandcode_unavailable":
     case "unsupported_generation_model_effort":
     case "backend_unavailable":
