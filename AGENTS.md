@@ -140,7 +140,7 @@ bunx tsc -p scripts/qa/tsconfig.json --noEmit
 
 ## RELEASE SECURITY GATE
 
-- Before every release publication, run a security review with `gpt-daybreak-blue-latest` (Daybreak), as explicitly required by the user. Use low reasoning effort by default.
+- Before every release publication, run an independent security review with a GPT-5.6 or later model, as explicitly required by the user. Follow the established Daybreak review protocol below; Daybreak-specific model access is not required. Use low reasoning effort by default.
 - Review the final release changes, relevant security boundaries and packaged artifacts. Save the reviewed commit/tree, scope, findings and validation evidence under an ignored `.omo/evidence/release-<version>/` directory.
-- Resolve release-blocking findings and have Daybreak verify the fixes before publishing. A draft release or successful CI is not a substitute for this review. If Daybreak is unavailable or the review is incomplete, keep the release unpublished and report the gate accurately.
+- Resolve release-blocking findings and have the reviewer verify the fixes before publishing. A draft release or successful CI is not a substitute for this review. Record the reviewer model with the evidence. If an eligible reviewer is unavailable or the review is incomplete, keep the release unpublished and report the gate accurately.
 

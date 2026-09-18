@@ -113,7 +113,7 @@ bun test packages/backend/tests/charts.test.ts
 node scripts/qa/e2e-smoke.mjs --only creation-canvas-charts
 ```
 
-테스트는 저장소 루트에서 실행해야 임시 프로필이 격리됩니다. 브라우저 QA에는 Node.js 22.13+와 Chrome·Edge가 필요합니다. Windows에서는 필요하면 `--bun <bun.exe 절대경로>`를 지정하세요. QA는 별도 프로필을 사용하며 실제 제공업체에 생성 요청을 보내지 않습니다. 커버리지는 테스트 통과와 별도 기준입니다. 공개 릴리즈 전에는 Daybreak로 최종 소스와 패키지를 보안 검토하고 차단 이슈를 해결합니다.
+테스트는 저장소 루트에서 실행해야 임시 프로필이 격리됩니다. 브라우저 QA에는 Node.js 22.13+와 Chrome·Edge가 필요합니다. Windows에서는 필요하면 `--bun <bun.exe 절대경로>`를 지정하세요. QA는 별도 프로필을 사용하며 실제 제공업체에 생성 요청을 보내지 않습니다. 커버리지는 테스트 통과와 별도 기준입니다. 공개 릴리즈 전에는 GPT-5.6 이상 모델이 기존 Daybreak 검토 절차에 따라 최종 소스와 패키지를 독립적으로 보안 검토하고, 차단 이슈 수정까지 확인합니다.
 
 ## 변경 이력
 

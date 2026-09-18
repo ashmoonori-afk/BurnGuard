@@ -127,7 +127,7 @@ bun test packages/backend/tests/charts.test.ts
 node scripts/qa/e2e-smoke.mjs --only creation-canvas-charts
 ```
 
-请在仓库根目录运行测试，这样预加载脚本才会创建隔离的临时配置目录。浏览器 QA 需要 Node.js 22.13+ 和 Chrome/Edge；Windows 上如有需要可传入 `--bun <bun.exe 的绝对路径>`。它使用自有的固定配置，不会向真实服务商发送请求。覆盖率（`bun run test:coverage`）是独立于测试通过的另一道门槛。每次发布前，用 Daybreak 审查最终源码和安装包，并解决阻断级安全问题。
+请在仓库根目录运行测试，这样预加载脚本才会创建隔离的临时配置目录。浏览器 QA 需要 Node.js 22.13+ 和 Chrome/Edge；Windows 上如有需要可传入 `--bun <bun.exe 的绝对路径>`。它使用自有的固定配置，不会向真实服务商发送请求。覆盖率（`bun run test:coverage`）是独立于测试通过的另一道门槛。每次发布前，由 GPT-5.6 或更高版本模型按既有 Daybreak 审查流程独立检查最终源码和安装包，并验证阻断级安全问题的修复。
 
 ## 更新日志
 
