@@ -13,6 +13,7 @@ import {
   cafe24AssetBaseUrl,
   deckFrameZipOption,
   graphicExportOptions,
+  logoExportOptions,
   platformPackageOptions,
 } from "./export-option-entries";
 
@@ -108,7 +109,7 @@ export function buildExportRetryRequest(
   const matches = model.ok ? model.options.filter((option) => option.format === format) : [];
   const option = matches.length === 1 ? matches[0] : undefined;
   if (option?.options !== undefined) return { format, options: option.options };
-  return projectType === "graphic" ? null : { format };
+  return projectType === "graphic" || projectType === "logo" ? null : { format };
 }
 
 function standardOptions(): readonly ExportMenuOption[] {
@@ -128,6 +129,12 @@ export function buildExportMenuModel(
   optionsJson: string | null,
   values: ExportOptionValues = DEFAULT_EXPORT_OPTION_VALUES,
 ): ExportMenuModel {
+  if (projectType === "logo") {
+    return {
+      ok: true,
+      options: [...logoExportOptions(), ...platformPackageOptions(projectType, values)],
+    };
+  }
   if (projectType !== "graphic") {
     return {
       ok: true,

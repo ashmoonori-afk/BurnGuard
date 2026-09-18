@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useT, type MessageKey } from "@/i18n/t";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, Blocks, Image, LayoutTemplate, Plus, Presentation, Search } from "lucide-react";
+import { ArrowUpRight, Blocks, Image, LayoutTemplate, PenTool, Plus, Presentation, Search } from "lucide-react";
 import type { ProjectType } from "@bg/shared";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -34,6 +34,7 @@ import DeleteDesignSystemDialog from "@/components/home/DeleteDesignSystemDialog
 import DeleteProjectDialog from "@/components/home/DeleteProjectDialog";
 import CliMissingModal from "@/components/errors/CliMissingModal";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { requiresImageBackend } from "@/lib/project-creation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -52,6 +53,7 @@ const PROJECT_TYPES = [
   { id: "slide_deck", label: "home.type.slide_deck", description: "home.type.slideDescription", icon: Presentation, color: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" },
   { id: "prototype", label: "home.type.prototype", description: "home.type.webDescription", icon: Blocks, color: "bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300" },
   { id: "graphic", label: "home.type.graphic", description: "home.type.graphicDescription", icon: Image, color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
+  { id: "logo", label: "home.type.logo", description: "home.type.logoDescription", icon: PenTool, color: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/50 dark:text-fuchsia-300" },
   { id: "from_template", label: "home.type.from_template", description: "home.type.templateDescription", icon: LayoutTemplate, color: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" },
 ] as const;
 
@@ -318,7 +320,7 @@ export default function HomeView() {
         </div>
         {detectionQuery.data?.backends.every((backend) => !backend.found) ? <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-sm text-muted-foreground">{t("home.aiNotice")}</p><Button variant="outline" size="sm" onClick={() => setCliMissingOpen(true)}>{t("home.aiGuide")}</Button></div> : null}
         {activeTab === "recent" || activeTab === "mine" ? <section aria-label={t("home.quickStart")} className="mb-10 grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 xl:grid-cols-4">
-          {PROJECT_TYPES.map(({ id, label, description, icon: Icon, color }) => <button key={id} type="button" onClick={() => startProject(id)} disabled={id === "graphic" && !graphicReady} title={id === "graphic" && !graphicReady ? t("home.codexRequired") : undefined} aria-haspopup="dialog" className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:items-start xl:gap-3">
+          {PROJECT_TYPES.map(({ id, label, description, icon: Icon, color }) => <button key={id} type="button" onClick={() => startProject(id)} disabled={requiresImageBackend(id) && !graphicReady} title={requiresImageBackend(id) && !graphicReady ? t("home.codexRequired") : undefined} aria-haspopup="dialog" className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:items-start xl:gap-3">
             <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${color}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
             <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{t(label)}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{t(description)}</span></span>
             <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" aria-hidden="true" />
@@ -479,7 +481,7 @@ export default function HomeView() {
           <div className="px-6 pt-5">
             <p id="project-type-label" className="mb-2 text-xs font-semibold text-muted-foreground">{t("home.createType")}</p>
             <div role="group" aria-labelledby="project-type-label" className="flex flex-wrap gap-2">
-              {[...PROJECT_TYPES, { id: "other" as const, label: "home.type.other" as const }].map((type) => <button key={type.id} type="button" disabled={creatingProject || (type.id === "graphic" && !graphicReady)} aria-pressed={creationType === type.id} onClick={() => { const next = new URLSearchParams(searchParams); next.set("create", type.id); setSearchParams(next, { replace: true }); }} className={`min-h-10 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${creationType === type.id ? "border-accent bg-accent/10 text-accent" : "border-border bg-card text-muted-foreground hover:bg-muted"}`}>{t(type.label)}</button>)}
+              {[...PROJECT_TYPES, { id: "other" as const, label: "home.type.other" as const }].map((type) => <button key={type.id} type="button" disabled={creatingProject || (requiresImageBackend(type.id) && !graphicReady)} aria-pressed={creationType === type.id} onClick={() => { const next = new URLSearchParams(searchParams); next.set("create", type.id); setSearchParams(next, { replace: true }); }} className={`min-h-10 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${creationType === type.id ? "border-accent bg-accent/10 text-accent" : "border-border bg-card text-muted-foreground hover:bg-muted"}`}>{t(type.label)}</button>)}
             </div>
             {!graphicReady && <p className="mt-2 text-xs text-muted-foreground">{t("home.graphicAvailability")}</p>}
           </div>

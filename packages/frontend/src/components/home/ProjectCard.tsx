@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useT } from "@/i18n/t";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Blocks, File, Image, MoreHorizontal, Palette, Presentation, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowUpRight, Blocks, File, Image, MoreHorizontal, Palette, PenTool, Presentation, RefreshCw, Trash2 } from "lucide-react";
 import { resolveThumbnailSource, thumbnailRetryDelay } from "./thumbnail-source";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -29,7 +29,7 @@ export default function ProjectCard(
     const timer = setTimeout(() => { setRetryAttempt((attempt) => attempt + 1); setFailedSource(null); }, retryDelay);
     return () => clearTimeout(timer);
   }, [thumbnailFailed, retryDelay]);
-  const Icon = props.kind === "system" ? Palette : props.kind === "slide_deck" ? Presentation : props.kind === "prototype" ? Blocks : props.kind === "graphic" ? Image : File;
+  const Icon = props.kind === "system" ? Palette : props.kind === "slide_deck" ? Presentation : props.kind === "prototype" ? Blocks : props.kind === "graphic" ? Image : props.kind === "logo" ? PenTool : File;
 
   return (
     <div className="group relative">

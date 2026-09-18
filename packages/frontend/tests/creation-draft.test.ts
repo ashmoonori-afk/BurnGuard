@@ -22,6 +22,27 @@ describe("new project draft survival", () => {
     expect(parseCreationDraft(serializeCreationDraft(entered))).toEqual(entered);
   });
 
+  test("Given entered logo brief values When serialized and read back Then every answer returns", () => {
+    const entered = {
+      ...INITIAL_BRIEF_FORM,
+      name: "온새미로 로고",
+      logoBrandName: "온새미로",
+      logoNiche: "유기농 베이커리",
+      logoCharacter: ["따뜻한", "정직한"],
+      logoType: "combination" as const,
+      logoSymbolKeywords: ["밀 이삭"],
+      logoAvoid: "흔한 방패 문양은 피해 주세요",
+    };
+
+    expect(parseCreationDraft(serializeCreationDraft(entered))).toEqual(entered);
+  });
+
+  test("Given a stored logo type the build no longer knows When read Then the automatic type is used", () => {
+    const stored = JSON.stringify({ logoType: "hologram", logoCharacter: ["따뜻한", 7] });
+
+    expect(parseCreationDraft(stored)).toEqual(INITIAL_BRIEF_FORM);
+  });
+
   test("Given no stored draft or unreadable storage When read Then the empty form is used", () => {
     expect(parseCreationDraft(null)).toEqual(INITIAL_BRIEF_FORM);
     expect(parseCreationDraft("{not json")).toEqual(INITIAL_BRIEF_FORM);
@@ -47,5 +68,7 @@ describe("new project draft survival", () => {
   test("Given a project type When the storage key is built Then drafts never mix between types", () => {
     expect(CREATION_DRAFT_KEY("graphic")).not.toBe(CREATION_DRAFT_KEY("slide_deck"));
     expect(CREATION_DRAFT_KEY("graphic")).toContain("graphic");
+    expect(CREATION_DRAFT_KEY("logo")).not.toBe(CREATION_DRAFT_KEY("graphic"));
+    expect(CREATION_DRAFT_KEY("logo")).toContain("logo");
   });
 });

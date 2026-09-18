@@ -21,6 +21,7 @@ import ProjectBriefFields, {
 } from "@/components/home/ProjectBriefFields";
 import { GraphicCanvasFields } from "@/components/home/GraphicCanvasFields";
 import { GraphicSetFields } from "@/components/home/GraphicSetFields";
+import { LogoSetFields } from "@/components/home/LogoSetFields";
 import DesignSystemPicker from "./DesignSystemPicker";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { readCreationDraft, writeCreationDraft } from "@/lib/creation-draft";
@@ -33,6 +34,7 @@ import {
   buildCreateProjectRequest,
   keepSelectedDesignSystemId,
   isOriginalSampleSystem,
+  requiresImageBackend,
   selectableDesignSystems,
   type BriefForm,
 } from "@/lib/project-creation";
@@ -95,8 +97,12 @@ export default function NewProjectPanel({
   const isOriginal = isOriginalSampleSystem(designSystemId);
   const effectiveType = isTemplate && isOriginal ? templateFormat : type;
   const isGraphic = effectiveType === "graphic";
+  const isLogo = effectiveType === "logo";
+  // Both formats are drawn with the image tool, so both pin the backend to a
+  // draw-capable one and both wait for that backend to be ready.
+  const needsImageBackend = requiresImageBackend(effectiveType);
   const detectedBackends = detection.data?.backends ?? [];
-  const effectiveBackend = isGraphic ? graphicBackendId(detectedBackends, backendId) : backendId;
+  const effectiveBackend = needsImageBackend ? graphicBackendId(detectedBackends, backendId) : backendId;
   const generation = generationByBackend[effectiveBackend] ?? defaultGenerationOptions(effectiveBackend);
 
   const createMutation = useMutation({
@@ -171,7 +177,7 @@ export default function NewProjectPanel({
   return (
     <form className="p-6" onSubmit={(event) => {
       event.preventDefault();
-      if (!canContinue || disabled || (isGraphic && !graphicReady)) return;
+      if (!canContinue || disabled || (needsImageBackend && !graphicReady)) return;
       if (needsSystemChoice) { setChoosingSystem(true); return; }
       if (!built.ok || (designSystemId && (systemsLoading || systemsError))) return;
       setError(null);
@@ -180,7 +186,7 @@ export default function NewProjectPanel({
       <h2 className="mb-3 text-xs font-semibold text-muted-foreground">{t("home.creation.basics")}</h2>
 
       <div className="space-y-4">
-        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={effectiveBackend} disabled={disabled || isGraphic} onChange={(event) => setBackendId(event.target.value as BackendId)}>{(detectedBackends.length > 0 ? detectedBackends : [{ id: "claude-code" as BackendId, found: true }, { id: "codex" as BackendId, found: true }]).map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendLabel(backend.id)}{backend.found ? "" : " —"}</option>)}</select><GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
+        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={effectiveBackend} disabled={disabled || needsImageBackend} onChange={(event) => setBackendId(event.target.value as BackendId)}>{(detectedBackends.length > 0 ? detectedBackends : [{ id: "claude-code" as BackendId, found: true }, { id: "codex" as BackendId, found: true }]).map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendLabel(backend.id)}{backend.found ? "" : " —"}</option>)}</select><GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
         <div className="space-y-1.5">
           <label htmlFor="project-name" className={PROJECT_LABEL_CLASS}>
             {t("home.creation.name")}
@@ -294,6 +300,14 @@ export default function NewProjectPanel({
           />
         )}
 
+        {isLogo && (
+          <LogoSetFields
+            form={form}
+            disabled={disabled}
+            onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
+          />
+        )}
+
         {effectiveType === "prototype" && <>
           <div className="space-y-1.5"><label htmlFor="section-count" className={PROJECT_LABEL_CLASS}>{t("home.creation.sections")}</label><Input id="section-count" type="number" min={1} max={30} step={1} value={form.sectionCount ?? 6} disabled={disabled} onChange={(event) => update("sectionCount", event.target.valueAsNumber)} /><p className="text-xs text-muted-foreground">{t("home.creation.sectionsHint")}</p></div>
           <fieldset className="space-y-2" disabled={disabled}>
@@ -312,7 +326,7 @@ export default function NewProjectPanel({
           form={form}
           disabled={disabled}
           onChange={update}
-          showOutputSize={!isGraphic}
+          showOutputSize={!isGraphic && !isLogo}
         />
 
         {effectiveType === "slide_deck" && (
@@ -336,12 +350,12 @@ export default function NewProjectPanel({
         )}
       </div>
 
-      {isGraphic && !graphicReady && <p role="status" className="mt-4 text-sm text-muted-foreground">{t("home.creation.graphicRequired")}</p>}
+      {needsImageBackend && !graphicReady && <p role="status" className="mt-4 text-sm text-muted-foreground">{t(isLogo ? "home.creation.logoRequired" : "home.creation.graphicRequired")}</p>}
       <Button
         className="mt-6 h-11 w-full gap-2 rounded-xl"
         type="submit"
         variant="cta"
-        disabled={!canContinue || disabled || (isGraphic && !graphicReady) || (!!designSystemId && (systemsLoading || systemsError !== null))}
+        disabled={!canContinue || disabled || (needsImageBackend && !graphicReady) || (!!designSystemId && (systemsLoading || systemsError !== null))}
       >
         {createMutation.isPending ? t("home.creation.creating") : t(needsSystemChoice ? "home.picker.next" : "home.creation.create")}
         <ArrowRight className="h-4 w-4" aria-hidden="true" />

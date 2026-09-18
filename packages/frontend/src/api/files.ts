@@ -1,5 +1,5 @@
 import type { ArtifactHistoryV1, PatchFileRequest, PatchFileResponse } from "@bg/shared";
-import { apiFetch } from "./client";
+import { ApiError, apiFetch, authorizedFetch } from "./client";
 
 export function getArtifactHistory(projectId: string): Promise<ArtifactHistoryV1> {
   return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/history`);
@@ -23,6 +23,31 @@ function encodePath(relPath: string): string {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
+}
+
+/** Same route the canvas and thumbnails read, for files the app renders directly. */
+export function projectFileUrl(projectId: string, relPath: string): string {
+  return `/api/projects/${encodeURIComponent(projectId)}/fs/${encodePath(relPath)}`;
+}
+
+/**
+ * Reads a small agent-authored JSON file from the project tree. The file route
+ * serves raw bytes rather than the API envelope, so the caller parses the
+ * contract itself.
+ */
+export async function readProjectFileText(
+  projectId: string,
+  relPath: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const response = await authorizedFetch(projectFileUrl(projectId, relPath), {
+    ...(signal === undefined ? {} : { signal }),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new ApiError("path_unavailable", "Project file unavailable", response.status);
+  }
+  return response.text();
 }
 
 export async function patchProjectFile(

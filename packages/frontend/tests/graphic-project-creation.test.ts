@@ -37,6 +37,12 @@ function draft(overrides: Partial<ProjectDraft> = {}): ProjectDraft {
     frames: [],
     presetId: null,
     detailBrief: {},
+    logoBrandName: "",
+    logoNiche: "",
+    logoCharacter: [],
+    logoType: "auto",
+    logoSymbolKeywords: [],
+    logoAvoid: "",
     ...overrides,
   };
 }
