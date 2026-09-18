@@ -150,6 +150,12 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 ## Changelog
 
+### 0.5.19
+
+- Recover verified legacy attachment-only artifact revisions during startup without replacing project files or uploaded originals.
+- Normalize Windows line endings when reading design-system surface rules.
+- Fix Windows browser-test startup and isolate provider/render fixtures; include legacy recovery checks in Windows release packaging.
+
 ### 0.5.18
 
 - Fit oversized slide content to the artboard as content and images load.

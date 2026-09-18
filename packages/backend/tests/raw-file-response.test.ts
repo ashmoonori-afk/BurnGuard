@@ -67,14 +67,14 @@ describe("raw file response headers", () => {
     try {
       const responses = await Promise.all(names.map(name => app.request(`/api/projects/${projectId}/fs/${name}`)));
       expect(responses.map(response => response.status)).toEqual(names.map(() => 200));
-      expect(observe).toHaveBeenCalledTimes(1);
+      expect(observe.mock.calls.filter(([id]) => id === projectId)).toHaveLength(1);
       const oldHash = responses[0]!.headers.get("x-burnguard-file-hash");
       const oldDigest = responses[0]!.headers.get("x-burnguard-artifact-digest");
       await writeFile(path.join(root, names[0]!), "<svg>updated</svg>");
       const next = await app.request(`/api/projects/${projectId}/fs/${names[0]}`);
       expect(next.status).toBe(200);
       expect(await next.text()).toBe("<svg>updated</svg>");
-      expect(observe).toHaveBeenCalledTimes(2);
+      expect(observe.mock.calls.filter(([id]) => id === projectId)).toHaveLength(2);
       expect(next.headers.get("x-burnguard-file-hash")).not.toBe(oldHash);
       expect(next.headers.get("x-burnguard-artifact-digest")).not.toBe(oldDigest);
     } finally { observe.mockRestore(); }

@@ -16,10 +16,11 @@ import { readProjectDocument } from "../src/services/project-documents";
 import { readdir } from "node:fs/promises";
 import { buildPrompt } from "../src/harness/prompt-builder";
 import { createCanvas } from "@napi-rs/canvas";
+import { closeProjectWatcher } from "../src/services/watcher-registry";
 
 const created: { id: string; dir: string }[] = [];
 beforeAll(runMigrations);
-afterAll(async () => { for (const project of created) { getSqlite().query("DELETE FROM projects WHERE id=?").run(project.id); await rm(project.dir, { recursive: true, force: true }); } });
+afterAll(async () => { for (const project of created) { closeProjectWatcher(project.id); getSqlite().query("DELETE FROM projects WHERE id=?").run(project.id); await rm(project.dir, { recursive: true, force: true }); } });
 async function zipForm(files: Record<string, string | Uint8Array>, name = "한국흑연") {
   const zip = new JSZip(); for (const [name, content] of Object.entries(files)) zip.file(name, content);
   const form = new FormData(); form.set("name", name); form.set("source", "zip"); form.set("files", new File([await zip.generateAsync({ type: "uint8array" })], "project.zip")); return form;

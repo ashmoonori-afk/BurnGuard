@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   isChromiumLaunchable,
   resetChromiumCapability,
   setChromiumCapabilityForTesting,
 } from "../src/services/chromium-capability";
 
+beforeEach(() => resetChromiumCapability());
 afterEach(() => {
   resetChromiumCapability();
   delete process.env.BG_CHROMIUM_ASSUME_USABLE;
@@ -17,7 +18,7 @@ describe("chromium launch capability", () => {
     let probes = 0;
     const probe = async (): Promise<boolean> => {
       probes += 1;
-      await Bun.sleep(5);
+      await Promise.resolve();
       return true;
     };
 
@@ -89,10 +90,12 @@ describe("chromium launch capability", () => {
     // Given: a probe as slow as a stuck browser launch.
     process.env.BG_CHROMIUM_PROBE_WAIT_MS = "30";
     let settled = false;
+    let finish!: (usable: boolean) => void;
+    const pending = new Promise<boolean>(resolve => { finish = resolve; });
     const probe = async (): Promise<boolean> => {
-      await Bun.sleep(400);
+      const usable = await pending;
       settled = true;
-      return true;
+      return usable;
     };
 
     // When
@@ -106,9 +109,9 @@ describe("chromium launch capability", () => {
     expect(settled).toBe(false);
 
     // ...and the probe keeps running, so a later request sees the real answer.
-    await Bun.sleep(500);
+    finish(true);
+    expect(await isChromiumLaunchable(probe, { waitForResult: true })).toBe(true);
     expect(settled).toBe(true);
-    expect(await isChromiumLaunchable(probe)).toBe(true);
   });
 
   test("Given the assume-usable override When asked Then no probe runs", async () => {

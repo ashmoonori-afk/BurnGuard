@@ -10,6 +10,7 @@ import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 import { persistCanonicalExtraction, upsertDesignSystemColorToken, uploadDesignSystemFont } from "../src/services/design-system-extract";
 import { reserveExtractionBundle, validateExtractionBundle } from "../src/services/extraction-publication";
 import { launchChromium } from "../src/services/export-render-session";
+import { resetChromiumCapability } from "../src/services/chromium-capability";
 
 const id = `canonical-preview-render-${process.pid}`;
 const root = path.join(systemsDir, id);
@@ -22,6 +23,7 @@ const failures: string[] = [];
 const responses = new Map<string, { status: number; type: string }>();
 
 beforeAll(async () => {
+  resetChromiumCapability();
   const source = await mkdtemp(path.join(tmpdir(), "bg-preview-source-"));
   try {
     const analysis = await analyzeLocalTree(source, "Preview fixture", new AbortController().signal);

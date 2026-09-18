@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { logsDir } from "../src/lib/paths";
@@ -29,8 +29,9 @@ describe("turn error event boundary", () => {
     try {
       await writeFile(path.join(root, "index.html"), "<h1>safe</h1>");
       await mkdir(path.join(root, ".attachments"));
-      await symlink(
-        "/private/Users/local/private-project",
+      await writeFile(path.join(root, ".attachments", "private-original"), "private source");
+      await link(
+        path.join(root, ".attachments", "private-original"),
         path.join(root, "escaped-link"),
       );
       getSqlite()

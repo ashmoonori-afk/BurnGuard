@@ -75,9 +75,9 @@ describe("initial graphic template", () => {
     const frames = parse(html).querySelectorAll("[data-graphic-artboard]");
 
     // Then
-    expect(frames.map((frame) => frame.getAttribute("style"))).toEqual([
-      "width:1200px;height:628px",
-      "width:1080px;height:1080px",
+    expect(frames.map((frame) => Object.fromEntries(frame.getAttribute("style")!.split(";").map(rule => rule.split(":"))))).toEqual([
+      { width: "1200px", height: "628px", "--bg-frame-width": "1200px" },
+      { width: "1080px", height: "1080px", "--bg-frame-width": "1080px" },
     ]);
   });
 
