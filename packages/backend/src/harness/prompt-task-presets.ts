@@ -14,7 +14,7 @@ import { REVIEWED_TASK_EXAMPLES, type ReviewedExampleCorpus } from "./task-prese
 /** Provider route. A model ID alone never implies equivalence across routes. */
 export type Route = "codex/native" | "claude-code/native" | "claude-code/commandcode";
 
-export type Deliverable = "prototype" | "slide_deck" | "graphic" | "diagram" | "generic";
+export type Deliverable = "prototype" | "slide_deck" | "graphic" | "logo" | "diagram" | "generic";
 
 export type ModelWording =
   | "luna" | "spark" | "terra" | "sol" | "gpt55" | "astra" | "sonnet" | "opus"
@@ -73,6 +73,10 @@ const DELIVERABLES: Readonly<Record<Deliverable, TextBlock>> = {
   graphic: {
     id: "deliverable-graphic-v1",
     text: "Work from message to each requested frame's composition to image and copy placement. Use every frame in burnguard-graphic-output-v1 with its own dimensions, aspect ratio and order. Associate each frame with safe-area, distinct-image and substantive-content checks through the final CTA. Embedded diagrams inherit the artboard contract.",
+  },
+  logo: {
+    id: "deliverable-logo-v1",
+    text: "Work in the phase burnguard-logo-output-v1 declares. Explore: four image-generated candidates, the manifest and the candidate sheet, nothing else. Finalize: vectorise only the selected candidate, then every required guideline page in order at the declared page size. Associate each unit with the image-generation, source-attribute, page-count and small-size checks.",
   },
   diagram: {
     id: "deliverable-diagram-v1",

@@ -24,6 +24,8 @@ import {
 import { appendDesignBriefContext } from "./prompt-design-brief";
 import { appendDesignSystemContext } from "./prompt-design-system";
 import { appendGraphicOutputContext } from "./prompt-graphic-set";
+import { appendLogoOutputContext, readLogoManifestForPrompt } from "./prompt-logo-set";
+import { LOGO_SKILL_MD } from "./skills/logo-skill";
 import { DESIGN_CRAFT_RULES } from "./design-craft";
 import { CHART_AUTHORING_RULES } from "./chart-authoring";
 import { appendGenerationStyle } from "./prompt-generation-style";
@@ -126,6 +128,13 @@ export async function buildPrompt(
   }
   if (project.project_type === "graphic" && projectOptions.graphic_canvas !== null) {
     appendGraphicOutputContext(lines, projectOptions.graphic_canvas, projectOptions.graphic_set);
+  }
+  if (project.project_type === "logo" && projectOptions.logo_set !== null) {
+    appendLogoOutputContext(
+      lines,
+      { logoSet: projectOptions.logo_set, manifest: await readLogoManifestForPrompt(project.project_dir), action: null },
+      userEvent.text,
+    );
   }
   lines.push("");
 
@@ -260,6 +269,10 @@ export async function buildPrompt(
     );
     lines.push(PROTOTYPE_NAVIGATION_CONTRACT.trim());
     lines.push("");
+  } else if (project.project_type === "logo") {
+    lines.push("## Logo skill");
+    lines.push(LOGO_SKILL_MD.trim());
+    lines.push("");
   }
 
   const visualCraft = selectVisualCraft(project.project_type);
@@ -340,6 +353,7 @@ export function resolveDeliverable(projectType: string, requestText: string): De
   if (projectType === "prototype") return "prototype";
   if (projectType === "slide_deck") return "slide_deck";
   if (projectType === "graphic") return "graphic";
+  if (projectType === "logo") return "logo";
   return isDiagramRequest(requestText) ? "diagram" : "generic";
 }
 
@@ -352,6 +366,7 @@ function selectVisualCraft(projectType: SessionContext["project"]["project_type"
     case "prototype":
     case "slide_deck":
     case "graphic":
+    case "logo":
       return VISUAL_CRAFT_BY_TYPE[projectType];
     default:
       return null;

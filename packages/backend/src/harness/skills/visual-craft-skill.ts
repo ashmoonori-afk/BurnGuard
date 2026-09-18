@@ -180,8 +180,32 @@ tokens everywhere.
   alternate band is optional and may borrow the other palette's values.
 `;
 
+export const LOGO_VISUAL_CRAFT = `## Logo craft (LOGO_VISUAL_CRAFT)
+
+A mark is judged at 16px and at sign size; the guidelines document is judged
+at exactly 1920 x 1080 per page.
+- Mandatory: the mark works in one colour first; colour is applied to a form
+  that already holds. No gradient, shadow, glow, 3D or texture inside the mark.
+- Mandatory: stroke weights and corner radii derive from one grid unit;
+  counters and gaps never thinner than the smallest stroke; letterforms kerned
+  by eye after the grid.
+- Clear space is a stated fraction of the mark (x-height, cap height or the
+  symbol's height) and is applied everywhere the mark appears in the document.
+- Guideline pages: safe inset --content-safe of the short side (6-8% with no
+  surface); left column with the numbered section eyebrow and title, right
+  field for the demonstration; one rule per page; captions 24px or larger;
+  running footer at the bottom edge inside the inset.
+- Show, never describe: every rule is drawn on the mark itself (grid overlays,
+  clear-space guides, size ladders, crossed-out misuse tiles).
+- Palette pages use flat swatches with values as tabular text; pairings show
+  the mark on each approved ground at equal size.
+- No decorative imagery on rule pages; generated scenes appear only on the
+  applications page, with the mark overlaid as vector.
+`;
+
 export const VISUAL_CRAFT_BY_TYPE = {
   prototype: PROTOTYPE_VISUAL_CRAFT,
   slide_deck: DECK_VISUAL_CRAFT,
   graphic: GRAPHIC_VISUAL_CRAFT,
+  logo: LOGO_VISUAL_CRAFT,
 } as const;

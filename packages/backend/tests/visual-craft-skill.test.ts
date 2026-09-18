@@ -7,6 +7,7 @@ import {
   DECK_VISUAL_CRAFT,
   DEFAULT_VISUAL_IDENTITY,
   GRAPHIC_VISUAL_CRAFT,
+  LOGO_VISUAL_CRAFT,
   MAX_VISUAL_CRAFT_CHARS,
   PROTOTYPE_VISUAL_CRAFT,
   VISUAL_CRAFT_CORE,
@@ -141,6 +142,7 @@ describe("visual craft skill", () => {
       PROTOTYPE_VISUAL_CRAFT,
       DECK_VISUAL_CRAFT,
       GRAPHIC_VISUAL_CRAFT,
+      LOGO_VISUAL_CRAFT,
       DEFAULT_VISUAL_IDENTITY,
     ];
     for (const block of blocks) {
@@ -150,6 +152,7 @@ describe("visual craft skill", () => {
       PROTOTYPE_VISUAL_CRAFT.length,
       DECK_VISUAL_CRAFT.length,
       GRAPHIC_VISUAL_CRAFT.length,
+      LOGO_VISUAL_CRAFT.length,
     );
     expect(MAX_VISUAL_CRAFT_CHARS).toBe(6400);
     expect(
