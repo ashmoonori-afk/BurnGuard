@@ -63,6 +63,31 @@ function png(width: number, height: number, seed: number): Buffer {
   return Buffer.concat([PNG_SIGNATURE, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
 
+/**
+ * A PNG whose chunks are all CRC-valid but whose image content may be illegal. Every value defaults
+ * to the legal grayscale 8-bit image from png(); each override is one way a decoder must refuse it.
+ */
+function pngRaw(options: { readonly bitDepth?: number; readonly colourType?: number; readonly idat?: Buffer; readonly filterByte?: number; readonly rows?: number } = {}): Buffer {
+  const width = 256;
+  const height = options.rows ?? 256;
+  const raw = Buffer.alloc((width + 1) * height, 1);
+  for (let y = 0; y < height; y += 1) raw[y * (width + 1)] = options.filterByte ?? 0;
+  const chunk = (type: string, data: Buffer): Buffer => {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length, 0);
+    const typed = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(typed) >>> 0, 0);
+    return Buffer.concat([length, typed, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(256, 4);
+  ihdr[8] = options.bitDepth ?? 8;
+  ihdr[9] = options.colourType ?? 0;
+  return Buffer.concat([PNG_SIGNATURE, chunk("IHDR", ihdr), chunk("IDAT", options.idat ?? deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
+
 function candidateBytes(round: number, index: number): Buffer {
   return png(256, 256, round * 16 + index);
 }
@@ -320,6 +345,11 @@ describe("logo explore deliverables", () => {
     ["a PNG cut off before IEND", png(256, 256, 5).subarray(0, 200), "candidate_truncated:candidate-2"],
     ["a 100 px thumbnail", png(100, 100, 5), "candidate_geometry:candidate-2"],
     ["a non-square image", png(256, 128, 5), "candidate_geometry:candidate-2"],
+    ["a CRC-valid PNG with an illegal bit depth", pngRaw({ bitDepth: 3 }), "candidate_undecodable:candidate-2"],
+    ["a CRC-valid PNG whose IDAT is not a zlib stream", pngRaw({ idat: Buffer.from("not a zlib stream") }), "candidate_undecodable:candidate-2"],
+    ["a PNG whose pixel stream is shorter than its geometry", pngRaw({ rows: 100 }), "candidate_undecodable:candidate-2"],
+    ["a PNG with an illegal row filter byte", pngRaw({ filterByte: 9 }), "candidate_undecodable:candidate-2"],
+    ["a palette PNG with no PLTE", pngRaw({ colourType: 3 }), "candidate_undecodable:candidate-2"],
   ])("Given %s as a candidate When asserted Then it is refused", async (_label, bytes, detail) => {
     const dir = await priorProject(0);
     const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");

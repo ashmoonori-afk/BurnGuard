@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
-import { crc32 } from "node:zlib";
+import { crc32, inflateSync } from "node:zlib";
 import { parse } from "node-html-parser";
 import {
   LOGO_FILES,
@@ -255,38 +255,70 @@ async function candidateHash(dir: string, candidate: Pick<LogoCandidateV1, "file
   return sha256(await readFile(file));
 }
 
+const PNG_CHANNELS: Readonly<Record<number, number>> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
+const PNG_BIT_DEPTHS: Readonly<Record<number, readonly number[]>> = { 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] };
+type PngHeader = { readonly width: number; readonly height: number; readonly bitDepth: number; readonly colourType: number };
+
 /**
- * Structural PNG decode: signature, an IHDR first chunk, every chunk's CRC, at least one IDAT and an
- * IEND that ends exactly at the last byte. A signature with no image data, or a file cut off before
- * IEND, is "truncated"; anything else that is not a PNG is "not_png".
+ * PNG decode without a pixel buffer: signature; IHDR first with a legal bit depth / colour type pair
+ * and the only defined compression, filter and interlace methods; every chunk's CRC; PLTE before
+ * IDAT for a palette image; IEND exactly at the last byte; then the IDAT stream inflated to exactly
+ * height x (1 + row bytes) with a legal filter byte on every row. A file that frames correctly but
+ * cannot be decoded is "undecodable"; a bare signature or a file cut off before IEND is "truncated";
+ * anything else is "not_png". Interlaced images are refused: the image tool never writes them and
+ * Adam7 would need a second geometry model.
  */
-function inspectPng(bytes: Buffer): { readonly width: number; readonly height: number } | "not_png" | "truncated" {
+function inspectPng(bytes: Buffer): { readonly width: number; readonly height: number } | "not_png" | "truncated" | "undecodable" {
   if (bytes.length < PNG_SIGNATURE.length || !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return "not_png";
   let offset = PNG_SIGNATURE.length;
-  let width = 0;
-  let height = 0;
-  let sawIhdr = false;
-  let sawIdat = false;
+  let header: PngHeader | null = null;
+  let sawPlte = false;
+  const idat: Buffer[] = [];
   while (offset + 8 <= bytes.length) {
     const length = bytes.readUInt32BE(offset);
     const type = bytes.toString("ascii", offset + 4, offset + 8);
     const end = offset + 12 + length;
     if (end > bytes.length) return "truncated";
     if ((crc32(bytes.subarray(offset + 4, end - 4)) >>> 0) !== bytes.readUInt32BE(end - 4)) return "not_png";
-    if (!sawIhdr) {
+    if (header === null) {
       if (type !== "IHDR" || length !== 13) return "not_png";
-      width = bytes.readUInt32BE(offset + 8);
-      height = bytes.readUInt32BE(offset + 12);
+      const width = bytes.readUInt32BE(offset + 8);
+      const height = bytes.readUInt32BE(offset + 12);
       if (width === 0 || height === 0) return "not_png";
-      sawIhdr = true;
+      const bitDepth = bytes[offset + 16] ?? 0;
+      const colourType = bytes[offset + 17] ?? 0;
+      const methodsDefined = bytes[offset + 18] === 0 && bytes[offset + 19] === 0 && bytes[offset + 20] === 0;
+      if (!methodsDefined || PNG_BIT_DEPTHS[colourType]?.includes(bitDepth) !== true) return "undecodable";
+      header = { width, height, bitDepth, colourType };
+    } else if (type === "PLTE") {
+      if (idat.length > 0 || length === 0 || length % 3 !== 0) return "undecodable";
+      sawPlte = true;
     } else if (type === "IDAT") {
-      sawIdat = true;
+      idat.push(bytes.subarray(offset + 8, end - 4));
     } else if (type === "IEND") {
-      return sawIdat && end === bytes.length ? { width, height } : "truncated";
+      if (idat.length === 0 || end !== bytes.length) return "truncated";
+      if (header.colourType === 3 && !sawPlte) return "undecodable";
+      return inflatesToGeometry(Buffer.concat(idat), header) ? { width: header.width, height: header.height } : "undecodable";
     }
     offset = end;
   }
   return "truncated";
+}
+
+/** The IDAT stream must inflate to exactly the filtered scanlines the header declares. */
+function inflatesToGeometry(stream: Buffer, header: PngHeader): boolean {
+  const rowBytes = Math.ceil((header.width * (PNG_CHANNELS[header.colourType] ?? 0) * header.bitDepth) / 8);
+  const expected = header.height * (rowBytes + 1);
+  let raw: Buffer;
+  try {
+    raw = inflateSync(stream, { maxOutputLength: expected + 1 });
+  } catch (error) {
+    if (error instanceof Error) return false;
+    throw error;
+  }
+  if (raw.length !== expected) return false;
+  for (let row = 0; row < header.height; row += 1) if ((raw[row * (rowBytes + 1)] ?? 5) > 4) return false;
+  return true;
 }
 
 function sha256(bytes: Buffer): string {
@@ -335,23 +367,6 @@ function safePath(dir: string, relative: string, detail: string): string {
 }
 
 /** The opening tag of the document's root element, only when that element is an `<svg>`. */
-
-function tagEnd(body: string, start: number): number {
-  let quote: string | null = null;
-  for (let cursor = start; cursor < body.length; cursor += 1) {
-    const character = body[cursor];
-    if (quote !== null) {
-      if (character === quote) quote = null;
-      continue;
-    }
-    if (character === '"' || character === "'") {
-      quote = character;
-      continue;
-    }
-    if (character === ">") return cursor;
-  }
-  return -1;
-}
 
 function isMissing(error: unknown): boolean {
   if (!(error instanceof Error) || !("code" in error) || typeof error.code !== "string") return false;
