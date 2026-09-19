@@ -131,6 +131,33 @@ test("Given a version probe timeout, then detection waits for its wrapper child 
   expect(() => process.kill(pid, 0)).toThrow();
 }, 20_000);
 
+function killFixture(pid: number): void {
+  try { process.kill(pid, "SIGKILL"); }
+  catch (error) { if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error; }
+}
+
+test.skipIf(process.platform === "win32")("Given an authentication probe with a descendant When its deadline expires Then the descendant is reaped before rejection", async () => {
+  const pidFile = path.join(root, "auth-descendant-pid");
+  const fixture = await writeExecutableFixture(root, "codex-descendant", `
+import { spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
+const child = spawn(${JSON.stringify(process.execPath)}, ["-e", "setInterval(() => {}, 60000)"], { stdio: "inherit" });
+writeFileSync(${JSON.stringify(pidFile)}, String(child.pid));
+setInterval(() => {}, 60000);
+`);
+  let pid: number | undefined;
+  try {
+    await expect(probeCodexAuthentication(fixture)).rejects.toMatchObject({
+      code: "codex_authentication_probe_failed", diagnostics: { reason: "timeout" },
+    });
+    const descendantPid = Number(await readFile(pidFile, "utf8"));
+    pid = descendantPid;
+    expect(() => process.kill(descendantPid, 0)).toThrow();
+  } finally {
+    if (pid !== undefined) killFixture(pid);
+  }
+}, 15_000);
+
 test("turn start forces a fresh check and an indeterminate probe never invokes the adapter", async () => {
   const projectId = `readiness-${crypto.randomUUID()}`;
   const sessionId = `${projectId}-session`;
