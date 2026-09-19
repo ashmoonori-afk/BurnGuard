@@ -4,6 +4,7 @@ import { getDesignSystemDetail } from "../db/seed";
 import { resolveManagedPath, systemsDir } from "../lib/paths";
 import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
 import { upsertDesignSystemColorToken } from "./design-system-extract";
+import { LogoDeliverableError, logoSvgSource, validateLogoSvg } from "./logo-deliverables";
 
 /**
  * Folds a finished logo's guidelines back into the design system the project is pinned to
@@ -37,6 +38,8 @@ export type LogoDesignSystemPatchResult =
 export async function applyLogoDesignSystemPatch(input: {
   readonly projectDir: string;
   readonly designSystemId: string | null;
+  /** Selected candidate captured by the completed turn, never re-derived from the live project. */
+  readonly expectedSource: string;
 }): Promise<LogoDesignSystemPatchResult> {
   if (input.designSystemId === null) return { applied: false, reason: "no_design_system" };
 
@@ -78,6 +81,19 @@ export async function applyLogoDesignSystemPatch(input: {
     throw error;
   });
   if (asset === null) throw new LogoDesignSystemPatchError("logo_asset_missing");
+
+  // The live file can change after finalization. Validate the exact buffer we will copy, before
+  // any destination write, and bind its source claim to the turn's captured selection.
+  const text = asset.toString("utf8");
+  try {
+    validateLogoSvg(text);
+  } catch (error) {
+    if (error instanceof LogoDeliverableError) throw new LogoDesignSystemPatchError(error.detail);
+    throw error;
+  }
+  const source = logoSvgSource(text);
+  if (source === null) throw new LogoDesignSystemPatchError("svg_source_missing");
+  if (source !== input.expectedSource) throw new LogoDesignSystemPatchError("svg_source_mismatch");
 
   // Resolve every destination and read every input before the first write, so a rejected path or
   // an unreadable README cannot leave the colour tokens changed by a patch that then fails.

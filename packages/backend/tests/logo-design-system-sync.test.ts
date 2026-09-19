@@ -6,7 +6,7 @@ import { LOGO_SOURCE_ATTRIBUTE } from "@bg/shared";
 import { createDesignSystemRecord } from "../src/db/seed";
 import { getSqlite } from "../src/db/sqlite-client";
 import { systemsDir } from "../src/lib/paths";
-import { applyLogoDesignSystemPatch } from "../src/services/logo-design-system-sync";
+import { applyLogoDesignSystemPatch, LogoDesignSystemPatchError } from "../src/services/logo-design-system-sync";
 
 const systemId = `logo-sync-${process.pid}`;
 const systemDir = path.join(systemsDir, systemId);
@@ -66,19 +66,19 @@ afterAll(async () => {
 describe("logo design system sync", () => {
   test("Given no design system When applied Then it is a no-op", async () => {
     const dir = await projectStage({ "design-system-patch.json": JSON.stringify(patch), "logo.svg": LOGO_SVG });
-    expect(await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: null })).toEqual({ applied: false, reason: "no_design_system" });
+    expect(await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: null, expectedSource: "explorations/round-1/candidate-2.png" })).toEqual({ applied: false, reason: "no_design_system" });
   });
 
   test("Given no patch file When applied Then it is a no-op", async () => {
     const dir = await projectStage({ "logo.svg": LOGO_SVG });
-    expect(await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId })).toEqual({ applied: false, reason: "patch_absent" });
+    expect(await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId, expectedSource: "explorations/round-1/candidate-2.png" })).toEqual({ applied: false, reason: "patch_absent" });
   });
 
   test("Given a patch When applied twice Then colours, README and asset land idempotently and no system row is created", async () => {
     const before = systemCount();
     const dir = await projectStage({ "design-system-patch.json": JSON.stringify(patch), "logo.svg": LOGO_SVG });
 
-    expect(await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId })).toEqual({
+    expect(await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId, expectedSource: "explorations/round-1/candidate-2.png" })).toEqual({
       applied: true,
       colors: 2,
       readme: "replaced",
@@ -97,7 +97,7 @@ describe("logo design system sync", () => {
     expect(await readFile(path.join(systemDir, "assets", "logo.svg"), "utf8")).toBe(LOGO_SVG);
     expect(systemCount()).toEqual(before);
 
-    expect(await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId })).toEqual({
+    expect(await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId, expectedSource: "explorations/round-1/candidate-2.png" })).toEqual({
       applied: true,
       colors: 2,
       readme: "replaced",
@@ -110,16 +110,42 @@ describe("logo design system sync", () => {
   test("Given a README without a logo section When applied Then the section is appended", async () => {
     await writeFile(path.join(systemDir, "README.md"), "# System\n\n## Colors\n\nOnly colours.\n");
     const dir = await projectStage({ "design-system-patch.json": JSON.stringify(patch), "logo.svg": LOGO_SVG });
-    const result = await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId });
+    const result = await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId, expectedSource: "explorations/round-1/candidate-2.png" });
     expect(result).toEqual({ applied: true, colors: 2, readme: "appended", asset: true });
     const readme = await readFile(path.join(systemDir, "README.md"), "utf8");
     expect(readme.indexOf("## Colors")).toBeLessThan(readme.indexOf("## Logo"));
     expect(readme.endsWith("\n")).toBe(true);
   });
 
+  test.each([
+    ["active content", LOGO_SVG.replace("</svg>", "<script>alert(1)</script></svg>"), "svg_forbidden_element:script"],
+    ["external reference", LOGO_SVG.replace("</svg>", '<use href="https://example.com/logo.svg#mark"/></svg>'), "svg_external_reference"],
+    ["another selected source", LOGO_SVG.replace("candidate-2.png", "candidate-3.png"), "svg_source_mismatch"],
+    ["missing source", LOGO_SVG.replace(` ${LOGO_SOURCE_ATTRIBUTE}="explorations/round-1/candidate-2.png"`, ""), "svg_source_missing"],
+  ])("Given an SVG with %s When promoted Then a typed failure leaves the system unchanged", async (_label, svg, detail) => {
+    const files = ["colors_and_type.css", "README.md", "assets/logo.svg"];
+    await mkdir(path.join(systemDir, "assets"), { recursive: true });
+    await writeFile(path.join(systemDir, "assets", "logo.svg"), LOGO_SVG);
+    const before = await Promise.all(files.map((file) => readFile(path.join(systemDir, file))));
+    const dir = await projectStage({
+      "design-system-patch.json": JSON.stringify({
+        ...patch,
+        colors: [{ name: "logo-rejected", value: "#ABCDEF" }],
+        readme_section: "## Logo\n\nRejected replacement.\n",
+      }),
+      "logo.svg": svg,
+    });
+    const input = { projectDir: dir, designSystemId: systemId, expectedSource: "explorations/round-1/candidate-2.png" };
+
+    const result = await applyLogoDesignSystemPatch(input).catch((error: unknown) => error);
+    expect(result).toBeInstanceOf(LogoDesignSystemPatchError);
+    expect(result).toMatchObject({ code: "logo_design_system_patch_failed", detail });
+    expect(await Promise.all(files.map((file) => readFile(path.join(systemDir, file))))).toEqual(before);
+  });
+
   test("Given a malformed patch When applied Then a typed failure is thrown and nothing is written", async () => {
     const dir = await projectStage({ "design-system-patch.json": JSON.stringify({ ...patch, colors: [{ name: "Logo Primary", value: "#112233" }] }), "logo.svg": LOGO_SVG });
-    await expect(applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId })).rejects.toMatchObject({
+    await expect(applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId, expectedSource: "explorations/round-1/candidate-2.png" })).rejects.toMatchObject({
       code: "logo_design_system_patch_failed",
       detail: "patch_invalid:colors.0.name",
     });
@@ -127,7 +153,7 @@ describe("logo design system sync", () => {
 
   test("Given a missing logo asset When applied Then a typed failure is thrown", async () => {
     const dir = await projectStage({ "design-system-patch.json": JSON.stringify(patch) });
-    await expect(applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId })).rejects.toMatchObject({
+    await expect(applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId, expectedSource: "explorations/round-1/candidate-2.png" })).rejects.toMatchObject({
       code: "logo_design_system_patch_failed",
       detail: "logo_asset_missing",
     });
@@ -136,7 +162,7 @@ describe("logo design system sync", () => {
   test("Given an unknown design system When applied Then a typed failure is thrown and no row appears", async () => {
     const before = systemCount();
     const dir = await projectStage({ "design-system-patch.json": JSON.stringify(patch), "logo.svg": LOGO_SVG });
-    await expect(applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: `${systemId}-unknown` })).rejects.toMatchObject({
+    await expect(applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: `${systemId}-unknown`, expectedSource: "explorations/round-1/candidate-2.png" })).rejects.toMatchObject({
       code: "logo_design_system_patch_failed",
       detail: "design_system_missing",
     });

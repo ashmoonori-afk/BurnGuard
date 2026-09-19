@@ -379,8 +379,8 @@ async function runUserTurnInternal(
   let providerReportedFailure = false;
   let providerErrorPublished = false;
   let stopPreview: (() => Promise<void>) | undefined;
-  /** Set by the deliverable gate so the design-system patch only runs after a finished finalize. */
-  let logoFinalized = false;
+  /** Captured selection, retained only after the finalize deliverable gate succeeds. */
+  let finalizedLogoSource: string | null = null;
   const terminalEvents: NormalizedEvent[] = [];
   const selectedAttachments = sessionContext.attachments.filter((attachment) => contextPayload.attachments.includes(attachment.file_path));
   const forbiddenSha256 = new Set(selectedAttachments.filter((attachment) => attachment.source_role === "immutable_reference").flatMap((attachment) => attachment.sha256 === null ? [] : [attachment.sha256]));
@@ -523,17 +523,17 @@ async function runUserTurnInternal(
           const info = await lstat(path.join(stageDir, project.entrypoint));
           if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new LogoDeliverableError("guidelines_not_file");
           await assertLogoDeliverables(stageDir, logoExpectation, { imageGenerations, imageOutputs });
-          logoFinalized = logoExpectation.phase === "finalize";
+          finalizedLogoSource = logoExpectation.selected?.file ?? null;
         }
       },
     });
     if (activeTurn.interrupted) {
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "interrupted" });
     } else for (const event of terminalEvents) await persistAndPublish(sessionId, event);
-    if (!activeTurn.interrupted && logoFinalized) {
+    if (!activeTurn.interrupted && finalizedLogoSource !== null) {
       // Guidelines feed the design system, but they are not the deliverable: a patch that cannot be
       // applied is a warning on the trace, never a failed turn.
-      try { await applyLogoDesignSystemPatch({ projectDir, designSystemId: project.design_system_id }); }
+      try { await applyLogoDesignSystemPatch({ projectDir, designSystemId: project.design_system_id, expectedSource: finalizedLogoSource }); }
       catch (error) { await appendSessionTrace(sessionId, { level: "logo_design_system_patch_failed", turnId, error: diagnosticError(error) }); }
     }
   } catch (error) {
