@@ -71,6 +71,7 @@ import {
   parseFigmaUrl,
 } from "./figma";
 import { UPLOAD_EXTRACTOR_PY } from "./upload-extractor-py";
+import { pythonCandidates } from "./python-runtime";
 import {
   awaitChildWithAbort,
   createAcquisitionBudget,
@@ -1184,16 +1185,7 @@ export async function runPythonUploadExtractor(input: {
   try {
     const scriptPath = path.join(scriptDir, "extract.py");
     await writeFile(scriptPath, UPLOAD_EXTRACTOR_PY, "utf8");
-    const candidates =
-      process.platform === "win32"
-        ? [
-            ["py", "-3"],
-            ["python"],
-          ]
-        : [
-            ["python3"],
-            ["python"],
-          ];
+    const candidates = pythonCandidates();
 
     let lastFailure = "Python executable was not found";
     for (const prefix of candidates) {
