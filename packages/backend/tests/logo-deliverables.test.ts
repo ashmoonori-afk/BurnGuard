@@ -521,7 +521,7 @@ describe("logo svg validator", () => {
   });
 
   test("Given an internal use reference Then it is allowed", () => {
-    expect(svgDetail('<svg viewBox="0 0 8 8"><defs><path id="m" d="M0 0"/></defs><use href="#m"/></svg>')).toBe("ok");
+    expect(svgDetail('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><defs><path id="m" d="M0 0"/></defs><use href="#m"/></svg>')).toBe("ok");
   });
 
   test("Given an SVG above one mebibyte Then it is refused", () => {

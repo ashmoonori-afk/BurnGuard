@@ -206,6 +206,7 @@ export function validateLogoSvg(text: string): void {
   // A reference this document cannot resolve is either a typo or a placeholder for bytes the
   // validator never saw; neither belongs in a finished master vector.
   for (const reference of references) if (!ids.has(reference)) throw fail("svg_reference_missing");
+  if (attributeOf(root, "xmlns") === null) throw fail("svg_namespace_missing");
 }
 
 /** The generated candidate the vector claims to reproduce, or null when the root does not say. */

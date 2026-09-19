@@ -18,6 +18,9 @@ function svgDetail(text: string): string {
 }
 
 describe("logo svg validator", () => {
+  test("Given a namespace-less vector When validated for standalone export Then it is rejected", () => {
+    expect(svgDetail('<svg viewBox="0 0 8 8"><path d="M0 0H8V8H0Z"/></svg>')).toBe("svg_namespace_missing");
+  });
   test("Given a clean vector mark Then it validates", () => {
     expect(svgDetail(logoSvg("explorations/round-1/candidate-2.png"))).toBe("ok");
     expect(svgDetail(`<?xml version="1.0" encoding="UTF-8"?>\n<!-- generated -->\n${logoSvg("explorations/round-1/candidate-1.png")}`)).toBe("ok");
@@ -40,7 +43,7 @@ describe("logo svg validator", () => {
   });
 
   test("Given an internal use reference Then it is allowed", () => {
-    expect(svgDetail('<svg viewBox="0 0 8 8"><defs><path id="m" d="M0 0"/></defs><use href="#m"/></svg>')).toBe("ok");
+    expect(svgDetail('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><defs><path id="m" d="M0 0"/></defs><use href="#m"/></svg>')).toBe("ok");
   });
 
   test("Given an SVG above one mebibyte Then it is refused", () => {
@@ -72,7 +75,7 @@ describe("logo svg validator adversarial payloads", () => {
     expect(svgDetail('<svg viewBox="0 0 8 8"><path style="fill:u&#114;l(#g)" d="M0 0"/></svg>')).toBe("svg_entity");
     expect(svgDetail('<svg viewBox="0 0 8 8"><path style="fill:url(#g)" d="M0 0"/></svg>')).toBe("svg_forbidden_attribute:style");
     expect(svgDetail('<svg viewBox="0 0 8 8"><path d="M0 0" fill="&#35;fff"/></svg>')).toBe("svg_entity");
-    expect(svgDetail('<svg viewBox="0 0 8 8"><title>a &amp; b</title><path d="M0 0"/></svg>')).toBe("ok");
+    expect(svgDetail('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><title>a &amp; b</title><path d="M0 0"/></svg>')).toBe("ok");
   });
 
   test("Given the reviewer's malformed root Then the document is refused", () => {
