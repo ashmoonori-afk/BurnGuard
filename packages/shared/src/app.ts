@@ -4,7 +4,7 @@ export const APP_NAME = "BurnGuard Design";
 // When cutting a release, bump this in lockstep with the root
 // `package.json` and every `packages/<name>/package.json`. These
 // should always agree — verified manually at release time.
-export const APP_VERSION = "0.5.19";
+export const APP_VERSION = "0.5.20";
 
 /** Every CLI provider this app can drive. Detection, the adapter registry and the picker all read it. */
 export const BACKEND_IDS = ["claude-code", "codex", "gemini", "copilot"] as const;
