@@ -37,7 +37,8 @@ type PreflightManifest = {
   readonly checks: PreflightChecks;
 };
 
-async function commandPasses(command: readonly string[]): Promise<boolean> {
+async function commandPasses(command: readonly [string, ...string[]]): Promise<boolean> {
+  if (Bun.which(command[0]) === null) return false;
   const child = Bun.spawn([...command], {
     stdout: "ignore",
     stderr: "ignore",
@@ -91,7 +92,10 @@ export async function runPreflight(
       readRepositoryIdentity(repoRoot),
       currentAttemptDirectory(repoRoot),
       commandPasses(["jq", "--version"]),
-      access("/usr/bin/qlmanage").then(() => true),
+      access("/usr/bin/qlmanage").then(() => true, (error: unknown) => {
+        if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+        throw error;
+      }),
       findChromiumExecutable().then(() => true),
       isPortFree(port),
       hasAuthenticatedBackend(),
