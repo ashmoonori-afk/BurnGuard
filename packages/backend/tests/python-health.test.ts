@@ -58,7 +58,7 @@ describe("pypdf version gate", () => {
   });
 
   test("Given the in-app installer, requirements.txt and the embedded extractor When compared Then all three pin the same pypdf version", async () => {
-    expect(pypdfInstallCommand(["python3"])).toEqual(["python3", "-m", "pip", "install", "--user", `pypdf==${PYPDF_REQUIRED_VERSION}`]);
+    expect(pypdfInstallCommand(["python3"])).toEqual(["python3", "-m", "pip", "install", `pypdf==${PYPDF_REQUIRED_VERSION}`]);
     const requirements = await readFile(path.join(import.meta.dir, "..", "requirements.txt"), "utf8");
     expect(requirements.split(/\r?\n/).filter((line) => line.trim() && !line.startsWith("#"))).toEqual([`pypdf==${PYPDF_REQUIRED_VERSION}`]);
     expect(UPLOAD_EXTRACTOR_PY).toContain(`REQUIRED_PYPDF = (${PYPDF_REQUIRED_VERSION.split(".").join(", ")})`);

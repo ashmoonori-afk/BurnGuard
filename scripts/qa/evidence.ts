@@ -26,6 +26,9 @@ function parseStatus(raw: string): UlwStatus {
 }
 
 async function runToolkit(args: readonly string[]): Promise<string> {
+  if (Bun.which("omo-agent-toolkit") === null) {
+    throw new QaPreflightError("ulw_toolkit_missing", "ULW toolkit is not installed");
+  }
   const child = Bun.spawn(["omo-agent-toolkit", "ulw-loop", ...args], {
     stdout: "pipe",
     stderr: "ignore",

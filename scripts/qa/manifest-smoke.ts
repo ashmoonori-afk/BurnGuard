@@ -2,7 +2,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { currentAttemptDirectory, ULW_SESSION_ID } from "./evidence";
-import { QaInputError } from "./errors";
+import { QaInputError, QaPreflightError, QaTimeoutError } from "./errors";
 import { publishManifest, readEvidenceManifest } from "./manifest-publication";
 import {
   parseEvidenceManifest,
@@ -38,8 +38,8 @@ async function main(): Promise<void> {
   }
   const root = path.resolve(import.meta.dir, "../..");
   const attempt = await currentAttemptDirectory(root);
-  const evidenceDirectory = await mkdtemp(path.join(attempt, "manifest-smoke."));
   const repository = await readRepositoryIdentity(root);
+  const evidenceDirectory = await mkdtemp(path.join(attempt, "manifest-smoke."));
   const identity = {
     sessionId: ULW_SESSION_ID,
     attemptDirectory: attempt,
@@ -174,7 +174,7 @@ async function main(): Promise<void> {
     };
     const ok = Object.values(receipt).every(Boolean);
     process.stdout.write(`${JSON.stringify({ ...receipt, ok })}\n`);
-    if (!ok) process.exit(1);
+    if (!ok) process.exitCode = 1;
   } finally {
     await rm(evidenceDirectory, { recursive: true, force: true });
   }
@@ -184,7 +184,12 @@ if (import.meta.main) {
   try {
     await main();
   } catch (error) {
-    const code = error instanceof QaInputError ? error.code : "manifest_smoke_failed";
+    const code =
+      error instanceof QaInputError || error instanceof QaPreflightError
+        ? error.code
+        : error instanceof QaTimeoutError
+          ? `timeout_${error.operation.replaceAll(" ", "_")}`
+          : "manifest_smoke_failed";
     process.stderr.write(`${JSON.stringify({ ok: false, code })}\n`);
     process.exit(1);
   }

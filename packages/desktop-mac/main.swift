@@ -4,7 +4,7 @@ import WebKit
 
 private let smokeTestArguments = ["--smoke-test", "--smoke-report"]
 
-final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate {
+final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKDownloadDelegate {
     private var window: NSWindow!
     private var webView: WKWebView!
     private var service: Process?
@@ -13,6 +13,10 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var outputBuffer = Data()
     private var origin: URL?
     private var smokeReportPath: String?
+    private var smokePageReport: [String: Any]?
+    private var smokeDownloadFinished = false
+    private var smokeStarted = false
+    private var smokeFinishing = false
     private var closing = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -46,36 +50,110 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
-        guard let url = navigationAction.request.url, isAppURL(url) else {
+        guard let url = navigationAction.request.url else {
             decisionHandler(.cancel)
             return
         }
-        decisionHandler(.allow)
+        // Canvas documents remain opaque, sandboxed subframes; never allow this at the top level.
+        if url.absoluteString == "about:srcdoc", navigationAction.targetFrame?.isMainFrame == false {
+            decisionHandler(.allow)
+            return
+        }
+        if navigationAction.shouldPerformDownload {
+            let trustedSource = navigationAction.sourceFrame.isMainFrame &&
+                navigationAction.sourceFrame.request.url.map(isAppURL) == true
+            decisionHandler(trustedSource && isAppDownloadURL(url) ? .download : .cancel)
+            return
+        }
+        decisionHandler(isAppURL(url) ? .allow : .cancel)
+    }
+
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        download.delegate = self
+    }
+
+    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
+                  completionHandler: @escaping (URL?) -> Void) {
+        if let reportPath = smokeReportPath {
+            // Only the explicit diagnostic invocation may bypass user consent, inside its owned directory.
+            completionHandler(URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent("native-smoke-download.txt"))
+            return
+        }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = URL(fileURLWithPath: suggestedFilename).lastPathComponent
+        panel.beginSheetModal(for: window) { result in
+            completionHandler(result == .OK ? panel.url : nil)
+        }
+    }
+
+    func download(_ download: WKDownload, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+                  decisionHandler: @escaping (WKDownload.RedirectPolicy) -> Void) {
+        decisionHandler(request.url.map(isAppURL) == true ? .allow : .cancel)
+    }
+
+    func downloadDidFinish(_ download: WKDownload) {
+        guard smokeReportPath != nil else { return }
+        smokeDownloadFinished = true
+        if smokePageReport != nil { finishSmoke() }
+    }
+
+    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        if (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled { return }
+        if smokeReportPath != nil {
+            fail("Native download failed.")
+        } else {
+            let alert = NSAlert()
+            alert.messageText = "BurnGuard"
+            alert.informativeText = "파일을 다운로드하지 못했습니다. 다시 시도해 주세요."
+            alert.beginSheetModal(for: window)
+        }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        guard smokeReportPath != nil else { return }
+        guard smokeReportPath != nil, !smokeStarted else { return }
+        smokeStarted = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 80) { [weak self] in
+            guard let self, !self.closing else { return }
+            self.finishSmoke()
+        }
         webView.callAsyncJavaScript(
             """
             const ready = () => {
                 const root = document.getElementById("root");
                 return root && root.innerText.trim().length >= 40;
             };
-            if (ready()) {
-                return {title: document.title, bodyTextLength: document.body?.innerText?.length ?? 0};
-            }
-            return await new Promise((resolve, reject) => {
+            if (!ready()) await new Promise((resolve, reject) => {
                 const observer = new MutationObserver(() => {
                     if (!ready()) return;
+                    clearTimeout(timer);
                     observer.disconnect();
-                    resolve({title: document.title, bodyTextLength: document.body?.innerText?.length ?? 0});
+                    resolve();
                 });
                 observer.observe(document.documentElement, {subtree: true, childList: true, characterData: true});
-                window.setTimeout(() => {
+                const timer = window.setTimeout(() => {
                     observer.disconnect();
                     reject(new Error("BurnGuard 기본 화면이 준비되지 않았습니다."));
                 }, 60000);
             });
+            const frame = document.createElement('iframe');
+            frame.sandbox = 'allow-scripts';
+            frame.title = 'Native canvas regression';
+            frame.style = 'position:fixed;inset:80px;width:600px;height:240px;z-index:2147483647;background:white';
+            const canvasReady = new Promise(resolve => {
+                const finish = value => { clearTimeout(timer); window.removeEventListener('message', receive); resolve(value); };
+                const receive = event => {
+                    if (event.source === frame.contentWindow && event.origin === 'null' && event.data === 'burnguard-native-canvas-ready') finish(true);
+                };
+                const timer = window.setTimeout(() => finish(false), 10000);
+                window.addEventListener('message', receive);
+            });
+            frame.srcdoc = '<!doctype html><body style="background:#e6f4ff;font:24px system-ui;padding:24px">Native sandboxed canvas loaded<script>parent.postMessage("burnguard-native-canvas-ready", "*")</script>';
+            document.body.append(frame);
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(new Blob(['burnguard-native-download\\n'], {type: 'text/plain'}));
+            link.download = 'native-smoke-download.txt';
+            link.click();
+            return {title: document.title, bodyTextLength: document.body?.innerText?.length ?? 0, canvasReady: await canvasReady};
             """,
             arguments: [:],
             in: nil,
@@ -90,18 +168,42 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                 }
                 let pageTitle = values["title"] as? String ?? ""
                 let bodyTextLength = values["bodyTextLength"] as? Int ?? 0
-                guard let reportPath = self.smokeReportPath else { return }
-                self.writeReport([
+                self.smokePageReport = [
                     "nativeWindowVisible": self.window.isVisible,
                     "windowTitle": self.window.title,
                     "pageTitle": pageTitle,
                     "bodyTextLength": bodyTextLength,
                     "backendUrl": self.origin?.absoluteString ?? "",
-                ], to: reportPath)
-                self.shutdown()
+                    "canvasReady": values["canvasReady"] as? Bool ?? false,
+                    "backendPid": self.service?.processIdentifier ?? 0,
+                ]
+                if values["canvasReady"] as? Bool != true || self.smokeDownloadFinished { self.finishSmoke() }
             case .failure(let error):
                 self.fail(error.localizedDescription)
             }
+        }
+    }
+
+    private func finishSmoke() {
+        guard let reportPath = smokeReportPath, !smokeFinishing else { return }
+        smokeFinishing = true
+        var report = smokePageReport ?? ["error": "Native smoke did not complete"]
+        report["downloadCompleted"] = smokeDownloadFinished
+        webView.takeSnapshot(with: nil) { [weak self] image, error in
+            guard let self else { return }
+            do {
+                if let error { throw error }
+                guard let tiff = image?.tiffRepresentation,
+                      let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
+                    throw NSError(domain: "BurnGuard", code: 1)
+                }
+                try png.write(to: URL(fileURLWithPath: reportPath + ".png"), options: .atomic)
+                report["snapshotCaptured"] = true
+            } catch {
+                report["snapshotCaptured"] = false
+            }
+            self.writeReport(report, to: reportPath)
+            self.shutdown()
         }
     }
 
@@ -130,6 +232,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private func createWindow() throws {
         NSApp.setActivationPolicy(.regular)
         let configuration = WKWebViewConfiguration()
+        if smokeReportPath != nil { configuration.websiteDataStore = .nonPersistent() }
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
 
@@ -236,6 +339,12 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             host == originHost &&
             url.port == origin.port &&
             url.user == nil
+    }
+
+    private func isAppDownloadURL(_ url: URL) -> Bool {
+        if isAppURL(url) { return true }
+        guard url.scheme == "blob", let blobURL = URL(string: String(url.absoluteString.dropFirst(5))) else { return false }
+        return isAppURL(blobURL)
     }
 
     private func writeReport(_ report: [String: Any], to path: String) {

@@ -18,38 +18,24 @@ export class CodexAuthenticationProbeError extends Error {
   }
 }
 
-/**
- * Windows has no process groups, so aborting the probe terminates only the process that was
- * spawned. The CLI on PATH there is `codex.cmd`, a wrapper that launches its own interpreter, so
- * that interpreter keeps running after a timeout unless the whole tree is ended explicitly.
- * POSIX already reaps the child through the abort signal.
- */
-async function terminateProcessTree(pid: number | undefined): Promise<void> {
-  if (process.platform !== "win32" || pid === undefined) return;
-  try {
-    await Bun.spawn({ cmd: ["taskkill", "/PID", String(pid), "/T", "/F"], stdout: "ignore", stderr: "ignore" }).exited;
-  } catch {
-    // Already gone, or taskkill is unavailable; the caller still awaits the child's own exit.
-  }
-}
-
 /** Only an explicit CLI login/logout response confirms authentication state. */
 export async function probeCodexAuthentication(binaryPath: string): Promise<boolean> {
   const started = performance.now();
   const controller = new AbortController();
-  let proc: ReturnType<typeof Bun.spawn> | undefined;
   let exitCode: number | null = null;
   const failure = (reason: CodexAuthenticationProbeError["diagnostics"]["reason"]) => new CodexAuthenticationProbeError({ reason, exit_code: exitCode, elapsed_ms: Math.round(performance.now() - started) });
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let timedOut = false;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => { timedOut = true; reject(failure("timeout")); }, 5_000);
-  });
+  timer = setTimeout(() => controller.abort(), 5_000);
   try {
-    const child = Bun.spawn({ cmd: [binaryPath, "login", "status"], stdin: "ignore", stdout: "pipe", stderr: "pipe", signal: controller.signal, killSignal: "SIGKILL" });
-    proc = child;
-    const [stdout, stderr, exit] = await Promise.race([Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]), timeout]);
+    const child = Bun.spawn({ cmd: [binaryPath, "login", "status"], stdin: "ignore", stdout: "pipe", stderr: "pipe", ...ownedProcessSpawnOptions() });
+    let stdout = "";
+    let stderr = "";
+    const exit = await settleProcessStreams(child, [
+      new Response(child.stdout).text().then(text => { stdout = text; }),
+      new Response(child.stderr).text().then(text => { stderr = text; }),
+    ], controller.signal);
     exitCode = exit;
+    if (controller.signal.aborted) throw failure("timeout");
     const lines = `${stdout}\n${stderr}`.split(/\r?\n/).map((line) => line.trim());
     if (exit === 0 && lines.some((line) => /^logged in using\s+\S/i.test(line))) return true;
     if (exit === 1 && lines.some((line) => /^not logged in$/i.test(line))) return false;
@@ -60,13 +46,6 @@ export async function probeCodexAuthentication(binaryPath: string): Promise<bool
     throw failure(controller.signal.aborted ? "timeout" : "execution_failed");
   } finally {
     if (timer !== undefined) clearTimeout(timer);
-    if (timedOut && proc) {
-      // End the tree while the spawned process is still alive: aborting first orphans the
-      // descendants it launched, which can then no longer be reached through its process id.
-      await terminateProcessTree(proc.pid);
-      controller.abort();
-    }
-    if (controller.signal.aborted && proc) await proc.exited;
   }
 }
 

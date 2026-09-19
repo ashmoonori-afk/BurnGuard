@@ -13,6 +13,8 @@ export function isRuntimeSource(relativePath: string): boolean {
 
 /** The resource folder is the portable app's data source, never its user-data folder. */
 export async function stageRuntimeAssets(repoRoot: string, outputDirectory: string, includeNode = false): Promise<string> {
+  // Validate required runtimes before replacing any previously staged resources.
+  const node = includeNode ? await packagableNode() : null;
   await mkdir(outputDirectory, { recursive: true });
   const destinationParent = await realpath(outputDirectory);
   const resources = path.join(destinationParent, "resources");
@@ -61,7 +63,6 @@ export async function stageRuntimeAssets(repoRoot: string, outputDirectory: stri
   let nodeVersion: string | null = null;
   // The packaged app drives Chromium from a Node child (chromium-node-bridge.mjs) because
   // Bun's in-process Playwright launch stalls on Windows and macOS.
-  const node = includeNode ? await packagableNode() : null;
   if (node !== null) {
     const versionProbe = Bun.spawn([node, "--version"], { stdout: "pipe", stderr: "pipe" });
     const versionDeadline = setTimeout(() => versionProbe.kill(), 10_000);
@@ -92,18 +93,16 @@ export async function stageRuntimeAssets(repoRoot: string, outputDirectory: stri
 }
 
 /**
- * The Node binary to ship, or null when this build cannot carry one. Windows requires it.
+ * Require a Node binary that can ship without relying on the user's PATH.
  * On macOS a Homebrew node links Homebrew dylibs (@rpath, /opt/homebrew) and would not run on
- * another machine, so only a self-contained build (nodejs.org, actions/setup-node) is staged;
- * without one the app falls back to a Node on the user's PATH at runtime.
+ * another machine, so only a self-contained build (nodejs.org, actions/setup-node) is staged.
  */
-async function packagableNode(): Promise<string | null> {
+async function packagableNode(): Promise<string> {
   if (process.platform !== "win32" && process.platform !== "darwin") throw new Error("Portable packaging with a Node runtime supports Windows and macOS only");
   const node = Bun.which("node");
   if (!node) {
     if (process.platform === "win32") throw new Error("Node is required to package the Windows browser renderer");
-    console.warn("[package] no Node on PATH: the macOS bundle will use the user's Node for Chromium rendering");
-    return null;
+    throw new Error("Node is required to package the macOS app; put a standalone Node from nodejs.org or actions/setup-node on PATH");
   }
   if (process.platform === "darwin") {
     const otool = Bun.spawn(["otool", "-L", node], { stdout: "pipe", stderr: "pipe" });
@@ -112,8 +111,7 @@ async function packagableNode(): Promise<string | null> {
     if (exitCode !== 0) throw new Error("Could not inspect the Node runtime's linked libraries");
     const foreign = listing.split("\n").slice(1).map((line) => line.trim().split(" ")[0] ?? "").filter((library) => library !== "" && !library.startsWith("/usr/lib/") && !library.startsWith("/System/"));
     if (foreign.length > 0) {
-      console.warn(`[package] ${node} links ${foreign.length} non-system libraries and is not relocatable; the macOS bundle will use the user's Node for Chromium rendering`);
-      return null;
+      throw new Error("Node links non-system libraries and is not relocatable; put a standalone Node from nodejs.org or actions/setup-node on PATH");
     }
   }
   return node;

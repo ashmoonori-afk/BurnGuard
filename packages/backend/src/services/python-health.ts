@@ -2,7 +2,9 @@ import type {
   PypdfInstallStatus,
   PythonHealth,
 } from "@bg/shared";
+import { existsSync } from "node:fs";
 import { PYPDF_REQUIRED_VERSION, isSupportedPypdfVersion } from "./pypdf-version";
+import { managedPythonExecutable, pythonCandidates, pythonVenvDir } from "./python-runtime";
 
 const MAX_TAIL = 120;
 const CHECK_TIMEOUT_MS = 3_000;
@@ -16,14 +18,7 @@ let installStatus: PypdfInstallStatus = {
   tail: [],
 };
 
-let runningInstall: ReturnType<typeof Bun.spawn> | null = null;
 let cachedHealth: PythonHealth | null = null;
-
-function pythonCandidates(): string[][] {
-  return process.platform === "win32"
-    ? [["py", "-3"], ["python3"], ["python"]]
-    : [["python3"], ["python"]];
-}
 
 async function probe(cmd: string[]): Promise<{
   ok: boolean;
@@ -81,9 +76,9 @@ export function pypdfHealth(version: string | null): PythonHealth["pypdf"] {
   return { found: version !== null, version, supported: isSupportedPypdfVersion(version), required_version: PYPDF_REQUIRED_VERSION };
 }
 
-/** `python -m pip install --user pypdf==<reviewed version>`: the installer never floats to latest. */
+/** Run only in the app-owned venv; the installer never floats to latest. */
 export function pypdfInstallCommand(prefix: readonly string[]): string[] {
-  return [...prefix, "-m", "pip", "install", "--user", `pypdf==${PYPDF_REQUIRED_VERSION}`];
+  return [...prefix, "-m", "pip", "install", `pypdf==${PYPDF_REQUIRED_VERSION}`];
 }
 
 export async function checkPythonRuntime(): Promise<PythonHealth> {
@@ -136,15 +131,14 @@ export function getPypdfInstallStatus(): PypdfInstallStatus {
 }
 
 /**
- * Spawns `python -m pip install --user pypdf==<pinned>` so PDF uploads start
- * working without asking the user for a shell. `--user` avoids needing
- * admin on Windows / sudo on Unix for system-wide installs.
+ * Creates an app-owned venv when needed, then installs the pinned pypdf there.
+ * System and user-site packages are never changed, including on PEP 668 hosts.
  *
  * Returns `{ started: false }` if an install is already running (409
  * from the route handler). On completion, re-runs the health probe so
  * the Settings UI flips straight to green without a manual refresh.
  */
-export function startPypdfInstall(): { started: boolean; reason?: string } {
+export function startPypdfInstall(): { started: true; completion: Promise<void> } | { started: false; reason: string } {
   if (installStatus.state === "installing") {
     return { started: false, reason: "install_in_progress" };
   }
@@ -164,14 +158,13 @@ export function startPypdfInstall(): { started: boolean; reason?: string } {
     tail: [],
   };
 
+  const managed = managedPythonExecutable();
+  const createEnvironment = !existsSync(managed);
+  let phase = createEnvironment ? "Python venv creation" : "pip install pypdf";
+  const spawn = (cmd: string[]) => Bun.spawn({ cmd, stdout: "pipe", stderr: "pipe", stdin: "ignore", env: { ...process.env } });
+  let proc: ReturnType<typeof spawn>;
   try {
-    runningInstall = Bun.spawn({
-      cmd: pypdfInstallCommand(prefix),
-      stdout: "pipe",
-      stderr: "pipe",
-      stdin: "ignore",
-      env: { ...process.env },
-    });
+    proc = spawn(createEnvironment ? [...prefix, "-m", "venv", pythonVenvDir] : pypdfInstallCommand([managed]));
   } catch (err) {
     installStatus = {
       ...installStatus,
@@ -182,7 +175,6 @@ export function startPypdfInstall(): { started: boolean; reason?: string } {
     return { started: false, reason: "spawn_failed" };
   }
 
-  const proc = runningInstall;
   const pushLine = (line: string) => {
     const trimmed = line.replace(/\r$/, "");
     if (!trimmed) return;
@@ -190,26 +182,41 @@ export function startPypdfInstall(): { started: boolean; reason?: string } {
     if (installStatus.tail.length > MAX_TAIL) installStatus.tail.shift();
   };
 
-  if (proc.stdout instanceof ReadableStream) void readStream(proc.stdout, pushLine);
-  if (proc.stderr instanceof ReadableStream) void readStream(proc.stderr, pushLine);
+  const settle = async (child: ReturnType<typeof spawn>): Promise<number> => {
+    const [exitCode] = await Promise.all([
+      child.exited,
+      readStream(child.stdout, pushLine),
+      readStream(child.stderr, pushLine),
+    ]);
+    return exitCode;
+  };
+  const completion = (async () => {
+    try {
+      let exitCode = await settle(proc);
+      if (createEnvironment && exitCode === 0) {
+        phase = "pip install pypdf";
+        exitCode = await settle(spawn(pypdfInstallCommand([managed])));
+      }
+      // Refresh before publishing completion so the Settings response sees this environment.
+      await checkPythonRuntime();
+      installStatus = {
+        ...installStatus,
+        state: exitCode === 0 ? "success" : "error",
+        finished_at: Date.now(),
+        exit_code: exitCode,
+        error: exitCode === 0 ? null : `${phase} exited with code ${exitCode}. See tail for details.`,
+      };
+    } catch (error) {
+      installStatus = {
+        ...installStatus,
+        state: "error",
+        finished_at: Date.now(),
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  })();
 
-  void proc.exited.then(async (exitCode) => {
-    installStatus = {
-      ...installStatus,
-      state: exitCode === 0 ? "success" : "error",
-      finished_at: Date.now(),
-      exit_code: exitCode,
-      error:
-        exitCode === 0
-          ? null
-          : `pip install pypdf exited with code ${exitCode}. See tail for details.`,
-    };
-    runningInstall = null;
-    // Refresh the cached health so the next GET reflects the new state.
-    await checkPythonRuntime().catch(() => {});
-  });
-
-  return { started: true };
+  return { started: true, completion };
 }
 
 async function readStream(
