@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -304,24 +304,49 @@ describe("production website acquisition boundaries", () => {
 
   test("Given request cancellation during body streaming When production fetch aborts Then the exact server request aborts without leaking the body", async () => {
     // Given
-    let notifyRequest: (() => void) | undefined, notifyAbort: ((state: { readonly aborted: boolean }) => void) | undefined;
+    let notifyBody: ((chunk: Uint8Array) => void) | undefined, notifyAbort: ((state: { readonly aborted: boolean }) => void) | undefined;
     let observedSignal: AbortSignal | undefined;
-    const requestSeen = new Promise<void>((resolve) => { notifyRequest = resolve; });
+    const bodyRead = new Promise<Uint8Array>((resolve) => { notifyBody = resolve; });
     const requestAborted = new Promise<{ readonly aborted: boolean }>((resolve) => { notifyAbort = resolve; });
     const server = Bun.serve({
       port: 0,
       fetch: (request) => {
         observedSignal = request.signal;
         request.signal.addEventListener("abort", () => notifyAbort?.({ aborted: request.signal.aborted }), { once: true });
-        notifyRequest?.();
         return new Response(new ReadableStream({ start: (streamController) => streamController.enqueue(new TextEncoder().encode("partial")) }));
       },
     });
     const restoreAdapter = configureOwnedAdapter(server.port, "/stream", []);
     const controller = new AbortController();
+    const nativeFetch = globalThis.fetch;
+    const restoreObservers: Array<() => void> = [];
+    // Keep native fetch, Response and reader; observe only this client's actual body reads.
+    const fetchObserver = spyOn(globalThis, "fetch").mockImplementation(Object.assign(async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const response = await nativeFetch(input, init);
+      const body = response.body;
+      if (body === null) throw new Error("Streaming fixture response has no body");
+      const getReader = body.getReader.bind(body);
+      const readerObserver = spyOn(body, "getReader").mockImplementation(() => {
+        const reader = getReader();
+        const read = reader.read.bind(reader);
+        const readObserver = spyOn(reader, "read").mockImplementation(async () => {
+          const chunk = await read();
+          if (chunk.done) return { done: true as const, value: chunk.value };
+          notifyBody?.(chunk.value);
+          return chunk;
+        });
+        restoreObservers.push(() => readObserver.mockRestore());
+        return reader;
+      });
+      restoreObservers.push(() => readerObserver.mockRestore());
+      return response;
+    }, { preconnect: nativeFetch.preconnect }));
     try {
       const operation = fetchWebsiteResource(new URL(`http://127.0.0.1:${server.port}/stream`), { maxBytes: 100, kind: "html", noteBytes: () => {}, signal: controller.signal, userAgent });
-      await awaitBounded(requestSeen, 10_000);
+      expect(new TextDecoder().decode(await awaitBounded(bodyRead, 10_000))).toBe("partial");
+      // Handler entry can precede headers; aborting there under GC strands Bun's pending response.
+      // Exercise collection deterministically, but only after body streaming has really started.
+      Bun.gc(true);
 
       // When
       controller.abort(new ExtractionAcquisitionError("acquisition_aborted"));
@@ -331,6 +356,8 @@ describe("production website acquisition boundaries", () => {
       expect(await awaitBounded(requestAborted, 10_000)).toEqual({ aborted: true });
       expect(observedSignal?.aborted).toBe(true);
     } finally {
+      fetchObserver.mockRestore();
+      for (const restore of restoreObservers.reverse()) restore();
       restoreAdapter();
       await server.stop(true);
       expect(server.pendingRequests).toBe(0);
