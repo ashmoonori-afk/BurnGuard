@@ -1,4 +1,4 @@
-import { chmod, cp, copyFile, lstat, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, copyFile, lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { APP_NAME, APP_VERSION } from "../packages/shared/src/app";
 import { nativeModulePackages } from "../packages/backend/src/services/native-binding";
@@ -9,6 +9,17 @@ export function isRuntimeSource(relativePath: string): boolean {
   return normalized === "LICENSE" || normalized === "NOTICE" || normalized.startsWith("assets/fonts/") || normalized.startsWith("assets/liquid-glass/") || normalized.startsWith("design system themes/") || normalized.startsWith("samples/original/") ||
     (normalized.startsWith("design system sample/") && !normalized.startsWith("design system sample/uploads/")) ||
     normalized.startsWith("packages/backend/src/db/migrations/");
+}
+
+/** Strip inherited group/world write only from staged copies, never symlink targets. */
+async function normalizeRuntimePermissions(target: string): Promise<void> {
+  if (process.platform === "win32") return;
+  const info = await lstat(target);
+  if (info.isSymbolicLink()) return;
+  if ((info.mode & 0o022) !== 0) await chmod(target, (info.mode & 0o7777) & ~0o022);
+  if (info.isDirectory()) {
+    for (const name of await readdir(target)) await normalizeRuntimePermissions(path.join(target, name));
+  }
 }
 
 /** The resource folder is the portable app's data source, never its user-data folder. */
@@ -45,7 +56,9 @@ export async function stageRuntimeAssets(repoRoot: string, outputDirectory: stri
   const canvasRoot = path.dirname(Bun.resolveSync("@napi-rs/canvas/package.json", path.join(repoRoot, "packages/backend")));
   for (const name of nativeModulePackages(process.platform, process.arch)) {
     const source = path.dirname(Bun.resolveSync(`${name}/package.json`, name.startsWith("@napi-rs/canvas-") ? canvasRoot : path.join(repoRoot, "packages/backend")));
-    await cp(source, path.join(destinationParent, "node_modules", name), { recursive: true, dereference: true });
+    const target = path.join(destinationParent, "node_modules", name);
+    await cp(source, target, { recursive: true, dereference: true });
+    await normalizeRuntimePermissions(target);
   }
   await copyFile(path.join(repoRoot, "packages/backend/src/services/chromium-node-bridge.mjs"), path.join(resources, "chromium-node-bridge.mjs"));
   const worker = await Bun.build({
@@ -89,6 +102,7 @@ export async function stageRuntimeAssets(repoRoot: string, outputDirectory: stri
     await writeFile(path.join(resources, "node/LICENSE"), license);
   }
   await writeFile(path.join(resources, "burnguard-runtime.json"), JSON.stringify({ schema_version: 1, name: APP_NAME, version: APP_VERSION, nodeVersion, sourceFiles: files }, null, 2));
+  await normalizeRuntimePermissions(resources);
   return resources;
 }
 
