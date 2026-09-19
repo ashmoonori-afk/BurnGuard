@@ -52,6 +52,8 @@ const MAX_CANDIDATE_BYTES = 8 * 1024 * 1024;
 /** A candidate is a square mark; the image tool renders 1024 px, but a decoded square in this window counts. */
 const CANDIDATE_MIN_PX = 256;
 const CANDIDATE_MAX_PX = 4096;
+/** 64 MiB of pixels plus one filter byte per row admits 4096-square 8-bit RGBA. */
+const MAX_CANDIDATE_DECODED_BYTES = 64 * 1024 * 1024 + CANDIDATE_MAX_PX;
 /** Tool names the Codex adapter emits for its built-in image tool (adapters/codex/event-mapping.ts). */
 export const LOGO_IMAGE_TOOLS: ReadonlySet<string> = new Set(["image_generation", "image_generation_call"]);
 
@@ -271,9 +273,6 @@ async function assertCandidatePng(dir: string, candidate: LogoCandidateV1): Prom
   const bytes = await readFile(file);
   const png = inspectPng(bytes);
   if (typeof png === "string") throw new LogoDeliverableError(`candidate_${png}:${candidate.id}`);
-  if (png.width !== png.height || png.width < CANDIDATE_MIN_PX || png.width > CANDIDATE_MAX_PX) {
-    throw new LogoDeliverableError(`candidate_geometry:${candidate.id}`);
-  }
   return sha256(bytes);
 }
 
@@ -296,18 +295,19 @@ async function candidateHash(dir: string, candidate: Pick<LogoCandidateV1, "file
 
 const PNG_CHANNELS: Readonly<Record<number, number>> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
 const PNG_BIT_DEPTHS: Readonly<Record<number, readonly number[]>> = { 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] };
-type PngHeader = { readonly width: number; readonly height: number; readonly bitDepth: number; readonly colourType: number };
+type PngHeader = { readonly width: number; readonly height: number; readonly rowBytes: number; readonly colourType: number };
 
 /**
  * PNG decode without a pixel buffer: signature; IHDR first with a legal bit depth / colour type pair
- * and the only defined compression, filter and interlace methods; every chunk's CRC; PLTE before
+ * and the only defined compression, filter and interlace methods; candidate geometry and decoded
+ * budget checked before collecting IDAT; every chunk's CRC; PLTE before
  * IDAT for a palette image; IEND exactly at the last byte; then the IDAT stream inflated to exactly
  * height x (1 + row bytes) with a legal filter byte on every row. A file that frames correctly but
  * cannot be decoded is "undecodable"; a bare signature or a file cut off before IEND is "truncated";
  * anything else is "not_png". Interlaced images are refused: the image tool never writes them and
  * Adam7 would need a second geometry model.
  */
-function inspectPng(bytes: Buffer): { readonly width: number; readonly height: number } | "not_png" | "truncated" | "undecodable" {
+function inspectPng(bytes: Buffer): { readonly width: number; readonly height: number } | "not_png" | "truncated" | "undecodable" | "geometry" | "too_large" {
   if (bytes.length < PNG_SIGNATURE.length || !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return "not_png";
   let offset = PNG_SIGNATURE.length;
   let header: PngHeader | null = null;
@@ -324,11 +324,16 @@ function inspectPng(bytes: Buffer): { readonly width: number; readonly height: n
       const width = bytes.readUInt32BE(offset + 8);
       const height = bytes.readUInt32BE(offset + 12);
       if (width === 0 || height === 0) return "not_png";
+      if (width !== height || width < CANDIDATE_MIN_PX || width > CANDIDATE_MAX_PX) return "geometry";
       const bitDepth = bytes[offset + 16] ?? 0;
       const colourType = bytes[offset + 17] ?? 0;
       const methodsDefined = bytes[offset + 18] === 0 && bytes[offset + 19] === 0 && bytes[offset + 20] === 0;
       if (!methodsDefined || PNG_BIT_DEPTHS[colourType]?.includes(bitDepth) !== true) return "undecodable";
-      header = { width, height, bitDepth, colourType };
+      // Width is bounded and the format validated before multiplying; divide the budget before
+      // multiplying by height so no untrusted geometry can overflow the decoded-size calculation.
+      const rowBytes = Math.ceil((width * (PNG_CHANNELS[colourType] ?? 0) * bitDepth) / 8);
+      if (height > Math.floor(MAX_CANDIDATE_DECODED_BYTES / (rowBytes + 1))) return "too_large";
+      header = { width, height, rowBytes, colourType };
     } else if (type === "PLTE") {
       if (idat.length > 0 || length === 0 || length % 3 !== 0) return "undecodable";
       sawPlte = true;
@@ -346,7 +351,7 @@ function inspectPng(bytes: Buffer): { readonly width: number; readonly height: n
 
 /** The IDAT stream must inflate to exactly the filtered scanlines the header declares. */
 function inflatesToGeometry(stream: Buffer, header: PngHeader): boolean {
-  const rowBytes = Math.ceil((header.width * (PNG_CHANNELS[header.colourType] ?? 0) * header.bitDepth) / 8);
+  const rowBytes = header.rowBytes;
   const expected = header.height * (rowBytes + 1);
   let raw: Buffer;
   try {

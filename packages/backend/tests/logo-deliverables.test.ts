@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { crc32, deflateSync } from "node:zlib";
+import * as zlib from "node:zlib";
 import { LOGO_MAX_ROUNDS, LOGO_PAGE, LOGO_SOURCE_ATTRIBUTE, type LogoManifestV1 } from "@bg/shared";
 import {
   assertLogoDeliverables,
@@ -71,7 +72,7 @@ function png(width: number, height: number, seed: number): Buffer {
  * A PNG whose chunks are all CRC-valid but whose image content may be illegal. Every value defaults
  * to the legal grayscale 8-bit image from png(); each override is one way a decoder must refuse it.
  */
-function pngRaw(options: { readonly bitDepth?: number; readonly colourType?: number; readonly idat?: Buffer; readonly filterByte?: number; readonly rows?: number } = {}): Buffer {
+function pngRaw(options: { readonly width?: number; readonly height?: number; readonly bitDepth?: number; readonly colourType?: number; readonly idat?: Buffer; readonly filterByte?: number; readonly rows?: number } = {}): Buffer {
   const width = 256;
   const height = options.rows ?? 256;
   const raw = Buffer.alloc((width + 1) * height, 1);
@@ -85,8 +86,8 @@ function pngRaw(options: { readonly bitDepth?: number; readonly colourType?: num
     return Buffer.concat([length, typed, crc]);
   };
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(256, 4);
+  ihdr.writeUInt32BE(options.width ?? width, 0);
+  ihdr.writeUInt32BE(options.height ?? 256, 4);
   ihdr[8] = options.bitDepth ?? 8;
   ihdr[9] = options.colourType ?? 0;
   return Buffer.concat([PNG_SIGNATURE, chunk("IHDR", ihdr), chunk("IDAT", options.idat ?? deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
@@ -368,6 +369,7 @@ describe("logo explore deliverables", () => {
     ["a CRC-valid PNG with an illegal bit depth", pngRaw({ bitDepth: 3 }), "candidate_undecodable:candidate-2"],
     ["a CRC-valid PNG whose IDAT is not a zlib stream", pngRaw({ idat: Buffer.from("not a zlib stream") }), "candidate_undecodable:candidate-2"],
     ["a PNG whose pixel stream is shorter than its geometry", pngRaw({ rows: 100 }), "candidate_undecodable:candidate-2"],
+    ["a PNG whose pixel stream exceeds its geometry", pngRaw({ rows: 257 }), "candidate_undecodable:candidate-2"],
     ["a PNG with an illegal row filter byte", pngRaw({ filterByte: 9 }), "candidate_undecodable:candidate-2"],
     ["a palette PNG with no PLTE", pngRaw({ colourType: 3 }), "candidate_undecodable:candidate-2"],
   ])("Given %s as a candidate When asserted Then it is refused", async (_label, bytes, detail) => {
@@ -378,6 +380,58 @@ describe("logo explore deliverables", () => {
     await writeFile(path.join(dir, "index.html"), guidelines(1));
     await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ code: "logo_deliverables_missing", detail });
   });
+
+  test.each([
+    ["8192-square RGBA", 8192, 8192, 8, "geometry"],
+    ["below the minimum", 255, 255, 8, "geometry"],
+    ["above the maximum", 4097, 4097, 8, "geometry"],
+    ["non-square", 256, 257, 8, "geometry"],
+    ["uint32 maximum dimensions", 0xffffffff, 0xffffffff, 16, "geometry"],
+    ["4096-square 16-bit RGBA over the decoded budget", 4096, 4096, 16, "too_large"],
+  ] as const)("Given %s IHDR When asserted Then it is rejected before inflate", async (_label, width, height, bitDepth, reason) => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
+    // Highly compressed, CRC-valid PNG with a deliberately short stream: even RED cannot expand
+    // hundreds of MiB. The spy observes the real inflater, not a replacement decoder.
+    const bytes = pngRaw({ width, height, bitDepth, colourType: 6 });
+    expect(bytes.length).toBeLessThan(1024);
+    await writeManifest(dir, manifestOf(1));
+    await writeCandidates(dir, 1, { "candidate-1": bytes });
+    const turnEvidence = await evidence(dir);
+    const inflate = spyOn(zlib, "inflateSync");
+    try {
+      const result = assertLogoDeliverables(dir, expectation, turnEvidence);
+      await expect(result).rejects.toBeInstanceOf(LogoDeliverableError);
+      expect(inflate).not.toHaveBeenCalled();
+      await expect(result).rejects.toMatchObject({
+        code: "logo_deliverables_missing",
+        detail: `candidate_${reason}:candidate-1`,
+      });
+    } finally {
+      inflate.mockRestore();
+    }
+  });
+
+  test.each([[256, 8], [1024, 16], [4096, 8]] as const)(
+    "Given %i-square %i-bit RGBA within the decoded budget When asserted Then bounded inflation passes",
+    async (width, bitDepth) => {
+      const dir = await priorProject(0);
+      const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
+      const decodedBytes = (width * 4 * bitDepth / 8 + 1) * width;
+      const bytes = pngRaw({ width, height: width, bitDepth, colourType: 6, idat: deflateSync(Buffer.alloc(decodedBytes)) });
+      await exploreResult(dir, 1);
+      await writeFile(path.join(dir, "explorations", "round-1", "candidate-1.png"), bytes);
+      const turnEvidence = await evidence(dir);
+      const inflate = spyOn(zlib, "inflateSync");
+      try {
+        await expect(assertLogoDeliverables(dir, expectation, turnEvidence)).resolves.toBeUndefined();
+        expect(inflate).toHaveBeenCalledTimes(4);
+        expect(inflate.mock.calls[0]?.[1]).toEqual({ maxOutputLength: decodedBytes + 1 });
+      } finally {
+        inflate.mockRestore();
+      }
+    },
+  );
 
   test("Given a directory in place of a candidate file When asserted Then it is refused", async () => {
     const dir = await priorProject(0);
