@@ -1,7 +1,35 @@
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { PathBoundaryError, resolveWithin } from "../../security/path-boundary";
+
+/**
+ * Codex CLI 0.154 `exec --json` emits no item at all for its built-in `image_gen` tool: the only
+ * trace of a generation is the PNG it saves under `$CODEX_HOME/generated_images/<thread_id>/`
+ * (verified against a live run, 2026-09-20). Each `codex exec` opens a fresh thread, so that
+ * directory holds exactly this process's outputs. Hashing it at turn end is the provenance the
+ * logo gate needs; a missing directory, a foreign thread id or a non-PNG file yields nothing.
+ */
+const THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const MAX_GENERATED_FILES = 64;
+
+export function collectGeneratedImageHashes(codexHome: string, threadId: string): string[] {
+  if (!THREAD_ID.test(threadId)) return [];
+  let entries: string[];
+  try {
+    entries = readdirSync(resolveWithin(codexHome, "generated_images", threadId)).sort();
+  } catch (error) {
+    if (error instanceof PathBoundaryError || (error instanceof Error && "code" in error)) return [];
+    throw error;
+  }
+  const hashes = new Set<string>();
+  for (const name of entries.slice(0, MAX_GENERATED_FILES)) {
+    if (!/^[A-Za-z0-9._-]+\.png$/i.test(name)) continue;
+    const hash = hashPngPath(name, resolveWithin(codexHome, "generated_images", threadId));
+    if (hash !== null) hashes.add(hash);
+  }
+  return [...hashes];
+}
 
 /**
  * Hashes of the images a Codex image-tool item carries.

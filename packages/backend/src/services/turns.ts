@@ -39,7 +39,7 @@ import { generationOutputComplete } from "./generation-output";
 import { parse } from "node-html-parser";
 import { prepareSlideDeckExport } from "./export-stage";
 import { reviewTurnDesign } from "./turn-design-review";
-import { parseStoredProjectOptions } from "./project-options";
+import { designAuditCanvas } from "./design-audit";
 import { assertLogoDeliverables, captureLogoTurnExpectation, imageOutputHashes, isLogoImageGeneration, isLogoImageToolStart, LogoDeliverableError, scanExplorationHashes } from "./logo-deliverables";
 import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
@@ -480,7 +480,7 @@ async function runUserTurnInternal(
               await ensureThreeSceneRuntime(stageDir);
               await ensureCharts(stageDir);
               if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
-              const canvas = parseStoredProjectOptions(project.options_json).graphic_canvas;
+              const canvas = designAuditCanvas(project.type, project.options_json);
               const designReview = await (dependencies.reviewDesign ?? reviewTurnDesign)({
                 adapter: adapterInput, projectId: project.id, type: project.type, entrypoint: project.entrypoint,
                 revision: project.current_revision + 1, ...(canvas ? { canvas } : {}),

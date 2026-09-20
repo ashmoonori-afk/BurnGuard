@@ -7,6 +7,10 @@ export interface CodexParserContext {
   projectDir?: string;
   /** Correlates a tool_result line to the tool name set at tool_start. */
   toolNames: Map<string, string>;
+  /** `$CODEX_HOME`; where the built-in image tool saves its outputs. Unset disables the scan. */
+  codexHome?: string;
+  /** Set from `thread.started`; names this process's `generated_images/<thread_id>` directory. */
+  threadId?: string;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { DESIGN_AUDIT_CHECK_CODES, DesignAuditContractError, parseDesignAuditResult, type DesignAuditCheck, type DesignAuditCheckCode, type DesignAuditFinding, type DesignAuditResult } from "@bg/shared";
+import { DESIGN_AUDIT_CHECK_CODES, DesignAuditContractError, LOGO_PAGE, parseDesignAuditResult, type DesignAuditCheck, type DesignAuditCheckCode, type DesignAuditFinding, type DesignAuditResult, type ProjectType } from "@bg/shared";
 import { getProjectDetail } from "../db/project-read-repository";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
 import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
@@ -15,6 +15,17 @@ import { buildSiteMap } from "./site-map";
 import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
 
 export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v2";
+
+/**
+ * The fixed page a project renders into, or undefined for a responsive website audit. A logo
+ * project has no stored canvas: its candidate sheet and every guidelines page are the constant
+ * LOGO_PAGE, so auditing it at website viewports only produces spurious narrow-width findings.
+ */
+export function designAuditCanvas(type: ProjectType, optionsJson: string | null): { readonly width: number; readonly height: number } | undefined {
+  if (type === "logo") return LOGO_PAGE;
+  if (type === "graphic") return parseStoredProjectOptions(optionsJson).graphic_canvas ?? undefined;
+  return undefined;
+}
 
 export type AuditRenderedTreeInput = { readonly projectId: string; readonly projectDir: string; readonly entrypoint: string; readonly revision: number; readonly digest: string; readonly treeDigest?: string; readonly safeFix?: boolean; readonly deck?: boolean; readonly canvas?: { readonly width: number; readonly height: number }; readonly signal: AbortSignal };
 export class DesignAuditServiceError extends Error {
@@ -89,9 +100,7 @@ export async function getProjectDesignAudit(projectId: string, force = false, si
     if (cached !== null && cached.project_id === projectId && cached.artifact_revision === project.current_revision && cached.artifact_digest === project.current_digest) return cached;
   }
   let result: DesignAuditResult;
-  const graphicCanvas = project.type === "graphic"
-    ? parseStoredProjectOptions(project.options_json).graphic_canvas ?? undefined
-    : undefined;
+  const graphicCanvas = designAuditCanvas(project.type, project.options_json);
   try { result = await auditRenderedTree({ projectId, projectDir, entrypoint: project.entrypoint, revision: project.current_revision, digest: project.current_digest, deck: project.type === "slide_deck", ...(graphicCanvas === undefined ? {} : { canvas: graphicCanvas }), signal }); }
   catch (error) { if (error instanceof RenderSessionError || error instanceof CanonicalTreeManifestError) throw new DesignAuditServiceError("audit_unavailable", "Rendered audit is unavailable"); throw error; }
   const after = await getProjectDetail(projectId);

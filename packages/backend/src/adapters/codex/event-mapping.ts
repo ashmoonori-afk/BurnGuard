@@ -3,7 +3,7 @@ import { ulid } from "ulid";
 import type { NormalizedEvent } from "@bg/shared";
 import { resolveWithin } from "../../security/path-boundary";
 import type { CodexParserContext } from "./parser";
-import { collectImageOutputHashes } from "./image-outputs";
+import { collectGeneratedImageHashes, collectImageOutputHashes } from "./image-outputs";
 
 export function isCodexStartupNotice(message: string): boolean {
   return /^Under-development features enabled: [a-z0-9_, ]+\. Under-development features are incomplete and may behave unpredictably\. To suppress this warning, set `?suppress_unstable_features_warning = true`? in [^\r\n]+config\.toml`?\.?$/.test(message.trim());
@@ -17,8 +17,11 @@ export function mapCodexEnvelope(
   if (!type) return null;
 
   switch (type) {
-    case "thread.started":
+    case "thread.started": {
+      const threadId = asString(obj.thread_id);
+      if (threadId) ctx.threadId = threadId;
       return [];
+    }
     case "turn.started":
       return [{ id: ulid(), ts: Date.now(), type: "status.running" }];
     case "item.started":
@@ -72,7 +75,7 @@ function mapItem(
   if (itemType === "error" && completed) {
     const message = asString(value.message) ?? "Codex reported an error";
     // Codex sends this startup notice as an error item in some CLI versions.
-    if (isCodexStartupNotice(message) || message === "Skills were trimmed for this turn.") return [];
+    if (isCodexStartupNotice(message) || message === "Skills were trimmed for this turn." || message.startsWith("Exceeded skills context budget.")) return [];
     return [{ id: ulid(), ts: Date.now(), type: "tool.started", turnId: ctx.turnId, toolCallId: itemId, tool: "generation_tool_failed", input: {} },
       { id: ulid(), ts: Date.now(), type: "tool.finished", turnId: ctx.turnId, toolCallId: itemId, tool: "generation_tool_failed", ok: false }];
   }
@@ -127,6 +130,7 @@ function mapTurnCompleted(
   const output = asNumber(usage.output_tokens) ?? 0;
   const cached = asNumber(usage.cached_input_tokens);
   return [
+    ...mapGeneratedImages(ctx),
     {
       id: ulid(),
       ts: Date.now(),
@@ -138,6 +142,22 @@ function mapTurnCompleted(
     { id: ulid(), ts: Date.now(), type: "chat.message_end", turnId: ctx.turnId },
     { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "end_turn" },
   ];
+}
+
+/**
+ * The exec stream carries no item for the built-in image tool (see image-outputs.ts), so each PNG
+ * it saved for this thread is surfaced as one completed `image_generation` call carrying only the
+ * sha256 of its bytes. Emitted before the terminal events so the turn gate observes them.
+ */
+function mapGeneratedImages(ctx: CodexParserContext): NormalizedEvent[] {
+  if (ctx.codexHome === undefined || ctx.threadId === undefined) return [];
+  return collectGeneratedImageHashes(ctx.codexHome, ctx.threadId).flatMap((sha256): NormalizedEvent[] => {
+    const toolCallId = `image_generation_${sha256.slice(0, 16)}`;
+    return [
+      { id: ulid(), ts: Date.now(), type: "tool.started", turnId: ctx.turnId, toolCallId, tool: "image_generation", input: {} },
+      { id: ulid(), ts: Date.now(), type: "tool.finished", turnId: ctx.turnId, toolCallId, tool: "image_generation", ok: true, output: { image_sha256: [sha256] } },
+    ];
+  });
 }
 
 function mapFileChanges(
