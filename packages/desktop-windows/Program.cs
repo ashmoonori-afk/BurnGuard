@@ -110,6 +110,7 @@ namespace BurnGuard.Desktop
         private bool smokeStarted;
         private int smokeStage;
         private Dictionary<string, object> smokeDom;
+        private readonly List<string> smokeDownloadEvents = new List<string>();
         private long startupElapsedMs;
         private int port;
         private readonly ToolStrip updateStrip = new ToolStrip { Dock = DockStyle.Bottom, GripStyle = ToolStripGripStyle.Hidden };
@@ -344,16 +345,20 @@ namespace BurnGuard.Desktop
                 if (File.Exists(destination)) File.Delete(destination);
                 args.ResultFilePath = destination;
                 args.Handled = true;
+                var operation = args.DownloadOperation;
                 EventHandler<object> changed = null;
-                changed = (sender, __) =>
+                Action settle = () =>
                 {
-                    var operation = (CoreWebView2DownloadOperation)sender;
+                    smokeDownloadEvents.Add("native-state:" + extension + ":" + operation.State);
                     if (operation.State == CoreWebView2DownloadState.InProgress) return;
                     operation.StateChanged -= changed;
                     if (operation.State == CoreWebView2DownloadState.Completed) completion.TrySetResult(destination);
                     else completion.TrySetException(new InvalidOperationException("Native " + extension + " download was interrupted."));
                 };
-                args.DownloadOperation.StateChanged += changed;
+                changed = (_, __) => settle();
+                operation.StateChanged += changed;
+                smokeDownloadEvents.Add("native-start:" + extension + ":" + operation.State + ":" + mime + ":" + suggested);
+                settle();
             };
         }
 
@@ -390,9 +395,9 @@ namespace BurnGuard.Desktop
                 var screenshot = Path.ChangeExtension(report, ".png");
                 Directory.CreateDirectory(Path.GetDirectoryName(screenshot));
                 using (var stream = File.Create(screenshot)) await web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, stream);
-                Program.WriteReport(report, new { ok = true, startupElapsedMs, processId = Process.GetCurrentProcess().Id, servicePid = service.Id, webViewVersion = web.CoreWebView2.Environment.BrowserVersionString, screenshot, dom = smokeDom, artifacts = new { svg, pdf } });
+                Program.WriteReport(report, new { ok = true, startupElapsedMs, processId = Process.GetCurrentProcess().Id, servicePid = service.Id, webViewVersion = web.CoreWebView2.Environment.BrowserVersionString, screenshot, dom = smokeDom, artifacts = new { svg, pdf }, downloadEvents = smokeDownloadEvents });
             }
-            catch (Exception exception) { Program.ExitCode = 1; Program.WriteReport(report, new { ok = false, startupElapsedMs, error = exception.Message }); }
+            catch (Exception exception) { Program.ExitCode = 1; Program.WriteReport(report, new { ok = false, startupElapsedMs, error = exception.Message, downloadEvents = smokeDownloadEvents }); }
             Close();
         }
 
@@ -403,6 +408,12 @@ namespace BurnGuard.Desktop
             received = (_, args) =>
             {
                 if (!IsAppUrl(args.Source)) return;
+                var message = Program.Json.Deserialize<Dictionary<string, object>>(args.WebMessageAsJson);
+                if (message.ContainsKey("downloadAction"))
+                {
+                    smokeDownloadEvents.Add("browser-action:" + (string)message["downloadAction"]);
+                    return;
+                }
                 web.CoreWebView2.WebMessageReceived -= received;
                 result.TrySetResult(args.WebMessageAsJson);
             };
@@ -479,7 +490,7 @@ namespace BurnGuard.Desktop
                     const job=await data(await fetch('/api/exports/'+created.id));
                     if(job.status!=='succeeded'||!job.latest_attempt?.digests?.output||job.size_bytes<=0)throw new Error(format+' export receipt invalid');
                     const response=await fetch('/api/exports/'+created.id+'/download'); if(!response.ok)throw new Error(format+' download unavailable');
-                    const blob=await response.blob(), url=URL.createObjectURL(blob), link=document.createElement('a'); link.href=url; link.download='native-export.'+format; link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+                    const blob=await response.blob(), url=URL.createObjectURL(blob), link=document.createElement('a'); link.href=url; link.download='native-export.'+format; window.chrome.webview.postMessage({downloadAction:format}); link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
                     return {id:job.id,bytes:job.size_bytes,sha256:job.latest_attempt.digests.output};
                 };
                 const svg=await run('svg',{}), pdf=await run('pdf',{pdf_paper:'artboard'});
