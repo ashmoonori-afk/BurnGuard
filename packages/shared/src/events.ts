@@ -6,6 +6,8 @@ export type TurnErrorCode =
   | "graphic_starter_unchanged"
   | "logo_requires_authenticated_codex"
   | "logo_deliverables_missing"
+  | "logo_image_provenance_missing"
+  | "design_review_failed"
   | "commandcode_unavailable"
   | "unsupported_generation_model_effort"
   | "backend_unavailable"

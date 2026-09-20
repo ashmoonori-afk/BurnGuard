@@ -8,6 +8,8 @@ const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {
   graphic_starter_unchanged: "chat.error.graphicStarterUnchanged",
   logo_requires_authenticated_codex: "chat.error.logoRequiresAuthenticatedCodex",
   logo_deliverables_missing: "chat.error.logoDeliverablesMissing",
+  logo_image_provenance_missing: "chat.error.logoImageProvenanceMissing",
+  design_review_failed: "chat.error.designReviewFailed",
   commandcode_unavailable: "chat.error.commandCodeUnavailable",
   unsupported_generation_model_effort: "chat.error.unsupportedModelEffort",
   backend_unavailable: "chat.error.backendUnavailable",

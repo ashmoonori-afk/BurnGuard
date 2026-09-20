@@ -38,7 +38,7 @@ import { needsGenerationPhases, runGenerationPhases } from "./turn-phases";
 import { generationOutputComplete } from "./generation-output";
 import { parse } from "node-html-parser";
 import { prepareSlideDeckExport } from "./export-stage";
-import { reviewTurnDesign } from "./turn-design-review";
+import { DesignReviewError, reviewTurnDesign } from "./turn-design-review";
 import { designAuditCanvas } from "./design-audit";
 import { assertLogoDeliverables, captureLogoTurnExpectation, LogoDeliverableError, LogoEvidenceCollector } from "./logo-deliverables";
 import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
@@ -474,8 +474,7 @@ async function runUserTurnInternal(
                 revision: project.current_revision + 1, ...(canvas ? { canvas } : {}),
                 run: (input) => runAdapter(backendId, input),
               });
-              if (designReview.status !== "checked" || designReview.result?.overall_status === "must_fix" || !designReview.result) throw new ArtifactOperationError("publication_failed", "Design checks are incomplete or required fixes remain");
-              if (providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Design repair did not complete");
+              if (designReview.status !== "checked" || designReview.result?.overall_status === "must_fix" || !designReview.result || providerReportedFailure) throw new DesignReviewError();
               const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
               if (encodingIssues.length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
             } catch (error) {

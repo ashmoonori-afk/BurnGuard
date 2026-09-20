@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { collectImageOutputHashes } from "../src/adapters/codex/image-outputs";
@@ -17,9 +17,11 @@ describe("codex image-tool output hashes", () => {
 
   test("Given a .png path inside the project Then the file bytes are hashed; outside or missing paths are ignored", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "bg-image-outputs-"));
-    writeFileSync(path.join(dir, "out.png"), PNG);
-    expect(collectImageOutputHashes({ output_path: "out.png", other: "../escape.png", missing: "nope.png" }, dir)).toEqual([SHA]);
-    expect(collectImageOutputHashes({ output_path: path.join(dir, "out.png") }, dir)).toEqual([SHA]);
+    try {
+      writeFileSync(path.join(dir, "out.png"), PNG);
+      expect(collectImageOutputHashes({ output_path: "out.png", other: "../escape.png", missing: "nope.png" }, dir)).toEqual([SHA]);
+      expect(collectImageOutputHashes({ output_path: path.join(dir, "out.png") }, dir)).toEqual([SHA]);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 
   test("Given prose, non-PNG base64 and deep nesting Then nothing is collected", () => {

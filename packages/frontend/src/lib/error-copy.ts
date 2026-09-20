@@ -37,6 +37,8 @@ const ERROR_COPY: Record<string, MessageKey> = {
   graphic_starter_unchanged: "errors.graphic_starter_unchanged",
   logo_requires_authenticated_codex: "errors.logo_requires_authenticated_codex",
   logo_deliverables_missing: "errors.logo_deliverables_missing",
+  logo_image_provenance_missing: "errors.logo_image_provenance_missing",
+  design_review_failed: "errors.design_review_failed",
   invalid_project_options: "errors.invalid_project_options",
   forbidden: "errors.forbidden",
   has_active_projects: "errors.has_active_projects",

@@ -16,5 +16,9 @@ if (process.argv[2] === "child") {
   });
   const receipt = { parent: process.pid, child: child.pid };
   writeFileSync(path.join(process.cwd(), "owned-pids.json"), JSON.stringify(receipt));
-  child.once("message", () => console.log(JSON.stringify(receipt)));
+  child.once("message", () => {
+    console.log(JSON.stringify(process.argv[2] === "exec"
+      ? { type: "item.completed", item: { type: "agent_message", text: JSON.stringify(receipt) } }
+      : receipt));
+  });
 }

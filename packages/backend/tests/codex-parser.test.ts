@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { mapGeneratedImages } from "../src/adapters/codex/event-mapping";
 import {
   parseCodexLine,
   type CodexParserContext,
@@ -10,6 +11,13 @@ import {
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
 const PNG_SHA = createHash("sha256").update(PNG).digest("hex");
+const homes: string[] = [];
+afterEach(() => { for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true }); });
+function tempCodexHome(): string {
+  const home = mkdtempSync(path.join(tmpdir(), "bg-codex-home-"));
+  homes.push(home);
+  return home;
+}
 
 function ctx(): CodexParserContext {
   return { turnId: "turn-1", toolNames: new Map() };
@@ -21,8 +29,8 @@ describe("parseCodexLine — structured path", () => {
     const errorItem = (message: string) => JSON.stringify({ type: "item.completed", item: { type: "error", message } });
     expect(parseCodexLine(errorItem(warning), ctx())).toEqual([]);
     expect(parseCodexLine(warning, ctx())).toEqual([]);
-    expect(parseCodexLine("Authentication failed", ctx())[0]).toMatchObject({ type: "chat.delta", text: "Authentication failed" });
-    expect(parseCodexLine(`${warning}\nAuthentication failed`, ctx())).toHaveLength(1);
+    expect(parseCodexLine("Authentication failed", ctx())).toEqual([]);
+    expect(parseCodexLine(`${warning}\nAuthentication failed`, ctx())).toEqual([]);
     const privateDiagnostic =
       "Authentication failed: sk-private at /Users/local/.codex/config.toml";
     const events = parseCodexLine(errorItem(privateDiagnostic), ctx());
@@ -203,7 +211,7 @@ describe("parseCodexLine — structured path", () => {
   });
 
   test("Given images the built-in image tool saved for this thread When the turn completes Then each is surfaced as one image_generation call carrying only its sha256", () => {
-    const codexHome = mkdtempSync(path.join(tmpdir(), "bg-codex-home-"));
+    const codexHome = tempCodexHome();
     const threadId = "01a0bd75-12bd-75a3-8193-127dd61ddb33";
     mkdirSync(path.join(codexHome, "generated_images", threadId), { recursive: true });
     writeFileSync(path.join(codexHome, "generated_images", threadId, "exec-1.png"), PNG);
@@ -218,8 +226,21 @@ describe("parseCodexLine — structured path", () => {
     expect(JSON.stringify(events)).not.toContain(codexHome);
   });
 
+  test("Given an image already surfaced while the tool ran When the turn completes Then it is not reported a second time", () => {
+    const codexHome = tempCodexHome();
+    const threadId = "01a0bd75-12bd-75a3-8193-127dd61ddb33";
+    mkdirSync(path.join(codexHome, "generated_images", threadId), { recursive: true });
+    writeFileSync(path.join(codexHome, "generated_images", threadId, "exec-1.png"), PNG);
+    const c: CodexParserContext = { ...ctx(), codexHome };
+    parseCodexLine(JSON.stringify({ type: "thread.started", thread_id: threadId }), c);
+    expect(mapGeneratedImages(c).map((event) => event.type)).toEqual(["tool.started", "tool.finished"]);
+    expect(mapGeneratedImages(c)).toEqual([]);
+    const events = parseCodexLine(JSON.stringify({ type: "turn.completed", usage: {} }), c);
+    expect(events.map((event) => event.type)).toEqual(["usage.delta", "chat.message_end", "status.idle"]);
+  });
+
   test("Given no thread, an unsafe thread id or no codexHome When the turn completes Then no image call is invented", () => {
-    const codexHome = mkdtempSync(path.join(tmpdir(), "bg-codex-home-"));
+    const codexHome = tempCodexHome();
     mkdirSync(path.join(codexHome, "generated_images", "other"), { recursive: true });
     writeFileSync(path.join(codexHome, "generated_images", "other", "exec-1.png"), PNG);
     const completed = JSON.stringify({ type: "turn.completed", usage: {} });
@@ -308,15 +329,9 @@ describe("parseCodexLine — structured path", () => {
   });
 });
 
-describe("parseCodexLine — raw-mode fallthrough", () => {
-  test("non-JSON text falls through to chat.delta byte-for-byte", () => {
-    const c = ctx();
-    const raw = "  hello world from codex  ";
-    const events = parseCodexLine(raw, c);
-    expect(events).toHaveLength(1);
-    const e = events[0];
-    expect(e.type).toBe("chat.delta");
-    if (e.type === "chat.delta") expect(e.text).toBe(raw);
+describe("parseCodexLine — structured stdout boundary", () => {
+  test("Given non-JSON stdout When parsed Then it is dropped rather than promoted to authored chat", () => {
+    expect(parseCodexLine("  hello world from codex  ", ctx())).toEqual([]);
   });
 
   test("JSON with an unknown structured type is ignored instead of becoming chat", () => {
@@ -331,16 +346,44 @@ describe("parseCodexLine — raw-mode fallthrough", () => {
     expect(events).toEqual([]);
   });
 
-  test("JSON without a type field falls through", () => {
-    const c = ctx();
-    const [e] = parseCodexLine(JSON.stringify({ hello: "world" }), c);
-    expect(e.type).toBe("chat.delta");
+  test("Given JSON without a type When parsed Then it is dropped rather than promoted to authored chat", () => {
+    expect(parseCodexLine(JSON.stringify({ hello: "world" }), ctx())).toEqual([]);
   });
 
-  test("malformed JSON falls through instead of throwing", () => {
-    const c = ctx();
-    const [e] = parseCodexLine(`{ "type": "text",`, c);
-    expect(e.type).toBe("chat.delta");
+  test("Given malformed JSON When parsed Then it is dropped without throwing", () => {
+    expect(parseCodexLine(`{ "type": "text",`, ctx())).toEqual([]);
+  });
+
+  test("Given diagnostic stdout interleaved with supported assistant messages When parsed Then only authored messages reach chat", () => {
+    const secret = "FAKE_NOT_A_SECRET";
+    const privatePath = "/private/fixture-only/config.toml";
+    const diagnostic = `PROBE_ONLY diagnostic token=${secret} path=${privatePath}`;
+    const diagnostics = [
+      diagnostic,
+      `${diagnostic}\n${diagnostic}`,
+      `{ "type": "text", "text": ${JSON.stringify(diagnostic)}, }`,
+      `{ "type": "text", "text": ${JSON.stringify(diagnostic)}`,
+      JSON.stringify({ text: diagnostic }),
+      ...[null, 7, "", "unknown_diagnostic"].map((type) => JSON.stringify({ type, text: diagnostic })),
+      JSON.stringify(diagnostic),
+      JSON.stringify([{ type: "text", text: diagnostic }]),
+      "null",
+      "true",
+    ];
+    const authored = "AUTHORED_MESSAGE_CONTROL";
+    const messages = [
+      { type: "item.completed", item: { type: "agent_message", text: authored } },
+      { type: "text", content: authored },
+      { type: "message", text: authored },
+      { type: "chat.delta", text: authored },
+    ];
+    for (const message of messages) {
+      const context = ctx();
+      const events = [...diagnostics, JSON.stringify(message), ...diagnostics].flatMap((line) => parseCodexLine(line, context));
+      expect(events).toMatchObject([{ type: "chat.delta", turnId: "turn-1", text: authored }]);
+      expect(JSON.stringify(events)).not.toContain(secret);
+      expect(JSON.stringify(events)).not.toContain(privatePath);
+    }
   });
 
   test("empty / whitespace-only lines are dropped", () => {
