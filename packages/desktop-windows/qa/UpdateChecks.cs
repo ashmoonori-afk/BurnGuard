@@ -23,6 +23,7 @@ internal static class UpdateChecks
         VelopackApp.Build().Run();
         CheckDownloadRouting();
         CheckDownloadObservation();
+        CheckPermissionPolicy();
         Check(new FakeUpdates { Installed = false }, null, "설치 패키지", false, 0, 0);
         Check(new FakeUpdates(), "isolated-smoke.json", "대기 중", false, 0, 0);
         Check(new FakeUpdates(), null, "최신 버전", false, 1, 0);
@@ -90,6 +91,23 @@ internal static class UpdateChecks
         Assert(settlements == expectedSettlements && terminal == CoreWebView2DownloadState.Completed, "Download completion did not settle exactly once");
         Assert(unsubscriptions == 1, "Download observer did not unsubscribe exactly once");
     }
+
+    private static void CheckPermissionPolicy()
+    {
+        var policy = Window.GetMethod("DiagnosticPermissionState", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(Window.FullName, "DiagnosticPermissionState");
+        var app = new Uri("http://127.0.0.1:14175/");
+        var multiple = CoreWebView2PermissionKind.MultipleAutomaticDownloads;
+        Assert(Permission(policy, true, "http://127.0.0.1:14175", app, multiple) == CoreWebView2PermissionState.Allow, "Owned diagnostic origin must allow multiple downloads");
+        Assert(Permission(policy, false, "http://127.0.0.1:14175", app, multiple) == CoreWebView2PermissionState.Deny, "Normal mode must deny multiple downloads");
+        Assert(Permission(policy, true, "https://127.0.0.1:14175", app, multiple) == CoreWebView2PermissionState.Deny, "Mismatched scheme must be denied");
+        Assert(Permission(policy, true, "http://localhost:14175", app, multiple) == CoreWebView2PermissionState.Deny, "Mismatched host must be denied");
+        Assert(Permission(policy, true, "http://127.0.0.1:14176", app, multiple) == CoreWebView2PermissionState.Deny, "Mismatched port must be denied");
+        Assert(Permission(policy, true, "http://127.0.0.1:14175", app, CoreWebView2PermissionKind.Notifications) == CoreWebView2PermissionState.Deny, "Other permissions must remain denied");
+    }
+
+    private static CoreWebView2PermissionState Permission(MethodInfo policy, bool diagnostic, string source, Uri app, CoreWebView2PermissionKind kind) =>
+        (CoreWebView2PermissionState)policy.Invoke(null, new object[] { diagnostic, source, app, kind });
 
     private static void Check(FakeUpdates updates, string report, string expected, bool staged, int checks, int downloads)
     {

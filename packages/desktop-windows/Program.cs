@@ -214,7 +214,11 @@ namespace BurnGuard.Desktop
                     args.Handled = true;
                     if (args.IsUserInitiated) OpenExternal(args.Uri);
                 };
-                web.CoreWebView2.PermissionRequested += (_, args) => args.State = CoreWebView2PermissionState.Deny;
+                web.CoreWebView2.PermissionRequested += (_, args) =>
+                {
+                    args.State = DiagnosticPermissionState(report != null, args.Uri, origin, args.PermissionKind);
+                    if (args.State == CoreWebView2PermissionState.Allow) args.SavesInProfile = false;
+                };
                 web.CoreWebView2.ProcessFailed += (_, __) => Fail("화면 프로세스가 종료되었습니다. BurnGuard를 다시 실행해 주세요.");
                 web.CoreWebView2.NavigationCompleted += async (_, args) =>
                 {
@@ -235,7 +239,14 @@ namespace BurnGuard.Desktop
             catch (Exception exception) { if (!closing) Fail(exception.Message); }
         }
 
-        private bool IsAppUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && origin != null && uri.Scheme == origin.Scheme && uri.Host == origin.Host && uri.Port == origin.Port && string.IsNullOrEmpty(uri.UserInfo);
+        private bool IsAppUrl(string value) => IsAppUrl(value, origin);
+
+        private static bool IsAppUrl(string value, Uri expectedOrigin) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && expectedOrigin != null && uri.Scheme == expectedOrigin.Scheme && uri.Host == expectedOrigin.Host && uri.Port == expectedOrigin.Port && string.IsNullOrEmpty(uri.UserInfo);
+
+        private static CoreWebView2PermissionState DiagnosticPermissionState(bool diagnostic, string source, Uri expectedOrigin, CoreWebView2PermissionKind kind) =>
+            diagnostic && kind == CoreWebView2PermissionKind.MultipleAutomaticDownloads && IsAppUrl(source, expectedOrigin)
+                ? CoreWebView2PermissionState.Allow
+                : CoreWebView2PermissionState.Deny;
 
         private static bool IsTopLevelAppRoute(Uri uri) => !uri.AbsolutePath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) && !uri.AbsolutePath.StartsWith("/runtime/", StringComparison.OrdinalIgnoreCase);
 
