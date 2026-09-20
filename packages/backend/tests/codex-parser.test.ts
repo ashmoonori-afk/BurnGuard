@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { mapGeneratedImages } from "../src/adapters/codex/event-mapping";
 import {
   parseCodexLine,
   type CodexParserContext,
@@ -216,6 +217,19 @@ describe("parseCodexLine — structured path", () => {
     expect(events[0]).toMatchObject({ type: "tool.started", tool: "image_generation" });
     expect(events[1]).toMatchObject({ type: "tool.finished", tool: "image_generation", ok: true, output: { image_sha256: [PNG_SHA] } });
     expect(JSON.stringify(events)).not.toContain(codexHome);
+  });
+
+  test("Given an image already surfaced while the tool ran When the turn completes Then it is not reported a second time", () => {
+    const codexHome = mkdtempSync(path.join(tmpdir(), "bg-codex-home-"));
+    const threadId = "01a0bd75-12bd-75a3-8193-127dd61ddb33";
+    mkdirSync(path.join(codexHome, "generated_images", threadId), { recursive: true });
+    writeFileSync(path.join(codexHome, "generated_images", threadId, "exec-1.png"), PNG);
+    const c: CodexParserContext = { ...ctx(), codexHome };
+    parseCodexLine(JSON.stringify({ type: "thread.started", thread_id: threadId }), c);
+    expect(mapGeneratedImages(c).map((event) => event.type)).toEqual(["tool.started", "tool.finished"]);
+    expect(mapGeneratedImages(c)).toEqual([]);
+    const events = parseCodexLine(JSON.stringify({ type: "turn.completed", usage: {} }), c);
+    expect(events.map((event) => event.type)).toEqual(["usage.delta", "chat.message_end", "status.idle"]);
   });
 
   test("Given no thread, an unsafe thread id or no codexHome When the turn completes Then no image call is invented", () => {

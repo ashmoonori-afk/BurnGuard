@@ -11,6 +11,8 @@ export interface CodexParserContext {
   codexHome?: string;
   /** Set from `thread.started`; names this process's `generated_images/<thread_id>` directory. */
   threadId?: string;
+  /** sha256 of every generated image already surfaced as an `image_generation` call this run. */
+  reportedImageHashes?: Set<string>;
 }
 
 /**

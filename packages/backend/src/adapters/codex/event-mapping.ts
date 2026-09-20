@@ -147,11 +147,18 @@ function mapTurnCompleted(
 /**
  * The exec stream carries no item for the built-in image tool (see image-outputs.ts), so each PNG
  * it saved for this thread is surfaced as one completed `image_generation` call carrying only the
- * sha256 of its bytes. Emitted before the terminal events so the turn gate observes them.
+ * sha256 of its bytes. The runner calls this whenever a file lands in the thread directory, so the
+ * call is observed while the tool is still silent (each generation takes 35-60 s with no stream
+ * output; four in a row would otherwise trip the turn's idle-stall detector), and once more at
+ * `turn.completed` as a sweep. A hash already reported this run is never reported twice.
  */
-function mapGeneratedImages(ctx: CodexParserContext): NormalizedEvent[] {
+export function mapGeneratedImages(ctx: CodexParserContext): NormalizedEvent[] {
   if (ctx.codexHome === undefined || ctx.threadId === undefined) return [];
+  if (ctx.reportedImageHashes === undefined) ctx.reportedImageHashes = new Set();
+  const reported = ctx.reportedImageHashes;
   return collectGeneratedImageHashes(ctx.codexHome, ctx.threadId).flatMap((sha256): NormalizedEvent[] => {
+    if (reported.has(sha256)) return [];
+    reported.add(sha256);
     const toolCallId = `image_generation_${sha256.slice(0, 16)}`;
     return [
       { id: ulid(), ts: Date.now(), type: "tool.started", turnId: ctx.turnId, toolCallId, tool: "image_generation", input: {} },

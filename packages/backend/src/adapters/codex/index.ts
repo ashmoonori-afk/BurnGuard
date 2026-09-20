@@ -1,7 +1,9 @@
+import { watch, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { ulid } from "ulid";
 import type { AdapterRunInput, AdapterRunResult } from "../types";
+import { mapGeneratedImages } from "./event-mapping";
 import { parseCodexLine, type CodexParserContext } from "./parser";
 import { ownedProcessSpawnOptions } from "../owned-process-tree";
 import { settleProcessStreams } from "../process-streams";
@@ -67,6 +69,33 @@ export async function runCodexTurn(
     ...ownedProcessSpawnOptions(),
   });
 
+  // The built-in image tool is silent on the stream for the whole generation (35-60 s each), so a
+  // run that draws several images in a row looks stalled to the turn's idle detector. Watching the
+  // thread's generated_images directory surfaces each image as an `image_generation` call the
+  // moment it lands; the same events carry the provenance hashes the logo gate needs.
+  let imageWatcher: FSWatcher | undefined;
+  let imageEmits: Promise<void> = Promise.resolve();
+  const emitGeneratedImages = () => {
+    imageEmits = imageEmits.then(async () => {
+      for (const event of mapGeneratedImages(ctx)) await input.onEvent(event);
+    }).catch(() => undefined);
+    return imageEmits;
+  };
+  const watchGeneratedImages = () => {
+    if (imageWatcher !== undefined || ctx.codexHome === undefined || ctx.threadId === undefined) return;
+    const threadId = ctx.threadId;
+    try {
+      imageWatcher = watch(path.join(ctx.codexHome, "generated_images"), { recursive: true }, (_type, name) => {
+        if (typeof name === "string" && name.includes(threadId)) void emitGeneratedImages();
+      });
+      imageWatcher.on("error", () => undefined);
+      // Anything that landed between thread.started and the watch attaching.
+      void emitGeneratedImages();
+    } catch {
+      // No generated_images directory yet: the turn-end sweep in mapTurnCompleted still runs.
+    }
+  };
+
   let exitCode: number;
   try {
     const readers = [
@@ -86,6 +115,9 @@ export async function runCodexTurn(
           );
           return;
         }
+        watchGeneratedImages();
+        // Keep watcher-driven image calls ordered ahead of the stream's own events.
+        await imageEmits;
         for (const event of events) {
           if (event.type === "status.idle") sawIdle = true;
           if (event.type === "chat.message_end") sawMessageEnd = true;
@@ -97,7 +129,9 @@ export async function runCodexTurn(
       }),
     ];
     exitCode = await settleProcessStreams(proc, readers, input.signal);
+    await imageEmits;
   } finally {
+    imageWatcher?.close();
     // Always release the decision sink — see the matching comment in
     // the Claude Code adapter. A throw between subscribe and here
     // would otherwise leak the listener into the broker.
