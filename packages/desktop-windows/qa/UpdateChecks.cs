@@ -103,6 +103,7 @@ internal static class UpdateChecks
         Assert(Permission(policy, true, "https://127.0.0.1:14175", app, multiple) == CoreWebView2PermissionState.Deny, "Mismatched scheme must be denied");
         Assert(Permission(policy, true, "http://localhost:14175", app, multiple) == CoreWebView2PermissionState.Deny, "Mismatched host must be denied");
         Assert(Permission(policy, true, "http://127.0.0.1:14176", app, multiple) == CoreWebView2PermissionState.Deny, "Mismatched port must be denied");
+        Assert(Permission(policy, true, "http://user@127.0.0.1:14175", app, multiple) == CoreWebView2PermissionState.Deny, "Userinfo origin must be denied");
         Assert(Permission(policy, true, "http://127.0.0.1:14175", app, CoreWebView2PermissionKind.Notifications) == CoreWebView2PermissionState.Deny, "Other permissions must remain denied");
     }
 
