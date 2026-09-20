@@ -40,7 +40,7 @@ import { parse } from "node-html-parser";
 import { prepareSlideDeckExport } from "./export-stage";
 import { reviewTurnDesign } from "./turn-design-review";
 import { designAuditCanvas } from "./design-audit";
-import { assertLogoDeliverables, captureLogoTurnExpectation, imageOutputHashes, isLogoImageGeneration, isLogoImageToolStart, LogoDeliverableError, scanExplorationHashes } from "./logo-deliverables";
+import { assertLogoDeliverables, captureLogoTurnExpectation, LogoDeliverableError, LogoEvidenceCollector } from "./logo-deliverables";
 import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { manifestEntry, readManagedFile } from "./artifact-tree-storage";
@@ -400,9 +400,7 @@ async function runUserTurnInternal(
         // The logo gate's expectation is captured before the agent runs, so nothing the model writes
         // during the turn can change which phase is checked or which candidate counts as selected.
         const logoExpectation = project.type === "logo" ? await captureLogoTurnExpectation(stageDir, payload.text) : null;
-        let imageGenerations = 0;
-        const imageOutputs = new Set<string>();
-        let explorationBeforeTool: ReadonlySet<string> | null = null;
+        const logoEvidence = logoExpectation === null ? null : new LogoEvidenceCollector(stageDir, logoExpectation);
         const deckStarter = project.type === "slide_deck" && (await readFile(path.join(stageDir, project.entrypoint), "utf8")).includes("Send your first prompt in chat to expand this deck.");
         const waitsForInterrupt = process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "abort";
         if (waitsForInterrupt && !activeTurn.abortController.signal.aborted) await new Promise<void>((resolve) => activeTurn.abortController.signal.addEventListener("abort", () => resolve(), { once: true }));
@@ -430,17 +428,7 @@ async function runUserTurnInternal(
                 if (activeTurn.interrupted && event.type === "status.error") return;
                 if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason === "error")) providerReportedFailure = true;
                 if (event.type === "file.changed") return;
-                if (logoExpectation !== null && isLogoImageToolStart(event)) explorationBeforeTool = new Set((await scanExplorationHashes(stageDir)).values());
-                if (logoExpectation !== null && isLogoImageGeneration(event)) {
-                  // A candidate is provenanced by the image tool reporting its bytes, or by the file
-                  // appearing between the tool's start and its successful finish; anything the model
-                  // wrote outside that window is not the tool's output.
-                  imageGenerations += 1;
-                  for (const hash of imageOutputHashes(event)) imageOutputs.add(hash);
-                  const before = explorationBeforeTool ?? new Set([...logoExpectation.priorCandidates.values()].map((entry) => entry.sha256));
-                  for (const hash of (await scanExplorationHashes(stageDir)).values()) if (!before.has(hash)) imageOutputs.add(hash);
-                  explorationBeforeTool = null;
-                }
+                if (logoEvidence !== null) await logoEvidence.observe(event);
                 const scrubbedEvent = config.commandcodeApiKey ? JSON.parse(JSON.stringify(event, (_key, value: unknown) => typeof value === "string" ? value.split(config.commandcodeApiKey!).join("[redacted]") : value)) as NormalizedEvent : event;
                 const safeEvent = redactPrivateAttachmentPaths(scrubbedEvent, stageInputs);
                 if (safeEvent.type === "status.error") providerErrorPublished = true;
@@ -519,10 +507,10 @@ async function runUserTurnInternal(
           if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new Error("graphic_starter_unchanged");
           assertGraphicStarterReplaced(graphicBefore, await readFile(graphicEntrypoint, "utf8"));
         }
-        if (logoExpectation !== null) {
+        if (logoExpectation !== null && logoEvidence !== null) {
           const info = await lstat(path.join(stageDir, project.entrypoint));
           if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new LogoDeliverableError("guidelines_not_file");
-          await assertLogoDeliverables(stageDir, logoExpectation, { imageGenerations, imageOutputs });
+          await assertLogoDeliverables(stageDir, logoExpectation, logoEvidence.evidence);
           finalizedLogoSource = logoExpectation.selected?.file ?? null;
         }
       },
