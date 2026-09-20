@@ -2,6 +2,8 @@ import { watch, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { ulid } from "ulid";
+import type { NormalizedEvent } from "@bg/shared";
+import { PathBoundaryError, resolveWithin } from "../../security/path-boundary";
 import type { AdapterRunInput, AdapterRunResult } from "../types";
 import { mapGeneratedImages } from "./event-mapping";
 import { parseCodexLine, type CodexParserContext } from "./parser";
@@ -73,70 +75,107 @@ export async function runCodexTurn(
   // run that draws several images in a row looks stalled to the turn's idle detector. Watching the
   // thread's generated_images directory surfaces each image as an `image_generation` call the
   // moment it lands; the same events carry the provenance hashes the logo gate needs.
+  //
+  // Parsing mutates hash deduplication state, so it belongs in the same queue as delivery.
+  // A failed batch is terminal: its context is never swept/reused as successful provenance.
+  let queue: Promise<void> = Promise.resolve();
+  let failure: { readonly error: unknown } | undefined;
+  const deliveryFailed = Promise.withResolvers<void>();
+  let accepting = true;
   let imageWatcher: FSWatcher | undefined;
-  let imageEmits: Promise<void> = Promise.resolve();
-  const emitGeneratedImages = () => {
-    imageEmits = imageEmits.then(async () => {
-      for (const event of mapGeneratedImages(ctx)) await input.onEvent(event);
-    }).catch(() => undefined);
-    return imageEmits;
+  let rootWatcher: FSWatcher | undefined;
+  const closeIntake = () => {
+    accepting = false;
+    imageWatcher?.close();
+    rootWatcher?.close();
   };
+  const fail = (error: unknown) => {
+    if (failure !== undefined) return;
+    failure = { error };
+    closeIntake();
+    deliveryFailed.reject(error);
+  };
+  const enqueue = (produce: () => readonly NormalizedEvent[]): Promise<void> => {
+    if (!accepting) return queue;
+    queue = queue.then(async () => {
+      if (failure !== undefined) return;
+      for (const event of produce()) {
+        if (failure !== undefined) return;
+        if (event.type === "status.idle") sawIdle = true;
+        if (event.type === "chat.message_end") sawMessageEnd = true;
+        await input.onEvent(event);
+      }
+    }).catch(fail);
+    return queue;
+  };
+  const scanImages = () => enqueue(() => mapGeneratedImages(ctx));
   const watchGeneratedImages = () => {
-    if (imageWatcher !== undefined || ctx.codexHome === undefined || ctx.threadId === undefined) return;
+    if (!accepting || ctx.codexHome === undefined || ctx.threadId === undefined) return;
     const threadId = ctx.threadId;
     try {
-      imageWatcher = watch(path.join(ctx.codexHome, "generated_images"), { recursive: true }, (_type, name) => {
-        if (typeof name === "string" && name.includes(threadId)) void emitGeneratedImages();
+      // Subscribe to the parent BEFORE attempting attachment, closing the create-before-watch gap.
+      if (rootWatcher === undefined) {
+        const watcher = watch(resolveWithin(ctx.codexHome), (_type, name) => {
+          if (name === null || name === "generated_images") watchGeneratedImages();
+        });
+        rootWatcher = watcher;
+        watcher.on("error", () => {
+          watcher.close();
+          if (rootWatcher === watcher) rootWatcher = undefined;
+          watchGeneratedImages();
+        });
+      }
+      if (imageWatcher !== undefined) return;
+      // Do not observe a generated_images symlink that escapes the scanner's boundary.
+      const watcher = watch(resolveWithin(ctx.codexHome, "generated_images"), { recursive: true }, (_type, name) => {
+        if (name === null || (typeof name === "string" && name.includes(threadId))) void scanImages();
       });
-      imageWatcher.on("error", () => undefined);
-      // Anything that landed between thread.started and the watch attaching.
-      void emitGeneratedImages();
-    } catch {
-      // No generated_images directory yet: the turn-end sweep in mapTurnCompleted still runs.
+      imageWatcher = watcher;
+      watcher.on("error", () => {
+        watcher.close();
+        if (imageWatcher === watcher) imageWatcher = undefined;
+        watchGeneratedImages();
+      });
+      // Includes anything saved between thread.started and attachment/recovery.
+      void scanImages();
+    } catch (error) {
+      // Missing roots retry on the parent notification; escaped roots remain unobserved.
+      if (error instanceof PathBoundaryError || (error instanceof Error && "code" in error && error.code === "ENOENT")) return;
+      fail(error);
     }
   };
 
   let exitCode: number;
   try {
     const readers = [
-      readLines(proc.stdout, async (line) => {
-        // Parser exceptions used to bubble up through readLines and
-        // abort the read loop entirely, leaving the CLI subprocess
-        // with a clogged stdout pipe and no clean exit. Trap here so
-        // a single malformed line never wedges the whole turn.
-        let events;
-        try {
-          events = parseCodexLine(line, ctx);
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            "[codex] parser threw on a stream line — skipping:",
-            err,
-          );
-          return;
-        }
+      readLines(proc.stdout, (line) => enqueue(() => {
+        // The parser itself tolerates malformed JSON; unexpected failures must settle the owner.
+        const events = parseCodexLine(line, ctx);
         watchGeneratedImages();
-        // Keep watcher-driven image calls ordered ahead of the stream's own events.
-        await imageEmits;
-        for (const event of events) {
-          if (event.type === "status.idle") sawIdle = true;
-          if (event.type === "chat.message_end") sawMessageEnd = true;
-          await input.onEvent(event);
-        }
-      }),
+        return events;
+      })),
       readLines(proc.stderr, async (line) => {
-        await input.onStderr?.(line);
+        if (failure === undefined) await input.onStderr?.(line);
       }),
-    ];
-    exitCode = await settleProcessStreams(proc, readers, input.signal);
-    await imageEmits;
+    ].map((reader) => reader.catch((error: unknown) => { fail(error); throw error; }));
+    // A watcher callback can fail while stdout is silent. Treat that failure as a reader failure
+    // so settlement kills the owned writer before waiting for its pipes, not after natural exit.
+    const drained = Promise.all(readers).then(() => undefined);
+    exitCode = await settleProcessStreams(proc, [...readers, Promise.race([drained, deliveryFailed.promise])], input.signal);
+    closeIntake();
+    await queue;
+  } catch (error) {
+    fail(error);
+    throw failure === undefined ? error : failure.error;
   } finally {
-    imageWatcher?.close();
+    closeIntake();
+    await queue;
     // Always release the decision sink — see the matching comment in
     // the Claude Code adapter. A throw between subscribe and here
     // would otherwise leak the listener into the broker.
     unsubscribeDecision?.();
   }
+  if (failure !== undefined) throw failure.error;
 
   if (!sawMessageEnd) {
     await input.onEvent({
