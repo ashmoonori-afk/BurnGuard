@@ -18,6 +18,11 @@ interface NativeSmokeReport {
   readonly savedRevision: number;
   readonly reloadPersisted: boolean;
   readonly reloadedRevision: number;
+  readonly expectedSavedRevision: number;
+  readonly reloadTextareaValue: string;
+  readonly reloadTextareaState: "persisted";
+  readonly reloadPageTitle: string;
+  readonly reloadBodyTextLength: number;
   readonly exports: Readonly<Record<"svg" | "pdf", { readonly id: string; readonly size: number; readonly digest: string }>>;
   readonly downloads: readonly string[];
   readonly downloadCompleted: boolean;
@@ -83,7 +88,12 @@ try {
   assert.equal(report.projectId, fixture.projectId);
   assert.equal(report.savedRevision, report.baseRevision + 1, "UI save must advance one durable revision");
   assert.equal(report.reloadPersisted, true, "Reloaded canvas must expose the saved text through the edit UI");
+  assert.equal(report.expectedSavedRevision, report.savedRevision);
   assert.equal(report.reloadedRevision, report.savedRevision);
+  assert.equal(report.reloadTextareaValue, fixture.editPersisted, "Reloaded Edit state must hydrate to the persisted text");
+  assert.equal(report.reloadTextareaState, "persisted");
+  assert.equal(report.reloadPageTitle, "BurnGuard Design");
+  assert.ok(report.reloadBodyTextLength >= 40);
   assert.equal(report.downloadCompleted, true, "Both real export downloads must finish in WKDownload");
   assert.equal(report.downloads.length, 2);
   assert.equal(report.snapshotCaptured, true);

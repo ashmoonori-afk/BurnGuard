@@ -152,9 +152,13 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     }
 
     private func runSmokeReloadAndExports(projectId: String) {
+        guard let savedRevision = smokePageReport?["savedRevision"] as? Int else {
+            fail("Native saved revision was unavailable before reload.")
+            return
+        }
         webView.callAsyncJavaScript(
             Self.smokeReloadAndExportScript,
-            arguments: ["projectId": projectId, "persistedText": "NATIVE_LOGO_PERSISTED"],
+            arguments: ["projectId": projectId, "persistedText": "NATIVE_LOGO_PERSISTED", "savedRevision": savedRevision],
             in: nil,
             in: .page
         ) { [weak self] result in
@@ -163,6 +167,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             case .success(let value):
                 guard let report = value as? [String: Any] else { self.fail("Native export report was invalid."); return }
                 for (key, value) in report { self.smokePageReport?[key] = value }
+                if let error = report["error"] as? String { self.fail(error); return }
                 if self.smokeDownloads.count == 2 { self.finishSmoke() }
             case .failure(let error): self.fail(String(describing: error))
             }
@@ -202,30 +207,50 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     """
 
     private static let smokeReloadAndExportScript = """
+    const diagnostics = {reloadPageTitle: document.title, reloadBodyTextLength: document.body?.innerText?.length ?? 0, reloadTextareaValue:null, reloadTextareaState:'not-mounted'};
     const waitFor = (check, root = document.documentElement, timeoutMs = 60000) => {
       const immediate = check(); if (immediate) return Promise.resolve(immediate);
       return new Promise((resolve, reject) => { const observer = new MutationObserver(() => { const value = check(); if (!value) return; clearTimeout(timer); observer.disconnect(); resolve(value); }); observer.observe(root, {subtree:true, childList:true, attributes:true,characterData:true}); const timer=setTimeout(()=>{observer.disconnect();reject(new Error('Native export event deadline exceeded'));},timeoutMs); });
     };
     const json = async response => { const body=await response.json(); if(!response.ok || !body.data) throw new Error(`HTTP ${response.status}`); return body.data; };
-    const frame = await waitFor(() => { const value=document.querySelector('iframe'); return value?.getAttribute('aria-busy') === 'false' ? value : null; }).catch(error=>{throw new Error(`reload-frame: ${error}`)});
-    const toolbar = await waitFor(() => [...document.querySelectorAll('button[aria-pressed]')].map(value => value.parentElement).find(value => value?.querySelectorAll(':scope > button').length >= 7)); toolbar.querySelectorAll(':scope > button')[1].click();
-    const overlay = await waitFor(() => [...frame.parentElement.children].find(value => value instanceof HTMLDivElement && value.style.pointerEvents === 'auto')).catch(error=>{throw new Error(`reload-overlay: ${error}`)});
-    const rect=overlay.getBoundingClientRect(); overlay.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:rect.left+rect.width/2,clientY:rect.top+rect.height/2}));
-    const textarea=await waitFor(()=>document.getElementById('element-edit-text')).catch(error=>{throw new Error(`reload-textarea: ${error}`)}); if(textarea.value!==persistedText) throw new Error('Reloaded canvas did not contain the persisted edit');
-    const project=await json(await fetch(`/api/projects/${projectId}`));
-    const trigger = document.querySelector('button[aria-haspopup="menu"]:has(svg.lucide-download)'); if(!trigger) throw new Error('Export control unavailable'); trigger.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerType:'mouse'})); trigger.click();
-    const menu=await waitFor(()=>document.querySelector('[data-export-menu-content]')).catch(error=>{throw new Error(`export-menu: ${error}`)});
-    const runExport = async (index, format) => {
-      let createdId=null, restoreFetch; const terminal=new Promise((resolve,reject)=>{ const original=window.fetch; restoreFetch=()=>{window.fetch=original;}; const timer=setTimeout(()=>{restoreFetch();reject(new Error(`${format} export deadline exceeded`));},60000);
-        window.fetch=async(...args)=>{ const response=await original(...args); const request=args[0]; const url=typeof request==='string'?request:request.url; const method=args[1]?.method??(typeof request==='string'?'GET':request.method); const pathname=new URL(url,location.href).pathname;
-          try { if(method==='POST'&&pathname===`/api/projects/${projectId}/exports`){const data=await json(response.clone());if(data.format===format)createdId=data.id;} if(method==='GET'&&pathname===`/api/projects/${projectId}/exports`&&createdId){const jobs=await json(response.clone());const job=jobs.find(value=>value.id===createdId);if(job?.status==='failed')throw new Error(`${format} export failed`);if(job?.status==='succeeded'){clearTimeout(timer);restoreFetch();resolve(job);}} } catch(error){clearTimeout(timer);restoreFetch();reject(error);} return response; };
-      });
-      const item=menu.querySelectorAll('[role="menuitem"]')[index]; if(!item) throw new Error(`${format} menu item unavailable`); item.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerType:'mouse'})); item.click(); const job=await terminal;
-      await waitFor(()=>[...menu.querySelectorAll('li')].find(value=>[...value.querySelectorAll('span')].some(span=>span.textContent?.trim()===format.toUpperCase()))).catch(error=>{throw new Error(`${format}-download-row: ${error}`)});
-      const response=await fetch(`/api/exports/${job.id}/download`); if(!response.ok)throw new Error(`${format} download HTTP ${response.status}`); const disposition=response.headers.get('content-disposition')??''; const filename=/filename="([^"]+)"/i.exec(disposition)?.[1]??`native-${format}`; const url=URL.createObjectURL(await response.blob()); const link=document.createElement('a');link.href=url;link.download=filename;link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); return {id:job.id,size:job.size_bytes,digest:job.latest_attempt?.digests?.output};
-    };
-    const svg=await runExport(0,'svg'); const pdf=await runExport(1,'pdf');
-    return {reloadPersisted:true,reloadedRevision:project.current_revision,exports:{svg,pdf},snapshotCaptured:true};
+    const observePersistedTextarea = expected => new Promise((resolve, reject) => {
+      const prototype = HTMLTextAreaElement.prototype;
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+      let settled = false;
+      const restore = () => Object.defineProperty(prototype, 'value', descriptor);
+      const finish = (error, textarea) => { if (settled) return; settled = true; clearTimeout(timer); observer.disconnect(); restore(); error ? reject(error) : resolve(textarea); };
+      const inspect = () => { const textarea=document.getElementById('element-edit-text'); if (!(textarea instanceof HTMLTextAreaElement)) return; diagnostics.reloadTextareaValue=textarea.value; diagnostics.reloadTextareaState=textarea.value===expected?'persisted':'hydrating'; if(textarea.value===expected)finish(null,textarea); };
+      Object.defineProperty(prototype, 'value', {configurable:descriptor.configurable,enumerable:descriptor.enumerable,get:descriptor.get,set(value){descriptor.set.call(this,value);if(this.id==='element-edit-text'){diagnostics.reloadTextareaValue=String(value);diagnostics.reloadTextareaState=value===expected?'persisted':'hydrating';if(value===expected)finish(null,this);}}});
+      const observer = new MutationObserver(inspect); observer.observe(document.documentElement,{subtree:true,childList:true});
+      const timer=setTimeout(()=>{inspect();finish(new Error('Reloaded edit state did not reach the persisted value'));},60000);
+      inspect();
+    });
+    try {
+      const frame = await waitFor(() => { const value=document.querySelector('iframe'); return value?.getAttribute('aria-busy') === 'false' ? value : null; }).catch(error=>{throw new Error(`reload-frame: ${error}`)}); diagnostics.reloadBodyTextLength=document.body?.innerText?.length??0; diagnostics.reloadPageTitle=document.title;
+      const project=await json(await fetch(`/api/projects/${projectId}`)); diagnostics.reloadedRevision=project.current_revision; diagnostics.expectedSavedRevision=savedRevision;
+      if(project.current_revision!==savedRevision)throw new Error('Reloaded project revision did not match the saved revision');
+      const toolbar = await waitFor(() => [...document.querySelectorAll('button[aria-pressed]')].map(value => value.parentElement).find(value => value?.querySelectorAll(':scope > button').length >= 7)); toolbar.querySelectorAll(':scope > button')[1].click();
+      const textareaReady=observePersistedTextarea(persistedText);
+      const overlay = await waitFor(() => [...frame.parentElement.children].find(value => value instanceof HTMLDivElement && value.style.pointerEvents === 'auto')).catch(error=>{throw new Error(`reload-overlay: ${error}`)});
+      const rect=overlay.getBoundingClientRect(); overlay.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:rect.left+rect.width/2,clientY:rect.top+rect.height/2}));
+      const textarea=await textareaReady; diagnostics.reloadTextareaValue=textarea.value; diagnostics.reloadTextareaState='persisted';
+      const trigger = document.querySelector('button[aria-haspopup="menu"]:has(svg.lucide-download)'); if(!trigger) throw new Error('Export control unavailable'); trigger.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerType:'mouse'})); trigger.click();
+      const menu=await waitFor(()=>document.querySelector('[data-export-menu-content]')).catch(error=>{throw new Error(`export-menu: ${error}`)});
+      const runExport = async (index, format) => {
+        let createdId=null, restoreFetch; const terminal=new Promise((resolve,reject)=>{ const original=window.fetch; restoreFetch=()=>{window.fetch=original;}; const timer=setTimeout(()=>{restoreFetch();reject(new Error(`${format} export deadline exceeded`));},60000);
+          window.fetch=async(...args)=>{ const response=await original(...args); const request=args[0]; const url=typeof request==='string'?request:request.url; const method=args[1]?.method??(typeof request==='string'?'GET':request.method); const pathname=new URL(url,location.href).pathname;
+            try { if(method==='POST'&&pathname===`/api/projects/${projectId}/exports`){const data=await json(response.clone());if(data.format===format)createdId=data.id;} if(method==='GET'&&pathname===`/api/projects/${projectId}/exports`&&createdId){const jobs=await json(response.clone());const job=jobs.find(value=>value.id===createdId);if(job?.status==='failed')throw new Error(`${format} export failed`);if(job?.status==='succeeded'){clearTimeout(timer);restoreFetch();resolve(job);}} } catch(error){clearTimeout(timer);restoreFetch();reject(error);} return response; };
+        });
+        const item=menu.querySelectorAll('[role="menuitem"]')[index]; if(!item) throw new Error(`${format} menu item unavailable`); item.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerType:'mouse'})); item.click(); const job=await terminal;
+        await waitFor(()=>[...menu.querySelectorAll('li')].find(value=>[...value.querySelectorAll('span')].some(span=>span.textContent?.trim()===format.toUpperCase()))).catch(error=>{throw new Error(`${format}-download-row: ${error}`)});
+        const response=await fetch(`/api/exports/${job.id}/download`); if(!response.ok)throw new Error(`${format} download HTTP ${response.status}`); const disposition=response.headers.get('content-disposition')??''; const filename=/filename="([^"]+)"/i.exec(disposition)?.[1]??`native-${format}`; const url=URL.createObjectURL(await response.blob()); const link=document.createElement('a');link.href=url;link.download=filename;link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); return {id:job.id,size:job.size_bytes,digest:job.latest_attempt?.digests?.output};
+      };
+      const svg=await runExport(0,'svg'); const pdf=await runExport(1,'pdf');
+      return {...diagnostics,reloadPersisted:true,reloadedRevision:project.current_revision,exports:{svg,pdf}};
+    } catch(error) {
+      const textarea=document.getElementById('element-edit-text'); if(textarea instanceof HTMLTextAreaElement){diagnostics.reloadTextareaValue=textarea.value;diagnostics.reloadTextareaState=textarea.value===persistedText?'persisted':'mismatch';}
+      return {...diagnostics,error:String(error?.message??error)};
+    }
     """
 
     private func finishSmoke() {
@@ -405,22 +430,41 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
 
     private func fail(_ message: String) {
         if let reportPath = smokeReportPath {
-            writeReport([
-                "nativeWindowVisible": window?.isVisible ?? false,
-                "windowTitle": window?.title ?? "",
-                "pageTitle": "",
-                "bodyTextLength": 0,
-                "backendUrl": origin?.absoluteString ?? "",
-                "error": message,
-            ], to: reportPath)
+            guard !smokeFinishing else { return }
+            smokeFinishing = true
+            var report = smokePageReport ?? [:]
+            report["nativeWindowVisible"] = window?.isVisible ?? false
+            report["windowTitle"] = window?.title ?? ""
+            report["pageTitle"] = report["pageTitle"] ?? ""
+            report["bodyTextLength"] = report["bodyTextLength"] ?? 0
+            report["backendUrl"] = origin?.absoluteString ?? ""
+            report["backendPid"] = service?.processIdentifier ?? 0
+            report["error"] = message
+            guard webView != nil else {
+                writeReport(report, to: reportPath)
+                shutdown()
+                return
+            }
+            webView.takeSnapshot(with: nil) { [weak self] image, error in
+                guard let self else { return }
+                if error == nil, let tiff = image?.tiffRepresentation,
+                   let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                    try? png.write(to: URL(fileURLWithPath: reportPath + ".png"), options: .atomic)
+                    report["failureSnapshotCaptured"] = true
+                } else {
+                    report["failureSnapshotCaptured"] = false
+                }
+                self.writeReport(report, to: reportPath)
+                self.shutdown()
+            }
         } else {
             let alert = NSAlert()
             alert.messageText = "BurnGuard"
             alert.informativeText = message
             alert.alertStyle = .warning
             alert.runModal()
+            shutdown()
         }
-        shutdown()
     }
 
     private func shutdown() {
