@@ -93,6 +93,34 @@ export type LogoTurnEvidence = {
   readonly imageOutputs: ReadonlySet<string>;
 };
 
+/**
+ * Accumulates LogoTurnEvidence from the turn's event stream exactly as the turn gate consumes it. A
+ * candidate is provenanced by the image tool reporting its bytes (`output.image_sha256`), or by the
+ * file appearing between the tool's start and its successful finish; anything the model wrote
+ * outside that window is not the tool's output.
+ */
+export class LogoEvidenceCollector {
+  private imageGenerations = 0;
+  private readonly imageOutputs = new Set<string>();
+  private explorationBeforeTool: ReadonlySet<string> | null = null;
+
+  constructor(private readonly dir: string, private readonly expectation: LogoTurnExpectation) {}
+
+  async observe(event: NormalizedEvent): Promise<void> {
+    if (isLogoImageToolStart(event)) this.explorationBeforeTool = new Set((await scanExplorationHashes(this.dir)).values());
+    if (!isLogoImageGeneration(event)) return;
+    this.imageGenerations += 1;
+    for (const hash of imageOutputHashes(event)) this.imageOutputs.add(hash);
+    const before = this.explorationBeforeTool ?? new Set([...this.expectation.priorCandidates.values()].map((entry) => entry.sha256));
+    for (const hash of (await scanExplorationHashes(this.dir)).values()) if (!before.has(hash)) this.imageOutputs.add(hash);
+    this.explorationBeforeTool = null;
+  }
+
+  get evidence(): LogoTurnEvidence {
+    return { imageGenerations: this.imageGenerations, imageOutputs: this.imageOutputs };
+  }
+}
+
 /** The image tool's start, which opens the window in which files it writes count as its outputs. */
 export function isLogoImageToolStart(event: NormalizedEvent): boolean {
   return event.type === "tool.started" && LOGO_IMAGE_TOOLS.has(event.tool);

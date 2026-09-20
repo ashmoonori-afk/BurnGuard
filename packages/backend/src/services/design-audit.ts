@@ -14,7 +14,8 @@ import { parseStoredProjectOptions } from "./project-options";
 import { buildSiteMap } from "./site-map";
 import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
 
-export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v2";
+/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v3: logo sheets audit at LOGO_PAGE). */
+export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v3";
 
 /**
  * The fixed page a project renders into, or undefined for a responsive website audit. A logo

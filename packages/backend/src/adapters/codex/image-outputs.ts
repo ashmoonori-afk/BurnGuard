@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { opendirSync, readFileSync, statSync, type Dir } from "node:fs";
 import path from "node:path";
 import { PathBoundaryError, resolveWithin } from "../../security/path-boundary";
 
@@ -11,21 +11,37 @@ import { PathBoundaryError, resolveWithin } from "../../security/path-boundary";
  * logo gate needs; a missing directory, a foreign thread id or a non-PNG file yields nothing.
  */
 const THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** At most this many PNG files are hashed, and at most MAX_SCANNED_ENTRIES directory entries are read to find them. */
 const MAX_GENERATED_FILES = 64;
+const MAX_SCANNED_ENTRIES = 1024;
+const GENERATED_PNG_NAME = /^[A-Za-z0-9._-]+\.png$/i;
 
 export function collectGeneratedImageHashes(codexHome: string, threadId: string): string[] {
   if (!THREAD_ID.test(threadId)) return [];
-  let entries: string[];
+  // Enumeration itself is bounded: the directory is read entry by entry and only PNG-named regular
+  // files count against the allowance, so unrelated entries cannot crowd a real output out. A
+  // missing directory surfaces from open or (on Bun) from the first read; both mean "no outputs".
+  let root: string;
+  const names: string[] = [];
   try {
-    entries = readdirSync(resolveWithin(codexHome, "generated_images", threadId)).sort();
+    root = resolveWithin(codexHome, "generated_images", threadId);
+    const dir: Dir = opendirSync(root);
+    try {
+      for (let scanned = 0; scanned < MAX_SCANNED_ENTRIES && names.length < MAX_GENERATED_FILES; scanned += 1) {
+        const entry = dir.readSync();
+        if (entry === null) break;
+        if (entry.isFile() && GENERATED_PNG_NAME.test(entry.name)) names.push(entry.name);
+      }
+    } finally {
+      dir.closeSync();
+    }
   } catch (error) {
     if (error instanceof PathBoundaryError || (error instanceof Error && "code" in error)) return [];
     throw error;
   }
   const hashes = new Set<string>();
-  for (const name of entries.slice(0, MAX_GENERATED_FILES)) {
-    if (!/^[A-Za-z0-9._-]+\.png$/i.test(name)) continue;
-    const hash = hashPngPath(name, resolveWithin(codexHome, "generated_images", threadId));
+  for (const name of names.sort()) {
+    const hash = hashPngPath(name, root);
     if (hash !== null) hashes.add(hash);
   }
   return [...hashes];
