@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { runClaudeCode } from "../src/adapters/claude-code/runner";
 import { spawnOwnedProcess } from "../src/adapters/owned-process";
-import { closeOwnedProcessTree, ownedProcessSpawnOptions, terminateOwnedProcessTree } from "../src/adapters/owned-process-tree";
+import { closeOwnedProcessTree, OwnedProcessTreeCleanupError, ownedProcessSpawnOptions, terminateOwnedProcessTree } from "../src/adapters/owned-process-tree";
 import { awaitChildWithAbort, ExtractionAcquisitionError } from "../src/services/extraction-acquisition";
 
 for (const alreadyAborted of [false, true]) test(`acquisition abort reaps its descendant (already aborted: ${alreadyAborted})`, async () => {
@@ -87,11 +87,15 @@ test("Given an adapter run that is aborted mid-stream When the run settles Then 
   }
 });
 
-test("Given a process that already exited When its owned tree is closed Then cleanup resolves instead of throwing", async () => {
+test.skipIf(process.platform === "win32")("Given a POSIX process already exited When its owned tree is closed Then cleanup resolves instead of throwing", async () => {
   const proc = Bun.spawn({ cmd: [process.execPath, "-e", "process.exit(0)"], stdout: "ignore", stderr: "ignore", ...ownedProcessSpawnOptions() });
   const processId = proc.pid;
   await proc.exited;
   expect(await closeOwnedProcessTree(processId)).toBeUndefined();
+});
+
+test.skipIf(process.platform !== "win32")("Given only a bare Windows PID When cleanup is requested Then opaque ownership is required", async () => {
+  await expect(closeOwnedProcessTree(1_000_000_000)).rejects.toBeInstanceOf(OwnedProcessTreeCleanupError);
 });
 
 test("POSIX cleanup reports a permission boundary without rejecting an asynchronous abort handler", async () => {

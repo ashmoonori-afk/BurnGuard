@@ -149,6 +149,13 @@ test("Windows rejected control kills the owned launcher, disposes once, and keep
   expect(disposed).toBe(1);
 });
 
+test.skipIf(process.platform !== "win32")("Given an opaque-owned target already exited When settlement runs Then the exact final receipt proves zero active processes", async () => {
+  const owned = spawnOwnedProcess({ cmd: [process.execPath, "-e", "process.exit(0)"], stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+  const exitCode = await owned.proc.exited;
+  await expect(settleOwnedProcess(owned, exitCode)).resolves.toBeUndefined();
+  expect(exitCode).toBe(0);
+});
+
 test.skipIf(process.platform !== "win32")("Given an owned root exits with a live child When the host settles Then the child is gone and an unrelated sentinel survives", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "bg-windows-job-natural-exit-"));
   const childSource = `Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response('fixture')});console.log('READY');await new Promise(()=>{})`;
