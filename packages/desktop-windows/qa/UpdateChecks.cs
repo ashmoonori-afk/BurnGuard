@@ -32,7 +32,8 @@ internal static class UpdateChecks
 
     private static void CheckDownloadRouting()
     {
-        var route = Window.GetMethod("DiagnosticDownloadExtension", Fields);
+        var route = Window.GetMethod("DiagnosticDownloadExtension", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(Window.FullName, "DiagnosticDownloadExtension");
         Assert((string)route.Invoke(null, new object[] { "native-export.svg", "application/octet-stream" }) == ".svg", "SVG filename must route a generic blob MIME");
         Assert((string)route.Invoke(null, new object[] { "native-export.pdf", "application/octet-stream" }) == ".pdf", "PDF filename must route a generic blob MIME");
         Assert((string)route.Invoke(null, new object[] { "download", "application/pdf" }) == ".pdf", "PDF MIME fallback must remain available");
