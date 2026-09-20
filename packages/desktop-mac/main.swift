@@ -13,15 +13,20 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var outputBuffer = Data()
     private var origin: URL?
     private var smokeReportPath: String?
+    private var smokeProjectId: String?
     private var smokePageReport: [String: Any]?
-    private var smokeDownloadFinished = false
+    private var smokeDownloads: [String] = []
+    private var smokeDownloadNames: [ObjectIdentifier: String] = [:]
+    private var smokeStage = 0
     private var smokeStarted = false
     private var smokeFinishing = false
     private var closing = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
-            smokeReportPath = try parseArguments()
+            let diagnostics = try parseArguments()
+            smokeReportPath = diagnostics.reportPath
+            smokeProjectId = diagnostics.projectId
             try createWindow()
             try startService()
         } catch {
@@ -76,7 +81,9 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                   completionHandler: @escaping (URL?) -> Void) {
         if let reportPath = smokeReportPath {
             // Only the explicit diagnostic invocation may bypass user consent, inside its owned directory.
-            completionHandler(URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent("native-smoke-download.txt"))
+            let filename = URL(fileURLWithPath: suggestedFilename).lastPathComponent
+            smokeDownloadNames[ObjectIdentifier(download)] = filename
+            completionHandler(URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(filename))
             return
         }
         let panel = NSSavePanel()
@@ -93,8 +100,9 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
 
     func downloadDidFinish(_ download: WKDownload) {
         guard smokeReportPath != nil else { return }
-        smokeDownloadFinished = true
-        if smokePageReport != nil { finishSmoke() }
+        let name = smokeDownloadNames.removeValue(forKey: ObjectIdentifier(download)) ?? "unknown"
+        smokeDownloads.append(name)
+        if smokePageReport != nil && smokeDownloads.count == 2 { finishSmoke() }
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
@@ -110,85 +118,122 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        guard smokeReportPath != nil, !smokeStarted else { return }
+        guard let projectId = smokeProjectId, smokeReportPath != nil, !smokeStarted else { return }
         smokeStarted = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 80) { [weak self] in
-            guard let self, !self.closing else { return }
-            self.finishSmoke()
+        if smokeStage == 0 {
+            runSmokeEdit(projectId: projectId)
+        } else {
+            runSmokeReloadAndExports(projectId: projectId)
         }
+    }
+
+    private func runSmokeEdit(projectId: String) {
         webView.callAsyncJavaScript(
-            """
-            const ready = () => {
-                const root = document.getElementById("root");
-                return root && root.innerText.trim().length >= 40;
-            };
-            if (!ready()) await new Promise((resolve, reject) => {
-                const observer = new MutationObserver(() => {
-                    if (!ready()) return;
-                    clearTimeout(timer);
-                    observer.disconnect();
-                    resolve();
-                });
-                observer.observe(document.documentElement, {subtree: true, childList: true, characterData: true});
-                const timer = window.setTimeout(() => {
-                    observer.disconnect();
-                    reject(new Error("BurnGuard 기본 화면이 준비되지 않았습니다."));
-                }, 60000);
-            });
-            const frame = document.createElement('iframe');
-            frame.sandbox = 'allow-scripts';
-            frame.title = 'Native canvas regression';
-            frame.style = 'position:fixed;inset:80px;width:600px;height:240px;z-index:2147483647;background:white';
-            const canvasReady = new Promise(resolve => {
-                const finish = value => { clearTimeout(timer); window.removeEventListener('message', receive); resolve(value); };
-                const receive = event => {
-                    if (event.source === frame.contentWindow && event.origin === 'null' && event.data === 'burnguard-native-canvas-ready') finish(true);
-                };
-                const timer = window.setTimeout(() => finish(false), 10000);
-                window.addEventListener('message', receive);
-            });
-            frame.srcdoc = '<!doctype html><body style="background:#e6f4ff;font:24px system-ui;padding:24px">Native sandboxed canvas loaded<script>parent.postMessage("burnguard-native-canvas-ready", "*")</script>';
-            document.body.append(frame);
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(new Blob(['burnguard-native-download\\n'], {type: 'text/plain'}));
-            link.download = 'native-smoke-download.txt';
-            link.click();
-            return {title: document.title, bodyTextLength: document.body?.innerText?.length ?? 0, canvasReady: await canvasReady};
-            """,
-            arguments: [:],
+            Self.smokeEditScript,
+            arguments: ["projectId": projectId, "persistedText": "NATIVE_LOGO_PERSISTED"],
             in: nil,
             in: .page
         ) { [weak self] result in
             guard let self else { return }
             switch result {
             case .success(let value):
-                guard let values = value as? [String: Any] else {
-                    self.fail("BurnGuard 화면 상태를 확인할 수 없습니다.")
-                    return
-                }
-                let pageTitle = values["title"] as? String ?? ""
-                let bodyTextLength = values["bodyTextLength"] as? Int ?? 0
-                self.smokePageReport = [
-                    "nativeWindowVisible": self.window.isVisible,
-                    "windowTitle": self.window.title,
-                    "pageTitle": pageTitle,
-                    "bodyTextLength": bodyTextLength,
-                    "backendUrl": self.origin?.absoluteString ?? "",
-                    "canvasReady": values["canvasReady"] as? Bool ?? false,
-                    "backendPid": self.service?.processIdentifier ?? 0,
-                ]
-                if values["canvasReady"] as? Bool != true || self.smokeDownloadFinished { self.finishSmoke() }
-            case .failure(let error):
-                self.fail(error.localizedDescription)
+                guard let report = value as? [String: Any] else { self.fail("Native edit report was invalid."); return }
+                self.smokePageReport = report
+                self.smokePageReport?["nativeWindowVisible"] = self.window.isVisible
+                self.smokePageReport?["windowTitle"] = self.window.title
+                self.smokePageReport?["backendUrl"] = self.origin?.absoluteString ?? ""
+                self.smokePageReport?["backendPid"] = self.service?.processIdentifier ?? 0
+                self.smokeStage = 1
+                self.smokeStarted = false
+                self.webView.reload()
+            case .failure(let error): self.fail(String(describing: error))
             }
         }
     }
+
+    private func runSmokeReloadAndExports(projectId: String) {
+        webView.callAsyncJavaScript(
+            Self.smokeReloadAndExportScript,
+            arguments: ["projectId": projectId, "persistedText": "NATIVE_LOGO_PERSISTED"],
+            in: nil,
+            in: .page
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let value):
+                guard let report = value as? [String: Any] else { self.fail("Native export report was invalid."); return }
+                for (key, value) in report { self.smokePageReport?[key] = value }
+                if self.smokeDownloads.count == 2 { self.finishSmoke() }
+            case .failure(let error): self.fail(String(describing: error))
+            }
+        }
+    }
+
+    private static let smokeEditScript = """
+    const waitFor = (check, root = document.documentElement, timeoutMs = 60000) => {
+      const immediate = check(); if (immediate) return Promise.resolve(immediate);
+      return new Promise((resolve, reject) => {
+        const observer = new MutationObserver(() => { const value = check(); if (!value) return; clearTimeout(timer); observer.disconnect(); resolve(value); });
+        observer.observe(root, {subtree:true, childList:true, attributes:true, characterData:true});
+        const timer = setTimeout(() => { observer.disconnect(); reject(new Error('Native UI event deadline exceeded')); }, timeoutMs);
+      });
+    };
+    const json = async response => { const body = await response.json(); if (!response.ok || !body.data) throw new Error(`HTTP ${response.status}`); return body.data; };
+    const frame = await waitFor(() => { const value = document.querySelector('iframe'); return value?.getAttribute('aria-busy') === 'false' ? value : null; });
+    const projectBefore = await json(await fetch(`/api/projects/${projectId}`));
+    const toolbar = await waitFor(() => [...document.querySelectorAll('button[aria-pressed]')].map(value => value.parentElement).find(value => value?.querySelectorAll(':scope > button').length >= 7));
+    const edit = toolbar.querySelectorAll(':scope > button')[1]; if (!edit) throw new Error('Edit control unavailable'); edit.click();
+    const overlay = await waitFor(() => [...frame.parentElement.children].find(value => value instanceof HTMLDivElement && value.style.pointerEvents === 'auto'));
+    const rect = overlay.getBoundingClientRect(); overlay.dispatchEvent(new MouseEvent('click', {bubbles:true, clientX:rect.left + rect.width / 2, clientY:rect.top + rect.height / 2}));
+    const textarea = await waitFor(() => document.getElementById('element-edit-text'));
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value'); descriptor.set.call(textarea, persistedText); textarea.dispatchEvent(new Event('input', {bubbles:true}));
+    let restoreFetch; const patched = new Promise((resolve, reject) => {
+      const original = window.fetch; restoreFetch = () => { window.fetch = original; };
+      const timer = setTimeout(() => { restoreFetch(); reject(new Error('Edit response deadline exceeded')); }, 60000);
+      window.fetch = async (...args) => { const response = await original(...args); const request = args[0]; const url = typeof request === 'string' ? request : request.url; const method = args[1]?.method ?? (typeof request === 'string' ? 'GET' : request.method);
+        if (method === 'PATCH' && new URL(url, location.href).pathname.includes(`/api/projects/${projectId}/fs/`)) { clearTimeout(timer); restoreFetch(); try { resolve(await json(response.clone())); } catch (error) { reject(error); } }
+        return response;
+      };
+    });
+    const save = textarea.closest('aside')?.querySelector('.sticky button'); if (!save) throw new Error('Save control unavailable'); save.click();
+    const patch = await patched;
+    if (patch.result_revision !== projectBefore.current_revision + 1) throw new Error('Edit revision did not advance exactly once');
+    return {nativeWindowVisible:true, windowTitle:document.title, pageTitle:document.title, bodyTextLength:document.body?.innerText?.length ?? 0, canvasReady:true, projectId, baseRevision:projectBefore.current_revision, savedRevision:patch.result_revision};
+    """
+
+    private static let smokeReloadAndExportScript = """
+    const waitFor = (check, root = document.documentElement, timeoutMs = 60000) => {
+      const immediate = check(); if (immediate) return Promise.resolve(immediate);
+      return new Promise((resolve, reject) => { const observer = new MutationObserver(() => { const value = check(); if (!value) return; clearTimeout(timer); observer.disconnect(); resolve(value); }); observer.observe(root, {subtree:true, childList:true, attributes:true,characterData:true}); const timer=setTimeout(()=>{observer.disconnect();reject(new Error('Native export event deadline exceeded'));},timeoutMs); });
+    };
+    const json = async response => { const body=await response.json(); if(!response.ok || !body.data) throw new Error(`HTTP ${response.status}`); return body.data; };
+    const frame = await waitFor(() => { const value=document.querySelector('iframe'); return value?.getAttribute('aria-busy') === 'false' ? value : null; }).catch(error=>{throw new Error(`reload-frame: ${error}`)});
+    const toolbar = await waitFor(() => [...document.querySelectorAll('button[aria-pressed]')].map(value => value.parentElement).find(value => value?.querySelectorAll(':scope > button').length >= 7)); toolbar.querySelectorAll(':scope > button')[1].click();
+    const overlay = await waitFor(() => [...frame.parentElement.children].find(value => value instanceof HTMLDivElement && value.style.pointerEvents === 'auto')).catch(error=>{throw new Error(`reload-overlay: ${error}`)});
+    const rect=overlay.getBoundingClientRect(); overlay.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:rect.left+rect.width/2,clientY:rect.top+rect.height/2}));
+    const textarea=await waitFor(()=>document.getElementById('element-edit-text')).catch(error=>{throw new Error(`reload-textarea: ${error}`)}); if(textarea.value!==persistedText) throw new Error('Reloaded canvas did not contain the persisted edit');
+    const project=await json(await fetch(`/api/projects/${projectId}`));
+    const trigger = document.querySelector('button[aria-haspopup="menu"]:has(svg.lucide-download)'); if(!trigger) throw new Error('Export control unavailable'); trigger.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerType:'mouse'})); trigger.click();
+    const menu=await waitFor(()=>document.querySelector('[data-export-menu-content]')).catch(error=>{throw new Error(`export-menu: ${error}`)});
+    const runExport = async (index, format) => {
+      let createdId=null, restoreFetch; const terminal=new Promise((resolve,reject)=>{ const original=window.fetch; restoreFetch=()=>{window.fetch=original;}; const timer=setTimeout(()=>{restoreFetch();reject(new Error(`${format} export deadline exceeded`));},60000);
+        window.fetch=async(...args)=>{ const response=await original(...args); const request=args[0]; const url=typeof request==='string'?request:request.url; const method=args[1]?.method??(typeof request==='string'?'GET':request.method); const pathname=new URL(url,location.href).pathname;
+          try { if(method==='POST'&&pathname===`/api/projects/${projectId}/exports`){const data=await json(response.clone());if(data.format===format)createdId=data.id;} if(method==='GET'&&pathname===`/api/projects/${projectId}/exports`&&createdId){const jobs=await json(response.clone());const job=jobs.find(value=>value.id===createdId);if(job?.status==='failed')throw new Error(`${format} export failed`);if(job?.status==='succeeded'){clearTimeout(timer);restoreFetch();resolve(job);}} } catch(error){clearTimeout(timer);restoreFetch();reject(error);} return response; };
+      });
+      const item=menu.querySelectorAll('[role="menuitem"]')[index]; if(!item) throw new Error(`${format} menu item unavailable`); item.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerType:'mouse'})); item.click(); const job=await terminal;
+      await waitFor(()=>[...menu.querySelectorAll('li')].find(value=>[...value.querySelectorAll('span')].some(span=>span.textContent?.trim()===format.toUpperCase()))).catch(error=>{throw new Error(`${format}-download-row: ${error}`)});
+      const response=await fetch(`/api/exports/${job.id}/download`); if(!response.ok)throw new Error(`${format} download HTTP ${response.status}`); const disposition=response.headers.get('content-disposition')??''; const filename=/filename="([^"]+)"/i.exec(disposition)?.[1]??`native-${format}`; const url=URL.createObjectURL(await response.blob()); const link=document.createElement('a');link.href=url;link.download=filename;link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); return {id:job.id,size:job.size_bytes,digest:job.latest_attempt?.digests?.output};
+    };
+    const svg=await runExport(0,'svg'); const pdf=await runExport(1,'pdf');
+    return {reloadPersisted:true,reloadedRevision:project.current_revision,exports:{svg,pdf},snapshotCaptured:true};
+    """
 
     private func finishSmoke() {
         guard let reportPath = smokeReportPath, !smokeFinishing else { return }
         smokeFinishing = true
         var report = smokePageReport ?? ["error": "Native smoke did not complete"]
-        report["downloadCompleted"] = smokeDownloadFinished
+        report["downloadCompleted"] = smokeDownloads.count == 2
+        report["downloads"] = smokeDownloads
         webView.takeSnapshot(with: nil) { [weak self] image, error in
             guard let self else { return }
             do {
@@ -215,18 +260,16 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         fail("BurnGuard 화면을 불러오지 못했습니다: \(error.localizedDescription)")
     }
 
-    private func parseArguments() throws -> String? {
+    private func parseArguments() throws -> (reportPath: String?, projectId: String?) {
         let arguments = Array(CommandLine.arguments.dropFirst())
-        if arguments.isEmpty {
-            return nil
+        if arguments.isEmpty { return (nil, nil) }
+        guard arguments.count == 5, Array(arguments.prefix(2)) == smokeTestArguments, arguments[3] == "--smoke-project" else {
+            throw NSError(domain: "BurnGuard", code: 1, userInfo: [NSLocalizedDescriptionKey: "Supported diagnostic arguments: --smoke-test --smoke-report <absolute JSON path> --smoke-project <project id>."])
         }
-        guard arguments.count == 3, Array(arguments.prefix(2)) == smokeTestArguments else {
-            throw NSError(domain: "BurnGuard", code: 1, userInfo: [NSLocalizedDescriptionKey: "Supported diagnostic arguments: --smoke-test --smoke-report <absolute JSON path>."])
+        guard arguments[2].hasPrefix("/"), !arguments[4].isEmpty else {
+            throw NSError(domain: "BurnGuard", code: 1, userInfo: [NSLocalizedDescriptionKey: "The native smoke report path must be absolute and a project id is required."])
         }
-        guard arguments[2].hasPrefix("/") else {
-            throw NSError(domain: "BurnGuard", code: 1, userInfo: [NSLocalizedDescriptionKey: "The native smoke report path must be absolute."])
-        }
-        return arguments[2]
+        return (arguments[2], arguments[4])
     }
 
     private func createWindow() throws {
@@ -327,7 +370,8 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                 return
             }
             origin = url
-            webView.load(URLRequest(url: url))
+            let target = smokeProjectId.map { url.appendingPathComponent("projects").appendingPathComponent($0) } ?? url
+            webView.load(URLRequest(url: target))
         }
     }
 
