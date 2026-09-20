@@ -1,4 +1,4 @@
-import { ownedProcessSpawnOptions } from "../owned-process-tree";
+import { spawnOwnedProcess } from "../owned-process";
 import { settleProcessStreams } from "../process-streams";
 
 /**
@@ -67,15 +67,15 @@ export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResul
     `[claude-code] spawn cwd=${options.projectDir} binary=${options.binaryPath}`,
   );
 
-  const proc = Bun.spawn({
+  const owned = spawnOwnedProcess({
     cmd,
     cwd: options.projectDir,
     stdin: new Blob([options.prompt]),
     stdout: "pipe",
     stderr: "pipe",
     env: buildClaudeEnvironment(options),
-    ...ownedProcessSpawnOptions(),
   });
+  const proc = owned.proc;
 
   const readers = [
     readLines(proc.stdout, options.onStdoutLine),
@@ -84,7 +84,7 @@ export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResul
       : readLines(proc.stderr, () => {}),
   ];
 
-  const exitCode = await settleProcessStreams(proc, readers, options.signal);
+  const exitCode = await settleProcessStreams(owned, readers, options.signal);
   // eslint-disable-next-line no-console
   console.log(`[claude-code] exit=${exitCode}`);
   return { exitCode };

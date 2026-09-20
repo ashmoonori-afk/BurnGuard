@@ -32,13 +32,15 @@ namespace BurnGuard.Desktop
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             string report = null;
+            string smokeProject = null;
             try
             {
                 if (args.Length != 0)
                 {
-                    if (args.Length != 3 || args[0] != "--smoke-test" || args[1] != "--smoke-report" || !Path.IsPathRooted(args[2]))
-                        throw new InvalidOperationException("Supported diagnostic arguments: --smoke-test --smoke-report <absolute JSON path>.");
+                    if (args.Length != 5 || args[0] != "--smoke-test" || args[1] != "--smoke-report" || !Path.IsPathRooted(args[2]) || args[3] != "--smoke-project" || string.IsNullOrWhiteSpace(args[4]))
+                        throw new InvalidOperationException("Supported diagnostic arguments: --smoke-test --smoke-report <absolute JSON path> --smoke-project <project id>.");
                     report = Path.GetFullPath(args[2]);
+                    smokeProject = args[4];
                     if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("BG_APP_ROOT")))
                         throw new InvalidOperationException("Smoke tests require an isolated BG_APP_ROOT directory.");
                 }
@@ -66,7 +68,7 @@ namespace BurnGuard.Desktop
                                 return 0;
                             }
                         }
-                        Application.Run(new DesktopWindow(identity, activateMessage, report));
+                        Application.Run(new DesktopWindow(identity, activateMessage, report, smokeProject));
                     }
                     finally { mutex.ReleaseMutex(); }
                 }
@@ -95,14 +97,20 @@ namespace BurnGuard.Desktop
         private readonly Label status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Text = "BurnGuard를 시작하고 있습니다…", Font = new Font("Segoe UI", 13) };
         private readonly string identity;
         private readonly string report;
+        private readonly string smokeProject;
         private readonly uint activateMessage;
         private readonly TaskCompletionSource<string> ready = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<string> svgDownload = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<string> pdfDownload = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         private Process service;
         private IntPtr job;
         private Uri origin;
         private bool closing;
         private bool stopped;
         private bool smokeStarted;
+        private int smokeStage;
+        private Dictionary<string, object> smokeDom;
+        private readonly List<string> smokeDownloadEvents = new List<string>();
         private long startupElapsedMs;
         private int port;
         private readonly ToolStrip updateStrip = new ToolStrip { Dock = DockStyle.Bottom, GripStyle = ToolStripGripStyle.Hidden };
@@ -117,9 +125,9 @@ namespace BurnGuard.Desktop
         private bool updateStarted;
         private bool restartForUpdate;
 
-        internal DesktopWindow(string identity, uint activateMessage, string report)
+        internal DesktopWindow(string identity, uint activateMessage, string report, string smokeProject)
         {
-            this.identity = identity; this.activateMessage = activateMessage; this.report = report;
+            this.identity = identity; this.activateMessage = activateMessage; this.report = report; this.smokeProject = smokeProject;
             Text = "BurnGuard";
             ClientSize = new Size(1280, 850);
             MinimumSize = new Size(900, 640);
@@ -206,7 +214,11 @@ namespace BurnGuard.Desktop
                     args.Handled = true;
                     if (args.IsUserInitiated) OpenExternal(args.Uri);
                 };
-                web.CoreWebView2.PermissionRequested += (_, args) => args.State = CoreWebView2PermissionState.Deny;
+                web.CoreWebView2.PermissionRequested += (_, args) =>
+                {
+                    args.State = DiagnosticPermissionState(report != null, args.Uri, origin, args.PermissionKind);
+                    if (args.State == CoreWebView2PermissionState.Allow) args.SavesInProfile = false;
+                };
                 web.CoreWebView2.ProcessFailed += (_, __) => Fail("화면 프로세스가 종료되었습니다. BurnGuard를 다시 실행해 주세요.");
                 web.CoreWebView2.NavigationCompleted += async (_, args) =>
                 {
@@ -221,12 +233,20 @@ namespace BurnGuard.Desktop
                     }
                     if (report != null && !smokeStarted) { smokeStarted = true; await SmokeAsync(); }
                 };
-                web.CoreWebView2.Navigate(origin.AbsoluteUri + (report == null ? "" : "?create=slide_deck"));
+                if (report != null) ConfigureDiagnosticDownloads();
+                web.CoreWebView2.Navigate(origin.AbsoluteUri + (report == null ? "" : "projects/" + Uri.EscapeDataString(smokeProject)));
             }
             catch (Exception exception) { if (!closing) Fail(exception.Message); }
         }
 
-        private bool IsAppUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && origin != null && uri.Scheme == origin.Scheme && uri.Host == origin.Host && uri.Port == origin.Port && string.IsNullOrEmpty(uri.UserInfo);
+        private bool IsAppUrl(string value) => IsAppUrl(value, origin);
+
+        private static bool IsAppUrl(string value, Uri expectedOrigin) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && expectedOrigin != null && uri.Scheme == expectedOrigin.Scheme && uri.Host == expectedOrigin.Host && uri.Port == expectedOrigin.Port && string.IsNullOrEmpty(uri.UserInfo);
+
+        private static CoreWebView2PermissionState DiagnosticPermissionState(bool diagnostic, string source, Uri expectedOrigin, CoreWebView2PermissionKind kind) =>
+            diagnostic && kind == CoreWebView2PermissionKind.MultipleAutomaticDownloads && IsAppUrl(source, expectedOrigin)
+                ? CoreWebView2PermissionState.Allow
+                : CoreWebView2PermissionState.Deny;
 
         private static bool IsTopLevelAppRoute(Uri uri) => !uri.AbsolutePath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) && !uri.AbsolutePath.StartsWith("/runtime/", StringComparison.OrdinalIgnoreCase);
 
@@ -316,53 +336,200 @@ namespace BurnGuard.Desktop
             service.BeginOutputReadLine(); service.BeginErrorReadLine();
         }
 
+        private void ConfigureDiagnosticDownloads()
+        {
+            web.CoreWebView2.DownloadStarting += (_, args) =>
+            {
+                var mime = args.DownloadOperation.MimeType;
+                var suggested = Path.GetFileName(args.ResultFilePath);
+                var extension = DiagnosticDownloadExtension(suggested, mime);
+                var completion = extension == ".svg" ? svgDownload : extension == ".pdf" ? pdfDownload : null;
+                if (completion == null)
+                {
+                    args.Cancel = true;
+                    var failure = new InvalidOperationException("Unexpected native download: " + suggested + " (" + mime + ").");
+                    svgDownload.TrySetException(failure);
+                    pdfDownload.TrySetException(failure);
+                    return;
+                }
+                var destination = Path.Combine(Path.GetDirectoryName(report), "native-export" + extension);
+                if (File.Exists(destination)) File.Delete(destination);
+                args.ResultFilePath = destination;
+                args.Handled = true;
+                var operation = args.DownloadOperation;
+                smokeDownloadEvents.Add("native-start:" + extension + ":" + operation.State + ":" + mime + ":" + suggested);
+                ObserveDiagnosticDownload(
+                    handler => operation.StateChanged += handler,
+                    handler => operation.StateChanged -= handler,
+                    () => operation.State,
+                    state => smokeDownloadEvents.Add("native-state:" + extension + ":" + state),
+                    state =>
+                    {
+                        if (state == CoreWebView2DownloadState.Completed) completion.TrySetResult(destination);
+                        else completion.TrySetException(new InvalidOperationException("Native " + extension + " download was interrupted."));
+                    });
+            };
+        }
+
+        private static void ObserveDiagnosticDownload(
+            Action<EventHandler<object>> subscribe,
+            Action<EventHandler<object>> unsubscribe,
+            Func<CoreWebView2DownloadState> readState,
+            Action<CoreWebView2DownloadState> observed,
+            Action<CoreWebView2DownloadState> terminal)
+        {
+            var settled = false;
+            EventHandler<object> changed = null;
+            Action inspect = () =>
+            {
+                var state = readState();
+                observed(state);
+                if (state == CoreWebView2DownloadState.InProgress || settled) return;
+                settled = true;
+                unsubscribe(changed);
+                terminal(state);
+            };
+            changed = (_, __) => inspect();
+            subscribe(changed);
+            inspect();
+        }
+
+        private static string DiagnosticDownloadExtension(string suggested, string mime)
+        {
+            var extension = Path.GetExtension(suggested).ToLowerInvariant();
+            if (extension == ".svg" || extension == ".pdf") return extension;
+            return mime == "image/svg+xml" ? ".svg" : mime == "application/pdf" ? ".pdf" : null;
+        }
+
         private async Task SmokeAsync()
         {
             try
             {
-                var result = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-                web.CoreWebView2.Settings.IsWebMessageEnabled = true;
-                web.CoreWebView2.WebMessageReceived += (_, args) =>
+                if (smokeStage == 0)
                 {
-                    if (IsAppUrl(args.Source)) result.TrySetResult(args.WebMessageAsJson);
-                };
-                await web.CoreWebView2.ExecuteScriptAsync(@"(() => {
-                    const root = document.getElementById('root');
-                    const ready = () => root && root.innerText.length > 40 && document.querySelector('select[aria-label=""생성 모델""]')?.options.length > 1;
-                    const send = () => {
-                        const model = document.querySelector('select[aria-label=""생성 모델""]');
-                        const original = model.value;
-                        const selected = model.options[1].value;
-                        model.value = selected;
-                        model.dispatchEvent(new Event('change', { bubbles:true }));
-                        requestAnimationFrame(() => {
-                            const current = document.querySelector('select[aria-label=""생성 모델""]');
-                            const modelSelected = current.value === selected;
-                            const effort = document.querySelector('select[aria-label=""추론 강도""]');
-                            const vanilla = current.closest('fieldset').querySelector('input[type=""checkbox""]');
-                            current.value = original;
-                            current.dispatchEvent(new Event('change', { bubbles:true }));
-                            window.chrome.webview.postMessage({ title:document.title, reactMounted:!!root, modelSelector:true, modelSelected, modelOptions:current.options.length, effort:effort?.value, vanilla:vanilla?.checked, origin:location.origin });
-                        });
-                    };
-                    if (ready()) { send(); return; }
-                    const timer = setTimeout(() => { observer.disconnect(); window.chrome.webview.postMessage({ error:'React/model selector not ready' }); }, 30000);
-                    const observer = new MutationObserver(() => { if (ready()) { clearTimeout(timer); observer.disconnect(); send(); } });
-                    observer.observe(document.documentElement, {subtree:true, childList:true, attributes:true});
-                })()");
-                if (await Task.WhenAny(result.Task, Task.Delay(35000)) != result.Task) throw new TimeoutException("WebView smoke result timed out.");
-                var dom = Program.Json.Deserialize<Dictionary<string, object>>(await result.Task);
-                if (dom.ContainsKey("error")) throw new InvalidOperationException((string)dom["error"]);
-                if (!(bool)dom["reactMounted"] || !(bool)dom["modelSelector"] || !(bool)dom["modelSelected"]) throw new InvalidOperationException("React smoke assertion failed.");
-                if ((string)dom["effort"] != "low" || !(bool)dom["vanilla"]) throw new InvalidOperationException("Default generation controls must use low effort and vanilla mode.");
+                    var first = await ExecuteSmokeScriptAsync(SmokeEditScript, 90000);
+                    if (!(bool)first["canvasReady"] || !(bool)first["savePersisted"])
+                        throw new InvalidOperationException("Product canvas edit did not persist.");
+                    smokeDom = first;
+                    smokeStage = 1;
+                    smokeStarted = false;
+                    web.CoreWebView2.Reload();
+                    return;
+                }
+
+                var second = await ExecuteSmokeScriptAsync(SmokeReloadAndExportScript, 240000);
+                if (!(bool)second["reloadPersisted"] || !(bool)second["exportsCompleted"])
+                    throw new InvalidOperationException("Reload or export acceptance failed.");
+                foreach (var entry in second) smokeDom[entry.Key] = entry.Value;
+                var downloads = await Task.WhenAll(WaitDownload(svgDownload.Task), WaitDownload(pdfDownload.Task));
+                var svg = ArtifactEvidence(downloads[0], "svg");
+                var pdf = ArtifactEvidence(downloads[1], "pdf");
                 var screenshot = Path.ChangeExtension(report, ".png");
                 Directory.CreateDirectory(Path.GetDirectoryName(screenshot));
                 using (var stream = File.Create(screenshot)) await web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, stream);
-                Program.WriteReport(report, new { ok = true, startupElapsedMs, processId = Process.GetCurrentProcess().Id, servicePid = service.Id, webViewVersion = web.CoreWebView2.Environment.BrowserVersionString, screenshot, dom });
+                Program.WriteReport(report, new { ok = true, startupElapsedMs, processId = Process.GetCurrentProcess().Id, servicePid = service.Id, webViewVersion = web.CoreWebView2.Environment.BrowserVersionString, screenshot, dom = smokeDom, artifacts = new { svg, pdf }, downloadEvents = smokeDownloadEvents });
             }
-            catch (Exception exception) { Program.ExitCode = 1; Program.WriteReport(report, new { ok = false, startupElapsedMs, error = exception.Message }); }
+            catch (Exception exception) { Program.ExitCode = 1; Program.WriteReport(report, new { ok = false, startupElapsedMs, error = exception.Message, downloadEvents = smokeDownloadEvents }); }
             Close();
         }
+
+        private async Task<Dictionary<string, object>> ExecuteSmokeScriptAsync(string script, int timeoutMs)
+        {
+            var result = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            EventHandler<CoreWebView2WebMessageReceivedEventArgs> received = null;
+            received = (_, args) =>
+            {
+                if (!IsAppUrl(args.Source)) return;
+                var message = Program.Json.Deserialize<Dictionary<string, object>>(args.WebMessageAsJson);
+                if (message.ContainsKey("downloadAction"))
+                {
+                    smokeDownloadEvents.Add("browser-action:" + (string)message["downloadAction"]);
+                    return;
+                }
+                web.CoreWebView2.WebMessageReceived -= received;
+                result.TrySetResult(args.WebMessageAsJson);
+            };
+            web.CoreWebView2.Settings.IsWebMessageEnabled = true;
+            web.CoreWebView2.WebMessageReceived += received;
+            await web.CoreWebView2.ExecuteScriptAsync(script.Replace("__PROJECT_ID__", Program.Json.Serialize(smokeProject)));
+            if (await Task.WhenAny(result.Task, Task.Delay(timeoutMs)) != result.Task)
+            {
+                web.CoreWebView2.WebMessageReceived -= received;
+                throw new TimeoutException("WebView product acceptance timed out.");
+            }
+            var value = Program.Json.Deserialize<Dictionary<string, object>>(await result.Task);
+            if (value.ContainsKey("error")) throw new InvalidOperationException((string)value["error"]);
+            return value;
+        }
+
+        private static async Task<string> WaitDownload(Task<string> download)
+        {
+            if (await Task.WhenAny(download, Task.Delay(60000)) != download) throw new TimeoutException("Native download completion timed out.");
+            return await download;
+        }
+
+        private static object ArtifactEvidence(string path, string format)
+        {
+            var bytes = File.ReadAllBytes(path);
+            if (bytes.Length == 0) throw new InvalidOperationException(format.ToUpperInvariant() + " download was empty.");
+            if (format == "pdf" && (bytes.Length < 5 || Encoding.ASCII.GetString(bytes, 0, 5) != "%PDF-")) throw new InvalidOperationException("PDF signature was invalid.");
+            if (format == "svg")
+            {
+                var prefix = Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 4096));
+                if (prefix.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) < 0) throw new InvalidOperationException("SVG root was invalid.");
+            }
+            string digest;
+            using (var hash = SHA256.Create()) digest = BitConverter.ToString(hash.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
+            return new { path, format, bytes = bytes.Length, sha256 = digest };
+        }
+
+        private const string SmokeEditScript = @"(async () => {
+            try {
+                const projectId = __PROJECT_ID__, marker = 'NATIVE_WINDOWS_PERSISTED';
+                const waitFor = (check, timeoutMs) => { const immediate = check(); if (immediate) return Promise.resolve(immediate); return new Promise((resolve, reject) => { const observer = new MutationObserver(() => { const value = check(); if (!value) return; clearTimeout(timer); observer.disconnect(); resolve(value); }); observer.observe(document.documentElement, {subtree:true, childList:true, attributes:true, characterData:true}); const timer = setTimeout(() => { observer.disconnect(); reject(new Error('Canvas readiness deadline exceeded')); }, timeoutMs); }); };
+                const data = async response => { const body = await response.json(); if (!response.ok || !body.data) throw new Error('HTTP ' + response.status); return body.data; };
+                const frame = await waitFor(() => { const value = [...document.querySelectorAll('iframe')].find(item => item.srcdoc?.includes('NATIVE_WINDOWS_BASELINE')); return value?.srcdoc?.includes('NATIVE_WINDOWS_BASELINE') ? value : null; }, 60000);
+                const before = await data(await fetch('/api/projects/' + projectId));
+                const authority = await data(await fetch('/api/bootstrap'));
+                const file = await fetch('/api/projects/' + projectId + '/fs/index.html?node_bg_id=native-windows-title');
+                if (!file.ok) throw new Error('Fixture file unavailable');
+                const response = await fetch('/api/projects/' + projectId + '/fs/index.html', { method:'PATCH', headers:{'content-type':'application/json','x-burnguard-capability':authority.capability}, body:JSON.stringify({ expected_revision:Number(file.headers.get('x-burnguard-revision')), expected_artifact_digest:file.headers.get('x-burnguard-artifact-digest'), expected_file_hash:file.headers.get('x-burnguard-file-hash'), node_bg_id:'native-windows-title', node_fingerprint:file.headers.get('x-burnguard-node-fingerprint'), text:marker }) });
+                const saved = await data(response);
+                if (saved.result_revision !== before.current_revision + 1) throw new Error('Revision did not advance exactly once');
+                window.chrome.webview.postMessage({ canvasReady:!!frame, savePersisted:true, projectId, origin:location.origin, baseRevision:before.current_revision, savedRevision:saved.result_revision, marker });
+            } catch (error) { window.chrome.webview.postMessage({error:String(error?.message ?? error)}); }
+        })();";
+
+        private const string SmokeReloadAndExportScript = @"(async () => {
+            let source;
+            try {
+                const projectId = __PROJECT_ID__, marker = 'NATIVE_WINDOWS_PERSISTED';
+                const waitFor = (check, timeoutMs) => { const immediate = check(); if (immediate) return Promise.resolve(immediate); return new Promise((resolve, reject) => { const observer = new MutationObserver(() => { const value = check(); if (!value) return; clearTimeout(timer); observer.disconnect(); resolve(value); }); observer.observe(document.documentElement, {subtree:true, childList:true, attributes:true,characterData:true}); const timer=setTimeout(()=>{observer.disconnect();reject(new Error('Reload readiness deadline exceeded'));},timeoutMs); }); };
+                const data = async response => { const body=await response.json(); if(!response.ok || !body.data) throw new Error('HTTP '+response.status); return body.data; };
+                const frame = await waitFor(() => [...document.querySelectorAll('iframe')].find(item => item.srcdoc?.includes(marker)) ?? null, 60000);
+                const project = await data(await fetch('/api/projects/' + projectId));
+                const authority = await data(await fetch('/api/bootstrap'));
+                const session = await data(await fetch('/api/projects/' + projectId + '/session'));
+                const events = new Map(), waiters = new Map();
+                source = new EventSource('/api/sessions/' + session.id + '/stream');
+                const opened = new Promise((resolve,reject)=>{ const timer=setTimeout(()=>reject(new Error('Export event stream deadline exceeded')),15000); source.onopen=()=>{clearTimeout(timer);resolve();}; source.onerror=()=>{clearTimeout(timer);reject(new Error('Export event stream failed'));}; });
+                source.onmessage = message => { const envelope=JSON.parse(message.data), event=envelope.event; if(event?.type!=='export.attempt')return; events.set(event.jobId,event); const waiter=waiters.get(event.jobId); if(waiter && ['validated','failed','cancelled','corrupt'].includes(event.status)) waiter(event); };
+                await opened;
+                const run = async (format, options) => {
+                    const created = await data(await fetch('/api/projects/' + projectId + '/exports', {method:'POST',headers:{'content-type':'application/json','x-burnguard-capability':authority.capability},body:JSON.stringify({format,options})}));
+                    const terminal = await new Promise((resolve,reject)=>{ const timer=setTimeout(()=>{waiters.delete(created.id);reject(new Error(format+' export deadline exceeded'));},180000); const finish=event=>{if(!['validated','failed','cancelled','corrupt'].includes(event.status))return;clearTimeout(timer);waiters.delete(created.id);resolve(event);}; waiters.set(created.id,finish); const known=events.get(created.id); if(known)finish(known); });
+                    if(terminal.status!=='validated')throw new Error(format+' export ended as '+terminal.status);
+                    const job=await data(await fetch('/api/exports/'+created.id));
+                    if(job.status!=='succeeded'||!job.latest_attempt?.digests?.output||job.size_bytes<=0)throw new Error(format+' export receipt invalid');
+                    const response=await fetch('/api/exports/'+created.id+'/download'); if(!response.ok)throw new Error(format+' download unavailable');
+                    const blob=await response.blob(), url=URL.createObjectURL(blob), link=document.createElement('a'); link.href=url; link.download='native-export.'+format; window.chrome.webview.postMessage({downloadAction:format}); link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+                    return {id:job.id,bytes:job.size_bytes,sha256:job.latest_attempt.digests.output};
+                };
+                const svg=await run('svg',{}), pdf=await run('pdf',{pdf_paper:'artboard'});
+                source.close();
+                window.chrome.webview.postMessage({reloadPersisted:!!frame,exportsCompleted:true,reloadedRevision:project.current_revision,exports:{svg,pdf}});
+            } catch (error) { source?.close(); window.chrome.webview.postMessage({error:String(error?.message ?? error)}); }
+        })();";
 
         private void Fail(string message)
         {

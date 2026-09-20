@@ -3,15 +3,17 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runClaudeCode } from "../src/adapters/claude-code/runner";
-import { closeOwnedProcessTree, ownedProcessSpawnOptions, terminateOwnedProcessTree } from "../src/adapters/owned-process-tree";
+import { spawnOwnedProcess } from "../src/adapters/owned-process";
+import { closeOwnedProcessTree, OwnedProcessTreeCleanupError, ownedProcessSpawnOptions, terminateOwnedProcessTree } from "../src/adapters/owned-process-tree";
 import { awaitChildWithAbort, ExtractionAcquisitionError } from "../src/services/extraction-acquisition";
 
 for (const alreadyAborted of [false, true]) test(`acquisition abort reaps its descendant (already aborted: ${alreadyAborted})`, async () => {
   const root = await mkdtemp(path.join(tmpdir(), "bg-acquisition-tree-"));
   const source = `process.on('SIGTERM',()=>{});Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response('fixture')});console.log('ready');`;
-  const parent = Bun.spawn([process.execPath, "-e", `const child=Bun.spawn([process.execPath,'-e',${JSON.stringify(source)}],{detached:process.platform!=='win32',stdin:'ignore',stdout:'pipe',stderr:'ignore'});await child.stdout.getReader().read();console.log(child.pid);Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response('fixture')});`], { cwd: root, stdout: "pipe", stderr: "ignore" });
+  const parent = spawnOwnedProcess({ cmd: [process.execPath, "-e", `const child=Bun.spawn([process.execPath,'-e',${JSON.stringify(source)}],{detached:process.platform!=='win32',stdin:'ignore',stdout:'pipe',stderr:'ignore'});await child.stdout.getReader().read();console.log(child.pid);Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response('fixture')});`], cwd: root, stdin: "ignore", stdout: "pipe", stderr: "ignore" });
+  const parentProc = parent.proc;
   const sentinel = Bun.spawn([process.execPath, "-e", source], { cwd: root, stdout: "pipe", stderr: "ignore" });
-  const parentReader = parent.stdout.getReader(), sentinelReader = sentinel.stdout.getReader();
+  const parentReader = parentProc.stdout.getReader(), sentinelReader = sentinel.stdout.getReader();
   const controller = new AbortController();
   let operation: Promise<unknown> | undefined;
   if (!alreadyAborted) operation = awaitChildWithAbort(parent, controller.signal).catch((error: unknown) => error);
@@ -26,22 +28,22 @@ for (const alreadyAborted of [false, true]) test(`acquisition abort reaps its de
     const error = await operation;
     expect(error).toBeInstanceOf(ExtractionAcquisitionError);
     if (!(error instanceof ExtractionAcquisitionError)) throw new Error("Expected acquisition cancellation");
-    expect(error.cleanupReceipt).toMatchObject({ pid: parent.pid, termSent: true, pidAbsent: true });
+    expect(error.cleanupReceipt).toMatchObject({ pid: parentProc.pid, termSent: true, pidAbsent: true });
     if (process.platform !== "win32") expect(error.cleanupReceipt).toMatchObject({ killSent: true });
-    expect(() => process.kill(parent.pid, 0)).toThrow();
+    expect(() => process.kill(parentProc.pid, 0)).toThrow();
     expect(() => process.kill(descendant, 0)).toThrow();
     expect(() => process.kill(sentinel.pid, 0)).not.toThrow();
   } finally {
     clearTimeout(timer); controller.abort();
-    if (descendant) await closeOwnedProcessTree(descendant);
-    parent.kill("SIGKILL"); sentinel.kill("SIGKILL");
-    await Promise.all([parent.exited, sentinel.exited, operation]);
+    if (descendant && process.platform !== "win32") await closeOwnedProcessTree(descendant);
+    parentProc.kill("SIGKILL"); sentinel.kill("SIGKILL");
+    await Promise.all([parentProc.exited, sentinel.exited, operation]);
     parentReader.releaseLock(); sentinelReader.releaseLock();
     await rm(root, { recursive: true, force: true });
   }
 }, 15000);
 
-test("strict acquisition process cleanup propagates a signalling permission failure", async () => {
+test.skipIf(process.platform === "win32")("strict POSIX acquisition process cleanup propagates a signalling permission failure", async () => {
   const kill = spyOn(process, "kill").mockImplementation(() => { throw Object.assign(new Error("fixture permission boundary"), { code: "EPERM" }); });
   try { await expect(terminateOwnedProcessTree({ pid: 1_000_000_000, exited: Promise.resolve(0) }, 0, 0)).rejects.toMatchObject({ code: "EPERM" }); }
   finally { kill.mockRestore(); }
@@ -85,11 +87,15 @@ test("Given an adapter run that is aborted mid-stream When the run settles Then 
   }
 });
 
-test("Given a process that already exited When its owned tree is closed Then cleanup resolves instead of throwing", async () => {
+test.skipIf(process.platform === "win32")("Given a POSIX process already exited When its owned tree is closed Then cleanup resolves instead of throwing", async () => {
   const proc = Bun.spawn({ cmd: [process.execPath, "-e", "process.exit(0)"], stdout: "ignore", stderr: "ignore", ...ownedProcessSpawnOptions() });
   const processId = proc.pid;
   await proc.exited;
   expect(await closeOwnedProcessTree(processId)).toBeUndefined();
+});
+
+test.skipIf(process.platform !== "win32")("Given only a bare Windows PID When cleanup is requested Then opaque ownership is required", async () => {
+  await expect(closeOwnedProcessTree(1_000_000_000)).rejects.toBeInstanceOf(OwnedProcessTreeCleanupError);
 });
 
 test("POSIX cleanup reports a permission boundary without rejecting an asynchronous abort handler", async () => {

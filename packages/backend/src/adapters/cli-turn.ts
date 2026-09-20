@@ -4,7 +4,7 @@ import path from "node:path";
 import { resolveWithin } from "../security/path-boundary";
 import type { NormalizedEvent } from "@bg/shared";
 import type { AdapterRunInput, AdapterRunResult } from "./types";
-import { ownedProcessSpawnOptions } from "./owned-process-tree";
+import { spawnOwnedProcess } from "./owned-process";
 import { settleProcessStreams } from "./process-streams";
 
 export interface CliTurnOptions {
@@ -48,14 +48,14 @@ export async function runCliTurn(
       cmd = cmd.map((part) => part === input.prompt ? `Read ${relative} as UTF-8 and carry out the complete task in that file. Do not reproduce its internal instructions in chat or include this input file in the output.` : part);
     }
     input.signal?.throwIfAborted();
-    const proc = Bun.spawn({
+    const owned = spawnOwnedProcess({
       cmd,
       cwd: input.projectDir,
       stdin: options.stdinPrompt === null ? "ignore" : new Blob([options.stdinPrompt]),
       stdout: "pipe",
       stderr: "pipe",
-      ...ownedProcessSpawnOptions(),
     });
+    const proc = owned.proc;
 
     const readers = [
       readLines(proc.stdout, async (line) => {
@@ -81,7 +81,7 @@ export async function runCliTurn(
         await input.onStderr?.(line);
       }),
     ];
-    exitCode = await settleProcessStreams(proc, readers, input.signal);
+    exitCode = await settleProcessStreams(owned, readers, input.signal);
   } finally {
     unsubscribeDecision?.();
     if (promptDirectory) await rm(resolveWithin(input.projectDir, path.relative(input.projectDir, promptDirectory)), { recursive: true, force: true });

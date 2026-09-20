@@ -23,6 +23,11 @@ async function main() {
   if (!existsSync(OUT_DIR)) {
     mkdirSync(OUT_DIR, { recursive: true });
   }
+  if (process.platform === "win32") {
+    stage = "process-host";
+    const { buildWindowsProcessHost } = await import("./build-windows-process-host");
+    await buildWindowsProcessHost();
+  }
 
   console.log(`[build] entry:  ${ENTRY}`);
   console.log(`[build] output: ${OUT}`);

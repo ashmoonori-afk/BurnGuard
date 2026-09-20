@@ -16,7 +16,7 @@
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { chromiumNodeCommand } from "./chromium-node-launch";
-import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../adapters/owned-process-tree";
+import { closeOwnedProcess, settleOwnedProcess, spawnOwnedProcess } from "../adapters/owned-process";
 
 const PROBE_TIMEOUT_MS = 45_000;
 
@@ -119,18 +119,19 @@ process.exit(1);
 export async function spawnLaunchProbe(node = chromiumNodeCommand(), timeoutMs = chromiumCapabilityTimeoutMs()): Promise<boolean> {
   const compiled = /\$bunfs|~BUN/i.test(import.meta.url);
   const fallback = compiled ? [process.execPath, "--bg-chromium-probe"] : [process.execPath, "-e", PROBE_SOURCE];
-  const child = Bun.spawn(node === null ? fallback : [node.node, node.script, "--probe"], {
-    ...ownedProcessSpawnOptions(),
+  const owned = spawnOwnedProcess({
+    cmd: node === null ? fallback : [node.node, node.script, "--probe"],
     cwd: node?.cwd ?? (compiled ? path.dirname(process.execPath) : fileURLToPath(new URL("..", import.meta.url))),
     stdout: "pipe",
     stderr: "ignore",
     stdin: "ignore",
   });
+  const child = owned.proc;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let forcedClose: Promise<void> | undefined;
   const expired = new Promise<false>((resolve, reject) => {
     timer = setTimeout(() => {
-      forcedClose = closeOwnedProcessTree(child.pid);
+      forcedClose = closeOwnedProcess(owned, { timeoutMs: 3_000 });
       void forcedClose.then(() => resolve(false), reject);
     }, timeoutMs);
   });
@@ -141,6 +142,8 @@ export async function spawnLaunchProbe(node = chromiumNodeCommand(), timeoutMs =
   } finally {
     if (timer !== undefined) clearTimeout(timer);
     await forcedClose;
+    const exitCode = await child.exited;
+    await settleOwnedProcess(owned, exitCode);
   }
 }
 

@@ -9,7 +9,7 @@ import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { interruptUserTurn, startUserTurn, type TurnDependencies } from "../src/services/turns";
 import { settleProcessStreams } from "../src/adapters/process-streams";
-import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../src/adapters/owned-process-tree";
+import { closeOwnedProcess, spawnOwnedProcess } from "../src/adapters/owned-process";
 import { sessionRoutes } from "../src/routes/session";
 import { insertNormalizedEvent } from "../src/db/events";
 import { insertAttachment } from "../src/db/attachments";
@@ -417,7 +417,8 @@ test("Given a pending permission When decided twice Then one durable decision an
 
 test("Given a real child tree continuously writing When its output callback fails Then the owned tree exits before failure returns", async () => {
   const script = `const child=Bun.spawn([process.execPath,'-e','setInterval(()=>{},1000)'],{stdin:'ignore',stdout:'ignore',stderr:'ignore'}); console.log(child.pid); setInterval(()=>process.stdout.write('x'.repeat(65536)),1);`;
-  const proc = Bun.spawn({ cmd: [process.execPath, "-e", script], stdout: "pipe", stderr: "pipe", ...ownedProcessSpawnOptions() });
+  const owned = spawnOwnedProcess({ cmd: [process.execPath, "-e", script], stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  const proc = owned.proc;
   let childPid = 0;
   const stdout = (async () => {
     const reader = proc.stdout.getReader();
@@ -434,12 +435,12 @@ test("Given a real child tree continuously writing When its output callback fail
   })();
   const stderr = new Response(proc.stderr).text().then(() => {});
   try {
-    await expect(settleProcessStreams(proc, [stdout, stderr])).rejects.toThrow("injected event persistence failure");
+    await expect(settleProcessStreams(owned, [stdout, stderr])).rejects.toThrow("injected event persistence failure");
     expect(Number.isSafeInteger(childPid) && childPid > 0).toBe(true);
     expect(() => process.kill(proc.pid, 0)).toThrow();
     expect(() => process.kill(childPid, 0)).toThrow();
   } finally {
-    await closeOwnedProcessTree(proc.pid);
+    await closeOwnedProcess(owned, { timeoutMs: 3_000 });
     if (childPid > 0) { try { process.kill(childPid, "SIGKILL"); } catch {} }
   }
 }, 15_000);

@@ -20,6 +20,7 @@ import {
   type DesignSystemDetail,
   type DesignSystemSourceType,
 } from "@bg/shared";
+import { settleOwnedProcess, spawnOwnedProcess } from "../adapters/owned-process";
 import { commitDesignSystemReceipt, getDesignSystemReceiptById, prepareDesignSystemReceipt } from "../db/design-system-repository";
 import { getDb } from "../db/client";
 import { createDesignSystemRecord, deleteDesignSystemRecord, getDesignSystemDetail } from "../db/seed";
@@ -660,14 +661,15 @@ async function ingestGitSource(
   const repoDir = path.join(ingestDir, "repo");
   const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.toUpperCase().startsWith("GIT_") && name.toUpperCase() !== "SSH_ASKPASS"));
   const emptyConfig = await writeEmptyGitConfig(ingestDir);
-  const proc = Bun.spawn({
+  const owned = spawnOwnedProcess({
     cmd: ["git", "-c", "credential.helper=", "-c", "http.followRedirects=false", "clone", "--depth=1", sourceUrl, repoDir],
     cwd: ingestDir,
     env: { ...environment, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_SYSTEM: emptyConfig, GIT_CONFIG_GLOBAL: emptyConfig, GIT_ALLOW_PROTOCOL: "https", GIT_TERMINAL_PROMPT: "0" },
     stdout: "ignore",
     stderr: "ignore",
+    stdin: "ignore",
   });
-  const { exitCode } = await awaitChildWithAbort(proc, signal);
+  const { exitCode } = await awaitChildWithAbort(owned, signal);
   if (exitCode !== 0) {
     throw new DesignSystemExtractError(
       "git_clone_failed",
@@ -1190,7 +1192,7 @@ export async function runPythonUploadExtractor(input: {
     let lastFailure = "Python executable was not found";
     for (const prefix of candidates) {
       try {
-        const proc = Bun.spawn({
+        const owned = spawnOwnedProcess({
           cmd: [
             ...prefix,
             scriptPath,
@@ -1201,13 +1203,15 @@ export async function runPythonUploadExtractor(input: {
           ],
           stdout: "pipe",
           stderr: "pipe",
+          stdin: "ignore",
         });
+        const proc = owned.proc;
         const [stdout, stderr, exitCode] = await Promise.all([
           new Response(proc.stdout).text(),
           new Response(proc.stderr).text(),
           input.signal === undefined
-            ? proc.exited
-            : awaitChildWithAbort(proc, input.signal).then((receipt) => receipt.exitCode),
+            ? proc.exited.then(async (code) => { await settleOwnedProcess(owned, code); return code; })
+            : awaitChildWithAbort(owned, input.signal).then((receipt) => receipt.exitCode),
         ]);
         if (exitCode === 0) {
           return;

@@ -5,7 +5,7 @@ import type { Browser, BrowserContext, Page } from "playwright-core";
 import { chromium } from "./playwright-runtime";
 import { resolveRepoRoot } from "../lib/paths";
 import { registerExportBrowser } from "./export-browser-registry";
-import { closeOwnedProcessTree, ownedProcessSpawnOptions } from "../adapters/owned-process-tree";
+import { closeOwnedProcess, settleOwnedProcess, spawnOwnedProcess } from "../adapters/owned-process";
 
 export function chromiumNodeCommand(): { readonly node: string; readonly script: string; readonly cwd: string } | null {
   const root = resolveRepoRoot();
@@ -19,7 +19,8 @@ export function chromiumNodeCommand(): { readonly node: string; readonly script:
 export async function launchChromiumViaNode(options: { readonly channel?: string }, signal: AbortSignal, command = chromiumNodeCommand()): Promise<Browser> {
   if (command === null) throw new Error("Node Chromium runtime is unavailable");
   signal.throwIfAborted();
-  const child = Bun.spawn([command.node, command.script, JSON.stringify(options)], { ...ownedProcessSpawnOptions(), cwd: command.cwd, stdin: "pipe", stdout: "pipe", stderr: "ignore" });
+  const owned = spawnOwnedProcess({ cmd: [command.node, command.script, JSON.stringify(options)], cwd: command.cwd, stdin: "pipe", stdout: "pipe", stderr: "ignore" });
+  const child = owned.proc;
   let closing: Promise<void> | null = null;
   const closeChild = (): Promise<void> => closing ??= (async () => {
     signal.removeEventListener("abort", onAbort);
@@ -27,11 +28,16 @@ export async function launchChromiumViaNode(options: { readonly channel?: string
     let timer: ReturnType<typeof setTimeout> | undefined;
     let forcedClose: Promise<void> | undefined;
     const deadline = new Promise<void>((resolve, reject) => { timer = setTimeout(() => {
-      forcedClose = closeOwnedProcessTree(child.pid);
+      forcedClose = closeOwnedProcess(owned, { timeoutMs: 3_000 });
       void forcedClose.then(resolve, reject);
     }, 5000); });
     try { await Promise.race([child.exited, deadline]); }
-    finally { clearTimeout(timer); await forcedClose; }
+    finally {
+      clearTimeout(timer);
+      await forcedClose;
+      const exitCode = await child.exited;
+      await settleOwnedProcess(owned, exitCode);
+    }
   })();
   const owner = registerExportBrowser(closeChild);
   const close = () => owner.close();
