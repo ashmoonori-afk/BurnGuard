@@ -7,7 +7,7 @@ import { PathBoundaryError, resolveWithin } from "../../security/path-boundary";
 import type { AdapterRunInput, AdapterRunResult } from "../types";
 import { mapGeneratedImages } from "./event-mapping";
 import { parseCodexLine, type CodexParserContext } from "./parser";
-import { ownedProcessSpawnOptions } from "../owned-process-tree";
+import { spawnOwnedProcess } from "../owned-process";
 import { settleProcessStreams } from "../process-streams";
 
 export function buildCodexCommand(binaryPath: string, generation?: AdapterRunInput["generation"], platform = process.platform): string[] {
@@ -62,14 +62,14 @@ export async function runCodexTurn(
     );
   });
 
-  const proc = Bun.spawn({
+  const owned = spawnOwnedProcess({
     cmd: buildCodexCommand(input.binaryPath, input.generation),
     cwd: input.projectDir,
     stdin: new Blob([input.prompt]),
     stdout: "pipe",
     stderr: "pipe",
-    ...ownedProcessSpawnOptions(),
   });
+  const proc = owned.proc;
 
   // The built-in image tool is silent on the stream for the whole generation (35-60 s each), so a
   // run that draws several images in a row looks stalled to the turn's idle detector. Watching the
@@ -161,7 +161,7 @@ export async function runCodexTurn(
     // A watcher callback can fail while stdout is silent. Treat that failure as a reader failure
     // so settlement kills the owned writer before waiting for its pipes, not after natural exit.
     const drained = Promise.all(readers).then(() => undefined);
-    exitCode = await settleProcessStreams(proc, [...readers, Promise.race([drained, deliveryFailed.promise])], input.signal);
+    exitCode = await settleProcessStreams(owned, [...readers, Promise.race([drained, deliveryFailed.promise])], input.signal);
     closeIntake();
     await queue;
   } catch (error) {

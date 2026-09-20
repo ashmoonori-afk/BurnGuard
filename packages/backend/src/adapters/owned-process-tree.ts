@@ -7,6 +7,7 @@ export class OwnedProcessTreeCleanupError extends Error {
 
 /** Capture before the first signal, including descendants outside the root's group. */
 export async function terminateOwnedProcessTree(child: { readonly pid: number; readonly exited: Promise<number> }, termGraceMs: number, killGraceMs: number): Promise<{ readonly exitCode: number; readonly killSent: boolean }> {
+  if (process.platform === "win32") throw new OwnedProcessTreeCleanupError(child.pid);
   const pids = [...snapshotDescendants(child.pid).reverse(), child.pid];
   let exitCode: number | undefined;
   void child.exited.then((code) => { exitCode = code; });
@@ -40,14 +41,7 @@ export function ownedProcessSpawnOptions(): { readonly detached: boolean } {
 }
 
 export async function closeOwnedProcessTree(processId: number): Promise<void> {
-  if (process.platform === "win32") {
-    const result = Bun.spawnSync(["taskkill", "/PID", String(processId), "/T", "/F"], { stdout: "ignore", stderr: "ignore" });
-    // A non-zero taskkill exit usually means the root already exited on its
-    // own, which is the normal path — only an actually surviving process is
-    // worth reporting, and never by throwing (see warnCleanupIncomplete).
-    if (result.exitCode !== 0 && isProcessPresent(processId)) warnCleanupIncomplete(processId);
-    return;
-  }
+  if (process.platform === "win32") throw new OwnedProcessTreeCleanupError(processId);
   // Snapshot before signalling any ancestor: detached tools have their own
   // process group and lose their ownership link when the CLI exits. Do not
   // yield between discovering these exact descendants and signalling them.
@@ -66,10 +60,7 @@ export async function closeOwnedProcessTree(processId: number): Promise<void> {
 }
 
 function snapshotDescendants(processId: number): number[] {
-  const command = process.platform === "win32"
-    ? ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", 'Get-CimInstance Win32_Process | ForEach-Object { "{0} {1} 0" -f $_.ProcessId, $_.ParentProcessId }']
-    : ["ps", "-axo", "pid=,ppid=,pgid="];
-  const result = Bun.spawnSync(command, { stdout: "pipe", stderr: "pipe", timeout: process.platform === "win32" ? 5_000 : 1_000 });
+  const result = Bun.spawnSync(["ps", "-axo", "pid=,ppid=,pgid="], { stdout: "pipe", stderr: "pipe", timeout: 1_000 });
   if (result.exitCode !== 0) throw new Error(`Cannot snapshot owned process tree ${processId}: ${result.stderr.toString()}`);
   const children = new Map<number, number[]>();
   const owned = new Set([processId]);

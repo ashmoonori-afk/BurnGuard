@@ -1,4 +1,5 @@
-import { OwnedProcessTreeCleanupError, terminateOwnedProcessTree } from "../adapters/owned-process-tree";
+import { type OwnedProcess, OwnedProcessHostError, settleOwnedProcess, terminateOwnedProcess } from "../adapters/owned-process";
+import { OwnedProcessTreeCleanupError } from "../adapters/owned-process-tree";
 
 const TERM_GRACE_MS = 250;
 const KILL_GRACE_MS = 2_000;
@@ -149,16 +150,17 @@ export function throwIfAcquisitionAborted(signal: AbortSignal | undefined): void
 }
 
 export async function awaitChildWithAbort(
-  child: Bun.Subprocess,
+  child: OwnedProcess<Bun.Subprocess>,
   signal: AbortSignal,
 ): Promise<OwnedChildCleanupReceipt> {
-  const exactExit = child.exited;
+  const proc = child.proc;
+  const exactExit = proc.exited;
   let notifyAbort: (() => void) | undefined;
   const aborted = new Promise<void>((resolve) => { notifyAbort = resolve; });
   let cleanup: Promise<{ readonly exitCode: number; readonly killSent: boolean }> | undefined;
   const onAbort = (): void => {
     // The async helper snapshots and signals synchronously, before ancestry can be lost.
-    cleanup ??= terminateOwnedProcessTree(child, TERM_GRACE_MS, KILL_GRACE_MS);
+    cleanup ??= terminateOwnedProcess(child, TERM_GRACE_MS, KILL_GRACE_MS);
     // Observe rejection immediately; the exit path below still awaits and propagates it.
     void cleanup.then(() => notifyAbort?.(), () => notifyAbort?.());
   };
@@ -166,11 +168,15 @@ export async function awaitChildWithAbort(
   try {
     if (signal.aborted) onAbort();
     await Promise.race([exactExit, aborted]);
-    if (cleanup === undefined) return receipt(child.pid, await exactExit, false, false);
+    if (cleanup === undefined) {
+      const exitCode = await exactExit;
+      if (child.ownership.kind === "windows-job") await settleOwnedProcess(child, exitCode);
+      return receipt(proc.pid, exitCode, false, false);
+    }
     const result = await cleanup;
-    throw acquisitionAbort(signal, receipt(child.pid, result.exitCode, true, result.killSent));
+    throw acquisitionAbort(signal, receipt(proc.pid, result.exitCode, true, result.killSent));
   } catch (error) {
-    if (error instanceof OwnedProcessTreeCleanupError) throw new OwnedChildCleanupError(child.pid);
+    if (error instanceof OwnedProcessTreeCleanupError || error instanceof OwnedProcessHostError) throw new OwnedChildCleanupError(proc.pid);
     throw error;
   } finally {
     signal.removeEventListener("abort", onAbort);

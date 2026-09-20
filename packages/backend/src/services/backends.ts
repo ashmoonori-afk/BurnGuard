@@ -2,7 +2,7 @@ import { CLAUDE_MODELS, COPILOT_MODELS, GEMINI_MODELS, GENERATION_EFFORTS, type 
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import { ownedProcessSpawnOptions } from "../adapters/owned-process-tree";
+import { spawnOwnedProcess } from "../adapters/owned-process";
 import { settleProcessStreams } from "../adapters/process-streams";
 
 const VERSION_PROBE_TIMEOUT_MS = 5_000;
@@ -27,10 +27,11 @@ export async function probeCodexAuthentication(binaryPath: string): Promise<bool
   let timer: ReturnType<typeof setTimeout> | undefined;
   timer = setTimeout(() => controller.abort(), 5_000);
   try {
-    const child = Bun.spawn({ cmd: [binaryPath, "login", "status"], stdin: "ignore", stdout: "pipe", stderr: "pipe", ...ownedProcessSpawnOptions() });
+    const owned = spawnOwnedProcess({ cmd: [binaryPath, "login", "status"], stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+    const child = owned.proc;
     let stdout = "";
     let stderr = "";
-    const exit = await settleProcessStreams(child, [
+    const exit = await settleProcessStreams(owned, [
       new Response(child.stdout).text().then(text => { stdout = text; }),
       new Response(child.stderr).text().then(text => { stderr = text; }),
     ], controller.signal);
@@ -75,16 +76,16 @@ async function probeVersion(binaryPath: string): Promise<string | undefined> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), VERSION_PROBE_TIMEOUT_MS);
   try {
-    const proc = Bun.spawn({
+    const owned = spawnOwnedProcess({
       cmd: [binaryPath, "--version"],
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      ...ownedProcessSpawnOptions(),
     });
+    const proc = owned.proc;
     let stdout = "";
     let stderr = "";
-    const code = await settleProcessStreams(proc, [
+    const code = await settleProcessStreams(owned, [
       new Response(proc.stdout).text().then(text => { stdout = text; }),
       new Response(proc.stderr).text().then(text => { stderr = text; }),
     ], controller.signal);

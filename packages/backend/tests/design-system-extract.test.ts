@@ -1,3 +1,4 @@
+import { spawnOwnedProcess } from "../src/adapters/owned-process";
 import { describe, expect, spyOn, test } from "bun:test";
 import { extractDesignSystemFromSource } from "../src/services/design-system-extract";
 import { mkdir, mkdtemp, rm, truncate, writeFile } from "node:fs/promises";
@@ -165,7 +166,8 @@ describe("bounded extraction acquisition", () => {
   // under test is POSIX-only, so skip rather than weaken the assertion.
   test.skipIf(process.platform === "win32")("Given a TERM-resistant owned child When its signal aborts Then KILL is reaped and an unrelated sentinel survives", async () => {
     // Given
-    const child = Bun.spawn([process.execPath, "-e", "process.on('SIGTERM',()=>{});console.log('READY');await new Promise(()=>{})"], { stdout: "pipe", stderr: "ignore" });
+    const owned = spawnOwnedProcess({ cmd: [process.execPath, "-e", "process.on('SIGTERM',()=>{});console.log('READY');await new Promise(()=>{})"], stdin: "ignore", stdout: "pipe", stderr: "ignore" });
+    const child = owned.proc;
     const sentinel = Bun.spawn([process.execPath, "-e", "process.on('SIGTERM',()=>process.exit(0));console.log('READY');await new Promise(()=>{})"], { stdout: "pipe", stderr: "ignore" });
     const childReader = child.stdout.getReader();
     const sentinelReader = sentinel.stdout.getReader();
@@ -173,7 +175,7 @@ describe("bounded extraction acquisition", () => {
     const exactChildExit = child.exited;
     const exactSentinelExit = sentinel.exited;
     const controller = new AbortController();
-    const operation = awaitChildWithAbort(child, controller.signal);
+    const operation = awaitChildWithAbort(owned, controller.signal);
 
     // When
     controller.abort();
