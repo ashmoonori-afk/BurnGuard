@@ -58,7 +58,7 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
     for (const element of textElements) {
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
-      const canvas = element.closest<HTMLElement>("[data-slide]")?.getBoundingClientRect();
+      const canvas = element.closest<HTMLElement>("[data-slide],[data-graphic-artboard]")?.getBoundingClientRect();
       const bounds = canvas ?? { left: 0, right: document.documentElement.clientWidth, top: 0, bottom: fixedCanvas ? window.innerHeight : Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) };
       // Scroll dimensions include visible ink outside tight line boxes; only clipped axes lose text.
       const clips = (overflow: string): boolean => overflow !== "visible";
