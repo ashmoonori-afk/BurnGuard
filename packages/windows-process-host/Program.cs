@@ -298,6 +298,10 @@ namespace BurnGuard.ProcessHost
             return parsed;
         }
 
+        // Batch command construction is adapted under Apache-2.0 from Rust 1.90.0 std:
+        // library/std/src/sys/args/windows.rs make_bat_command_line/append_bat_arg.
+        // Source: https://github.com/rust-lang/rust/blob/1.90.0/library/std/src/sys/args/windows.rs
+        // Copyright (c) The Rust Project Contributors. See the repository NOTICE.
         private static Invocation BuildInvocation(IReadOnlyList<string> target)
         {
             var extension = Path.GetExtension(target[0]);
@@ -308,20 +312,46 @@ namespace BurnGuard.ProcessHost
             var command = !string.IsNullOrEmpty(configured) && Path.IsPathRooted(configured) && string.Equals(Path.GetFullPath(configured), systemCommand, StringComparison.OrdinalIgnoreCase)
                 ? configured
                 : systemCommand;
-            var batch = new StringBuilder("\"");
-            for (var index = 0; index < target.Count; index++)
+            if (target[0].IndexOf('"') >= 0 || target[0].EndsWith("\\", StringComparison.Ordinal)) Fail(HostExit.InvalidArguments, "invalid_batch_target");
+            var batch = new StringBuilder(QuoteArgument(command) + " /e:ON /v:OFF /d /c \"\"");
+            batch.Append(target[0]);
+            batch.Append('"');
+            for (var index = 1; index < target.Count; index++)
             {
-                if (index > 0) batch.Append(' ');
+                batch.Append(' ');
                 batch.Append(QuoteBatchArgument(target[index]));
             }
             batch.Append('"');
-            return new Invocation { Application = command, CommandLine = QuoteArgument(command) + " /d /v:off /s /c " + batch };
+            return new Invocation { Application = command, CommandLine = batch.ToString() };
         }
 
         private static string QuoteBatchArgument(string value)
         {
             if (value.IndexOfAny(new[] { '\0', '\r', '\n' }) >= 0) Fail(HostExit.InvalidArguments, "invalid_batch_argument");
-            return "\"" + value.Replace("^", "^^").Replace("%", "%%").Replace("\"", "^\"") + "\"";
+            var quote = value.Length == 0 || value.EndsWith("\\", StringComparison.Ordinal);
+            const string safe = "#$*+-./:?@\\_";
+            foreach (var character in value)
+            {
+                if (character < 0x20 || character < 0x7f && !char.IsLetterOrDigit(character) && safe.IndexOf(character) < 0) quote = true;
+            }
+            var result = new StringBuilder();
+            if (quote) result.Append('"');
+            var slashes = 0;
+            foreach (var character in value)
+            {
+                if (character == '\\') { slashes++; continue; }
+                if (character == '"') { result.Append('\\', slashes * 2); result.Append("\"\""); }
+                else
+                {
+                    result.Append('\\', slashes);
+                    if (character == '%') result.Append("%%cd:~,");
+                    result.Append(character);
+                }
+                slashes = 0;
+            }
+            result.Append('\\', quote ? slashes * 2 : slashes);
+            if (quote) result.Append('"');
+            return result.ToString();
         }
 
         private static string BuildCommandLine(IReadOnlyList<string> arguments)

@@ -139,3 +139,14 @@ INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
 LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
 OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
+--------------------------------------------------------------------------------
+
+The Windows process host batch-command quoting is adapted from the Rust 1.90.0
+standard library (`library/std/src/sys/args/windows.rs`, functions
+`make_bat_command_line` and `append_bat_arg`).
+
+Source: https://github.com/rust-lang/rust/tree/1.90.0
+Copyright (c) The Rust Project Contributors.
+Rust is dual-licensed under the Apache License, Version 2.0 and the MIT
+License. This adaptation is used under the Apache License, Version 2.0; the
+full license text is included in the root LICENSE file.
