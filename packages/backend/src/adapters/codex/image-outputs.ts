@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { opendirSync, readFileSync, statSync, type Dir } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { PathBoundaryError, resolveWithin } from "../../security/path-boundary";
 
@@ -11,29 +11,29 @@ import { PathBoundaryError, resolveWithin } from "../../security/path-boundary";
  * logo gate needs; a missing directory, a foreign thread id or a non-PNG file yields nothing.
  */
 const THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-/** At most this many PNG files are hashed, and at most MAX_SCANNED_ENTRIES directory entries are read to find them. */
+/**
+ * At most this many PNG files are hashed, and at most MAX_CONSIDERED_ENTRIES directory entries are
+ * examined to find them. The directory listing itself is one `readdirSync` call: Bun 1.3 has no
+ * incremental readdir (`Dir.readSync` reads the whole directory on its first call), so the bound
+ * is on what this process examines, opens and hashes, not on the listing the OS returns. The
+ * directory is Codex-owned and holds one thread's outputs (a handful of files), so that is the
+ * practical bound; a directory the model could fill is the stage, which is never scanned here.
+ */
 const MAX_GENERATED_FILES = 64;
-const MAX_SCANNED_ENTRIES = 1024;
+const MAX_CONSIDERED_ENTRIES = 1024;
 const GENERATED_PNG_NAME = /^[A-Za-z0-9._-]+\.png$/i;
 
 export function collectGeneratedImageHashes(codexHome: string, threadId: string): string[] {
   if (!THREAD_ID.test(threadId)) return [];
-  // Enumeration itself is bounded: the directory is read entry by entry and only PNG-named regular
-  // files count against the allowance, so unrelated entries cannot crowd a real output out. A
-  // missing directory surfaces from open or (on Bun) from the first read; both mean "no outputs".
   let root: string;
   const names: string[] = [];
   try {
     root = resolveWithin(codexHome, "generated_images", threadId);
-    const dir: Dir = opendirSync(root);
-    try {
-      for (let scanned = 0; scanned < MAX_SCANNED_ENTRIES && names.length < MAX_GENERATED_FILES; scanned += 1) {
-        const entry = dir.readSync();
-        if (entry === null) break;
-        if (entry.isFile() && GENERATED_PNG_NAME.test(entry.name)) names.push(entry.name);
-      }
-    } finally {
-      dir.closeSync();
+    // Only PNG-named regular files count against the file allowance, so unrelated entries cannot
+    // crowd a real output out of it (they do count against the larger entry budget).
+    for (const entry of readdirSync(root, { withFileTypes: true }).slice(0, MAX_CONSIDERED_ENTRIES)) {
+      if (names.length >= MAX_GENERATED_FILES) break;
+      if (entry.isFile() && GENERATED_PNG_NAME.test(entry.name)) names.push(entry.name);
     }
   } catch (error) {
     if (error instanceof PathBoundaryError || (error instanceof Error && "code" in error)) return [];

@@ -15,6 +15,7 @@ import {
   type LogoTurnExpectation,
 } from "../src/services/logo-deliverables";
 import { LOGO_STARTER_NODE_ID, LOGO_STARTER_SENTENCE } from "../src/db/templates/logo";
+import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const THREAD_ID = "01a0bd75-12bd-75a3-8193-127dd61ddb33";
@@ -154,15 +155,23 @@ describe("collectGeneratedImageHashes bounds", () => {
     expect(collectGeneratedImageHashes(codexHome, THREAD_ID)).toHaveLength(64);
   });
 
-  test("Given a symlink escaping the thread directory or a foreign thread When scanned Then nothing is hashed", async () => {
+  test.skipIf(!canCreateSymlink())(`Given a symlink escaping the thread directory When scanned Then it is not followed (${SYMLINK_SKIP_REASON})`, async () => {
     const codexHome = await temp("bg-codex-home-");
     const outside = await temp("bg-outside-");
     await writeFile(path.join(outside, "secret.png"), png(5));
     const threadDir = path.join(codexHome, "generated_images", THREAD_ID);
     await mkdir(threadDir, { recursive: true });
-    await symlink(path.join(outside, "secret.png"), path.join(threadDir, "link.png")).catch(() => undefined);
+    await symlink(path.join(outside, "secret.png"), path.join(threadDir, "link.png"));
     expect(collectGeneratedImageHashes(codexHome, THREAD_ID)).toEqual([]);
+  });
+
+  test("Given a foreign, missing or traversal thread id When scanned Then nothing is hashed", async () => {
+    const codexHome = await temp("bg-codex-home-");
+    const threadDir = path.join(codexHome, "generated_images", THREAD_ID);
+    await mkdir(threadDir, { recursive: true });
+    await writeFile(path.join(threadDir, "exec-1.png"), png(6));
     expect(collectGeneratedImageHashes(codexHome, "01a0bd75-12bd-75a3-8193-000000000000")).toEqual([]);
     expect(collectGeneratedImageHashes(codexHome, "../generated_images")).toEqual([]);
+    expect(collectGeneratedImageHashes(codexHome, `${THREAD_ID}/..`)).toEqual([]);
   });
 });
