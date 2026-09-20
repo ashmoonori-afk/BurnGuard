@@ -33,6 +33,15 @@ jobs:
         run: bun run build:mac:release
       - name: Verify the bundled Node renderer runtime
         run: test -x "dist/mac/BurnGuard Design.app/Contents/MacOS/resources/node/node"
+      - name: Verify packaged native canvas, persistence, and exports
+        run: bun scripts/qa/native-mac-smoke.ts "dist/mac/BurnGuard Design.app" "$RUNNER_TEMP/native-mac-smoke-evidence"
+      - name: Upload native acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BurnGuard-macOS-Native-QA
+          path: ${{ runner.temp }}/native-mac-smoke-evidence/*
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: BurnGuard-macOS
