@@ -17,17 +17,13 @@ export interface CodexParserContext {
 
 /**
  * Parses a single stdout line from the Codex CLI into zero or more
- * `NormalizedEvent`s. The parser is intentionally forward-compatible:
+ * `NormalizedEvent`s. The runner uses `exec --json`: only recognized
+ * structured events are eligible for delivery. Both supported snake_case
+ * and dot.case event variants remain accepted.
  *
- *   1. JSON lines with a `type` tag matching a known event kind are
- *      mapped to the corresponding normalized event. Both snake_case
- *      and dot.case variants are accepted because Codex's eventual
- *      structured output format isn't nailed down yet.
- *   2. Anything else — non-JSON text, JSON without a `type`, JSON with
- *      an unknown `type` — falls through to `chat.delta` so nothing
- *      gets silently dropped. This preserves the Phase 1 raw-mode
- *      guarantee while letting the adapter upgrade incrementally as
- *      Codex starts to emit structured events.
+ * Non-JSON, malformed, untyped and unknown stdout is dropped. It may be
+ * provider diagnostics containing private data, not authored assistant
+ * text; only recognized message events can produce `chat.delta`.
  *
  * Callers must supply a fresh context per turn (with a unique turnId
  * and an empty `toolNames` map); the parser mutates `toolNames` to
@@ -51,19 +47,11 @@ export function parseCodexLine(
         if (typeof record.type === "string") return [];
       }
     } catch {
-      // Malformed JSON — fall through to raw delta.
+      // Unparseable stdout is not authored assistant text.
     }
   }
 
-  return [
-    {
-      id: ulid(),
-      ts: Date.now(),
-      type: "chat.delta",
-      turnId: ctx.turnId,
-      text: line,
-    },
-  ];
+  return [];
 }
 
 function mapStructured(
