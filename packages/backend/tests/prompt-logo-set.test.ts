@@ -103,6 +103,8 @@ describe("logo output prompt block", () => {
     });
     expect(rulePhases(prompt)).toEqual(["explore"]);
     expect(prompt.split("LOGO_IMAGE_GENERATION_REQUIRED")).toHaveLength(2);
+    // The candidate must be the tool's bytes: a fixed pixel size once made the model re-encode with sips and fail provenance.
+    expect(prompt.split("LOGO_CANDIDATE_BYTES_VERBATIM")).toHaveLength(2);
     expect(prompt.split("LOGO_REALISM_EXCEPTION")).toHaveLength(2);
     expect(prompt.split("LOGO_SKILL_MD")).toHaveLength(2);
   });
