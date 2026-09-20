@@ -346,20 +346,41 @@ namespace BurnGuard.Desktop
                 args.ResultFilePath = destination;
                 args.Handled = true;
                 var operation = args.DownloadOperation;
-                EventHandler<object> changed = null;
-                Action settle = () =>
-                {
-                    smokeDownloadEvents.Add("native-state:" + extension + ":" + operation.State);
-                    if (operation.State == CoreWebView2DownloadState.InProgress) return;
-                    operation.StateChanged -= changed;
-                    if (operation.State == CoreWebView2DownloadState.Completed) completion.TrySetResult(destination);
-                    else completion.TrySetException(new InvalidOperationException("Native " + extension + " download was interrupted."));
-                };
-                changed = (_, __) => settle();
-                operation.StateChanged += changed;
                 smokeDownloadEvents.Add("native-start:" + extension + ":" + operation.State + ":" + mime + ":" + suggested);
-                settle();
+                ObserveDiagnosticDownload(
+                    handler => operation.StateChanged += handler,
+                    handler => operation.StateChanged -= handler,
+                    () => operation.State,
+                    state => smokeDownloadEvents.Add("native-state:" + extension + ":" + state),
+                    state =>
+                    {
+                        if (state == CoreWebView2DownloadState.Completed) completion.TrySetResult(destination);
+                        else completion.TrySetException(new InvalidOperationException("Native " + extension + " download was interrupted."));
+                    });
             };
+        }
+
+        private static void ObserveDiagnosticDownload(
+            Action<EventHandler<object>> subscribe,
+            Action<EventHandler<object>> unsubscribe,
+            Func<CoreWebView2DownloadState> readState,
+            Action<CoreWebView2DownloadState> observed,
+            Action<CoreWebView2DownloadState> terminal)
+        {
+            var settled = false;
+            EventHandler<object> changed = null;
+            Action inspect = () =>
+            {
+                var state = readState();
+                observed(state);
+                if (state == CoreWebView2DownloadState.InProgress || settled) return;
+                settled = true;
+                unsubscribe(changed);
+                terminal(state);
+            };
+            changed = (_, __) => inspect();
+            subscribe(changed);
+            inspect();
         }
 
         private static string DiagnosticDownloadExtension(string suggested, string mime)
