@@ -2,16 +2,20 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import type { TurnErrorCode } from "@bg/shared/events";
 import { requiredArray, requiredBoolean, stringArray } from "@bg/shared/contract-parser";
 import { parseLearningContract } from "@bg/shared/learning-contract";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { createArtifactOperation, transitionArtifactOperation } from "../src/db/artifact-operation-repository";
 import { commitDesignSystemReceipt, getDesignSystemPipeline, prepareDesignSystemReceipt, updateDesignSystemMetadata } from "../src/db/design-system-repository";
-import { insertSequencedEvent, parsePersistedNormalizedEvent, parsePersistedUserEvent } from "../src/db/event-sequence-repository";
+import { insertSequencedEvent, listSequencedSessionEvents, parsePersistedNormalizedEvent, parsePersistedUserEvent } from "../src/db/event-sequence-repository";
+import { persistNormalizedEvent } from "../src/db/events";
 import { createExportAttempt, createExportRetry, getExportAttempt } from "../src/db/export-attempt-repository";
 import { createLearningCheckpoint, getLearningCheckpoint, updateLearningProgress } from "../src/db/learning-repository";
 import { runMigrationsFrom } from "../src/db/migrate";
 import { PipelineRepositoryError, reconcilePipelineRows } from "../src/db/pipeline-repository";
+import { LogoDeliverableError } from "../src/services/logo-deliverables";
+import { sanitizeTurnEvent } from "../src/services/turn-error-sanitizer";
 
 let sqlite: Database;
 let db: ReturnType<typeof drizzle>;
@@ -208,6 +212,54 @@ describe("artifact, export, event, and recovery repositories", () => {
     expect(normalizedTypes).toEqual(normalized.map((item) => item.type));
     expect(userTypes).toEqual(users.map((item) => item.type));
     try { parsePersistedNormalizedEvent("{}", "bad"); } catch (error) { expect(repositoryError(error).code).toBe("corrupt_json"); }
+  });
+
+  test("Given a persisted sanitized logo failure When replayed Then its stage code and terminal idle survive without diagnostics", () => {
+    // Given
+    const cause = new LogoDeliverableError("rounds_changed");
+    const safe = sanitizeTurnEvent({ id: "logo-error", ts: 10, type: "status.error", message: "private-stage-diagnostic", recoverable: true }, cause);
+    const error = persistNormalizedEvent(sqlite, "s", safe);
+    const idle = persistNormalizedEvent(sqlite, "s", { id: "logo-idle", ts: 10, type: "status.idle", stopReason: "error" });
+
+    // When
+    const replay = listSequencedSessionEvents(sqlite, "s", 0);
+
+    // Then
+    expect(replay).toEqual([error, idle]);
+    expect(replay[0]?.event).toMatchObject({ type: "status.error", code: "logo_deliverables_missing", recoverable: true });
+    expect(JSON.stringify(replay)).not.toContain("private-stage-diagnostic");
+    expect(JSON.stringify(replay)).not.toContain(cause.detail);
+  });
+
+  test("Given every shared turn error code When persisted and replayed Then strict readers preserve all codes", () => {
+    // Given: Record makes additions to the shared DTO require replay coverage.
+    const codes = {
+      graphic_requires_authenticated_codex: "graphic_requires_authenticated_codex", graphic_starter_unchanged: "graphic_starter_unchanged",
+      logo_requires_authenticated_codex: "logo_requires_authenticated_codex", logo_deliverables_missing: "logo_deliverables_missing",
+      logo_image_provenance_missing: "logo_image_provenance_missing", design_review_failed: "design_review_failed",
+      commandcode_unavailable: "commandcode_unavailable", unsupported_generation_model_effort: "unsupported_generation_model_effort",
+      backend_unavailable: "backend_unavailable", agent_control_files_present: "agent_control_files_present", path_unavailable: "path_unavailable",
+      immutable_reference_mutated: "immutable_reference_mutated", immutable_reference_path_unavailable: "immutable_reference_path_unavailable",
+      immutable_reference_escaped: "immutable_reference_escaped", private_input_unavailable: "private_input_unavailable",
+      publication_failed: "publication_failed", operation_conflict: "operation_conflict", operation_cancelled: "operation_cancelled", turn_failed: "turn_failed",
+    } satisfies Record<TurnErrorCode, TurnErrorCode>;
+    const expected = Object.values(codes).map((code) => {
+      const event = { id: code, ts: 10, type: "status.error" as const, code, message: "sanitized", recoverable: true };
+      const stored = insertSequencedEvent(sqlite, { id: event.id, sessionId: "s", direction: "down", type: event.type, payload: event, turnId: null, processedAt: event.ts, createdAt: event.ts });
+      return { sequence: stored.sequence, event };
+    });
+
+    // When / Then
+    expect(listSequencedSessionEvents(sqlite, "s", 0)).toEqual(expected);
+  });
+
+  test.each(["unknown_error", "", "toString", "__proto__", null, 7, {}])("Given invalid persisted error code %j When replayed Then corruption is rejected", (code) => {
+    // Given
+    const event = { id: "invalid-error", ts: 10, type: "status.error", code, message: "sanitized", recoverable: true };
+    insertSequencedEvent(sqlite, { id: event.id, sessionId: "s", direction: "down", type: event.type, payload: event, turnId: null, processedAt: event.ts, createdAt: event.ts });
+
+    // When / Then
+    expect(() => listSequencedSessionEvents(sqlite, "s", 0)).toThrow(new PipelineRepositoryError("corrupt_json", event.id));
   });
 
   test("Given events share a millisecond When inserted Then sequence is monotonic and corrupted JSON is rejected with a machine code", () => {

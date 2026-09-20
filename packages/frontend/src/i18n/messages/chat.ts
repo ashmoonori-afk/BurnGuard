@@ -189,6 +189,16 @@ export const chatMessages = defineMessages({
     en: "The logo deliverables were incomplete, so nothing was applied. Generate concepts again or re-request the selected one.",
     "zh-CN": "标志成果未完成，因此未应用。请重新生成方案，或再次提交所选方案。",
   },
+  "chat.error.logoImageProvenanceMissing": {
+    ko: "로고 이미지의 생성 출처를 확인하지 못해 반영하지 않았어요. 이미지 생성 도구로 시안을 다시 만들어 주세요.",
+    en: "The logo images' generation origin could not be verified, so nothing was applied. Create the concepts again with the image-generation tool.",
+    "zh-CN": "无法验证标志图像的生成来源，因此未应用结果。请使用图像生成工具重新创建方案。",
+  },
+  "chat.error.designReviewFailed": {
+    ko: "디자인 검사·수정을 완료하지 못해 반영하지 않았어요. 기존 결과는 유지돼요. 검사를 다시 요청해 주세요.",
+    en: "Design checks or repairs could not be completed, so nothing was applied. The previous result is preserved. Request the checks again.",
+    "zh-CN": "设计检查或修复未能完成，因此未应用结果。原有结果已保留。请重新请求检查。",
+  },
   "chat.error.commandCodeUnavailable": {
     ko: "설정에서 CommandCode API 키를 저장하고 Claude Code를 선택해 주세요.",
     en: "Save a CommandCode API key in Settings and select Claude Code.",

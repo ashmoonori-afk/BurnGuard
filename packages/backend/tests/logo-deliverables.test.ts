@@ -280,7 +280,7 @@ describe("logo explore deliverables", () => {
     const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
     await exploreResult(dir, 1);
     await expect(assertLogoDeliverables(dir, expectation, await evidence(dir, 0))).rejects.toMatchObject({
-      code: "logo_deliverables_missing",
+      code: "logo_image_provenance_missing",
       detail: "image_generation_missing",
     });
   });
@@ -289,7 +289,7 @@ describe("logo explore deliverables", () => {
     const dir = await priorProject(0);
     const expectation = await captureLogoTurnExpectation(dir, "로고 만들어줘");
     await exploreResult(dir, 1);
-    await expect(assertLogoDeliverables(dir, expectation, { imageGenerations: 1, imageOutputs: new Set(["0".repeat(64)]) })).rejects.toMatchObject({ detail: "candidate_unprovenanced:candidate-1" });
+    await expect(assertLogoDeliverables(dir, expectation, { imageGenerations: 1, imageOutputs: new Set(["0".repeat(64)]) })).rejects.toMatchObject({ code: "logo_image_provenance_missing", detail: "candidate_unprovenanced:candidate-1" });
   });
 
   test("Given the exploration scan Then it hashes every candidate PNG under explorations and nothing else", async () => {

@@ -272,6 +272,7 @@ test("Given explicit generation options When a turn runs Then the adapter receiv
   const turn = startUserTurn(sessionId, { type: "user.message", text: "Create", generation }, undefined, {
     detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "fixture", models: [{ id: "fixture-model", label: "Fixture", efforts: ["low", "high"] }] }] }),
     runAdapter: async (_backend, input) => { expect(input.generation).toEqual(generation); observed = true; return { exitCode: 0 }; },
+    reviewDesign: async () => ({ status: "checked", repairs: 0, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "ready", checks: [] } }),
   });
   await turn!.promise;
   expect(observed).toBe(true);

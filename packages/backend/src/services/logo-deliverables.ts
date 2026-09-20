@@ -24,16 +24,20 @@ import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
  *
  * The phase is never trusted from the model: the caller derives it from the manifest on disk and
  * the action sentinel the user sent, and every artefact this module inspects is re-read from the
- * staged directory. A failure fails the turn with `logo_deliverables_missing`; the `detail` names
- * the missing contract without ever naming a filesystem path.
+ * staged directory. Provenance failures have a separate public code from incomplete deliverables;
+ * the private `detail` names the missing contract without ever naming a filesystem path.
  */
 export class LogoDeliverableError extends Error {
   readonly name = "LogoDeliverableError";
-  readonly code = "logo_deliverables_missing";
+  readonly code: "logo_deliverables_missing" | "logo_image_provenance_missing";
   readonly detail: string;
 
   constructor(detail: string) {
-    super("logo_deliverables_missing");
+    const code = detail === "image_generation_missing" || detail.startsWith("candidate_unprovenanced:")
+      ? "logo_image_provenance_missing" : "logo_deliverables_missing";
+    // The coordinator preserves the message when wrapping domain errors; keep it a public code.
+    super(code);
+    this.code = code;
     this.detail = detail;
   }
 }
