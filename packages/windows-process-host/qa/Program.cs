@@ -74,18 +74,19 @@ internal static class ProcessHostChecks
             File.WriteAllText(commandShim, shim);
             File.WriteAllText(batchShim, shim);
             File.Copy(Self, Path.Combine(fixture.Root, "ProcessHostChecks.exe"));
-            VerifyArguments(helper, fixture.Root, Self, arguments);
-            VerifyArguments(helper, fixture.Root, commandShim, arguments);
-            VerifyArguments(helper, fixture.Root, batchShim, arguments);
+            VerifyArguments(helper, fixture.Root, Self, arguments, true);
+            VerifyArguments(helper, fixture.Root, commandShim, arguments, false);
+            VerifyArguments(helper, fixture.Root, batchShim, arguments, false);
             if (File.Exists(injected)) throw new Exception("batch argument escaped into command execution");
         }
     }
 
-    private static void VerifyArguments(string helper, string root, string target, string[] arguments)
+    private static void VerifyArguments(string helper, string root, string target, string[] arguments, bool directExecutable)
     {
         var token = Guid.NewGuid().ToString("N");
         var receipt = Path.Combine(root, token + ".json");
         var command = "launch --job " + token + " --receipt " + Quote(receipt) + " -- " + Quote(target);
+        if (directExecutable) command += " capture";
         foreach (var argument in arguments) command += " " + Quote(argument);
         using (var host = Start(helper, command, true))
         {
