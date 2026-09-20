@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import path from "node:path";
 import { ulid } from "ulid";
 import type { AdapterRunInput, AdapterRunResult } from "../types";
 import { parseCodexLine, type CodexParserContext } from "./parser";
@@ -40,6 +42,7 @@ export async function runCodexTurn(
     turnId: input.turnId,
     projectDir: input.projectDir,
     toolNames: new Map(),
+    codexHome: process.env.CODEX_HOME ?? path.join(homedir(), ".codex"),
   };
 
   let sawIdle = false;

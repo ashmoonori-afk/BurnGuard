@@ -1,9 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   parseCodexLine,
   type CodexParserContext,
 } from "../src/adapters/codex/parser";
+
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+const PNG_SHA = createHash("sha256").update(PNG).digest("hex");
 
 function ctx(): CodexParserContext {
   return { turnId: "turn-1", toolNames: new Map() };
@@ -183,6 +189,48 @@ describe("parseCodexLine — structured path", () => {
       c,
     );
     expect(events).toEqual([]);
+  });
+
+  test("Codex skills-budget notice does not become a failed tool", () => {
+    const events = parseCodexLine(
+      JSON.stringify({
+        type: "item.completed",
+        item: { type: "error", message: "Exceeded skills context budget. All skill descriptions were removed and 26 additional skills were not included in the model-visible skills list." },
+      }),
+      ctx(),
+    );
+    expect(events).toEqual([]);
+  });
+
+  test("Given images the built-in image tool saved for this thread When the turn completes Then each is surfaced as one image_generation call carrying only its sha256", () => {
+    const codexHome = mkdtempSync(path.join(tmpdir(), "bg-codex-home-"));
+    const threadId = "01a0bd75-12bd-75a3-8193-127dd61ddb33";
+    mkdirSync(path.join(codexHome, "generated_images", threadId), { recursive: true });
+    writeFileSync(path.join(codexHome, "generated_images", threadId, "exec-1.png"), PNG);
+    writeFileSync(path.join(codexHome, "generated_images", threadId, "notes.txt"), PNG);
+    writeFileSync(path.join(codexHome, "generated_images", threadId, "fake.png"), Buffer.from("not a png"));
+    const c: CodexParserContext = { ...ctx(), codexHome };
+    expect(parseCodexLine(JSON.stringify({ type: "thread.started", thread_id: threadId }), c)).toEqual([]);
+    const events = parseCodexLine(JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } }), c);
+    expect(events.map((event) => event.type)).toEqual(["tool.started", "tool.finished", "usage.delta", "chat.message_end", "status.idle"]);
+    expect(events[0]).toMatchObject({ type: "tool.started", tool: "image_generation" });
+    expect(events[1]).toMatchObject({ type: "tool.finished", tool: "image_generation", ok: true, output: { image_sha256: [PNG_SHA] } });
+    expect(JSON.stringify(events)).not.toContain(codexHome);
+  });
+
+  test("Given no thread, an unsafe thread id or no codexHome When the turn completes Then no image call is invented", () => {
+    const codexHome = mkdtempSync(path.join(tmpdir(), "bg-codex-home-"));
+    mkdirSync(path.join(codexHome, "generated_images", "other"), { recursive: true });
+    writeFileSync(path.join(codexHome, "generated_images", "other", "exec-1.png"), PNG);
+    const completed = JSON.stringify({ type: "turn.completed", usage: {} });
+    const types = (c: CodexParserContext) => parseCodexLine(completed, c).map((event) => event.type);
+    expect(types({ ...ctx(), codexHome })).toEqual(["usage.delta", "chat.message_end", "status.idle"]);
+    const traversal: CodexParserContext = { ...ctx(), codexHome };
+    parseCodexLine(JSON.stringify({ type: "thread.started", thread_id: "../generated_images/other" }), traversal);
+    expect(types(traversal)).toEqual(["usage.delta", "chat.message_end", "status.idle"]);
+    const noHome: CodexParserContext = ctx();
+    parseCodexLine(JSON.stringify({ type: "thread.started", thread_id: "01a0bd75-12bd-75a3-8193-127dd61ddb33" }), noHome);
+    expect(types(noHome)).toEqual(["usage.delta", "chat.message_end", "status.idle"]);
   });
 
   test("Codex turn.failed becomes one bounded terminal error sequence", () => {
