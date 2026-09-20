@@ -35,10 +35,19 @@ jobs:
           bun scripts/build-windows-process-host.ts
           dotnet build packages/windows-process-host/qa-host/BurnGuard.ProcessHost.Qa.csproj -c Release -o dist/windows-process-host-qa --nologo
       - name: Verify native Windows process host
+        id: process_host_qa
         env:
           BG_WINDOWS_PROCESS_HOST: ${{ github.workspace }}\dist\windows-process-host\burnguard-windows-process-host.exe
           BG_WINDOWS_PROCESS_HOST_QA: ${{ github.workspace }}\dist\windows-process-host-qa\burnguard-windows-process-host-qa.exe
+          BG_WINDOWS_PROCESS_HOST_EVIDENCE: ${{ github.workspace }}\.omo\evidence\windows-process-host
         run: dotnet run --project packages/windows-process-host/qa/ProcessHostChecks.csproj -c Release
+      - name: Upload Windows process host evidence
+        if: always() && steps.process_host_qa.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BurnGuard-Windows-Process-Host-QA
+          path: .omo/evidence/windows-process-host/*
+          if-no-files-found: error
       - name: Verify owned process cleanup in an isolated runner
         env:
           BG_WINDOWS_PROCESS_HOST: ${{ github.workspace }}\dist\windows-process-host\burnguard-windows-process-host.exe

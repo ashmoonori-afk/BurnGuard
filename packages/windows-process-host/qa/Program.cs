@@ -89,9 +89,16 @@ internal static class ProcessHostChecks
         foreach (var argument in arguments) command += " " + Quote(argument);
         using (var host = Start(helper, command, true))
         {
+            var watch = Stopwatch.StartNew();
             var output = host.StandardOutput.ReadToEndAsync();
-            if (!host.WaitForExit(5_000) || !output.Wait(5_000)) throw new Exception("argument fixture deadline");
-            Equal(host.ExitCode, 0, "argument fixture host exit");
+            var error = host.StandardError.ReadToEndAsync();
+            var exited = host.WaitForExit(5_000);
+            var remaining = Math.Max(0, 5_000 - (int)watch.ElapsedMilliseconds);
+            var streams = exited && Task.WaitAll(new Task[] { output, error }, remaining);
+            var receiptText = File.Exists(receipt) ? File.ReadAllText(receipt) : "";
+            WriteArgumentEvidence(target, arguments, exited ? host.ExitCode : (int?)null, output.IsCompleted ? output.Result : "", error.IsCompleted ? error.Result : "", receiptText);
+            if (!exited || !streams) throw new Exception("argument fixture deadline: " + Path.GetExtension(target));
+            if (host.ExitCode != 0) throw new Exception("argument fixture host exit: " + Path.GetExtension(target) + ":" + host.ExitCode);
             var lines = output.Result.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
             Equal(lines.Length, arguments.Length, "argument count changed");
             for (var index = 0; index < arguments.Length; index++)
@@ -171,6 +178,27 @@ internal static class ProcessHostChecks
 
     private static string LaunchArguments(string token, string receipt, string mode, string eventName) =>
         "launch --job " + token + " --receipt " + Quote(receipt) + " -- " + Quote(Self) + " " + mode + " " + Quote(eventName);
+
+    private static void WriteArgumentEvidence(string target, string[] arguments, int? exitCode, string output, string error, string receipt)
+    {
+        var root = Environment.GetEnvironmentVariable("BG_WINDOWS_PROCESS_HOST_EVIDENCE");
+        if (string.IsNullOrEmpty(root)) return;
+        Directory.CreateDirectory(root);
+        var extension = Path.GetExtension(target).TrimStart('.').ToLowerInvariant();
+        if (extension != "cmd" && extension != "bat") extension = "exe";
+        var encoded = new string[arguments.Length];
+        for (var index = 0; index < arguments.Length; index++) encoded[index] = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(arguments[index]));
+        var value = new Dictionary<string, object> {
+            ["schema_version"] = 1,
+            ["case"] = extension,
+            ["arguments_base64"] = encoded,
+            ["exit_code"] = exitCode,
+            ["stdout"] = output,
+            ["stderr"] = error,
+            ["launch_receipt"] = receipt,
+        };
+        File.WriteAllText(Path.Combine(root, extension + ".json"), new JavaScriptSerializer().Serialize(value));
+    }
 
     private static Process Start(string executable, string arguments, bool output)
     {
