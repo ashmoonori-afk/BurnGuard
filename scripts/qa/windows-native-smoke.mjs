@@ -11,6 +11,7 @@ import {
 	readFile,
 	realpath,
 	rm,
+	stat,
 	writeFile,
 } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -49,21 +50,29 @@ try {
 	await mkdir(evidence, { recursive: true });
 	if (release) {
 		await mkdir(app);
+		const archive = path.join(repo, "dist/releases/BurnGuard-win-Portable.zip");
+		assert.ok((await stat(archive)).size > 0, "release ZIP must exist and contain bytes");
+		const extractor = path.join(fixture, "extract-portable.ps1");
+		await writeFile(extractor, "param([string]$Archive,[string]$Destination)\n$ErrorActionPreference='Stop'\nExpand-Archive -LiteralPath $Archive -DestinationPath $Destination -Force\n");
 		const extract = spawn(
-			"tar.exe",
+			"pwsh.exe",
 			[
-				"-xf",
-				path.join(repo, "dist/releases/BurnGuard-win-Portable.zip"),
-				"-C",
+				"-NoLogo",
+				"-NoProfile",
+				"-NonInteractive",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				extractor,
+				archive,
 				app,
 			],
-			{ windowsHide: true, stdio: "ignore" },
+			{ windowsHide: true, stdio: ["ignore", "ignore", "pipe"] },
 		);
-		assert.equal(
-			(await bounded(once(extract, "exit"), 90_000))[0],
-			0,
-			"release ZIP extraction must succeed",
-		);
+		const extractError = [];
+		extract.stderr.on("data", (chunk) => extractError.push(chunk));
+		const [extractCode] = await bounded(once(extract, "exit"), 180_000, () => extract.kill());
+		assert.equal(extractCode, 0, `release ZIP extraction must succeed: ${Buffer.concat(extractError).toString("utf8").trim()}`);
 		const version = JSON.parse(
 			await readFile(path.join(repo, "package.json"), "utf8"),
 		).version;
