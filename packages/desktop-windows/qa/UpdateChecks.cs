@@ -11,6 +11,8 @@ internal static class UpdateChecks
 {
     private static readonly Type Window = Assembly.Load("BurnGuard").GetType("BurnGuard.Desktop.DesktopWindow", true);
     private const BindingFlags Fields = BindingFlags.Instance | BindingFlags.NonPublic;
+    private static readonly ConstructorInfo WindowConstructor = Window.GetConstructor(Fields, null, new[] { typeof(string), typeof(uint), typeof(string), typeof(string) }, null)
+        ?? throw new MissingMethodException(Window.FullName, ".ctor(string,uint,string,string)");
     private static object Field(Form form, string name) => Window.GetField(name, Fields).GetValue(form);
     private static void Assert(bool value, string description) { if (!value) throw new Exception(description); }
 
@@ -29,7 +31,7 @@ internal static class UpdateChecks
 
     private static void Check(FakeUpdates updates, string report, string expected, bool staged, int checks, int downloads)
     {
-        using (var form = (Form)Activator.CreateInstance(Window, Fields, null, new object[] { "update-qa", (uint)0, report }, null))
+        using (var form = (Form)WindowConstructor.Invoke(new object[] { "update-qa", (uint)0, report, null }))
         {
             Window.GetField("updates", Fields).SetValue(form, updates);
             ((Task)Window.GetMethod("CheckUpdateAsync", Fields).Invoke(form, null)).GetAwaiter().GetResult();
