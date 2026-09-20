@@ -20,6 +20,7 @@ internal static class UpdateChecks
     private static void Main()
     {
         VelopackApp.Build().Run();
+        CheckDownloadRouting();
         Check(new FakeUpdates { Installed = false }, null, "설치 패키지", false, 0, 0);
         Check(new FakeUpdates(), "isolated-smoke.json", "대기 중", false, 0, 0);
         Check(new FakeUpdates(), null, "최신 버전", false, 1, 0);
@@ -27,6 +28,15 @@ internal static class UpdateChecks
         Check(new FakeUpdates { Available = true }, null, "준비 완료", true, 1, 1);
         Check(new FakeUpdates { Available = true, DownloadFails = true }, null, "확인하지 못했습니다", false, 1, 1);
         Console.WriteLine("PASS: portable, smoke, current, offline, staged/recheck, failed download; no live update applied.");
+    }
+
+    private static void CheckDownloadRouting()
+    {
+        var route = Window.GetMethod("DiagnosticDownloadExtension", Fields);
+        Assert((string)route.Invoke(null, new object[] { "native-export.svg", "application/octet-stream" }) == ".svg", "SVG filename must route a generic blob MIME");
+        Assert((string)route.Invoke(null, new object[] { "native-export.pdf", "application/octet-stream" }) == ".pdf", "PDF filename must route a generic blob MIME");
+        Assert((string)route.Invoke(null, new object[] { "download", "application/pdf" }) == ".pdf", "PDF MIME fallback must remain available");
+        Assert(route.Invoke(null, new object[] { "download.bin", "application/octet-stream" }) == null, "Unknown downloads must fail closed");
     }
 
     private static void Check(FakeUpdates updates, string report, string expected, bool staged, int checks, int downloads)

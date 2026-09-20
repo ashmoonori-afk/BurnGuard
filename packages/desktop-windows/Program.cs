@@ -329,11 +329,15 @@ namespace BurnGuard.Desktop
             web.CoreWebView2.DownloadStarting += (_, args) =>
             {
                 var mime = args.DownloadOperation.MimeType;
-                var extension = mime == "image/svg+xml" ? ".svg" : mime == "application/pdf" ? ".pdf" : null;
+                var suggested = Path.GetFileName(args.ResultFilePath);
+                var extension = DiagnosticDownloadExtension(suggested, mime);
                 var completion = extension == ".svg" ? svgDownload : extension == ".pdf" ? pdfDownload : null;
                 if (completion == null)
                 {
                     args.Cancel = true;
+                    var failure = new InvalidOperationException("Unexpected native download: " + suggested + " (" + mime + ").");
+                    svgDownload.TrySetException(failure);
+                    pdfDownload.TrySetException(failure);
                     return;
                 }
                 var destination = Path.Combine(Path.GetDirectoryName(report), "native-export" + extension);
@@ -351,6 +355,13 @@ namespace BurnGuard.Desktop
                 };
                 args.DownloadOperation.StateChanged += changed;
             };
+        }
+
+        private static string DiagnosticDownloadExtension(string suggested, string mime)
+        {
+            var extension = Path.GetExtension(suggested).ToLowerInvariant();
+            if (extension == ".svg" || extension == ".pdf") return extension;
+            return mime == "image/svg+xml" ? ".svg" : mime == "application/pdf" ? ".pdf" : null;
         }
 
         private async Task SmokeAsync()
