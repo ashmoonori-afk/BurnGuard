@@ -35,6 +35,13 @@ function uploadSequence(input, id = 23) {
   });
 }
 
+function concurrencyBlock(text) {
+  const lines = text.split(/\r?\n/);
+  const index = lines.indexOf("concurrency:");
+  if (index < 0 || !lines[index + 1]?.startsWith("  group: ") || !lines[index + 2]?.startsWith("  cancel-in-progress: ")) return undefined;
+  return [lines[index + 1].slice("  group: ".length), lines[index + 2].slice("  cancel-in-progress: ".length)];
+}
+
 function expectIdUpload(call, input, asset, id = 23) {
   expect(call.args).toEqual([
     "api",
@@ -153,13 +160,10 @@ describe("release draft asset attachment", () => {
 
   test("serializes tag runs across both release workflows without cancelling either", () => {
     const workflowPaths = ["../../.github/workflows/windows-release.yml", "../../.github/workflows/macos-release.yml"];
-    const blocks = workflowPaths.map(value => {
-      const lines = readFileSync(new URL(value, import.meta.url), "utf8").split("\n");
-      const index = lines.indexOf("concurrency:");
-      if (index < 0 || !lines[index + 1]?.startsWith("  group: ") || !lines[index + 2]?.startsWith("  cancel-in-progress: ")) return undefined;
-      return [lines[index + 1].slice("  group: ".length), lines[index + 2].slice("  cancel-in-progress: ".length)];
-    });
+    const texts = workflowPaths.map(value => readFileSync(new URL(value, import.meta.url), "utf8"));
+    const blocks = texts.map(concurrencyBlock);
     expect(blocks[0]).toEqual(blocks[1]);
+    expect(concurrencyBlock(texts[0].replaceAll("\n", "\r\n"))).toEqual(blocks[0]);
     expect(blocks[0]?.[1]).toBe("false");
     expect(blocks[0]?.[0]).toContain("startsWith(github.ref, 'refs/tags/')");
     expect(blocks[0]?.[0]).toContain("github.workflow, github.run_id");
