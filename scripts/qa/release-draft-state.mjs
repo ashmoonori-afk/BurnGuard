@@ -16,20 +16,37 @@ export function attachDraftReleaseAssets(input, run = spawnSync) {
     else if (created.status === 422) release = requiredRelease(lookupRelease(input.repository, input.tag, run));
     else throw new Error(`release_create_http_${created.status}`);
   }
-  assertDraftAndUnique(release, input.assets);
+  const assetNames = input.assets.map(asset => path.basename(asset));
+  if (!release.draft) {
+    if (assetNames.every(name => release.assets.includes(name))) return { releaseId: release.id, uploaded: [] };
+    throw new Error("published_release_assets_mismatch");
+  }
+  assertUnique(release, input.assets);
 
   // GitHub exposes no conditional "upload only while draft" operation. Re-read
   // immediately before the non-clobbering upload and never replace existing bytes.
-  release = requiredRelease(lookupRelease(input.repository, input.tag, run));
-  assertDraftAndUnique(release, input.assets);
+  release = lookupReleaseById(input.repository, release.id, run);
+  if (!release.draft) throw new Error("release_not_draft");
+  assertUnique(release, input.assets);
   const uploaded = run("gh", ["release", "upload", input.tag, ...input.assets, "--repo", input.repository], { encoding: "utf8", stdio: ["ignore", "ignore", "ignore"] });
   if (uploaded.error || uploaded.signal || uploaded.status !== 0) throw new Error("release_upload_failed");
-  return { releaseId: release.id, uploaded: input.assets.map(asset => path.basename(asset)) };
+  return { releaseId: release.id, uploaded: assetNames };
 }
 
 function lookupRelease(repository, tag, run) {
   const response = api(run, [`repos/${repository}/releases/tags/${encodeURIComponent(tag)}`, "--include"]);
-  if (response.status === 404) return null;
+  if (response.status === 200) return parseRelease(response.body);
+  if (response.status !== 404) throw new Error(`release_lookup_http_${response.status}`);
+
+  const listed = api(run, [`repos/${repository}/releases?per_page=100`, "--include"]);
+  if (listed.status !== 200) throw new Error(`release_list_http_${listed.status}`);
+  if (!Array.isArray(listed.body)) throw new Error("invalid_release_response");
+  const release = listed.body.find(item => item && item.tag_name === tag);
+  return release === undefined ? null : parseRelease(release);
+}
+
+function lookupReleaseById(repository, releaseId, run) {
+  const response = api(run, [`repos/${repository}/releases/${releaseId}`, "--include"]);
   if (response.status !== 200) throw new Error(`release_lookup_http_${response.status}`);
   return parseRelease(response.body);
 }
@@ -71,8 +88,7 @@ function requiredRelease(release) {
   return release;
 }
 
-function assertDraftAndUnique(release, assets) {
-  if (!release.draft) throw new Error("release_not_draft");
+function assertUnique(release, assets) {
   const existing = new Set(release.assets);
   if (assets.some(asset => existing.has(path.basename(asset)))) throw new Error("release_asset_exists");
 }

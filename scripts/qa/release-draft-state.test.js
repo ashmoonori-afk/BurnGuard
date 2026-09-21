@@ -10,7 +10,7 @@ const windows = {
   assets: ["dist/releases/BurnGuard-win-Setup.exe", "dist/releases/releases.win.json", "dist/releases/SHA256SUMS.txt"],
 };
 const macos = { ...windows, platform: "macos", assets: ["dist/releases/BurnGuard-osx-Setup.pkg", "dist/releases/releases.osx.json", "dist/releases/SHA256SUMS-macos.txt"] };
-const release = (draft = true, assets = []) => ({ id: 23, draft, assets: assets.map(name => ({ name })) });
+const release = (draft = true, assets = [], tag = windows.tag) => ({ id: 23, tag_name: tag, draft, assets: assets.map(name => ({ name })) });
 const response = (status, body = null) => ({ status: status >= 200 && status < 300 ? 0 : 1, signal: null, stdout: `HTTP/2.0 ${status} status\ncontent-type: application/json\n\n${body === null ? "" : JSON.stringify(body)}` });
 
 function fake(sequence) {
@@ -29,6 +29,7 @@ describe("release draft asset attachment", () => {
     const stub = fake([response(200, release()), response(200, release()), { status: 0, signal: null, stdout: "" }]);
     expect(attachDraftReleaseAssets(windows, stub.run).uploaded).toEqual(windows.assets.map(value => value.split("/").at(-1)));
     const upload = stub.calls.at(-1);
+    expect(stub.calls[1].args).toEqual(["api", "repos/owner/repo/releases/23", "--include"]);
     expect(upload.args).toEqual(["release", "upload", windows.tag, ...windows.assets, "--repo", windows.repository]);
     expect(upload.args).not.toContain("--clobber");
   });
@@ -39,18 +40,37 @@ describe("release draft asset attachment", () => {
     expect(stub.calls).toHaveLength(2);
   });
 
-  test("creates a missing draft and attaches after re-reading it", () => {
-    const stub = fake([response(404, { message: "Not Found" }), response(200, { ref: "refs/tags/v0.5.23" }), response(201, release()), response(200, release()), { status: 0, signal: null, stdout: "" }]);
+  test("finds an existing draft through the authenticated release list", () => {
+    const stub = fake([response(404), response(200, [release(true, [], "v0.5.22"), release()]), response(200, release()), { status: 0, signal: null, stdout: "" }]);
     expect(attachDraftReleaseAssets(windows, stub.run).releaseId).toBe(23);
-    expect(stub.calls[1].args).toEqual(["api", "repos/owner/repo/git/ref/tags/v0.5.23", "--include"]);
-    expect(stub.calls[2].args).toContain("POST");
-    expect(JSON.parse(stub.calls[2].options.input).draft).toBe(true);
+    expect(stub.calls[1].args).toEqual(["api", "repos/owner/repo/releases?per_page=100", "--include"]);
+  });
+
+  test("creates a missing draft and attaches after re-reading it by id", () => {
+    const stub = fake([response(404), response(200, []), response(200, { ref: "refs/tags/v0.5.23" }), response(201, release()), response(200, release()), { status: 0, signal: null, stdout: "" }]);
+    expect(attachDraftReleaseAssets(windows, stub.run).releaseId).toBe(23);
+    expect(stub.calls[2].args).toEqual(["api", "repos/owner/repo/git/ref/tags/v0.5.23", "--include"]);
+    expect(stub.calls[3].args).toContain("POST");
+    expect(JSON.parse(stub.calls[3].options.input).draft).toBe(true);
+    expect(stub.calls[4].args).toEqual(["api", "repos/owner/repo/releases/23", "--include"]);
   });
 
   test("converges after a simultaneous create conflict", () => {
-    const stub = fake([response(404), response(200, { ref: "refs/tags/v0.5.23" }), response(422, { message: "already_exists" }), response(200, release()), response(200, release()), { status: 0, signal: null, stdout: "" }]);
+    const stub = fake([response(404), response(200, []), response(200, { ref: "refs/tags/v0.5.23" }), response(422, { message: "already_exists" }), response(404), response(200, [release()]), response(200, release()), { status: 0, signal: null, stdout: "" }]);
     expect(attachDraftReleaseAssets(windows, stub.run).releaseId).toBe(23);
-    expect(stub.calls).toHaveLength(6);
+    expect(stub.calls).toHaveLength(8);
+  });
+
+  test("returns read-only success for an already-published release with every requested asset", () => {
+    const stub = fake([response(200, release(false, windows.assets.map(value => value.split("/").at(-1))))]);
+    expect(attachDraftReleaseAssets(windows, stub.run)).toEqual({ releaseId: 23, uploaded: [] });
+    expect(stub.calls).toHaveLength(1);
+  });
+
+  test("fails closed when an already-published release is missing a requested asset", () => {
+    const stub = fake([response(200, release(false, ["BurnGuard-win-Setup.exe"]))]);
+    expect(() => attachDraftReleaseAssets(windows, stub.run)).toThrow("published_release_assets_mismatch");
+    expect(stub.calls).toHaveLength(1);
   });
 
   test("fails closed on authentication, server, network, and malformed responses", () => {
