@@ -77,13 +77,24 @@ export function capturePageFromSession(page: Page): CapturePage {
     flattenBackground: async () => {
       await page.addStyleTag({ content: "html, body { background: #ffffff !important; }" });
     },
-    capture: async (request) => new Uint8Array(await page.screenshot({
-      type: request.format,
-      clip: request.clip,
-      // Clips use document coordinates; viewport capture would truncate tall frames/slices.
-      fullPage: true,
-      animations: "disabled",
-      ...(request.quality === undefined ? {} : { quality: request.quality }),
-    })),
+    capture: async (request) => {
+      const previous = await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }));
+      await page.evaluate(({ x, y }) => new Promise<void>((resolve) => {
+        window.scrollTo(x, y);
+        requestAnimationFrame(() => { requestAnimationFrame(() => { resolve(); }); });
+      }), { x: request.clip.x, y: request.clip.y });
+      try {
+        return new Uint8Array(await page.screenshot({
+          type: request.format,
+          clip: request.clip,
+          // Clips use document coordinates; viewport capture would truncate tall frames/slices.
+          fullPage: true,
+          animations: "disabled",
+          ...(request.quality === undefined ? {} : { quality: request.quality }),
+        }));
+      } finally {
+        await page.evaluate(({ x, y }) => { window.scrollTo(x, y); }, previous);
+      }
+    },
   };
 }

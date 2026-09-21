@@ -93,6 +93,14 @@ async function parseActiveRelPath(value: unknown, projectId: string): Promise<st
   return value;
 }
 
+type SessionRouteDependencies = { readonly detectBackends?: typeof detectBackends };
+
+function routeDetectBackends(environment: unknown): typeof detectBackends {
+  return typeof environment === "object" && environment !== null && "detectBackends" in environment
+    ? (environment as SessionRouteDependencies).detectBackends ?? detectBackends
+    : detectBackends;
+}
+
 export const sessionRoutes = new Hono();
 
 sessionRoutes.post("/api/sessions/:id/documents", async (c) => {
@@ -137,7 +145,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
   const contentType = c.req.header("content-type") ?? "";
   const [config, detection, project] = await Promise.all([
     loadConfig(),
-    detectBackends({ requireCodexAuthentication: session.backend_id === "codex" }),
+    routeDetectBackends(c.env)({ requireCodexAuthentication: session.backend_id === "codex" }),
     getProjectDetail(session.project_id),
   ]);
   if (project !== null && await hasAgentControlFiles(project.dir_path)) {
@@ -265,7 +273,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       }
     }
 
-    if (!payload || payload.type !== "user.message") {
+    if (payload?.type !== "user.message") {
       return c.json(
         fail("invalid_body", "Expected a user.message payload with text"),
         400,

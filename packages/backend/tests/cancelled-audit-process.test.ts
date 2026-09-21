@@ -20,18 +20,19 @@ test("Given a real API audit with a route command in flight When its HTTP client
   const stderr = new Response(child.stderr).text();
   const exited = child.exited.then(async code => { throw new Error(`Audit server exited ${code}\n${await stdout}\n${await stderr}`); });
   const deadline = Promise.withResolvers<never>();
-  const timer = setTimeout(() => deadline.reject(new Error("Audit cancellation event deadline exceeded")), 55_000);
-  const event = (signal: Promise<Message>) => Promise.race([signal, exited, deadline.promise]);
+  let waitingFor = "ready";
+  const timer = setTimeout(() => deadline.reject(new Error(`Audit cancellation event deadline exceeded while waiting for ${waitingFor}`)), 55_000);
+  const event = (label: string, signal: Promise<Message>) => { waitingFor = label; return Promise.race([signal, exited, deadline.promise]); };
   // Observe exit/deadline even if a preceding assertion fails and teardown wins.
   const done = Promise.allSettled([exited, deadline.promise]);
   const controller = new AbortController();
   try {
-    const { url, projectId } = await event(ready.promise);
+    const { url, projectId } = await event("ready", ready.promise);
     const cancelled = fetch(`${url}/api/projects/${projectId}/design-audit`, { signal: controller.signal }).then(response => ({ response }), error => ({ error }));
-    await event(routed.promise);
+    await event("route_in_flight", routed.promise);
     controller.abort();
     expect(await cancelled).toHaveProperty("error");
-    const result = await event(settled.promise);
+    const result = await event("audit_settled", settled.promise);
     expect(result.status).toBe(503);
     expect(result.body).toMatchObject({ error: { code: "audit_unavailable" } });
     expect(result.resources).toEqual({ connected: false, contexts: 0, closedContexts: 1, pagesClosed: true, pendingCommands: 0, owners: 0 });

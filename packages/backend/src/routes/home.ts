@@ -92,6 +92,7 @@ function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): Sett
     app_version: APP_VERSION,
     default_backend: config.defaultBackend,
     theme: config.theme,
+    locale: config.locale,
     chat_abort_threshold_ms: config.chat.abortThresholdMs,
     chat_context_mode: config.chat.contextMode,
     // Surface only whether a Figma PAT is configured; never the value.
@@ -247,7 +248,7 @@ homeRoutes.patch("/api/settings", async (c) => {
     return c.json(fail("invalid_body", "Expected a JSON object request body"), 400);
   }
 
-  const changes: Pick<Partial<AppConfig>, "theme" | "defaultBackend" | "figmaPersonalAccessToken" | "commandcodeApiKey" | "generationDefaults"> & {
+  const changes: Pick<Partial<AppConfig>, "theme" | "locale" | "defaultBackend" | "figmaPersonalAccessToken" | "commandcodeApiKey" | "generationDefaults"> & {
     llmApiKeys?: LlmApiKeysPatch;
     chat?: Partial<AppConfig["chat"]>;
     user?: Partial<AppConfig["user"]>;
@@ -280,6 +281,12 @@ homeRoutes.patch("/api/settings", async (c) => {
       return c.json(fail("invalid_theme", "Unsupported theme value"), 400);
     }
     changes.theme = patch.theme;
+  }
+  if ("locale" in patch) {
+    if (patch.locale !== "ko" && patch.locale !== "en" && patch.locale !== "zh-CN") {
+      return c.json(fail("invalid_locale", "Unsupported locale value"), 400);
+    }
+    changes.locale = patch.locale;
   }
   if ("default_backend" in patch) {
     if (!isBackendId(patch.default_backend)) {

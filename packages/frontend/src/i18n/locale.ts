@@ -45,3 +45,20 @@ export const useLocaleStore = create<LocaleState>((set) => ({
     set({ locale });
   },
 }));
+/**
+ * Makes the shared setting authoritative while lazily publishing an existing
+ * browser-local choice from releases that stored locale only in localStorage.
+ */
+export async function synchronizePortableLocale(
+  load: () => Promise<{ locale: Locale | null }>,
+  save: (locale: Locale) => Promise<{ locale: Locale | null }>,
+): Promise<void> {
+  const settings = await load();
+  if (settings.locale !== null) {
+    useLocaleStore.getState().setLocale(settings.locale);
+    return;
+  }
+  const cached = useLocaleStore.getState().locale;
+  const updated = await save(cached);
+  useLocaleStore.getState().setLocale(updated.locale ?? cached);
+}

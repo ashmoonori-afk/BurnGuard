@@ -25,8 +25,9 @@ test.skipIf(!systemChromeAvailable)("system Chrome confines popup requests and c
   const stagedDir = path.join(root, "artifact");
   const requests: string[] = [];
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) { requests.push(request.url); return new Response("fixture"); } });
-  const browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(20000));
+  let browser: Awaited<ReturnType<typeof launchChromiumViaNode>> | undefined;
   try {
+    browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(20000));
     await mkdir(stagedDir);
     await writeFile(path.join(root, "outside.html"), "OUTSIDE_FIXTURE");
     await writeFile(path.join(stagedDir, "inside.js"), "window.insideLoaded = true;");
@@ -63,7 +64,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome confines popup requests and c
       expect(session.findings).toContainEqual({ code: "remote_request", path: "file:outside-artifact" });
       expect(JSON.stringify(session.findings)).not.toContain(root);
     } finally { await session.close(); }
-  } finally { await browser.close(); await server.stop(true); await rm(root, { recursive: true, force: true }); }
+  } finally { await browser?.close(); await server.stop(true); await rm(root, { recursive: true, force: true }); }
 }, 30000);
 
 for (const surface of ["export", "thumbnail"] as const) test.skipIf(!systemChromeAvailable)(`system Chrome ${surface} denies WebSockets before any upstream connection`, async () => {
