@@ -24,12 +24,13 @@ export function attachDraftReleaseAssets(input, run = spawnSync) {
   assertUnique(release, input.assets);
 
   // GitHub exposes no conditional "upload only while draft" operation. Re-read
-  // immediately before the non-clobbering upload and never replace existing bytes.
-  release = lookupReleaseById(input.repository, release.id, run);
-  if (!release.draft) throw new Error("release_not_draft");
-  assertUnique(release, input.assets);
-  const uploaded = run("gh", ["release", "upload", input.tag, ...input.assets, "--repo", input.repository], { encoding: "utf8", stdio: ["ignore", "ignore", "ignore"] });
-  if (uploaded.error || uploaded.signal || uploaded.status !== 0) throw new Error("release_upload_failed");
+  // immediately before each ID-bound, non-clobbering upload.
+  for (const asset of input.assets) {
+    release = lookupReleaseById(input.repository, release.id, run);
+    if (!release.draft) throw new Error("release_not_draft");
+    assertUnique(release, [asset]);
+    uploadReleaseAsset(input.repository, release.id, asset, run);
+  }
   return { releaseId: release.id, uploaded: assetNames };
 }
 
@@ -41,14 +42,21 @@ function lookupRelease(repository, tag, run) {
   const listed = api(run, [`repos/${repository}/releases?per_page=100`, "--include"]);
   if (listed.status !== 200) throw new Error(`release_list_http_${listed.status}`);
   if (!Array.isArray(listed.body)) throw new Error("invalid_release_response");
-  const release = listed.body.find(item => item && item.tag_name === tag);
-  return release === undefined ? null : parseRelease(release);
+  const matches = listed.body.filter(item => item && item.tag_name === tag);
+  if (matches.length > 1) throw new Error("duplicate_release_tag");
+  return matches.length === 0 ? null : parseRelease(matches[0]);
 }
 
 function lookupReleaseById(repository, releaseId, run) {
   const response = api(run, [`repos/${repository}/releases/${releaseId}`, "--include"]);
   if (response.status !== 200) throw new Error(`release_lookup_http_${response.status}`);
   return parseRelease(response.body);
+}
+
+function uploadReleaseAsset(repository, releaseId, asset, run) {
+  const name = encodeURIComponent(path.basename(asset));
+  const response = api(run, ["--hostname", "uploads.github.com", `repos/${repository}/releases/${releaseId}/assets?name=${name}`, "--method", "POST", "--header", "Content-Type: application/octet-stream", "--input", asset, "--include"]);
+  if (response.status !== 201) throw new Error(`release_upload_http_${response.status}`);
 }
 
 function verifyTag(repository, tag, run) {
