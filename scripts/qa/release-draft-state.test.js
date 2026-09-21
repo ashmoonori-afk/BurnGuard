@@ -45,9 +45,7 @@ function concurrencyBlock(text) {
 function expectIdUpload(call, input, asset, id = 23) {
   expect(call.args).toEqual([
     "api",
-    "--hostname",
-    "uploads.github.com",
-    `repos/${input.repository}/releases/${id}/assets?name=${encodeURIComponent(asset.split("/").at(-1))}`,
+    `https://uploads.github.com/repos/${input.repository}/releases/${id}/assets?name=${encodeURIComponent(asset.split("/").at(-1))}`,
     "--method",
     "POST",
     "--header",
@@ -56,6 +54,8 @@ function expectIdUpload(call, input, asset, id = 23) {
     asset,
     "--include",
   ]);
+  expect(call.args).not.toContain("--hostname");
+  expect(call.args[1]).not.toContain("api.uploads.github.com");
   expect(call.args).not.toContain("release");
   expect(call.args).not.toContain(input.tag);
   expect(call.args).not.toContain("--clobber");
@@ -69,6 +69,14 @@ describe("release draft asset attachment", () => {
       expect(stub.calls[1 + index * 2].args).toEqual(["api", "repos/owner/repo/releases/23", "--include"]);
       expectIdUpload(stub.calls[2 + index * 2], windows, windows.assets[index]);
     }
+  });
+
+  test("encodes the asset filename in the absolute verified-id upload URL", () => {
+    const input = { ...windows, assets: ["dist/releases/BurnGuard win Setup #1.exe"] };
+    const stub = fake([response(200, release()), ...uploadSequence(input)]);
+    expect(attachDraftReleaseAssets(input, stub.run).releaseId).toBe(23);
+    expectIdUpload(stub.calls[2], input, input.assets[0]);
+    expect(stub.calls[2].args[1]).toBe("https://uploads.github.com/repos/owner/repo/releases/23/assets?name=BurnGuard%20win%20Setup%20%231.exe");
   });
 
   test("rejects a publication race before upload", () => {
@@ -163,7 +171,7 @@ describe("release draft asset attachment", () => {
     const texts = workflowPaths.map(value => readFileSync(new URL(value, import.meta.url), "utf8"));
     const blocks = texts.map(concurrencyBlock);
     expect(blocks[0]).toEqual(blocks[1]);
-    expect(concurrencyBlock(texts[0].replaceAll("\n", "\r\n"))).toEqual(blocks[0]);
+    expect(concurrencyBlock(texts[0].replaceAll("\r\n", "\n").replaceAll("\n", "\r\n"))).toEqual(blocks[0]);
     expect(blocks[0]?.[1]).toBe("false");
     expect(blocks[0]?.[0]).toContain("startsWith(github.ref, 'refs/tags/')");
     expect(blocks[0]?.[0]).toContain("github.workflow, github.run_id");

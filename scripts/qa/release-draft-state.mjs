@@ -55,7 +55,7 @@ function lookupReleaseById(repository, releaseId, run) {
 
 function uploadReleaseAsset(repository, releaseId, asset, run) {
   const name = encodeURIComponent(path.basename(asset));
-  const response = api(run, ["--hostname", "uploads.github.com", `repos/${repository}/releases/${releaseId}/assets?name=${name}`, "--method", "POST", "--header", "Content-Type: application/octet-stream", "--input", asset, "--include"]);
+  const response = api(run, [`https://uploads.github.com/repos/${repository}/releases/${releaseId}/assets?name=${name}`, "--method", "POST", "--header", "Content-Type: application/octet-stream", "--input", asset, "--include"]);
   if (response.status !== 201) throw new Error(`release_upload_http_${response.status}`);
 }
 
