@@ -22,6 +22,10 @@ beforeEach(() => {
   getSqlite().prepare("DELETE FROM events WHERE session_id='turn-error-session'").run();
 });
 
+const readyCodex = async () => ({
+  backends: [{ id: "codex" as const, found: true, authenticated: true, image_generation: true, models: [] }],
+});
+
 describe("turn error event boundary", () => {
   test.skipIf(!canCreateSymlink())(`Given artifact preparation fails with a private path When the route responds Then diagnostics stay server-side (${SYMLINK_SKIP_REASON})`, async () => {
     const root = await mkdtemp(
@@ -39,6 +43,7 @@ describe("turn error event boundary", () => {
         .prepare("UPDATE projects SET dir_path=? WHERE id='turn-error-project'")
         .run(root);
 
+      let readinessCalls = 0;
       const response = await sessionRoutes.request(
         "http://local/api/sessions/turn-error-session/events",
         {
@@ -46,7 +51,14 @@ describe("turn error event boundary", () => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ type: "user.message", text: "safe request" }),
         },
+        {
+          detectBackends: async () => {
+            readinessCalls += 1;
+            return readyCodex();
+          },
+        },
       );
+      expect(readinessCalls).toBe(1);
       const body = (await response.json()) as {
         readonly error: { readonly code: string };
       };
@@ -88,6 +100,7 @@ describe("turn error event boundary", () => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ type: "user.message", text: "safe request" }),
         },
+        { detectBackends: readyCodex },
       );
 
       expect(response.status).toBe(409);
