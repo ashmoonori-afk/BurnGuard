@@ -1,8 +1,8 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import * as shared from "@bg/shared";
 import { defaultConfig, loadConfig, saveConfig } from "../src/config";
-import { configFilePath } from "../src/lib/app-paths";
+import { configFilePath, localConfigFilePath } from "../src/lib/app-paths";
 import { homeRoutes } from "../src/routes/home";
 
 const ids = ["gemini", "deepseek", "xai"] as const;
@@ -26,14 +26,15 @@ describe("configuration-only LLM connections", () => {
     expect((await loadConfig()).llmApiKeys).toEqual(emptyKeys);
   });
 
-  test("legacy config loads unset connections without rewriting or losing CommandCode and unrelated settings", async () => {
+  test("legacy config migrates unset connections without losing CommandCode or unrelated settings", async () => {
     const legacy = { ...defaultConfig, commandcodeApiKey: "fixture-commandcode-private", theme: "dark", llmApiKeys: undefined };
+    await rm(localConfigFilePath(), { force: true });
     await writeFile(configFilePath, JSON.stringify(legacy));
-    const before = await readFile(configFilePath, "utf8");
     const response = await homeRoutes.request("http://local/api/settings");
     expect(response.status).toBe(200);
     expect((await response.json()).data.llm_connections.map((connection: { api_key_set: boolean }) => connection.api_key_set)).toEqual([false, false, false]);
-    expect(await readFile(configFilePath, "utf8")).toBe(before);
+    expect(await readFile(configFilePath, "utf8")).not.toContain("fixture-commandcode-private");
+    expect(await readFile(localConfigFilePath(), "utf8")).toContain("fixture-commandcode-private");
     expect(await loadConfig()).toMatchObject({ llmApiKeys: emptyKeys, commandcodeApiKey: legacy.commandcodeApiKey, theme: "dark" });
   });
 
@@ -75,7 +76,10 @@ describe("configuration-only LLM connections", () => {
     }
     const config = await loadConfig();
     expect(config).toMatchObject({ llmApiKeys: keys, commandcodeApiKey: "fixture-commandcode-private", generationDefaults: { "claude-code": generation }, theme: "dark", user: { displayName: "Concurrent" }, figmaPersonalAccessToken: "fixture-figma-private", chat: { contextMode: "full" } });
-    expect(JSON.parse(await readFile(configFilePath, "utf8"))).toEqual(config);
+    const shared = await readFile(configFilePath, "utf8");
+    const local = await readFile(localConfigFilePath(), "utf8");
+    for (const secret of [...Object.values(keys), "fixture-commandcode-private", "fixture-figma-private"]) expect(shared).not.toContain(secret);
+    for (const secret of [...Object.values(keys), "fixture-commandcode-private", "fixture-figma-private"]) expect(local).toContain(secret);
     expect((await patch({ llm_api_keys: {} })).status).toBe(200);
     expect((await loadConfig()).llmApiKeys).toEqual(keys);
   });

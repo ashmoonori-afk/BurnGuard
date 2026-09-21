@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { bootstrapApiAuthority } from "@/api/client";
+import { getSettings, patchSettings } from "@/api/home";
+import { synchronizePortableLocale } from "@/i18n/locale";
 import { useT } from "@/i18n/t";
 
 /** Render recovery before API consumers mount, including while bootstrap is offline. */
@@ -8,11 +10,14 @@ export default function Bootstrap({ children }: { children: ReactNode }) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   useEffect(() => {
+    void attempt;
     const controller = new AbortController();
     let active = true;
     setState("loading");
     const timeout = window.setTimeout(() => controller.abort(), 15_000);
     void bootstrapApiAuthority(controller.signal).then(
+      () => synchronizePortableLocale(getSettings, (locale) => patchSettings({ locale })),
+    ).then(
       () => { if (active) setState("ready"); },
       () => { if (active) setState("error"); },
     ).finally(() => window.clearTimeout(timeout));

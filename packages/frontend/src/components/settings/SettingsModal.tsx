@@ -182,6 +182,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
         default_backend: settings.default_backend,
         generation_defaults: settings.generation_defaults,
         theme: settings.theme,
+        locale,
         chat_abort_threshold_ms: settings.chat_abort_threshold_ms,
         chat_context_mode: settings.chat_context_mode,
         user: settings.user,
@@ -286,11 +287,11 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               <div className="flex gap-2"><Button type="button" size="sm" disabled={commandcodeSaving || !commandcodeKey.trim()} onClick={() => void saveCommandcodeKey(commandcodeKey)}>{t("settings.keySave")}</Button><Button type="button" size="sm" variant="outline" disabled={commandcodeSaving || !settings.commandcode_api_key_set} onClick={() => void saveCommandcodeKey(null)}>{t("settings.keyDelete")}</Button></div>
             </div>
 
-            <div className="space-y-1.5">
-              <div id="chat-context-label" className="text-xs font-medium text-muted-foreground">
+            <fieldset className="space-y-1.5">
+              <legend id="chat-context-label" className="text-xs font-medium text-muted-foreground">
                 {t("settings.context")}
-              </div>
-              <div role="group" aria-labelledby="chat-context-label" className="flex gap-2">
+              </legend>
+              <div className="flex gap-2">
                 {(["compact", "full"] as const).map((mode) => (
                   <Button
                     key={mode}
@@ -310,7 +311,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               <p className="text-xs text-muted-foreground">
                 {t("settings.contextHint")}
               </p>
-            </div>
+            </fieldset>
 
             <div className="space-y-1.5">
               <div className="text-xs font-medium text-muted-foreground">
@@ -324,11 +325,11 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
             </section>
             <section id="settings-appearance" aria-labelledby="settings-appearance-title" className="scroll-mt-6 space-y-5 rounded-2xl border border-border bg-card p-5">
               <div className="space-y-1"><h2 id="settings-appearance-title" className="text-base font-semibold">{t("settings.appearance")}</h2><p className="text-sm leading-6 text-muted-foreground">{t("settings.appearanceHint")}</p></div>
-            <div className="space-y-1.5">
-              <div id="theme-label" className="text-xs font-medium text-muted-foreground">
+            <fieldset className="space-y-1.5">
+              <legend id="theme-label" className="text-xs font-medium text-muted-foreground">
                 {t("settings.theme")}
-              </div>
-              <div role="group" aria-labelledby="theme-label" className="flex flex-wrap gap-2">
+              </legend>
+              <div className="flex flex-wrap gap-2">
                 {(["light", "dark", "auto"] as const).map((theme) => (
                   <Button
                     key={theme}
@@ -344,11 +345,11 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               <p className="text-xs text-muted-foreground">
                 {t("settings.themeHint")}
               </p>
-            </div>
+            </fieldset>
             <div className="space-y-1.5">
               <div id="language-label" className="text-xs font-medium text-muted-foreground">{t("settings.language")}</div>
               <fieldset aria-labelledby="language-label" className="flex flex-wrap gap-2">
-                {LOCALES.map((language) => <Button key={language} type="button" lang={language} aria-pressed={locale === language} variant={locale === language ? "default" : "outline"} size="sm" onClick={() => setLocale(language)}>{LANGUAGE_NAMES[language]}</Button>)}
+                {LOCALES.map((language) => <Button key={language} type="button" lang={language} aria-pressed={locale === language} variant={locale === language ? "default" : "outline"} size="sm" onClick={() => { setLocale(language); setSettings({ ...settings, locale: language }); }}>{LANGUAGE_NAMES[language]}</Button>)}
               </fieldset>
               <p className="text-xs text-muted-foreground">{t("settings.languageHint")}</p>
             </div>
@@ -356,9 +357,9 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
             <section id="settings-files" aria-labelledby="settings-files-title" className="scroll-mt-6 space-y-5 rounded-2xl border border-border bg-card p-5">
               <div className="space-y-1"><h2 id="settings-files-title" className="text-base font-semibold">{t("settings.files")}</h2><p className="text-sm leading-6 text-muted-foreground">{t("settings.filesHint")}</p></div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
+              <div className="text-xs font-medium text-muted-foreground">
                 {t("settings.chromium")}
-              </label>
+              </div>
               <div className="rounded-md border border-border bg-muted/30 p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <PlaywrightStateDot state={pw?.state ?? "idle"} />
@@ -403,9 +404,9 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
+              <div className="text-xs font-medium text-muted-foreground">
                 {t("settings.python")}
-              </label>
+              </div>
               <div className="rounded-md border border-border bg-muted/30 p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <PyStateDot py={py} />

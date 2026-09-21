@@ -80,6 +80,8 @@ export interface SettingsSummary {
   app_version: string;
   default_backend: BackendId;
   theme: ThemeMode;
+  /** Portable user preference. Null means an older browser choice has not been migrated yet. */
+  locale: "ko" | "en" | "zh-CN" | null;
   /**
    * Minimum time (ms) a single CLI turn must be running before the
    * composer surfaces an Interrupt button. Local CLIs routinely take
@@ -102,6 +104,7 @@ export type SettingsPatch = Partial<
     SettingsSummary,
     | "default_backend"
     | "theme"
+    | "locale"
     | "chat_abort_threshold_ms"
     | "chat_context_mode"
     | "generation_defaults"

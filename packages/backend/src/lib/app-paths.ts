@@ -16,3 +16,6 @@ export const cacheDir = path.join(appRootDir, "cache");
 export const logsDir = path.join(appRootDir, "logs");
 export const exportsDir = path.join(cacheDir, "exports");
 export const configFilePath = path.join(appRootDir, "config.json");
+export function localConfigFilePath(platform: NodeJS.Platform = process.platform): string {
+  return path.join(appRootDir, `config.local.${platform}.json`);
+}
