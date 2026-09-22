@@ -32,6 +32,17 @@ const VIEW_BOX = /^-?\d+(\.\d+)?([ ,]+-?\d+(\.\d+)?){3}$/;
 const COLOUR = /^(none|currentColor|black|white|transparent|#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$/;
 const TRANSFORM = /^((translate|scale|rotate|matrix|skewX|skewY)\(\s*-?\d+(\.\d+)?([ ,]+-?\d+(\.\d+)?)*\s*\)\s*)+$/;
 const SOURCE = /^explorations\/round-\d{1,2}\/candidate-[1-4]\.png$/;
+/**
+ * The accessible name of the mark. A logo is a picture, so a screen reader has nothing to read
+ * unless the document names it, and every finished vector the contract accepts should carry that
+ * name. It is admitted as inert character data only: 1..64 characters from a closed set of letters,
+ * digits, combining marks, spaces and light punctuation, starting on a letter or digit. The set
+ * spells no scheme, no `url(`, no markup, no entity and no control character, so a Korean brand
+ * name passes while nothing in the value can address or execute anything. `aria-labelledby` and the
+ * other referencing ARIA attributes stay forbidden: they point at another node instead of naming
+ * this one, and resolving them is a second reference graph this validator deliberately does not have.
+ */
+const ARIA_LABEL = /^[\p{L}\p{N}][\p{L}\p{N}\p{M}\p{Zs}.,'\u2019-]{0,63}$/u;
 
 const ATTRIBUTES = new Map<string, RegExp>([
   ["version", /^\d+(\.\d+)?$/],
@@ -46,6 +57,7 @@ const ATTRIBUTES = new Map<string, RegExp>([
   ["stroke-linecap", /^(butt|round|square)$/],
   ["stroke-linejoin", /^(miter|round|bevel)$/],
   ["aria-hidden", /^(true|false)$/],
+  ["aria-label", ARIA_LABEL],
   ["role", /^[a-z]+$/],
   ["lang", /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/],
 ]);
