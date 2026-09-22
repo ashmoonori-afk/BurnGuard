@@ -17,6 +17,7 @@ import GraphicFrameNavigator from "./GraphicFrameNavigator";
 import {
   buildSandboxedArtifactSrcDoc,
   openFrameExternalLink,
+  parseFramePreviewReport,
   requestFrameSetActiveSlide,
   requestFramePreviewReport,
   subscribeFrameEvent,
@@ -75,6 +76,13 @@ function buildPlaceholderSrc(locale: string, title: string, subtitle: string): s
 </body>
 </html>`;
 }
+
+/**
+ * Outcome of the report attempt for the document currently in the frame.
+ * Exposed as a data attribute so a real browser can tell a report that never
+ * happened from one the server refused; it carries no user-facing copy.
+ */
+type PreviewReportState = "accepted" | "unavailable" | "failed" | `refused_${number}`;
 
 export default function Canvas({
   mode,
@@ -227,6 +235,10 @@ export default function Canvas({
   // placeholder with no signal (audit fix #6). Cleared on every src
   // change so a successful Refresh recovers cleanly.
   const [loadError, setLoadError] = useState<{ status?: number } | null>(null);
+  // Diagnosis of the current render's report attempt, not user-facing copy:
+  // a missing report, an unusable answer and a refused report look identical
+  // from outside otherwise.
+  const [previewReportState, setPreviewReportState] = useState<PreviewReportState | null>(null);
   const previewReportUrl = livePreview?.reportUrl;
   const previewVersion = livePreview?.version;
 
@@ -239,10 +251,17 @@ export default function Canvas({
       if (payload?.documentKey !== frameLoadKey) return;
       setLoadedFrameKey(frameKey ?? src);
       if (previewReportUrl && previewVersion !== undefined) {
-        void requestFramePreviewReport(iframe).then(async (report) => {
-          if (!current || !report || typeof report !== "object" || Array.isArray(report)) return;
-          await authorizedFetch(previewReportUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...report, version: previewVersion }) });
-        }).catch(() => {});
+        void requestFramePreviewReport(iframe).then(async (payload) => {
+          if (!current) return;
+          const report = parseFramePreviewReport(payload);
+          // Only this document's own measurements are reported, and only under
+          // the version it was loaded for; an unusable answer is recorded as
+          // unavailable rather than repaired into an observation.
+          if (report === null) { setPreviewReportState("unavailable"); return; }
+          const response = await authorizedFetch(previewReportUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...report, version: previewVersion }) });
+          if (!current) return;
+          setPreviewReportState(response.ok ? "accepted" : `refused_${response.status}`);
+        }).catch(() => { if (current) setPreviewReportState("failed"); });
       }
     });
     return () => {
@@ -260,6 +279,7 @@ export default function Canvas({
 
   useEffect(() => {
     setLoadedFrameKey(null);
+    setPreviewReportState(null);
     if (!src) {
       setFrameDocument(null);
       setLoadError(null);
@@ -389,6 +409,7 @@ export default function Canvas({
             ref={iframeRef}
             key={frameDocumentKey}
             data-document-key={frameDocumentKey}
+            data-preview-report-state={previewReportState ?? undefined}
             aria-busy={loadedFrameKey !== (frameKey ?? src)}
             title={t("workspace.canvas.title")}
             srcDoc={frameSrcDoc ?? placeholderSrc}

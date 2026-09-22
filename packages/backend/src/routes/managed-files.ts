@@ -53,8 +53,12 @@ managedFileRoutes.get("/api/projects/:id/preview/:previewId/fs/*", async (c) => 
 
 managedFileRoutes.post("/api/projects/:id/preview/:previewId/report", async (c) => {
   const value: unknown = await c.req.json().catch(() => null);
-  const saved = await recordTurnPreview(c.req.param("id"), c.req.param("previewId"), value);
-  return saved ? c.json(ok({ saved: true })) : c.json(fail("preview_report_invalid", "Preview report is stale or invalid"), 409);
+  const outcome = await recordTurnPreview(c.req.param("id"), c.req.param("previewId"), value);
+  if (outcome === "saved") return c.json(ok({ saved: true }));
+  // The outcome is the only detail: it separates a preview that has ended from
+  // a report about a superseded render or a payload that broke the shape.
+  if (outcome === "no_preview") return c.json(fail("preview_expired", "Live preview has ended", { outcome }), 404);
+  return c.json(fail("preview_report_invalid", "Preview report is stale or invalid", { outcome }), 409);
 });
 
 managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {

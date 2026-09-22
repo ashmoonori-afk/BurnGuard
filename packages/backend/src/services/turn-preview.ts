@@ -79,19 +79,33 @@ export async function readTurnPreview(projectId: string, previewId: string, rela
   } finally { await handle.close(); }
 }
 
-export async function recordTurnPreview(projectId: string, previewId: string, value: unknown): Promise<boolean> {
+/** Finite outcomes so a caller can tell a missing preview from a late or an invalid report. */
+export type TurnPreviewReportOutcome = "saved" | "no_preview" | "superseded" | "malformed";
+
+// Sanitized trace: the outcome plus two version integers. Never a path, an id,
+// or any artifact content.
+function refuseReport(outcome: Exclude<TurnPreviewReportOutcome, "saved">, currentVersion: number | null, value: unknown): TurnPreviewReportOutcome {
+  const received = value !== null && typeof value === "object" && typeof (value as { version?: unknown }).version === "number" ? (value as { version: number }).version : null;
+  console.error("[preview] report refused", outcome, JSON.stringify({ current_version: currentVersion, received_version: received }));
+  return outcome;
+}
+
+export async function recordTurnPreview(projectId: string, previewId: string, value: unknown): Promise<TurnPreviewReportOutcome> {
   const preview = previews.get(projectId);
-  if (!preview || preview.id !== previewId) return false;
+  if (!preview || preview.id !== previewId) return refuseReport("no_preview", null, value);
   const keys = ["version", "width", "height", "images", "brokenImages", "pendingImages", "horizontalOverflow"] as const;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return refuseReport("malformed", preview.version, value);
   const report = value as Record<string, unknown>;
-  if (Object.keys(report).length !== keys.length || keys.some((key) => typeof report[key] !== "number" || !Number.isSafeInteger(report[key]) || (report[key] as number) < 0 || (report[key] as number) > 1_000_000) || report.version !== preview.version || Number(report.brokenImages) + Number(report.pendingImages) > Number(report.images)) return false;
+  if (Object.keys(report).length !== keys.length || keys.some((key) => typeof report[key] !== "number" || !Number.isSafeInteger(report[key]) || (report[key] as number) < 0 || (report[key] as number) > 1_000_000) || Number(report.brokenImages) + Number(report.pendingImages) > Number(report.images)) return refuseReport("malformed", preview.version, report);
+  // Version equality stays exact. A report for any other render is evidence
+  // about a document the app is no longer showing.
+  if (report.version !== preview.version) return refuseReport("superseded", preview.version, report);
   const target = path.join(path.dirname(preview.stageDir), "preview-report.json");
   const temporary = `${target}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporary, JSON.stringify({ schema_version: 1, source: "in_app_iframe_dom", scope: "current_page_only_not_screenshot_review", observed_at: Date.now(), path: preview.entrypoint, ...report }), { flag: "wx", mode: 0o600 });
-    if (previews.get(projectId) !== preview) return false;
+    if (previews.get(projectId) !== preview) return refuseReport("no_preview", null, report);
     await rename(temporary, target);
-    return true;
+    return "saved";
   } finally { await rm(temporary, { force: true }); }
 }
