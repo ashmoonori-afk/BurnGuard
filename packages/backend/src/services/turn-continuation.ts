@@ -2,12 +2,21 @@ import { watch } from "node:fs";
 import type { AdapterRunInput, AdapterRunResult } from "../adapters/types";
 import { ulid } from "ulid";
 
+/** Schedules `handler` after `ms` and returns its cancel function; injected so tests drive deadlines by signal instead of elapsed time. */
+export type ContinuationTimer = (handler: () => void, ms: number) => () => void;
+
+const realTimer: ContinuationTimer = (handler, ms) => {
+  const timer = setTimeout(handler, ms);
+  return () => clearTimeout(timer);
+};
+
 /** Retries stay inside the same unpublished stage and session reservation. */
 export async function runWithContinuation(
   input: AdapterRunInput,
   run: (input: AdapterRunInput) => Promise<AdapterRunResult>,
   complete: () => Promise<boolean>,
   limits = { idleMs: 120_000, toolMs: 600_000, attemptMs: 900_000, attempts: 3 },
+  schedule: ContinuationTimer = realTimer,
 ): Promise<AdapterRunResult> {
   let recovery: { id: string; tool: string } | undefined;
   const emitRecovery = async (ok: boolean) => {
@@ -19,11 +28,11 @@ export async function runWithContinuation(
       input.signal?.throwIfAborted();
       const controller = new AbortController();
       const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal;
-      let idle: ReturnType<typeof setTimeout>;
+      let cancelIdle = () => {};
       const pending = new Set<string>();
-      const touch = () => { clearTimeout(idle); idle = setTimeout(() => controller.abort(), pending.size ? limits.toolMs : limits.idleMs); };
+      const touch = () => { cancelIdle(); cancelIdle = schedule(() => controller.abort(), pending.size ? limits.toolMs : limits.idleMs); };
       const watcher = watch(input.projectDir, { recursive: true }, touch);
-      const deadline = setTimeout(() => controller.abort(), limits.attemptMs);
+      const cancelDeadline = schedule(() => controller.abort(), limits.attemptMs);
       watcher.on("error", () => controller.abort());
       let failed = false;
       let needsAction = false;
@@ -54,7 +63,7 @@ export async function runWithContinuation(
         if (!controller.signal.aborted) throw error;
         result = { exitCode: 1 };
       } finally {
-        clearTimeout(idle!); clearTimeout(deadline); watcher.close();
+        cancelIdle(); cancelDeadline(); watcher.close();
       }
       input.signal?.throwIfAborted();
       const success = result.exitCode === 0 && !failed && !controller.signal.aborted && await complete();
