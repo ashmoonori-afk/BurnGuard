@@ -16,6 +16,14 @@ test("Given dynamic model capabilities When selecting effort Then unsupported va
   expect(() => parseGenerationOptions({ ...generation, apiKey: "not-a-field" })).toThrow();
   expect(() => parseGenerationOptions({ ...generation, model: "unsafe model" })).toThrow();
   expect(buildCodexCommand("codex", generation)).toContain('model_reasoning_effort="low"');
+  // Progress is only visible when the exposed summary is requested: the catalog default may be
+  // none, and --ignore-user-config removes any user setting, so the request is made here.
+  expect(buildCodexCommand("codex", generation)).toContain('model_reasoning_summary="concise"');
+  expect(buildCodexCommand("codex", { ...generation, vanilla: false })).toContain('model_reasoning_summary="concise"');
+  expect(buildCodexCommand("codex", generation, "linux", "forbidden")).toContain('model_reasoning_summary="concise"');
+  // Nothing hidden is ever requested: no raw or encrypted reasoning setting is on the command line.
+  expect(buildCodexCommand("codex", generation).join(" ")).not.toContain("encrypted");
+  expect(buildCodexCommand("codex", generation).join(" ")).not.toContain("include_reasoning_content");
   expect(buildCodexCommand("codex", generation)).toContain("fixture-model");
   expect(buildCodexCommand("codex", generation)).toContain("--ignore-user-config");
   expect(buildCodexCommand("codex", generation)).toContain("features.plugins=false");

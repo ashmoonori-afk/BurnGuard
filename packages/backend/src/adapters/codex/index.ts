@@ -24,6 +24,12 @@ export function buildCodexCommand(
     "--sandbox",
     "workspace-write",
     "-c", `model_reasoning_effort="${generation?.effort ?? "low"}"`,
+    // Ask for the exposed reasoning summary explicitly. `model_reasoning_summary` defaults to the
+    // model catalog's own setting, which may expose nothing, and `--ignore-user-config` below drops
+    // any value the user configured - so a turn that reasons for minutes between tool calls would
+    // put nothing on the stream and look stalled. "concise" is the smallest exposed summary Codex
+    // offers; the raw and encrypted chain of thought is never requested and never read.
+    "-c", 'model_reasoning_summary="concise"',
     "-c", "suppress_unstable_features_warning=true",
     // A repair edits an artifact that is already finished; the capability is switched off rather
     // than merely discouraged in the prompt.
