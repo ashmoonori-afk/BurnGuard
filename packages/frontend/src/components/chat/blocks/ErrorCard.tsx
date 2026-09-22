@@ -1,7 +1,26 @@
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, CircleSlash, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { TurnErrorCode } from "@bg/shared";
+import type { TurnErrorCode, TurnNotApplied, TurnRejectionReason } from "@bg/shared";
 import { useT, type MessageKey } from "@/i18n/t";
+
+/**
+ * The finite rejection vocabulary, mapped onto shipped copy.
+ *
+ * A reason says which contract the finished work broke. It is a closed list from `@bg/shared`, so
+ * every case has copy and nothing model-authored, no path and no id can reach the card this way.
+ */
+const TURN_REASON_MESSAGE_KEYS: Record<TurnRejectionReason, MessageKey> = {
+  logo_manifest_missing: "chat.reason.logo_manifest_missing",
+  logo_manifest_invalid: "chat.reason.logo_manifest_invalid",
+  logo_history_changed: "chat.reason.logo_history_changed",
+  logo_selection_invalid: "chat.reason.logo_selection_invalid",
+  logo_candidate_invalid: "chat.reason.logo_candidate_invalid",
+  logo_candidate_provenance: "chat.reason.logo_candidate_provenance",
+  logo_svg_missing: "chat.reason.logo_svg_missing",
+  logo_svg_invalid: "chat.reason.logo_svg_invalid",
+  logo_svg_source_mismatch: "chat.reason.logo_svg_source_mismatch",
+  logo_guidelines_invalid: "chat.reason.logo_guidelines_invalid",
+};
 
 const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {
   graphic_requires_authenticated_codex: "chat.error.graphicRequiresAuthenticatedCodex",
@@ -27,15 +46,25 @@ const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {
 
 export default function ErrorCard({
   code,
+  reason,
+  notApplied,
   recoverable,
 }: {
   message: string;
   code?: TurnErrorCode;
+  reason?: TurnRejectionReason;
+  notApplied?: TurnNotApplied;
   recoverable: boolean;
 }) {
   const t = useT();
   return (
-    <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs">
+    <div
+      className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs"
+      data-qa="turn-error"
+      data-turn-id={notApplied?.turnId}
+      data-turn-reason={reason}
+      data-turn-not-applied={notApplied === undefined ? undefined : "true"}
+    >
       <div className="flex items-start gap-2">
         <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
         <div className="min-w-0 flex-1">
@@ -43,6 +72,18 @@ export default function ErrorCard({
           <div className="text-destructive/80 mt-0.5 break-words">
             {t(TURN_ERROR_MESSAGE_KEYS[code ?? "turn_failed"])}
           </div>
+          {reason !== undefined && (
+            <div className="text-destructive/80 mt-1 break-words" data-qa="turn-error-reason">
+              {t(TURN_REASON_MESSAGE_KEYS[reason])}
+            </div>
+          )}
+          {notApplied !== undefined && (
+            // Stated only when the server stated it: the refused turn published nothing.
+            <div className="mt-2 flex items-start gap-1.5 font-medium text-destructive" data-qa="turn-not-applied">
+              <CircleSlash className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+              <span>{t("chat.turn.not_applied")}</span>
+            </div>
+          )}
           {recoverable && (
             <div className="mt-2 flex gap-2">
               <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => document.querySelector<HTMLTextAreaElement>('[data-qa="composer"] textarea')?.focus()}>

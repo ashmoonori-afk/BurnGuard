@@ -163,6 +163,81 @@ export const chatMessages = defineMessages({
   },
   "chat.user.revert": { ko: "이 턴 되돌리기", en: "Revert this turn", "zh-CN": "撤销本轮" },
   "chat.user.reverting": { ko: "되돌리는 중…", en: "Reverting…", "zh-CN": "正在恢复…" },
+  "chat.turn.pending": {
+    ko: "생성됨 · 검사 중 (아직 프로젝트에 저장되지 않음)",
+    en: "Generated · checking (not saved to the project yet)",
+    "zh-CN": "已生成 · 检查中（尚未保存到项目）",
+  },
+  "chat.turn.committed": {
+    ko: "프로젝트에 저장됨",
+    en: "Saved to the project",
+    "zh-CN": "已保存到项目",
+  },
+  "chat.turn.not_applied": {
+    ko: "프로젝트에 반영되지 않음 — 이 작업의 결과는 저장되지 않았고 프로젝트는 그대로예요.",
+    en: "Not applied — nothing from this turn was saved and the project is unchanged.",
+    "zh-CN": "未应用到项目 — 本轮结果未保存，项目保持原样。",
+  },
+  "chat.turn.rejected": {
+    ko: "완료되지 않음 — 이 작업은 끝나지 않았어요.",
+    en: "Did not finish — this turn stopped before it completed.",
+    "zh-CN": "未完成 — 本轮在完成前中止。",
+  },
+  "chat.turn.stopped": {
+    ko: "중단됨 — 그때까지 진행된 부분만 남아 있어요.",
+    en: "Stopped — only the work reached before you stopped it was kept.",
+    "zh-CN": "已中断 — 仅保留中断前已完成的部分。",
+  },
+  "chat.reason.logo_manifest_missing": {
+    ko: "로고 후보 기록을 찾지 못했어요.",
+    en: "The logo candidate record could not be found.",
+    "zh-CN": "未找到徽标候选记录。",
+  },
+  "chat.reason.logo_manifest_invalid": {
+    ko: "로고 후보 기록의 형식이 올바르지 않아요.",
+    en: "The logo candidate record is not in a valid shape.",
+    "zh-CN": "徽标候选记录的格式无效。",
+  },
+  "chat.reason.logo_history_changed": {
+    ko: "이전 라운드의 기록이 바뀌었어요.",
+    en: "The earlier exploration rounds were changed.",
+    "zh-CN": "此前轮次的记录被修改。",
+  },
+  "chat.reason.logo_selection_invalid": {
+    ko: "선택한 후보가 기록과 맞지 않아요.",
+    en: "The selected candidate does not match the record.",
+    "zh-CN": "所选候选与记录不匹配。",
+  },
+  "chat.reason.logo_candidate_invalid": {
+    ko: "후보 이미지가 올바르지 않아요.",
+    en: "A candidate image is not valid.",
+    "zh-CN": "候选图像无效。",
+  },
+  "chat.reason.logo_candidate_provenance": {
+    ko: "후보 이미지의 출처를 확인하지 못했어요.",
+    en: "A candidate image's origin could not be confirmed.",
+    "zh-CN": "无法确认候选图像的来源。",
+  },
+  "chat.reason.logo_svg_missing": {
+    ko: "최종 벡터 파일이 없어요.",
+    en: "The final vector file is missing.",
+    "zh-CN": "缺少最终矢量文件。",
+  },
+  "chat.reason.logo_svg_invalid": {
+    ko: "최종 벡터 파일이 허용된 형식을 벗어났어요.",
+    en: "The final vector file is outside the allowed shape.",
+    "zh-CN": "最终矢量文件超出允许的格式。",
+  },
+  "chat.reason.logo_svg_source_mismatch": {
+    ko: "최종 벡터가 선택한 후보에서 나오지 않았어요.",
+    en: "The final vector did not come from the selected candidate.",
+    "zh-CN": "最终矢量并非来自所选候选。",
+  },
+  "chat.reason.logo_guidelines_invalid": {
+    ko: "사용 가이드 문서가 완성되지 않았어요.",
+    en: "The usage guidelines document is incomplete.",
+    "zh-CN": "使用指南文档未完成。",
+  },
   "chat.error.title": { ko: "오류", en: "Error", "zh-CN": "错误" },
   "chat.error.focusComposer": {
     ko: "메시지 입력으로 이동",
