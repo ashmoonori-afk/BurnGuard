@@ -133,9 +133,11 @@ test("Given the report route When each outcome occurs Then the status and detail
   expect(unparsable.status).toBe(409);
   expect(unparsable.body.error?.details?.outcome).toBe("malformed");
 
+  // An ended preview stays on the report route's single refusal status: the outcome, not the
+  // status code, is what tells the three refusals apart.
   const missing = await postReport(preview.projectId, `preview-${randomUUID()}`, report(preview.version));
-  expect(missing.status).toBe(404);
-  expect(missing.body.error?.code).toBe("preview_expired");
+  expect(missing.status).toBe(409);
+  expect(missing.body.error?.code).toBe("preview_report_invalid");
   expect(missing.body.error?.details?.outcome).toBe("no_preview");
 
   for (const outcome of [superseded, malformed, unparsable, missing]) {
