@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AdapterRunInput } from "../src/adapters/types";
 import type { NormalizedEvent } from "@bg/shared";
-import { runWithContinuation } from "../src/services/turn-continuation";
+import { resolveContinuationLimits, runWithContinuation } from "../src/services/turn-continuation";
 import { parseCodexLine } from "../src/adapters/codex/parser";
 
 test("Given an incomplete attempt, then recovery preserves stage assets and publishes only the successful terminal event", async () => {
@@ -18,6 +18,7 @@ test("Given an incomplete attempt, then recovery preserves stage assets and publ
       if (calls === 1) await writeFile(path.join(dir, "image.png"), "existing image");
       else {
         expect(attempt.prompt).toContain("<resume_incomplete_work>");
+        expect(attempt.prompt).toContain('data-bg-complete="true"');
         expect(await readFile(path.join(dir, "image.png"), "utf8")).toBe("existing image");
         await writeFile(path.join(dir, "deck.html"), "finished");
       }
@@ -29,6 +30,10 @@ test("Given an incomplete attempt, then recovery preserves stage assets and publ
     expect(events.filter(e => e.type === "status.idle")).toEqual([expect.objectContaining({ stopReason: "end_turn" })]);
     expect(events).toContainEqual(expect.objectContaining({ type: "tool.finished", tool: "generation_resume_incomplete", ok: true }));
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Given a partial continuation timeout override, then tool and absolute deadlines retain safe defaults", () => {
+  expect(resolveContinuationLimits({ idleMs: 120_000, attempts: 3 })).toEqual({ idleMs: 120_000, toolMs: 600_000, attemptMs: 900_000, attempts: 3 });
 });
 
 test("Given a stalled attempt, then owned cleanup finishes before restart and explicit cancellation never restarts", async () => {
