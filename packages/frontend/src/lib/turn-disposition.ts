@@ -44,7 +44,19 @@ type MutableTurnState = {
  */
 export function projectTurnStates(events: readonly NormalizedEvent[]): ReadonlyMap<string, TurnState> {
   const states = new Map<string, MutableTurnState>();
+  const userTurns = new Set(events.flatMap((event) => event.type === "chat.user_message" ? [event.turnId] : []));
+  const childParents = new Map<string, string>();
   let open: string | null = null;
+
+  const parentOf = (turnId: string): string => {
+    // A user-message id is authoritative even if it happens to resemble a generated repair id.
+    if (userTurns.has(turnId)) return turnId;
+    const parent = [...userTurns]
+      .filter((candidate) => turnId === `${candidate}-logo-repair` || new RegExp(`^${candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-design-repair-[1-9]\\d*$`).test(turnId))
+      .sort((left, right) => right.length - left.length)[0];
+    if (parent !== undefined) childParents.set(turnId, parent);
+    return parent ?? turnId;
+  };
 
   const track = (turnId: string): MutableTurnState => {
     const existing = states.get(turnId);
@@ -64,14 +76,15 @@ export function projectTurnStates(events: readonly NormalizedEvent[]): ReadonlyM
       case "tool.permission_required":
       case "file.changed":
         track(event.turnId);
-        open = event.turnId;
+        open = parentOf(event.turnId);
         break;
       case "chat.message_end": {
+        const parent = parentOf(event.turnId);
         const state = track(event.turnId);
-        // A terminal that already refused the turn wins: the failure path republishes the
-        // provider's buffered terminals after the refusal, and they publish nothing.
-        if (state.disposition === "pending") state.disposition = "committed";
-        open = event.turnId;
+        // Only the enclosing user turn's terminal proves publication. Repair terminals are
+        // intentionally suppressed by the backend and cannot independently commit their bubble.
+        if (parent === event.turnId && state.disposition === "pending") state.disposition = "committed";
+        open = parent;
         break;
       }
       case "status.error": {
@@ -100,6 +113,17 @@ export function projectTurnStates(events: readonly NormalizedEvent[]): ReadonlyM
       default:
         break;
     }
+  }
+
+  // Repair output is part of its enclosing user turn. It remains pending while the parent is
+  // pending, then receives that parent's authoritative publication result (including notApplied).
+  for (const [childId, parentId] of childParents) {
+    const child = states.get(childId);
+    const parent = states.get(parentId);
+    if (child === undefined || parent === undefined || parent.disposition === "pending") continue;
+    child.disposition = parent.disposition;
+    child.reason = parent.reason;
+    child.notApplied = parent.notApplied;
   }
 
   return new Map([...states].map(([turnId, state]) => [turnId, { ...state }]));

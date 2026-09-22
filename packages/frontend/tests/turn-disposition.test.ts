@@ -24,7 +24,10 @@ const FIRST = "turn-first";
 const SECOND = "turn-second";
 
 let nextId = 0;
-const id = () => `event-${(nextId += 1)}`;
+const id = () => {
+  nextId += 1;
+  return `event-${nextId}`;
+};
 
 /** A turn that finished and published: its terminal message_end is only sent after the commit. */
 function committedTurn(turnId: string, text: string): NormalizedEvent[] {
@@ -68,6 +71,39 @@ test("Given a refused turn after a committed one When projected Then only the re
   expect(states.get(SECOND)?.reason).toBe("logo_svg_invalid");
   expect(states.get(SECOND)?.notApplied).toEqual({ turnId: SECOND, operationId: "operation-9", repairs: 1 });
   expect(states.get(FIRST)?.notApplied).toBeUndefined();
+});
+
+test("Given repair child output When the parent commits or is not applied Then the child bubble inherits only that parent standing", () => {
+  const committedChild = `${FIRST}-design-repair-1`;
+  const refusedChild = `${SECOND}-logo-repair`;
+  const events: NormalizedEvent[] = [
+    { id: id(), ts: 1, type: "chat.user_message", turnId: FIRST, text: "make the mark", attachmentCount: 0 },
+    { id: id(), ts: 2, type: "chat.delta", turnId: committedChild, text: "contrast repaired" },
+    { id: id(), ts: 3, type: "chat.message_end", turnId: FIRST },
+    { id: id(), ts: 4, type: "status.idle", stopReason: "end_turn" },
+    { id: id(), ts: 5, type: "chat.user_message", turnId: SECOND, text: "finalize it", attachmentCount: 0 },
+    { id: id(), ts: 6, type: "chat.delta", turnId: refusedChild, text: "vector repaired" },
+    { id: id(), ts: 7, type: "status.error", code: "logo_deliverables_missing", reason: "logo_svg_invalid", notApplied: { turnId: SECOND, operationId: "operation-7", repairs: 1 }, message: "turn_failed", recoverable: true },
+    { id: id(), ts: 8, type: "status.idle", stopReason: "error" },
+  ];
+
+  const states = projectTurnStates(events);
+
+  expect(states.get(committedChild)?.disposition).toBe("committed");
+  expect(states.get(refusedChild)?.disposition).toBe("not_applied");
+  expect(states.get(refusedChild)?.notApplied).toEqual({ turnId: SECOND, operationId: "operation-7", repairs: 1 });
+  expect(states.get(refusedChild)?.reason).toBe("logo_svg_invalid");
+});
+
+test("Given an independent turn whose id resembles a repair child When projected Then it is not joined to another turn", () => {
+  const independent = `${FIRST}-logo-repair`;
+  const events: NormalizedEvent[] = [
+    ...committedTurn(FIRST, "first mark delivered"),
+    { id: id(), ts: 6, type: "chat.user_message", turnId: independent, text: "independent request", attachmentCount: 0 },
+    { id: id(), ts: 7, type: "chat.delta", turnId: independent, text: "still working" },
+  ];
+
+  expect(projectTurnStates(events).get(independent)?.disposition).toBe("pending");
 });
 
 test("Given a turn whose work is still streaming When projected Then it is pending rather than committed", () => {
