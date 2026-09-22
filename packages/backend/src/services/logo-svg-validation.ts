@@ -221,6 +221,51 @@ export function validateLogoSvg(text: string): void {
   if (attributeOf(root, "xmlns") === null) throw fail("svg_namespace_missing");
 }
 
+/**
+ * Every violation this parser can report, without the subject it found. A detail reads
+ * `svg_forbidden_attribute:<name>`, and that name is copied out of the document, so it is
+ * model-authored text; the head is not. Only the head — one of this closed list — and the
+ * allowlist below ever leave the server, so a repair is told which rule it broke and what the rule
+ * is, and never handed back a string the model itself wrote.
+ */
+export const LOGO_SVG_VIOLATIONS = [
+  "svg_too_large", "svg_doctype", "svg_cdata", "svg_processing_instruction", "svg_entity",
+  "svg_malformed", "svg_root_invalid", "svg_viewbox_missing", "svg_viewbox_invalid",
+  "svg_namespace_missing", "svg_forbidden_element", "svg_text_content", "svg_event_handler",
+  "svg_forbidden_attribute", "svg_attribute_invalid", "svg_external_reference",
+  "svg_url_reference", "svg_reference_missing", "svg_source_invalid",
+] as const;
+export type LogoSvgViolation = (typeof LOGO_SVG_VIOLATIONS)[number];
+
+/** The finite head of a validator detail, or null when the detail is not one of this module's. */
+export function logoSvgViolation(detail: string): LogoSvgViolation | null {
+  const head = detail.split(":")[0] ?? "";
+  return (LOGO_SVG_VIOLATIONS as readonly string[]).includes(head) ? head as LogoSvgViolation : null;
+}
+
+export type LogoSvgContract = {
+  readonly elements: readonly string[];
+  readonly text_elements: readonly string[];
+  readonly attributes: readonly string[];
+  readonly max_bytes: number;
+};
+
+/**
+ * The allowlist itself, read off the tables above so it cannot drift from what is enforced. This
+ * is what a repair is given instead of a diagnostic: the permitted surface, as data.
+ */
+export function logoSvgContract(): LogoSvgContract {
+  return {
+    elements: [...ELEMENTS].sort(),
+    text_elements: [...TEXT_ELEMENTS].sort(),
+    attributes: [...new Set([
+      ...ATTRIBUTES.keys(), ...FRAGMENT_ATTRIBUTES, ...URL_ATTRIBUTES,
+      "xmlns", "xmlns:xlink", LOGO_SOURCE_ATTRIBUTE,
+    ])].sort(),
+    max_bytes: MAX_SVG_BYTES,
+  };
+}
+
 /** The generated candidate the vector claims to reproduce, or null when the root does not say. */
 export function logoSvgSource(text: string): string | null {
   const body = text.replace(/<!--[\s\S]*?-->/g, "").replace(/^\s*<\?xml\s+[^<>]*\?>/, "");

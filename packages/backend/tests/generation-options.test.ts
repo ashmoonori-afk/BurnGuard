@@ -23,6 +23,10 @@ test("Given dynamic model capabilities When selecting effort Then unsupported va
   expect(buildCodexCommand("codex", generation)).toContain("suppress_unstable_features_warning=true");
   expect(buildCodexCommand("codex", generation)).toContain("features.image_generation=true");
   expect(buildCodexCommand("codex", { ...generation, vanilla: false })).toContain("features.image_generation=true");
+  // A repair of a finished deliverable loses the capability itself, not just the permission to use it.
+  expect(buildCodexCommand("codex", generation, "linux", "forbidden")).toContain("features.image_generation=false");
+  expect(buildCodexCommand("codex", generation, "linux", "forbidden")).not.toContain("features.image_generation=true");
+  expect(buildCodexCommand("codex", generation, "linux", "allowed")).toContain("features.image_generation=true");
   expect(buildCodexCommand("codex", { ...generation, vanilla: false })).toContain("suppress_unstable_features_warning=true");
   expect(buildCodexCommand("codex", generation, "win32")).toContain('windows.sandbox="unelevated"');
   expect(buildCodexCommand("codex", generation, "linux")).not.toContain('windows.sandbox="unelevated"');

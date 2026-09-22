@@ -25,6 +25,12 @@ export interface AdapterRunInput {
   prompt: string;
   userEvent: Extract<UserEvent, { type: "user.message" }>;
   signal?: AbortSignal;
+  /**
+   * Whether this run may call the provider's built-in image tool. Repairs of an already-finished
+   * artifact set "forbidden": the capability is switched off in the CLI invocation, and the caller
+   * refuses the run if an image call shows up regardless. Absent means the default, allowed.
+   */
+  imageGeneration?: "allowed" | "forbidden";
   onEvent: (event: NormalizedEvent) => Promise<void>;
   onStderr?: (line: string) => Promise<void>;
   /**

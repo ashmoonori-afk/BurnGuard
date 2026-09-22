@@ -4,7 +4,7 @@ import { ensureCharts } from "./charts";
 import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
-import type { NormalizedEvent, UserEvent } from "@bg/shared";
+import type { NormalizedEvent, TurnNotApplied, TurnRejectionReason, UserEvent } from "@bg/shared";
 import { assignAttachmentsToTurn } from "../db/attachments";
 import {
   persistNormalizedEvent,
@@ -30,7 +30,9 @@ import { isDirectionOperationActive } from "./direction-operation-registry";
 import { buildVisualSourceManifest } from "./visual-source-manifest";
 import { captureImmutableAttachments, verifyImmutableAttachments } from "./immutable-attachment-guard";
 import { redactPrivateAttachmentPaths, withPrivateAttachmentInputs } from "./stage-attachment-inputs";
-import { sanitizeTurnEvent } from "./turn-error-sanitizer";
+import { sanitizeTurnEvent, turnRejectionReason } from "./turn-error-sanitizer";
+import { isRepairableLogoRejection, repairLogoCompletion } from "./logo-completion-repair";
+import { logoSvgViolation } from "./logo-svg-validation";
 import { startTurnPreview } from "./turn-preview";
 import { findHtmlEncodingIssues } from "./generated-html-encoding";
 import { runWithContinuation } from "./turn-continuation";
@@ -381,6 +383,14 @@ async function runUserTurnInternal(
   let stopPreview: (() => Promise<void>) | undefined;
   /** Captured selection, retained only after the finalize deliverable gate succeeds. */
   let finalizedLogoSource: string | null = null;
+  /** Bounded targeted repairs of the finished deliverable; the gate allows at most one. */
+  let logoRepairs = 0;
+  /**
+   * The finite reason the completion gate refused, recorded where the domain error is still
+   * itself. The artifact coordinator rethrows a fresh error carrying only the public message, so
+   * the reason has to be captured here or it is gone by the time the failure is published.
+   */
+  let rejectionReason: TurnRejectionReason | undefined;
   const terminalEvents: NormalizedEvent[] = [];
   const selectedAttachments = sessionContext.attachments.filter((attachment) => contextPayload.attachments.includes(attachment.file_path));
   const forbiddenSha256 = new Set(selectedAttachments.filter((attachment) => attachment.source_role === "immutable_reference").flatMap((attachment) => attachment.sha256 === null ? [] : [attachment.sha256]));
@@ -477,6 +487,41 @@ async function runUserTurnInternal(
               if (designReview.status !== "checked" || designReview.result?.overall_status === "must_fix" || !designReview.result || providerReportedFailure) throw new DesignReviewError();
               const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
               if (encodingIssues.length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
+              if (logoExpectation !== null && logoEvidence !== null) {
+                // The expectation was captured before the agent ran and is never recaptured. A
+                // repair is therefore judged against the same phase, the same selected candidate
+                // and the same candidate hashes as the first attempt: it may correct the document
+                // it was refused for and nothing else, and a second pass cannot launder a turn
+                // that quietly regenerated an image or rewrote history.
+                const gate = async (): Promise<void> => {
+                  const info = await lstat(path.join(stageDir, project.entrypoint));
+                  if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new LogoDeliverableError("guidelines_not_file");
+                  await assertLogoDeliverables(stageDir, logoExpectation, logoEvidence.evidence);
+                };
+                try {
+                  try { await gate(); }
+                  catch (rejected) {
+                    const reason = turnRejectionReason(rejected);
+                    // A repair is offered only when the refusal carries a finite violation from
+                    // the validator's own list; nothing derived from what the model wrote.
+                    const violation = rejected instanceof LogoDeliverableError ? logoSvgViolation(rejected.detail) : null;
+                    if (!isRepairableLogoRejection(reason) || violation === null || logoRepairs > 0) throw rejected;
+                    logoRepairs += 1;
+                    if (!await repairLogoCompletion({ adapter: adapterInput, reason, violation, run: (attempt) => runAdapter(backendId, attempt) })) throw rejected;
+                    // Revalidate the whole deliverable rather than the part that was refused.
+                    // Immutable references are re-verified by this operation's own `finally`,
+                    // which still runs between here and publication.
+                    await gate();
+                    if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
+                  }
+                } catch (error) {
+                  // The coordinator rethrows a fresh error carrying only the public message, so
+                  // the finite reason is recorded here while the domain error is still itself.
+                  rejectionReason = turnRejectionReason(error);
+                  throw error;
+                }
+                finalizedLogoSource = logoExpectation.selected?.file ?? null;
+              }
             } catch (error) {
               if (!activeTurn.interrupted) throw error;
               // The adapter has settled and stopped its owned writers. Keep its partial
@@ -506,12 +551,6 @@ async function runUserTurnInternal(
           if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new Error("graphic_starter_unchanged");
           assertGraphicStarterReplaced(graphicBefore, await readFile(graphicEntrypoint, "utf8"));
         }
-        if (logoExpectation !== null && logoEvidence !== null) {
-          const info = await lstat(path.join(stageDir, project.entrypoint));
-          if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new LogoDeliverableError("guidelines_not_file");
-          await assertLogoDeliverables(stageDir, logoExpectation, logoEvidence.evidence);
-          finalizedLogoSource = logoExpectation.selected?.file ?? null;
-        }
       },
     });
     if (activeTurn.interrupted) {
@@ -525,6 +564,13 @@ async function runUserTurnInternal(
     }
   } catch (error) {
     if (!operationPrepared) throw error;
+    // The operation reached its terminal state without publishing, so nothing this turn produced
+    // is in the project. An interrupted turn is the exception: it keeps and publishes its partial
+    // stage, so it is not "not applied" and carries no such notice.
+    const rejected: { readonly notApplied: TurnNotApplied; readonly reason?: TurnRejectionReason } = {
+      notApplied: { turnId, operationId, repairs: logoRepairs },
+      ...(rejectionReason === undefined ? {} : { reason: rejectionReason }),
+    };
     if (activeTurn.interrupted || activeTurn.abortController.signal.aborted) {
       if (!(error instanceof ArtifactOperationError && error.code === "operation_cancelled")) {
         await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.error", message: "turn_failed", recoverable: true }, error);
@@ -532,7 +578,7 @@ async function runUserTurnInternal(
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "interrupted" });
     } else if (providerReportedFailure) {
       if (!providerErrorPublished) {
-        await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.error", message: "turn_failed", recoverable: true }, error);
+        await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.error", message: "turn_failed", recoverable: true, ...rejected }, error);
       }
       for (const event of terminalEvents) await persistAndPublish(sessionId, event);
       if (
@@ -549,7 +595,7 @@ async function runUserTurnInternal(
         });
       }
     } else {
-      await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.error", message: "turn_failed", recoverable: true }, error);
+      await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.error", message: "turn_failed", recoverable: true, ...rejected }, error);
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "error" });
     }
     await setSessionStatus(sessionId, "idle");

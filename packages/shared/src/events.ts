@@ -22,6 +22,39 @@ export type TurnErrorCode =
   | "operation_cancelled"
   | "turn_failed";
 
+/**
+ * Why a turn that ran to completion was refused, in a closed machine-readable vocabulary.
+ *
+ * A `TurnErrorCode` says which apology the client shows; a reason says which contract the finished
+ * work broke, so the client and the trace can tell "the mark itself is malformed" from "the image
+ * history was rewritten" without reading prose. The private `detail` a domain error records names a
+ * candidate id or a manifest path, so it is mapped onto one of these before it can leave the
+ * server: a reason is always one of this list and never carries a path, an id or model-authored text.
+ */
+export type TurnRejectionReason =
+  | "logo_manifest_missing"
+  | "logo_manifest_invalid"
+  | "logo_history_changed"
+  | "logo_selection_invalid"
+  | "logo_candidate_invalid"
+  | "logo_candidate_provenance"
+  | "logo_svg_missing"
+  | "logo_svg_invalid"
+  | "logo_svg_source_mismatch"
+  | "logo_guidelines_invalid";
+
+/**
+ * A turn that finished and was then refused. Nothing it produced reached the project, so a client
+ * can say "not applied" instead of leaving the last streamed message looking committed. The turn id
+ * correlates the notice with the bubbles already on screen; `repairs` is how many bounded targeted
+ * corrections the server attempted before giving up.
+ */
+export type TurnNotApplied = {
+  readonly turnId: string;
+  readonly operationId: string;
+  readonly repairs: number;
+};
+
 export type NormalizedEvent =
   | {
       id: string;
@@ -135,6 +168,10 @@ export type NormalizedEvent =
       ts: number;
       type: "status.error";
       code?: TurnErrorCode;
+      /** Which contract the finished work broke, when the server refused a completed turn. */
+      reason?: TurnRejectionReason;
+      /** Set when the turn published nothing; the project tree is exactly what it was. */
+      notApplied?: TurnNotApplied;
       message: string;
       recoverable: boolean;
     }

@@ -10,7 +10,12 @@ import { parseCodexLine, type CodexParserContext } from "./parser";
 import { spawnOwnedProcess } from "../owned-process";
 import { settleProcessStreams } from "../process-streams";
 
-export function buildCodexCommand(binaryPath: string, generation?: AdapterRunInput["generation"], platform = process.platform): string[] {
+export function buildCodexCommand(
+  binaryPath: string,
+  generation?: AdapterRunInput["generation"],
+  platform = process.platform,
+  imageGeneration: NonNullable<AdapterRunInput["imageGeneration"]> = "allowed",
+): string[] {
   return [
     binaryPath,
     "exec",
@@ -20,7 +25,9 @@ export function buildCodexCommand(binaryPath: string, generation?: AdapterRunInp
     "workspace-write",
     "-c", `model_reasoning_effort="${generation?.effort ?? "low"}"`,
     "-c", "suppress_unstable_features_warning=true",
-    "-c", "features.image_generation=true",
+    // A repair edits an artifact that is already finished; the capability is switched off rather
+    // than merely discouraged in the prompt.
+    "-c", `features.image_generation=${imageGeneration === "forbidden" ? "false" : "true"}`,
     ...(generation?.model ? ["--model", generation.model] : []),
     ...(generation?.vanilla ? ["--ignore-user-config", "-c", "features.plugins=false", "-c", "features.skip_host_skill_discovery=true", "-c", "project_doc_max_bytes=0"] : []),
     // Ignoring user config also drops Windows sandbox selection and makes exec read-only.
@@ -63,7 +70,7 @@ export async function runCodexTurn(
   });
 
   const owned = spawnOwnedProcess({
-    cmd: buildCodexCommand(input.binaryPath, input.generation),
+    cmd: buildCodexCommand(input.binaryPath, input.generation, process.platform, input.imageGeneration ?? "allowed"),
     cwd: input.projectDir,
     stdin: new Blob([input.prompt]),
     stdout: "pipe",
