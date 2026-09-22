@@ -5,7 +5,7 @@ import path from "node:path";
 import type { AdapterRunInput } from "../src/adapters/types";
 import type { NormalizedEvent } from "@bg/shared";
 import { type ContinuationTimer, runWithContinuation } from "../src/services/turn-continuation";
-import { parseCodexLine } from "../src/adapters/codex/parser";
+import { type CodexParserContext, parseCodexLine } from "../src/adapters/codex/parser";
 
 const STALL_LIMITS = { idleMs: 1_000, toolMs: 5_000, attemptMs: 60_000, attempts: 3 };
 
@@ -193,6 +193,37 @@ test("Given progress that outlives the attempt deadline, then the attempt still 
     expect(result.exitCode).toBe(0);
     expect(steps).toBe(3);
     expect(events).toContainEqual(expect.objectContaining({ type: "tool.started", tool: "generation_resume_stalled", input: { attempt: 2, maximum: limits.attempts, reason: "attempt_deadline" } }));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Given Codex reasoning on the real stream, then parsed progress keeps the attempt alive and hidden reasoning is never published", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-codex-progress-"));
+  const { schedule, advance } = manualTimers();
+  const events: NormalizedEvent[] = [];
+  // Item shapes as recorded by the installed Codex CLI: an exposed summary beside encrypted content.
+  const lines = [
+    JSON.stringify({ type: "item.started", item: { id: "item_0", type: "reasoning", text: "" } }),
+    JSON.stringify({ type: "item.completed", item: { id: "item_0", type: "reasoning", text: "Reviewing the brief and the existing assets" } }),
+    JSON.stringify({ type: "item.completed", item: { id: "item_1", type: "reasoning", summary: [{ type: "summary_text", text: "Drafting the first section" }], encrypted_content: "ENCRYPTED-REASONING-PAYLOAD", content: [{ type: "reasoning_text", text: "raw private chain of thought" }] } }),
+  ];
+  let calls = 0;
+  try {
+    const result = await runWithContinuation({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "task", userEvent: { type: "user.message", text: "task" }, onEvent: async e => { events.push(e); } }, async attempt => {
+      calls++;
+      const ctx: CodexParserContext = { turnId: attempt.turnId, projectDir: dir, toolNames: new Map() };
+      for (const line of lines) {
+        for (const event of parseCodexLine(line, ctx)) await attempt.onEvent(event);
+        advance(STALL_LIMITS.idleMs - 1);
+      }
+      expect(attempt.signal!.aborted).toBe(false);
+      await attempt.onEvent({ id: "end", ts: 1, type: "status.idle", stopReason: "end_turn" });
+      return { exitCode: 0 };
+    }, async () => true, STALL_LIMITS, schedule);
+    expect(result.exitCode).toBe(0);
+    expect(calls).toBe(1);
+    expect(events.filter(e => e.type === "chat.thinking").map(e => e.text)).toEqual(["Reviewing the brief and the existing assets", "Drafting the first section"]);
+    expect(JSON.stringify(events)).not.toContain("ENCRYPTED-REASONING-PAYLOAD");
+    expect(JSON.stringify(events)).not.toContain("raw private chain of thought");
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
