@@ -5,6 +5,7 @@ import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
 import type { NormalizedEvent, TurnNotApplied, TurnRejectionReason, UserEvent } from "@bg/shared";
+import { LOGO_FILES } from "@bg/shared";
 import { assignAttachmentsToTurn } from "../db/attachments";
 import {
   persistNormalizedEvent,
@@ -44,7 +45,7 @@ import { DesignReviewError, reviewTurnDesign } from "./turn-design-review";
 import { designAuditCanvas } from "./design-audit";
 import { assertLogoDeliverables, captureLogoTurnExpectation, LogoDeliverableError, LogoEvidenceCollector } from "./logo-deliverables";
 import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
-import { inspectCanonicalTree } from "./canonical-tree-manifest";
+import { inspectCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { manifestEntry, readManagedFile } from "./artifact-tree-storage";
 import { resolveWithin } from "../security/path-boundary";
 
@@ -108,6 +109,21 @@ export async function persistAndPublish(sessionId: string, event: NormalizedEven
     level: "event",
     event: safeEvent,
   });
+}
+
+/**
+ * Which paths differ between two canonical manifests of the same stage.
+ *
+ * Content, additions and removals all count; the comparison is on the manifest's own hashes, so it
+ * sees exactly what publication would see.
+ */
+function changedTreePaths(before: CanonicalTreeManifest, after: CanonicalTreeManifest): readonly string[] {
+  const previous = new Map(before.files.map((file) => [file.path, file.sha256]));
+  const current = new Map(after.files.map((file) => [file.path, file.sha256]));
+  const changed = new Set<string>();
+  for (const [path, sha256] of current) if (previous.get(path) !== sha256) changed.add(path);
+  for (const path of previous.keys()) if (!current.has(path)) changed.add(path);
+  return [...changed];
 }
 
 function diagnosticError(error: unknown): Readonly<Record<string, unknown>> {
@@ -378,6 +394,8 @@ async function runUserTurnInternal(
     });
   }
   let operationPrepared = false;
+  /** Set once the artifact operation is terminal and committed: its work is in the project. */
+  let publishedOperation = false;
   let providerReportedFailure = false;
   let providerErrorPublished = false;
   let stopPreview: (() => Promise<void>) | undefined;
@@ -395,7 +413,7 @@ async function runUserTurnInternal(
   const selectedAttachments = sessionContext.attachments.filter((attachment) => contextPayload.attachments.includes(attachment.file_path));
   const forbiddenSha256 = new Set(selectedAttachments.filter((attachment) => attachment.source_role === "immutable_reference").flatMap((attachment) => attachment.sha256 === null ? [] : [attachment.sha256]));
   try {
-    await coordinator.run({
+    const operation = await coordinator.run({
       projectId: project.id, projectDir, kind: "turn", operationId,
       expectedRevision: project.current_revision, expectedArtifactDigest: base.tree_digest,
       publicationPolicy: { forbiddenSha256 },
@@ -507,11 +525,20 @@ async function runUserTurnInternal(
                     const violation = rejected instanceof LogoDeliverableError ? logoSvgViolation(rejected.detail) : null;
                     if (!isRepairableLogoRejection(reason) || violation === null || logoRepairs > 0) throw rejected;
                     logoRepairs += 1;
+                    // The stage as the refusal left it. The repair is handed exactly one editable
+                    // file, and the deliverable gate cannot see a rewritten guidelines document or
+                    // a file left behind beside it, so the repair's own blast radius is measured.
+                    const beforeRepair = await inspectCanonicalTree(stageDir);
                     if (!await repairLogoCompletion({ adapter: adapterInput, reason, violation, run: (attempt) => runAdapter(backendId, attempt) })) throw rejected;
                     // Revalidate the whole deliverable rather than the part that was refused.
                     // Immutable references are re-verified by this operation's own `finally`,
                     // which still runs between here and publication.
                     await gate();
+                    // A valid vector does not buy a repair the right to change anything else: a
+                    // turn that edited outside its one file keeps the refusal that opened the
+                    // repair, and the whole operation rolls back with nothing published.
+                    const touched = changedTreePaths(beforeRepair, await inspectCanonicalTree(stageDir));
+                    if (touched.some((changed) => changed !== LOGO_FILES.logo)) throw rejected;
                     if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
                   }
                 } catch (error) {
@@ -553,6 +580,13 @@ async function runUserTurnInternal(
         }
       },
     });
+    // The operation is terminal here. "committed" means what this turn produced is in the project,
+    // whatever happens next, so a later failure must not be reported as a turn that published
+    // nothing. The QA barrier below makes exactly that sequence reproducible.
+    publishedOperation = operation.status === "committed";
+    if (process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "after_publish") {
+      throw new Error("qa_fault_after_publication");
+    }
     if (activeTurn.interrupted) {
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "interrupted" });
     } else for (const event of terminalEvents) await persistAndPublish(sessionId, event);
@@ -567,8 +601,11 @@ async function runUserTurnInternal(
     // The operation reached its terminal state without publishing, so nothing this turn produced
     // is in the project. An interrupted turn is the exception: it keeps and publishes its partial
     // stage, so it is not "not applied" and carries no such notice.
-    const rejected: { readonly notApplied: TurnNotApplied; readonly reason?: TurnRejectionReason } = {
-      notApplied: { turnId, operationId, repairs: logoRepairs },
+    const rejected: { readonly notApplied?: TurnNotApplied; readonly reason?: TurnRejectionReason } = {
+      // Only a turn whose operation never committed can say the project is untouched. A step that
+      // failed after publication - persisting a terminal event, writing the trace - leaves real
+      // work in the project, and claiming otherwise would send the user looking for lost output.
+      ...(publishedOperation ? {} : { notApplied: { turnId, operationId, repairs: logoRepairs } }),
       ...(rejectionReason === undefined ? {} : { reason: rejectionReason }),
     };
     if (activeTurn.interrupted || activeTurn.abortController.signal.aborted) {

@@ -88,7 +88,7 @@ afterEach(async () => {
 
 type Scenario =
   | "repair-success" | "repair-still-invalid" | "repair-exit" | "repair-error-event" | "repair-cancelled"
-  | "repair-image-call" | "repair-mutated-candidate"
+  | "repair-image-call" | "repair-mutated-candidate" | "repair-mutated-guidelines" | "repair-extra-file"
   | "source-mismatch" | "history-appended" | "candidate-mutated" | "selection-not-recorded" | "revision-conflict";
 
 type Expected = {
@@ -106,6 +106,11 @@ const cases = [
   ["repair-cancelled", { code: null, reason: null, repairs: 1, stopReason: "interrupted" }],
   ["repair-image-call", { code: "logo_deliverables_missing", reason: "logo_svg_invalid", repairs: 1, stopReason: "error" }],
   ["repair-mutated-candidate", { code: "logo_deliverables_missing", reason: "logo_history_changed", repairs: 1, stopReason: "error" }],
+  // A repair that produces a valid vector and also edits something it was told to preserve is
+  // still refused, with the refusal that opened the repair: the deliverable gate cannot see a
+  // guidelines rewrite or a stray file, so the repair's own blast radius is what is checked.
+  ["repair-mutated-guidelines", { code: "logo_deliverables_missing", reason: "logo_svg_invalid", repairs: 1, stopReason: "error" }],
+  ["repair-extra-file", { code: "logo_deliverables_missing", reason: "logo_svg_invalid", repairs: 1, stopReason: "error" }],
   ["source-mismatch", { code: "logo_deliverables_missing", reason: "logo_svg_source_mismatch", repairs: 0, stopReason: "error" }],
   ["history-appended", { code: "logo_deliverables_missing", reason: "logo_history_changed", repairs: 0, stopReason: "error" }],
   ["candidate-mutated", { code: "logo_deliverables_missing", reason: "logo_history_changed", repairs: 0, stopReason: "error" }],
@@ -151,6 +156,9 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
           if (scenario === "repair-cancelled") interruptUserTurn(sessionId);
           if (scenario !== "repair-still-invalid") await writeFile(path.join(input.projectDir, "logo.svg"), VALID_SVG);
           if (scenario === "repair-mutated-candidate") await writeFile(path.join(input.projectDir, SELECTED_FILE), png(9));
+          // Valid vector, but the repair also rewrote a preserve_paths file the gate cannot judge.
+          if (scenario === "repair-mutated-guidelines") await writeFile(path.join(input.projectDir, "index.html"), `${GUIDELINES}<!-- repaired -->`);
+          if (scenario === "repair-extra-file") await writeFile(path.join(input.projectDir, "repair-notes.md"), "# left behind by the repair\n");
           if (scenario === "repair-image-call") {
             // A repair that reaches for the image tool anyway is refused whatever it then wrote.
             const imageCallId = crypto.randomUUID();
@@ -235,6 +243,63 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
         .toEqual({ round: 1, candidate_id: SELECTED });
     }
   } finally {
+    unsubscribe();
+    interruptUserTurn(sessionId);
+  }
+});
+
+test("Given a failure after the operation committed Then the refusal never claims the project is unchanged", async () => {
+  const before = await new ArtifactCoordinator(getSqlite()).initialize(projectId, projectDir);
+  const events: NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  // The shipped QA barrier, scoped to this operation id: it throws once publication is terminal,
+  // which is the only way to reach a post-commit failure without a real disk or database fault.
+  const operationId = `gate-after-publish-${crypto.randomUUID()}`;
+  const previous = {
+    qa: process.env.BG_ARTIFACT_QA,
+    operation: process.env.BG_ARTIFACT_TURN_OPERATION_ID,
+    barrier: process.env.BG_ARTIFACT_TURN_BARRIER,
+  };
+  process.env.BG_ARTIFACT_QA = "1";
+  process.env.BG_ARTIFACT_TURN_OPERATION_ID = operationId;
+  process.env.BG_ARTIFACT_TURN_BARRIER = "after_publish";
+  try {
+    const turn = startUserTurn(sessionId, { type: "user.message", text: REQUEST }, operationId, {
+      detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "unused", version: "fixture", authenticated: true, image_generation: true }] }),
+      runAdapter: async (_backend, input) => {
+        await writeFile(path.join(input.projectDir, "index.html"), GUIDELINES);
+        await writeFile(path.join(input.projectDir, "logo.svg"), VALID_SVG);
+        await writeFile(path.join(input.projectDir, "explorations/manifest.json"), manifestJson({ round: 1, candidate_id: SELECTED }));
+        await input.onEvent({ id: crypto.randomUUID(), ts: 3, type: "chat.message_end", turnId: input.turnId });
+        await input.onEvent({ id: crypto.randomUUID(), ts: 4, type: "status.idle", stopReason: "end_turn" });
+        return { exitCode: 0 };
+      },
+      reviewDesign: async (input): Promise<{ status: "checked"; repairs: number; result: DesignAuditResult }> => ({
+        status: "checked", repairs: 0,
+        result: { schema_version: 1, project_id: input.projectId, artifact_revision: input.revision, artifact_digest: before.tree_digest, created_at: 1, overall_status: "ready", checks: [] },
+      }),
+    });
+    if (turn === null) throw new Error("turn reservation unavailable");
+    expect(turn.operationId).toBe(operationId);
+    await Promise.all([turn.prepared, turn.promise]);
+
+    // The turn is reported as failed, because a step after publication did fail.
+    const errors = events.filter(event => event.type === "status.error");
+    expect(errors).toHaveLength(1);
+    expect(events.filter(event => event.type === "status.idle").map(event => event.stopReason)).toEqual(["error"]);
+    // But its work is in the project, so no not-applied notice and no rejection reason is attached.
+    expect(errors.map(event => event.notApplied ?? null)).toEqual([null]);
+    expect(errors.map(event => event.reason ?? null)).toEqual([null]);
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(operationId)).toEqual({ status: "committed" });
+    expect(await readFile(path.join(projectDir, "logo.svg"), "utf8")).toBe(VALID_SVG);
+    expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(GUIDELINES);
+    expect((await inspectCanonicalTree(projectDir)).tree_digest).not.toBe(before.tree_digest);
+    // The durable replay tells the reloaded client the same thing the live stream did.
+    expect(listSequencedSessionEvents(getSqlite(), sessionId, 0).map(item => item.event).filter(event => event.type === "status.error")).toEqual(errors);
+  } finally {
+    if (previous.qa === undefined) delete process.env.BG_ARTIFACT_QA; else process.env.BG_ARTIFACT_QA = previous.qa;
+    if (previous.operation === undefined) delete process.env.BG_ARTIFACT_TURN_OPERATION_ID; else process.env.BG_ARTIFACT_TURN_OPERATION_ID = previous.operation;
+    if (previous.barrier === undefined) delete process.env.BG_ARTIFACT_TURN_BARRIER; else process.env.BG_ARTIFACT_TURN_BARRIER = previous.barrier;
     unsubscribe();
     interruptUserTurn(sessionId);
   }
