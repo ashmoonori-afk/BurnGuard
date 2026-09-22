@@ -14,6 +14,12 @@ Creating a logo project requires `options.logo_set` (`LogoSetV1`): `brand_name`,
 
 The prompt carries the `LOGO_IMAGE_GENERATION_REQUIRED` rule in both phases: candidates are never drawn by hand, and the master vector reproduces the selected generated candidate rather than a new idea. The photorealism contract does not apply to logo candidates (`LOGO_REALISM_EXCEPTION`); a candidate is described to the image tool as a flat vector-style mark. After the turn, `assertLogoDeliverables` rejects the result with `logo_deliverables_missing` when the manifest is absent or malformed, the latest round does not hold four decodable square PNG files whose bytes are new to the project, no successful image-tool call was observed on the turn's event stream, a candidate's bytes are not among the images the image tool reported (hashes attached to its finish event) or wrote between its start and finish (`candidate_unprovenanced`), an earlier round or its candidate files changed, the phase or selected candidate fixed before the turn does not match the tree afterwards, `logo.svg` fails validation or does not name the selected candidate, or the guidelines document has fewer than eight pages. Nothing is published from a failed turn. The image tool's item payload is undocumented and no captured trace exists here, so the adapter hashes two plausible carriers (a base64 PNG, a `.png` path inside the project) and the turn additionally credits files that appear inside the tool's call window; an unrecognised shape fails closed rather than open, and the first real explore turn should confirm the binding.
 
+## Completion, repair, and turn disposition
+
+The completion and repair rules are implemented in [`logo-svg-validation.ts`](../packages/backend/src/services/logo-svg-validation.ts), [`logo-completion-repair.ts`](../packages/backend/src/services/logo-completion-repair.ts), [`turns.ts`](../packages/backend/src/services/turns.ts), and [`events.ts`](../packages/shared/src/events.ts). The SVG allowlist admits an inert, bounded `aria-label` for the mark's accessible name; other ARIA references remain excluded. A refusal carries only a finite rejection reason, while a `notApplied` notice carries turn-correlated operation metadata and the number of attempted repairs.
+
+Only an invalid `logo.svg` with a finite validator violation receives one bounded repair. The repair runs with image generation disabled and may edit only `logo.svg`. The server captures the pre-turn phase, selection, candidate history, and canonical tree, then revalidates the whole deliverable and rejects any repair that changes anything outside that file. An operation is considered applied at commit: a later terminal-event or notification failure must not falsely report `notApplied`. Interrupted work is the exception; its partial stage is retained and reported as interrupted without `notApplied` metadata.
+
 ## Exports
 
 | Format | Logo project | Download name |
@@ -39,8 +45,8 @@ The shipped method is distilled from the project's logo master guide and its ref
 ## Checks
 
 ```powershell
-bun test packages/backend/tests/logo-contract.test.ts packages/backend/tests/prompt-logo-set.test.ts packages/backend/tests/logo-deliverables.test.ts packages/backend/tests/logo-export.test.ts packages/backend/tests/logo-design-system-sync.test.ts packages/backend/tests/logo-migration.test.ts
-bun test packages/frontend/tests/logo-project-creation.test.ts packages/frontend/tests/logo-export-options.test.ts
+bun test packages/backend/tests/logo-contract.test.ts packages/backend/tests/prompt-logo-set.test.ts packages/backend/tests/logo-deliverables.test.ts packages/backend/tests/logo-export.test.ts packages/backend/tests/logo-design-system-sync.test.ts packages/backend/tests/logo-migration.test.ts packages/backend/tests/logo-svg-validation.test.ts packages/backend/tests/logo-completion-gate.test.ts
+bun test packages/frontend/tests/logo-project-creation.test.ts packages/frontend/tests/logo-export-options.test.ts packages/frontend/tests/turn-disposition.test.ts
 ```
 
 These cover contracts, prompt assembly, the completion gate, export guards and naming, the design-system patch and the migration. They do not submit image-generation requests or judge the quality of a generated mark.
