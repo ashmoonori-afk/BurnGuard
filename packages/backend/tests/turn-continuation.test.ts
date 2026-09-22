@@ -121,6 +121,81 @@ test("Given an adapter throwing on an owned timeout, then it resumes but unexpec
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test("Given reasoning that keeps advancing, then a working attempt is never stopped as inactive", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-progress-"));
+  const { schedule, advance } = manualTimers();
+  const events: NormalizedEvent[] = [];
+  let calls = 0;
+  try {
+    const result = await runWithContinuation({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "task", userEvent: { type: "user.message", text: "task" }, onEvent: async e => { events.push(e); } }, async attempt => {
+      calls++;
+      for (const [index, text] of ["reading the brief", "reading the brief and the bundled assets", "drafting the layout"].entries()) {
+        await attempt.onEvent({ id: `think-${index}`, ts: 1, type: "chat.thinking", turnId: "t", text });
+        advance(STALL_LIMITS.idleMs - 1);
+      }
+      expect(attempt.signal!.aborted).toBe(false);
+      await attempt.onEvent({ id: "end", ts: 1, type: "status.idle", stopReason: "end_turn" });
+      return { exitCode: 0 };
+    }, async () => true, STALL_LIMITS, schedule);
+    expect(result.exitCode).toBe(0);
+    expect(calls).toBe(1);
+    expect(events.some(e => e.type === "tool.started" && e.tool.startsWith("generation_resume"))).toBe(false);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Given only a repeated status heartbeat after the last output, then the attempt stops for inactivity and records that reason", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-heartbeat-"));
+  const { schedule, advance } = manualTimers();
+  const events: NormalizedEvent[] = [];
+  let calls = 0;
+  try {
+    const result = await runWithContinuation({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "task", userEvent: { type: "user.message", text: "task" }, onEvent: async e => { events.push(e); } }, async attempt => {
+      calls++;
+      if (calls > 1) {
+        await attempt.onEvent({ id: "end", ts: 1, type: "status.idle", stopReason: "end_turn" });
+        return { exitCode: 0 };
+      }
+      for (let beat = 0; beat < 3; beat++) {
+        await attempt.onEvent({ id: `run-${beat}`, ts: 1, type: "status.running" });
+        await attempt.onEvent({ id: `beat-${beat}`, ts: 1, type: "chat.thinking", turnId: "t", text: "still working on it" });
+        advance(STALL_LIMITS.idleMs - 1);
+      }
+      await whenAborted(attempt.signal!);
+      return { exitCode: 1 };
+    }, async () => calls === 2, STALL_LIMITS, schedule);
+    expect(result.exitCode).toBe(0);
+    expect(calls).toBe(2);
+    expect(events).toContainEqual(expect.objectContaining({ type: "tool.started", tool: "generation_resume_stalled", input: { attempt: 2, maximum: STALL_LIMITS.attempts, reason: "inactivity" } }));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Given progress that outlives the attempt deadline, then the attempt still stops and records the deadline instead of inactivity", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-deadline-"));
+  const { schedule, advance } = manualTimers();
+  const limits = { idleMs: 1_000, toolMs: 5_000, attemptMs: 2_500, attempts: 3 };
+  const events: NormalizedEvent[] = [];
+  let calls = 0;
+  let steps = 0;
+  try {
+    const result = await runWithContinuation({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "task", userEvent: { type: "user.message", text: "task" }, onEvent: async e => { events.push(e); } }, async attempt => {
+      calls++;
+      if (calls > 1) {
+        await attempt.onEvent({ id: "end", ts: 1, type: "status.idle", stopReason: "end_turn" });
+        return { exitCode: 0 };
+      }
+      while (!attempt.signal!.aborted && steps < 10) {
+        await attempt.onEvent({ id: `step-${steps}`, ts: 1, type: "chat.thinking", turnId: "t", text: `drafting section ${steps}` });
+        steps++;
+        advance(limits.idleMs - 1);
+      }
+      return { exitCode: 1 };
+    }, async () => calls === 2, limits, schedule);
+    expect(result.exitCode).toBe(0);
+    expect(steps).toBe(3);
+    expect(events).toContainEqual(expect.objectContaining({ type: "tool.started", tool: "generation_resume_stalled", input: { attempt: 2, maximum: limits.attempts, reason: "attempt_deadline" } }));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("Given a Codex save error, then it is visible without leaking diagnostics or declaring a file changed", () => {
   const ctx = { turnId: "t", projectDir: process.cwd(), toolNames: new Map<string, string>() };
   for (const item of [{ type: "error", message: "apply_patch failed in C:/private/token" }, { type: "file_change", status: "failed", changes: [{ path: "deck.html", kind: "delete" }] }]) {

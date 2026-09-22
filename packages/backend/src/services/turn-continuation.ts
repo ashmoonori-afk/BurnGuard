@@ -10,6 +10,29 @@ const realTimer: ContinuationTimer = (handler, ms) => {
   return () => clearTimeout(timer);
 };
 
+/** Why an attempt was stopped. A closed vocabulary, so it is safe to publish: never provider text, a path or a credential. */
+export type ContinuationStopReason = "inactivity" | "attempt_deadline" | "workspace_unwatchable" | "incomplete_output";
+
+/**
+ * Distinguishes work that is getting somewhere from a status heartbeat.
+ *
+ * Providers repeat a reasoning summary while a single long call is in flight, so the text alone
+ * cannot prove activity; only reasoning that has not been seen in this attempt refreshes the
+ * inactivity budget. The window is bounded so a long turn cannot grow this set without limit.
+ */
+function activityProgress(): (text: string) => boolean {
+  const seen = new Set<string>();
+  return (text) => {
+    const value = text.trim();
+    if (value.length === 0) return false;
+    const signature = `${value.length}:${value.slice(-256)}`;
+    if (seen.has(signature)) return false;
+    if (seen.size >= 64) for (const oldest of seen) { seen.delete(oldest); break; }
+    seen.add(signature);
+    return true;
+  };
+}
+
 /** Retries stay inside the same unpublished stage and session reservation. */
 export async function runWithContinuation(
   input: AdapterRunInput,
@@ -29,11 +52,14 @@ export async function runWithContinuation(
       const controller = new AbortController();
       const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal;
       let cancelIdle = () => {};
+      let stopped: ContinuationStopReason | undefined;
+      const stop = (reason: ContinuationStopReason) => { stopped ??= reason; controller.abort(); };
       const pending = new Set<string>();
-      const touch = () => { cancelIdle(); cancelIdle = schedule(() => controller.abort(), pending.size ? limits.toolMs : limits.idleMs); };
+      const touch = () => { cancelIdle(); cancelIdle = schedule(() => stop("inactivity"), pending.size ? limits.toolMs : limits.idleMs); };
+      const progressed = activityProgress();
       const watcher = watch(input.projectDir, { recursive: true }, touch);
-      const cancelDeadline = schedule(() => controller.abort(), limits.attemptMs);
-      watcher.on("error", () => controller.abort());
+      const cancelDeadline = schedule(() => stop("attempt_deadline"), limits.attemptMs);
+      watcher.on("error", () => stop("workspace_unwatchable"));
       let failed = false;
       let needsAction = false;
       const terminal: Parameters<AdapterRunInput["onEvent"]>[0][] = [];
@@ -46,7 +72,9 @@ export async function runWithContinuation(
             if (event.type === "tool.started") pending.add(event.toolCallId);
             if (event.type === "tool.finished") pending.delete(event.toolCallId);
             if (event.type === "tool.permission_required") needsAction = true;
-            if (event.type !== "chat.thinking" && event.type !== "status.running") touch();
+            // A bare running ping proves nothing, and repeated reasoning is the same ping with text
+            // attached; only output, tool and file activity or reasoning that advances is progress.
+            if (event.type === "chat.thinking" ? progressed(event.text) : event.type !== "status.running") touch();
             if (event.type === "status.error") { failed = true; needsAction ||= !event.recoverable || (event.code !== undefined && event.code !== "turn_failed"); }
             if (event.type === "status.idle") {
               failed ||= event.stopReason === "error" || event.stopReason === "interrupted";
@@ -78,7 +106,7 @@ export async function runWithContinuation(
         return { exitCode: 1 };
       }
       recovery = { id: ulid(), tool: controller.signal.aborted ? "generation_resume_stalled" : "generation_resume_incomplete" };
-      await input.onEvent({ id: ulid(), ts: Date.now(), type: "tool.started", turnId: input.turnId, toolCallId: recovery.id, tool: recovery.tool, input: { attempt: attempt + 2, maximum: limits.attempts } });
+      await input.onEvent({ id: ulid(), ts: Date.now(), type: "tool.started", turnId: input.turnId, toolCallId: recovery.id, tool: recovery.tool, input: { attempt: attempt + 2, maximum: limits.attempts, reason: stopped ?? "incomplete_output" } });
     }
     return { exitCode: 1 };
   } finally { await emitRecovery(false); }
