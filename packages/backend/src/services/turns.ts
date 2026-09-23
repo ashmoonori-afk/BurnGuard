@@ -394,8 +394,9 @@ async function runUserTurnInternal(
       mutate: async (stageDir) => {
         const sourcePages = project.type === "slide_deck"
           ? await readDeckSourcePages(
-            contextPayload.attachments.flatMap(file => selectedAttachments.filter(attachment => attachment.file_path === file)),
+            selectedAttachments,
             parseStoredProjectOptions(project.options_json).design_brief?.source_page_mapping,
+            payload.attachments ?? [],
           )
           : undefined;
         // Old projects carry a copied runtime. Refresh only the owned stage,

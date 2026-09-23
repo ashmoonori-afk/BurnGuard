@@ -19,12 +19,21 @@ export class DeckSourceMappingError extends Error {
 }
 
 export async function readDeckSourcePages(
-  attachments: readonly Pick<AttachmentRecord, "id" | "file_path" | "mime_type" | "source_role">[],
+  attachments: readonly Pick<AttachmentRecord, "id" | "file_path" | "mime_type" | "source_role" | "created_at">[],
   mapping: DesignBriefV1["source_page_mapping"],
+  requestedPaths: readonly string[] = [],
 ): Promise<readonly DeckSourcePage[] | undefined> {
   if (mapping !== "one_to_one") return undefined;
   const pages: DeckSourcePage[] = [];
-  for (const attachment of attachments) {
+  // Context relevance chooses inclusion, not source sequence. Explicit selection wins;
+  // persisted sources otherwise use creation order, with ID as a stable tie-breaker.
+  const ordered = [...attachments].sort((a, b) => {
+    const aIndex = requestedPaths.indexOf(a.file_path);
+    const bIndex = requestedPaths.indexOf(b.file_path);
+    return (aIndex < 0 ? requestedPaths.length : aIndex) - (bIndex < 0 ? requestedPaths.length : bIndex)
+      || a.created_at - b.created_at || a.id.localeCompare(b.id);
+  });
+  for (const attachment of ordered) {
     if (attachment.source_role !== "ordinary_content") continue;
     if (attachment.mime_type !== "application/pdf" && attachment.mime_type !== "application/vnd.openxmlformats-officedocument.presentationml.presentation") continue;
     const summary = await readAttachmentSummaryFile(attachmentSummaryPath(attachment.file_path));
