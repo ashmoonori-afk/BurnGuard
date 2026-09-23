@@ -72,6 +72,13 @@ function mapItem(
       ? [{ id: ulid(), ts: Date.now(), type: "chat.delta", turnId: ctx.turnId, text }]
       : [];
   }
+  if (itemType === "reasoning" && completed) {
+    // Reasoning items carry an exposed summary beside `encrypted_content`, and hidden chain of
+    // thought never belongs in an event. Only exposed text is published, and an item that exposes
+    // nothing stays silent rather than claiming progress the stream never showed.
+    const text = exposedReasoning(value);
+    return text ? [{ id: ulid(), ts: Date.now(), type: "chat.thinking", turnId: ctx.turnId, text }] : [];
+  }
   if (itemType === "error" && completed) {
     const message = asString(value.message) ?? "Codex reported an error";
     // Codex sends this startup notice as an error item in some CLI versions.
@@ -211,6 +218,22 @@ function normalizeProjectPath(rawPath: string, projectDir: string): string | nul
   } catch {
     return null;
   }
+}
+
+/**
+ * The exposed reasoning summary, or null when the provider exposed none.
+ *
+ * `encrypted_content`, `content` and any other raw chain of thought are deliberately never read:
+ * they are the model's hidden reasoning, not authored output the user may see.
+ */
+function exposedReasoning(value: Record<string, unknown>): string | null {
+  const direct = asString(value.text);
+  if (direct) return direct;
+  if (!Array.isArray(value.summary)) return null;
+  const parts = value.summary
+    .map((part) => (isRecord(part) ? asString(part.text) : asString(part)))
+    .filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join("\n\n") : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

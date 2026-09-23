@@ -8,6 +8,7 @@ import ErrorCard from "./blocks/ErrorCard";
 import UsageFooter from "./blocks/UsageFooter";
 import UserMessage from "./blocks/UserMessage";
 import { useT } from "@/i18n/t";
+import { projectTurnStates } from "@/lib/turn-disposition";
 
 const STICK_THRESHOLD_PX = 80;
 
@@ -26,6 +27,7 @@ export default function MessageStream({
 }) {
   const t = useT();
   const groups = useMemo(() => buildGroups(events), [events]);
+  const turnStates = useMemo(() => projectTurnStates(events), [events]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Sticky-bottom mode: when true, the next render snaps the scroll
   // position to the new content height so streaming chunks stay visible.
@@ -95,7 +97,14 @@ export default function MessageStream({
                 />
               );
             case "message":
-              return <AgentMessage key={`msg-${i}`} text={g.text} />;
+              return (
+                <AgentMessage
+                  key={`msg-${i}`}
+                  text={g.text}
+                  turnId={g.turnId}
+                  disposition={turnStates.get(g.turnId)?.disposition ?? "pending"}
+                />
+              );
             case "thinking":
               return <ThinkingBlock key={g.ev.id} text={g.ev.text} />;
             case "tool":
@@ -119,6 +128,8 @@ export default function MessageStream({
                   key={g.ev.id}
                   message={g.ev.message}
                   code={g.ev.code}
+                  reason={g.ev.reason}
+                  notApplied={g.ev.notApplied}
                   recoverable={g.ev.recoverable}
                 />
               );
@@ -150,7 +161,7 @@ type ErrorEv = Extract<NormalizedEvent, { type: "status.error" }>;
 
 type Group =
   | { kind: "user"; ev: UserMessageEv }
-  | { kind: "message"; text: string }
+  | { kind: "message"; turnId: string; text: string }
   | { kind: "thinking"; ev: ThinkingEv }
   | { kind: "tool"; started: ToolStarted; finished: ToolFinished | null }
   | { kind: "error"; ev: ErrorEv };
@@ -163,9 +174,12 @@ function buildGroups(events: NormalizedEvent[]): Group[] {
 
   const groups: Group[] = [];
   let textBuf = "";
+  // Streamed text belongs to the turn that produced it, so the bubble can say whether that turn
+  // reached the project. A delta from a different turn closes the buffer instead of joining it.
+  let textTurnId = "";
   const flushText = () => {
     if (textBuf) {
-      groups.push({ kind: "message", text: textBuf });
+      groups.push({ kind: "message", turnId: textTurnId, text: textBuf });
       textBuf = "";
     }
   };
@@ -177,6 +191,8 @@ function buildGroups(events: NormalizedEvent[]): Group[] {
         groups.push({ kind: "user", ev });
         break;
       case "chat.delta":
+        if (textBuf && ev.turnId !== textTurnId) flushText();
+        textTurnId = ev.turnId;
         textBuf += ev.text;
         break;
       case "chat.message_end":

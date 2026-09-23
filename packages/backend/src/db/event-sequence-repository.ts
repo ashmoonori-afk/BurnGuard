@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { VisualSourceContractError, parseDesignDirectionState, parseUploadedVisualSourceSelections, parseVisualSourceManifest, type ExportAttemptStatus, type ExportProgress, type ExportStopReason, type NormalizedEvent, type SequencedEventEnvelope, type TurnErrorCode, type UserEvent } from "@bg/shared";
+import { VisualSourceContractError, parseDesignDirectionState, parseUploadedVisualSourceSelections, parseVisualSourceManifest, type ExportAttemptStatus, type ExportProgress, type ExportStopReason, type NormalizedEvent, type SequencedEventEnvelope, type TurnErrorCode, type TurnNotApplied, type TurnRejectionReason, type UserEvent } from "@bg/shared";
 import { PipelineRepositoryError, parseJsonRecord } from "./pipeline-errors";
 
 export { insertSequencedEvent } from "./sequenced-event-writer";
@@ -50,7 +50,14 @@ export function parsePersistedNormalizedEvent(value: string, id: string): Normal
       return { ...base, type, stopReason: stopReason(item, id) };
     case "status.error": {
       const common = { ...base, type, message: text(item, "message", id), recoverable: truth(item, "recoverable", id) };
-      return item["code"] === undefined ? common : { ...common, code: turnErrorCode(item, id) };
+      // Replay has to carry the rejection notice, or a reloaded conversation would show the
+      // apology without the fact that the turn produced nothing.
+      return {
+        ...common,
+        ...(item["code"] === undefined ? {} : { code: turnErrorCode(item, id) }),
+        ...(item["reason"] === undefined ? {} : { reason: rejectionReason(item, id) }),
+        ...(item["notApplied"] === undefined ? {} : { notApplied: notApplied(item["notApplied"], id) }),
+      };
     }
     case "usage.delta": {
       const cached = item["cached"];
@@ -176,6 +183,22 @@ function turnErrorCode(item: Readonly<Record<string, unknown>>, id: string): Tur
     case "backend_unavailable": case "path_unavailable": case "immutable_reference_mutated": case "immutable_reference_path_unavailable": case "immutable_reference_escaped": case "private_input_unavailable": case "publication_failed": case "operation_conflict": case "operation_cancelled": case "turn_failed": return value;
     default: throw new PipelineRepositoryError("corrupt_json", id);
   }
+}
+
+function rejectionReason(item: Readonly<Record<string, unknown>>, id: string): TurnRejectionReason {
+  const value = text(item, "reason", id);
+  switch (value) {
+    case "logo_manifest_missing": case "logo_manifest_invalid": case "logo_history_changed":
+    case "logo_selection_invalid": case "logo_candidate_invalid": case "logo_candidate_provenance":
+    case "logo_svg_missing": case "logo_svg_invalid": case "logo_svg_source_mismatch":
+    case "logo_guidelines_invalid": return value;
+    default: throw new PipelineRepositoryError("corrupt_json", id);
+  }
+}
+
+function notApplied(value: unknown, id: string): TurnNotApplied {
+  if (!record(value)) throw new PipelineRepositoryError("corrupt_json", id);
+  return { turnId: text(value, "turnId", id), operationId: text(value, "operationId", id), repairs: integer(value, "repairs", id) };
 }
 
 function stopReason(item: Readonly<Record<string, unknown>>, id: string): "end_turn" | "requires_action" | "interrupted" | "error" {

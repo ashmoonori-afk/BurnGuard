@@ -53,8 +53,12 @@ managedFileRoutes.get("/api/projects/:id/preview/:previewId/fs/*", async (c) => 
 
 managedFileRoutes.post("/api/projects/:id/preview/:previewId/report", async (c) => {
   const value: unknown = await c.req.json().catch(() => null);
-  const saved = await recordTurnPreview(c.req.param("id"), c.req.param("previewId"), value);
-  return saved ? c.json(ok({ saved: true })) : c.json(fail("preview_report_invalid", "Preview report is stale or invalid"), 409);
+  const outcome = await recordTurnPreview(c.req.param("id"), c.req.param("previewId"), value);
+  if (outcome === "saved") return c.json(ok({ saved: true }));
+  // Every refusal keeps the status this route has always answered with; the added detail is the
+  // outcome, which separates an ended preview from a superseded render or a broken payload
+  // without changing what a client has to handle.
+  return c.json(fail("preview_report_invalid", "Preview report is stale or invalid", { outcome }), 409);
 });
 
 managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {

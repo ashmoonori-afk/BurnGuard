@@ -41,6 +41,17 @@ describe("parseCodexLine — structured path", () => {
     expect(parseCodexLine(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: warning } }), ctx())[0]).toMatchObject({ type: "chat.delta", text: warning });
   });
 
+  test("Given a reasoning item When parsing Then only exposed progress is published and hidden reasoning never leaves the parser", () => {
+    const reasoning = (item: Record<string, unknown>) => parseCodexLine(JSON.stringify({ type: "item.completed", item: { type: "reasoning", ...item } }), ctx());
+    expect(reasoning({ id: "item_0", text: "Reviewing the brief" })).toEqual([expect.objectContaining({ type: "chat.thinking", turnId: "turn-1", text: "Reviewing the brief" })]);
+    const summarized = reasoning({ id: "item_1", summary: [{ type: "summary_text", text: "Planning" }, { type: "summary_text", text: "Drafting" }], encrypted_content: "ENCRYPTED-REASONING-PAYLOAD", content: [{ type: "reasoning_text", text: "raw private chain of thought" }] });
+    expect(summarized).toEqual([expect.objectContaining({ type: "chat.thinking", text: "Planning\n\nDrafting" })]);
+    expect(JSON.stringify(summarized)).not.toContain("ENCRYPTED-REASONING-PAYLOAD");
+    expect(JSON.stringify(summarized)).not.toContain("raw private chain of thought");
+    // Reasoning the provider kept encrypted exposes no progress, so the parser must not invent one.
+    expect(reasoning({ id: "item_2", summary: [], encrypted_content: "ENCRYPTED-REASONING-PAYLOAD" })).toEqual([]);
+  });
+
   test("tool_start becomes tool.started and registers the tool name", () => {
     const c = ctx();
     const events = parseCodexLine(

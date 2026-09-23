@@ -155,6 +155,49 @@ describe("logo svg validator adversarial payloads", () => {
   });
 });
 
+describe("logo svg accessible name", () => {
+  // Synthetic brand fixture; no real project or user content appears in this repository.
+  const BRAND = "하늘빛 스튜디오";
+
+  test("Given a Korean accessible name on the root Then the mark validates", () => {
+    expect(svgDetail(logoSvg("explorations/round-1/candidate-1.png", '<path d="M0 0H512V512H0Z"/>', `viewBox="0 0 512 512" role="img" aria-label="${BRAND}"`))).toBe("ok");
+  });
+
+  test("Given an accessible name on an inner group Then the mark validates", () => {
+    expect(svgDetail(logoSvg("explorations/round-3/candidate-2.png", `<g aria-label="${BRAND}"><path d="M0 0H512V512H0Z"/></g>`))).toBe("ok");
+  });
+
+  test.each([
+    ["Northvale-Ridge 2026", "ok"],
+    ["Aurélie’s Atelier", "ok"],
+    ["", "svg_attribute_invalid:aria-label"],
+    [" leading space", "svg_attribute_invalid:aria-label"],
+    ["a".repeat(64), "ok"],
+    ["a".repeat(65), "svg_attribute_invalid:aria-label"],
+    ["javascript:alert(1)", "svg_attribute_invalid:aria-label"],
+    ["url(#g)", "svg_url_reference"],
+    ["data:image/svg+xml,x", "svg_attribute_invalid:aria-label"],
+    ["line\nbreak", "svg_attribute_invalid:aria-label"],
+    ["tab\tstop", "svg_attribute_invalid:aria-label"],
+    ["null\u0000byte", "svg_attribute_invalid:aria-label"],
+    ["brand </svg><script>x</script>", "svg_malformed"],
+  ])("Given the accessible name %p Then the outcome is %p", (label, detail) => {
+    expect(svgDetail(logoSvg("explorations/round-1/candidate-1.png", '<path d="M0 0H512V512H0Z"/>', `viewBox="0 0 512 512" aria-label="${label}"`))).toBe(detail);
+  });
+
+  test("Given an entity-encoded accessible name Then the entity gate still fires", () => {
+    expect(svgDetail(logoSvg("explorations/round-1/candidate-1.png", '<path d="M0 0H512V512H0Z"/>', 'viewBox="0 0 512 512" aria-label="&#60;script&#62;"'))).toBe("svg_entity");
+  });
+
+  test.each([
+    ["aria-labelledby", '<svg viewBox="0 0 8 8" aria-labelledby="t"><title id="t">mark</title><path d="M0 0"/></svg>', "svg_forbidden_attribute:aria-labelledby"],
+    ["aria-describedby", '<svg viewBox="0 0 8 8" aria-describedby="d"><desc id="d">mark</desc><path d="M0 0"/></svg>', "svg_forbidden_attribute:aria-describedby"],
+    ["aria-live", '<svg viewBox="0 0 8 8" aria-live="polite"><path d="M0 0"/></svg>', "svg_forbidden_attribute:aria-live"],
+  ])("Given the referencing attribute %p Then it stays forbidden", (_name, text, detail) => {
+    expect(svgDetail(text)).toBe(detail);
+  });
+});
+
 describe("logo svg source attribute", () => {
   test("Given a mark Then the source claim is read from the root", () => {
     expect(logoSvgSource(logoSvg("explorations/round-2/candidate-3.png"))).toBe("explorations/round-2/candidate-3.png");

@@ -7,7 +7,43 @@ const DEFAULT_CONTINUATION_LIMITS = { idleMs: 120_000, toolMs: 600_000, attemptM
 type ContinuationLimits = Readonly<Record<keyof typeof DEFAULT_CONTINUATION_LIMITS, number>>;
 
 export function resolveContinuationLimits(overrides: Partial<ContinuationLimits> = {}): ContinuationLimits {
-  return { ...DEFAULT_CONTINUATION_LIMITS, ...overrides };
+  return {
+    idleMs: overrides.idleMs ?? DEFAULT_CONTINUATION_LIMITS.idleMs,
+    toolMs: overrides.toolMs ?? DEFAULT_CONTINUATION_LIMITS.toolMs,
+    attemptMs: overrides.attemptMs ?? DEFAULT_CONTINUATION_LIMITS.attemptMs,
+    attempts: overrides.attempts ?? DEFAULT_CONTINUATION_LIMITS.attempts,
+  };
+}
+
+/** Schedules `handler` after `ms` and returns its cancel function; injected so tests drive deadlines by signal instead of elapsed time. */
+export type ContinuationTimer = (handler: () => void, ms: number) => () => void;
+
+const realTimer: ContinuationTimer = (handler, ms) => {
+  const timer = setTimeout(handler, ms);
+  return () => clearTimeout(timer);
+};
+
+/** Why an attempt was stopped. A closed vocabulary, so it is safe to publish: never provider text, a path or a credential. */
+export type ContinuationStopReason = "inactivity" | "attempt_deadline" | "workspace_unwatchable" | "incomplete_output";
+
+/**
+ * Distinguishes work that is getting somewhere from a status heartbeat.
+ *
+ * Providers repeat a reasoning summary while a single long call is in flight, so the text alone
+ * cannot prove activity; only reasoning that has not been seen in this attempt refreshes the
+ * inactivity budget. The window is bounded so a long turn cannot grow this set without limit.
+ */
+function activityProgress(): (text: string) => boolean {
+  const seen = new Set<string>();
+  return (text) => {
+    const value = text.trim();
+    if (value.length === 0) return false;
+    const signature = `${value.length}:${value.slice(-256)}`;
+    if (seen.has(signature)) return false;
+    if (seen.size >= 64) for (const oldest of seen) { seen.delete(oldest); break; }
+    seen.add(signature);
+    return true;
+  };
 }
 
 /** Retries stay inside the same unpublished stage and session reservation. */
@@ -16,6 +52,7 @@ export async function runWithContinuation(
   run: (input: AdapterRunInput) => Promise<AdapterRunResult>,
   complete: () => Promise<boolean>,
   overrides: Partial<ContinuationLimits> = {},
+  schedule: ContinuationTimer = realTimer,
 ): Promise<AdapterRunResult> {
   const limits = resolveContinuationLimits(overrides);
   let recovery: { id: string; tool: string } | undefined;
@@ -28,12 +65,15 @@ export async function runWithContinuation(
       input.signal?.throwIfAborted();
       const controller = new AbortController();
       const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal;
-      let idle: ReturnType<typeof setTimeout>;
+      let cancelIdle = () => {};
+      let stopped: ContinuationStopReason | undefined;
+      const stop = (reason: ContinuationStopReason) => { stopped ??= reason; controller.abort(); };
       const pending = new Set<string>();
-      const touch = () => { clearTimeout(idle); idle = setTimeout(() => controller.abort(), pending.size ? limits.toolMs : limits.idleMs); };
+      const touch = () => { cancelIdle(); cancelIdle = schedule(() => stop("inactivity"), pending.size ? limits.toolMs : limits.idleMs); };
+      const progressed = activityProgress();
       const watcher = watch(input.projectDir, { recursive: true }, touch);
-      const deadline = setTimeout(() => controller.abort(), limits.attemptMs);
-      watcher.on("error", () => controller.abort());
+      const cancelDeadline = schedule(() => stop("attempt_deadline"), limits.attemptMs);
+      watcher.on("error", () => stop("workspace_unwatchable"));
       let failed = false;
       let needsAction = false;
       const terminal: Parameters<AdapterRunInput["onEvent"]>[0][] = [];
@@ -46,7 +86,9 @@ export async function runWithContinuation(
             if (event.type === "tool.started") pending.add(event.toolCallId);
             if (event.type === "tool.finished") pending.delete(event.toolCallId);
             if (event.type === "tool.permission_required") needsAction = true;
-            if (event.type !== "chat.thinking" && event.type !== "status.running") touch();
+            // A bare running ping proves nothing, and repeated reasoning is the same ping with text
+            // attached; only output, tool and file activity or reasoning that advances is progress.
+            if (event.type === "chat.thinking" ? progressed(event.text) : event.type !== "status.running") touch();
             if (event.type === "status.error") { failed = true; needsAction ||= !event.recoverable || (event.code !== undefined && event.code !== "turn_failed"); }
             if (event.type === "status.idle") {
               failed ||= event.stopReason === "error" || event.stopReason === "interrupted";
@@ -63,7 +105,7 @@ export async function runWithContinuation(
         if (!controller.signal.aborted) throw error;
         result = { exitCode: 1 };
       } finally {
-        clearTimeout(idle!); clearTimeout(deadline); watcher.close();
+        cancelIdle(); cancelDeadline(); watcher.close();
       }
       input.signal?.throwIfAborted();
       const success = result.exitCode === 0 && !failed && !controller.signal.aborted && await complete();
@@ -78,7 +120,7 @@ export async function runWithContinuation(
         return { exitCode: 1 };
       }
       recovery = { id: ulid(), tool: controller.signal.aborted ? "generation_resume_stalled" : "generation_resume_incomplete" };
-      await input.onEvent({ id: ulid(), ts: Date.now(), type: "tool.started", turnId: input.turnId, toolCallId: recovery.id, tool: recovery.tool, input: { attempt: attempt + 2, maximum: limits.attempts } });
+      await input.onEvent({ id: ulid(), ts: Date.now(), type: "tool.started", turnId: input.turnId, toolCallId: recovery.id, tool: recovery.tool, input: { attempt: attempt + 2, maximum: limits.attempts, reason: stopped ?? "incomplete_output" } });
     }
     return { exitCode: 1 };
   } finally { await emitRecovery(false); }
