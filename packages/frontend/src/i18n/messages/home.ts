@@ -177,6 +177,8 @@ export const homeMessages = defineMessages({
   "home.creation.attachHint": { ko: "PNG·JPG·WebP·DOCX·PDF·PPTX·TXT·MD·CSV, 최대 8개 · 파일당 10 MB · 합계 25 MB. 프로젝트 생성 시 docs/attachments에 원본을 저장해요. 직접 전송할 때 AI에 전달하며, 첨부를 빼도 저장된 원본은 남아요.", en: "PNG·JPG·WebP·DOCX·PDF·PPTX·TXT·MD·CSV, up to 8 files · 10 MB each · 25 MB total. Originals are saved to docs/attachments when the project is created. They reach AI when you send them; removing an attachment keeps the saved original.", "zh-CN": "支持 PNG·JPG·WebP·DOCX·PDF·PPTX·TXT·MD·CSV，最多 8 个文件 · 每个 10 MB · 总计 25 MB。创建项目时，原文件保存至 docs/attachments。手动发送时才会提交给 AI；移除附件不会删除已保存的原文件。" },
   "home.creation.speakerNotes": { ko: "발표자 노트 사용", en: "Use speaker notes", "zh-CN": "使用演讲者备注" },
   "home.creation.speakerNotesHint": { ko: "슬라이드 위 글자를 줄여요", en: "Keep less text on slides", "zh-CN": "减少幻灯片上的文字" },
+  "home.creation.sourcePages": { ko: "원본 페이지와 1:1 대응", en: "Match source pages one-to-one", "zh-CN": "与原文页面一一对应" },
+  "home.creation.sourcePagesHint": { ko: "내용 자료로 첨부한 PDF·PPTX의 페이지 수와 순서를 유지해요. 끄면 내용을 재구성할 수 있어요. 디자인 참고 자료와 다른 파일 형식에는 적용하지 않아요.", en: "Keep the page count and order of PDF/PPTX content sources. Turn off to restructure content. Design references and other file types are excluded.", "zh-CN": "保留作为内容资料添加的 PDF/PPTX 的页数和顺序。关闭后可重新组织内容。设计参考资料及其他文件格式不适用。" },
   "home.creation.copyTemplate": { ko: "템플릿을 그대로 복사", en: "Copy template as is", "zh-CN": "原样复制模板" },
   "home.creation.copyTemplateHint": { ko: "구조는 유지하고 내용만 바꿔요", en: "Keep the structure and change only the content", "zh-CN": "保留结构，仅更改内容" },
   "home.creation.graphicRequired": { ko: "그래픽을 만들려면 설정에서 Codex를 연결하고 로그인해 주세요.", en: "To create graphics, connect and sign in to Codex in Settings.", "zh-CN": "要创建平面设计，请在设置中连接并登录 Codex。" },

@@ -39,7 +39,7 @@ import {
   type BriefForm,
 } from "@/lib/project-creation";
 import ComposerAttachments from "@/components/chat/ComposerAttachments";
-import { planAttachmentIntake, setAttachmentRole, COMPOSER_SUPPORTED_EXTENSIONS, type IntakeItem } from "@/components/chat/attachment-intake";
+import { hasPaginatedContentSource, planAttachmentIntake, setAttachmentRole, COMPOSER_SUPPORTED_EXTENSIONS, type IntakeItem } from "@/components/chat/attachment-intake";
 import { saveComposerDraft } from "@/components/chat/useComposerDraft";
 import { useUIStore } from "@/state/uiStore";
 
@@ -128,8 +128,10 @@ export default function NewProjectPanel({
     },
   });
 
+  const effectiveContentSource = items.some((item) => item.status === "ready") ? "attached" : form.contentSource;
+  const canMapSourcePages = hasPaginatedContentSource(items);
   const built = buildCreateProjectRequest(
-    { ...form, contentSource: items.some((item) => item.status === "ready") ? "attached" : form.contentSource, type: effectiveType, backendId: effectiveBackend, designSystemId: pickedSystemId, ...(isOriginal && isGraphic ? { graphicWidth: 1080, graphicHeight: 1350 } : {}) },
+    { ...form, sourcePageMapping: canMapSourcePages ? form.sourcePageMapping : "restructure", contentSource: effectiveContentSource, type: effectiveType, backendId: effectiveBackend, designSystemId: pickedSystemId, ...(isOriginal && isGraphic ? { graphicWidth: 1080, graphicHeight: 1350 } : {}) },
     designSystems,
   );
   const disabled = createMutation.isPending;
@@ -336,6 +338,16 @@ export default function NewProjectPanel({
             checked={form.useSpeakerNotes}
             disabled={disabled}
             onChange={(v) => update("useSpeakerNotes", v)}
+          />
+        )}
+
+        {effectiveType === "slide_deck" && effectiveContentSource === "attached" && (
+          <ToggleRow
+            title={t("home.creation.sourcePages")}
+            hint={t("home.creation.sourcePagesHint")}
+            checked={canMapSourcePages && form.sourcePageMapping !== "restructure"}
+            disabled={disabled || !canMapSourcePages}
+            onChange={(v) => update("sourcePageMapping", v ? "one_to_one" : "restructure")}
           />
         )}
 

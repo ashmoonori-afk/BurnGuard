@@ -76,6 +76,21 @@ function expectRequest(result: BuildResult): CreateProjectRequest {
   return result.request;
 }
 
+test("Given an attached deck When creating it Then source pages default to one-to-one without affecting unrelated projects", () => {
+  const attached = expectRequest(buildCreateProjectRequest(draft({ contentSource: "attached" }), SYSTEMS));
+  expect(parseDesignBriefV1(attached.options?.design_brief).source_page_mapping).toBe("one_to_one");
+  const empty = expectRequest(buildCreateProjectRequest(draft(), SYSTEMS));
+  expect(parseDesignBriefV1(empty.options?.design_brief).source_page_mapping).toBeUndefined();
+});
+
+test("Given an attached deck with restructuring selected When creating it Then that explicit choice is preserved", () => {
+  const request = expectRequest(buildCreateProjectRequest(draft({
+    contentSource: "attached",
+    sourcePageMapping: "restructure",
+  }), SYSTEMS));
+  expect(parseDesignBriefV1(request.options?.design_brief).source_page_mapping).toBe("restructure");
+});
+
 describe("selectableDesignSystems", () => {
   test("Given original templates, When choosing a supported format, Then requests retain the actual format", () => {
     const originals = ["sonnel", "foliover", "oddward", "velune", "halide", "future-sample"].map((brand) =>
@@ -265,6 +280,7 @@ describe("buildCreateProjectRequest", () => {
       audience: "국내 투자 심사역",
       objective: "투자 유치 승인",
       content_source: "attached",
+      source_page_mapping: "one_to_one",
       locale: BRIEF_LOCALE,
       brand_mode: "selected_design_system",
       visual_mood: "premium",

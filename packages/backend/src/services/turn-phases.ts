@@ -4,14 +4,20 @@ import { ulid } from "ulid";
 import type { AdapterRunInput, AdapterRunResult } from "../adapters/types";
 import { resolveWithin } from "../security/path-boundary";
 import { runWithContinuation } from "./turn-continuation";
-import { generationOutputComplete, hasGeneratedContent } from "./generation-output";
+import { generationOutputComplete, hasGeneratedContent, matchesDeckSourcePages, type DeckSourcePage } from "./generation-output";
 
 export function needsGenerationPhases(projectType: string, request: string, starter = false): boolean {
   return (projectType === "slide_deck" && starter) || /대형|대규모|다중|전체.{0,12}(다시|재작성|재구성)|여러\s*(페이지|화면|장)|\b(?:large|multi-page|multi-screen|rebuild)\b|\d+\s*(?:페이지|장|pages|slides)/iu.test(request);
 }
 
 /** A server-owned loop, not a request that the model merely describe phases. */
-export async function runGenerationPhases(input: AdapterRunInput, entrypoint: string, run: (input: AdapterRunInput) => Promise<AdapterRunResult>, projectType?: string): Promise<AdapterRunResult> {
+export async function runGenerationPhases(input: AdapterRunInput, entrypoint: string, run: (input: AdapterRunInput) => Promise<AdapterRunResult>, projectType?: string, sourcePages?: readonly DeckSourcePage[]): Promise<AdapterRunResult> {
+  if (sourcePages !== undefined) {
+    input = {
+      ...input,
+      prompt: `${input.prompt}\n<deck_source_page_mapping>\n${JSON.stringify({ schema_version: 1, mode: "one_to_one", pages: sourcePages })}\n</deck_source_page_mapping>\nCreate exactly one slide per listed source page, in that order. Do not split, merge, omit or reorder pages. Each slide must carry data-bg-source-attachment matching attachmentId and data-bg-source-page matching page. Preserve the original content and conditions within each mapped page. Reference imagery and the selected design system control visual treatment, not the source-page count.`,
+    };
+  }
   const folder = [".burnguard-inputs", `phases-${ulid()}`];
   await mkdir(resolveWithin(input.projectDir, ...folder), { recursive: true });
   const planRelative = [...folder, "plan.json"].join("/");
@@ -26,6 +32,7 @@ export async function runGenerationPhases(input: AdapterRunInput, entrypoint: st
   const readPlan = async () => {
     const value: unknown = JSON.parse(await readOwned([...folder, "plan.json"], 32_768));
     if (!value || typeof value !== "object" || !("units" in value) || !Array.isArray(value.units) || value.units.length < 1 || value.units.length > 80 || !value.units.every((unit: unknown) => typeof unit === "string" && unit.trim().length > 0 && unit.length <= 300)) return false;
+    if (sourcePages !== undefined && value.units.length !== sourcePages.length) return false;
     units = value.units;
     return true;
   };
@@ -34,14 +41,14 @@ export async function runGenerationPhases(input: AdapterRunInput, entrypoint: st
     const nodes = root.querySelectorAll("[data-bg-unit]");
     if (projectType === "slide_deck") {
       const slides = root.querySelectorAll("[data-slide]");
+      if (sourcePages !== undefined && !matchesDeckSourcePages(slides, sourcePages)) return false;
       if (slides.length !== units.length || nodes.some(node => !node.hasAttribute("data-slide") || !node.classList.contains("deck-slide") || node.parentNode?.closest("[data-slide]"))) return false;
       if (!root.querySelectorAll("script[src]").some(node => /^\/?(?:\.\/)?runtime\/deck-stage\.js(?:[?#].*)?$/.test(node.getAttribute("src") ?? ""))) return false;
     }
     return nodes.length === units.length && units.every((_unit, index) => {
-      const matches = nodes.filter(node => node.getAttribute("data-bg-unit") === String(index + 1));
-      if (matches.length !== 1) return false;
+      const node = nodes[index];
+      if (!node || node.getAttribute("data-bg-unit") !== String(index + 1)) return false;
       if (index >= end) return true;
-      const node = matches[0];
       if (node.getAttribute("data-bg-complete") !== "true") return false;
       return hasGeneratedContent(node) && node.innerHTML !== placeholders[index];
     });
@@ -72,7 +79,7 @@ export async function runGenerationPhases(input: AdapterRunInput, entrypoint: st
   placeholders = units.map((_unit, index) => scaffold.querySelector(`[data-bg-unit="${index + 1}"]`)!.innerHTML);
   for (let start = 0; start < units.length; start += 4) {
     const end = Math.min(start + 4, units.length);
-    const result = await phase("generation_phase_content", `Implement only units ${start + 1} through ${end} of ${units.length}. Their plan is ${JSON.stringify(units.slice(start, end))}. Use the shared design system. Generate only the images needed for this batch and reuse existing ones. Keep all unit containers and set data-bg-complete="true" only on completed containers. Replace the planned placeholder content, remove data-bg-placeholder and verify referenced local images exist. Save this batch to ${entrypoint}; do not implement later batches.`, async () => await savedThrough(end) && (end < units.length || await generationOutputComplete(input.projectDir, entrypoint, projectType ?? "")), { from: start + 1, to: end, total: units.length });
+    const result = await phase("generation_phase_content", `Implement only units ${start + 1} through ${end} of ${units.length}. Their plan is ${JSON.stringify(units.slice(start, end))}. Use the shared design system. Generate only the images needed for this batch and reuse existing ones. Keep all unit containers and set data-bg-complete="true" only on completed containers. Replace the planned placeholder content, remove data-bg-placeholder and verify referenced local images exist. Save this batch to ${entrypoint}; do not implement later batches.`, async () => await savedThrough(end) && (end < units.length || await generationOutputComplete(input.projectDir, entrypoint, projectType ?? "", sourcePages?.length, sourcePages)), { from: start + 1, to: end, total: units.length });
     if (result.exitCode !== 0) return result;
   }
   await input.onEvent({ id: ulid(), ts: Date.now(), type: "chat.message_end", turnId: input.turnId });

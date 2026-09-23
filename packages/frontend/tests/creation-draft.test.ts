@@ -7,6 +7,11 @@ import {
 } from "../src/lib/creation-draft";
 
 describe("new project draft survival", () => {
+  test("Given an explicit deck restructuring choice When saved and restored Then the choice survives", () => {
+    const entered = { ...INITIAL_BRIEF_FORM, sourcePageMapping: "restructure" as const };
+    expect(parseCreationDraft(serializeCreationDraft(entered))).toEqual(entered);
+  });
+
   test("Given entered graphic set values When serialized and read back Then every answer returns", () => {
     const entered = {
       ...INITIAL_BRIEF_FORM,

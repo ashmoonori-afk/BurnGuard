@@ -14,7 +14,8 @@ import {
 import { getProjectDetail, getSessionInfo } from "../db/seed";
 import { getSqlite } from "../db/sqlite-client";
 import { broker, sequencedBroker } from "./broker";
-import { buildSessionContext, selectContextAttachments } from "./context";
+import { buildSessionContext, readDeckSourcePages, selectContextAttachments } from "./context";
+import { parseStoredProjectOptions } from "./project-options";
 import { writePreTurnSnapshot, writeTurnCheckpoint } from "./checkpoints";
 import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
 import { appendSessionTrace } from "./trace";
@@ -391,6 +392,12 @@ async function runUserTurnInternal(
       publicationPolicy: { forbiddenSha256 },
       onPrepared: () => { operationPrepared = true; onPrepared(); },
       mutate: async (stageDir) => {
+        const sourcePages = project.type === "slide_deck"
+          ? await readDeckSourcePages(
+            contextPayload.attachments.flatMap(file => selectedAttachments.filter(attachment => attachment.file_path === file)),
+            parseStoredProjectOptions(project.options_json).design_brief?.source_page_mapping,
+          )
+          : undefined;
         // Old projects carry a copied runtime. Refresh only the owned stage,
         // so the preview receives engine fixes without touching live files.
         if (project.type === "slide_deck") await prepareSlideDeckExport(stageDir, project.entrypoint);
@@ -416,7 +423,8 @@ async function runUserTurnInternal(
             // Observe the guidance that was actually emitted rather than re-deriving it, so the
             // record cannot drift from the envelope the model received.
             let shippedPreset: TaskPresetObservation | null = null;
-            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation, onTaskGuidance: (value) => { shippedPreset = value; } });
+            const sourceInstructions = sourcePages === undefined ? "" : `\n<deck_source_page_mapping>\n${JSON.stringify({ schema_version: 1, mode: "one_to_one", pages: sourcePages })}\n</deck_source_page_mapping>\nKeep exactly one slide per source page in this order, with matching data-bg-source-attachment and data-bg-source-page attributes. Do not split, merge, omit or reorder source pages. Preserve their content and conditions; visual styling follows the selected design reference.`;
+            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation, onTaskGuidance: (value) => { shippedPreset = value; } }) + sourceInstructions;
             await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId, task_preset: shippedPreset });
             const adapterInput: Parameters<typeof runAdapterTurn>[1] = {
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,
@@ -452,14 +460,14 @@ async function runUserTurnInternal(
             const runAdapter = dependencies.runAdapter ?? runAdapterTurn;
             try {
               const result = needsGenerationPhases(project.type, payload.text, deckStarter)
-                ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input), project.type)
-                : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type));
+                ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input), project.type, sourcePages)
+                : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages));
               if (result.exitCode !== 0 || providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
               if (project.type === "slide_deck") {
-                const expectedSlides = parse(await readFile(path.join(stageDir, project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length;
+                const expectedSlides = sourcePages?.length ?? parse(await readFile(path.join(stageDir, project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length;
                 const toolCallId = ulid();
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", input: { scope: "all_slides" } });
-                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}\nPreserve all ${expectedSlides} slides and completed content. Replace unfinished placeholders and repair missing local images before returning.` }, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, expectedSlides), { idleMs: 120_000, toolMs: 120_000, attemptMs: 120_000, attempts: 3 });
+                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}\nPreserve all ${expectedSlides} slides and completed content. Replace unfinished placeholders and repair missing local images before returning.` }, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, expectedSlides, sourcePages), { idleMs: 120_000 });
                 const reviewed = review.exitCode === 0 && !providerReportedFailure;
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", ok: reviewed });
                 if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
@@ -475,6 +483,9 @@ async function runUserTurnInternal(
                 run: (input) => runAdapter(backendId, input),
               });
               if (designReview.status !== "checked" || designReview.result?.overall_status === "must_fix" || !designReview.result || providerReportedFailure) throw new DesignReviewError();
+              if (sourcePages !== undefined && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages.length, sourcePages)) {
+                throw new ArtifactOperationError("publication_failed", "Source page correspondence changed during design review");
+              }
               const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
               if (encodingIssues.length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
             } catch (error) {
@@ -487,6 +498,7 @@ async function runUserTurnInternal(
           await verifyImmutableAttachments(immutableSnapshots);
         }
         if (activeTurn.interrupted) {
+          if (sourcePages !== undefined) throw new ArtifactOperationError("operation_cancelled", "Interrupted source-mapped output remains unpublished");
           const partial = await inspectCanonicalTree(stageDir);
           if (!manifestEntry(partial, project.entrypoint)) {
             const original = manifestEntry(base, project.entrypoint);
