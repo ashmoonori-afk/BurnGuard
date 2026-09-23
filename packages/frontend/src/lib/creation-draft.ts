@@ -93,6 +93,7 @@ export function parseCreationDraft(raw: string | null): BriefForm {
     graphicHeight: sameShape(record["graphicHeight"], INITIAL_BRIEF_FORM.graphicHeight),
     useSpeakerNotes: sameShape(record["useSpeakerNotes"], INITIAL_BRIEF_FORM.useSpeakerNotes),
     copyAsIs: sameShape(record["copyAsIs"], INITIAL_BRIEF_FORM.copyAsIs),
+    sourcePageMapping: record["sourcePageMapping"] === "restructure" ? "restructure" : "one_to_one",
     sectionCount: sameShape(record["sectionCount"], INITIAL_BRIEF_FORM.sectionCount),
     pages: stringList(record["pages"], INITIAL_BRIEF_FORM.pages),
     graphicKind: sameShape(record["graphicKind"], INITIAL_BRIEF_FORM.graphicKind),

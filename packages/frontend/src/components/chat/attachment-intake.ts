@@ -72,6 +72,10 @@ export function readyAttachmentSources(items: readonly IntakeItem[]): readonly R
   return items.flatMap((item) => item.status === "ready" ? [{ id: item.id, file: item.file, role: item.role }] : []);
 }
 
+export function hasPaginatedContentSource(items: readonly IntakeItem[]): boolean {
+  return items.some(item => item.status === "ready" && item.role === "ordinary_content" && /\.(?:pdf|pptx)$/iu.test(item.file.name));
+}
+
 export function setAttachmentRole(
   items: readonly IntakeItem[],
   id: string,

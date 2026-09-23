@@ -2,6 +2,19 @@ import { watch } from "node:fs";
 import type { AdapterRunInput, AdapterRunResult } from "../adapters/types";
 import { ulid } from "ulid";
 
+const DEFAULT_CONTINUATION_LIMITS = { idleMs: 120_000, toolMs: 600_000, attemptMs: 900_000, attempts: 3 } as const;
+
+type ContinuationLimits = Readonly<Record<keyof typeof DEFAULT_CONTINUATION_LIMITS, number>>;
+
+export function resolveContinuationLimits(overrides: Partial<ContinuationLimits> = {}): ContinuationLimits {
+  return {
+    idleMs: overrides.idleMs ?? DEFAULT_CONTINUATION_LIMITS.idleMs,
+    toolMs: overrides.toolMs ?? DEFAULT_CONTINUATION_LIMITS.toolMs,
+    attemptMs: overrides.attemptMs ?? DEFAULT_CONTINUATION_LIMITS.attemptMs,
+    attempts: overrides.attempts ?? DEFAULT_CONTINUATION_LIMITS.attempts,
+  };
+}
+
 /** Schedules `handler` after `ms` and returns its cancel function; injected so tests drive deadlines by signal instead of elapsed time. */
 export type ContinuationTimer = (handler: () => void, ms: number) => () => void;
 
@@ -38,9 +51,10 @@ export async function runWithContinuation(
   input: AdapterRunInput,
   run: (input: AdapterRunInput) => Promise<AdapterRunResult>,
   complete: () => Promise<boolean>,
-  limits = { idleMs: 120_000, toolMs: 600_000, attemptMs: 900_000, attempts: 3 },
+  overrides: Partial<ContinuationLimits> = {},
   schedule: ContinuationTimer = realTimer,
 ): Promise<AdapterRunResult> {
+  const limits = resolveContinuationLimits(overrides);
   let recovery: { id: string; tool: string } | undefined;
   const emitRecovery = async (ok: boolean) => {
     if (recovery) await input.onEvent({ id: ulid(), ts: Date.now(), type: "tool.finished", turnId: input.turnId, toolCallId: recovery.id, tool: recovery.tool, ok });
@@ -67,7 +81,7 @@ export async function runWithContinuation(
       touch();
       try {
         result = await run({ ...input, signal,
-          prompt: attempt === 0 ? input.prompt : `${input.prompt}\n\n<resume_incomplete_work>\nThe previous attempt did not finish. Continue the same requested deliverable in this directory. Inspect and reuse existing assets; do not regenerate completed images. Restore a missing entrypoint. Write a small valid file first, then extend it in small patches. Never delete and add the same path in one patch, and never delete the entrypoint before preparing its replacement. Verify the saved result before reporting completion.\n</resume_incomplete_work>`,
+          prompt: attempt === 0 ? input.prompt : `${input.prompt}\n\n<resume_incomplete_work>\nThe previous attempt did not finish. Continue the same requested deliverable in this directory. Inspect and reuse existing assets; do not regenerate completed images. Restore a missing entrypoint. Write a small valid file first, then extend it in small patches. Never delete and add the same path in one patch, and never delete the entrypoint before preparing its replacement. For completed generated units, remove data-bg-placeholder and set data-bg-complete="true" on every data-bg-unit container. Verify the saved result before reporting completion.\n</resume_incomplete_work>`,
           onEvent: async (event) => {
             if (event.type === "tool.started") pending.add(event.toolCallId);
             if (event.type === "tool.finished") pending.delete(event.toolCallId);

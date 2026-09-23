@@ -3,6 +3,7 @@ import { ApiError } from "../src/api/client";
 import {
   COMPOSER_ATTACHMENT_LIMITS,
   COMPOSER_SUPPORTED_EXTENSIONS,
+  hasPaginatedContentSource,
   planAttachmentIntake,
   readyAttachmentSources,
   resolveSendOutcome,
@@ -24,6 +25,15 @@ function ready(name: string, sizeBytes = 8): IntakeItem {
 }
 
 describe("composer attachment intake", () => {
+  test("Given queued source roles and formats When enabling page mapping Then only ready ordinary PDF or PPTX content qualifies", () => {
+    expect(hasPaginatedContentSource([])).toBe(false);
+    expect(hasPaginatedContentSource(planAttachmentIntake([], [file("notes.txt"), file("photo.png"), file("brief.docx")]))).toBe(false);
+    expect(hasPaginatedContentSource(planAttachmentIntake([], [file("deck.PDF")]))).toBe(true);
+    expect(hasPaginatedContentSource(planAttachmentIntake([], [file("deck.pptx")]))).toBe(true);
+    expect(hasPaginatedContentSource([{ id: "reference", status: "ready", file: file("style.pdf"), role: "immutable_reference" }])).toBe(false);
+    expect(hasPaginatedContentSource([{ id: "rejected", status: "rejected", file: file("large.pdf"), reason: "too_large" }])).toBe(false);
+  });
+
   test("Given an empty queue When a supported source is added Then it is queued ready for send", () => {
     const items = planAttachmentIntake([], [file("deck.pdf", "application/pdf")]);
 

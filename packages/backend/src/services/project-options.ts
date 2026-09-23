@@ -71,9 +71,10 @@ export function parseStoredProjectOptions(
   try {
     return parseProjectOptions(parsed);
   } catch (error) {
-    // A corrupt set is the authoring contract itself: degrading it to a default would silently
-    // reshape the deliverable, so it stays fatal for both the graphic and the logo set.
-    if (error instanceof UpgradeContractError && !error.path.startsWith("options.graphic_set") && !error.path.startsWith("options.logo_set")) return DEFAULT_OPTIONS;
+    const sourceMappingDeclared = isRecord(parsed) && isRecord(parsed["design_brief"]) &&
+      parsed["design_brief"]["source_page_mapping"] !== undefined;
+    // Invalid authoring contracts must not silently become unrestricted defaults.
+    if (error instanceof UpgradeContractError && !sourceMappingDeclared && !error.path.startsWith("options.graphic_set") && !error.path.startsWith("options.logo_set")) return DEFAULT_OPTIONS;
     throw error;
   }
 }

@@ -3,6 +3,20 @@ import { parse, type HTMLElement } from "node-html-parser";
 import { resolveWithin } from "../security/path-boundary";
 import { localAssetReferences } from "./export-closure";
 
+export type DeckSourcePage = {
+  readonly attachmentId: string;
+  readonly page: number;
+};
+
+export function matchesDeckSourcePages(slides: readonly HTMLElement[], sourcePages: readonly DeckSourcePage[]): boolean {
+  return slides.length === sourcePages.length && slides.every((slide, index) => {
+    const source = sourcePages[index];
+    return source !== undefined &&
+      slide.getAttribute("data-bg-source-attachment") === source.attachmentId &&
+      slide.getAttribute("data-bg-source-page") === String(source.page);
+  });
+}
+
 /** Structural completion, not a claim that copy or image quality has been reviewed. */
 export function hasGeneratedContent(node: HTMLElement): boolean {
   if (node.hasAttribute("data-bg-placeholder") || node.querySelector("[data-bg-placeholder]")) return false;
@@ -13,7 +27,7 @@ export function hasGeneratedContent(node: HTMLElement): boolean {
   return text.length > 0 || content.querySelector("img[src],svg,canvas,video[src]") !== null || /background(?:-image)?\s*:[^;{}]*url\(/i.test(node.innerHTML);
 }
 
-export async function generationOutputComplete(directory: string, entrypoint: string, projectType: string, expectedSlides?: number): Promise<boolean> {
+export async function generationOutputComplete(directory: string, entrypoint: string, projectType: string, expectedSlides?: number, sourcePages?: readonly DeckSourcePage[]): Promise<boolean> {
   try {
     const file = resolveWithin(directory, entrypoint);
     const info = await lstat(file);
@@ -27,6 +41,7 @@ export async function generationOutputComplete(directory: string, entrypoint: st
     if (projectType === "slide_deck") {
       const slides = root.querySelectorAll("[data-slide]");
       if (!slides.length || (expectedSlides !== undefined && slides.length !== expectedSlides) || slides.some(node => node.parentNode?.closest("[data-slide]") || !hasGeneratedContent(node))) return false;
+      if (sourcePages !== undefined && !matchesDeckSourcePages(slides, sourcePages)) return false;
       if (!root.querySelectorAll("script[src]").some(node => /^\/?(?:\.\/)?runtime\/deck-stage\.js(?:[?#].*)?$/.test(node.getAttribute("src") ?? ""))) return false;
     }
     // Reuse the asset parser; virtual runtime/font routes are not local images.

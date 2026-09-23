@@ -67,6 +67,7 @@ export type DesignBriefV1 = {
   readonly visual_mood: DesignBriefVisualMood;
   readonly density: DesignBriefDensity;
   readonly output_size: DesignBriefOutputSize;
+  readonly source_page_mapping?: "one_to_one" | "restructure";
   readonly section_count?: number;
   readonly pages?: readonly string[];
 };
@@ -81,17 +82,25 @@ export function parseDesignBriefV1(input: unknown): DesignBriefV1 {
     invalid("locale");
   }
   const parsedOutputType = outputType(requiredString(record, "output_type"));
+  const parsedContentSource = contentSource(requiredString(record, "content_source"));
+  const sourcePageMapping = record.source_page_mapping;
+  if (sourcePageMapping !== undefined && (
+    parsedOutputType !== "slide_deck" ||
+    parsedContentSource !== "attached" ||
+    (sourcePageMapping !== "one_to_one" && sourcePageMapping !== "restructure")
+  )) invalid("source_page_mapping");
   const sectionCount = record.section_count;
   if (sectionCount !== undefined && (parsedOutputType !== "prototype" || typeof sectionCount !== "number" || !Number.isSafeInteger(sectionCount) || sectionCount < 1 || sectionCount > 30)) invalid("section_count");
   const pages = parsePages(record.pages, parsedOutputType);
   return {
+    ...(sourcePageMapping === undefined ? {} : { source_page_mapping: sourcePageMapping }),
     ...(typeof sectionCount === "number" ? { section_count: sectionCount } : {}),
     ...(pages === undefined ? {} : { pages }),
     schema_version: 1,
     output_type: parsedOutputType,
     audience: boundedString(record, "audience", 200),
     objective: boundedString(record, "objective", 1000),
-    content_source: contentSource(requiredString(record, "content_source")),
+    content_source: parsedContentSource,
     locale,
     brand_mode: brandMode(requiredString(record, "brand_mode")),
     visual_mood: visualMood(requiredString(record, "visual_mood")),

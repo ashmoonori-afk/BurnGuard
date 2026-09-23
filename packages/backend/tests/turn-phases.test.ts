@@ -6,6 +6,70 @@ import { parse } from "node-html-parser";
 import type { NormalizedEvent } from "@bg/shared";
 import { needsGenerationPhases, runGenerationPhases } from "../src/services/turn-phases";
 
+test("Given two authoritative source pages When the planner invents a third slide Then content generation is blocked", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-phase-source-count-"));
+  let contentCalls = 0;
+  let planning = true;
+  try {
+    const result = await runGenerationPhases({
+      sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture",
+      prompt: "Keep source pages one-to-one",
+      userEvent: { type: "user.message", text: "Keep source pages one-to-one" },
+      onEvent: async event => {
+        if (event.type === "tool.started" && event.tool.startsWith("generation_phase_")) planning = event.tool === "generation_phase_plan";
+      },
+    }, "deck.html", async input => {
+      if (!planning) { contentCalls++; return { exitCode: 1 }; }
+      const plan = input.prompt.match(/\.burnguard-inputs\/phases-[A-Z0-9]+\/plan\.json/)?.[0];
+      if (!plan) throw new Error("missing plan path");
+      await writeFile(path.join(dir, plan), JSON.stringify({ units: ["One", "Two", "Invented split"] }));
+      await writeFile(path.join(dir, "deck.html"), [1, 2, 3].map(unit =>
+        `<section class="deck-slide" data-slide data-bg-unit="${unit}" data-bg-source-attachment="source" data-bg-source-page="${unit}">Pending</section>`
+      ).join("") + '<script src="runtime/deck-stage.js"></script>');
+      return { exitCode: 0 };
+    }, "slide_deck", [{ attachmentId: "source", page: 1 }, { attachmentId: "source", page: 2 }]);
+    expect(contentCalls).toBe(0);
+    expect(result.exitCode).toBe(1);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Given a plan with reversed slide order When validating the scaffold Then content generation never starts", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-phase-order-"));
+  let plans = 0;
+  let contentCalls = 0;
+  let currentPhase = "";
+  try {
+    const result = await runGenerationPhases({
+      sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture",
+      prompt: "Create two slides in source order",
+      userEvent: { type: "user.message", text: "Create two slides in source order" },
+      onEvent: async event => {
+        if (event.type === "tool.started" && event.tool.startsWith("generation_phase_")) currentPhase = event.tool;
+      },
+    }, "deck.html", async input => {
+      if (currentPhase !== "generation_phase_plan") {
+        contentCalls++;
+        return { exitCode: 1 };
+      }
+      plans++;
+      const plan = input.prompt.match(/\.burnguard-inputs\/phases-[A-Z0-9]+\/plan\.json/)?.[0];
+      if (!plan) throw new Error("missing plan path");
+      await writeFile(path.join(dir, plan), JSON.stringify({ units: ["First source page", "Second source page"] }));
+      await writeFile(path.join(dir, "deck.html"), [2, 1].map(unit =>
+        `<section class="deck-slide" data-slide data-bg-unit="${unit}" data-bg-placeholder>Pending</section>`
+      ).join("") + '<script src="runtime/deck-stage.js"></script>');
+      return { exitCode: 0 };
+    }, "slide_deck");
+    expect(contentCalls).toBe(0);
+    expect(plans).toBe(3);
+    expect(result.exitCode).toBe(1);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("Given a five-unit deck and a failed final batch, then phases run sequentially and only that batch resumes", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "bg-phases-"));
   const events: NormalizedEvent[] = [];

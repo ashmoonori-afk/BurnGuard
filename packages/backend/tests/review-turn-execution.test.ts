@@ -37,8 +37,8 @@ beforeEach(async () => {
 });
 afterEach(async () => { getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId); await rm(projectDir, { recursive: true, force: true }); });
 
-function start(runAdapter: NonNullable<TurnDependencies["runAdapter"]>, text = "Create a result", reviewDesign?: TurnDependencies["reviewDesign"]) {
-  const turn = startUserTurn(sessionId, { type: "user.message", text }, undefined, {
+function start(runAdapter: NonNullable<TurnDependencies["runAdapter"]>, text = "Create a result", reviewDesign?: TurnDependencies["reviewDesign"], attachments: readonly string[] = []) {
+  const turn = startUserTurn(sessionId, { type: "user.message", text, attachments: [...attachments] }, undefined, {
     detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "fixture", version: "test" }] }), runAdapter,
     reviewDesign: reviewDesign ?? (async () => ({ status: "checked", repairs: 0, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "ready", checks: [] } })),
   });
@@ -163,7 +163,7 @@ test("Given a reopened session with an earlier PDF and no extracted sidecar When
     const original = input.prompt.match(/source_path: (.+?) \(read-only document/)?.[1];
     const extracted = input.prompt.match(/extracted_text_path: (.+?) \(safe text version/)?.[1];
     expect(original).toBeDefined();
-    expect(new Uint8Array(await readFile(original!))).toEqual(bytes);
+    expect(new Uint8Array(await readFile(original!))).toEqual(new Uint8Array(bytes));
     expect(await readFile(extracted!, "utf8")).toContain("PRESERVE THE ORIGINAL BRIEF");
     expect(input.prompt).not.toContain("do not Read/Glob/Bash this file");
     read = true;
@@ -171,7 +171,7 @@ test("Given a reopened session with an earlier PDF and no extracted sidecar When
   }, "원문 그대로 다시 작업해 주세요");
   await turn.promise;
   expect(read).toBe(true);
-  expect(new Uint8Array(await readFile(source))).toEqual(bytes);
+  expect(new Uint8Array(await readFile(source))).toEqual(new Uint8Array(bytes));
 });
 
 test("Given a running generation When staged HTML changes Then draft files and in-app reports work before commit and expire afterward", async () => {
@@ -266,6 +266,123 @@ test("Given a final deck review deletes a slide despite a clean exit, then it re
   expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toContain(">Two</section>");
 });
 
+test.each(["valid", "review_reorders", "interrupted"] as const)("Given a source-mapped deck When the turn is %s Then only intact correspondence can publish", async (outcome) => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck',options_json=? WHERE id=?").run(JSON.stringify({
+    design_brief: {
+      schema_version: 1, output_type: "slide_deck", audience: "Customers", objective: "Explain the source",
+      content_source: "attached", locale: "ko", brand_mode: "none", visual_mood: "formal",
+      density: "balanced", output_size: "widescreen-16x9", source_page_mapping: "one_to_one",
+    },
+  }), projectId);
+  await mkdir(path.join(projectDir, ".attachments"));
+  const pdf = await PDFDocument.create();
+  pdf.addPage().drawText("Source page one");
+  pdf.addPage().drawText("Source page two");
+  const bytes = await pdf.save();
+  const source = path.join(projectDir, ".attachments", "source.pdf");
+  await writeFile(source, bytes);
+  await writeFile(`${source}.summary.json`, JSON.stringify({
+    kind: "pdf", page_count: 2, fonts: [], colors: [], notes: [], headings: [], bodies: [], pages: [],
+  }));
+  await writeFile(`${source}.extracted.md`, "Source page one\nSource page two");
+  const attachment = await insertAttachment({
+    sessionId, turnId: "source-turn", filePath: source, mimeType: "application/pdf",
+    originalName: "source.pdf", sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"),
+  });
+  const deck = (pages: readonly number[]) => pages.map(page =>
+    `<section data-slide data-bg-source-attachment="${attachment.id}" data-bg-source-page="${page}"><h1>Source page ${page}</h1></section>`
+  ).join("") + '<script src="runtime/deck-stage.js"></script>';
+  let calls = 0;
+  let reviewed = false;
+  const turn = start(async (_backend, input) => {
+    calls++;
+    const mapping = input.prompt.match(/<deck_source_page_mapping>\s*([\s\S]*?)\s*<\/deck_source_page_mapping>/)?.[1];
+    expect(mapping).toBeDefined();
+    expect(JSON.parse(mapping ?? "null").pages).toEqual([
+      { attachmentId: attachment.id, page: 1 }, { attachmentId: attachment.id, page: 2 },
+    ]);
+    await writeFile(path.join(input.projectDir, "index.html"), deck(outcome === "interrupted" ? [1] : [1, 2]));
+    if (outcome === "interrupted") interruptUserTurn(sessionId);
+    return { exitCode: 0 };
+  }, "Update wording", async (input) => {
+    reviewed = true;
+    if (outcome === "review_reorders") {
+      await writeFile(path.join(input.adapter.projectDir, "index.html"), deck([2, 1]));
+    }
+    return { status: "checked", repairs: 0, result: {
+      schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest,
+      created_at: 1, overall_status: "ready", checks: [],
+    } };
+  });
+  await turn.promise;
+  expect(calls).toBe(outcome === "interrupted" ? 1 : 2);
+  expect(reviewed).toBe(outcome !== "interrupted");
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(outcome === "valid" ? deck([1, 2]) : "base");
+  expect(getSqlite().query("SELECT current_revision FROM projects WHERE id=?").get(projectId))
+    .toEqual({ current_revision: outcome === "valid" ? 1 : 0 });
+  expect(getSqlite().query("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId))
+    .toEqual({ status: outcome === "valid" ? "committed" : "failed" });
+  expect(new Uint8Array(await readFile(source))).toEqual(new Uint8Array(bytes));
+});
+
+test.each([false, true])("Given two selected source documents and a reference When final review swaps documents=%s Then only selected source order publishes", async (swap) => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck',options_json=? WHERE id=?").run(JSON.stringify({
+    design_brief: {
+      schema_version: 1, output_type: "slide_deck", audience: "Customers", objective: "Explain the sources",
+      content_source: "attached", locale: "ko", brand_mode: "none", visual_mood: "formal",
+      density: "balanced", output_size: "widescreen-16x9", source_page_mapping: "one_to_one",
+    },
+  }), projectId);
+  await mkdir(path.join(projectDir, ".attachments"));
+  const sources: Awaited<ReturnType<typeof insertAttachment>>[] = [];
+  for (const [index, name] of ["first", "second", "reference"].entries()) {
+    const pdf = await PDFDocument.create();
+    pdf.addPage().drawText(name);
+    const bytes = await pdf.save();
+    const filePath = path.join(projectDir, ".attachments", `${name}.pdf`);
+    await writeFile(filePath, bytes);
+    await writeFile(`${filePath}.summary.json`, JSON.stringify({
+      kind: "pdf", page_count: 1, fonts: [], colors: [], notes: [], headings: [], bodies: [], pages: [],
+    }));
+    await writeFile(`${filePath}.extracted.md`, name);
+    const attachment = await insertAttachment({
+      sessionId, turnId: "source-turn", filePath, mimeType: "application/pdf", originalName: `${name}.pdf`,
+      sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"),
+      sourceRole: name === "reference" ? "immutable_reference" : "ordinary_content", sourceRoleExplicit: true,
+    });
+    getSqlite().prepare("UPDATE attachments SET created_at=? WHERE id=?").run(index + 1, attachment.id);
+    sources.push(attachment);
+  }
+  const [first, second, reference] = sources;
+  if (!first || !second || !reference) throw new Error("source_fixture_missing");
+  const expected = [{ attachmentId: first.id, page: 1 }, { attachmentId: second.id, page: 1 }];
+  const deck = (pages: typeof expected) => pages.map(source =>
+    `<section data-slide data-bg-source-attachment="${source.attachmentId}" data-bg-source-page="${source.page}"><h1>Source ${source.attachmentId}</h1></section>`
+  ).join("") + '<script src="runtime/deck-stage.js"></script>';
+  let calls = 0;
+  let reviewed = false;
+  const turn = start(async (_backend, input) => {
+    calls++;
+    const mapping = input.prompt.match(/<deck_source_page_mapping>\s*([\s\S]*?)\s*<\/deck_source_page_mapping>/)?.[1];
+    expect(JSON.parse(mapping ?? "null").pages).toEqual(expected);
+    await writeFile(path.join(input.projectDir, "index.html"), deck(expected));
+    return { exitCode: 0 };
+  }, "Update wording", async input => {
+    reviewed = true;
+    if (swap) await writeFile(path.join(input.adapter.projectDir, "index.html"), deck([...expected].reverse()));
+    return { status: "checked", repairs: 0, result: {
+      schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest,
+      created_at: 1, overall_status: "ready", checks: [],
+    } };
+  }, [first.file_path, reference.file_path, second.file_path]);
+  await turn.promise;
+  expect(calls).toBe(2);
+  expect(reviewed).toBe(true);
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(swap ? "base" : deck(expected));
+  expect(getSqlite().query("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId))
+    .toEqual({ status: swap ? "failed" : "committed" });
+});
+
 test("Given explicit generation options When a turn runs Then the adapter receives the validated selected model and effort", async () => {
   let observed = false;
   const generation = { model: "fixture-model", effort: "high" as const, vanilla: true, provider: "native" as const };
@@ -332,7 +449,7 @@ for (const backendId of ["claude-code", "codex"] as const) {
     expect(observed.filter((event) => event.type === "status.idle" && event.stopReason === "error")).toHaveLength(1);
     expect(
       getSqlite()
-        .query<{ readonly count: number }, []>(
+        .query<{ readonly count: number }, [string]>(
           "SELECT COUNT(*) count FROM events WHERE session_id=? AND type='status.error'",
         )
         .get(sessionId)?.count,

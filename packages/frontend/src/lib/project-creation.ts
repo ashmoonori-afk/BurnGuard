@@ -95,6 +95,7 @@ export type ProjectDraft = {
   readonly graphicHeight: number;
   readonly useSpeakerNotes: boolean;
   readonly copyAsIs: boolean;
+  readonly sourcePageMapping?: NonNullable<DesignBriefV1["source_page_mapping"]>;
   readonly sectionCount?: number;
   readonly pages: readonly string[];
   readonly graphicKind: GraphicSetKind;
@@ -127,6 +128,7 @@ export const INITIAL_BRIEF_FORM: BriefForm = {
   graphicHeight: 1080,
   useSpeakerNotes: false,
   copyAsIs: false,
+  sourcePageMapping: "one_to_one",
   sectionCount: 6,
   pages: [],
   graphicKind: "single",
@@ -343,6 +345,9 @@ export function buildCreateProjectRequest(
   }
 
   const brief: DesignBriefV1 = {
+    ...(draft.type === "slide_deck" && draft.contentSource === "attached"
+      ? { source_page_mapping: draft.sourcePageMapping ?? "one_to_one" }
+      : {}),
     ...(draft.type === "prototype" ? {
       section_count: draft.sectionCount ?? 6,
       ...(draft.pages.length === 0 ? {} : { pages: draft.pages }),
