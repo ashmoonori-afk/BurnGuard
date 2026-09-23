@@ -7,6 +7,8 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { runMigrations } from "../src/db/migrate-local";
 import { broker, sequencedBroker } from "../src/services/broker";
 import { persistAndPublish } from "../src/services/turns";
+import { LogoDeliverableError } from "../src/services/logo-deliverables";
+import { sanitizeTurnEvent } from "../src/services/turn-error-sanitizer";
 import { PathBoundaryError } from "../src/security/path-boundary";
 import { sessionRoutes } from "../src/routes/session";
 import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
@@ -170,6 +172,57 @@ describe("turn error event boundary", () => {
     await persistAndPublish("turn-error-session", { id: "cancelled", ts: 4, type: "status.idle", stopReason: "interrupted" });
     expect(getSqlite().query<{ readonly payload_json: string }, []>("SELECT payload_json FROM events WHERE id='cancelled'").get()?.payload_json).toContain('"stopReason":"interrupted"');
     expect(getSqlite().query<{ readonly count: number }, []>("SELECT COUNT(*) count FROM events WHERE session_id='turn-error-session' AND type='status.error'").get()?.count).toBe(0);
+  });
+
+  test("Given a logo deliverable refusal When crossing the boundary Then the finite reason ships and the private detail does not", async () => {
+    const error = new LogoDeliverableError("candidate_unprovenanced:candidate-3");
+    await persistAndPublish("turn-error-session", { id: "logo-reason", ts: 5, type: "status.error", message: error.message, recoverable: true }, error);
+    const payload = getSqlite().query<{ readonly payload_json: string }, []>("SELECT payload_json FROM events WHERE id='logo-reason'").get()?.payload_json ?? "";
+    expect(payload).toContain("logo_image_provenance_missing");
+    expect(payload).toContain("logo_candidate_provenance");
+    expect(payload).not.toContain("candidate_unprovenanced");
+    expect(payload).not.toContain("candidate-3");
+  });
+
+  test.each([
+    ["svg_forbidden_attribute:data-variant", "logo_svg_invalid"],
+    ["svg_source_mismatch", "logo_svg_source_mismatch"],
+    ["svg_missing", "logo_svg_missing"],
+    ["prior_candidate_changed:1:candidate-2", "logo_history_changed"],
+    ["manifest_invalid:rounds.0.candidates", "logo_manifest_invalid"],
+    ["guidelines_pages_over", "logo_guidelines_invalid"],
+    ["candidate_truncated:candidate-1", "logo_candidate_invalid"],
+    ["selection_not_recorded", "logo_selection_invalid"],
+  ])("Given the private detail %p Then the published reason is %p", (detail, reason) => {
+    expect(sanitizeTurnEvent({ id: "r", ts: 1, type: "status.error", message: detail, recoverable: true }, new LogoDeliverableError(detail)))
+      .toMatchObject({ reason });
+  });
+
+  test("Given an unrecognised detail Then no reason is claimed at all", () => {
+    expect(sanitizeTurnEvent({ id: "r", ts: 1, type: "status.error", message: "x", recoverable: true }, new LogoDeliverableError("brand_new_failure:secret")))
+      .not.toHaveProperty("reason");
+  });
+
+  test("Given a wrapped logo refusal Then the reason survives the cause chain", () => {
+    const wrapped = new Error("outer", { cause: new Error("inner", { cause: new LogoDeliverableError("svg_forbidden_element:script") }) });
+    expect(sanitizeTurnEvent({ id: "r", ts: 1, type: "status.error", message: "x", recoverable: true }, wrapped)).toMatchObject({ reason: "logo_svg_invalid" });
+  });
+
+  test.each([
+    ["an unknown reason", { reason: "totally_made_up" }],
+    ["a not-applied notice with a path", { notApplied: { turnId: "/private/x", operationId: "op", repairs: 0 } }],
+    ["a not-applied notice with a fractional count", { notApplied: { turnId: "t", operationId: "op", repairs: 1.5 } }],
+    ["a not-applied notice with an absurd count", { notApplied: { turnId: "t", operationId: "op", repairs: 99 } }],
+    ["a not-applied notice that is not an object", { notApplied: "yes" }],
+  ])("Given %s claimed on the event Then it is dropped rather than forwarded", (_label, claim) => {
+    const sanitized = sanitizeTurnEvent({ id: "r", ts: 1, type: "status.error", message: "x", recoverable: true, ...claim } as never);
+    expect(sanitized).not.toHaveProperty("reason");
+    expect(sanitized).not.toHaveProperty("notApplied");
+  });
+
+  test("Given a well-formed not-applied notice Then it is preserved", () => {
+    expect(sanitizeTurnEvent({ id: "r", ts: 1, type: "status.error", message: "x", recoverable: true, notApplied: { turnId: "01ABC", operationId: "01DEF", repairs: 1 } }))
+      .toMatchObject({ notApplied: { turnId: "01ABC", operationId: "01DEF", repairs: 1 } });
   });
 
   test("Given an allowlisted immutable failure When crossing boundary Then its stable code and Korean copy survive", async () => {

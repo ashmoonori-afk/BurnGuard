@@ -27,7 +27,8 @@ describe("buildCodexCommand", () => {
   test("uses Codex exec with JSON events and stdin prompt input", () => {
     expect(buildCodexCommand("/opt/homebrew/bin/codex")).toEqual([
       "/opt/homebrew/bin/codex", "exec", "--json", "--skip-git-repo-check", "--sandbox", "workspace-write",
-      "-c", 'model_reasoning_effort="low"', "-c", "suppress_unstable_features_warning=true",
+      "-c", 'model_reasoning_effort="low"', "-c", 'model_reasoning_summary="concise"',
+      "-c", "suppress_unstable_features_warning=true",
       "-c", "features.image_generation=true", "-",
     ]);
   });

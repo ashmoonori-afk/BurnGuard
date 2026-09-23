@@ -32,6 +32,17 @@ const VIEW_BOX = /^-?\d+(\.\d+)?([ ,]+-?\d+(\.\d+)?){3}$/;
 const COLOUR = /^(none|currentColor|black|white|transparent|#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$/;
 const TRANSFORM = /^((translate|scale|rotate|matrix|skewX|skewY)\(\s*-?\d+(\.\d+)?([ ,]+-?\d+(\.\d+)?)*\s*\)\s*)+$/;
 const SOURCE = /^explorations\/round-\d{1,2}\/candidate-[1-4]\.png$/;
+/**
+ * The accessible name of the mark. A logo is a picture, so a screen reader has nothing to read
+ * unless the document names it, and every finished vector the contract accepts should carry that
+ * name. It is admitted as inert character data only: 1..64 characters from a closed set of letters,
+ * digits, combining marks, spaces and light punctuation, starting on a letter or digit. The set
+ * spells no scheme, no `url(`, no markup, no entity and no control character, so a Korean brand
+ * name passes while nothing in the value can address or execute anything. `aria-labelledby` and the
+ * other referencing ARIA attributes stay forbidden: they point at another node instead of naming
+ * this one, and resolving them is a second reference graph this validator deliberately does not have.
+ */
+const ARIA_LABEL = /^[\p{L}\p{N}][\p{L}\p{N}\p{M}\p{Zs}.,'\u2019-]{0,63}$/u;
 
 const ATTRIBUTES = new Map<string, RegExp>([
   ["version", /^\d+(\.\d+)?$/],
@@ -46,6 +57,7 @@ const ATTRIBUTES = new Map<string, RegExp>([
   ["stroke-linecap", /^(butt|round|square)$/],
   ["stroke-linejoin", /^(miter|round|bevel)$/],
   ["aria-hidden", /^(true|false)$/],
+  ["aria-label", ARIA_LABEL],
   ["role", /^[a-z]+$/],
   ["lang", /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/],
 ]);
@@ -207,6 +219,51 @@ export function validateLogoSvg(text: string): void {
   // validator never saw; neither belongs in a finished master vector.
   for (const reference of references) if (!ids.has(reference)) throw fail("svg_reference_missing");
   if (attributeOf(root, "xmlns") === null) throw fail("svg_namespace_missing");
+}
+
+/**
+ * Every violation this parser can report, without the subject it found. A detail reads
+ * `svg_forbidden_attribute:<name>`, and that name is copied out of the document, so it is
+ * model-authored text; the head is not. Only the head — one of this closed list — and the
+ * allowlist below ever leave the server, so a repair is told which rule it broke and what the rule
+ * is, and never handed back a string the model itself wrote.
+ */
+export const LOGO_SVG_VIOLATIONS = [
+  "svg_too_large", "svg_doctype", "svg_cdata", "svg_processing_instruction", "svg_entity",
+  "svg_malformed", "svg_root_invalid", "svg_viewbox_missing", "svg_viewbox_invalid",
+  "svg_namespace_missing", "svg_forbidden_element", "svg_text_content", "svg_event_handler",
+  "svg_forbidden_attribute", "svg_attribute_invalid", "svg_external_reference",
+  "svg_url_reference", "svg_reference_missing", "svg_source_invalid",
+] as const;
+export type LogoSvgViolation = (typeof LOGO_SVG_VIOLATIONS)[number];
+
+/** The finite head of a validator detail, or null when the detail is not one of this module's. */
+export function logoSvgViolation(detail: string): LogoSvgViolation | null {
+  const head = detail.split(":")[0] ?? "";
+  return (LOGO_SVG_VIOLATIONS as readonly string[]).includes(head) ? head as LogoSvgViolation : null;
+}
+
+export type LogoSvgContract = {
+  readonly elements: readonly string[];
+  readonly text_elements: readonly string[];
+  readonly attributes: readonly string[];
+  readonly max_bytes: number;
+};
+
+/**
+ * The allowlist itself, read off the tables above so it cannot drift from what is enforced. This
+ * is what a repair is given instead of a diagnostic: the permitted surface, as data.
+ */
+export function logoSvgContract(): LogoSvgContract {
+  return {
+    elements: [...ELEMENTS].sort(),
+    text_elements: [...TEXT_ELEMENTS].sort(),
+    attributes: [...new Set([
+      ...ATTRIBUTES.keys(), ...FRAGMENT_ATTRIBUTES, ...URL_ATTRIBUTES,
+      "xmlns", "xmlns:xlink", LOGO_SOURCE_ATTRIBUTE,
+    ])].sort(),
+    max_bytes: MAX_SVG_BYTES,
+  };
 }
 
 /** The generated candidate the vector claims to reproduce, or null when the root does not say. */

@@ -329,6 +329,30 @@ export async function requestFramePreviewReport(iframe: HTMLIFrameElement | null
   return requestFrameBridge(iframe, "preview-report");
 }
 
+/** Exactly the observations the backend report route accepts, in its own order. */
+export const FRAME_PREVIEW_REPORT_FIELDS = ["width", "height", "images", "brokenImages", "pendingImages", "horizontalOverflow"] as const;
+export type FramePreviewReport = Record<(typeof FRAME_PREVIEW_REPORT_FIELDS)[number], number>;
+
+/**
+ * The bridge answer reaches us from a sandboxed document that can run authored
+ * script, so it is parsed like any other untrusted input: known fields only,
+ * safe non-negative integers only, and all-or-nothing. Dropping the whole
+ * observation beats sending a guess, and forwarding unknown keys would make the
+ * server refuse every report for the rest of the turn. Cross-field consistency
+ * stays with the server, which owns the report contract.
+ */
+export function parseFramePreviewReport(payload: unknown): FramePreviewReport | null {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const source = payload as Record<string, unknown>;
+  const report = {} as FramePreviewReport;
+  for (const field of FRAME_PREVIEW_REPORT_FIELDS) {
+    const value = source[field];
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0 || value > 1_000_000) return null;
+    report[field] = value;
+  }
+  return report;
+}
+
 export async function requestFrameRectForBgId(
   iframe: HTMLIFrameElement | null,
   bgId: string,

@@ -1,5 +1,6 @@
-import type { NormalizedEvent, TurnErrorCode } from "@bg/shared";
+import type { NormalizedEvent, TurnErrorCode, TurnNotApplied, TurnRejectionReason } from "@bg/shared";
 import { PathBoundaryError } from "../security/path-boundary";
+import { LogoDeliverableError } from "./logo-deliverables";
 
 const COPY: Readonly<Record<TurnErrorCode, string>> = {
   graphic_requires_authenticated_codex: "그래픽 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요. 모델 선택과 로그인 상태를 확인해 주세요.",
@@ -23,10 +24,95 @@ const COPY: Readonly<Record<TurnErrorCode, string>> = {
   turn_failed: "요청을 처리하지 못했어요. 다시 시도해 주세요.",
 };
 
+/**
+ * A domain error records a private `detail` that names a candidate id, a manifest field or a path;
+ * this is the only place that detail is turned into something a client may see. The mapping is
+ * total over the details the logo gate can raise and closed at the edges: an unrecognised detail
+ * yields no reason at all rather than a guess, so a new failure mode can never inherit the
+ * treatment — including repairability — of an existing one.
+ */
+const LOGO_REASONS: ReadonlyMap<string, TurnRejectionReason> = new Map([
+  ["manifest_missing", "logo_manifest_missing"],
+  ["manifest_invalid", "logo_manifest_invalid"],
+  ["manifest_path_unsafe", "logo_manifest_invalid"],
+  ["selection_missing", "logo_selection_invalid"],
+  ["selection_unknown", "logo_selection_invalid"],
+  ["selection_not_recorded", "logo_selection_invalid"],
+  ["round_count", "logo_history_changed"],
+  ["rounds_changed", "logo_history_changed"],
+  ["rounds_exhausted", "logo_history_changed"],
+  ["prior_candidate_changed", "logo_history_changed"],
+  ["selected_candidate_changed", "logo_history_changed"],
+  ["image_generation_missing", "logo_candidate_provenance"],
+  ["candidate_unprovenanced", "logo_candidate_provenance"],
+  ["svg_missing", "logo_svg_missing"],
+  ["svg_not_file", "logo_svg_missing"],
+  ["svg_empty", "logo_svg_missing"],
+  ["svg_path_unsafe", "logo_svg_missing"],
+  ["svg_source_missing", "logo_svg_source_mismatch"],
+  ["svg_source_mismatch", "logo_svg_source_mismatch"],
+  ["starter_unchanged", "logo_guidelines_invalid"],
+]);
+
+const REJECTION_REASONS: ReadonlySet<string> = new Set<TurnRejectionReason>([
+  "logo_manifest_missing", "logo_manifest_invalid", "logo_history_changed", "logo_selection_invalid",
+  "logo_candidate_invalid", "logo_candidate_provenance", "logo_svg_missing", "logo_svg_invalid",
+  "logo_svg_source_mismatch", "logo_guidelines_invalid",
+]);
+
+/** Identifiers this server mints (ULIDs and fixture ids); never a path and never model-authored. */
+const SAFE_ID = /^[A-Za-z0-9_-]{1,80}$/;
+/** How deep a wrapped error is followed before the chain is treated as unreadable. */
+const MAX_CAUSE_DEPTH = 4;
+
+function logoRejectionReason(detail: string): TurnRejectionReason | undefined {
+  const head = detail.split(":")[0] ?? "";
+  const mapped = LOGO_REASONS.get(head);
+  if (mapped !== undefined) return mapped;
+  if (head.startsWith("candidate_")) return "logo_candidate_invalid";
+  if (head.startsWith("guidelines_")) return "logo_guidelines_invalid";
+  // Everything the allowlist parser refuses about the document itself.
+  return head.startsWith("svg_") ? "logo_svg_invalid" : undefined;
+}
+
+/**
+ * The finite reason behind an error, following `cause` so a wrapper that keeps the original does
+ * not lose it. The artifact coordinator does NOT keep it — it rethrows a fresh error carrying only
+ * the public message — so the turn records the reason at the throw site and hands it to the event;
+ * this function covers every other path and the unwrapped case.
+ */
+export function turnRejectionReason(error: unknown, depth = 0): TurnRejectionReason | undefined {
+  if (error instanceof LogoDeliverableError) return logoRejectionReason(error.detail);
+  if (depth >= MAX_CAUSE_DEPTH || !(error instanceof Error) || error.cause === undefined) return undefined;
+  return turnRejectionReason(error.cause, depth + 1);
+}
+
+function safeReason(value: unknown): TurnRejectionReason | undefined {
+  return typeof value === "string" && REJECTION_REASONS.has(value) ? value as TurnRejectionReason : undefined;
+}
+
+/** Rebuilds the not-applied notice from validated primitives so no field can smuggle a payload. */
+function safeNotApplied(value: unknown): TurnNotApplied | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const { turnId, operationId, repairs } = value as Partial<TurnNotApplied>;
+  if (typeof turnId !== "string" || !SAFE_ID.test(turnId)) return undefined;
+  if (typeof operationId !== "string" || !SAFE_ID.test(operationId)) return undefined;
+  if (typeof repairs !== "number" || !Number.isInteger(repairs) || repairs < 0 || repairs > 4) return undefined;
+  return { turnId, operationId, repairs };
+}
+
 export function sanitizeTurnEvent(event: NormalizedEvent, cause?: unknown): NormalizedEvent {
   if (event.type !== "status.error") return event;
+  // Drop both additions before rebuilding them, so an unvalidated value can never survive the spread.
+  const { reason: claimedReason, notApplied: claimedNotApplied, ...rest } = event;
   const code = turnErrorCode(cause, event.code ?? event.message);
-  return { ...event, code, message: COPY[code] };
+  const reason = safeReason(claimedReason) ?? turnRejectionReason(cause);
+  const notApplied = safeNotApplied(claimedNotApplied);
+  return {
+    ...rest, code, message: COPY[code],
+    ...(reason === undefined ? {} : { reason }),
+    ...(notApplied === undefined ? {} : { notApplied }),
+  };
 }
 
 export function turnErrorCode(error: unknown, fallback?: string): TurnErrorCode {

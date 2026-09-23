@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import type { TurnErrorCode } from "@bg/shared/events";
+import type { TurnErrorCode, TurnRejectionReason } from "@bg/shared/events";
 import { requiredArray, requiredBoolean, stringArray } from "@bg/shared/contract-parser";
 import { parseLearningContract } from "@bg/shared/learning-contract";
 import { drizzle } from "drizzle-orm/bun-sqlite";
@@ -251,6 +251,47 @@ describe("artifact, export, event, and recovery repositories", () => {
 
     // When / Then
     expect(listSequencedSessionEvents(sqlite, "s", 0)).toEqual(expected);
+  });
+
+  test("Given every shared rejection reason and a not-applied notice When replayed Then strict readers preserve them", () => {
+    // Given: Record makes additions to the shared DTO require replay coverage.
+    const reasons = {
+      logo_manifest_missing: "logo_manifest_missing", logo_manifest_invalid: "logo_manifest_invalid",
+      logo_history_changed: "logo_history_changed", logo_selection_invalid: "logo_selection_invalid",
+      logo_candidate_invalid: "logo_candidate_invalid", logo_candidate_provenance: "logo_candidate_provenance",
+      logo_svg_missing: "logo_svg_missing", logo_svg_invalid: "logo_svg_invalid",
+      logo_svg_source_mismatch: "logo_svg_source_mismatch", logo_guidelines_invalid: "logo_guidelines_invalid",
+    } satisfies Record<TurnRejectionReason, TurnRejectionReason>;
+    const expected = Object.values(reasons).map((reason, index) => {
+      const event = {
+        id: reason, ts: 10, type: "status.error" as const, code: "logo_deliverables_missing" as const,
+        message: "sanitized", recoverable: true, reason,
+        notApplied: { turnId: `turn-${index}`, operationId: `op-${index}`, repairs: index % 2 },
+      };
+      const stored = insertSequencedEvent(sqlite, { id: event.id, sessionId: "s", direction: "down", type: event.type, payload: event, turnId: null, processedAt: event.ts, createdAt: event.ts });
+      return { sequence: stored.sequence, event };
+    });
+
+    // When / Then: a reloaded conversation still knows the turn produced nothing.
+    expect(listSequencedSessionEvents(sqlite, "s", 0)).toEqual(expected);
+  });
+
+  test.each([
+    ["an unknown reason", { reason: "logo_vibes_wrong" }],
+    ["an empty reason", { reason: "" }],
+    ["a non-string reason", { reason: 7 }],
+    ["a not-applied notice that is not an object", { notApplied: "yes" }],
+    ["a not-applied array", { notApplied: [] }],
+    ["a not-applied notice without an operation", { notApplied: { turnId: "t", repairs: 0 } }],
+    ["a negative repair count", { notApplied: { turnId: "t", operationId: "o", repairs: -1 } }],
+    ["a fractional repair count", { notApplied: { turnId: "t", operationId: "o", repairs: 0.5 } }],
+  ])("Given %s persisted on a turn error When replayed Then corruption is rejected", (_label, claim) => {
+    // Given
+    const event = { id: "invalid-metadata", ts: 10, type: "status.error", message: "sanitized", recoverable: true, ...claim };
+    insertSequencedEvent(sqlite, { id: event.id, sessionId: "s", direction: "down", type: event.type, payload: event, turnId: null, processedAt: event.ts, createdAt: event.ts });
+
+    // When / Then
+    expect(() => listSequencedSessionEvents(sqlite, "s", 0)).toThrow(new PipelineRepositoryError("corrupt_json", event.id));
   });
 
   test.each(["unknown_error", "", "toString", "__proto__", null, 7, {}])("Given invalid persisted error code %j When replayed Then corruption is rejected", (code) => {
