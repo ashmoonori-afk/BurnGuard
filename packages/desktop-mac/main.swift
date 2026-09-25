@@ -23,6 +23,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var closing = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installMainMenu()
         do {
             let diagnostics = try parseArguments()
             smokeReportPath = diagnostics.reportPath
@@ -326,6 +327,25 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             throw NSError(domain: "BurnGuard", code: 1, userInfo: [NSLocalizedDescriptionKey: "The native smoke report path must be absolute and a project id is required."])
         }
         return (arguments[2], arguments[4])
+    }
+
+    // AppKit delivers Cmd-key editing, quit and close only through main-menu key equivalents; nil targets reach the web view.
+    private func installMainMenu() {
+        let appMenu = NSMenu(title: "BurnGuard")
+        appMenu.addItem(withTitle: "BurnGuard 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let editMenu = NSMenu(title: "편집")
+        editMenu.addItem(withTitle: "실행 취소", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "실행 복귀", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(withTitle: "오려두기", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "복사하기", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "붙이기", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "모두 선택", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let windowMenu = NSMenu(title: "윈도우")
+        windowMenu.addItem(withTitle: "최소화", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "닫기", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        let mainMenu = NSMenu()
+        for menu in [appMenu, editMenu, windowMenu] { mainMenu.addItem(withTitle: menu.title, action: nil, keyEquivalent: "").submenu = menu }
+        NSApp.mainMenu = mainMenu
     }
 
     private func createWindow() throws {

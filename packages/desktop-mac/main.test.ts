@@ -72,3 +72,16 @@ describe("macOS external links", () => {
     expect(external).toBeLessThan(tail.indexOf("decisionHandler(isAppURL(url) ? .allow : .cancel)"));
   });
 });
+
+describe("macOS main menu", () => {
+  test("Given launch When the main menu is installed Then standard key equivalents reach the first responder, the window and the app", () => {
+    expect(body("func applicationDidFinishLaunching(")).toMatch(/^\{\s*installMainMenu\(\)/);
+    const menu = body("private func installMainMenu()");
+    expect(menu).toContain("NSApp.mainMenu = ");
+    expect(menu).not.toContain(".target");
+    const bindings = { terminate: "q", undo: "z", redo: "Z", cut: "x", copy: "c", paste: "v", selectAll: "a", performMiniaturize: "m", performClose: "w" };
+    for (const [action, key] of Object.entries(bindings)) {
+      expect(menu).toMatch(new RegExp(`action: (?:#selector\\(\\w+\\.${action}\\(_:\\)\\)|Selector\\(\\("${action}:"\\)\\)), keyEquivalent: "${key}"`));
+    }
+  });
+});

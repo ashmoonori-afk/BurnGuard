@@ -8,7 +8,7 @@ Single-file Swift `WKWebView` shell (`main.swift`, 287 LOC) that launches and ow
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Lifecycle | `BurnGuardAppDelegate` | `applicationDidFinishLaunching` → arguments → window → service; terminate waits on `shutdown()` |
+| Lifecycle | `BurnGuardAppDelegate` | `applicationDidFinishLaunching` → main menu → arguments → window → service; terminate waits on `shutdown()` |
 | Argument contract | `parseArguments` | Only `["--smoke-test", "--smoke-report"]`; any other argument shape is rejected |
 | Window/webview | `createWindow` | `WKWebViewConfiguration`, navigation delegate installed before the first load |
 | Backend ownership | `startService` | `Process` rooted at `Bundle.main.bundleURL`, stdin/stdout/stderr pipes retained for drain and shutdown |
@@ -29,5 +29,5 @@ Single-file Swift `WKWebView` shell (`main.swift`, 287 LOC) that launches and ow
 - Do not allow navigation to a host other than the resolved backend origin, and do not add a same-origin escape for previews.
 - Do not print or alert raw subprocess output; it can contain private absolute paths.
 - Do not exit before the service process is terminated and its pipes are drained.
-- Do not add product features, UI chrome, or web-message channels to the shell; the SPA owns the UI.
+- Do not add product features, UI chrome, or web-message channels to the shell; the SPA owns the UI. The standard App/Edit/Window main menu (`installMainMenu`) is OS keyboard integration, not chrome.
 - Do not invoke macOS packaging from a Windows validation run.
