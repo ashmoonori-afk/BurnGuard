@@ -100,6 +100,15 @@ describe("cafe24 smart design package", () => {
     expect(css).toContain(`${CAFE24_BASE}css/base.css`);
   });
 
+  test("Given an inline style that loads a local image When the package is built Then validation accepts the entity-quoted rewrite", async () => {
+    // Given / When
+    const built = await build("cafe24_package", {}, '<section class="hero" style="background:url(img/hero.png) no-repeat"><h1>안녕하세요</h1></section>');
+
+    // Then
+    expect(await built.text("pages/home.html")).toContain(`url(&quot;${CAFE24_BASE}img/hero.png&quot;)`);
+    expect(built.names).toContain("web/shop-site/img/hero.png");
+  });
+
   test("Given a configured asset base url When the package is built Then that host is used instead of the default", async () => {
     const built = await build("cafe24_package", { asset_base_url: "https://cdn.example.com/burnguard" });
     expect(await built.text("pages/home.html")).toContain("https://cdn.example.com/burnguard/img/hero.png");
@@ -417,7 +426,8 @@ describe("platform package boundaries", () => {
     // When / Then
     const { validatePlatformPackage } = await import("../src/services/export-package-validation");
     const manifest: PlatformPackageManifest = JSON.parse(await built.text("burnguard-export.json"));
-    await expect(validatePlatformPackage(tampered, manifest)).rejects.toBeInstanceOf(ExportPackageError);
+    await expect(validatePlatformPackage(built.bytes, manifest)).resolves.toEqual(manifest);
+    await expect(validatePlatformPackage(tampered, manifest)).rejects.toMatchObject({ code: "manifest_mismatch" });
   });
 
   test.each(["cafe24_package", "imweb_package"] as const)("Given a published %s receipt When the download is verified Then identity holds and tampering is rejected", async (format) => {
