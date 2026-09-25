@@ -73,7 +73,8 @@ function htmlReferences(source: string, file: string): readonly string[] {
       if (value !== undefined) values.push(value);
     }
     const srcset = element.getAttribute("srcset");
-    if (srcset !== undefined) values.push(...srcsetUrls(srcset));
+    // A loop, not a spread: a huge attribute must reach the reference cap instead of overflowing the call stack.
+    if (srcset !== undefined) for (const url of srcsetUrls(srcset)) values.push(url);
   }
   for (const style of document.querySelectorAll("style")) values.push(...cssReferences(style.text, file));
   for (const element of document.querySelectorAll("[style]")) values.push(...cssUrlValues(element.getAttribute("style") ?? ""));
@@ -93,9 +94,10 @@ function srcsetUrls(srcset: string): readonly string[] {
     const start = index;
     while (index < srcset.length && !space(srcset[index])) index += 1;
     if (start === index) break;
-    const url = srcset.slice(start, index);
-    if (url.endsWith(",")) { urls.push(url.replace(/,+$/u, "")); continue; }
-    urls.push(url);
+    let end = index;
+    while (end > start && srcset[end - 1] === ",") end -= 1;
+    urls.push(srcset.slice(start, end));
+    if (end < index) continue;
     for (let inParens = false; index < srcset.length; index += 1) {
       const character = srcset[index];
       if (character === "(") inParens = true;

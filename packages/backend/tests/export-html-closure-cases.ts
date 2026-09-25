@@ -47,6 +47,14 @@ describe("export HTML closure boundaries", () => {
       await writeFile(path.join(root, "index.html"), `<html><body><img srcset="${"a.png 1x, ".repeat(150_000)}"></body></html>`);
       // When / Then
       await expect(resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root))).rejects.toMatchObject({ code: "closure_limit" });
+      // Given: millions of candidates, which must reach the cap rather than overflow a spread.
+      await writeFile(path.join(root, "index.html"), `<html><body><img srcset="${"a.png ,".repeat(3_000_000)}"></body></html>`);
+      // When / Then
+      await expect(resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root))).rejects.toMatchObject({ code: "closure_limit" });
+      // Given: one URL with a long inner comma run and a trailing comma, which an end-anchored comma pattern backtracks over.
+      await writeFile(path.join(root, "index.html"), `<html><body><img srcset="a.png${",".repeat(400_000)}b,"></body></html>`);
+      // When / Then
+      await expect(resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root))).rejects.toMatchObject({ code: "missing_asset" });
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
