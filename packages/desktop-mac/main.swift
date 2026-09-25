@@ -365,11 +365,12 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
 
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty else { return }
+            // At EOF the handler keeps firing with empty data until it is cleared.
+            if data.isEmpty { handle.readabilityHandler = nil; return }
             DispatchQueue.main.async { self?.consumeServiceOutput(data) }
         }
         errorOutput.fileHandleForReading.readabilityHandler = { handle in
-            _ = handle.availableData
+            if handle.availableData.isEmpty { handle.readabilityHandler = nil }
         }
         process.terminationHandler = { [weak self] process in
             DispatchQueue.main.async {
