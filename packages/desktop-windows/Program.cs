@@ -521,7 +521,7 @@ namespace BurnGuard.Desktop
                 const run = async (format, options) => {
                     const created = await data(await fetch('/api/projects/' + projectId + '/exports', {method:'POST',headers:{'content-type':'application/json','x-burnguard-capability':authority.capability},body:JSON.stringify({format,options})}));
                     const terminal = await new Promise((resolve,reject)=>{ const timer=setTimeout(()=>{waiters.delete(created.id);reject(new Error(format+' export deadline exceeded'));},180000); const finish=event=>{if(!['validated','failed','cancelled','corrupt'].includes(event.status))return;clearTimeout(timer);waiters.delete(created.id);resolve(event);}; waiters.set(created.id,finish); const known=events.get(created.id); if(known)finish(known); });
-                    if(terminal.status!=='validated')throw new Error(format+' export ended as '+terminal.status);
+                    if(terminal.status!=='validated')throw new Error(format+' export ended as '+terminal.status+' ('+(terminal.stopReason??'no stop reason')+')');
                     const job=await data(await fetch('/api/exports/'+created.id));
                     if(job.status!=='succeeded'||!job.latest_attempt?.digests?.output||job.size_bytes<=0)throw new Error(format+' export receipt invalid');
                     const response=await fetch('/api/exports/'+created.id+'/download'); if(!response.ok)throw new Error(format+' download unavailable');
