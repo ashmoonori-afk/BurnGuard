@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
-import { ExportClosureError, resolveStaticClosure } from "../src/services/export-closure";
+import { ExportClosureError, localAssetReferences, resolveStaticClosure } from "../src/services/export-closure";
 import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "../src/services/export-html-validation";
 import { canonicalJson, sha256 } from "../src/services/export-receipt";
 import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
@@ -55,6 +55,21 @@ describe("export HTML closure boundaries", () => {
       await writeFile(path.join(root, "index.html"), `<html><body><img srcset="a.png${",".repeat(400_000)}b,"></body></html>`);
       // When / Then
       await expect(resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root))).rejects.toMatchObject({ code: "missing_asset" });
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  test("Given a million CSS url() values in a style attribute or a style element When references are collected Then they reach the reference cap instead of overflowing a spread", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-export-closure-css-"));
+    const urls = "url(a.png)".repeat(1_000_000);
+    try {
+      await writeFile(path.join(root, "a.png"), "image");
+      for (const body of [`<div style="background:${urls}"></div>`, `<style>.a{background:${urls}}</style>`]) {
+        // Given
+        await writeFile(path.join(root, "index.html"), `<html><body>${body}</body></html>`);
+        // When / Then
+        await expect(resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root))).rejects.toMatchObject({ code: "closure_limit" });
+        expect(localAssetReferences(body, "index.html")).toHaveLength(1_000_000);
+      }
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 

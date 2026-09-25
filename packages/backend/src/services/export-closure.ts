@@ -76,8 +76,8 @@ function htmlReferences(source: string, file: string): readonly string[] {
     // A loop, not a spread: a huge attribute must reach the reference cap instead of overflowing the call stack.
     if (srcset !== undefined) for (const url of srcsetUrls(srcset)) values.push(url);
   }
-  for (const style of document.querySelectorAll("style")) values.push(...cssReferences(style.text, file));
-  for (const element of document.querySelectorAll("[style]")) values.push(...cssUrlValues(element.getAttribute("style") ?? ""));
+  for (const style of document.querySelectorAll("style")) for (const url of cssReferences(style.text, file)) values.push(url);
+  for (const element of document.querySelectorAll("[style]")) for (const url of cssUrlValues(element.getAttribute("style") ?? "")) values.push(url);
   return values;
 }
 
@@ -120,7 +120,7 @@ function cssReferences(source: string, file: string): readonly string[] {
     const match = /^(?:url\()?\s*["']?([^"')\s]+)["']?/.exec(rule.params);
     if (match?.[1] !== undefined) values.push(match[1]);
   });
-  root.walkDecls((declaration) => { values.push(...cssUrlValues(declaration.value)); });
+  root.walkDecls((declaration) => { for (const url of cssUrlValues(declaration.value)) values.push(url); });
   return values;
 }
 
