@@ -164,9 +164,18 @@ export function platformFindings(job: ExportJob): readonly PlatformFindingView[]
   });
 }
 
-/** A platform package that failed its checks is explained by the findings in its export row, never by the quality panel. */
+/** A platform package that failed its checks is never explained by the quality panel. */
 export function isPlatformCheckFailure(job: ExportJob): boolean {
   return job.latest_attempt?.stop_reason === "validation_failed" && (job.format === "cafe24_package" || job.format === "imweb_package");
+}
+
+/**
+ * Failure copy for a platform check failure, or null for any other failure. A package that failed before it
+ * recorded findings (an incomplete package, an invalid asset destination) has nothing to review in its row.
+ */
+export function platformCheckFailureCopy(job: ExportJob): MessageKey | null {
+  if (!isPlatformCheckFailure(job)) return null;
+  return platformFindings(job).length > 0 ? "export.platformCheckFailed" : "errors.render_failed";
 }
 
 /** A failed export can be handed to the AI only when the attempt left findings that describe what to fix. */
