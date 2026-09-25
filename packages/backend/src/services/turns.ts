@@ -517,8 +517,9 @@ async function runUserTurnInternal(
                 run: (input) => runAdapter(backendId, input),
               });
               if (designReview.status !== "checked" || designReview.result?.overall_status === "must_fix" || !designReview.result || providerReportedFailure) throw new DesignReviewError();
-              if (sourcePages !== undefined && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages.length, sourcePages)) {
-                throw new ArtifactOperationError("publication_failed", "Source page correspondence changed during design review");
+              // A repair edits the stage after the completion gate, so repaired output is gated again.
+              if ((designReview.repairs > 0 || sourcePages !== undefined) && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages)) {
+                throw new ArtifactOperationError("publication_failed", "Design review left incomplete or remapped output");
               }
               const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
               if (encodingIssues.length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");

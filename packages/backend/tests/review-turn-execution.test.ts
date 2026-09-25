@@ -287,6 +287,26 @@ test("Given a provider that ends its message and then reports a fatal error When
   } finally { unsubscribe(); }
 });
 
+test.each([
+  ["prototype", "<h1>Finished</h1>", '<h1 data-bg-placeholder>TBD</h1>'],
+  ["slide_deck", '<section data-slide><h1>Finished</h1></section><script src="/runtime/deck-stage.js"></script>', "<section data-slide><h1>Without runtime</h1></section>"],
+] as const)("Given a %s design repair that leaves incomplete output When the turn finalizes Then nothing is published", async (type, generated, repaired) => {
+  getSqlite().prepare("UPDATE projects SET type=? WHERE id=?").run(type, projectId);
+  const before = await inspectCanonicalTree(projectDir);
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "index.html"), generated);
+    return { exitCode: 0 };
+  }, "Update wording", async (input) => {
+    await writeFile(path.join(input.adapter.projectDir, "index.html"), repaired);
+    return { status: "checked", repairs: 1, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "ready", checks: [] } };
+  });
+  await turn.promise;
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+  expect(await inspectCanonicalTree(projectDir)).toEqual(before);
+  const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
+  expect(JSON.parse(error!.payload_json).code).toBe("publication_failed");
+});
+
 test("Given a clean provider exit with empty content or missing imagery, then the saved output is repaired before publication", async () => {
   let calls = 0;
   const turn = start(async (_backend, input) => {
