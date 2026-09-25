@@ -14,7 +14,7 @@ export const PDF_PAPER_POINTS: Readonly<Record<Exclude<PdfPaper, "artboard">, { 
 export const PDF_PRINT_CSS = `
 html, body { margin: 0 !important; padding: 0 !important; }
 [data-deck-nav], [data-deck-nav-style] { display: none !important; }
-[data-slide], [data-graphic-artboard] { overflow: hidden !important; box-sizing: border-box !important; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
+[data-slide], [data-graphic-artboard] { overflow: hidden !important; box-sizing: border-box !important; vertical-align: top !important; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
 [data-slide] { width: 100vw !important; height: 100vh !important; min-height: 0 !important; max-height: 100vh !important; }
 [data-slide]:last-of-type, [data-graphic-artboard]:last-of-type { page-break-after: auto; break-after: auto; }
 `;

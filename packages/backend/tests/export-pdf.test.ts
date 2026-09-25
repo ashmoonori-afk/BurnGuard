@@ -31,6 +31,11 @@ describe("PDF_PRINT_CSS", () => {
     expect(PDF_PRINT_CSS).toContain("[data-graphic-artboard]:last-of-type");
   });
 
+  test("Given an inline-block page with overflow forced hidden When print CSS is applied Then it is top-aligned so the line strut cannot spill a second PDF page", () => {
+    // Given / When / Then
+    expect(PDF_PRINT_CSS).toMatch(/\[data-slide\], \[data-graphic-artboard\] \{[^}]*vertical-align:\s*top\s*!important/);
+  });
+
   test("does not declare an @page rule (page size is driven by the paper option)", () => {
     // The @page { size: A4 landscape } rule used to live here. After
     // P4 export audit fix 7, the user picks paper / orientation per
