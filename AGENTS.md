@@ -76,7 +76,7 @@ BurnGuard/
 ## CONVENTIONS
 
 - Startup order is contractual: migrate, seed/bootstrap, lifecycle reconciliation, then watchers. Shutdown stops intake, interrupts owned turns, closes registered Chromium instances, then forces server stop.
-- Backend binds `127.0.0.1`, canonical port `14070`; port scanning is opt-in via `BG_SCAN_PORT=1`; one process per profile (`profile-ownership.ts`, Windows mutex).
+- Backend binds `127.0.0.1`, canonical port `14070`; port scanning is opt-in via `BG_SCAN_PORT=1`; one process per profile (`profile-ownership.ts`: Windows named pipe, POSIX exclusive SQLite lock on `<profile>/.profile.lock`).
 - `@bg/shared` (snake_case fields) is the only transport authority; backend routes and frontend api/types never redeclare DTO shapes. Typecheck `packages/shared` before its consumers.
 - Envelopes: success `{ data, meta? }`, failure `{ error: { code, message, details? } }`. `/api/health` is public; `/api/bootstrap` GET same-origin mints the per-launch capability (32 random bytes, `HttpOnly SameSite=Strict` cookie + `x-burnguard-capability`, `timingSafeEqual`); unknown `Host` -> 421, else 403. Body caps 1 MiB JSON / 4 MiB draws / 64 MiB listed multipart -> 413.
 - SQLite rows + canonical filesystem receipts (canonical JSON, SHA-256 digest, revision, owner) are durable authority; in-memory locks, watcher suppression, and browser registries are not. Mutations run prepare/stage/validate/publish/commit with rollback or startup recovery.
