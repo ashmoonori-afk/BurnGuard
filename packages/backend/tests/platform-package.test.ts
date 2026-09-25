@@ -13,7 +13,7 @@ import { buildPlatformPackage, PLATFORM_TRANSFORMATION_VERSION } from "../src/se
 import { ExportPackageError, type PlatformPackageManifest } from "../src/services/export-package-validation";
 import { canonicalJson, parseExportReceipt, sha256, type ExportReceipt } from "../src/services/export-receipt";
 import { SITE_MAP_PAGE_LIMIT } from "../src/services/site-map";
-import { FIXTURE_ENTRYPOINT, stagePlatformFixture } from "./helpers/platform-package-fixture";
+import { FIXTURE_ENTRYPOINT, OVER_BUDGET_IMAGE_BYTES, stagePlatformFixture } from "./helpers/platform-package-fixture";
 
 const CAFE24_BASE = "/web/upload/burnguard/shop-site/";
 const projectName = "Shop Site";
@@ -245,6 +245,27 @@ describe("imweb code widget package", () => {
     expect(await built.text("pages/a-b.imweb.html")).toContain("<p>a-b.html</p>");
     expect(await built.text("pages/a-b-2.imweb.html")).toContain('class="bg-site bg-page-a-b-2"');
     expect(await built.text("pages/a-b-2.imweb.html")).toContain("<p>a/b.html</p>");
+  });
+
+  test("Given two over-budget images with the same basename and an asset base url When the package is built Then one destination-collision finding names both files", async () => {
+    // Given
+    const main = '<section class="hero" id="hero"><img src="img/home/bg.jpg" alt="a"><img src="img/about/bg.jpg" alt="b"><img src="img/home/bg.jpg" alt="c"></section>';
+    const prepare = async (root: string): Promise<void> => {
+      for (const folder of ["home", "about"]) {
+        await mkdir(path.join(root, "img", folder), { recursive: true });
+        await writeFile(path.join(root, "img", folder, "bg.jpg"), Buffer.alloc(OVER_BUDGET_IMAGE_BYTES, folder.length));
+      }
+    };
+
+    // When
+    const lint = await (await build("imweb_package", { asset_base_url: "https://cdn.example.com/site/" }, main, prepare)).lint();
+
+    // Then
+    const collisions = lint.findings.filter((finding) => finding.code === "platform_unresolved_destination");
+    expect(collisions).toHaveLength(1);
+    expect(collisions[0]?.severity).toBe("warning");
+    expect(collisions[0]?.evidence).toContain("img/home/bg.jpg");
+    expect(collisions[0]?.evidence).toContain("img/about/bg.jpg");
   });
 
   test("Given a fragment over one million characters When the package is built Then the export fails as a platform lint failure", async () => {

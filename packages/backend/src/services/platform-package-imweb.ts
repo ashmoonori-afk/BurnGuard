@@ -15,11 +15,21 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
   const baseUrl = input.options.asset_base_url === undefined ? null : normalizeBaseUrl(input.options.asset_base_url);
   const findings: PlatformLintFinding[] = [];
   const hosted = new Set<string>();
+  const hostedNames = new Map<string, string>();
   const resolve = (relPath: string): string | null => {
     const asset = input.staged.assets.find((item) => item.rel_path === relPath);
     if (asset === undefined) return null;
     if (isImagePath(relPath) && asset.bytes.byteLength <= IMWEB_INLINE_IMAGE_BUDGET_BYTES) return dataUri(relPath, asset.bytes);
-    if (baseUrl !== null) return safeAssetUrl(baseUrl, encodeURI(path.posix.basename(relPath)));
+    if (baseUrl !== null) {
+      // The base url is flat, so two sources sharing a basename would publish to one URL.
+      const name = path.posix.basename(relPath); const owner = hostedNames.get(name.toLocaleLowerCase("en-US")) ?? relPath;
+      hostedNames.set(name.toLocaleLowerCase("en-US"), owner);
+      if (owner !== relPath && !hosted.has(relPath)) {
+        hosted.add(relPath);
+        findings.push({ code: "platform_unresolved_destination", severity: "warning", path: relPath, evidence: `${relPath} and ${owner} both publish as ${name} under the asset base url; rename one so each keeps its own URL.` });
+      }
+      return safeAssetUrl(baseUrl, encodeURI(name));
+    }
     if (isImagePath(relPath) && !hosted.has(relPath)) {
       hosted.add(relPath);
       findings.push({ code: "imweb_image_needs_hosting", severity: "warning", path: relPath, evidence: `${asset.bytes.byteLength} bytes exceed the inline budget; attach the image to a board post and re-export with that URL.` });
