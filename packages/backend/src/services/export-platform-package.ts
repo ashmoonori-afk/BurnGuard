@@ -1,6 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { PLATFORM_GUIDES, type ExportOptions, type GraphicSetV1, type PlatformGuide, type ProjectDetail } from "@bg/shared";
+import { PLATFORM_GUIDES, type ExportOptions, type PlatformGuide, type ProjectDetail } from "@bg/shared";
 import type { FileInfo } from "@bg/shared/harness";
 import { resolveWithin } from "../security/path-boundary";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
@@ -9,7 +9,6 @@ import { ExportError } from "./export-errors";
 import { validatePlatformPackage, type PlatformPackageManifest } from "./export-package-validation";
 import { canonicalJson, sha256 } from "./export-receipt";
 import type { ExportValidation } from "./export-receipt-validation";
-import type { RenderSession } from "./export-render-session";
 import { hasBlockingFinding, lintForPlatform, type PlatformLintFinding, type PlatformTarget } from "./platform-lint";
 import { buildCafe24Package } from "./platform-package-cafe24";
 import { encode, type PlatformBuildInput, type PlatformBuildResult, type StagedAsset } from "./platform-package-contract";
@@ -40,17 +39,14 @@ export type PlatformPackageContext = {
   readonly outputPath: string;
   readonly format: "cafe24_package" | "imweb_package";
   readonly project: ProjectDetail;
-  readonly graphic_set: GraphicSetV1;
   readonly options: ExportOptions;
-  readonly browserSession: RenderSession;
-  readonly receiptWriter: (validation: ExportValidation) => Promise<void>;
   readonly onFindings?: PlatformFindingReport;
   readonly signal: AbortSignal;
 };
 
 const NOTICE_FILE = /^(?:ofl|license|copyright)|[-_](?:ofl|license)\.(?:txt|md)$/iu;
 
-/** Renders a platform ZIP from the staged tree, project and graphic-set contracts, options, browser session, receipt writer, and cancellation signal. */
+/** Renders a platform ZIP from the staged tree, project contract, options, and cancellation signal; the transformation is text-only and needs no browser. */
 export async function renderPlatformPackage(context: PlatformPackageContext): Promise<ExportValidation> {
   if (context.project.current_digest === null) throw new ExportError("platform_package_incomplete");
   context.signal.throwIfAborted();
