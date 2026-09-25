@@ -28,7 +28,7 @@ const HOST = "burnguard-windows-process-host.exe";
 const bunDirectory = path.join(tmpdir(), "bg-fixture-bun");
 const besideExecPath = path.join(bunDirectory, HOST);
 const distHost = path.resolve(import.meta.dir, "../../../dist/windows-process-host", HOST);
-const resolveHost = (env: NodeJS.ProcessEnv, present: readonly string[]) => resolveWindowsProcessHost({ env, execPath: path.join(bunDirectory, "bun.exe"), exists: (candidate) => present.includes(candidate) });
+const resolveHost = (env: NodeJS.ProcessEnv, present: readonly string[], compiled = false) => resolveWindowsProcessHost({ env, execPath: path.join(bunDirectory, "bun.exe"), compiled, exists: (candidate) => present.includes(candidate) });
 
 test("Given BG_WINDOWS_PROCESS_HOST When resolving the Windows process host Then it wins", () => {
   const configured = path.join(tmpdir(), "bg-fixture-ci", HOST);
@@ -41,6 +41,12 @@ test("Given a helper beside execPath and a dist build When resolving the Windows
 
 test("Given no helper beside bun.exe but one in dist/windows-process-host When resolving Then the dist helper is used", () => {
   expect(resolveHost({}, [distHost])).toBe(distHost);
+});
+
+test("Given a compiled run with no helper beside execPath and a dist build present When resolving Then absent_helper is thrown", () => {
+  const probed: string[] = [];
+  expect(() => resolveWindowsProcessHost({ env: {}, execPath: path.join(bunDirectory, "burnguard-design.exe"), compiled: true, exists: (candidate) => { probed.push(candidate); return candidate === distHost; } })).toThrow(expect.objectContaining({ reason: "absent_helper" }));
+  expect(probed).toEqual([besideExecPath]);
 });
 
 test("Given no helper anywhere, or a configured helper that is missing, When resolving Then OwnedProcessHostError absent_helper is thrown", () => {

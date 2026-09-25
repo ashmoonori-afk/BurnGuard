@@ -143,17 +143,19 @@ async function awaitHostExitBounded(hostExit: Promise<number>, timeoutMs: number
   finally { if (timer !== undefined) clearTimeout(timer); }
 }
 
-/** An explicit host is authoritative; otherwise the packaged helper beside execPath, then a source checkout's dist build. */
-export function resolveWindowsProcessHost(input: { readonly env: NodeJS.ProcessEnv; readonly execPath: string; readonly exists: (candidate: string) => boolean }): string {
+/** An explicit host is authoritative; otherwise the packaged helper beside execPath, then, from source only, the checkout's dist build. */
+export function resolveWindowsProcessHost(input: { readonly env: NodeJS.ProcessEnv; readonly execPath: string; readonly compiled: boolean; readonly exists: (candidate: string) => boolean }): string {
   const configured = input.env.BG_WINDOWS_PROCESS_HOST;
-  const candidates = configured !== undefined ? [configured] : [path.join(path.dirname(input.execPath), WINDOWS_PROCESS_HOST), path.resolve(import.meta.dir, "../../../../dist/windows-process-host", WINDOWS_PROCESS_HOST)];
+  const besideExecPath = path.join(path.dirname(input.execPath), WINDOWS_PROCESS_HOST);
+  // A compiled binary's import.meta.dir is Bun's virtual root, so the dist path would leave the install directory.
+  const candidates = configured !== undefined ? [configured] : input.compiled ? [besideExecPath] : [besideExecPath, path.resolve(import.meta.dir, "../../../../dist/windows-process-host", WINDOWS_PROCESS_HOST)];
   const helper = candidates.find((candidate) => input.exists(candidate));
   if (helper === undefined) throw new OwnedProcessHostError("absent_helper");
   return helper;
 }
 
 function createWindowsOwnership(): WindowsJobOwnership {
-  const helperPath = resolveWindowsProcessHost({ env: process.env, execPath: process.execPath, exists: existsSync });
+  const helperPath = resolveWindowsProcessHost({ env: process.env, execPath: process.execPath, compiled: /\$bunfs|~BUN/i.test(import.meta.url), exists: existsSync });
   const token = randomBytes(16).toString("hex");
   const receiptRoot = mkdtempSync(path.join(tmpdir(), "burnguard-owned-process-"));
   const launchReceipt = path.join(receiptRoot, "launch.json");
