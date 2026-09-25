@@ -33,6 +33,23 @@ describe("export HTML closure boundaries", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
+  test("Given a srcset descriptor that hides a comma in parentheses or a very long srcset When closure resolves Then every browser candidate is checked in linear time", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-export-closure-srcset-"));
+    try {
+      // Given: a browser drops the invalid `1x(,#)` candidate and fetches the next one.
+      await writeFile(path.join(root, "a.png"), "image");
+      for (const remote of ["https://tracker.example/p.gif", "//evil.example/p.png"]) {
+        await writeFile(path.join(root, "index.html"), `<html><body><img srcset="#a 1x(,#),${remote}"></body></html>`);
+        // When / Then
+        await expect(resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root))).rejects.toMatchObject({ code: "remote_asset" });
+      }
+      // Given: 1.5 MB of candidates, which a quadratic parser cannot even finish before the reference cap is checked.
+      await writeFile(path.join(root, "index.html"), `<html><body><img srcset="${"a.png 1x, ".repeat(150_000)}"></body></html>`);
+      // When / Then
+      await expect(resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root))).rejects.toMatchObject({ code: "closure_limit" });
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test.skipIf(!canCreateSymlink())(`Given the temp directory reached through a link When an HTML archive is validated Then the entrypoint closure resolves (${SYMLINK_SKIP_REASON})`, async () => {
     // Given
     const real = await mkdtemp(path.join(tmpdir(), "bg-html-validate-real-")); const link = `${real}-link`; await symlink(real, link, "dir");

@@ -80,13 +80,28 @@ function htmlReferences(source: string, file: string): readonly string[] {
   return values;
 }
 
-/** HTML candidate grammar: a URL is a whitespace-free run, so a comma inside a data: URL does not end its candidate. */
+/**
+ * HTML candidate grammar, in one linear pass: a URL is a run without ASCII whitespace (so a comma inside a data: URL
+ * stays in it), and its descriptors end at the first comma outside parentheses, exactly where a browser starts the next candidate.
+ */
 function srcsetUrls(srcset: string): readonly string[] {
+  const space = (character: string | undefined): boolean => character === " " || character === "\t" || character === "\n" || character === "\f" || character === "\r";
   const urls: string[] = [];
-  for (let rest = srcset.replace(/^[\s,]+/u, ""); rest !== ""; rest = rest.replace(/^[\s,]+/u, "")) {
-    const url = /^\S+/u.exec(rest)?.[0] ?? ""; rest = rest.slice(url.length);
-    if (url.endsWith(",")) urls.push(url.replace(/,+$/u, ""));
-    else { urls.push(url); const next = rest.indexOf(","); rest = next < 0 ? "" : rest.slice(next + 1); }
+  let index = 0;
+  while (index < srcset.length) {
+    while (index < srcset.length && (space(srcset[index]) || srcset[index] === ",")) index += 1;
+    const start = index;
+    while (index < srcset.length && !space(srcset[index])) index += 1;
+    if (start === index) break;
+    const url = srcset.slice(start, index);
+    if (url.endsWith(",")) { urls.push(url.replace(/,+$/u, "")); continue; }
+    urls.push(url);
+    for (let inParens = false; index < srcset.length; index += 1) {
+      const character = srcset[index];
+      if (character === "(") inParens = true;
+      else if (character === ")") inParens = false;
+      else if (character === "," && !inParens) { index += 1; break; }
+    }
   }
   return urls;
 }
