@@ -128,6 +128,37 @@ describe("product detail slicing against real Chromium", () => {
   }, 120_000);
 });
 
+describe("JPEG slice background against real Chromium", () => {
+  test.each([
+    { page: "html,body{margin:0;background:#111214;color:#ffffff}", expected: [17, 18, 20] },
+    { page: "html,body{margin:0}", expected: [255, 255, 255] },
+  ])("Given a transparent product detail over page style $page When exported as JPEG slices Then the slice background is $expected", async ({ page: pageStyle, expected }) => {
+    // Given
+    expect(usable).toBe(true);
+    const sections = Array.from({ length: 3 }, (_, index) => `<section data-bg-node-id="section-${index}" style="height:1500px;padding:40px;box-sizing:border-box;font:48px sans-serif">Section ${index + 1}</section>`).join("");
+    await writeFile(path.join(stagedDir, "jpeg.html"), `<!doctype html><html><head><meta charset="utf-8"><title>JPEG</title><style>${pageStyle}</style></head><body><main data-graphic-artboard style="width:860px">${sections}</main></body></html>`);
+    const outputPath = path.join(root, "jpeg.zip");
+    const signal = AbortSignal.timeout(60_000);
+    const session = await openRenderSession({ stagedDir, entrypoint: "jpeg.html", viewport: { width: 1280, height: 720, dpr: 1 }, deck: false, signal });
+
+    // When
+    try {
+      const { validation } = await renderPngZipWithPage({ page: capturePageFromSession(session.page), stagedDir, outputPath, deck: false, graphic_set: { schema_version: 1, kind: "product_detail", frame_count: 1 }, options: { slice_height: 5000, slice_format: "jpeg", jpeg_quality: 95 }, receiptWriter: async () => undefined, signal });
+
+      // Then
+      const archive = await JSZip.loadAsync(await readFile(outputPath));
+      for (const output of validation.outputs) {
+        const slice = await decodeFrame(archive, output.rel_path);
+        for (const [channel, value] of expected.entries()) expect(Math.abs((slice.pixel(700, 1000)[channel] ?? -255) - value)).toBeLessThanOrEqual(8);
+      }
+    } finally {
+      await session.close();
+      await rm(outputPath, { force: true });
+    }
+    expect(activeExportBrowserCount()).toBe(0);
+  }, 120_000);
+});
+
 describe("product detail section hints against real Chromium", () => {
   test("Given a product detail with three in-flow sections plus hidden and absolutely positioned node children When sliced Then only the in-flow bottoms are cut hints And the export succeeds", async () => {
     // Given

@@ -86,7 +86,11 @@ export function capturePageFromSession(page: Page): CapturePage {
       return { pageWidth: Math.round(rect.width), pageHeight: Math.round(rect.height), originX, originY, sectionBottoms };
     }, selector),
     flattenBackground: async () => {
-      await page.addStyleTag({ content: "html, body { background: #ffffff !important; }" });
+      // Only an unpainted page is flattened to white; an authored page background is what the slices must show.
+      await page.evaluate(() => {
+        const bare = [document.documentElement, document.body].every((node) => { const style = getComputedStyle(node); return style.backgroundImage === "none" && style.backgroundColor === "rgba(0, 0, 0, 0)"; });
+        if (bare) document.documentElement.style.backgroundColor = "#ffffff";
+      });
     },
     capture: async (request) => {
       const previous = await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }));
