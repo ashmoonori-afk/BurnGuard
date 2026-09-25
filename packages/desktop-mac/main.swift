@@ -348,6 +348,10 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         let errorOutput = Pipe()
         let process = Process()
         var environment = ProcessInfo.processInfo.environment
+        // Finder and Dock launches inherit launchd's minimal PATH; put the usual user tool directories first so CLIs resolve.
+        let searchPath = (environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin").split(separator: ":").map(String.init)
+        let userPaths = [NSHomeDirectory() + "/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.bun/bin"].filter { !searchPath.contains($0) }
+        environment["PATH"] = (userPaths + searchPath).joined(separator: ":")
         environment["BG_DESKTOP"] = "1"
         environment["BG_NO_OPEN"] = "1"
         environment["BG_UPDATE_WAIT_PID"] = String(ProcessInfo.processInfo.processIdentifier)

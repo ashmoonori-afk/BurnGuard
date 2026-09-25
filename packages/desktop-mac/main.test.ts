@@ -35,3 +35,15 @@ describe("macOS service pipes", () => {
     for (const handler of [stdout, stderr]) expect(handler).toMatch(/\.isEmpty \{ handle\.readabilityHandler = nil/);
   });
 });
+
+describe("macOS service environment", () => {
+  test("Given a launchd PATH When the backend environment is built Then missing user tool directories are added once ahead of the inherited entries", () => {
+    const service = body("private func startService()");
+    const assigned = service.indexOf('environment["PATH"] = ');
+    expect(assigned).toBeGreaterThan(service.indexOf("var environment = ProcessInfo.processInfo.environment"));
+    expect(assigned).toBeLessThan(service.indexOf("process.environment = environment"));
+    for (const directory of ['NSHomeDirectory() + "/.local/bin"', '"/opt/homebrew/bin"', '"/usr/local/bin"', 'NSHomeDirectory() + "/.bun/bin"']) expect(service).toContain(directory);
+    expect(service).toMatch(/\.filter \{ !searchPath\.contains\(\$0\) \}/);
+    expect(service).toContain('environment["PATH"] = (userPaths + searchPath).joined(separator: ":")');
+  });
+});
