@@ -15,6 +15,8 @@ const ERROR_COPY: Record<string, MessageKey> = {
   retention_expired: "errors.retention_expired",
   render_failed: "errors.render_failed",
   validation_failed: "errors.validation_failed",
+  invalid_export_options: "errors.invalid_export_options",
+  pdf_resource_limit: "errors.pdf_resource_limit",
   source_changed: "errors.source_changed",
   project_in_use: "errors.project_in_use",
   backend_unavailable: "errors.backend_unavailable",
