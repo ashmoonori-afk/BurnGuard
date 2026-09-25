@@ -41,19 +41,23 @@ describe("auditSiteStructure", () => {
     expect(result.findings.every((finding) => finding.severity === "recommended")).toBe(true);
   });
 
-  test("Given srcset candidates that are root-absolute first or after a bare comma When audited Then site_root_absolute_asset is reported and protocol-relative or relative candidates are not", async () => {
-    // Given
+  test("Given srcset candidates that are root-absolute first or after a bare comma When audited Then site_root_absolute_asset is reported and protocol-relative, relative or data-URI candidates are not", async () => {
+    // Given: a base64 JPEG payload starts with "/9j/" right after a comma that belongs to the URL.
+    const jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ";
     const html = new Map([
       ["index.html", '<picture><source srcset="/img/a.webp 1x"><img src="img/a.png" alt=""></picture>'],
       ["about.html", '<img srcset="img/a.png 1x,/img/b.png 2x" alt="">'],
       ["legacy.html", '<img srcset="//cdn.example/a.png 1x, img/b.png 2x" alt="">'],
+      ["data-first.html", `<img src="img/hero.jpg" srcset="${jpeg} 1x, img/hero@2x.jpg 2x" alt="">`],
+      ["data-later.html", `<img srcset="img/hero.jpg 1x, ${jpeg} 2x" alt="">`],
+      ["data-then-root.html", `<img srcset="${jpeg} 1x, /img/b.png 2x" alt="">`],
     ]);
-    const siteMap = await buildSiteMap(files, "index.html", (relPath) => html.get(relPath) ?? "");
+    const siteMap = await buildSiteMap([...html.keys()].map((rel_path) => ({ rel_path, category: "html" as const })), "index.html", (relPath) => html.get(relPath) ?? "");
 
     // When
     const result = auditSiteStructure(siteMap, [...html].map(([rel_path, source]) => ({ rel_path, html: source })));
 
     // Then
-    expect(result.findings.filter((finding) => finding.code === "site_root_absolute_asset").map((finding) => finding.rel_path)).toEqual(["index.html", "about.html"]);
+    expect(result.findings.filter((finding) => finding.code === "site_root_absolute_asset").map((finding) => finding.rel_path)).toEqual(["index.html", "about.html", "data-then-root.html"]);
   });
 });
