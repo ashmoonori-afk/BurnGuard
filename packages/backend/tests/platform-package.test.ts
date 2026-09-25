@@ -12,6 +12,7 @@ import { verifyExportDownload, ExportDownloadError } from "../src/services/expor
 import { buildPlatformPackage, PLATFORM_TRANSFORMATION_VERSION } from "../src/services/export-platform-package";
 import { ExportPackageError, type PlatformPackageManifest } from "../src/services/export-package-validation";
 import { canonicalJson, parseExportReceipt, sha256, type ExportReceipt } from "../src/services/export-receipt";
+import { SITE_MAP_PAGE_LIMIT } from "../src/services/site-map";
 import { FIXTURE_ENTRYPOINT, stagePlatformFixture } from "./helpers/platform-package-fixture";
 
 const CAFE24_BASE = "/web/upload/burnguard/shop-site/";
@@ -28,8 +29,9 @@ async function stage(main?: string): Promise<string> {
   return root;
 }
 
-async function build(format: "cafe24_package" | "imweb_package", options: ExportOptions = {}, main?: string) {
+async function build(format: "cafe24_package" | "imweb_package", options: ExportOptions = {}, main?: string, prepare?: (root: string) => Promise<void>) {
   const stagedDir = await stage(main);
+  await prepare?.(stagedDir);
   const outputPath = path.join(path.dirname(stagedDir), `${path.basename(stagedDir)}-artifact.zip`);
   const validation = await buildPlatformPackage({
     paths: { staged: stagedDir, scratch: path.join(path.dirname(stagedDir), `${path.basename(stagedDir)}-package`), output: outputPath },
@@ -45,7 +47,7 @@ async function build(format: "cafe24_package" | "imweb_package", options: Export
     if (file === null) throw new TypeError(`missing package entry: ${name}`);
     return file.async("string");
   };
-  return { validation, outputPath, bytes, names, text, lint: async () => JSON.parse(await text("lint.json")) as { readonly findings: readonly { readonly code: string; readonly severity: string }[] } };
+  return { validation, outputPath, bytes, names, text, lint: async () => JSON.parse(await text("lint.json")) as { readonly findings: readonly { readonly code: string; readonly severity: string; readonly path: string | null; readonly evidence: string }[] } };
 }
 
 describe("cafe24 smart design package", () => {
@@ -230,6 +232,57 @@ describe("platform package boundaries", () => {
     // When / Then
     const { validatePlatformPackage } = await import("../src/services/export-package-validation");
     await expect(validatePlatformPackage(await zip.generateAsync({ type: "uint8array" }), forged)).rejects.toMatchObject({ code: "unresolved_reference" });
+  });
+
+  test.each(["cafe24_package", "imweb_package"] as const)("Given an image referenced only by a subpage When %s is built Then it is shipped and rewritten", async (format) => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      const about = path.join(root, "about.html");
+      await writeFile(about, (await readFile(about, "utf8")).replace("<p>우리는 만듭니다</p>", '<img src="img/team.png" alt="team">'));
+      await writeFile(path.join(root, "img", "team.png"), Buffer.alloc(1024, 5));
+    };
+
+    // When
+    const built = await build(format, {}, undefined, prepare);
+
+    // Then
+    if (format === "cafe24_package") {
+      expect(built.names).toContain("web/shop-site/img/team.png");
+      expect(await built.text("pages/about.html")).toContain(`${CAFE24_BASE}img/team.png`);
+    } else {
+      expect(await built.text("pages/about.imweb.html")).toContain("data:image/png;base64,");
+      expect(await built.text("pages/about.imweb.html")).not.toContain('src="img/team.png"');
+    }
+  });
+
+  test("Given a subpage whose image is missing When imweb is built Then the export succeeds with a missing-asset warning for that page", async () => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      const about = path.join(root, "about.html");
+      await writeFile(about, (await readFile(about, "utf8")).replace("<p>우리는 만듭니다</p>", '<img src="img/gone.png" alt="gone">'));
+    };
+
+    // When
+    const lint = await (await build("imweb_package", {}, undefined, prepare)).lint();
+
+    // Then
+    const missing = lint.findings.filter((finding) => finding.code === "platform_missing_asset");
+    expect(missing).toHaveLength(1);
+    expect(missing[0]).toMatchObject({ severity: "warning", path: "about.html" });
+  });
+
+  test.each(["cafe24_package", "imweb_package"] as const)("Given more pages than the site-map cap When %s is built Then every page has a fragment", async (format) => {
+    // Given
+    const extra = SITE_MAP_PAGE_LIMIT + 6;
+    const prepare = async (root: string): Promise<void> => {
+      for (let index = 0; index < extra; index += 1) await writeFile(path.join(root, `p${String(index).padStart(2, "0")}.html`), `<!doctype html><html><head><title>p${index}</title></head><body><main data-bg-content><p>page ${index}</p></main></body></html>`);
+    };
+
+    // When
+    const built = await build(format, {}, undefined, prepare);
+
+    // Then
+    expect(built.names.filter((name) => name.startsWith("pages/"))).toHaveLength(extra + 2);
   });
 
   test.each(["cafe24_package", "imweb_package"] as const)("Given a built %s When one entry is edited Then package validation rejects the archive", async (format) => {

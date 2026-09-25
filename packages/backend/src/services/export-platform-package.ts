@@ -4,7 +4,7 @@ import { PLATFORM_GUIDES, type ExportOptions, type GraphicSetV1, type PlatformGu
 import type { FileInfo } from "@bg/shared/harness";
 import { resolveWithin } from "../security/path-boundary";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
-import { resolveStaticClosure } from "./export-closure";
+import { ExportClosureError, resolveStaticClosure } from "./export-closure";
 import { ExportError } from "./export-errors";
 import { validatePlatformPackage, type PlatformPackageManifest } from "./export-package-validation";
 import { canonicalJson, sha256 } from "./export-receipt";
@@ -67,10 +67,10 @@ export async function renderPlatformPackage(context: PlatformPackageContext): Pr
 export async function buildPlatformPackage(input: PlatformPackageBuild): Promise<ExportValidation> {
   const platform: PlatformTarget = input.format === "cafe24_package" ? "cafe24" : "imweb";
   const slug = packageSlug(input.project.name);
-  const staged = await stageSources(input.paths.staged, input.project.entrypoint);
+  const { staged, findings: stagingFindings } = await stageSources(input.paths.staged, input.project.entrypoint);
   const buildInput: PlatformBuildInput = { entrypoint: input.project.entrypoint, slug, options: input.options, staged };
   const built: PlatformBuildResult = platform === "cafe24" ? buildCafe24Package(buildInput) : await buildImwebPackage(buildInput);
-  const findings: readonly PlatformLintFinding[] = [...built.findings, ...dynamicReferenceFindings(staged), ...lintForPlatform({ platform, assets: built.assets, documents: built.documents })];
+  const findings: readonly PlatformLintFinding[] = [...built.findings, ...stagingFindings, ...dynamicReferenceFindings(staged), ...lintForPlatform({ platform, assets: built.assets, documents: built.documents })];
   // Reported before the blocking check so a failed export carries the finding that stopped it, not only the archive that was never written.
   input.onFindings?.(findings.map((finding) => ({ code: finding.code, path: finding.path })));
   if (hasBlockingFinding(findings)) throw new ExportError("platform_lint_failed");
@@ -108,20 +108,31 @@ export async function buildPlatformPackage(input: PlatformPackageBuild): Promise
   return { entries: manifest.entries.length };
 }
 
-async function stageSources(stagedDir: string, entrypoint: string): Promise<PlatformBuildInput["staged"]> {
+async function stageSources(stagedDir: string, entrypoint: string): Promise<{ readonly staged: PlatformBuildInput["staged"]; readonly findings: readonly PlatformLintFinding[] }> {
   const tree = await inspectCanonicalTree(stagedDir);
-  const closure = await resolveStaticClosure(stagedDir, entrypoint, tree);
+  const referenced = new Set((await resolveStaticClosure(stagedDir, entrypoint, tree)).referenced_paths);
   const files: readonly FileInfo[] = tree.files.map((file) => ({ rel_path: file.path, category: /\.html?$/iu.test(file.path) ? "html" : "other" }));
   const read = async (relPath: string): Promise<Uint8Array> => new Uint8Array(await readFile(resolveWithin(stagedDir, relPath)));
   const siteMap = await buildSiteMap(files, entrypoint, async (relPath) => readFile(resolveWithin(stagedDir, relPath), "utf8"));
-  const pagePaths = new Set(siteMap.pages.map((page) => page.rel_path));
-  const pages = await Promise.all(siteMap.pages.map(async (page) => ({ rel_path: page.rel_path, html: await readFile(resolveWithin(stagedDir, page.rel_path), "utf8") })));
-  const assetPaths = closure.referenced_paths.filter((relPath) => !pagePaths.has(relPath) && !isProjectDocumentPath(relPath));
+  // The site map is capped for prompt context; the package ships every page, site-map order first.
+  const pagePaths = new Set([...siteMap.pages.map((page) => page.rel_path), ...files.filter((file) => file.category === "html").map((file) => file.rel_path)]);
+  const pages = await Promise.all([...pagePaths].map(async (relPath) => ({ rel_path: relPath, html: await readFile(resolveWithin(stagedDir, relPath), "utf8") })));
+  const findings: PlatformLintFinding[] = [];
+  for (const relPath of pagePaths) {
+    if (relPath === entrypoint) continue;
+    // Only the entrypoint closure is authoritative; a subpage the closure cannot follow ships with a warning instead of failing the package.
+    try { for (const reference of (await resolveStaticClosure(stagedDir, relPath, tree)).referenced_paths) referenced.add(reference); }
+    catch (error) {
+      if (!(error instanceof ExportClosureError)) throw error;
+      findings.push({ code: "platform_missing_asset", severity: "warning", path: relPath, evidence: `${error.code}: ${error.asset} is not packaged with this page; fix the reference before uploading.` });
+    }
+  }
+  const assetPaths = [...referenced].sort(compare).filter((relPath) => !pagePaths.has(relPath) && !isProjectDocumentPath(relPath));
   const assets: readonly StagedAsset[] = await Promise.all(assetPaths.map(async (relPath) => ({ rel_path: relPath, bytes: await read(relPath) })));
   const fontDirectories = new Set(assets.filter((asset) => bucketFor(asset.rel_path) === "fonts").map((asset) => path.posix.dirname(asset.rel_path)));
   const noticePaths = tree.files.map((file) => file.path).filter((relPath) => fontDirectories.has(path.posix.dirname(relPath)) && NOTICE_FILE.test(path.posix.basename(relPath)) && !isProjectDocumentPath(relPath));
   const notices: readonly StagedAsset[] = await Promise.all(noticePaths.map(async (relPath) => ({ rel_path: relPath, bytes: await read(relPath) })));
-  return { pages, assets, notices, tree: tree.files.map((file) => file.path).filter((relPath) => !isProjectDocumentPath(relPath) && !pagePaths.has(relPath)) };
+  return { staged: { pages, assets, notices, tree: tree.files.map((file) => file.path).filter((relPath) => !isProjectDocumentPath(relPath) && !pagePaths.has(relPath)) }, findings };
 }
 
 function dynamicReferenceFindings(staged: PlatformBuildInput["staged"]): readonly PlatformLintFinding[] {
