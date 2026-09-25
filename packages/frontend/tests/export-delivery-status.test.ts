@@ -117,6 +117,8 @@ describe("platform lint findings", () => {
     "imweb_duplicate_id",
     "imweb_document_script",
     "platform_dynamic_reference",
+    "platform_missing_asset",
+    "platform_unresolved_destination",
     "png_zip:cut_through_content",
   ] as const)("Given the backend code %s When modeled Then it is explained instead of echoed back", (code: string) => {
     const modeled = platformFindings(job({

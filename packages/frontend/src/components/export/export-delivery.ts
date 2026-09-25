@@ -132,6 +132,14 @@ const FINDING_COPY: Record<string, { readonly severity: FindingSeverity; readonl
     severity: "warning",
     message: "export.finding.platform_dynamic_reference",
   },
+  platform_missing_asset: {
+    severity: "warning",
+    message: "export.finding.platform_missing_asset",
+  },
+  platform_unresolved_destination: {
+    severity: "warning",
+    message: "export.finding.platform_unresolved_destination",
+  },
   "png_zip:cut_through_content": {
     severity: "warning",
     message: "export.finding.png_zip:cut_through_content",
