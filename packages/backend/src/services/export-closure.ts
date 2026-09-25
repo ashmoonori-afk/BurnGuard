@@ -73,11 +73,22 @@ function htmlReferences(source: string, file: string): readonly string[] {
       if (value !== undefined) values.push(value);
     }
     const srcset = element.getAttribute("srcset");
-    if (srcset !== undefined) values.push(...srcset.split(",").map((item) => item.trim().split(/\s+/)[0] ?? ""));
+    if (srcset !== undefined) values.push(...srcsetUrls(srcset));
   }
   for (const style of document.querySelectorAll("style")) values.push(...cssReferences(style.text, file));
   for (const element of document.querySelectorAll("[style]")) values.push(...cssUrlValues(element.getAttribute("style") ?? ""));
   return values;
+}
+
+/** HTML candidate grammar: a URL is a whitespace-free run, so a comma inside a data: URL does not end its candidate. */
+function srcsetUrls(srcset: string): readonly string[] {
+  const urls: string[] = [];
+  for (let rest = srcset.replace(/^[\s,]+/u, ""); rest !== ""; rest = rest.replace(/^[\s,]+/u, "")) {
+    const url = /^\S+/u.exec(rest)?.[0] ?? ""; rest = rest.slice(url.length);
+    if (url.endsWith(",")) urls.push(url.replace(/,+$/u, ""));
+    else { urls.push(url); const next = rest.indexOf(","); rest = next < 0 ? "" : rest.slice(next + 1); }
+  }
+  return urls;
 }
 
 function cssReferences(source: string, file: string): readonly string[] {
@@ -110,7 +121,8 @@ function resolveReference(raw: string, owner: string): string | null {
   const value = raw.trim();
   if (value.length === 0 || value.startsWith("#")) return null;
   if (value.startsWith("data:")) {
-    if (!/^data:image\/(?:png|gif|jpeg|webp|svg\+xml);base64,/iu.test(value) || value.length > MAX_DATA_IMAGE_BYTES * 2) throw new ExportClosureError("unsafe_asset", value.slice(0, 64));
+    // Image and font media types the artifact CSP admits via data:, in base64 or percent-encoded form.
+    if (!/^data:(?:image\/(?:png|gif|jpeg|webp|avif|svg\+xml)|font\/(?:woff2?|ttf|otf))(?:;[a-z0-9=._-]+)*,/iu.test(value) || value.length > MAX_DATA_IMAGE_BYTES * 2) throw new ExportClosureError("unsafe_asset", value.slice(0, 64));
     return null;
   }
   let url: URL;

@@ -177,6 +177,27 @@ describe("export validation contracts", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
+  test("Given data URIs the artifact CSP admits and a srcset data candidate When closure resolves Then only local files are referenced and non-image data fails closed", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-export-closure-data-"));
+    const closureCode = async (): Promise<string> => {
+      try { await resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root)); return "resolved"; }
+      catch (error) { if (!(error instanceof ExportClosureError)) throw error; return `${error.code}:${error.asset}`; }
+    };
+    try {
+      // Given
+      const admitted = `<html><body><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Ccircle cx='110' cy='110' r='100' fill='%23f06'/%3E%3C/svg%3E"><img src="data:image/avif;base64,AAAAIGZ0eXBhdmlm"><img srcset="data:image/png;base64,iVBORw0KGgo= 1x, b.png 2x"><style>@font-face{font-family:x;src:url(data:font/woff2;base64,d09GMgABAAAAAA==)}.a{background:url("data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22/>")}</style></body></html>`;
+      await writeFile(path.join(root, "index.html"), admitted); await writeFile(path.join(root, "b.png"), "image");
+      // When / Then
+      expect((await resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root))).referenced_paths).toEqual(["b.png"]);
+      await rm(path.join(root, "b.png"));
+      expect(await closureCode()).toBe("missing_asset:b.png");
+      for (const rejected of ['<img src="data:text/html,%3Cscript%3Ealert(1)%3C/script%3E">', '<script src="data:application/javascript,alert(1)"></script>', '<img src="data:image/svg+xml">']) {
+        await writeFile(path.join(root, "index.html"), `<html><body>${rejected}</body></html>`);
+        expect(await closureCode()).toStartWith("unsafe_asset:");
+      }
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test("Given PNG chunks and deterministic pixels When validated Then dimensions and statistics are exact", () => {
     const bytes = png(2, 2, [255, 255, 255, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255]);
     expect(parsePng(bytes)).toEqual({ width: 2, height: 2 });
