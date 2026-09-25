@@ -66,7 +66,8 @@ export function platformPackageOptions(
       key: "imweb_package",
       format: "imweb_package",
       label: t("export.option.imweb"),
-      ...(entered === "" ? {} : { options: { asset_base_url: entered } }),
+      // A site-relative Cafe24 upload path does not exist on Imweb, which has no FTP; only an https host is shared.
+      ...(/^https:\/\//iu.test(entered) ? { options: { asset_base_url: entered } } : {}),
       fields: [IMWEB_URL_FIELD],
       ...disabled,
     },

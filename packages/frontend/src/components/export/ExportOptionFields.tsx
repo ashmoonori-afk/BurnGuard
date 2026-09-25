@@ -8,13 +8,18 @@ import type {
 const CONTROL_CLASS =
   "flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
 
+/** One input per kind; Cafe24 and Imweb explain the shared asset URL differently, so every distinct hint is kept. */
 function uniqueFields(
   options: readonly ExportMenuOption[],
-): readonly ExportOptionField[] {
-  const seen = new Map<string, ExportOptionField>();
+): readonly (ExportOptionField & { readonly hints: readonly string[] })[] {
+  const seen = new Map<string, ExportOptionField & { hints: string[] }>();
   for (const option of options) {
     if (option.disabledReason !== undefined) continue;
-    for (const field of option.fields ?? []) if (!seen.has(field.kind)) seen.set(field.kind, field);
+    for (const field of option.fields ?? []) {
+      const known = seen.get(field.kind);
+      if (known === undefined) seen.set(field.kind, { ...field, hints: [field.hint] });
+      else if (!known.hints.includes(field.hint)) known.hints.push(field.hint);
+    }
   }
   return [...seen.values()];
 }
@@ -58,7 +63,7 @@ export default function ExportOptionFields({
               disabled={disabled}
               onChange={(event) => onChange({ ...values, assetBaseUrl: event.target.value })}
             />
-            <p className="text-pretty break-keep text-[10px] text-muted-foreground">{field.hint}</p>
+            {field.hints.map((hint) => <p key={hint} className="text-pretty break-keep text-[10px] text-muted-foreground">{hint}</p>)}
           </div>
         ) : (
           <div key={field.kind} className="space-y-1">
