@@ -164,6 +164,8 @@ export const chatMessages = defineMessages({
     en: "Revert to before this turn",
     "zh-CN": "恢复到本轮之前",
   },
+  "chat.user.revertAccept": { ko: "되돌리기", en: "Revert", "zh-CN": "恢复" },
+  "chat.user.revertCancel": { ko: "취소", en: "Cancel", "zh-CN": "取消" },
   "chat.user.revert": { ko: "이 턴 되돌리기", en: "Revert this turn", "zh-CN": "撤销本轮" },
   "chat.user.reverting": { ko: "되돌리는 중…", en: "Reverting…", "zh-CN": "正在恢复…" },
   "chat.turn.pending": {

@@ -1,7 +1,17 @@
+import { useState } from "react";
 import { Paperclip, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentEditDisplayText } from "@/components/modes/comment-edit-request";
 import { useT } from "@/i18n/t";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export default function UserMessage({
   text,
@@ -18,6 +28,8 @@ export default function UserMessage({
 }) {
   const t = useT();
   const canRevert = Boolean(turnId && onRevert);
+  // An in-app dialog: the macOS WKWebView shell answers native confirm() with Cancel.
+  const [confirming, setConfirming] = useState(false);
   return (
     <div className="group flex flex-col items-end gap-1">
       <div className="max-w-[94%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-md border border-primary/15 bg-primary/5 px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
@@ -31,10 +43,10 @@ export default function UserMessage({
       {canRevert && (
         <button
           type="button"
+          data-qa="turn-revert"
           onClick={() => {
             if (!turnId || !onRevert || reverting) return;
-            const ok = window.confirm(t("chat.user.revertConfirm"));
-            if (ok) onRevert(turnId);
+            setConfirming(true);
           }}
           disabled={reverting}
           title={t("chat.user.revertTitle")}
@@ -46,6 +58,31 @@ export default function UserMessage({
           <RotateCcw className="h-3 w-3" />
           <span>{reverting ? t("chat.user.reverting") : t("chat.user.revert")}</span>
         </button>
+      )}
+      {canRevert && (
+        <Dialog open={confirming} onOpenChange={setConfirming}>
+          <DialogContent className="max-w-md" data-qa="revert-confirm">
+            <DialogHeader>
+              <DialogTitle className="break-keep leading-snug">{t("chat.user.revertTitle")}</DialogTitle>
+              <DialogDescription className="break-keep">{t("chat.user.revertConfirm")}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="pt-2 border-t border-border">
+              <Button variant="ghost" data-qa="revert-cancel" onClick={() => setConfirming(false)}>
+                {t("chat.user.revertCancel")}
+              </Button>
+              <Button
+                variant="destructive"
+                data-qa="revert-accept"
+                onClick={() => {
+                  setConfirming(false);
+                  if (turnId && onRevert) onRevert(turnId);
+                }}
+              >
+                {t("chat.user.revertAccept")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
