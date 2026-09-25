@@ -24,7 +24,8 @@ async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Pro
   const safeId = assertSafeName(row.attempt_id); const stage = resolveWithin(root, ".staging", safeId); const published = resolveWithin(root, "attempts", safeId);
   const cancelRequested = () => db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(row.attempt_id)?.requested === 1;
   const cancel = async () => {
-    await rm(stage, { recursive: true, force: true }); await rm(published, { recursive: true, force: true });
+    // Cleanup is best-effort: a held handle must not block the terminal transition or startup.
+    await rm(stage, { recursive: true, force: true }).catch(() => undefined); await rm(published, { recursive: true, force: true }).catch(() => undefined);
     failExportAttempt(db, { jobId: row.job_id, attemptId: row.attempt_id, status: "cancelled", reason: "user_cancelled", message: "Export cancelled" });
     emitRecovery(db, row, "cancelled", "user_cancelled");
   };
@@ -56,7 +57,7 @@ async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Pro
     completion = { jobId: row.job_id, attemptId: row.attempt_id, outputPath: finalOutput, size: info.size, outputDigest, receiptDigest: expectedReceipt, projectId: row.project_id, projectRevision: row.project_revision, projectDigest: row.project_digest };
   } catch (error) {
     if (cancelRequested()) { await cancel(); return; }
-    await rm(stage, { recursive: true, force: true });
+    await rm(stage, { recursive: true, force: true }).catch(() => undefined);
     markExportAttemptCorrupt(db, { jobId: row.job_id, attemptId: row.attempt_id, message: error instanceof Error ? error.message : String(error) }); emitRecovery(db, row, "corrupt", "receipt_corrupt");
     return;
   }
@@ -70,7 +71,7 @@ async function cleanOrphanStages(db: Database, root: string): Promise<void> {
     if (!entry.isDirectory()) continue;
     try { assertSafeName(entry.name); } catch { continue; }
     const exists = db.query<{ readonly value: number }, [string]>("SELECT 1 value FROM export_attempts WHERE id=?").get(entry.name);
-    if (exists === null) await rm(resolveWithin(staging, entry.name), { recursive: true, force: true });
+    if (exists === null) await rm(resolveWithin(staging, entry.name), { recursive: true, force: true }).catch(() => undefined);
   }
 }
 function emitRecovery(db: Database, row: RecoveryRow, status: "validated" | "failed" | "corrupt" | "cancelled", stopReason: "recovery_failed" | "receipt_corrupt" | "user_cancelled" | null): void {

@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import * as fsp from "node:fs/promises";
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -173,6 +174,25 @@ describe("export authority migration", () => {
     expect(db.query("SELECT status,stop_reason FROM export_attempts WHERE id=?").get(missing.attemptId)).toEqual({ status: "failed", stop_reason: "recovery_failed" });
     const malformed = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "png", options: { png_width: 320, png_height: 240, png_dpr: 1 }, rendererDigest: "r", captureDigest: "c" }); db.prepare("UPDATE export_attempts SET status='running' WHERE id=?").run(malformed.attemptId); const stage = path.join(root, ".staging", malformed.attemptId); await mkdir(stage, { recursive: true }); await writeFile(path.join(stage, "receipt.json"), "{}"); await reconcileExportState(db, root);
     expect(db.query("SELECT status,stop_reason FROM export_attempts WHERE id=?").get(malformed.attemptId)).toEqual({ status: "corrupt", stop_reason: "receipt_corrupt" });
+  });
+
+  test("Given a cancelled attempt, a corrupt attempt and an orphan stage whose removal rejects with EBUSY When recovery runs Then it resolves and both attempts are terminal", async () => {
+    // Given
+    const db = await migratedDatabase(); seedProject(db); const root = await mkdtemp(path.join(tmpdir(), "bg-export-recovery-busy-")); directories.push(root);
+    const cancelled = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "html_zip", options: {}, rendererDigest: "r", captureDigest: "c" });
+    db.prepare("UPDATE export_attempts SET status='running' WHERE id=?").run(cancelled.attemptId); requestExportCancellation(db, cancelled.attemptId);
+    await mkdir(path.join(root, ".staging", cancelled.attemptId, "render"), { recursive: true });
+    const corrupt = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "html_zip", options: {}, rendererDigest: "r", captureDigest: "c" });
+    db.prepare("UPDATE export_attempts SET status='running' WHERE id=?").run(corrupt.attemptId);
+    await mkdir(path.join(root, "attempts", corrupt.attemptId), { recursive: true }); await writeFile(path.join(root, "attempts", corrupt.attemptId, "receipt.json"), "{}");
+    await mkdir(path.join(root, ".staging", "01ORPHANSTAGE0000000000000"), { recursive: true });
+    const original = fsp.rm;
+    const busy = spyOn(fsp, "rm").mockImplementation(async (target, options) => { if (String(target).startsWith(root)) throw Object.assign(new Error("resource busy"), { code: "EBUSY" }); return original(target, options); });
+    // When
+    try { await reconcileExportState(db, root); } finally { busy.mockRestore(); }
+    // Then
+    expect(db.query("SELECT status,stop_reason FROM export_attempts WHERE id=?").get(cancelled.attemptId)).toEqual({ status: "cancelled", stop_reason: "user_cancelled" });
+    expect(db.query("SELECT status,stop_reason FROM export_attempts WHERE id=?").get(corrupt.attemptId)).toEqual({ status: "corrupt", stop_reason: "receipt_corrupt" });
   });
 
   test("Given a forged PDF cross-field receipt When recovery runs Then authority becomes typed corrupt without digest propagation", async () => {

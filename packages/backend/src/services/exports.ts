@@ -82,7 +82,7 @@ export async function enqueueProjectExport(projectId: string, format: ExportForm
   const ids = createExportAuthority(getSqlite(), { ...context.identity, format, options, rendererDigest: context.rendererDigest, captureDigest: context.captureDigest });
   emit(context.identity, ids, "pending", { stage: "queued", completed: 0, total: 6 }, null);
   const controller = new AbortController(); active.set(ids.attemptId, controller);
-  void runExport({ ...ids, context, controller, hooks }).finally(() => active.delete(ids.attemptId));
+  void runExport({ ...ids, context, controller, hooks }).catch((error: unknown) => { console.warn("[export] attempt settlement failed", ids.attemptId, error instanceof Error ? String(Reflect.get(error, "code") ?? error.name) : "unknown"); }).finally(() => active.delete(ids.attemptId));
   return getExportJob(ids.jobId);
 }
 
@@ -92,7 +92,7 @@ export async function retryProjectExport(jobId: string, hooks: ExportHooks = {})
   const attemptId = createRetryAuthority(getSqlite(), { jobId, parentAttemptId: job.latest_attempt.id, identity: context.identity, rendererDigest: context.rendererDigest, captureDigest: context.captureDigest });
   const controller = new AbortController(); active.set(attemptId, controller);
   emit(context.identity, { jobId, attemptId }, "retrying", { stage: "queued", completed: 0, total: 6 }, null);
-  void runExport({ jobId, attemptId, context, controller, hooks }).finally(() => active.delete(attemptId));
+  void runExport({ jobId, attemptId, context, controller, hooks }).catch((error: unknown) => { console.warn("[export] attempt settlement failed", attemptId, error instanceof Error ? String(Reflect.get(error, "code") ?? error.name) : "unknown"); }).finally(() => active.delete(attemptId));
   return getExportJob(jobId);
 }
 
@@ -150,8 +150,9 @@ async function runExport(input: RunInput): Promise<void> {
     const completedEvent = completeExportAttemptWithEvent(db, { jobId: input.jobId, attemptId: input.attemptId, outputPath, size: outputInfo.size, outputDigest, receiptDigest: sha256(receiptJson), projectId: context.identity.projectId, projectRevision: context.identity.revision, projectDigest: context.identity.digest });
     publishPersistedExportAttemptEvent(completedEvent);
   } catch (error) {
-    if (stageRoot !== null) await rm(stageRoot, { recursive: true, force: true });
-    if (publishedRoot !== null) await rm(publishedRoot, { recursive: true, force: true });
+    // Cleanup is best-effort: a held handle must not keep the attempt from reaching its terminal state.
+    if (stageRoot !== null) await rm(stageRoot, { recursive: true, force: true }).catch(() => undefined);
+    if (publishedRoot !== null) await rm(publishedRoot, { recursive: true, force: true }).catch(() => undefined);
     const cancelled = input.controller.signal.aborted || db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(input.attemptId)?.requested === 1; const reason: ExportStopReason = cancelled ? "user_cancelled" : exportStopReason(error);
     failExportAttempt(db, { jobId: input.jobId, attemptId: input.attemptId, status: cancelled ? "cancelled" : "failed", reason, message: error instanceof Error ? error.message : String(error) });
     emit(context.identity, input, cancelled ? "cancelled" : "failed", { stage: "rendering", completed: 2, total: 6 }, reason);
