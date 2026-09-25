@@ -40,6 +40,8 @@ export async function repairLogoCompletion(input: {
   readonly reason: TurnRejectionReason;
   readonly violation: LogoSvgViolation;
   readonly run: (input: AdapterRunInput) => Promise<AdapterRunResult>;
+  /** The repair's own deadline; injected so tests drive it by signal instead of elapsed time. */
+  readonly deadline?: AbortSignal;
 }): Promise<boolean> {
   const signal = input.adapter.signal ?? new AbortController().signal;
   const toolCallId = ulid();
@@ -52,7 +54,7 @@ export async function repairLogoCompletion(input: {
   let exitCode = 1;
   try {
     signal.throwIfAborted();
-    const repairSignal = AbortSignal.any([signal, AbortSignal.timeout(REPAIR_TIMEOUT_MS)]);
+    const repairSignal = AbortSignal.any([signal, input.deadline ?? AbortSignal.timeout(REPAIR_TIMEOUT_MS)]);
     const prompt = repairPrompt(input.adapter.projectDir, input.reason, input.violation);
     const result = await input.run({
       ...input.adapter,
@@ -75,8 +77,14 @@ export async function repairLogoCompletion(input: {
         if (event.type === "chat.message_end") return;
         await input.adapter.onEvent(event);
       },
+    }).catch((error: unknown) => {
+      // Only the repair's own deadline is a refusal; parent cancellation and every other failure keep their authority.
+      signal.throwIfAborted();
+      if (repairSignal.aborted) return null;
+      throw error;
     });
-    repairSignal.throwIfAborted();
+    signal.throwIfAborted();
+    if (result === null || repairSignal.aborted) return false;
     exitCode = result.exitCode;
     return exitCode === 0 && !failed && imageCalls === 0;
   } finally {

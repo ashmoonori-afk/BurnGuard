@@ -12,6 +12,7 @@ import { projectsDir } from "../src/lib/paths";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { broker } from "../src/services/broker";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
+import { repairLogoCompletion } from "../src/services/logo-completion-repair";
 import { logoSvgContract } from "../src/services/logo-svg-validation";
 import { interruptUserTurn, startUserTurn } from "../src/services/turns";
 
@@ -349,4 +350,31 @@ test("Given a nonrepairable provenance failure in an explore turn Then no repair
     unsubscribe();
     interruptUserTurn(sessionId);
   }
+});
+
+function repairInput(events: NormalizedEvent[], run: Parameters<typeof repairLogoCompletion>[0]["run"], deadline: AbortSignal): Parameters<typeof repairLogoCompletion>[0] {
+  return {
+    adapter: { sessionId, turnId: "repair-deadline", projectDir, binaryPath: "unused", prompt: "fixture", userEvent: { type: "user.message", text: "fixture" }, onEvent: async event => { events.push(event); } },
+    reason: "logo_svg_invalid", violation: "svg_forbidden_attribute", run, deadline,
+  };
+}
+
+test.each(["throws", "returns"] as const)("Given the repair's own deadline expires while the adapter %s When the repair settles Then it is a refusal instead of an escaped timeout", async (settle) => {
+  const deadline = new AbortController();
+  const events: NormalizedEvent[] = [];
+  const repaired = await repairLogoCompletion(repairInput(events, async (input) => {
+    deadline.abort(new DOMException(PRIVATE_DIAGNOSTIC, "TimeoutError"));
+    if (settle === "throws") input.signal?.throwIfAborted();
+    return { exitCode: 1 };
+  }, deadline.signal));
+  expect(repaired).toBe(false);
+  expect(events.at(-1)).toMatchObject({ type: "tool.finished", tool: "generation_logo_repair", ok: false });
+  expect(JSON.stringify(events)).not.toContain(PRIVATE_DIAGNOSTIC);
+});
+
+test("Given a repair adapter failure that is not the deadline When the repair settles Then the failure keeps its authority", async () => {
+  const failure = Object.assign(new Error(PRIVATE_DIAGNOSTIC), { code: "EACCES" });
+  const events: NormalizedEvent[] = [];
+  await expect(repairLogoCompletion(repairInput(events, async () => { throw failure; }, new AbortController().signal))).rejects.toBe(failure);
+  expect(events.at(-1)).toMatchObject({ type: "tool.finished", tool: "generation_logo_repair", ok: false });
 });
