@@ -109,6 +109,33 @@ test("Given a five-unit deck and a failed final batch, then phases run sequentia
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test("Given a plan saved with a UTF-8 BOM and CRLF When the plan phase checks it Then content phases start", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-phase-bom-"));
+  let planCalls = 0;
+  let contentCalls = 0;
+  let currentPhase = "";
+  try {
+    const result = await runGenerationPhases({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "Create 1 slide", userEvent: { type: "user.message", text: "Create 1 slide" }, onEvent: async event => {
+      if (event.type === "tool.started" && event.tool.startsWith("generation_phase_")) currentPhase = event.tool;
+    } }, "deck.html", async input => {
+      const file = path.join(dir, "deck.html");
+      if (currentPhase === "generation_phase_plan") {
+        planCalls++;
+        const plan = input.prompt.match(/\.burnguard-inputs\/phases-[A-Z0-9]+\/plan\.json/)![0];
+        await writeFile(path.join(dir, plan), `﻿${JSON.stringify({ units: ["Overview"] })}\r\n`);
+        await writeFile(file, '<section class="deck-slide" data-slide data-bg-unit="1" data-bg-placeholder>Pending</section><script src="/runtime/deck-stage.js"></script>');
+      } else {
+        contentCalls++;
+        await writeFile(file, '<section class="deck-slide" data-slide data-bg-unit="1" data-bg-complete="true"><h1>Our product overview</h1></section><script src="/runtime/deck-stage.js"></script>');
+      }
+      return { exitCode: 0 };
+    }, "slide_deck");
+    expect(result.exitCode).toBe(0);
+    expect(planCalls).toBe(1);
+    expect(contentCalls).toBe(1);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("Given an invalid plan, then the server bounds retries and never starts content phases", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "bg-phase-limit-"));
   let calls = 0;

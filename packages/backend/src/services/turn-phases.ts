@@ -30,7 +30,7 @@ export async function runGenerationPhases(input: AdapterRunInput, entrypoint: st
     return readFile(file, "utf8");
   };
   const readPlan = async () => {
-    const value: unknown = JSON.parse(await readOwned([...folder, "plan.json"], 32_768));
+    const value: unknown = JSON.parse((await readOwned([...folder, "plan.json"], 32_768)).replace(/^\uFEFF/, ""));
     if (!value || typeof value !== "object" || !("units" in value) || !Array.isArray(value.units) || value.units.length < 1 || value.units.length > 80 || !value.units.every((unit: unknown) => typeof unit === "string" && unit.trim().length > 0 && unit.length <= 300)) return false;
     if (sourcePages !== undefined && value.units.length !== sourcePages.length) return false;
     units = value.units;

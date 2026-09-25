@@ -199,6 +199,12 @@ describe("logo manifest reader", () => {
     expect(await readLogoManifest(dir)).toEqual(manifestOf(1));
   });
 
+  test("Given a manifest saved with a UTF-8 BOM and CRLF When read Then it is parsed", async () => {
+    const dir = await stage();
+    await writeManifest(dir, `﻿${JSON.stringify(manifestOf(1))}\r\n`);
+    expect(await readLogoManifest(dir)).toEqual(manifestOf(1));
+  });
+
   test("Given unparseable JSON When read Then a typed deliverable error is thrown", async () => {
     const dir = await stage();
     await writeManifest(dir, "{ not json");

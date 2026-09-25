@@ -107,6 +107,11 @@ describe("logo design system sync", () => {
     expect(systemCount()).toEqual(before);
   });
 
+  test("Given a patch saved with a UTF-8 BOM and CRLF When applied Then it applies like the plain patch", async () => {
+    const dir = await projectStage({ "design-system-patch.json": `﻿${JSON.stringify(patch)}\r\n`, "logo.svg": LOGO_SVG });
+    expect(await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId, expectedSource: "explorations/round-1/candidate-2.png" })).toMatchObject({ applied: true, colors: 2, asset: true });
+  });
+
   test("Given a README without a logo section When applied Then the section is appended", async () => {
     await writeFile(path.join(systemDir, "README.md"), "# System\n\n## Colors\n\nOnly colours.\n");
     const dir = await projectStage({ "design-system-patch.json": JSON.stringify(patch), "logo.svg": LOGO_SVG });
