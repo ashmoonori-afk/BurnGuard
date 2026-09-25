@@ -177,8 +177,8 @@ test("Given child ids whose parents are themselves suffixed user turns When proj
 });
 
 test("Given a long session with many deck-review child events When projected Then parents resolve without a per-turn search", () => {
-  // Given: 20,000 turns x 5 review events. Searching the user turns for each child event or child id costs at least
-  // 400M string comparisons, minutes on a 2 GHz core; resolving each child by its suffix takes milliseconds.
+  // Given: 20,000 turns x 5 review events. Scanning the user turns per child event with a string or RegExp built per
+  // candidate, as the pre-fix code did, runs for minutes here; resolving each child by its suffix takes milliseconds.
   const events: NormalizedEvent[] = [];
   for (let turn = 0; turn < 20_000; turn += 1) {
     const turnId = `${FIRST}-${turn}`;
