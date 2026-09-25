@@ -27,6 +27,7 @@ export const errorsMessages = defineMessages({
   "errors.source_changed": { ko: "내보내는 동안 원본이 바뀌었어요. 최신 원본으로 다시 내보내 주세요.", en: "The source changed during export. Export again using the latest source.", "zh-CN": "导出期间源文件发生变化。请使用最新源文件重新导出。" },
   "errors.project_in_use": { ko: "복구 기록이나 진행 중인 작업이 연결되어 삭제할 수 없어요. 프로젝트와 파일은 유지돼요.", en: "Cannot delete while recovery records or active tasks are linked. The project and files are preserved.", "zh-CN": "关联了恢复记录或进行中的任务，无法删除。项目和文件将保留。" },
   "errors.backend_unavailable": { ko: "선택한 AI 도구를 실행할 수 없어요. 설정에서 설치 상태를 확인해 주세요.", en: "Cannot run the selected AI tool. Check its installation in Settings.", "zh-CN": "无法运行所选 AI 工具。请在设置中检查安装状态。" },
+  "errors.install_start_failed": { ko: "설치 프로그램을 실행하지 못했어요. 설정의 설치 상태를 확인하고, 계속 실패하면 앱을 다시 설치해 주세요.", en: "Could not start the installer. Check the install status in Settings, and reinstall the app if it keeps failing.", "zh-CN": "无法启动安装程序。请在设置中检查安装状态，如仍然失败，请重新安装应用。" },
   "errors.path_unavailable": { ko: "프로젝트 파일에 접근하지 못했어요. 파일을 확인하고 다시 시도해 주세요.", en: "Could not access the project file. Check the file and try again.", "zh-CN": "无法访问项目文件。请检查文件后重试。" },
   "errors.immutable_reference_mutated": { ko: "원본 참고 자료 변경을 감지해 작업을 중단했어요. 원본을 유지한 채 다시 요청해 주세요.", en: "Work stopped because an original reference was changed. Keep the original intact and request again.", "zh-CN": "检测到原始参考资料被更改，任务已停止。请保留原件后重新请求。" },
   "errors.immutable_reference_path_unavailable": { ko: "원본 참고 자료를 찾을 수 없어요. 자료를 다시 첨부해 주세요.", en: "Original reference not found. Attach it again.", "zh-CN": "未找到原始参考资料。请重新添加附件。" },

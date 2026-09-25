@@ -20,6 +20,7 @@ const ERROR_COPY: Record<string, MessageKey> = {
   source_changed: "errors.source_changed",
   project_in_use: "errors.project_in_use",
   backend_unavailable: "errors.backend_unavailable",
+  install_start_failed: "errors.install_start_failed",
   agent_control_files_present: "errors.agent_control_files_present",
   path_unavailable: "errors.path_unavailable",
   immutable_reference_mutated: "errors.immutable_reference_mutated",
