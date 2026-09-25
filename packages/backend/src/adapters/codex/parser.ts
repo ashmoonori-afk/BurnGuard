@@ -196,7 +196,6 @@ function mapStructured(
       ];
     }
 
-    case "error":
     case "status.error": {
       const message = asString(obj.message) ?? "Codex reported an error";
       const recoverable =
