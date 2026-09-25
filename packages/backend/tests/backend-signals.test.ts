@@ -19,11 +19,13 @@ async function backendEnv(): Promise<{ readonly app: string; readonly env: Recor
 
 /** Resolves once the backend prints its listening line; the spawn timeout bounds the wait. */
 async function listening(stdout: ReadableStream<Uint8Array>): Promise<string> {
-  const decoder = new TextDecoder(); let text = "";
-  for await (const chunk of stdout) {
-    text += decoder.decode(chunk, { stream: true });
-    if (/\[burnguard\] listening on http:\/\/127\.0\.0\.1:\d+\n/.test(text)) return text;
-  }
+  const reader = stdout.getReader(); const decoder = new TextDecoder(); let text = "";
+  try {
+    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+      text += decoder.decode(chunk.value, { stream: true });
+      if (/\[burnguard\] listening on http:\/\/127\.0\.0\.1:\d+\n/.test(text)) return text;
+    }
+  } finally { reader.releaseLock(); }
   throw new Error(`backend exited before listening: ${text}`);
 }
 
