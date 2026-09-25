@@ -118,7 +118,28 @@ describe("deck PDF layout", () => {
       }
     } finally { await rm(stagedDir, { recursive: true, force: true }); }
   }, 60_000);
+
+  test("Given transparent slides over a dark page background When exported to widescreen PDF Then the page prints the authored background And a slide painting its own white stays white", async () => {
+    // Given
+    const stagedDir = await mkdtemp(path.join(tmpdir(), "bg-deck-pdf-background-"));
+    try {
+      await writeFile(path.join(stagedDir, "index.html"), darkDeckHtml);
+      const outputPath = path.join(stagedDir, "deck.pdf");
+
+      // When
+      await renderDeckToPdf({ stagedDir, entrypoint: "index.html", outputPath, paper: "widescreen-16x9", title: "Dark", signal: AbortSignal.timeout(45_000) });
+
+      // Then
+      const [dark, white] = await rasterizePdf(outputPath);
+      if (dark === undefined || white === undefined) throw new TypeError("expected two PDF pages");
+      for (const [channel, value] of [17, 18, 20].entries()) expect(Math.abs((pixelAt(dark, dark.width / 2, 4)[channel] ?? -255) - value)).toBeLessThanOrEqual(2);
+      expect(pixelAt(white, white.width / 2, 4).slice(0, 3)).toEqual([255, 255, 255]);
+    } finally { await rm(stagedDir, { recursive: true, force: true }); }
+  }, 60_000);
 });
+
+/** A dark page background under a transparent slide, then a slide that paints its own white background. */
+const darkDeckHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Dark</title><style>html,body{margin:0;background:#111214;color:#f4f4ee;font-family:sans-serif}body[data-deck-ready] .slide:not([data-active]){display:none}.slide{width:100vw;height:100vh;padding:80px;box-sizing:border-box}h1{margin:0;font-size:120px}</style><script src="/runtime/deck-stage.js" defer></script></head><body><section data-slide class="slide"><h1>Dark</h1></section><section data-slide class="slide" style="background:#ffffff;color:#111214"><h1>Light</h1></section></body></html>`;
 
 /** Two gated grid slides: the gate hides inactive slides the way the slide-deck template does. */
 const twoColumnDeckHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Columns</title><style>html,body{margin:0}body[data-deck-ready] .slide:not([data-active]){display:none}.slide{width:100vw;height:100vh;display:grid;grid-template-columns:1fr 1fr;align-items:center;justify-items:center;background:#ffffff;box-sizing:border-box;padding:40px}.box{width:200px;height:200px}</style><script src="/runtime/deck-stage.js" defer></script></head><body>${Array.from({ length: 2 }, () => '<section data-slide class="slide"><div class="box" style="background:#e03050"></div><div class="box" style="background:#3050e0"></div></section>').join("")}</body></html>`;
@@ -139,6 +160,8 @@ async function rasterizePdf(file: string, scale = 4 / 3): Promise<readonly Raste
     return pages;
   } finally { await pdf.destroy(); }
 }
+
+function pixelAt(raster: Raster, x: number, y: number): readonly number[] { const offset = (Math.round(y) * raster.width + Math.round(x)) * 4; return Array.from(raster.data.subarray(offset, offset + 4)); }
 
 function centroid(raster: Raster, rgb: readonly [number, number, number], tolerance = 24): { readonly x: number; readonly y: number; readonly count: number } {
   let x = 0; let y = 0; let count = 0;

@@ -9,6 +9,10 @@ describe("PDF_PRINT_CSS", () => {
     expect(PDF_PRINT_CSS).toMatch(/display:\s*none\s*!important/);
   });
 
+  test("Given a deck painting its page background When print CSS is applied Then the html and body background is left to the author", () => {
+    expect(PDF_PRINT_CSS).not.toMatch(/background/);
+  });
+
   test("breaks a page between slides except after the last", () => {
     expect(PDF_PRINT_CSS).toContain("page-break-after: always");
     expect(PDF_PRINT_CSS).toContain("break-after: page");

@@ -13,7 +13,7 @@ export const PDF_PAPER_POINTS: Readonly<Record<Exclude<PdfPaper, "artboard">, { 
 };
 
 export const PDF_PRINT_CSS = `
-html, body { margin: 0 !important; padding: 0 !important; background: #ffffff !important; }
+html, body { margin: 0 !important; padding: 0 !important; }
 [data-deck-nav], [data-deck-nav-style] { display: none !important; }
 [data-slide], [data-graphic-artboard] { overflow: hidden !important; box-sizing: border-box !important; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
 [data-slide] { width: 100vw !important; height: 100vh !important; min-height: 0 !important; max-height: 100vh !important; }

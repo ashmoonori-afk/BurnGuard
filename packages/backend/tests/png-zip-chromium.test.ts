@@ -192,6 +192,30 @@ describe("frame batch export against real Chromium", () => {
     expect(activeExportBrowserCount()).toBe(0);
   }, 120_000);
 
+  test("Given transparent slides over a dark page background When exported as a deck PNG ZIP Then the frame keeps the authored background And a slide painting its own white stays white", async () => {
+    // Given
+    expect(usable).toBe(true);
+    await writeFile(path.join(stagedDir, "dark.html"), `<!doctype html><html><head><meta charset="utf-8"><title>Dark</title><style>html,body{margin:0;background:#111214;color:#f4f4ee;font-family:sans-serif}body[data-deck-ready] .slide:not([data-active]){display:none}.slide{width:100vw;height:100vh;padding:80px;box-sizing:border-box}h1{margin:0;font-size:120px}</style><script src="/runtime/deck-stage.js" defer></script></head><body><section data-slide class="slide"><h1>Dark</h1></section><section data-slide class="slide" style="background:#ffffff;color:#111214"><h1>Light</h1></section></body></html>`);
+    const outputPath = path.join(root, "dark.zip");
+    const signal = AbortSignal.timeout(60_000);
+    const session = await openRenderSession({ stagedDir, entrypoint: "dark.html", viewport: { width: 1280, height: 720, dpr: 1 }, deck: true, signal });
+
+    // When
+    try {
+      await renderPngZipWithPage({ page: capturePageFromSession(session.page), stagedDir, outputPath, deck: true, graphic_set: { schema_version: 1, kind: "single", frame_count: 1 }, options: {}, receiptWriter: async () => undefined, signal });
+
+      // Then
+      const archive = await JSZip.loadAsync(await readFile(outputPath));
+      const dark = await decodeFrame(archive, "01.png"); const white = await decodeFrame(archive, "02.png");
+      expect(dark.pixel(dark.width / 2, 4)).toEqual([17, 18, 20, 255]);
+      expect(white.pixel(white.width / 2, 4)).toEqual([255, 255, 255, 255]);
+    } finally {
+      await session.close();
+      await rm(outputPath, { force: true });
+    }
+    expect(activeExportBrowserCount()).toBe(0);
+  }, 120_000);
+
   test("Given artboards with inline flex layout When exported as PNG ZIP Then each frame keeps the authored layout And the inline display is restored", async () => {
     // Given
     expect(usable).toBe(true);
