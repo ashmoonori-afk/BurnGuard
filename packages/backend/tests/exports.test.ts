@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { launchChromium } from "../src/services/export-render-session";
 import { DECK_STAGE_JS } from "../src/runtime/deck-stage";
 import { prepareSlideDeckExport } from "../src/services/export-stage";
+import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
+import { resolveStaticClosure } from "../src/services/export-closure";
 import { copyBundledFonts } from "../src/data/bundled-fonts";
 import JSZip from "jszip";
 import { chartSample, renderChart } from "@bg/shared";
@@ -27,6 +29,27 @@ describe("export path boundary", () => {
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
+  });
+});
+
+describe("deck runtime staging", () => {
+  test.each([
+    ["deck.html", ["./runtime/deck-stage.js", "runtime/deck-stage.js", "/runtime/deck-stage.js", "/runtime/deck-stage.js?v=2"]],
+    ["slides/deck.html", ["../runtime/deck-stage.js", "/runtime/deck-stage.js", "/runtime/deck-stage.js#boot"]],
+  ] as const)("Given %s with relative and absolute runtime references When prepareSlideDeckExport runs twice Then the bytes are stable and every src resolves to the staged runtime", async (entrypoint, sources) => {
+    // Given
+    const dir = await mkdtemp(path.join(tmpdir(), "bg-deck-runtime-"));
+    try {
+      await mkdir(path.dirname(path.join(dir, entrypoint)), { recursive: true });
+      await writeFile(path.join(dir, entrypoint), `<!doctype html><html><body><section data-slide></section>${sources.map((src) => `<script src="${src}" defer></script>`).join("")}</body></html>`);
+      // When
+      await prepareSlideDeckExport(dir, entrypoint); const first = await readFile(path.join(dir, entrypoint), "utf8");
+      await prepareSlideDeckExport(dir, entrypoint); const second = await readFile(path.join(dir, entrypoint), "utf8");
+      // Then
+      expect(second).toBe(first);
+      expect(first).not.toContain('"/runtime/deck-stage.js');
+      expect((await resolveStaticClosure(dir, entrypoint, await inspectCanonicalTree(dir))).referenced_paths).toEqual(["runtime/deck-stage.js"]);
+    } finally { await rm(dir, { recursive: true, force: true }); }
   });
 });
 

@@ -40,5 +40,6 @@ export async function prepareSlideDeckExport(projectDir: string, entrypoint: str
   await mkdir(runtimeDir, { recursive: true });
   await writeFile(path.join(runtimeDir, "deck-stage.js"), DECK_STAGE_JS, "utf8");
   const relative = path.relative(path.dirname(entrypointPath), path.join(runtimeDir, "deck-stage.js")).replaceAll("\\", "/");
-  await writeFile(entrypointPath, (await readFile(entrypointPath, "utf8")).replaceAll("/runtime/deck-stage.js", relative), "utf8");
+  // Only an attribute value that is exactly the absolute virtual path is rewritten; relative spellings stay, so reruns are no-ops.
+  await writeFile(entrypointPath, (await readFile(entrypointPath, "utf8")).replace(/(=\s*["']?)\/runtime\/deck-stage\.js(?=[?#"'\s>])/gu, `$1${relative}`), "utf8");
 }
