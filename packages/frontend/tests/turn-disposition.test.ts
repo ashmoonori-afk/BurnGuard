@@ -177,12 +177,13 @@ test("Given child ids whose parents are themselves suffixed user turns When proj
 });
 
 test("Given a long session with many deck-review child events When projected Then parents resolve without a per-turn search", () => {
-  // Given: 2,000 turns x 50 review events; a search over every user turn per child event would not finish in the test timeout.
+  // Given: 20,000 turns x 5 review events. Searching the user turns for each child event or child id costs at least
+  // 400M string comparisons, minutes on a 2 GHz core; resolving each child by its suffix takes milliseconds.
   const events: NormalizedEvent[] = [];
-  for (let turn = 0; turn < 2_000; turn += 1) {
+  for (let turn = 0; turn < 20_000; turn += 1) {
     const turnId = `${FIRST}-${turn}`;
     events.push({ id: id(), ts: turn, type: "chat.user_message", turnId, text: "request", attachmentCount: 0 });
-    for (let child = 0; child < 50; child += 1) events.push({ id: id(), ts: turn, type: "chat.delta", turnId: `${turnId}-review`, text: "review" });
+    for (let child = 0; child < 5; child += 1) events.push({ id: id(), ts: turn, type: "chat.delta", turnId: `${turnId}-review`, text: "review" });
     events.push({ id: id(), ts: turn, type: "chat.message_end", turnId });
   }
 
@@ -190,7 +191,7 @@ test("Given a long session with many deck-review child events When projected The
   const states = projectTurnStates(events);
 
   // Then
-  expect(states.get(`${FIRST}-1999-review`)?.disposition).toBe("committed");
+  expect(states.get(`${FIRST}-19999-review`)?.disposition).toBe("committed");
 });
 
 test("Given a turn whose work is still streaming When projected Then it is pending rather than committed", () => {
