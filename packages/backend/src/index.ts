@@ -58,7 +58,6 @@ const server = Bun.serve({
 });
 
 const url = `http://${host}:${server.port}`;
-console.log(`[burnguard] listening on ${url}`);
 
 // In dev (package.json sets BG_DEV=1), the React SPA is served by Vite on a
 // separate port (5173-ish) and this backend only serves /api/*. Auto-opening
@@ -87,6 +86,8 @@ process.on("SIGINT", () => { void shutdown(); });
 process.on("SIGTERM", () => { void shutdown(); });
 // Closing the launching terminal hangs up its foreground group, backend included.
 process.on("SIGHUP", () => { void shutdown(); });
+// Announce only once the handlers exist: a signal that arrives earlier takes the default action and skips the ordered shutdown.
+console.log(`[burnguard] listening on ${url}`);
 if (isDesktop) {
   watchDesktopParent(process.stdin, () => { void shutdown(); });
   console.log(`[burnguard-desktop] ${JSON.stringify({ protocol: 1, url, pid: process.pid })}`);
