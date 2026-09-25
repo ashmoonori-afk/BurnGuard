@@ -42,10 +42,23 @@ test("Given a long multilingual task, then argv stays short, UTF-8 input is exac
     }, { provider: "fixture", cmd: [process.execPath, "-e", script, prompt], stdinPrompt: null, parse: line => parseGeminiLine(line, ctx) });
     expect(result.exitCode).toBe(0);
     expect(unsubscribed).toBe(true);
-    expect(events).toMatchObject([{ type: "chat.delta", text: "finished reading" }, { type: "status.idle", stopReason: "error" }]);
+    expect(events).toMatchObject([{ type: "chat.delta", text: "finished reading" }, { type: "chat.message_end", turnId: ctx.turnId }, { type: "status.idle", stopReason: "error" }]);
     expect(JSON.stringify(events)).not.toContain("PRIVATE");
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 20_000);
+
+test("Given a Gemini-shaped CLI that exits 0 with a success result When the turn settles Then the events end with chat.message_end for the turn followed by status.idle end_turn", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "bg-cli-success-"));
+  const events: NormalizedEvent[] = [];
+  const script = `console.log(JSON.stringify({type:'message',role:'assistant',content:'done'}));console.log(JSON.stringify({type:'result',status:'success'}));`;
+  try {
+    const result = await runCliTurn({ sessionId: "safety", turnId: ctx.turnId, projectDir: root, binaryPath: process.execPath, prompt: "task",
+      userEvent: { type: "user.message", text: "task" }, onEvent: async event => { events.push(event); },
+    }, { provider: "fixture", cmd: [process.execPath, "-e", script], stdinPrompt: "task", parse: line => parseGeminiLine(line, ctx) });
+    expect(result.exitCode).toBe(0);
+    expect(events).toMatchObject([{ type: "chat.delta", text: "done" }, { type: "chat.message_end", turnId: ctx.turnId }, { type: "status.idle", stopReason: "end_turn" }]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 test("Given spawn failure, then the decision subscription and private task are released", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "bg-cli-failure-"));

@@ -87,6 +87,7 @@ export async function runCliTurn(
     if (promptDirectory) await rm(resolveWithin(input.projectDir, path.relative(input.projectDir, promptDirectory)), { recursive: true, force: true });
   }
 
+  await input.onEvent({ id: ulid(), ts: Date.now(), type: "chat.message_end", turnId: input.turnId });
   await input.onEvent({
     id: ulid(),
     ts: Date.now(),
