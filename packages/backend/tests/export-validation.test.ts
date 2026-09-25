@@ -3,7 +3,7 @@ import "./export-pdf-deadline-cases";
 import "./export-pdf-producer-closure-cases";
 import "./export-pdf-raster-cases";
 import "./export-receipt-boundary-cases";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { deflateSync } from "node:zlib";
@@ -17,6 +17,7 @@ import { buildContentDisposition, buildDownloadFilename, formatExtension, format
 import { analyzePixels, parsePng, validateDecodedPng } from "../src/services/export-png-validation";
 import { canonicalJson, type ExportReceipt, parseExportReceipt, receiptDigest, requireReceiptIdentity, sha256 } from "../src/services/export-receipt";
 import { zipDirectory } from "../src/services/zip";
+import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 
 const digest = "a".repeat(64);
 
@@ -216,6 +217,25 @@ describe("export validation contracts", () => {
     expect((await validateHtmlArchive(bytes, expected)).entries).toHaveLength(2);
     const missing = new JSZip(); missing.file("index.html", html); missing.file(HTML_EXPORT_MANIFEST, canonicalJson(manifest));
     await expect(validateHtmlArchive(await missing.generateAsync({ type: "uint8array" }), expected)).rejects.toThrow("manifest_mismatch");
+  });
+
+  test.skipIf(!canCreateSymlink())(`Given the temp directory reached through a link When an HTML archive is validated Then the entrypoint closure resolves (${SYMLINK_SKIP_REASON})`, async () => {
+    // Given
+    const real = await mkdtemp(path.join(tmpdir(), "bg-html-validate-real-")); const link = `${real}-link`; await symlink(real, link, "dir");
+    const saved = { TMPDIR: process.env["TMPDIR"], TEMP: process.env["TEMP"], TMP: process.env["TMP"] };
+    const html = new TextEncoder().encode("<html><body><img src=asset.png></body></html>"); const asset = Uint8Array.from([1, 2, 3]);
+    const expected = { schema_version: 1 as const, entrypoint: "index.html", project_revision: 7, project_digest: digest, input_closure_digest: "b".repeat(64) };
+    const manifest = buildHtmlArchiveManifest(expected, [{ path: "index.html", size: html.length, sha256: sha256(html) }, { path: "asset.png", size: asset.length, sha256: sha256(asset) }]);
+    const zip = new JSZip(); zip.file("index.html", html); zip.file("asset.png", asset); zip.file(HTML_EXPORT_MANIFEST, canonicalJson(manifest));
+    const bytes = await zip.generateAsync({ type: "uint8array" });
+    try {
+      process.env["TMPDIR"] = link; process.env["TEMP"] = link; process.env["TMP"] = link;
+      // When / Then
+      expect((await validateHtmlArchive(bytes, expected)).entries).toEqual(manifest.entries);
+    } finally {
+      for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+      await rm(link, { force: true }); await rm(real, { recursive: true, force: true });
+    }
   });
 
   test("Given a receipt When identity or digest changes Then strict verification blocks it", () => {

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
@@ -47,7 +47,8 @@ export async function validateHtmlArchive(bytes: Uint8Array, expected: Omit<Html
   if (manifest.entrypoint !== expected.entrypoint || manifest.project_revision !== expected.project_revision || manifest.project_digest !== expected.project_digest || manifest.input_closure_digest !== expected.input_closure_digest) throw new HtmlExportValidationError("manifest_mismatch");
   const actualEntries = entries.filter((entry) => entry.path !== HTML_EXPORT_MANIFEST).map(({ path: entryPath, size, sha256 }) => ({ path: entryPath, size, sha256 })).sort(compareEntry);
   if (JSON.stringify(actualEntries) !== JSON.stringify(manifest.entries)) throw new HtmlExportValidationError("manifest_mismatch");
-  const stage = await mkdtemp(path.join(tmpdir(), "bg-html-validate-"));
+  // Canonical spelling: the tree manifest relativises realpath targets, so an 8.3, junction or linked temp root would miss every entry.
+  const stage = await realpath(await mkdtemp(path.join(tmpdir(), "bg-html-validate-")));
   try {
     for (const entry of entries.filter((item) => item.path !== HTML_EXPORT_MANIFEST)) { const target = path.join(stage, entry.path); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, entry.bytes); }
     await resolveStaticClosure(stage, manifest.entrypoint, await inspectCanonicalTree(stage));
