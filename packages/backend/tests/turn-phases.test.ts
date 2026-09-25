@@ -194,6 +194,18 @@ test.each([
   ["slide_deck", "제목만 수정", true, true],
   ["prototype", "전체 다시 구성해줘", false, true],
   ["prototype", "Please rebuild the site", false, true],
+  ["slide_deck", "3페이지에 표 만들어줘", false, false],
+  ["slide_deck", "3페이지 배경을 파란색으로 만들어줘", false, false],
+  ["slide_deck", "2장 슬라이드에 이미지 생성해줘", false, false],
+  ["slide_deck", "Make the titles on the last 2 slides shorter", false, false],
+  ["prototype", "Make the hero text large", false, false],
+  ["prototype", "대형 배너로 만들어줘", false, false],
+  ["prototype", "Make page 2 hero larger", false, false],
+  ["slide_deck", "20장의 슬라이드를 만들어줘", false, true],
+  ["slide_deck", "5장 슬라이드 만들어줘", false, true],
+  ["slide_deck", "10페이지로 만들어줘", false, true],
+  ["slide_deck", "Make a 10-slide deck", false, true],
+  ["slide_deck", "Create a deck in 10 slides", false, true],
 ] as const)("Given a %s request %p (starter=%p) When deciding phases Then phased generation is %p", (projectType, request, starter, expected) => {
   expect(needsGenerationPhases(projectType, request, starter)).toBe(expected);
 });

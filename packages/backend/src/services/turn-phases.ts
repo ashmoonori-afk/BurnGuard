@@ -10,8 +10,12 @@ export function needsGenerationPhases(projectType: string, request: string, star
   // A logo has its own explore/finalize contract; page units would contradict it.
   if (projectType === "logo") return false;
   if ((projectType === "slide_deck" && starter) || /전체.{0,12}(다시|재작성|재구성)|\brebuild\b/iu.test(request)) return true;
-  // Size and count words describe a new document only together with creation intent, never an edit that names a page.
-  return /대형|대규모|다중|여러\s*(페이지|화면|장)|\b(?:large|multi-page|multi-screen)\b|\d+\s*(?:페이지|장|pages|slides)/iu.test(request) && /만들|생성|작성|제작|\b(?:create|make|build|generate)\b/iu.test(request);
+  // "on the last 2 slides" or "slide 3" names an edit target, not a document size.
+  if (/\bon\s+(?:the\s+)?(?:\w+\s+){0,3}\d+\s*(?:pages|slides)\b|\b(?:slide|page)\s+\d+\b/iu.test(request)) return false;
+  // A count or size describes a new document only when a quantity or document noun follows it, and only with creation intent.
+  const count = /\d+\s*(?:페이지|장)\s*(?:짜리|분량|이상|으?로|(?:의\s*)?(?:슬라이드|덱|프레젠테이션|사이트|웹사이트|문서|소개서|발표)(?!에))|\b\d+[\s-]*(?:pages?|slides?)\b/iu;
+  const size = /(?:대형|대규모|다중)\s*(?:덱|슬라이드|사이트|웹|문서|프레젠테이션)|여러\s*(?:페이지|화면|장)|\blarge\s+(?:slide\s+)?(?:deck|site|website|presentation)\b|\b(?:multi-page|multi-screen)\b/iu;
+  return (count.test(request) || size.test(request)) && /만들|생성|작성|제작|\b(?:create|make|build|generate)\b/iu.test(request);
 }
 
 /** A server-owned loop, not a request that the model merely describe phases. */
