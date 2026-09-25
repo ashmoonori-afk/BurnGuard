@@ -7,10 +7,58 @@ import { resolveWithin } from "../security/path-boundary";
 
 /** An @font-face rule, which cannot nest braces; whether it is served from the shared font endpoint is checked on the match so the pattern cannot backtrack. */
 const FONT_FACE = /@font-face\s*\{[^{}]*\}/gi;
-/** Above this many distinct bundled families, pruning is skipped so the usage scan stays bounded; the bundle ships 72. */
+/** Above this many distinct bundled families, pruning is skipped so the family search stays small; the bundle ships 72. */
 const MAX_PRUNED_FAMILIES = 128;
+/** A longer family name is never searched for and keeps its faces; bundled names are under 20 characters. */
+const MAX_PRUNED_FAMILY_LENGTH = 256;
 const bundledFace = (face: string): boolean => face.includes("/runtime/fonts/");
 const faceFamily = (face: string): string | undefined => /font-family\s*:\s*(['"]?)([^'";}]+)\1/i.exec(face)?.[2]?.trim().toLowerCase();
+
+/** Which `names` occur in `text`, in one Aho-Corasick pass; a substring search per name costs the text once per name, and more for some shapes. */
+function namesIn(text: string, names: readonly string[]): Set<string> {
+  const next: Map<number, number>[] = [new Map()];
+  const ends: string[][] = [[]];
+  for (const name of names) {
+    let state = 0;
+    for (let index = 0; index < name.length; index++) {
+      const code = name.charCodeAt(index);
+      let to = next[state]!.get(code);
+      if (to === undefined) {
+        to = next.push(new Map()) - 1;
+        ends.push([]);
+        next[state]!.set(code, to);
+      }
+      state = to;
+    }
+    ends[state]!.push(name);
+  }
+  // Breadth-first, each state falls back to the longest proper suffix of its path that is also a state.
+  const fail = new Int32Array(next.length);
+  const order = [...next[0]!.values()];
+  for (let head = 0; head < order.length; head++) {
+    for (const [code, to] of next[order[head]!]!) {
+      let back = fail[order[head]!]!;
+      while (back !== 0 && !next[back]!.has(code)) back = fail[back]!;
+      fail[to] = next[back]!.get(code) ?? 0;
+      order.push(to);
+    }
+  }
+  const reached = new Uint8Array(next.length);
+  for (let index = 0, state = 0; index < text.length; index++) {
+    const code = text.charCodeAt(index);
+    while (state !== 0 && !next[state]!.has(code)) state = fail[state]!;
+    state = next[state]!.get(code) ?? 0;
+    reached[state] = 1;
+  }
+  // Reaching a state also reaches its fallbacks; deepest first, so each is marked before it is read.
+  const found = new Set<string>();
+  for (const state of order.reverse()) {
+    if (!reached[state]) continue;
+    reached[fail[state]!] = 1;
+    for (const name of ends[state]!) found.add(name);
+  }
+  return found;
+}
 
 /** Export closures must work independently of the installed app's shared font endpoint. */
 export async function prepareBundledFontExport(root: string): Promise<void> {
@@ -20,11 +68,11 @@ export async function prepareBundledFontExport(root: string): Promise<void> {
   // Ship only families the document names outside the bundled faces themselves; a face whose family cannot be read is kept.
   const usage = [...texts.values()].map((text) => text.replace(FONT_FACE, (face) => bundledFace(face) ? "" : face)).join("\n").toLowerCase();
   const families = new Set([...texts.values()].flatMap((text) => (text.match(FONT_FACE) ?? []).filter(bundledFace).map(faceFamily)));
-  const used = new Map<string, boolean>();
+  let used: Set<string> | undefined;
   const keep = (family: string | undefined): boolean => {
-    if (family === undefined || families.size > MAX_PRUNED_FAMILIES) return true;
-    if (!used.has(family)) used.set(family, usage.includes(family));
-    return used.get(family) === true;
+    if (!family || family.length > MAX_PRUNED_FAMILY_LENGTH || families.size > MAX_PRUNED_FAMILIES) return true;
+    used ??= namesIn(usage, [...families].filter((name): name is string => !!name && name.length <= MAX_PRUNED_FAMILY_LENGTH));
+    return used.has(family);
   };
   const written = new Map<string, string>();
   for (const [file, text] of texts) {

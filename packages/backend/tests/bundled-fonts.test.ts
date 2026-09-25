@@ -82,6 +82,27 @@ test("Given more distinct face families than the pruning cap and an unclosed @fo
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("Given bundled faces whose long family names defeat a per-name substring search and megabytes of project text When prepareBundledFontExport runs Then used families are found in one pass and only they and over-long families keep their faces", async () => {
+  // Given
+  const root = path.join(appRootDir, `font-prune-names-${process.pid}`);
+  const font = [...(await bundledFontFiles()).values()].find(file => file.name.endsWith(".woff2"))!;
+  const families = Array.from({ length: 100 }, (_unused, index) => `${"a".repeat(100 + index)}b${"a".repeat(155 - index)}`);
+  const overLong = Array.from({ length: 20 }, (_unused, index) => `${"a".repeat(500 + index)}b${"a".repeat(523 - index)}`);
+  const faces = [...families, ...overLong].map(family => `@font-face{font-family:"${family}";src:url(${bundledFontUrl(font)})}`).join("");
+  await mkdir(path.join(root, "styles"), { recursive: true });
+  await writeFile(path.join(root, "index.html"), '<!doctype html><html><head><link rel="stylesheet" href="styles/site.css"></head><body>Names</body></html>');
+  await writeFile(path.join(root, "styles/site.css"), faces);
+  await writeFile(path.join(root, "data.json"), JSON.stringify({ filler: "a".repeat(8 * 1024 * 1024), font: families[0] }));
+  try {
+    // When
+    await prepareBundledFontExport(root);
+    // Then
+    const css = await readFile(path.join(root, "styles/site.css"), "utf8");
+    expect(css.match(/font-family:"([ab]+)"/g)).toEqual([families[0]!, ...overLong].map(family => `font-family:"${family}"`));
+    expect(css).not.toContain(bundledFontUrl(font));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("Given bundled local fonts, when initializing projects and copying over brand assets, then font bytes are durable and supplied files survive", async () => {
   const bundle = await bundledFontFiles();
   expect(await bundledFontFiles()).toBe(bundle);
