@@ -3,8 +3,9 @@ import type {
   PythonHealth,
 } from "@bg/shared";
 import { existsSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { PYPDF_REQUIRED_VERSION, isSupportedPypdfVersion } from "./pypdf-version";
-import { managedPythonExecutable, pythonCandidates, pythonVenvDir } from "./python-runtime";
+import { managedPythonExecutable, pythonVenvDir, systemPythonCandidates } from "./python-runtime";
 
 const MAX_TAIL = 120;
 const CHECK_TIMEOUT_MS = 3_000;
@@ -85,28 +86,32 @@ export async function checkPythonRuntime(): Promise<PythonHealth> {
   let pythonExecutable: string[] | null = null;
   let pythonVersion: string | null = null;
   let pypdfVersion: string | null = null;
+  const managed = managedPythonExecutable();
+  const environment = existsSync(managed);
 
-  for (const prefix of pythonCandidates()) {
+  // A broken managed venv falls through to a system Python, so the installer can rebuild it.
+  for (const prefix of environment ? [[managed], ...systemPythonCandidates()] : systemPythonCandidates()) {
     const versionResult = await probe([...prefix, "--version"]);
     // Python 2.x prints the version to stderr; newer Python uses stdout.
     const combined = `${versionResult.stdout}\n${versionResult.stderr}`.trim();
     if (!versionResult.ok) continue;
     const parsedVersion = parsePythonVersion(combined);
     if (!parsedVersion) continue;
+    // Extraction runs in the managed venv once it exists, so only its pypdf counts then.
+    if (prefix[0] === managed || !environment) {
+      const pypdfResult = await probe([
+        ...prefix,
+        "-c",
+        "import pypdf; print(pypdf.__version__)",
+      ]);
+      if (prefix[0] === managed && !pypdfResult.ok && !(await probe([managed, "-m", "pip", "--version"])).ok) continue;
+      if (pypdfResult.ok) {
+        pypdfVersion = parsePypdfVersion(pypdfResult.stdout);
+      }
+    }
     pythonExecutable = [...prefix];
     pythonVersion = parsedVersion;
     break;
-  }
-
-  if (pythonExecutable) {
-    const pypdfResult = await probe([
-      ...pythonExecutable,
-      "-c",
-      "import pypdf; print(pypdf.__version__)",
-    ]);
-    if (pypdfResult.ok) {
-      pypdfVersion = parsePypdfVersion(pypdfResult.stdout);
-    }
   }
 
   const next: PythonHealth = {
@@ -159,12 +164,13 @@ export function startPypdfInstall(): { started: true; completion: Promise<void> 
   };
 
   const managed = managedPythonExecutable();
-  const createEnvironment = !existsSync(managed);
+  // Health selects a system Python when the venv is absent or broken; --clear rebuilds it in place.
+  const createEnvironment = prefix[0] !== managed;
   let phase = createEnvironment ? "Python venv creation" : "pip install pypdf";
   const spawn = (cmd: string[]) => Bun.spawn({ cmd, stdout: "pipe", stderr: "pipe", stdin: "ignore", env: { ...process.env } });
   let proc: ReturnType<typeof spawn>;
   try {
-    proc = spawn(createEnvironment ? [...prefix, "-m", "venv", pythonVenvDir] : pypdfInstallCommand([managed]));
+    proc = spawn(createEnvironment ? [...prefix, "-m", "venv", "--clear", pythonVenvDir] : pypdfInstallCommand([managed]));
   } catch (err) {
     installStatus = {
       ...installStatus,
@@ -193,6 +199,8 @@ export function startPypdfInstall(): { started: true; completion: Promise<void> 
   const completion = (async () => {
     try {
       let exitCode = await settle(proc);
+      // Never leave a half-created venv for health and extraction to select.
+      if (createEnvironment && exitCode !== 0) await rm(pythonVenvDir, { recursive: true, force: true });
       if (createEnvironment && exitCode === 0) {
         phase = "pip install pypdf";
         exitCode = await settle(spawn(pypdfInstallCommand([managed])));
