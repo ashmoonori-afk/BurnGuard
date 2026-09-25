@@ -32,6 +32,7 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
   const documents: PlatformLintDocument[] = [];
   let sharedCss = "";
   const scripts: string[] = [];
+  const usedSlugs = new Set<string>();
 
   for (const page of input.staged.pages) {
     const { document } = parseDocument(page.html);
@@ -41,7 +42,9 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
       sharedCss = `${await linkedStylesheets(document, page.rel_path, input.staged.assets, resolve)}${rewriteCssText(styles.shared, page.rel_path, resolve)}`;
       scripts.push(...linkedScripts(document, page.rel_path, input.staged.assets, content.element));
     }
-    const slug = pageSlug(page.rel_path);
+    let slug = pageSlug(page.rel_path);
+    for (let counter = 2; usedSlugs.has(slug); counter += 1) slug = `${pageSlug(page.rel_path)}-${counter}`;
+    usedSlugs.add(slug);
     if (content.element !== null) rewriteHtmlReferences(content.element, page.rel_path, resolve);
     const body = stripHtmlComments(content.element === null ? content.html : content.element.toString());
     const pageCss = scopeCss(rewriteCssText(styles.page, page.rel_path, resolve), slug);

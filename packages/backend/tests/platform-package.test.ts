@@ -229,6 +229,24 @@ describe("imweb code widget package", () => {
     expect(fragment.match(/window\.x=/gu)).toHaveLength(1);
   });
 
+  test("Given pages whose slugs collide When the package is built Then each page gets its own fragment and scope class", async () => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      await mkdir(path.join(root, "a"), { recursive: true });
+      for (const relPath of ["a-b.html", "a/b.html"]) await writeFile(path.join(root, relPath), `<!doctype html><html><head><title>${relPath}</title></head><body><main data-bg-content><p>${relPath}</p></main></body></html>`);
+    };
+
+    // When
+    const built = await build("imweb_package", {}, undefined, prepare);
+
+    // Then
+    expect(built.names).toContain("pages/a-b.imweb.html");
+    expect(built.names).toContain("pages/a-b-2.imweb.html");
+    expect(await built.text("pages/a-b.imweb.html")).toContain("<p>a-b.html</p>");
+    expect(await built.text("pages/a-b-2.imweb.html")).toContain('class="bg-site bg-page-a-b-2"');
+    expect(await built.text("pages/a-b-2.imweb.html")).toContain("<p>a/b.html</p>");
+  });
+
   test("Given a fragment over one million characters When the package is built Then the export fails as a platform lint failure", async () => {
     // Given
     const oversized = `<section class="hero" id="hero"><p>${"가".repeat(1_000_001)}</p></section>`;
