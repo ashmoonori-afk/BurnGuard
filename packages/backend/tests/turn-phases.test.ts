@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { parse } from "node-html-parser";
@@ -133,6 +133,30 @@ test("Given a plan saved with a UTF-8 BOM and CRLF When the plan phase checks it
     expect(result.exitCode).toBe(0);
     expect(planCalls).toBe(1);
     expect(contentCalls).toBe(1);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test.each([
+  ["the refreshed relative path", () => "../runtime/deck-stage.js"],
+  ["the runtime path named by the phase prompt", (prompt: string) => /<generation_phase>[\s\S]*?<script src="([^"]+)"/.exec(prompt)?.[1] ?? "missing"],
+] as const)("Given a deck entrypoint in a subfolder When the model writes %s Then the phases complete", async (_label, runtimeSrc) => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-phase-subfolder-"));
+  let currentPhase = "";
+  try {
+    await mkdir(path.join(dir, "slides"));
+    const result = await runGenerationPhases({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "Create 1 slide", userEvent: { type: "user.message", text: "Create 1 slide" }, onEvent: async event => {
+      if (event.type === "tool.started" && event.tool.startsWith("generation_phase_")) currentPhase = event.tool;
+    } }, "slides/deck.html", async input => {
+      const runtime = `<script src="${runtimeSrc(input.prompt)}" defer></script>`;
+      const file = path.join(dir, "slides", "deck.html");
+      if (currentPhase === "generation_phase_plan") {
+        const plan = input.prompt.match(/\.burnguard-inputs\/phases-[A-Z0-9]+\/plan\.json/)![0];
+        await writeFile(path.join(dir, plan), JSON.stringify({ units: ["Overview"] }));
+        await writeFile(file, `<section class="deck-slide" data-slide data-bg-unit="1" data-bg-placeholder>Pending</section>${runtime}`);
+      } else await writeFile(file, `<section class="deck-slide" data-slide data-bg-unit="1" data-bg-complete="true"><h1>Our product overview</h1></section>${runtime}`);
+      return { exitCode: 0 };
+    }, "slide_deck");
+    expect(result.exitCode).toBe(0);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 

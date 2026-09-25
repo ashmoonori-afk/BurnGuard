@@ -4,7 +4,7 @@ import { ulid } from "ulid";
 import type { AdapterRunInput, AdapterRunResult } from "../adapters/types";
 import { resolveWithin } from "../security/path-boundary";
 import { runWithContinuation } from "./turn-continuation";
-import { generationOutputComplete, hasGeneratedContent, matchesDeckSourcePages, type DeckSourcePage } from "./generation-output";
+import { generationOutputComplete, hasDeckRuntime, hasGeneratedContent, matchesDeckSourcePages, type DeckSourcePage } from "./generation-output";
 
 export function needsGenerationPhases(projectType: string, request: string, starter = false): boolean {
   // A logo has its own explore/finalize contract; page units would contradict it.
@@ -47,7 +47,7 @@ export async function runGenerationPhases(input: AdapterRunInput, entrypoint: st
       const slides = root.querySelectorAll("[data-slide]");
       if (sourcePages !== undefined && !matchesDeckSourcePages(slides, sourcePages)) return false;
       if (slides.length !== units.length || nodes.some(node => !node.hasAttribute("data-slide") || !node.classList.contains("deck-slide") || node.parentNode?.closest("[data-slide]"))) return false;
-      if (!root.querySelectorAll("script[src]").some(node => /^\/?(?:\.\/)?runtime\/deck-stage\.js(?:[?#].*)?$/.test(node.getAttribute("src") ?? ""))) return false;
+      if (!hasDeckRuntime(root, entrypoint)) return false;
     }
     return nodes.length === units.length && units.every((_unit, index) => {
       const node = nodes[index];
@@ -69,7 +69,7 @@ export async function runGenerationPhases(input: AdapterRunInput, entrypoint: st
     await input.onEvent({ id: ulid(), ts: Date.now(), type: "tool.started", turnId: input.turnId, toolCallId, tool, input: progress });
     let ok = false;
     try {
-      const result = await runWithContinuation({ ...input, prompt: `${input.prompt}\n\n<generation_phase>\n${instruction}\nFor slide decks, every unit must be a non-nested <section class="deck-slide" data-slide data-bg-unit="N">. Preserve slide geometry CSS and <script src="runtime/deck-stage.js" defer></script>. Mark unfinished content with data-bg-placeholder and remove that marker only after replacing it with actual content, never just a slide counter.\nOnly perform this phase. Save valid UTF-8 files before returning. Do not rewrite completed units or regenerate their assets. Keep changes small; never delete the entrypoint to replace it.\n</generation_phase>`, onEvent: async event => {
+      const result = await runWithContinuation({ ...input, prompt: `${input.prompt}\n\n<generation_phase>\n${instruction}\nFor slide decks, every unit must be a non-nested <section class="deck-slide" data-slide data-bg-unit="N">. Preserve slide geometry CSS and <script src="/runtime/deck-stage.js" defer></script>. Mark unfinished content with data-bg-placeholder and remove that marker only after replacing it with actual content, never just a slide counter.\nOnly perform this phase. Save valid UTF-8 files before returning. Do not rewrite completed units or regenerate their assets. Keep changes small; never delete the entrypoint to replace it.\n</generation_phase>`, onEvent: async event => {
         // A completed phase is not a completed user request.
         if (event.type !== "status.idle" && event.type !== "chat.message_end") await input.onEvent(event);
       } }, run, valid(check));

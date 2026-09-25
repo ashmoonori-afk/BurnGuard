@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { generationOutputComplete } from "../src/services/generation-output";
@@ -22,5 +22,24 @@ test("Given saved output, then completion rejects empty content, unfinished unit
     expect(await generationOutputComplete(dir, "index.html", "slide_deck", 2)).toBe(false);
     await writeFile(path.join(dir, "index.html"), '<div style="width:100px;height:100px;background-image:url(image.svg)"></div>');
     expect(await generationOutputComplete(dir, "index.html", "graphic")).toBe(true);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test.each([
+  ["index.html", "/runtime/deck-stage.js", true],
+  ["index.html", "runtime/deck-stage.js", true],
+  ["index.html", "./runtime/deck-stage.js?v=2", true],
+  ["index.html", "../runtime/deck-stage.js", false],
+  ["index.html", "//runtime/deck-stage.js", false],
+  ["slides/deck.html", "../runtime/deck-stage.js", true],
+  ["slides/deck.html", "/runtime/deck-stage.js#stage", true],
+  ["slides/deck.html", "runtime/deck-stage.js", false],
+  ["slides/deck.html", "./runtime/deck-stage.js", false],
+] as const)("Given a deck entrypoint %s When its runtime is referenced as %s Then completion is %p", async (entrypoint, src, expected) => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-output-runtime-"));
+  try {
+    await mkdir(path.join(dir, path.dirname(entrypoint)), { recursive: true });
+    await writeFile(path.join(dir, entrypoint), `<section data-slide><h1>Product</h1></section><script src="${src}" defer></script>`);
+    expect(await generationOutputComplete(dir, entrypoint, "slide_deck")).toBe(expected);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
