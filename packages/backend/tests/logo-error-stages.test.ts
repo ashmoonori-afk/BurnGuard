@@ -76,12 +76,14 @@ test.each(cases)("Given %s in a logo turn When finalized Then its stage is prese
   let generations = 0, repairs = 0, audits = 0;
   let generationPrompt = "";
   let manifestHashBeforeRepair = "";
+  const repairImageGeneration: unknown[] = [];
   try {
     const turn = startUserTurn(sessionId, { type: "user.message", text: "Create logo concepts" }, undefined, {
       detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "unused", version: "fixture", authenticated: true, image_generation: true }] }),
       runAdapter: async (_backend, input) => {
         if (input.turnId.includes("-design-repair-")) {
           repairs++;
+          repairImageGeneration.push(input.imageGeneration);
           const contextMatch = /<burnguard-design-repair-v1>\n([\s\S]*?)\n<\/burnguard-design-repair-v1>/.exec(input.prompt);
           const findingsMatch = /<design_review_findings>\n([\s\S]*?)\n<\/design_review_findings>/.exec(input.prompt);
           if (!contextMatch?.[1] || !findingsMatch?.[1]) throw new Error("repair context missing");
@@ -144,6 +146,8 @@ test.each(cases)("Given %s in a logo turn When finalized Then its stage is prese
     await Promise.all([turn.prepared, turn.promise]);
     expect(generations).toBe(1);
     expect(repairs).toBe(scenario === "must-fix" ? 2 : scenario.startsWith("repair-") ? 1 : 0);
+    // A contrast-only repair has image generation switched off in the invocation, not only in the prompt.
+    expect(repairImageGeneration).toEqual(Array.from({ length: repairs }, () => scenario === "repair-contrast" ? "forbidden" : undefined));
     expect(audits).toBe(scenario === "generation-error" ? 0 : scenario === "must-fix" ? 3 : scenario === "repair-success" || scenario === "repair-contrast" ? 2 : 1);
     const errors = events.filter(event => event.type === "status.error");
     expect(errors.map(event => event.code)).toEqual(expectedCode === null ? [] : [expectedCode]);
