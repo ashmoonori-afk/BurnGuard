@@ -60,6 +60,35 @@ test("Given a Gemini-shaped CLI that exits 0 with a success result When the turn
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("Given a CLI that writes more than 2 MiB of short assistant lines and a consumer that stalls on its first event When the turn settles Then it resolves with exit 0 and delivers every line", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "bg-cli-burst-"));
+  const lines = 40_000;
+  const drained = Promise.withResolvers<void>();
+  let deltas = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("fixture drain deadline")), 15_000); });
+  // The child reports on stderr once every stdout byte has left it, so the first event is held until the whole burst is buffered.
+  const script = `const line=JSON.stringify({type:'message',role:'assistant',content:'x'.repeat(80)})+'\\n';process.stdout.write(line.repeat(${lines}),()=>console.error('DRAINED'));`;
+  try {
+    const result = await runCliTurn({ sessionId: "safety", turnId: ctx.turnId, projectDir: root, binaryPath: process.execPath, prompt: "task",
+      userEvent: { type: "user.message", text: "task" },
+      onEvent: async event => { if (event.type === "chat.delta" && deltas++ === 0) await Promise.race([drained.promise, deadline]); },
+      onStderr: async line => { if (line === "DRAINED") drained.resolve(); },
+    }, { provider: "fixture", cmd: [process.execPath, "-e", script], stdinPrompt: "task", parse: line => parseGeminiLine(line, ctx) });
+    expect(result.exitCode).toBe(0);
+    expect(deltas).toBe(lines);
+  } finally { clearTimeout(timer); await rm(root, { recursive: true, force: true }); }
+}, 20_000);
+
+test("Given a single unterminated line over 2 MiB When the turn reads it Then provider_stream_limit is still thrown", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "bg-cli-limit-"));
+  try {
+    await expect(runCliTurn({ sessionId: "safety", turnId: ctx.turnId, projectDir: root, binaryPath: process.execPath, prompt: "task",
+      userEvent: { type: "user.message", text: "task" }, onEvent: async () => {},
+    }, { provider: "fixture", cmd: [process.execPath, "-e", `process.stdout.write('x'.repeat(${2 * 1024 * 1024 + 1}))`], stdinPrompt: "task", parse: line => parseGeminiLine(line, ctx) })).rejects.toThrow("provider_stream_limit");
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 20_000);
+
 test("Given spawn failure, then the decision subscription and private task are released", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "bg-cli-failure-"));
   let unsubscribed = false;

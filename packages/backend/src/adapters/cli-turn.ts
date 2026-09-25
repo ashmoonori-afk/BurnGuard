@@ -110,7 +110,6 @@ async function readLines(
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      if (buffer.length > 2 * 1024 * 1024) throw new Error("provider_stream_limit");
       let index = buffer.indexOf("\n");
       while (index >= 0) {
         const line = buffer.slice(0, index);
@@ -118,6 +117,8 @@ async function readLines(
         if (line.length > 0) await onLine(line);
         index = buffer.indexOf("\n");
       }
+      // Bound the unterminated line only: a lagging consumer receives large coalesced chunks of short lines.
+      if (buffer.length > 2 * 1024 * 1024) throw new Error("provider_stream_limit");
     }
     if (buffer.length > 0) await onLine(buffer);
   } finally {
