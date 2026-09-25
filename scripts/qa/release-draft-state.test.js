@@ -166,6 +166,14 @@ describe("release draft asset attachment", () => {
     expect(() => attachDraftReleaseAssets({ ...macos, assets: windows.assets }, fake([]).run)).toThrow("cross_platform_release_asset");
   });
 
+  test("gives the first-created draft the same note from either workflow, asking to wait for both platforms", () => {
+    const workflowPaths = ["../../.github/workflows/windows-release.yml", "../../.github/workflows/macos-release.yml"];
+    const notes = workflowPaths.map(value => /release-draft-state\.mjs (?:windows|macos) \S+ "[^"]*" '([^']*)'/.exec(readFileSync(new URL(value, import.meta.url), "utf8"))?.[1]);
+    expect(notes[0]).toBeDefined();
+    expect(notes[0]).toEqual(notes[1]);
+    expect(notes[0]).toContain("both the Windows and macOS assets are attached");
+  });
+
   test("serializes tag runs across both release workflows without cancelling either", () => {
     const workflowPaths = ["../../.github/workflows/windows-release.yml", "../../.github/workflows/macos-release.yml"];
     const texts = workflowPaths.map(value => readFileSync(new URL(value, import.meta.url), "utf8"));
