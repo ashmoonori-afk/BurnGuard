@@ -108,7 +108,8 @@ describe("logo design system sync", () => {
   });
 
   test("Given a patch saved with a UTF-8 BOM and CRLF When applied Then it applies like the plain patch", async () => {
-    const dir = await projectStage({ "design-system-patch.json": `﻿${JSON.stringify(patch)}\r\n`, "logo.svg": LOGO_SVG });
+    const dir = await projectStage({ "design-system-patch.json": `\uFEFF${JSON.stringify(patch)}\r\n`, "logo.svg": LOGO_SVG });
+    expect([...(await readFile(path.join(dir, "design-system-patch.json"))).subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
     expect(await applyLogoDesignSystemPatch({ projectDir: dir, designSystemId: systemId, expectedSource: "explorations/round-1/candidate-2.png" })).toMatchObject({ applied: true, colors: 2, asset: true });
   });
 

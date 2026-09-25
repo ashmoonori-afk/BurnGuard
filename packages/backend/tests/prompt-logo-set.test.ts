@@ -120,7 +120,8 @@ describe("logo output prompt block", () => {
     const bomDir = mkdtempSync(path.join(tmpdir(), "bg-logo-prompt-bom-"));
     try {
       mkdirSync(path.join(bomDir, "explorations"), { recursive: true });
-      writeFileSync(path.join(bomDir, "explorations", "manifest.json"), `﻿${readFileSync(path.join(exploredDir, "explorations", "manifest.json"), "utf8")}\r\n`, "utf8");
+      writeFileSync(path.join(bomDir, "explorations", "manifest.json"), `\uFEFF${readFileSync(path.join(exploredDir, "explorations", "manifest.json"), "utf8")}\r\n`, "utf8");
+      expect([...readFileSync(path.join(bomDir, "explorations", "manifest.json")).subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
       expect(outputBlock(await promptFor(logoContext(bomDir), `${REGENERATE}\n다시 만들어주세요.`))).toMatchObject({ phase: "explore", round: 2 });
     } finally { rmSync(bomDir, { recursive: true, force: true }); }
   });

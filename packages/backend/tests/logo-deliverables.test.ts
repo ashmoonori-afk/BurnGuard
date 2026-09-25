@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { crc32, deflateSync } from "node:zlib";
@@ -201,7 +201,8 @@ describe("logo manifest reader", () => {
 
   test("Given a manifest saved with a UTF-8 BOM and CRLF When read Then it is parsed", async () => {
     const dir = await stage();
-    await writeManifest(dir, `﻿${JSON.stringify(manifestOf(1))}\r\n`);
+    await writeManifest(dir, `\uFEFF${JSON.stringify(manifestOf(1))}\r\n`);
+    expect([...(await readFile(path.join(dir, "explorations", "manifest.json"))).subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
     expect(await readLogoManifest(dir)).toEqual(manifestOf(1));
   });
 

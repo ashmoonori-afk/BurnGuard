@@ -122,7 +122,8 @@ test("Given a plan saved with a UTF-8 BOM and CRLF When the plan phase checks it
       if (currentPhase === "generation_phase_plan") {
         planCalls++;
         const plan = input.prompt.match(/\.burnguard-inputs\/phases-[A-Z0-9]+\/plan\.json/)![0];
-        await writeFile(path.join(dir, plan), `﻿${JSON.stringify({ units: ["Overview"] })}\r\n`);
+        await writeFile(path.join(dir, plan), `\uFEFF${JSON.stringify({ units: ["Overview"] })}\r\n`);
+        expect([...(await readFile(path.join(dir, plan))).subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
         await writeFile(file, '<section class="deck-slide" data-slide data-bg-unit="1" data-bg-placeholder>Pending</section><script src="/runtime/deck-stage.js"></script>');
       } else {
         contentCalls++;
