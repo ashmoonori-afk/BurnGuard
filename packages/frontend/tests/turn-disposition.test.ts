@@ -95,6 +95,59 @@ test("Given repair child output When the parent commits or is not applied Then t
   expect(states.get(refusedChild)?.reason).toBe("logo_svg_invalid");
 });
 
+test("Given deck review output When the parent commits or is not applied Then the review bubble inherits that parent standing", () => {
+  const committedReview = `${FIRST}-review`;
+  const refusedReview = `${SECOND}-review`;
+  const events: NormalizedEvent[] = [
+    { id: id(), ts: 1, type: "chat.user_message", turnId: FIRST, text: "make the deck", attachmentCount: 0 },
+    { id: id(), ts: 2, type: "chat.delta", turnId: FIRST, text: "slides written" },
+    { id: id(), ts: 3, type: "chat.delta", turnId: committedReview, text: "copy reviewed" },
+    { id: id(), ts: 4, type: "chat.message_end", turnId: committedReview },
+    { id: id(), ts: 5, type: "chat.message_end", turnId: FIRST },
+    { id: id(), ts: 6, type: "status.idle", stopReason: "end_turn" },
+    { id: id(), ts: 7, type: "chat.user_message", turnId: SECOND, text: "revise the deck", attachmentCount: 0 },
+    { id: id(), ts: 8, type: "chat.delta", turnId: SECOND, text: "slides revised" },
+    { id: id(), ts: 9, type: "chat.delta", turnId: refusedReview, text: "copy reviewed" },
+    { id: id(), ts: 10, type: "status.error", code: "design_review_failed", notApplied: { turnId: SECOND, operationId: "operation-10", repairs: 0 }, message: "turn_failed", recoverable: true },
+    { id: id(), ts: 11, type: "status.idle", stopReason: "error" },
+  ];
+
+  const states = projectTurnStates(events);
+
+  expect(states.get(FIRST)?.disposition).toBe("committed");
+  expect(states.get(committedReview)?.disposition).toBe("committed");
+  expect(states.get(SECOND)?.disposition).toBe("not_applied");
+  expect(states.get(refusedReview)?.disposition).toBe("not_applied");
+  expect(states.get(refusedReview)?.notApplied).toEqual({ turnId: SECOND, operationId: "operation-10", repairs: 0 });
+});
+
+test("Given a deck review that fails or is interrupted When the buffered parent terminal follows Then the parent never reads as committed and the review shares its standing", () => {
+  const failedReview = `${FIRST}-review`;
+  const stoppedReview = `${SECOND}-review`;
+  const events: NormalizedEvent[] = [
+    { id: id(), ts: 1, type: "chat.user_message", turnId: FIRST, text: "make the deck", attachmentCount: 0 },
+    { id: id(), ts: 2, type: "chat.delta", turnId: FIRST, text: "slides written" },
+    { id: id(), ts: 3, type: "tool.started", turnId: FIRST, toolCallId: "review-call", tool: "generation_deck_review", input: { scope: "all_slides" } },
+    { id: id(), ts: 4, type: "chat.delta", turnId: failedReview, text: "reviewing copy" },
+    // The review exhausted its continuations; the provider-failure path then flushes the buffered parent terminal.
+    { id: id(), ts: 5, type: "status.error", message: "turn_failed", recoverable: true },
+    { id: id(), ts: 6, type: "tool.finished", turnId: FIRST, toolCallId: "review-call", tool: "generation_deck_review", ok: false },
+    { id: id(), ts: 7, type: "chat.message_end", turnId: FIRST },
+    { id: id(), ts: 8, type: "status.idle", stopReason: "error" },
+    { id: id(), ts: 9, type: "chat.user_message", turnId: SECOND, text: "revise the deck", attachmentCount: 0 },
+    { id: id(), ts: 10, type: "chat.delta", turnId: SECOND, text: "slides revised" },
+    { id: id(), ts: 11, type: "chat.delta", turnId: stoppedReview, text: "reviewing copy" },
+    { id: id(), ts: 12, type: "status.idle", stopReason: "interrupted" },
+  ];
+
+  const states = projectTurnStates(events);
+
+  expect(states.get(FIRST)?.disposition).toBe("rejected");
+  expect(states.get(failedReview)?.disposition).toBe("rejected");
+  expect(states.get(SECOND)?.disposition).toBe("stopped");
+  expect(states.get(stoppedReview)?.disposition).toBe("stopped");
+});
+
 test("Given an independent turn whose id resembles a repair child When projected Then it is not joined to another turn", () => {
   const independent = `${FIRST}-logo-repair`;
   const events: NormalizedEvent[] = [
