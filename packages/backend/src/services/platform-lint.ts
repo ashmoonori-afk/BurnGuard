@@ -69,15 +69,16 @@ function lintCafe24(assets: readonly PlatformLintAsset[], documents: readonly Pl
 
 function lintImweb(documents: readonly PlatformLintDocument[]): readonly PlatformLintFinding[] {
   const findings: PlatformLintFinding[] = [];
-  const idOwners = new Map<string, string[]>();
+  const idOwners = new Map<string, Set<string>>();
   for (const document of documents) {
     if (document.role === "page_fragment") {
       const characters = [...document.text].length;
       if (characters > IMWEB_MAX_FRAGMENT_CHARS) findings.push({ code: "imweb_page_over_1m_chars", severity: "error", path: document.path, evidence: `${characters} characters exceed the 1,000,000-character code-widget cap.` });
       else if (characters > IMWEB_WARN_FRAGMENT_CHARS) findings.push(warn("imweb_page_over_500k_chars", document.path, `${characters} characters are close to the 1,000,000-character cap.`));
-      for (const match of document.text.matchAll(/\bid\s*=\s*(["'])(.*?)\1/giu)) {
+      // The look-behind keeps `data-bg-node-id` and other `*-id` attributes out of the element ids.
+      for (const match of document.text.matchAll(/(?<![\w-])id\s*=\s*(["'])(.*?)\1/giu)) {
         const id = match[2] ?? "";
-        if (id !== "") idOwners.set(id, [...idOwners.get(id) ?? [], document.path]);
+        if (id !== "") idOwners.set(id, (idOwners.get(id) ?? new Set<string>()).add(document.path));
       }
     }
     if (/<(?:form|iframe)\b/iu.test(document.text)) findings.push(warn("imweb_form_or_iframe", document.path, "Forms and iframes are not guaranteed to work inside a code widget."));
@@ -86,7 +87,7 @@ function lintImweb(documents: readonly PlatformLintDocument[]): readonly Platfor
     if (document.role === "common_code") for (const selector of unscopedSelectors(document.text)) findings.push(warn("imweb_global_selector", document.path, `Selector ${selector} is not scoped to .bg-site.`));
   }
   for (const [id, owners] of idOwners) {
-    if (owners.length > 1) findings.push(warn("imweb_duplicate_id", owners[0] ?? null, `id "${id}" appears in ${owners.length} fragments; two widgets on one page would collide.`));
+    if (owners.size > 1) findings.push(warn("imweb_duplicate_id", [...owners][0] ?? null, `id "${id}" appears in ${owners.size} fragments; two widgets on one page would collide.`));
   }
   return findings;
 }

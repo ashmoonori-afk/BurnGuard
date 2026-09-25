@@ -129,6 +129,19 @@ describe("imweb platform lint", () => {
     expect(findings.find((finding) => finding.code === "imweb_duplicate_id")?.evidence).toContain("hero");
   });
 
+  test("Given one fragment whose element carries id and data-bg-node-id with the same value When linted Then no duplicate-id warning fires", () => {
+    const findings = imweb({ documents: [{ path: "pages/a.imweb.html", role: "page_fragment", text: '<section id="hero" data-bg-node-id="hero"></section><p id="cta"></p><p id="cta"></p>' }] });
+    expect(codes(findings)).not.toContain("imweb_duplicate_id");
+  });
+
+  test("Given the same id in three fragments When linted Then one warning counts the three fragments", () => {
+    const documents = ["a", "b", "c"].map((name) => ({ path: `pages/${name}.imweb.html`, role: "page_fragment" as const, text: '<div id="hero" data-bg-node-id="hero"></div>' }));
+    const duplicates = imweb({ documents }).filter((finding) => finding.code === "imweb_duplicate_id");
+    expect(duplicates).toHaveLength(1);
+    expect(duplicates[0]?.path).toBe("pages/a.imweb.html");
+    expect(duplicates[0]?.evidence).toContain("3");
+  });
+
   test("Given an unscoped selector in the common code When linted Then the global-selector warning fires", () => {
     expect(codes(imweb({ documents: [{ path: "common/header-code.html", role: "common_code", text: "<style>body{margin:0}</style>" }] }))).toContain("imweb_global_selector");
     expect(codes(imweb({ documents: [{ path: "common/header-code.html", role: "common_code", text: "<style>.bg-site{margin:0}</style>" }] }))).not.toContain("imweb_global_selector");
