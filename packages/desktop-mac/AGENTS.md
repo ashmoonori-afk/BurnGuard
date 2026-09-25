@@ -13,7 +13,7 @@ Single-file Swift `WKWebView` shell (`main.swift`, 287 LOC) that launches and ow
 | Window/webview | `createWindow` | `WKWebViewConfiguration`, navigation delegate installed before the first load |
 | Backend ownership | `startService` | `Process` rooted at `Bundle.main.bundleURL`, stdin/stdout/stderr pipes retained for drain and shutdown |
 | Readiness protocol | `consumeServiceOutput` | Line-buffered; only `[burnguard-desktop] ` JSON with a matching `protocol` version and `url` is accepted |
-| Navigation policy | `isAppURL`, `webView(_:decidePolicyFor:)` | Host must equal the backend origin host; everything else is cancelled |
+| Navigation policy | `isAppURL`, `webView(_:decidePolicyFor:)`, `createWebViewWith`, `openExternal` | Host must equal the backend origin host; everything else is cancelled. Main-frame link clicks and `window.open` to absolute `http(s)` without userinfo open in the default browser, never in a second web view |
 | Smoke report | `webView(_:didFinish:)`, `writeReport` | Evaluates page JS, records `title`/`bodyTextLength`, writes pretty JSON to the report path |
 | Failure path | `fail` | Smoke run writes the failure into the report; interactive run shows an `NSAlert` |
 

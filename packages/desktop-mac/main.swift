@@ -70,6 +70,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             decisionHandler(trustedSource && isAppDownloadURL(url) ? .download : .cancel)
             return
         }
+        // Parent-owned link clicks that leave the app open in the default browser, mirroring the Windows shell.
+        if navigationAction.navigationType == .linkActivated, navigationAction.sourceFrame.isMainFrame,
+           navigationAction.targetFrame?.isMainFrame != false {
+            openExternal(url)
+        }
         decisionHandler(isAppURL(url) ? .allow : .cancel)
     }
 
@@ -86,6 +91,17 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         panel.beginSheetModal(for: window) { result in
             completionHandler(result == .OK ? panel.urls : nil)
         }
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        // window.open never gets a second web view; external targets go to the default browser instead.
+        if let url = navigationAction.request.url { openExternal(url) }
+        return nil
     }
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
@@ -429,6 +445,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             host == originHost &&
             url.port == origin.port &&
             url.user == nil
+    }
+
+    private func openExternal(_ url: URL) {
+        guard url.scheme == "https" || url.scheme == "http", url.user == nil, url.password == nil, !isAppURL(url) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func isAppDownloadURL(_ url: URL) -> Bool {

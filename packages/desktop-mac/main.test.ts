@@ -47,3 +47,28 @@ describe("macOS service environment", () => {
     expect(service).toContain('environment["PATH"] = (userPaths + searchPath).joined(separator: ":")');
   });
 });
+
+describe("macOS external links", () => {
+  test("Given a URL leaving the app When it is opened externally Then only NSWorkspace opens it, behind http(s), no-userinfo and non-app guards", () => {
+    const open = body("private func openExternal(_ url: URL)");
+    expect(open).toMatch(/guard url\.scheme == "https" \|\| url\.scheme == "http", url\.user == nil, url\.password == nil, !isAppURL\(url\) else \{ return \}/);
+    expect(open).toContain("NSWorkspace.shared.open(url)");
+    expect(source.match(/NSWorkspace/g)).toHaveLength(1);
+  });
+
+  test("Given window.open or a target=_blank request When WebKit asks for a new web view Then the URL goes to openExternal and no web view is created", () => {
+    expect(source).toMatch(/createWebViewWith configuration: WKWebViewConfiguration,\s*for navigationAction: WKNavigationAction,\s*windowFeatures: WKWindowFeatures\s*\) -> WKWebView\? \{/);
+    const create = body("createWebViewWith configuration: WKWebViewConfiguration");
+    expect(create).toContain("if let url = navigationAction.request.url { openExternal(url) }");
+    expect(create).toMatch(/return nil\s*\}$/);
+  });
+
+  test("Given a main-frame link activation When the navigation policy is decided Then it is opened externally and still decided by the app-origin rule", () => {
+    const policy = body("decidePolicyFor navigationAction: WKNavigationAction");
+    const tail = policy.slice(policy.indexOf("return", policy.indexOf("navigationAction.shouldPerformDownload")));
+    const external = tail.indexOf("openExternal(url)");
+    expect(tail).toMatch(/navigationAction\.navigationType == \.linkActivated, navigationAction\.sourceFrame\.isMainFrame,\s*navigationAction\.targetFrame\?\.isMainFrame != false/);
+    expect(external).toBeGreaterThan(tail.indexOf(".linkActivated"));
+    expect(external).toBeLessThan(tail.indexOf("decisionHandler(isAppURL(url) ? .allow : .cancel)"));
+  });
+});
