@@ -1,5 +1,6 @@
 import { authorizedFetch } from "@/api/client";
 import { requestBundledFont } from "@/api/fonts";
+import { anySignal } from "@/lib/abort-signal";
 
 // Public content-addressed fonts are shared by every canvas in this app window.
 const bundledFonts = new Map<string, Promise<string>>();
@@ -89,7 +90,7 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
   const fetched = new Map<string, Promise<string>>();
   let sharedFontUsed = false;
   const resources = new AbortController();
-  const boundedSignal = AbortSignal.any([signal, resources.signal, AbortSignal.timeout(15000)]);
+  const boundedSignal = anySignal([signal, resources.signal, AbortSignal.timeout(15000)]);
   const budget = { remaining: 32 * 1024 * 1024 };
   const resolve = async (source: string, base = documentUrl, kind: "asset" | "css" | "script" = "asset"): Promise<string> => {
     if (kind === "asset" && isBundledFontUrl(source, base)) {
