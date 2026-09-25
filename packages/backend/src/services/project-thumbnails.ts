@@ -41,6 +41,8 @@ const inFlightRenders = new Map<string, Promise<Uint8Array<ArrayBuffer> | null>>
 const waitingRenders: Array<() => void> = [];
 let activeRenders = 0;
 let chromiumUnavailableUntil = 0;
+/** A render that failed on its own content fails again for the same identity; a new revision is a new key and retries at once. */
+const renderFailedUntil = new Map<string, number>();
 
 export type ThumbnailRenderRequest = {
   readonly stagedDir: string;
@@ -137,6 +139,7 @@ async function loadProjectThumbnailUncapped(
   }
 
   if (Date.now() < chromiumUnavailableUntil) return { kind: "unavailable", code: "thumbnail_unavailable" };
+  if (Date.now() < (renderFailedUntil.get(cachePath) ?? 0)) return { kind: "unavailable", code: "thumbnail_unavailable" };
 
   // Never start an in-process launch before the child-process probe says a
   // launch actually completes here: on a host where it does not, the launch
@@ -201,13 +204,18 @@ async function renderThumbnailFile(input: {
     await mkdir(path.dirname(cachePath), { recursive: true });
     await input.render({ ...input.request, outputPath: temporaryPath });
     const bytes = await readThumbnailFile(temporaryPath);
-    if (bytes === null) return null;
+    if (bytes === null) {
+      renderFailedUntil.set(cachePath, Date.now() + chromiumCooldownMs());
+      return null;
+    }
     await rename(temporaryPath, cachePath);
+    renderFailedUntil.delete(cachePath);
     await pruneStaleThumbnails(input.request.stagedDir, path.basename(cachePath));
     return bytes;
   } catch (error) {
     if (error instanceof Error) {
       if (isChromiumUnavailable(error)) chromiumUnavailableUntil = Date.now() + chromiumCooldownMs();
+      else renderFailedUntil.set(cachePath, Date.now() + chromiumCooldownMs());
       return null;
     }
     throw error;

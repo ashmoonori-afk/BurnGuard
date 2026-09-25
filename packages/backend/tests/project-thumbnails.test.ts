@@ -418,6 +418,49 @@ describe("project thumbnail generation and cache", () => {
     }
   });
 
+  test("Given a renderer that fails with render_failed When the same identity is loaded twice Then it renders once and a new revision is retried immediately", async () => {
+    const previousCooldown = process.env.BG_THUMBNAIL_CHROMIUM_COOLDOWN_MS;
+    process.env.BG_THUMBNAIL_CHROMIUM_COOLDOWN_MS = "600000";
+    try {
+      const project = await createProject({ digest: digestA });
+      let renders = 0;
+      const renderFailed: ThumbnailRenderer = async () => {
+        renders += 1;
+        throw Object.assign(new Error("render_failed"), { code: "render_failed" });
+      };
+      const unavailable = { kind: "unavailable", code: "thumbnail_unavailable" };
+
+      expect(await loadProjectThumbnail(project.id, renderFailed)).toEqual(unavailable);
+      expect(await loadProjectThumbnail(project.id, renderFailed)).toEqual(unavailable);
+      expect(renders).toBe(1);
+
+      getSqlite().prepare("UPDATE projects SET current_digest=?, current_revision=4 WHERE id=?").run(digestB, project.id);
+      expect(await loadProjectThumbnail(project.id, renderFailed)).toEqual(unavailable);
+      expect(renders).toBe(2);
+    } finally {
+      if (previousCooldown === undefined) delete process.env.BG_THUMBNAIL_CHROMIUM_COOLDOWN_MS;
+      else process.env.BG_THUMBNAIL_CHROMIUM_COOLDOWN_MS = previousCooldown;
+    }
+  });
+
+  test("Given a render whose PNG fails validation When the same identity is loaded twice Then it renders once and nothing is cached", async () => {
+    const previousCooldown = process.env.BG_THUMBNAIL_CHROMIUM_COOLDOWN_MS;
+    process.env.BG_THUMBNAIL_CHROMIUM_COOLDOWN_MS = "600000";
+    try {
+      const project = await createProject({ digest: digestA });
+      const wrongSize = recordingRenderer(320, 180);
+
+      expect(await loadProjectThumbnail(project.id, wrongSize.renderer)).toEqual({ kind: "unavailable", code: "thumbnail_unavailable" });
+      expect(await loadProjectThumbnail(project.id, wrongSize.renderer)).toEqual({ kind: "unavailable", code: "thumbnail_unavailable" });
+
+      expect(wrongSize.requests.length).toBe(1);
+      expect(await cachedFiles(project.dirPath)).toEqual([]);
+    } finally {
+      if (previousCooldown === undefined) delete process.env.BG_THUMBNAIL_CHROMIUM_COOLDOWN_MS;
+      else process.env.BG_THUMBNAIL_CHROMIUM_COOLDOWN_MS = previousCooldown;
+    }
+  });
+
   test("Given a slide deck project When the thumbnail renders Then the deck flag and project entrypoint are used", async () => {
     const project = await createProject({ digest: digestA, type: "slide_deck" });
     const { renderer, requests } = recordingRenderer();
