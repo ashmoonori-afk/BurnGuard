@@ -1,7 +1,8 @@
 import { copyBundledFonts } from "./data/bundled-fonts";
 import { copyBundledLiquidGlass } from "./data/bundled-liquid-glass";
 import type { Database } from "bun:sqlite";
-import { cp, mkdir, stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { cp, mkdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { ensureConfig } from "./config";
 import {
@@ -78,26 +79,41 @@ export async function seedBundledDesignSystems(
         bundledDesignSystemId(slug),
       );
       if (await exists(destination)) return;
-      await cp(path.join(themesSource, slug), destination, { recursive: true });
-      await copyBundledFonts(destination, repoRoot);
-      await copyBundledLiquidGlass(destination, repoRoot);
+      // Publish only a complete theme; startup extraction recovery removes a stage left by a killed first launch.
+      const stage = path.join(destinationRoot, `.${bundledDesignSystemId(slug)}.staging-${randomUUID()}`);
+      try {
+        await cp(path.join(themesSource, slug), stage, { recursive: true });
+        await copyBundledFonts(stage, repoRoot);
+        await copyBundledLiquidGlass(stage, repoRoot);
+        await rename(stage, destination);
+      } finally {
+        await rm(stage, { recursive: true, force: true });
+      }
     }),
   );
 }
 
-async function seedSampleDesignSystems(): Promise<void> {
-  const repoRoot = resolveRepoRoot();
+export async function seedSampleDesignSystems(
+  repoRoot = resolveRepoRoot(),
+  destinationRoot = systemsDir,
+): Promise<void> {
   const sampleSource = path.join(repoRoot, "design system sample");
-  const sampleDestination = path.join(systemsDir, "northvale-capital");
+  const sampleDestination = path.join(destinationRoot, "northvale-capital");
 
   if (!(await exists(sampleDestination))) {
-    await cp(sampleSource, sampleDestination, {
-      recursive: true,
-      filter: (src) => isSampleSourcePathAllowed(path.relative(sampleSource, src)),
-    });
+    const stage = path.join(destinationRoot, `.northvale-capital.staging-${randomUUID()}`);
+    try {
+      await cp(sampleSource, stage, {
+        recursive: true,
+        filter: (src) => isSampleSourcePathAllowed(path.relative(sampleSource, src)),
+      });
+      await rename(stage, sampleDestination);
+    } finally {
+      await rm(stage, { recursive: true, force: true });
+    }
   }
 
-  await seedBundledDesignSystems(repoRoot, systemsDir);
+  await seedBundledDesignSystems(repoRoot, destinationRoot);
 }
 
 export async function reconcileResearchOnStartup(db: Database, researchRecovery = createProductionResearchRecoveryDependencies(db)): Promise<void> {
