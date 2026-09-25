@@ -53,8 +53,8 @@ export async function initializeImportedProject(project: { id: string; session_i
   const report = { schema_version: 1, entrypoint: project.entrypoint, file_count: entries.length, pages, styles, documents: results, initialized_at: Date.now() };
   await writeFile(resolveWithin(project.dir_path, IMPORT_CONTEXT_PATH), JSON.stringify(report));
   const failed = results.filter(item => item.status === "needs_review").length;
-  await insertNormalizedEvent(project.session_id, { id: ulid(), ts: Date.now(), type: "tool.started", turnId: initId, toolCallId: initId, tool: "프로젝트 자동 초기화", input: { pages: pages.length, documents: results.length } });
-  await insertNormalizedEvent(project.session_id, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId: initId, toolCallId: initId, tool: "프로젝트 자동 초기화", ok: failed === 0, output: `${pages.filter(page => page.status === "read").length}개 HTML과 ${styles.length}개 CSS를 읽었어요. 자료 ${results.length - failed}개를 다음 AI 작업에 연결했어요.${failed ? ` 자료 ${failed}개는 텍스트 추출을 확인해야 해요. 원본은 프로젝트 파일에 보존했어요.` : ""}` });
+  await insertNormalizedEvent(project.session_id, { id: ulid(), ts: Date.now(), type: "tool.started", turnId: initId, toolCallId: initId, tool: "project_import_init", input: { pages: pages.length, documents: results.length } });
+  await insertNormalizedEvent(project.session_id, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId: initId, toolCallId: initId, tool: "project_import_init", ok: failed === 0, output: `${pages.filter(page => page.status === "read").length}개 HTML과 ${styles.length}개 CSS를 읽었어요. 자료 ${results.length - failed}개를 다음 AI 작업에 연결했어요.${failed ? ` 자료 ${failed}개는 텍스트 추출을 확인해야 해요. 원본은 프로젝트 파일에 보존했어요.` : ""}` });
   return { pages: pages.length, documents: results.length, needs_review: failed };
 }
 

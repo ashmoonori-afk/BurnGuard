@@ -14,7 +14,13 @@ const OUT = path.join(OUT_DIR, "burnguard-design.exe");
 const ENTRY = path.join(ROOT, "packages/backend/src/index.ts");
 let stage = "preflight";
 
+/** The process host, bundled Node and native canvas binding are staged from the build host, so only Windows x64 can produce this package. */
+export function assertWindowsBuildHost(platform: NodeJS.Platform, arch: NodeJS.Architecture): void {
+  if (platform !== "win32" || arch !== "x64") throw new Error("Build the Windows backend on Windows x64: its process host, bundled Node and native canvas binding are staged from the build host.");
+}
+
 async function main() {
+  assertWindowsBuildHost(process.platform, process.arch);
   if (!existsSync(ENTRY)) {
     console.error(`entry not found: ${ENTRY}`);
     process.exit(1);
@@ -60,8 +66,10 @@ async function main() {
   console.log("[build] distribute the complete dist/windows folder");
 }
 
-main().catch((e) => {
-  console.error(`[build] failed stage=${stage}`);
-  console.error(e);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((e) => {
+    console.error(`[build] failed stage=${stage}`);
+    console.error(e);
+    process.exit(1);
+  });
+}

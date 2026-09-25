@@ -16,6 +16,7 @@ import { getProjectDetail } from "../db/project-read-repository";
 import { isCanonicalTreeRootMissing } from "../services/canonical-tree-manifest";
 import { parseStoredProjectOptions } from "../services/project-options";
 import type { ExportQaPhase } from "../services/export-qa-barrier";
+import type { ExportServiceError } from "../services/exports";
 
 function ok<T>(data: T): ApiSuccess<T> {
   return { data };
@@ -32,6 +33,9 @@ function fail(
 function isExportFormat(value: unknown): value is ExportFormat {
   return value === "html_zip" || value === "pdf" || value === "png" || value === "pptx" || value === "handoff" || value === "cafe24_package" || value === "imweb_package" || value === "png_zip" || value === "svg";
 }
+
+/** Export admission refusals that the create and retry routes both answer as a typed 400; any other service error stays a server fault. */
+const REFUSED_EXPORT_CODES: ReadonlySet<ExportServiceError["code"]> = new Set(["invalid_graphic_export_options", "format_requires_web", "format_requires_frames", "format_requires_logo", "pdf_resource_limit"]);
 
 export const artifactRoutes = new Hono();
 
@@ -173,7 +177,7 @@ artifactRoutes.post("/api/projects/:id/exports", async (c) => {
     if (job === null) return c.json(fail("export_create_failed", "Export job could not be created"), 500);
     return c.json(ok(job satisfies ExportJob), 202);
   } catch (error) {
-    if (error instanceof ExportServiceError && (error.code === "invalid_graphic_export_options" || error.code === "format_requires_web" || error.code === "format_requires_frames" || error.code === "format_requires_logo" || error.code === "pdf_resource_limit")) return c.json(fail(error.code, error.message), 400);
+    if (error instanceof ExportServiceError && REFUSED_EXPORT_CODES.has(error.code)) return c.json(fail(error.code, error.message), 400);
     throw error;
   }
 });
@@ -229,9 +233,13 @@ artifactRoutes.post("/api/exports/:id/retry", async (c) => {
   const revision = body && typeof body === "object" ? Reflect.get(body, "project_revision") : undefined;
   const digest = body && typeof body === "object" ? Reflect.get(body, "project_digest") : undefined;
   if (project === null || revision !== project.current_revision || digest !== project.current_digest) return c.json(fail("stale_artifact_identity", "Current project revision and digest are required"), 412);
-  const { retryProjectExport } = await import("../services/exports"); const { exportQaHooks } = await import("../services/export-qa-barrier");
+  const { retryProjectExport, ExportServiceError } = await import("../services/exports"); const { exportQaHooks } = await import("../services/export-qa-barrier");
   try { return c.json(ok(await retryProjectExport(job.id, exportQaHooks(c.req.header("x-bg-export-qa-barrier") ?? null))), 202); }
-  catch (error) { if (error instanceof ExportLifecycleError && error.code === "invalid_retry") return c.json(fail("export_retry_conflict", "Export retry already exists or parent is not retryable"), 409); throw error; }
+  catch (error) {
+    if (error instanceof ExportLifecycleError && error.code === "invalid_retry") return c.json(fail("export_retry_conflict", "Export retry already exists or parent is not retryable"), 409);
+    if (error instanceof ExportServiceError && REFUSED_EXPORT_CODES.has(error.code)) return c.json(fail(error.code, error.message), 400);
+    throw error;
+  }
 });
 
 function recordValue(value: unknown, key: string): unknown { return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined; }

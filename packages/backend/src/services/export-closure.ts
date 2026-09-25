@@ -73,11 +73,39 @@ function htmlReferences(source: string, file: string): readonly string[] {
       if (value !== undefined) values.push(value);
     }
     const srcset = element.getAttribute("srcset");
-    if (srcset !== undefined) values.push(...srcset.split(",").map((item) => item.trim().split(/\s+/)[0] ?? ""));
+    // A loop, not a spread: a huge attribute must reach the reference cap instead of overflowing the call stack.
+    if (srcset !== undefined) for (const url of srcsetUrls(srcset)) values.push(url);
   }
-  for (const style of document.querySelectorAll("style")) values.push(...cssReferences(style.text, file));
-  for (const element of document.querySelectorAll("[style]")) values.push(...cssUrlValues(element.getAttribute("style") ?? ""));
+  for (const style of document.querySelectorAll("style")) for (const url of cssReferences(style.text, file)) values.push(url);
+  for (const element of document.querySelectorAll("[style]")) for (const url of cssUrlValues(element.getAttribute("style") ?? "")) values.push(url);
   return values;
+}
+
+/**
+ * HTML candidate grammar, in one linear pass: a URL is a run without ASCII whitespace (so a comma inside a data: URL
+ * stays in it), and its descriptors end at the first comma outside parentheses, exactly where a browser starts the next candidate.
+ */
+function srcsetUrls(srcset: string): readonly string[] {
+  const space = (character: string | undefined): boolean => character === " " || character === "\t" || character === "\n" || character === "\f" || character === "\r";
+  const urls: string[] = [];
+  let index = 0;
+  while (index < srcset.length) {
+    while (index < srcset.length && (space(srcset[index]) || srcset[index] === ",")) index += 1;
+    const start = index;
+    while (index < srcset.length && !space(srcset[index])) index += 1;
+    if (start === index) break;
+    let end = index;
+    while (end > start && srcset[end - 1] === ",") end -= 1;
+    urls.push(srcset.slice(start, end));
+    if (end < index) continue;
+    for (let inParens = false; index < srcset.length; index += 1) {
+      const character = srcset[index];
+      if (character === "(") inParens = true;
+      else if (character === ")") inParens = false;
+      else if (character === "," && !inParens) { index += 1; break; }
+    }
+  }
+  return urls;
 }
 
 function cssReferences(source: string, file: string): readonly string[] {
@@ -92,7 +120,7 @@ function cssReferences(source: string, file: string): readonly string[] {
     const match = /^(?:url\()?\s*["']?([^"')\s]+)["']?/.exec(rule.params);
     if (match?.[1] !== undefined) values.push(match[1]);
   });
-  root.walkDecls((declaration) => { values.push(...cssUrlValues(declaration.value)); });
+  root.walkDecls((declaration) => { for (const url of cssUrlValues(declaration.value)) values.push(url); });
   return values;
 }
 
@@ -110,7 +138,8 @@ function resolveReference(raw: string, owner: string): string | null {
   const value = raw.trim();
   if (value.length === 0 || value.startsWith("#")) return null;
   if (value.startsWith("data:")) {
-    if (!/^data:image\/(?:png|gif|jpeg|webp|svg\+xml);base64,/iu.test(value) || value.length > MAX_DATA_IMAGE_BYTES * 2) throw new ExportClosureError("unsafe_asset", value.slice(0, 64));
+    // Image and font media types the artifact CSP admits via data:, in base64 or percent-encoded form.
+    if (!/^data:(?:image\/(?:png|gif|jpeg|webp|avif|svg\+xml)|font\/(?:woff2?|ttf|otf))(?:;[a-z0-9=._-]+)*,/iu.test(value) || value.length > MAX_DATA_IMAGE_BYTES * 2) throw new ExportClosureError("unsafe_asset", value.slice(0, 64));
     return null;
   }
   let url: URL;

@@ -52,7 +52,7 @@ export async function applyLogoDesignSystemPatch(input: {
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(raw.replace(/^\uFEFF/, ""));
   } catch (error) {
     if (error instanceof SyntaxError) throw new LogoDesignSystemPatchError("patch_invalid:json");
     throw error;

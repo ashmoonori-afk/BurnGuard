@@ -132,6 +132,14 @@ const FINDING_COPY: Record<string, { readonly severity: FindingSeverity; readonl
     severity: "warning",
     message: "export.finding.platform_dynamic_reference",
   },
+  platform_missing_asset: {
+    severity: "warning",
+    message: "export.finding.platform_missing_asset",
+  },
+  platform_unresolved_destination: {
+    severity: "warning",
+    message: "export.finding.platform_unresolved_destination",
+  },
   "png_zip:cut_through_content": {
     severity: "warning",
     message: "export.finding.png_zip:cut_through_content",
@@ -154,6 +162,20 @@ export function platformFindings(job: ExportJob): readonly PlatformFindingView[]
       message: copy === undefined ? t("export.unknownFinding", { name: finding.code }) : t(copy.message),
     };
   });
+}
+
+/** A platform package that failed its checks is never explained by the quality panel. */
+export function isPlatformCheckFailure(job: ExportJob): boolean {
+  return job.latest_attempt?.stop_reason === "validation_failed" && (job.format === "cafe24_package" || job.format === "imweb_package");
+}
+
+/**
+ * Failure copy for a platform check failure, or null for any other failure. A package that failed before it
+ * recorded findings (an incomplete package, an invalid asset destination) has nothing to review in its row.
+ */
+export function platformCheckFailureCopy(job: ExportJob): MessageKey | null {
+  if (!isPlatformCheckFailure(job)) return null;
+  return platformFindings(job).length > 0 ? "export.platformCheckFailed" : "errors.render_failed";
 }
 
 /** A failed export can be handed to the AI only when the attempt left findings that describe what to fix. */

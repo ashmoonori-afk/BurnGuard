@@ -16,6 +16,8 @@ import { isProjectDocumentPath } from "./project-document-paths";
 const MAX_UPLOAD = 48 * 1024 * 1024;
 const MAX_EXPANDED = 128 * 1024 * 1024;
 const MAX_FILES = 10_000;
+// App-owned 3D runtime files (three-scene.ts) ride along in BurnGuard's own HTML exports; every other dot entry stays rejected.
+const APP_OWNED_DOT_FILES = new Set([".burnguard-three/LICENSE", ".burnguard-three/runtime.js"]);
 export class ProjectImportError extends Error {
   constructor(readonly code: "invalid_project_import" | "project_import_limit" | "project_import_entrypoint") { super(code); }
 }
@@ -62,7 +64,7 @@ export async function importProject(form: FormData) {
   const seen = new Set<string>();
   for (const entry of entries) {
     const key = entry.name.toLowerCase();
-    if (seen.has(key) || entry.name.split("/").some(part => part.startsWith(".")) || /(?:^|\/)(?:node_modules|AGENTS(?:\.override)?\.md|CLAUDE(?:\.local)?\.md)(?:\/|$)/i.test(entry.name) || /\.(?:exe|dll|sh|bat|cmd|ps1|pem|key|p12|pfx)$/i.test(entry.name)) throw new ProjectImportError("invalid_project_import");
+    if (seen.has(key) || (!APP_OWNED_DOT_FILES.has(entry.name) && entry.name.split("/").some(part => part.startsWith("."))) || /(?:^|\/)(?:node_modules|AGENTS(?:\.override)?\.md|CLAUDE(?:\.local)?\.md)(?:\/|$)/i.test(entry.name) || /\.(?:exe|dll|sh|bat|cmd|ps1|pem|key|p12|pfx)$/i.test(entry.name)) throw new ProjectImportError("invalid_project_import");
     seen.add(key);
   }
   let documents: File[];

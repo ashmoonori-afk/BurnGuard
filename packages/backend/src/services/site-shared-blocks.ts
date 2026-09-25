@@ -85,7 +85,9 @@ function normalizeShared(value: string): string {
 }
 
 function hasRootAbsoluteAsset(html: string): boolean {
+  // srcset walks whole candidates: a URL runs to whitespace (so a data: URL's comma stays inside it) and ends its candidate
+  // when it ends with a comma; otherwise its descriptors run to the next comma.
   return /\b(?:src|poster)\s*=\s*["']\/(?!\/)/iu.test(html)
-    || /\bsrcset\s*=\s*["'][^"']*(?:^|\s)\/(?!\/)/imu.test(html)
+    || /\bsrcset\s*=\s*["'](?:[\s,]*[^\s"',][^\s"']*(?:(?<=,)(?=[\s"'])|(?<!,)\s[^,"']*,))*[\s,]*\/(?!\/)/iu.test(html)
     || /url\(\s*["']?\/(?!\/)/iu.test(html);
 }

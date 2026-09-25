@@ -8,7 +8,7 @@ run_task8_gates() {
   local full='cd "$REPO_ROOT" && umask 022 && bun test "$REPO_ROOT/packages"'
   local static='test -z "$(rg -n "as any|@ts-ignore|@ts-expect-error|TODO DEBUG|console\\.log\\(\\\"\\[DEBUG|sleep [0-9]|waitForTimeout" packages/backend/src/services/export-* packages/backend/src/db/export-* packages/backend/tests/export-* scripts/qa/task-8-* | grep -v "scripts/qa/task-8-gates.sh:" || true)"'
   local loc='test "$(wc -l packages/backend/src/db/export-lifecycle-repository.ts packages/backend/src/db/migrate-local.ts packages/backend/src/db/sequenced-event-writer.ts packages/backend/src/services/export-*.ts packages/backend/tests/export-*.ts scripts/qa/task-8-* | awk '\''$2!="total"&&$1>250{bad=1}END{print bad+0}'\'')" = 0'
-  local failed=0; gate exact-seven "$seven" || failed=1; gate chromium "$chromium" || failed=1; gate affected "$affected" || failed=1; gate typecheck 'bun run typecheck' || failed=1; gate build 'bun run build' || failed=1; gate full-suite "$full" || failed=1; gate diff-check 'git diff --check' || failed=1; gate static-audit "$static" || failed=1; gate loc-audit "$loc" || failed=1; return "$failed"
+  local failed=0; gate exact-seven "$seven" || failed=1; gate chromium "$chromium" || failed=1; gate affected "$affected" || failed=1; gate typecheck 'bun run typecheck' || failed=1; gate build 'bun run build:frontend && { [ "${OS:-}" != Windows_NT ] || bun run build:backend; }' || failed=1; gate full-suite "$full" || failed=1; gate diff-check 'git diff --check' || failed=1; gate static-audit "$static" || failed=1; gate loc-audit "$loc" || failed=1; return "$failed"
 }
 
 

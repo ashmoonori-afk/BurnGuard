@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PDFDocument } from "pdf-lib";
 import { ARTBOARD_PRINT_CSS, assertUniformArtboardPages, PdfExportError, renderDeckToPdf } from "../src/services/export-pdf";
+import * as shared from "@bg/shared";
+import * as contract from "../src/services/export-pdf-contract";
 import { pdfDimensionsForPaper, pdfPointsForPaper, pdfRasterBudgetFitsPages } from "../src/services/export-pdf-contract";
+import { createCanvas, getDocument } from "../src/services/export-native-modules";
 
 describe("artboard PDF geometry", () => {
   test.each([
@@ -89,6 +92,14 @@ describe("artboard PDF geometry", () => {
     expect(pdfRasterBudgetFitsPages([pdfPointsForPaper("artboard", { width: 4000, height: 4000 })])).toBe(false);
   });
 
+  test("Given the backend PDF contract When the raster budget is read Then it is the one shared rule the export menu also uses", () => {
+    // Given / When / Then
+    expect([contract.PDF_RASTER_SCALE, contract.PDF_MAX_PAGE_PIXELS, contract.PDF_MAX_EXPECTED_PIXELS]).toEqual([shared.PDF_RASTER_SCALE, shared.PDF_MAX_PAGE_PIXELS, shared.PDF_MAX_EXPECTED_PIXELS]);
+    expect(contract.pdfRasterBudgetFitsPages).toBe(shared.pdfRasterBudgetFitsPages);
+    expect(contract.pdfRasterDimensions).toBe(shared.pdfRasterDimensions);
+    expect(pdfPointsForPaper("artboard", { width: 860, height: 16_000 })).toEqual(shared.pdfArtboardPoints({ width: 860, height: 16_000 }));
+  });
+
   test("Given stacked artboards When print CSS is applied Then stack spacing and page minimums cannot add blank pages", () => {
     // Given / When / Then
     expect(ARTBOARD_PRINT_CSS).toMatch(/\[data-graphic-artboard\][^{]*\{[^}]*margin:\s*0\s*!important/u);
@@ -96,6 +107,122 @@ describe("artboard PDF geometry", () => {
     expect(ARTBOARD_PRINT_CSS).toMatch(/min-width:\s*0\s*!important/u);
   });
 });
+
+describe("deck PDF layout", () => {
+  test("Given a deck slide authored as a two-column grid When exported to widescreen PDF Then the right-column box stays in the right half", async () => {
+    // Given
+    const stagedDir = await mkdtemp(path.join(tmpdir(), "bg-deck-pdf-grid-"));
+    try {
+      await writeFile(path.join(stagedDir, "index.html"), twoColumnDeckHtml);
+      const outputPath = path.join(stagedDir, "deck.pdf");
+
+      // When
+      await renderDeckToPdf({ stagedDir, entrypoint: "index.html", outputPath, paper: "widescreen-16x9", title: "Columns", signal: AbortSignal.timeout(45_000) });
+
+      // Then
+      for (const page of await rasterizePdf(outputPath)) {
+        const left = centroid(page, [0xe0, 0x30, 0x50]); const right = centroid(page, [0x30, 0x50, 0xe0]);
+        expect(left.count).toBeGreaterThan(0); expect(right.count).toBeGreaterThan(0);
+        expect(left.x).toBeLessThan(page.width / 2); expect(right.x).toBeGreaterThan(page.width / 2);
+        expect(Math.abs(left.y - right.y)).toBeLessThanOrEqual(2);
+      }
+    } finally { await rm(stagedDir, { recursive: true, force: true }); }
+  }, 60_000);
+
+  test("Given transparent slides over a dark page background When exported to widescreen PDF Then the page prints the authored background And a slide painting its own white stays white", async () => {
+    // Given
+    const stagedDir = await mkdtemp(path.join(tmpdir(), "bg-deck-pdf-background-"));
+    try {
+      await writeFile(path.join(stagedDir, "index.html"), darkDeckHtml);
+      const outputPath = path.join(stagedDir, "deck.pdf");
+
+      // When
+      await renderDeckToPdf({ stagedDir, entrypoint: "index.html", outputPath, paper: "widescreen-16x9", title: "Dark", signal: AbortSignal.timeout(45_000) });
+
+      // Then
+      const [dark, white] = await rasterizePdf(outputPath);
+      if (dark === undefined || white === undefined) throw new TypeError("expected two PDF pages");
+      for (const [channel, value] of [17, 18, 20].entries()) expect(Math.abs((pixelAt(dark, dark.width / 2, 4)[channel] ?? -255) - value)).toBeLessThanOrEqual(2);
+      expect(pixelAt(white, white.width / 2, 4).slice(0, 3)).toEqual([255, 255, 255]);
+    } finally { await rm(stagedDir, { recursive: true, force: true }); }
+  }, 60_000);
+
+  test("Given a ten-slide deck whose gate hides inactive slides before their lazy images load When exported to PDF Then every page contains its image", async () => {
+    // Given
+    const stagedDir = await mkdtemp(path.join(tmpdir(), "bg-deck-pdf-lazy-"));
+    try {
+      const red = createCanvas(200, 200); const paint = red.getContext("2d"); paint.fillStyle = "#ff0000"; paint.fillRect(0, 0, 200, 200);
+      await writeFile(path.join(stagedDir, "red.png"), red.toBuffer("image/png"));
+      const slides = Array.from({ length: 10 }, (_, index) => `<section data-slide style="width:100vw;height:100vh;box-sizing:border-box;padding:40px;background:#ffffff;border:6px solid #222222"><h2>Slide ${index + 1}</h2><img loading="lazy" src="red.png" width="200" height="200" alt=""></section>`).join("");
+      await writeFile(path.join(stagedDir, "index.html"), `<!doctype html><html><head><meta charset="utf-8"><title>Lazy</title><style>html,body{margin:0}[data-slide]:not([data-active]){display:none}</style><script src="/runtime/deck-stage.js" defer></script></head><body>${slides}</body></html>`);
+      const outputPath = path.join(stagedDir, "deck.pdf");
+
+      // When
+      await renderDeckToPdf({ stagedDir, entrypoint: "index.html", outputPath, paper: "widescreen-16x9", title: "Lazy", signal: AbortSignal.timeout(45_000) });
+
+      // Then
+      const pages = await rasterizePdf(outputPath, 0.5);
+      expect(pages).toHaveLength(10);
+      for (const page of pages) expect(centroid(page, [255, 0, 0], 10).count).toBeGreaterThan(0);
+    } finally { await rm(stagedDir, { recursive: true, force: true }); }
+  }, 60_000);
+});
+
+describe("artboard PDF readiness", () => {
+  test("Given a card news set with lazy images below the fold When exported on artboard paper Then it resolves And every page contains its image", async () => {
+    // Given
+    const stagedDir = await mkdtemp(path.join(tmpdir(), "bg-artboard-pdf-lazy-"));
+    try {
+      await writeFile(path.join(stagedDir, "red.svg"), RED_SVG);
+      const boards = Array.from({ length: 6 }, (_, index) => `<section data-graphic-artboard style="width:1080px;height:1350px;box-sizing:border-box;padding:40px;background:#ffffff;border:6px solid #222222"><h2>Card ${index + 1}</h2><img loading="lazy" src="red.svg" width="200" height="200" alt=""></section>`).join("");
+      await writeFile(path.join(stagedDir, "index.html"), `<!doctype html><html><head><meta charset="utf-8"><title>Cards</title><style>html,body{margin:0}</style></head><body>${boards}</body></html>`);
+      const outputPath = path.join(stagedDir, "cards.pdf");
+
+      // When
+      await renderDeckToPdf({ stagedDir, entrypoint: "index.html", outputPath, paper: "artboard", selector: "[data-graphic-artboard]", title: "Cards", signal: AbortSignal.timeout(30_000) });
+
+      // Then
+      const pages = await rasterizePdf(outputPath, 0.25);
+      expect(pages).toHaveLength(6);
+      for (const page of pages) expect(centroid(page, [255, 0, 0], 10).count).toBeGreaterThan(0);
+    } finally { await rm(stagedDir, { recursive: true, force: true }); }
+  }, 60_000);
+});
+
+const RED_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#ff0000"/></svg>';
+
+/** A dark page background under a transparent slide, then a slide that paints its own white background. */
+const darkDeckHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Dark</title><style>html,body{margin:0;background:#111214;color:#f4f4ee;font-family:sans-serif}body[data-deck-ready] .slide:not([data-active]){display:none}.slide{width:100vw;height:100vh;padding:80px;box-sizing:border-box}h1{margin:0;font-size:120px}</style><script src="/runtime/deck-stage.js" defer></script></head><body><section data-slide class="slide"><h1>Dark</h1></section><section data-slide class="slide" style="background:#ffffff;color:#111214"><h1>Light</h1></section></body></html>`;
+
+/** Two gated grid slides: the gate hides inactive slides the way the slide-deck template does. */
+const twoColumnDeckHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Columns</title><style>html,body{margin:0}body[data-deck-ready] .slide:not([data-active]){display:none}.slide{width:100vw;height:100vh;display:grid;grid-template-columns:1fr 1fr;align-items:center;justify-items:center;background:#ffffff;box-sizing:border-box;padding:40px}.box{width:200px;height:200px}</style><script src="/runtime/deck-stage.js" defer></script></head><body>${Array.from({ length: 2 }, () => '<section data-slide class="slide"><div class="box" style="background:#e03050"></div><div class="box" style="background:#3050e0"></div></section>').join("")}</body></html>`;
+
+type Raster = { readonly width: number; readonly height: number; readonly data: Uint8ClampedArray };
+
+/** Rasterises every page; the default 4/3 scale maps PDF points back to CSS pixels. */
+async function rasterizePdf(file: string, scale = 4 / 3): Promise<readonly Raster[]> {
+  const pdf = await getDocument({ data: new Uint8Array(await readFile(file)) }).promise;
+  try {
+    const pages: Raster[] = [];
+    for (let number = 1; number <= pdf.numPages; number += 1) {
+      const page = await pdf.getPage(number); const viewport = page.getViewport({ scale });
+      const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height)); const canvasContext = canvas.getContext("2d");
+      await Reflect.get(Reflect.apply(page.render, page, [{ canvas, canvasContext, viewport }]), "promise");
+      pages.push({ width: canvas.width, height: canvas.height, data: canvasContext.getImageData(0, 0, canvas.width, canvas.height).data });
+    }
+    return pages;
+  } finally { await pdf.destroy(); }
+}
+
+function pixelAt(raster: Raster, x: number, y: number): readonly number[] { const offset = (Math.round(y) * raster.width + Math.round(x)) * 4; return Array.from(raster.data.subarray(offset, offset + 4)); }
+
+function centroid(raster: Raster, rgb: readonly [number, number, number], tolerance = 24): { readonly x: number; readonly y: number; readonly count: number } {
+  let x = 0; let y = 0; let count = 0;
+  for (let offset = 0; offset < raster.data.length; offset += 4) {
+    if (rgb.every((value, channel) => Math.abs((raster.data[offset + channel] ?? -255) - value) <= tolerance)) { x += (offset / 4) % raster.width; y += Math.floor(offset / 4 / raster.width); count += 1; }
+  }
+  return { x: count === 0 ? -1 : x / count, y: count === 0 ? -1 : y / count, count };
+}
 
 function artboardHtml(artboards: readonly { readonly width: number; readonly height: number }[]): string {
   return `<!doctype html><html><head><style>html,body{margin:0;min-width:1280px;min-height:720px}[data-graphic-artboard]{margin:32px;background:white;padding:32px;box-sizing:border-box}[data-graphic-artboard]>div{width:50%;height:50%;background:#2468ac}</style></head><body>${artboards.map(({ width, height }) => `<section data-graphic-artboard style="width:${width}px;height:${height}px"><div></div></section>`).join("")}</body></html>`;

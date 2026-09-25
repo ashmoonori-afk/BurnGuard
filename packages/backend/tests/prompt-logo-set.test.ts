@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { LOGO_CANDIDATE_COUNT, LOGO_FILES, LOGO_PAGE, type LogoSetV1 } from "@bg/shared";
@@ -114,6 +114,16 @@ describe("logo output prompt block", () => {
 
     expect(block).toMatchObject({ phase: "explore", round: 2 });
     expect(block["selected"]).toBeUndefined();
+  });
+
+  test("Given an explored round whose manifest has a UTF-8 BOM When the prompt is built Then the manifest is read and the next round is 2", async () => {
+    const bomDir = mkdtempSync(path.join(tmpdir(), "bg-logo-prompt-bom-"));
+    try {
+      mkdirSync(path.join(bomDir, "explorations"), { recursive: true });
+      writeFileSync(path.join(bomDir, "explorations", "manifest.json"), `\uFEFF${readFileSync(path.join(exploredDir, "explorations", "manifest.json"), "utf8")}\r\n`, "utf8");
+      expect([...readFileSync(path.join(bomDir, "explorations", "manifest.json")).subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+      expect(outputBlock(await promptFor(logoContext(bomDir), `${REGENERATE}\n다시 만들어주세요.`))).toMatchObject({ phase: "explore", round: 2 });
+    } finally { rmSync(bomDir, { recursive: true, force: true }); }
   });
 
   test("Given an explored round and a select action When the prompt is built Then the phase is finalize with the selected candidate and the required guideline pages", async () => {

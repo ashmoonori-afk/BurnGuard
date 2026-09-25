@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { embedCssImages, isProjectImageUrl, readCanvasImage } from "../src/lib/canvas-images";
+import { MAX_SHARED_CANVAS_FONTS, embedCssImages, isProjectImageUrl, readCanvasImage } from "../src/lib/canvas-images";
 
 test("Given sandbox images, When resolving assets, Then only the current project is fetched and CSS images are embedded", async () => {
   const base = "http://127.0.0.1:14070/api/projects/one/fs/index.html";
@@ -42,4 +42,12 @@ test("Given project font CSS, When resolving nested font files, Then stylesheet-
   expect(requested).toEqual(["http://127.0.0.1:14070/api/projects/one/fs/fonts/dm-sans.woff2"]);
   expect(embedded).toContain('src:url("data:font/woff2;base64,AAAA")');
   expect(embedded).toContain('url("../../../../two/fs/font.woff2")');
+});
+
+test("Given the bundled shared fonts.css When its distinct woff2 faces are counted Then every face fits the window-shared canvas font cache", async () => {
+  // Every new project receives this stylesheet with each face rewritten to a distinct /runtime/fonts URL.
+  const css = await Bun.file(`${import.meta.dir}/../../../assets/fonts/fonts.css`).text();
+  const faces = new Set(Array.from(css.matchAll(/url\('\.\/([^']+\.woff2)'\)/g), match => match[1]));
+  expect(faces.size).toBeGreaterThan(0);
+  expect(faces.size).toBeLessThan(MAX_SHARED_CANVAS_FONTS);
 });

@@ -4,10 +4,18 @@ import { ulid } from "ulid";
 import type { AdapterRunInput, AdapterRunResult } from "../adapters/types";
 import { resolveWithin } from "../security/path-boundary";
 import { runWithContinuation } from "./turn-continuation";
-import { generationOutputComplete, hasGeneratedContent, matchesDeckSourcePages, type DeckSourcePage } from "./generation-output";
+import { generationOutputComplete, hasDeckRuntime, hasGeneratedContent, matchesDeckSourcePages, type DeckSourcePage } from "./generation-output";
 
 export function needsGenerationPhases(projectType: string, request: string, starter = false): boolean {
-  return (projectType === "slide_deck" && starter) || /대형|대규모|다중|전체.{0,12}(다시|재작성|재구성)|여러\s*(페이지|화면|장)|\b(?:large|multi-page|multi-screen|rebuild)\b|\d+\s*(?:페이지|장|pages|slides)/iu.test(request);
+  // A logo has its own explore/finalize contract; page units would contradict it.
+  if (projectType === "logo") return false;
+  if ((projectType === "slide_deck" && starter) || /전체.{0,12}(다시|재작성|재구성)|\brebuild\b/iu.test(request)) return true;
+  // "on the last 2 slides" or "slide 3" names an edit target, not a document size.
+  if (/\bon\s+(?:the\s+)?(?:\w+\s+){0,3}\d+\s*(?:pages|slides)\b|\b(?:slide|page)\s+\d+\b/iu.test(request)) return false;
+  // A count or size describes a new document only when a quantity or document noun follows it, and only with creation intent.
+  const count = /\d+\s*(?:페이지|장)\s*(?:짜리|분량|이상|으?로|(?:의\s*)?(?:슬라이드|덱|프레젠테이션|사이트|웹사이트|문서|소개서|발표)(?!에))|\b\d+[\s-]*(?:pages?|slides?)\b/iu;
+  const size = /(?:대형|대규모|다중)\s*(?:덱|슬라이드|사이트|웹|문서|프레젠테이션)|여러\s*(?:페이지|화면|장)|\blarge\s+(?:slide\s+)?(?:deck|site|website|presentation)\b|\b(?:multi-page|multi-screen)\b/iu;
+  return (count.test(request) || size.test(request)) && /만들|생성|작성|제작|\b(?:create|make|build|generate)\b/iu.test(request);
 }
 
 /** A server-owned loop, not a request that the model merely describe phases. */
@@ -30,7 +38,7 @@ export async function runGenerationPhases(input: AdapterRunInput, entrypoint: st
     return readFile(file, "utf8");
   };
   const readPlan = async () => {
-    const value: unknown = JSON.parse(await readOwned([...folder, "plan.json"], 32_768));
+    const value: unknown = JSON.parse((await readOwned([...folder, "plan.json"], 32_768)).replace(/^\uFEFF/, ""));
     if (!value || typeof value !== "object" || !("units" in value) || !Array.isArray(value.units) || value.units.length < 1 || value.units.length > 80 || !value.units.every((unit: unknown) => typeof unit === "string" && unit.trim().length > 0 && unit.length <= 300)) return false;
     if (sourcePages !== undefined && value.units.length !== sourcePages.length) return false;
     units = value.units;
@@ -43,7 +51,7 @@ export async function runGenerationPhases(input: AdapterRunInput, entrypoint: st
       const slides = root.querySelectorAll("[data-slide]");
       if (sourcePages !== undefined && !matchesDeckSourcePages(slides, sourcePages)) return false;
       if (slides.length !== units.length || nodes.some(node => !node.hasAttribute("data-slide") || !node.classList.contains("deck-slide") || node.parentNode?.closest("[data-slide]"))) return false;
-      if (!root.querySelectorAll("script[src]").some(node => /^\/?(?:\.\/)?runtime\/deck-stage\.js(?:[?#].*)?$/.test(node.getAttribute("src") ?? ""))) return false;
+      if (!hasDeckRuntime(root, entrypoint)) return false;
     }
     return nodes.length === units.length && units.every((_unit, index) => {
       const node = nodes[index];
@@ -65,7 +73,7 @@ export async function runGenerationPhases(input: AdapterRunInput, entrypoint: st
     await input.onEvent({ id: ulid(), ts: Date.now(), type: "tool.started", turnId: input.turnId, toolCallId, tool, input: progress });
     let ok = false;
     try {
-      const result = await runWithContinuation({ ...input, prompt: `${input.prompt}\n\n<generation_phase>\n${instruction}\nFor slide decks, every unit must be a non-nested <section class="deck-slide" data-slide data-bg-unit="N">. Preserve slide geometry CSS and <script src="runtime/deck-stage.js" defer></script>. Mark unfinished content with data-bg-placeholder and remove that marker only after replacing it with actual content, never just a slide counter.\nOnly perform this phase. Save valid UTF-8 files before returning. Do not rewrite completed units or regenerate their assets. Keep changes small; never delete the entrypoint to replace it.\n</generation_phase>`, onEvent: async event => {
+      const result = await runWithContinuation({ ...input, prompt: `${input.prompt}\n\n<generation_phase>\n${instruction}\nFor slide decks, every unit must be a non-nested <section class="deck-slide" data-slide data-bg-unit="N">. Preserve slide geometry CSS and <script src="/runtime/deck-stage.js" defer></script>. Mark unfinished content with data-bg-placeholder and remove that marker only after replacing it with actual content, never just a slide counter.\nOnly perform this phase. Save valid UTF-8 files before returning. Do not rewrite completed units or regenerate their assets. Keep changes small; never delete the entrypoint to replace it.\n</generation_phase>`, onEvent: async event => {
         // A completed phase is not a completed user request.
         if (event.type !== "status.idle" && event.type !== "chat.message_end") await input.onEvent(event);
       } }, run, valid(check));

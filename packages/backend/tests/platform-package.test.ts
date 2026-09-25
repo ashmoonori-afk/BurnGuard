@@ -12,7 +12,8 @@ import { verifyExportDownload, ExportDownloadError } from "../src/services/expor
 import { buildPlatformPackage, PLATFORM_TRANSFORMATION_VERSION } from "../src/services/export-platform-package";
 import { ExportPackageError, type PlatformPackageManifest } from "../src/services/export-package-validation";
 import { canonicalJson, parseExportReceipt, sha256, type ExportReceipt } from "../src/services/export-receipt";
-import { FIXTURE_ENTRYPOINT, stagePlatformFixture } from "./helpers/platform-package-fixture";
+import { SITE_MAP_PAGE_LIMIT } from "../src/services/site-map";
+import { FIXTURE_ENTRYPOINT, OVER_BUDGET_IMAGE_BYTES, stagePlatformFixture } from "./helpers/platform-package-fixture";
 
 const CAFE24_BASE = "/web/upload/burnguard/shop-site/";
 const projectName = "Shop Site";
@@ -28,8 +29,9 @@ async function stage(main?: string): Promise<string> {
   return root;
 }
 
-async function build(format: "cafe24_package" | "imweb_package", options: ExportOptions = {}, main?: string) {
+async function build(format: "cafe24_package" | "imweb_package", options: ExportOptions = {}, main?: string, prepare?: (root: string) => Promise<void>) {
   const stagedDir = await stage(main);
+  await prepare?.(stagedDir);
   const outputPath = path.join(path.dirname(stagedDir), `${path.basename(stagedDir)}-artifact.zip`);
   const validation = await buildPlatformPackage({
     paths: { staged: stagedDir, scratch: path.join(path.dirname(stagedDir), `${path.basename(stagedDir)}-package`), output: outputPath },
@@ -45,7 +47,7 @@ async function build(format: "cafe24_package" | "imweb_package", options: Export
     if (file === null) throw new TypeError(`missing package entry: ${name}`);
     return file.async("string");
   };
-  return { validation, outputPath, bytes, names, text, lint: async () => JSON.parse(await text("lint.json")) as { readonly findings: readonly { readonly code: string; readonly severity: string }[] } };
+  return { validation, outputPath, bytes, names, text, lint: async () => JSON.parse(await text("lint.json")) as { readonly findings: readonly { readonly code: string; readonly severity: string; readonly path: string | null; readonly evidence: string }[] } };
 }
 
 describe("cafe24 smart design package", () => {
@@ -98,6 +100,15 @@ describe("cafe24 smart design package", () => {
     expect(css).toContain(`${CAFE24_BASE}css/base.css`);
   });
 
+  test("Given an inline style that loads a local image When the package is built Then validation accepts the entity-quoted rewrite", async () => {
+    // Given / When
+    const built = await build("cafe24_package", {}, '<section class="hero" style="background:url(img/hero.png) no-repeat"><h1>안녕하세요</h1></section>');
+
+    // Then
+    expect(await built.text("pages/home.html")).toContain(`url(&quot;${CAFE24_BASE}img/hero.png&quot;)`);
+    expect(built.names).toContain("web/shop-site/img/hero.png");
+  });
+
   test("Given a configured asset base url When the package is built Then that host is used instead of the default", async () => {
     const built = await build("cafe24_package", { asset_base_url: "https://cdn.example.com/burnguard" });
     expect(await built.text("pages/home.html")).toContain("https://cdn.example.com/burnguard/img/hero.png");
@@ -113,6 +124,40 @@ describe("cafe24 smart design package", () => {
     expect(lint.findings.map((finding) => finding.code)).toContain("cafe24_jquery_duplicate");
     expect(lint.findings.every((finding) => finding.severity !== "error")).toBe(true);
     expect(built.names).toContain("web/shop-site/fonts/OFL.txt");
+  });
+
+  test("Given bundled-style <Family>-OFL.txt licenses beside shipped fonts When the package is built Then each license ships next to the fonts without an extension warning", async () => {
+    // Given / When
+    const built = await build("cafe24_package", {}, undefined, async (root) => { await writeFile(path.join(root, "fonts", "Pretendard-OFL.txt"), "SIL Open Font License 1.1"); });
+    const lint = await built.lint();
+
+    // Then
+    expect(built.names).toContain("web/shop-site/fonts/Pretendard-OFL.txt");
+    expect(built.names).toContain("web/shop-site/fonts/OFL.txt");
+    expect(lint.findings.filter((finding) => finding.code === "cafe24_disallowed_extension" && (finding.path ?? "").endsWith(".txt"))).toHaveLength(0);
+    expect(lint.findings.filter((finding) => finding.code === "cafe24_disallowed_extension" && (finding.path ?? "").endsWith(".woff2"))).toHaveLength(1);
+  });
+
+  test("Given font folders that each carry OFL.txt When the package is built Then every notice ships under a distinct name", async () => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      for (const [folder, family] of [["a", "A"], ["b", "B"]] as const) {
+        await mkdir(path.join(root, "fonts", folder), { recursive: true });
+        await writeFile(path.join(root, "fonts", folder, `${family}.woff2`), Buffer.alloc(512, 2));
+        await writeFile(path.join(root, "fonts", folder, "OFL.txt"), `${family} license`);
+      }
+      const css = path.join(root, "css", "site.css");
+      await writeFile(css, `${await readFile(css, "utf8")}@font-face{font-family:"A";src:url(../fonts/a/A.woff2)}@font-face{font-family:"B";src:url(../fonts/b/B.woff2)}`);
+    };
+
+    // When
+    const built = await build("cafe24_package", {}, undefined, prepare);
+
+    // Then
+    expect(built.names).toContain("web/shop-site/fonts/OFL.txt");
+    expect(built.names).toContain("web/shop-site/fonts/2-OFL.txt");
+    expect(built.names).toContain("web/shop-site/fonts/3-OFL.txt");
+    expect(await built.text("web/shop-site/fonts/2-OFL.txt")).toBe("A license");
   });
 
   test("Given inter-page navigation When the package is built Then the relative href survives with an informational finding", async () => {
@@ -172,6 +217,139 @@ describe("imweb code widget package", () => {
     expect(lint.findings.map((finding) => finding.code)).not.toContain("imweb_image_needs_hosting");
   });
 
+  test("Given a chart config, JSON-LD, a module and an inline script inside main When the package is built Then the footer holds only classic scripts and the inline script ships once", async () => {
+    // Given
+    const main = '<section class="hero" id="hero"><figure><script type="application/json" data-bg-chart-config>{"schema_version":1,"kind":"bar"}</script></figure><script>window.x=1;</script></section>';
+    const prepare = async (root: string): Promise<void> => {
+      const home = path.join(root, "home.html");
+      await writeFile(home, (await readFile(home, "utf8")).replace("</head>", '<script type="application/ld+json">{"@context":"https://schema.org"}</script><script type="module">import { boot } from "./js/boot.js"; boot();</script></head>'));
+    };
+
+    // When
+    const built = await build("imweb_package", {}, main, prepare);
+    const footer = await built.text("common/footer-code.html");
+    const fragment = await built.text("pages/home.imweb.html");
+
+    // Then
+    const bodies = [...footer.matchAll(/<script>([\s\S]*?)<\/script>/gu)].map((match) => match[1] ?? "");
+    expect(bodies.join("")).toContain("DOMContentLoaded");
+    for (const body of bodies) expect(() => new Function(body)).not.toThrow();
+    for (const excluded of ["schema_version", "@context", "boot()", "window.x"]) expect(footer).not.toContain(excluded);
+    expect(fragment.match(/window\.x=/gu)).toHaveLength(1);
+  });
+
+  test.each([
+    ["no asset base url", {}, 1, 0],
+    ["an asset base url", { asset_base_url: "https://cdn.example.com/site/" }, 0, 1],
+  ] as const)("Given a src script inside main and %s When the imweb package is built Then its code is delivered exactly once", async (_label, options, footerCopies, hostedTags) => {
+    // Given
+    const main = '<section class="hero" id="hero"><h1>x</h1><script src="js/section.js"></script></section>';
+    const prepare = async (root: string): Promise<void> => { await writeFile(path.join(root, "js", "section.js"), "window.sectionReady=true;"); };
+
+    // When
+    const built = await build("imweb_package", options, main, prepare);
+    const footer = await built.text("common/footer-code.html");
+    const fragment = await built.text("pages/home.imweb.html");
+
+    // Then
+    expect(footer.match(/window\.sectionReady=/gu) ?? []).toHaveLength(footerCopies);
+    expect(fragment.match(/src="https:\/\/cdn\.example\.com\/site\/section\.js"/gu) ?? []).toHaveLength(hostedTags);
+  });
+
+  test.each([["no asset base url", {}], ["an asset base url", { asset_base_url: "https://cdn.example.com/site/" }]] as const)("Given a page without main, an inline body script and %s When the imweb package is built Then the script ships once and linked scripts stay in the footer", async (_label, options) => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      const home = path.join(root, "home.html");
+      await writeFile(home, (await readFile(home, "utf8")).replace("<main data-bg-content>", '<div class="content">').replace("</main>", "</div><script>window.y=1;</script>"));
+    };
+
+    // When
+    const built = await build("imweb_package", options, undefined, prepare);
+    const footer = await built.text("common/footer-code.html");
+    const fragment = await built.text("pages/home.imweb.html");
+
+    // Then
+    expect(`${fragment}${footer}`.match(/window\.y=/gu)).toHaveLength(1);
+    expect(footer).toContain("DOMContentLoaded");
+  });
+
+  test("Given pages whose slugs collide When the package is built Then each page gets its own fragment and scope class", async () => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      await mkdir(path.join(root, "a"), { recursive: true });
+      for (const relPath of ["a-b.html", "a/b.html"]) await writeFile(path.join(root, relPath), `<!doctype html><html><head><title>${relPath}</title></head><body><main data-bg-content><p>${relPath}</p></main></body></html>`);
+    };
+
+    // When
+    const built = await build("imweb_package", {}, undefined, prepare);
+
+    // Then
+    expect(built.names).toContain("pages/a-b.imweb.html");
+    expect(built.names).toContain("pages/a-b-2.imweb.html");
+    expect(await built.text("pages/a-b.imweb.html")).toContain("<p>a-b.html</p>");
+    expect(await built.text("pages/a-b-2.imweb.html")).toContain('class="bg-site bg-page-a-b-2"');
+    expect(await built.text("pages/a-b-2.imweb.html")).toContain("<p>a/b.html</p>");
+  });
+
+  test("Given two over-budget images with the same basename and an asset base url When the package is built Then one destination-collision finding names both files", async () => {
+    // Given
+    const main = '<section class="hero" id="hero"><img src="img/home/bg.jpg" alt="a"><img src="img/about/bg.jpg" alt="b"><img src="img/home/bg.jpg" alt="c"></section>';
+    const prepare = async (root: string): Promise<void> => {
+      for (const folder of ["home", "about"]) {
+        await mkdir(path.join(root, "img", folder), { recursive: true });
+        await writeFile(path.join(root, "img", folder, "bg.jpg"), Buffer.alloc(OVER_BUDGET_IMAGE_BYTES, folder.length));
+      }
+    };
+
+    // When
+    const lint = await (await build("imweb_package", { asset_base_url: "https://cdn.example.com/site/" }, main, prepare)).lint();
+
+    // Then
+    const collisions = lint.findings.filter((finding) => finding.code === "platform_unresolved_destination");
+    expect(collisions).toHaveLength(1);
+    expect(collisions[0]?.severity).toBe("warning");
+    expect(collisions[0]?.evidence).toContain("img/home/bg.jpg");
+    expect(collisions[0]?.evidence).toContain("img/about/bg.jpg");
+  });
+
+  test("Given keyframes in shared CSS used by page CSS and inline styles When the package is built Then every reference uses the renamed keyframes", async () => {
+    // Given
+    const main = '<section class="hero" id="hero"><div class="lift" style="animation: fadeUp 1s">a</div><p style="animation-name:fadeUp">b</p><p style="animation: fade 1s">c</p></section>';
+    const prepare = async (root: string): Promise<void> => {
+      for (const page of ["home.html", "about.html"]) {
+        const file = path.join(root, page);
+        await writeFile(file, (await readFile(file, "utf8")).replace("/* @bg-page-css */", "@keyframes fadeUp{from{opacity:0}to{opacity:1}}/* @bg-page-css */.lift{animation:fadeUp 2s}"));
+      }
+    };
+
+    // When
+    const built = await build("imweb_package", {}, main, prepare);
+    const header = await built.text("common/header-code.html");
+    const fragment = await built.text("pages/home.imweb.html");
+
+    // Then
+    expect(header).toContain("@keyframes bg-shared-fadeUp");
+    expect(fragment).not.toMatch(/animation(?:-name)?:\s*fadeUp\b/u);
+    expect(fragment).not.toMatch(/animation:\s*fade\b/u);
+    expect(fragment).toContain("animation:bg-shared-fadeUp 2s");
+    expect(fragment).toContain("animation: bg-shared-fadeUp 1s");
+    expect(fragment).toContain("animation-name:bg-shared-fadeUp");
+    expect(fragment).toContain("animation: bg-home-fade 1s");
+    expect(await built.text("pages/about.imweb.html")).toContain("animation:bg-shared-fadeUp 2s");
+  });
+
+  test.each([
+    ["preformatted text", '<section class="hero" id="hero"><pre>background: url(&quot;https://images.example.com/a.png&quot;)</pre></section>'],
+    ["a data attribute", '<section class="hero" id="hero" data-bg="url(&quot;https://images.example.com/a.png&quot;)"><h1>x</h1></section>'],
+  ] as const)("Given an entity-quoted remote url() in %s When the imweb package is built Then validation accepts it because only style attributes are decoded", async (_label, main) => {
+    // Given / When
+    const built = await build("imweb_package", {}, main);
+
+    // Then
+    expect(built.validation.entries).toBeGreaterThan(0);
+    expect(await built.text("pages/home.imweb.html")).toContain("url(&quot;https://images.example.com/a.png&quot;)");
+  });
+
   test("Given a fragment over one million characters When the package is built Then the export fails as a platform lint failure", async () => {
     // Given
     const oversized = `<section class="hero" id="hero"><p>${"가".repeat(1_000_001)}</p></section>`;
@@ -200,6 +378,134 @@ describe("platform package boundaries", () => {
     expect(built.names.some((name) => name.includes("docs/attachments") || name.includes("private-brief"))).toBe(false);
   });
 
+  test.each(["cafe24_package", "imweb_package"] as const)("Given mailto, tel, external and directory anchors in main When %s is built Then validation accepts the archive and the hrefs survive", async (format) => {
+    // Given
+    const hrefs = ["mailto:hello@brand.kr", "tel:+82-2-000-0000", "https://instagram.com/brand", "/", "about/", "./", "?q=1"];
+    const main = `<section class="hero" id="hero">${hrefs.map((href) => `<a href="${href}">link</a>`).join("")}<area href="https://example.com/map" alt="map"></section>`;
+
+    // When
+    const built = await build(format, {}, main);
+
+    // Then
+    const fragment = await built.text(built.names.find((name) => name.startsWith("pages/home")) ?? "pages/home.html");
+    expect(built.validation.entries).toBeGreaterThan(0);
+    expect(fragment).toContain('href="mailto:hello@brand.kr"');
+    expect(fragment).toContain('href="https://instagram.com/brand"');
+  });
+
+  test.each([
+    ["cafe24_package", "url(https://evil.example/x.png)"],
+    ["imweb_package", "url(https://evil.example/x.png)"],
+    ["cafe24_package", "url(&quot;https://evil.example/x.png&quot;)"],
+    ["imweb_package", "\n  url(&#39;https://evil.example/x.png&#39;)"],
+  ] as const)("Given an anchor whose style loads an off-package url When %s is validated Then the style reference %s is still rejected", async (format, url) => {
+    // Given
+    const built = await build(format, {}, '<section class="hero" id="hero"><a href="mailto:hello@brand.kr">mail</a></section>');
+    const zip = await JSZip.loadAsync(built.bytes);
+    const victim = built.names.find((name) => name.startsWith("pages/home")) ?? "pages/home.html";
+    const tamperedText = (await built.text(victim)).replace('<a href="mailto:hello@brand.kr">', `<a href="mailto:hello@brand.kr" style="background:${url}">`);
+    zip.file(victim, tamperedText);
+    const manifest: PlatformPackageManifest = JSON.parse(await built.text("burnguard-export.json"));
+    const bytes = new TextEncoder().encode(tamperedText);
+    const forged: PlatformPackageManifest = { ...manifest, entries: manifest.entries.map((entry) => entry.path === victim ? { path: entry.path, size: bytes.byteLength, sha256: sha256(bytes) } : { path: entry.path, size: entry.size, sha256: entry.sha256 }) };
+    zip.file("burnguard-export.json", canonicalJson(forged));
+
+    // When / Then
+    const { validatePlatformPackage } = await import("../src/services/export-package-validation");
+    await expect(validatePlatformPackage(await zip.generateAsync({ type: "uint8array" }), forged)).rejects.toMatchObject({ code: "unresolved_reference" });
+  });
+
+  test.each(["cafe24_package", "imweb_package"] as const)("Given an image referenced only by a subpage When %s is built Then it is shipped and rewritten", async (format) => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      const about = path.join(root, "about.html");
+      await writeFile(about, (await readFile(about, "utf8")).replace("<p>우리는 만듭니다</p>", '<img src="img/team.png" alt="team">'));
+      await writeFile(path.join(root, "img", "team.png"), Buffer.alloc(1024, 5));
+    };
+
+    // When
+    const built = await build(format, {}, undefined, prepare);
+
+    // Then
+    if (format === "cafe24_package") {
+      expect(built.names).toContain("web/shop-site/img/team.png");
+      expect(await built.text("pages/about.html")).toContain(`${CAFE24_BASE}img/team.png`);
+    } else {
+      expect(await built.text("pages/about.imweb.html")).toContain("data:image/png;base64,");
+      expect(await built.text("pages/about.imweb.html")).not.toContain('src="img/team.png"');
+    }
+  });
+
+  test("Given a subpage whose image is missing When imweb is built Then the export succeeds with a missing-asset warning for that page", async () => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      const about = path.join(root, "about.html");
+      await writeFile(about, (await readFile(about, "utf8")).replace("<p>우리는 만듭니다</p>", '<img src="img/gone.png" alt="gone">'));
+    };
+
+    // When
+    const lint = await (await build("imweb_package", {}, undefined, prepare)).lint();
+
+    // Then
+    const missing = lint.findings.filter((finding) => finding.code === "platform_missing_asset");
+    expect(missing).toHaveLength(1);
+    expect(missing[0]).toMatchObject({ severity: "warning", path: "about.html" });
+  });
+
+  test.each(["cafe24_package", "imweb_package"] as const)("Given a subpage with a remote head script and a subpage-only image When %s is built Then only the remote reference is lost and the image is shipped and rewritten", async (format) => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      const about = path.join(root, "about.html");
+      await writeFile(about, (await readFile(about, "utf8")).replace("</head>", '<script src="https://maps.example.com/api.js"></script></head>').replace("<p>우리는 만듭니다</p>", '<img src="img/team.png" alt="team">'));
+      await writeFile(path.join(root, "img", "team.png"), Buffer.alloc(1024, 5));
+    };
+
+    // When
+    const built = await build(format, {}, undefined, prepare);
+
+    // Then
+    expect((await built.lint()).findings.filter((finding) => finding.code === "platform_missing_asset").map((finding) => finding.path)).toEqual(["about.html"]);
+    if (format === "cafe24_package") {
+      expect(built.names).toContain("web/shop-site/img/team.png");
+      expect(await built.text("pages/about.html")).toContain(`${CAFE24_BASE}img/team.png`);
+    } else {
+      expect(await built.text("pages/about.imweb.html")).toContain("data:image/png;base64,");
+      expect(await built.text("pages/about.imweb.html")).not.toContain('src="img/team.png"');
+    }
+  });
+
+  test("Given a subpage with one missing and one present image When imweb is built Then the present image is still inlined", async () => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      const about = path.join(root, "about.html");
+      await writeFile(about, (await readFile(about, "utf8")).replace("<p>우리는 만듭니다</p>", '<img src="img/gone.png" alt="gone"><img src="img/team.png" alt="team">'));
+      await writeFile(path.join(root, "img", "team.png"), Buffer.alloc(1024, 5));
+    };
+
+    // When
+    const built = await build("imweb_package", {}, undefined, prepare);
+    const fragment = await built.text("pages/about.imweb.html");
+
+    // Then
+    expect(fragment).not.toContain('src="img/team.png"');
+    expect(fragment).toContain('src="img/gone.png"');
+    expect((await built.lint()).findings.filter((finding) => finding.code === "platform_missing_asset").map((finding) => finding.path)).toEqual(["about.html"]);
+  });
+
+  test.each(["cafe24_package", "imweb_package"] as const)("Given more pages than the site-map cap When %s is built Then every page has a fragment", async (format) => {
+    // Given
+    const extra = SITE_MAP_PAGE_LIMIT + 6;
+    const prepare = async (root: string): Promise<void> => {
+      for (let index = 0; index < extra; index += 1) await writeFile(path.join(root, `p${String(index).padStart(2, "0")}.html`), `<!doctype html><html><head><title>p${index}</title></head><body><main data-bg-content><p>page ${index}</p></main></body></html>`);
+    };
+
+    // When
+    const built = await build(format, {}, undefined, prepare);
+
+    // Then
+    expect(built.names.filter((name) => name.startsWith("pages/"))).toHaveLength(extra + 2);
+  });
+
   test.each(["cafe24_package", "imweb_package"] as const)("Given a built %s When one entry is edited Then package validation rejects the archive", async (format) => {
     // Given
     const built = await build(format);
@@ -212,7 +518,8 @@ describe("platform package boundaries", () => {
     // When / Then
     const { validatePlatformPackage } = await import("../src/services/export-package-validation");
     const manifest: PlatformPackageManifest = JSON.parse(await built.text("burnguard-export.json"));
-    await expect(validatePlatformPackage(tampered, manifest)).rejects.toBeInstanceOf(ExportPackageError);
+    await expect(validatePlatformPackage(built.bytes, manifest)).resolves.toEqual(manifest);
+    await expect(validatePlatformPackage(tampered, manifest)).rejects.toMatchObject({ code: "manifest_mismatch" });
   });
 
   test.each(["cafe24_package", "imweb_package"] as const)("Given a published %s receipt When the download is verified Then identity holds and tampering is rejected", async (format) => {

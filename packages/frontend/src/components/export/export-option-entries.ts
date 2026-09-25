@@ -4,7 +4,7 @@
  * which options each entry sends.
  */
 import { t } from "@/i18n/t";
-import type { GraphicCanvasV1, GraphicSetV1, ProjectType } from "@bg/shared";
+import { pdfArtboardPoints, pdfRasterBudgetFitsPages, type GraphicCanvasV1, type GraphicSetV1, type ProjectType } from "@bg/shared";
 import type {
   ExportMenuOption,
   ExportOptionField,
@@ -66,7 +66,8 @@ export function platformPackageOptions(
       key: "imweb_package",
       format: "imweb_package",
       label: t("export.option.imweb"),
-      ...(entered === "" ? {} : { options: { asset_base_url: entered } }),
+      // A site-relative Cafe24 upload path does not exist on Imweb, which has no FTP; only an https host is shared.
+      ...(/^https:\/\//iu.test(entered) ? { options: { asset_base_url: entered } } : {}),
       fields: [IMWEB_URL_FIELD],
       ...disabled,
     },
@@ -124,6 +125,9 @@ export function graphicExportOptions(
   values: ExportOptionValues,
 ): readonly ExportMenuOption[] {
   const uniform = framesAreUniform(set);
+  // Same pages the backend admission budgets (banner frames, else frame_count x canvas); the backend stays the authority.
+  const pages = set.kind === "banner_set" && set.frames !== undefined ? set.frames : Array.from({ length: set.frame_count }, () => canvas);
+  const fits = pdfRasterBudgetFitsPages(pages.map(pdfArtboardPoints));
   return [
     ...(set.kind === "single"
       ? [{
@@ -143,7 +147,7 @@ export function graphicExportOptions(
       format: "pdf",
       options: { pdf_paper: "artboard" },
       label: t("export.option.pdfArtboard"),
-      ...(uniform ? {} : { disabledReason: "mixed_frames" as const, note: t("export.option.mixedFrames") }),
+      ...(!uniform ? { disabledReason: "mixed_frames" as const, note: t("export.option.mixedFrames") } : fits ? {} : { disabledReason: "pdf_too_large" as const }),
     },
   ];
 }

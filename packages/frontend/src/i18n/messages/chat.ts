@@ -9,6 +9,9 @@ export const chatMessages = defineMessages({
   "chat.tool.resumeIncomplete": { ko: "작업이 미완료되어 기존 파일에서 자동 재개", en: "Work incomplete — automatically resuming existing files", "zh-CN": "工作未完成，正在从现有文件自动恢复" },
   "chat.tool.providerFailed": { ko: "작업 도구 실행 실패 · 기존 결과는 유지", en: "Tool execution failed; existing result preserved", "zh-CN": "工具执行失败，现有结果已保留" },
   "chat.tool.saveArtifact": { ko: "결과 파일 저장", en: "Save result files", "zh-CN": "保存结果文件" },
+  "chat.tool.deckReview": { ko: "덱 문안·글꼴·이미지·크기 점검", en: "Check deck copy, fonts, images and sizing", "zh-CN": "检查演示文稿文案、字体、图片和尺寸" },
+  "chat.tool.logoRepair": { ko: "로고 벡터 보정 (최대 1회)", en: "Logo vector repair (up to 1)", "zh-CN": "徽标矢量修复（最多1次）" },
+  "chat.tool.importInit": { ko: "프로젝트 자동 초기화", en: "Automatic project setup", "zh-CN": "项目自动初始化" },
   "chat.pane.aria": {
     ko: "AI 대화와 코멘트",
     en: "AI chat and comments",
@@ -161,6 +164,8 @@ export const chatMessages = defineMessages({
     en: "Revert to before this turn",
     "zh-CN": "恢复到本轮之前",
   },
+  "chat.user.revertAccept": { ko: "되돌리기", en: "Revert", "zh-CN": "恢复" },
+  "chat.user.revertCancel": { ko: "취소", en: "Cancel", "zh-CN": "取消" },
   "chat.user.revert": { ko: "이 턴 되돌리기", en: "Revert this turn", "zh-CN": "撤销本轮" },
   "chat.user.reverting": { ko: "되돌리는 중…", en: "Reverting…", "zh-CN": "正在恢复…" },
   "chat.turn.pending": {

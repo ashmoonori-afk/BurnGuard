@@ -237,6 +237,74 @@ for (const reviewFails of [false, true]) test(`Given a deck generation When mand
   await turn.promise;
   expect(calls).toBe(reviewFails ? 5 : 3);
   expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(reviewFails ? "base" : '<section data-slide><h1>Reviewed wording</h1></section>' + runtime);
+  const reviewTools = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type IN ('tool.started','tool.finished') ORDER BY sequence").all(sessionId)
+    .map(row => JSON.parse(row.payload_json)).filter(event => event.turnId === turn.turnId && !String(event.tool).startsWith("generation_phase_"));
+  expect(reviewTools.map(event => [event.type, event.tool, event.ok ?? null])).toEqual([["tool.started", "generation_deck_review", null], ["tool.finished", "generation_deck_review", !reviewFails]]);
+});
+
+test("Given a deck generation that finished When the mandatory copy review fails Then no chat.message_end is released and the refusal names the turn", async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
+  const before = await inspectCanonicalTree(projectDir);
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  let calls = 0;
+  try {
+    const turn = start(async (_backend, input) => {
+      calls++;
+      if (input.turnId.endsWith("-review")) return { exitCode: 1 };
+      await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide><h1>Finished</h1></section><script src="/runtime/deck-stage.js"></script>');
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "chat.delta", turnId: input.turnId, text: "Saved the deck." });
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "chat.message_end", turnId: input.turnId });
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "status.idle", stopReason: "end_turn" });
+      return { exitCode: 0 };
+    }, "Update wording");
+    await turn.promise;
+    expect(calls).toBe(4);
+    expect(events.filter(event => event.type === "chat.message_end")).toEqual([]);
+    expect(events.filter(event => event.type === "status.idle").map(event => event.stopReason)).toEqual(["error"]);
+    const errors = events.filter(event => event.type === "status.error");
+    expect(errors.map(event => event.notApplied ?? null)).toEqual([{ turnId: turn.turnId, operationId: turn.operationId, repairs: 0 }]);
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+    expect(await inspectCanonicalTree(projectDir)).toEqual(before);
+  } finally { unsubscribe(); }
+});
+
+test("Given a provider that ends its message and then reports a fatal error When the turn refuses Then the buffered success terminals are withheld", async () => {
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  try {
+    const turn = start(async (_backend, input) => {
+      await writeFile(path.join(input.projectDir, "index.html"), "<h1>Written before the failure</h1>");
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "chat.message_end", turnId: input.turnId });
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "status.idle", stopReason: "end_turn" });
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "status.error", code: "turn_failed", message: "provider failed", recoverable: false });
+      return { exitCode: 0 };
+    });
+    await turn.promise;
+    expect(events.filter(event => event.type === "chat.message_end")).toEqual([]);
+    expect(events.filter(event => event.type === "status.idle").map(event => event.stopReason)).toEqual(["error"]);
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+  } finally { unsubscribe(); }
+});
+
+test.each([
+  ["prototype", "<h1>Finished</h1>", '<h1 data-bg-placeholder>TBD</h1>'],
+  ["slide_deck", '<section data-slide><h1>Finished</h1></section><script src="/runtime/deck-stage.js"></script>', "<section data-slide><h1>Without runtime</h1></section>"],
+] as const)("Given a %s design repair that leaves incomplete output When the turn finalizes Then nothing is published", async (type, generated, repaired) => {
+  getSqlite().prepare("UPDATE projects SET type=? WHERE id=?").run(type, projectId);
+  const before = await inspectCanonicalTree(projectDir);
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "index.html"), generated);
+    return { exitCode: 0 };
+  }, "Update wording", async (input) => {
+    await writeFile(path.join(input.adapter.projectDir, "index.html"), repaired);
+    return { status: "checked", repairs: 1, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "ready", checks: [] } };
+  });
+  await turn.promise;
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+  expect(await inspectCanonicalTree(projectDir)).toEqual(before);
+  const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
+  expect(JSON.parse(error!.payload_json).code).toBe("publication_failed");
 });
 
 test("Given a clean provider exit with empty content or missing imagery, then the saved output is repaired before publication", async () => {

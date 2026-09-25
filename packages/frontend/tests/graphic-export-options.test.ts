@@ -64,6 +64,35 @@ describe("graphic export menu model", () => {
   });
 });
 
+describe("graphic artboard PDF raster budget", () => {
+  const artboardPdf = (canvas: { readonly width: number; readonly height: number }, graphicSet: Readonly<Record<string, unknown>>) => {
+    const model = buildExportMenuModel("graphic", JSON.stringify({ graphic_canvas: { schema_version: 1, ...canvas }, graphic_set: { schema_version: 1, ...graphicSet } }));
+    if (!model.ok) throw new TypeError("expected graphic export model");
+    return model.options.find((option) => option.key === "graphic-pdf-artboard");
+  };
+
+  test.each([
+    { preset_id: "smartstore-product-detail", width: 860, height: 16_000 },
+    { preset_id: "coupang-product-detail", width: 780, height: 16_000 },
+  ])("Given a $preset_id graphic When the menu is modeled Then the artboard PDF entry is disabled as too large", ({ preset_id, width, height }) => {
+    expect(artboardPdf({ width, height }, { kind: "product_detail", frame_count: 1, preset_id })?.disabledReason).toBe("pdf_too_large");
+  });
+
+  test("Given six 1080x1350 card news frames When the menu is modeled Then the artboard PDF entry stays enabled", () => {
+    expect(artboardPdf({ width: 1080, height: 1350 }, { kind: "card_news", frame_count: 6 })).toMatchObject({ format: "pdf", options: { pdf_paper: "artboard" } });
+    expect(artboardPdf({ width: 1080, height: 1350 }, { kind: "card_news", frame_count: 6 })?.disabledReason).toBeUndefined();
+  });
+
+  test("Given twenty 1080x1350 card news frames When the menu is modeled Then the aggregate budget disables the artboard PDF entry", () => {
+    expect(artboardPdf({ width: 1080, height: 1350 }, { kind: "card_news", frame_count: 20 })?.disabledReason).toBe("pdf_too_large");
+  });
+
+  test("Given banner frames of one size When the menu is modeled Then the budget counts the banner frames, not the canvas", () => {
+    const frames = Array.from({ length: 2 }, () => ({ width: 4000, height: 4000, label: "Poster" }));
+    expect(artboardPdf({ width: 1080, height: 1080 }, { kind: "banner_set", frame_count: 2, frames })?.disabledReason).toBe("pdf_too_large");
+  });
+});
+
 describe("chromium export failure copy", () => {
   test("Given a launch timeout message When classified Then safe retry guidance is offered", () => {
     expect(classifyChromiumFailure("chromium_launch_timeout: Chromium did not finish launching\ntried channels: bundled, chrome, msedge")).toBe("launch_timeout");

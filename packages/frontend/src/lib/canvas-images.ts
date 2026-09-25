@@ -1,7 +1,10 @@
 import { authorizedFetch } from "@/api/client";
 import { requestBundledFont } from "@/api/fonts";
+import { anySignal } from "@/lib/abort-signal";
 
 // Public content-addressed fonts are shared by every canvas in this app window.
+// Leave room above the bundled stylesheet for older hashes kept after font updates.
+export const MAX_SHARED_CANVAS_FONTS = 256;
 const bundledFonts = new Map<string, Promise<string>>();
 
 function isBundledFontUrl(value: string, base: string): boolean {
@@ -15,7 +18,7 @@ function isBundledFontUrl(value: string, base: string): boolean {
 async function sharedFontData(url: string): Promise<string> {
   let pending = bundledFonts.get(url);
   if (!pending) {
-    if (bundledFonts.size >= 64) throw new Error("artifact_font_limit");
+    if (bundledFonts.size >= MAX_SHARED_CANVAS_FONTS) throw new Error("artifact_font_limit");
     pending = (async () => {
       const response = await requestBundledFont(url);
       if (!response.ok || response.headers.get("content-type") !== "font/woff2") throw new Error("artifact_font_load_failed");
@@ -89,7 +92,7 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
   const fetched = new Map<string, Promise<string>>();
   let sharedFontUsed = false;
   const resources = new AbortController();
-  const boundedSignal = AbortSignal.any([signal, resources.signal, AbortSignal.timeout(15000)]);
+  const boundedSignal = anySignal([signal, resources.signal, AbortSignal.timeout(15000)]);
   const budget = { remaining: 32 * 1024 * 1024 };
   const resolve = async (source: string, base = documentUrl, kind: "asset" | "css" | "script" = "asset"): Promise<string> => {
     if (kind === "asset" && isBundledFontUrl(source, base)) {
@@ -116,7 +119,7 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
           if (kind === "script") throw new Error("artifact_script_mime_invalid");
           return source;
         }
-        const blob = await readCanvasImage(response, budget, () => resources.abort());
+        const blob = await readCanvasImage(response, budget, () => { if (kind !== "asset") resources.abort(); });
         if (kind !== "asset") return blob.text();
         return new Promise<string>((done, reject) => {
           const reader = new FileReader();
@@ -127,6 +130,8 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
       })().catch((error: unknown) => {
         // A draft may reference an image/CSS file that the generator writes next.
         if (/\/preview\//.test(new URL(documentUrl).pathname) && error !== null && typeof error === "object" && "httpStatus" in error && error.httpStatus === 404) return source;
+        // An asset beyond the byte budget stays unembedded; CSS and script overruns remain fatal.
+        if (kind === "asset" && error instanceof Error && error.message === "artifact_image_limit") return source;
         resources.abort(); throw error;
       });
       fetched.set(key, pending);

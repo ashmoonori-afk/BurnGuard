@@ -169,7 +169,7 @@ export async function readLogoManifest(dir: string): Promise<LogoManifestV1 | nu
   if (text === null) return null;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(text.replace(/^\uFEFF/, ""));
   } catch (error) {
     if (error instanceof SyntaxError) throw new LogoDeliverableError("manifest_invalid:json");
     throw error;

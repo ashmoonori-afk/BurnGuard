@@ -159,4 +159,17 @@ describe("buildContentDisposition", () => {
     const header = buildContentDisposition('Some "Quoted" project.zip');
     expect(header).toContain('filename="Some _Quoted_ project.zip"');
   });
+
+  test("Given a project name whose 80th code unit is the high surrogate of an emoji When the download header is built Then it does not throw and filename* decodes to a well-formed slug", () => {
+    // Given
+    const name = `${"가".repeat(79)}🚀 런칭`;
+    // When
+    const slug = slugifyProjectName(name);
+    const header = buildContentDisposition(buildDownloadFilename({ projectName: name, revision: 2, format: "html_zip" }));
+    // Then
+    expect(slug.length).toBeLessThanOrEqual(80);
+    expect(slug).not.toMatch(/[\uD800-\uDBFF]$/u);
+    const encoded = /filename\*=UTF-8''(.+)$/u.exec(header)?.[1] ?? "";
+    expect(decodeURIComponent(encoded)).toBe(`${slug}-html-r2.zip`);
+  });
 });

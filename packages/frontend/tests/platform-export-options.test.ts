@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { t } from "../src/i18n/t";
+import ExportOptionFields from "../src/components/export/ExportOptionFields";
 import {
   DEFAULT_EXPORT_OPTION_VALUES,
   buildExportMenuModel,
@@ -69,6 +73,25 @@ describe("platform package export choices", () => {
 
     expect(entry(model, "cafe24_package").options).toEqual({ asset_base_url: "https://cdn.example.com/burnguard/" });
     expect(entry(model, "imweb_package").options).toEqual({ asset_base_url: "https://cdn.example.com/burnguard/" });
+  });
+
+  test("Given a site-relative Cafe24 upload path When the menu is modeled Then only the Cafe24 package carries it", () => {
+    const model = buildExportMenuModel("prototype", null, {
+      ...DEFAULT_EXPORT_OPTION_VALUES,
+      assetBaseUrl: "/web/upload/burnguard/spring/",
+    });
+
+    expect(entry(model, "cafe24_package").options).toEqual({ asset_base_url: "/web/upload/burnguard/spring/" });
+    expect(entry(model, "imweb_package").options).toBeUndefined();
+  });
+
+  test("Given both platform packages are choosable When the option fields render Then the Cafe24 and the Imweb asset hints are both shown", () => {
+    const model = buildExportMenuModel("prototype", null, DEFAULT_EXPORT_OPTION_VALUES);
+    const html = renderToStaticMarkup(createElement(ExportOptionFields, { options: options(model), values: DEFAULT_EXPORT_OPTION_VALUES, disabled: false, onChange() {} }));
+
+    expect(html).toContain(t("export.field.cafe24Hint"));
+    expect(html).toContain(t("export.field.imwebHint"));
+    expect(html.match(/id="export-asset-base-url"/g)).toHaveLength(1);
   });
 
   test("Given an Imweb package When the menu is modeled Then the board-attach helper text is offered as a field", () => {

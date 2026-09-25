@@ -89,4 +89,21 @@ describe("task-8 gate entrypoint", () => {
     expect(shellRuns).toHaveLength(9);
     expect(shellRuns.every((line) => line.startsWith("bash\t-c "))).toBe(true);
   });
+
+  test.each([
+    { host: "a non-Windows host", os: undefined, builds: ["run build:frontend"] },
+    { host: "a Windows host", os: "Windows_NT", builds: ["run build:frontend", "run build:backend"] },
+  ] as const)("Given $host When the build gate runs Then it builds only what that host can build", async ({ os, builds }) => {
+    // Given
+    const setup = await fixture();
+    const env = Object.fromEntries(Object.entries(setup.env).filter(([key]) => key !== "OS"));
+
+    // When
+    const result = run(["/bin/bash", script], setup.root, os === undefined ? env : { ...env, OS: os });
+
+    // Then
+    expect(result.exitCode).toBe(0);
+    const bunArgs = (await readFile(path.join(setup.root, "commands.log"), "utf8")).split("\n").filter((line) => line.startsWith("bun\t")).map((line) => line.split("\t")[3]);
+    expect(bunArgs.filter((args) => args?.startsWith("run build"))).toEqual([...builds]);
+  });
 });

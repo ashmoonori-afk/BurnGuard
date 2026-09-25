@@ -12,8 +12,8 @@ afterEach(() => { resetChromiumCapability(); if (previousTimeout === undefined) 
 
 function fakeBrowser(onClose: () => void = () => undefined): Browser { return { close: async (): Promise<void> => { onClose(); } } as unknown as Browser; }
 
-async function launchFailure(signal: AbortSignal, launch: ChromiumLauncher): Promise<RenderSessionError> {
-  const error: unknown = await launchChromium(signal, launch).then(() => null, (reason: unknown) => reason);
+async function launchFailure(signal: AbortSignal, launch: ChromiumLauncher, installed?: () => Promise<boolean>): Promise<RenderSessionError> {
+  const error: unknown = await launchChromium(signal, launch, installed).then(() => null, (reason: unknown) => reason);
   if (!(error instanceof RenderSessionError)) throw new TypeError(`expected a RenderSessionError, got ${String(error)}`);
   return error;
 }
@@ -61,6 +61,18 @@ describe("chromium launch", () => {
     expect(error.code).toBe("chromium_not_installed");
     expect(error.message).toContain("Executable doesn't exist");
   });
+
+  for (const [installed, code] of [[false, "chromium_not_installed"], [true, "chromium_launch_timeout"]] as const) {
+    test(`Given the capability probe is negative and the bundled browser installed=${installed} When Chromium is launched Then the failure is ${code} and no launch is attempted`, async () => {
+      setChromiumCapabilityForTesting(false);
+      let launches = 0;
+
+      const error = await launchFailure(new AbortController().signal, async () => { launches += 1; return fakeBrowser(); }, async () => installed);
+
+      expect(error.code).toBe(code);
+      expect(launches).toBe(0);
+    });
+  }
 
   test("Given a render cancelled while a launch is pending When the signal aborts Then the wait ends as a cancelled render", async () => {
     const controller = new AbortController();

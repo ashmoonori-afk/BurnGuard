@@ -10,6 +10,7 @@ This document defines how we develop BurnGuard Design: environment setup, coding
 - **Node.js 20+** — required for Playwright and some dev tooling (not the main runtime)
 - **Git**
 - **Claude Code CLI** OR **Codex CLI** — at least one must be installed locally for end-to-end testing
+- **.NET 8 SDK** (Windows only) — builds the process host that owns every provider and browser child process. `bun run scripts/dev-launcher.ts` builds it into `dist/windows-process-host/` when it is missing; before running `bun run dev` directly, run `bun scripts/build-windows-process-host.ts` once.
 - Windows 10/11 (primary target; macOS/Linux support arrives in Phase 3)
 
 ### Bootstrap

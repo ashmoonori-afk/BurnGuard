@@ -1,4 +1,5 @@
 import { lstat, readFile } from "node:fs/promises";
+import path from "node:path";
 import { parse, type HTMLElement } from "node-html-parser";
 import { resolveWithin } from "../security/path-boundary";
 import { localAssetReferences } from "./export-closure";
@@ -14,6 +15,14 @@ export function matchesDeckSourcePages(slides: readonly HTMLElement[], sourcePag
     return source !== undefined &&
       slide.getAttribute("data-bg-source-attachment") === source.attachmentId &&
       slide.getAttribute("data-bg-source-page") === String(source.page);
+  });
+}
+
+/** The absolute virtual runtime route, or a relative src that resolves from the entrypoint to the staged runtime. */
+export function hasDeckRuntime(root: HTMLElement, entrypoint: string): boolean {
+  return root.querySelectorAll("script[src]").some(node => {
+    const src = (node.getAttribute("src") ?? "").replace(/[?#][\s\S]*$/, "");
+    return src === "/runtime/deck-stage.js" || (!src.startsWith("/") && path.posix.normalize(path.posix.join(path.posix.dirname(entrypoint), src)) === "runtime/deck-stage.js");
   });
 }
 
@@ -42,7 +51,7 @@ export async function generationOutputComplete(directory: string, entrypoint: st
       const slides = root.querySelectorAll("[data-slide]");
       if (!slides.length || (expectedSlides !== undefined && slides.length !== expectedSlides) || slides.some(node => node.parentNode?.closest("[data-slide]") || !hasGeneratedContent(node))) return false;
       if (sourcePages !== undefined && !matchesDeckSourcePages(slides, sourcePages)) return false;
-      if (!root.querySelectorAll("script[src]").some(node => /^\/?(?:\.\/)?runtime\/deck-stage\.js(?:[?#].*)?$/.test(node.getAttribute("src") ?? ""))) return false;
+      if (!hasDeckRuntime(root, entrypoint)) return false;
     }
     // Reuse the asset parser; virtual runtime/font routes are not local images.
     for (const asset of localAssetReferences(source, entrypoint).filter(value => /\.(?:png|jpe?g|webp|gif|avif|svg)$/i.test(value))) {

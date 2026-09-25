@@ -1,6 +1,7 @@
 import type { AppUpdateStatus, PlaywrightInstallStatus, PythonSettings } from "@bg/shared";
 import { apiFetch } from "./client";
 import { t } from "@/i18n/t";
+import { anySignal } from "@/lib/abort-signal";
 
 export async function getAppUpdateStatus(): Promise<AppUpdateStatus> {
   return apiFetch<AppUpdateStatus>("/api/settings/updates");
@@ -34,7 +35,7 @@ export function waitForAppRestart(): Promise<void> {
         const response = await fetch("/api/health", {
           cache: "no-store",
           credentials: "omit",
-          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(2000)]),
+          signal: anySignal([controller.signal, AbortSignal.timeout(2000)]),
         });
         if (response.ok) finish();
       } catch {

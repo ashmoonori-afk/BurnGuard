@@ -4,7 +4,7 @@ import { desktopPort, watchDesktopParent } from "./desktop-lifecycle";
 import { openBrowser } from "./lib/browser";
 import { pickPort } from "./lib/port";
 import { appRootDir } from "./lib/app-paths";
-import { acquireWindowsProfile } from "./profile-ownership";
+import { acquirePosixProfile, acquireWindowsProfile } from "./profile-ownership";
 import { generateLaunchCapability } from "./security/request-authority";
 import { MAX_REQUEST_BODY_BYTES } from "./security/request-limits";
 import { createApp } from "./server";
@@ -22,7 +22,7 @@ const ownedPort = isDesktop ? desktopPort(process.env.BG_PORT) : undefined;
 // Refuse an existing owner before any migration/recovery writes to its profile.
 // The native host also holds a profile mutex throughout this child's lifetime.
 if (ownedPort !== undefined) await pickPort(ownedPort, ownedPort);
-const profileOwner = process.platform === "win32" ? await acquireWindowsProfile(appRootDir) : undefined;
+const profileOwner = process.platform === "win32" ? await acquireWindowsProfile(appRootDir) : await acquirePosixProfile(appRootDir);
 await bootstrapLocalAppData();
 const config = await loadConfig();
 // Dev + binary both prefer the canonical port 14070 (Vite proxy target).
@@ -58,7 +58,6 @@ const server = Bun.serve({
 });
 
 const url = `http://${host}:${server.port}`;
-console.log(`[burnguard] listening on ${url}`);
 
 // In dev (package.json sets BG_DEV=1), the React SPA is served by Vite on a
 // separate port (5173-ish) and this backend only serves /api/*. Auto-opening
@@ -85,6 +84,10 @@ const shutdown = async (): Promise<void> => {
 startAppUpdateScheduler(configureAppUpdater({ shutdown }));
 process.on("SIGINT", () => { void shutdown(); });
 process.on("SIGTERM", () => { void shutdown(); });
+// Closing the launching terminal hangs up its foreground group, backend included.
+process.on("SIGHUP", () => { void shutdown(); });
+// Announce only once the handlers exist: a signal that arrives earlier takes the default action and skips the ordered shutdown.
+console.log(`[burnguard] listening on ${url}`);
 if (isDesktop) {
   watchDesktopParent(process.stdin, () => { void shutdown(); });
   console.log(`[burnguard-desktop] ${JSON.stringify({ protocol: 1, url, pid: process.pid })}`);

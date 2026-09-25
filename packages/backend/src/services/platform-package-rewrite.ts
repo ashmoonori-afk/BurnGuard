@@ -12,6 +12,8 @@ export type ReferenceResolver = (relPath: string) => string | null;
 const HTML_URL_ATTRIBUTES = ["src", "poster", "xlink:href"] as const;
 const MAX_URL_LENGTH = 4096;
 const MAX_IMPORT_DEPTH = 4;
+/** The target token of an `@import`; whatever follows it is the layer, supports() and media condition list. */
+const IMPORT_TARGET = /^(?:url\(\s*["']?[^"')\s]+["']?\s*\)|["']?[^"')\s]+["']?)/u;
 
 /** Upload folder and default asset path segment: ASCII letters, digits and dashes only, so the package never trips the mall-origin filename warnings itself. */
 export function packageSlug(name: string): string {
@@ -112,7 +114,7 @@ export function rewriteStylesheet(css: string, owner: string, resolve: Reference
     if (reference === undefined) return;
     const local = resolveLocalReference(reference, owner);
     const replacement = local === null ? null : resolve(local);
-    if (replacement !== null) rule.params = `url("${replacement}")`;
+    if (replacement !== null) rule.params = rule.params.replace(IMPORT_TARGET, () => `url("${replacement}")`);
   });
   root.walkDecls((declaration) => { declaration.value = rewriteCssText(declaration.value, owner, resolve); });
   return root.toString();
@@ -122,20 +124,36 @@ export function rewriteStylesheet(css: string, owner: string, resolve: Reference
 export async function flattenStylesheet(css: string, owner: string, read: (relPath: string) => Promise<string | null>, depth = 0): Promise<string> {
   if (depth >= MAX_IMPORT_DEPTH) return css;
   const root = parseCss(css);
-  const inlined: { rule: postcss.AtRule; css: string }[] = [];
+  const inlined: { rule: postcss.AtRule; css: string; conditions: string }[] = [];
   const pending: Promise<void>[] = [];
   root.walkAtRules("import", (rule) => {
     const reference = /^(?:url\()?\s*["']?([^"')\s]+)["']?/u.exec(rule.params)?.[1];
     const local = reference === undefined ? null : resolveLocalReference(reference, owner);
     if (local === null) return;
+    const conditions = rule.params.replace(IMPORT_TARGET, "").trim();
     pending.push(read(local).then(async (source) => {
       if (source === null) return;
-      inlined.push({ rule, css: await flattenStylesheet(source, local, read, depth + 1) });
+      inlined.push({ rule, css: await flattenStylesheet(source, local, read, depth + 1), conditions });
     }));
   });
   await Promise.all(pending);
-  for (const item of inlined) item.rule.replaceWith(parseCss(item.css));
+  for (const item of inlined) item.rule.replaceWith(withImportConditions(parseCss(item.css), item.conditions));
   return root.toString();
+}
+
+/** Nests inlined rules under the `@import`'s supports() and media conditions, outermost first; the layer is dropped. */
+function withImportConditions(root: postcss.Root, conditions: string): postcss.Root | postcss.AtRule {
+  const layer = /^layer(?:\(\s*([^)]*?)\s*\))?(?=\s|$)/iu.exec(conditions);
+  let rest = conditions.slice(layer?.[0].length ?? 0).trim();
+  let supports: string | null = null;
+  if (/^supports\(/iu.test(rest)) {
+    let end = "supports".length;
+    for (let depth = 0; end < rest.length; end += 1) { if (rest[end] === "(") depth += 1; else if (rest[end] === ")" && (depth -= 1) === 0) break; }
+    supports = rest.slice("supports".length, end + 1); rest = rest.slice(end + 1).trim();
+  }
+  // A code widget cannot order its layers against the unlayered widget reset and host CSS, so layered rules would always lose.
+  const wrappers = [supports === null ? null : postcss.atRule({ name: "supports", params: supports }), rest === "" ? null : postcss.atRule({ name: "media", params: rest })].filter((wrapper) => wrapper !== null);
+  return wrappers.reduceRight<postcss.Root | postcss.AtRule>((inner, wrapper) => wrapper.append(inner), root);
 }
 
 export function parseCss(css: string): postcss.Root {

@@ -20,7 +20,7 @@ import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } f
 import { formatExtension } from "./export-naming";
 import { validateHandoffPackage, validatePptxPackage } from "./export-package-validation";
 import { assertUniformArtboardPages, PdfExportError, renderDeckToPdf } from "./export-pdf";
-import { pdfPointsForPaper, pdfRasterBudgetFitsPages } from "./export-pdf-contract";
+import { pdfPointsForPaper, pdfRasterBudgetFits, pdfRasterBudgetFitsPages } from "./export-pdf-contract";
 import { ExportError } from "./export-errors";
 import { renderPlatformPackage } from "./export-platform-package";
 import { capturePageFromSession } from "./export-frame-capture";
@@ -82,7 +82,7 @@ export async function enqueueProjectExport(projectId: string, format: ExportForm
   const ids = createExportAuthority(getSqlite(), { ...context.identity, format, options, rendererDigest: context.rendererDigest, captureDigest: context.captureDigest });
   emit(context.identity, ids, "pending", { stage: "queued", completed: 0, total: 6 }, null);
   const controller = new AbortController(); active.set(ids.attemptId, controller);
-  void runExport({ ...ids, context, controller, hooks }).finally(() => active.delete(ids.attemptId));
+  void runExport({ ...ids, context, controller, hooks }).catch((error: unknown) => { console.warn("[export] attempt settlement failed", ids.attemptId, error instanceof Error ? String(Reflect.get(error, "code") ?? error.name) : "unknown"); }).finally(() => active.delete(ids.attemptId));
   return getExportJob(ids.jobId);
 }
 
@@ -92,7 +92,7 @@ export async function retryProjectExport(jobId: string, hooks: ExportHooks = {})
   const attemptId = createRetryAuthority(getSqlite(), { jobId, parentAttemptId: job.latest_attempt.id, identity: context.identity, rendererDigest: context.rendererDigest, captureDigest: context.captureDigest });
   const controller = new AbortController(); active.set(attemptId, controller);
   emit(context.identity, { jobId, attemptId }, "retrying", { stage: "queued", completed: 0, total: 6 }, null);
-  void runExport({ jobId, attemptId, context, controller, hooks }).finally(() => active.delete(attemptId));
+  void runExport({ jobId, attemptId, context, controller, hooks }).catch((error: unknown) => { console.warn("[export] attempt settlement failed", attemptId, error instanceof Error ? String(Reflect.get(error, "code") ?? error.name) : "unknown"); }).finally(() => active.delete(attemptId));
   return getExportJob(jobId);
 }
 
@@ -150,8 +150,9 @@ async function runExport(input: RunInput): Promise<void> {
     const completedEvent = completeExportAttemptWithEvent(db, { jobId: input.jobId, attemptId: input.attemptId, outputPath, size: outputInfo.size, outputDigest, receiptDigest: sha256(receiptJson), projectId: context.identity.projectId, projectRevision: context.identity.revision, projectDigest: context.identity.digest });
     publishPersistedExportAttemptEvent(completedEvent);
   } catch (error) {
-    if (stageRoot !== null) await rm(stageRoot, { recursive: true, force: true });
-    if (publishedRoot !== null) await rm(publishedRoot, { recursive: true, force: true });
+    // Cleanup is best-effort: a held handle must not keep the attempt from reaching its terminal state.
+    if (stageRoot !== null) await rm(stageRoot, { recursive: true, force: true }).catch(() => undefined);
+    if (publishedRoot !== null) await rm(publishedRoot, { recursive: true, force: true }).catch(() => undefined);
     const cancelled = input.controller.signal.aborted || db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(input.attemptId)?.requested === 1; const reason: ExportStopReason = cancelled ? "user_cancelled" : exportStopReason(error);
     failExportAttempt(db, { jobId: input.jobId, attemptId: input.attemptId, status: cancelled ? "cancelled" : "failed", reason, message: error instanceof Error ? error.message : String(error) });
     emit(context.identity, input, cancelled ? "cancelled" : "failed", { stage: "rendering", completed: 2, total: 6 }, reason);
@@ -174,11 +175,7 @@ async function renderOutput(input: RunInput, renderRoot: string, outputPath: str
     case "pptx": { await renderDeckToPptx({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, size: context.options.pptx_size, signal: input.controller.signal }); const slides = parse(await readFile(path.join(renderRoot, context.project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length; return only(await validatePptxPackage(new Uint8Array(await readFile(outputPath)), slides)); }
     case "handoff": { const bundle = path.join(path.dirname(renderRoot), "handoff"); await renderHandoffBundle({ stagedProjectDir: renderRoot, stagingDir: bundle, designSystemPin: context.designSystemPin, entrypoint: context.project.entrypoint, tokensSrcPath: null, tokensFileName: null, designSystemName: context.project.design_system_name, project: { id: context.project.id, name: context.project.name, type: context.project.type, entrypoint: context.project.entrypoint }, isDeck: context.project.type === "slide_deck", signal: input.controller.signal }); await zipDirectory(bundle, outputPath); return only(await validateHandoffPackage(new Uint8Array(await readFile(outputPath)), context.project.entrypoint, context.designSystemPin)); }
     case "cafe24_package":
-    case "imweb_package": {
-      const browserSession = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: false, signal: input.controller.signal });
-      try { return only(await renderPlatformPackage({ stagedDir: renderRoot, outputPath, format: context.format, project: context.project, graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, browserSession, receiptWriter: async () => undefined, onFindings: (findings) => { recordPlatformFindings(input.attemptId, findings); }, signal: input.controller.signal })); }
-      finally { await browserSession.close(); }
-    }
+    case "imweb_package": return only(await renderPlatformPackage({ stagedDir: renderRoot, outputPath, format: context.format, project: context.project, options: context.options, onFindings: (findings) => { recordPlatformFindings(input.attemptId, findings); }, signal: input.controller.signal }));
     case "png_zip": {
       const browserSession = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: context.project.type === "slide_deck", signal: input.controller.signal });
       try { return await renderPngZipWithPage({ page: capturePageFromSession(browserSession.page), stagedDir: renderRoot, outputPath, deck: context.project.type === "slide_deck", graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, receiptWriter: async () => undefined, signal: input.controller.signal }); }
@@ -212,6 +209,11 @@ export async function assertExportAllowed(project: ProjectDetail, format: Export
     assertArtboardPdfPages(sizes, "Graphic PDF exceeds the per-page or aggregate raster budget");
   }
   if (format === "pdf" && logo) assertArtboardPdfPages(await logoGuidelinesPages(project), "Logo guidelines PDF exceeds the per-page or aggregate raster budget");
+  if (format === "pdf" && project.type === "slide_deck") {
+    // Every printed slide is rasterised for validation, so a deck past the budget is refused before an attempt exists.
+    const paper = pdfPointsForPaper(options.pdf_paper ?? "a4");
+    if (!pdfRasterBudgetFits(paper.width, paper.height, Math.max(1, await entrypointPageCount(project, "[data-slide]")))) throw new ExportServiceError("pdf_resource_limit", "Deck PDF exceeds the aggregate raster budget");
+  }
   if (project.type === "graphic" && format === "png") {
     const canvas = projectOptions.graphic_canvas;
     if (
@@ -240,12 +242,17 @@ function assertArtboardPdfPages(sizes: readonly { readonly width: number; readon
  * page per artboard in the live entrypoint, which is what the raster budget has to cover.
  */
 async function logoGuidelinesPages(project: ProjectDetail): Promise<readonly { readonly width: number; readonly height: number }[]> {
+  // A guidelines document always prints at least its first page; the count only bounds the budget.
+  return Array.from({ length: Math.max(1, await entrypointPageCount(project, "[data-graphic-artboard]")) }, () => LOGO_PAGE);
+}
+
+/** Counts the export pages in the live entrypoint; a missing entrypoint has none. */
+async function entrypointPageCount(project: ProjectDetail, selector: string): Promise<number> {
   const entrypoint = resolveWithin(resolveManagedPath(projectsDir, project.dir_path), project.entrypoint);
   let html = "";
   try { html = await readFile(entrypoint, "utf8"); }
   catch (error) { if (!(error instanceof Error) || Reflect.get(error, "code") !== "ENOENT") throw error; }
-  // A guidelines document always prints at least its first page; the count only bounds the budget.
-  return Array.from({ length: Math.max(1, parse(html).querySelectorAll("[data-graphic-artboard]").length) }, () => LOGO_PAGE);
+  return parse(html).querySelectorAll(selector).length;
 }
 
 async function exportContext(projectId: string, format: ExportFormat, options: ExportOptions): Promise<Context> {

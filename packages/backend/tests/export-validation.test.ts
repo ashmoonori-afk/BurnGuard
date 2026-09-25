@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import "./export-pdf-deadline-cases";
 import "./export-pdf-producer-closure-cases";
 import "./export-pdf-raster-cases";
+import "./export-html-closure-cases";
 import "./export-receipt-boundary-cases";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

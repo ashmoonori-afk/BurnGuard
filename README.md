@@ -38,7 +38,7 @@ Desktop packages include **41 website examples**, **41 generated WebP illustrati
 
 These examples illustrate the bundled themes' default designs. Existing system preview files take precedence; when they are missing, BurnGuard shows the bundled reference without overwriting edited system files or publication records. In the app, the examples use the shared local font store.
 
-**37 font families** ship with license notices. Bundled fonts use one shared local store, and canvas loads are reused across projects within the app window. New projects reference that store; standalone exports include the font files they need. [Font catalogue](assets/fonts/README.md) · [Design-system format](<design system sample/README.md>)
+**72 font families** ship with license notices. Bundled fonts use one shared local store, and canvas loads are reused across projects within the app window. New projects reference that store; standalone exports include the font files they need. [Font catalogue](assets/fonts/README.md) · [Design-system format](<design system sample/README.md>)
 
 ## One workspace, several kinds of output
 
@@ -149,6 +149,30 @@ The interface captures were selected from the repository's local `.omo/evidence`
 </details>
 
 ## Changelog
+
+### 0.5.24
+
+- New projects and seeded samples load in the canvas, live preview and Present again; the bundled font set had outgrown the canvas font limit.
+- PDF and PNG ZIP exports keep authored grid/flex layouts and page backgrounds, wait for lazy-loaded images, and export seeded sample graphics as artboard PDFs. Decks too large for PDF are refused before rendering with a clear reason.
+- Cafe24 and Imweb packages accept ordinary links, include every page and the assets only subpages use, keep footer scripts working, ship font licenses, and no longer need Chromium.
+- Exports include only the bundled fonts the document uses, ZIP files carry local timestamps, and deleted projects no longer leave cached exports behind.
+- Chat reports whether a turn's work actually reached the project, including failed deck reviews and repairs; attached source pages map one-to-one to slides when requested.
+- macOS app: finds CLIs and Python installed with Homebrew or in `~/.local/bin`, opens external links in the browser, supports standard ⌘C/⌘V/⌘Q shortcuts, replaces an existing download, and waits for the local server to stop before quitting.
+- Windows app: stays open on recoverable WebView2 process failures and lists installed fonts. Linux source runs list installed fonts, and one backend now owns each profile on macOS and Linux.
+- Settings are split into a shared profile and device-local credentials and policy.
+
+### 0.5.23
+
+- Logo projects show Codex image outputs as they arrive, keep candidate bytes verbatim, audit text per artboard and report clearer failure stages.
+- Windows owns the backend's process trees with job objects, quotes batch provider arguments safely and routes native downloads by filename.
+- Release packaging verifies native canvas, persistence and exports on Windows and macOS before a draft is prepared.
+
+### 0.5.22
+
+- Add logo-design projects with exploration rounds, a selected SVG master and brand-guideline deliverables.
+- macOS: working sandboxed canvases, native export downloads, installed font listing and an app-owned Python environment for PDF dependencies.
+- Security fixes: PNG decoded-size checks before decompression, SVG revalidation before design-system promotion and stricter POSIX package permissions.
+- 0.5.20 and 0.5.21 were not publicly released.
 
 ### 0.5.19
 

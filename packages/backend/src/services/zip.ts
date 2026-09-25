@@ -18,13 +18,20 @@ const DEFAULT_COMPRESSION_LEVEL = 6;
  *
  * Empty directories are not preserved. The contents of `srcDir` end up
  * at the zip root — `srcDir` itself is not part of the archive paths.
+ * Every entry is stamped with `now` as local wall-clock time.
  */
 export async function zipDirectory(
   srcDir: string,
   outPath: string,
+  now: Date = new Date(),
 ): Promise<void> {
   const zip = new JSZip();
   await addDirectory(zip, srcDir, "");
+  // Unzip tools read ZIP DOS times as local time, but JSZip encodes the UTC
+  // fields, so shift by the offset (JSZip's documented workaround). Stamping
+  // after the walk also covers the folder entries JSZip creates implicitly.
+  const date = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  zip.forEach((_, entry) => { entry.date = date; });
   const buffer = await zip.generateAsync({
     type: "uint8array",
     compression: "DEFLATE",

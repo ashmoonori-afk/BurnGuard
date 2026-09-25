@@ -171,16 +171,35 @@ describe("parseCodexLine — structured path", () => {
     expect(e.type).toBe("chat.thinking");
   });
 
-  test("error maps to status.error with recoverable default true", () => {
+  test("Given a Codex top-level retry error line When parsed Then no status.error is produced", () => {
+    expect(parseCodexLine(JSON.stringify({ type: "error", message: "Reconnecting... 1/5" }), ctx())).toEqual([]);
+  });
+
+  test("Given a retried stream error before turn.completed When the stream is parsed Then the turn ends cleanly", () => {
     const c = ctx();
-    const [e] = parseCodexLine(
-      JSON.stringify({ type: "error", message: "boom" }),
-      c,
-    );
-    if (e.type === "status.error") {
-      expect(e.message).toBe("boom");
-      expect(e.recoverable).toBe(true);
-    }
+    const events = [
+      { type: "thread.started", thread_id: "01a0bd75-12bd-75a3-8193-127dd61ddb33" },
+      { type: "turn.started" },
+      { type: "error", message: "Reconnecting... 1/5" },
+      { type: "item.completed", item: { type: "agent_message", text: "done" } },
+      { type: "turn.completed", usage: {} },
+    ].flatMap((line) => parseCodexLine(JSON.stringify(line), c));
+    expect(events.some((event) => event.type === "status.error")).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: "status.idle", stopReason: "end_turn" });
+  });
+
+  test("Given a Codex turn.failed after an error line When parsed Then turn.failed stays the authoritative failure", () => {
+    const c = ctx();
+    expect(parseCodexLine(JSON.stringify({ type: "error", message: "stream disconnected" }), c)).toEqual([]);
+    expect(parseCodexLine(JSON.stringify({ type: "turn.failed", error: { message: "stream disconnected" } }), c)).toMatchObject([
+      { type: "chat.message_end", turnId: "turn-1" },
+      { type: "status.error", code: "turn_failed", recoverable: true },
+      { type: "status.idle", stopReason: "error" },
+    ]);
+  });
+
+  test("Given a legacy status.error line When parsed Then it still maps to status.error with recoverable default true", () => {
+    expect(parseCodexLine(JSON.stringify({ type: "status.error", message: "boom" }), ctx())).toMatchObject([{ type: "status.error", message: "boom", recoverable: true }]);
   });
 
   test("Codex item.completed agent messages become readable chat deltas", () => {

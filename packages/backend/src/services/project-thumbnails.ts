@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { getProjectDetail } from "../db/project-read-repository";
 import { isChromiumLaunchable } from "./chromium-capability";
@@ -41,6 +41,8 @@ const inFlightRenders = new Map<string, Promise<Uint8Array<ArrayBuffer> | null>>
 const waitingRenders: Array<() => void> = [];
 let activeRenders = 0;
 let chromiumUnavailableUntil = 0;
+/** A render that failed on its own content fails again for the same identity; a new revision is a new key and retries at once. */
+const renderFailedUntil = new Map<string, number>();
 
 export type ThumbnailRenderRequest = {
   readonly stagedDir: string;
@@ -137,6 +139,7 @@ async function loadProjectThumbnailUncapped(
   }
 
   if (Date.now() < chromiumUnavailableUntil) return { kind: "unavailable", code: "thumbnail_unavailable" };
+  if (Date.now() < (renderFailedUntil.get(cachePath) ?? 0)) return { kind: "unavailable", code: "thumbnail_unavailable" };
 
   // Never start an in-process launch before the child-process probe says a
   // launch actually completes here: on a host where it does not, the launch
@@ -201,17 +204,37 @@ async function renderThumbnailFile(input: {
     await mkdir(path.dirname(cachePath), { recursive: true });
     await input.render({ ...input.request, outputPath: temporaryPath });
     const bytes = await readThumbnailFile(temporaryPath);
-    if (bytes === null) return null;
+    if (bytes === null) {
+      renderFailedUntil.set(cachePath, Date.now() + chromiumCooldownMs());
+      return null;
+    }
     await rename(temporaryPath, cachePath);
+    renderFailedUntil.delete(cachePath);
+    await pruneStaleThumbnails(input.request.stagedDir, path.basename(cachePath));
     return bytes;
   } catch (error) {
     if (error instanceof Error) {
       if (isChromiumUnavailable(error)) chromiumUnavailableUntil = Date.now() + chromiumCooldownMs();
+      else renderFailedUntil.set(cachePath, Date.now() + chromiumCooldownMs());
       return null;
     }
     throw error;
   } finally {
     await rm(temporaryPath, { force: true });
+  }
+}
+
+/**
+ * Older identities are never requested again, so only the PNG just published
+ * is kept. Another render's temporary file is left for its owner to publish.
+ */
+async function pruneStaleThumbnails(projectDir: string, keep: string): Promise<void> {
+  try {
+    for (const entry of await readdir(resolveWithin(projectDir, ...CACHE_SEGMENTS), { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith(".png") && entry.name !== keep) await rm(resolveWithin(projectDir, ...CACHE_SEGMENTS, entry.name), { force: true });
+    }
+  } catch {
+    // Best effort: a stale entry left behind only costs disk space and is never served.
   }
 }
 

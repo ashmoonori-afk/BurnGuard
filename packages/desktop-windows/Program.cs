@@ -219,7 +219,7 @@ namespace BurnGuard.Desktop
                     args.State = DiagnosticPermissionState(report != null, args.Uri, origin, args.PermissionKind);
                     if (args.State == CoreWebView2PermissionState.Allow) args.SavesInProfile = false;
                 };
-                web.CoreWebView2.ProcessFailed += (_, __) => Fail("화면 프로세스가 종료되었습니다. BurnGuard를 다시 실행해 주세요.");
+                web.CoreWebView2.ProcessFailed += (_, args) => { if (IsFatalProcessFailure(args.ProcessFailedKind)) Fail("화면 프로세스가 종료되었습니다. BurnGuard를 다시 실행해 주세요."); };
                 web.CoreWebView2.NavigationCompleted += async (_, args) =>
                 {
                     if (closing) return;
@@ -247,6 +247,9 @@ namespace BurnGuard.Desktop
             diagnostic && kind == CoreWebView2PermissionKind.MultipleAutomaticDownloads && IsAppUrl(source, expectedOrigin)
                 ? CoreWebView2PermissionState.Allow
                 : CoreWebView2PermissionState.Deny;
+
+        // WebView2 recovers GPU, utility, sandbox-helper and subframe renderer failures and reports hangs; only losing the browser or main renderer is fatal.
+        private static bool IsFatalProcessFailure(CoreWebView2ProcessFailedKind kind) => kind == CoreWebView2ProcessFailedKind.BrowserProcessExited || kind == CoreWebView2ProcessFailedKind.RenderProcessExited;
 
         private static bool IsTopLevelAppRoute(Uri uri) => !uri.AbsolutePath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) && !uri.AbsolutePath.StartsWith("/runtime/", StringComparison.OrdinalIgnoreCase);
 
@@ -518,7 +521,7 @@ namespace BurnGuard.Desktop
                 const run = async (format, options) => {
                     const created = await data(await fetch('/api/projects/' + projectId + '/exports', {method:'POST',headers:{'content-type':'application/json','x-burnguard-capability':authority.capability},body:JSON.stringify({format,options})}));
                     const terminal = await new Promise((resolve,reject)=>{ const timer=setTimeout(()=>{waiters.delete(created.id);reject(new Error(format+' export deadline exceeded'));},180000); const finish=event=>{if(!['validated','failed','cancelled','corrupt'].includes(event.status))return;clearTimeout(timer);waiters.delete(created.id);resolve(event);}; waiters.set(created.id,finish); const known=events.get(created.id); if(known)finish(known); });
-                    if(terminal.status!=='validated')throw new Error(format+' export ended as '+terminal.status);
+                    if(terminal.status!=='validated')throw new Error(format+' export ended as '+terminal.status+' ('+(terminal.stopReason??'no stop reason')+')');
                     const job=await data(await fetch('/api/exports/'+created.id));
                     if(job.status!=='succeeded'||!job.latest_attempt?.digests?.output||job.size_bytes<=0)throw new Error(format+' export receipt invalid');
                     const response=await fetch('/api/exports/'+created.id+'/download'); if(!response.ok)throw new Error(format+' download unavailable');

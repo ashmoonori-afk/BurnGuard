@@ -9,7 +9,9 @@ import {
   PACKAGE_PUBLISH_NOTE,
   PACKAGE_READY_LABEL,
   exportDeliveryStage,
+  isPlatformCheckFailure,
   offersFixRequest,
+  platformCheckFailureCopy,
   platformFindings,
 } from "../src/components/export/export-delivery";
 import { platformFixRequest } from "../src/lib/platform-fix-request";
@@ -117,6 +119,8 @@ describe("platform lint findings", () => {
     "imweb_duplicate_id",
     "imweb_document_script",
     "platform_dynamic_reference",
+    "platform_missing_asset",
+    "platform_unresolved_destination",
     "png_zip:cut_through_content",
   ] as const)("Given the backend code %s When modeled Then it is explained instead of echoed back", (code: string) => {
     const modeled = platformFindings(job({
@@ -154,6 +158,55 @@ describe("fix action availability", () => {
       status: "succeeded",
       latest_attempt: attempt({ status: "validated", progress: { stage: "complete", completed: 6, total: 6 }, findings: [{ code: "cafe24_jquery_duplicate", path: "pages/home.html" }] }),
     }))).toBe(false);
+  });
+});
+
+describe("failed export guidance", () => {
+  test.each(["cafe24_package", "imweb_package"] as const)("Given a %s that failed platform validation When the failure is classified Then it is a platform check failure, not a quality-panel one", (format) => {
+    expect(isPlatformCheckFailure(job({
+      format,
+      status: "failed",
+      latest_attempt: attempt({ status: "failed", stop_reason: "validation_failed", findings: [{ code: "imweb_page_over_1m_chars", path: "pages/index.html" }] }),
+    }))).toBe(true);
+  });
+
+  test("Given a PDF that failed rendering When the failure is classified Then it keeps the stop-reason copy", () => {
+    expect(isPlatformCheckFailure(job({
+      format: "pdf",
+      status: "failed",
+      latest_attempt: attempt({ status: "failed", stop_reason: "render_failed" }),
+    }))).toBe(false);
+  });
+
+  test("Given a platform package that failed rendering When the failure is classified Then it keeps the stop-reason copy", () => {
+    expect(isPlatformCheckFailure(job({
+      format: "cafe24_package",
+      status: "failed",
+      latest_attempt: attempt({ status: "failed", stop_reason: "render_failed" }),
+    }))).toBe(false);
+  });
+
+  test("Given a platform package that failed validation with findings When its failure copy is chosen Then it points to the findings", () => {
+    expect(platformCheckFailureCopy(job({
+      status: "failed",
+      latest_attempt: attempt({ status: "failed", stop_reason: "validation_failed", findings: [{ code: "cafe24_unresolved_link", path: "pages/contact.html" }] }),
+    }))).toBe("export.platformCheckFailed");
+  });
+
+  test.each(["cafe24_package", "imweb_package"] as const)("Given a %s that failed validation without findings When its failure copy is chosen Then it does not point to findings that do not exist", (format) => {
+    expect(platformCheckFailureCopy(job({
+      format,
+      status: "failed",
+      latest_attempt: attempt({ status: "failed", stop_reason: "validation_failed", findings: [] }),
+    }))).toBe("errors.render_failed");
+  });
+
+  test("Given a PDF that failed rendering When its failure copy is chosen Then no platform copy applies", () => {
+    expect(platformCheckFailureCopy(job({
+      format: "pdf",
+      status: "failed",
+      latest_attempt: attempt({ status: "failed", stop_reason: "render_failed" }),
+    }))).toBeNull();
   });
 });
 

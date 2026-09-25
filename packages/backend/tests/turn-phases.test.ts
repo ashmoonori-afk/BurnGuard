@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { parse } from "node-html-parser";
@@ -109,6 +109,58 @@ test("Given a five-unit deck and a failed final batch, then phases run sequentia
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test("Given a plan saved with a UTF-8 BOM and CRLF When the plan phase checks it Then content phases start", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-phase-bom-"));
+  let planCalls = 0;
+  let contentCalls = 0;
+  let currentPhase = "";
+  try {
+    const result = await runGenerationPhases({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "Create 1 slide", userEvent: { type: "user.message", text: "Create 1 slide" }, onEvent: async event => {
+      if (event.type === "tool.started" && event.tool.startsWith("generation_phase_")) currentPhase = event.tool;
+    } }, "deck.html", async input => {
+      const file = path.join(dir, "deck.html");
+      if (currentPhase === "generation_phase_plan") {
+        planCalls++;
+        const plan = input.prompt.match(/\.burnguard-inputs\/phases-[A-Z0-9]+\/plan\.json/)![0];
+        await writeFile(path.join(dir, plan), `\uFEFF${JSON.stringify({ units: ["Overview"] })}\r\n`);
+        expect([...(await readFile(path.join(dir, plan))).subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+        await writeFile(file, '<section class="deck-slide" data-slide data-bg-unit="1" data-bg-placeholder>Pending</section><script src="/runtime/deck-stage.js"></script>');
+      } else {
+        contentCalls++;
+        await writeFile(file, '<section class="deck-slide" data-slide data-bg-unit="1" data-bg-complete="true"><h1>Our product overview</h1></section><script src="/runtime/deck-stage.js"></script>');
+      }
+      return { exitCode: 0 };
+    }, "slide_deck");
+    expect(result.exitCode).toBe(0);
+    expect(planCalls).toBe(1);
+    expect(contentCalls).toBe(1);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test.each([
+  ["the refreshed relative path", () => "../runtime/deck-stage.js"],
+  ["the runtime path named by the phase prompt", (prompt: string) => /<generation_phase>[\s\S]*?<script src="([^"]+)"/.exec(prompt)?.[1] ?? "missing"],
+] as const)("Given a deck entrypoint in a subfolder When the model writes %s Then the phases complete", async (_label, runtimeSrc) => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-phase-subfolder-"));
+  let currentPhase = "";
+  try {
+    await mkdir(path.join(dir, "slides"));
+    const result = await runGenerationPhases({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "Create 1 slide", userEvent: { type: "user.message", text: "Create 1 slide" }, onEvent: async event => {
+      if (event.type === "tool.started" && event.tool.startsWith("generation_phase_")) currentPhase = event.tool;
+    } }, "slides/deck.html", async input => {
+      const runtime = `<script src="${runtimeSrc(input.prompt)}" defer></script>`;
+      const file = path.join(dir, "slides", "deck.html");
+      if (currentPhase === "generation_phase_plan") {
+        const plan = input.prompt.match(/\.burnguard-inputs\/phases-[A-Z0-9]+\/plan\.json/)![0];
+        await writeFile(path.join(dir, plan), JSON.stringify({ units: ["Overview"] }));
+        await writeFile(file, `<section class="deck-slide" data-slide data-bg-unit="1" data-bg-placeholder>Pending</section>${runtime}`);
+      } else await writeFile(file, `<section class="deck-slide" data-slide data-bg-unit="1" data-bg-complete="true"><h1>Our product overview</h1></section>${runtime}`);
+      return { exitCode: 0 };
+    }, "slide_deck");
+    expect(result.exitCode).toBe(0);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("Given an invalid plan, then the server bounds retries and never starts content phases", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "bg-phase-limit-"));
   let calls = 0;
@@ -126,6 +178,37 @@ test("Given an invalid plan, then the server bounds retries and never starts con
   expect(needsGenerationPhases("slide_deck", "제목만 수정", false)).toBe(false);
   expect(needsGenerationPhases("prototype", "여러 페이지로 만들어")).toBe(true);
   expect(needsGenerationPhases("prototype", "제목만 수정")).toBe(false);
+});
+
+test.each([
+  ["slide_deck", "3페이지 제목만 수정해줘", false, false],
+  ["slide_deck", "2장 슬라이드 오타 고쳐줘", false, false],
+  ["slide_deck", "fix the typo on 2 slides", false, false],
+  ["prototype", "대형 폰트로 바꿔줘", false, false],
+  ["logo", "대형 병원 로고 만들어줘", false, false],
+  ["logo", "Create a large multi-page logo set", true, false],
+  ["slide_deck", "10페이지짜리 덱 만들어줘", false, true],
+  ["prototype", "여러 페이지로 만들어", false, true],
+  ["slide_deck", "Create a large slide deck", false, true],
+  ["prototype", "Create 29 slides", false, true],
+  ["slide_deck", "소개서", true, true],
+  ["slide_deck", "제목만 수정", true, true],
+  ["prototype", "전체 다시 구성해줘", false, true],
+  ["prototype", "Please rebuild the site", false, true],
+  ["slide_deck", "3페이지에 표 만들어줘", false, false],
+  ["slide_deck", "3페이지 배경을 파란색으로 만들어줘", false, false],
+  ["slide_deck", "2장 슬라이드에 이미지 생성해줘", false, false],
+  ["slide_deck", "Make the titles on the last 2 slides shorter", false, false],
+  ["prototype", "Make the hero text large", false, false],
+  ["prototype", "대형 배너로 만들어줘", false, false],
+  ["prototype", "Make page 2 hero larger", false, false],
+  ["slide_deck", "20장의 슬라이드를 만들어줘", false, true],
+  ["slide_deck", "5장 슬라이드 만들어줘", false, true],
+  ["slide_deck", "10페이지로 만들어줘", false, true],
+  ["slide_deck", "Make a 10-slide deck", false, true],
+  ["slide_deck", "Create a deck in 10 slides", false, true],
+] as const)("Given a %s request %p (starter=%p) When deciding phases Then phased generation is %p", (projectType, request, starter, expected) => {
+  expect(needsGenerationPhases(projectType, request, starter)).toBe(expected);
 });
 
 test("Given malformed slides and falsely completed placeholders, then neither can advance the phase", async () => {

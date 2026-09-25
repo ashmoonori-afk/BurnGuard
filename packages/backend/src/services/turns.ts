@@ -346,24 +346,8 @@ async function runUserTurnInternal(
   const detection = await (dependencies.detectBackends ?? detectBackends)({ force: true, requireCodexAuthentication: backendId === "codex" });
   const backend = detection.backends.find((b) => b.id === backendId);
 
-  if (!backend?.found || !backend.binary_path) {
-    await persistAndPublish(sessionId, {
-      id: ulid(),
-      ts: Date.now(),
-      type: "status.error",
-      code: "backend_unavailable",
-      message: `${backendId} CLI not found on PATH. ${backend?.install_hint ?? "Install and retry."}`,
-      recoverable: true,
-    });
-    await persistAndPublish(sessionId, {
-      id: ulid(),
-      ts: Date.now(),
-      type: "status.idle",
-      stopReason: "error",
-    });
-    await setSessionStatus(sessionId, "idle");
-    throw new Error("backend_unavailable");
-  }
+  // The caller publishes the one sanitized error and idle for a turn that fails before preparation.
+  if (!backend?.found || !backend.binary_path) throw Object.assign(new Error("backend_unavailable"), { code: "backend_unavailable" });
 
   const binaryPath = backend.binary_path;
   const config = await loadConfig();
@@ -495,10 +479,15 @@ async function runUserTurnInternal(
               if (project.type === "slide_deck") {
                 const expectedSlides = sourcePages?.length ?? parse(await readFile(path.join(stageDir, project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length;
                 const toolCallId = ulid();
-                await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", input: { scope: "all_slides" } });
-                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}\nPreserve all ${expectedSlides} slides and completed content. Replace unfinished placeholders and repair missing local images before returning.` }, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, expectedSlides, sourcePages), { idleMs: 120_000 });
-                const reviewed = review.exitCode === 0 && !providerReportedFailure;
-                await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", ok: reviewed });
+                await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "generation_deck_review", input: { scope: "all_slides" } });
+                let reviewFailed = false;
+                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}\nPreserve all ${expectedSlides} slides and completed content. Replace unfinished placeholders and repair missing local images before returning.`, onEvent: async (event) => {
+                  // A failed review belongs to this check, not the enclosing turn: retain it and refuse below.
+                  if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason !== "end_turn")) { reviewFailed = true; return; }
+                  await adapterInput.onEvent(event);
+                } }, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, expectedSlides, sourcePages), { idleMs: 120_000 });
+                const reviewed = review.exitCode === 0 && !reviewFailed && !providerReportedFailure;
+                await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "generation_deck_review", ok: reviewed });
                 if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
               }
               if (!await generationOutputComplete(stageDir, project.entrypoint, project.type)) throw new ArtifactOperationError("turn_failed", "Generated content is incomplete");
@@ -512,8 +501,9 @@ async function runUserTurnInternal(
                 run: (input) => runAdapter(backendId, input),
               });
               if (designReview.status !== "checked" || designReview.result?.overall_status === "must_fix" || !designReview.result || providerReportedFailure) throw new DesignReviewError();
-              if (sourcePages !== undefined && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages.length, sourcePages)) {
-                throw new ArtifactOperationError("publication_failed", "Source page correspondence changed during design review");
+              // A repair edits the stage after the completion gate, so repaired output is gated again.
+              if ((designReview.repairs > 0 || sourcePages !== undefined) && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages)) {
+                throw new ArtifactOperationError("publication_failed", "Design review left incomplete or remapped output");
               }
               const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
               if (encodingIssues.length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
@@ -630,7 +620,8 @@ async function runUserTurnInternal(
       if (!providerErrorPublished) {
         await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.error", message: "turn_failed", recoverable: true, ...rejected }, error);
       }
-      for (const event of terminalEvents) await persistAndPublish(sessionId, event);
+      // An unpublished operation never releases a buffered message end or success idle.
+      for (const event of terminalEvents) if (publishedOperation || (event.type === "status.idle" && event.stopReason === "error")) await persistAndPublish(sessionId, event);
       if (
         !terminalEvents.some(
           (event) =>

@@ -1,8 +1,7 @@
-import type { PdfPaper } from "@bg/shared";
+import { pdfArtboardPoints, pdfRasterBudgetFitsPages, type PdfPaper } from "@bg/shared";
 
-export const PDF_RASTER_SCALE = 2;
-export const PDF_MAX_PAGE_PIXELS = 16_000_000;
-export const PDF_MAX_EXPECTED_PIXELS = 64_000_000;
+// One raster budget for the export menu and the renderer; @bg/shared owns it.
+export { PDF_MAX_EXPECTED_PIXELS, PDF_MAX_PAGE_PIXELS, PDF_RASTER_SCALE, pdfRasterBudgetFitsPages, pdfRasterDimensions } from "@bg/shared";
 export const PDF_POINT_TOLERANCE = 1;
 export const PDF_EDGE_TOLERANCE_PIXELS = 1;
 export const PDF_CLIPPED_PAINT_RATIO = 0.25;
@@ -13,13 +12,21 @@ export const PDF_PAPER_POINTS: Readonly<Record<Exclude<PdfPaper, "artboard">, { 
 };
 
 export const PDF_PRINT_CSS = `
-html, body { margin: 0 !important; padding: 0 !important; background: #ffffff !important; }
+html, body { margin: 0 !important; padding: 0 !important; }
 [data-deck-nav], [data-deck-nav-style] { display: none !important; }
-[data-slide], [data-graphic-artboard] { display: block !important; overflow: hidden !important; box-sizing: border-box !important; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
+[data-slide], [data-graphic-artboard] { overflow: hidden !important; box-sizing: border-box !important; vertical-align: top !important; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
 [data-slide] { width: 100vw !important; height: 100vh !important; min-height: 0 !important; max-height: 100vh !important; }
-[data-bg-export-page] { display: block !important; }
 [data-slide]:last-of-type, [data-graphic-artboard]:last-of-type { page-break-after: auto; break-after: auto; }
 `;
+/** Browser-side: pins every gated export page to the display it has when active, so authored grid/flex layout survives the lifted gate. */
+export function revealExportPages(): void {
+  for (const page of document.querySelectorAll<HTMLElement>("[data-slide], [data-graphic-artboard]")) {
+    if (getComputedStyle(page).display !== "none") continue;
+    const active = page.hasAttribute("data-active"); page.setAttribute("data-active", "");
+    const shown = getComputedStyle(page).display; if (!active) page.removeAttribute("data-active");
+    page.style.setProperty("display", shown === "none" ? "block" : shown, "important");
+  }
+}
 export type PdfArtboardDimensions = { readonly width: number; readonly height: number };
 export type PdfPageDimensions = { readonly format?: "A4" | "Letter"; readonly width?: string; readonly height?: string };
 export class PdfContractError extends Error { readonly name = "PdfContractError"; constructor(readonly code: "artboard_dimensions_required") { super(code); } }
@@ -48,23 +55,11 @@ export function pdfPointsForPaper(paper: PdfPaper, artboard?: PdfArtboardDimensi
 }
 function artboardPoints(artboard: PdfArtboardDimensions | undefined): PdfArtboardDimensions {
   if (artboard === undefined) throw new PdfContractError("artboard_dimensions_required");
-  return { width: artboard.width * 0.75, height: artboard.height * 0.75 };
+  return pdfArtboardPoints(artboard);
 }
-export function pdfRasterDimensions(widthPoints: number, heightPoints: number): { readonly width: number; readonly height: number } { return { width: Math.ceil(widthPoints * PDF_RASTER_SCALE), height: Math.ceil(heightPoints * PDF_RASTER_SCALE) }; }
 export function pdfRasterBudgetFits(widthPoints: number, heightPoints: number, pages: number): boolean {
   if (!Number.isSafeInteger(pages) || pages <= 0) return false;
   return pdfRasterBudgetFitsPages(Array.from({ length: pages }, () => ({ width: widthPoints, height: heightPoints })));
-}
-export function pdfRasterBudgetFitsPages(pages: readonly PdfArtboardDimensions[]): boolean {
-  if (pages.length === 0) return false;
-  let total = 0;
-  for (const page of pages) {
-    const { width, height } = pdfRasterDimensions(page.width, page.height); const pixels = width * height;
-    if (!Number.isSafeInteger(pixels) || pixels <= 0 || pixels > PDF_MAX_PAGE_PIXELS) return false;
-    total += pixels;
-    if (!Number.isSafeInteger(total) || total > PDF_MAX_EXPECTED_PIXELS) return false;
-  }
-  return true;
 }
 export function pdfPointsMatchPaper(paper: PdfPaper, width: number, height: number, artboard?: PdfArtboardDimensions): boolean { const expected = pdfPointsForPaper(paper, artboard); return Math.abs(width - expected.width) <= PDF_POINT_TOLERANCE && Math.abs(height - expected.height) <= PDF_POINT_TOLERANCE; }
 export function isPdfSingleEdgeClipped(bounds: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number }, width: number, height: number, painted: number, pixels: number): boolean {

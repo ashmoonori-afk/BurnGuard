@@ -59,7 +59,7 @@ export async function readLogoManifestForPrompt(projectDir: string): Promise<Log
     throw error;
   }
   try {
-    return parseLogoManifestV1(JSON.parse(text));
+    return parseLogoManifestV1(JSON.parse(text.replace(/^\uFEFF/, "")));
   } catch (error) {
     if (error instanceof SyntaxError || error instanceof UpgradeContractError) return null;
     throw error;

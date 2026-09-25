@@ -25,7 +25,7 @@ function readStored(projectId: string): ExportOptionValues {
           : DEFAULT_EXPORT_OPTION_VALUES.jpegQuality,
     };
   } catch (error) {
-    if (error instanceof SyntaxError) return DEFAULT_EXPORT_OPTION_VALUES;
+    if (error instanceof SyntaxError || error instanceof DOMException) return DEFAULT_EXPORT_OPTION_VALUES;
     throw error;
   }
 }
@@ -41,7 +41,11 @@ export function useExportOptionValues(
   const update = useCallback(
     (next: ExportOptionValues) => {
       setValues(next);
-      window.localStorage.setItem(storageKey(projectId), JSON.stringify(next));
+      try {
+        window.localStorage.setItem(storageKey(projectId), JSON.stringify(next));
+      } catch (error) {
+        if (!(error instanceof DOMException)) throw error;
+      }
     },
     [projectId],
   );

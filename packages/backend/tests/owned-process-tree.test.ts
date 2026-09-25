@@ -94,6 +94,33 @@ test.skipIf(process.platform === "win32")("Given a POSIX process already exited 
   expect(await closeOwnedProcessTree(processId)).toBeUndefined();
 });
 
+test.skipIf(process.platform === "win32")("Given a PATH without ps When an owned child that started a same-group grandchild exits 0 Then settleProcessStreams resolves 0 and the grandchild is gone", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "bg-no-ps-"));
+  // The owned child records its same-group grandchild's pid in a file and exits 0; the harness reports one JSON line.
+  const childSource = `const g=Bun.spawn([process.execPath,'-e','setInterval(()=>{},1e9)'],{stdin:'ignore',stdout:'ignore',stderr:'ignore'});g.unref();await Bun.write('grandchild.pid',String(g.pid));`;
+  const harness = `import { spawnOwnedProcess } from ${JSON.stringify(path.resolve(import.meta.dir, "../src/adapters/owned-process.ts"))};
+    import { settleProcessStreams } from ${JSON.stringify(path.resolve(import.meta.dir, "../src/adapters/process-streams.ts"))};
+    const owned=spawnOwnedProcess({cmd:[process.execPath,'-e',${JSON.stringify(childSource)}],stdin:'ignore',stdout:'ignore',stderr:'ignore'});
+    let code=null;try{code=await settleProcessStreams(owned,[]);}catch{}
+    const grandchild=Number(await Bun.file('grandchild.pid').text());
+    let alive=true;try{process.kill(grandchild,0);}catch{alive=false;}
+    console.log(JSON.stringify({psMissing:Bun.which('ps')===null,grandchild,code,alive}));`;
+  const proc = Bun.spawn([process.execPath, "-e", harness], { cwd: root, env: { PATH: root }, stdin: "ignore", stdout: "pipe", stderr: "ignore" });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let report: { psMissing: boolean; grandchild: number; code: number | null; alive: boolean } | undefined;
+  try {
+    report = JSON.parse(await Promise.race([new Response(proc.stdout).text(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Harness deadline")), 15_000); })]));
+    expect(report).toMatchObject({ psMissing: true, code: 0, alive: false });
+    expect(report!.grandchild).toBeGreaterThan(0);
+  } finally {
+    clearTimeout(timer);
+    if (report?.alive) { try { process.kill(report.grandchild, "SIGKILL"); } catch { /* already gone */ } }
+    proc.kill("SIGKILL");
+    await proc.exited;
+    await rm(root, { recursive: true, force: true });
+  }
+}, 20_000);
+
 test.skipIf(process.platform !== "win32")("Given only a bare Windows PID When cleanup is requested Then opaque ownership is required", async () => {
   await expect(closeOwnedProcessTree(1_000_000_000)).rejects.toBeInstanceOf(OwnedProcessTreeCleanupError);
 });

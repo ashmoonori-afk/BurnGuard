@@ -16,6 +16,7 @@ export * from "./design-audit";
 export * from "./events";
 export * from "./export";
 export * from "./export-attempt";
+export * from "./pdf-raster-budget";
 export * from "./extraction-domain";
 export * from "./extraction-provenance";
 export * from "./file-patch";

@@ -25,6 +25,7 @@ import {
 import type { CanvasMode } from "@/components/modes/types";
 import { authorizedFetch } from "@/api/client";
 import { embedCanvasImages } from "@/lib/canvas-images";
+import { anySignal } from "@/lib/abort-signal";
 import { hydrateCanvasCharts } from "@/lib/canvas-charts";
 import { canvasPoint } from "./canvas-coordinates";
 import { requestFrameScrollAtPoint } from "./frame-bridge";
@@ -287,7 +288,7 @@ export default function Canvas({
     }
 
     const controller = new AbortController();
-    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]);
+    const signal = anySignal([controller.signal, AbortSignal.timeout(30_000)]);
     setLoadError(null);
 
     void authorizedFetch(src, { signal, cache: "no-store", redirect: "error" })

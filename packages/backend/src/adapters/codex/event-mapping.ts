@@ -30,6 +30,10 @@ export function mapCodexEnvelope(
       return mapItem(obj.item, ctx, true);
     case "turn.completed":
       return mapTurnCompleted(obj.usage, ctx);
+    // Codex prints retried stream errors ("Reconnecting... n/5") as top-level error lines; a real
+    // failure always also emits turn.failed and exits nonzero, and those stay authoritative.
+    case "error":
+      return [];
     case "turn.failed":
       return [
         {

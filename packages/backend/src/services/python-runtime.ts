@@ -11,11 +11,15 @@ export function managedPythonExecutable(platform: NodeJS.Platform = process.plat
     : path.join(pythonVenvDir, "bin", "python3");
 }
 
+export function systemPythonCandidates(): string[][] {
+  return process.platform === "win32"
+    ? [["py", "-3"], ["python3"], ["python"]]
+    : [["python3"], ["python"]];
+}
+
 /** Health checks and extraction must use the same environment once it has been created. */
 export function pythonCandidates(): string[][] {
   const managed = managedPythonExecutable();
   if (existsSync(managed)) return [[managed]];
-  return process.platform === "win32"
-    ? [["py", "-3"], ["python3"], ["python"]]
-    : [["python3"], ["python"]];
+  return systemPythonCandidates();
 }

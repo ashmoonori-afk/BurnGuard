@@ -15,11 +15,21 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
   const baseUrl = input.options.asset_base_url === undefined ? null : normalizeBaseUrl(input.options.asset_base_url);
   const findings: PlatformLintFinding[] = [];
   const hosted = new Set<string>();
+  const hostedNames = new Map<string, string>();
   const resolve = (relPath: string): string | null => {
     const asset = input.staged.assets.find((item) => item.rel_path === relPath);
     if (asset === undefined) return null;
     if (isImagePath(relPath) && asset.bytes.byteLength <= IMWEB_INLINE_IMAGE_BUDGET_BYTES) return dataUri(relPath, asset.bytes);
-    if (baseUrl !== null) return safeAssetUrl(baseUrl, encodeURI(path.posix.basename(relPath)));
+    if (baseUrl !== null) {
+      // The base url is flat, so two sources sharing a basename would publish to one URL.
+      const name = path.posix.basename(relPath); const owner = hostedNames.get(name.toLocaleLowerCase("en-US")) ?? relPath;
+      hostedNames.set(name.toLocaleLowerCase("en-US"), owner);
+      if (owner !== relPath && !hosted.has(relPath)) {
+        hosted.add(relPath);
+        findings.push({ code: "platform_unresolved_destination", severity: "warning", path: relPath, evidence: `${relPath} and ${owner} both publish as ${name} under the asset base url; rename one so each keeps its own URL.` });
+      }
+      return safeAssetUrl(baseUrl, encodeURI(name));
+    }
     if (isImagePath(relPath) && !hosted.has(relPath)) {
       hosted.add(relPath);
       findings.push({ code: "imweb_image_needs_hosting", severity: "warning", path: relPath, evidence: `${asset.bytes.byteLength} bytes exceed the inline budget; attach the image to a board post and re-export with that URL.` });
@@ -31,7 +41,9 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
   const roles: PackageEntryRole[] = [];
   const documents: PlatformLintDocument[] = [];
   let sharedCss = "";
+  let sharedKeyframes: ReadonlyMap<string, string> = new Map();
   const scripts: string[] = [];
+  const usedSlugs = new Set<string>();
 
   for (const page of input.staged.pages) {
     const { document } = parseDocument(page.html);
@@ -39,12 +51,21 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
     const styles = splitStyleBlocks(document);
     if (page.rel_path === input.entrypoint) {
       sharedCss = `${await linkedStylesheets(document, page.rel_path, input.staged.assets, resolve)}${rewriteCssText(styles.shared, page.rel_path, resolve)}`;
-      scripts.push(...linkedScripts(document, page.rel_path, input.staged.assets));
+      sharedKeyframes = keyframeRenames(sharedCss, "shared");
+      scripts.push(...linkedScripts(document, page.rel_path, input.staged.assets, content.element, resolve));
     }
-    const slug = pageSlug(page.rel_path);
-    if (content.element !== null) rewriteHtmlReferences(content.element, page.rel_path, resolve);
+    let slug = pageSlug(page.rel_path);
+    for (let counter = 2; usedSlugs.has(slug); counter += 1) slug = `${pageSlug(page.rel_path)}-${counter}`;
+    usedSlugs.add(slug);
+    const pageCssText = rewriteCssText(styles.page, page.rel_path, resolve);
+    // Shared keyframes are renamed in the header, so page CSS and inline styles must follow; a page-local name wins.
+    const keyframes = new Map([...sharedKeyframes, ...keyframeRenames(pageCssText, slug)]);
+    if (content.element !== null) {
+      rewriteHtmlReferences(content.element, page.rel_path, resolve);
+      for (const element of content.element.querySelectorAll("[style]")) element.setAttribute("style", (element.getAttribute("style") ?? "").replace(/(animation(?:-name)?\s*:)([^;]*)/giu, (_match, property: string, value: string) => `${property}${renameAnimations(value, keyframes)}`));
+    }
     const body = stripHtmlComments(content.element === null ? content.html : content.element.toString());
-    const pageCss = scopeCss(rewriteCssText(styles.page, page.rel_path, resolve), slug);
+    const pageCss = scopeCss(pageCssText, slug, keyframes);
     const fragmentPath = `pages/${slug}.imweb.html`;
     const fragment = `<div class="${IMWEB_SCOPE_CLASS} bg-page-${slug}">${pageCss.trim() === "" ? "" : `<style>${pageCss}</style>`}${body}</div>\n`;
     entries.push({ path: fragmentPath, bytes: encode(fragment) });
@@ -53,7 +74,8 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
   }
 
   const header = `<style>\n${RESET}${scopeCss(sharedCss, "shared")}\n</style>\n`;
-  const footer = `<script>\n${scripts.join("\n")}\n</script>\n`;
+  // One element per source, so a syntax error in one script cannot stop the others.
+  const footer = scripts.map((source) => `<script>\n${source}\n</script>\n`).join("");
   for (const [entryPath, text] of [[IMWEB_HEADER_PATH, header], [IMWEB_FOOTER_PATH, footer]] as const) {
     entries.push({ path: entryPath, bytes: encode(text) });
     roles.push({ path: entryPath, role: "common_code" });
@@ -67,10 +89,10 @@ export function pageSlug(relPath: string): string {
   return withoutExtension.replaceAll("/", "-").replace(/[^\p{L}\p{N}_-]/gu, "-").toLocaleLowerCase("en-US");
 }
 
-/** Prefixes every selector with the widget scope and remaps document-level selectors, keyframe names and animation references. */
-export function scopeCss(css: string, keyframeNamespace: string): string {
+/** Prefixes every selector with the widget scope and remaps document-level selectors, keyframe names and animation references, including inherited renames. */
+export function scopeCss(css: string, keyframeNamespace: string, inherited: ReadonlyMap<string, string> = new Map()): string {
   const root = parseCss(css);
-  const renamed = new Map<string, string>();
+  const renamed = new Map(inherited);
   root.walkAtRules((rule) => {
     if (!rule.name.toLowerCase().endsWith("keyframes")) return;
     const from = rule.params.trim();
@@ -82,10 +104,20 @@ export function scopeCss(css: string, keyframeNamespace: string): string {
     if (rule.parent instanceof postcss.AtRule && rule.parent.name.toLowerCase().endsWith("keyframes")) return;
     rule.selectors = rule.selectors.map(scopeSelector);
   });
-  root.walkDecls(/^animation(-name)?$/u, (declaration) => {
-    for (const [from, to] of renamed) declaration.value = declaration.value.replace(new RegExp(`(^|[\\s,])${escapeRegExp(from)}($|[\\s,])`, "gu"), `$1${to}$2`);
-  });
+  root.walkDecls(/^animation(-name)?$/u, (declaration) => { declaration.value = renameAnimations(declaration.value, renamed); });
   return root.toString();
+}
+
+function keyframeRenames(css: string, keyframeNamespace: string): ReadonlyMap<string, string> {
+  const renamed = new Map<string, string>();
+  parseCss(css).walkAtRules((rule) => { if (rule.name.toLowerCase().endsWith("keyframes")) renamed.set(rule.params.trim(), `bg-${keyframeNamespace}-${rule.params.trim()}`); });
+  return renamed;
+}
+
+function renameAnimations(value: string, renamed: ReadonlyMap<string, string>): string {
+  let result = value;
+  for (const [from, to] of renamed) result = result.replace(new RegExp(`(^|[\\s,])${escapeRegExp(from)}($|[\\s,])`, "gu"), `$1${to}$2`);
+  return result;
 }
 
 function scopeSelector(selector: string): string {
@@ -113,10 +145,20 @@ async function linkedStylesheets(document: ReturnType<typeof parseDocument>["doc
   return css;
 }
 
-function linkedScripts(document: ReturnType<typeof parseDocument>["document"], owner: string, assets: readonly StagedAsset[]): readonly string[] {
+function linkedScripts(document: ReturnType<typeof parseDocument>["document"], owner: string, assets: readonly StagedAsset[], content: ReturnType<typeof extractPageContent>["element"], resolve: (relPath: string) => string | null): readonly string[] {
+  // Scripts the fragment already delivers are skipped; data blocks and modules cannot run as classic footer code.
+  // Without a content landmark the fragment is the body minus chrome and is never rewritten, so only its inline scripts run there.
+  const inContent = new Set(content !== null ? content.querySelectorAll("script") : document.querySelectorAll("body script").filter((script) => script.getAttribute("src") === undefined && script.closest("header,nav,footer") === null));
   const sources: string[] = [];
   for (const script of document.querySelectorAll("script")) {
+    if (!["", "text/javascript", "application/javascript"].includes((script.getAttribute("type") ?? "").trim().toLowerCase())) continue;
     const reference = script.getAttribute("src");
+    if (inContent.has(script)) {
+      // An in-content src script is delivered only when it stays remote or rewrites to a hosted URL.
+      if (reference === undefined) continue;
+      const target = resolveLocalReference(reference, owner);
+      if (target === null || resolve(target) !== null) continue;
+    }
     if (reference === undefined) { sources.push(script.text); continue; }
     const target = resolveLocalReference(reference, owner);
     const asset = target === null ? undefined : assets.find((item) => item.rel_path === target);

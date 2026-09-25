@@ -1,5 +1,5 @@
 import type { Page } from "playwright-core";
-import { PDF_PRINT_CSS } from "./export-pdf-contract";
+import { PDF_PRINT_CSS, revealExportPages } from "./export-pdf-contract";
 
 /**
  * The narrow browser surface the frame and slice exporters need. The Playwright
@@ -28,6 +28,8 @@ export function capturePageFromSession(page: Page): CapturePage {
     awaitRenderReady: async () => {
       await page.evaluate(async () => {
         await document.fonts.ready;
+        // A deferred lazy image never fires load or error, so it would stall readiness and print blank.
+        for (const image of document.images) if (image.loading === "lazy") image.loading = "eager";
         await Promise.all([...document.images].filter((image) => !image.complete).map((image) => new Promise<void>((resolve) => {
           image.addEventListener("load", () => { resolve(); }, { once: true });
           image.addEventListener("error", () => { resolve(); }, { once: true });
@@ -37,6 +39,7 @@ export function capturePageFromSession(page: Page): CapturePage {
     },
     applyDeckPrintStyles: async () => {
       await page.addStyleTag({ content: PDF_PRINT_CSS });
+      await page.evaluate(revealExportPages);
     },
     measureFrames: async (selector) => await page.evaluate((elementSelector) => [...document.querySelectorAll<HTMLElement>(elementSelector)].map((element, index) => {
       const rect = element.getBoundingClientRect();
@@ -48,8 +51,12 @@ export function capturePageFromSession(page: Page): CapturePage {
       const nodes = [...document.querySelectorAll<HTMLElement>(elementSelector)];
       for (const [position, node] of nodes.entries()) {
         node.toggleAttribute("data-bg-export-frame", position === target);
-        if (position === target) node.style.removeProperty("display");
-        else node.style.setProperty("display", "none", "important");
+        // The first isolation snapshots the authored inline display so the target and restoreFrames can put it back.
+        if (!node.hasAttribute("data-bg-export-display")) node.setAttribute("data-bg-export-display", JSON.stringify([node.style.getPropertyValue("display"), node.style.getPropertyPriority("display")]));
+        const [value, priority] = JSON.parse(node.getAttribute("data-bg-export-display") ?? "[]") as [string?, string?];
+        if (position !== target) node.style.setProperty("display", "none", "important");
+        else if (value) node.style.setProperty("display", value, priority);
+        else node.style.removeProperty("display");
       }
       const element = nodes[target];
       if (element === undefined) return null;
@@ -60,7 +67,9 @@ export function capturePageFromSession(page: Page): CapturePage {
       await page.evaluate((elementSelector) => {
         for (const node of document.querySelectorAll<HTMLElement>(elementSelector)) {
           node.removeAttribute("data-bg-export-frame");
-          node.style.removeProperty("display");
+          const [value, priority] = JSON.parse(node.getAttribute("data-bg-export-display") ?? "[]") as [string?, string?];
+          if (value) node.style.setProperty("display", value, priority); else node.style.removeProperty("display");
+          node.removeAttribute("data-bg-export-display");
         }
       }, selector);
     },
@@ -69,13 +78,19 @@ export function capturePageFromSession(page: Page): CapturePage {
       const rect = artboard.getBoundingClientRect();
       const originX = Math.round(rect.left + window.scrollX);
       const originY = Math.round(rect.top + window.scrollY);
-      const sectionBottoms = [...artboard.children].flatMap((child) => child instanceof HTMLElement && child.hasAttribute("data-bg-node-id")
+      // Only rendered in-flow sections say where to cut; hidden and out-of-flow decorations do not.
+      const inFlow = (child: HTMLElement): boolean => { const style = getComputedStyle(child); return style.display !== "none" && style.display !== "contents" && style.position !== "absolute" && style.position !== "fixed" && child.getBoundingClientRect().height > 0; };
+      const sectionBottoms = [...artboard.children].flatMap((child) => child instanceof HTMLElement && child.hasAttribute("data-bg-node-id") && inFlow(child)
         ? [Math.round(child.getBoundingClientRect().bottom + window.scrollY) - originY]
         : []);
       return { pageWidth: Math.round(rect.width), pageHeight: Math.round(rect.height), originX, originY, sectionBottoms };
     }, selector),
     flattenBackground: async () => {
-      await page.addStyleTag({ content: "html, body { background: #ffffff !important; }" });
+      // Only an unpainted page is flattened to white; an authored page background is what the slices must show.
+      await page.evaluate(() => {
+        const bare = [document.documentElement, document.body].every((node) => { const style = getComputedStyle(node); return style.backgroundImage === "none" && style.backgroundColor === "rgba(0, 0, 0, 0)"; });
+        if (bare) document.documentElement.style.backgroundColor = "#ffffff";
+      });
     },
     capture: async (request) => {
       const previous = await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }));

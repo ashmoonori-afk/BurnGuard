@@ -81,6 +81,8 @@ export async function reviewTurnDesign(input: {
         signal: repairSignal,
         prompt: repairPrompt,
         userEvent: { type: "user.message", text: repairPrompt },
+        // The capability is switched off in the invocation itself, not asked for in the prompt.
+        ...(contrastOnly ? { imageGeneration: "forbidden" as const } : {}),
       });
       repairSignal.throwIfAborted();
       if (repair.exitCode !== 0 || repairFailed) throw new DesignReviewError();

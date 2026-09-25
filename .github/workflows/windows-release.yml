@@ -79,5 +79,5 @@ jobs:
         shell: pwsh
         run: |
           $assets = (Get-ChildItem dist/releases -File).FullName
-          node scripts/qa/release-draft-state.mjs windows $env:GITHUB_REF_NAME "BurnGuard $env:GITHUB_REF_NAME" 'Windows installer, portable app, and automatic update feed. Publish this draft after checking the package.' @assets
+          node scripts/qa/release-draft-state.mjs windows $env:GITHUB_REF_NAME "BurnGuard $env:GITHUB_REF_NAME" 'Windows and macOS installers, portable apps, and automatic update feeds. Publish only after both the Windows and macOS assets are attached and checked.' @assets
           if ($LASTEXITCODE -ne 0) { throw 'Draft release attachment failed' }

@@ -63,6 +63,14 @@ describe("apiErrorCopy", () => {
     );
   });
 
+  test.each(["invalid_export_options", "pdf_resource_limit"])("Given the export admission rejection %s When mapped Then it has its own recovery copy instead of the generic fallback", (code) => {
+    expect(apiErrorCopy(new FakeApiError(code, "private internal error"))).not.toBe(apiErrorCopy(new FakeApiError("__unknown__", "boom")));
+  });
+
+  test("Given an installer that could not be started When mapped Then it has its own recovery copy instead of the generic fallback", () => {
+    expect(apiErrorCopy(new FakeApiError("install_start_failed", "private internal error"))).not.toBe(apiErrorCopy(new FakeApiError("__unknown__", "boom")));
+  });
+
   test("Given has_active_projects When mapped Then the copy tells the user to delete the referencing projects", () => {
     const copy = apiErrorCopy(new FakeApiError("has_active_projects", "Active projects reference this system"));
     expect(copy).toContain("삭제");

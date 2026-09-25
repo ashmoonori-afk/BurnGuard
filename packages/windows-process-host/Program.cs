@@ -106,7 +106,7 @@ namespace BurnGuard.ProcessHost
                 if (ActiveProcesses(job) != 0 && !Native.TerminateJobObject(job, targetExit)) Fail(HostExit.NativeFailure, "terminate_descendants_failed");
                 WaitForActiveZero(completionPort, zero, job, args.TimeoutMs);
                 WriteReceipt(args.Receipt, "{\"schema_version\":1,\"operation\":\"launch\",\"state\":\"exited\",\"job_token\":\"" + args.Job + "\",\"host_pid\":" + Native.GetCurrentProcessId() + ",\"target_pid\":" + process.ProcessId + ",\"target_exit_code\":" + targetExit + ",\"active_processes\":0}");
-                return unchecked((int)targetExit);
+                return targetExit > 255 ? 255 : (int)targetExit;
             }
             finally
             {

@@ -23,13 +23,15 @@ export type ExportOptionDisabledReason =
   | "deck_only"
   | "web_only"
   | "frames_only"
-  | "mixed_frames";
+  | "mixed_frames"
+  | "pdf_too_large";
 
 export const EXPORT_DISABLED_LABEL: Record<ExportOptionDisabledReason, string> = {
   get deck_only() { return t("export.disabled.deck_only"); },
   get web_only() { return t("export.disabled.web_only"); },
   get frames_only() { return t("export.disabled.frames_only"); },
   get mixed_frames() { return t("export.disabled.mixed_frames"); },
+  get pdf_too_large() { return t("export.disabled.pdf_too_large"); },
 };
 
 export type ExportOptionField = {

@@ -148,6 +148,8 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
       const next = await startPlaywrightInstall();
       queryClient.setQueryData(["settings", "playwright"], next);
     } catch (err) {
+      // A failed spawn is recorded as the install error; refetch so the card shows it.
+      void queryClient.invalidateQueries({ queryKey: ["settings", "playwright"] });
       pushToast({
         title: t("settings.playwrightStartFailed"),
         body: apiErrorCopy(err),
@@ -164,6 +166,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
       const next = await startPypdfInstall();
       queryClient.setQueryData(["settings", "python"], next);
     } catch (err) {
+      void queryClient.invalidateQueries({ queryKey: ["settings", "python"] });
       pushToast({
         title: t("settings.pypdfStartFailed"),
         body: apiErrorCopy(err),

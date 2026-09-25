@@ -14,6 +14,7 @@
  *   - SIGINT / window-close brings down both child processes together.
  */
 import { spawn, type Subprocess } from "bun";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { APP_NAME } from "../packages/shared/src/app";
 import { isPortFree } from "./qa/port";
@@ -26,8 +27,15 @@ const BACKEND_TIMEOUT_MS = 60_000;
 const FRONTEND_TIMEOUT_MS = 30_000;
 const POLL_INTERVAL_MS = 250;
 const PROBE_TIMEOUT_MS = 800;
+const WINDOWS_PROCESS_HOST = path.join(REPO_ROOT, "dist", "windows-process-host", "burnguard-windows-process-host.exe");
 
 type PortState = "burnguard" | "other" | "free";
+
+/** A source checkout has no helper beside bun.exe, so Windows owned spawns need the dist build. */
+export function windowsProcessHostPreflight(input: { readonly platform: NodeJS.Platform; readonly env: NodeJS.ProcessEnv; readonly exists: (candidate: string) => boolean; readonly dotnet: string | null }): "ready" | "build" | "missing_sdk" {
+  if (input.platform !== "win32" || input.env.BG_WINDOWS_PROCESS_HOST !== undefined || input.exists(WINDOWS_PROCESS_HOST)) return "ready";
+  return input.dotnet === null ? "missing_sdk" : "build";
+}
 
 export async function isBurnGuardHealth(response: Response): Promise<boolean> {
   if (!response.ok) return false;
@@ -121,6 +129,19 @@ async function main(): Promise<void> {
       "           Free the port (Resource Monitor on Windows, `lsof -i :14070` on macOS) and try again.",
     );
     process.exit(1);
+  }
+
+  // 1b. Windows: every provider, probe and Chromium spawn runs through the process host.
+  const host = windowsProcessHostPreflight({ platform: process.platform, env: process.env, exists: existsSync, dotnet: Bun.which("dotnet") });
+  if (host === "missing_sdk") {
+    console.error("[launcher] The Windows process host is not built and the .NET 8 SDK was not found.");
+    console.error("           Install the .NET 8 SDK, run `bun scripts/build-windows-process-host.ts`, then try again.");
+    process.exit(1);
+  }
+  if (host === "build") {
+    console.log("[launcher] building the Windows process host...");
+    const { buildWindowsProcessHost } = await import("./build-windows-process-host");
+    await buildWindowsProcessHost();
   }
 
   // 2. Start backend.

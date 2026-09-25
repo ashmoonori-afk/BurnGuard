@@ -24,6 +24,7 @@ internal static class UpdateChecks
         CheckDownloadRouting();
         CheckDownloadObservation();
         CheckPermissionPolicy();
+        CheckProcessFailurePolicy();
         Check(new FakeUpdates { Installed = false }, null, "설치 패키지", false, 0, 0);
         Check(new FakeUpdates(), "isolated-smoke.json", "대기 중", false, 0, 0);
         Check(new FakeUpdates(), null, "최신 버전", false, 1, 0);
@@ -105,6 +106,16 @@ internal static class UpdateChecks
         Assert(Permission(policy, true, "http://127.0.0.1:14176", app, multiple) == CoreWebView2PermissionState.Deny, "Mismatched port must be denied");
         Assert(Permission(policy, true, "http://user@127.0.0.1:14175", app, multiple) == CoreWebView2PermissionState.Deny, "Userinfo origin must be denied");
         Assert(Permission(policy, true, "http://127.0.0.1:14175", app, CoreWebView2PermissionKind.Notifications) == CoreWebView2PermissionState.Deny, "Other permissions must remain denied");
+    }
+
+    private static void CheckProcessFailurePolicy()
+    {
+        var fatal = Window.GetMethod("IsFatalProcessFailure", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(Window.FullName, "IsFatalProcessFailure");
+        foreach (var kind in new[] { CoreWebView2ProcessFailedKind.BrowserProcessExited, CoreWebView2ProcessFailedKind.RenderProcessExited })
+            Assert((bool)fatal.Invoke(null, new object[] { kind }), "Main browser or renderer exit must stay fatal: " + kind);
+        foreach (var kind in new[] { CoreWebView2ProcessFailedKind.GpuProcessExited, CoreWebView2ProcessFailedKind.UtilityProcessExited, CoreWebView2ProcessFailedKind.SandboxHelperProcessExited, CoreWebView2ProcessFailedKind.FrameRenderProcessExited, CoreWebView2ProcessFailedKind.RenderProcessUnresponsive })
+            Assert(!(bool)fatal.Invoke(null, new object[] { kind }), "Recoverable process failure must not close the app: " + kind);
     }
 
     private static CoreWebView2PermissionState Permission(MethodInfo policy, bool diagnostic, string source, Uri app, CoreWebView2PermissionKind kind) =>

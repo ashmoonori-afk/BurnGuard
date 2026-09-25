@@ -45,7 +45,13 @@ export async function closeOwnedProcessTree(processId: number): Promise<void> {
   // Snapshot before signalling any ancestor: detached tools have their own
   // process group and lose their ownership link when the CLI exits. Do not
   // yield between discovering these exact descendants and signalling them.
-  const descendants = snapshotDescendants(processId);
+  // Without a snapshot (no `ps` on the host) the group kill below still reaps the owned group.
+  let descendants: number[];
+  try { descendants = snapshotDescendants(processId); }
+  catch {
+    console.warn(`[adapter] cannot snapshot owned process tree ${processId}`);
+    descendants = [];
+  }
   for (const pid of descendants.reverse()) killIfPresent(pid);
   killIfPresent(-processId);
   // Real elapsed time, not scheduler ticks: the previous setImmediate loop

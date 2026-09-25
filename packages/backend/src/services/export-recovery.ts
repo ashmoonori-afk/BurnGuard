@@ -16,7 +16,7 @@ export async function reconcileExportState(db: Database, root?: string): Promise
     FROM export_attempts a JOIN exports e ON e.id=a.job_id WHERE a.status IN ('pending','running','validating','validated','retrying','recovering')`).all();
   for (const row of rows) await recoverAttempt(db, exportRoot, row);
   db.prepare("UPDATE exports SET status='failed',output_path=NULL,error_message='Legacy export has no validated receipt' WHERE status='succeeded' AND NOT EXISTS (SELECT 1 FROM export_attempts a WHERE a.job_id=exports.id AND a.status='validated')").run();
-  await cleanOrphanStages(db, exportRoot);
+  await cleanOrphanTrees(db, exportRoot);
 }
 
 type RecoveryRow = { readonly attempt_id: string; readonly job_id: string; readonly parent_attempt_id: string | null; readonly status: string; readonly project_revision: number; readonly project_digest: string; readonly canonical_options_json: string; readonly options_digest: string; readonly input_closure_digest: string | null; readonly design_system_digest: string | null; readonly renderer_digest: string; readonly capture_digest: string; readonly output_digest: string | null; readonly receipt_digest: string | null; readonly format: ExportFormat; readonly project_id: string };
@@ -24,17 +24,21 @@ async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Pro
   const safeId = assertSafeName(row.attempt_id); const stage = resolveWithin(root, ".staging", safeId); const published = resolveWithin(root, "attempts", safeId);
   const cancelRequested = () => db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(row.attempt_id)?.requested === 1;
   const cancel = async () => {
-    await rm(stage, { recursive: true, force: true }); await rm(published, { recursive: true, force: true });
+    // Cleanup is best-effort: a held handle must not block the terminal transition or startup.
+    await rm(stage, { recursive: true, force: true }).catch(() => undefined); await rm(published, { recursive: true, force: true }).catch(() => undefined);
     failExportAttempt(db, { jobId: row.job_id, attemptId: row.attempt_id, status: "cancelled", reason: "user_cancelled", message: "Export cancelled" });
     emitRecovery(db, row, "cancelled", "user_cancelled");
   };
   if (row.status !== "validated" && cancelRequested()) { await cancel(); return; }
   const source = await directoryExists(published) ? published : await directoryExists(stage) ? stage : null;
-  if (source === null) {
+  // A stage without a receipt is a render interrupted before validation, not corrupt output.
+  const interrupted = source === stage && row.status !== "validated" && await stat(path.join(stage, "receipt.json")).then(() => false, (error: unknown) => Reflect.get(Object(error), "code") === "ENOENT");
+  if (source === null || interrupted) {
     if (row.status === "validated") {
       markExportAttemptCorrupt(db, { jobId: row.job_id, attemptId: row.attempt_id, message: "Export recovery found no owned output" });
       emitRecovery(db, row, "corrupt", "receipt_corrupt");
     } else {
+      await rm(stage, { recursive: true, force: true }).catch(() => undefined);
       failExportAttempt(db, { jobId: row.job_id, attemptId: row.attempt_id, status: "failed", reason: "recovery_failed", message: "Export recovery found no owned output" });
       emitRecovery(db, row, "failed", "recovery_failed");
     }
@@ -54,23 +58,33 @@ async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Pro
     if (cancelRequested()) { await cancel(); return; }
     advanceExportAttempt(db, { attemptId: row.attempt_id, status: "recovering", stage: "publishing" });
     completion = { jobId: row.job_id, attemptId: row.attempt_id, outputPath: finalOutput, size: info.size, outputDigest, receiptDigest: expectedReceipt, projectId: row.project_id, projectRevision: row.project_revision, projectDigest: row.project_digest };
-  } catch (error) {
+  } catch {
     if (cancelRequested()) { await cancel(); return; }
-    await rm(stage, { recursive: true, force: true });
-    markExportAttemptCorrupt(db, { jobId: row.job_id, attemptId: row.attempt_id, message: error instanceof Error ? error.message : String(error) }); emitRecovery(db, row, "corrupt", "receipt_corrupt");
+    await rm(stage, { recursive: true, force: true }).catch(() => undefined);
+    // Fixed copy: fs errors carry absolute private paths, and this message reaches the job DTO.
+    markExportAttemptCorrupt(db, { jobId: row.job_id, attemptId: row.attempt_id, message: "Export receipt or output is corrupt" }); emitRecovery(db, row, "corrupt", "receipt_corrupt");
     return;
   }
   // Persistence failure leaves verified bytes and a recovering attempt intact.
   // It must not classify a valid receipt as corrupt or delete the recoverable output.
   completeExportAttemptWithEvent(db, completion);
 }
-async function cleanOrphanStages(db: Database, root: string): Promise<void> {
-  const staging = resolveWithin(root, ".staging");
-  for (const entry of await readdir(staging, { withFileTypes: true }).catch(() => [])) {
-    if (!entry.isDirectory()) continue;
-    try { assertSafeName(entry.name); } catch { continue; }
-    const exists = db.query<{ readonly value: number }, [string]>("SELECT 1 value FROM export_attempts WHERE id=?").get(entry.name);
-    if (exists === null) await rm(resolveWithin(staging, entry.name), { recursive: true, force: true });
+/**
+ * Startup only, before serving: every attempt row is inserted before its directories exist, so a directory
+ * without a row is a crash leftover or the output of a project whose export rows were cascaded away.
+ * A terminal attempt's directory is a tree an earlier best-effort cleanup failed to remove; validated,
+ * corrupt and expired outputs under `attempts` stay for their own lifecycle.
+ */
+async function cleanOrphanTrees(db: Database, root: string): Promise<void> {
+  for (const owner of [".staging", "attempts"] as const) {
+    const parent = resolveWithin(root, owner);
+    for (const entry of await readdir(parent, { withFileTypes: true }).catch(() => [])) {
+      if (!entry.isDirectory()) continue;
+      try { assertSafeName(entry.name); } catch { continue; }
+      const row = db.query<{ readonly status: string }, [string]>("SELECT status FROM export_attempts WHERE id=?").get(entry.name);
+      const stale = row === null || (owner === ".staging" ? ["failed", "cancelled", "corrupt", "expired"] : ["failed", "cancelled"]).includes(row.status);
+      if (stale) await rm(resolveWithin(parent, entry.name), { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 }
 function emitRecovery(db: Database, row: RecoveryRow, status: "validated" | "failed" | "corrupt" | "cancelled", stopReason: "recovery_failed" | "receipt_corrupt" | "user_cancelled" | null): void {

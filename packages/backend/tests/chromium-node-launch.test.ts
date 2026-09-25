@@ -106,6 +106,8 @@ for (const surface of ["export", "thumbnail"] as const) test.skipIf(!systemChrom
       expect(upgrades).toEqual([]);
       expect(blocked).toEqual({ kind: "unavailable", code: "thumbnail_unavailable" });
       await writeFile(path.join(root, "index.html"), '<!doctype html><html><head><script src="local.js"></script></head><body style="background:#123456;color:white"><h1>Local render</h1></body></html>');
+      // A failed identity is not re-rendered; the rewritten artifact is a new revision.
+      getSqlite().prepare("UPDATE projects SET current_revision=2,current_digest=? WHERE id=?").run("b".repeat(64), id);
       const local = await loadProjectThumbnail(id);
       expect(local.kind).toBe("ready");
       if (local.kind !== "ready") throw new Error("local thumbnail missing");

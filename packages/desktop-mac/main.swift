@@ -17,12 +17,15 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var smokePageReport: [String: Any]?
     private var smokeDownloads: [String] = []
     private var smokeDownloadNames: [ObjectIdentifier: String] = [:]
+    private var pendingReplacements: [ObjectIdentifier: (temporary: URL, target: URL)] = [:]
     private var smokeStage = 0
     private var smokeStarted = false
     private var smokeFinishing = false
     private var closing = false
+    private var terminationReplyPending = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installMainMenu()
         do {
             let diagnostics = try parseArguments()
             smokeReportPath = diagnostics.reportPath
@@ -39,9 +42,10 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if closing {
-            return .terminateNow
-        }
+        // The shell exits only after its backend; finishTermination answers once the service has exited.
+        guard service?.isRunning == true else { return .terminateNow }
+        if terminationReplyPending { return .terminateCancel }
+        terminationReplyPending = true
         shutdown()
         return .terminateLater
     }
@@ -70,6 +74,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             decisionHandler(trustedSource && isAppDownloadURL(url) ? .download : .cancel)
             return
         }
+        // Parent-owned link clicks that leave the app open in the default browser, mirroring the Windows shell.
+        if navigationAction.navigationType == .linkActivated, navigationAction.sourceFrame.isMainFrame,
+           navigationAction.targetFrame?.isMainFrame != false {
+            openExternal(url)
+        }
         decisionHandler(isAppURL(url) ? .allow : .cancel)
     }
 
@@ -88,6 +97,17 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         }
     }
 
+    func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        // window.open never gets a second web view; external targets go to the default browser instead.
+        if let url = navigationAction.request.url { openExternal(url) }
+        return nil
+    }
+
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
         download.delegate = self
     }
@@ -104,7 +124,12 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         let panel = NSSavePanel()
         panel.nameFieldStringValue = URL(fileURLWithPath: suggestedFilename).lastPathComponent
         panel.beginSheetModal(for: window) { result in
-            completionHandler(result == .OK ? panel.url : nil)
+            guard result == .OK, let url = panel.url else { completionHandler(nil); return }
+            // WKDownload refuses an existing destination, so a confirmed replacement downloads beside it and swaps only on success.
+            guard FileManager.default.fileExists(atPath: url.path) else { completionHandler(url); return }
+            let temporary = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).burnguard-download-\(UUID().uuidString)")
+            self.pendingReplacements[ObjectIdentifier(download)] = (temporary: temporary, target: url)
+            completionHandler(temporary)
         }
     }
 
@@ -114,6 +139,10 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     }
 
     func downloadDidFinish(_ download: WKDownload) {
+        if let replacement = pendingReplacements.removeValue(forKey: ObjectIdentifier(download)) {
+            do { _ = try FileManager.default.replaceItemAt(replacement.target, withItemAt: replacement.temporary) }
+            catch { try? FileManager.default.removeItem(at: replacement.temporary); alertDownloadFailed() }
+        }
         guard smokeReportPath != nil else { return }
         let name = smokeDownloadNames.removeValue(forKey: ObjectIdentifier(download)) ?? "unknown"
         smokeDownloads.append(name)
@@ -121,15 +150,21 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        // The confirmed original stays untouched; only the partial download beside it is discarded.
+        if let replacement = pendingReplacements.removeValue(forKey: ObjectIdentifier(download)) { try? FileManager.default.removeItem(at: replacement.temporary) }
         if (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled { return }
         if smokeReportPath != nil {
             fail("Native download failed.")
         } else {
-            let alert = NSAlert()
-            alert.messageText = "BurnGuard"
-            alert.informativeText = "파일을 다운로드하지 못했습니다. 다시 시도해 주세요."
-            alert.beginSheetModal(for: window)
+            alertDownloadFailed()
         }
+    }
+
+    private func alertDownloadFailed() {
+        let alert = NSAlert()
+        alert.messageText = "BurnGuard"
+        alert.informativeText = "파일을 다운로드하지 못했습니다. 다시 시도해 주세요."
+        alert.beginSheetModal(for: window)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -312,6 +347,25 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         return (arguments[2], arguments[4])
     }
 
+    // AppKit delivers Cmd-key editing, quit and close only through main-menu key equivalents; nil targets reach the web view.
+    private func installMainMenu() {
+        let appMenu = NSMenu(title: "BurnGuard")
+        appMenu.addItem(withTitle: "BurnGuard 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let editMenu = NSMenu(title: "편집")
+        editMenu.addItem(withTitle: "실행 취소", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "실행 복귀", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(withTitle: "오려두기", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "복사하기", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "붙이기", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "모두 선택", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let windowMenu = NSMenu(title: "윈도우")
+        windowMenu.addItem(withTitle: "최소화", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "닫기", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        let mainMenu = NSMenu()
+        for menu in [appMenu, editMenu, windowMenu] { mainMenu.addItem(withTitle: menu.title, action: nil, keyEquivalent: "").submenu = menu }
+        NSApp.mainMenu = mainMenu
+    }
+
     private func createWindow() throws {
         NSApp.setActivationPolicy(.regular)
         let configuration = WKWebViewConfiguration()
@@ -348,6 +402,10 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         let errorOutput = Pipe()
         let process = Process()
         var environment = ProcessInfo.processInfo.environment
+        // Finder and Dock launches inherit launchd's minimal PATH; put the usual user tool directories first so CLIs resolve.
+        let searchPath = (environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin").split(separator: ":").map(String.init)
+        let userPaths = [NSHomeDirectory() + "/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.bun/bin"].filter { !searchPath.contains($0) }
+        environment["PATH"] = (userPaths + searchPath).joined(separator: ":")
         environment["BG_DESKTOP"] = "1"
         environment["BG_NO_OPEN"] = "1"
         environment["BG_UPDATE_WAIT_PID"] = String(ProcessInfo.processInfo.processIdentifier)
@@ -365,15 +423,17 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
 
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty else { return }
+            // At EOF the handler keeps firing with empty data until it is cleared.
+            if data.isEmpty { handle.readabilityHandler = nil; return }
             DispatchQueue.main.async { self?.consumeServiceOutput(data) }
         }
         errorOutput.fileHandleForReading.readabilityHandler = { handle in
-            _ = handle.availableData
+            if handle.availableData.isEmpty { handle.readabilityHandler = nil }
         }
         process.terminationHandler = { [weak self] process in
             DispatchQueue.main.async {
-                guard let self, !self.closing else { return }
+                guard let self else { return }
+                if self.closing { self.finishTermination(); return }
                 self.fail("BurnGuard 서버가 종료되었습니다 (code \(process.terminationStatus)).")
             }
         }
@@ -402,7 +462,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             }
             if message["event"] as? String == "shutdown" {
                 closing = true
-                NSApp.terminate(nil)
+                awaitServiceExit()
                 return
             }
             guard let urlString = message["url"] as? String,
@@ -424,6 +484,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             host == originHost &&
             url.port == origin.port &&
             url.user == nil
+    }
+
+    private func openExternal(_ url: URL) {
+        guard url.scheme == "https" || url.scheme == "http", url.user == nil, url.password == nil, !isAppURL(url) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func isAppDownloadURL(_ url: URL) -> Bool {
@@ -489,13 +554,19 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         serviceOutput?.fileHandleForReading.readabilityHandler = nil
         serviceInput?.fileHandleForWriting.write(Data("shutdown\n".utf8))
         serviceInput?.fileHandleForWriting.closeFile()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            guard let self else { return }
-            if self.service?.isRunning == true {
-                self.service?.terminate()
-            }
-            NSApp.terminate(nil)
+        awaitServiceExit()
+    }
+
+    // The termination handler finishes the exit; the backend handles SIGTERM as its own drain, so a stuck drain gets SIGKILL.
+    private func awaitServiceExit() {
+        guard let service, service.isRunning else { DispatchQueue.main.async { [weak self] in self?.finishTermination() }; return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+            if service.isRunning { kill(service.processIdentifier, SIGKILL) }
         }
+    }
+
+    private func finishTermination() {
+        if terminationReplyPending { NSApp.reply(toApplicationShouldTerminate: true) } else { NSApp.terminate(nil) }
     }
 }
 

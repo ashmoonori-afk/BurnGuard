@@ -8,6 +8,7 @@ import { advanceExportAttempt, completeExportAttempt, createExportAuthority, cre
 import { reconcileExportState } from "../src/services/export-recovery";
 import { canonicalJson, receiptDigest, sha256, type ExportReceipt } from "../src/services/export-receipt";
 import { completeExportAttemptWithEvent } from "../src/services/export-events";
+import "./export-recovery-orphan-cases";
 
 const sourceDir = path.join(import.meta.dir, "../src/db/migrations");
 const databases: Database[] = [];

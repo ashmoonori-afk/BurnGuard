@@ -111,7 +111,8 @@ export function slugifyProjectName(name: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
-  const truncated = stripped.slice(0, FILENAME_MAX_LEN);
+  // Drop a high surrogate orphaned by the code-unit cut; encodeURIComponent rejects it.
+  const truncated = stripped.slice(0, FILENAME_MAX_LEN).replace(/[\uD800-\uDBFF]$/u, "");
   return truncated.length > 0 ? truncated : "export";
 }
 

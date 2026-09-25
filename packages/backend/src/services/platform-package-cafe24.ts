@@ -49,12 +49,19 @@ export function buildCafe24Package(input: PlatformBuildInput): PlatformBuildResu
     roles.push({ path: destination.package_path, role: "asset" });
   }
   const shipsFonts = input.staged.assets.some((asset) => bucketFor(asset.rel_path) === "fonts");
+  // Font licenses travel with the fonts they cover rather than through the uploader, so they are not linted as uploader assets.
+  const assets = entries.filter((entry) => entry.path.startsWith(`web/${input.slug}/`)).map((entry) => ({ path: entry.path, bytes: entry.bytes.byteLength }));
+  const taken = new Set([...destinations.values()].filter((destination) => destination.bucket === "fonts").map((destination) => path.posix.basename(destination.package_path).toLocaleLowerCase("en-US")));
   if (shipsFonts) for (const notice of input.staged.notices) {
-    const noticePath = `web/${input.slug}/fonts/${path.posix.basename(notice.rel_path)}`;
+    const base = path.posix.basename(notice.rel_path).normalize("NFC");
+    let name = base; let counter = 2;
+    while (taken.has(name.toLocaleLowerCase("en-US"))) { name = `${counter}-${base}`; counter += 1; }
+    taken.add(name.toLocaleLowerCase("en-US"));
+    const noticePath = `web/${input.slug}/fonts/${name}`;
     entries.push({ path: noticePath, bytes: notice.bytes });
     roles.push({ path: noticePath, role: "asset" });
   }
-  return { entries, roles, documents, assets: entries.filter((entry) => entry.path.startsWith(`web/${input.slug}/`)).map((entry) => ({ path: entry.path, bytes: entry.bytes.byteLength })), findings, external_urls: [baseUrl] };
+  return { entries, roles, documents, assets, findings, external_urls: [baseUrl] };
 }
 
 type LayoutInput = { readonly doctype: string; readonly document: HTMLElement; readonly sharedCss: string; readonly landmark: HTMLElement };
