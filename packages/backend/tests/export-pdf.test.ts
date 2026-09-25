@@ -1,5 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import type { ExportOptions, ProjectDetail } from "@bg/shared";
+import { projectsDir } from "../src/lib/paths";
 import { PDF_PRINT_CSS, pdfDimensionsForPaper } from "../src/services/export-pdf-contract";
+import { assertExportAllowed, ExportServiceError } from "../src/services/exports";
 
 describe("PDF_PRINT_CSS", () => {
   test("Given authored grid or flex slides When print CSS is applied Then it forces no display type and still hides the nav", () => {
@@ -40,5 +45,41 @@ describe("PDF_PRINT_CSS", () => {
     expect(pdfDimensionsForPaper("a4")).toEqual({ format: "A4" });
     expect(pdfDimensionsForPaper("letter")).toEqual({ format: "Letter" });
     expect(pdfDimensionsForPaper("widescreen-16x9")).toEqual({ width: "13.333in", height: "7.5in" });
+  });
+});
+
+describe("deck PDF admission", () => {
+  const deckDir = path.join(projectsDir, `export-pdf-deck-admission-${process.pid}`);
+  const deck = (entrypoint: string): ProjectDetail => ({ id: path.basename(deckDir), name: "Deck", type: "slide_deck", design_system_id: null, design_system_name: null, thumbnail_path: null, updated_at: 1, archived_at: null, dir_path: deckDir, entrypoint, backend_id: "claude-code", options_json: null, current_revision: 1, current_digest: null });
+
+  beforeAll(async () => {
+    await mkdir(deckDir, { recursive: true });
+    for (const slides of [30, 31, 32]) await writeFile(path.join(deckDir, `deck-${slides}.html`), `<!doctype html><html><body>${"<section data-slide><h1>Slide</h1></section>".repeat(slides)}</body></html>`);
+  });
+
+  afterAll(async () => { await rm(deckDir, { recursive: true, force: true }); });
+
+  test.each([
+    { slides: 30, paper: "widescreen-16x9", options: { pdf_paper: "widescreen-16x9" } },
+    { slides: 31, paper: "a4", options: { pdf_paper: "a4" } },
+    { slides: 31, paper: "default a4", options: {} },
+  ] as readonly { readonly slides: number; readonly paper: string; readonly options: ExportOptions }[])("Given a $slides-slide deck When PDF on $paper paper is requested Then the raster budget admits it", async ({ slides, options }) => {
+    // Given / When / Then
+    await expect(assertExportAllowed(deck(`deck-${slides}.html`), "pdf", options)).resolves.toBeUndefined();
+  });
+
+  test.each([
+    { slides: 31, paper: "widescreen-16x9", options: { pdf_paper: "widescreen-16x9" } },
+    { slides: 32, paper: "a4", options: { pdf_paper: "a4" } },
+    { slides: 32, paper: "default a4", options: {} },
+  ] as readonly { readonly slides: number; readonly paper: string; readonly options: ExportOptions }[])("Given a $slides-slide deck When PDF on $paper paper is requested Then admission refuses it with a typed resource limit before any attempt exists", async ({ slides, options }) => {
+    // Given / When / Then
+    await expect(assertExportAllowed(deck(`deck-${slides}.html`), "pdf", options)).rejects.toBeInstanceOf(ExportServiceError);
+    await expect(assertExportAllowed(deck(`deck-${slides}.html`), "pdf", options)).rejects.toMatchObject({ code: "pdf_resource_limit" });
+  });
+
+  test("Given an oversized deck When PPTX is requested Then the PDF raster budget does not apply", async () => {
+    // Given / When / Then
+    await expect(assertExportAllowed(deck("deck-32.html"), "pptx", { pptx_size: "16x9" })).resolves.toBeUndefined();
   });
 });

@@ -20,7 +20,7 @@ import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } f
 import { formatExtension } from "./export-naming";
 import { validateHandoffPackage, validatePptxPackage } from "./export-package-validation";
 import { assertUniformArtboardPages, PdfExportError, renderDeckToPdf } from "./export-pdf";
-import { pdfPointsForPaper, pdfRasterBudgetFitsPages } from "./export-pdf-contract";
+import { pdfPointsForPaper, pdfRasterBudgetFits, pdfRasterBudgetFitsPages } from "./export-pdf-contract";
 import { ExportError } from "./export-errors";
 import { renderPlatformPackage } from "./export-platform-package";
 import { capturePageFromSession } from "./export-frame-capture";
@@ -213,6 +213,11 @@ export async function assertExportAllowed(project: ProjectDetail, format: Export
     assertArtboardPdfPages(sizes, "Graphic PDF exceeds the per-page or aggregate raster budget");
   }
   if (format === "pdf" && logo) assertArtboardPdfPages(await logoGuidelinesPages(project), "Logo guidelines PDF exceeds the per-page or aggregate raster budget");
+  if (format === "pdf" && project.type === "slide_deck") {
+    // Every printed slide is rasterised for validation, so a deck past the budget is refused before an attempt exists.
+    const paper = pdfPointsForPaper(options.pdf_paper ?? "a4");
+    if (!pdfRasterBudgetFits(paper.width, paper.height, Math.max(1, await entrypointPageCount(project, "[data-slide]")))) throw new ExportServiceError("pdf_resource_limit", "Deck PDF exceeds the aggregate raster budget");
+  }
   if (project.type === "graphic" && format === "png") {
     const canvas = projectOptions.graphic_canvas;
     if (
@@ -241,12 +246,17 @@ function assertArtboardPdfPages(sizes: readonly { readonly width: number; readon
  * page per artboard in the live entrypoint, which is what the raster budget has to cover.
  */
 async function logoGuidelinesPages(project: ProjectDetail): Promise<readonly { readonly width: number; readonly height: number }[]> {
+  // A guidelines document always prints at least its first page; the count only bounds the budget.
+  return Array.from({ length: Math.max(1, await entrypointPageCount(project, "[data-graphic-artboard]")) }, () => LOGO_PAGE);
+}
+
+/** Counts the export pages in the live entrypoint; a missing entrypoint has none. */
+async function entrypointPageCount(project: ProjectDetail, selector: string): Promise<number> {
   const entrypoint = resolveWithin(resolveManagedPath(projectsDir, project.dir_path), project.entrypoint);
   let html = "";
   try { html = await readFile(entrypoint, "utf8"); }
   catch (error) { if (!(error instanceof Error) || Reflect.get(error, "code") !== "ENOENT") throw error; }
-  // A guidelines document always prints at least its first page; the count only bounds the budget.
-  return Array.from({ length: Math.max(1, parse(html).querySelectorAll("[data-graphic-artboard]").length) }, () => LOGO_PAGE);
+  return parse(html).querySelectorAll(selector).length;
 }
 
 async function exportContext(projectId: string, format: ExportFormat, options: ExportOptions): Promise<Context> {
