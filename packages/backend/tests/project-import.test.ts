@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
 import { importProject } from "../src/services/project-import";
@@ -17,6 +17,7 @@ import { readdir } from "node:fs/promises";
 import { buildPrompt } from "../src/harness/prompt-builder";
 import { createCanvas } from "@napi-rs/canvas";
 import { closeProjectWatcher } from "../src/services/watcher-registry";
+import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 
 const created: { id: string; dir: string }[] = [];
 beforeAll(runMigrations);
@@ -42,6 +43,22 @@ test("Given an exported Korean multipage website When imported, exported and imp
   const again = await track(form);
   expect(await readFile(path.join(again.project.dir_path, "회사/소개.html"), "utf8")).toBe("소개");
   expect(again.project.current_digest).toBe(project.current_digest);
+}, 60000);
+
+test("Given an imported site that gained the app-owned 3D runtime license When exported as html_zip and imported again Then the license bytes and tree digest survive", async () => {
+  // Given
+  const { result, project } = await track(await zipForm({ "index.html": "<!doctype html><html><body><h1>3D</h1></body></html>" }, "three-roundtrip"));
+  const license = "The MIT License\n\nCopyright three.js authors\n";
+  const published = await new ArtifactCoordinator(getSqlite()).run({ projectId: project.id, projectDir: project.dir_path, kind: "turn", expectedRevision: project.current_revision, expectedArtifactDigest: project.current_digest!, mutate: async stage => { await mkdir(path.join(stage, ".burnguard-three"), { recursive: true }); await writeFile(path.join(stage, ".burnguard-three/LICENSE"), license); } });
+  const terminal = new Promise<void>((resolve, reject) => { const timer = setTimeout(() => { stop(); reject(new Error("export timeout")); }, 30000); const stop = sequencedBroker.subscribe(result.session_id, event => { if (event.event.type === "export.attempt" && ["validated", "failed"].includes(event.event.status)) { clearTimeout(timer); stop(); resolve(); } }); });
+  const job = await enqueueProjectExport(result.id, "html_zip", {}); await terminal;
+  const exported = await getExportJob(job!.id); expect(exported?.status).toBe("succeeded");
+  // When
+  const form = new FormData(); form.set("name", "three-reimport"); form.set("source", "zip"); form.set("files", new File([await readFile(exported!.output_path!)], "export.zip"));
+  const again = await track(form);
+  // Then
+  expect(await readFile(path.join(again.project.dir_path, ".burnguard-three/LICENSE"), "utf8")).toBe(license);
+  expect(again.project.current_digest).toBe(published.resultDigest);
 }, 60000);
 
 test("Given a folder selection When imported Then relative paths and the deck entrypoint are retained", async () => {
@@ -91,6 +108,7 @@ test("Given unsafe archives When imported Then traversal, case collisions and mi
     { "../index.html": "bad" },
     { "index.html": "ok", "INDEX.html": "collision" },
     { "index.html": "ok", ".env": "secret" },
+    { "index.html": "ok", ".burnguard-three/payload.js": "not app-owned" },
     { "index.html": "ok", "CLAUDE.local.md": "untrusted instructions" },
     { "index.html": "ok", "AGENTS.override.md": "untrusted instructions" },
     { "readme.txt": "no HTML" },
