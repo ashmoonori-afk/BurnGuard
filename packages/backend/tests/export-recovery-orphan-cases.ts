@@ -27,6 +27,12 @@ function seedProject(db: Database): void {
   db.exec(`INSERT INTO projects(id,name,type,dir_path,backend_id,created_at,updated_at,current_revision,current_digest) VALUES ('p','Project','slide_deck','/tmp/project','codex',1,1,3,'${"a".repeat(64)}'); INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES ('s','p','codex','idle',1,1,1)`);
 }
 
+/** Rejects every removal under `root` with EBUSY, the way a held Windows handle does, until restored. */
+function busyRemovals(root: string) {
+  const original = fsp.rm;
+  return spyOn(fsp, "rm").mockImplementation(async (target, options) => { if (String(target).startsWith(root)) throw Object.assign(new Error("resource busy"), { code: "EBUSY" }); return original(target, options); });
+}
+
 describe("export recovery cleanup and orphan trees", () => {
   afterEach(async () => {
     for (const db of databases.splice(0)) db.close();
@@ -43,13 +49,29 @@ describe("export recovery cleanup and orphan trees", () => {
     db.prepare("UPDATE export_attempts SET status='running' WHERE id=?").run(corrupt.attemptId);
     await mkdir(path.join(root, "attempts", corrupt.attemptId), { recursive: true }); await writeFile(path.join(root, "attempts", corrupt.attemptId, "receipt.json"), "{}");
     await mkdir(path.join(root, ".staging", "01ORPHANSTAGE0000000000000"), { recursive: true });
-    const original = fsp.rm;
-    const busy = spyOn(fsp, "rm").mockImplementation(async (target, options) => { if (String(target).startsWith(root)) throw Object.assign(new Error("resource busy"), { code: "EBUSY" }); return original(target, options); });
+    const busy = busyRemovals(root);
     // When
     try { await reconcileExportState(db, root); } finally { busy.mockRestore(); }
     // Then
     expect(db.query("SELECT status,stop_reason FROM export_attempts WHERE id=?").get(cancelled.attemptId)).toEqual({ status: "cancelled", stop_reason: "user_cancelled" });
     expect(db.query("SELECT status,stop_reason FROM export_attempts WHERE id=?").get(corrupt.attemptId)).toEqual({ status: "corrupt", stop_reason: "receipt_corrupt" });
+  });
+
+  test("Given a cancelled attempt whose stage removal failed at the previous startup When recovery runs again with removal working Then the stage directory is gone", async () => {
+    // Given
+    const db = await migratedDatabase(); seedProject(db); const root = await mkdtemp(path.join(tmpdir(), "bg-export-recovery-leak-")); directories.push(root);
+    const ids = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "html_zip", options: {}, rendererDigest: "r", captureDigest: "c" });
+    db.prepare("UPDATE export_attempts SET status='running' WHERE id=?").run(ids.attemptId); requestExportCancellation(db, ids.attemptId);
+    await mkdir(path.join(root, ".staging", ids.attemptId, "render"), { recursive: true }); await writeFile(path.join(root, ".staging", ids.attemptId, "render", "index.html"), "project copy");
+    await mkdir(path.join(root, "attempts", ids.attemptId), { recursive: true }); await writeFile(path.join(root, "attempts", ids.attemptId, "artifact.zip"), "cancelled bytes");
+    const busy = busyRemovals(root);
+    try { await reconcileExportState(db, root); } finally { busy.mockRestore(); }
+    expect(db.query("SELECT status,stop_reason FROM export_attempts WHERE id=?").get(ids.attemptId)).toEqual({ status: "cancelled", stop_reason: "user_cancelled" });
+    // When
+    await reconcileExportState(db, root);
+    // Then
+    expect(await readdir(path.join(root, ".staging"))).toEqual([]);
+    expect(await readdir(path.join(root, "attempts"))).toEqual([]);
   });
 
   test("Given an interrupted render stage and a published receipt whose output is gone When recovery runs Then the render is failed not corrupt and no job message carries a path", async () => {

@@ -72,6 +72,8 @@ async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Pro
 /**
  * Startup only, before serving: every attempt row is inserted before its directories exist, so a directory
  * without a row is a crash leftover or the output of a project whose export rows were cascaded away.
+ * A terminal attempt's directory is a tree an earlier best-effort cleanup failed to remove; validated,
+ * corrupt and expired outputs under `attempts` stay for their own lifecycle.
  */
 async function cleanOrphanTrees(db: Database, root: string): Promise<void> {
   for (const owner of [".staging", "attempts"] as const) {
@@ -79,8 +81,9 @@ async function cleanOrphanTrees(db: Database, root: string): Promise<void> {
     for (const entry of await readdir(parent, { withFileTypes: true }).catch(() => [])) {
       if (!entry.isDirectory()) continue;
       try { assertSafeName(entry.name); } catch { continue; }
-      const exists = db.query<{ readonly value: number }, [string]>("SELECT 1 value FROM export_attempts WHERE id=?").get(entry.name);
-      if (exists === null) await rm(resolveWithin(parent, entry.name), { recursive: true, force: true }).catch(() => undefined);
+      const row = db.query<{ readonly status: string }, [string]>("SELECT status FROM export_attempts WHERE id=?").get(entry.name);
+      const stale = row === null || (owner === ".staging" ? ["failed", "cancelled", "corrupt", "expired"] : ["failed", "cancelled"]).includes(row.status);
+      if (stale) await rm(resolveWithin(parent, entry.name), { recursive: true, force: true }).catch(() => undefined);
     }
   }
 }
