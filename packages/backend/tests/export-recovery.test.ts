@@ -195,6 +195,30 @@ describe("export authority migration", () => {
     expect(db.query("SELECT status,stop_reason FROM export_attempts WHERE id=?").get(corrupt.attemptId)).toEqual({ status: "corrupt", stop_reason: "receipt_corrupt" });
   });
 
+  test("Given an interrupted render stage and a published receipt whose output is gone When recovery runs Then the render is failed not corrupt and no job message carries a path", async () => {
+    // Given
+    const db = await migratedDatabase(); seedProject(db); const root = await mkdtemp(path.join(tmpdir(), "bg-export-recovery-interrupted-")); directories.push(root);
+    const options = { png_width: 320, png_height: 240, png_dpr: 1 } as const;
+    const interrupted = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "png", options, rendererDigest: "b".repeat(64), captureDigest: "c".repeat(64) });
+    db.prepare("UPDATE export_attempts SET status='running' WHERE id=?").run(interrupted.attemptId);
+    const stage = path.join(root, ".staging", interrupted.attemptId); await mkdir(path.join(stage, "render"), { recursive: true }); await writeFile(path.join(stage, "render", "index.html"), "scratch");
+    const missing = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "png", options, rendererDigest: "b".repeat(64), captureDigest: "c".repeat(64) });
+    db.prepare("UPDATE export_attempts SET status='recovering',input_closure_digest=? WHERE id=?").run("a".repeat(64), missing.attemptId);
+    const published = path.join(root, "attempts", missing.attemptId); await mkdir(published, { recursive: true });
+    const receipt: ExportReceipt = { schema_version: 1, job_id: missing.jobId, attempt_id: missing.attemptId, parent_attempt_id: null, format: "png", project: { id: "p", revision: 3, digest: "a".repeat(64) }, options, output_file: "artifact.png", output_size: 3, digests: { input_closure: "a".repeat(64), design_system: null, options: sha256(canonicalJson(options)), renderer: "b".repeat(64), capture: "c".repeat(64), output: "d".repeat(64) }, validation: { width: 320, height: 240, statistics: { pixels: 76_800, visible_pixels: 76_800, differing_pixels: 100, dominant_ratio: 0.9, luminance_variance: 10, entropy: 0.2 } } };
+    await writeFile(path.join(published, "receipt.json"), canonicalJson(receipt));
+    // When
+    await reconcileExportState(db, root);
+    // Then
+    expect(db.query("SELECT status,stop_reason FROM export_attempts WHERE id=?").get(interrupted.attemptId)).toEqual({ status: "failed", stop_reason: "recovery_failed" });
+    expect(await Bun.file(path.join(stage, "render", "index.html")).exists()).toBe(false);
+    expect(db.query("SELECT status,stop_reason FROM export_attempts WHERE id=?").get(missing.attemptId)).toEqual({ status: "corrupt", stop_reason: "receipt_corrupt" });
+    for (const jobId of [interrupted.jobId, missing.jobId]) {
+      const message = db.query<{ readonly error_message: string }, [string]>("SELECT error_message FROM exports WHERE id=?").get(jobId)?.error_message ?? "";
+      expect(message).not.toBe(""); expect(message).not.toMatch(/[\\/]/u);
+    }
+  });
+
   test("Given a forged PDF cross-field receipt When recovery runs Then authority becomes typed corrupt without digest propagation", async () => {
     const db = await migratedDatabase(); seedProject(db); const root = await mkdtemp(path.join(tmpdir(), "bg-export-forged-pdf-")); directories.push(root);
     const ids = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "pdf", options: { pdf_paper: "letter" }, rendererDigest: "b".repeat(64), captureDigest: "c".repeat(64) }); db.prepare("UPDATE export_attempts SET status='recovering',input_closure_digest=? WHERE id=?").run("a".repeat(64), ids.attemptId);

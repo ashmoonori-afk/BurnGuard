@@ -31,11 +31,14 @@ async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Pro
   };
   if (row.status !== "validated" && cancelRequested()) { await cancel(); return; }
   const source = await directoryExists(published) ? published : await directoryExists(stage) ? stage : null;
-  if (source === null) {
+  // A stage without a receipt is a render interrupted before validation, not corrupt output.
+  const interrupted = source === stage && row.status !== "validated" && await stat(path.join(stage, "receipt.json")).then(() => false, (error: unknown) => Reflect.get(Object(error), "code") === "ENOENT");
+  if (source === null || interrupted) {
     if (row.status === "validated") {
       markExportAttemptCorrupt(db, { jobId: row.job_id, attemptId: row.attempt_id, message: "Export recovery found no owned output" });
       emitRecovery(db, row, "corrupt", "receipt_corrupt");
     } else {
+      await rm(stage, { recursive: true, force: true }).catch(() => undefined);
       failExportAttempt(db, { jobId: row.job_id, attemptId: row.attempt_id, status: "failed", reason: "recovery_failed", message: "Export recovery found no owned output" });
       emitRecovery(db, row, "failed", "recovery_failed");
     }
@@ -55,10 +58,11 @@ async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Pro
     if (cancelRequested()) { await cancel(); return; }
     advanceExportAttempt(db, { attemptId: row.attempt_id, status: "recovering", stage: "publishing" });
     completion = { jobId: row.job_id, attemptId: row.attempt_id, outputPath: finalOutput, size: info.size, outputDigest, receiptDigest: expectedReceipt, projectId: row.project_id, projectRevision: row.project_revision, projectDigest: row.project_digest };
-  } catch (error) {
+  } catch {
     if (cancelRequested()) { await cancel(); return; }
     await rm(stage, { recursive: true, force: true }).catch(() => undefined);
-    markExportAttemptCorrupt(db, { jobId: row.job_id, attemptId: row.attempt_id, message: error instanceof Error ? error.message : String(error) }); emitRecovery(db, row, "corrupt", "receipt_corrupt");
+    // Fixed copy: fs errors carry absolute private paths, and this message reaches the job DTO.
+    markExportAttemptCorrupt(db, { jobId: row.job_id, attemptId: row.attempt_id, message: "Export receipt or output is corrupt" }); emitRecovery(db, row, "corrupt", "receipt_corrupt");
     return;
   }
   // Persistence failure leaves verified bytes and a recovering attempt intact.
