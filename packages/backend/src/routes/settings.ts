@@ -61,6 +61,9 @@ settingsRoutes.get("/api/settings/playwright", (c) => {
 settingsRoutes.post("/api/settings/playwright/install", (c) => {
   const result = startPlaywrightInstall();
   if (!result.started) {
+    if (result.reason === "spawn_failed") {
+      return c.json(fail("install_start_failed", "The installer could not be started"), 500);
+    }
     return c.json(
       fail("install_in_progress", "A Playwright install is already running"),
       409,
@@ -97,13 +100,11 @@ settingsRoutes.post("/api/settings/python/install", (c) => {
         409,
       );
     }
+    if (result.reason === "spawn_failed") {
+      return c.json(fail("install_start_failed", "The installer could not be started"), 500);
+    }
     return c.json(
-      fail(
-        "install_in_progress",
-        result.reason === "install_in_progress"
-          ? "A pypdf install is already running"
-          : "Could not spawn pip install",
-      ),
+      fail("install_in_progress", "A pypdf install is already running"),
       409,
     );
   }

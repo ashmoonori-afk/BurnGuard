@@ -56,14 +56,15 @@ export function getPlaywrightInstallStatus(): PlaywrightInstallStatus {
 /**
  * Installs the Chromium build required by this app's exact Playwright version.
  * Returns `{ started: true }` when a fresh install begins, or
- * `{ started: false }` if one is already running.
+ * `{ started: false }` with `install_in_progress` if one is already running
+ * and `spawn_failed` if the installer could not be started.
  *
  * The stream outputs are buffered into `status.tail` so the UI can surface
  * a short log without subscribing to a stream. Final state is `success` or
  * `error`. Single global slot — concurrent requests are ignored.
  */
-export function startPlaywrightInstall(): { started: boolean } {
-  if (status.state === "installing") return { started: false };
+export function startPlaywrightInstall(command: () => string[] = playwrightInstallCommand): { started: true } | { started: false; reason: "install_in_progress" | "spawn_failed" } {
+  if (status.state === "installing") return { started: false, reason: "install_in_progress" };
 
   status = {
     state: "installing",
@@ -75,7 +76,7 @@ export function startPlaywrightInstall(): { started: boolean } {
   };
 
   try {
-    const cmd = playwrightInstallCommand();
+    const cmd = command();
 
     runningProc = Bun.spawn({
       cmd,
@@ -91,7 +92,7 @@ export function startPlaywrightInstall(): { started: boolean } {
       finished_at: Date.now(),
       error: "The bundled browser installer runtime is unavailable. Reinstall BurnGuard to restore it.",
     };
-    return { started: false };
+    return { started: false, reason: "spawn_failed" };
   }
 
   const proc = runningProc;
