@@ -116,7 +116,7 @@ bun run dev:backend            # BG_DEV=1 bun run --watch src/index.ts
 bun run typecheck              # tsc --build across the workspace
 bun test                       # root only; preload isolates BG_APP_ROOT (timeout 30000)
 bun test packages/backend/tests/<file>.test.ts
-bun run build                  # frontend + scripts/build-binary.ts
+bun run build                  # frontend + scripts/build-binary.ts; the backend step needs a Windows x64 host
 bun run build:windows:release  # Windows host, .NET 8, vpk 1.2.0
 bun run build:mac:dmg          # macOS host only
 bun run lint                   # git diff --check
