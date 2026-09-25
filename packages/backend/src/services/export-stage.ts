@@ -5,16 +5,23 @@ import { readBundledFontUrl, bundledFontFiles } from "../data/bundled-fonts";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { resolveWithin } from "../security/path-boundary";
 
+/** An @font-face rule served from the shared font endpoint; the rule cannot nest braces. */
+const BUNDLED_FACE = /@font-face\s*\{[^{}]*\/runtime\/fonts\/[^{}]*\}/gi;
+
 /** Export closures must work independently of the installed app's shared font endpoint. */
 export async function prepareBundledFontExport(root: string): Promise<void> {
   const manifest = await inspectCanonicalTree(root);
-  const written = new Set<string>();
-  for (const file of manifest.files) {
-    if (!/\.(css|html?)$/i.test(file.path)) continue;
-    const absolute = path.join(root, file.path);
-    let source = await readFile(absolute, "utf8");
+  const texts = new Map<string, string>();
+  for (const file of manifest.files) if (/\.(css|html?|[cm]?js|svg|json)$/i.test(file.path)) texts.set(file.path, await readFile(path.join(root, file.path), "utf8"));
+  // Ship only families the document names outside the bundled faces themselves; a face whose family cannot be read is kept.
+  const usage = [...texts.values()].map((text) => text.replace(BUNDLED_FACE, "")).join("\n").toLowerCase();
+  const written = new Map<string, string>();
+  for (const [file, text] of texts) {
+    if (!/\.(css|html?)$/i.test(file)) continue;
+    const absolute = path.join(root, file);
+    let source = text.replace(BUNDLED_FACE, (face) => { const family = /font-family\s*:\s*(['"]?)([^'";}]+)\1/i.exec(face)?.[2]?.trim().toLowerCase(); return family === undefined || usage.includes(family) ? face : ""; });
     const matches = [...source.matchAll(/url\(\s*['"]?(\/runtime\/fonts\/[a-f0-9]{64}\/[A-Za-z0-9_.-]+\.woff2)['"]?\s*\)/g)];
-    if (!matches.length) continue;
+    if (source === text && !matches.length) continue;
     for (const match of matches) {
       const font = await readBundledFontUrl(match[1]!);
       if (!font) throw new Error("Bundled export font unavailable");
@@ -22,15 +29,21 @@ export async function prepareBundledFontExport(root: string): Promise<void> {
       if (!written.has(relative)) {
         await mkdir(path.join(root, "fonts/bundled"), { recursive: true });
         await writeFile(path.join(root, relative), font.bytes, { flag: "wx" });
-        written.add(relative);
+        written.set(relative, font.name);
       }
-      source = source.replaceAll(match[0], `url('${path.posix.relative(path.posix.dirname(file.path), relative)}')`);
+      source = source.replaceAll(match[0], `url('${path.posix.relative(path.posix.dirname(file), relative)}')`);
     }
     await writeFile(absolute, source);
   }
   if (written.size) {
-    for (const file of (await bundledFontFiles()).values()) {
-      if (/\.(txt|md|json)$/i.test(file.name)) await writeFile(path.join(root, "fonts/bundled", file.name), file.bytes, { flag: "wx" });
+    const bundle = await bundledFontFiles();
+    const families = (JSON.parse(bundle.get("manifest.json")?.bytes.toString("utf8") ?? "{}") as { readonly families?: readonly { readonly file: string; readonly licenseFile: string }[] }).families ?? [];
+    const licenses = new Set(families.map((family) => family.licenseFile));
+    const shipped = [...written.values()].map((name) => families.find((family) => family.file === name)?.licenseFile);
+    // A license travels only with a shipped family; a face missing from the manifest keeps every license.
+    const kept = shipped.includes(undefined) ? licenses : new Set(shipped);
+    for (const file of bundle.values()) {
+      if (/\.(txt|md|json)$/i.test(file.name) && (!licenses.has(file.name) || kept.has(file.name))) await writeFile(path.join(root, "fonts/bundled", file.name), file.bytes, { flag: "wx" });
     }
   }
 }

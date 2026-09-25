@@ -28,7 +28,9 @@ test("Given shared fonts When two projects load and one exports Then storage is 
   for (const url of [bundledFontUrl(font).replace(font.sha256, "0".repeat(64)), `/runtime/fonts/${font.sha256}/fonts.css`, `/runtime/fonts/${font.sha256}/unknown.woff2`]) expect((await app.request(url)).status).toBe(404);
   for (const root of roots) expect((await readdir(path.join(root, "fonts"))).filter(name => name.endsWith(".woff2"))).toEqual([]);
   const exported = roots[0]!;
-  await writeFile(path.join(exported, "index.html"), '<!doctype html><html><head><link rel="stylesheet" href="fonts/fonts.css"></head><body>Font export</body></html>');
+  // Exports ship only the families a document names, so the fixture names the probed face and Pretendard.
+  const family = (JSON.parse(bundle.get("manifest.json")!.bytes.toString("utf8")) as { readonly families: readonly BundledFontEntry[] }).families.find(entry => entry.file === font.name)!.family;
+  await writeFile(path.join(exported, "index.html"), `<!doctype html><html><head><link rel="stylesheet" href="fonts/fonts.css"></head><body style="font-family:'${family}',Pretendard">Font export</body></html>`);
   await prepareBundledFontExport(exported);
   expect(await readFile(path.join(exported, "fonts/fonts.css"), "utf8")).not.toContain("/runtime/fonts/");
   const closure = await resolveStaticClosure(exported, "index.html", await inspectCanonicalTree(exported));
@@ -37,6 +39,28 @@ test("Given shared fonts When two projects load and one exports Then storage is 
   expect(await readFile(path.join(exported, "fonts/bundled/Pretendard-OFL.txt"), "utf8")).toContain("SIL OPEN FONT LICENSE");
   expect(isPublicAsset("fonts/bundled/Pretendard-OFL.txt")).toBe(true);
   expect((await readdir(path.join(roots[1]!, "fonts"))).filter(name => name.endsWith(".woff2"))).toEqual([]);
+});
+
+test("Given a staged project whose CSS names four bundled families, one only through a custom property, When prepareBundledFontExport runs Then only those faces and their licenses ship and the static closure still passes", async () => {
+  // Given
+  const root = path.join(appRootDir, `font-prune-${process.pid}`);
+  await copyBundledFonts(root);
+  await mkdir(path.join(root, "styles"), { recursive: true });
+  await writeFile(path.join(root, "index.html"), '<!doctype html><html><head><link rel="stylesheet" href="fonts/fonts.css"><link rel="stylesheet" href="styles/site.css"></head><body><h1>Launch</h1><code>npm i</code></body></html>');
+  await writeFile(path.join(root, "styles/site.css"), ":root{--display:'Space Grotesk',sans-serif}body{font-family:\"DM Sans\",'Pretendard',sans-serif}h1{font-family:var(--display)}code{font-family:'IBM Plex Mono',monospace}");
+  try {
+    // When
+    await prepareBundledFontExport(root);
+    // Then
+    const shipped = await readdir(path.join(root, "fonts/bundled"));
+    expect(shipped.filter(name => name.endsWith(".woff2")).map(name => name.replace(/^[a-f0-9]{64}-/, "")).sort()).toEqual(["DMSans.woff2", "IBMPlexMono.woff2", "PretendardVariable.woff2", "SpaceGrotesk.woff2"]);
+    expect(shipped.filter(name => name.endsWith("-OFL.txt")).sort()).toEqual(["DMSans-OFL.txt", "IBMPlexMono-OFL.txt", "Pretendard-OFL.txt", "SpaceGrotesk-OFL.txt"]);
+    const css = await readFile(path.join(root, "fonts/fonts.css"), "utf8");
+    expect(css.match(/@font-face/g)?.length).toBe(4);
+    expect(css).not.toContain("/runtime/fonts/");
+    const closure = await resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root));
+    expect(closure.referenced_paths.filter(name => name.startsWith("fonts/bundled/"))).toHaveLength(4);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("Given bundled local fonts, when initializing projects and copying over brand assets, then font bytes are durable and supplied files survive", async () => {
