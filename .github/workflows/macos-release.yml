@@ -55,4 +55,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The Windows workflow drafts the release for the same tag; whichever job finishes first creates it.
-          node scripts/qa/release-draft-state.mjs macos "$GITHUB_REF_NAME" "BurnGuard $GITHUB_REF_NAME" 'Windows and macOS installers, portable apps, and automatic update feeds. Publish this draft after checking the packages.' dist/releases/*
+          node scripts/qa/release-draft-state.mjs macos "$GITHUB_REF_NAME" "BurnGuard $GITHUB_REF_NAME" 'Windows and macOS installers, portable apps, and automatic update feeds. Publish only after both the Windows and macOS assets are attached and checked.' dist/releases/*
