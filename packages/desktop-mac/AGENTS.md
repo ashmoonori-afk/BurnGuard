@@ -8,7 +8,7 @@ Single-file Swift `WKWebView` shell (`main.swift`, 287 LOC) that launches and ow
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Lifecycle | `BurnGuardAppDelegate` | `applicationDidFinishLaunching` → main menu → arguments → window → service; terminate waits on `shutdown()` |
+| Lifecycle | `BurnGuardAppDelegate` | `applicationDidFinishLaunching` → main menu → arguments → window → service; terminate waits for the backend to exit (`awaitServiceExit`, SIGKILL after 15 s because the backend handles SIGTERM as its own drain), then `finishTermination` replies |
 | Argument contract | `parseArguments` | Only `["--smoke-test", "--smoke-report"]`; any other argument shape is rejected |
 | Window/webview | `createWindow` | `WKWebViewConfiguration`, navigation delegate installed before the first load |
 | Backend ownership | `startService` | `Process` rooted at `Bundle.main.bundleURL`, stdin/stdout/stderr pipes retained for drain and shutdown |

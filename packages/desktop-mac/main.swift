@@ -21,6 +21,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var smokeStarted = false
     private var smokeFinishing = false
     private var closing = false
+    private var terminationReplyPending = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
@@ -40,9 +41,10 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if closing {
-            return .terminateNow
-        }
+        // The shell exits only after its backend; finishTermination answers once the service has exited.
+        guard service?.isRunning == true else { return .terminateNow }
+        if terminationReplyPending { return .terminateCancel }
+        terminationReplyPending = true
         shutdown()
         return .terminateLater
     }
@@ -417,7 +419,8 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         }
         process.terminationHandler = { [weak self] process in
             DispatchQueue.main.async {
-                guard let self, !self.closing else { return }
+                guard let self else { return }
+                if self.closing { self.finishTermination(); return }
                 self.fail("BurnGuard 서버가 종료되었습니다 (code \(process.terminationStatus)).")
             }
         }
@@ -446,7 +449,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             }
             if message["event"] as? String == "shutdown" {
                 closing = true
-                NSApp.terminate(nil)
+                awaitServiceExit()
                 return
             }
             guard let urlString = message["url"] as? String,
@@ -538,13 +541,19 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         serviceOutput?.fileHandleForReading.readabilityHandler = nil
         serviceInput?.fileHandleForWriting.write(Data("shutdown\n".utf8))
         serviceInput?.fileHandleForWriting.closeFile()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            guard let self else { return }
-            if self.service?.isRunning == true {
-                self.service?.terminate()
-            }
-            NSApp.terminate(nil)
+        awaitServiceExit()
+    }
+
+    // The termination handler finishes the exit; the backend handles SIGTERM as its own drain, so a stuck drain gets SIGKILL.
+    private func awaitServiceExit() {
+        guard let service, service.isRunning else { DispatchQueue.main.async { [weak self] in self?.finishTermination() }; return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+            if service.isRunning { kill(service.processIdentifier, SIGKILL) }
         }
+    }
+
+    private func finishTermination() {
+        if terminationReplyPending { NSApp.reply(toApplicationShouldTerminate: true) } else { NSApp.terminate(nil) }
     }
 }
 

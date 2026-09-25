@@ -96,3 +96,32 @@ describe("macOS download destination", () => {
     expect(removed).toBeLessThan(panel.indexOf("completionHandler(url)"));
   });
 });
+
+describe("macOS shutdown ordering", () => {
+  test("Given a running backend When quit is requested Then termination waits for the backend's exit and a repeated quit is cancelled", () => {
+    const terminate = body("func applicationShouldTerminate(");
+    expect(terminate).toMatch(/guard service\?\.isRunning == true else \{ return \.terminateNow \}\s*if terminationReplyPending \{ return \.terminateCancel \}\s*terminationReplyPending = true\s*shutdown\(\)\s*return \.terminateLater/);
+    const service = body("private func startService()");
+    expect(service.slice(service.indexOf("process.terminationHandler"))).toContain("if self.closing { self.finishTermination(); return }");
+    expect(body("private func finishTermination()")).toContain("if terminationReplyPending { NSApp.reply(toApplicationShouldTerminate: true) } else { NSApp.terminate(nil) }");
+  });
+
+  test("Given the backend announces its own shutdown When the event is consumed Then the shell waits for the backend instead of terminating", () => {
+    const event = body('if message["event"] as? String == "shutdown"');
+    expect(event).toContain("awaitServiceExit()");
+    expect(event).not.toContain("NSApp.terminate");
+  });
+
+  test("Given shutdown When the backend outlives its drain deadline Then it is escalated to SIGKILL, never to the SIGTERM the backend handles itself", async () => {
+    const shutdown = body("private func shutdown()");
+    expect(shutdown).toContain("awaitServiceExit()");
+    expect(shutdown).not.toMatch(/asyncAfter|NSApp\.terminate/);
+    const wait = body("private func awaitServiceExit()");
+    expect(wait).toContain("guard let service, service.isRunning else { DispatchQueue.main.async { [weak self] in self?.finishTermination() }; return }");
+    expect(wait).toContain("if service.isRunning { kill(service.processIdentifier, SIGKILL) }");
+    const turns = await readFile(path.join(import.meta.dir, "../backend/src/services/turns.ts"), "utf8");
+    const drainMs = Number(/const SHUTDOWN_DRAIN_MS = ([\d_]+);/.exec(turns)?.[1]?.replaceAll("_", ""));
+    expect(Number(/asyncAfter\(deadline: \.now\(\) \+ (\d+)\)/.exec(wait)?.[1]) * 1000).toBeGreaterThan(drainMs);
+    expect(source).not.toMatch(/service\??\.terminate\(\)/);
+  });
+});
