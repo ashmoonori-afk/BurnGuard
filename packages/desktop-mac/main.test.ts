@@ -87,13 +87,16 @@ describe("macOS main menu", () => {
 });
 
 describe("macOS download destination", () => {
-  test("Given the save panel returns .OK When the destination is handed to WebKit Then the confirmed existing file is removed first", () => {
+  test("Given a confirmed replacement When the download finishes or fails Then the original is swapped only on success and never deleted up front", () => {
     const destination = body("decideDestinationUsing response: URLResponse");
     const panel = destination.slice(destination.indexOf("panel.beginSheetModal"));
     expect(panel).toContain("guard result == .OK, let url = panel.url else { completionHandler(nil); return }");
-    const removed = panel.indexOf("try? FileManager.default.removeItem(at: url)");
-    expect(removed).toBeGreaterThan(panel.indexOf("guard result == .OK"));
-    expect(removed).toBeLessThan(panel.indexOf("completionHandler(url)"));
+    expect(panel).not.toContain("removeItem");
+    expect(panel).toContain("self.pendingReplacements[ObjectIdentifier(download)] = (temporary: temporary, target: url)");
+    expect(panel).toContain("completionHandler(temporary)");
+    expect(body("func downloadDidFinish(")).toContain("try FileManager.default.replaceItemAt(replacement.target, withItemAt: replacement.temporary)");
+    const failure = body("didFailWithError error: Error");
+    expect(failure.indexOf("removeItem(at: replacement.temporary)")).toBeLessThan(failure.indexOf("NSURLErrorCancelled"));
   });
 });
 

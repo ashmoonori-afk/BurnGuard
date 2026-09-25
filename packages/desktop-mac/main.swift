@@ -17,6 +17,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var smokePageReport: [String: Any]?
     private var smokeDownloads: [String] = []
     private var smokeDownloadNames: [ObjectIdentifier: String] = [:]
+    private var pendingReplacements: [ObjectIdentifier: (temporary: URL, target: URL)] = [:]
     private var smokeStage = 0
     private var smokeStarted = false
     private var smokeFinishing = false
@@ -124,9 +125,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         panel.nameFieldStringValue = URL(fileURLWithPath: suggestedFilename).lastPathComponent
         panel.beginSheetModal(for: window) { result in
             guard result == .OK, let url = panel.url else { completionHandler(nil); return }
-            // The panel already confirmed replacing an existing file, and WKDownload refuses an existing destination.
-            try? FileManager.default.removeItem(at: url)
-            completionHandler(url)
+            // WKDownload refuses an existing destination, so a confirmed replacement downloads beside it and swaps only on success.
+            guard FileManager.default.fileExists(atPath: url.path) else { completionHandler(url); return }
+            let temporary = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).burnguard-download-\(UUID().uuidString)")
+            self.pendingReplacements[ObjectIdentifier(download)] = (temporary: temporary, target: url)
+            completionHandler(temporary)
         }
     }
 
@@ -136,6 +139,10 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     }
 
     func downloadDidFinish(_ download: WKDownload) {
+        if let replacement = pendingReplacements.removeValue(forKey: ObjectIdentifier(download)) {
+            do { _ = try FileManager.default.replaceItemAt(replacement.target, withItemAt: replacement.temporary) }
+            catch { try? FileManager.default.removeItem(at: replacement.temporary); alertDownloadFailed() }
+        }
         guard smokeReportPath != nil else { return }
         let name = smokeDownloadNames.removeValue(forKey: ObjectIdentifier(download)) ?? "unknown"
         smokeDownloads.append(name)
@@ -143,15 +150,21 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        // The confirmed original stays untouched; only the partial download beside it is discarded.
+        if let replacement = pendingReplacements.removeValue(forKey: ObjectIdentifier(download)) { try? FileManager.default.removeItem(at: replacement.temporary) }
         if (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled { return }
         if smokeReportPath != nil {
             fail("Native download failed.")
         } else {
-            let alert = NSAlert()
-            alert.messageText = "BurnGuard"
-            alert.informativeText = "파일을 다운로드하지 못했습니다. 다시 시도해 주세요."
-            alert.beginSheetModal(for: window)
+            alertDownloadFailed()
         }
+    }
+
+    private func alertDownloadFailed() {
+        let alert = NSAlert()
+        alert.messageText = "BurnGuard"
+        alert.informativeText = "파일을 다운로드하지 못했습니다. 다시 시도해 주세요."
+        alert.beginSheetModal(for: window)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
