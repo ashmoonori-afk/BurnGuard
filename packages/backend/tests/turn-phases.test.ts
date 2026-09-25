@@ -155,6 +155,25 @@ test("Given an invalid plan, then the server bounds retries and never starts con
   expect(needsGenerationPhases("prototype", "제목만 수정")).toBe(false);
 });
 
+test.each([
+  ["slide_deck", "3페이지 제목만 수정해줘", false, false],
+  ["slide_deck", "2장 슬라이드 오타 고쳐줘", false, false],
+  ["slide_deck", "fix the typo on 2 slides", false, false],
+  ["prototype", "대형 폰트로 바꿔줘", false, false],
+  ["logo", "대형 병원 로고 만들어줘", false, false],
+  ["logo", "Create a large multi-page logo set", true, false],
+  ["slide_deck", "10페이지짜리 덱 만들어줘", false, true],
+  ["prototype", "여러 페이지로 만들어", false, true],
+  ["slide_deck", "Create a large slide deck", false, true],
+  ["prototype", "Create 29 slides", false, true],
+  ["slide_deck", "소개서", true, true],
+  ["slide_deck", "제목만 수정", true, true],
+  ["prototype", "전체 다시 구성해줘", false, true],
+  ["prototype", "Please rebuild the site", false, true],
+] as const)("Given a %s request %p (starter=%p) When deciding phases Then phased generation is %p", (projectType, request, starter, expected) => {
+  expect(needsGenerationPhases(projectType, request, starter)).toBe(expected);
+});
+
 test("Given malformed slides and falsely completed placeholders, then neither can advance the phase", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "bg-phase-content-"));
   const events: NormalizedEvent[] = [];

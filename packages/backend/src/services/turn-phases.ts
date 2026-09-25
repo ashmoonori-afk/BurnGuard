@@ -7,7 +7,11 @@ import { runWithContinuation } from "./turn-continuation";
 import { generationOutputComplete, hasGeneratedContent, matchesDeckSourcePages, type DeckSourcePage } from "./generation-output";
 
 export function needsGenerationPhases(projectType: string, request: string, starter = false): boolean {
-  return (projectType === "slide_deck" && starter) || /대형|대규모|다중|전체.{0,12}(다시|재작성|재구성)|여러\s*(페이지|화면|장)|\b(?:large|multi-page|multi-screen|rebuild)\b|\d+\s*(?:페이지|장|pages|slides)/iu.test(request);
+  // A logo has its own explore/finalize contract; page units would contradict it.
+  if (projectType === "logo") return false;
+  if ((projectType === "slide_deck" && starter) || /전체.{0,12}(다시|재작성|재구성)|\brebuild\b/iu.test(request)) return true;
+  // Size and count words describe a new document only together with creation intent, never an edit that names a page.
+  return /대형|대규모|다중|여러\s*(페이지|화면|장)|\b(?:large|multi-page|multi-screen)\b|\d+\s*(?:페이지|장|pages|slides)/iu.test(request) && /만들|생성|작성|제작|\b(?:create|make|build|generate)\b/iu.test(request);
 }
 
 /** A server-owned loop, not a request that the model merely describe phases. */
