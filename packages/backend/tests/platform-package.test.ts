@@ -208,6 +208,27 @@ describe("imweb code widget package", () => {
     expect(lint.findings.map((finding) => finding.code)).not.toContain("imweb_image_needs_hosting");
   });
 
+  test("Given a chart config, JSON-LD, a module and an inline script inside main When the package is built Then the footer holds only classic scripts and the inline script ships once", async () => {
+    // Given
+    const main = '<section class="hero" id="hero"><figure><script type="application/json" data-bg-chart-config>{"schema_version":1,"kind":"bar"}</script></figure><script>window.x=1;</script></section>';
+    const prepare = async (root: string): Promise<void> => {
+      const home = path.join(root, "home.html");
+      await writeFile(home, (await readFile(home, "utf8")).replace("</head>", '<script type="application/ld+json">{"@context":"https://schema.org"}</script><script type="module">import { boot } from "./js/boot.js"; boot();</script></head>'));
+    };
+
+    // When
+    const built = await build("imweb_package", {}, main, prepare);
+    const footer = await built.text("common/footer-code.html");
+    const fragment = await built.text("pages/home.imweb.html");
+
+    // Then
+    const bodies = [...footer.matchAll(/<script>([\s\S]*?)<\/script>/gu)].map((match) => match[1] ?? "");
+    expect(bodies.join("")).toContain("DOMContentLoaded");
+    for (const body of bodies) expect(() => new Function(body)).not.toThrow();
+    for (const excluded of ["schema_version", "@context", "boot()", "window.x"]) expect(footer).not.toContain(excluded);
+    expect(fragment.match(/window\.x=/gu)).toHaveLength(1);
+  });
+
   test("Given a fragment over one million characters When the package is built Then the export fails as a platform lint failure", async () => {
     // Given
     const oversized = `<section class="hero" id="hero"><p>${"가".repeat(1_000_001)}</p></section>`;

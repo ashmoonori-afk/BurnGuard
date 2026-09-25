@@ -39,7 +39,7 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
     const styles = splitStyleBlocks(document);
     if (page.rel_path === input.entrypoint) {
       sharedCss = `${await linkedStylesheets(document, page.rel_path, input.staged.assets, resolve)}${rewriteCssText(styles.shared, page.rel_path, resolve)}`;
-      scripts.push(...linkedScripts(document, page.rel_path, input.staged.assets));
+      scripts.push(...linkedScripts(document, page.rel_path, input.staged.assets, content.element));
     }
     const slug = pageSlug(page.rel_path);
     if (content.element !== null) rewriteHtmlReferences(content.element, page.rel_path, resolve);
@@ -53,7 +53,8 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
   }
 
   const header = `<style>\n${RESET}${scopeCss(sharedCss, "shared")}\n</style>\n`;
-  const footer = `<script>\n${scripts.join("\n")}\n</script>\n`;
+  // One element per source, so a syntax error in one script cannot stop the others.
+  const footer = scripts.map((source) => `<script>\n${source}\n</script>\n`).join("");
   for (const [entryPath, text] of [[IMWEB_HEADER_PATH, header], [IMWEB_FOOTER_PATH, footer]] as const) {
     entries.push({ path: entryPath, bytes: encode(text) });
     roles.push({ path: entryPath, role: "common_code" });
@@ -113,9 +114,12 @@ async function linkedStylesheets(document: ReturnType<typeof parseDocument>["doc
   return css;
 }
 
-function linkedScripts(document: ReturnType<typeof parseDocument>["document"], owner: string, assets: readonly StagedAsset[]): readonly string[] {
+function linkedScripts(document: ReturnType<typeof parseDocument>["document"], owner: string, assets: readonly StagedAsset[], content: ReturnType<typeof extractPageContent>["element"]): readonly string[] {
+  // Scripts inside the content landmark already ship in the fragment; data blocks and modules cannot run as classic footer code.
+  const inContent = new Set(content?.querySelectorAll("script") ?? []);
   const sources: string[] = [];
   for (const script of document.querySelectorAll("script")) {
+    if (inContent.has(script) || !["", "text/javascript", "application/javascript"].includes((script.getAttribute("type") ?? "").trim().toLowerCase())) continue;
     const reference = script.getAttribute("src");
     if (reference === undefined) { sources.push(script.text); continue; }
     const target = resolveLocalReference(reference, owner);
