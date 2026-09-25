@@ -121,7 +121,10 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         let panel = NSSavePanel()
         panel.nameFieldStringValue = URL(fileURLWithPath: suggestedFilename).lastPathComponent
         panel.beginSheetModal(for: window) { result in
-            completionHandler(result == .OK ? panel.url : nil)
+            guard result == .OK, let url = panel.url else { completionHandler(nil); return }
+            // The panel already confirmed replacing an existing file, and WKDownload refuses an existing destination.
+            try? FileManager.default.removeItem(at: url)
+            completionHandler(url)
         }
     }
 

@@ -85,3 +85,14 @@ describe("macOS main menu", () => {
     }
   });
 });
+
+describe("macOS download destination", () => {
+  test("Given the save panel returns .OK When the destination is handed to WebKit Then the confirmed existing file is removed first", () => {
+    const destination = body("decideDestinationUsing response: URLResponse");
+    const panel = destination.slice(destination.indexOf("panel.beginSheetModal"));
+    expect(panel).toContain("guard result == .OK, let url = panel.url else { completionHandler(nil); return }");
+    const removed = panel.indexOf("try? FileManager.default.removeItem(at: url)");
+    expect(removed).toBeGreaterThan(panel.indexOf("guard result == .OK"));
+    expect(removed).toBeLessThan(panel.indexOf("completionHandler(url)"));
+  });
+});
