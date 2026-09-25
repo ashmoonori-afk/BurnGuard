@@ -21,3 +21,11 @@ test("message packs have unique machine keys and matching interpolation contract
     }
   }
 });
+
+test("Given every registered message When the en and zh-CN values, plural forms included, are scanned Then none contains Hangul", () => {
+  const forms = (message: Message) => typeof message === "string" ? [message] : [message.one, message.other];
+  const hangul = messagePacks.flatMap((pack) => Object.entries<MessageDefinition>(pack))
+    .filter(([, entry]) => [...forms(entry.en), ...forms(entry["zh-CN"])].some((form) => /\p{Script=Hangul}/u.test(form)))
+    .map(([key]) => key);
+  expect(hangul).toEqual([]);
+});
