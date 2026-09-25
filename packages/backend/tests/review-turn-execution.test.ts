@@ -237,6 +237,9 @@ for (const reviewFails of [false, true]) test(`Given a deck generation When mand
   await turn.promise;
   expect(calls).toBe(reviewFails ? 5 : 3);
   expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(reviewFails ? "base" : '<section data-slide><h1>Reviewed wording</h1></section>' + runtime);
+  const reviewTools = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type IN ('tool.started','tool.finished') ORDER BY sequence").all(sessionId)
+    .map(row => JSON.parse(row.payload_json)).filter(event => event.turnId === turn.turnId && !String(event.tool).startsWith("generation_phase_"));
+  expect(reviewTools.map(event => [event.type, event.tool, event.ok ?? null])).toEqual([["tool.started", "generation_deck_review", null], ["tool.finished", "generation_deck_review", !reviewFails]]);
 });
 
 test("Given a deck generation that finished When the mandatory copy review fails Then no chat.message_end is released and the refusal names the turn", async () => {
