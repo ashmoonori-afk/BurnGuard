@@ -29,6 +29,12 @@ export default function ToolBadge({
     generation_phase_plan: "chat.tool.phasePlan",
     generation_design_review: "chat.tool.designReview",
     generation_phase_content: "chat.tool.phaseContent",
+    generation_deck_review: "chat.tool.deckReview",
+    generation_logo_repair: "chat.tool.logoRepair",
+    project_import_init: "chat.tool.importInit",
+    // Legacy literal names remain in persisted session events.
+    "덱 문안·글꼴·이미지·크기 점검": "chat.tool.deckReview",
+    "프로젝트 자동 초기화": "chat.tool.importInit",
   };
   const progress = input && typeof input === "object" && "from" in input && "to" in input && "total" in input && [input.from, input.to, input.total].every(value => typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 80) ? input : null;
   return (
