@@ -1,5 +1,5 @@
 import type { Page } from "playwright-core";
-import { PDF_PRINT_CSS } from "./export-pdf-contract";
+import { PDF_PRINT_CSS, revealExportPages } from "./export-pdf-contract";
 
 /**
  * The narrow browser surface the frame and slice exporters need. The Playwright
@@ -37,6 +37,7 @@ export function capturePageFromSession(page: Page): CapturePage {
     },
     applyDeckPrintStyles: async () => {
       await page.addStyleTag({ content: PDF_PRINT_CSS });
+      await page.evaluate(revealExportPages);
     },
     measureFrames: async (selector) => await page.evaluate((elementSelector) => [...document.querySelectorAll<HTMLElement>(elementSelector)].map((element, index) => {
       const rect = element.getBoundingClientRect();
@@ -48,8 +49,12 @@ export function capturePageFromSession(page: Page): CapturePage {
       const nodes = [...document.querySelectorAll<HTMLElement>(elementSelector)];
       for (const [position, node] of nodes.entries()) {
         node.toggleAttribute("data-bg-export-frame", position === target);
-        if (position === target) node.style.removeProperty("display");
-        else node.style.setProperty("display", "none", "important");
+        // The first isolation snapshots the authored inline display so the target and restoreFrames can put it back.
+        if (!node.hasAttribute("data-bg-export-display")) node.setAttribute("data-bg-export-display", JSON.stringify([node.style.getPropertyValue("display"), node.style.getPropertyPriority("display")]));
+        const [value, priority] = JSON.parse(node.getAttribute("data-bg-export-display") ?? "[]") as [string?, string?];
+        if (position !== target) node.style.setProperty("display", "none", "important");
+        else if (value) node.style.setProperty("display", value, priority);
+        else node.style.removeProperty("display");
       }
       const element = nodes[target];
       if (element === undefined) return null;
@@ -60,7 +65,9 @@ export function capturePageFromSession(page: Page): CapturePage {
       await page.evaluate((elementSelector) => {
         for (const node of document.querySelectorAll<HTMLElement>(elementSelector)) {
           node.removeAttribute("data-bg-export-frame");
-          node.style.removeProperty("display");
+          const [value, priority] = JSON.parse(node.getAttribute("data-bg-export-display") ?? "[]") as [string?, string?];
+          if (value) node.style.setProperty("display", value, priority); else node.style.removeProperty("display");
+          node.removeAttribute("data-bg-export-display");
         }
       }, selector);
     },

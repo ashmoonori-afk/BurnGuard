@@ -15,11 +15,19 @@ export const PDF_PAPER_POINTS: Readonly<Record<Exclude<PdfPaper, "artboard">, { 
 export const PDF_PRINT_CSS = `
 html, body { margin: 0 !important; padding: 0 !important; background: #ffffff !important; }
 [data-deck-nav], [data-deck-nav-style] { display: none !important; }
-[data-slide], [data-graphic-artboard] { display: block !important; overflow: hidden !important; box-sizing: border-box !important; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
+[data-slide], [data-graphic-artboard] { overflow: hidden !important; box-sizing: border-box !important; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
 [data-slide] { width: 100vw !important; height: 100vh !important; min-height: 0 !important; max-height: 100vh !important; }
-[data-bg-export-page] { display: block !important; }
 [data-slide]:last-of-type, [data-graphic-artboard]:last-of-type { page-break-after: auto; break-after: auto; }
 `;
+/** Browser-side: pins every gated export page to the display it has when active, so authored grid/flex layout survives the lifted gate. */
+export function revealExportPages(): void {
+  for (const page of document.querySelectorAll<HTMLElement>("[data-slide], [data-graphic-artboard]")) {
+    if (getComputedStyle(page).display !== "none") continue;
+    const active = page.hasAttribute("data-active"); page.setAttribute("data-active", "");
+    const shown = getComputedStyle(page).display; if (!active) page.removeAttribute("data-active");
+    page.style.setProperty("display", shown === "none" ? "block" : shown, "important");
+  }
+}
 export type PdfArtboardDimensions = { readonly width: number; readonly height: number };
 export type PdfPageDimensions = { readonly format?: "A4" | "Letter"; readonly width?: string; readonly height?: string };
 export class PdfContractError extends Error { readonly name = "PdfContractError"; constructor(readonly code: "artboard_dimensions_required") { super(code); } }

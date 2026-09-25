@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { PDFDocument } from "pdf-lib";
 import type { PdfPaper } from "@bg/shared";
-import { PDF_PRINT_CSS, pdfDimensionsForPaper, pdfPointsForPaper, pdfRasterBudgetFitsPages } from "./export-pdf-contract";
+import { PDF_PRINT_CSS, pdfDimensionsForPaper, pdfPointsForPaper, pdfRasterBudgetFitsPages, revealExportPages } from "./export-pdf-contract";
 import { capturePageFromSession } from "./export-frame-capture";
 import { openRenderSession, RenderSessionError, type RenderPhase, type RenderSession } from "./export-render-session";
 import { validatePdf, type PdfValidation } from "./export-pdf-validation";
@@ -50,6 +50,7 @@ export async function renderDeckToPdf(input: {
     const title = input.title ?? await session.page.title();
     await session.page.evaluate((value) => { document.title = value; }, title);
     await session.page.addStyleTag({ content: PDF_PRINT_CSS });
+    await session.page.evaluate(revealExportPages);
     const selector = input.selector ?? "[data-slide]";
     if (selector === "[data-graphic-artboard]") {
       await session.page.addStyleTag({ content: ARTBOARD_PRINT_CSS });

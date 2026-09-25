@@ -2,12 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { PDF_PRINT_CSS, pdfDimensionsForPaper } from "../src/services/export-pdf-contract";
 
 describe("PDF_PRINT_CSS", () => {
-  test("overrides single-slide gate and hides the nav", () => {
-    // The slide-deck template hides non-active slides via
-    // `body[data-deck-ready] .deck-slide:not([data-active]) { display: none }`.
-    // Print CSS must force every [data-slide] visible with !important to win
-    // specificity, and hide the runtime nav strip so no artifact prints.
-    expect(PDF_PRINT_CSS).toMatch(/\[data-slide\][^{]*{\s*display:\s*block\s*!important/);
+  test("Given authored grid or flex slides When print CSS is applied Then it forces no display type and still hides the nav", () => {
+    // The single-slide gate is lifted by revealExportPages, which pins each hidden page to its own active display.
+    expect(PDF_PRINT_CSS).not.toMatch(/display:\s*block/);
     expect(PDF_PRINT_CSS).toContain("[data-deck-nav]");
     expect(PDF_PRINT_CSS).toMatch(/display:\s*none\s*!important/);
   });
@@ -21,8 +18,8 @@ describe("PDF_PRINT_CSS", () => {
 
   test("Given graphic artboards When print CSS is applied Then they use the same page isolation contract as slides", () => {
     // Given / When / Then
-    expect(PDF_PRINT_CSS).toContain("[data-graphic-artboard]");
-    expect(PDF_PRINT_CSS).toContain("[data-bg-export-page]");
+    expect(PDF_PRINT_CSS).toMatch(/\[data-slide\], \[data-graphic-artboard\] \{[^}]*break-after: page/);
+    expect(PDF_PRINT_CSS).toContain("[data-graphic-artboard]:last-of-type");
   });
 
   test("does not declare an @page rule (page size is driven by the paper option)", () => {

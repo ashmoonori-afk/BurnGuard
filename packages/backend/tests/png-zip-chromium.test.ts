@@ -164,4 +164,78 @@ describe("frame batch export against real Chromium", () => {
     }
     expect(activeExportBrowserCount()).toBe(0);
   }, 120_000);
+
+  test("Given a deck slide authored as a two-column grid When exported as a deck PNG ZIP Then the right-column box stays in the right half", async () => {
+    // Given
+    expect(usable).toBe(true);
+    await writeFile(path.join(stagedDir, "columns.html"), `<!doctype html><html><head><meta charset="utf-8"><title>Columns</title><style>html,body{margin:0}body[data-deck-ready] .slide:not([data-active]){display:none}.slide{width:100vw;height:100vh;display:grid;grid-template-columns:1fr 1fr;align-items:center;justify-items:center;background:#ffffff;box-sizing:border-box;padding:40px}.box{width:200px;height:200px}</style><script src="/runtime/deck-stage.js" defer></script></head><body>${Array.from({ length: 2 }, () => '<section data-slide class="slide"><div class="box" style="background:#e03050"></div><div class="box" style="background:#3050e0"></div></section>').join("")}</body></html>`);
+    const outputPath = path.join(root, "columns.zip");
+    const signal = AbortSignal.timeout(60_000);
+    const session = await openRenderSession({ stagedDir, entrypoint: "columns.html", viewport: { width: 1280, height: 720, dpr: 1 }, deck: true, signal });
+
+    // When
+    try {
+      await renderPngZipWithPage({ page: capturePageFromSession(session.page), stagedDir, outputPath, deck: true, graphic_set: { schema_version: 1, kind: "single", frame_count: 1 }, options: {}, receiptWriter: async () => undefined, signal });
+
+      // Then
+      const archive = await JSZip.loadAsync(await readFile(outputPath));
+      for (const name of ["01.png", "02.png"]) {
+        const frame = await decodeFrame(archive, name);
+        const left = centroid(frame, [0xe0, 0x30, 0x50]); const right = centroid(frame, [0x30, 0x50, 0xe0]);
+        expect(left.x).toBeLessThan(frame.width / 2); expect(right.x).toBeGreaterThan(frame.width / 2);
+        expect(Math.abs(left.y - right.y)).toBeLessThanOrEqual(2);
+      }
+    } finally {
+      await session.close();
+      await rm(outputPath, { force: true });
+    }
+    expect(activeExportBrowserCount()).toBe(0);
+  }, 120_000);
+
+  test("Given artboards with inline flex layout When exported as PNG ZIP Then each frame keeps the authored layout And the inline display is restored", async () => {
+    // Given
+    expect(usable).toBe(true);
+    const board = '<section data-graphic-artboard style="width:600px;height:600px;display:flex;flex-direction:column;justify-content:flex-end;background:#ffffff"><div style="height:100px;background:#ff0000"></div></section>';
+    await writeFile(path.join(stagedDir, "flex.html"), `<!doctype html><html><head><meta charset="utf-8"><title>Flex</title><style>html,body{margin:0;background:#ffffff}</style></head><body>${board}${board}</body></html>`);
+    const outputPath = path.join(root, "flex.zip");
+    const signal = AbortSignal.timeout(60_000);
+    const session = await openRenderSession({ stagedDir, entrypoint: "flex.html", viewport: { width: 1280, height: 720, dpr: 1 }, deck: false, signal });
+
+    // When
+    try {
+      await renderPngZipWithPage({ page: capturePageFromSession(session.page), stagedDir, outputPath, deck: false, graphic_set: { schema_version: 1, kind: "card_news", frame_count: 2 }, options: {}, receiptWriter: async () => undefined, signal });
+
+      // Then
+      const archive = await JSZip.loadAsync(await readFile(outputPath));
+      for (const name of ["01.png", "02.png"]) {
+        const frame = await decodeFrame(archive, name);
+        expect(frame.pixel(300, 550)).toEqual([255, 0, 0, 255]);
+        expect(frame.pixel(300, 50)).toEqual([255, 255, 255, 255]);
+      }
+      expect(await session.page.evaluate(() => [...document.querySelectorAll<HTMLElement>("[data-graphic-artboard]")].map((node) => [node.style.display, node.hasAttribute("data-bg-export-display")]))).toEqual([["flex", false], ["flex", false]]);
+    } finally {
+      await session.close();
+      await rm(outputPath, { force: true });
+    }
+    expect(activeExportBrowserCount()).toBe(0);
+  }, 120_000);
 });
+
+type Frame = { readonly width: number; readonly height: number; readonly data: Uint8ClampedArray; readonly pixel: (x: number, y: number) => readonly number[] };
+
+async function decodeFrame(archive: JSZip, name: string): Promise<Frame> {
+  const entry = archive.file(name);
+  if (entry === null) throw new TypeError(`missing ${name}`);
+  const image = await loadImage(await entry.async("nodebuffer"));
+  const canvas = createCanvas(image.width, image.height); const context = canvas.getContext("2d"); context.drawImage(image, 0, 0);
+  const data = context.getImageData(0, 0, image.width, image.height).data;
+  return { width: image.width, height: image.height, data, pixel: (x, y) => Array.from(data.subarray((y * image.width + x) * 4, (y * image.width + x) * 4 + 4)) };
+}
+
+function centroid(frame: Frame, rgb: readonly [number, number, number], tolerance = 24): { readonly x: number; readonly y: number; readonly count: number } {
+  let x = 0; let y = 0; let count = 0;
+  for (let offset = 0; offset < frame.data.length; offset += 4) {
+    if (rgb.every((value, channel) => Math.abs((frame.data[offset + channel] ?? -255) - value) <= tolerance)) { x += (offset / 4) % frame.width; y += Math.floor(offset / 4 / frame.width); count += 1; }
+  }
+  return { x: count === 0 ? -1 : x / count, y: count === 0 ? -1 : y / count, count };
+}

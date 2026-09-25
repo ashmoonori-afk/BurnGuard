@@ -5,6 +5,7 @@ import path from "node:path";
 import { PDFDocument } from "pdf-lib";
 import { ARTBOARD_PRINT_CSS, assertUniformArtboardPages, PdfExportError, renderDeckToPdf } from "../src/services/export-pdf";
 import { pdfDimensionsForPaper, pdfPointsForPaper, pdfRasterBudgetFitsPages } from "../src/services/export-pdf-contract";
+import { createCanvas, getDocument } from "../src/services/export-native-modules";
 
 describe("artboard PDF geometry", () => {
   test.each([
@@ -96,6 +97,56 @@ describe("artboard PDF geometry", () => {
     expect(ARTBOARD_PRINT_CSS).toMatch(/min-width:\s*0\s*!important/u);
   });
 });
+
+describe("deck PDF layout", () => {
+  test("Given a deck slide authored as a two-column grid When exported to widescreen PDF Then the right-column box stays in the right half", async () => {
+    // Given
+    const stagedDir = await mkdtemp(path.join(tmpdir(), "bg-deck-pdf-grid-"));
+    try {
+      await writeFile(path.join(stagedDir, "index.html"), twoColumnDeckHtml);
+      const outputPath = path.join(stagedDir, "deck.pdf");
+
+      // When
+      await renderDeckToPdf({ stagedDir, entrypoint: "index.html", outputPath, paper: "widescreen-16x9", title: "Columns", signal: AbortSignal.timeout(45_000) });
+
+      // Then
+      for (const page of await rasterizePdf(outputPath)) {
+        const left = centroid(page, [0xe0, 0x30, 0x50]); const right = centroid(page, [0x30, 0x50, 0xe0]);
+        expect(left.count).toBeGreaterThan(0); expect(right.count).toBeGreaterThan(0);
+        expect(left.x).toBeLessThan(page.width / 2); expect(right.x).toBeGreaterThan(page.width / 2);
+        expect(Math.abs(left.y - right.y)).toBeLessThanOrEqual(2);
+      }
+    } finally { await rm(stagedDir, { recursive: true, force: true }); }
+  }, 60_000);
+});
+
+/** Two gated grid slides: the gate hides inactive slides the way the slide-deck template does. */
+const twoColumnDeckHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Columns</title><style>html,body{margin:0}body[data-deck-ready] .slide:not([data-active]){display:none}.slide{width:100vw;height:100vh;display:grid;grid-template-columns:1fr 1fr;align-items:center;justify-items:center;background:#ffffff;box-sizing:border-box;padding:40px}.box{width:200px;height:200px}</style><script src="/runtime/deck-stage.js" defer></script></head><body>${Array.from({ length: 2 }, () => '<section data-slide class="slide"><div class="box" style="background:#e03050"></div><div class="box" style="background:#3050e0"></div></section>').join("")}</body></html>`;
+
+type Raster = { readonly width: number; readonly height: number; readonly data: Uint8ClampedArray };
+
+/** Rasterises every page; the default 4/3 scale maps PDF points back to CSS pixels. */
+async function rasterizePdf(file: string, scale = 4 / 3): Promise<readonly Raster[]> {
+  const pdf = await getDocument({ data: new Uint8Array(await readFile(file)) }).promise;
+  try {
+    const pages: Raster[] = [];
+    for (let number = 1; number <= pdf.numPages; number += 1) {
+      const page = await pdf.getPage(number); const viewport = page.getViewport({ scale });
+      const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height)); const canvasContext = canvas.getContext("2d");
+      await Reflect.get(Reflect.apply(page.render, page, [{ canvas, canvasContext, viewport }]), "promise");
+      pages.push({ width: canvas.width, height: canvas.height, data: canvasContext.getImageData(0, 0, canvas.width, canvas.height).data });
+    }
+    return pages;
+  } finally { await pdf.destroy(); }
+}
+
+function centroid(raster: Raster, rgb: readonly [number, number, number], tolerance = 24): { readonly x: number; readonly y: number; readonly count: number } {
+  let x = 0; let y = 0; let count = 0;
+  for (let offset = 0; offset < raster.data.length; offset += 4) {
+    if (rgb.every((value, channel) => Math.abs((raster.data[offset + channel] ?? -255) - value) <= tolerance)) { x += (offset / 4) % raster.width; y += Math.floor(offset / 4 / raster.width); count += 1; }
+  }
+  return { x: count === 0 ? -1 : x / count, y: count === 0 ? -1 : y / count, count };
+}
 
 function artboardHtml(artboards: readonly { readonly width: number; readonly height: number }[]): string {
   return `<!doctype html><html><head><style>html,body{margin:0;min-width:1280px;min-height:720px}[data-graphic-artboard]{margin:32px;background:white;padding:32px;box-sizing:border-box}[data-graphic-artboard]>div{width:50%;height:50%;background:#2468ac}</style></head><body>${artboards.map(({ width, height }) => `<section data-graphic-artboard style="width:${width}px;height:${height}px"><div></div></section>`).join("")}</body></html>`;
