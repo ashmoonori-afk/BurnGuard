@@ -96,7 +96,13 @@ describe("macOS download destination", () => {
     expect(panel).toContain("completionHandler(temporary)");
     expect(body("func downloadDidFinish(")).toContain("try FileManager.default.replaceItemAt(replacement.target, withItemAt: replacement.temporary)");
     const failure = body("didFailWithError error: Error");
-    expect(failure.indexOf("removeItem(at: replacement.temporary)")).toBeLessThan(failure.indexOf("NSURLErrorCancelled"));
+    const cleanup = failure.indexOf("removeItem(at: replacement.temporary)");
+    expect(cleanup).toBeGreaterThan(-1);
+    expect(cleanup).toBeLessThan(failure.indexOf("NSURLErrorCancelled"));
+    // The user's confirmed file is only ever the destination of the atomic swap.
+    for (const handler of [panel, body("func downloadDidFinish("), failure]) {
+      expect(handler).not.toMatch(/(?:removeItem|trashItem)\(at: (?:url|replacement\.target)\b/);
+    }
   });
 });
 
