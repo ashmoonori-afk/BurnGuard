@@ -82,11 +82,13 @@ function validateImwebRoles(fragments: readonly string[], texts: ReadonlyMap<str
 }
 
 function packageReferences(html: string): readonly string[] {
+  // Hyperlinks navigate rather than load; only asset-bearing references must resolve inside the package.
+  const source = html.replace(/<(?:a|area)\b[^>]*>/giu, (tag) => tag.replace(/(?<![\w-])href\s*=\s*(["']).*?\1/giu, ""));
   const values = [
     // `data-*` lookalikes are excluded: a dynamic reference is a lint warning, not a broken package.
-    ...[...html.matchAll(/(?<![\w-])(?:src|href|poster)\s*=\s*(["'])(.*?)\1/giu)].map((match) => match[2] ?? ""),
-    ...[...html.matchAll(/url\(\s*(["']?)([^"')]+)\1\s*\)/giu)].map((match) => match[2] ?? ""),
-    ...[...html.matchAll(/srcset\s*=\s*(["'])(.*?)\1/giu)].flatMap((match) => (match[2] ?? "").split(",").map((candidate) => candidate.trim().split(/\s+/u)[0] ?? "")),
+    ...[...source.matchAll(/(?<![\w-])(?:src|href|poster)\s*=\s*(["'])(.*?)\1/giu)].map((match) => match[2] ?? ""),
+    ...[...source.matchAll(/url\(\s*(["']?)([^"')]+)\1\s*\)/giu)].map((match) => match[2] ?? ""),
+    ...[...source.matchAll(/srcset\s*=\s*(["'])(.*?)\1/giu)].flatMap((match) => (match[2] ?? "").split(",").map((candidate) => candidate.trim().split(/\s+/u)[0] ?? "")),
   ];
   return values.map((value) => value.trim()).filter((value) => value !== "" && !value.startsWith("#") && !value.startsWith("data:"));
 }

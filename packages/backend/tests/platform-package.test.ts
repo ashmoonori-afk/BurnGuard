@@ -200,6 +200,38 @@ describe("platform package boundaries", () => {
     expect(built.names.some((name) => name.includes("docs/attachments") || name.includes("private-brief"))).toBe(false);
   });
 
+  test.each(["cafe24_package", "imweb_package"] as const)("Given mailto, tel, external and directory anchors in main When %s is built Then validation accepts the archive and the hrefs survive", async (format) => {
+    // Given
+    const hrefs = ["mailto:hello@brand.kr", "tel:+82-2-000-0000", "https://instagram.com/brand", "/", "about/", "./", "?q=1"];
+    const main = `<section class="hero" id="hero">${hrefs.map((href) => `<a href="${href}">link</a>`).join("")}<area href="https://example.com/map" alt="map"></section>`;
+
+    // When
+    const built = await build(format, {}, main);
+
+    // Then
+    const fragment = await built.text(built.names.find((name) => name.startsWith("pages/home")) ?? "pages/home.html");
+    expect(built.validation.entries).toBeGreaterThan(0);
+    expect(fragment).toContain('href="mailto:hello@brand.kr"');
+    expect(fragment).toContain('href="https://instagram.com/brand"');
+  });
+
+  test.each(["cafe24_package", "imweb_package"] as const)("Given an anchor whose style loads an off-package url When %s is validated Then the style reference is still rejected", async (format) => {
+    // Given
+    const built = await build(format, {}, '<section class="hero" id="hero"><a href="mailto:hello@brand.kr">mail</a></section>');
+    const zip = await JSZip.loadAsync(built.bytes);
+    const victim = built.names.find((name) => name.startsWith("pages/home")) ?? "pages/home.html";
+    const tamperedText = (await built.text(victim)).replace('<a href="mailto:hello@brand.kr">', '<a href="mailto:hello@brand.kr" style="background:url(https://evil.example/x.png)">');
+    zip.file(victim, tamperedText);
+    const manifest: PlatformPackageManifest = JSON.parse(await built.text("burnguard-export.json"));
+    const bytes = new TextEncoder().encode(tamperedText);
+    const forged: PlatformPackageManifest = { ...manifest, entries: manifest.entries.map((entry) => entry.path === victim ? { path: entry.path, size: bytes.byteLength, sha256: sha256(bytes) } : { path: entry.path, size: entry.size, sha256: entry.sha256 }) };
+    zip.file("burnguard-export.json", canonicalJson(forged));
+
+    // When / Then
+    const { validatePlatformPackage } = await import("../src/services/export-package-validation");
+    await expect(validatePlatformPackage(await zip.generateAsync({ type: "uint8array" }), forged)).rejects.toMatchObject({ code: "unresolved_reference" });
+  });
+
   test.each(["cafe24_package", "imweb_package"] as const)("Given a built %s When one entry is edited Then package validation rejects the archive", async (format) => {
     // Given
     const built = await build(format);
