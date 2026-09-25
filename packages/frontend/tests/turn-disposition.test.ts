@@ -159,6 +159,23 @@ test("Given an independent turn whose id resembles a repair child When projected
   expect(projectTurnStates(events).get(independent)?.disposition).toBe("pending");
 });
 
+test("Given child ids whose parents are themselves suffixed user turns When projected Then each child joins exactly its direct parent", () => {
+  const nested = `${FIRST}-review`;
+  const events: NormalizedEvent[] = [
+    { id: id(), ts: 1, type: "chat.user_message", turnId: FIRST, text: "first", attachmentCount: 0 },
+    { id: id(), ts: 2, type: "chat.delta", turnId: `${FIRST}-design-repair-12`, text: "repair twelve" },
+    { id: id(), ts: 3, type: "chat.message_end", turnId: FIRST },
+    { id: id(), ts: 4, type: "status.idle", stopReason: "end_turn" },
+    { id: id(), ts: 5, type: "chat.user_message", turnId: nested, text: "a request whose id ends like a review", attachmentCount: 0 },
+    { id: id(), ts: 6, type: "chat.delta", turnId: `${nested}-logo-repair`, text: "nested repair" },
+  ];
+
+  const states = projectTurnStates(events);
+  expect(states.get(`${FIRST}-design-repair-12`)?.disposition).toBe("committed");
+  expect(states.get(nested)?.disposition).toBe("pending");
+  expect(states.get(`${nested}-logo-repair`)?.disposition).toBe("pending");
+});
+
 test("Given a turn whose work is still streaming When projected Then it is pending rather than committed", () => {
   const streaming: NormalizedEvent[] = [
     { id: id(), ts: 1, type: "chat.user_message", turnId: FIRST, text: "make the mark", attachmentCount: 0 },

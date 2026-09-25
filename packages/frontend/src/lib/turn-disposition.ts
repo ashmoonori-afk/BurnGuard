@@ -48,15 +48,21 @@ export function projectTurnStates(events: readonly NormalizedEvent[]): ReadonlyM
   const childParents = new Map<string, string>();
   let open: string | null = null;
 
+  const parents = new Map<string, string>();
   const parentOf = (turnId: string): string => {
     // A user-message id is authoritative even if it happens to resemble a generated repair or
     // deck review id.
     if (userTurns.has(turnId)) return turnId;
-    const parent = [...userTurns]
-      .filter((candidate) => turnId === `${candidate}-logo-repair` || turnId === `${candidate}-review` || new RegExp(`^${candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-design-repair-[1-9]\\d*$`).test(turnId))
-      .sort((left, right) => right.length - left.length)[0];
-    if (parent !== undefined) childParents.set(turnId, parent);
-    return parent ?? turnId;
+    // A child id is its parent plus exactly one generated suffix, so one strip and one lookup decide it; the
+    // projection re-runs on every streamed event, so the answer is cached per id.
+    let parent = parents.get(turnId);
+    if (parent === undefined) {
+      const prefix = turnId.replace(/-(?:review|logo-repair|design-repair-[1-9]\d*)$/u, "");
+      parent = prefix !== turnId && userTurns.has(prefix) ? prefix : turnId;
+      parents.set(turnId, parent);
+    }
+    if (parent !== turnId) childParents.set(turnId, parent);
+    return parent;
   };
 
   const track = (turnId: string): MutableTurnState => {
