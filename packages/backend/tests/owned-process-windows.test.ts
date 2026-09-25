@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { closeOwnedProcess, OwnedProcessHostError, settleOwnedProcess, spawnOwnedProcess, terminateOwnedWindowsJob, type WindowsJobOwnership, windowsOwnedLaunchCommand } from "../src/adapters/owned-process";
+import { validateLaunchSettlement } from "../src/adapters/owned-process-windows";
 
 const jobToken = "a".repeat(32);
 
@@ -98,6 +99,18 @@ test("Windows launch settlement requires the final exact-token zero-active recei
   const invalidOwnership = testWindowsOwnership();
   const invalidOwned = { proc: { pid: 50, exited: Promise.resolve(17), kill: () => {} }, ownership: invalidOwnership };
   await expect(settleOwnedProcess(invalidOwned, 17, async () => "{}")).rejects.toBeInstanceOf(OwnedProcessHostError);
+});
+
+for (const scenario of [
+  { name: "an exited receipt with target_exit_code 3221226505 and host exit 255", targetExitCode: 3221226505, hostExit: 255, valid: true },
+  { name: "the same receipt and a truncated host exit 9", targetExitCode: 3221226505, hostExit: 9, valid: false },
+  { name: "target_exit_code 3 and host exit 3", targetExitCode: 3, hostExit: 3, valid: true },
+  { name: "target_exit_code 256 and a truncated host exit 0", targetExitCode: 256, hostExit: 0, valid: false },
+] as const) test(`Given ${scenario.name} When launch settlement is validated Then it ${scenario.valid ? "validates" : "throws invalid_receipt"}`, () => {
+  const receipt = JSON.stringify({ schema_version: 1, operation: "launch", state: "exited", job_token: jobToken, host_pid: 50, target_pid: 51, target_exit_code: scenario.targetExitCode, active_processes: 0 });
+  const validate = () => validateLaunchSettlement(receipt, testWindowsOwnership(), 50, scenario.hostExit);
+  if (scenario.valid) expect(validate).not.toThrow();
+  else expect(validate).toThrow(expect.objectContaining({ reason: "invalid_receipt" }));
 });
 
 test("Windows host settlement waits for terminate receipt consumption before disposal", async () => {

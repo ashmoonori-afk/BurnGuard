@@ -64,7 +64,7 @@ export async function terminateOwnedWindowsJob(input: {
 
 export function validateLaunchSettlement(contents: string, ownership: WindowsJobOwnership, hostPid: number, exitCode: number): void {
   const receipt = parseLaunchReceipt(contents);
-  if (receipt === null || receipt.job !== ownership.token || receipt.hostPid !== hostPid || receipt.targetExitCode !== exitCode || receipt.activeProcesses !== 0) {
+  if (receipt === null || receipt.job !== ownership.token || receipt.hostPid !== hostPid || Math.min(receipt.targetExitCode, 255) !== exitCode || receipt.activeProcesses !== 0) {
     throw new OwnedProcessHostError("invalid_receipt");
   }
 }
