@@ -1,4 +1,5 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { stat } from "node:fs/promises";
 import path from "node:path";
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import { chromium } from "./playwright-runtime";
@@ -100,7 +101,7 @@ export type ChromiumLauncher = (options: ChromiumLaunchAttempt) => Promise<Brows
 type LaunchOutcome = { readonly kind: "browser"; readonly browser: Browser } | { readonly kind: "failed"; readonly error: unknown } | { readonly kind: "timeout" } | { readonly kind: "aborted" };
 const LAUNCH_ATTEMPTS: readonly ChromiumLaunchAttempt[] = [{ headless: true }, { headless: true, channel: "chrome" }, { headless: true, channel: "msedge" }];
 
-export async function launchChromium(signal: AbortSignal, launch: ChromiumLauncher = (options) => chromiumNodeCommand() !== null ? launchChromiumViaNode(options, signal) : chromium.launch(options)): Promise<Browser> {
+export async function launchChromium(signal: AbortSignal, launch: ChromiumLauncher = (options) => chromiumNodeCommand() !== null ? launchChromiumViaNode(options, signal) : chromium.launch(options), installed: () => Promise<boolean> = async () => (await stat(chromium.executablePath())).isFile()): Promise<Browser> {
   // A launch that never completes its handshake blocks the Bun event loop, so
   // the in-process attempt below would freeze every other request and even the
   // timer meant to cap it. The child-process probe answers that question
@@ -108,7 +109,9 @@ export async function launchChromium(signal: AbortSignal, launch: ChromiumLaunch
   const usable = await isChromiumLaunchable(undefined, { waitForResult: true, signal });
   if (signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled");
   if (!usable) {
-    throw new RenderSessionError("chromium_launch_timeout", "chromium_launch_timeout: Chromium could not be launched on this host");
+    // The probe cannot tell a hung launch from a missing browser; the bundled executable on disk can.
+    const code = (await installed().catch(() => false)) ? "chromium_launch_timeout" : "chromium_not_installed";
+    throw new RenderSessionError(code, `${code}: Chromium could not be launched on this host`);
   }
   const timeoutMs = chromiumLaunchTimeoutMs(); const errors: string[] = []; const tried: string[] = []; let timedOut = false;
   for (const options of LAUNCH_ATTEMPTS) {
