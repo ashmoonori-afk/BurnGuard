@@ -31,10 +31,13 @@ export async function prepareBundledFontExport(root: string): Promise<void> {
     if (!/\.(css|html?)$/i.test(file)) continue;
     const absolute = path.join(root, file);
     let source = text.replace(FONT_FACE, (face) => !bundledFace(face) || keep(faceFamily(face)) ? face : "");
-    const matches = [...source.matchAll(/url\(\s*['"]?(\/runtime\/fonts\/[a-f0-9]{64}\/[A-Za-z0-9_.-]+\.woff2)['"]?\s*\)/g)];
-    if (source === text && !matches.length) continue;
-    for (const match of matches) {
-      const font = await readBundledFontUrl(match[1]!);
+    const fontUrl = /url\(\s*['"]?(\/runtime\/fonts\/[a-f0-9]{64}\/[A-Za-z0-9_.-]+\.woff2)['"]?\s*\)/g;
+    const fontPaths = new Set([...source.matchAll(fontUrl)].map((match) => match[1]!));
+    if (source === text && !fontPaths.size) continue;
+    // Each distinct font is resolved once and every reference is rewritten in one pass; a replace per reference is quadratic.
+    const replacements = new Map<string, string>();
+    for (const fontPath of fontPaths) {
+      const font = await readBundledFontUrl(fontPath);
       if (!font) throw new Error("Bundled export font unavailable");
       const relative = `fonts/bundled/${font.sha256}-${font.name}`;
       if (!written.has(relative)) {
@@ -42,8 +45,9 @@ export async function prepareBundledFontExport(root: string): Promise<void> {
         await writeFile(path.join(root, relative), font.bytes, { flag: "wx" });
         written.set(relative, font.name);
       }
-      source = source.replaceAll(match[0], `url('${path.posix.relative(path.posix.dirname(file), relative)}')`);
+      replacements.set(fontPath, `url('${path.posix.relative(path.posix.dirname(file), relative)}')`);
     }
+    source = source.replace(fontUrl, (_reference, fontPath: string) => replacements.get(fontPath)!);
     await writeFile(absolute, source);
   }
   if (written.size) {

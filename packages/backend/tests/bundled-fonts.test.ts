@@ -63,11 +63,11 @@ test("Given a staged project whose CSS names four bundled families, one only thr
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("Given more distinct face families than the pruning cap and an unclosed @font-face run When prepareBundledFontExport runs Then it keeps every face and finishes without per-face scans or backtracking", async () => {
+test("Given more distinct face families than the pruning cap and an unclosed @font-face run When prepareBundledFontExport runs Then it keeps and rewrites every face without per-face scans, per-reference rewrites or backtracking", async () => {
   // Given
   const root = path.join(appRootDir, `font-prune-bound-${process.pid}`);
   const font = [...(await bundledFontFiles()).values()].find(file => file.name.endsWith(".woff2"))!;
-  const faces = Array.from({ length: 200 }, (_unused, index) => `@font-face{font-family:"q${index}";src:url(${bundledFontUrl(font)})}`).join("");
+  const faces = Array.from({ length: 80_000 }, (_unused, index) => `@font-face{font-family:"q${index}";src:url(${bundledFontUrl(font)})}`).join("");
   await mkdir(path.join(root, "styles"), { recursive: true });
   await writeFile(path.join(root, "index.html"), '<!doctype html><html><head><link rel="stylesheet" href="styles/site.css"></head><body>Bound</body></html>');
   await writeFile(path.join(root, "styles/site.css"), `${faces}/*@font-face{${"/runtime/fonts/ ".repeat(70_000)}*/`);
@@ -76,7 +76,8 @@ test("Given more distinct face families than the pruning cap and an unclosed @fo
     await prepareBundledFontExport(root);
     // Then
     const css = await readFile(path.join(root, "styles/site.css"), "utf8");
-    expect(css.match(/font-family:"q\d+"/g)).toHaveLength(200);
+    expect(css.match(/font-family:"q\d+"/g)).toHaveLength(80_000);
+    expect(css).not.toContain(bundledFontUrl(font));
     expect((await readdir(path.join(root, "fonts/bundled"))).filter(name => name.endsWith(".woff2"))).toEqual([`${font.sha256}-${font.name}`]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
