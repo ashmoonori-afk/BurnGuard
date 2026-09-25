@@ -119,7 +119,7 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
           if (kind === "script") throw new Error("artifact_script_mime_invalid");
           return source;
         }
-        const blob = await readCanvasImage(response, budget, () => resources.abort());
+        const blob = await readCanvasImage(response, budget, () => { if (kind !== "asset") resources.abort(); });
         if (kind !== "asset") return blob.text();
         return new Promise<string>((done, reject) => {
           const reader = new FileReader();
@@ -130,6 +130,8 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
       })().catch((error: unknown) => {
         // A draft may reference an image/CSS file that the generator writes next.
         if (/\/preview\//.test(new URL(documentUrl).pathname) && error !== null && typeof error === "object" && "httpStatus" in error && error.httpStatus === 404) return source;
+        // An asset beyond the byte budget stays unembedded; CSS and script overruns remain fatal.
+        if (kind === "asset" && error instanceof Error && error.message === "artifact_image_limit") return source;
         resources.abort(); throw error;
       });
       fetched.set(key, pending);
