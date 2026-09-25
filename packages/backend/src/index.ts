@@ -85,6 +85,8 @@ const shutdown = async (): Promise<void> => {
 startAppUpdateScheduler(configureAppUpdater({ shutdown }));
 process.on("SIGINT", () => { void shutdown(); });
 process.on("SIGTERM", () => { void shutdown(); });
+// Closing the launching terminal hangs up its foreground group, backend included.
+process.on("SIGHUP", () => { void shutdown(); });
 if (isDesktop) {
   watchDesktopParent(process.stdin, () => { void shutdown(); });
   console.log(`[burnguard-desktop] ${JSON.stringify({ protocol: 1, url, pid: process.pid })}`);
