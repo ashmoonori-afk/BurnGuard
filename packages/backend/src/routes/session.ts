@@ -280,7 +280,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       );
     }
 
-    const turn = startReservedUserTurn({ ...reservation, operationId: requestedOperationId ?? reservation.operationId }, payload);
+    const turn = startReservedUserTurn({ ...reservation, operationId: requestedOperationId ?? reservation.operationId }, payload, { detectBackends: routeDetectBackends(c.env) });
     if (!turn) {
       return c.json(
         fail("session_busy", "A turn is already running for this session", { id }),

@@ -346,24 +346,8 @@ async function runUserTurnInternal(
   const detection = await (dependencies.detectBackends ?? detectBackends)({ force: true, requireCodexAuthentication: backendId === "codex" });
   const backend = detection.backends.find((b) => b.id === backendId);
 
-  if (!backend?.found || !backend.binary_path) {
-    await persistAndPublish(sessionId, {
-      id: ulid(),
-      ts: Date.now(),
-      type: "status.error",
-      code: "backend_unavailable",
-      message: `${backendId} CLI not found on PATH. ${backend?.install_hint ?? "Install and retry."}`,
-      recoverable: true,
-    });
-    await persistAndPublish(sessionId, {
-      id: ulid(),
-      ts: Date.now(),
-      type: "status.idle",
-      stopReason: "error",
-    });
-    await setSessionStatus(sessionId, "idle");
-    throw new Error("backend_unavailable");
-  }
+  // The caller publishes the one sanitized error and idle for a turn that fails before preparation.
+  if (!backend?.found || !backend.binary_path) throw Object.assign(new Error("backend_unavailable"), { code: "backend_unavailable" });
 
   const binaryPath = backend.binary_path;
   const config = await loadConfig();

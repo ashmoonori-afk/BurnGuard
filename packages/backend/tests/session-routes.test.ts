@@ -8,6 +8,7 @@ import { sessionRoutes } from "../src/routes/session";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { writePreTurnSnapshot } from "../src/services/checkpoints";
 import { insertNormalizedEvent } from "../src/db/events";
+import { listSequencedSessionEvents } from "../src/db/event-sequence-repository";
 
 const projectId = `session-routes-${process.pid}`;
 const sessionId = `${projectId}-session`;
@@ -85,5 +86,17 @@ describe("production session route boundaries", () => {
     expect((await request(`/api/sessions/${sessionId}/tool-decision`, "POST", { toolCallId: "allow", decision: "allow", reason: "ok" })).status).toBe(200);
     expect((await request(`/api/sessions/${sessionId}/tool-decision`, "POST", { toolCallId: "deny", decision: "deny" })).status).toBe(200);
     expect(getSqlite().query<{ readonly count: number }, [string]>("SELECT COUNT(*) count FROM events WHERE session_id=? AND direction='up'").get(sessionId)?.count).toBe(2);
+  });
+
+  test("Given a session whose backend is not installed When a message is posted Then exactly one status.error and one status.idle are persisted", async () => {
+    const after = listSequencedSessionEvents(getSqlite(), sessionId, 0).at(-1)?.sequence ?? 0;
+    const response = await sessionRoutes.request(`http://local/api/sessions/${sessionId}/events`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ type: "user.message", text: "hello" }) }, {
+      detectBackends: async () => ({ backends: [{ id: "codex", found: false }, { id: "claude-code", found: false }] }),
+    });
+    expect(response.status).toBe(500);
+    const events = listSequencedSessionEvents(getSqlite(), sessionId, after).map(item => item.event);
+    expect(events.filter(event => event.type === "status.error").map(event => event.code)).toEqual(["backend_unavailable"]);
+    expect(events.filter(event => event.type === "status.idle").map(event => event.stopReason)).toEqual(["error"]);
+    expect(getSqlite().query("SELECT status FROM sessions WHERE id=?").get(sessionId)).toEqual({ status: "idle" });
   });
 });
