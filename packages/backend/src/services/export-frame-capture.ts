@@ -78,7 +78,9 @@ export function capturePageFromSession(page: Page): CapturePage {
       const rect = artboard.getBoundingClientRect();
       const originX = Math.round(rect.left + window.scrollX);
       const originY = Math.round(rect.top + window.scrollY);
-      const sectionBottoms = [...artboard.children].flatMap((child) => child instanceof HTMLElement && child.hasAttribute("data-bg-node-id")
+      // Only rendered in-flow sections say where to cut; hidden and out-of-flow decorations do not.
+      const inFlow = (child: HTMLElement): boolean => { const style = getComputedStyle(child); return style.display !== "none" && style.display !== "contents" && style.position !== "absolute" && style.position !== "fixed" && child.getBoundingClientRect().height > 0; };
+      const sectionBottoms = [...artboard.children].flatMap((child) => child instanceof HTMLElement && child.hasAttribute("data-bg-node-id") && inFlow(child)
         ? [Math.round(child.getBoundingClientRect().bottom + window.scrollY) - originY]
         : []);
       return { pageWidth: Math.round(rect.width), pageHeight: Math.round(rect.height), originX, originY, sectionBottoms };

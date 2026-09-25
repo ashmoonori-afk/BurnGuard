@@ -128,6 +128,34 @@ describe("product detail slicing against real Chromium", () => {
   }, 120_000);
 });
 
+describe("product detail section hints against real Chromium", () => {
+  test("Given a product detail with three in-flow sections plus hidden and absolutely positioned node children When sliced Then only the in-flow bottoms are cut hints And the export succeeds", async () => {
+    // Given
+    expect(usable).toBe(true);
+    const sections = [2000, 2000, 2000].map((height, index) => `<section data-bg-node-id="section-${index}" style="height:${height}px;background:#eeeeee"></section>`).join("");
+    const decorations = '<div data-bg-node-id="badge" hidden>Hidden badge</div><div data-bg-node-id="sticker" style="position:absolute;left:40px;bottom:-200px;width:200px;height:400px;background:#ff0000"></div><div data-bg-node-id="ribbon" style="position:absolute;left:40px;top:-40px;width:200px;height:80px;background:#0000ff"></div>';
+    await writeFile(path.join(stagedDir, "hints.html"), `<!doctype html><html><head><meta charset="utf-8"><title>Hints</title><style>html,body{margin:0}</style></head><body><main data-graphic-artboard style="position:relative;overflow:hidden;width:860px">${sections}${decorations}</main></body></html>`);
+    const outputPath = path.join(root, "hints.zip");
+    const signal = AbortSignal.timeout(60_000);
+    const session = await openRenderSession({ stagedDir, entrypoint: "hints.html", viewport: { width: 1280, height: 720, dpr: 1 }, deck: false, signal });
+
+    // When
+    try {
+      const page = capturePageFromSession(session.page);
+      const measurement = await page.measureSections("[data-graphic-artboard]");
+      const { validation } = await renderPngZipWithPage({ page, stagedDir, outputPath, deck: false, graphic_set: { schema_version: 1, kind: "product_detail", frame_count: 1 }, options: { slice_height: 5000, slice_format: "png" }, receiptWriter: async () => undefined, signal });
+
+      // Then
+      expect(measurement.sectionBottoms).toEqual([2000, 4000, 6000]);
+      expect(validation.outputs.map((output) => output.source_region)).toEqual([{ top: 0, bottom: 4000 }, { top: 4000, bottom: 6000 }]);
+    } finally {
+      await session.close();
+      await rm(outputPath, { force: true });
+    }
+    expect(activeExportBrowserCount()).toBe(0);
+  }, 120_000);
+});
+
 describe("render readiness against real Chromium", () => {
   test("Given a 9000px product detail with a lazy image in each section When exported as PNG slices Then it resolves And every slice contains the image", async () => {
     // Given
