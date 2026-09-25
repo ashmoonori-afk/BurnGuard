@@ -136,7 +136,50 @@ describe("deck PDF layout", () => {
       expect(pixelAt(white, white.width / 2, 4).slice(0, 3)).toEqual([255, 255, 255]);
     } finally { await rm(stagedDir, { recursive: true, force: true }); }
   }, 60_000);
+
+  test("Given a ten-slide deck whose gate hides inactive slides before their lazy images load When exported to PDF Then every page contains its image", async () => {
+    // Given
+    const stagedDir = await mkdtemp(path.join(tmpdir(), "bg-deck-pdf-lazy-"));
+    try {
+      const red = createCanvas(200, 200); const paint = red.getContext("2d"); paint.fillStyle = "#ff0000"; paint.fillRect(0, 0, 200, 200);
+      await writeFile(path.join(stagedDir, "red.png"), red.toBuffer("image/png"));
+      const slides = Array.from({ length: 10 }, (_, index) => `<section data-slide style="width:100vw;height:100vh;box-sizing:border-box;padding:40px;background:#ffffff;border:6px solid #222222"><h2>Slide ${index + 1}</h2><img loading="lazy" src="red.png" width="200" height="200" alt=""></section>`).join("");
+      await writeFile(path.join(stagedDir, "index.html"), `<!doctype html><html><head><meta charset="utf-8"><title>Lazy</title><style>html,body{margin:0}[data-slide]:not([data-active]){display:none}</style><script src="/runtime/deck-stage.js" defer></script></head><body>${slides}</body></html>`);
+      const outputPath = path.join(stagedDir, "deck.pdf");
+
+      // When
+      await renderDeckToPdf({ stagedDir, entrypoint: "index.html", outputPath, paper: "widescreen-16x9", title: "Lazy", signal: AbortSignal.timeout(45_000) });
+
+      // Then
+      const pages = await rasterizePdf(outputPath, 0.5);
+      expect(pages).toHaveLength(10);
+      for (const page of pages) expect(centroid(page, [255, 0, 0], 10).count).toBeGreaterThan(0);
+    } finally { await rm(stagedDir, { recursive: true, force: true }); }
+  }, 60_000);
 });
+
+describe("artboard PDF readiness", () => {
+  test("Given a card news set with lazy images below the fold When exported on artboard paper Then it resolves And every page contains its image", async () => {
+    // Given
+    const stagedDir = await mkdtemp(path.join(tmpdir(), "bg-artboard-pdf-lazy-"));
+    try {
+      await writeFile(path.join(stagedDir, "red.svg"), RED_SVG);
+      const boards = Array.from({ length: 6 }, (_, index) => `<section data-graphic-artboard style="width:1080px;height:1350px;box-sizing:border-box;padding:40px;background:#ffffff;border:6px solid #222222"><h2>Card ${index + 1}</h2><img loading="lazy" src="red.svg" width="200" height="200" alt=""></section>`).join("");
+      await writeFile(path.join(stagedDir, "index.html"), `<!doctype html><html><head><meta charset="utf-8"><title>Cards</title><style>html,body{margin:0}</style></head><body>${boards}</body></html>`);
+      const outputPath = path.join(stagedDir, "cards.pdf");
+
+      // When
+      await renderDeckToPdf({ stagedDir, entrypoint: "index.html", outputPath, paper: "artboard", selector: "[data-graphic-artboard]", title: "Cards", signal: AbortSignal.timeout(30_000) });
+
+      // Then
+      const pages = await rasterizePdf(outputPath, 0.25);
+      expect(pages).toHaveLength(6);
+      for (const page of pages) expect(centroid(page, [255, 0, 0], 10).count).toBeGreaterThan(0);
+    } finally { await rm(stagedDir, { recursive: true, force: true }); }
+  }, 60_000);
+});
+
+const RED_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#ff0000"/></svg>';
 
 /** A dark page background under a transparent slide, then a slide that paints its own white background. */
 const darkDeckHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Dark</title><style>html,body{margin:0;background:#111214;color:#f4f4ee;font-family:sans-serif}body[data-deck-ready] .slide:not([data-active]){display:none}.slide{width:100vw;height:100vh;padding:80px;box-sizing:border-box}h1{margin:0;font-size:120px}</style><script src="/runtime/deck-stage.js" defer></script></head><body><section data-slide class="slide"><h1>Dark</h1></section><section data-slide class="slide" style="background:#ffffff;color:#111214"><h1>Light</h1></section></body></html>`;

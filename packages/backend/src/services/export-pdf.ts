@@ -52,10 +52,8 @@ export async function renderDeckToPdf(input: {
     await session.page.addStyleTag({ content: PDF_PRINT_CSS });
     await session.page.evaluate(revealExportPages);
     const selector = input.selector ?? "[data-slide]";
-    if (selector === "[data-graphic-artboard]") {
-      await session.page.addStyleTag({ content: ARTBOARD_PRINT_CSS });
-      await capturePageFromSession(session.page).awaitRenderReady();
-    }
+    if (selector === "[data-graphic-artboard]") await session.page.addStyleTag({ content: ARTBOARD_PRINT_CSS });
+    await capturePageFromSession(session.page).awaitRenderReady();
     const preflight = await session.page.evaluate((elementSelector) => [...document.querySelectorAll<HTMLElement>(elementSelector)].map((slide) => {
       const bounds = slide.getBoundingClientRect();
       const clipped = [...slide.querySelectorAll<HTMLElement>("*")].some((element) => {

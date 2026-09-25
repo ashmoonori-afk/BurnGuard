@@ -28,6 +28,8 @@ export function capturePageFromSession(page: Page): CapturePage {
     awaitRenderReady: async () => {
       await page.evaluate(async () => {
         await document.fonts.ready;
+        // A deferred lazy image never fires load or error, so it would stall readiness and print blank.
+        for (const image of document.images) if (image.loading === "lazy") image.loading = "eager";
         await Promise.all([...document.images].filter((image) => !image.complete).map((image) => new Promise<void>((resolve) => {
           image.addEventListener("load", () => { resolve(); }, { once: true });
           image.addEventListener("error", () => { resolve(); }, { once: true });

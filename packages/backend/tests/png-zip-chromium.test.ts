@@ -128,6 +128,37 @@ describe("product detail slicing against real Chromium", () => {
   }, 120_000);
 });
 
+describe("render readiness against real Chromium", () => {
+  test("Given a 9000px product detail with a lazy image in each section When exported as PNG slices Then it resolves And every slice contains the image", async () => {
+    // Given
+    expect(usable).toBe(true);
+    await writeFile(path.join(stagedDir, "red.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#ff0000"/></svg>');
+    const sections = Array.from({ length: 6 }, (_, index) => `<section data-bg-node-id="section-${index}" style="height:1500px;background:#eeeeee;padding:40px;box-sizing:border-box"><img loading="lazy" src="red.svg" width="200" height="200" alt=""></section>`).join("");
+    await writeFile(path.join(stagedDir, "lazy.html"), `<!doctype html><html><head><meta charset="utf-8"><title>Lazy</title><style>html,body{margin:0}</style></head><body><main data-graphic-artboard style="width:860px">${sections}</main></body></html>`);
+    const outputPath = path.join(root, "lazy.zip");
+    const signal = AbortSignal.timeout(30_000);
+    const session = await openRenderSession({ stagedDir, entrypoint: "lazy.html", viewport: { width: 1280, height: 720, dpr: 1 }, deck: false, signal });
+
+    // When
+    try {
+      const { validation } = await renderPngZipWithPage({ page: capturePageFromSession(session.page), stagedDir, outputPath, deck: false, graphic_set: { schema_version: 1, kind: "product_detail", frame_count: 1 }, options: { slice_height: 3000, slice_format: "png" }, receiptWriter: async () => undefined, signal });
+
+      // Then
+      expect(validation.outputs.map((output) => output.source_region)).toEqual([{ top: 0, bottom: 3000 }, { top: 3000, bottom: 6000 }, { top: 6000, bottom: 9000 }]);
+      const archive = await JSZip.loadAsync(await readFile(outputPath));
+      for (const output of validation.outputs) {
+        const slice = await decodeFrame(archive, output.rel_path);
+        // Each 3000px slice holds two sections, and each section places its image at (40, 40).
+        for (const top of [40, 1540]) expect(slice.pixel(140, top + 100)).toEqual([255, 0, 0, 255]);
+      }
+    } finally {
+      await session.close();
+      await rm(outputPath, { force: true });
+    }
+    expect(activeExportBrowserCount()).toBe(0);
+  }, 120_000);
+});
+
 describe("frame batch export against real Chromium", () => {
   test("Given three artboards in one document When exported through the capture adapter Then three validated PNGs are archived", async () => {
     // Given
