@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
-import { mkdir, realpath } from "node:fs/promises";
+import { chmod, mkdir, open, realpath } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
 import path from "node:path";
 
@@ -25,7 +25,11 @@ export async function acquireWindowsProfile(profile: string): Promise<Server> {
 /** POSIX releases SQLite's exclusive file lock when the process exits, even after a crash; the lock follows the inode, so every spelling of the profile path shares it. */
 export async function acquirePosixProfile(profile: string): Promise<{ close(): void }> {
   await mkdir(profile, { recursive: true });
-  const lock = new Database(path.join(profile, ".profile.lock"), { create: true });
+  const lockPath = path.join(profile, ".profile.lock");
+  // A read lock needs only read access, so another account must not be able to open the file and block startup.
+  await (await open(lockPath, "a", 0o600)).close();
+  await chmod(lockPath, 0o600);
+  const lock = new Database(lockPath, { create: true });
   try {
     lock.run("PRAGMA busy_timeout=0");
     lock.run("PRAGMA locking_mode=EXCLUSIVE");

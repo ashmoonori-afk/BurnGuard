@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { acquirePosixProfile, acquireWindowsProfile } from "../src/profile-ownership";
@@ -62,6 +62,23 @@ test.skipIf(process.platform === "win32")("Given a POSIX profile owner that is k
     (await acquirePosixProfile(profile)).close();
   } finally {
     await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test.skipIf(process.platform === "win32")("Given a new or an existing world-readable profile lock When the profile is acquired Then only the owner can open the lock file", async () => {
+  const profile = await mkdtemp(path.join(tmpdir(), "burnguard-owner-"));
+  const other = await mkdtemp(path.join(tmpdir(), "burnguard-owner-"));
+  try {
+    // Another account could otherwise hold a read lock on it and keep BurnGuard from starting.
+    await writeFile(path.join(other, ".profile.lock"), "", { mode: 0o644 });
+    for (const root of [profile, other]) {
+      const owner = await acquirePosixProfile(root);
+      try { expect((await stat(path.join(root, ".profile.lock"))).mode & 0o777).toBe(0o600); }
+      finally { owner.close(); }
+    }
+  } finally {
+    await rm(profile, { recursive: true, force: true });
+    await rm(other, { recursive: true, force: true });
   }
 });
 
