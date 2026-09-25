@@ -41,6 +41,7 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
   const roles: PackageEntryRole[] = [];
   const documents: PlatformLintDocument[] = [];
   let sharedCss = "";
+  let sharedKeyframes: ReadonlyMap<string, string> = new Map();
   const scripts: string[] = [];
   const usedSlugs = new Set<string>();
 
@@ -50,14 +51,21 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
     const styles = splitStyleBlocks(document);
     if (page.rel_path === input.entrypoint) {
       sharedCss = `${await linkedStylesheets(document, page.rel_path, input.staged.assets, resolve)}${rewriteCssText(styles.shared, page.rel_path, resolve)}`;
+      sharedKeyframes = keyframeRenames(sharedCss, "shared");
       scripts.push(...linkedScripts(document, page.rel_path, input.staged.assets, content.element));
     }
     let slug = pageSlug(page.rel_path);
     for (let counter = 2; usedSlugs.has(slug); counter += 1) slug = `${pageSlug(page.rel_path)}-${counter}`;
     usedSlugs.add(slug);
-    if (content.element !== null) rewriteHtmlReferences(content.element, page.rel_path, resolve);
+    const pageCssText = rewriteCssText(styles.page, page.rel_path, resolve);
+    // Shared keyframes are renamed in the header, so page CSS and inline styles must follow; a page-local name wins.
+    const keyframes = new Map([...sharedKeyframes, ...keyframeRenames(pageCssText, slug)]);
+    if (content.element !== null) {
+      rewriteHtmlReferences(content.element, page.rel_path, resolve);
+      for (const element of content.element.querySelectorAll("[style]")) element.setAttribute("style", (element.getAttribute("style") ?? "").replace(/(animation(?:-name)?\s*:)([^;]*)/giu, (_match, property: string, value: string) => `${property}${renameAnimations(value, keyframes)}`));
+    }
     const body = stripHtmlComments(content.element === null ? content.html : content.element.toString());
-    const pageCss = scopeCss(rewriteCssText(styles.page, page.rel_path, resolve), slug);
+    const pageCss = scopeCss(pageCssText, slug, keyframes);
     const fragmentPath = `pages/${slug}.imweb.html`;
     const fragment = `<div class="${IMWEB_SCOPE_CLASS} bg-page-${slug}">${pageCss.trim() === "" ? "" : `<style>${pageCss}</style>`}${body}</div>\n`;
     entries.push({ path: fragmentPath, bytes: encode(fragment) });
@@ -81,10 +89,10 @@ export function pageSlug(relPath: string): string {
   return withoutExtension.replaceAll("/", "-").replace(/[^\p{L}\p{N}_-]/gu, "-").toLocaleLowerCase("en-US");
 }
 
-/** Prefixes every selector with the widget scope and remaps document-level selectors, keyframe names and animation references. */
-export function scopeCss(css: string, keyframeNamespace: string): string {
+/** Prefixes every selector with the widget scope and remaps document-level selectors, keyframe names and animation references, including inherited renames. */
+export function scopeCss(css: string, keyframeNamespace: string, inherited: ReadonlyMap<string, string> = new Map()): string {
   const root = parseCss(css);
-  const renamed = new Map<string, string>();
+  const renamed = new Map(inherited);
   root.walkAtRules((rule) => {
     if (!rule.name.toLowerCase().endsWith("keyframes")) return;
     const from = rule.params.trim();
@@ -96,10 +104,20 @@ export function scopeCss(css: string, keyframeNamespace: string): string {
     if (rule.parent instanceof postcss.AtRule && rule.parent.name.toLowerCase().endsWith("keyframes")) return;
     rule.selectors = rule.selectors.map(scopeSelector);
   });
-  root.walkDecls(/^animation(-name)?$/u, (declaration) => {
-    for (const [from, to] of renamed) declaration.value = declaration.value.replace(new RegExp(`(^|[\\s,])${escapeRegExp(from)}($|[\\s,])`, "gu"), `$1${to}$2`);
-  });
+  root.walkDecls(/^animation(-name)?$/u, (declaration) => { declaration.value = renameAnimations(declaration.value, renamed); });
   return root.toString();
+}
+
+function keyframeRenames(css: string, keyframeNamespace: string): ReadonlyMap<string, string> {
+  const renamed = new Map<string, string>();
+  parseCss(css).walkAtRules((rule) => { if (rule.name.toLowerCase().endsWith("keyframes")) renamed.set(rule.params.trim(), `bg-${keyframeNamespace}-${rule.params.trim()}`); });
+  return renamed;
+}
+
+function renameAnimations(value: string, renamed: ReadonlyMap<string, string>): string {
+  let result = value;
+  for (const [from, to] of renamed) result = result.replace(new RegExp(`(^|[\\s,])${escapeRegExp(from)}($|[\\s,])`, "gu"), `$1${to}$2`);
+  return result;
 }
 
 function scopeSelector(selector: string): string {

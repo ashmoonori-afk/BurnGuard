@@ -268,6 +268,32 @@ describe("imweb code widget package", () => {
     expect(collisions[0]?.evidence).toContain("img/about/bg.jpg");
   });
 
+  test("Given keyframes in shared CSS used by page CSS and inline styles When the package is built Then every reference uses the renamed keyframes", async () => {
+    // Given
+    const main = '<section class="hero" id="hero"><div class="lift" style="animation: fadeUp 1s">a</div><p style="animation-name:fadeUp">b</p><p style="animation: fade 1s">c</p></section>';
+    const prepare = async (root: string): Promise<void> => {
+      for (const page of ["home.html", "about.html"]) {
+        const file = path.join(root, page);
+        await writeFile(file, (await readFile(file, "utf8")).replace("/* @bg-page-css */", "@keyframes fadeUp{from{opacity:0}to{opacity:1}}/* @bg-page-css */.lift{animation:fadeUp 2s}"));
+      }
+    };
+
+    // When
+    const built = await build("imweb_package", {}, main, prepare);
+    const header = await built.text("common/header-code.html");
+    const fragment = await built.text("pages/home.imweb.html");
+
+    // Then
+    expect(header).toContain("@keyframes bg-shared-fadeUp");
+    expect(fragment).not.toMatch(/animation(?:-name)?:\s*fadeUp\b/u);
+    expect(fragment).not.toMatch(/animation:\s*fade\b/u);
+    expect(fragment).toContain("animation:bg-shared-fadeUp 2s");
+    expect(fragment).toContain("animation: bg-shared-fadeUp 1s");
+    expect(fragment).toContain("animation-name:bg-shared-fadeUp");
+    expect(fragment).toContain("animation: bg-home-fade 1s");
+    expect(await built.text("pages/about.imweb.html")).toContain("animation:bg-shared-fadeUp 2s");
+  });
+
   test("Given a fragment over one million characters When the package is built Then the export fails as a platform lint failure", async () => {
     // Given
     const oversized = `<section class="hero" id="hero"><p>${"가".repeat(1_000_001)}</p></section>`;
