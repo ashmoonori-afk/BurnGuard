@@ -141,7 +141,7 @@ export async function flattenStylesheet(css: string, owner: string, read: (relPa
   return root.toString();
 }
 
-/** Nests inlined rules under the `@import`'s layer, supports() and media conditions, outermost first. */
+/** Nests inlined rules under the `@import`'s supports() and media conditions, outermost first; the layer is dropped. */
 function withImportConditions(root: postcss.Root, conditions: string): postcss.Root | postcss.AtRule {
   const layer = /^layer(?:\(\s*([^)]*?)\s*\))?(?=\s|$)/iu.exec(conditions);
   let rest = conditions.slice(layer?.[0].length ?? 0).trim();
@@ -151,7 +151,8 @@ function withImportConditions(root: postcss.Root, conditions: string): postcss.R
     for (let depth = 0; end < rest.length; end += 1) { if (rest[end] === "(") depth += 1; else if (rest[end] === ")" && (depth -= 1) === 0) break; }
     supports = rest.slice("supports".length, end + 1); rest = rest.slice(end + 1).trim();
   }
-  const wrappers = [layer === null ? null : postcss.atRule({ name: "layer", params: layer[1] ?? "" }), supports === null ? null : postcss.atRule({ name: "supports", params: supports }), rest === "" ? null : postcss.atRule({ name: "media", params: rest })].filter((wrapper) => wrapper !== null);
+  // A code widget cannot order its layers against the unlayered widget reset and host CSS, so layered rules would always lose.
+  const wrappers = [supports === null ? null : postcss.atRule({ name: "supports", params: supports }), rest === "" ? null : postcss.atRule({ name: "media", params: rest })].filter((wrapper) => wrapper !== null);
   return wrappers.reduceRight<postcss.Root | postcss.AtRule>((inner, wrapper) => wrapper.append(inner), root);
 }
 

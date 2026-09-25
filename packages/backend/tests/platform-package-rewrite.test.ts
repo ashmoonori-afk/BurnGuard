@@ -38,10 +38,10 @@ describe("conditional @import", () => {
     ]);
   });
 
-  test("Given conditional imports When the stylesheet is flattened Then the inlined rules stay under their conditions", async () => {
-    // Given
-    const sources: Readonly<Record<string, string>> = { "css/print.css": "body{color:black}", "css/grid.css": ".w{display:grid}", "css/layer.css": ".l{color:red}", "css/base.css": ".b{margin:0}" };
-    const css = '@import "print.css" print;@import url(grid.css) supports((display: grid) and (gap: 1rem)) screen and (min-width: 900px);@import "layer.css" layer(base);@import "base.css";.a{color:blue}';
+  test("Given conditional imports When the stylesheet is flattened Then the inlined rules stay under their supports and media conditions and outside any layer", async () => {
+    // Given: a layered widget rule would lose to the unlayered widget reset and host CSS.
+    const sources: Readonly<Record<string, string>> = { "css/print.css": "body{color:black}", "css/grid.css": ".w{display:grid}", "css/layer.css": ".l{color:red}", "css/anon.css": ".n{color:green}", "css/base.css": ".b{margin:0}" };
+    const css = '@import "print.css" print;@import url(grid.css) supports((display: grid) and (gap: 1rem)) screen and (min-width: 900px);@import "layer.css" layer(base);@import "anon.css" layer screen;@import "base.css";.a{color:blue}';
 
     // When
     const flattened = await flattenStylesheet(css, "css/site.css", async (relPath) => sources[relPath] ?? null);
@@ -51,7 +51,8 @@ describe("conditional @import", () => {
     expect(ruleContexts(flattened)).toEqual([
       "@media print > body",
       "@supports ((display: grid) and (gap: 1rem)) > @media screen and (min-width: 900px) > .w",
-      "@layer base > .l",
+      ".l",
+      "@media screen > .n",
       ".b",
       ".a",
     ]);
