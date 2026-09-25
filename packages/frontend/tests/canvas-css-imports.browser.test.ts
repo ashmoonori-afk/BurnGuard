@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Browser } from "../../backend/node_modules/playwright-core";
+import { chromium, type Browser, type Page } from "../../backend/node_modules/playwright-core";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 
 declare global { var canvasCssTest: {
@@ -194,4 +194,48 @@ test("imported project styles render nested CSS inside the real opaque canvas sa
     await browser?.close();
     await server.stop(true);
   }
+}, 30_000);
+
+/** Serve one page of the Playwright-matched browser with the canvas bundle and an authorized API. */
+async function withCanvasPage<T>(serve: (pathname: string) => Response | undefined, action: (page: Page, origin: string) => Promise<T>): Promise<T> {
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) {
+    const pathname = new URL(request.url).pathname;
+    if (pathname === "/") return new Response("<!doctype html><html><body></body></html>", { headers: { "content-type": "text/html" } });
+    if (pathname === "/api/bootstrap") return Response.json({ data: { capability: "css-import-test" } });
+    return serve(pathname) ?? new Response("not found", { status: 404 });
+  } });
+  let browser: Browser | undefined;
+  try {
+    const compiler = Bun.spawn([process.execPath, "build", `${import.meta.dir}/fixtures/canvas-css-browser.ts`, "--target=browser", "--format=iife"], { stdout: "pipe", stderr: "pipe" });
+    const [exitCode, script, errors] = await Promise.all([compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text()]);
+    if (exitCode !== 0) throw new Error(`Browser test bundle failed (${exitCode}): ${errors}`);
+    browser = process.platform === "win32" ? await launchChromiumViaNode({}, AbortSignal.timeout(30_000)) : await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.goto(server.url.origin, { waitUntil: "load" });
+    await page.addScriptTag({ content: script });
+    await page.evaluate(() => globalThis.canvasCssTest.bootstrapApiAuthority());
+    return await action(page, server.url.origin);
+  } finally {
+    await browser?.close();
+    await server.stop(true);
+  }
+}
+
+test("Given a project document linking the real shared fonts.css When embedCanvasImages runs Then it resolves and every face is an embedded woff2", async () => {
+  const fonts = `${import.meta.dir}/../../../assets/fonts`;
+  // The same content-addressed rewrite every new project receives in fonts/fonts.css.
+  const stylesheet = (await Bun.file(`${fonts}/fonts.css`).text()).replace(/url\('\.\/([^']+\.woff2)'\)/g, (_, name: string) => `url('/runtime/fonts/${"b".repeat(64)}/${name}')`);
+  const faces = stylesheet.match(/url\(/g)?.length ?? 0;
+  const result = await withCanvasPage(pathname => {
+    if (pathname === "/api/projects/fonts/fs/fonts/fonts.css") return new Response(stylesheet, { headers: { "content-type": "text/css" } });
+    const font = /^\/runtime\/fonts\/b{64}\/([A-Za-z0-9_.-]+\.woff2)$/.exec(pathname)?.[1];
+    return font === undefined ? undefined : new Response(Bun.file(`${fonts}/${font}`), { headers: { "content-type": "font/woff2" } });
+  }, (page, origin) => page.evaluate(async url => {
+    try {
+      const html = await globalThis.canvasCssTest.embedCanvasImages('<link rel="stylesheet" href="fonts/fonts.css">', url, new AbortController().signal);
+      return { embedded: Array.from(html.matchAll(/url\("?([^"')]*)/g), match => match[1]!.startsWith("data:font/woff2;base64,")) };
+    } catch (error) { return { error: error instanceof Error ? error.message : String(error) }; }
+  }, `${origin}/api/projects/fonts/fs/index.html`));
+  expect(faces).toBeGreaterThan(0);
+  expect(result).toEqual({ embedded: Array.from({ length: faces }, () => true) });
 }, 30_000);

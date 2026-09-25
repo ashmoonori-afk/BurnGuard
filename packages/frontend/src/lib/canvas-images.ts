@@ -3,6 +3,8 @@ import { requestBundledFont } from "@/api/fonts";
 import { anySignal } from "@/lib/abort-signal";
 
 // Public content-addressed fonts are shared by every canvas in this app window.
+// Leave room above the bundled stylesheet for older hashes kept after font updates.
+export const MAX_SHARED_CANVAS_FONTS = 256;
 const bundledFonts = new Map<string, Promise<string>>();
 
 function isBundledFontUrl(value: string, base: string): boolean {
@@ -16,7 +18,7 @@ function isBundledFontUrl(value: string, base: string): boolean {
 async function sharedFontData(url: string): Promise<string> {
   let pending = bundledFonts.get(url);
   if (!pending) {
-    if (bundledFonts.size >= 64) throw new Error("artifact_font_limit");
+    if (bundledFonts.size >= MAX_SHARED_CANVAS_FONTS) throw new Error("artifact_font_limit");
     pending = (async () => {
       const response = await requestBundledFont(url);
       if (!response.ok || response.headers.get("content-type") !== "font/woff2") throw new Error("artifact_font_load_failed");
