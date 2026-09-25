@@ -5,8 +5,12 @@ import { readBundledFontUrl, bundledFontFiles } from "../data/bundled-fonts";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { resolveWithin } from "../security/path-boundary";
 
-/** An @font-face rule served from the shared font endpoint; the rule cannot nest braces. */
-const BUNDLED_FACE = /@font-face\s*\{[^{}]*\/runtime\/fonts\/[^{}]*\}/gi;
+/** An @font-face rule, which cannot nest braces; whether it is served from the shared font endpoint is checked on the match so the pattern cannot backtrack. */
+const FONT_FACE = /@font-face\s*\{[^{}]*\}/gi;
+/** Above this many distinct bundled families, pruning is skipped so the usage scan stays bounded; the bundle ships 72. */
+const MAX_PRUNED_FAMILIES = 128;
+const bundledFace = (face: string): boolean => face.includes("/runtime/fonts/");
+const faceFamily = (face: string): string | undefined => /font-family\s*:\s*(['"]?)([^'";}]+)\1/i.exec(face)?.[2]?.trim().toLowerCase();
 
 /** Export closures must work independently of the installed app's shared font endpoint. */
 export async function prepareBundledFontExport(root: string): Promise<void> {
@@ -14,12 +18,19 @@ export async function prepareBundledFontExport(root: string): Promise<void> {
   const texts = new Map<string, string>();
   for (const file of manifest.files) if (/\.(css|html?|[cm]?js|svg|json)$/i.test(file.path)) texts.set(file.path, await readFile(path.join(root, file.path), "utf8"));
   // Ship only families the document names outside the bundled faces themselves; a face whose family cannot be read is kept.
-  const usage = [...texts.values()].map((text) => text.replace(BUNDLED_FACE, "")).join("\n").toLowerCase();
+  const usage = [...texts.values()].map((text) => text.replace(FONT_FACE, (face) => bundledFace(face) ? "" : face)).join("\n").toLowerCase();
+  const families = new Set([...texts.values()].flatMap((text) => (text.match(FONT_FACE) ?? []).filter(bundledFace).map(faceFamily)));
+  const used = new Map<string, boolean>();
+  const keep = (family: string | undefined): boolean => {
+    if (family === undefined || families.size > MAX_PRUNED_FAMILIES) return true;
+    if (!used.has(family)) used.set(family, usage.includes(family));
+    return used.get(family) === true;
+  };
   const written = new Map<string, string>();
   for (const [file, text] of texts) {
     if (!/\.(css|html?)$/i.test(file)) continue;
     const absolute = path.join(root, file);
-    let source = text.replace(BUNDLED_FACE, (face) => { const family = /font-family\s*:\s*(['"]?)([^'";}]+)\1/i.exec(face)?.[2]?.trim().toLowerCase(); return family === undefined || usage.includes(family) ? face : ""; });
+    let source = text.replace(FONT_FACE, (face) => !bundledFace(face) || keep(faceFamily(face)) ? face : "");
     const matches = [...source.matchAll(/url\(\s*['"]?(\/runtime\/fonts\/[a-f0-9]{64}\/[A-Za-z0-9_.-]+\.woff2)['"]?\s*\)/g)];
     if (source === text && !matches.length) continue;
     for (const match of matches) {
