@@ -219,7 +219,7 @@ namespace BurnGuard.Desktop
                     args.State = DiagnosticPermissionState(report != null, args.Uri, origin, args.PermissionKind);
                     if (args.State == CoreWebView2PermissionState.Allow) args.SavesInProfile = false;
                 };
-                web.CoreWebView2.ProcessFailed += (_, __) => Fail("화면 프로세스가 종료되었습니다. BurnGuard를 다시 실행해 주세요.");
+                web.CoreWebView2.ProcessFailed += (_, args) => { if (IsFatalProcessFailure(args.ProcessFailedKind)) Fail("화면 프로세스가 종료되었습니다. BurnGuard를 다시 실행해 주세요."); };
                 web.CoreWebView2.NavigationCompleted += async (_, args) =>
                 {
                     if (closing) return;
@@ -247,6 +247,9 @@ namespace BurnGuard.Desktop
             diagnostic && kind == CoreWebView2PermissionKind.MultipleAutomaticDownloads && IsAppUrl(source, expectedOrigin)
                 ? CoreWebView2PermissionState.Allow
                 : CoreWebView2PermissionState.Deny;
+
+        // WebView2 recovers GPU, utility, sandbox-helper and subframe renderer failures and reports hangs; only losing the browser or main renderer is fatal.
+        private static bool IsFatalProcessFailure(CoreWebView2ProcessFailedKind kind) => kind == CoreWebView2ProcessFailedKind.BrowserProcessExited || kind == CoreWebView2ProcessFailedKind.RenderProcessExited;
 
         private static bool IsTopLevelAppRoute(Uri uri) => !uri.AbsolutePath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) && !uri.AbsolutePath.StartsWith("/runtime/", StringComparison.OrdinalIgnoreCase);
 
