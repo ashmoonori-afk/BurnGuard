@@ -238,6 +238,41 @@ describe("imweb code widget package", () => {
     expect(fragment.match(/window\.x=/gu)).toHaveLength(1);
   });
 
+  test.each([
+    ["no asset base url", {}, 1, 0],
+    ["an asset base url", { asset_base_url: "https://cdn.example.com/site/" }, 0, 1],
+  ] as const)("Given a src script inside main and %s When the imweb package is built Then its code is delivered exactly once", async (_label, options, footerCopies, hostedTags) => {
+    // Given
+    const main = '<section class="hero" id="hero"><h1>x</h1><script src="js/section.js"></script></section>';
+    const prepare = async (root: string): Promise<void> => { await writeFile(path.join(root, "js", "section.js"), "window.sectionReady=true;"); };
+
+    // When
+    const built = await build("imweb_package", options, main, prepare);
+    const footer = await built.text("common/footer-code.html");
+    const fragment = await built.text("pages/home.imweb.html");
+
+    // Then
+    expect(footer.match(/window\.sectionReady=/gu) ?? []).toHaveLength(footerCopies);
+    expect(fragment.match(/src="https:\/\/cdn\.example\.com\/site\/section\.js"/gu) ?? []).toHaveLength(hostedTags);
+  });
+
+  test.each([["no asset base url", {}], ["an asset base url", { asset_base_url: "https://cdn.example.com/site/" }]] as const)("Given a page without main, an inline body script and %s When the imweb package is built Then the script ships once and linked scripts stay in the footer", async (_label, options) => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      const home = path.join(root, "home.html");
+      await writeFile(home, (await readFile(home, "utf8")).replace("<main data-bg-content>", '<div class="content">').replace("</main>", "</div><script>window.y=1;</script>"));
+    };
+
+    // When
+    const built = await build("imweb_package", options, undefined, prepare);
+    const footer = await built.text("common/footer-code.html");
+    const fragment = await built.text("pages/home.imweb.html");
+
+    // Then
+    expect(`${fragment}${footer}`.match(/window\.y=/gu)).toHaveLength(1);
+    expect(footer).toContain("DOMContentLoaded");
+  });
+
   test("Given pages whose slugs collide When the package is built Then each page gets its own fragment and scope class", async () => {
     // Given
     const prepare = async (root: string): Promise<void> => {

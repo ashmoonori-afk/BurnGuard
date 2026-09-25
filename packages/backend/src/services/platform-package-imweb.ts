@@ -52,7 +52,7 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
     if (page.rel_path === input.entrypoint) {
       sharedCss = `${await linkedStylesheets(document, page.rel_path, input.staged.assets, resolve)}${rewriteCssText(styles.shared, page.rel_path, resolve)}`;
       sharedKeyframes = keyframeRenames(sharedCss, "shared");
-      scripts.push(...linkedScripts(document, page.rel_path, input.staged.assets, content.element));
+      scripts.push(...linkedScripts(document, page.rel_path, input.staged.assets, content.element, resolve));
     }
     let slug = pageSlug(page.rel_path);
     for (let counter = 2; usedSlugs.has(slug); counter += 1) slug = `${pageSlug(page.rel_path)}-${counter}`;
@@ -145,13 +145,20 @@ async function linkedStylesheets(document: ReturnType<typeof parseDocument>["doc
   return css;
 }
 
-function linkedScripts(document: ReturnType<typeof parseDocument>["document"], owner: string, assets: readonly StagedAsset[], content: ReturnType<typeof extractPageContent>["element"]): readonly string[] {
-  // Scripts inside the content landmark already ship in the fragment; data blocks and modules cannot run as classic footer code.
-  const inContent = new Set(content?.querySelectorAll("script") ?? []);
+function linkedScripts(document: ReturnType<typeof parseDocument>["document"], owner: string, assets: readonly StagedAsset[], content: ReturnType<typeof extractPageContent>["element"], resolve: (relPath: string) => string | null): readonly string[] {
+  // Scripts the fragment already delivers are skipped; data blocks and modules cannot run as classic footer code.
+  // Without a content landmark the fragment is the body minus chrome and is never rewritten, so only its inline scripts run there.
+  const inContent = new Set(content !== null ? content.querySelectorAll("script") : document.querySelectorAll("body script").filter((script) => script.getAttribute("src") === undefined && script.closest("header,nav,footer") === null));
   const sources: string[] = [];
   for (const script of document.querySelectorAll("script")) {
-    if (inContent.has(script) || !["", "text/javascript", "application/javascript"].includes((script.getAttribute("type") ?? "").trim().toLowerCase())) continue;
+    if (!["", "text/javascript", "application/javascript"].includes((script.getAttribute("type") ?? "").trim().toLowerCase())) continue;
     const reference = script.getAttribute("src");
+    if (inContent.has(script)) {
+      // An in-content src script is delivered only when it stays remote or rewrites to a hosted URL.
+      if (reference === undefined) continue;
+      const target = resolveLocalReference(reference, owner);
+      if (target === null || resolve(target) !== null) continue;
+    }
     if (reference === undefined) { sources.push(script.text); continue; }
     const target = resolveLocalReference(reference, owner);
     const asset = target === null ? undefined : assets.find((item) => item.rel_path === target);
