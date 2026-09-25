@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { getProjectDetail } from "../db/project-read-repository";
 import { isChromiumLaunchable } from "./chromium-capability";
@@ -203,6 +203,7 @@ async function renderThumbnailFile(input: {
     const bytes = await readThumbnailFile(temporaryPath);
     if (bytes === null) return null;
     await rename(temporaryPath, cachePath);
+    await pruneStaleThumbnails(input.request.stagedDir, path.basename(cachePath));
     return bytes;
   } catch (error) {
     if (error instanceof Error) {
@@ -212,6 +213,20 @@ async function renderThumbnailFile(input: {
     throw error;
   } finally {
     await rm(temporaryPath, { force: true });
+  }
+}
+
+/**
+ * Older identities are never requested again, so only the PNG just published
+ * is kept. Another render's temporary file is left for its owner to publish.
+ */
+async function pruneStaleThumbnails(projectDir: string, keep: string): Promise<void> {
+  try {
+    for (const entry of await readdir(resolveWithin(projectDir, ...CACHE_SEGMENTS), { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith(".png") && entry.name !== keep) await rm(resolveWithin(projectDir, ...CACHE_SEGMENTS, entry.name), { force: true });
+    }
+  } catch {
+    // Best effort: a stale entry left behind only costs disk space and is never served.
   }
 }
 

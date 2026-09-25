@@ -451,7 +451,22 @@ describe("project thumbnail generation and cache", () => {
     expect(requests.length).toBe(2);
     if (stale.kind !== "ready" || fresh.kind !== "ready") throw new Error("expected ready thumbnails");
     expect(fresh.etag).not.toBe(stale.etag);
-    expect((await cachedFiles(project.dirPath)).length).toBe(2);
+    expect((await cachedFiles(project.dirPath)).length).toBe(1);
+  });
+
+  test("Given a cached thumbnail for revision N and another render's temporary file When revision N+1 renders Then only the new identity PNG remains and the temporary file is left alone", async () => {
+    const project = await createProject({ digest: digestA });
+    const { renderer } = recordingRenderer();
+    await loadProjectThumbnail(project.id, renderer);
+    const concurrentTemporary = `${"d".repeat(64)}.png.${process.pid}.other.tmp`;
+    await writeFile(path.join(cacheDir(project.dirPath), concurrentTemporary), "partial");
+    getSqlite().prepare("UPDATE projects SET current_digest=?, current_revision=4 WHERE id=?").run(digestB, project.id);
+
+    const fresh = await loadProjectThumbnail(project.id, renderer);
+
+    expect(fresh.kind).toBe("ready");
+    expect(await cachedFiles(project.dirPath)).toEqual([`${projectThumbnailIdentity({ id: project.id, current_revision: 4, current_digest: digestB }) ?? ""}.png`]);
+    expect(await readdir(cacheDir(project.dirPath))).toContain(concurrentTemporary);
   });
 
   test("Given a corrupt cached PNG When loaded Then it regenerates exactly once and returns a valid PNG", async () => {
@@ -528,6 +543,22 @@ describe("project thumbnail path boundary", () => {
     expect(outcome).toEqual({ kind: "unavailable", code: "thumbnail_unavailable" });
     expect(requests.length).toBe(0);
     expect(await readdir(escape)).toEqual([]);
+  });
+
+  test("Given the cache directory swapped for a link outside the project during a render When the render publishes Then stale-entry pruning deletes nothing outside the project", async () => {
+    const project = await createProject({ digest: digestA });
+    const outside = await mkdtemp(path.join(tmpdir(), "bg-thumb-prune-escape-"));
+    tempDirs.push(outside);
+    await writeFile(path.join(outside, "victim.png"), "outside");
+    const renderer: ThumbnailRenderer = async (request) => {
+      await writeFile(path.join(outside, path.basename(request.outputPath)), pngFixture(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT));
+      await rm(cacheDir(project.dirPath), { recursive: true, force: true });
+      await symlink(outside, cacheDir(project.dirPath), process.platform === "win32" ? "junction" : "dir");
+    };
+
+    await loadProjectThumbnail(project.id, renderer);
+
+    expect(await readdir(outside)).toContain("victim.png");
   });
 });
 
