@@ -22,7 +22,10 @@ export async function acquireWindowsProfile(profile: string): Promise<Server> {
   });
 }
 
-/** POSIX releases SQLite's exclusive file lock when the process exits, even after a crash; the lock follows the inode, so every spelling of the profile path shares it. */
+/**
+ * POSIX releases SQLite's exclusive file lock when the process exits, even after a crash; the lock follows the inode, so every
+ * spelling of the profile path shares it. Call once per process: closing any descriptor of the file drops this process's locks.
+ */
 export async function acquirePosixProfile(profile: string): Promise<{ close(): void }> {
   await mkdir(profile, { recursive: true });
   const lockPath = path.join(profile, ".profile.lock");
