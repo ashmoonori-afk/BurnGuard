@@ -40,4 +40,20 @@ describe("auditSiteStructure", () => {
     expect(result.findings.filter((finding) => finding.code === "site_missing_aria_current")).toHaveLength(2);
     expect(result.findings.every((finding) => finding.severity === "recommended")).toBe(true);
   });
+
+  test("Given srcset candidates that are root-absolute first or after a bare comma When audited Then site_root_absolute_asset is reported and protocol-relative or relative candidates are not", async () => {
+    // Given
+    const html = new Map([
+      ["index.html", '<picture><source srcset="/img/a.webp 1x"><img src="img/a.png" alt=""></picture>'],
+      ["about.html", '<img srcset="img/a.png 1x,/img/b.png 2x" alt="">'],
+      ["legacy.html", '<img srcset="//cdn.example/a.png 1x, img/b.png 2x" alt="">'],
+    ]);
+    const siteMap = await buildSiteMap(files, "index.html", (relPath) => html.get(relPath) ?? "");
+
+    // When
+    const result = auditSiteStructure(siteMap, [...html].map(([rel_path, source]) => ({ rel_path, html: source })));
+
+    // Then
+    expect(result.findings.filter((finding) => finding.code === "site_root_absolute_asset").map((finding) => finding.rel_path)).toEqual(["index.html", "about.html"]);
+  });
 });

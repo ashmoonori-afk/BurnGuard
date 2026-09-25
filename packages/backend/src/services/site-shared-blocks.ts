@@ -86,6 +86,6 @@ function normalizeShared(value: string): string {
 
 function hasRootAbsoluteAsset(html: string): boolean {
   return /\b(?:src|poster)\s*=\s*["']\/(?!\/)/iu.test(html)
-    || /\bsrcset\s*=\s*["'][^"']*(?:^|\s)\/(?!\/)/imu.test(html)
+    || /\bsrcset\s*=\s*["'](?:[^"']*[\s,])?\/(?!\/)/iu.test(html)
     || /url\(\s*["']?\/(?!\/)/iu.test(html);
 }
