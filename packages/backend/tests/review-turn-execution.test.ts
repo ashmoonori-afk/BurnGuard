@@ -239,6 +239,51 @@ for (const reviewFails of [false, true]) test(`Given a deck generation When mand
   expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(reviewFails ? "base" : '<section data-slide><h1>Reviewed wording</h1></section>' + runtime);
 });
 
+test("Given a deck generation that finished When the mandatory copy review fails Then no chat.message_end is released and the refusal names the turn", async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
+  const before = await inspectCanonicalTree(projectDir);
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  let calls = 0;
+  try {
+    const turn = start(async (_backend, input) => {
+      calls++;
+      if (input.turnId.endsWith("-review")) return { exitCode: 1 };
+      await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide><h1>Finished</h1></section><script src="/runtime/deck-stage.js"></script>');
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "chat.delta", turnId: input.turnId, text: "Saved the deck." });
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "chat.message_end", turnId: input.turnId });
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "status.idle", stopReason: "end_turn" });
+      return { exitCode: 0 };
+    }, "Update wording");
+    await turn.promise;
+    expect(calls).toBe(4);
+    expect(events.filter(event => event.type === "chat.message_end")).toEqual([]);
+    expect(events.filter(event => event.type === "status.idle").map(event => event.stopReason)).toEqual(["error"]);
+    const errors = events.filter(event => event.type === "status.error");
+    expect(errors.map(event => event.notApplied ?? null)).toEqual([{ turnId: turn.turnId, operationId: turn.operationId, repairs: 0 }]);
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+    expect(await inspectCanonicalTree(projectDir)).toEqual(before);
+  } finally { unsubscribe(); }
+});
+
+test("Given a provider that ends its message and then reports a fatal error When the turn refuses Then the buffered success terminals are withheld", async () => {
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  try {
+    const turn = start(async (_backend, input) => {
+      await writeFile(path.join(input.projectDir, "index.html"), "<h1>Written before the failure</h1>");
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "chat.message_end", turnId: input.turnId });
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "status.idle", stopReason: "end_turn" });
+      await input.onEvent({ id: crypto.randomUUID(), ts: Date.now(), type: "status.error", code: "turn_failed", message: "provider failed", recoverable: false });
+      return { exitCode: 0 };
+    });
+    await turn.promise;
+    expect(events.filter(event => event.type === "chat.message_end")).toEqual([]);
+    expect(events.filter(event => event.type === "status.idle").map(event => event.stopReason)).toEqual(["error"]);
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+  } finally { unsubscribe(); }
+});
+
 test("Given a clean provider exit with empty content or missing imagery, then the saved output is repaired before publication", async () => {
   let calls = 0;
   const turn = start(async (_backend, input) => {

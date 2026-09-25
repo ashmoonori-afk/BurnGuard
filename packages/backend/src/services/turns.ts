@@ -496,8 +496,13 @@ async function runUserTurnInternal(
                 const expectedSlides = sourcePages?.length ?? parse(await readFile(path.join(stageDir, project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length;
                 const toolCallId = ulid();
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", input: { scope: "all_slides" } });
-                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}\nPreserve all ${expectedSlides} slides and completed content. Replace unfinished placeholders and repair missing local images before returning.` }, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, expectedSlides, sourcePages), { idleMs: 120_000 });
-                const reviewed = review.exitCode === 0 && !providerReportedFailure;
+                let reviewFailed = false;
+                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}\nPreserve all ${expectedSlides} slides and completed content. Replace unfinished placeholders and repair missing local images before returning.`, onEvent: async (event) => {
+                  // A failed review belongs to this check, not the enclosing turn: retain it and refuse below.
+                  if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason !== "end_turn")) { reviewFailed = true; return; }
+                  await adapterInput.onEvent(event);
+                } }, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, expectedSlides, sourcePages), { idleMs: 120_000 });
+                const reviewed = review.exitCode === 0 && !reviewFailed && !providerReportedFailure;
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "덱 문안·글꼴·이미지·크기 점검", ok: reviewed });
                 if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
               }
@@ -630,7 +635,8 @@ async function runUserTurnInternal(
       if (!providerErrorPublished) {
         await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.error", message: "turn_failed", recoverable: true, ...rejected }, error);
       }
-      for (const event of terminalEvents) await persistAndPublish(sessionId, event);
+      // An unpublished operation never releases a buffered message end or success idle.
+      for (const event of terminalEvents) if (publishedOperation || (event.type === "status.idle" && event.stopReason === "error")) await persistAndPublish(sessionId, event);
       if (
         !terminalEvents.some(
           (event) =>
