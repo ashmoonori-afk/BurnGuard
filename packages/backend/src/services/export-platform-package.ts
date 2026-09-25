@@ -48,7 +48,7 @@ export type PlatformPackageContext = {
   readonly signal: AbortSignal;
 };
 
-const NOTICE_FILE = /^(?:ofl|license|copyright)/iu;
+const NOTICE_FILE = /^(?:ofl|license|copyright)|[-_](?:ofl|license)\.(?:txt|md)$/iu;
 
 /** Renders a platform ZIP from the staged tree, project and graphic-set contracts, options, browser session, receipt writer, and cancellation signal. */
 export async function renderPlatformPackage(context: PlatformPackageContext): Promise<ExportValidation> {

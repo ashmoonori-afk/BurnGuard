@@ -117,6 +117,40 @@ describe("cafe24 smart design package", () => {
     expect(built.names).toContain("web/shop-site/fonts/OFL.txt");
   });
 
+  test("Given bundled-style <Family>-OFL.txt licenses beside shipped fonts When the package is built Then each license ships next to the fonts without an extension warning", async () => {
+    // Given / When
+    const built = await build("cafe24_package", {}, undefined, async (root) => { await writeFile(path.join(root, "fonts", "Pretendard-OFL.txt"), "SIL Open Font License 1.1"); });
+    const lint = await built.lint();
+
+    // Then
+    expect(built.names).toContain("web/shop-site/fonts/Pretendard-OFL.txt");
+    expect(built.names).toContain("web/shop-site/fonts/OFL.txt");
+    expect(lint.findings.filter((finding) => finding.code === "cafe24_disallowed_extension" && (finding.path ?? "").endsWith(".txt"))).toHaveLength(0);
+    expect(lint.findings.filter((finding) => finding.code === "cafe24_disallowed_extension" && (finding.path ?? "").endsWith(".woff2"))).toHaveLength(1);
+  });
+
+  test("Given font folders that each carry OFL.txt When the package is built Then every notice ships under a distinct name", async () => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      for (const [folder, family] of [["a", "A"], ["b", "B"]] as const) {
+        await mkdir(path.join(root, "fonts", folder), { recursive: true });
+        await writeFile(path.join(root, "fonts", folder, `${family}.woff2`), Buffer.alloc(512, 2));
+        await writeFile(path.join(root, "fonts", folder, "OFL.txt"), `${family} license`);
+      }
+      const css = path.join(root, "css", "site.css");
+      await writeFile(css, `${await readFile(css, "utf8")}@font-face{font-family:"A";src:url(../fonts/a/A.woff2)}@font-face{font-family:"B";src:url(../fonts/b/B.woff2)}`);
+    };
+
+    // When
+    const built = await build("cafe24_package", {}, undefined, prepare);
+
+    // Then
+    expect(built.names).toContain("web/shop-site/fonts/OFL.txt");
+    expect(built.names).toContain("web/shop-site/fonts/2-OFL.txt");
+    expect(built.names).toContain("web/shop-site/fonts/3-OFL.txt");
+    expect(await built.text("web/shop-site/fonts/2-OFL.txt")).toBe("A license");
+  });
+
   test("Given inter-page navigation When the package is built Then the relative href survives with an informational finding", async () => {
     const built = await build("cafe24_package");
     expect(await built.text("layout/burnguard-layout.html")).toContain("./about.html");
