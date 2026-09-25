@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { type FSWatcher, mkdtempSync, watch } from "node:fs";
+import { existsSync, type FSWatcher, mkdtempSync, watch } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -40,6 +40,7 @@ type WindowsLifecycle = {
 };
 
 const lifecycles = new WeakMap<WindowsJobOwnership, WindowsLifecycle>();
+const WINDOWS_PROCESS_HOST = "burnguard-windows-process-host.exe";
 
 export function spawnOwnedProcess<Stdin extends InputMode, Stdout extends OutputMode, Stderr extends OutputMode>(
   options: OwnedSpawnOptions<Stdin, Stdout, Stderr>,
@@ -142,7 +143,17 @@ async function awaitHostExitBounded(hostExit: Promise<number>, timeoutMs: number
   finally { if (timer !== undefined) clearTimeout(timer); }
 }
 
+/** An explicit host is authoritative; otherwise the packaged helper beside execPath, then a source checkout's dist build. */
+export function resolveWindowsProcessHost(input: { readonly env: NodeJS.ProcessEnv; readonly execPath: string; readonly exists: (candidate: string) => boolean }): string {
+  const configured = input.env.BG_WINDOWS_PROCESS_HOST;
+  const candidates = configured !== undefined ? [configured] : [path.join(path.dirname(input.execPath), WINDOWS_PROCESS_HOST), path.resolve(import.meta.dir, "../../../../dist/windows-process-host", WINDOWS_PROCESS_HOST)];
+  const helper = candidates.find((candidate) => input.exists(candidate));
+  if (helper === undefined) throw new OwnedProcessHostError("absent_helper");
+  return helper;
+}
+
 function createWindowsOwnership(): WindowsJobOwnership {
+  const helperPath = resolveWindowsProcessHost({ env: process.env, execPath: process.execPath, exists: existsSync });
   const token = randomBytes(16).toString("hex");
   const receiptRoot = mkdtempSync(path.join(tmpdir(), "burnguard-owned-process-"));
   const launchReceipt = path.join(receiptRoot, "launch.json");
@@ -157,7 +168,7 @@ function createWindowsOwnership(): WindowsJobOwnership {
   const ownership: WindowsJobOwnership = {
     kind: "windows-job",
     token,
-    helperPath: process.env.BG_WINDOWS_PROCESS_HOST ?? path.join(path.dirname(process.execPath), "burnguard-windows-process-host.exe"),
+    helperPath,
     receiptRoot,
     launchReceipt,
     terminateReceipt,

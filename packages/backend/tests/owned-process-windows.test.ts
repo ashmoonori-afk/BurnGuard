@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
+import { readdirSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { closeOwnedProcess, OwnedProcessHostError, settleOwnedProcess, spawnOwnedProcess, terminateOwnedWindowsJob, type WindowsJobOwnership, windowsOwnedLaunchCommand } from "../src/adapters/owned-process";
+import { closeOwnedProcess, OwnedProcessHostError, resolveWindowsProcessHost, settleOwnedProcess, spawnOwnedProcess, terminateOwnedWindowsJob, type WindowsJobOwnership, windowsOwnedLaunchCommand } from "../src/adapters/owned-process";
 import { validateLaunchSettlement } from "../src/adapters/owned-process-windows";
 
 const jobToken = "a".repeat(32);
@@ -22,6 +23,44 @@ function testWindowsOwnership(onDispose: () => void = () => {}): WindowsJobOwner
 const runningReceipt = JSON.stringify({ schema_version: 1, operation: "launch", state: "running", job_token: jobToken, host_pid: 50, target_pid: 51, active_processes: 2 });
 const finalReceipt = JSON.stringify({ schema_version: 1, operation: "launch", state: "exited", job_token: jobToken, host_pid: 50, target_pid: 51, target_exit_code: 17, active_processes: 0 });
 const terminatedReceipt = JSON.stringify({ schema_version: 1, operation: "terminate", state: "terminated", job_token: jobToken, active_processes: 0 });
+
+const HOST = "burnguard-windows-process-host.exe";
+const bunDirectory = path.join(tmpdir(), "bg-fixture-bun");
+const besideExecPath = path.join(bunDirectory, HOST);
+const distHost = path.resolve(import.meta.dir, "../../../dist/windows-process-host", HOST);
+const resolveHost = (env: NodeJS.ProcessEnv, present: readonly string[]) => resolveWindowsProcessHost({ env, execPath: path.join(bunDirectory, "bun.exe"), exists: (candidate) => present.includes(candidate) });
+
+test("Given BG_WINDOWS_PROCESS_HOST When resolving the Windows process host Then it wins", () => {
+  const configured = path.join(tmpdir(), "bg-fixture-ci", HOST);
+  expect(resolveHost({ BG_WINDOWS_PROCESS_HOST: configured }, [configured, besideExecPath, distHost])).toBe(configured);
+});
+
+test("Given a helper beside execPath and a dist build When resolving the Windows process host Then the packaged helper is used", () => {
+  expect(resolveHost({}, [besideExecPath, distHost])).toBe(besideExecPath);
+});
+
+test("Given no helper beside bun.exe but one in dist/windows-process-host When resolving Then the dist helper is used", () => {
+  expect(resolveHost({}, [distHost])).toBe(distHost);
+});
+
+test("Given no helper anywhere, or a configured helper that is missing, When resolving Then OwnedProcessHostError absent_helper is thrown", () => {
+  expect(() => resolveHost({}, [])).toThrow(expect.objectContaining({ code: "owned_process_host_failed", reason: "absent_helper" }));
+  expect(() => resolveHost({ BG_WINDOWS_PROCESS_HOST: path.join(tmpdir(), "bg-fixture-missing", HOST) }, [besideExecPath, distHost])).toThrow(expect.objectContaining({ reason: "absent_helper" }));
+});
+
+test.skipIf(process.platform !== "win32")("Given a configured helper that is missing When spawning Then absent_helper is thrown and no receipt directory is created", () => {
+  const previous = process.env.BG_WINDOWS_PROCESS_HOST;
+  const receiptRoots = () => readdirSync(tmpdir()).filter((name) => name.startsWith("burnguard-owned-process-"));
+  const before = receiptRoots();
+  process.env.BG_WINDOWS_PROCESS_HOST = path.join(tmpdir(), `bg-missing-host-${process.pid}`, HOST);
+  try {
+    expect(() => spawnOwnedProcess({ cmd: [process.execPath, "-e", "process.exit(0)"], stdin: "ignore", stdout: "ignore", stderr: "ignore" })).toThrow(expect.objectContaining({ reason: "absent_helper" }));
+    expect(receiptRoots()).toEqual(before);
+  } finally {
+    if (previous === undefined) delete process.env.BG_WINDOWS_PROCESS_HOST;
+    else process.env.BG_WINDOWS_PROCESS_HOST = previous;
+  }
+});
 
 test("Windows owned host launch keeps target argv after an opaque control prefix", () => {
   const ownership = testWindowsOwnership();
