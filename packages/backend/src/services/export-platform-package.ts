@@ -4,7 +4,7 @@ import { PLATFORM_GUIDES, type ExportOptions, type PlatformGuide, type ProjectDe
 import type { FileInfo } from "@bg/shared/harness";
 import { resolveWithin } from "../security/path-boundary";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
-import { ExportClosureError, resolveStaticClosure } from "./export-closure";
+import { ExportClosureError, localAssetReferences, resolveStaticClosure } from "./export-closure";
 import { ExportError } from "./export-errors";
 import { validatePlatformPackage, type PlatformPackageManifest } from "./export-package-validation";
 import { canonicalJson, sha256 } from "./export-receipt";
@@ -114,6 +114,7 @@ async function stageSources(stagedDir: string, entrypoint: string): Promise<{ re
   const pagePaths = new Set([...siteMap.pages.map((page) => page.rel_path), ...files.filter((file) => file.category === "html").map((file) => file.rel_path)]);
   const pages = await Promise.all([...pagePaths].map(async (relPath) => ({ rel_path: relPath, html: await readFile(resolveWithin(stagedDir, relPath), "utf8") })));
   const findings: PlatformLintFinding[] = [];
+  const treeFiles = new Set(tree.files.map((file) => file.path));
   for (const relPath of pagePaths) {
     if (relPath === entrypoint) continue;
     // Only the entrypoint closure is authoritative; a subpage the closure cannot follow ships with a warning instead of failing the package.
@@ -121,6 +122,8 @@ async function stageSources(stagedDir: string, entrypoint: string): Promise<{ re
     catch (error) {
       if (!(error instanceof ExportClosureError)) throw error;
       findings.push({ code: "platform_missing_asset", severity: "warning", path: relPath, evidence: `${error.code}: ${error.asset} is not packaged with this page; fix the reference before uploading.` });
+      // The closure stops at the first bad reference, so the page's other direct references are still packaged.
+      for (const reference of localAssetReferences(pages.find((page) => page.rel_path === relPath)?.html ?? "", relPath)) if (treeFiles.has(reference)) referenced.add(reference);
     }
   }
   const assetPaths = [...referenced].sort(compare).filter((relPath) => !pagePaths.has(relPath) && !isProjectDocumentPath(relPath));

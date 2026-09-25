@@ -435,6 +435,46 @@ describe("platform package boundaries", () => {
     expect(missing[0]).toMatchObject({ severity: "warning", path: "about.html" });
   });
 
+  test.each(["cafe24_package", "imweb_package"] as const)("Given a subpage with a remote head script and a subpage-only image When %s is built Then only the remote reference is lost and the image is shipped and rewritten", async (format) => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      const about = path.join(root, "about.html");
+      await writeFile(about, (await readFile(about, "utf8")).replace("</head>", '<script src="https://maps.example.com/api.js"></script></head>').replace("<p>우리는 만듭니다</p>", '<img src="img/team.png" alt="team">'));
+      await writeFile(path.join(root, "img", "team.png"), Buffer.alloc(1024, 5));
+    };
+
+    // When
+    const built = await build(format, {}, undefined, prepare);
+
+    // Then
+    expect((await built.lint()).findings.filter((finding) => finding.code === "platform_missing_asset").map((finding) => finding.path)).toEqual(["about.html"]);
+    if (format === "cafe24_package") {
+      expect(built.names).toContain("web/shop-site/img/team.png");
+      expect(await built.text("pages/about.html")).toContain(`${CAFE24_BASE}img/team.png`);
+    } else {
+      expect(await built.text("pages/about.imweb.html")).toContain("data:image/png;base64,");
+      expect(await built.text("pages/about.imweb.html")).not.toContain('src="img/team.png"');
+    }
+  });
+
+  test("Given a subpage with one missing and one present image When imweb is built Then the present image is still inlined", async () => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      const about = path.join(root, "about.html");
+      await writeFile(about, (await readFile(about, "utf8")).replace("<p>우리는 만듭니다</p>", '<img src="img/gone.png" alt="gone"><img src="img/team.png" alt="team">'));
+      await writeFile(path.join(root, "img", "team.png"), Buffer.alloc(1024, 5));
+    };
+
+    // When
+    const built = await build("imweb_package", {}, undefined, prepare);
+    const fragment = await built.text("pages/about.imweb.html");
+
+    // Then
+    expect(fragment).not.toContain('src="img/team.png"');
+    expect(fragment).toContain('src="img/gone.png"');
+    expect((await built.lint()).findings.filter((finding) => finding.code === "platform_missing_asset").map((finding) => finding.path)).toEqual(["about.html"]);
+  });
+
   test.each(["cafe24_package", "imweb_package"] as const)("Given more pages than the site-map cap When %s is built Then every page has a fragment", async (format) => {
     // Given
     const extra = SITE_MAP_PAGE_LIMIT + 6;
