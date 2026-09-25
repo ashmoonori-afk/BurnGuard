@@ -45,6 +45,7 @@ export const exportMessages = defineMessages({
   "export.disabled.web_only": { ko: "웹 전용", en: "Web only", "zh-CN": "仅限网页" },
   "export.disabled.frames_only": { ko: "프레임 전용", en: "Frames only", "zh-CN": "仅限画帧" },
   "export.disabled.mixed_frames": { ko: "크기 불일치", en: "Mixed sizes", "zh-CN": "尺寸不一致" },
+  "export.disabled.pdf_too_large": { ko: "PDF 한도 초과", en: "Too large for PDF", "zh-CN": "超出 PDF 上限" },
   "export.chromium.launch_timeout": { ko: "Chromium 렌더링을 완료하지 못했어요. 설정에서 Chromium 상태를 확인한 뒤 다시 시도해 주세요.", en: "Chromium could not finish rendering. Check its status in Settings, then try again.", "zh-CN": "Chromium 未能完成渲染。请在设置中检查 Chromium 状态后重试。" },
   "export.chromium.not_installed": { ko: "Chromium이 설치되어 있지 않아요. 설정 → \"내보내기용 Chromium\" → 설치를 실행한 뒤 다시 내보내 주세요.", en: "Chromium is not installed. Open Settings → Chromium for export → Install, then export again.", "zh-CN": "尚未安装 Chromium。请前往设置 → 导出用 Chromium → 安装，然后重新导出。" },
   "export.format.pptx": { ko: "파워포인트", en: "PowerPoint", "zh-CN": "PowerPoint" },

@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PDFDocument } from "pdf-lib";
 import { ARTBOARD_PRINT_CSS, assertUniformArtboardPages, PdfExportError, renderDeckToPdf } from "../src/services/export-pdf";
+import * as shared from "@bg/shared";
+import * as contract from "../src/services/export-pdf-contract";
 import { pdfDimensionsForPaper, pdfPointsForPaper, pdfRasterBudgetFitsPages } from "../src/services/export-pdf-contract";
 import { createCanvas, getDocument } from "../src/services/export-native-modules";
 
@@ -88,6 +90,14 @@ describe("artboard PDF geometry", () => {
   test("Given a single artboard over the per-page ceiling When budgeted Then it is refused before rendering", () => {
     // Given / When / Then
     expect(pdfRasterBudgetFitsPages([pdfPointsForPaper("artboard", { width: 4000, height: 4000 })])).toBe(false);
+  });
+
+  test("Given the backend PDF contract When the raster budget is read Then it is the one shared rule the export menu also uses", () => {
+    // Given / When / Then
+    expect([contract.PDF_RASTER_SCALE, contract.PDF_MAX_PAGE_PIXELS, contract.PDF_MAX_EXPECTED_PIXELS]).toEqual([shared.PDF_RASTER_SCALE, shared.PDF_MAX_PAGE_PIXELS, shared.PDF_MAX_EXPECTED_PIXELS]);
+    expect(contract.pdfRasterBudgetFitsPages).toBe(shared.pdfRasterBudgetFitsPages);
+    expect(contract.pdfRasterDimensions).toBe(shared.pdfRasterDimensions);
+    expect(pdfPointsForPaper("artboard", { width: 860, height: 16_000 })).toEqual(shared.pdfArtboardPoints({ width: 860, height: 16_000 }));
   });
 
   test("Given stacked artboards When print CSS is applied Then stack spacing and page minimums cannot add blank pages", () => {
