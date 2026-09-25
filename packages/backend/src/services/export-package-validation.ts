@@ -87,8 +87,8 @@ function packageReferences(html: string): readonly string[] {
   const values = [
     // `data-*` lookalikes are excluded: a dynamic reference is a lint warning, not a broken package.
     ...[...source.matchAll(/(?<![\w-])(?:src|href|poster)\s*=\s*(["'])(.*?)\1/giu)].map((match) => match[2] ?? ""),
-    // A rewritten style attribute serialises its url() quotes as entities; the host decodes them before loading.
-    ...[...source.replace(/&(?:quot|#0*34|#x0*22);/giu, '"').replace(/&(?:apos|#0*39|#x0*27);/giu, "'").matchAll(/url\(\s*(["']?)([^"')]+)\1\s*\)/giu)].map((match) => match[2] ?? ""),
+    // A rewritten style attribute serialises its url() quotes as entities; the host decodes them before loading. Text and other attributes stay raw.
+    ...[...source.replace(/(?<![\w-])style\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+)/giu, (attribute) => attribute.replace(/&(?:quot|#0*34|#x0*22);/giu, '"').replace(/&(?:apos|#0*39|#x0*27);/giu, "'")).matchAll(/url\(\s*(["']?)([^"')]+)\1\s*\)/giu)].map((match) => match[2] ?? ""),
     ...[...source.matchAll(/srcset\s*=\s*(["'])(.*?)\1/giu)].flatMap((match) => (match[2] ?? "").split(",").map((candidate) => candidate.trim().split(/\s+/u)[0] ?? "")),
   ];
   return values.map((value) => value.trim()).filter((value) => value !== "" && !value.startsWith("#") && !value.startsWith("data:"));

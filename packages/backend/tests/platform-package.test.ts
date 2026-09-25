@@ -338,6 +338,18 @@ describe("imweb code widget package", () => {
     expect(await built.text("pages/about.imweb.html")).toContain("animation:bg-shared-fadeUp 2s");
   });
 
+  test.each([
+    ["preformatted text", '<section class="hero" id="hero"><pre>background: url(&quot;https://images.example.com/a.png&quot;)</pre></section>'],
+    ["a data attribute", '<section class="hero" id="hero" data-bg="url(&quot;https://images.example.com/a.png&quot;)"><h1>x</h1></section>'],
+  ] as const)("Given an entity-quoted remote url() in %s When the imweb package is built Then validation accepts it because only style attributes are decoded", async (_label, main) => {
+    // Given / When
+    const built = await build("imweb_package", {}, main);
+
+    // Then
+    expect(built.validation.entries).toBeGreaterThan(0);
+    expect(await built.text("pages/home.imweb.html")).toContain("url(&quot;https://images.example.com/a.png&quot;)");
+  });
+
   test("Given a fragment over one million characters When the package is built Then the export fails as a platform lint failure", async () => {
     // Given
     const oversized = `<section class="hero" id="hero"><p>${"가".repeat(1_000_001)}</p></section>`;
@@ -381,12 +393,17 @@ describe("platform package boundaries", () => {
     expect(fragment).toContain('href="https://instagram.com/brand"');
   });
 
-  test.each(["cafe24_package", "imweb_package"] as const)("Given an anchor whose style loads an off-package url When %s is validated Then the style reference is still rejected", async (format) => {
+  test.each([
+    ["cafe24_package", "url(https://evil.example/x.png)"],
+    ["imweb_package", "url(https://evil.example/x.png)"],
+    ["cafe24_package", "url(&quot;https://evil.example/x.png&quot;)"],
+    ["imweb_package", "\n  url(&#39;https://evil.example/x.png&#39;)"],
+  ] as const)("Given an anchor whose style loads an off-package url When %s is validated Then the style reference %s is still rejected", async (format, url) => {
     // Given
     const built = await build(format, {}, '<section class="hero" id="hero"><a href="mailto:hello@brand.kr">mail</a></section>');
     const zip = await JSZip.loadAsync(built.bytes);
     const victim = built.names.find((name) => name.startsWith("pages/home")) ?? "pages/home.html";
-    const tamperedText = (await built.text(victim)).replace('<a href="mailto:hello@brand.kr">', '<a href="mailto:hello@brand.kr" style="background:url(https://evil.example/x.png)">');
+    const tamperedText = (await built.text(victim)).replace('<a href="mailto:hello@brand.kr">', `<a href="mailto:hello@brand.kr" style="background:${url}">`);
     zip.file(victim, tamperedText);
     const manifest: PlatformPackageManifest = JSON.parse(await built.text("burnguard-export.json"));
     const bytes = new TextEncoder().encode(tamperedText);
