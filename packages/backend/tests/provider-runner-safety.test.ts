@@ -89,6 +89,23 @@ test("Given a single unterminated line over 2 MiB When the turn reads it Then pr
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 20_000);
 
+test("Given a short line then a newline-terminated line over 2 MiB and a consumer that stalls on its first event When the turn reads it Then provider_stream_limit is thrown", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "bg-cli-long-line-"));
+  const drained = Promise.withResolvers<void>();
+  let first = true;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("fixture drain deadline")), 15_000); });
+  // Holding the first event until the child has flushed everything makes the oversized line arrive terminated inside one coalesced chunk.
+  const script = `const a=JSON.stringify({type:'message',role:'assistant',content:'hi'})+'\\n';const b=JSON.stringify({type:'message',role:'assistant',content:'y'.repeat(${2 * 1024 * 1024 + 1})})+'\\n';process.stdout.write(a+b,()=>console.error('DRAINED'));`;
+  try {
+    await expect(runCliTurn({ sessionId: "safety", turnId: ctx.turnId, projectDir: root, binaryPath: process.execPath, prompt: "task",
+      userEvent: { type: "user.message", text: "task" },
+      onEvent: async event => { if (event.type === "chat.delta" && first) { first = false; await Promise.race([drained.promise, deadline]); } },
+      onStderr: async line => { if (line === "DRAINED") drained.resolve(); },
+    }, { provider: "fixture", cmd: [process.execPath, "-e", script], stdinPrompt: "task", parse: line => parseGeminiLine(line, ctx) })).rejects.toThrow("provider_stream_limit");
+  } finally { clearTimeout(timer); await rm(root, { recursive: true, force: true }); }
+}, 20_000);
+
 test("Given spawn failure, then the decision subscription and private task are released", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "bg-cli-failure-"));
   let unsubscribed = false;

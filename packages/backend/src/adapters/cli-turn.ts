@@ -112,6 +112,7 @@ async function readLines(
       buffer += decoder.decode(value, { stream: true });
       let index = buffer.indexOf("\n");
       while (index >= 0) {
+        if (index > 2 * 1024 * 1024) throw new Error("provider_stream_limit");
         const line = buffer.slice(0, index);
         buffer = buffer.slice(index + 1);
         if (line.length > 0) await onLine(line);
