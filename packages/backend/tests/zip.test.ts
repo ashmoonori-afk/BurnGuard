@@ -99,4 +99,28 @@ describe("zipDirectory", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("Given a fixed local time outside UTC When a directory is zipped Then every entry's DOS time is the local wall-clock time", async () => {
+    const previousTz = process.env.TZ;
+    const systemTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    process.env.TZ = "Asia/Seoul";
+    const root = await tempRoot("bg-zip-time-");
+    try {
+      await mkdir(path.join(root, "nested"), { recursive: true });
+      await writeFile(path.join(root, "a.txt"), "a", "utf8");
+      await writeFile(path.join(root, "nested", "b.txt"), "b", "utf8");
+      const out = path.join(root, "out.zip");
+
+      await zipDirectory(root, out, new Date(2026, 8, 25, 12, 33, 20));
+
+      const reopened = await JSZip.loadAsync(await readFile(out));
+      // JSZip reads the DOS date and time fields back as UTC components.
+      const stamps = Object.fromEntries(Object.values(reopened.files).map(({ name, date }) => [name, [date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()]]));
+      const local = [2026, 8, 25, 12, 33, 20];
+      expect(stamps).toEqual({ "a.txt": local, "nested/": local, "nested/b.txt": local });
+    } finally {
+      process.env.TZ = previousTz ?? systemTz;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
