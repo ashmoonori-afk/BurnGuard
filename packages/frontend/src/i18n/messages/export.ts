@@ -10,6 +10,7 @@ export const exportMessages = defineMessages({
   "export.requestFailed": { ko: "내보내기 요청을 완료하지 못했어요", en: "Could not complete the export request", "zh-CN": "无法完成导出请求" },
   "export.failedFormat": { ko: "내보내기에 실패했어요 ({name})", en: "Export failed ({name})", "zh-CN": "导出失败（{name}）" },
   "export.auditFailed": { ko: "내보내기 전 품질 점검에서 고쳐야 할 문제가 발견됐어요.", en: "The pre-export quality check found issues that need fixing.", "zh-CN": "导出前的质量检查发现了需要修复的问题。" },
+  "export.platformCheckFailed": { ko: "패키지가 플랫폼 점검을 통과하지 못했어요. 내보내기 메뉴의 최근 내보내기에서 이 항목의 점검 결과를 확인해 주세요.", en: "The package failed platform checks. Review this export's findings under Recent exports in the Export menu.", "zh-CN": "软件包未通过平台检查。请在导出菜单的最近导出中查看此项的检查结果。" },
   "export.listFailed": { ko: "내보내기 목록을 불러오지 못했어요.", en: "Could not load exports.", "zh-CN": "无法加载导出列表。" },
   "export.retry": { ko: "다시 시도", en: "Retry", "zh-CN": "重试" },
   "export.qualityRecommendations": { ko: "개선 권장사항 {count}개가 있어요. 현재 상태 그대로 내보낼 수 있어요.", en: { one: "There is {count} recommendation. You can export the current state as is.", other: "There are {count} recommendations. You can export the current state as is." }, "zh-CN": "有 {count} 项改进建议。您仍可按当前状态导出。" },

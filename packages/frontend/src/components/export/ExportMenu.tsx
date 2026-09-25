@@ -42,7 +42,7 @@ import {
   EXPORT_DISABLED_LABEL,
 } from "./export-options";
 import ExportOptionFields from "./ExportOptionFields";
-import { platformFindings } from "./export-delivery";
+import { isPlatformCheckFailure, platformFindings } from "./export-delivery";
 import { platformFixRequest } from "@/lib/platform-fix-request";
 import { useExportOptionValues } from "./useExportOptionValues";
 
@@ -158,9 +158,11 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
           title: t("export.failedFormat", { name: formatLabel(job.format) }),
           body: auditFailed
             ? t("export.auditFailed")
-            : chromiumFailure !== null
-              ? CHROMIUM_FAILURE_MESSAGE[chromiumFailure]
-              : apiErrorCopy({ code: job.latest_attempt?.stop_reason }),
+            : isPlatformCheckFailure(job)
+              ? t("export.platformCheckFailed")
+              : chromiumFailure !== null
+                ? CHROMIUM_FAILURE_MESSAGE[chromiumFailure]
+                : apiErrorCopy({ code: job.latest_attempt?.stop_reason }),
           tone: "error",
         });
       }

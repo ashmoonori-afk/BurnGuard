@@ -9,6 +9,7 @@ import {
   PACKAGE_PUBLISH_NOTE,
   PACKAGE_READY_LABEL,
   exportDeliveryStage,
+  isPlatformCheckFailure,
   offersFixRequest,
   platformFindings,
 } from "../src/components/export/export-delivery";
@@ -155,6 +156,32 @@ describe("fix action availability", () => {
     expect(offersFixRequest(job({
       status: "succeeded",
       latest_attempt: attempt({ status: "validated", progress: { stage: "complete", completed: 6, total: 6 }, findings: [{ code: "cafe24_jquery_duplicate", path: "pages/home.html" }] }),
+    }))).toBe(false);
+  });
+});
+
+describe("failed export guidance", () => {
+  test.each(["cafe24_package", "imweb_package"] as const)("Given a %s that failed platform validation When the failure is classified Then it is a platform check failure, not a quality-panel one", (format) => {
+    expect(isPlatformCheckFailure(job({
+      format,
+      status: "failed",
+      latest_attempt: attempt({ status: "failed", stop_reason: "validation_failed", findings: [{ code: "imweb_page_over_1m_chars", path: "pages/index.html" }] }),
+    }))).toBe(true);
+  });
+
+  test("Given a PDF that failed rendering When the failure is classified Then it keeps the stop-reason copy", () => {
+    expect(isPlatformCheckFailure(job({
+      format: "pdf",
+      status: "failed",
+      latest_attempt: attempt({ status: "failed", stop_reason: "render_failed" }),
+    }))).toBe(false);
+  });
+
+  test("Given a platform package that failed rendering When the failure is classified Then it keeps the stop-reason copy", () => {
+    expect(isPlatformCheckFailure(job({
+      format: "cafe24_package",
+      status: "failed",
+      latest_attempt: attempt({ status: "failed", stop_reason: "render_failed" }),
     }))).toBe(false);
   });
 });

@@ -164,6 +164,11 @@ export function platformFindings(job: ExportJob): readonly PlatformFindingView[]
   });
 }
 
+/** A platform package that failed its checks is explained by the findings in its export row, never by the quality panel. */
+export function isPlatformCheckFailure(job: ExportJob): boolean {
+  return job.latest_attempt?.stop_reason === "validation_failed" && (job.format === "cafe24_package" || job.format === "imweb_package");
+}
+
 /** A failed export can be handed to the AI only when the attempt left findings that describe what to fix. */
 export function offersFixRequest(job: ExportJob): boolean {
   return exportDeliveryStage(job) === "failure" && platformFindings(job).length > 0;
