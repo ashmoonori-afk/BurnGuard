@@ -169,6 +169,12 @@ function GeometryNumber({ label, unit, value, min, max, disabled, onCommit }: { 
   </span></label>;
 }
 
+/** A denied Local Font Access permission resolves [] in Chromium and WebView2 instead of rejecting, so an empty or refused browser list falls back to the host. */
+export async function loadLocalFontFamilies(query: (() => Promise<Array<{ family: string }>>) | undefined, readHost: () => Promise<unknown>) {
+  const local = query ? [...new Set((await query().catch(() => [])).map((font) => font.family))] : [];
+  return local.length > 0 ? parseLocalFonts({ schema_version: 1, families: local }) : parseLocalFonts(await readHost());
+}
+
 function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; saving: boolean; onApply: ApplyFn }) {
   const t = useT();
   const [families, setFamilies] = useState<readonly string[]>([]);
@@ -179,10 +185,8 @@ function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; savi
     setLoading(true); setError("");
     try {
       const query = (window as Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> }).queryLocalFonts;
-      // Browser permission remains an explicit user gesture. Unsupported hosts (the macOS WKWebView shell included) use the host OS family list.
-      const result = query
-        ? parseLocalFonts({ schema_version: 1, families: [...new Set((await query.call(window)).map((font) => font.family))] })
-        : parseLocalFonts(await apiFetch<unknown>("/api/settings/local-fonts"));
+      // Browser permission remains an explicit user gesture. Unsupported or denied hosts (the macOS WKWebView and Windows WebView2 shells) use the host OS family list.
+      const result = await loadLocalFontFamilies(query?.bind(window), () => apiFetch<unknown>("/api/settings/local-fonts"));
       setFamilies(result.families);
     } catch { setError("modes.tweaks.fontLoadError"); }
     finally { setLoading(false); }
