@@ -219,6 +219,31 @@ describe("export authority migration", () => {
     }
   });
 
+  test("Given attempt and stage directories whose export rows were cascaded away by project deletion When recovery runs Then they are removed while a validated attempt stays byte-identical", async () => {
+    // Given
+    const db = await migratedDatabase(); seedProject(db); db.exec("PRAGMA foreign_keys=ON"); const root = await mkdtemp(path.join(tmpdir(), "bg-export-orphan-attempts-")); directories.push(root);
+    const kept = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "png", options: { png_width: 320, png_height: 240, png_dpr: 1 }, rendererDigest: "b".repeat(64), captureDigest: "c".repeat(64) });
+    db.prepare("UPDATE export_attempts SET status='recovering',input_closure_digest=? WHERE id=?").run("a".repeat(64), kept.attemptId);
+    const published = path.join(root, "attempts", kept.attemptId); await mkdir(published, { recursive: true }); const output = Uint8Array.from([1, 2, 3]); await writeFile(path.join(published, "artifact.png"), output);
+    const receipt: ExportReceipt = { schema_version: 1, job_id: kept.jobId, attempt_id: kept.attemptId, parent_attempt_id: null, format: "png", project: { id: "p", revision: 3, digest: "a".repeat(64) }, options: { png_width: 320, png_height: 240, png_dpr: 1 }, output_file: "artifact.png", output_size: 3, digests: { input_closure: "a".repeat(64), design_system: null, options: sha256(canonicalJson({ png_width: 320, png_height: 240, png_dpr: 1 })), renderer: "b".repeat(64), capture: "c".repeat(64), output: sha256(output) }, validation: { width: 320, height: 240, statistics: { pixels: 76_800, visible_pixels: 76_800, differing_pixels: 100, dominant_ratio: 0.9, luminance_variance: 10, entropy: 0.2 } } };
+    await writeFile(path.join(published, "receipt.json"), canonicalJson(receipt));
+    db.exec(`INSERT INTO projects(id,name,type,dir_path,backend_id,created_at,updated_at,current_revision,current_digest) VALUES ('gone','Gone','prototype','/tmp/gone','codex',1,1,1,'${"e".repeat(64)}')`);
+    const deleted = createExportAuthority(db, { projectId: "gone", revision: 1, digest: "e".repeat(64), designSystemDigest: null, format: "html_zip", options: {}, rendererDigest: "r", captureDigest: "c" });
+    db.prepare("UPDATE export_attempts SET status='failed',stop_reason='render_failed' WHERE id=?").run(deleted.attemptId);
+    await mkdir(path.join(root, "attempts", deleted.attemptId), { recursive: true }); await writeFile(path.join(root, "attempts", deleted.attemptId, "artifact.zip"), "deleted project source");
+    await mkdir(path.join(root, ".staging", deleted.attemptId, "render"), { recursive: true });
+    db.prepare("DELETE FROM projects WHERE id='gone'").run();
+    expect(db.query("SELECT COUNT(*) count FROM export_attempts WHERE id=?").get(deleted.attemptId)).toEqual({ count: 0 });
+    // When
+    await reconcileExportState(db, root);
+    // Then
+    expect(await readdir(path.join(root, "attempts"))).toEqual([kept.attemptId]);
+    expect(await readdir(path.join(root, ".staging"))).toEqual([]);
+    expect(db.query("SELECT status FROM export_attempts WHERE id=?").get(kept.attemptId)).toEqual({ status: "validated" });
+    expect(new Uint8Array(await readFile(path.join(published, "artifact.png")))).toEqual(output);
+    expect(await readFile(path.join(published, "receipt.json"), "utf8")).toBe(canonicalJson(receipt));
+  });
+
   test("Given a forged PDF cross-field receipt When recovery runs Then authority becomes typed corrupt without digest propagation", async () => {
     const db = await migratedDatabase(); seedProject(db); const root = await mkdtemp(path.join(tmpdir(), "bg-export-forged-pdf-")); directories.push(root);
     const ids = createExportAuthority(db, { projectId: "p", revision: 3, digest: "a".repeat(64), designSystemDigest: null, format: "pdf", options: { pdf_paper: "letter" }, rendererDigest: "b".repeat(64), captureDigest: "c".repeat(64) }); db.prepare("UPDATE export_attempts SET status='recovering',input_closure_digest=? WHERE id=?").run("a".repeat(64), ids.attemptId);

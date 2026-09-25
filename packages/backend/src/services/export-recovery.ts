@@ -16,7 +16,7 @@ export async function reconcileExportState(db: Database, root?: string): Promise
     FROM export_attempts a JOIN exports e ON e.id=a.job_id WHERE a.status IN ('pending','running','validating','validated','retrying','recovering')`).all();
   for (const row of rows) await recoverAttempt(db, exportRoot, row);
   db.prepare("UPDATE exports SET status='failed',output_path=NULL,error_message='Legacy export has no validated receipt' WHERE status='succeeded' AND NOT EXISTS (SELECT 1 FROM export_attempts a WHERE a.job_id=exports.id AND a.status='validated')").run();
-  await cleanOrphanStages(db, exportRoot);
+  await cleanOrphanTrees(db, exportRoot);
 }
 
 type RecoveryRow = { readonly attempt_id: string; readonly job_id: string; readonly parent_attempt_id: string | null; readonly status: string; readonly project_revision: number; readonly project_digest: string; readonly canonical_options_json: string; readonly options_digest: string; readonly input_closure_digest: string | null; readonly design_system_digest: string | null; readonly renderer_digest: string; readonly capture_digest: string; readonly output_digest: string | null; readonly receipt_digest: string | null; readonly format: ExportFormat; readonly project_id: string };
@@ -69,13 +69,19 @@ async function recoverAttempt(db: Database, root: string, row: RecoveryRow): Pro
   // It must not classify a valid receipt as corrupt or delete the recoverable output.
   completeExportAttemptWithEvent(db, completion);
 }
-async function cleanOrphanStages(db: Database, root: string): Promise<void> {
-  const staging = resolveWithin(root, ".staging");
-  for (const entry of await readdir(staging, { withFileTypes: true }).catch(() => [])) {
-    if (!entry.isDirectory()) continue;
-    try { assertSafeName(entry.name); } catch { continue; }
-    const exists = db.query<{ readonly value: number }, [string]>("SELECT 1 value FROM export_attempts WHERE id=?").get(entry.name);
-    if (exists === null) await rm(resolveWithin(staging, entry.name), { recursive: true, force: true }).catch(() => undefined);
+/**
+ * Startup only, before serving: every attempt row is inserted before its directories exist, so a directory
+ * without a row is a crash leftover or the output of a project whose export rows were cascaded away.
+ */
+async function cleanOrphanTrees(db: Database, root: string): Promise<void> {
+  for (const owner of [".staging", "attempts"] as const) {
+    const parent = resolveWithin(root, owner);
+    for (const entry of await readdir(parent, { withFileTypes: true }).catch(() => [])) {
+      if (!entry.isDirectory()) continue;
+      try { assertSafeName(entry.name); } catch { continue; }
+      const exists = db.query<{ readonly value: number }, [string]>("SELECT 1 value FROM export_attempts WHERE id=?").get(entry.name);
+      if (exists === null) await rm(resolveWithin(parent, entry.name), { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 }
 function emitRecovery(db: Database, row: RecoveryRow, status: "validated" | "failed" | "corrupt" | "cancelled", stopReason: "recovery_failed" | "receipt_corrupt" | "user_cancelled" | null): void {
