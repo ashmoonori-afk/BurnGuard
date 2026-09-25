@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { parse } from "node-html-parser";
 import { originalSamples, originalSampleFormats, originalSampleSystemId, ORIGINAL_SAMPLE_TAG } from "../src/data/original-samples";
 import { seedOriginalSamplesOnce } from "../src/db/seed-original-samples";
 import { createProjectRecord, listHomeProjects } from "../src/db/seed";
@@ -9,6 +10,17 @@ import { resolveRepoRoot } from "../src/lib/paths";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { createApp } from "../src/server";
 import { bundledFontFiles, bundledFontUrl } from "../src/data/bundled-fonts";
+
+test("Given each seeded graphic sample When its entrypoint is parsed Then exactly one artboard is marked for artboard PDF export", async () => {
+  // Given
+  const graphic = originalSampleFormats.find((format) => format.type === "graphic")!;
+
+  // When
+  const counts = await Promise.all(originalSamples.map(async (sample) => [sample.slug, parse(await readFile(path.join(resolveRepoRoot(), "samples/original", sample.slug, graphic.directory, graphic.entrypoint), "utf8")).querySelectorAll("[data-graphic-artboard]").length] as const));
+
+  // Then
+  expect(counts).toEqual(originalSamples.map((sample) => [sample.slug, 1] as const));
+});
 
 test("Given original samples, when seeded and copied, then all formats have durable assets and deletion stays deleted", async () => {
   await seedOriginalSamplesOnce();
