@@ -134,4 +134,6 @@ export const workspaceMessages = defineMessages({
   "workspace.project.createPagePrompt": { ko: "`{from}`에서 링크되는 `{page}` 페이지를 만들어 주세요. 같은 헤더·내비게이션·푸터를 공유해요.", en: "Create `{page}` linked from `{from}`, sharing the same header, nav and footer.", "zh-CN": "请创建从 `{from}` 链接到的 `{page}` 页面，并共用相同的页眉、导航和页脚。" },
   "workspace.canvas.workingTitle": { ko: "AI가 작업하고 있어요", en: "The AI is working", "zh-CN": "AI 正在工作" },
   "workspace.canvas.workingSubtitle": { ko: "첫 결과물이 저장되면 이 자리에 나타나요.", en: "The first result will appear here once it is saved.", "zh-CN": "第一个成果保存后会显示在这里。" },
+  "workspace.project.operationConflicted": { ko: "다른 변경과 충돌해서 프로젝트 파일을 다시 불러왔어요", en: "Project files were reloaded after a conflicting change", "zh-CN": "因发生冲突更改，已重新加载项目文件" },
+  "workspace.project.operationRecovered": { ko: "앱이 다시 시작되어 프로젝트 파일을 복구했어요", en: "Project files were recovered after a restart", "zh-CN": "应用重启后已恢复项目文件" },
 });

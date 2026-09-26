@@ -367,4 +367,9 @@ export const chatMessages = defineMessages({
     en: "Design directions are being generated. You can send a request when they are ready.",
     "zh-CN": "正在生成设计方向。完成后即可发送请求。",
   },
+  "chat.turn.unchanged": {
+    ko: "답변만 남김 · 바뀐 파일이 없어요",
+    en: "Answered · no files changed",
+    "zh-CN": "已回复 · 没有文件更改",
+  },
 });

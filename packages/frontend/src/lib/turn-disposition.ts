@@ -10,11 +10,12 @@ import type { NormalizedEvent, TurnNotApplied, TurnRejectionReason } from "@bg/s
  *
  * - `pending`     generated, still being checked; nothing is in the project yet
  * - `committed`   the turn published; what was streamed is what the project now holds
+ * - `unchanged`   the turn finished with an empty diff: the answer stands, no file changed
  * - `not_applied` the turn was refused and the server states nothing it produced was published
  * - `rejected`    the turn failed without that statement; the UI claims nothing about the tree
  * - `stopped`     the user interrupted; the partial work the turn had reached was kept
  */
-export const TURN_DISPOSITIONS = ["pending", "committed", "not_applied", "rejected", "stopped"] as const;
+export const TURN_DISPOSITIONS = ["pending", "committed", "unchanged", "not_applied", "rejected", "stopped"] as const;
 
 export type TurnDisposition = (typeof TURN_DISPOSITIONS)[number];
 
@@ -46,6 +47,7 @@ export function projectTurnStates(events: readonly NormalizedEvent[]): ReadonlyM
   const states = new Map<string, MutableTurnState>();
   const userTurns = new Set(events.flatMap((event) => event.type === "chat.user_message" ? [event.turnId] : []));
   const childParents = new Map<string, string>();
+  const unchangedTurns = new Set<string>();
   let open: string | null = null;
 
   const parents = new Map<string, string>();
@@ -90,8 +92,14 @@ export function projectTurnStates(events: readonly NormalizedEvent[]): ReadonlyM
         const state = track(event.turnId);
         // Only the enclosing user turn's terminal proves publication. Repair and deck review
         // terminals are suppressed or buffered by the backend and cannot commit their own bubble.
-        if (parent === event.turnId && state.disposition === "pending") state.disposition = "committed";
+        if (parent === event.turnId && state.disposition === "pending") state.disposition = unchangedTurns.has(parent) ? "unchanged" : "committed";
         open = parent;
+        break;
+      }
+      case "artifact.operation": {
+        // The coordinator reports a turn that ended with an empty diff as cancelled, before the turn's
+        // terminal is released: the answer stands, but nothing reached the project.
+        if (open !== null && event.outcome === "cancelled") unchangedTurns.add(open);
         break;
       }
       case "status.error": {

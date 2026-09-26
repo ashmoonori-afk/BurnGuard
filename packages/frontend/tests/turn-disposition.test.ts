@@ -194,6 +194,26 @@ test("Given a long session with many deck-review child events When projected The
   expect(states.get(`${FIRST}-19999-review`)?.disposition).toBe("committed");
 });
 
+test("Given a turn whose operation reports cancelled before its terminal When projected Then it is unchanged and renders its own copy", () => {
+  const answered: NormalizedEvent[] = [
+    { id: id(), ts: 1, type: "chat.user_message", turnId: FIRST, text: "what does the hero say", attachmentCount: 0 },
+    { id: id(), ts: 2, type: "status.running" },
+    { id: id(), ts: 3, type: "chat.delta", turnId: FIRST, text: "the hero says hello" },
+    { id: id(), ts: 4, type: "artifact.operation", operationId: "operation-4", revision: 3, digest: "digest-3", changedPaths: [], outcome: "cancelled" },
+    { id: id(), ts: 5, type: "chat.message_end", turnId: FIRST },
+    { id: id(), ts: 6, type: "status.idle", stopReason: "end_turn" },
+  ];
+
+  expect(projectTurnStates(answered).get(FIRST)?.disposition).toBe("unchanged");
+  // The same stream without the empty-diff operation is a publication.
+  expect(projectTurnStates(answered.filter((event) => event.type !== "artifact.operation")).get(FIRST)?.disposition).toBe("committed");
+
+  const html = renderToStaticMarkup(createElement(AgentMessage, { text: "the hero says hello", turnId: FIRST, disposition: "unchanged" as const }));
+  expect(html).toContain('data-turn-disposition="unchanged"');
+  expect(html).toContain(renderToStaticMarkup(createElement("span", null, t("chat.turn.unchanged"))).replace(/^<span>|<\/span>$/g, ""));
+  expect(t("chat.turn.unchanged")).not.toBe(t("chat.turn.committed"));
+});
+
 test("Given a turn whose work is still streaming When projected Then it is pending rather than committed", () => {
   const streaming: NormalizedEvent[] = [
     { id: id(), ts: 1, type: "chat.user_message", turnId: FIRST, text: "make the mark", attachmentCount: 0 },

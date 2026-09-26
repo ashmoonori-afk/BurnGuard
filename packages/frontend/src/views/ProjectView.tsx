@@ -82,6 +82,7 @@ import ArtifactHistory from "@/components/canvas/ArtifactHistory";
 import { qualityFixRequest } from "@/lib/quality-fix-request";
 import { createPagePrompt } from "@/lib/create-page-prompt";
 import { nextActiveTabAfterClose } from "@/lib/artifact-tabs";
+import { artifactOperationRefresh } from "@/lib/artifact-operation-refresh";
 import { panelGenerationFor } from "@/lib/panel-generation";
 import {
   deserializeDraws,
@@ -713,31 +714,41 @@ export default function ProjectView() {
       });
     }
 
-    // Final publication refreshes authoritative files after the draft preview.
-    if (event.type === "artifact.operation" && event.outcome === "committed") {
-      turnTouchedFilesRef.current = true;
-      if (id) {
-        openChangedFilesAsTabs(
-          event.changedPaths,
-          openFileTabsRef.current.length > 0,
-          setOpenFileTabs,
-          setActiveTabId,
-        );
-        if (event.changedPaths.includes(activeTabIdRef.current)) {
-          setRefreshTick((value) => value + 1);
+    if (event.type === "artifact.operation") {
+      const refresh = artifactOperationRefresh(event.outcome);
+      // Final publication refreshes authoritative files after the draft preview.
+      if (refresh.openChangedTabs) {
+        turnTouchedFilesRef.current = true;
+        if (id) {
+          openChangedFilesAsTabs(
+            event.changedPaths,
+            openFileTabsRef.current.length > 0,
+            setOpenFileTabs,
+            setActiveTabId,
+          );
+          if (event.changedPaths.includes(activeTabIdRef.current)) {
+            setRefreshTick((value) => value + 1);
+          }
+          void queryClient.invalidateQueries({
+            queryKey: ["project", id, "files"],
+          });
+          // The explore turn writes the candidate manifest as part of the same
+          // publication, so the picker follows the turn instead of polling for it.
+          void queryClient.invalidateQueries({
+            queryKey: ["projects", id, "logo-manifest"],
+          });
         }
-        void queryClient.invalidateQueries({
-          queryKey: ["project", id, "files"],
-        });
-        // The explore turn writes the candidate manifest as part of the same
-        // publication, so the picker follows the turn instead of polling for it.
-        void queryClient.invalidateQueries({
-          queryKey: ["projects", id, "logo-manifest"],
-        });
+      } else if (refresh.invalidate && id) {
+        // The coordinator replaced the tree without a turn publishing it (an external
+        // conflict, a startup recovery): the canvas must not keep showing the old one.
+        void queryClient.invalidateQueries({ queryKey: ["project", id, "files"] });
+        void queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] });
+        if (refresh.refreshCanvas) setRefreshTick((value) => value + 1);
+        if (refresh.notice !== null) pushToast({ title: globalT(refresh.notice), tone: "info" });
       }
     }
 
-  }, [id, invalidateDesignAudit, mergeDirectionCache, mergeDesignAuditCache, queryClient]);
+  }, [id, invalidateDesignAudit, mergeDirectionCache, mergeDesignAuditCache, pushToast, queryClient]);
   const stream = useSessionEvents(sessionQuery.data?.id, handleLiveEvent);
   const events = useMemo(() => stream.state?.envelopes.map((item) => item.event) ?? [], [stream.state?.envelopes]);
   useEffect(() => {
@@ -805,11 +816,15 @@ export default function ProjectView() {
   // flips on once the interrupt grace period has elapsed.
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
   const [nowTs, setNowTs] = useState(() => Date.now());
+  // The interrupt POST answers as soon as the abort is delivered, while the turn still finishes its
+  // stage; Stop stays disabled from the request until the session is idle again.
+  const [stopRequested, setStopRequested] = useState(false);
   useEffect(() => {
     if (chatComposerDisabled) {
       setTurnStartedAt((prev) => prev ?? Date.now());
     } else {
       setTurnStartedAt(null);
+      setStopRequested(false);
     }
   }, [chatComposerDisabled]);
   useEffect(() => {
@@ -829,7 +844,9 @@ export default function ProjectView() {
       if (!session) throw new Error("no_session");
       return interruptSession(session.id);
     },
+    onMutate: () => setStopRequested(true),
     onError: (err) => {
+      setStopRequested(false);
       pushToast({
         title: t("workspace.project.interruptFailed"),
         body: apiErrorCopy(err),
@@ -1060,7 +1077,10 @@ export default function ProjectView() {
               }, { signal });
             } catch (error) {
               clearSendPending(sendPendingTimeoutRef, setSendPending);
-              if (!(error instanceof DOMException && error.name === "AbortError")) {
+              if (error instanceof DOMException && error.name === "AbortError") {
+                // The backend may have admitted the turn before the abort reached it.
+                void stream.refreshSnapshot().catch(() => {});
+              } else {
                 pushToast({
                   title:
                     error instanceof ApiError && error.status === 409
@@ -1151,8 +1171,8 @@ export default function ProjectView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {refreshError && <div role="alert" aria-label={t("workspace.project.refreshErrorLabel")} className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm"><span>{t("workspace.project.refreshError")}</span><button type="button" className="min-h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium" onClick={() => { for (const query of loadQueries) if (query.isError) void query.refetch(); }}>{t("workspace.project.refreshData")}</button></div>}
-      {stream.error && <div role="alert" className="flex items-center justify-between bg-warning/15 px-4 py-2 text-sm"><span>{t("workspace.project.streamDisconnected")}</span><button type="button" className="rounded border px-3 py-2" onClick={stream.retry}>{t("workspace.project.reconnect")}</button></div>}
+      {(refreshError || stream.stale) && <div role="alert" aria-label={t("workspace.project.refreshErrorLabel")} className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm"><span>{t("workspace.project.refreshError")}</span><button type="button" className="min-h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium" onClick={() => { for (const query of loadQueries) if (query.isError) void query.refetch(); if (stream.stale) void stream.refreshSnapshot().catch(() => {}); }}>{t("workspace.project.refreshData")}</button></div>}
+      {stream.error && <div role="alert" className="flex items-center justify-between bg-warning/15 px-4 py-2 text-sm"><span>{t("workspace.project.streamDisconnected")}</span><button type="button" className="rounded border px-3 py-2" onClick={() => void stream.retry().then(() => queryClient.invalidateQueries())}>{t("workspace.project.reconnect")}</button></div>}
       <ProjectTopBar
         chatCollapsed={chatCollapsed}
         onToggleChat={() => setChatCollapsed((value) => !value)}
@@ -1208,7 +1228,7 @@ export default function ProjectView() {
           composerDisabledReason={composerDisabledReason}
           canInterrupt={canInterrupt}
           turnElapsedMs={turnElapsedMs}
-          interruptPending={interruptMutation.isPending}
+          interruptPending={interruptMutation.isPending || stopRequested}
           onInterrupt={() => interruptMutation.mutate()}
           composerInitialText={composerPrefill}
           activePageLabel={activeRelPath !== null && activeRelPath !== project.entrypoint ? t("workspace.project.viewingPage", { path: activeRelPath }) : null}

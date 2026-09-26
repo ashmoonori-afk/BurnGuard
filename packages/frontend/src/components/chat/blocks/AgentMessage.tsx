@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleSlash, Loader2, OctagonX, PauseCircle } from "lucide-react";
+import { CheckCircle2, CircleMinus, CircleSlash, Loader2, OctagonX, PauseCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { TurnDisposition } from "@/lib/turn-disposition";
 import { useT, type MessageKey } from "@/i18n/t";
@@ -6,6 +6,7 @@ import { useT, type MessageKey } from "@/i18n/t";
 const DISPOSITION_COPY: Record<TurnDisposition, { readonly key: MessageKey; readonly icon: LucideIcon; readonly tone: string }> = {
   pending: { key: "chat.turn.pending", icon: Loader2, tone: "text-muted-foreground" },
   committed: { key: "chat.turn.committed", icon: CheckCircle2, tone: "text-muted-foreground" },
+  unchanged: { key: "chat.turn.unchanged", icon: CircleMinus, tone: "text-muted-foreground" },
   not_applied: { key: "chat.turn.not_applied", icon: CircleSlash, tone: "text-destructive" },
   rejected: { key: "chat.turn.rejected", icon: OctagonX, tone: "text-destructive" },
   stopped: { key: "chat.turn.stopped", icon: PauseCircle, tone: "text-muted-foreground" },
