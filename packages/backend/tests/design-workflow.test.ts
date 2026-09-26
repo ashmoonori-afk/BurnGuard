@@ -121,15 +121,16 @@ test("Given a contrast finding and design-system tokens When a repair runs Then 
   expect(overflow.every(prompt => !prompt.includes("<design_review_palette>"))).toBe(true);
 });
 
-test("Given must_fix findings on changed and untouched pages When blocking findings are selected Then only changed pages and site-wide findings count", () => {
+test("Given must_fix findings on changed and untouched pages When blocking findings are selected Then an HTML-only turn answers for its pages and a changed non-HTML file answers for every page (DP-03)", () => {
   const finding = (relPath: string, code: "contrast" | "site_nav_mismatch", severity: "must_fix" | "recommended" = "must_fix") => ({ id: `${code}:${relPath}`, check_code: code, severity, source: { rel_path: relPath, node_bg_id: null }, evidence: "fixture", targeted_action: code === "contrast" ? "increase_color_contrast" as const : "repair_site_navigation" as const });
   const audited: DesignAuditResult = { ...result(false), overall_status: "must_fix", checks: [
     { code: "contrast", status: "fail", reason: null, findings: [finding("index.html", "contrast"), finding("about.html", "contrast"), finding("pricing.html", "contrast", "recommended")] },
     { code: "site_nav_mismatch", status: "fail", reason: null, findings: [finding("about.html", "site_nav_mismatch")] },
   ] };
-  expect(blockingDesignFindings(audited, ["index.html", "styles.css"]).map(item => item.id)).toEqual(["contrast:index.html", "site_nav_mismatch:about.html"]);
-  expect(blockingDesignFindings(audited, ["styles.css"])).toEqual([]);
+  expect(blockingDesignFindings(audited, ["index.html"]).map(item => item.id)).toEqual(["contrast:index.html", "site_nav_mismatch:about.html"]);
   expect(blockingDesignFindings(audited, ["about.html"]).map(item => item.id)).toEqual(["contrast:about.html", "site_nav_mismatch:about.html"]);
+  for (const changed of [["styles.css"], ["index.html", "styles.css"], ["assets/hero.png"], ["app.js"]]) expect(blockingDesignFindings(audited, changed).map(item => item.id)).toEqual(["contrast:index.html", "contrast:about.html", "site_nav_mismatch:about.html"]);
+  expect(blockingDesignFindings(audited, [])).toEqual([]);
 });
 
 test("Given audited page counts When the review budget is derived Then it grows 20 s per further page and caps at 180 s", async () => {

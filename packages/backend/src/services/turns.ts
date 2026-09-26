@@ -15,7 +15,7 @@ import {
 import { getProjectDetail, getSessionInfo } from "../db/seed";
 import { getSqlite } from "../db/sqlite-client";
 import { broker, sequencedBroker } from "./broker";
-import { buildSessionContext, readDeckSourcePages, selectContextAttachments } from "./context";
+import { buildSessionContext, DeckSourceMappingError, readDeckSourcePages, selectContextAttachments } from "./context";
 import { parseStoredProjectOptions, withResearchPurpose } from "./project-options";
 import { matchResearchPurpose } from "./research-purpose";
 import { writePreTurnSnapshot, writeTurnCheckpoint } from "./checkpoints";
@@ -416,13 +416,20 @@ async function runUserTurnInternal(
       publicationPolicy: { forbiddenSha256 },
       onPrepared: () => { operationPrepared = true; onPrepared(); },
       mutate: async (stageDir) => {
-        const sourcePages = project.type === "slide_deck"
-          ? await readDeckSourcePages(
-            selectedAttachments,
-            parseStoredProjectOptions(project.options_json).design_brief?.source_page_mapping,
-            payload.attachments ?? [],
-          )
-          : undefined;
+        let sourcePages: Awaited<ReturnType<typeof readDeckSourcePages>>;
+        try {
+          sourcePages = project.type === "slide_deck"
+            ? await readDeckSourcePages(
+              selectedAttachments,
+              parseStoredProjectOptions(project.options_json).design_brief?.source_page_mapping,
+              payload.attachments ?? [],
+            )
+            : undefined;
+        } catch (error) {
+          // The coordinator rewraps any other error as operation_failed, so the mapping code would never reach the client.
+          if (error instanceof DeckSourceMappingError) throw new ArtifactOperationError(error.code, error.message);
+          throw error;
+        }
         const briefPages = parseStoredProjectOptions(project.options_json).design_brief?.pages;
         // Old projects carry a copied runtime. Refresh only the owned stage,
         // so the preview receives engine fixes without touching live files.
@@ -505,7 +512,7 @@ async function runUserTurnInternal(
                 // request must not precede the review instructions, and the review never replays it.
                 const deckSummary = await summarizeDeckHtml(path.join(stageDir, project.entrypoint));
                 const reviewPrompt = [
-                  "## Project", `- id: ${project.id}`, `- name: ${project.name}`, `- type: ${project.type}`, `- entrypoint: ${project.entrypoint}`, `- directory: ${stageDir}`, "",
+                  "## Project", `- id: ${project.id}`, `- name: ${project.name}`, `- type: ${project.type}`, `- entrypoint: ${project.entrypoint}`, `- directory: ${stageDir}`, `- locale: ${parseStoredProjectOptions(project.options_json).design_brief?.locale ?? "unknown"}`, "",
                   ...(sessionContext.designSystemPin ? ["<pinned_design_system>", JSON.stringify({ revision: sessionContext.designSystemPin.revision, digest: sessionContext.designSystemPin.digest }), sessionContext.designSystemPin.context, "</pinned_design_system>", ""] : []),
                   ...(deckSummary === null ? [] : ["## Deck structure", deckSummary, ""]),
                   ...(sourceInstructions === "" ? [] : [sourceInstructions.trim(), ""]),

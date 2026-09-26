@@ -282,9 +282,10 @@ describe("delivery and direction guidance follow the selected design system", ()
 });
 
 describe("deck review locale", () => {
-  test("PH-13: Given the deck review prompt Then the closing sentence follows the brief's locale rather than naming Korean", () => {
+  test("PH-13/DP-30: Given the deck review prompt Then the closing sentence follows the Project locale line of its bounded context, not a brief block or request that context omits", () => {
     expect(DECK_REVIEW_PROMPT).toContain("locale");
-    expect(DECK_REVIEW_PROMPT).toContain("burnguard-design-brief-v1");
+    expect(DECK_REVIEW_PROMPT).not.toContain("burnguard-design-brief-v1");
+    expect(DECK_REVIEW_PROMPT).not.toContain("user's request");
     expect(DECK_REVIEW_PROMPT).not.toContain("Korean sentence");
   });
 });

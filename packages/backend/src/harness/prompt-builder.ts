@@ -374,12 +374,6 @@ export async function buildPrompt(
 }
 
 /**
- * The deliverable a turn is producing. An explicit project type always wins, so a deck, prototype
- * or graphic keeps its own structural contract and a diagram stays embedded within it; only an
- * open-ended project can resolve to a standalone diagram. Exported so the turn can record the same
- * selection it shipped instead of re-deriving it and drifting.
- */
-/**
  * The UTF-8 contract every host receives, plus the PowerShell transport rules only where a shell can
  * apply them. The platform is a parameter so the win32 rendering is testable from any host.
  */
@@ -395,6 +389,12 @@ export function renderTextEncodingBlock(platform: NodeJS.Platform = process.plat
   ];
 }
 
+/**
+ * The deliverable a turn is producing. An explicit project type always wins, so a deck, prototype
+ * or graphic keeps its own structural contract and a diagram stays embedded within it; only an
+ * open-ended project can resolve to a standalone diagram. Exported so the turn can record the same
+ * selection it shipped instead of re-deriving it and drifting.
+ */
 export function resolveDeliverable(projectType: string, requestText: string): Deliverable {
   if (projectType === "prototype") return "prototype";
   if (projectType === "slide_deck") return "slide_deck";

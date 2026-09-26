@@ -17,7 +17,7 @@ import { createHash } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
 import { broker } from "../src/services/broker";
 import { managedFileRoutes } from "../src/routes/managed-files";
-import { selectContextAttachments } from "../src/services/context";
+import { DECK_SOURCE_PAGE_LIMIT, selectContextAttachments } from "../src/services/context";
 import { createApp } from "../src/server";
 import { reviewTurnDesign } from "../src/services/turn-design-review";
 import { RenderSessionError } from "../src/services/export-render-session";
@@ -435,6 +435,7 @@ test("Given a slide_deck edit that changes the deck When the copy review runs Th
     expect(prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
     expect(prompt).toContain("## Deck structure");
     expect(prompt).toContain("1 slide(s)");
+    expect(prompt.split("\n")).toContain("- locale: unknown");
     expect(prompt).not.toContain("## Request");
     expect(prompt).not.toContain("Update wording");
   }
@@ -813,3 +814,86 @@ test("Given a real child tree continuously writing When its output callback fail
     if (childPid > 0) { try { process.kill(childPid, "SIGKILL"); } catch {} }
   }
 }, 15_000);
+
+test("DP-28: Given a source-mapped deck whose source exceeds the page limit When the turn starts Then no adapter runs and the published error carries deck_source_page_limit", async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck',options_json=? WHERE id=?").run(JSON.stringify({
+    design_brief: {
+      schema_version: 1, output_type: "slide_deck", audience: "Customers", objective: "Explain the source",
+      content_source: "attached", locale: "ko", brand_mode: "none", visual_mood: "formal",
+      density: "balanced", output_size: "widescreen-16x9", source_page_mapping: "one_to_one",
+    },
+  }), projectId);
+  await mkdir(path.join(projectDir, ".attachments"));
+  const pdf = await PDFDocument.create();
+  pdf.addPage().drawText("Source page one");
+  const bytes = await pdf.save();
+  const source = path.join(projectDir, ".attachments", "source.pdf");
+  await writeFile(source, bytes);
+  await writeFile(`${source}.summary.json`, JSON.stringify({ kind: "pdf", page_count: DECK_SOURCE_PAGE_LIMIT + 1, fonts: [], colors: [], notes: [], headings: [], bodies: [], pages: [] }));
+  await writeFile(`${source}.extracted.md`, "Source page one");
+  await insertAttachment({ sessionId, turnId: "source-turn", filePath: source, mimeType: "application/pdf", originalName: "source.pdf", sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+  let calls = 0;
+  const turn = start(async () => { calls++; return { exitCode: 0 }; }, "Update wording");
+  await turn.promise;
+  expect(calls).toBe(0);
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("base");
+  const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
+  expect(JSON.parse(error!.payload_json)).toMatchObject({ code: "deck_source_page_limit", notApplied: { operationId: turn.operationId, repairs: 0 } });
+});
+
+test("DP-03: Given a must_fix contrast finding on index.html When a turn changes only styles.css Then the review repairs it and refuses the turn instead of committing", async () => {
+  await new ArtifactCoordinator(getSqlite()).run({ projectId, projectDir, kind: "turn", expectedRevision: 0, expectedArtifactDigest: digest, mutate: async (stage) => {
+    await writeFile(path.join(stage, "index.html"), '<!doctype html><link rel="stylesheet" href="styles.css"><h1>Home</h1>');
+  } });
+  let repairs = 0;
+  const turn = start(async (_backend, input) => {
+    if (input.turnId.includes("-design-repair-")) { repairs++; return { exitCode: 0 }; }
+    await writeFile(path.join(input.projectDir, "styles.css"), "h1{color:#777}");
+    return { exitCode: 0 };
+  }, "Make the headings grey", input => reviewTurnDesign({ ...input, audit: async () => mustFixFinding("index.html", "contrast") }));
+  await turn.promise;
+  expect(repairs).toBe(2);
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+  expect(existsSync(path.join(projectDir, "styles.css"))).toBe(false);
+  const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
+  expect(JSON.parse(error!.payload_json).code).toBe("design_review_failed");
+});
+
+test("DP-18: Given a committed turn whose page has undersized text When the Quality panel reads the cached review Then the minimum_text_size finding carries a safe fix for the committed identity", async () => {
+  const page = '<!doctype html><html><head><style>:root{--ink:#111;--paper:#fff}html,body{margin:0;background:var(--paper);color:var(--ink)}</style></head><body><p data-bg-node-id="tiny" style="font-size:9px">tiny</p></body></html>';
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "index.html"), page);
+    return { exitCode: 0 };
+  }, "Add a caption", input => reviewTurnDesign(input));
+  await turn.promise;
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+  const project = getSqlite().query<{ current_revision: number; current_digest: string }, [string]>("SELECT current_revision,current_digest FROM projects WHERE id=?").get(projectId)!;
+  expect(existsSync(path.join(projectDir, ".meta", "audits", `${project.current_revision}-${project.current_digest}-${DESIGN_AUDIT_POLICY_VERSION}.json`))).toBe(true);
+  const tiny = (await getProjectDesignAudit(projectId)).checks.find(check => check.code === "minimum_text_size")?.findings.find(finding => finding.source.node_bg_id === "tiny");
+  const committed = (await inspectCanonicalTree(projectDir)).files.find(file => file.path === "index.html");
+  expect(tiny?.safe_fix).toEqual({ kind: "patch_html_node", rel_path: "index.html", request: { expected_revision: project.current_revision, expected_artifact_digest: project.current_digest, expected_file_hash: committed!.sha256, node_bg_id: "tiny", node_fingerprint: expect.any(String), styles: { "font-size": "12px" } } });
+}, 90_000);
+
+test("DP-30: Given a slide_deck project with a brief locale When the copy review runs Then its bounded context names that locale under ## Project", async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck',options_json=? WHERE id=?").run(JSON.stringify({
+    design_brief: {
+      schema_version: 1, output_type: "slide_deck", audience: "Customers", objective: "Explain the plan",
+      content_source: "none", locale: "en", brand_mode: "none", visual_mood: "formal",
+      density: "balanced", output_size: "widescreen-16x9",
+    },
+  }), projectId);
+  const reviewPrompts: string[] = [];
+  const turn = start(async (_backend, input) => {
+    if (input.turnId.endsWith("-review")) { reviewPrompts.push(input.prompt); return { exitCode: 1 }; }
+    await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide><h1>Edited</h1></section><script src="runtime/deck-stage.js"></script>');
+    return { exitCode: 0 };
+  }, "Update wording");
+  await turn.promise;
+  expect(reviewPrompts.length).toBeGreaterThan(0);
+  for (const prompt of reviewPrompts) {
+    const lines = prompt.split("\n");
+    expect(lines).toContain("- locale: en");
+    expect(lines.indexOf("- locale: en")).toBeLessThan(lines.indexOf("## Deck structure"));
+  }
+});

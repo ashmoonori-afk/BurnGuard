@@ -18,13 +18,17 @@ export function designReviewBudgetMs(pages: number): number {
 }
 
 /**
- * The must_fix findings this turn answers for: those on an HTML page the turn changed, and
- * site-wide findings once any page changed. A finding on an untouched page stays visible in the
- * Quality panel but neither refuses the turn nor targets a repair.
+ * The must_fix findings this turn answers for. A turn that changed only HTML pages answers for
+ * findings on those pages, plus site-wide findings once any file changed; a changed stylesheet,
+ * script or asset reaches every page, so such a turn answers for every must_fix finding. A finding
+ * on an untouched page of an HTML-only turn stays visible in the Quality panel but neither refuses
+ * the turn nor targets a repair.
  */
 export function blockingDesignFindings(result: DesignAuditResult, changedPaths: readonly string[]): readonly DesignAuditFinding[] {
-  const changedPages = new Set(changedPaths.filter((relPath) => /\.html?$/iu.test(relPath)));
-  return result.checks.flatMap((check) => check.findings).filter((finding) => finding.severity === "must_fix" && (finding.check_code.startsWith("site_") ? changedPages.size > 0 : changedPages.has(finding.source.rel_path)));
+  const isPage = (relPath: string): boolean => /\.html?$/iu.test(relPath);
+  const changedPages = new Set(changedPaths.filter(isPage));
+  const pageScoped = changedPaths.every(isPage);
+  return result.checks.flatMap((check) => check.findings).filter((finding) => finding.severity === "must_fix" && (finding.check_code.startsWith("site_") ? changedPaths.length > 0 : !pageScoped || changedPages.has(finding.source.rel_path)));
 }
 
 /** The colour custom properties of the first :root block, bounded, so a contrast repair draws on the project's own palette. */
@@ -39,7 +43,7 @@ function paletteExcerpt(tokensCss: string): string {
 /** At most two targeted repairs. Measurements are data, never instructions from the artifact. */
 export async function reviewTurnDesign(input: {
   adapter: AdapterRunInput; projectId: string; type: ProjectType; entrypoint: string; revision: number;
-  /** Paths this turn changed against the stage as the adapter found it; only findings there can block or be repaired. */
+  /** Paths this turn changed against the stage as the adapter found it; they decide which findings can block or be repaired. */
   changedPaths: readonly string[];
   canvas?: { width: number; height: number };
   /** The pinned design-system token CSS, offered to a contrast repair as the palette to choose from. */
@@ -60,7 +64,8 @@ export async function reviewTurnDesign(input: {
       try {
         result = await (input.audit ?? auditRenderedTree)({
           projectId: input.projectId, projectDir: input.adapter.projectDir, entrypoint: input.entrypoint,
-          revision: input.revision, digest: manifest.tree_digest, safeFix: false, deck: input.type === "slide_deck",
+          // The review names the identity the turn commits, so its safe fixes stay valid once the result is cached.
+          revision: input.revision, digest: manifest.tree_digest, deck: input.type === "slide_deck",
           ...(input.canvas ? { canvas: input.canvas } : {}),
           signal: AbortSignal.any([signal, AbortSignal.timeout(designReviewBudgetMs(pages))]),
         });
