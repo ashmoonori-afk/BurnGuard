@@ -24,6 +24,7 @@ const ACTIVE_ELEMENTS = [
 ] as const;
 const URL_ATTRIBUTES = ["href", "src", "action", "formaction", "poster", "xlink:href"] as const;
 const DANGEROUS_SCHEME = /^(?:javascript|data:text\/html|vbscript):/i;
+const NETWORK_STYLE = /(?:@import\s|url\s*\()/i;
 
 export function parseSafeExtractionUrl(sourceUrl: string): URL {
   const trimmed = sourceUrl.trim();
@@ -70,13 +71,40 @@ export function removeSourceMarkupReferences(content: string): string {
   return root.toString();
 }
 
+/**
+ * Strips a fetched page down to inert evidence instead of rejecting it: active elements, refresh
+ * metas, event handlers, network-capable styles and every resource reference are removed, so an
+ * ordinary script-bearing homepage still imports. `assertInertSourceMarkup` remains the gate.
+ */
+export function removeActiveSourceMarkup(content: string): string {
+  const root = parse(content, { lowerCaseTagName: true });
+  for (const elementName of ACTIVE_ELEMENTS) {
+    for (const node of root.querySelectorAll(elementName)) node.remove();
+  }
+  for (const meta of root.querySelectorAll("meta")) {
+    if (meta.getAttribute("http-equiv")?.trim().toLowerCase() === "refresh") meta.remove();
+  }
+  for (const style of root.querySelectorAll("style")) {
+    if (NETWORK_STYLE.test(style.textContent)) style.set_content("");
+  }
+  for (const node of root.querySelectorAll("*")) {
+    for (const attributeName of Object.keys(node.attributes)) {
+      if (attributeName.toLowerCase().startsWith("on")) node.removeAttribute(attributeName);
+    }
+    const style = node.getAttribute("style");
+    if (style !== undefined && NETWORK_STYLE.test(style)) node.removeAttribute("style");
+    for (const attributeName of URL_ATTRIBUTES) node.removeAttribute(attributeName);
+  }
+  return root.toString();
+}
+
 function assertSourceMarkup(content: string, kind: "html" | "svg", relativeReferencesAllowed: boolean): void {
   const normalized = content.toLowerCase();
   const structurallyComplete = kind === "html"
     ? normalized.includes("<html") && normalized.includes("<body") && normalized.includes("</body>") && normalized.includes("</html>")
     : normalized.includes("<svg") && normalized.includes("</svg>");
   if (!structurallyComplete) throw new ExtractionSafetyError("unsafe_source_content", `Malformed ${kind} source is not accepted`);
-  if (/(?:@import\s|url\s*\()/i.test(content)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
+  if (NETWORK_STYLE.test(content)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
   const root = parse(content, { lowerCaseTagName: true });
   for (const elementName of ACTIVE_ELEMENTS) {
     if (root.querySelector(elementName) !== null) throw new ExtractionSafetyError("unsafe_source_content", `Active ${kind} element is not accepted`);

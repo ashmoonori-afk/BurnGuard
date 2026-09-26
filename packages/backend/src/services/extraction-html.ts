@@ -1,13 +1,9 @@
 import { parse } from "node-html-parser";
 import { AcquisitionLimitError, DEFAULT_ACQUISITION_LIMITS, throwIfAcquisitionAborted, type AcquisitionLimits } from "./extraction-acquisition";
-import { assertAcquirableSourceMarkup, assertInertSourceMarkup, ExtractionSafetyError, removeSourceMarkupReferences } from "./extraction-safety";
+import { assertAcquirableSourceMarkup, assertInertSourceMarkup, ExtractionSafetyError, removeActiveSourceMarkup, removeSourceMarkupReferences } from "./extraction-safety";
 
 export function sanitizeSourceHtml(html: string): string {
-  // Do not let parser serialization repair a source the acquisition gate rejects.
-  const normalized = html.toLowerCase();
-  if (!["<html", "<body", "</body>", "</html>"].every(tag => normalized.includes(tag))) {
-    throw new ExtractionSafetyError("unsafe_source_content", "Malformed html source is not accepted");
-  }
+  assertStructurallyCompleteHtml(html);
   const root = parse(html, { lowerCaseTagName: true });
   // Public HTTPS navigation is text evidence, not a resource to fetch or ship.
   // Leave other schemes and all resource URLs for the strict acquisition gate.
@@ -21,6 +17,26 @@ export function sanitizeSourceHtml(html: string): string {
   const stored = removeSourceMarkupReferences(root.toString());
   assertInertSourceMarkup(stored, "html");
   return stored;
+}
+
+/**
+ * Website acquisition stores a fetched page as inert evidence: active markup and resource
+ * references are stripped rather than failing the import, since production pages nearly always
+ * carry scripts and absolute asset URLs. Link, stylesheet and logo discovery reads the raw bytes.
+ */
+export function sanitizeAcquiredWebsiteHtml(html: string): string {
+  assertStructurallyCompleteHtml(html);
+  const stored = removeActiveSourceMarkup(html);
+  assertInertSourceMarkup(stored, "html");
+  return stored;
+}
+
+function assertStructurallyCompleteHtml(html: string): void {
+  // Do not let parser serialization repair a source the acquisition gate rejects.
+  const normalized = html.toLowerCase();
+  if (!["<html", "<body", "</body>", "</html>"].every(tag => normalized.includes(tag))) {
+    throw new ExtractionSafetyError("unsafe_source_content", "Malformed html source is not accepted");
+  }
 }
 
 export type HtmlComponentSamples = {

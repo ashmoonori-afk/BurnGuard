@@ -96,7 +96,7 @@ import {
 } from "./extraction-css";
 import { DESIGN_SURFACE_FILES, DESIGN_SURFACES } from "@bg/shared";
 import { DERIVED_SURFACE_README_SECTIONS, renderDerivedSurfaceCss } from "./design-system-surface";
-import { collectCandidateWebsitePages, extractHtmlComponentSamples, sanitizeSourceHtml } from "./extraction-html";
+import { collectCandidateWebsitePages, extractHtmlComponentSamples, sanitizeAcquiredWebsiteHtml, sanitizeSourceHtml } from "./extraction-html";
 import { analyzeLocalTree, type SourceAnalysis } from "./extraction-local-tree";
 import {
   contentTypeForDesignSystemFile,
@@ -725,7 +725,7 @@ async function ingestWebsiteSource(
   });
   url = homepage.finalUrl;
   const html = homepage.text;
-  const storedHomepageHtml = sanitizeSourceHtml(html);
+  const storedHomepageHtml = sanitizeAcquiredWebsiteHtml(html);
 
   const websiteDir = path.join(ingestDir, "website");
   const uploadsDir = path.join(websiteDir, "uploads", "linked-css");
@@ -762,7 +762,7 @@ async function ingestWebsiteSource(
         userAgent: `BurnGuard/${APP_VERSION} design-system-import`,
       });
       if (pageHtmlByUrl.has(pageFetch.finalUrl.toString())) continue;
-      const storedPageHtml = sanitizeSourceHtml(pageFetch.text);
+      const storedPageHtml = sanitizeAcquiredWebsiteHtml(pageFetch.text);
       pageHtmlByUrl.set(pageFetch.finalUrl.toString(), pageFetch.text);
       const fileName = `page-${pageHtmlByUrl.size}.html`;
       await writeFile(path.join(pagesDir, fileName), storedPageHtml, "utf8");
@@ -830,7 +830,10 @@ async function ingestWebsiteSource(
       if (!href) continue;
       try {
         const cssUrl = new URL(href, pageBase);
-        if (cssUrl.origin !== url.origin) continue;
+        if (cssUrl.origin !== url.origin) {
+          notes.push(`Skipped cross-origin stylesheet: ${href}`);
+          continue;
+        }
         const cssFetch = await fetchWebsiteResource(cssUrl, {
           maxBytes: MAX_CSS_BYTES,
           kind: "css",
@@ -846,6 +849,9 @@ async function ingestWebsiteSource(
         const absolute = path.join(uploadsDir, fileName);
         await writeFile(absolute, cssText, "utf8");
         const cssSourceId = isOwnedQaAdapterResourceUrl(cssFetch.finalUrl) ? `qa-adapter:${cssFetch.finalUrl.pathname}` : cssFetch.finalUrl.toString();
+        // Only same-origin stylesheets linked from the page are fetched; @import targets are recorded, not followed.
+        const imports = [...cssText.matchAll(/@import\s+(?:url\(\s*)?["']?([^"')\s;]+)/gi)].map((match) => match[1]).slice(0, 8);
+        if (imports.length > 0) notes.push(`Skipped @import in ${cssSourceId}: ${imports.join(", ")}`);
         const parsedCss = await parseCssSource({ content: cssText, sourceId: cssSourceId, fileOrder: cssFileOrder, signal });
         cssFileOrder += 1;
         cssDeclarations.push(...parsedCss.declarations);
@@ -1535,6 +1541,9 @@ function buildReadme(
     analysis.fetchedPageCount > 1
       ? `- ${analysis.fetchedPageCount} same-origin pages were analyzed for broader component coverage.`
       : "- Only the landing page was analyzed; deeper site coverage may still be needed.",
+    ...(sourceType === "website"
+      ? ["- Only same-origin stylesheets linked from the fetched pages were read; cross-origin stylesheets and @import targets are listed below and were not fetched."]
+      : []),
     analysis.fontFamilies.length === 0
       ? "- No source font-family declarations were detected; fallback stacks were used."
       : `- Font family candidates detected: ${analysis.fontFamilies.join(", ")}.`,
