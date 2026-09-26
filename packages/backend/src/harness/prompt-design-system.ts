@@ -73,7 +73,7 @@ export async function appendDesignSystemContext(
   }
   lines.push("- Preserve display/body/mono font tokens and Korean fallbacks. Link the existing fonts/fonts.css: it points to the app's shared font store. Do not copy bundled font binaries into projects or replace shared font URLs; export bundles include the required fonts automatically. No font CDNs. Use bundled DM Sans / Space Grotesk with Pretendard fallback and IBM Plex Mono when no brand face is specified. Keep supplied brand font files intact.");
   lines.push("- Fonts (BUNDLED_FONT_REFERENCE): when the design system leaves a role unspecified, Read fonts/fonts.md in the project before picking a bundled family; it records traits, Korean coverage and pairings for every family in fonts/fonts.css.");
-  lines.push("- Shared font handling above supersedes older theme instructions to copy bundled fonts/ into each output. Only user-supplied brand fonts belong in a project's font directory.");
+  lines.push("- Shared font handling above supersedes any theme SKILL.md wording about including font files on export: never copy font binaries into the project; the export bundle adds the required fonts and licences itself. Only user-supplied brand fonts belong in a project's font directory.");
   lines.push("- Liquid glass (BUNDLED_LIQUID_GLASS_REFERENCE): for a circular element that should read as physical glass over a visible background, Read liquid-glass/liquid-glass.md before using liquid-glass/liquid-glass.js; it records the options, the radial bands and the refraction limit past which straight lines break. It needs real pixels behind it, so skip it on a flat background where a plain border is honest and cheaper.");
   lines.push("");
 

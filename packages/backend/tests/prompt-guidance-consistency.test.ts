@@ -8,7 +8,9 @@ import { CHART_AUTHORING_RULES } from "../src/harness/chart-authoring";
 import { DESIGN_CRAFT_RULES, EXPORT_REMOTE_FRAME_RULE } from "../src/harness/design-craft";
 import { buildPrompt, MAX_SKILL_CHARS } from "../src/harness/prompt-builder";
 import { COMPACT_DECK_SKILL_MD } from "../src/harness/prompt-compact-skills";
+import { IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../src/harness/design-craft";
 import { DECK_REVIEW_PROMPT, DECK_SKILL_MD } from "../src/harness/skills/deck-skill";
+import { PROTOTYPE_SKILL_MD } from "../src/harness/skills/prototype-skill";
 import { DECK_STAGE_JS } from "../src/runtime/deck-stage";
 import {
   DEFAULT_VISUAL_IDENTITY,
@@ -165,6 +167,78 @@ describe("map embeds under export", () => {
       await expect(renderDeckToPdf({ stagedDir: dir, entrypoint: "deck.html", outputPath: path.join(dir, "deck.pdf") })).rejects.toMatchObject({ code: "render_failed" });
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("prototype structure and breakpoint guidance", () => {
+  test("PH-10: Given a full-mode prototype prompt When the default page structure is sliced Then social proof is conditional on supplied material while the spatial sentinels and archetypes still ship", async () => {
+    const prompt = await buildPrompt(makeContext("prototype"), REQUEST, { contextMode: "full" });
+    const structure = section(prompt, "## Default page structure", "## Per-section content rules");
+    const sequence = structure.slice(structure.indexOf("default to:"), structure.indexOf("sections)"));
+
+    expect(sequence).not.toContain("social proof");
+    expect(structure).toContain("supplied");
+    for (const sentinel of ["scroll-owner", "wrap-first", "load-bearing"]) expect(prompt).toContain(sentinel);
+    expect(prompt).toContain("horizontal monochrome row of customer logos");
+    expect(PROTOTYPE_SKILL_MD.length).toBeLessThanOrEqual(MAX_SKILL_CHARS);
+  });
+
+  test("PH-30: Given the prototype skill Then the breakpoint rule names --layout-bp-* before the fixed fallback and wrap-first still ships", () => {
+    const token = PROTOTYPE_SKILL_MD.indexOf("--layout-bp-*");
+    const fallback = PROTOTYPE_SKILL_MD.indexOf("640px");
+    expect(token).toBeGreaterThanOrEqual(0);
+    expect(fallback).toBeGreaterThan(token);
+    expect(PROTOTYPE_SKILL_MD).toContain("1024px");
+    expect(PROTOTYPE_SKILL_MD).toContain("wrap-first");
+  });
+});
+
+describe("compact skill token sources", () => {
+  test("CSS-21: Given compact prompts with and without a design system When the compact skill is sliced Then it names colors_and_type.css and the declared-token fallback instead of a list that is not there", async () => {
+    const designSystem = { id: "compact-tokens", name: "Compact", dir_path: "/missing/compact-tokens", skill_md_path: null, tokens_css_path: null, readme_md_path: null } as unknown as NonNullable<BuildContext["designSystem"]>;
+    for (const projectType of ["slide_deck", "prototype"] as const) {
+      const heading = projectType === "slide_deck" ? "## Slide deck skill" : "## Prototype skill";
+      const bare = section(await buildPrompt(makeContext(projectType), REQUEST, { contextMode: "compact" }), heading, "## Visual craft");
+      const branded = section(await buildPrompt(makeContext(projectType, { designSystem }), REQUEST, { contextMode: "compact" }), heading, "## Visual craft");
+      for (const skill of [bare, branded]) {
+        expect(skill).not.toContain("see list above");
+        expect(skill).toContain("colors_and_type.css");
+        expect(skill).toContain("tokens you declared");
+      }
+    }
+  });
+});
+
+describe("theme font wording", () => {
+  test("CSS-25: Given a full-mode prompt with a theme SKILL.md When the design-system section is read Then the harness supersede line covers font files on export and precedes the inlined skill", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "bg-theme-fonts-"));
+    try {
+      const skill = path.join(dir, "SKILL.md");
+      await writeFile(skill, "Reference shared local fonts while working; include required font files and licenses on export. No CDN.");
+      const designSystem = { id: "theme-fonts", name: "Theme", status: "published", source_type: "manual", is_template: false, dir_path: dir, skill_md_path: skill, tokens_css_path: null, readme_md_path: null, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as unknown as NonNullable<BuildContext["designSystem"]>;
+      const prompt = await buildPrompt(makeContext("prototype", { designSystem }), REQUEST, { contextMode: "full" });
+      const supersede = prompt.indexOf("supersedes");
+      expect(supersede).toBeGreaterThanOrEqual(0);
+      const line = prompt.slice(supersede, prompt.indexOf("\n", supersede));
+      expect(line).toContain("font files");
+      expect(line).toContain("export");
+      expect(supersede).toBeLessThan(prompt.indexOf("### SKILL.md"));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("image verification ownership", () => {
+  test("PH-23: Given every project type in both modes When counted Then the duplicate and display-size checks each ship once, owned by the completion checks and realism rules", async () => {
+    for (const projectType of ["prototype", "slide_deck", "graphic"] as const) {
+      for (const contextMode of ["full", "compact"] as const) {
+        const prompt = await buildPrompt(makeContext(projectType), REQUEST, { contextMode });
+        expect(countOccurrences(prompt, "still a duplicate")).toBe(1);
+        expect(countOccurrences(prompt, "display size")).toBe(1);
+        expect(countOccurrences(prompt, IMAGE_ARTBOARD_COMPLETION_CHECKS)).toBe(1);
+      }
     }
   });
 });

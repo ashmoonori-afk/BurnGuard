@@ -25,8 +25,9 @@ export const PROTOTYPE_SKILL_MD = `# Prototype authoring conventions
 
 ## Default page structure
 
-- Unspecified homepages default to: navbar → hero → features → social proof
-  → pricing or secondary feature → CTA banner → footer (4–7 sections).
+- Unspecified homepages default to: navbar → hero → features → pricing or
+  secondary feature → CTA banner → footer (4–6 sections); social proof only
+  from supplied logos, quotes or figures.
 - Top-level blocks are \`<section data-section="<archetype>">\` direct
   children of \`<body>\`, except navbar (\`<header>\`) and footer
   (\`<footer>\`). Wrap the body sections in a single \`<main>\`.
@@ -100,7 +101,8 @@ export const PROTOTYPE_SKILL_MD = `# Prototype authoring conventions
 - Pair color-coded status with text, sign, shape, or pattern cues.
 - Disable nonessential animation and smooth scrolling in
   \`@media (prefers-reduced-motion: reduce)\`.
-- Use \`@media (min-width: 640px)\` for tablet and \`(min-width: 1024px)\` for desktop.
+- When a breakpoint is needed, use the system's \`--layout-bp-*\` values; without
+  a system, 640px tablet / 1024px desktop.
 
 ## Video & media
 
