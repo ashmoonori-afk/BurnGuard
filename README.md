@@ -150,6 +150,16 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 ## Changelog
 
+### Unreleased
+
+- Generation turns commit even when the rendered design check cannot run (Chromium missing or a large site timing out); the chat shows a "review incomplete" badge instead of refusing the turn. Must-fix findings block a turn only in pages the turn changed, and a turn that edits shared CSS, scripts or images is checked across every page.
+- The Quality panel reports checks that do not apply to decks and fixed-size graphics as not applicable, measures contrast on plain gradients, treats monospace text as its own font role, scans linked stylesheets for hard-coded colours, and flags remote fonts, images and frames that exports cannot fetch.
+- The design brief carries the app language, and UX-review findings, quality and platform fix requests, direction previews and every app-built AI request are shown in Korean, English or Chinese; error messages exist for every server error code.
+- The prompt harness reconciles contradictory rules (charts, palettes, breakpoints, social proof, map embeds, PowerShell on Windows only), adds Hangul typography rules, stages the Lucide icon reference inside each project, gates the 3D and chart contracts by request, ships the complete design-system token block and trims pinned rules in compact mode.
+- Canvas: the Edit panel edits image sources and link targets, resolved comments can be reopened, a new comment opens its editor, Ctrl/⌘+Z undoes style tweaks, colour swatches come from the page's own tokens, every bundled font is listed, and the duplicate Select mode is gone.
+- Home and settings: dark mode applies on every screen, the language saves on click, backend detection failures show a retry, the creation draft clears after success, and search covers all projects.
+- Website import strips scripts and forms instead of rejecting the page, records media-query context on extracted tokens and emits the canonical token contract; starter templates declare `--page-background`.
+
 ### 0.5.24
 
 - New projects and seeded samples load in the canvas, live preview and Present again; the bundled font set had outgrown the canvas font limit.
