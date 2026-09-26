@@ -62,6 +62,12 @@ describe("design audit grouping and actions", () => {
     expect(grouped.unknown.map((item) => [item.code, item.status, item.reason])).toEqual([["narrow_width", "unmeasurable", "unresolvable_rendering"], ["token_usage", "skipped", "tokens_not_exposed"]]);
     expect(grouped.passedCount).toBe(4);
   });
+  test("Given not-applicable checks When grouped Then they are neither unknown nor counted as passed", () => {
+    const report = result({ checks: [check({ code: "text_overflow" }), check({ code: "contrast" }), check({ code: "narrow_width", status: "not_applicable" }), check({ code: "site_nav_mismatch", status: "not_applicable" })] });
+    const grouped = groupDesignAuditResult(report);
+    expect(grouped.unknown).toEqual([]);
+    expect(grouped.passedCount).toBe(2);
+  });
   test("Given a stale safe-fix finding When resolving actions Then reveal stays available and mutation is closed", () => {
     const withFix = finding({ safe_fix: { kind: "patch_html_node", rel_path: "index.html", request: { node_bg_id: "hero-title", styles: { "font-size": "12px" } } } });
     expect(designAuditActionAvailability(withFix, { current: false, running: false, pendingFindingId: null })).toEqual({ canOpenFile: true, canReveal: true, canApplySafeFix: false, applying: false });

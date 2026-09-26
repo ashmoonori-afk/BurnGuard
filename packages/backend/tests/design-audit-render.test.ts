@@ -44,7 +44,8 @@ describe("rendered design auditor", () => {
       const fix = result.checks[2]?.findings.find((finding) => finding.source.node_bg_id === "tiny")?.safe_fix;
       expect(fix?.request.styles).toEqual({ "font-size": "12px" });
       expect(JSON.stringify(result)).not.toContain(root);
-      expect(result.checks[3]?.findings.some((finding) => finding.source.node_bg_id === "gradient")).toBeFalse();
+      // White on the red stop of linear-gradient(red, blue) measures 4.0: an opaque gradient is resolved against its worst stop.
+      expect(result.checks[3]?.findings.find((finding) => finding.source.node_bg_id === "gradient")).toMatchObject({ measured: 4, threshold: 4.5 });
     } finally { await rm(root, { recursive: true, force: true }); }
   }, 60_000);
 

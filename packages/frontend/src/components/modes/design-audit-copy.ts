@@ -8,10 +8,12 @@ export const DESIGN_AUDIT_CHECK_COPY = {
   get narrow_width() { return t("modes.audit.check.narrowWidth"); }, get duplicate_node_id() { return t("modes.audit.check.duplicateNodeId"); }, get missing_image() { return t("modes.audit.check.missingImage"); }, get token_usage() { return t("modes.audit.check.tokenUsage"); },
   get site_nav_mismatch() { return t("modes.audit.check.siteNavMismatch"); }, get site_missing_aria_current() { return t("modes.audit.check.currentPage"); }, get site_dangling_link() { return t("modes.audit.check.danglingLink"); },
   get site_missing_shared_block() { return t("modes.audit.check.sharedBlock"); }, get site_root_absolute_asset() { return t("modes.audit.check.absoluteAsset"); },
+  get remote_resources() { return t("modes.audit.check.remoteResources"); },
 } as const satisfies Record<DesignAuditCheckCode, string>;
 
 export const DESIGN_AUDIT_STATUS_COPY = {
   get pass() { return t("modes.audit.status.pass"); }, get fail() { return t("modes.audit.status.fail"); }, get skipped() { return t("modes.audit.status.skipped"); }, get unmeasurable() { return t("modes.audit.status.unmeasurable"); },
+  get not_applicable() { return t("modes.audit.status.notApplicable"); },
 } as const satisfies Record<DesignAuditCheckStatus, string>;
 
 export const DESIGN_AUDIT_ACTION_COPY = {
@@ -22,7 +24,7 @@ export const DESIGN_AUDIT_ACTION_COPY = {
   get restore_image_reference() { return t("modes.audit.action.imageReference"); }, get replace_literal_with_token() { return t("modes.audit.action.useToken"); },
   get repair_site_navigation() { return t("modes.audit.action.siteNavigation"); }, get mark_current_page() { return t("modes.audit.action.currentPage"); },
   get create_or_repair_site_link() { return t("modes.audit.action.siteLink"); }, get add_shared_blocks() { return t("modes.audit.action.sharedBlocks"); },
-  get relativize_asset_path() { return t("modes.audit.action.assetPath"); },
+  get relativize_asset_path() { return t("modes.audit.action.assetPath"); }, get bundle_remote_resource() { return t("modes.audit.action.bundleRemote"); },
 } as const satisfies Record<DesignAuditTargetedAction, string>;
 
 export const DESIGN_AUDIT_UNKNOWN_COPY = {
