@@ -42,7 +42,7 @@ import { needsGenerationPhases, runGenerationPhases } from "./turn-phases";
 import { generationOutputComplete } from "./generation-output";
 import { parse } from "node-html-parser";
 import { prepareSlideDeckExport } from "./export-stage";
-import { DesignReviewError, reviewTurnDesign } from "./turn-design-review";
+import { blockingDesignFindings, DesignReviewError, reviewTurnDesign } from "./turn-design-review";
 import { designAuditCanvas } from "./design-audit";
 import { assertLogoDeliverables, captureLogoTurnExpectation, LogoDeliverableError, LogoEvidenceCollector } from "./logo-deliverables";
 import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
@@ -430,6 +430,9 @@ async function runUserTurnInternal(
           turnId,
           operationId,
         });
+        // What this turn changes is measured against the stage as the adapter found it, so a
+        // finding that predates the turn on an untouched page cannot refuse it.
+        const beforeAdapter = await inspectCanonicalTree(stageDir);
         const immutableSnapshots = await captureImmutableAttachments(selectedAttachments);
         try {
           await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: contextPayload.attachments, immutableSnapshots }, async (stageInputs) => {
@@ -495,12 +498,17 @@ async function runUserTurnInternal(
               await ensureCharts(stageDir);
               if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
               const canvas = designAuditCanvas(project.type, project.options_json);
+              const changedPaths = changedTreePaths(beforeAdapter, await inspectCanonicalTree(stageDir));
               const designReview = await (dependencies.reviewDesign ?? reviewTurnDesign)({
                 adapter: adapterInput, projectId: project.id, type: project.type, entrypoint: project.entrypoint,
-                revision: project.current_revision + 1, ...(canvas ? { canvas } : {}),
+                revision: project.current_revision + 1, changedPaths, ...(canvas ? { canvas } : {}),
+                ...(sessionContext.designSystemPin ? { tokensCss: sessionContext.designSystemPin.tokens } : {}),
                 run: (input) => runAdapter(backendId, input),
               });
-              if (designReview.status !== "checked" || designReview.result?.overall_status === "must_fix" || !designReview.result || providerReportedFailure) throw new DesignReviewError();
+              // Checks that could not run do not refuse the turn: the review badge and the on-demand
+              // Quality audit carry that warning. Only measured, blocking defects do.
+              const blocking = designReview.result === null ? [] : blockingDesignFindings(designReview.result, changedPaths);
+              if (blocking.length > 0 || providerReportedFailure) throw new DesignReviewError();
               // A repair edits the stage after the completion gate, so repaired output is gated again.
               if ((designReview.repairs > 0 || sourcePages !== undefined) && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages)) {
                 throw new ArtifactOperationError("publication_failed", "Design review left incomplete or remapped output");

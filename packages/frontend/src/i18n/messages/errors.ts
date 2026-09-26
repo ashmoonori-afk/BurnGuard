@@ -1,6 +1,7 @@
 import { defineMessages } from "../types";
 
 export const errorsMessages = defineMessages({
+  "errors.design_review_failed": { ko: "디자인 검사·수정을 완료하지 못해 반영하지 않았어요. 기존 결과는 유지돼요.", en: "Design checks or repairs could not be completed, so nothing was applied. The previous result is preserved.", "zh-CN": "设计检查或修复未能完成，因此未应用结果。原有结果已保留。" },
   "errors.cliMissing": { ko: "LLM CLI를 찾을 수 없어요", en: "LLM CLI not found", "zh-CN": "未找到 LLM CLI" },
   "errors.cliRequired": { ko: "BurnGuard Design에서 프로젝트를 만들려면 Claude Code 또는 Codex CLI를 설치해야 해요.", en: "Install Claude Code or Codex CLI to create projects in BurnGuard Design.", "zh-CN": "在 BurnGuard Design 中创建项目需要安装 Claude Code 或 Codex CLI。" },
   "errors.installed": { ko: "설치됨 ({version})", en: "Installed ({version})", "zh-CN": "已安装（{version}）" },
@@ -48,7 +49,6 @@ export const errorsMessages = defineMessages({
   "errors.logo_requires_authenticated_codex": { ko: "로고 작업에는 이미지 생성이 가능한 인증된 연결이 필요해요. 설정에서 Codex 연결과 로그인을 확인해 주세요.", en: "Logo work requires an authenticated image-capable connection. Check the Codex connection and sign-in in Settings.", "zh-CN": "标志任务需要已认证且支持图像生成的连接。请在设置中检查 Codex 连接与登录状态。" },
   "errors.logo_deliverables_missing": { ko: "로고 결과물이 완성되지 않아 반영하지 않았어요. 시안을 다시 만들거나 선택한 시안으로 다시 요청해 주세요.", en: "The logo deliverables were incomplete, so nothing was applied. Generate concepts again or re-request the selected one.", "zh-CN": "标志成果未完成，因此未应用。请重新生成方案，或再次提交所选方案。" },
   "errors.logo_image_provenance_missing": { ko: "로고 이미지의 생성 출처를 확인하지 못해 반영하지 않았어요. 이미지 생성 도구로 시안을 다시 만들어 주세요.", en: "The logo images' generation origin could not be verified, so nothing was applied. Create the concepts again with the image-generation tool.", "zh-CN": "无法验证标志图像的生成来源，因此未应用结果。请使用图像生成工具重新创建方案。" },
-  "errors.design_review_failed": { ko: "디자인 검사·수정을 완료하지 못해 반영하지 않았어요. 기존 결과는 유지돼요. 검사를 다시 요청해 주세요.", en: "Design checks or repairs could not be completed, so nothing was applied. The previous result is preserved. Request the checks again.", "zh-CN": "设计检查或修复未能完成，因此未应用结果。原有结果已保留。请重新请求检查。" },
   "errors.invalid_project_options": { ko: "프로젝트 옵션이 프로젝트 종류와 맞지 않아요. 값을 다시 확인한 뒤 시도해 주세요.", en: "The options do not match the project type. Check the values and try again.", "zh-CN": "项目选项与项目类型不匹配。请检查选项值后重试。" },
   "errors.forbidden": { ko: "이 요청을 처리할 권한이 없어요. 페이지를 새로고침한 뒤 다시 시도해 주세요.", en: "You do not have permission for this request. Refresh the page and try again.", "zh-CN": "没有处理此请求的权限。请刷新页面后重试。" },
   "errors.has_active_projects": { ko: "이 디자인 시스템을 쓰는 프로젝트가 아직 있어요. 해당 프로젝트를 먼저 삭제한 뒤 다시 시도해 주세요.", en: "Projects still use this design system. Delete those projects first, then try again.", "zh-CN": "仍有项目使用此设计系统。请先删除相关项目后重试。" },

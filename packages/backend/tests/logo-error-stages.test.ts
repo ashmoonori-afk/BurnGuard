@@ -53,8 +53,8 @@ const images = [1, 2, 3, 4].map(png);
 const hashes = images.map(bytes => createHash("sha256").update(bytes).digest("hex"));
 
 const cases = [
-  ["audit-timeout", "design_review_failed"],
-  ["audit-unavailable", "design_review_failed"],
+  ["audit-timeout", null],
+  ["audit-unavailable", null],
   ["must-fix", "design_review_failed"],
   ["repair-exit", "design_review_failed"],
   ["repair-error-event", "design_review_failed"],
@@ -174,7 +174,7 @@ test("Given parent cancellation during a repair When review settles Then cancell
   const controller = new AbortController();
   const reason = new DOMException("fixture cancellation", "AbortError");
   const events: NormalizedEvent[] = [];
-  const review = reviewTurnDesign({ projectId, type: "logo", entrypoint: "index.html", revision: 1,
+  const review = reviewTurnDesign({ projectId, type: "logo", entrypoint: "index.html", revision: 1, changedPaths: ["index.html"],
     adapter: { sessionId, turnId: "cancel-review", projectDir, binaryPath: "unused", prompt: "fixture", userEvent: { type: "user.message", text: "fixture" }, signal: controller.signal, onEvent: async event => { events.push(event); } },
     audit: async () => ({ schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: "a".repeat(64), created_at: 1, overall_status: "must_fix", checks: [{ code: "text_overflow", status: "fail", reason: null, findings: [{ id: "fixture", check_code: "text_overflow", severity: "must_fix", source: { rel_path: "index.html", node_bg_id: "fixture" }, evidence: "fixture", targeted_action: "expand_or_reflow_text" }] }] }),
     run: async () => { controller.abort(reason); throw reason; },

@@ -11,7 +11,7 @@ import { fingerprintHtmlNode, FilePatchError } from "./file-patch";
 import { launchChromium, openRenderSession, RenderSessionError, type RenderSession } from "./export-render-session";
 import { registerExportBrowser } from "./export-browser-registry";
 import { parseStoredProjectOptions } from "./project-options";
-import { buildSiteMap } from "./site-map";
+import { buildSiteMap, type SiteMap } from "./site-map";
 import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
 
 /** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v4: remote resources, not-applicable checks, site-wide folding). */
@@ -34,6 +34,12 @@ export class DesignAuditServiceError extends Error {
   constructor(readonly code: "project_not_found" | "project_path_unavailable" | "stale_artifact_identity" | "audit_unavailable", message: string) { super(message); }
 }
 
+/** The pages a website audit renders: the entrypoint plus every page the site map reaches, bounded by the site-map page limit. */
+export async function auditedSiteMap(manifest: CanonicalTreeManifest, projectDir: string, entrypoint: string): Promise<SiteMap> {
+  const htmlFiles = manifest.files.filter((file) => /\.html?$/iu.test(file.path)).map((file) => ({ rel_path: file.path, category: "html" as const }));
+  return buildSiteMap(htmlFiles, entrypoint, (relPath) => readFile(resolveWithin(projectDir, relPath), "utf8"));
+}
+
 export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<DesignAuditResult> {
   const manifest = await inspectCanonicalTree(input.projectDir);
   const expectedTreeDigest = input.treeDigest ?? input.digest;
@@ -43,8 +49,7 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   let siteFindings: readonly DesignAuditFinding[] = [];
   let sharedChangeDivergence: readonly string[] = [];
   if (!(input.deck ?? false) && input.canvas === undefined) {
-    const htmlFiles = manifest.files.filter((file) => /\.html?$/iu.test(file.path)).map((file) => ({ rel_path: file.path, category: "html" as const }));
-    const siteMap = await buildSiteMap(htmlFiles, input.entrypoint, (relPath) => readFile(resolveWithin(input.projectDir, relPath), "utf8"));
+    const siteMap = await auditedSiteMap(manifest, input.projectDir, input.entrypoint);
     const pages = await Promise.all(siteMap.pages.map(async (page) => ({ rel_path: page.rel_path, html: await readFile(resolveWithin(input.projectDir, page.rel_path), "utf8") })));
     auditEntrypoints = siteMap.pages.map((page) => page.rel_path);
     const siteAudit = auditSiteStructure(siteMap, pages);

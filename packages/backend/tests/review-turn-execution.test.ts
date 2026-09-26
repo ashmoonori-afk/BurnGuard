@@ -19,6 +19,9 @@ import { broker } from "../src/services/broker";
 import { managedFileRoutes } from "../src/routes/managed-files";
 import { selectContextAttachments } from "../src/services/context";
 import { createApp } from "../src/server";
+import { reviewTurnDesign } from "../src/services/turn-design-review";
+import { RenderSessionError } from "../src/services/export-render-session";
+import type { DesignAuditResult } from "@bg/shared";
 
 let projectId: string;
 let sessionId: string;
@@ -46,17 +49,60 @@ function start(runAdapter: NonNullable<TurnDependencies["runAdapter"]>, text = "
   return turn;
 }
 
-test.each(["unavailable", "must_fix"] as const)("Given %s design checks When finalizing Then the prior artifact remains unchanged", async (status) => {
+function mustFixFinding(relPath: string, checkCode: "text_overflow" | "contrast" = "text_overflow"): DesignAuditResult {
+  return { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "must_fix", checks: [{ code: checkCode, status: "fail", reason: null, findings: [{ id: "fixture", check_code: checkCode, severity: "must_fix", source: { rel_path: relPath, node_bg_id: "fixture" }, evidence: "fixture", targeted_action: checkCode === "contrast" ? "increase_color_contrast" : "expand_or_reflow_text" }] }] };
+}
+
+test("Given must_fix design checks When finalizing Then the prior artifact remains unchanged", async () => {
   const before = await inspectCanonicalTree(projectDir);
   const turn = start(async (_backend, input) => {
     await writeFile(path.join(input.projectDir, "index.html"), "<!doctype html><p>Updated</p>");
     return { exitCode: 0 };
-  }, "Update a paragraph", async () => status === "unavailable"
-    ? { status: "unavailable", repairs: 0, result: null }
-    : { status: "checked", repairs: 2, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "must_fix", checks: [] } });
+  }, "Update a paragraph", async () => ({ status: "checked", repairs: 2, result: mustFixFinding("index.html") }));
   await turn.promise;
   expect(await inspectCanonicalTree(projectDir)).toEqual(before);
   expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+  const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
+  expect(JSON.parse(error!.payload_json).code).toBe("design_review_failed");
+});
+
+test("Given unavailable design checks When finalizing Then the turn commits and the review badge reports the checks as unavailable", async () => {
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  try {
+    const turn = start(async (_backend, input) => {
+      await writeFile(path.join(input.projectDir, "index.html"), "<!doctype html><p>Updated</p>");
+      return { exitCode: 0 };
+    }, "Update a paragraph", input => reviewTurnDesign({ ...input, audit: async () => { throw new RenderSessionError("chromium_not_installed", "unavailable"); } }));
+    await turn.promise;
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+    expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("<!doctype html><p>Updated</p>");
+    expect(events.filter(event => event.type === "status.error")).toEqual([]);
+    expect(events.filter(event => event.type === "tool.finished" && event.tool === "generation_design_review").at(-1)).toMatchObject({ ok: false, output: { status: "unavailable", repairs: 0 } });
+  } finally { unsubscribe(); }
+});
+
+test("Given a pre-existing must_fix finding on an untouched page When a turn edits only index.html Then it commits without a repair", async () => {
+  await new ArtifactCoordinator(getSqlite()).run({ projectId, projectDir, kind: "turn", expectedRevision: 0, expectedArtifactDigest: digest, mutate: async (stage) => {
+    await writeFile(path.join(stage, "index.html"), "<!doctype html><p>Home</p>");
+    await writeFile(path.join(stage, "about.html"), '<!doctype html><p style="color:#777">About</p>');
+  } });
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  let repairs = 0;
+  try {
+    const turn = start(async (_backend, input) => {
+      if (input.turnId.includes("-design-repair-")) { repairs++; return { exitCode: 0 }; }
+      await writeFile(path.join(input.projectDir, "index.html"), "<!doctype html><p>Home edited</p>");
+      return { exitCode: 0 };
+    }, "Edit the home paragraph", input => reviewTurnDesign({ ...input, audit: async () => mustFixFinding("about.html", "contrast") }));
+    await turn.promise;
+    expect(repairs).toBe(0);
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+    expect(events.filter(event => event.type === "status.error")).toEqual([]);
+    expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("<!doctype html><p>Home edited</p>");
+    expect(await readFile(path.join(projectDir, "about.html"), "utf8")).toBe('<!doctype html><p style="color:#777">About</p>');
+  } finally { unsubscribe(); }
 });
 
 test("Given a deleted entrypoint after a failed write When continuing Then generated assets survive and only the repaired result is committed", async () => {
