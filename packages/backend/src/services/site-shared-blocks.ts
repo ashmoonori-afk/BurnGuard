@@ -28,12 +28,15 @@ export function auditSiteStructure(siteMap: SiteMap, pages: readonly SiteHtml[])
   const homeParts = extractSharedParts(homeHtml);
   const findings: SiteStructureFinding[] = [];
   const divergentPages: string[] = [];
+  // A site that never adopted the markers (an import) is one finding on its home page, not one per page.
+  const anyMarked = siteMap.pages.some((page) => extractSharedParts(htmlByPath.get(page.rel_path) ?? "").marked);
+  const hasPageLinks = (relPath: string): boolean => siteMap.nav_links.some((link) => link.from === relPath && link.target_rel_path !== null) || siteMap.dangling.some((link) => link.from === relPath);
 
   for (const page of siteMap.pages) {
     const html = htmlByPath.get(page.rel_path) ?? "";
     const parts = extractSharedParts(html);
-    if (!parts.marked) findings.push(finding("site_missing_shared_block", page.rel_path, "Shared header, nav, footer, content, or CSS markers are missing; legacy landmarks were used."));
-    if (!/\baria-current\s*=\s*["']page["']/iu.test(parts.nav)) findings.push(finding("site_missing_aria_current", page.rel_path, "Navigation does not mark the current page with aria-current=page."));
+    if (!parts.marked && (anyMarked || page.rel_path === homePath)) findings.push(finding("site_missing_shared_block", page.rel_path, anyMarked ? "Shared header, nav, footer, content, or CSS markers are missing; legacy landmarks were used." : "No page marks its shared header, nav, footer, content, or CSS; legacy landmarks were used."));
+    if (hasPageLinks(page.rel_path) && !/\baria-current\s*=\s*["']page["']/iu.test(parts.nav)) findings.push(finding("site_missing_aria_current", page.rel_path, "Navigation does not mark the current page with aria-current=page."));
     if (page.rel_path !== homePath && normalizeShared(parts.nav) !== normalizeShared(homeParts.nav)) findings.push(finding("site_nav_mismatch", page.rel_path, "Shared navigation differs from the entrypoint after active-link normalization."));
     if (page.rel_path !== homePath && sharedSignature(parts) !== sharedSignature(homeParts)) divergentPages.push(page.rel_path);
     if (hasRootAbsoluteAsset(html)) findings.push(finding("site_root_absolute_asset", page.rel_path, "Page contains a root-absolute asset reference."));

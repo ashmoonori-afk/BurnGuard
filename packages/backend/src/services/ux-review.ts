@@ -21,8 +21,12 @@ export function reviewHtml(html: string, kind: ProjectType): readonly UxReviewFi
   if (nodes.length > 5000) throw new UxReviewError("review_unavailable", "HTML exceeds review limits");
   for (const node of nodes) { let depth = 0; for (let parent = node.parentNode; parent; parent = parent.parentNode) if (++depth > 100) throw new UxReviewError("review_unavailable", "HTML exceeds review limits"); }
   const visible = (node: HTMLElement): boolean => {
+    let inSummary = false;
     for (let current: HTMLElement | null = node; current; current = current.parentNode) {
       if (current.hasAttribute("hidden") || current.getAttribute("aria-hidden") === "true" || /(?:display\s*:\s*none|visibility\s*:\s*hidden)/i.test(current.getAttribute("style") ?? "")) return false;
+      // A closed <details> shows only its <summary>.
+      if (current.tagName === "SUMMARY") inSummary = true;
+      else if (current.tagName === "DETAILS") { if (!current.hasAttribute("open") && !inSummary) return false; inSummary = false; }
     }
     return true;
   };

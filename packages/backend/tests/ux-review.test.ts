@@ -38,6 +38,10 @@ describe("local UX review", () => {
     expect(reviewHtml("<p>Short slide</p>", "slide_deck")).toEqual([]);
     expect(reviewHtml('<img data-bg-node-id="same"><img data-bg-node-id="same">', "graphic").every((finding) => finding.node_bg_id === null)).toBe(true);
   });
+  test("Given images without alt inside closed and open details, When reviewing, Then only the open details content and the closed summary are reviewed", () => {
+    const findings = reviewHtml('<h1>Title</h1><details><summary><img data-bg-node-id="in-summary"></summary><img data-bg-node-id="closed"><a href="x.html">here</a></details><details open><img data-bg-node-id="open"></details>', "prototype");
+    expect(findings.map((finding) => [finding.code, finding.node_bg_id])).toEqual([["image_alt", "in-summary"], ["image_alt", "open"]]);
+  });
   test("Given canonical project identity, When route receives traversal or stale bytes, Then rejects safely", async () => {
     await runMigrations();
     await mkdir(projectsDir, { recursive: true });
