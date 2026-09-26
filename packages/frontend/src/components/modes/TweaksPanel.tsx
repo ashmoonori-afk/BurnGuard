@@ -6,7 +6,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { cn } from "@/lib/utils";
-import { dimensionPatch, isAspectLocked, MAX_ELEMENT_SIZE, rotationPatch, targetDimensions } from "@/lib/element-geometry";
+import { ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, MAX_ELEMENT_SIZE, rotationPatch, targetDimensions } from "@/lib/element-geometry";
 import { parseLocalFonts } from "@bg/shared";
 import { apiFetch } from "@/api/client";
 import {
@@ -61,27 +61,22 @@ const FONT_WEIGHTS: Array<{ value: string; label: MessageKey }> = [
 ];
 
 const TRANSPARENT_RE = /^rgba?\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)$/i;
-const SIZE_RULES: Record<
-  TweaksStyleKey,
-  { min: number; max: number; allowNegative: boolean }
-> = {
-  width: { min: 1, max: MAX_ELEMENT_SIZE, allowNegative: false },
-  height: { min: 1, max: MAX_ELEMENT_SIZE, allowNegative: false },
-  rotate: { min: -180, max: 180, allowNegative: true },
-  "aspect-ratio": { min: 0, max: 0, allowNegative: false },
-  "box-sizing": { min: 0, max: 0, allowNegative: false },
-  display: { min: 0, max: 0, allowNegative: false },
-  "font-family": { min: 0, max: 0, allowNegative: false },
-  "font-size": { min: 8, max: 240, allowNegative: false },
-  "font-weight": { min: 100, max: 900, allowNegative: false },
-  color: { min: 0, max: 0, allowNegative: false },
-  "line-height": { min: 8, max: 320, allowNegative: false },
-  "letter-spacing": { min: -8, max: 24, allowNegative: true },
-  "background-color": { min: 0, max: 0, allowNegative: false },
-  padding: { min: 0, max: 320, allowNegative: false },
-  margin: { min: -320, max: 320, allowNegative: true },
-  "border-radius": { min: 0, max: 320, allowNegative: false },
-};
+type SizeRuleKey = "font-size" | "line-height" | "letter-spacing";
+interface SizeRule { min: number; max: number; allowNegative: boolean }
+
+/** Text floors match the quality audit (`minimum_text_size`): 12px on the web, 24px inside a deck slide. */
+export function sizeRuleFor(styleKey: SizeRuleKey, target: Pick<TweaksTarget, "inSlide">): SizeRule {
+  const textFloor = target.inSlide === true ? 24 : 12;
+  switch (styleKey) {
+    case "font-size": return { min: textFloor, max: 240, allowNegative: false };
+    case "line-height": return { min: textFloor, max: 320, allowNegative: false };
+    case "letter-spacing": return { min: -8, max: 24, allowNegative: true };
+    default: {
+      const unreachable: never = styleKey;
+      return unreachable;
+    }
+  }
+}
 
 /** Simple geometry first; the existing style controls remain under Advanced. */
 export default function TweaksPanel({ target, saving, onApply, onResetAll, onClear, review }: {
@@ -139,13 +134,13 @@ function GeometryControls({ target, saving, onApply }: { target: TweaksTarget; s
     <div className="grid grid-cols-2 gap-3">
       <GeometryNumber label={t("modes.width")} unit="px" value={width} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, value, height, locked))} />
       <GeometryNumber label={t("modes.height")} unit="px" value={height} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, width, value, locked))} />
-      <GeometryNumber label={t("modes.rotation")} unit="°" value={rotation} min={-360} max={360} disabled={saving} onCommit={value => onApply(rotationPatch(value))} />
-      <label className="block text-xs">{t("modes.tweaks.ratio")}<select aria-label={t("modes.tweaks.ratio")} disabled={saving} value={locked ? "locked" : "free"} onChange={event => {
+      <GeometryNumber label={t("modes.rotation")} unit="°" value={rotation} min={-180} max={180} disabled={saving} onCommit={value => onApply(rotationPatch(value))} />
+      <label className="block text-xs">{t("modes.tweaks.ratio")}<select aria-label={t("modes.tweaks.ratio")} disabled={saving} value={aspectPresetValue(target)} onChange={event => {
           const value = event.target.value;
           if (value === "free" || value === "locked") onApply({ "aspect-ratio": value === "free" ? "auto" : `${width} / ${height}` });
           else { const ratio = Number(value); onApply({ ...dimensionPatch(target, width, width / ratio, false), "aspect-ratio": `${ratio} / 1` }); }
         }} className="mt-1 min-h-10 w-full rounded border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <option value="free">{t("modes.tweaks.freeRatio")}</option><option value="locked">{t("modes.tweaks.lockRatio")}</option><option value="1">1 : 1</option><option value="1.3333333333333333">4 : 3</option><option value="1.7777777777777777">16 : 9</option><option value="0.5625">9 : 16</option>
+          <option value="free">{t("modes.tweaks.freeRatio")}</option><option value="locked">{t("modes.tweaks.lockRatio")}</option>{ASPECT_PRESETS.map((preset) => <option key={preset.label} value={String(preset.value)}>{preset.label}</option>)}
         </select>
       </label>
     </div>
@@ -239,7 +234,7 @@ function SizeRow({
   onApply,
 }: {
   target: TweaksTarget;
-  styleKey: TweaksStyleKey;
+  styleKey: SizeRuleKey;
   saving: boolean;
   onApply: ApplyFn;
 }) {
@@ -262,7 +257,7 @@ function SizeRow({
       setDraft(numericFromLength(inline));
       return;
     }
-    const rule = SIZE_RULES[styleKey];
+    const rule = sizeRuleFor(styleKey, target);
     if ((!rule.allowNegative && parsed < 0) || !Number.isFinite(parsed)) {
       setDraft(numericFromLength(inline));
       return;
@@ -428,7 +423,7 @@ function ColorRow({
             }
           />
           <span className="min-w-0 flex-1 truncate text-left">
-            {inline || (effective && !showTransparent ? "—" : "—")}
+            {inline || (showTransparent ? "—" : effective)}
           </span>
         </button>
       </label>

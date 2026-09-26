@@ -71,6 +71,8 @@ export interface FrameBgHit {
   text: string | null;
   /** True when a non-inline descendant exists, which the server's text patch refuses (`non_leaf_text_target`). */
   hasBlockChildren?: boolean;
+  /** True inside a deck slide, where the audit's text floor is 24px instead of 12px. */
+  inSlide?: boolean;
   attributes: Record<string, string>;
   computed: Record<string, string>;
   inline: Record<string, string>;
@@ -715,6 +717,7 @@ const BRIDGE_SCRIPT = String.raw`(function () {
         tag: String(bgNode.tagName || "").toLowerCase(),
         text: String(bgNode.textContent || ""),
         hasBlockChildren: !!(bgNode.querySelector && bgNode.querySelector(":not(span,em,strong,br,i,b,u,s,small,sup,sub,mark,code)")),
+        inSlide: !!bgNode.closest("[data-slide]"),
         attributes: readAttributes(bgNode),
         computed: readComputed(bgNode),
         inline: readInline(bgNode)

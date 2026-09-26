@@ -36,6 +36,8 @@ export interface TweaksTarget {
   geometry?: { width: number; height: number };
   bg_id: string;
   tag: string;
+  /** Inside a deck slide the text-size floor is the audit's 24px instead of 12px. */
+  inSlide?: boolean;
   computed: Partial<Record<TweaksStyleKey, string>>;
   inline: Partial<Record<TweaksStyleKey, string>>;
 }
@@ -128,6 +130,7 @@ export default function TweaksLayer({
       onSelect({
         bg_id: hit.bgId,
         tag: hit.tag ?? "div",
+        inSlide: hit.inSlide === true,
         computed,
         inline,
         geometry: hit.geometry,
