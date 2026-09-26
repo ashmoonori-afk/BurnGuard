@@ -72,6 +72,18 @@
     --input: 215 222 232;            /* visible input edge */
     --ring: 0 79 255;                /* blue-500 */
 
+    /* Card tints — soft thumbnail backgrounds, one per project type or
+       system slot; the dark block swaps them for deep shades. */
+    --tint-rose: 255 228 230;
+    --tint-slate: 241 245 249;
+    --tint-sky: 224 242 254;
+    --tint-fuchsia: 250 232 255;
+    --tint-blue: 219 234 254;
+    --tint-stone: 245 245 244;
+    --tint-amber: 254 243 199;
+    --tint-emerald: 209 250 229;
+    --tint-violet: 237 233 254;
+
     --radius: 0.75rem;
     color-scheme: light;
   }
@@ -90,11 +102,24 @@
     --muted-foreground: 187 197 204;
     --accent: 109 149 255;
     --accent-foreground: 17 17 17;
+    --success: 52 211 153;
+    --success-foreground: 17 17 17;
+    --warning: 251 191 36;
+    --warning-foreground: 17 17 17;
     --destructive: 255 120 114;
     --destructive-foreground: 17 17 17;
     --border: 70 74 77;
     --input: 70 74 77;
     --ring: 109 149 255;
+    --tint-rose: 136 19 55;
+    --tint-slate: 30 41 59;
+    --tint-sky: 12 74 110;
+    --tint-fuchsia: 112 26 117;
+    --tint-blue: 30 58 138;
+    --tint-stone: 41 37 36;
+    --tint-amber: 120 53 15;
+    --tint-emerald: 6 78 59;
+    --tint-violet: 76 29 149;
     color-scheme: dark;
   }
 }

@@ -90,7 +90,7 @@ describe("projectToCard", () => {
 
   test("Given a logo project When mapped Then it carries its own tint instead of the generic fallback", () => {
     const card = projectToCard(projectSummary({ type: "logo" }));
-    expect(card.tintClass).toBe("bg-fuchsia-100");
+    expect(card.tintClass).toBe("bg-tint-fuchsia");
     expect(card.kind).toBe("logo");
   });
 
