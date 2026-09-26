@@ -32,9 +32,9 @@ come from its tokens.
   for a role the brief left unspecified. Usual split: display for headlines,
   body for text, mono for numbers and code.
 - Suggested display: weight 500-700, line-height 1.0-1.1, letter-spacing
-  -0.02em to -0.04em; body line-height 1.55-1.65, measure 55-70ch;
-  \`text-wrap: balance\` on headings. Widen a container before shrinking type,
-  but headline line count is never an acceptance gate.
+  -0.02em to -0.04em (Latin only); body line-height 1.55-1.65, measure
+  55-70ch; \`text-wrap: balance\` on headings. Widen a container before
+  shrinking type, but headline line count is never an acceptance gate.
 - Eyebrows: uppercase, letter-spacing 0.14-0.2em, muted. Never numbered filler
   ("SECTION 01", "STEP 1", "ABOUT US").
 - Tabular numerals for every metric; keep the unit beside the number.
@@ -91,9 +91,9 @@ with 24-32px gutters and 1200-1280px content width.
 - Easing cubic-bezier(0.32, 0.72, 0, 1); 200-300ms hover, 500-800ms reveals;
   transform and opacity only. Hover: cards lift 2px and deepen their shadow,
   buttons shift fill, press scales to 0.98. Nothing decorative moves.
-- Test viewports, not fixed page or artboard dimensions: judge the render at
-  desktop 1280 and narrow 375, and content must reflow with no horizontal
-  scroll and nothing that carries the value hidden down to 320px.
+- Test viewports, not fixed page or artboard dimensions: the app audits at
+  desktop 1280 and narrow 375; 320px is the authoring floor, with no
+  horizontal scroll and nothing that carries the value hidden.
 `;
 
 export const DECK_VISUAL_CRAFT = `## Deck craft (DECK_VISUAL_CRAFT)
@@ -162,13 +162,13 @@ tokens everywhere.
   fallback in any stack. Other bundled families (BUNDLED_FONT_REFERENCE):
   read fonts/fonts.md first.
 - Optional palette examples:
-  Paper (calm, editorial): --bg:#F6F1E8 --surface:#FFFDF9 --surface-2:#EFE6D8
+  Light (calm, editorial): --bg:#F4F5F7 --surface:#FFFFFF --surface-2:#E9EBEF
   --ink:#18232D --ink-2:#52616C --ink-3:#8A949C --line:rgba(24,35,45,.10)
   --accent:#C8512F --accent-ink:#FFF8F2 --accent-soft:rgba(200,81,47,.12)
   Ink (bold, product, tech): --bg:#0B0D12 --surface:#141822 --surface-2:#1C2230
   --ink:#F6F1E8 --ink-2:#B7B2A8 --ink-3:#7C7A74 --line:rgba(246,241,232,.10)
   --accent:#E06B4C --accent-ink:#0B0D12 --accent-soft:rgba(224,107,76,.16)
-- Data accent for charts: --accent-2:#2F6FDB (Paper) or #7DB4FF (Ink).
+- Data accent for charts: --accent-2:#2F6FDB (Light) or #7DB4FF (Ink).
   Status: --ok:#1F8A5B --warn:#B7791F --danger:#C0392B, always paired with
   text or an icon.
 - Scale: --space-1..8 = 4 8 16 24 32 48 64 96px; --radius-s:8px
