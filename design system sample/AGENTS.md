@@ -33,7 +33,7 @@ design system sample/
 - Brand voice is institutional and third-person: Title Case headlines, sentence-case body, ALL-CAPS tracked eyebrows (`0.14em`), tabular numerals.
 - Visual rules: white/near-white surfaces, `#7399C6` brand blue used sparingly, `#186ADE` for interactive, conservative radii (0/2/4/8), 4px grid, Lucide icons at 1.5px stroke.
 - `SKILL.md` front matter (`name: northvale-capital-design`, `user-invocable: true`) sends the reader to `README.md` first; keep its quick reference aligned with the README.
-- This tree doubles as the worked example for the authoring contract in `doc/05-design-system-format.md`.
+- This tree doubles as the worked example for the authoring contract in `doc/05-design-system-format.md` (local-only record, see doc/README.md; the tracked contract is `design system themes/AGENTS.md`).
 
 ## ANTI-PATTERNS
 

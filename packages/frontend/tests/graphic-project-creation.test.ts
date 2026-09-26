@@ -199,7 +199,8 @@ describe("graphic set form choices", () => {
       compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text(),
     ]);
     if (exitCode !== 0) throw new Error(`Graphic fixture bundle failed (${exitCode}): ${errors}`);
-    const browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(60_000));
+    // Bundled Chromium, as in canvas-css-imports.browser.test.ts: hosts without system Chrome still run this suite.
+    const browser = await launchChromiumViaNode({}, AbortSignal.timeout(60_000));
     try {
       const page = await browser.newPage();
       const rendered = await browser.newPage();

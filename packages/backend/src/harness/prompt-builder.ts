@@ -67,7 +67,7 @@ export interface PromptBuildOptions {
 
 /**
  * Builds the prompt text piped into the LLM CLI's stdin.
- * Mirrors doc/03-backend-adapters.md section 5.4 at a Phase 1 minimum: project state,
+ * Mirrors doc/03-backend-adapters.md section 4 at a Phase 1 minimum: project state,
  * design system (SKILL.md + tokens CSS + README), attachments, user request.
  */
 export async function buildPrompt(

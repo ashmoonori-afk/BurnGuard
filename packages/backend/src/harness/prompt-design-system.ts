@@ -79,7 +79,7 @@ export function compactPinnedDesignSystemContext(pin: { readonly context: string
 
 /**
  * Emits the tokens and prose that only apply to the surface this project renders into: a fluid page,
- * a fixed slide, or a fixed content artboard. See doc/22-design-system-surfaces-2026-09-15.md.
+ * a fixed slide, or a fixed content artboard. See doc/22-design-system-surfaces-2026-09-15.md (local-only record, see doc/README.md).
  */
 async function appendSurfaceContext(
   lines: string[],

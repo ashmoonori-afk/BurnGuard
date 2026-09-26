@@ -1,4 +1,5 @@
 import { EXPORT_REMOTE_FRAME_RULE } from "./design-craft";
+import { LUCIDE_REFERENCE_REL_PATH } from "./lucide-reference";
 
 export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 
@@ -25,6 +26,7 @@ export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 - Use asymmetric layouts, oversized type or KPI numbers where useful, and avoid centered-everything except cover/closing slides.
 - Declare \`--deck-font-heading: var(--font-display)\` and \`--deck-font-body: var(--font-body)\` in :root; font-family uses only them.
 - When PowerPoint/PPTX output is requested, stay text-first: real HTML text, simple shapes, flat layouts; no effects that only survive raster capture.
+- Icons (LUCIDE_ICON_REFERENCE): Read \`${LUCIDE_REFERENCE_REL_PATH}\` in the project. Use its inline \`<svg>\` with \`stroke="currentColor"\` and \`--icon-size\`; no external sources.
 - Keep CSS inline in the top \`<style>\` block. Reference the design-system CSS variables from the layout/surface contracts above and from colors_and_type.css (Read it for colour/type names); with no design system use the tokens you declared. Avoid new palettes, font stacks, or typefaces.`;
 
 export const COMPACT_PROTOTYPE_SKILL_MD = `# Prototype compact contract
@@ -40,4 +42,5 @@ export const COMPACT_PROTOTYPE_SKILL_MD = `# Prototype compact contract
 - Give subpages distinct content layouts but shared identity; propagate shared-block changes across the site map, and when \`## Active page\` exists edit it unless the request explicitly names another file (an explicit comment-edit file is authoritative).
 - Top-level semantic sections need \`data-section\` and unique \`data-bg-node-id\` values for visible text and editable parent sections.
 - Strong visual hierarchy, asymmetric sections outside true heroes, responsive down to 320 px, no hidden primary value.
+- Icons (LUCIDE_ICON_REFERENCE): on demand, Read \`${LUCIDE_REFERENCE_REL_PATH}\` in the project. Use only its inline \`<svg>\`; keep \`stroke="currentColor"\` and size with \`--icon-size\`. Never use external URLs, sprites, or icon fonts.
 - Keep CSS in one top \`<style>\` block. Reference the design-system CSS variables from the layout/surface contracts above and from colors_and_type.css (Read it for colour/type names); with no design system use the tokens you declared. Avoid new palettes, font stacks, or typefaces.`;

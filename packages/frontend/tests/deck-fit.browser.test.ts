@@ -3,7 +3,8 @@ import { buildSandboxedArtifactSrcDoc } from "../src/components/canvas/frame-bri
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 
 test("Given a fixed-size deck When the sandbox resizes or changes slides Then the whole artboard fits without document scrollbars", async () => {
-  const browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(30_000));
+  // Bundled Chromium, as in canvas-css-imports.browser.test.ts: hosts without system Chrome still run this suite.
+  const browser = await launchChromiumViaNode({}, AbortSignal.timeout(30_000));
   try {
     const page = await browser.newPage();
     await page.setContent('<iframe sandbox="allow-scripts" style="width:586px;height:365px;border:0"></iframe>');

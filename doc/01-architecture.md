@@ -199,7 +199,7 @@ Current behavior:
 - if a specific file tab is active, the canvas loads that file
 - otherwise it falls back to the artifact entrypoint
 - when the active file receives `file.changed`, the iframe is reloaded
-- selector mode is still a placeholder overlay and does not inspect the real iframe DOM
+- selector mode asks the frame bridge for a `hit-select` at the pointer; the iframe resolves the element under it, prefers its nearest `data-bg-node-id` anchor, and answers with that node's rect, selector, tag, text, computed styles and inline styles read from the real iframe DOM
 
 ## 6. Current Route Surface
 
@@ -220,7 +220,7 @@ Important backend routes today:
 | `POST /api/sessions/:id/events` | send user turn |
 | `GET /api/sessions/:id/events` | replay session history |
 | `GET /api/sessions/:id/stream` | live SSE stream |
-| `POST /api/sessions/:id/interrupt` | currently only marks idle/interrupted |
+| `POST /api/sessions/:id/interrupt` | aborts the running CLI subprocess (abort signal to the adapter, owned process tree killed) and marks the session interrupted |
 | `GET /runtime/deck-stage.js` | slide deck runtime script |
 
 ## 7. Security and Safety Model

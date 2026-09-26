@@ -88,11 +88,13 @@ describe("bundled Lucide icon vocabulary", () => {
       expect(after.tree_digest).toBe(before.tree_digest);
       expect(after.files.map((file) => file.path)).toEqual(["index.html"]);
       for (const projectType of ["prototype", "slide_deck"] as const) {
-        const context = makeContext(projectType);
-        const prompt = await buildPrompt({ ...context, project: { ...context.project, project_dir: stage } }, { type: "user.message", text: "Use an icon" });
-        const pointer = prompt.match(/\(LUCIDE_ICON_REFERENCE\)[^`]*`([^`]+)`/u)?.[1];
-        expect(pointer).toBe(LUCIDE_REFERENCE_REL_PATH);
-        expect(await readFile(path.join(stage, pointer!), "utf8")).toBe(renderLucideIconReference());
+        for (const contextMode of ["full", "compact"] as const) {
+          const context = makeContext(projectType);
+          const prompt = await buildPrompt({ ...context, project: { ...context.project, project_dir: stage } }, { type: "user.message", text: "Use an icon" }, { contextMode });
+          const pointer = prompt.match(/\(LUCIDE_ICON_REFERENCE\)[^`]*`([^`]+)`/u)?.[1];
+          expect(pointer).toBe(LUCIDE_REFERENCE_REL_PATH);
+          expect(await readFile(path.join(stage, pointer!), "utf8")).toBe(renderLucideIconReference());
+        }
       }
     } finally {
       await rm(stage, { recursive: true, force: true });

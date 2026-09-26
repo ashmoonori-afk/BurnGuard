@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-Prompt construction, structural summaries, and shipped generation skills; earned this guide at score 9 for a distinct high-fan-in domain and widely referenced prompt exports. 16 root prompt/rule/extractor modules, 5 `skills/*-skill.ts`, 1 generated Lucide asset module (~2.3k LOC).
+Prompt construction, structural summaries, and shipped generation skills; earned this guide at score 9 for a distinct high-fan-in domain and widely referenced prompt exports. 23 root prompt/rule/extractor modules, 6 `skills/*-skill.ts`, 1 generated Lucide asset module (~2.3k LOC).
 
 ## WHERE TO LOOK
 
@@ -14,7 +14,7 @@ Prompt construction, structural summaries, and shipped generation skills; earned
 | Attachments | `prompt-attachments.ts`, `prompt-visual-sources.ts` | Original binary paths remain private |
 | Reference layouts | `prompt-reference-layout.ts` | Immutable underlay and exporter constraints |
 | Existing artifact map | `structure-extractor.ts` | Summarize HTML instead of embedding full files |
-| Project skills | `skills/*-skill.ts` | Five separate skills: deck, prototype, diagram, reference-layout, visual-craft |
+| Project skills | `skills/*-skill.ts` | Six separate skills: deck, prototype, diagram, logo, reference-layout, visual-craft |
 | Compact mode | `prompt-compact-skills.ts` | Stable contract references replace full prose |
 | Lucide assets | `assets/lucide/icons.ts`, `assets/lucide/reference.md`, `lucide-reference.ts` | Generated inline reference; `provisionLucideIconReference` stages it at `.burnguard-inputs/lucide-icons.md` every turn so the skills can point at a project-local path; no CDN |
 
@@ -23,7 +23,7 @@ Prompt construction, structural summaries, and shipped generation skills; earned
 - Keep prompt order: project/research/design context, sources, structural map, skills, delivery rules, request.
 - Emit machine-consumed contexts inside versioned sentinel tags with stable JSON shapes.
 - Select exactly the project-type skill; do not cross-inject deck, prototype, and diagram guidance.
-- Select exactly one design surface from `project_type` (`website`/`slides`/`content`). A fixed surface receives the brand half of the layout contract - the `composition` section and `--family-*` - and never its grid, regions or responsive rules; see `doc/22-design-system-surfaces-2026-09-15.md`.
+- Select exactly one design surface from `project_type` (`website`/`slides`/`content`). A fixed surface receives the brand half of the layout contract - the `composition` section and `--family-*` - and never its grid, regions or responsive rules; see `doc/22-design-system-surfaces-2026-09-15.md` (local-only record, see doc/README.md).
 - In compact mode, point the agent to exact files and summaries rather than pasting large artifacts.
 - Bound excerpts, file lists, attachment summaries, and skill content explicitly.
 - Preserve Korean and multilingual text bytes; grapheme-sensitive behavior belongs in renderers.
