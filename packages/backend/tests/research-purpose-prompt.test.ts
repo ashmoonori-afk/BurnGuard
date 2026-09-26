@@ -17,9 +17,9 @@ type ResearchBlock = {
 
 beforeAll(() => ensureLearningSchema(getSqlite()));
 
-function context(projectType = "prototype", files: BuildContext["files"] = []): BuildContext {
+function context(projectType = "prototype", files: BuildContext["files"] = [], optionsJson: string | null = null): BuildContext {
   return {
-    project: { project_id: `research-purpose-${projectType}`, project_name: "Research purpose", project_type: projectType, entrypoint: projectType === "slide_deck" ? "deck.html" : "index.html", project_dir: "/missing/research-purpose", options_json: null },
+    project: { project_id: `research-purpose-${projectType}`, project_name: "Research purpose", project_type: projectType, entrypoint: projectType === "slide_deck" ? "deck.html" : "index.html", project_dir: "/missing/research-purpose", options_json: optionsJson },
     files, attachments: [], designSystem: null, openComments: [],
   } as BuildContext;
 }
@@ -81,6 +81,16 @@ describe("research purpose prompt integration", () => {
     expect(generic.routing).toEqual({ project_type: "prototype", request_intent: "unspecified", creation_mode: "blank", fallback: "common_baseline", purpose: null });
     expect(template.routing).toEqual({ project_type: "from_template", request_intent: "unspecified", creation_mode: "template", fallback: "common_baseline", purpose: null });
     expect(selectedTemplate.routing.purpose).toBe("prototype.dashboard");
+  });
+
+  test("Given a stored research purpose When an edit request matches no selector Then the stored purpose routes the rules", async () => {
+    const stored = JSON.stringify({ research_purpose: "deck.company" });
+    const edit = researchBlock(await buildPrompt(context("slide_deck", [], stored), { type: "user.message", text: "2페이지 글자 키워줘" }));
+    expect(edit.routing).toEqual({ project_type: "slide_deck", request_intent: "unspecified", creation_mode: "blank", fallback: "none", purpose: "deck.company" });
+    expect(edit.rules.map((rule) => rule.id)).toEqual(expect.arrayContaining(["deck.company:1", "deck.company:2", "deck.company:3"]));
+    const explicit = researchBlock(await buildPrompt(context("slide_deck", [], stored), { type: "user.message", text: "Create a sales proposal deck" }));
+    expect(explicit.routing).toMatchObject({ request_intent: "sales", fallback: "none", purpose: "deck.sales" });
+    expect(explicit.rules.some((rule) => rule.id.startsWith("deck.company:"))).toBe(false);
   });
 
   test("Given captured files When built Then creation mode changes without changing request intent", async () => {

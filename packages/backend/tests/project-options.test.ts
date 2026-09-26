@@ -3,6 +3,7 @@ import { UpgradeContractError } from "@bg/shared";
 import {
   parseProjectOptions,
   parseStoredProjectOptions,
+  withResearchPurpose,
 } from "../src/services/project-options";
 
 const validBrief = {
@@ -33,7 +34,17 @@ describe("project options", () => {
       graphic_canvas: null,
       graphic_set: { schema_version: 1, kind: "single", frame_count: 1 },
       logo_set: null,
+      research_purpose: null,
     });
+  });
+
+  test("Given a stored research purpose When parsed or merged Then the catalog purpose is preserved beside the other options", () => {
+    expect(parseProjectOptions({ research_purpose: "deck.company" }).research_purpose).toBe("deck.company");
+    expect(parseStoredProjectOptions(null).research_purpose).toBeNull();
+    expect(() => parseProjectOptions({ research_purpose: "deck.unknown" })).toThrow(UpgradeContractError);
+    const merged = JSON.parse(withResearchPurpose(JSON.stringify({ use_speaker_notes: true, design_brief: validBrief }), "deck.sales"));
+    expect(merged).toEqual({ use_speaker_notes: true, design_brief: validBrief, research_purpose: "deck.sales" });
+    expect(JSON.parse(withResearchPurpose(null, "prototype.landing"))).toEqual({ research_purpose: "prototype.landing" });
   });
 
   test("Given graphic dimensions When parsed Then the canonical canvas is preserved", () => {
@@ -82,6 +93,7 @@ describe("project options", () => {
       graphic_canvas: null,
       graphic_set: { schema_version: 1, kind: "single", frame_count: 1 },
       logo_set: null,
+      research_purpose: null,
     });
   });
 

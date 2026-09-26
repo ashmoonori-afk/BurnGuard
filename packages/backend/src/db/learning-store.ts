@@ -112,7 +112,9 @@ export function selectPromptLearning(db: Database, projectId: string): PromptLea
   const row = db.query<CheckpointRow, [string]>("SELECT * FROM learning_checkpoints WHERE project_id=? ORDER BY artifact_revision DESC,created_at DESC,id DESC LIMIT 1").get(projectId);
   if (row === null) return { context: null, warning: null };
   const item = db.query<{ readonly deleted_at: number | null }, [string]>("SELECT deleted_at FROM learning_items WHERE id=?").get(row.item_id);
-  if (item === null || item.deleted_at !== null || project.current_digest === null || !validLineage(db, row, row.item_id, projectId, project.current_revision, project.current_digest)) return { context: null, warning: "incompatible_checkpoint" };
+  if (item === null || item.deleted_at !== null || !validLineage(db, row, row.item_id, projectId, row.artifact_revision, row.artifact_digest)) return { context: null, warning: "incompatible_checkpoint" };
+  // An intact checkpoint that names an earlier artifact is superseded by later work, not corrupt: nothing to inject and nothing to warn about.
+  if (row.artifact_revision !== project.current_revision || row.artifact_digest !== project.current_digest) return { context: null, warning: null };
   const context = parseContext(row);
   if (context === null) return { context: null, warning: "incompatible_checkpoint" };
   return { context: { checkpoint_id: row.id, item_id: row.item_id, project_id: row.project_id, artifact_revision: row.artifact_revision, artifact_digest: row.artifact_digest, feedback: row.feedback, next_context: context }, warning: null };

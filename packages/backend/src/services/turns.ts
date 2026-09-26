@@ -16,7 +16,8 @@ import { getProjectDetail, getSessionInfo } from "../db/seed";
 import { getSqlite } from "../db/sqlite-client";
 import { broker, sequencedBroker } from "./broker";
 import { buildSessionContext, readDeckSourcePages, selectContextAttachments } from "./context";
-import { parseStoredProjectOptions } from "./project-options";
+import { parseStoredProjectOptions, withResearchPurpose } from "./project-options";
+import { matchResearchPurpose } from "./research-purpose";
 import { writePreTurnSnapshot, writeTurnCheckpoint } from "./checkpoints";
 import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
 import { appendSessionTrace } from "./trace";
@@ -356,6 +357,12 @@ async function runUserTurnInternal(
   const projectDir = sessionContext.project.project_dir;
   const project = await getProjectDetail(sessionContext.project.project_id);
   if (project === null) throw new Error("project_not_found");
+  // The first request that names a research purpose fixes it for the project, so later edits that
+  // name none keep running under its rules instead of falling back to the baseline.
+  const researchPurpose = matchResearchPurpose(payload.text);
+  if (researchPurpose !== null && parseStoredProjectOptions(project.options_json).research_purpose === null) {
+    getSqlite().prepare("UPDATE projects SET options_json=? WHERE id=? AND options_json IS ?").run(withResearchPurpose(project.options_json, researchPurpose), project.id, project.options_json);
+  }
   if (await hasAgentControlFiles(projectDir)) {
     throw Object.assign(new Error("agent_control_files_present"), {
       code: "agent_control_files_present",

@@ -361,6 +361,22 @@ test("Given a deck generation that finished When the mandatory copy review fails
   } finally { unsubscribe(); }
 });
 
+test("Given a first request that names a purpose When later turns run Then the stored purpose routes edits and an explicit match still wins", async () => {
+  const purposes: (string | null)[] = [];
+  const adapter: NonNullable<TurnDependencies["runAdapter"]> = async (_backend, input) => {
+    const block = input.prompt.match(/<burnguard-research-context-v1>\n([^\n]+)\n<\/burnguard-research-context-v1>/u);
+    purposes.push(JSON.parse(block![1]!).routing.purpose);
+    await writeFile(path.join(input.projectDir, "index.html"), `<h1>Turn ${purposes.length}</h1>`);
+    return { exitCode: 0 };
+  };
+  await start(adapter, "Create a landing page").promise;
+  expect(JSON.parse(getSqlite().query<{ options_json: string }, [string]>("SELECT options_json FROM projects WHERE id=?").get(projectId)!.options_json).research_purpose).toBe("prototype.landing");
+  await start(adapter, "Polish this").promise;
+  await start(adapter, "Improve this dashboard").promise;
+  expect(purposes).toEqual(["prototype.landing", "prototype.landing", "prototype.dashboard"]);
+  expect(JSON.parse(getSqlite().query<{ options_json: string }, [string]>("SELECT options_json FROM projects WHERE id=?").get(projectId)!.options_json).research_purpose).toBe("prototype.landing");
+});
+
 test("Given a prototype brief listing about.html When the adapter writes only index.html Then the turn resumes instead of committing", async () => {
   getSqlite().prepare("UPDATE projects SET options_json=? WHERE id=?").run(JSON.stringify({ design_brief: {
     schema_version: 1, output_type: "prototype", audience: "Customers", objective: "Introduce the product", content_source: "none",

@@ -172,6 +172,7 @@ export async function buildPrompt(
     projectType: project.project_type,
     request: userEvent.text,
     hasCapturedFiles: context.files.length > 0,
+    storedPurpose: projectOptions.research_purpose,
   })));
   lines.push("</burnguard-research-context-v1>");
   lines.push("Its creation_mode describes the captured state of the project directory. The explicit request and target decide whether this turn creates or modifies; existing starter files alone never make a request an edit.");

@@ -56,12 +56,19 @@ export type ResearchPurposeInput = {
   readonly projectType: ProjectType;
   readonly request: string;
   readonly hasCapturedFiles: boolean;
+  /** The purpose stored on the project; used when the request itself matches no selector. */
+  readonly storedPurpose?: PromptPurpose | null;
 };
+
+/** The purpose a request names, or null when no selector matches. */
+export function matchResearchPurpose(request: string): PromptPurpose | null {
+  return INTENT_SELECTORS.find((selector) => selector.pattern.test(request))?.purpose ?? null;
+}
 
 export function buildResearchPromptContext(input: ResearchPurposeInput): BurnguardResearchContext {
   const catalog = loadResearchCatalog();
   const selected = INTENT_SELECTORS.find((selector) => selector.pattern.test(input.request));
-  const purpose = selected?.purpose ?? null;
+  const purpose = selected?.purpose ?? input.storedPurpose ?? null;
   const purposeRecord = purpose === null ? null : catalog.purposes.find((item) => item.id === purpose) ?? null;
   const commonIds = new Set([...COMMON_BASELINE_IDS, ...(purposeRecord?.common_rule_ids ?? [])]);
   const commonRules: readonly PromptResearchRule[] = catalog.common_rules
