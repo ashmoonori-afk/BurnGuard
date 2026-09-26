@@ -14,6 +14,11 @@ import { artifactHistory } from "../services/artifact-history";
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
 function fail(code: string, message: string, details?: unknown): ApiErrorBody { return { error: { code, message, details } }; }
 
+// Inline styles are serialized as `name: value` pairs, so the route validates shape: a name is one
+// property or custom property, and a value cannot open markup, a block, or another declaration line.
+const STYLE_NAME = /^(?:--[\w-]+|[a-z][a-z0-9-]*)$/i;
+const MAX_STYLE_VALUE_CHARS = 4096;
+
 export const artifactOperationRoutes = new Hono();
 
 artifactOperationRoutes.get("/api/projects/:id/history", async c => {
@@ -147,11 +152,17 @@ artifactOperationRoutes.patch("/api/projects/:id/fs/*", async (c) => {
     }
     const entries: Array<[string, string | null]> = [];
     for (const [name, value] of Object.entries(styles)) {
+      if (!STYLE_NAME.test(name)) {
+        return c.json(fail("invalid_style_name", `styles.${name} must be a CSS property or custom property name`), 400);
+      }
       if (value !== null && typeof value !== "string") {
         return c.json(
           fail("invalid_style_value", `styles.${name} must be string or null`),
           400,
         );
+      }
+      if (value !== null && (value.length > MAX_STYLE_VALUE_CHARS || /[<{}\r\n]/.test(value))) {
+        return c.json(fail("invalid_style_value", `styles.${name} must not contain markup, braces or newlines and must be at most ${MAX_STYLE_VALUE_CHARS} characters`), 400);
       }
       entries.push([name, value]);
     }

@@ -26,7 +26,10 @@ export function paletteCss(css: string, colors: Map<string, Color>, change?: { c
       const value = hex(token);
       if (value === null) return token;
       const previous = colors.get(value);
-      colors.set(value, { id: value, value, name: decl.prop.startsWith("--") ? decl.prop : previous?.name ?? value, count: (previous?.count ?? 0) + 1 });
+      // The first custom property naming a hex labels it; only --page-background may take the label over.
+      const named = previous !== undefined && previous.name !== value;
+      const name = decl.prop === "--page-background" || (!named && decl.prop.startsWith("--")) ? decl.prop : previous?.name ?? value;
+      colors.set(value, { id: value, value, name, count: (previous?.count ?? 0) + 1 });
       return change?.color === value ? change.value : token;
     });
   });
@@ -102,7 +105,8 @@ export async function readProjectPalette(root: string, relPath: string): Promise
     if (/\.html?$/i.test(name)) paletteHtml(source, colors);
     else paletteCss(source, colors);
   }
-  return { colors: [...colors.values()].sort((a, b) => b.count - a.count || a.value.localeCompare(b.value)), files: [...files.keys()] };
+  const pinned = (color: Color): number => (color.name === "--page-background" ? 1 : 0);
+  return { colors: [...colors.values()].sort((a, b) => pinned(b) - pinned(a) || b.count - a.count || a.value.localeCompare(b.value)), files: [...files.keys()] };
 }
 
 export async function replaceProjectPalette(root: string, relPath: string, color: string, value: string): Promise<void> {

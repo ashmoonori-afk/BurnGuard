@@ -617,14 +617,16 @@ export async function uploadDesignSystemFont(input: {
     const existingCss = await readFile(tokenPath, "utf8").catch(
       () => "",
     );
-    const fallback =
-      role === "display"
-        ? "var(--font-display-fallback)"
-        : role === "sans"
-          ? "var(--font-sans-fallback)"
-          : role === "serif"
-            ? "var(--font-serif-fallback)"
-            : "var(--font-mono-fallback)";
+    const fontsCss = await readFile(path.join(fontsDir, "fonts.css"), "utf8").catch(() => "");
+    const tokens = await extractCssCustomProperties(existingCss);
+    const fallbackDefined = tokens.has(`font-${role}-fallback`) || (await extractCssCustomProperties(fontsCss)).has(`font-${role}-fallback`);
+    // `var(--font-<role>-fallback)` only resolves when a token or fonts.css defines it (extracted
+    // systems do); otherwise keep the current stack behind the new family so its fallbacks survive.
+    const existingStack = tokens.get(`font-${role}`);
+    const stack = existingStack?.startsWith(`${cssString(family)},`) ? existingStack.slice(cssString(family).length + 1).trim() : existingStack;
+    const fallback = fallbackDefined
+      ? `var(--font-${role}-fallback)`
+      : stack || `"Pretendard", ${role === "serif" ? "serif" : role === "mono" ? "monospace" : "sans-serif"}`;
     const nextCss = upsertCssCustomProperty(
       ensureTokensCssImportsFonts(existingCss),
       `font-${role}`,
@@ -2145,10 +2147,12 @@ async function appendFontFaceRule(
   const existing = await readFile(fontsCssPath, "utf8").catch(() => "");
   const safeFamily = family.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   const safeUrl = fileName.replace(/\\/g, "/").replace(/'/g, "%27");
+  // A single static face declares one weight; a 100 900 range would make the browser reuse these
+  // outlines for bold instead of synthesizing it.
   const rule = `@font-face {
   font-family: '${safeFamily}';
   src: url('./${safeUrl}') format('${fontFormatForFile(fileName)}');
-  font-weight: 100 900;
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
