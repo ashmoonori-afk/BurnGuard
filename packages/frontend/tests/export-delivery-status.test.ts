@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import type {
   ExportAttempt,
   ExportFinding,
@@ -15,6 +15,8 @@ import {
   platformFindings,
 } from "../src/components/export/export-delivery";
 import { platformFixRequest } from "../src/lib/platform-fix-request";
+import { useLocaleStore } from "../src/i18n/locale";
+import { t } from "../src/i18n/t";
 
 function attempt(overrides: Partial<ExportAttempt> = {}): ExportAttempt {
   return {
@@ -211,6 +213,19 @@ describe("failed export guidance", () => {
 });
 
 describe("AI fix request for platform findings", () => {
+  afterEach(() => useLocaleStore.getState().setLocale("ko"));
+
+  test("Given the locale store set to en When a fix request is built Then it opens with the resolved intro key and still embeds the bounded JSON findings (DP-31)", () => {
+    useLocaleStore.getState().setLocale("en");
+    const request = platformFixRequest([{ code: "cafe24_unresolved_link", page: "contact.html", message: "Unresolved link", severity: "warning" }]);
+    if (request === null) throw new TypeError("expected a fix request");
+    const [intro, payload, ...outro] = request.split("\n");
+    expect(intro).toBe(t("export.fixRequest.intro"));
+    expect(JSON.parse(payload!)).toEqual([{ code: "cafe24_unresolved_link", page: "contact.html", message: "Unresolved link" }]);
+    expect(outro.join("\n")).toBe(t("export.fixRequest.outro"));
+    expect(request).not.toMatch(/\p{Script=Hangul}/u);
+  });
+
   test("Given lint findings When a fix request is built Then it carries code, page, and message only", () => {
     const request = platformFixRequest(platformFindings(job({
       latest_attempt: attempt({

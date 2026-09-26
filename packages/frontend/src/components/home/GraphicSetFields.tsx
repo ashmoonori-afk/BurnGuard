@@ -8,6 +8,7 @@ import {
   GRAPHIC_KIND_CHOICES,
   defaultFrameCount,
   presetChoicesFor,
+  presetIdForFrameCount,
 } from "@/lib/graphic-set-form";
 import {
   PROJECT_CONTROL_CLASS,
@@ -62,6 +63,7 @@ export function GraphicSetFields({
   function pickFrameCount(count: number) {
     onChange({
       frameCount: count,
+      presetId: presetIdForFrameCount(form.presetId, count),
       ...(kind === "banner_set" && Number.isSafeInteger(count)
         ? { frames: resizeFrames(form.frames, Math.max(count, 0), defaultFrame(form)) }
         : {}),

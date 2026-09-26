@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { DesignSystemColorToken, DesignSystemDetail } from "@bg/shared";
+import type { CatalogDesignSystemDetail, DesignSystemColorToken, DesignSystemDetail } from "@bg/shared";
 import { ArrowLeft, ArrowUpRight, CheckCircle2, Pencil, Plus, Upload } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -17,7 +17,9 @@ import { Input } from "@/components/ui/input";
 import { useUIStore } from "@/state/uiStore";
 import { ApiError, authorizedFetch } from "@/api/client";
 import { apiErrorCopy } from "@/lib/error-copy";
-import { useT, type MessageKey } from "@/i18n/t";
+import { resolveTokenColor } from "@/lib/token-color";
+import { t, useT, type MessageKey } from "@/i18n/t";
+import { localeTag, useLocaleStore, type Locale } from "@/i18n/locale";
 
 type FontRole = "display" | "sans" | "serif" | "mono";
 
@@ -63,6 +65,7 @@ export default function DesignSystemView({
 
 function DesignSystemEditor({ id }: { id: string }) {
   const t = useT();
+  const locale = useLocaleStore((state) => state.locale);
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
   const systemQuery = useQuery({
@@ -426,16 +429,7 @@ function DesignSystemEditor({ id }: { id: string }) {
             <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
               {catalogDetailRows(system).map((row) => {
                 const labelKey = CATALOG_DETAIL_LABELS[row.label];
-                const absentPath = (row.label === "Source URI" && system.source_uri === null)
-                  || (row.label === "SKILL.md" && system.skill_md_path === null)
-                  || (row.label === "Tokens CSS" && system.tokens_css_path === null)
-                  || (row.label === "README.md" && system.readme_md_path === null);
-                const value = row.label === "Status" ? t(STATUS_LABELS[system.status])
-                  : row.label === "Template" ? t(system.is_template ? "system.yes" : "system.no")
-                  : row.label === "Source" ? t(SOURCE_LABELS[system.source_type ?? "manual"])
-                  : row.label === "Archived" && system.archived_at === null ? t("system.no")
-                  : absentPath ? t("system.none") : row.value;
-                return <InfoRow key={row.label} label={labelKey ? t(labelKey) : row.label} value={value} />;
+                return <InfoRow key={row.label} label={labelKey ? t(labelKey) : row.label} value={catalogDetailValue(row, system, locale)} />;
               })}
             </dl>
           </details>
@@ -443,6 +437,19 @@ function DesignSystemEditor({ id }: { id: string }) {
       </div>
     </div>
   );
+}
+
+/** Localized value for one catalog detail row; the archive timestamp is shown as a date in the active locale. */
+export function catalogDetailValue(row: { readonly label: string; readonly value: string }, system: CatalogDesignSystemDetail, locale: Locale): string {
+  const absentPath = (row.label === "Source URI" && system.source_uri === null)
+    || (row.label === "SKILL.md" && system.skill_md_path === null)
+    || (row.label === "Tokens CSS" && system.tokens_css_path === null)
+    || (row.label === "README.md" && system.readme_md_path === null);
+  return row.label === "Status" ? t(STATUS_LABELS[system.status])
+    : row.label === "Template" ? t(system.is_template ? "system.yes" : "system.no")
+    : row.label === "Source" ? t(SOURCE_LABELS[system.source_type ?? "manual"])
+    : row.label === "Archived" ? (system.archived_at === null ? t("system.no") : new Date(system.archived_at).toLocaleString(localeTag(locale)))
+    : absentPath ? t("system.none") : row.value;
 }
 
 function FontUploadCard({
@@ -578,6 +585,9 @@ export function ColorTokenEditor({
   onCancel: () => void;
 }) {
   const t = useT();
+  // A var() draft resolves through the system's own tokens; an unresolvable one must not let the picker write black.
+  const resolvedDraft = resolveTokenColor(value, tokens);
+  const unresolvedReference = resolvedDraft === null && /^var\(/i.test(value.trim());
   return (
     <section ref={refEl} className="min-w-0 rounded-2xl border border-border bg-card p-5">
       <div className="flex items-start justify-between gap-3">
@@ -625,9 +635,9 @@ export function ColorTokenEditor({
                 <input
                   type="color"
                   aria-label={t("system.selectColor")}
-                  value={normalizeColorInput(value)}
+                  value={normalizeColorInput(resolvedDraft ?? value)}
                   onChange={(e) => onValueChange(e.target.value)}
-                  disabled={saving}
+                  disabled={saving || unresolvedReference}
                   className="h-9 w-11 shrink-0 rounded-md border border-input bg-background p-1"
                 />
                 <Input
@@ -662,14 +672,17 @@ export function ColorTokenEditor({
             {t("system.noColors")}
           </div>
         ) : (
-          tokens.map((token) => (
+          tokens.map((token) => {
+            const resolved = resolveTokenColor(token.value, tokens);
+            return (
             <div
               key={token.name}
               className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2"
             >
               <div
                 className="h-8 w-8 shrink-0 rounded-md border border-border"
-                style={{ background: token.value }}
+                style={resolved === null ? UNRESOLVED_SWATCH_STYLE : { background: resolved }}
+                {...(resolved === null ? { "data-unresolved": "", title: t("system.tokenUnresolved", { value: token.value }) } : {})}
               />
               <div className="min-w-0 flex-1">
                 <div className="truncate font-mono text-xs">--{token.name}</div>
@@ -689,16 +702,22 @@ export function ColorTokenEditor({
                 {t("system.edit")}
               </Button>
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </section>
   );
 }
 
+/** Hatched placeholder: the value is a reference this system's tokens cannot resolve. */
+const UNRESOLVED_SWATCH_STYLE = {
+  backgroundImage: "repeating-linear-gradient(45deg, #ccc 0, #ccc 3px, transparent 3px, transparent 6px)",
+} as const;
+
 function normalizeColorInput(value: string): string {
   const trimmed = value.trim();
-  return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed : "#000000";
+  return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed.toLowerCase() : "#000000";
 }
 
 function DraftValidationCard({

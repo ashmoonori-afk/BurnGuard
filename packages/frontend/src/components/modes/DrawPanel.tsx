@@ -23,6 +23,7 @@ export default function DrawPanel({
   onRedo,
   onClear,
   hasShapes,
+  canRedo,
 }: {
   tool: DrawTool;
   color: string;
@@ -34,6 +35,7 @@ export default function DrawPanel({
   onRedo: () => void;
   onClear: () => void;
   hasShapes: boolean;
+  canRedo: boolean;
 }) {
   const t = useT();
   return (
@@ -139,7 +141,8 @@ export default function DrawPanel({
         <button
           type="button"
           onClick={onRedo}
-          className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:text-foreground"
+          disabled={!canRedo}
+          className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
           title={t("modes.draw.redoShortcut")}
         >
           <Redo2 className="h-3 w-3" />{" "}{t("modes.redo")}

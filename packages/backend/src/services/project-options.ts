@@ -11,6 +11,7 @@ import {
   type LogoSetV1,
 } from "@bg/shared";
 import { isRecord } from "@bg/shared/contract-parser";
+import { isPromptPurpose, type PromptPurpose } from "./prompt-purpose";
 
 export type ProjectOptions = {
   readonly use_speaker_notes: boolean;
@@ -19,6 +20,8 @@ export type ProjectOptions = {
   readonly graphic_canvas: GraphicCanvasV1 | null;
   readonly graphic_set: GraphicSetV1;
   readonly logo_set: LogoSetV1 | null;
+  /** The research purpose the project's first matching request named; edits that name none run under it. */
+  readonly research_purpose: PromptPurpose | null;
 };
 
 const DEFAULT_OPTIONS: ProjectOptions = {
@@ -28,6 +31,7 @@ const DEFAULT_OPTIONS: ProjectOptions = {
   graphic_canvas: null,
   graphic_set: DEFAULT_GRAPHIC_SET,
   logo_set: null,
+  research_purpose: null,
 };
 
 export function parseProjectOptions(input: unknown): ProjectOptions {
@@ -54,7 +58,28 @@ export function parseProjectOptions(input: unknown): ProjectOptions {
       input["logo_set"] === undefined || input["logo_set"] === null
         ? null
         : parseLogoSetOption(input["logo_set"]),
+    research_purpose:
+      input["research_purpose"] === undefined || input["research_purpose"] === null
+        ? null
+        : parseResearchPurposeOption(input["research_purpose"]),
   };
+}
+
+/** The stored options with the research purpose added; every other stored key is kept as it was. */
+export function withResearchPurpose(optionsJson: string | null, purpose: PromptPurpose): string {
+  let stored: unknown = null;
+  if (optionsJson !== null) {
+    try { stored = JSON.parse(optionsJson); }
+    catch (error) { if (!(error instanceof SyntaxError)) throw error; }
+  }
+  return JSON.stringify({ ...(isRecord(stored) ? stored : {}), research_purpose: purpose });
+}
+
+function parseResearchPurposeOption(input: unknown): PromptPurpose {
+  if (!isPromptPurpose(input)) {
+    throw new UpgradeContractError("invalid_field", "options.research_purpose");
+  }
+  return input;
 }
 
 export function parseStoredProjectOptions(

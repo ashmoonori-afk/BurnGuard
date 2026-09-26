@@ -11,6 +11,11 @@ import {
   type UnknownRecord,
 } from "./contract-parser";
 
+/** Slot error strings the workflow writes and the UI recognizes; shared so neither side can drift. */
+export const DIRECTION_INTERRUPTION_ERROR = "Direction generation was interrupted; retry unfinished directions.";
+export const DIRECTION_CANCELLATION_ERROR = "Direction generation was cancelled; retry this direction.";
+export const DIRECTION_RENDER_ERROR = "Direction preview could not be rendered; retry this direction.";
+
 export const DESIGN_DIRECTION_LAYOUTS = ["editorial", "modular", "narrative"] as const;
 export const DESIGN_DIRECTION_SLOT_STATUSES = ["pending", "ready", "failed", "cancelled"] as const;
 export const DESIGN_DIRECTION_STATUSES = ["loading", "ready", "partial", "failed", "cancelled"] as const;

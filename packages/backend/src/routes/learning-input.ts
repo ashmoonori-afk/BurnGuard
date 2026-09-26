@@ -1,5 +1,8 @@
 import type { LearningNextContext } from "@bg/shared/learning-contract";
 
+/** Feedback reaches the generation prompt verbatim, so it is bounded here rather than by the JSON body limit. */
+export const MAX_CHECKPOINT_FEEDBACK_CHARS = 2000;
+
 export class LearningInputError extends Error {
   readonly name = "LearningInputError";
   readonly code = "invalid_learning_body" as const;
@@ -83,7 +86,7 @@ export function parseCheckpoint(input: unknown): CheckpointInput {
   else throw new LearningInputError("evidence.kind");
   return {
     id: identifier(body, "id"), projectId: identifier(body, "project_id"), artifactRevision: integer(body, "artifact_revision"),
-    artifactDigest: string(body, "artifact_digest"), feedback: string(body, "feedback"), parentCheckpointId: nullableIdentifier(body, "parent_checkpoint_id"),
+    artifactDigest: string(body, "artifact_digest"), feedback: boundedString(body, "feedback", MAX_CHECKPOINT_FEEDBACK_CHARS), parentCheckpointId: nullableIdentifier(body, "parent_checkpoint_id"),
     nextContext: { kind: "iteration", parent_checkpoint_id: identifier(context, "parent_checkpoint_id"), schema_revision: integer(context, "schema_revision"), artifact_revision: integer(context, "artifact_revision"), artifact_digest: string(context, "artifact_digest") },
     evidence: evidenceKind === "complete" ? { kind: "complete" } : { kind: "partial", code: "missing_artifact_evidence" },
   };
@@ -103,6 +106,9 @@ function exact(body: Readonly<Record<string, unknown>>, fields: readonly string[
 }
 function string(body: Readonly<Record<string, unknown>>, field: string): string {
   const value = body[field]; if (typeof value !== "string" || value.trim().length === 0) throw new LearningInputError(field); return value.trim();
+}
+function boundedString(body: Readonly<Record<string, unknown>>, field: string, maximum: number): string {
+  const value = string(body, field); if (value.length > maximum) throw new LearningInputError(field); return value;
 }
 function nullableString(body: Readonly<Record<string, unknown>>, field: string): string | null {
   const value = body[field]; if (value === null) return null; return string(body, field);

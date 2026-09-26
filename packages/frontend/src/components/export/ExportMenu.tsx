@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import type { ExportStatus, ProjectType } from "@bg/shared";
+import type { ExportQualityGate } from "@/lib/design-audit-state";
 import {
   createExport,
   cancelExport,
@@ -33,7 +34,7 @@ import {
 } from "@/api/export";
 import { useUIStore } from "@/state/uiStore";
 import ExportStatusList from "./ExportStatusList";
-import { exportJobState } from "./export-job-state";
+import { exportTransitions } from "./export-job-state";
 import { apiErrorCopy } from "@/lib/error-copy";
 import {
   buildExportMenuModel,
@@ -58,7 +59,7 @@ const OPTION_ICON: Record<ExportFormat, LucideIcon> = {
   svg: PenTool,
 };
 
-export type ExportQualityGate = { readonly mustFixCount: number } | null;
+export type { ExportQualityGate };
 
 export default function ExportMenu({ projectId, projectType, projectOptionsJson, qualityGate, onOpenQuality, platformFix }: {
   readonly projectId: string;
@@ -132,41 +133,38 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
   const jobs = jobsQuery.data ?? [];
   const menuModel = buildExportMenuModel(projectType, projectOptionsJson, optionValues);
 
-  // Surface async failures via a toast — the createMutation onError only
+  // Surface async outcomes via a toast — the createMutation onError only
   // catches synchronous create-call errors. Background pipeline failures
-  // (chromium missing, Playwright crash, etc.) only surface through the
-  // poll, and previously sat silently as a "failed" status indicator.
-  // Tracks last-seen status per job so a job that was already failed at
-  // mount, or that we've already toasted, doesn't fire again on every poll.
+  // (chromium missing, Playwright crash, etc.) and completions only surface
+  // through the poll. Tracks last-seen status per job so a job that was
+  // already terminal at mount, or that we've already toasted, doesn't fire
+  // again on every poll; the dropdown stays the primary status signal.
   const lastStatusRef = useRef<Map<string, ExportStatus>>(new Map());
   const isInitialLoadRef = useRef(true);
   useEffect(() => {
     if (isInitialLoadRef.current) {
-      for (const job of jobs) lastStatusRef.current.set(job.id, job.status);
+      exportTransitions(lastStatusRef.current, jobs, { initial: true });
       if (jobs.length > 0 || jobsQuery.status === "success") {
         isInitialLoadRef.current = false;
       }
       return;
     }
-    for (const job of jobs) {
-      const previous = lastStatusRef.current.get(job.id);
-      lastStatusRef.current.set(job.id, job.status);
-      if (job.status === "failed" && previous !== "failed" && !exportJobState(job).cancelled) {
-        const chromiumFailure = classifyChromiumFailure(job.error_message);
-        const auditFailed = isDesignAuditExportFailure(job);
-        const platformCopy = platformCheckFailureCopy(job);
-        pushToast({
-          title: t("export.failedFormat", { name: formatLabel(job.format) }),
-          body: auditFailed
-            ? t("export.auditFailed")
-            : platformCopy !== null
-              ? t(platformCopy)
-              : chromiumFailure !== null
-                ? CHROMIUM_FAILURE_MESSAGE[chromiumFailure]
-                : apiErrorCopy({ code: job.latest_attempt?.stop_reason }),
-          tone: "error",
-        });
+    for (const { job, outcome } of exportTransitions(lastStatusRef.current, jobs)) {
+      if (outcome === "succeeded") {
+        pushToast({ title: t("export.succeededFormat", { name: formatLabel(job.format) }), tone: "info" });
+        continue;
       }
+      const chromiumFailure = classifyChromiumFailure(job.error_message);
+      const platformCopy = platformCheckFailureCopy(job);
+      pushToast({
+        title: t("export.failedFormat", { name: formatLabel(job.format) }),
+        body: platformCopy !== null
+          ? t(platformCopy)
+          : chromiumFailure !== null
+            ? CHROMIUM_FAILURE_MESSAGE[chromiumFailure]
+            : apiErrorCopy({ code: job.latest_attempt?.stop_reason }),
+        tone: "error",
+      });
     }
   }, [jobs, pushToast, jobsQuery.status, t]);
 
@@ -187,7 +185,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
         <DropdownMenuSeparator />
         {jobsQuery.isError && <div role="alert" className="p-2 text-xs"><p>{t("export.listFailed")}</p><button type="button" className="mt-2 underline" onClick={() => void jobsQuery.refetch()}>{t("export.retry")}</button></div>}
         {qualityGate !== null && <div className="mx-2 mb-2 rounded-md border border-destructive/30 bg-destructive/10 p-2">
-          <p className="text-pretty break-keep text-xs text-foreground">{t("export.qualityRecommendations", { count: qualityGate.mustFixCount })}</p>
+          <p className="text-pretty break-keep text-xs text-foreground">{t(qualityGate.copyKey, { count: qualityGate.mustFixCount })}</p>
           <Button type="button" variant="outline" size="sm" className="mt-2 h-8 w-full max-[900px]:min-h-11" onClick={openQuality}>{t("export.openQuality")}</Button>
         </div>}
         {!menuModel.ok && (
@@ -237,10 +235,6 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
             </DropdownMenuItem>
           );
         })}
-        {jobs.some(isDesignAuditExportFailure) && <div className="mx-2 mt-2 rounded-md bg-warning/15 p-2">
-          <p className="break-keep text-xs">{t("export.auditStopped")}</p>
-          <Button type="button" variant="outline" size="sm" className="mt-2 h-8 w-full max-[900px]:min-h-11" onClick={openQuality}>{t("export.openQuality")}</Button>
-        </div>}
         {jobs.length > 0 && (
           <>
             <DropdownMenuSeparator />
@@ -268,8 +262,4 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-function isDesignAuditExportFailure(job: { readonly error_message: string | null; readonly latest_attempt: { readonly stop_reason: string | null } | null }): boolean {
-  return job.latest_attempt?.stop_reason === "validation_failed" && job.error_message?.startsWith("Design audit found ") === true;
 }

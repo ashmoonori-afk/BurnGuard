@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent, type RefObject }
 import type { Comment } from "@bg/shared";
 import { readFrameCommentPositions, requestFrameCommentAtPoint, subscribeFrameEvent, watchFrameComments, type FrameCommentPosition } from "./frame-bridge";
 import { cn } from "@/lib/utils";
+import { useT, type t } from "@/i18n/t";
 import type { CommentPinInput, CommentPoint } from "./quick-comment";
 
 export default function CommentLayer({
@@ -106,6 +107,11 @@ export default function CommentLayer({
   );
 }
 
+/** A pin without a note still needs a tooltip; the placeholder is localized like every other string. */
+export function commentPinTitle(body: string, translate: typeof t): string {
+  return body || translate("workspace.comments.noNote");
+}
+
 function CommentPin({
   comment,
   index,
@@ -119,6 +125,7 @@ function CommentPin({
   onSelect: (point: CommentPoint) => void;
   position: FrameCommentPosition;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -128,7 +135,7 @@ function CommentPin({
         const rect = e.currentTarget.getBoundingClientRect();
         onSelect({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
       }}
-      title={comment.body || "(no note)"}
+      title={commentPinTitle(comment.body, t)}
       className={cn(
         "absolute -translate-x-1/2 -translate-y-1/2 h-6 w-6 rounded-full text-[10px] font-semibold border shadow-md flex items-center justify-center transition",
         "bg-accent text-accent-foreground border-white",

@@ -1,3 +1,4 @@
+import { MAX_USER_MESSAGE_CHARS } from "@bg/shared";
 import { t, type MessageKey } from "@/i18n/t";
 
 /** Backend messages are internal; map known codes to localized recovery copy. */
@@ -63,12 +64,57 @@ const ERROR_COPY: Record<string, MessageKey> = {
   attachment_extract_failed: "errors.attachment_extract_failed",
   unsafe_source_content: "errors.unsafe_source_content",
   upload_file_required: "errors.upload_file_required",
+  graphic_requires_authenticated_codex: "errors.graphic_requires_authenticated_codex",
+  codex_authentication_probe_failed: "errors.codex_authentication_probe_failed",
+  acquisition_limit: "errors.acquisition_limit",
+  acquisition_timeout: "errors.acquisition_timeout",
+  invalid_upload: "errors.invalid_upload",
+  invalid_font_upload: "errors.invalid_font_upload",
+  system_id_conflict: "errors.system_id_conflict",
+  catalog_operation_failed: "errors.catalog_operation_failed",
+  design_system_not_found: "errors.design_system_not_found",
+  design_system_file_not_found: "errors.design_system_file_not_found",
+  invalid_design_system: "errors.invalid_design_system",
+  invalid_project_import: "errors.invalid_project_import",
+  pinterest_unavailable: "errors.pinterest_unavailable",
+  invalid_pinterest_request: "errors.invalid_pinterest_request",
+  message_too_long: "errors.message_too_long",
+  turn_capacity_exhausted: "errors.turn_capacity_exhausted",
+  active_page_unavailable: "errors.active_page_unavailable",
+  invalid_active_page: "errors.invalid_active_page",
+  document_save_failed: "errors.document_save_failed",
+  artifact_prepare_failed: "errors.artifact_prepare_failed",
+  invalid_body: "errors.invalid_body",
+  snapshot_not_found: "errors.snapshot_not_found",
+  non_leaf_text_target: "errors.non_leaf_text_target",
+  invalid_attribute_url: "errors.invalid_attribute_url",
+  ambiguous_node_id: "errors.ambiguous_node_id",
+  node_not_found: "errors.node_not_found",
+  snapshot_failed: "errors.snapshot_failed",
+  recovery_failed: "errors.recovery_failed",
+  invalid_graphic_export_options: "errors.invalid_graphic_export_options",
+  export_not_found: "errors.export_not_found",
+  format_requires_web: "errors.format_requires_project_type",
+  format_requires_frames: "errors.format_requires_project_type",
+  format_requires_deck: "errors.format_requires_project_type",
+  format_requires_logo: "errors.format_requires_project_type",
+  invalid_export_format: "errors.invalid_export_format",
 };
 
 /** Resolve at call time so changing the locale also changes error recovery copy. */
 export function apiErrorCopy(error: unknown): string {
   const code = errorCode(error);
+  if (code === "message_too_long") return t(ERROR_COPY[code], { limit: errorLimit(error) ?? MAX_USER_MESSAGE_CHARS });
   return t(code !== null && Object.hasOwn(ERROR_COPY, code) ? ERROR_COPY[code] : "errors.fallback");
+}
+
+/** The route reports the ceiling it enforced in `details.limit`; the shared constant covers an older server. */
+function errorLimit(error: unknown): number | null {
+  if (typeof error !== "object" || error === null || !("details" in error)) return null;
+  const details = (error as { details: unknown }).details;
+  if (typeof details !== "object" || details === null || !("limit" in details)) return null;
+  const limit = (details as { limit: unknown }).limit;
+  return typeof limit === "number" && Number.isFinite(limit) ? limit : null;
 }
 
 function errorCode(error: unknown): string | null {

@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-29 Markdown documents (5,536 LOC) split between foundational specifications and dated implementation records; earned this guide at score 8 for file count and an authorship contract that no source guide covers.
+13 tracked Markdown documents (four foundational specifications plus topic docs); the numbered records 04–23 and `reference-*.md` are local-only and gitignored (see `README.md`), so a fresh checkout has none of them. Earned this guide at score 8 for an authorship contract that no source guide covers.
 
 ## WHERE TO LOOK
 
@@ -10,10 +10,10 @@
 |------|----------|-------|
 | Entry point | `README.md` | Index, Start Here, numbered read order, topic table; states which specs are historical |
 | Contributing rules | `CONTRIBUTING.md` | Stack conventions, naming, import order, security rules, PR checklist |
-| Foundational specs | `00-overview` … `07-decisions` | Overview, architecture, data model, adapters, UI spec, design-system format, milestones, ADRs |
-| Current behavior | `08`–`18` dated records | Dated files supersede the numbered specs where they disagree; `14-…-2026-09-09` (708 LOC) is the deliverables/publishing authority |
-| Decisions | `07-decisions.md` | 15 ADRs; entries carry context/decision/consequences and a `Supersedes` line |
-| Manual smoke steps | `07-manual-smoke-test.md` | Referenced by `.github/workflows/security.yml` |
+| Foundational specs | `00-overview` … `03-backend-adapters` | Overview, architecture, data model, adapters; `04`–`07` (UI spec, design-system format, milestones, ADRs) are local-only |
+| Current behavior | `08`–`23` dated records (local-only) | Dated files supersede the numbered specs where they disagree; `14-…-2026-09-09` is the deliverables/publishing authority for maintainers holding the local copies |
+| Decisions | `07-decisions.md` (local-only) | 15 ADRs; entries carry context/decision/consequences and a `Supersedes` line |
+| Manual smoke steps | `07-manual-smoke-test.md` (local-only) | Referenced by `.github/workflows/security.yml` |
 | Generation rule sources | `charts.md`, `design-craft.md`, `image-production.md`, `research.md`, `brand-identity.md` | Product rules that the backend harness prompts mirror |
 | Screenshots/assets | `images/`, `screenshots/` | Each has a README with slot names, 2x capture, framing and size budgets (<500 KB per file) |
 

@@ -5,7 +5,7 @@ import { isRecord, UpgradeContractError } from "./contract-parser";
  * A design system is shared brand identity plus one contract per output geometry. `colors_and_type.css`
  * owns the shared part - colour, type families, spacing, radius, elevation, motion - and the website
  * grid; a surface owns what only applies to one geometry: a fluid page, a fixed 1920x1080 slide, or a
- * fixed content artboard. See doc/22-design-system-surfaces-2026-09-15.md.
+ * fixed content artboard. See doc/22-design-system-surfaces-2026-09-15.md (local-only record, see doc/README.md).
  *
  * Surface-independent brand rules - a theme's "## Composition" prose and its --family-* structural
  * decisions - are NOT part of a surface. They keep travelling with the layout contract in

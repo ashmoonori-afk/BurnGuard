@@ -35,16 +35,21 @@ export function filterHomeCards(
   );
 }
 
+/** The recent tab is a 12-row glance; a search there runs over the full list so an older match is never reported missing. */
+export function projectSearchTab<Tab extends string>(tab: Tab | "recent", query: string): Tab | "recent" | "mine" {
+  return tab === "recent" && query.trim().length > 0 ? "mine" : tab;
+}
+
 const PROJECT_TINTS: Record<string, string> = {
-  prototype: "bg-rose-100",
-  slide_deck: "bg-slate-100",
-  graphic: "bg-sky-100",
-  logo: "bg-fuchsia-100",
-  from_template: "bg-blue-100",
-  other: "bg-stone-100",
+  prototype: "bg-tint-rose",
+  slide_deck: "bg-tint-slate",
+  graphic: "bg-tint-sky",
+  logo: "bg-tint-fuchsia",
+  from_template: "bg-tint-blue",
+  other: "bg-tint-stone",
 };
 
-const SYSTEM_TINTS = ["bg-amber-100", "bg-sky-100", "bg-emerald-100", "bg-violet-100"];
+const SYSTEM_TINTS = ["bg-tint-amber", "bg-tint-sky", "bg-tint-emerald", "bg-tint-violet"];
 
 const SYSTEM_STATUS_SUFFIX: Record<DesignSystemStatus, MessageKey> = {
   draft: "home.systemDraft",
@@ -59,7 +64,7 @@ export function projectToCard(p: ProjectSummary): CardViewModel {
     name,
     subtitle: `${projectTypeDisplayLabel(p.type)} · ${formatRelativeDay(p.updated_at)}`,
     href: `/projects/${p.id}`,
-    tintClass: PROJECT_TINTS[p.type] ?? "bg-stone-100",
+    tintClass: PROJECT_TINTS[p.type] ?? "bg-tint-stone",
     thumbnail: p.thumbnail_path,
     kind: p.type,
   };

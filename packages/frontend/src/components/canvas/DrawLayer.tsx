@@ -42,6 +42,16 @@ export interface DrawLayerHandle {
   clear: () => void;
 }
 
+export interface DrawHistoryAvailability {
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+}
+
+/** Undo follows the shapes on the canvas; redo follows what undo set aside. */
+export function drawHistoryAvailability(shapes: readonly DrawShape[], redoStack: readonly DrawShape[]): DrawHistoryAvailability {
+  return { canUndo: shapes.length > 0, canRedo: redoStack.length > 0 };
+}
+
 /**
  * SVG overlay for Draw mode. Shapes live in React state so undo/redo
  * + live preview are cheap; the parent receives `onCommit(shapes)` each
@@ -59,9 +69,10 @@ const DrawLayer = forwardRef<
     initialShapes: DrawShape[];
     resetKey: string;
     onCommit: (shapes: DrawShape[]) => void;
+    onHistoryChange?: (state: DrawHistoryAvailability) => void;
   }
 >(function DrawLayer(
-  { active, tool, color, strokeWidth, initialShapes, resetKey, onCommit },
+  { active, tool, color, strokeWidth, initialShapes, resetKey, onCommit, onHistoryChange },
   ref,
 ) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -73,6 +84,9 @@ const DrawLayer = forwardRef<
   const redoStackRef = useRef<DrawShape[]>([]);
   const draggingRef = useRef(false);
 
+  const historyRef = useRef(onHistoryChange);
+  historyRef.current = onHistoryChange;
+
   useEffect(() => {
     if (loadedResetKeyRef.current === resetKey) return;
     loadedResetKeyRef.current = resetKey;
@@ -82,6 +96,7 @@ const DrawLayer = forwardRef<
     draftRef.current = null;
     draggingRef.current = false;
     setDraft(null);
+    historyRef.current?.(drawHistoryAvailability(initialShapes, []));
   }, [initialShapes, resetKey]);
 
   // Event handlers publish once. React may replay state updaters in StrictMode.
@@ -89,6 +104,7 @@ const DrawLayer = forwardRef<
     shapesRef.current = next;
     setShapes(next);
     onCommit(next);
+    historyRef.current?.(drawHistoryAvailability(next, redoStackRef.current));
   };
 
   const updateDraft = (next: DrawShape | null) => {

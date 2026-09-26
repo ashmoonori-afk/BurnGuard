@@ -10,8 +10,8 @@ const MULTIPART_BODY_BYTES = 64 * MiB;
 const DRAW_BODY_BYTES = 4 * MiB;
 /** Every other API body is JSON. */
 const JSON_BODY_BYTES = 1 * MiB;
-/** One user message; long pastes fit, unbounded prompts do not. */
-export const MAX_USER_MESSAGE_CHARS = 200_000;
+/** The message ceiling is a shared contract so the composer can count against the same number. */
+export { MAX_USER_MESSAGE_CHARS } from "@bg/shared";
 
 const MULTIPART_ROUTES = [
   /^\/api\/projects\/import$/,

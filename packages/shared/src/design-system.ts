@@ -111,6 +111,9 @@ export interface CreateDesignSystemExtractionResponse {
 export type CreateDesignSystemUploadResponse =
   CreateDesignSystemExtractionResponse;
 
+/** Most pin URLs one Pinterest mood request may carry; the backend rejects more and the dialog refuses before upload. */
+export const PINTEREST_PIN_LIMIT = 12;
+
 export interface CreatePinterestMoodRequest {
   readonly pin_urls: readonly string[];
   readonly name?: string;

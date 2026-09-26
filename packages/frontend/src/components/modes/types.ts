@@ -1,1 +1,1 @@
-export type CanvasMode = "select" | "tweaks" | "comment" | "edit" | "draw" | "quality";
+export type CanvasMode = "tweaks" | "comment" | "edit" | "draw" | "quality";

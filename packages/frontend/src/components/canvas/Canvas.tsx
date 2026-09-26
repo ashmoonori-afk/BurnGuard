@@ -6,6 +6,7 @@ import QuickComment from "./QuickComment";
 import type { CommentPinInput, CommentPoint } from "./quick-comment";
 import type { Ref, ReactNode } from "react";
 import DrawLayer, {
+  type DrawHistoryAvailability,
   type DrawLayerHandle,
   type DrawShape,
   type DrawTool,
@@ -18,13 +19,17 @@ import {
   buildSandboxedArtifactSrcDoc,
   openFrameExternalLink,
   parseFramePreviewReport,
+  requestFrameScrollPosition,
   requestFrameSetActiveSlide,
+  requestFrameSetScrollPosition,
   requestFramePreviewReport,
   subscribeFrameEvent,
+  type FrameScrollPosition,
 } from "./frame-bridge";
 import type { CanvasMode } from "@/components/modes/types";
 import { authorizedFetch } from "@/api/client";
 import { embedCanvasImages } from "@/lib/canvas-images";
+import { canvasLoadErrorKey } from "@/lib/canvas-load-error";
 import { anySignal } from "@/lib/abort-signal";
 import { hydrateCanvasCharts } from "@/lib/canvas-charts";
 import { canvasPoint } from "./canvas-coordinates";
@@ -33,6 +38,7 @@ import { requestFrameScrollAtPoint } from "./frame-bridge";
 import { MIN_CANVAS_ZOOM, MAX_CANVAS_ZOOM, zoomCanvasAt } from "./canvas-zoom";
 import { useT } from "@/i18n/t";
 import { useLocaleStore } from "@/i18n/locale";
+import { canvasPlaceholderKeys } from "@/lib/canvas-placeholder";
 
 function buildPlaceholderSrc(locale: string, title: string, subtitle: string): string {
   return `<!doctype html>
@@ -89,6 +95,7 @@ export default function Canvas({
   mode,
   src,
   loading = false,
+  working = false,
   frameKey,
   onModeChange,
   onRefresh,
@@ -115,6 +122,7 @@ export default function Canvas({
   drawResetKey,
   drawLayerRef,
   onCommitDraws,
+  onDrawHistoryChange,
   onActiveSlideChange,
   canUndo,
   undoPending,
@@ -134,6 +142,8 @@ export default function Canvas({
   mode: CanvasMode | null;
   src?: string | null;
   loading?: boolean;
+  /** A turn is running; with nothing renderable yet the placeholder says so instead of "loading". */
+  working?: boolean;
   frameKey?: string;
   onModeChange: (m: CanvasMode | null) => void;
   onRefresh: () => void;
@@ -160,6 +170,7 @@ export default function Canvas({
   drawResetKey: string;
   drawLayerRef: Ref<DrawLayerHandle>;
   onCommitDraws: (shapes: DrawShape[]) => void;
+  onDrawHistoryChange?: (state: DrawHistoryAvailability) => void;
   onActiveSlideChange: (value: number | null) => void;
   /** Audit fix #7 — file-level single-step undo for the active artifact. */
   canUndo?: boolean;
@@ -179,11 +190,8 @@ export default function Canvas({
 }) {
   const t = useT();
   const locale = useLocaleStore((state) => state.locale);
-  const placeholderSrc = buildPlaceholderSrc(
-    locale,
-    t(src || loading ? "workspace.canvas.loadingTitle" : "workspace.canvas.placeholderTitle"),
-    t(src || loading ? "workspace.canvas.loadingSubtitle" : "workspace.canvas.placeholderSubtitle"),
-  );
+  const placeholderKeys = canvasPlaceholderKeys({ src, loading, working });
+  const placeholderSrc = buildPlaceholderSrc(locale, t(placeholderKeys.title), t(placeholderKeys.subtitle));
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -228,6 +236,8 @@ export default function Canvas({
   const [showChartTools, setShowChartTools] = useState(false);
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const slideByFileRef = useRef(new Map<string, number | null>());
+  // Page scroll survives a reload of the same file (each live-preview version) like the slide index does.
+  const scrollByFileRef = useRef(new Map<string, FrameScrollPosition>());
   const lastFrameSlideRef = useRef<number | null>(null);
   const restoreTargetSlideIdxRef = useRef<number | null>(null);
   const restoringSlideRef = useRef(false);
@@ -290,6 +300,10 @@ export default function Canvas({
     const controller = new AbortController();
     const signal = anySignal([controller.signal, AbortSignal.timeout(30_000)]);
     setLoadError(null);
+    // The outgoing document is still mounted: remember where the user was before the swap.
+    if (frameDocument !== null && frameDocument.src === src && iframeRef.current?.dataset.documentKey === frameDocument.key) {
+      void requestFrameScrollPosition(iframeRef.current).then((position) => { if (position !== null) scrollByFileRef.current.set(src, position); });
+    }
 
     void authorizedFetch(src, { signal, cache: "no-store", redirect: "error" })
       .then(async (response) => {
@@ -323,7 +337,16 @@ export default function Canvas({
     return () => {
       controller.abort();
     };
+    // frameDocument is read for the outgoing document only; it must not restart the fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frameLoadKey, graphicCanvas, src]);
+
+  useEffect(() => {
+    if (!src || loadedFrameKey !== (frameKey ?? src)) return;
+    const position = scrollByFileRef.current.get(src);
+    if (position === undefined) return;
+    void requestFrameSetScrollPosition(iframeRef.current, position);
+  }, [frameKey, loadedFrameKey, src]);
 
   useLayoutEffect(() => {
     // Push-based: deck-stage's BRIDGE_SCRIPT broadcasts active-slide-
@@ -451,9 +474,9 @@ export default function Canvas({
           onSelect={onSelectEditTarget}
         />
         <TweaksLayer
-          active={mode === "tweaks" || mode === "select"}
+          active={mode === "tweaks"}
           iframeRef={iframeRef}
-          selectedBgId={mode === "tweaks" || mode === "select" ? tweaksSelectedBgId : null}
+          selectedBgId={mode === "tweaks" ? tweaksSelectedBgId : null}
           target={tweaksTarget}
           saving={tweaksSaving}
           onApply={onApplyTweak}
@@ -470,6 +493,7 @@ export default function Canvas({
           <GraphicFrameNavigator
             iframeRef={iframeRef}
             requestKey={loadedFrameKey}
+            onFrameChange={onActiveSlideChange}
           />
         )}
         <DrawLayer
@@ -481,6 +505,7 @@ export default function Canvas({
           initialShapes={drawInitialShapes}
           resetKey={drawResetKey}
           onCommit={onCommitDraws}
+          onHistoryChange={onDrawHistoryChange}
         />
         {mode === "draw" && (drawLoading || drawError) && (
           <div className="absolute inset-0 grid place-items-center bg-background/80">
@@ -500,11 +525,7 @@ export default function Canvas({
                 {loadError.status ? ` (HTTP ${loadError.status})` : ""}
               </div>
               <div className="mt-1 text-muted-foreground">
-                {t(loadError.status === 404
-                  ? "workspace.canvas.fileNotFound"
-                  : loadError.status === 401 || loadError.status === 403
-                    ? "workspace.canvas.unauthorized"
-                    : "workspace.canvas.connectionError")}
+                {t(canvasLoadErrorKey(loadError.status))}
               </div>
               <button
                 type="button"

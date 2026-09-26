@@ -242,6 +242,7 @@ describe("artifact, export, event, and recovery repositories", () => {
       immutable_reference_mutated: "immutable_reference_mutated", immutable_reference_path_unavailable: "immutable_reference_path_unavailable",
       immutable_reference_escaped: "immutable_reference_escaped", private_input_unavailable: "private_input_unavailable",
       publication_failed: "publication_failed", operation_conflict: "operation_conflict", operation_cancelled: "operation_cancelled", turn_failed: "turn_failed",
+      deck_source_page_limit: "deck_source_page_limit",
     } satisfies Record<TurnErrorCode, TurnErrorCode>;
     const expected = Object.values(codes).map((code) => {
       const event = { id: code, ts: 10, type: "status.error" as const, code, message: "sanitized", recoverable: true };

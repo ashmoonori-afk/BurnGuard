@@ -1,5 +1,5 @@
 import { t, useT } from "@/i18n/t";
-import type { DesignDirectionSlot } from "@bg/shared";
+import { DIRECTION_CANCELLATION_ERROR, DIRECTION_INTERRUPTION_ERROR, type DesignDirectionSlot } from "@bg/shared";
 import { AlertCircle, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -104,14 +104,14 @@ export function DirectionCard({
   );
 }
 
-function slotFailure(
+export function slotFailure(
   status: DesignDirectionSlot["status"],
   error: string | null,
 ): string {
-  if (error === "Direction generation was interrupted; retry unfinished directions.") {
+  if (error === DIRECTION_INTERRUPTION_ERROR) {
     return t("directions.previewInterrupted");
   }
-  if (error === "Direction generation was cancelled; retry this direction.") {
+  if (error === DIRECTION_CANCELLATION_ERROR) {
     return t("directions.previewCancelled");
   }
   switch (status) {

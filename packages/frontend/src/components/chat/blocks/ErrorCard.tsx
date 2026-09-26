@@ -2,6 +2,7 @@ import { AlertTriangle, CircleSlash, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TurnErrorCode, TurnNotApplied, TurnRejectionReason } from "@bg/shared";
 import { useT, type MessageKey } from "@/i18n/t";
+import { focusComposerOrReveal } from "@/lib/composer-focus";
 
 /**
  * The finite rejection vocabulary, mapped onto shipped copy.
@@ -42,6 +43,7 @@ const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {
   operation_conflict: "chat.error.operationConflict",
   operation_cancelled: "chat.error.operationCancelled",
   turn_failed: "chat.error.turnFailed",
+  deck_source_page_limit: "chat.error.deckSourcePageLimit",
 };
 
 export default function ErrorCard({
@@ -86,7 +88,7 @@ export default function ErrorCard({
           )}
           {recoverable && (
             <div className="mt-2 flex gap-2">
-              <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => document.querySelector<HTMLTextAreaElement>('[data-qa="composer"] textarea')?.focus()}>
+              <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => focusComposerOrReveal(document.querySelector<HTMLTextAreaElement>('[data-qa="composer"] textarea'))}>
                 <RefreshCw className="h-3 w-3" /> {t("chat.error.focusComposer")}
               </Button>
             </div>

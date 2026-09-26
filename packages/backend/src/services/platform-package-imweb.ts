@@ -36,6 +36,10 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
     }
     return null;
   };
+  const read = async (relPath: string): Promise<string | null> => {
+    const asset = input.staged.assets.find((item) => item.rel_path === relPath);
+    return asset === undefined ? null : new TextDecoder().decode(asset.bytes);
+  };
 
   const entries: PackageEntry[] = [];
   const roles: PackageEntryRole[] = [];
@@ -50,14 +54,15 @@ export async function buildImwebPackage(input: PlatformBuildInput): Promise<Plat
     const content = extractPageContent(document);
     const styles = splitStyleBlocks(document);
     if (page.rel_path === input.entrypoint) {
-      sharedCss = `${await linkedStylesheets(document, page.rel_path, input.staged.assets, resolve)}${rewriteCssText(styles.shared, page.rel_path, resolve)}`;
+      // An inline @import is flattened like a linked sheet, so a local font sheet reaches the lint instead of dangling mid-stylesheet.
+      sharedCss = `${await linkedStylesheets(document, page.rel_path, read, resolve)}${rewriteCssText(await flattenStylesheet(styles.shared, page.rel_path, read), page.rel_path, resolve)}`;
       sharedKeyframes = keyframeRenames(sharedCss, "shared");
       scripts.push(...linkedScripts(document, page.rel_path, input.staged.assets, content.element, resolve));
     }
     let slug = pageSlug(page.rel_path);
     for (let counter = 2; usedSlugs.has(slug); counter += 1) slug = `${pageSlug(page.rel_path)}-${counter}`;
     usedSlugs.add(slug);
-    const pageCssText = rewriteCssText(styles.page, page.rel_path, resolve);
+    const pageCssText = rewriteCssText(await flattenStylesheet(styles.page, page.rel_path, read), page.rel_path, resolve);
     // Shared keyframes are renamed in the header, so page CSS and inline styles must follow; a page-local name wins.
     const keyframes = new Map([...sharedKeyframes, ...keyframeRenames(pageCssText, slug)]);
     if (content.element !== null) {
@@ -130,11 +135,7 @@ function scopeSelector(selector: string): string {
   return rest === "" ? SCOPE : `${SCOPE} ${rest.replace(/^(?:>|~|\+)\s*/u, "")}`;
 }
 
-async function linkedStylesheets(document: ReturnType<typeof parseDocument>["document"], owner: string, assets: readonly StagedAsset[], resolve: (relPath: string) => string | null): Promise<string> {
-  const read = async (relPath: string): Promise<string | null> => {
-    const asset = assets.find((item) => item.rel_path === relPath);
-    return asset === undefined ? null : new TextDecoder().decode(asset.bytes);
-  };
+async function linkedStylesheets(document: ReturnType<typeof parseDocument>["document"], owner: string, read: (relPath: string) => Promise<string | null>, resolve: (relPath: string) => string | null): Promise<string> {
   let css = "";
   for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
     const target = resolveLocalReference(link.getAttribute("href") ?? "", owner);

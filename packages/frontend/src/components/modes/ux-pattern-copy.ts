@@ -1,7 +1,7 @@
 import type { UX_PATTERNS } from "@bg/shared";
 import type { MessageKey } from "@/i18n/t";
 
-/** UI-only copy. AI requests retain the shared pattern's original guidance. */
+/** Pattern copy for the panel and for the AI request it builds, in the UI locale. */
 export const UX_PATTERN_COPY = {
   heading: { title: "modes.ux.pattern.heading.title", description: "modes.ux.pattern.heading.description", guidance: "modes.ux.pattern.heading.guidance" },
   action: { title: "modes.ux.pattern.action.title", description: "modes.ux.pattern.action.description", guidance: "modes.ux.pattern.action.guidance" },

@@ -67,14 +67,14 @@ export function recordPlatformFindings(attemptId: string, platform: readonly Att
 
 /** Maps a render failure onto the attempt stop reason; cancellation is decided by the attempt row, not by the error. */
 export function exportStopReason(error: unknown): ExportStopReason {
-  if (error instanceof ExportServiceError) return error.code === "source_changed" ? "source_changed" : error.code === "design_audit_failed" ? "validation_failed" : "render_failed";
+  if (error instanceof ExportServiceError) return error.code === "source_changed" ? "source_changed" : "render_failed";
   if (error instanceof ExportError) return error.code === "platform_lint_failed" || error.code === "platform_package_incomplete" || error.code === "invalid_asset_destination" ? "validation_failed" : "render_failed";
   return "render_failed";
 }
 
 export class ExportServiceError extends Error {
   readonly name = "ExportServiceError";
-  constructor(readonly code: "project_not_found" | "source_changed" | "format_requires_deck" | "format_requires_web" | "format_requires_frames" | "pdf_resource_limit" | "attempt_not_found" | "design_audit_failed" | "invalid_graphic_export_options" | "format_requires_logo", message: string) { super(message); }
+  constructor(readonly code: "project_not_found" | "source_changed" | "format_requires_deck" | "format_requires_web" | "format_requires_frames" | "pdf_resource_limit" | "attempt_not_found" | "invalid_graphic_export_options" | "format_requires_logo", message: string) { super(message); }
 }
 
 export async function enqueueProjectExport(projectId: string, format: ExportFormat, options: ExportOptions, hooks: ExportHooks = {}) {

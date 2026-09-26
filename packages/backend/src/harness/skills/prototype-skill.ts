@@ -13,6 +13,8 @@
  * typography, and palette choices live in `colors_and_type.css` and
  * must NOT be re-declared here.
  */
+import { LUCIDE_REFERENCE_REL_PATH } from "../lucide-reference";
+
 export const PROTOTYPE_SKILL_MD = `# Prototype authoring conventions
 
 ## Artifact contract
@@ -25,8 +27,9 @@ export const PROTOTYPE_SKILL_MD = `# Prototype authoring conventions
 
 ## Default page structure
 
-- Unspecified homepages default to: navbar → hero → features → social proof
-  → pricing or secondary feature → CTA banner → footer (4–7 sections).
+- Unspecified homepages default to: navbar → hero → features → pricing or
+  secondary feature → CTA banner → footer (4–6 sections); social proof only
+  from supplied logos, quotes or figures.
 - Top-level blocks are \`<section data-section="<archetype>">\` direct
   children of \`<body>\`, except navbar (\`<header>\`) and footer
   (\`<footer>\`). Wrap the body sections in a single \`<main>\`.
@@ -93,14 +96,15 @@ export const PROTOTYPE_SKILL_MD = `# Prototype authoring conventions
   hardcode colours, font families, or scales that exist as tokens.
 - Do not introduce new palettes, font stacks, or typefaces. The design
   system owns visual identity; archetypes describe STRUCTURE only.
-- Icons (LUCIDE_ICON_REFERENCE): on demand, Read \`packages/backend/src/harness/assets/lucide/reference.md\`. Use only its inline \`<svg>\`; keep \`stroke="currentColor"\` and size with \`--icon-size\`. Never use external URLs, sprites, or icon fonts.
+- Icons (LUCIDE_ICON_REFERENCE): on demand, Read \`${LUCIDE_REFERENCE_REL_PATH}\` in the project. Use only its inline \`<svg>\`; keep \`stroke="currentColor"\` and size with \`--icon-size\`. Never use external URLs, sprites, or icon fonts.
 - Mobile first; reflow at 320 CSS pixels. Tables and diagrams may use bounded
   two-dimensional scrolling only when their relationships require it.
 - Interactive targets are at least 24 by 24 CSS pixels or have equivalent spacing.
 - Pair color-coded status with text, sign, shape, or pattern cues.
 - Disable nonessential animation and smooth scrolling in
   \`@media (prefers-reduced-motion: reduce)\`.
-- Use \`@media (min-width: 640px)\` for tablet and \`(min-width: 1024px)\` for desktop.
+- When a breakpoint is needed, use the system's \`--layout-bp-*\` values; without
+  a system, 640px tablet / 1024px desktop.
 
 ## Video & media
 

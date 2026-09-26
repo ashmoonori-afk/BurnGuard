@@ -42,6 +42,7 @@ export function appendGraphicOutputContext(lines: string[], canvas: GraphicCanva
   lines.push("</burnguard-graphic-output-v1>");
   lines.push(`<burnguard-graphic-rules-v1 kind="${graphicSet.kind}">`);
   for (const rule of rulesForKind(graphicSet.kind, canvas)) lines.push(`- ${rule}`);
+  if (storyShaped) lines.push(`- Keep the top and bottom ${zone} CSS px of every frame (safe_zone_css_px) free of text and logos; that zone scales with the frame.`);
   if (graphicSet.kind === "product_detail") appendDetailBrief(lines, graphicSet.detail_brief);
   lines.push("</burnguard-graphic-rules-v1>");
   lines.push("- PNG is the export format, not a replacement for index.html. If generating a raster image, save it inside the output directory and reference it from the authored index.html.");
@@ -75,7 +76,6 @@ function rulesForKind(kind: GraphicSetKind, canvas: GraphicCanvasV1): readonly s
         `Author exactly ${canvas.width} × ${canvas.height} CSS px per artboard and exactly as many [data-graphic-artboard] sections as artboard_count, in declared order.`,
         "Every artboard is the same size; the first artboard is the cover and the last artboard is the call to action.",
         "One message per artboard: a single claim, no second topic, no continuation of the previous sentence.",
-        `When the frame is 9:16, keep the top and bottom ${Math.round(canvas.height * STORY_SAFE_ZONE_RATIO)} CSS px free of text and logos; that zone scales with the frame.`,
         "Give each artboard the id frame-{sequence}-{purpose} so the exporter keeps the declared order.",
       ];
     case "banner_set":
@@ -107,7 +107,7 @@ function detailRules(canvas: GraphicCanvasV1): readonly string[] {
     "Section blueprint, one section each: Q1 is this for me (the persona's scene); Q2 what do I get (the concrete arrival scene the product can deliver); Q3 why this method (what was wrong with existing approaches and this mechanism); Q4 can I really do it (cases, previews, before/after, a teaser of the delivered screen); Q5 how hard and how long (stages, speed, templates and manuals that cut trial and error); Q6 exactly what do I receive (the journey in order, not an inventory); Q7 what if it fails (refund rule and exact support scope); Q8 why pay now (a concrete urgency device). Then features, then the payment call to action.",
     "Copy: every sentence must answer \"so what is in it for me?\"; translate boasts such as \"20 years of experience\" into the customer's outcome instead of deleting them; list the product composition as benefits, not inventory; make the four value signals (clear result, \"I can do it too\", speed, low effort) each appear at least once; state a difference from existing methods, because without one the customer compares on price only; cut every word the decision does not need; keep promises keepable and emphasize how fast the change starts.",
     "Anxiety placement: at each scroll position name the customer's silent objection and answer it in that same section.",
-    "Placeholders: evidence, testimonials, refund terms, and urgency values that are absent from detail_brief are rendered as visibly marked \"supply real data\" placeholders. Never invent numbers, reviews, or refund terms.",
+    "Placeholders: evidence, testimonials, refund terms, and urgency values that are absent from detail_brief are rendered as visibly marked placeholders: an element carrying data-bg-placeholder whose text starts with \"supply real data\" and names the missing item. The design audit reports unfinished wording under copy_review; a marked placeholder is the deliberate exception. Never invent numbers, reviews, or refund terms.",
     "Self-review: before finishing, re-read the copy as a suspicious version of the persona and rewrite every sentence that fails the \"so what\" test.",
     "Iteration: limit scope only for an explicitly localized edit. Initial creation, completion requests, and whole-page redesign must finish all sections through the final CTA in one turn; never stop after one region.",
   ];

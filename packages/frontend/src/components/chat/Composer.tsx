@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { defaultGenerationOptions, type BackendId, type FileInfo, type GenerationOptions } from "@bg/shared";
+import { defaultGenerationOptions, MAX_USER_MESSAGE_CHARS, type BackendId, type FileInfo, type GenerationOptions } from "@bg/shared";
 import { useQuery } from "@tanstack/react-query";
 import { getSettings } from "@/api/home";
 import GenerationControls from "@/components/settings/GenerationControls";
@@ -8,8 +8,11 @@ import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
 import { apiErrorCopy } from "@/lib/error-copy";
-import { t, useT } from "@/i18n/t";
+import { mergeComposerPrefill } from "@/lib/create-page-prompt";
+import { composerLengthState } from "@/lib/composer-send";
+import { t, useT, type MessageKey } from "@/i18n/t";
 import ComposerAttachments from "./ComposerAttachments";
+import InterruptButton from "./InterruptButton";
 import { VisualSourceCandidates } from "./VisualSourceCandidates";
 import {
   COMPOSER_SUPPORTED_EXTENSIONS,
@@ -17,12 +20,19 @@ import {
   type ReadyAttachmentSource,
   type SendOutcome,
 } from "./attachment-intake";
-import { useComposerPlaceholder } from "./useComposerPlaceholder";
+import { useComposerPlaceholder, type ComposerDisabledReason } from "./useComposerPlaceholder";
 import { useComposerVisualSources } from "./useComposerVisualSources";
 import { useComposerDraft } from "./useComposerDraft";
 import { useComposerDocuments } from "./useComposerDocuments";
 
 type ComposerSendState = { readonly kind: "idle" } | { readonly kind: "processing" } | SendOutcome;
+
+/** The send button's text and its shortcut wording move together, so the tooltip and the accessible name never disagree. */
+export function composerSendLabels(retrying: boolean): { readonly label: MessageKey; readonly shortcut: MessageKey } {
+  return retrying
+    ? { label: "workspace.composer.retrySend", shortcut: "workspace.composer.retrySendShortcut" }
+    : { label: "workspace.composer.send", shortcut: "workspace.composer.sendShortcut" };
+}
 
 function sendStateMessage(state: ComposerSendState): string | null {
   switch (state.kind) {
@@ -48,8 +58,8 @@ export default function Composer({
   backendId = "claude-code",
   onSend,
   disabled = false,
-  canInterrupt = false,
-  turnElapsedMs = null,
+  disabledReason = null,
+  turnStartedAt = null,
   interruptPending = false,
   onInterrupt,
   initialText = "",
@@ -66,15 +76,14 @@ export default function Composer({
    */
   onSend: (text: string, files: readonly ReadyAttachmentSource[], signal: AbortSignal, generation?: GenerationOptions) => void | Promise<void>;
   disabled?: boolean;
+  /** Names why `disabled` is true so the placeholder can say so; a disabled composer without a reason reads as busy. */
+  disabledReason?: ComposerDisabledReason;
   /**
-   * True when the current turn has exceeded the user's configured
-   * wait threshold and the backend can accept an Interrupt POST.
-   * Only surfaces the Stop button when the composer is also
+   * When the running turn started; the Stop button appears once the
+   * interrupt grace period has elapsed and only while the composer is
    * disabled — idle composers never show Stop.
    */
-  canInterrupt?: boolean;
-  /** 현재 턴 경과(ms). 중단 버튼 라벨에 mm:ss로 표시한다. */
-  turnElapsedMs?: number | null;
+  turnStartedAt?: number | null;
   interruptPending?: boolean;
   onInterrupt?: () => void;
   /**
@@ -103,11 +112,13 @@ export default function Composer({
     }
   }, [backendId, draft, settings.data]);
   const { text, setText } = draft;
+  const textRef = useRef(text);
+  textRef.current = text;
   const appliedPrefill = useRef(initialText);
   useEffect(() => {
     if (initialText !== appliedPrefill.current) {
       appliedPrefill.current = initialText;
-      setText(initialText);
+      setText(mergeComposerPrefill(textRef.current, initialText));
     }
   }, [initialText, setText]);
   const [sendState, setSendState] = useState<ComposerSendState>({ kind: "idle" });
@@ -117,12 +128,14 @@ export default function Composer({
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const sendAbort = useRef<AbortController | null>(null);
-  const placeholder = useComposerPlaceholder(disabled);
+  const placeholder = useComposerPlaceholder(disabled ? disabledReason ?? "busy" : null);
 
   const sending = sendState.kind === "processing";
-  const canSend = draft.ready && documents.canSend && text.trim().length > 0 && !disabled && !sending;
-  const statusMessage = sendStateMessage(sendState);
+  const length = composerLengthState(text);
+  const canSend = draft.ready && documents.canSend && text.trim().length > 0 && length.canSend && !disabled && !sending;
+  const statusMessage = sendStateMessage(sendState) ?? (length.statusKey === null ? null : translate(length.statusKey, { limit: MAX_USER_MESSAGE_CHARS }));
   const retrying = sendState.kind === "failed" || sendState.kind === "cancelled";
+  const sendLabels = composerSendLabels(retrying);
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -167,7 +180,10 @@ export default function Composer({
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <label htmlFor={`composer-${sessionId}`} className="text-xs font-semibold text-foreground">{translate("workspace.composer.requestLabel")}</label>
-        <span className="text-[11px] text-muted-foreground">Ctrl / ⌘ + Enter</span>
+        <span className="text-[11px] text-muted-foreground">
+          {length.counter !== null && <span role="status" className={cn("mr-2", !length.canSend && "text-destructive")}>{translate("workspace.composer.charCount", length.counter)}</span>}
+          {translate("workspace.composer.shortcutHint")}
+        </span>
       </div>
       {activePageLabel !== null ? <div className="mb-2 w-fit max-w-full truncate rounded-full border border-border bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground" title={activePageLabel}>{activePageLabel}</div> : null}
       <ComposerAttachments
@@ -204,6 +220,7 @@ export default function Composer({
         }}
         placeholder={placeholder}
         rows={3}
+        maxLength={MAX_USER_MESSAGE_CHARS}
         disabled={disabled || sending || !draft.ready}
         aria-label={translate("workspace.composer.messageInput")}
         onPaste={(e) => {
@@ -271,22 +288,8 @@ export default function Composer({
           >
             <StopCircle className="h-3.5 w-3.5" aria-hidden="true" /> {translate("workspace.composer.cancelSend")}
           </Button>
-        ) : disabled && canInterrupt ? (
-          <Button
-            variant="destructive"
-            size="sm"
-            className="h-9 gap-1.5 px-3 text-xs max-[900px]:h-11"
-            disabled={interruptPending || !onInterrupt}
-            onClick={() => onInterrupt?.()}
-            title={translate("workspace.composer.interruptTitle")}
-          >
-            <StopCircle className="h-3.5 w-3.5" />
-            {interruptPending
-              ? translate("workspace.composer.interrupting")
-              : turnElapsedMs == null
-                ? translate("workspace.composer.interrupt")
-                : translate("workspace.composer.interruptElapsed", { time: formatElapsed(turnElapsedMs) })}
-          </Button>
+        ) : disabled && turnStartedAt !== null ? (
+          <InterruptButton busy={disabled} turnStartedAt={turnStartedAt} pending={interruptPending} onInterrupt={onInterrupt} />
         ) : (
           <Button
             variant="cta"
@@ -294,22 +297,15 @@ export default function Composer({
             className="h-9 gap-1.5 px-3 text-xs max-[900px]:h-11"
             disabled={!canSend}
             onClick={() => void send()}
-            aria-label={translate(retrying ? "workspace.composer.retrySendShortcut" : "workspace.composer.sendShortcut")}
-            title={translate("workspace.composer.sendShortcut")}
+            aria-label={translate(sendLabels.shortcut)}
+            title={translate(sendLabels.shortcut)}
           >
             <Send className="h-3.5 w-3.5" aria-hidden="true" />{" "}
-            {translate(retrying ? "workspace.composer.retrySend" : "workspace.composer.send")}
+            {translate(sendLabels.label)}
           </Button>
         )}
       </div>
       <VisualSourceCandidates files={projectFiles} />
     </div>
   );
-}
-
-function formatElapsed(ms: number): string {
-  const total = Math.floor(ms / 1000);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
 }

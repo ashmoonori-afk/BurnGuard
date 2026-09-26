@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { getSqlite } from "../src/db/sqlite-client";
-import { buildPrompt } from "../src/harness/prompt-builder";
+import { buildPrompt, MAX_SKILL_CHARS, renderTextEncodingBlock, resolveDeliverable } from "../src/harness/prompt-builder";
 import { DESIGN_CRAFT_RULES, IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../src/harness/design-craft";
 import { IMAGE_PRODUCTION_RULES } from "../src/harness/prompt-image-production";
 import { PROTOTYPE_NAVIGATION_CONTRACT } from "../src/harness/skills/prototype-skill";
@@ -16,7 +16,8 @@ import {
   type SelectedTaskPreset,
 } from "../src/harness/prompt-model-context";
 import type { Deliverable } from "../src/harness/prompt-task-presets";
-import { GENERATION_EFFORTS, type GenerationEffort, type GenerationOptions } from "@bg/shared";
+import { GENERATION_EFFORTS, IMAGE_PROMPT_RECIPES, type GenerationEffort, type GenerationOptions } from "@bg/shared";
+import { CHART_AUTHORING_RULES } from "../src/harness/chart-authoring";
 import { ensureLearningSchema } from "./learning-fixture";
 import {
   attachmentExtractedTextPath,
@@ -74,7 +75,7 @@ describe("buildPrompt", () => {
     expect(prompt).not.toContain("<burnguard-model-guidance-v1>");
   });
 
-  test("Given any generation mode without a design system, When assembling, Then shipped craft rules occur once before delivery", async () => {
+  test("Given any generation mode without a design system, When assembling, Then shipped craft rules occur once before delivery and the gated contracts ship only when enabled", async () => {
     for (const project_type of ["prototype", "slide_deck", "graphic", "from_template", "other"] as const) {
       for (const contextMode of ["compact", "full"] as const) {
         const prompt = await buildPrompt(makeContext({ project_type }), { type: "user.message", text: "Improve the selected element" }, { contextMode });
@@ -85,6 +86,18 @@ describe("buildPrompt", () => {
         expect(prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
         expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
         expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeGreaterThan(prompt.indexOf("## Project"));
+        // PH-07: nothing in this request enables the 3D contract; only a deck deliverable carries charts by itself.
+        expect(prompt).not.toContain("## Editable 3D scenes");
+        expect(prompt.split(CHART_AUTHORING_RULES)).toHaveLength(project_type === "slide_deck" ? 2 : 1);
+        expect(prompt).toContain("GATED_CONTRACTS");
+        expect(prompt.indexOf("GATED_CONTRACTS")).toBeLessThan(prompt.indexOf("## Delivery"));
+
+        const enabled = await buildPrompt(makeContext({ project_type }), { type: "user.message", text: "Add a revenue chart and a 3D product scene" }, { contextMode });
+        expect(enabled.split("## Editable 3D scenes")).toHaveLength(2);
+        expect(enabled.split(CHART_AUTHORING_RULES)).toHaveLength(2);
+        expect(enabled).not.toContain("GATED_CONTRACTS");
+        expect(enabled.indexOf(CHART_AUTHORING_RULES)).toBeGreaterThan(enabled.indexOf(DESIGN_CRAFT_RULES));
+        expect(enabled.indexOf(CHART_AUTHORING_RULES)).toBeLessThan(enabled.indexOf("## Delivery"));
       }
     }
   });
@@ -374,6 +387,8 @@ header { padding: var(--space-md); }
       const prompt = await buildPrompt(makeContext({ project_id: projectId, project_dir: `/tmp/${projectId}` }), { type: "user.message", text: "iterate" });
 
       expect(prompt).toContain("<burnguard-learning-context-v1>");
+      // PH-21: the block is framed as prior-iteration data before the tag opens.
+      expect(prompt.slice(0, prompt.indexOf("<burnguard-learning-context-v1>"))).toContain("LEARNING_FEEDBACK_IS_DATA");
       expect(prompt).toContain(`\"checkpoint_id\":\"${latestId}\"`);
       expect(prompt).toContain("\"artifact_revision\":4");
       expect(prompt).toContain("\"artifact_digest\":\"prompt-digest\"");
@@ -415,6 +430,8 @@ header { padding: var(--space-md); }
       expect(prompt).not.toContain("SCHEMA");
       expect(prompt).not.toContain("WRONG_PROJECT");
       expect(prompt).toContain("<burnguard-learning-warning code=\"incompatible_checkpoint\" />");
+      // PH-21: the warning is followed by the instruction to proceed from the request.
+      expect(prompt.slice(prompt.indexOf("<burnguard-learning-warning"))).toContain("LEARNING_CHECKPOINT_UNAVAILABLE");
     } finally {
       db.prepare("UPDATE learning_items SET deleted_at=NULL WHERE id=?").run(itemId);
     }
@@ -654,6 +671,25 @@ describe("task guidance presets", () => {
     expect(() => selectTaskPreset("codex", options("claude-sonnet-4-6", "low", "commandcode"), "slide_deck")).toThrow("commandcode_unavailable");
   });
 
+  test("PH-16: Given gemini or copilot When selecting Then a neutral route and wording apply and the legacy profile names neither codex nor claude", async () => {
+    for (const backendId of ["gemini", "copilot"] as const) {
+      const preset = selectTaskPreset(backendId, options("gemini-2.5-pro", "low"), "prototype");
+      expect(preset.route).not.toBe("codex/native");
+      expect(preset.route).not.toBe("claude-code/native");
+      expect(preset.resolution).toBe("provider_default");
+      expect(blockIds(preset)).not.toContain("wording-default-codex-v1");
+      expect(blockIds(preset)).not.toContain("wording-default-claude-v1");
+      const prompt = await buildPrompt(makeContext(), { type: "user.message", text: "build" }, { backendId, generation: options("gemini-2.5-pro", "low") });
+      const legacy = JSON.parse(prompt.split("<burnguard-model-guidance-v1>\n")[1]!.split("\n</burnguard-model-guidance-v1>")[0]!);
+      expect(legacy.profile).not.toBe("codex");
+      expect(legacy.profile).not.toBe("claude");
+      expect(JSON.parse(prompt.split("<burnguard-task-guidance-v1>\n")[1]!.split("\n</burnguard-task-guidance-v1>")[0]!).route).toBe(preset.route);
+    }
+    expect(() => selectTaskPreset("gemini", options("gemini-2.5-pro", "low", "commandcode"), "prototype")).toThrow("commandcode_unavailable");
+    // The capability rule names no backend: it applies to any session without a built-in image tool.
+    expect(DESIGN_CRAFT_RULES).not.toMatch(/\bClaude\b|CommandCode/u);
+  });
+
   test("Given every shipped combination When serializing Then the envelope stays within budget", () => {
     const worstCaseModel = "m".repeat(120);
     const models: [Parameters<typeof selectTaskPreset>[0], string, "native" | "commandcode"][] = [
@@ -663,6 +699,8 @@ describe("task guidance presets", () => {
       ["claude-code", "claude-sonnet-4-6", "native"], ["claude-code", "claude-opus-4-6", "native"],
       ["claude-code", "sonnet", "native"], ["claude-code", "opus", "native"], ["claude-code", worstCaseModel, "native"],
       ["claude-code", "claude-sonnet-4-6", "commandcode"], ["claude-code", worstCaseModel, "commandcode"],
+      ["gemini", "gemini-2.5-pro", "native"], ["gemini", worstCaseModel, "native"],
+      ["copilot", "gpt-5", "native"], ["copilot", worstCaseModel, "native"],
     ];
     let checked = 0;
     for (const [backend, model, provider] of models) {
@@ -734,5 +772,199 @@ describe("task guidance presets", () => {
     );
     expect(standalone).toContain("## Diagram skill");
     expect(JSON.parse(standalone.split("<burnguard-task-guidance-v1>\n")[1].split("\n</burnguard-task-guidance-v1>")[0]).deliverable).toBe("diagram");
+  });
+});
+
+describe("prompt gaps", () => {
+  const generation = { model: "gpt-5.6-luna", effort: "low", provider: "native", vanilla: false } as const;
+  const taskDeliverable = (prompt: string): string =>
+    JSON.parse(prompt.split("<burnguard-task-guidance-v1>\n")[1]!.split("\n</burnguard-task-guidance-v1>")[0]!).deliverable;
+
+  test("PH-03: Given an open-ended project and a Korean diagram request When built Then the deliverable, the skill and the guidance route to diagram", async () => {
+    const text = "조직도를 만들어 줘";
+    expect(resolveDeliverable("other", text)).toBe("diagram");
+    expect(resolveDeliverable("slide_deck", text)).toBe("slide_deck");
+    const standalone = await buildPrompt(makeContext({ project_type: "other" }), { type: "user.message", text }, { backendId: "codex", generation });
+    expect(standalone).toContain("## Diagram skill");
+    expect(taskDeliverable(standalone)).toBe("diagram");
+    const deck = await buildPrompt(makeContext({ project_type: "slide_deck", entrypoint: "deck.html" }), { type: "user.message", text }, { backendId: "codex", generation });
+    expect(deck).not.toContain("## Diagram skill");
+    expect(taskDeliverable(deck)).toBe("slide_deck");
+  });
+
+  test("PH-02: Given a compact deck turn When built Then the slide deck skill section carries the notes, layout, export-ban and deck-ready contracts within budget", async () => {
+    for (const use_speaker_notes of [true, false]) {
+      const prompt = await buildPrompt(makeContext({ project_type: "slide_deck", entrypoint: "deck.html", options_json: JSON.stringify({ use_speaker_notes }) }), { type: "user.message", text: "make a deck" }, { contextMode: "compact" });
+      const skill = prompt.slice(prompt.indexOf("## Slide deck skill"), prompt.indexOf("## Visual craft"));
+      for (const token of ["use_speaker_notes", "data-speaker-notes", "deck-notes", "data-layout", "<iframe>", "data-deck-ready", "text-first"]) expect(skill).toContain(token);
+      expect(skill).not.toContain("## Layout archetypes");
+    }
+    expect(COMPACT_DECK_SKILL_MD.length).toBeLessThanOrEqual(MAX_SKILL_CHARS);
+  });
+
+  test("PH-19: Given the shipped craft rules and a product-detail graphic When built Then the audit hooks are named where the rules are stated", async () => {
+    expect(DESIGN_CRAFT_RULES).toContain("data-bg-font-exception");
+    expect(DESIGN_CRAFT_RULES).toContain("font_consistency");
+    const detail = await buildPrompt(makeContext({ project_type: "graphic", options_json: JSON.stringify({ graphic_canvas: { schema_version: 1, width: 860, height: 12_000 }, graphic_set: { schema_version: 1, kind: "product_detail", frame_count: 1 } }) }), { type: "user.message", text: "상세페이지를 만들어줘" });
+    const rules = detail.slice(detail.indexOf('<burnguard-graphic-rules-v1 kind="product_detail">'), detail.indexOf("</burnguard-graphic-rules-v1>"));
+    expect(rules).toContain("data-bg-placeholder");
+    expect(rules).toContain("supply real data");
+    expect(rules).toContain("copy_review");
+  });
+
+  test("PH-07: Given a captured prototype and a plain edit When built Then the 3D and chart contracts are withheld until the request, brief, files or entrypoint enable them", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "bg-prompt-gating-"));
+    try {
+      await writeFile(path.join(tempDir, "index.html"), '<!doctype html><html><body><header data-section="hero" data-bg-node-id="hero"><h1>Welcome</h1></header></body></html>', "utf8");
+      const captured = makeContext({ project_dir: tempDir }, { files: [{ rel_path: "index.html", category: "html", size_bytes: 120, hash: null, updated_at: 1 }] });
+      const edit = await buildPrompt(captured, { type: "user.message", text: "Change the hero title" }, { contextMode: "compact" });
+      expect(edit).not.toContain("## Editable 3D scenes");
+      expect(edit).not.toContain(CHART_AUTHORING_RULES);
+      expect(edit).toContain("GATED_CONTRACTS");
+
+      const korean = await buildPrompt(captured, { type: "user.message", text: "매출 차트를 추가해줘" }, { contextMode: "compact" });
+      expect(korean.split(CHART_AUTHORING_RULES)).toHaveLength(2);
+      expect(korean).not.toContain("## Editable 3D scenes");
+
+      const brief = JSON.stringify({ design_brief: { schema_version: 1, output_type: "prototype", audience: "방문자", objective: "데이터 현황 안내", content_source: "none", locale: "ko-KR", brand_mode: "none", visual_mood: "formal", density: "balanced", output_size: "responsive" } });
+      const briefed = await buildPrompt(makeContext({ project_dir: tempDir, options_json: brief }), { type: "user.message", text: "Change the hero title" }, { contextMode: "compact" });
+      expect(briefed.split(CHART_AUTHORING_RULES)).toHaveLength(2);
+
+      const runtime = makeContext({ project_dir: tempDir }, { files: [{ rel_path: ".burnguard-three/runtime.js", category: "script", size_bytes: 10, hash: null, updated_at: 1 }] });
+      const scene = await buildPrompt(runtime, { type: "user.message", text: "Change the hero title" }, { contextMode: "compact" });
+      expect(scene.split("## Editable 3D scenes")).toHaveLength(2);
+
+      await writeFile(path.join(tempDir, "index.html"), '<!doctype html><html><body><main data-section="stats" data-bg-node-id="stats"><figure data-bg-chart="revenue"><script type="application/json" data-bg-chart-config>{}</script></figure></main></body></html>', "utf8");
+      const charted = await buildPrompt(captured, { type: "user.message", text: "Change the hero title" }, { contextMode: "compact" });
+      expect(charted).toContain("data-bg-chart figure(s)");
+      expect(charted.split(CHART_AUTHORING_RULES)).toHaveLength(2);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("PH-24: Given logo and diagram deliverables When built Then the image rules ship without the recipe catalog, which a prototype still receives in full", async () => {
+    const logoSet = { schema_version: 1, brand_name: "Northvale", niche: "boutique asset management", character: ["calm", "precise"], logo_type: "combination", symbol_keywords: ["mountain"] };
+    const logo = await buildPrompt(makeContext({ project_type: "logo", project_dir: "/no/such/dir/that/exists", options_json: JSON.stringify({ logo_set: logoSet }) }), { type: "user.message", text: "로고 만들어줘" });
+    expect(logo.split(IMAGE_PRODUCTION_RULES)).toHaveLength(2);
+    expect(logo).not.toContain("<burnguard-image-recipes-v1>");
+    const diagram = await buildPrompt(makeContext({ project_type: "other" }), { type: "user.message", text: "Create an onboarding flowchart diagram" });
+    expect(diagram.split(IMAGE_PRODUCTION_RULES)).toHaveLength(2);
+    expect(diagram).not.toContain("<burnguard-image-recipes-v1>");
+    const site = await buildPrompt(makeContext(), { type: "user.message", text: "Build a landing page" });
+    const catalog = site.match(/<burnguard-image-recipes-v1>\n([\s\S]*?)\n<\/burnguard-image-recipes-v1>/u)![1]!;
+    expect(catalog.split("\n").map((line) => line.split(" | ")[0])).toEqual(Object.keys(IMAGE_PROMPT_RECIPES));
+  });
+
+  test("PH-05: Given a README whose sections ship in the layout contract When built in full mode Then those sections are not inlined again while the rest of the README is", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "bg-prompt-readme-"));
+    try {
+      const readme = path.join(tempDir, "README.md");
+      const skill = path.join(tempDir, "SKILL.md");
+      await writeFile(readme, "# Theme\n\n## Layout\nLAYOUT_RULE_TEXT\n\n## Family tokens\nFAMILY_RULE_TEXT\n\n## Image direction\nIMAGE_RULE_TEXT\n\n## Footer\nFOOTER_RULE_TEXT\n");
+      await writeFile(skill, "# Theme skill\n\n## Family tokens\nSKILL_FAMILY_TEXT\n");
+      const designSystem = { id: "readme-dedupe", name: "Dedupe", status: "published", source_type: "manual", is_template: false, dir_path: tempDir, skill_md_path: skill, tokens_css_path: null, readme_md_path: readme, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const;
+      const prompt = await buildPrompt(makeContext({}, { designSystem }), { type: "user.message", text: "Build it" }, { contextMode: "full" });
+      const layout = JSON.parse(prompt.match(/<selected_design_system_layout>\n([^\n]+)\n<\/selected_design_system_layout>/u)![1]!);
+      expect(layout.sections.map((section: { kind: string }) => section.kind)).toEqual(["layout", "family", "footer"]);
+      for (const text of ["LAYOUT_RULE_TEXT", "FAMILY_RULE_TEXT", "FOOTER_RULE_TEXT"]) expect(prompt.split(text)).toHaveLength(2);
+      const outsideLayout = prompt.replace(/<selected_design_system_layout>\n[^\n]+\n<\/selected_design_system_layout>/u, "");
+      expect(outsideLayout.split("## Family tokens")).toHaveLength(2);
+      expect(outsideLayout).toContain("SKILL_FAMILY_TEXT");
+      expect(outsideLayout).toContain("IMAGE_RULE_TEXT");
+      expect(outsideLayout).toContain("## Image direction");
+      expect(outsideLayout).not.toContain("## Layout\n");
+      expect(outsideLayout).not.toContain("## Footer");
+      expect(prompt).toContain("### README.md (excerpt)");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("DP-24: Given a SKILL.md beyond the excerpt budget When built in full mode Then the block ends at a section boundary and a marker names the path, while a short skill ships whole", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "bg-prompt-skill-"));
+    try {
+      const skill = path.join(tempDir, "SKILL.md");
+      const sections = Array.from({ length: 40 }, (_, index) => `## Section ${index}\n\n${"x".repeat(60)} paragraph ${index} line one.\n${"y".repeat(60)} paragraph ${index} line two.\n`);
+      const long = `# Long skill\n\n${sections.join("\n")}`;
+      await writeFile(skill, long);
+      const designSystem = { id: "skill-cut", name: "Cut", status: "published", source_type: "manual", is_template: false, dir_path: tempDir, skill_md_path: skill, tokens_css_path: null, readme_md_path: null, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const;
+      const prompt = await buildPrompt(makeContext({}, { designSystem }), { type: "user.message", text: "Build it" }, { contextMode: "full" });
+      expect(long.length).toBeGreaterThan(MAX_SKILL_CHARS);
+      const block = prompt.match(/### SKILL\.md\n```markdown\n([\s\S]*?)\n```\n([^\n]*)/u)!;
+      const excerpt = block[1]!;
+      expect(excerpt.length).toBeLessThanOrEqual(MAX_SKILL_CHARS);
+      expect(long.startsWith(excerpt)).toBe(true);
+      expect(long.charAt(excerpt.length)).toBe("\n");
+      expect(excerpt.endsWith("line two.")).toBe(true);
+      expect(block[2]).toContain("SKILL_MD_TRUNCATED");
+      expect(block[2]).toContain(skill);
+
+      await writeFile(skill, "# Short skill\n\nWhole text.\n");
+      const short = await buildPrompt(makeContext({}, { designSystem }), { type: "user.message", text: "Build it" }, { contextMode: "full" });
+      const shortBlock = short.match(/### SKILL\.md\n```markdown\n([\s\S]*?)\n```\n([^\n]*)/u)!;
+      expect(shortBlock[1]).toBe("# Short skill\n\nWhole text.\n");
+      expect(short).not.toContain("SKILL_MD_TRUNCATED");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("PH-06: Given a frozen pin that inlines SKILL.md When built in compact mode Then the pin ships its contracts and tokens with the compact handling but not the skill or README, which full mode keeps", async () => {
+    const context = [
+      "## Design system", "- name: Pinned", '<selected_design_system_surface surface="website">', '{"tokens":{},"sections":[]}', "</selected_design_system_surface>", "",
+      "### SKILL.md", "```markdown", "PINNED_SKILL_TEXT", "```", "",
+      "### colors_and_type.css (excerpt)", "```css", ":root { --brand: #123456; }", "```", "",
+      "### README.md (excerpt)", "```markdown", "PINNED_README_TEXT", "```", "",
+    ].join("\n");
+    const designSystemPin = { system_id: "pinned", revision: 3, digest: "pin-digest", context, tokens: "/* brand */\n:root { --brand: #123456; }\n" };
+    const compact = await buildPrompt(makeContext({}, { designSystemPin }), { type: "user.message", text: "Build it" }, { contextMode: "compact" });
+    const pinned = compact.slice(compact.indexOf("<pinned_design_system>"), compact.indexOf("</pinned_design_system>"));
+    expect(JSON.parse(pinned.split("\n")[1]!)).toEqual({ revision: 3, digest: "pin-digest" });
+    expect(pinned).toContain('surface="website"');
+    expect(pinned).toContain("### Compact design-system handling");
+    expect(pinned).toContain("--brand: #123456");
+    expect(pinned).not.toContain("### SKILL.md");
+    expect(pinned).not.toContain("PINNED_SKILL_TEXT");
+    expect(pinned).not.toContain("PINNED_README_TEXT");
+    expect(compact).not.toContain("DEFAULT_VISUAL_IDENTITY");
+
+    const full = await buildPrompt(makeContext({}, { designSystemPin }), { type: "user.message", text: "Build it" }, { contextMode: "full" });
+    const fullPinned = full.slice(full.indexOf("<pinned_design_system>"), full.indexOf("</pinned_design_system>"));
+    expect(fullPinned).toContain("### SKILL.md");
+    expect(fullPinned).toContain("PINNED_SKILL_TEXT");
+    expect(fullPinned).toContain("PINNED_README_TEXT");
+    expect(fullPinned).not.toContain("### Compact design-system handling");
+    expect(fullPinned.split("--brand: #123456")).toHaveLength(2);
+  });
+
+  test("PH-32: Given a host that is not win32 When built Then the text-encoding tag ships once without PowerShell guidance, which only the win32 seam adds", async () => {
+    const prompt = await buildPrompt(makeContext(), { type: "user.message", text: "hi" });
+    expect(prompt.split("<burnguard-text-encoding-v1>")).toHaveLength(2);
+    const shipped = prompt.slice(prompt.indexOf("<burnguard-text-encoding-v1>"), prompt.indexOf("</burnguard-text-encoding-v1>"));
+    expect(shipped.includes("PowerShell")).toBe(process.platform === "win32");
+    for (const platform of ["linux", "darwin"] as const) {
+      const block = renderTextEncodingBlock(platform);
+      expect(block[0]).toBe("<burnguard-text-encoding-v1>");
+      expect(block.at(-1)).toBe("</burnguard-text-encoding-v1>");
+      expect(block.join("\n")).not.toContain("PowerShell");
+    }
+    const windows = renderTextEncodingBlock("win32");
+    expect(windows[0]).toBe("<burnguard-text-encoding-v1>");
+    expect(windows.at(-1)).toBe("</burnguard-text-encoding-v1>");
+    expect(windows.join("\n")).toContain("PowerShell");
+  });
+
+  test("PH-27: Given a compact turn whose entrypoint does not exist yet When built Then the structure heading the compact skill points at still precedes the skill", async () => {
+    const deck = await buildPrompt(makeContext({ project_type: "slide_deck", entrypoint: "deck.html", project_dir: "/no/such/dir/that/exists" }), { type: "user.message", text: "first turn" }, { contextMode: "compact" });
+    expect(deck).toMatch(/^## Deck structure/mu);
+    expect(deck.indexOf("\n## Deck structure")).toBeLessThan(deck.indexOf("## Slide deck skill"));
+    expect(deck).not.toMatch(/deck\.html — \d/u);
+    const site = await buildPrompt(makeContext({ project_dir: "/no/such/dir/that/exists" }), { type: "user.message", text: "first turn" }, { contextMode: "compact" });
+    expect(site.indexOf("\n## Prototype structure")).toBeGreaterThan(0);
+    expect(site.indexOf("\n## Prototype structure")).toBeLessThan(site.indexOf("## Prototype skill"));
+    expect(site).not.toMatch(/index\.html — \d/u);
+    const full = await buildPrompt(makeContext({ project_type: "slide_deck", entrypoint: "deck.html", project_dir: "/no/such/dir/that/exists" }), { type: "user.message", text: "first turn" }, { contextMode: "full" });
+    expect(full).not.toMatch(/^## Deck structure/mu);
   });
 });

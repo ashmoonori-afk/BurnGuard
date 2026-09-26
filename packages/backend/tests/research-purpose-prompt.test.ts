@@ -17,9 +17,9 @@ type ResearchBlock = {
 
 beforeAll(() => ensureLearningSchema(getSqlite()));
 
-function context(projectType = "prototype", files: BuildContext["files"] = []): BuildContext {
+function context(projectType = "prototype", files: BuildContext["files"] = [], optionsJson: string | null = null): BuildContext {
   return {
-    project: { project_id: `research-purpose-${projectType}`, project_name: "Research purpose", project_type: projectType, entrypoint: projectType === "slide_deck" ? "deck.html" : "index.html", project_dir: "/missing/research-purpose", options_json: null },
+    project: { project_id: `research-purpose-${projectType}`, project_name: "Research purpose", project_type: projectType, entrypoint: projectType === "slide_deck" ? "deck.html" : "index.html", project_dir: "/missing/research-purpose", options_json: optionsJson },
     files, attachments: [], designSystem: null, openComments: [],
   } as BuildContext;
 }
@@ -83,6 +83,16 @@ describe("research purpose prompt integration", () => {
     expect(selectedTemplate.routing.purpose).toBe("prototype.dashboard");
   });
 
+  test("Given a stored research purpose When an edit request matches no selector Then the stored purpose routes the rules", async () => {
+    const stored = JSON.stringify({ research_purpose: "deck.company" });
+    const edit = researchBlock(await buildPrompt(context("slide_deck", [], stored), { type: "user.message", text: "2페이지 글자 키워줘" }));
+    expect(edit.routing).toEqual({ project_type: "slide_deck", request_intent: "unspecified", creation_mode: "blank", fallback: "none", purpose: "deck.company" });
+    expect(edit.rules.map((rule) => rule.id)).toEqual(expect.arrayContaining(["deck.company:1", "deck.company:2", "deck.company:3"]));
+    const explicit = researchBlock(await buildPrompt(context("slide_deck", [], stored), { type: "user.message", text: "Create a sales proposal deck" }));
+    expect(explicit.routing).toMatchObject({ request_intent: "sales", fallback: "none", purpose: "deck.sales" });
+    expect(explicit.rules.some((rule) => rule.id.startsWith("deck.company:"))).toBe(false);
+  });
+
   test("Given captured files When built Then creation mode changes without changing request intent", async () => {
     const block = researchBlock(await buildPrompt(context("prototype", [{ rel_path: "index.html", category: "code", size_bytes: 10, hash: "digest", updated_at: 1 }]), { type: "user.message", text: "Polish this" }));
     expect(block.routing.creation_mode).toBe("existing");
@@ -121,6 +131,28 @@ describe("research purpose prompt integration", () => {
     const block = researchBlock(await buildPrompt(context(), { type: "user.message", text: "Create a dashboard" }));
     expect(block.rules.map((rule) => rule.id)).toEqual(expect.arrayContaining(["CR-002", "CR-003", "CR-005", "CR-009", "prototype.dashboard:1"]));
     expect(block.advice).toEqual(expect.arrayContaining(["reflow_320_with_2d_exceptions", "non_color_state_cues", "target_size_24", "reduced_motion"]));
+  });
+
+  test("PH-11: Given fixed-frame project types When built Then the reflow and target-size web baseline is dropped while the fluid web surface keeps it", async () => {
+    for (const projectType of ["graphic", "logo", "slide_deck"]) {
+      const block = researchBlock(await buildPrompt(context(projectType), { type: "user.message", text: "Polish this" }));
+      const ids = block.rules.map((rule) => rule.id);
+      expect(ids).not.toContain("CR-003");
+      expect(ids).not.toContain("CR-005");
+      expect(ids).toEqual(expect.arrayContaining(["CR-001", "CR-002", "CR-004", "CR-008", "CR-009"]));
+      expect(block.advice).not.toContain("reflow_320_with_2d_exceptions");
+      expect(block.advice).not.toContain("target_size_24");
+      expect(block.advice).toEqual(expect.arrayContaining(["non_color_state_cues", "reduced_motion"]));
+    }
+    for (const projectType of ["prototype", "from_template", "other"]) {
+      const block = researchBlock(await buildPrompt(context(projectType), { type: "user.message", text: "Polish this" }));
+      expect(block.rules.map((rule) => rule.id)).toEqual(expect.arrayContaining(["CR-003", "CR-005"]));
+      expect(block.advice).toEqual(expect.arrayContaining(["reflow_320_with_2d_exceptions", "target_size_24"]));
+    }
+    // A web purpose matched on a fixed frame cannot smuggle the reflow rule back in.
+    const dashboardDeck = researchBlock(await buildPrompt(context("slide_deck"), { type: "user.message", text: "Create an analytics dashboard deck" }));
+    expect(dashboardDeck.routing.purpose).toBe("prototype.dashboard");
+    expect(dashboardDeck.rules.map((rule) => rule.id)).not.toContain("CR-003");
   });
 
   test("Given a diagram request When built Then SVG naming and bounded 2D advice are selected", async () => {

@@ -9,7 +9,7 @@ import { systemsDir } from "../src/lib/paths";
 import { extractDesignSystemFromSource, persistCanonicalExtraction } from "../src/services/design-system-extract";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 import { sanitizeSourceHtml } from "../src/services/extraction-html";
-import { assertInertSourceMarkup } from "../src/services/extraction-safety";
+import { assertAcquirableSourceMarkup, assertInertSourceMarkup } from "../src/services/extraction-safety";
 
 // The two offending references in mdn/beginner-html-site/index.html.
 const sourceHtml = '<!doctype html><html><head><meta charset="utf-8"></head><body><h1>Source</h1><img src="images/firefox-icon.png" alt="Firefox"><p><a href="https://www.mozilla.org/en-US/about/manifesto/">Manifesto</a></p></body></html>';
@@ -119,4 +119,22 @@ test.each([
     expect((await readdir(systemsDir)).sort()).toEqual(before);
     expect(getSqlite().prepare("SELECT id FROM design_systems WHERE id=?").get(id)).toBeNull();
   });
+});
+
+const INERT_PAGE = (body: string) => `<html><head><title>t</title></head><body>${body}</body></html>`;
+
+test.each([
+  ["a remote iframe inside <noscript>", INERT_PAGE('<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-1" height="0" width="0"></iframe></noscript>')],
+  ["a remote image inside <template>", INERT_PAGE('<template><img src="https://cdn.example/a.png"></template>')],
+  ["a remote srcset candidate", INERT_PAGE('<img srcset="https://cdn.example/a.jpg 2x" alt="">')],
+  ["a remote imagesrcset preload", INERT_PAGE('<link rel="preload" as="image" imagesrcset="https://cdn.example/a.jpg 1x">')],
+  ["a ping beacon", INERT_PAGE('<a ping="https://t.example/p">x</a>')],
+  ["an @import without whitespace", INERT_PAGE('<style>@import"https://evil.example/x.css";</style>')],
+])("R2-1: Given %s When the inert gate runs Then the source is rejected", (_label, html) => {
+  expect(() => assertInertSourceMarkup(html, "html")).toThrow(expect.objectContaining({ code: "unsafe_source_content" }));
+});
+
+test("R2-1: Given a relative srcset candidate list When the acquirable gate runs Then it is accepted like a relative src", () => {
+  expect(() => assertAcquirableSourceMarkup(INERT_PAGE('<img src="a.jpg" srcset="a.jpg 1x, b.jpg 2x" alt="">'), "html")).not.toThrow();
+  expect(() => assertAcquirableSourceMarkup(INERT_PAGE('<img srcset="a.jpg 1x, https://cdn.example/b.jpg 2x" alt="">'), "html")).toThrow(expect.objectContaining({ code: "unsafe_source_content" }));
 });

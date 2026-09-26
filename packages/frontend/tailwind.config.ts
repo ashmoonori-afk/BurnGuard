@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 export default {
-  darkMode: ["class"],
+  darkMode: ["selector", '[data-theme="dark"]'],
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     container: {
@@ -55,6 +55,19 @@ export default {
         popover: {
           DEFAULT: "rgb(var(--popover) / <alpha-value>)",
           foreground: "rgb(var(--popover-foreground) / <alpha-value>)",
+        },
+        // Card tints — soft backgrounds behind project and system
+        // thumbnails, re-tuned per theme in `src/index.css`.
+        tint: {
+          rose: "rgb(var(--tint-rose) / <alpha-value>)",
+          slate: "rgb(var(--tint-slate) / <alpha-value>)",
+          sky: "rgb(var(--tint-sky) / <alpha-value>)",
+          fuchsia: "rgb(var(--tint-fuchsia) / <alpha-value>)",
+          blue: "rgb(var(--tint-blue) / <alpha-value>)",
+          stone: "rgb(var(--tint-stone) / <alpha-value>)",
+          amber: "rgb(var(--tint-amber) / <alpha-value>)",
+          emerald: "rgb(var(--tint-emerald) / <alpha-value>)",
+          violet: "rgb(var(--tint-violet) / <alpha-value>)",
         },
         // Raw brand palette — mirrors the CSS custom properties in
         // `src/index.css`. Use these (e.g. `text-brand-500`) when a

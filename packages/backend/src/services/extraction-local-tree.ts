@@ -2,6 +2,7 @@ import { open, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   parseCssSource,
+  selectCssCustomProperties,
   styleSignalsFromDeclarations,
   type CssDeclarationEvidence,
   type CssParseIssue,
@@ -84,12 +85,7 @@ export async function analyzeLocalTree(
       if (first) fontFamilies.add(first);
     }
   }
-  const cssVars = new Map<string, string>();
-  for (const declaration of [...cssDeclarations].sort((left, right) => left.property.localeCompare(right.property) || left.value.localeCompare(right.value) || left.sourceLocator.localeCompare(right.sourceLocator))) {
-    if (declaration.property.startsWith("--") && !cssVars.has(declaration.property.slice(2))) {
-      cssVars.set(declaration.property.slice(2), declaration.value);
-    }
-  }
+  const cssVars = selectCssCustomProperties(cssDeclarations);
   const signals = styleSignalsFromDeclarations(cssDeclarations);
   if (cssParseIssues.length > 0) notes.push(`${cssParseIssues.length} CSS parse or support issue(s) retained as provenance evidence.`);
   return {

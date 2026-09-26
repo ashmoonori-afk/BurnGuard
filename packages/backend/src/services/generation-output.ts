@@ -36,7 +36,8 @@ export function hasGeneratedContent(node: HTMLElement): boolean {
   return text.length > 0 || content.querySelector("img[src],svg,canvas,video[src]") !== null || /background(?:-image)?\s*:[^;{}]*url\(/i.test(node.innerHTML);
 }
 
-export async function generationOutputComplete(directory: string, entrypoint: string, projectType: string, expectedSlides?: number, sourcePages?: readonly DeckSourcePage[]): Promise<boolean> {
+/** `briefPages`: pages the design brief promised; each must exist as a regular, non-empty HTML file holding generated content. */
+export async function generationOutputComplete(directory: string, entrypoint: string, projectType: string, expectedSlides?: number, sourcePages?: readonly DeckSourcePage[], briefPages?: readonly string[]): Promise<boolean> {
   try {
     const file = resolveWithin(directory, entrypoint);
     const info = await lstat(file);
@@ -45,6 +46,12 @@ export async function generationOutputComplete(directory: string, entrypoint: st
     if (source.includes("Send your first prompt in chat to expand this deck.") || source.includes("Start with one clear visual message.")) return false;
     const root = parse(source);
     if (!hasGeneratedContent(root)) return false;
+    for (const page of briefPages ?? []) {
+      const pageFile = resolveWithin(directory, page);
+      const pageInfo = await lstat(pageFile);
+      if (!pageInfo.isFile() || pageInfo.isSymbolicLink() || pageInfo.nlink !== 1 || pageInfo.size === 0 || pageInfo.size > 16 * 1024 * 1024) return false;
+      if (!hasGeneratedContent(parse(await readFile(pageFile, "utf8")))) return false;
+    }
     const units = root.querySelectorAll("[data-bg-unit]");
     if (units.some(node => node.getAttribute("data-bg-complete") !== "true" || !hasGeneratedContent(node))) return false;
     if (projectType === "slide_deck") {

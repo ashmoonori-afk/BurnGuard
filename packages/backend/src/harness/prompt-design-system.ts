@@ -10,12 +10,76 @@ type SessionContext = NonNullable<
 type DesignSystem = NonNullable<SessionContext["designSystem"]>;
 
 export const MAX_SKILL_CHARS = 5000;
-const MAX_TOKENS_CSS_LINES = 150;
+const MAX_TOKENS_CSS_LINES = 320;
+const MAX_TOKENS_CSS_CHARS = 12_000;
 const MAX_README_LINES = 120;
 
 /**
+ * The first `:root { ... }` block of the token CSS with comments and blank lines removed, or the
+ * whole stripped file when no block closes, bounded by lines and characters. Every shipped theme's
+ * token block fits, so elevation and motion tokens reach the model along with colour and type.
+ */
+function excerptTokensCss(content: string): string {
+  const stripped = content.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter((line) => line.trim() !== "").join("\n");
+  const start = stripped.indexOf(":root");
+  const close = start === -1 ? -1 : stripped.indexOf("}", start);
+  const block = close === -1 ? stripped : stripped.slice(start, close + 1);
+  return block.split("\n").slice(0, MAX_TOKENS_CSS_LINES).join("\n").slice(0, MAX_TOKENS_CSS_CHARS);
+}
+
+/**
+ * The SKILL.md excerpt: the whole file when it fits, otherwise the longest prefix that ends at a
+ * heading or paragraph boundary before MAX_SKILL_CHARS, so no sentence is cut mid-word.
+ */
+function excerptSkillMarkdown(content: string): { readonly text: string; readonly truncated: boolean } {
+  if (content.length <= MAX_SKILL_CHARS) return { text: content, truncated: false };
+  const head = content.slice(0, MAX_SKILL_CHARS);
+  const heading = Math.max(head.lastIndexOf("\n## "), head.lastIndexOf("\n### "));
+  const paragraph = head.lastIndexOf("\n\n");
+  // A paragraph boundary directly after a heading would strand that heading without its section.
+  const boundary = paragraph > heading && heading > 0 && /^\n#{2,3} [^\n]*$/u.test(head.slice(heading, paragraph)) ? heading : Math.max(heading, paragraph);
+  return { text: (boundary > 0 ? head.slice(0, boundary) : head).trimEnd(), truncated: true };
+}
+
+const LAYOUT_SECTION_HEADING = /^##\s+(Layout|Composition|Responsive[^\r\n]*|Family tokens|Navigation|Hero|Footer)\s*$/i;
+
+/** The README without the level-2 sections whose kind already shipped inside the layout contract. */
+function stripShippedReadmeSections(readme: string, shipped: ReadonlySet<string>): string {
+  const kept: string[] = [];
+  let skipping = false;
+  for (const line of readme.split("\n")) {
+    if (/^##\s/.test(line)) {
+      const kind = LAYOUT_SECTION_HEADING.exec(line)?.[1]?.toLowerCase().split(" ")[0];
+      skipping = kind !== undefined && shipped.has(kind);
+    }
+    if (!skipping) kept.push(line);
+  }
+  return kept.join("\n");
+}
+
+const PIN_INLINE_MARKERS = ["\n### SKILL.md\n", "\n### colors_and_type.css (excerpt)\n", "\n### README.md (excerpt)\n"] as const;
+
+/**
+ * Compact rendering of a frozen pin: the contracts before the inlined files, the token excerpt the
+ * model has no path to Read, then the compact handling. Everything comes from the pin itself, so a
+ * later change to the live system cannot leak into a pinned project.
+ */
+export function compactPinnedDesignSystemContext(pin: { readonly context: string; readonly tokens: string }): string {
+  const cuts = PIN_INLINE_MARKERS.map((marker) => pin.context.indexOf(marker)).filter((index) => index !== -1);
+  const lines = [cuts.length === 0 ? pin.context.trimEnd() : pin.context.slice(0, Math.min(...cuts)).trimEnd(), ""];
+  if (pin.tokens) lines.push("### colors_and_type.css (excerpt)", "```css", excerptTokensCss(pin.tokens), "```", "");
+  lines.push(
+    "### Compact design-system handling",
+    "- The pinned contracts and token excerpt above are the source of truth; the pinned SKILL.md and README are not inlined in compact mode. Reuse the CSS variables above and those the existing files already declare instead of inventing new palettes or type stacks.",
+    "- Prefer targeted Grep/Read ranges of the project's own files over reconstructing the design system.",
+    "",
+  );
+  return lines.join("\n");
+}
+
+/**
  * Emits the tokens and prose that only apply to the surface this project renders into: a fluid page,
- * a fixed slide, or a fixed content artboard. See doc/22-design-system-surfaces-2026-09-15.md.
+ * a fixed slide, or a fixed content artboard. See doc/22-design-system-surfaces-2026-09-15.md (local-only record, see doc/README.md).
  */
 async function appendSurfaceContext(
   lines: string[],
@@ -73,7 +137,7 @@ export async function appendDesignSystemContext(
   }
   lines.push("- Preserve display/body/mono font tokens and Korean fallbacks. Link the existing fonts/fonts.css: it points to the app's shared font store. Do not copy bundled font binaries into projects or replace shared font URLs; export bundles include the required fonts automatically. No font CDNs. Use bundled DM Sans / Space Grotesk with Pretendard fallback and IBM Plex Mono when no brand face is specified. Keep supplied brand font files intact.");
   lines.push("- Fonts (BUNDLED_FONT_REFERENCE): when the design system leaves a role unspecified, Read fonts/fonts.md in the project before picking a bundled family; it records traits, Korean coverage and pairings for every family in fonts/fonts.css.");
-  lines.push("- Shared font handling above supersedes older theme instructions to copy bundled fonts/ into each output. Only user-supplied brand fonts belong in a project's font directory.");
+  lines.push("- Shared font handling above supersedes any theme SKILL.md wording about including font files on export: never copy font binaries into the project; the export bundle adds the required fonts and licences itself. Only user-supplied brand fonts belong in a project's font directory.");
   lines.push("- Liquid glass (BUNDLED_LIQUID_GLASS_REFERENCE): for a circular element that should read as physical glass over a visible background, Read liquid-glass/liquid-glass.md before using liquid-glass/liquid-glass.js; it records the options, the radial bands and the refraction limit past which straight lines break. It needs real pixels behind it, so skip it on a flat background where a plain border is honest and cheaper.");
   lines.push("");
 
@@ -107,10 +171,12 @@ export async function appendDesignSystemContext(
   if (designSystem.skill_md_path) {
     const content = await read(designSystem.skill_md_path);
     if (content) {
+      const excerpt = excerptSkillMarkdown(content);
       lines.push("### SKILL.md");
       lines.push("```markdown");
-      lines.push(content.slice(0, MAX_SKILL_CHARS));
+      lines.push(excerpt.text);
       lines.push("```");
+      if (excerpt.truncated) lines.push(`SKILL_MD_TRUNCATED: the excerpt stops at a section boundary before ${MAX_SKILL_CHARS} characters; ${pinned ? "the remaining sections of the system's SKILL.md are not pinned" : `Read ${designSystem.skill_md_path} for the remaining sections`}.`);
       lines.push("");
     }
   }
@@ -119,9 +185,7 @@ export async function appendDesignSystemContext(
     if (content) {
       lines.push("### colors_and_type.css (excerpt)");
       lines.push("```css");
-      lines.push(
-        content.split("\n").slice(0, MAX_TOKENS_CSS_LINES).join("\n"),
-      );
+      lines.push(excerptTokensCss(content));
       lines.push("```");
       lines.push("");
     }
@@ -129,9 +193,10 @@ export async function appendDesignSystemContext(
   // The README is written around the website: Layout, Responsive, Navigation, Hero and Footer. A
   // fixed surface already has its curated sections in the blocks above, so inlining the whole
   // document here would put back exactly the geometry the surface split removes.
+  // Sections the layout contract already carries verbatim are dropped here rather than shipped twice.
   if (designSystem.readme_md_path && surface === "website") {
-    const content = await read(designSystem.readme_md_path);
-    if (content) {
+    const content = stripShippedReadmeSections(await read(designSystem.readme_md_path), new Set(layout.sections.map((section) => section.kind)));
+    if (content.trim()) {
       lines.push("### README.md (excerpt)");
       lines.push("```markdown");
       lines.push(content.split("\n").slice(0, MAX_README_LINES).join("\n"));

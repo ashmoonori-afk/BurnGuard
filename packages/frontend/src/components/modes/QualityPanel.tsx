@@ -1,4 +1,4 @@
-import { useT, t } from "@/i18n/t";
+import { useT, t, type MessageKey } from "@/i18n/t";
 import type { DesignAuditFinding } from "@bg/shared";
 import { AlertCircle, CircleHelp, Loader2, RefreshCw, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ export type QualityPanelBinding = {
   readonly onReveal: (finding: DesignAuditFinding) => void;
   readonly onApplySafeFix: (finding: DesignAuditFinding) => void;
   readonly onAutoFix: () => void;
+  readonly onRequestFix: (finding: DesignAuditFinding) => void;
   readonly autoFixPending: boolean;
   readonly autoFixDisabled: boolean;
 };
@@ -25,7 +26,7 @@ export default function QualityPanel({ quality }: { readonly quality: QualityPan
   const running = quality.autoFixPending || ("running" in quality.state && quality.state.running);
   const report = reportFromState(quality.state);
   const current = !running && (quality.state.kind === "error_warm" ? quality.state.current : quality.state.kind === "must_fix" || quality.state.kind === "recommended" || quality.state.kind === "ready");
-  const actionContext: DesignAuditActionContext = { current, running, pendingFindingId: quality.pendingFindingId };
+  const actionContext: DesignAuditActionContext = { current, running, pendingFindingId: quality.pendingFindingId, aiDisabled: quality.autoFixDisabled };
   const controls = designAuditControlAvailability(actionContext);
   const grouped = report === null ? null : groupDesignAuditResult(report);
   return (
@@ -69,7 +70,7 @@ export default function QualityPanel({ quality }: { readonly quality: QualityPan
 
 function FindingGroup({ title, findings, emptyCopy, actionContext, quality }: { readonly title: string; readonly findings: readonly DesignAuditFinding[]; readonly emptyCopy: string; readonly actionContext: DesignAuditActionContext; readonly quality: QualityPanelBinding }) {
   return <section className="mb-4"><h3 className="mb-2 text-xs font-semibold">{title} <span className="font-normal text-muted-foreground">{findings.length}</span></h3>
-    {findings.length === 0 ? <p className="text-xs text-muted-foreground">{emptyCopy}</p> : <div className="space-y-2">{findings.map((finding) => <QualityFindingCard key={finding.id} finding={finding} actionContext={actionContext} revealResult={quality.focusedFindingId === finding.id ? quality.revealResult : null} onOpenFile={quality.onOpenFile} onReveal={quality.onReveal} onApplySafeFix={quality.onApplySafeFix} />)}</div>}
+    {findings.length === 0 ? <p className="text-xs text-muted-foreground">{emptyCopy}</p> : <div className="space-y-2">{findings.map((finding) => <QualityFindingCard key={finding.id} finding={finding} actionContext={actionContext} revealResult={quality.focusedFindingId === finding.id ? quality.revealResult : null} onOpenFile={quality.onOpenFile} onReveal={quality.onReveal} onApplySafeFix={quality.onApplySafeFix} onRequestFix={quality.onRequestFix} />)}</div>}
   </section>;
 }
 
@@ -88,18 +89,22 @@ function reportFromState(state: DesignAuditViewState) {
   }
 }
 function statusCopy(state: DesignAuditViewState): string {
+  return t(qualityStatusKey(state));
+}
+/** Must-fix findings are "issues to fix" here and in the export gate; only a recommended report speaks of recommendations. */
+export function qualityStatusKey(state: DesignAuditViewState): MessageKey {
   switch (state.kind) {
     // `\u00A0` binds only the Korean auxiliary units (`-고 있다`, `-지 않다`)
     // so an ending never orphans onto its own line in the narrow panel.
-    case "loading": return t("modes.quality.initialCheck");
-    case "idle": return t("modes.quality.idle");
-    case "error_cold": return t("modes.quality.loadFailed");
-    case "error_warm": return t("modes.quality.warmError");
-    case "stale": return state.running ? t("modes.quality.staleRunning") : t("modes.quality.stale");
-    case "must_fix": return state.running ? t("modes.quality.rerunning") : t("modes.quality.needsImprovement");
-    case "recommended": return state.running ? t("modes.quality.rerunning") : t("modes.quality.recommendedStatus");
-    case "ready": return state.running ? t("modes.quality.passedRunning") : t("modes.quality.ready");
-    case "unavailable": return t("modes.quality.unavailable");
+    case "loading": return "modes.quality.initialCheck";
+    case "idle": return "modes.quality.idle";
+    case "error_cold": return "modes.quality.loadFailed";
+    case "error_warm": return "modes.quality.warmError";
+    case "stale": return state.running ? "modes.quality.staleRunning" : "modes.quality.stale";
+    case "must_fix": return state.running ? "modes.quality.rerunning" : "modes.quality.needsFix";
+    case "recommended": return state.running ? "modes.quality.rerunning" : "modes.quality.recommendedStatus";
+    case "ready": return state.running ? "modes.quality.passedRunning" : "modes.quality.ready";
+    case "unavailable": return "modes.quality.unavailable";
     default: return assertNever(state);
   }
 }

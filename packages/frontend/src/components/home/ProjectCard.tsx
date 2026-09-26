@@ -47,8 +47,8 @@ export default function ProjectCard(
           )}
         >
           {thumbnailSource === null ? (
-            <div className="flex flex-col items-center gap-3 text-slate-500">
-              <span className="grid h-16 w-16 place-items-center rounded-2xl border border-white/80 bg-white/70"><Icon className="h-7 w-7" strokeWidth={1.5} aria-hidden="true" /></span>
+            <div className="flex flex-col items-center gap-3 text-muted-foreground">
+              <span className="grid h-16 w-16 place-items-center rounded-2xl border border-card/80 bg-card/70"><Icon className="h-7 w-7" strokeWidth={1.5} aria-hidden="true" /></span>
               <span className="text-xs">{thumbnailFailed ? retryDelay === null ? t("home.previewError") : t("home.previewPreparing") : t("home.previewEmpty")}</span>
             </div>
           ) : (

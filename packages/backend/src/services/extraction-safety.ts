@@ -1,5 +1,5 @@
 import path from "node:path";
-import { parse } from "node-html-parser";
+import { parse, type HTMLElement } from "node-html-parser";
 
 export type ExtractionSafetyErrorCode =
   | "invalid_source_url"
@@ -22,8 +22,21 @@ const ACTIVE_ELEMENTS = [
   "form",
   "base",
 ] as const;
-const URL_ATTRIBUTES = ["href", "src", "action", "formaction", "poster", "xlink:href"] as const;
+const URL_ATTRIBUTES = ["href", "src", "action", "formaction", "poster", "xlink:href", "srcset", "imagesrcset", "ping"] as const;
+/** Raw-text or inert containers whose markup a JS-disabled consumer still renders and fetches. */
+const HIDDEN_MARKUP_CONTAINERS = ["noscript", "template"] as const;
 const DANGEROUS_SCHEME = /^(?:javascript|data:text\/html|vbscript):/i;
+const NETWORK_STYLE = /(?:@import\b|url\s*\()/i;
+const TEXT_NODE = 3;
+
+/** Every URL an attribute value can make the consumer fetch (srcset/imagesrcset candidates, ping list). */
+function attributeUrls(attributeName: string, value: string): string[] {
+  if (attributeName === "srcset" || attributeName === "imagesrcset") {
+    return value.split(",").map((candidate) => candidate.trim().split(/\s+/u)[0] ?? "").filter((url) => url.length > 0);
+  }
+  if (attributeName === "ping") return value.split(/\s+/u).filter((url) => url.length > 0);
+  return [value];
+}
 
 export function parseSafeExtractionUrl(sourceUrl: string): URL {
   const trimmed = sourceUrl.trim();
@@ -70,14 +83,50 @@ export function removeSourceMarkupReferences(content: string): string {
   return root.toString();
 }
 
+/**
+ * Strips a fetched page down to inert evidence instead of rejecting it: active elements, refresh
+ * metas, event handlers, network-capable styles and every resource reference are removed, so an
+ * ordinary script-bearing homepage still imports. `assertInertSourceMarkup` remains the gate.
+ */
+export function removeActiveSourceMarkup(content: string): string {
+  const root = parse(content, { lowerCaseTagName: true });
+  for (const elementName of [...ACTIVE_ELEMENTS, ...HIDDEN_MARKUP_CONTAINERS]) {
+    for (const node of root.querySelectorAll(elementName)) node.remove();
+  }
+  for (const meta of root.querySelectorAll("meta")) {
+    if (meta.getAttribute("http-equiv")?.trim().toLowerCase() === "refresh") meta.remove();
+  }
+  for (const style of root.querySelectorAll("style")) {
+    if (NETWORK_STYLE.test(style.textContent)) style.set_content("");
+  }
+  for (const node of root.querySelectorAll("*")) {
+    for (const attributeName of Object.keys(node.attributes)) {
+      if (attributeName.toLowerCase().startsWith("on")) node.removeAttribute(attributeName);
+    }
+    const style = node.getAttribute("style");
+    if (style !== undefined && NETWORK_STYLE.test(style)) node.removeAttribute("style");
+    for (const attributeName of URL_ATTRIBUTES) node.removeAttribute(attributeName);
+    for (const child of node.childNodes) {
+      // Prose that merely mentions CSS network syntax stays readable but can no longer trip the gate.
+      if (child.nodeType === TEXT_NODE && NETWORK_STYLE.test(child.rawText)) {
+        child.rawText = child.rawText.replace(/url(\s*)\(/giu, "url$1&#40;").replace(/@import/giu, "&#64;import");
+      }
+    }
+  }
+  return root.toString();
+}
+
 function assertSourceMarkup(content: string, kind: "html" | "svg", relativeReferencesAllowed: boolean): void {
   const normalized = content.toLowerCase();
   const structurallyComplete = kind === "html"
     ? normalized.includes("<html") && normalized.includes("<body") && normalized.includes("</body>") && normalized.includes("</html>")
     : normalized.includes("<svg") && normalized.includes("</svg>");
   if (!structurallyComplete) throw new ExtractionSafetyError("unsafe_source_content", `Malformed ${kind} source is not accepted`);
-  if (/(?:@import\s|url\s*\()/i.test(content)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
-  const root = parse(content, { lowerCaseTagName: true });
+  if (NETWORK_STYLE.test(content)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
+  assertInertTree(parse(content, { lowerCaseTagName: true }), kind, relativeReferencesAllowed);
+}
+
+function assertInertTree(root: HTMLElement, kind: "html" | "svg", relativeReferencesAllowed: boolean): void {
   for (const elementName of ACTIVE_ELEMENTS) {
     if (root.querySelector(elementName) !== null) throw new ExtractionSafetyError("unsafe_source_content", `Active ${kind} element is not accepted`);
   }
@@ -89,12 +138,18 @@ function assertSourceMarkup(content: string, kind: "html" | "svg", relativeRefer
       if (attributeName.toLowerCase().startsWith("on")) throw new ExtractionSafetyError("unsafe_source_content", `Active ${kind} handler is not accepted`);
     }
     for (const attributeName of URL_ATTRIBUTES) {
-      const value = node.getAttribute(attributeName)?.trim() ?? "";
-      const localFragment = attributeName === "href" && value.startsWith("#");
-      const relativeReference = relativeReferencesAllowed && isSafeRelativeReference(value);
-      if (value.length > 0 && !localFragment && !relativeReference) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} URL is not accepted`);
-      if (DANGEROUS_SCHEME.test(value)) throw new ExtractionSafetyError("unsafe_source_content", `Dangerous ${kind} URL is not accepted`);
+      for (const value of attributeUrls(attributeName, node.getAttribute(attributeName)?.trim() ?? "")) {
+        const localFragment = attributeName === "href" && value.startsWith("#");
+        const relativeReference = relativeReferencesAllowed && isSafeRelativeReference(value);
+        if (value.length > 0 && !localFragment && !relativeReference) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} URL is not accepted`);
+        if (DANGEROUS_SCHEME.test(value)) throw new ExtractionSafetyError("unsafe_source_content", `Dangerous ${kind} URL is not accepted`);
+      }
     }
+  }
+  // The parser keeps <noscript> as raw text and <template> inert, but a JS-disabled or printing
+  // consumer renders both, so their markup is held to the same rules.
+  for (const elementName of HIDDEN_MARKUP_CONTAINERS) {
+    for (const node of root.querySelectorAll(elementName)) assertInertTree(parse(node.innerHTML, { lowerCaseTagName: true }), kind, relativeReferencesAllowed);
   }
 }
 

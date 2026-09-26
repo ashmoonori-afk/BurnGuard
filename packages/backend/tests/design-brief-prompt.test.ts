@@ -111,6 +111,37 @@ describe("design brief prompt context", () => {
     expect(prompt).toContain("Create exactly these pages as real local files linked from the shared nav: index.html, about.html, 제품/상세.html");
   });
 
+  test("PH-26: Given a slide deck brief When the prompt is built Then the requested slide dimensions and density are derived outside the brief JSON", async () => {
+    const brief = (output_size: string, density: string) => JSON.stringify({ design_brief: {
+      schema_version: 1, output_type: "slide_deck", audience: "영업팀 리더", objective: "분기 성과 공유", content_source: "none",
+      locale: "ko-KR", brand_mode: "none", visual_mood: "premium", density, output_size,
+    } });
+    const outsideJson = (prompt: string) => prompt.replace(/<burnguard-design-brief-v1>\n[^\n]+\n<\/burnguard-design-brief-v1>/u, "");
+    const request = { type: "user.message", text: "덱을 만들어줘" } as const;
+
+    const fourThree = outsideJson(await buildPrompt(context(brief("standard-4x3", "dense")), request));
+    expect(fourThree).toContain("--slide-w: 1440px");
+    expect(fourThree).toContain("--slide-h: 1080px");
+    expect(fourThree).toContain("--slide-aspect: 4 / 3");
+    expect(fourThree).toContain("Brief density (dense)");
+
+    const wide = outsideJson(await buildPrompt(context(brief("widescreen-16x9", "sparse")), request));
+    expect(wide).toContain("--slide-w: 1920px");
+    expect(wide).toContain("--slide-aspect: 16 / 9");
+    expect(wide).toContain("Brief density (sparse)");
+
+    const a4 = outsideJson(await buildPrompt(context(brief("a4", "balanced")), request));
+    expect(a4).toContain("--slide-w: 1123px");
+    expect(a4).toContain("--slide-h: 794px");
+
+    const site = outsideJson(await buildPrompt(context(JSON.stringify({ design_brief: {
+      schema_version: 1, output_type: "prototype", audience: "방문자", objective: "서비스 소개", content_source: "none",
+      locale: "ko-KR", brand_mode: "none", visual_mood: "formal", density: "balanced", output_size: "responsive",
+    } }), "prototype"), request));
+    expect(site).not.toContain("--slide-w:");
+    expect(site).toContain("Brief density (balanced)");
+  });
+
   test("Given malformed project options When the prompt is built Then no partial brief leaks", async () => {
     const prompt = await buildPrompt(
       context(

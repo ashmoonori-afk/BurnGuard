@@ -61,12 +61,21 @@ export async function loadComposerDraft(sessionId: string): Promise<ComposerDraf
   return memoryDrafts.get(sessionId) ?? await readDraft(sessionId);
 }
 
+/** A handoff prompt outranks the stored text, but never the stored attachments. */
+export function restoredComposerDraft(stored: ComposerDraft | undefined, initialText: string): ComposerDraft {
+  if (stored === undefined) return { text: initialText, items: [] };
+  return initialText ? { ...stored, text: initialText } : stored;
+}
+
 /** Files use IndexedDB structured cloning; drafts remain local and keyed by session. */
 export function useComposerDraft(sessionId: string, initialText: string) {
   const [draft, setDraft] = useState<ComposerDraft>({ text: initialText, items: [] });
   const current = useRef(draft);
+  const initialTextRef = useRef(initialText);
+  initialTextRef.current = initialText;
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState(false);
+  // Restore once per session: a later prefill is merged by the composer, not by re-reading storage.
   useEffect(() => {
     let active = true;
     setReady(false);
@@ -76,12 +85,12 @@ export function useComposerDraft(sessionId: string, initialText: string) {
       try { restored ??= await readDraft(sessionId) ?? undefined; }
       catch { if (active) setStorageError(true); }
       if (!active) return;
-      current.current = restored ?? { text: initialText, items: [] };
+      current.current = restoredComposerDraft(restored, initialTextRef.current);
       setDraft(current.current);
       setReady(true);
     })();
     return () => { active = false; };
-  }, [sessionId, initialText]);
+  }, [sessionId]);
   const update = useCallback((next: ComposerDraft) => {
     current.current = next;
     memoryDrafts.set(sessionId, next);

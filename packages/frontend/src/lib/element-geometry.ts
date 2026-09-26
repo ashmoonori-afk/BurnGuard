@@ -21,6 +21,24 @@ export function isAspectLocked(target: TweaksTarget): boolean {
   return ratio !== "auto" && /^\s*(?:auto\s+)?\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?\s*$/.test(ratio);
 }
 
+/** The ratio presets the Style panel offers; the option value is the ratio as written by `String`. */
+export const ASPECT_PRESETS: ReadonlyArray<{ readonly value: number; readonly label: string }> = [
+  { value: 1, label: "1 : 1" },
+  { value: 4 / 3, label: "4 : 3" },
+  { value: 16 / 9, label: "16 : 9" },
+  { value: 9 / 16, label: "9 : 16" },
+];
+
+/** Echoes the stored ratio back as its preset option, or as locked/free when it is a custom value or auto. */
+export function aspectPresetValue(target: TweaksTarget): string {
+  const raw = target.inline["aspect-ratio"] ?? target.computed["aspect-ratio"] ?? "auto";
+  const match = raw.match(/^\s*(?:auto\s+)?(\d+(?:\.\d+)?)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*$/);
+  if (!match) return "free";
+  const ratio = Number(match[1]) / (match[2] === undefined ? 1 : Number(match[2]));
+  const preset = ASPECT_PRESETS.find((candidate) => Math.abs(candidate.value - ratio) < 1e-3);
+  return preset === undefined ? "locked" : String(preset.value);
+}
+
 /** Numeric inputs and drag handles share the same border-box size contract. */
 export function dimensionPatch(target: TweaksTarget, width: number, height: number, locked: boolean): Patch {
   if (!Number.isFinite(width) || !Number.isFinite(height)) return {};

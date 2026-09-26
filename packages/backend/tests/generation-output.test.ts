@@ -25,6 +25,23 @@ test("Given saved output, then completion rejects empty content, unfinished unit
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test("Given brief pages When only the entrypoint is generated Then completion waits for every listed page to hold generated content", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-output-pages-"));
+  try {
+    await writeFile(path.join(dir, "index.html"), '<h1>Home</h1><nav><a href="about.html">About</a></nav>');
+    expect(await generationOutputComplete(dir, "index.html", "prototype")).toBe(true);
+    expect(await generationOutputComplete(dir, "index.html", "prototype", undefined, undefined, ["about.html", "docs/pricing.html"])).toBe(false);
+    await writeFile(path.join(dir, "about.html"), "");
+    await mkdir(path.join(dir, "docs"));
+    await writeFile(path.join(dir, "docs", "pricing.html"), '<h1 data-bg-placeholder>TBD</h1>');
+    expect(await generationOutputComplete(dir, "index.html", "prototype", undefined, undefined, ["about.html", "docs/pricing.html"])).toBe(false);
+    await writeFile(path.join(dir, "about.html"), "<h1>About</h1>");
+    expect(await generationOutputComplete(dir, "index.html", "prototype", undefined, undefined, ["about.html", "docs/pricing.html"])).toBe(false);
+    await writeFile(path.join(dir, "docs", "pricing.html"), "<h1>Pricing</h1>");
+    expect(await generationOutputComplete(dir, "index.html", "prototype", undefined, undefined, ["about.html", "docs/pricing.html"])).toBe(true);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test.each([
   ["index.html", "/runtime/deck-stage.js", true],
   ["index.html", "runtime/deck-stage.js", true],

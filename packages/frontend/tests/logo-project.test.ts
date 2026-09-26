@@ -14,6 +14,7 @@ import {
   parseProjectLogoCanvas,
   parseProjectLogoManifest,
 } from "../src/lib/logo-project";
+import { useLocaleStore } from "../src/i18n/locale";
 
 function candidate(round: number, position: number) {
   return {
@@ -91,6 +92,22 @@ describe("logo action message", () => {
 
     expect(parseLogoAction(message)).toEqual({ action: "select", round: 2, candidate_id: "candidate-3" });
     expect(message).toContain("3");
+  });
+
+  test("Given the en locale When a selection message is built Then the human line is localized and the sentinel is unchanged", () => {
+    const original = useLocaleStore.getState().locale;
+    useLocaleStore.setState({ locale: "en" });
+    try {
+      const message = logoActionMessage({ action: "select", round: 1, candidate_id: "candidate-3" });
+      const line = message.split("\n").at(-1) ?? "";
+
+      expect(parseLogoAction(message)).toEqual({ action: "select", round: 1, candidate_id: "candidate-3" });
+      expect(line).toContain("3");
+      expect(line).not.toMatch(/\p{Script=Hangul}/u);
+      expect(logoActionMessage({ action: "regenerate" }).split("\n").at(-1)).not.toMatch(/\p{Script=Hangul}/u);
+    } finally {
+      useLocaleStore.setState({ locale: original });
+    }
   });
 });
 

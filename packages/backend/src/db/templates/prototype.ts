@@ -12,8 +12,9 @@ export function renderPrototype(projectName: string): string {
   <style>
     h1, h2, h3 { font-family: "Space Grotesk", "Pretendard", sans-serif; }
     code, pre, .number { font-family: "IBM Plex Mono", "Pretendard", monospace; font-variant-numeric: tabular-nums; }
+    :root { --page-background: #f4f5f7; }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: "DM Sans", "Pretendard", sans-serif; background: #f6f1e8; color: #18232d; }
+    body { margin: 0; font-family: "DM Sans", "Pretendard", sans-serif; background: var(--page-background); color: #18232d; }
     main { min-height: 100vh; display: grid; place-items: center; padding: clamp(20px, 5vw, 48px); }
     section { width: 100%; min-width: 0; max-width: 920px; overflow-wrap: anywhere; background: #fffdf9; border: 1px solid #e7dece; border-radius: 24px; padding: clamp(24px, 6vw, 56px); box-shadow: 0 20px 60px rgba(24,35,45,0.08); }
     .eyebrow { color: #a84129; text-transform: uppercase; letter-spacing: 0.16em; font-size: 12px; margin-bottom: 20px; }

@@ -1,7 +1,7 @@
 import { BACKEND_IDS } from "@bg/shared";
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import type { BackendId, ThemeMode } from "@bg/shared";
-import { APP_VERSION, LLM_CONNECTIONS, parseGenerationOptions, type GenerationOptions, type LlmConnectionId } from "@bg/shared";
+import { APP_VERSION, DEFAULT_DISPLAY_NAME, LLM_CONNECTIONS, parseGenerationOptions, type GenerationOptions, type LlmConnectionId } from "@bg/shared";
 import { appRootDir, configFilePath, localConfigFilePath } from "./lib/paths";
 
 export type AppLocale = "ko" | "en" | "zh-CN";
@@ -38,7 +38,7 @@ export const defaultConfig: AppConfig = {
   harness: { maxConcurrentSessions: 3, checkpointEveryTurns: 5, toolAutoAllow: true },
   chat: { abortThresholdMs: 300_000, contextMode: "compact" },
   logs: { level: "info" },
-  user: { id: "local", displayName: "You" },
+  user: { id: "local", displayName: DEFAULT_DISPLAY_NAME },
   figmaPersonalAccessToken: null,
   appVersion: APP_VERSION,
 };

@@ -156,6 +156,22 @@ describe("design direction workflow", () => {
     expect(JSON.stringify(await listSessionEvents(input.sessionId))).not.toContain("SECRET_RENDER_PATH");
   });
 
+  test("Given a brief in each locale When slot fixtures and the outline are built Then their copy follows the brief locale and the project name survives without a brief (DP-10)", async () => {
+    const brief = { schema_version: 1, output_type: "prototype", audience: "Operations leads", objective: "Explain the dashboard", content_source: "none", locale: "en-US", brand_mode: "none", visual_mood: "formal", density: "balanced", output_size: "responsive" } as const;
+    const english = await (await new DesignDirectionWorkflow().generate({ ...session("locale-en"), designBrief: brief })).completion;
+    const lines = (state: DesignDirectionState) => [...state.content_outline, ...state.directions.flatMap((slot) => [slot.title, slot.summary, ...slot.style_facts])];
+    expect(lines(english).some((line) => /\p{Script=Hangul}/u.test(line))).toBe(false);
+    expect(english.content_outline.some((line) => line.includes("Explain the dashboard"))).toBe(true);
+    const chinese = await (await new DesignDirectionWorkflow().generate({ ...session("locale-zh"), designBrief: { ...brief, locale: "zh-CN" } })).completion;
+    expect(lines(chinese).some((line) => /\p{Script=Hangul}/u.test(line))).toBe(false);
+    expect(lines(chinese).every((line) => /\p{Script=Han}/u.test(line) || line.includes("Explain the dashboard") || line.includes("Operations leads"))).toBe(true);
+    const korean = await (await new DesignDirectionWorkflow().generate({ ...session("locale-ko"), designBrief: { ...brief, locale: "ko-KR" } })).completion;
+    expect(korean.directions.map((slot) => slot.title)).toEqual(["편집 서사", "모듈 시스템", "흐름 서사"]);
+    const withSystem = await (await new DesignDirectionWorkflow().generate({ ...session("locale-en-system"), designBrief: brief, designSystem: { id: "test-dashboard", name: "Dashboard", layout: sampleLayoutFiles("dashboard").layout } })).completion;
+    expect(lines(withSystem).some((line) => /\p{Script=Hangul}/u.test(line))).toBe(false);
+    expect(withSystem.directions.every((slot) => slot.style_facts[0] === "Dashboard")).toBe(true);
+  });
+
   test("persists exactly three structurally distinct production SVG previews", async () => {
     const input = session("svg");
     const completed = await (await new DesignDirectionWorkflow(undefined, () => 10, () => "generation-svg").generate(input)).completion;

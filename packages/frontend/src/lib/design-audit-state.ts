@@ -1,8 +1,12 @@
 import type { DesignAuditCheck, DesignAuditFinding, DesignAuditResult } from "@bg/shared";
 import { ApiError } from "@/api/client";
+import type { MessageKey } from "@/i18n/t";
+
+/** The export menu's gate: must-fix findings of the current artifact, described as issues to fix that never block export. */
+export type ExportQualityGate = { readonly mustFixCount: number; readonly copyKey: MessageKey } | null;
 
 export type DesignAuditErrorCode = "project_not_found" | "project_path_unavailable" | "stale_artifact_identity" | "audit_unavailable" | "stale_revision" | "stale_artifact_digest" | "stale_file_hash" | "stale_node_fingerprint" | "file_not_found" | "node_not_found" | "network_error" | "unknown_error";
-export type DesignAuditActionContext = { readonly current: boolean; readonly running: boolean; readonly pendingFindingId: string | null };
+export type DesignAuditActionContext = { readonly current: boolean; readonly running: boolean; readonly pendingFindingId: string | null; /** The composer cannot take an AI request (a turn is running or the stream is down). */ readonly aiDisabled?: boolean };
 export type DesignAuditUnknownCheck = DesignAuditCheck & { readonly status: "skipped" | "unmeasurable"; readonly reason: NonNullable<DesignAuditCheck["reason"]> };
 export type DesignAuditGroups = {
   readonly mustFix: readonly DesignAuditFinding[];
@@ -41,6 +45,11 @@ export function isDesignAuditCurrent(report: DesignAuditResult, currentDigest: s
   return report.artifact_digest === currentDigest;
 }
 
+export function exportQualityGate(report: DesignAuditResult | null, currentDigest: string): ExportQualityGate {
+  if (report === null || !isDesignAuditCurrent(report, currentDigest) || report.overall_status !== "must_fix") return null;
+  return { mustFixCount: groupDesignAuditResult(report).mustFix.length, copyKey: "export.qualityMustFix" };
+}
+
 export function groupDesignAuditResult(report: DesignAuditResult): DesignAuditGroups {
   const findings = report.checks.flatMap((item) => item.findings);
   const unknown = report.checks.filter((item): item is DesignAuditUnknownCheck =>
@@ -60,6 +69,7 @@ export function designAuditActionAvailability(finding: DesignAuditFinding, conte
     canOpenFile: finding.source.rel_path.length > 0,
     canReveal: finding.source.node_bg_id !== null,
     canApplySafeFix: context.current && !context.running && context.pendingFindingId === null && finding.safe_fix !== undefined,
+    canRequestFix: context.current && !context.running && context.pendingFindingId === null && context.aiDisabled !== true,
     applying,
   } as const;
 }

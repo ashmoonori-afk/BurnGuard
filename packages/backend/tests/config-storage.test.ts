@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { readFile, rm, stat, writeFile } from "node:fs/promises";
+import { DEFAULT_DISPLAY_NAME } from "@bg/shared";
 import { defaultConfig, ensureConfig, loadConfig, loadConfigForPlatform, saveConfig, saveConfigForPlatform } from "../src/config";
 import { configFilePath, localConfigFilePath } from "../src/lib/app-paths";
 import { homeRoutes } from "../src/routes/home";
@@ -27,7 +28,7 @@ describe("settings storage", () => {
     const local = JSON.parse(await readFile(localConfigFilePath(), "utf8"));
     expect(shared).toEqual({
       schemaVersion: 1, generationDefaults: {}, defaultBackend: "claude-code", theme: "dark", locale: "en",
-      chat: defaultConfig.chat, user: { displayName: "You" },
+      chat: defaultConfig.chat, user: { displayName: DEFAULT_DISPLAY_NAME },
     });
     expect(JSON.stringify(shared)).not.toContain("private");
     expect(Object.keys(local).sort()).toEqual(["autoOpenBrowser", "commandcodeApiKey", "figmaPersonalAccessToken", "harness", "llmApiKeys", "logs", "platform", "playwright", "port", "schemaVersion"].sort());

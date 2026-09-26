@@ -5,7 +5,7 @@
  * A design system is shared brand identity plus one contract per output geometry: a fluid website, a
  * fixed 1920x1080 slide, and a fixed content artboard. `colors_and_type.css` keeps the shared part and
  * the website grid; this generator writes `surfaces/{website,slides,content}.css` and the README
- * sections that carry the prose those tokens cannot. See doc/22-design-system-surfaces-2026-09-15.md.
+ * sections that carry the prose those tokens cannot. See doc/22-design-system-surfaces-2026-09-15.md (local-only record, see doc/README.md).
  *
  * Like `build-theme-catalogue.ts` this is a deliberate generator for committed artifacts, not a step in
  * `bun run build`: it rewrites tracked source. Run it after changing the registry, a theme's layout

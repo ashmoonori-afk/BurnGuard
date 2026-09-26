@@ -90,7 +90,7 @@ test("imported project styles render nested CSS inside the real opaque canvas sa
       new Response(compiler.stderr).text(),
     ]);
     if (exitCode !== 0) throw new Error(`Browser test bundle failed (${exitCode}): ${errors}`);
-    browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(30_000));
+    browser = await launchChromiumViaNode({}, AbortSignal.timeout(30_000));
     const page = await browser.newPage();
     const external: string[] = [];
     await page.route("**/*", route => {
@@ -275,4 +275,48 @@ test("Given images beyond the per-document byte budget When embedCanvasImages ru
   expect(embedded).toBeLessThan(frames.length);
   expect(embedded * 3 * MiB).toBeLessThanOrEqual(32 * MiB);
   expect(result.stylesheet).toBe("artifact_image_limit");
+}, 30_000);
+
+test("UXW-15: Given a live-preview document whose stylesheet and image bytes change between versions When embedCanvasImages runs again for the same document Then the second embed carries the new bytes", async () => {
+  let version = 0;
+  const result = await withCanvasPage(pathname => {
+    const name = pathname.replace(/^\/api\/projects\/live\/preview\/draft\/fs\//, "");
+    if (name === "styles.css") return new Response(`#probe{--version:${version}}`, { headers: { "content-type": "text/css" } });
+    if (name === "assets/hero.png") return new Response(new Uint8Array([version]), { headers: { "content-type": "image/png" } });
+    return undefined;
+  }, async (page, origin) => {
+    const url = `${origin}/api/projects/live/preview/draft/fs/index.html`;
+    const html = '<link rel="stylesheet" href="styles.css"><img src="assets/hero.png">';
+    const embed = () => page.evaluate(async ({ html, url }) => {
+      const embedded = new DOMParser().parseFromString(await globalThis.canvasCssTest.embedCanvasImages(html, url, new AbortController().signal), "text/html");
+      const src = embedded.querySelector("img")?.getAttribute("src") ?? "";
+      return { css: embedded.querySelector("style")?.textContent ?? "", image: src.startsWith("data:image/png;base64,") ? atob(src.slice("data:image/png;base64,".length)).charCodeAt(0) : src };
+    }, { html, url });
+    const first = await embed();
+    version = 1;
+    return { first, second: await embed() };
+  });
+  expect(result.first).toEqual({ css: "#probe{--version:0}", image: 0 });
+  expect(result.second).toEqual({ css: "#probe{--version:1}", image: 1 });
+}, 30_000);
+
+test("Given a Google Fonts @import in a style element or a project stylesheet When embedCanvasImages runs Then it is hoisted to the top of the embedded stylesheet like a link tag would load, while other remote imports stay dropped (CSS-27)", async () => {
+  const googleImport = "https://fonts.googleapis.com/css2?family=Figtree&display=swap";
+  const result = await withCanvasPage(pathname => {
+    if (pathname === "/api/projects/hoist/fs/css/site.css") return new Response(`@import url("${googleImport}") screen;\n@import "https://external.invalid/private.css";\n#probe{color:red}`, { headers: { "content-type": "text/css" } });
+    return undefined;
+  }, (page, origin) => page.evaluate(async ({ url, googleImport }) => {
+    const api = globalThis.canvasCssTest;
+    const inline = await api.embedCanvasImages(`<style>@import url("${googleImport}");#probe{padding:1px}</style>`, url, new AbortController().signal);
+    const linked = await api.embedCanvasImages('<link rel="stylesheet" href="css/site.css">', url, new AbortController().signal);
+    const styleOf = (html: string) => new DOMParser().parseFromString(html, "text/html").querySelector("style")?.textContent ?? "";
+    return { inline: styleOf(inline), linked: styleOf(linked) };
+  }, { url: `${origin}/api/projects/hoist/fs/index.html`, googleImport }));
+  for (const css of [result.inline, result.linked]) {
+    expect(css.trimStart().startsWith("@import")).toBe(true);
+    expect(css).toContain(googleImport);
+    expect(css).not.toContain("external.invalid");
+    expect(css.indexOf("@import")).toBeLessThan(css.indexOf("#probe"));
+  }
+  expect(result.linked).toContain("screen");
 }, 30_000);

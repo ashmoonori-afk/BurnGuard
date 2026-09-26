@@ -5,6 +5,7 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { selectPromptLearning } from "../src/db/learning-store";
 import { ensureLearningSchema } from "./learning-fixture";
 import { learningRoutes } from "../src/routes/learning";
+import { MAX_CHECKPOINT_FEEDBACK_CHARS, parseCheckpoint } from "../src/routes/learning-input";
 import { seedLearningItems } from "../src/services/learning-service";
 
 const app = learningRoutes;
@@ -161,6 +162,21 @@ describe("learning checkpoint commit", () => {
       evidence: { kind: "complete" },
     });
     expect(duplicate).toMatchObject({ status: 409, body: { error: { code: "duplicate_id" } } });
+  });
+
+  test("PH-21: Given checkpoint feedback beyond the bound When committed Then the body is rejected on the feedback field and nothing is stored", async () => {
+    const itemId = `${prefix}-bounded`;
+    await request("POST", "/api/learning/items", { id: itemId, kind: "lesson", title: "Bounded", content: { summary: "Bounded" }, project_id: null });
+    const id = `${prefix}-bounded-cp`;
+    const body = (feedback: string) => ({
+      id, project_id: projectId, artifact_revision: 7, artifact_digest: "digest-7", feedback,
+      parent_checkpoint_id: null, next_context: { kind: "iteration", parent_checkpoint_id: id, schema_revision: 1, artifact_revision: 7, artifact_digest: "digest-7" },
+      evidence: { kind: "complete" },
+    });
+    const rejected = await request("POST", `/api/learning/items/${itemId}/checkpoints`, body("x".repeat(MAX_CHECKPOINT_FEEDBACK_CHARS + 1)));
+    expect(rejected).toMatchObject({ status: 400, body: { error: { code: "invalid_learning_body", details: { field: "feedback" } } } });
+    expect(getSqlite().query("SELECT COUNT(*) count FROM learning_checkpoints WHERE id=?").get(id)).toEqual({ count: 0 });
+    expect(parseCheckpoint(body("y".repeat(MAX_CHECKPOINT_FEEDBACK_CHARS))).feedback).toHaveLength(MAX_CHECKPOINT_FEEDBACK_CHARS);
   });
 
   test("Given crash-before-commit or partial evidence When checkpointing Then no checkpoint is exposed and partial state is a typed warning", async () => {

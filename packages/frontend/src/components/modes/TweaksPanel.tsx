@@ -6,15 +6,16 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { cn } from "@/lib/utils";
-import { dimensionPatch, isAspectLocked, MAX_ELEMENT_SIZE, rotationPatch, targetDimensions } from "@/lib/element-geometry";
+import { ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, MAX_ELEMENT_SIZE, rotationPatch, targetDimensions } from "@/lib/element-geometry";
+import { useQuery } from "@tanstack/react-query";
 import { parseLocalFonts } from "@bg/shared";
 import { apiFetch } from "@/api/client";
+import { getProjectPalette } from "@/api/project-palette";
 import {
   TWEAKS_STYLE_KEYS,
   type TweaksStyleKey,
   type TweaksTarget,
 } from "@/components/canvas/TweaksLayer";
-import { BRAND_PALETTE } from "./tweaks-palette";
 import {
   composeSides,
   normalizeHex,
@@ -49,7 +50,12 @@ export function buildTweakChangePreview(
   return null;
 }
 
-const BUNDLED_FONTS = ["DM Sans", "Space Grotesk", "DM Serif Display", "Bebas Neue", "IBM Plex Mono", "Gowun Batang", "Pretendard"];
+/** Shown until the manifest listing arrives; every new project links the full bundle through fonts/fonts.css. */
+const BUNDLED_FONTS_FALLBACK = ["DM Sans", "Space Grotesk", "DM Serif Display", "Bebas Neue", "IBM Plex Mono", "Gowun Batang", "Pretendard"];
+export const BUNDLED_FONTS_QUERY_KEY = ["settings", "bundled-fonts"] as const;
+export function tweaksPaletteQueryKey(projectId: string, relPath: string | null) {
+  return ["project", projectId, "tweaks-palette", relPath] as const;
+}
 
 const FONT_WEIGHTS: Array<{ value: string; label: MessageKey }> = [
   { value: "300", label: "modes.tweaks.weight300" },
@@ -61,30 +67,27 @@ const FONT_WEIGHTS: Array<{ value: string; label: MessageKey }> = [
 ];
 
 const TRANSPARENT_RE = /^rgba?\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)$/i;
-const SIZE_RULES: Record<
-  TweaksStyleKey,
-  { min: number; max: number; allowNegative: boolean }
-> = {
-  width: { min: 1, max: MAX_ELEMENT_SIZE, allowNegative: false },
-  height: { min: 1, max: MAX_ELEMENT_SIZE, allowNegative: false },
-  rotate: { min: -180, max: 180, allowNegative: true },
-  "aspect-ratio": { min: 0, max: 0, allowNegative: false },
-  "box-sizing": { min: 0, max: 0, allowNegative: false },
-  display: { min: 0, max: 0, allowNegative: false },
-  "font-family": { min: 0, max: 0, allowNegative: false },
-  "font-size": { min: 8, max: 240, allowNegative: false },
-  "font-weight": { min: 100, max: 900, allowNegative: false },
-  color: { min: 0, max: 0, allowNegative: false },
-  "line-height": { min: 8, max: 320, allowNegative: false },
-  "letter-spacing": { min: -8, max: 24, allowNegative: true },
-  "background-color": { min: 0, max: 0, allowNegative: false },
-  padding: { min: 0, max: 320, allowNegative: false },
-  margin: { min: -320, max: 320, allowNegative: true },
-  "border-radius": { min: 0, max: 320, allowNegative: false },
-};
+type SizeRuleKey = "font-size" | "line-height" | "letter-spacing";
+interface SizeRule { min: number; max: number; allowNegative: boolean }
+
+/** Text floors match the quality audit (`minimum_text_size`): 12px on the web, 24px inside a deck slide. */
+export function sizeRuleFor(styleKey: SizeRuleKey, target: Pick<TweaksTarget, "inSlide">): SizeRule {
+  const textFloor = target.inSlide === true ? 24 : 12;
+  switch (styleKey) {
+    case "font-size": return { min: textFloor, max: 240, allowNegative: false };
+    case "line-height": return { min: textFloor, max: 320, allowNegative: false };
+    case "letter-spacing": return { min: -8, max: 24, allowNegative: true };
+    default: {
+      const unreachable: never = styleKey;
+      return unreachable;
+    }
+  }
+}
 
 /** Simple geometry first; the existing style controls remain under Advanced. */
-export default function TweaksPanel({ target, saving, onApply, onResetAll, onClear, review }: {
+export default function TweaksPanel({ projectId, relPath, target, saving, onApply, onResetAll, onClear, review }: {
+  projectId: string;
+  relPath: string | null;
   target: TweaksTarget | null;
   saving: boolean;
   onApply: ApplyFn;
@@ -112,8 +115,8 @@ export default function TweaksPanel({ target, saving, onApply, onResetAll, onCle
           <FontFamilyRow target={target} saving={saving} onApply={onApply} />
           <SizeRow target={target} styleKey="font-size" saving={saving} onApply={onApply} />
           <FontWeightRow target={target} saving={saving} onApply={onApply} />
-          <ColorRow target={target} styleKey="color" saving={saving} onApply={onApply} />
-          <ColorRow target={target} styleKey="background-color" saving={saving} onApply={onApply} />
+          <ColorRow projectId={projectId} relPath={relPath} target={target} styleKey="color" saving={saving} onApply={onApply} />
+          <ColorRow projectId={projectId} relPath={relPath} target={target} styleKey="background-color" saving={saving} onApply={onApply} />
           <SizeRow target={target} styleKey="line-height" saving={saving} onApply={onApply} />
           <SizeRow target={target} styleKey="letter-spacing" saving={saving} onApply={onApply} />
         </div>
@@ -139,13 +142,13 @@ function GeometryControls({ target, saving, onApply }: { target: TweaksTarget; s
     <div className="grid grid-cols-2 gap-3">
       <GeometryNumber label={t("modes.width")} unit="px" value={width} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, value, height, locked))} />
       <GeometryNumber label={t("modes.height")} unit="px" value={height} min={1} max={MAX_ELEMENT_SIZE} disabled={saving} onCommit={value => onApply(dimensionPatch(target, width, value, locked))} />
-      <GeometryNumber label={t("modes.rotation")} unit="°" value={rotation} min={-360} max={360} disabled={saving} onCommit={value => onApply(rotationPatch(value))} />
-      <label className="block text-xs">{t("modes.tweaks.ratio")}<select aria-label={t("modes.tweaks.ratio")} disabled={saving} value={locked ? "locked" : "free"} onChange={event => {
+      <GeometryNumber label={t("modes.rotation")} unit="°" value={rotation} min={-180} max={180} disabled={saving} onCommit={value => onApply(rotationPatch(value))} />
+      <label className="block text-xs">{t("modes.tweaks.ratio")}<select aria-label={t("modes.tweaks.ratio")} disabled={saving} value={aspectPresetValue(target)} onChange={event => {
           const value = event.target.value;
           if (value === "free" || value === "locked") onApply({ "aspect-ratio": value === "free" ? "auto" : `${width} / ${height}` });
           else { const ratio = Number(value); onApply({ ...dimensionPatch(target, width, width / ratio, false), "aspect-ratio": `${ratio} / 1` }); }
         }} className="mt-1 min-h-10 w-full rounded border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <option value="free">{t("modes.tweaks.freeRatio")}</option><option value="locked">{t("modes.tweaks.lockRatio")}</option><option value="1">1 : 1</option><option value="1.3333333333333333">4 : 3</option><option value="1.7777777777777777">16 : 9</option><option value="0.5625">9 : 16</option>
+          <option value="free">{t("modes.tweaks.freeRatio")}</option><option value="locked">{t("modes.tweaks.lockRatio")}</option>{ASPECT_PRESETS.map((preset) => <option key={preset.label} value={String(preset.value)}>{preset.label}</option>)}
         </select>
       </label>
     </div>
@@ -181,6 +184,8 @@ function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; savi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<MessageKey | "">("");
   const inline = target.inline["font-family"] ?? "";
+  const bundled = useQuery({ queryKey: BUNDLED_FONTS_QUERY_KEY, queryFn: () => apiFetch<unknown>("/api/settings/bundled-fonts").then(parseLocalFonts), staleTime: Infinity });
+  const bundledFamilies = bundled.data?.families ?? BUNDLED_FONTS_FALLBACK;
   const load = async () => {
     setLoading(true); setError("");
     try {
@@ -196,12 +201,12 @@ function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; savi
       <RowLabel>{t("modes.tweaks.font")}</RowLabel>
       <select className={inputCls("min-w-0 flex-1")} value={inline} disabled={saving} onChange={(event) => onApply({ "font-family": event.target.value || null })}>
         <option value="">{t("modes.tweaks.inheritedValue", { value: target.computed["font-family"] || t("modes.tweaks.default") })}</option>
-        {inline && ![...BUNDLED_FONTS, ...families].some((family) => JSON.stringify(family) === inline) && <option value={inline}>{inline}</option>}
-        {BUNDLED_FONTS.map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
-        {families.filter((family) => !BUNDLED_FONTS.includes(family)).map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
+        {inline && ![...bundledFamilies, ...families].some((family) => JSON.stringify(family) === inline) && <option value={inline}>{inline}</option>}
+        {bundledFamilies.map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
+        {families.filter((family) => !bundledFamilies.includes(family)).map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
       </select>
     </label>
-    <p className="text-[10px] text-muted-foreground">{t("modes.tweaks.bundledFontsHint")}</p>
+    <p className="text-[10px] text-muted-foreground">{t("modes.tweaks.bundledFontsHint", { count: bundledFamilies.length })}</p>
     <button type="button" className="text-[10px] underline" disabled={loading} onClick={() => void load()}>{loading ? t("modes.tweaks.loadingFonts") : t("modes.tweaks.loadFonts")}</button>
     {error && <p role="alert" className="text-[10px] text-destructive">{t(error)}</p>}
     {families.length > 0 && <p role="status" className="text-[10px] text-muted-foreground">{t("modes.tweaks.installedFonts", { count: families.length })}</p>}
@@ -239,7 +244,7 @@ function SizeRow({
   onApply,
 }: {
   target: TweaksTarget;
-  styleKey: TweaksStyleKey;
+  styleKey: SizeRuleKey;
   saving: boolean;
   onApply: ApplyFn;
 }) {
@@ -262,7 +267,7 @@ function SizeRow({
       setDraft(numericFromLength(inline));
       return;
     }
-    const rule = SIZE_RULES[styleKey];
+    const rule = sizeRuleFor(styleKey, target);
     if ((!rule.allowNegative && parsed < 0) || !Number.isFinite(parsed)) {
       setDraft(numericFromLength(inline));
       return;
@@ -334,12 +339,49 @@ function FontWeightRow({
   );
 }
 
+/** The current page's colours, custom properties first; the app's own UI palette never appears here. */
+export function TweaksPaletteSwatches({ projectId, relPath, onPick }: { projectId: string; relPath: string | null; onPick: (hex: string) => void }) {
+  const t = useT();
+  const palette = useQuery({ queryKey: tweaksPaletteQueryKey(projectId, relPath), queryFn: () => getProjectPalette(projectId, relPath!), enabled: relPath !== null });
+  const colors = palette.data?.colors ?? [];
+  const groups = [
+    { title: "modes.tweaks.paletteTokens" as const, colors: colors.filter((color) => color.name.startsWith("--")) },
+    { title: "modes.tweaks.paletteColors" as const, colors: colors.filter((color) => !color.name.startsWith("--")) },
+  ].filter((group) => group.colors.length > 0);
+  return <>
+    {palette.isPending && <p role="status" className="mb-2 text-[10px] text-muted-foreground">{t("modes.tweaks.paletteLoading")}</p>}
+    {palette.isError && <p role="alert" className="mb-2 text-[10px] text-destructive">{t("modes.tweaks.paletteError")}</p>}
+    {palette.data && groups.length === 0 && <p className="mb-2 text-[10px] text-muted-foreground">{t("modes.tweaks.paletteEmpty")}</p>}
+    {groups.map((group) => (
+      <div key={group.title} className="mb-2 last:mb-0">
+        <div className="mb-1 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">{t(group.title)}</div>
+        <div className="grid grid-cols-8 gap-1">
+          {group.colors.map((color) => (
+            <button
+              key={color.id}
+              type="button"
+              onClick={() => onPick(color.value)}
+              title={color.name === color.value ? color.value : `${color.name} ${color.value}`}
+              className="h-5 w-5 rounded border border-border hover:ring-2 hover:ring-emerald-500"
+              style={{ backgroundColor: color.value }}
+            />
+          ))}
+        </div>
+      </div>
+    ))}
+  </>;
+}
+
 function ColorRow({
+  projectId,
+  relPath,
   target,
   styleKey,
   saving,
   onApply,
 }: {
+  projectId: string;
+  relPath: string | null;
   target: TweaksTarget;
   styleKey: TweaksStyleKey;
   saving: boolean;
@@ -428,31 +470,13 @@ function ColorRow({
             }
           />
           <span className="min-w-0 flex-1 truncate text-left">
-            {inline || (effective && !showTransparent ? "—" : "—")}
+            {inline || (showTransparent ? "—" : effective)}
           </span>
         </button>
       </label>
       {open && (
         <div className="absolute right-0 top-full z-20 mt-1 w-[240px] rounded border border-border bg-popover p-2 shadow-lg">
-          {BRAND_PALETTE.map((group) => (
-            <div key={group.title} className="mb-2 last:mb-0">
-              <div className="mb-1 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                {t(group.title)}
-              </div>
-              <div className="grid grid-cols-8 gap-1">
-                {group.swatches.map((s) => (
-                  <button
-                    key={s.hex}
-                    type="button"
-                    onClick={() => pick(s.hex)}
-                    title={`${s.name} ${s.hex}`}
-                    className="h-5 w-5 rounded border border-border hover:ring-2 hover:ring-emerald-500"
-                    style={{ backgroundColor: s.hex }}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+          <TweaksPaletteSwatches projectId={projectId} relPath={relPath} onPick={pick} />
           <div className="mt-2 flex items-center gap-1">
             <input
               type="text"

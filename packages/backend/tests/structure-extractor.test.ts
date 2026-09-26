@@ -88,6 +88,16 @@ describe("summarizeDeckHtml", () => {
     expect(text).toContain("--font-heading");
   });
 
+  test("PH-07: Given native chart figures When summarized Then the map reports their count so the chart contract can be gated on it", async () => {
+    const deck = await makeTempFile("deck.html", '<!doctype html><html><body><section data-slide data-bg-node-id="slide-1"><figure data-bg-chart="a"></figure><figure data-bg-chart="b"></figure></section></body></html>');
+    expect(await summarizeDeckHtml(deck)).toContain("Charts: 2 data-bg-chart figure(s)");
+    const site = await makeTempFile("index.html", '<!doctype html><html><body><main data-section="stats"><figure data-bg-chart="a"></figure></main></body></html>');
+    expect(await summarizePrototypeHtml(site)).toContain("Charts: 1 data-bg-chart figure(s)");
+    const landmarks = await makeTempFile("index.html", '<!doctype html><html><body><main><figure data-bg-chart="a"></figure></main></body></html>');
+    expect(await summarizePrototypeHtml(landmarks)).toContain("Charts: 1 data-bg-chart figure(s)");
+    expect(await summarizeDeckHtml(await makeTempFile("deck.html", sampleDeck))).not.toContain("data-bg-chart");
+  });
+
   test("returns null when the file is missing", async () => {
     const summary = await summarizeDeckHtml("/no/such/path/deck.html");
     expect(summary).toBeNull();

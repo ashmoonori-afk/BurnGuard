@@ -4,7 +4,7 @@ import { ensureCharts } from "./charts";
 import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
-import type { NormalizedEvent, TurnNotApplied, TurnRejectionReason, UserEvent } from "@bg/shared";
+import type { DesignAuditResult, NormalizedEvent, TurnNotApplied, TurnRejectionReason, UserEvent } from "@bg/shared";
 import { LOGO_FILES } from "@bg/shared";
 import { assignAttachmentsToTurn } from "../db/attachments";
 import {
@@ -15,16 +15,20 @@ import {
 import { getProjectDetail, getSessionInfo } from "../db/seed";
 import { getSqlite } from "../db/sqlite-client";
 import { broker, sequencedBroker } from "./broker";
-import { buildSessionContext, readDeckSourcePages, selectContextAttachments } from "./context";
-import { parseStoredProjectOptions } from "./project-options";
+import { buildSessionContext, DeckSourceMappingError, readDeckSourcePages, selectContextAttachments } from "./context";
+import { parseStoredProjectOptions, withResearchPurpose } from "./project-options";
+import { matchResearchPurpose } from "./research-purpose";
 import { writePreTurnSnapshot, writeTurnCheckpoint } from "./checkpoints";
 import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
 import { appendSessionTrace } from "./trace";
 import { detectBackends } from "./backends";
 import { resolveGenerationOptions } from "./generation-options";
 import { buildPrompt } from "../harness/prompt-builder";
+import { provisionLucideIconReference } from "../harness/lucide-reference";
 import type { TaskPresetObservation } from "../harness/task-preset-observation";
 import { DECK_REVIEW_PROMPT } from "../harness/skills/deck-skill";
+import { IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../harness/design-craft";
+import { summarizeDeckHtml } from "../harness/structure-extractor";
 import { runAdapterTurn } from "../adapters/registry";
 import { loadConfig } from "../config";
 import { hasAgentControlFiles } from "../security/agent-control-files";
@@ -42,8 +46,8 @@ import { needsGenerationPhases, runGenerationPhases } from "./turn-phases";
 import { generationOutputComplete } from "./generation-output";
 import { parse } from "node-html-parser";
 import { prepareSlideDeckExport } from "./export-stage";
-import { DesignReviewError, reviewTurnDesign } from "./turn-design-review";
-import { designAuditCanvas } from "./design-audit";
+import { blockingDesignFindings, DesignReviewError, reviewTurnDesign } from "./turn-design-review";
+import { designAuditCanvas, writeProjectAuditCache } from "./design-audit";
 import { assertLogoDeliverables, captureLogoTurnExpectation, LogoDeliverableError, LogoEvidenceCollector } from "./logo-deliverables";
 import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
 import { inspectCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
@@ -354,6 +358,12 @@ async function runUserTurnInternal(
   const projectDir = sessionContext.project.project_dir;
   const project = await getProjectDetail(sessionContext.project.project_id);
   if (project === null) throw new Error("project_not_found");
+  // The first request that names a research purpose fixes it for the project, so later edits that
+  // name none keep running under its rules instead of falling back to the baseline.
+  const researchPurpose = matchResearchPurpose(payload.text);
+  if (researchPurpose !== null && parseStoredProjectOptions(project.options_json).research_purpose === null) {
+    getSqlite().prepare("UPDATE projects SET options_json=? WHERE id=? AND options_json IS ?").run(withResearchPurpose(project.options_json, researchPurpose), project.id, project.options_json);
+  }
   if (await hasAgentControlFiles(projectDir)) {
     throw Object.assign(new Error("agent_control_files_present"), {
       code: "agent_control_files_present",
@@ -388,6 +398,8 @@ async function runUserTurnInternal(
   let finalizedLogoSource: string | null = null;
   /** Bounded targeted repairs of the finished deliverable; the gate allows at most one. */
   let logoRepairs = 0;
+  /** The last design measurement of the stage, cached after commit when it names the committed identity. */
+  let designReviewResult = null as DesignAuditResult | null;
   /**
    * The finite reason the completion gate refused, recorded where the domain error is still
    * itself. The artifact coordinator rethrows a fresh error carrying only the public message, so
@@ -404,17 +416,27 @@ async function runUserTurnInternal(
       publicationPolicy: { forbiddenSha256 },
       onPrepared: () => { operationPrepared = true; onPrepared(); },
       mutate: async (stageDir) => {
-        const sourcePages = project.type === "slide_deck"
-          ? await readDeckSourcePages(
-            selectedAttachments,
-            parseStoredProjectOptions(project.options_json).design_brief?.source_page_mapping,
-            payload.attachments ?? [],
-          )
-          : undefined;
+        let sourcePages: Awaited<ReturnType<typeof readDeckSourcePages>>;
+        try {
+          sourcePages = project.type === "slide_deck"
+            ? await readDeckSourcePages(
+              selectedAttachments,
+              parseStoredProjectOptions(project.options_json).design_brief?.source_page_mapping,
+              payload.attachments ?? [],
+            )
+            : undefined;
+        } catch (error) {
+          // The coordinator rewraps any other error as operation_failed, so the mapping code would never reach the client.
+          if (error instanceof DeckSourceMappingError) throw new ArtifactOperationError(error.code, error.message);
+          throw error;
+        }
+        const briefPages = parseStoredProjectOptions(project.options_json).design_brief?.pages;
         // Old projects carry a copied runtime. Refresh only the owned stage,
         // so the preview receives engine fixes without touching live files.
         if (project.type === "slide_deck") await prepareSlideDeckExport(stageDir, project.entrypoint);
-        stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
+        // The skills point at this file; it lives outside the canonical tree so it is never published.
+        await provisionLucideIconReference(stageDir);
+        stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: payload.active_rel_path ?? project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
         const graphicBefore = graphicEntrypoint === null ? null : await readFile(graphicEntrypoint, "utf8");
         // The logo gate's expectation is captured before the agent runs, so nothing the model writes
@@ -430,6 +452,9 @@ async function runUserTurnInternal(
           turnId,
           operationId,
         });
+        // What this turn changes is measured against the stage as the adapter found it, so a
+        // finding that predates the turn on an untouched page cannot refuse it.
+        const beforeAdapter = await inspectCanonicalTree(stageDir);
         const immutableSnapshots = await captureImmutableAttachments(selectedAttachments);
         try {
           await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: contextPayload.attachments, immutableSnapshots }, async (stageInputs) => {
@@ -472,37 +497,57 @@ async function runUserTurnInternal(
             };
             const runAdapter = dependencies.runAdapter ?? runAdapterTurn;
             try {
-              const result = needsGenerationPhases(project.type, payload.text, deckStarter)
-                ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input), project.type, sourcePages)
-                : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages));
+              const phased = needsGenerationPhases(project.type, payload.text, deckStarter);
+              const result = phased
+                ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input), project.type, sourcePages, briefPages)
+                : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages, briefPages));
               if (result.exitCode !== 0 || providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
-              if (project.type === "slide_deck") {
+              // The copy review reads the deck this turn wrote; an edit that left the deck alone has nothing for it to read.
+              if (project.type === "slide_deck" && (phased || changedTreePaths(beforeAdapter, await inspectCanonicalTree(stageDir)).includes(project.entrypoint))) {
                 const expectedSlides = sourcePages?.length ?? parse(await readFile(path.join(stageDir, project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length;
                 const toolCallId = ulid();
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "generation_deck_review", input: { scope: "all_slides" } });
                 let reviewFailed = false;
-                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}\nPreserve all ${expectedSlides} slides and completed content. Replace unfinished placeholders and repair missing local images before returning.`, onEvent: async (event) => {
+                // A bounded context of its own, not the creation prompt with the review appended: the
+                // request must not precede the review instructions, and the review never replays it.
+                const deckSummary = await summarizeDeckHtml(path.join(stageDir, project.entrypoint));
+                const reviewPrompt = [
+                  "## Project", `- id: ${project.id}`, `- name: ${project.name}`, `- type: ${project.type}`, `- entrypoint: ${project.entrypoint}`, `- directory: ${stageDir}`, `- locale: ${parseStoredProjectOptions(project.options_json).design_brief?.locale ?? "unknown"}`, "",
+                  ...(sessionContext.designSystemPin ? ["<pinned_design_system>", JSON.stringify({ revision: sessionContext.designSystemPin.revision, digest: sessionContext.designSystemPin.digest }), sessionContext.designSystemPin.context, "</pinned_design_system>", ""] : []),
+                  ...(deckSummary === null ? [] : ["## Deck structure", deckSummary, ""]),
+                  ...(sourceInstructions === "" ? [] : [sourceInstructions.trim(), ""]),
+                  IMAGE_ARTBOARD_COMPLETION_CHECKS, "",
+                  DECK_REVIEW_PROMPT,
+                  `Preserve all ${expectedSlides} slides and completed content. Replace unfinished placeholders and repair missing local images before returning.`,
+                ].join("\n");
+                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: reviewPrompt, userEvent: { type: "user.message", text: reviewPrompt }, onEvent: async (event) => {
                   // A failed review belongs to this check, not the enclosing turn: retain it and refuse below.
                   if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason !== "end_turn")) { reviewFailed = true; return; }
                   await adapterInput.onEvent(event);
-                } }, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, expectedSlides, sourcePages), { idleMs: 120_000 });
+                } }, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, expectedSlides, sourcePages), { idleMs: 120_000, attempts: 2 });
                 const reviewed = review.exitCode === 0 && !reviewFailed && !providerReportedFailure;
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "generation_deck_review", ok: reviewed });
                 if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
               }
-              if (!await generationOutputComplete(stageDir, project.entrypoint, project.type)) throw new ArtifactOperationError("turn_failed", "Generated content is incomplete");
+              if (!await generationOutputComplete(stageDir, project.entrypoint, project.type, undefined, undefined, briefPages)) throw new ArtifactOperationError("turn_failed", "Generated content is incomplete");
               await ensureThreeSceneRuntime(stageDir);
               await ensureCharts(stageDir);
               if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
               const canvas = designAuditCanvas(project.type, project.options_json);
+              const changedPaths = changedTreePaths(beforeAdapter, await inspectCanonicalTree(stageDir));
               const designReview = await (dependencies.reviewDesign ?? reviewTurnDesign)({
                 adapter: adapterInput, projectId: project.id, type: project.type, entrypoint: project.entrypoint,
-                revision: project.current_revision + 1, ...(canvas ? { canvas } : {}),
+                revision: project.current_revision + 1, changedPaths, ...(canvas ? { canvas } : {}),
+                ...(sessionContext.designSystemPin ? { tokensCss: sessionContext.designSystemPin.tokens } : {}),
                 run: (input) => runAdapter(backendId, input),
               });
-              if (designReview.status !== "checked" || designReview.result?.overall_status === "must_fix" || !designReview.result || providerReportedFailure) throw new DesignReviewError();
+              // Checks that could not run do not refuse the turn: the review badge and the on-demand
+              // Quality audit carry that warning. Only measured, blocking defects do.
+              const blocking = designReview.result === null ? [] : blockingDesignFindings(designReview.result, changedPaths);
+              if (blocking.length > 0 || providerReportedFailure) throw new DesignReviewError();
+              designReviewResult = designReview.result;
               // A repair edits the stage after the completion gate, so repaired output is gated again.
-              if ((designReview.repairs > 0 || sourcePages !== undefined) && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages)) {
+              if ((designReview.repairs > 0 || sourcePages !== undefined) && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages, briefPages)) {
                 throw new ArtifactOperationError("publication_failed", "Design review left incomplete or remapped output");
               }
               const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
@@ -589,6 +634,12 @@ async function runUserTurnInternal(
     publishedOperation = operation.status === "committed";
     if (process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "after_publish") {
       throw new Error("qa_fault_after_publication");
+    }
+    // The review measured the stage that was just committed, so the Quality panel's refetch can
+    // read it instead of rendering the same tree again. A cache miss costs a render, never the turn.
+    if (publishedOperation && designReviewResult !== null && designReviewResult.artifact_revision === operation.resultRevision && designReviewResult.artifact_digest === operation.resultDigest) {
+      try { await writeProjectAuditCache(projectDir, designReviewResult); }
+      catch (error) { await appendSessionTrace(sessionId, { level: "design_audit_cache_failed", turnId, error: diagnosticError(error) }); }
     }
     if (activeTurn.interrupted) {
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "interrupted" });

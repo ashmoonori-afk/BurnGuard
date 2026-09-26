@@ -9,9 +9,11 @@ type PrototypeSiteContext = {
   readonly entrypoint: string;
   readonly files: readonly FileInfo[];
   readonly activeRelPath?: string;
+  readonly contextMode?: "compact" | "full";
 };
 
-export async function appendPrototypeSiteContext(lines: string[], context: PrototypeSiteContext): Promise<void> {
+/** Appends the structural map, active page and site map; returns the entrypoint summary that was emitted, or null. */
+export async function appendPrototypeSiteContext(lines: string[], context: PrototypeSiteContext): Promise<string | null> {
   const indexedHtml = new Set(context.files.filter((file) => file.category === "html").map((file) => file.rel_path));
   const activeRelPath = context.activeRelPath !== undefined && indexedHtml.has(context.activeRelPath)
     ? context.activeRelPath
@@ -19,6 +21,9 @@ export async function appendPrototypeSiteContext(lines: string[], context: Proto
   const entrypointSummary = await summarizePrototypeHtml(path.join(context.projectDir, context.entrypoint));
   if (entrypointSummary !== null) {
     lines.push("## Prototype structure (use this map; only Read sections you must change)", entrypointSummary, "");
+  } else if (context.contextMode === "compact") {
+    // The compact skill names this heading as its map; a first turn has no entrypoint to summarize.
+    lines.push("## Prototype structure", "No readable entrypoint yet: write the complete scaffold first, then use targeted edits.", "");
   }
   if (activeRelPath !== undefined) {
     lines.push(`## Active page: ${activeRelPath}`);
@@ -28,7 +33,7 @@ export async function appendPrototypeSiteContext(lines: string[], context: Proto
     }
     lines.push("");
   }
-  if (indexedHtml.size === 0) return;
+  if (indexedHtml.size === 0) return entrypointSummary;
 
   const siteMap = await buildSiteMap(context.files, context.entrypoint, async (relPath) => {
     try { return await readFile(path.join(context.projectDir, relPath), "utf8"); }
@@ -42,4 +47,5 @@ export async function appendPrototypeSiteContext(lines: string[], context: Proto
   for (const missing of siteMap.dangling) lines.push(`- MISSING: ${missing.from} -> ${missing.href}`);
   if (siteMap.overflow) lines.push(`- OVERFLOW: ${siteMap.omitted_count} additional HTML page(s) omitted from this bounded summary.`);
   lines.push("");
+  return entrypointSummary;
 }

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   parseDesignBriefV1,
   type CreateProjectRequest,
@@ -13,6 +13,7 @@ import {
   type BuildResult,
   type ProjectDraft,
 } from "../src/lib/project-creation";
+import { LOCALES, useLocaleStore } from "../src/i18n/locale";
 
 function system(
   id: string,
@@ -75,6 +76,19 @@ function expectRequest(result: BuildResult): CreateProjectRequest {
   }
   return result.request;
 }
+
+// The brief carries the active UI locale; the default is pinned explicitly so the store never leaks between suites.
+const originalLocale = useLocaleStore.getState().locale;
+beforeEach(() => useLocaleStore.setState({ locale: BRIEF_LOCALE }));
+afterEach(() => useLocaleStore.setState({ locale: originalLocale }));
+
+test.each(LOCALES)("Given the UI locale %s When a slide-deck draft is built Then the design brief carries that locale", (locale) => {
+  useLocaleStore.setState({ locale });
+
+  const request = expectRequest(buildCreateProjectRequest(draft(), SYSTEMS));
+
+  expect(parseDesignBriefV1(request.options?.design_brief).locale).toBe(locale);
+});
 
 test("Given an attached deck When creating it Then source pages default to one-to-one without affecting unrelated projects", () => {
   const attached = expectRequest(buildCreateProjectRequest(draft({ contentSource: "attached" }), SYSTEMS));

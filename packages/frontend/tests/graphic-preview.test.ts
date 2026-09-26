@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { runInNewContext } from "node:vm";
 import { buildSandboxedArtifactSrcDoc } from "../src/components/canvas/frame-bridge";
-import { computeGraphicPreviewFit } from "../src/lib/graphic-preview";
+import { buildGraphicPreviewInjection, computeGraphicPreviewFit } from "../src/lib/graphic-preview";
 import { parseProjectGraphicCanvas } from "../src/lib/graphic-project";
 
 const GRAPHIC_HTML = "<!doctype html><html><head><title>Graphic</title></head><body><main data-graphic-artboard><h1 data-bg-node-id=title>Title</h1></main></body></html>";
@@ -86,4 +86,12 @@ describe("graphic preview fit", () => {
       graphic_canvas: { schema_version: 1, width: 1200, height: 628 },
     }))).toBeNull();
   });
+});
+
+test("Given a graphic preview injection When the artboard rule is read Then it contains layout only and outlines the frame so overflow paints beside it (CSS-23)", () => {
+  const style = buildGraphicPreviewInjection({ schema_version: 1, width: 1080, height: 1080 }).match(/<style data-bg-graphic-preview-style>([\s\S]*?)<\/style>/u)?.[1] ?? "";
+  const artboard = style.split("\n").find((line) => line.includes("[data-graphic-artboard]")) ?? "";
+  expect(artboard).toContain("contain: layout !important");
+  expect(artboard).not.toContain("paint");
+  expect(artboard).toContain("outline:");
 });

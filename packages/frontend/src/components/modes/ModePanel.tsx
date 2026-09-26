@@ -23,10 +23,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
  */
 export default function ModePanel({
   mode,
+  projectId,
   comments,
   activeRelPath,
   activeSlideIdx,
   focusedCommentId,
+  autoFocusCommentId = null,
   onFocusComment,
   onUpdateCommentBody,
   onToggleCommentResolved,
@@ -46,6 +48,7 @@ export default function ModePanel({
   drawColor,
   drawStrokeWidth,
   drawHasShapes,
+  drawCanRedo,
   onChangeDrawTool,
   onChangeDrawColor,
   onChangeDrawWidth,
@@ -56,10 +59,12 @@ export default function ModePanel({
   uxReview,
 }: {
   mode: CanvasMode | null;
+  projectId: string;
   comments: Comment[];
   activeRelPath: string | null;
   activeSlideIdx: number | null;
   focusedCommentId: string | null;
+  autoFocusCommentId?: string | null;
   onFocusComment: (id: string | null) => void;
   onUpdateCommentBody: (id: string, body: string) => void;
   onToggleCommentResolved: (id: string, resolved: boolean) => void;
@@ -82,6 +87,7 @@ export default function ModePanel({
   drawColor: string;
   drawStrokeWidth: number;
   drawHasShapes: boolean;
+  drawCanRedo: boolean;
   onChangeDrawTool: (t: DrawTool) => void;
   onChangeDrawColor: (c: string) => void;
   onChangeDrawWidth: (w: number) => void;
@@ -96,8 +102,10 @@ export default function ModePanel({
 
   return (
     <aside aria-label={t("modes.panel.settings")} className="flex min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1500px]:w-[288px] max-[1000px]:max-h-[40%] max-[1000px]:w-full max-[1000px]:shrink max-[1000px]:border-l-0 max-[1000px]:border-t">
-      {(mode === "select" || mode === "tweaks") && (
+      {mode === "tweaks" && (
         <TweaksPanel
+          projectId={projectId}
+          relPath={activeRelPath}
           target={tweaksTarget}
           saving={tweaksSaving}
           onApply={onApplyTweak}
@@ -112,6 +120,7 @@ export default function ModePanel({
           activeRelPath={activeRelPath}
           activeSlideIdx={activeSlideIdx}
           focusedId={focusedCommentId}
+          autoFocusId={autoFocusCommentId}
           onFocus={onFocusComment}
           onUpdateBody={onUpdateCommentBody}
           onToggleResolved={onToggleCommentResolved}
@@ -138,6 +147,7 @@ export default function ModePanel({
           color={drawColor}
           strokeWidth={drawStrokeWidth}
           hasShapes={drawHasShapes}
+          canRedo={drawCanRedo}
           onChangeTool={onChangeDrawTool}
           onChangeColor={onChangeDrawColor}
           onChangeWidth={onChangeDrawWidth}

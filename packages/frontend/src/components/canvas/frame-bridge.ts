@@ -69,6 +69,10 @@ export interface FrameBgHit {
   bgId: string | null;
   tag: string | null;
   text: string | null;
+  /** True when a non-inline descendant exists, which the server's text patch refuses (`non_leaf_text_target`). */
+  hasBlockChildren?: boolean;
+  /** True inside a deck slide, where the audit's text floor is 24px instead of 12px. */
+  inSlide?: boolean;
   attributes: Record<string, string>;
   computed: Record<string, string>;
   inline: Record<string, string>;
@@ -86,7 +90,9 @@ type BridgeAction =
   | "active-slide"
   | "set-active-slide"
   | "reveal-selector"
-  | "count-selector";
+  | "count-selector"
+  | "scroll-position"
+  | "set-scroll-position";
 
 /**
  * Default timeout per request. Bumped from the original 200 ms because
@@ -368,6 +374,20 @@ export async function requestFrameActiveSlide(
   return (await requestFrameBridge(iframe, "active-slide")) as number | null;
 }
 
+export interface FrameScrollPosition { x: number; y: number }
+
+/** The document's window scroll offsets, captured before a live-preview version swap. */
+export async function requestFrameScrollPosition(iframe: HTMLIFrameElement | null): Promise<FrameScrollPosition | null> {
+  const payload = await requestFrameBridge(iframe, "scroll-position").catch(() => null);
+  if (payload === null || typeof payload !== "object" || !("x" in payload) || !("y" in payload)) return null;
+  const { x, y } = payload as { x: unknown; y: unknown };
+  return typeof x === "number" && typeof y === "number" && Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+
+export async function requestFrameSetScrollPosition(iframe: HTMLIFrameElement | null, position: FrameScrollPosition): Promise<boolean> {
+  return (await requestFrameBridge(iframe, "set-scroll-position", { x: position.x, y: position.y }).catch(() => null)) === true;
+}
+
 export async function requestFrameSetActiveSlide(
   iframe: HTMLIFrameElement | null,
   slideIndex: number,
@@ -601,16 +621,30 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     var out = {};
     if (!node || !node.getAttribute) return out;
     var raw = node.getAttribute("style") || "";
-    var parts = raw.split(";");
-    for (var i = 0; i < parts.length; i++) {
-      var decl = parts[i].trim();
-      if (!decl) continue;
+    // Split on ";" only outside quotes and parentheses, like the server's parseInlineStyle.
+    var depth = 0, inSingle = false, inDouble = false, buf = "";
+    var commit = function () {
+      var decl = buf.trim();
+      buf = "";
+      if (!decl) return;
       var colon = decl.indexOf(":");
-      if (colon <= 0) continue;
+      if (colon <= 0) return;
       var key = decl.slice(0, colon).trim();
       var value = decl.slice(colon + 1).trim();
       if (key && value) out[key] = value;
+    };
+    for (var i = 0; i < raw.length; i++) {
+      var ch = raw.charAt(i);
+      if (ch === "'" && !inDouble) inSingle = !inSingle;
+      else if (ch === '"' && !inSingle) inDouble = !inDouble;
+      else if (!inSingle && !inDouble) {
+        if (ch === "(") depth++;
+        else if (ch === ")") { if (depth > 0) depth--; }
+        else if (ch === ";" && depth === 0) { commit(); continue; }
+      }
+      buf += ch;
     }
+    commit();
     return out;
   }
 
@@ -712,6 +746,8 @@ const BRIDGE_SCRIPT = String.raw`(function () {
         bgId: bgNode.getAttribute("data-bg-node-id"),
         tag: String(bgNode.tagName || "").toLowerCase(),
         text: String(bgNode.textContent || ""),
+        hasBlockChildren: !!(bgNode.querySelector && bgNode.querySelector(":not(span,em,strong,br,i,b,u,s,small,sup,sub,mark,code)")),
+        inSlide: !!bgNode.closest("[data-slide]"),
         attributes: readAttributes(bgNode),
         computed: readComputed(bgNode),
         inline: readInline(bgNode)
@@ -754,6 +790,15 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       } else {
         var active = document.querySelector("[data-slide][data-active]");
         response = active ? Array.prototype.indexOf.call(slides, active) : 0;
+      }
+    } else if (data.action === "scroll-position") {
+      response = { x: Number(window.scrollX) || 0, y: Number(window.scrollY) || 0 };
+    } else if (data.action === "set-scroll-position") {
+      var scrollX = payload.x, scrollY = payload.y;
+      if (typeof scrollX === "number" && typeof scrollY === "number" && isFinite(scrollX) && isFinite(scrollY)) {
+        try { window.scrollTo(scrollX, scrollY); response = true; } catch (e) { response = false; }
+      } else {
+        response = false;
       }
     } else if (data.action === "set-active-slide") {
       var targetIndex = Math.max(0, Number(payload.slideIndex) || 0);

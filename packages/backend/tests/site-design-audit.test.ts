@@ -41,6 +41,49 @@ describe("auditSiteStructure", () => {
     expect(result.findings.every((finding) => finding.severity === "recommended")).toBe(true);
   });
 
+  test("Given a single page whose nav links only to anchors When audited Then no aria-current finding is produced", async () => {
+    // Given
+    const html = new Map([["index.html", '<nav><a href="#top">Top</a><a href="#about">About</a></nav><main>Landing</main>']]);
+    const siteMap = await buildSiteMap(files.slice(0, 1), "index.html", (relPath) => html.get(relPath) ?? "");
+
+    // When
+    const result = auditSiteStructure(siteMap, [...html].map(([rel_path, source]) => ({ rel_path, html: source })));
+
+    // Then
+    expect(result.findings.some((finding) => finding.code === "site_missing_aria_current")).toBe(false);
+  });
+
+  test("Given an imported three-page site with no markers on any page When audited Then the shared-block finding is emitted once for the home page", async () => {
+    // Given
+    const html = new Map([
+      ["index.html", '<header>Brand</header><nav><a href="index.html">Home</a><a href="about.html">About</a><a href="legacy.html">Legacy</a></nav><main>Home</main><footer>Foot</footer>'],
+      ["about.html", '<header>Brand</header><nav><a href="index.html">Home</a><a href="about.html">About</a><a href="legacy.html">Legacy</a></nav><main>About</main><footer>Foot</footer>'],
+      ["legacy.html", '<header>Brand</header><nav><a href="index.html">Home</a><a href="about.html">About</a><a href="legacy.html">Legacy</a></nav><main>Legacy</main><footer>Foot</footer>'],
+    ]);
+    const siteMap = await buildSiteMap(files, "index.html", (relPath) => html.get(relPath) ?? "");
+
+    // When
+    const result = auditSiteStructure(siteMap, [...html].map(([rel_path, source]) => ({ rel_path, html: source })));
+
+    // Then
+    expect(result.findings.filter((finding) => finding.code === "site_missing_shared_block").map((finding) => finding.rel_path)).toEqual(["index.html"]);
+  });
+
+  test("Given a subpage without a nav and a home nav lacking aria-current When audited Then only the home page gets the aria-current finding", async () => {
+    // Given
+    const html = new Map([
+      ["index.html", '<header data-bg-shared="header"></header><nav data-bg-shared="nav"><a href="index.html">Home</a><a href="about.html">About</a></nav><main data-bg-content></main><footer data-bg-shared="footer"></footer><style>/* @bg-shared-css *//* @bg-page-css */</style>'],
+      ["about.html", '<main>Legal text without navigation</main>'],
+    ]);
+    const siteMap = await buildSiteMap(files.slice(0, 2), "index.html", (relPath) => html.get(relPath) ?? "");
+
+    // When
+    const result = auditSiteStructure(siteMap, [...html].map(([rel_path, source]) => ({ rel_path, html: source })));
+
+    // Then
+    expect(result.findings.filter((finding) => finding.code === "site_missing_aria_current").map((finding) => finding.rel_path)).toEqual(["index.html"]);
+  });
+
   test("Given srcset candidates that are root-absolute first or after a bare comma When audited Then site_root_absolute_asset is reported and protocol-relative, relative or data-URI candidates are not", async () => {
     // Given: a base64 JPEG payload starts with "/9j/" right after a comma that belongs to the URL.
     const jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ";

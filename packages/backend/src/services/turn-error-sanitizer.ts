@@ -1,5 +1,6 @@
 import type { NormalizedEvent, TurnErrorCode, TurnNotApplied, TurnRejectionReason } from "@bg/shared";
 import { PathBoundaryError } from "../security/path-boundary";
+import { DECK_SOURCE_PAGE_LIMIT } from "./context";
 import { LogoDeliverableError } from "./logo-deliverables";
 
 const COPY: Readonly<Record<TurnErrorCode, string>> = {
@@ -8,7 +9,7 @@ const COPY: Readonly<Record<TurnErrorCode, string>> = {
   logo_requires_authenticated_codex: "로고 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요. 모델 선택과 로그인 상태를 확인해 주세요.",
   logo_deliverables_missing: "로고 결과물이 아직 규격을 갖추지 못해 반영하지 않았어요. 다시 생성을 요청해 주세요.",
   logo_image_provenance_missing: "로고 이미지의 생성 출처를 확인하지 못해 반영하지 않았어요. 이미지 생성 도구로 시안을 다시 만들어 주세요.",
-  design_review_failed: "디자인 검사·수정을 완료하지 못해 반영하지 않았어요. 기존 결과는 유지돼요. 검사를 다시 요청해 주세요.",
+  design_review_failed: "디자인 검사·수정을 완료하지 못해 반영하지 않았어요. 기존 결과는 유지돼요.",
   commandcode_unavailable: "CommandCode 연결을 사용할 수 없어요. Claude Code 설치와 설정의 API 키를 확인해 주세요.",
   unsupported_generation_model_effort: "선택한 모델이나 추론 강도를 사용할 수 없어요. 모델을 다시 선택해 주세요.",
   backend_unavailable: "선택한 작업 도구를 사용할 수 없어요. 설치 상태를 확인해 주세요.",
@@ -22,6 +23,7 @@ const COPY: Readonly<Record<TurnErrorCode, string>> = {
   operation_conflict: "다른 작업이 진행 중이에요. 잠시 후 다시 시도해 주세요.",
   operation_cancelled: "작업이 취소되었어요.",
   turn_failed: "요청을 처리하지 못했어요. 다시 시도해 주세요.",
+  deck_source_page_limit: `내용 자료의 페이지가 슬라이드 한도(${DECK_SOURCE_PAGE_LIMIT}장)를 넘어 1:1로 옮길 수 없어요. 페이지 수 유지를 끄거나 자료를 나눠 주세요.`,
 };
 
 /**
@@ -142,6 +144,7 @@ function knownCode(candidate: string | undefined): TurnErrorCode | undefined {
     case "operation_cancelled":
     case "publication_failed":
     case "turn_failed":
+    case "deck_source_page_limit":
       return candidate;
     case "stage_attachment_input_invalid":
     case "private_input_unavailable":

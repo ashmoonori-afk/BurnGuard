@@ -12,13 +12,13 @@ import { REVIEWED_TASK_EXAMPLES, type ReviewedExampleCorpus } from "./task-prese
  */
 
 /** Provider route. A model ID alone never implies equivalence across routes. */
-export type Route = "codex/native" | "claude-code/native" | "claude-code/commandcode";
+export type Route = "codex/native" | "claude-code/native" | "claude-code/commandcode" | "generic/native";
 
 export type Deliverable = "prototype" | "slide_deck" | "graphic" | "logo" | "diagram" | "generic";
 
 export type ModelWording =
   | "luna" | "spark" | "terra" | "sol" | "gpt55" | "astra" | "sonnet" | "opus"
-  | "default-codex" | "default-claude" | "default-commandcode";
+  | "default-codex" | "default-claude" | "default-commandcode" | "default-generic";
 
 export interface TextBlock {
   readonly id: string;
@@ -100,6 +100,7 @@ const WORDING: Readonly<Record<ModelWording, TextBlock>> = {
   "default-codex": { id: "wording-default-codex-v1", text: "Target the requested artifact, preservation constraints and acceptance evidence directly." },
   "default-claude": { id: "wording-default-claude-v1", text: "Inspect relevant material, complete the requested artifact and verify its acceptance evidence." },
   "default-commandcode": { id: "wording-default-commandcode-v1", text: "Use the current route's available tools to complete the requested artifact, preserve constraints and verify acceptance evidence." },
+  "default-generic": { id: "wording-default-generic-v1", text: "Inspect the target, complete the requested artifact with the tools this session exposes, preserve constraints and verify acceptance evidence." },
 };
 
 const EFFORTS: Readonly<Record<GenerationEffort, TextBlock>> = {
@@ -173,6 +174,12 @@ export const TASK_PRESET_REGISTRY: PresetRegistry = {
       models: claudeModels("claude-code/commandcode"),
       aliases: CLAUDE_ALIASES,
       fallback: { id: "claude-code/commandcode/default/v1", wording: "default-commandcode", status: "draft" },
+    },
+    // Gemini and Copilot register no models; every selection takes the neutral route default.
+    "generic/native": {
+      models: {},
+      aliases: {},
+      fallback: { id: "generic/native/default/v1", wording: "default-generic", status: "draft" },
     },
   },
   // CI validates every corpus entry and its receipt before this static data can ship.

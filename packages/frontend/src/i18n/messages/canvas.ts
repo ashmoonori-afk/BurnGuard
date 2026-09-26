@@ -11,8 +11,6 @@ export const canvasMessages = defineMessages({
   "canvas.toolbar.commentHint": {"ko":"의견을 남길 위치를 누른 뒤 내용을 적어 주세요.","en":"Click where you want to leave feedback, then write your comment.","zh-CN":"点击要留下意见的位置，然后输入内容。"},
   "canvas.toolbar.draw": {"ko":"그리기","en":"Draw","zh-CN":"绘图"},
   "canvas.toolbar.drawHint": {"ko":"결과물 위에 자유롭게 표시해요. 그린 내용은 자동 저장돼요.","en":"Draw freely over the artifact. Drawings are saved automatically.","zh-CN":"在作品上自由绘图，内容会自动保存。"},
-  "canvas.toolbar.select": {"ko":"선택","en":"Select","zh-CN":"选择"},
-  "canvas.toolbar.selectHint": {"ko":"요소를 선택하면 구조와 스타일을 확인할 수 있어요.","en":"Select an element to inspect its structure and styles.","zh-CN":"选择元素以查看结构和样式。"},
   "canvas.toolbar.quality": {"ko":"품질 점검","en":"Quality review","zh-CN":"质量检查"},
   "canvas.toolbar.qualityHint": {"ko":"내보내기 전에 레이아웃과 접근성 문제를 확인해요.","en":"Check layout and accessibility issues before exporting.","zh-CN":"导出前检查布局和无障碍问题。"},
   "canvas.toolbar.tools": {"ko":"캔버스 도구","en":"Canvas tools","zh-CN":"画布工具"},
@@ -170,4 +168,6 @@ export const canvasMessages = defineMessages({
   "canvas.chart.validation.textLength": {"ko":"텍스트를 {max}자 이내로 입력해 주세요.","en":"Enter text within {max} characters.","zh-CN":"请输入不超过 {max} 个字符的文本。"},
   "canvas.chart.validation.numberRange": {"ko":"숫자는 {min}부터 {max}까지 입력할 수 있어요.","en":"Enter a number between {min} and {max}.","zh-CN":"请输入 {min} 到 {max} 之间的数字。"},
   "canvas.chart.validation.itemCount": {"ko":"항목 수는 {min}–{max}개여야 해요.","en":"The number of items must be between {min} and {max}.","zh-CN":"项目数量必须为 {min}–{max} 个。"},
+  "canvas.chart.aiRequestTemplate": {"ko":"파일 {file}의 차트 {chart}를 다음 요청에 맞게 수정해 주세요. data-bg-chart-config의 원본 데이터를 보존하고 ChartV1 규칙을 적용하세요. 배치도 파일의 목적에 맞게 조정하세요.","en":"Update chart {chart} in file {file} to match the request below. Preserve the original data in data-bg-chart-config and apply the ChartV1 rules. Adjust the layout to suit the file's purpose.","zh-CN":"请按照下面的要求修改文件 {file} 中的图表 {chart}。保留 data-bg-chart-config 中的原始数据并遵循 ChartV1 规则，同时根据文件用途调整布局。"},
+  "canvas.three.aiRequestTemplate": {"ko":"파일 {file}의 data-bg-three 관리형 3D 장면을 다음 요청에 맞게 수정해 주세요. ThreeSceneV1 계약을 유지하고 변경 결과를 설명해 주세요.","en":"Update the data-bg-three managed 3D scene in file {file} to match the request below. Keep the ThreeSceneV1 contract and describe what changed.","zh-CN":"请按照下面的要求修改文件 {file} 中由 data-bg-three 管理的 3D 场景。保持 ThreeSceneV1 契约并说明所做的更改。"},
 });

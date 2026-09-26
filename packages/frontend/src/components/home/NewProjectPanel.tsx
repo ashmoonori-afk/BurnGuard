@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { useT } from "@/i18n/t";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
@@ -13,7 +13,7 @@ import type {
 import { defaultGenerationOptions } from "@bg/shared";
 import GenerationControls from "@/components/settings/GenerationControls";
 import { createProject, detectBackends } from "@/api/home";
-import { backendLabel, graphicBackendId } from "@/lib/backend-display";
+import { backendOptionLabel, backendSelectState, graphicBackendId } from "@/lib/backend-display";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ProjectBriefFields, {
@@ -24,7 +24,8 @@ import { GraphicSetFields } from "@/components/home/GraphicSetFields";
 import { LogoSetFields } from "@/components/home/LogoSetFields";
 import DesignSystemPicker from "./DesignSystemPicker";
 import { apiErrorCopy } from "@/lib/error-copy";
-import { readCreationDraft, writeCreationDraft } from "@/lib/creation-draft";
+import { clearCreationDraft, readCreationDraft, writeCreationDraft } from "@/lib/creation-draft";
+import { manualCanvasPatch } from "@/lib/graphic-set-form";
 import {
   INITIAL_BRIEF_FORM,
   draftProblemMessage,
@@ -32,8 +33,11 @@ import {
   PROJECT_LABEL_CLASS,
   PROTOTYPE_PAGE_PRESETS,
   buildCreateProjectRequest,
+  coerceBriefChoice,
+  contentSourceChoicesFor,
   keepSelectedDesignSystemId,
   isOriginalSampleSystem,
+  outputSizeChoicesFor,
   requiresImageBackend,
   selectableDesignSystems,
   type BriefForm,
@@ -55,6 +59,8 @@ export default function NewProjectPanel({
   systemsError,
   onRetrySystems,
   onPendingChange,
+  onChoosingChange,
+  backRef,
   onCreated,
 }: {
   type: ProjectType;
@@ -66,6 +72,10 @@ export default function NewProjectPanel({
   systemsError: Error | null;
   onRetrySystems: () => void;
   onPendingChange?: (pending: boolean) => void;
+  /** Reports whether the design-system picker is showing, so the host dialog can route Escape to `backRef`. */
+  onChoosingChange?: (choosing: boolean) => void;
+  /** Filled with the picker's back step while it is showing; null otherwise. */
+  backRef?: MutableRefObject<(() => void) | null>;
   onCreated: (project: CreateProjectResponse) => void;
 }) {
   const t = useT();
@@ -101,7 +111,8 @@ export default function NewProjectPanel({
   // Both formats are drawn with the image tool, so both pin the backend to a
   // draw-capable one and both wait for that backend to be ready.
   const needsImageBackend = requiresImageBackend(effectiveType);
-  const detectedBackends = detection.data?.backends ?? [];
+  const backendSelect = backendSelectState(detection);
+  const detectedBackends = backendSelect.backends;
   const effectiveBackend = needsImageBackend ? graphicBackendId(detectedBackends, backendId) : backendId;
   const generation = generationByBackend[effectiveBackend] ?? defaultGenerationOptions(effectiveBackend);
 
@@ -112,6 +123,7 @@ export default function NewProjectPanel({
       catch { pushToast({ title: t("home.creation.draftMoved"), body: t("home.creation.storageLimited"), tone: "error" }); }
       setItems([]);
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      clearCreationDraft(type);
       onCreated(created);
       setForm(INITIAL_BRIEF_FORM);
       setPickedSystemId(null);
@@ -128,10 +140,16 @@ export default function NewProjectPanel({
     },
   });
 
-  const effectiveContentSource = items.some((item) => item.status === "ready") ? "attached" : form.contentSource;
+  // The brief offers only what the effective type supports; a draft value from
+  // another type falls back to the first offered choice.
+  const contentSourceChoices = contentSourceChoicesFor(effectiveType, isTemplate);
+  const outputSizeChoices = outputSizeChoicesFor(effectiveType);
+  const contentSource = coerceBriefChoice(contentSourceChoices, form.contentSource);
+  const outputSize = coerceBriefChoice(outputSizeChoices, form.outputSize);
+  const effectiveContentSource = items.some((item) => item.status === "ready") ? "attached" : contentSource;
   const canMapSourcePages = hasPaginatedContentSource(items);
   const built = buildCreateProjectRequest(
-    { ...form, sourcePageMapping: canMapSourcePages ? form.sourcePageMapping : "restructure", contentSource: effectiveContentSource, type: effectiveType, backendId: effectiveBackend, designSystemId: pickedSystemId, ...(isOriginal && isGraphic ? { graphicWidth: 1080, graphicHeight: 1350 } : {}) },
+    { ...form, sourcePageMapping: canMapSourcePages ? form.sourcePageMapping : "restructure", contentSource: effectiveContentSource, outputSize, type: effectiveType, backendId: effectiveBackend, designSystemId: pickedSystemId, ...(isOriginal && isGraphic ? { graphicWidth: 1080, graphicHeight: 1350 } : {}) },
     designSystems,
   );
   const disabled = createMutation.isPending;
@@ -153,6 +171,15 @@ export default function NewProjectPanel({
     onPendingChange?.(disabled);
     return () => onPendingChange?.(false);
   }, [disabled, onPendingChange]);
+
+  useEffect(() => {
+    onChoosingChange?.(choosingSystem);
+    if (backRef) backRef.current = choosingSystem ? () => setChoosingSystem(false) : null;
+    return () => {
+      onChoosingChange?.(false);
+      if (backRef) backRef.current = null;
+    };
+  }, [choosingSystem, onChoosingChange, backRef]);
 
   // What the user typed is a draft: it survives navigation, reload, and a
   // failed create, and each project type keeps its own.
@@ -188,7 +215,7 @@ export default function NewProjectPanel({
       <h2 className="mb-3 text-xs font-semibold text-muted-foreground">{t("home.creation.basics")}</h2>
 
       <div className="space-y-4">
-        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={effectiveBackend} disabled={disabled || needsImageBackend} onChange={(event) => setBackendId(event.target.value as BackendId)}>{(detectedBackends.length > 0 ? detectedBackends : [{ id: "claude-code" as BackendId, found: true }, { id: "codex" as BackendId, found: true }]).map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendLabel(backend.id)}{backend.found ? "" : " —"}</option>)}</select><GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
+        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={backendSelect.placeholder === null ? effectiveBackend : ""} disabled={disabled || needsImageBackend || backendSelect.placeholder !== null} onChange={(event) => setBackendId(event.target.value as BackendId)}>{backendSelect.placeholder === null ? detectedBackends.map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendOptionLabel(backend)}</option>) : <option value="">{t(backendSelect.placeholder)}</option>}</select>{detection.isError ? <p role="alert" className="text-xs text-destructive">{apiErrorCopy(detection.error)} <button type="button" onClick={() => void detection.refetch()} className="font-medium text-accent underline underline-offset-2 hover:no-underline">{t("home.retry")}</button></p> : null}<GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
         <div className="space-y-1.5">
           <label htmlFor="project-name" className={PROJECT_LABEL_CLASS}>
             {t("home.creation.name")}
@@ -286,11 +313,7 @@ export default function NewProjectPanel({
             width={isOriginal ? 1080 : form.graphicWidth}
             height={isOriginal ? 1350 : form.graphicHeight}
             disabled={disabled || isOriginal}
-            onChange={(size) => setForm((current) => ({
-              ...current,
-              graphicWidth: size.width,
-              graphicHeight: size.height,
-            }))}
+            onChange={(size) => setForm((current) => ({ ...current, ...manualCanvasPatch(size) }))}
           />
         )}
 
@@ -325,9 +348,11 @@ export default function NewProjectPanel({
         </>}
         <div className="space-y-2"><label htmlFor="project-materials" className={PROJECT_LABEL_CLASS}>{t("home.creation.attach")}</label><input id="project-materials" type="file" multiple accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")} disabled={disabled} onChange={(event) => { const picked = Array.from(event.target.files ?? []); setItems((current) => planAttachmentIntake(current, picked)); event.target.value = ""; }} className="block w-full text-sm" /><p className="text-xs text-muted-foreground">{t("home.creation.attachHint")}</p><ComposerAttachments items={items} sending={disabled} onRemove={(id) => setItems((current) => current.filter((item) => item.id !== id))} onRoleChange={(id, role) => setItems((current) => setAttachmentRole(current, id, role))} /></div>
         <ProjectBriefFields
-          form={form}
+          form={{ ...form, contentSource, outputSize }}
           disabled={disabled}
           onChange={update}
+          contentSourceChoices={contentSourceChoices}
+          outputSizeChoices={outputSizeChoices}
           showOutputSize={!isGraphic && !isLogo}
         />
 
@@ -364,6 +389,7 @@ export default function NewProjectPanel({
 
       {needsImageBackend && !graphicReady && <p role="status" className="mt-4 text-sm text-muted-foreground">{t(isLogo ? "home.creation.logoRequired" : "home.creation.graphicRequired")}</p>}
       <Button
+        data-qa="creation-submit"
         className="mt-6 h-11 w-full gap-2 rounded-xl"
         type="submit"
         variant="cta"

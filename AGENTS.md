@@ -20,7 +20,7 @@ BurnGuard/
 │   └── desktop-mac/       # single Swift main.swift, same stdout readiness protocol
 ├── scripts/               # 8 root Bun scripts: dev launcher, binary/native builds, test preload
 │   └── qa/                # 65-file evidence harness: receipts, static gate, Playwright fixtures
-├── doc/                   # 29 English-only design docs; dated records supersede numbered specs
+├── doc/                   # 13 tracked English-only design docs; numbered records 04-23 are local-only (doc/README.md)
 ├── docs/                  # separate 2-file tree: dated QA + security reports
 ├── samples/               # seeded corpus, 4 brands x 3 formats, staged by package-runtime.ts
 ├── design system themes/  # 10 bundled themes -> systems/builtin-theme-<slug>  (path has spaces)
@@ -38,9 +38,9 @@ BurnGuard/
 | Schema, migration, recovery state | `packages/backend/src/db/AGENTS.md` | 39 modules + 14 forward migrations (`0001`-`0014`) + 4 templates |
 | HTTP or SSE behavior | `packages/backend/src/routes/AGENTS.md` | 17 Hono modules + 3 `*-input.ts` parsers + thumbnail handler |
 | Capability, path containment, body caps | `packages/backend/src/security/AGENTS.md` | Request authority, raw-file headers, agent-control detection |
-| Prompt or context assembly | `packages/backend/src/harness/AGENTS.md` | Bounded summaries, 5 shipped skills, `assets/lucide/` |
+| Prompt or context assembly | `packages/backend/src/harness/AGENTS.md` | Bounded summaries, 6 shipped skills, `assets/lucide/` |
 | Claude Code/Codex execution | `packages/backend/src/adapters/AGENTS.md` | Subprocess + stream normalization; argv in `codex/index.ts` |
-| Backend test isolation, smoke gates | `packages/backend/tests/AGENTS.md` | 161 Bun suites, ~22.1k LOC, platform skips |
+| Backend test isolation, smoke gates | `packages/backend/tests/AGENTS.md` | 229 Bun suites, ~34.3k LOC, platform skips |
 | Frontend package, providers, dev proxy | `packages/frontend/AGENTS.md` | Provider order, counts, i18n wiring |
 | Feature UI or canvas bridge | `packages/frontend/src/components/AGENTS.md` | 107 files / 14 feature folders; canvas sandbox |
 | Route compositions | `packages/frontend/src/views/AGENTS.md` | 5 views, 3,435 LOC; `ProjectView` invariants |

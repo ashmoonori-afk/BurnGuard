@@ -62,6 +62,11 @@ export function directionProgress(state: DesignDirectionState): DirectionProgres
   };
 }
 
+/** Regeneration replaces the previews a selection was made against, so a selected state asks once before generating. */
+export function regenerateActivation(selectedId: string | null, confirming: boolean): "confirm" | "generate" {
+  return selectedId !== null && !confirming ? "confirm" : "generate";
+}
+
 export function directionActions(state: DesignDirectionState | null): DirectionActions {
   if (state === null) {
     return { canGenerate: true, canCancel: false, canRetry: false, canSelect: false, canUndo: false };

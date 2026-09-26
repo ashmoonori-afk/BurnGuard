@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, authorizedFetch } from "./client";
 
 const SAFE_LIMIT_BYTES = 2_000_000;
 
@@ -13,9 +13,7 @@ export async function getProjectDraws(
   projectId: string,
   relPath: string,
 ): Promise<string> {
-  const res = await fetch(`/api/projects/${projectId}/draws/${encode(relPath)}`, {
-    credentials: "same-origin",
-  });
+  const res = await authorizedFetch(`/api/projects/${projectId}/draws/${encode(relPath)}`);
   if (!res.ok) {
     throw new Error(`draws_fetch_failed: ${res.status}`);
   }

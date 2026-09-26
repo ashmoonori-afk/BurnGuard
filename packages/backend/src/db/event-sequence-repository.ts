@@ -180,7 +180,8 @@ function turnErrorCode(item: Readonly<Record<string, unknown>>, id: string): Tur
     case "logo_requires_authenticated_codex": case "logo_deliverables_missing":
     case "logo_image_provenance_missing": case "design_review_failed":
     case "commandcode_unavailable": case "unsupported_generation_model_effort": case "agent_control_files_present":
-    case "backend_unavailable": case "path_unavailable": case "immutable_reference_mutated": case "immutable_reference_path_unavailable": case "immutable_reference_escaped": case "private_input_unavailable": case "publication_failed": case "operation_conflict": case "operation_cancelled": case "turn_failed": return value;
+    case "backend_unavailable": case "path_unavailable": case "immutable_reference_mutated": case "immutable_reference_path_unavailable": case "immutable_reference_escaped": case "private_input_unavailable": case "publication_failed": case "operation_conflict": case "operation_cancelled": case "turn_failed":
+    case "deck_source_page_limit": return value;
     default: throw new PipelineRepositoryError("corrupt_json", id);
   }
 }

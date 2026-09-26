@@ -275,9 +275,9 @@ export const chatMessages = defineMessages({
     "zh-CN": "无法验证标志图像的生成来源，因此未应用结果。请使用图像生成工具重新创建方案。",
   },
   "chat.error.designReviewFailed": {
-    ko: "디자인 검사·수정을 완료하지 못해 반영하지 않았어요. 기존 결과는 유지돼요. 검사를 다시 요청해 주세요.",
-    en: "Design checks or repairs could not be completed, so nothing was applied. The previous result is preserved. Request the checks again.",
-    "zh-CN": "设计检查或修复未能完成，因此未应用结果。原有结果已保留。请重新请求检查。",
+    ko: "디자인 검사·수정을 완료하지 못해 반영하지 않았어요. 기존 결과는 유지돼요.",
+    en: "Design checks or repairs could not be completed, so nothing was applied. The previous result is preserved.",
+    "zh-CN": "设计检查或修复未能完成，因此未应用结果。原有结果已保留。",
   },
   "chat.error.commandCodeUnavailable": {
     ko: "설정에서 CommandCode API 키를 저장하고 Claude Code를 선택해 주세요.",
@@ -356,5 +356,25 @@ export const chatMessages = defineMessages({
     ko: "만들고 싶은 결과나 바꿀 부분을 알려 주세요.\n예: 제목을 짧게 바꾸고 여백을 넓혀 주세요.",
     en: "Describe what you want to create or change.\nExample: Shorten the title and increase the spacing.",
     "zh-CN": "请描述你想创建的结果或要修改的部分。\n例如：缩短标题并增加留白。",
+  },
+  "chat.composer.placeholderDisconnected": {
+    ko: "실시간 연결이 끊겨 있어요. 다시 연결되면 요청을 보낼 수 있어요.",
+    en: "The live connection is down. You can send a request once it reconnects.",
+    "zh-CN": "实时连接已断开。重新连接后即可发送请求。",
+  },
+  "chat.composer.placeholderDirections": {
+    ko: "디자인 방향을 만들고 있어요. 끝나면 요청을 보낼 수 있어요.",
+    en: "Design directions are being generated. You can send a request when they are ready.",
+    "zh-CN": "正在生成设计方向。完成后即可发送请求。",
+  },
+  "chat.turn.unchanged": {
+    ko: "답변만 남김 · 바뀐 파일이 없어요",
+    en: "Answered · no files changed",
+    "zh-CN": "已回复 · 没有文件更改",
+  },
+  "chat.error.deckSourcePageLimit": {
+    ko: "내용 자료의 페이지가 슬라이드 한도(80장)를 넘어 1:1로 옮길 수 없어요. 프로젝트 설정에서 페이지 수 유지를 끄거나 자료를 나눠 첨부해 주세요.",
+    en: "The content source has more pages than the 80-slide limit, so it cannot be mapped one-to-one. Turn off page-count preservation in the project settings or split the source.",
+    "zh-CN": "内容资料的页数超过 80 页的幻灯片上限，无法一一对应。请在项目设置中关闭保留页数，或拆分资料后添加。",
   },
 });

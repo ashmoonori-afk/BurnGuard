@@ -33,7 +33,6 @@ export const systemMessages = defineMessages({
   "system.status.review": { ko: "검토", en: "Review", "zh-CN": "审核" },
   "system.status.published": { ko: "게시됨", en: "Published", "zh-CN": "已发布" },
   "system.template": { ko: "템플릿", en: "Template", "zh-CN": "模板" },
-  "system.publish": { ko: "게시", en: "Publish", "zh-CN": "发布" },
   "system.notFound": { ko: "디자인 시스템을 찾을 수 없어요", en: "Design system not found", "zh-CN": "找不到设计系统" },
   "system.goHome": { ko: "홈으로 이동", en: "Go home", "zh-CN": "返回首页" },
   "system.loadFailed": { ko: "디자인 시스템을 불러오지 못했어요", en: "Could not load the design system", "zh-CN": "无法加载设计系统" },
@@ -147,4 +146,5 @@ export const systemMessages = defineMessages({
   "system.preview.failed": { ko: "미리보기를 불러오지 못했어요.", en: "Could not load the preview.", "zh-CN": "无法加载预览。" },
   "system.preview.loading": { ko: "미리보기를 불러오는 중이에요.", en: "Loading preview.", "zh-CN": "正在加载预览。" },
   "system.preview.title": { ko: "디자인 시스템 미리보기", en: "Design system preview", "zh-CN": "设计系统预览" },
+  "system.tokenUnresolved": { ko: "{value} 값을 이 시스템의 토큰으로 해석하지 못했어요", en: "{value} could not be resolved from this system's tokens", "zh-CN": "无法从此系统的令牌解析 {value}" },
 });

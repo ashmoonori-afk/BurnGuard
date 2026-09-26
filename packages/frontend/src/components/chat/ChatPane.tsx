@@ -6,11 +6,13 @@ import MessageStream from "./MessageStream";
 import Composer from "./Composer";
 import CommentPanel from "@/components/modes/CommentPanel";
 import type { ReadyAttachmentSource } from "./attachment-intake";
+import type { ComposerDisabledReason } from "./useComposerPlaceholder";
 import { switchSessionBackend } from "@/api/session";
 import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
 import { useT } from "@/i18n/t";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { backendLabel } from "@/lib/backend-display";
 
 type Tab = "chat" | "comments";
 
@@ -19,8 +21,8 @@ export default function ChatPane({
   events,
   session,
   composerDisabled,
-  canInterrupt,
-  turnElapsedMs,
+  composerDisabledReason,
+  turnStartedAt,
   interruptPending,
   onInterrupt,
   onSend,
@@ -45,8 +47,8 @@ export default function ChatPane({
   events: NormalizedEvent[];
   session: SessionInfo;
   composerDisabled?: boolean;
-  canInterrupt?: boolean;
-  turnElapsedMs?: number | null;
+  composerDisabledReason?: ComposerDisabledReason;
+  turnStartedAt?: number | null;
   interruptPending?: boolean;
   onInterrupt?: () => void;
   onSend: (
@@ -143,8 +145,8 @@ export default function ChatPane({
             backendId={session.backend_id}
             onSend={onSend}
             disabled={composerDisabled}
-            canInterrupt={canInterrupt}
-            turnElapsedMs={turnElapsedMs}
+            disabledReason={composerDisabledReason}
+            turnStartedAt={turnStartedAt}
             interruptPending={interruptPending}
             onInterrupt={onInterrupt}
             initialText={composerInitialText}
@@ -169,7 +171,14 @@ export default function ChatPane({
   );
 }
 
-function BackendToggle({
+/** The two backends with shipped runners can be switched to in chat; a session on any other backend still shows it pressed. */
+const SWITCHABLE_BACKENDS: readonly BackendId[] = ["claude-code", "codex"];
+
+export function backendToggleOptions(current: BackendId): readonly BackendId[] {
+  return [...new Set([...SWITCHABLE_BACKENDS, current])];
+}
+
+export function BackendToggle({
   current,
   disabled,
   onSwitch,
@@ -179,7 +188,7 @@ function BackendToggle({
   onSwitch: (next: BackendId) => void;
 }) {
   const t = useT();
-  const options: BackendId[] = ["claude-code", "codex"];
+  const options = backendToggleOptions(current);
   return (
     <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-0.5" role="group" aria-label={t("chat.backend.selection")}>
       {options.map((opt) => (
@@ -212,10 +221,6 @@ function BackendToggle({
       ))}
     </div>
   );
-}
-
-function backendLabel(id: BackendId): string {
-  return id === "claude-code" ? "Claude Code" : "Codex";
 }
 
 function ChatTab({

@@ -21,6 +21,7 @@ import {
 import CardGrid from "@/components/home/CardGrid";
 import {
   filterHomeCards,
+  projectSearchTab,
   projectToCard,
   systemToCard,
   type CardViewModel,
@@ -34,6 +35,8 @@ import DeleteDesignSystemDialog from "@/components/home/DeleteDesignSystemDialog
 import DeleteProjectDialog from "@/components/home/DeleteProjectDialog";
 import CliMissingModal from "@/components/errors/CliMissingModal";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { graphicGateCopy, hasGraphicBackend } from "@/lib/backend-display";
+import { creationEscapeAction } from "@/lib/creation-dialog";
 import { requiresImageBackend } from "@/lib/project-creation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,7 +78,11 @@ export default function HomeView() {
   const requestedType = searchParams.get("create");
   const creationType: ProjectType | null = requestedType === "other" || PROJECT_TYPES.some((type) => type.id === requestedType) ? requestedType as ProjectType : null;
   const createTriggerRef = useRef<HTMLButtonElement>(null);
+  // Whichever control opened the creation dialog gets focus back; the header button is only the fallback.
+  const openerRef = useRef<HTMLElement | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [pickingSystem, setPickingSystem] = useState(false);
+  const pickerBackRef = useRef<(() => void) | null>(null);
   const [projectImportOpen, setProjectImportOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState("");
   const [systemQuery, setSystemQuery] = useState("");
@@ -121,7 +128,7 @@ export default function HomeView() {
   const mineQuery = useQuery({
     queryKey: ["projects", "mine"],
     queryFn: () => listProjects("mine"),
-    enabled: activeTab === "mine",
+    enabled: activeTab === "mine" || projectSearchTab(activeTab, projectQuery) === "mine",
   });
   const examplesQuery = useQuery({
     queryKey: ["projects", "examples"],
@@ -144,7 +151,8 @@ export default function HomeView() {
     queryFn: detectBackends,
   });
 
-  const graphicReady = detectionQuery.data?.backends.some((backend) => backend.id === "codex" && backend.found && backend.authenticated === true) ?? false;
+  const graphicReady = hasGraphicBackend(detectionQuery.data?.backends ?? []);
+  const graphicGate = graphicGateCopy(detectionQuery.isError);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteProject(id),
@@ -248,13 +256,8 @@ export default function HomeView() {
       navigate(`/systems/${created.system.id}`);
     },
     onError: (err) => {
-      const message = apiErrorCopy(err);
+      // The import panel renders this inline; a toast would report it twice.
       setSystemImportError(err);
-      pushToast({
-        title: t("home.toast.systemImportError"),
-        body: message,
-        tone: "error",
-      });
     },
   });
 
@@ -264,6 +267,10 @@ export default function HomeView() {
   const filteredRecentCards = filterHomeCards(recentCards, projectQuery);
   const filteredMineCards = filterHomeCards(mineCards, projectQuery);
   const filteredExampleCards = filterHomeCards(exampleCards, projectQuery);
+  // A search on the recent glance reads the full list; the glance alone would report older projects as missing.
+  const recentSource = projectSearchTab("recent", projectQuery) === "mine"
+    ? { query: mineQuery, cards: mineCards, filtered: filteredMineCards }
+    : { query: recentQuery, cards: recentCards, filtered: filteredRecentCards };
   const systemCards = filterHomeCards(
     (systemsQuery.data ?? []).filter((system) => systemStatus === "all" || system.status === systemStatus).map((system, index) => systemToCard(system, index)),
     systemQuery,
@@ -289,6 +296,7 @@ export default function HomeView() {
   };
 
   const startProject = (type: ProjectType = "slide_deck") => {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const next = new URLSearchParams(searchParams);
     next.set("create", type);
     setSearchParams(next);
@@ -297,7 +305,8 @@ export default function HomeView() {
     if (creatingProject) return;
     const next = new URLSearchParams(searchParams);
     next.delete("create");
-    setSearchParams(next);
+    // Replace, so Back from the closed dialog does not land on the entry that reopens it.
+    setSearchParams(next, { replace: true });
   };
   const changeView = (view: string) => {
     const next = new URLSearchParams(searchParams);
@@ -319,12 +328,18 @@ export default function HomeView() {
           <div className="flex gap-2"><Button variant="outline" className="h-11" onClick={() => setProjectImportOpen(true)}>{t("home.importProject")}</Button><Button ref={createTriggerRef} variant="cta" className="h-11 gap-2 rounded-xl px-4" onClick={() => startProject()} aria-haspopup="dialog"><Plus className="h-4 w-4" aria-hidden="true" />{t("home.newProject")}</Button></div>
         </div>
         {detectionQuery.data?.backends.every((backend) => !backend.found) ? <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-sm text-muted-foreground">{t("home.aiNotice")}</p><Button variant="outline" size="sm" onClick={() => setCliMissingOpen(true)}>{t("home.aiGuide")}</Button></div> : null}
+        {detectionQuery.isError ? <div role="alert" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3"><p className="text-sm text-foreground">{t("home.detectionFailed")}</p><Button variant="outline" size="sm" disabled={detectionQuery.isFetching} onClick={() => void detectionQuery.refetch()}>{t("home.retry")}</Button></div> : null}
         {activeTab === "recent" || activeTab === "mine" ? <section aria-label={t("home.quickStart")} className="mb-10 grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 xl:grid-cols-4">
-          {PROJECT_TYPES.map(({ id, label, description, icon: Icon, color }) => <button key={id} type="button" onClick={() => startProject(id)} disabled={requiresImageBackend(id) && !graphicReady} title={requiresImageBackend(id) && !graphicReady ? t("home.codexRequired") : undefined} aria-haspopup="dialog" className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:items-start xl:gap-3">
-            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${color}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{t(label)}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{t(description)}</span></span>
-            <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" aria-hidden="true" />
-          </button>)}
+          {PROJECT_TYPES.map(({ id, label, description, icon: Icon, color }) => {
+            // A gated tile stays in the tab order and names its reason instead of vanishing from assistive technology.
+            const gated = requiresImageBackend(id) && !graphicReady;
+            return <button key={id} type="button" onClick={() => { if (!gated) startProject(id); }} aria-disabled={gated || undefined} aria-describedby={gated ? "home-graphic-gate" : undefined} title={gated ? t(graphicGate.title) : undefined} aria-haspopup="dialog" className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:border-border aria-disabled:hover:bg-card xl:items-start xl:gap-3">
+              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${color}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{t(label)}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{t(description)}</span></span>
+              <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" aria-hidden="true" />
+            </button>;
+          })}
+          {!graphicReady ? <p id="home-graphic-gate" className="col-span-full text-xs text-muted-foreground">{t(graphicGate.hint)}</p> : null}
         </section> : null}
         <Tabs
           value={activeTab}
@@ -370,14 +385,14 @@ export default function HomeView() {
           <div>
             <TabsContent value="recent">
               <ProjectCardSection
-                cards={filteredRecentCards}
-                sourceCount={recentCards.length}
+                cards={recentSource.filtered}
+                sourceCount={recentSource.cards.length}
                 query={projectQuery}
-                isLoading={recentQuery.isPending}
-                error={recentQuery.error}
+                isLoading={recentSource.query.isPending}
+                error={recentSource.query.error}
                 emptyText={t("home.empty.recent")}
                 emptyHint={t("home.empty.recentHint")}
-                onRetry={() => void recentQuery.refetch()}
+                onRetry={() => void recentSource.query.refetch()}
                 onClearQuery={clearProjectQuery}
                 onStartProject={() => startProject()}
                 onDelete={onProjectDelete}
@@ -427,6 +442,7 @@ export default function HomeView() {
                 onRetry={() => void examplesQuery.refetch()}
                 onClearQuery={clearProjectQuery}
                 onStartProject={() => startProject()}
+                emptyAction={{ label: t(restoreSamplesMutation.isPending ? "home.restoring" : "home.restoreExamples"), onSelect: () => restoreSamplesMutation.mutate(), pending: restoreSamplesMutation.isPending }}
                 onDelete={onProjectDelete}
               />
             </TabsContent>
@@ -473,7 +489,7 @@ export default function HomeView() {
       </div>
 
       <Dialog open={creationType !== null} onOpenChange={(open) => { if (!open) closeCreation(); }}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-2xl gap-0 p-0" hideClose={creatingProject} onEscapeKeyDown={(event) => { if (creatingProject) event.preventDefault(); }} onInteractOutside={(event) => { if (creatingProject) event.preventDefault(); }} onOpenAutoFocus={(event) => { event.preventDefault(); document.getElementById("project-name")?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); createTriggerRef.current?.focus(); }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-2xl gap-0 p-0" hideClose={creatingProject} onEscapeKeyDown={(event) => { const action = creationEscapeAction({ creating: creatingProject, picking: pickingSystem }); if (action !== "dismiss") event.preventDefault(); if (action === "back") pickerBackRef.current?.(); }} onInteractOutside={(event) => { if (creatingProject) event.preventDefault(); }} onOpenAutoFocus={(event) => { event.preventDefault(); document.getElementById("project-name")?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); (openerRef.current?.isConnected ? openerRef.current : createTriggerRef.current)?.focus(); }}>
           <DialogHeader className="border-b border-border px-6 pb-5 pt-6">
             <DialogTitle className="text-xl">{t("home.createTitle")}</DialogTitle>
             <DialogDescription className="pt-1 leading-6">{t("home.createDescription")}</DialogDescription>
@@ -485,7 +501,7 @@ export default function HomeView() {
             </div>
             {!graphicReady && <p className="mt-2 text-xs text-muted-foreground">{t("home.graphicAvailability")}</p>}
           </div>
-          {settingsQuery.isPending ? <p role="status" className="p-6 text-sm text-muted-foreground">{t("home.settingsLoading")}</p> : settingsQuery.isError ? <div role="alert" className="space-y-3 p-6"><p className="text-sm text-destructive">{t("home.settingsError")}</p><Button variant="outline" onClick={() => void settingsQuery.refetch()}>{t("home.settingsRetry")}</Button></div> : creationType !== null ? <NewProjectPanel generationDefaults={settingsQuery.data.generation_defaults} graphicReady={graphicReady} type={creationType} designSystems={systemsQuery.data ?? []} defaultBackend={settingsQuery.data.default_backend} systemsLoading={systemsQuery.isFetching} systemsError={systemsQuery.error} onRetrySystems={() => void systemsQuery.refetch()} onPendingChange={setCreatingProject} onCreated={(project) => navigate(`/projects/${project.id}`)} /> : null}
+          {settingsQuery.isPending ? <p role="status" className="p-6 text-sm text-muted-foreground">{t("home.settingsLoading")}</p> : settingsQuery.isError ? <div role="alert" className="space-y-3 p-6"><p className="text-sm text-destructive">{t("home.settingsError")}</p><Button variant="outline" onClick={() => void settingsQuery.refetch()}>{t("home.settingsRetry")}</Button></div> : creationType !== null ? <NewProjectPanel generationDefaults={settingsQuery.data.generation_defaults} graphicReady={graphicReady} type={creationType} designSystems={systemsQuery.data ?? []} defaultBackend={settingsQuery.data.default_backend} systemsLoading={systemsQuery.isFetching} systemsError={systemsQuery.error} onRetrySystems={() => void systemsQuery.refetch()} onPendingChange={setCreatingProject} onChoosingChange={setPickingSystem} backRef={pickerBackRef} onCreated={(project) => navigate(`/projects/${project.id}`)} /> : null}
         </DialogContent>
       </Dialog>
 
@@ -514,6 +530,7 @@ export default function HomeView() {
           if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
         }}
         isPending={deleteMutation.isPending}
+        onCloseFallbackFocus={() => searchInputRef.current?.focus()}
       />
 
       <DeleteDesignSystemDialog

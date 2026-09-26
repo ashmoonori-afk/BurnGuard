@@ -69,16 +69,25 @@ import {
   submitToolDecision,
 } from "@/api/session";
 import ChatPane from "@/components/chat/ChatPane";
+import type { ComposerDisabledReason } from "@/components/chat/useComposerPlaceholder";
 import { visualSourceSendErrorCopy } from "@/components/chat/attachment-intake";
 import { DirectionsView } from "@/components/directions/DirectionsView";
 import { DirectionStatusBar } from "@/components/directions/DirectionStatusBar";
 import PermissionDialog from "@/components/chat/PermissionDialog";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { sendFailureTitleKey } from "@/lib/composer-send";
 import Canvas from "@/components/canvas/Canvas";
 import ColorPalette from "@/components/canvas/ColorPalette";
 import ArtifactHistory from "@/components/canvas/ArtifactHistory";
 import { qualityFixRequest } from "@/lib/quality-fix-request";
+import { createPagePrompt } from "@/lib/create-page-prompt";
+import { nextActiveTabAfterClose } from "@/lib/artifact-tabs";
+import { artifactOperationRefresh } from "@/lib/artifact-operation-refresh";
+import { panelGenerationFor } from "@/lib/panel-generation";
+import { resolveUndoAction, type TweaksUndoFrame } from "@/lib/tweaks-history";
+import { canvasWriteInvalidations } from "@/lib/canvas-write-queries";
+import { deriveAutoFixRunning } from "@/lib/auto-fix-pending";
 import {
   deserializeDraws,
   serializeDraws,
@@ -116,13 +125,13 @@ import LogoCandidatePanel from "@/components/logo/LogoCandidatePanel";
 import {
   designAuditErrorCode,
   designAuditViewState,
-  groupDesignAuditResult,
+  exportQualityGate,
   isDesignAuditCurrent,
   preferDesignAuditResult,
 } from "@/lib/design-audit-state";
-import { isSafeCanvasPagePath, resolveCanvasNavigation, resolveCanvasPageTarget, resolveCanvasSource } from "@/lib/canvas-source";
+import { isSafeCanvasPagePath, resolveCanvasNavigationAfterRefetch, resolveCanvasPageTarget, resolveCanvasSource } from "@/lib/canvas-source";
 import { t as globalT, useT, type MessageKey } from "@/i18n/t";
-import { INTERRUPT_GRACE_MS } from "@/lib/session-event-state";
+import { latestArtifactPreview } from "@/lib/live-preview";
 
 export default function ProjectView() {
   const t = useT();
@@ -167,6 +176,7 @@ export default function ProjectView() {
   const [canvasNavigation, setCanvasNavigation] = useState<{ projectId: string; relPath: string; url: string } | null>(null);
   const [mode, setMode] = useState<CanvasMode | null>(null);
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
+  const [newCommentId, setNewCommentId] = useState<string | null>(null);
   const [activeSlideIdx, setActiveSlideIdx] = useState<number | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [tweaksTarget, setTweaksTarget] = useState<TweaksTarget | null>(null);
@@ -183,6 +193,7 @@ export default function ProjectView() {
   const [drawColor, setDrawColor] = useState("#EF4444");
   const [drawStrokeWidth, setDrawStrokeWidth] = useState(4);
   const [drawShapes, setDrawShapes] = useState<DrawShape[]>([]);
+  const [drawCanRedo, setDrawCanRedo] = useState(false);
   const [drawResetKey, setDrawResetKey] = useState("");
   const [drawLoading, setDrawLoading] = useState(false);
   const [drawError, setDrawError] = useState<MessageKey | null>(null);
@@ -194,6 +205,8 @@ export default function ProjectView() {
   const [sendPending, setSendPending] = useState(false);
   const [autoFixPending, setAutoFixPending] = useState(false);
   const autoFixRef = useRef(false);
+  /** Set once the auto-fix turn was seen running, so a composer re-enable can release the lock without racing the send. */
+  const autoFixTurnSeenRef = useRef(false);
   const [chatFocusKey, setChatFocusKey] = useState(0);
   useEffect(() => { if (chatFocusKey > 0) setChatCollapsed(false); }, [chatFocusKey]);
   const [directionActionError, setDirectionActionError] = useState<Error | null>(null);
@@ -389,6 +402,7 @@ export default function ProjectView() {
         (prev) => (prev ? [...prev, created] : [created]),
       );
       setFocusedCommentId(created.id);
+      setNewCommentId(created.id);
     },
     onError: (error) => handleWriteError("workspace.project.createCommentFailed", error),
   });
@@ -459,11 +473,9 @@ export default function ProjectView() {
           ? mergeTweaksTargetInline(current, variables.patch.styles)
           : current,
       );
-      void queryClient.invalidateQueries({ queryKey: ["project", id, "files"] });
-      void queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] });
-      void queryClient.invalidateQueries({
-        queryKey: ["project", id, "fs", variables.relPath, "undo-info"],
-      });
+      for (const entry of canvasWriteInvalidations(id!, variables.relPath)) {
+        void queryClient.invalidateQueries({ queryKey: [...entry.queryKey], exact: entry.exact });
+      }
       void invalidateDesignAudit();
       setRefreshTick((value) => value + 1);
     },
@@ -489,11 +501,7 @@ export default function ProjectView() {
           : current,
       );
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["project", id, "files"] }),
-        queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] }),
-        queryClient.invalidateQueries({
-          queryKey: ["project", id, "fs", variables.relPath, "undo-info"],
-        }),
+        ...canvasWriteInvalidations(id!, variables.relPath).map((entry) => queryClient.invalidateQueries({ queryKey: [...entry.queryKey], exact: entry.exact })),
         invalidateDesignAudit(),
       ]);
       setRefreshTick((value) => value + 1);
@@ -521,11 +529,13 @@ export default function ProjectView() {
   useEffect(() => {
     clearSendPending(sendPendingTimeoutRef, setSendPending);
     autoFixRef.current = false;
+    autoFixTurnSeenRef.current = false;
     setAutoFixPending(false);
     setActiveTabId("design-system");
     setOpenFileTabs([]);
     setMode(null);
     setFocusedCommentId(null);
+    setNewCommentId(null);
     setActiveSlideIdx(null);
     setEditTarget(null);
     setTweaksTarget(null);
@@ -670,8 +680,10 @@ export default function ProjectView() {
   }, [mode, drawBlocked]);
 
   const handleLiveEvent = useCallback((event: NormalizedEvent) => {
+    if (autoFixRef.current && event.type === "status.running") autoFixTurnSeenRef.current = true;
     if (autoFixRef.current && (event.type === "status.idle" || event.type === "status.error")) {
       autoFixRef.current = false;
+      autoFixTurnSeenRef.current = false;
       setAutoFixPending(false);
       if (event.type === "status.idle" && event.stopReason !== "error" && event.stopReason !== "interrupted") {
         void retryProjectDesignAudit(id ?? "").then(mergeDesignAuditCache).catch((error: unknown) => setAuditActionError(error instanceof Error ? error : new Error(String(error))));
@@ -709,31 +721,41 @@ export default function ProjectView() {
       });
     }
 
-    // Final publication refreshes authoritative files after the draft preview.
-    if (event.type === "artifact.operation" && event.outcome === "committed") {
-      turnTouchedFilesRef.current = true;
-      if (id) {
-        openChangedFilesAsTabs(
-          event.changedPaths,
-          openFileTabsRef.current.length > 0,
-          setOpenFileTabs,
-          setActiveTabId,
-        );
-        if (event.changedPaths.includes(activeTabIdRef.current)) {
-          setRefreshTick((value) => value + 1);
+    if (event.type === "artifact.operation") {
+      const refresh = artifactOperationRefresh(event.outcome);
+      // Final publication refreshes authoritative files after the draft preview.
+      if (refresh.openChangedTabs) {
+        turnTouchedFilesRef.current = true;
+        if (id) {
+          openChangedFilesAsTabs(
+            event.changedPaths,
+            openFileTabsRef.current.length > 0,
+            setOpenFileTabs,
+            setActiveTabId,
+          );
+          if (event.changedPaths.includes(activeTabIdRef.current)) {
+            setRefreshTick((value) => value + 1);
+          }
+          void queryClient.invalidateQueries({
+            queryKey: ["project", id, "files"],
+          });
+          // The explore turn writes the candidate manifest as part of the same
+          // publication, so the picker follows the turn instead of polling for it.
+          void queryClient.invalidateQueries({
+            queryKey: ["projects", id, "logo-manifest"],
+          });
         }
-        void queryClient.invalidateQueries({
-          queryKey: ["project", id, "files"],
-        });
-        // The explore turn writes the candidate manifest as part of the same
-        // publication, so the picker follows the turn instead of polling for it.
-        void queryClient.invalidateQueries({
-          queryKey: ["projects", id, "logo-manifest"],
-        });
+      } else if (refresh.invalidate && id) {
+        // The coordinator replaced the tree without a turn publishing it (an external
+        // conflict, a startup recovery): the canvas must not keep showing the old one.
+        void queryClient.invalidateQueries({ queryKey: ["project", id, "files"] });
+        void queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] });
+        if (refresh.refreshCanvas) setRefreshTick((value) => value + 1);
+        if (refresh.notice !== null) pushToast({ title: globalT(refresh.notice), tone: "info" });
       }
     }
 
-  }, [id, invalidateDesignAudit, mergeDirectionCache, mergeDesignAuditCache, queryClient]);
+  }, [id, invalidateDesignAudit, mergeDirectionCache, mergeDesignAuditCache, pushToast, queryClient]);
   const stream = useSessionEvents(sessionQuery.data?.id, handleLiveEvent);
   const events = useMemo(() => stream.state?.envelopes.map((item) => item.event) ?? [], [stream.state?.envelopes]);
   useEffect(() => {
@@ -769,8 +791,8 @@ export default function ProjectView() {
   const files: FileInfo[] = filesQuery.data ?? [];
   const artifacts = artifactsQuery.data ?? null;
   const session = stream.state?.session ?? null;
-  const latestPreview = [...events].reverse().find((event) => event.type === "artifact.preview");
-  const livePreview = session?.status === "running" && latestPreview?.type === "artifact.preview" && latestPreview.active && latestPreview.projectId === id ? latestPreview : null;
+  const latestPreview = useMemo(() => latestArtifactPreview(events), [events]);
+  const livePreview = session?.status === "running" && latestPreview !== undefined && latestPreview.active && latestPreview.projectId === id ? latestPreview : null;
   useEffect(() => {
     if (!livePreview) return;
     openFileAsTab(livePreview.path, setOpenFileTabs, setActiveTabId);
@@ -794,37 +816,38 @@ export default function ProjectView() {
   const directionLoading = directionState?.status === "loading";
   const chatComposerDisabled = sendPending || session?.status === "running";
   const composerDisabled = chatComposerDisabled || directionLoading || stream.error;
+  const composerDisabledReason: ComposerDisabledReason = chatComposerDisabled ? "busy" : directionLoading ? "directions" : stream.error ? "disconnected" : null;
 
   // Turn clock. When the composer flips from idle to busy we stamp a
-  // start time; a 1s ticker then drives re-renders so `canInterrupt`
-  // flips on once the interrupt grace period has elapsed.
+  // start time; the InterruptButton owns the 1s ticker that reveals Stop
+  // once the interrupt grace period has elapsed.
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
-  const [nowTs, setNowTs] = useState(() => Date.now());
+  // The interrupt POST answers as soon as the abort is delivered, while the turn still finishes its
+  // stage; Stop stays disabled from the request until the session is idle again.
+  const [stopRequested, setStopRequested] = useState(false);
   useEffect(() => {
     if (chatComposerDisabled) {
       setTurnStartedAt((prev) => prev ?? Date.now());
     } else {
       setTurnStartedAt(null);
+      setStopRequested(false);
+      // A snapshot-derived idle (reconnect, restart) never replays status.idle, so release the auto-fix lock here.
+      if (autoFixTurnSeenRef.current) {
+        autoFixRef.current = false;
+        autoFixTurnSeenRef.current = false;
+        setAutoFixPending(false);
+      }
     }
   }, [chatComposerDisabled]);
-  useEffect(() => {
-    if (!chatComposerDisabled) return;
-    const handle = window.setInterval(() => setNowTs(Date.now()), 1000);
-    return () => window.clearInterval(handle);
-  }, [chatComposerDisabled]);
-  // 통제권 우선: 실행 중이면 5초 유예 뒤 항상 중단 가능. 턴 시작 시점에
-  // 체크포인트를 뜨고 되돌리기가 있으므로 중단은 복구 가능한 동작이다.
-  const turnElapsedMs =
-    turnStartedAt == null ? null : Math.max(0, nowTs - turnStartedAt);
-  const canInterrupt =
-    chatComposerDisabled && turnElapsedMs != null && turnElapsedMs >= INTERRUPT_GRACE_MS;
 
   const interruptMutation = useMutation({
     mutationFn: () => {
       if (!session) throw new Error("no_session");
       return interruptSession(session.id);
     },
+    onMutate: () => setStopRequested(true),
     onError: (err) => {
+      setStopRequested(false);
       pushToast({
         title: t("workspace.project.interruptFailed"),
         body: apiErrorCopy(err),
@@ -853,8 +876,7 @@ export default function ProjectView() {
     setMobilePane("workspace");
     setMode("quality");
   }, [activeTabId, artifactsQuery.data?.entrypoint_url, openFileTabs, projectQuery.data, pushToast, t]);
-  const qualityGate = auditReport !== null && isDesignAuditCurrent(auditReport, artifactsQuery.data?.current_digest ?? "") && auditReport.overall_status === "must_fix"
-    ? { mustFixCount: groupDesignAuditResult(auditReport).mustFix.length } : null;
+  const qualityGate = exportQualityGate(auditReport, artifactsQuery.data?.current_digest ?? "");
 
   const handleQualityRevealResult = useCallback((nodeBgId: string, found: boolean) => {
     if (auditFocus?.nodeBgId === nodeBgId) setAuditRevealResult(found ? "found" : "not_found");
@@ -888,9 +910,9 @@ export default function ProjectView() {
     tabs,
   ]);
 
-  const handleCanvasNavigate = useCallback((href: string) => {
+  const handleCanvasNavigate = useCallback(async (href: string) => {
     if (!canvasSrc || !id) return;
-    const target = resolveCanvasNavigation(href, new URL(canvasSrc, window.location.href).href, files.map((file) => file.rel_path));
+    const target = await resolveCanvasNavigationAfterRefetch(href, new URL(canvasSrc, window.location.href).href, files.map((file) => file.rel_path), async () => ((await filesQuery.refetch()).data ?? []).map((file) => file.rel_path));
     if (!target) {
       const missing = resolveCanvasPageTarget(href, new URL(canvasSrc, window.location.href).href);
       const active = tabs.find((tab) => tab.id === activeTabId && tab.kind === "file")?.relPath;
@@ -900,7 +922,7 @@ export default function ProjectView() {
         body: t("workspace.project.pageUnavailableHelp"),
         tone: "warn",
         ...(canCreate ? { action: { label: t("workspace.project.createPage"), onSelect: () => {
-          setComposerPrefill(`Create \`${missing.relPath}\` linked from \`${active}\`, sharing the same header/nav/footer`);
+          setComposerPrefill(createPagePrompt(missing.relPath, active));
           setChatFocusKey((value) => value + 1);
           setMobilePane("chat");
         } } } : {}),
@@ -909,7 +931,7 @@ export default function ProjectView() {
     }
     setCanvasNavigation({ ...target, projectId: id });
     openFileAsTab(target.relPath, setOpenFileTabs, setActiveTabId);
-  }, [activeTabId, canvasSrc, files, id, pushToast, t, tabs]);
+  }, [activeTabId, canvasSrc, files, filesQuery, id, pushToast, t, tabs]);
 
   // Durable project history; file-key invalidations refresh it after any canvas save.
   const undoActiveRelPath = useMemo<string | null>(() => {
@@ -975,15 +997,21 @@ export default function ProjectView() {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target;
       if (!event.isTrusted || event.defaultPrevented || event.repeat || !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z" || (target instanceof HTMLElement && (target.closest("input,textarea,select,[contenteditable],[role=dialog]") || target.isContentEditable))) return;
-      if (event.shiftKey) {
-        const operationId = artifactRedo.current.revision === undoInfoQuery.data?.current_revision ? artifactRedo.current.operations.at(-1) : undefined;
-        if (!operationId) return;
-        event.preventDefault(); undoMutation.mutate({ operationId, redo: true });
-      } else if (undoInfoQuery.data?.undo_operation_id) { event.preventDefault(); undoMutation.mutate({}); }
+      const direction = event.shiftKey ? "redo" : "undo";
+      const projectOperationId = direction === "redo"
+        ? (artifactRedo.current.revision === undoInfoQuery.data?.current_revision ? artifactRedo.current.operations.at(-1) : undefined)
+        : undoInfoQuery.data?.undo_operation_id ?? undefined;
+      const action = resolveUndoAction({ mode, direction, frame: (direction === "undo" ? tweaksUndoRef : tweaksRedoRef).current.at(-1), activeRelPath: undoActiveRelPath, projectOperationId });
+      if (action.kind === "none") return;
+      event.preventDefault();
+      if (action.kind === "tweak") {
+        tweaksMutation.mutate({ relPath: action.frame.relPath, patch: { node_bg_id: action.frame.bg_id, styles: action.styles }, history: { kind: direction } });
+      } else if (direction === "redo") undoMutation.mutate({ operationId: action.operationId, redo: true });
+      else undoMutation.mutate({});
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undoActiveRelPath, mode, composerDisabled, undoMutation, undoInfoQuery.data, tweaksMutation.isPending, patchFileMutation.isPending]);
+  }, [undoActiveRelPath, mode, composerDisabled, undoMutation, undoInfoQuery.data, tweaksMutation, patchFileMutation.isPending]);
 
   useEffect(() => {
     if (!tabs.find((tab) => tab.id === activeTabId)) {
@@ -1055,12 +1083,12 @@ export default function ProjectView() {
               }, { signal });
             } catch (error) {
               clearSendPending(sendPendingTimeoutRef, setSendPending);
-              if (!(error instanceof DOMException && error.name === "AbortError")) {
+              if (error instanceof DOMException && error.name === "AbortError") {
+                // The backend may have admitted the turn before the abort reached it.
+                void stream.refreshSnapshot().catch(() => {});
+              } else {
                 pushToast({
-                  title:
-                    error instanceof ApiError && error.status === 409
-                      ? t("workspace.project.turnBusy")
-                      : t("workspace.project.sendFailed"),
+                  title: t(sendFailureTitleKey(error)),
                   body: visualSourceSendErrorCopy(error),
                   tone: "error",
                 });
@@ -1081,7 +1109,7 @@ export default function ProjectView() {
     setMobilePane("chat");
   };
 
-  const requestQualityFix = async () => {
+  const requestQualityFix = async (findings?: readonly DesignAuditFinding[]) => {
     if (composerDisabled || autoFixRef.current || !auditReport || safeFixMutation.isPending || designAuditQuery.isFetching || !isDesignAuditCurrent(auditReport, artifacts.current_digest)) return;
     autoFixRef.current = true;
     setAutoFixPending(true);
@@ -1091,11 +1119,12 @@ export default function ProjectView() {
         throw new ApiError("stale_artifact_identity", "Artifact changed", 409);
       }
       const generation = (await loadComposerDraft(session.id).catch(() => null))?.generation;
-      await sendMessage(qualityFixRequest(auditReport), [], new AbortController().signal, generation);
+      await sendMessage(qualityFixRequest(auditReport, { backendId: sessionQuery.data?.backend_id, findings }), [], new AbortController().signal, generation);
       setChatFocusKey((value) => value + 1);
       setMobilePane("chat");
     } catch (error) {
       autoFixRef.current = false;
+      autoFixTurnSeenRef.current = false;
       setAutoFixPending(false);
       handleWriteError("workspace.project.autoFixFailed", error);
     }
@@ -1146,8 +1175,8 @@ export default function ProjectView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {refreshError && <div role="alert" aria-label={t("workspace.project.refreshErrorLabel")} className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm"><span>{t("workspace.project.refreshError")}</span><button type="button" className="min-h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium" onClick={() => { for (const query of loadQueries) if (query.isError) void query.refetch(); }}>{t("workspace.project.refreshData")}</button></div>}
-      {stream.error && <div role="alert" className="flex items-center justify-between bg-warning/15 px-4 py-2 text-sm"><span>{t("workspace.project.streamDisconnected")}</span><button type="button" className="rounded border px-3 py-2" onClick={stream.retry}>{t("workspace.project.reconnect")}</button></div>}
+      {(refreshError || stream.stale) && <div role="alert" aria-label={t("workspace.project.refreshErrorLabel")} className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm"><span>{t("workspace.project.refreshError")}</span><button type="button" className="min-h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium" onClick={() => { for (const query of loadQueries) if (query.isError) void query.refetch(); if (stream.stale) void stream.refreshSnapshot().catch(() => {}); }}>{t("workspace.project.refreshData")}</button></div>}
+      {stream.error && <div role="alert" className="flex items-center justify-between bg-warning/15 px-4 py-2 text-sm"><span>{t("workspace.project.streamDisconnected")}</span><button type="button" className="rounded border px-3 py-2" onClick={() => void stream.retry().then(() => queryClient.invalidateQueries())}>{t("workspace.project.reconnect")}</button></div>}
       <ProjectTopBar
         chatCollapsed={chatCollapsed}
         onToggleChat={() => setChatCollapsed((value) => !value)}
@@ -1167,12 +1196,10 @@ export default function ProjectView() {
             activeId={activeTabId}
             onSelect={(tabId) => { setActiveTabId(tabId); setMobilePane("workspace"); }}
             onClose={(tabId) => {
+              setActiveTabId(nextActiveTabAfterClose(openFileTabs, tabId, activeTabId));
               setOpenFileTabs((current) =>
                 current.filter((tab) => tab.id !== tabId),
               );
-              if (activeTabId === tabId) {
-                setActiveTabId("design-system");
-              }
             }}
           />
         }
@@ -1202,9 +1229,9 @@ export default function ProjectView() {
             updateCommentMutation.mutate({ commentId, patch: { resolved } })
           }
           composerDisabled={composerDisabled}
-          canInterrupt={canInterrupt}
-          turnElapsedMs={turnElapsedMs}
-          interruptPending={interruptMutation.isPending}
+          composerDisabledReason={composerDisabledReason}
+          turnStartedAt={chatComposerDisabled ? turnStartedAt : null}
+          interruptPending={interruptMutation.isPending || stopRequested}
           onInterrupt={() => interruptMutation.mutate()}
           composerInitialText={composerPrefill}
           activePageLabel={activeRelPath !== null && activeRelPath !== project.entrypoint ? t("workspace.project.viewingPage", { path: activeRelPath }) : null}
@@ -1267,6 +1294,7 @@ export default function ProjectView() {
             error={directionError}
             preferencesSaving={saveDirectionPreferencesMutation.isPending}
             onGenerate={(preferences) => generateDirectionsMutation.mutate(preferences)}
+            onContinue={() => { setMobilePane("chat"); setChatFocusKey((value) => value + 1); }}
             onSavePreferences={(preferences) => {
               if (directionState === null) return;
               saveDirectionPreferencesMutation.mutate({ generation_id: directionState.generation_id, expected_selection_revision: directionState.selection_revision, creative_preferences: preferences });
@@ -1294,7 +1322,8 @@ export default function ProjectView() {
         {activeTab?.kind === "file" && (
           <div className="flex min-h-0 min-w-0 flex-1 max-[1000px]:flex-col">
             <Canvas
-              loading={projectQuery.isPending || filesQuery.isPending || artifactsQuery.isPending || session?.status === "running"}
+              loading={projectQuery.isPending || filesQuery.isPending || artifactsQuery.isPending}
+              working={session?.status === "running"}
               colorPalette={activeRelPath && /\.html?$/i.test(activeRelPath) ? <div className="flex items-center gap-2">
                 {project.type === "prototype" && artifacts.pages.length > 1 ? <label className="flex items-center gap-1.5 text-xs text-muted-foreground">{t("workspace.project.page")}<select aria-label={t("workspace.project.canvasPage")} value={activeRelPath} className="h-8 max-w-44 rounded-md border border-border bg-background px-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onChange={(event) => openFileAsTab(event.target.value, setOpenFileTabs, setActiveTabId)}>{artifacts.pages.map((page) => <option key={page.rel_path} value={page.rel_path}>{page.title}</option>)}</select></label> : null}
                 <ColorPalette
@@ -1334,7 +1363,7 @@ export default function ProjectView() {
               mode={livePreview ? null : mode}
               src={canvasSrc}
               livePreview={livePreview ? { version: livePreview.version, reportUrl: `/api/projects/${encodeURIComponent(livePreview.projectId)}/preview/${encodeURIComponent(livePreview.previewId)}/report` } : undefined}
-              onNavigate={livePreview ? undefined : handleCanvasNavigate}
+              onNavigate={livePreview ? undefined : (href) => void handleCanvasNavigate(href)}
               frameKey={`${canvasSrc ?? "entrypoint"}:${livePreview?.version ?? refreshTick}`}
               onModeChange={setMode}
               onRefresh={() => {
@@ -1401,6 +1430,7 @@ export default function ProjectView() {
                 } else setDrawLoadAttempt((value) => value + 1);
               }}
               drawLayerRef={drawLayerRef}
+              onDrawHistoryChange={(state) => setDrawCanRedo(state.canRedo)}
               onCommitDraws={(shapes) => {
                 if (drawBlocked) return;
                 setDrawShapes(shapes);
@@ -1425,6 +1455,7 @@ export default function ProjectView() {
             />
             <ModePanel
               mode={livePreview ? null : mode}
+              projectId={id!}
               uxReview={{
                 projectId: id!,
                 relPath: activeRelPath,
@@ -1433,7 +1464,7 @@ export default function ProjectView() {
                 disabled: composerDisabled,
                 onRequestAI: async (text, signal) => {
                   if (composerDisabled || signal.aborted) throw new Error("session_not_ready");
-                  const generation = (await loadComposerDraft(session.id).catch(() => null))?.generation ?? { model: "", effort: "low" as const, vanilla: true, provider: "native" as const };
+                  const generation = panelGenerationFor(await loadComposerDraft(session.id).catch(() => null));
                   if (signal.aborted) throw new DOMException("Aborted", "AbortError");
                   await sendMessage(text, [], signal, generation);
                   setChatFocusKey((value) => value + 1);
@@ -1442,7 +1473,8 @@ export default function ProjectView() {
               }}
               quality={{
                 onAutoFix: () => { void requestQualityFix(); },
-                autoFixPending,
+                onRequestFix: (finding) => { void requestQualityFix([finding]); },
+                autoFixPending: deriveAutoFixRunning({ autoFixPending, sendPending, sessionStatus: session?.status }),
                 autoFixDisabled: Boolean(composerDisabled),
                 state: auditState,
                 pendingFindingId: safeFixMutation.isPending ? safeFixMutation.variables?.findingId ?? null : null,
@@ -1471,6 +1503,7 @@ export default function ProjectView() {
               activeRelPath={activeRelPath}
               activeSlideIdx={activeSlideIdx}
               focusedCommentId={focusedCommentId}
+              autoFocusCommentId={newCommentId}
               onFocusComment={setFocusedCommentId}
               onUpdateCommentBody={(commentId, body) =>
                 updateCommentMutation.mutate({
@@ -1531,6 +1564,7 @@ export default function ProjectView() {
               drawColor={drawColor}
               drawStrokeWidth={drawStrokeWidth}
               drawHasShapes={!drawBlocked && drawShapes.length > 0}
+              drawCanRedo={!drawBlocked && drawCanRedo}
               onChangeDrawTool={setDrawTool}
               onChangeDrawColor={setDrawColor}
               onChangeDrawWidth={setDrawStrokeWidth}
@@ -1658,18 +1692,6 @@ function requireLoadedArtifacts(
     throw new Error("artifacts_not_loaded");
   }
   return artifacts;
-}
-
-/**
- * Undo frame for Tweaks mode. Capture the style values that WERE there so
- * Cmd/Ctrl+Z can re-emit the inverse PATCH. `forward` is the original
- * change so Cmd/Ctrl+Shift+Z can replay it after an undo.
- */
-interface TweaksUndoFrame {
-  bg_id: string;
-  relPath: string;
-  forward: Partial<Record<TweaksStyleKey, string | null>>;
-  inverse: Partial<Record<TweaksStyleKey, string | null>>;
 }
 
 type TweaksHistoryIntent =

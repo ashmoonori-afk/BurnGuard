@@ -90,13 +90,14 @@ import {
   extractCssStyleSignals,
   fontFamiliesFromDeclarations,
   parseCssSource,
+  selectCssCustomProperties,
   styleSignalsFromDeclarations,
   isColorTokenValue,
   upsertCssCustomProperty,
 } from "./extraction-css";
 import { DESIGN_SURFACE_FILES, DESIGN_SURFACES } from "@bg/shared";
 import { DERIVED_SURFACE_README_SECTIONS, renderDerivedSurfaceCss } from "./design-system-surface";
-import { collectCandidateWebsitePages, extractHtmlComponentSamples, sanitizeSourceHtml } from "./extraction-html";
+import { collectCandidateWebsitePages, extractHtmlComponentSamples, sanitizeAcquiredWebsiteHtml, sanitizeSourceHtml } from "./extraction-html";
 import { analyzeLocalTree, type SourceAnalysis } from "./extraction-local-tree";
 import {
   contentTypeForDesignSystemFile,
@@ -616,14 +617,19 @@ export async function uploadDesignSystemFont(input: {
     const existingCss = await readFile(tokenPath, "utf8").catch(
       () => "",
     );
-    const fallback =
-      role === "display"
-        ? "var(--font-display-fallback)"
-        : role === "sans"
-          ? "var(--font-sans-fallback)"
-          : role === "serif"
-            ? "var(--font-serif-fallback)"
-            : "var(--font-mono-fallback)";
+    const fontsCss = await readFile(path.join(fontsDir, "fonts.css"), "utf8").catch(() => "");
+    const tokens = await extractCssCustomProperties(existingCss);
+    const fallbackDefined = tokens.has(`font-${role}-fallback`) || (await extractCssCustomProperties(fontsCss)).has(`font-${role}-fallback`);
+    // `var(--font-<role>-fallback)` only resolves when a token or fonts.css defines it (extracted
+    // systems do); otherwise keep the current stack behind the new family so its fallbacks survive.
+    const existingStack = tokens.get(`font-${role}`);
+    const [leadingFamily, ...trailingFamilies] = existingStack?.split(",") ?? [];
+    const stack = leadingFamily !== undefined && leadingFamily.trim().replace(/^["']|["']$/gu, "") === family
+      ? trailingFamilies.join(",").trim()
+      : existingStack;
+    const fallback = fallbackDefined
+      ? `var(--font-${role}-fallback)`
+      : stack || `"Pretendard", ${role === "serif" ? "serif" : role === "mono" ? "monospace" : "sans-serif"}`;
     const nextCss = upsertCssCustomProperty(
       ensureTokensCssImportsFonts(existingCss),
       `font-${role}`,
@@ -725,7 +731,7 @@ async function ingestWebsiteSource(
   });
   url = homepage.finalUrl;
   const html = homepage.text;
-  const storedHomepageHtml = sanitizeSourceHtml(html);
+  const storedHomepageHtml = sanitizeAcquiredWebsiteHtml(html);
 
   const websiteDir = path.join(ingestDir, "website");
   const uploadsDir = path.join(websiteDir, "uploads", "linked-css");
@@ -734,7 +740,6 @@ async function ingestWebsiteSource(
   await mkdir(pagesDir, { recursive: true });
   await writeFile(path.join(websiteDir, "index.html"), storedHomepageHtml, "utf8");
 
-  const cssVars = new Map<string, string>();
   const cssDeclarations: import("./extraction-css").CssDeclarationEvidence[] = [];
   const cssParseIssues: import("./extraction-css").CssParseIssue[] = [];
   let cssFileOrder = 0;
@@ -762,7 +767,7 @@ async function ingestWebsiteSource(
         userAgent: `BurnGuard/${APP_VERSION} design-system-import`,
       });
       if (pageHtmlByUrl.has(pageFetch.finalUrl.toString())) continue;
-      const storedPageHtml = sanitizeSourceHtml(pageFetch.text);
+      const storedPageHtml = sanitizeAcquiredWebsiteHtml(pageFetch.text);
       pageHtmlByUrl.set(pageFetch.finalUrl.toString(), pageFetch.text);
       const fileName = `page-${pageHtmlByUrl.size}.html`;
       await writeFile(path.join(pagesDir, fileName), storedPageHtml, "utf8");
@@ -830,7 +835,10 @@ async function ingestWebsiteSource(
       if (!href) continue;
       try {
         const cssUrl = new URL(href, pageBase);
-        if (cssUrl.origin !== url.origin) continue;
+        if (cssUrl.origin !== url.origin) {
+          notes.push(`Skipped cross-origin stylesheet: ${href}`);
+          continue;
+        }
         const cssFetch = await fetchWebsiteResource(cssUrl, {
           maxBytes: MAX_CSS_BYTES,
           kind: "css",
@@ -846,6 +854,9 @@ async function ingestWebsiteSource(
         const absolute = path.join(uploadsDir, fileName);
         await writeFile(absolute, cssText, "utf8");
         const cssSourceId = isOwnedQaAdapterResourceUrl(cssFetch.finalUrl) ? `qa-adapter:${cssFetch.finalUrl.pathname}` : cssFetch.finalUrl.toString();
+        // Only same-origin stylesheets linked from the page are fetched; @import targets are recorded, not followed.
+        const imports = [...cssText.matchAll(/@import\s+(?:url\(\s*)?["']?([^"')\s;]+)/gi)].map((match) => match[1]).slice(0, 8);
+        if (imports.length > 0) notes.push(`Skipped @import in ${cssSourceId}: ${imports.join(", ")}`);
         const parsedCss = await parseCssSource({ content: cssText, sourceId: cssSourceId, fileOrder: cssFileOrder, signal });
         cssFileOrder += 1;
         cssDeclarations.push(...parsedCss.declarations);
@@ -905,15 +916,11 @@ async function ingestWebsiteSource(
     );
   }
 
-  for (const declaration of [...cssDeclarations].sort((left, right) => left.property.localeCompare(right.property) || left.value.localeCompare(right.value) || left.sourceLocator.localeCompare(right.sourceLocator))) {
-    if (declaration.property.startsWith("--") && !cssVars.has(declaration.property.slice(2))) cssVars.set(declaration.property.slice(2), declaration.value);
-  }
-
   return {
     brandName: preferredName?.trim() || deriveBrandNameFromHtml(url, html),
     cssDeclarations,
     cssParseIssues,
-    cssVars,
+    cssVars: selectCssCustomProperties(cssDeclarations),
     fontFamilies: [...fontFamilies],
     colors: [...colors],
     fontSizes: [...fontSizes],
@@ -1535,6 +1542,9 @@ function buildReadme(
     analysis.fetchedPageCount > 1
       ? `- ${analysis.fetchedPageCount} same-origin pages were analyzed for broader component coverage.`
       : "- Only the landing page was analyzed; deeper site coverage may still be needed.",
+    ...(sourceType === "website"
+      ? ["- Only same-origin stylesheets linked from the fetched pages were read; cross-origin stylesheets and @import targets are listed below and were not fetched."]
+      : []),
     analysis.fontFamilies.length === 0
       ? "- No source font-family declarations were detected; fallback stacks were used."
       : `- Font family candidates detected: ${analysis.fontFamilies.join(", ")}.`,
@@ -1593,6 +1603,15 @@ canonical format so the system can be reviewed, edited, and later published.
 - UI icons should stay geometric and quiet
 - Avoid decorative icon overload or novelty illustration styles
 
+## Layout
+Use the 12-column grid, 1200px content maximum, 60ch reading measure and 24px gutters declared by the --layout-* tokens in colors_and_type.css. Page margins and section rhythm come from --layout-margin and --layout-section-y; --layout-hero is the opening media ratio.
+
+## Composition
+Open with a restrained hero, follow with aligned evidence rows on flat surfaces, and close with a compact footer. Keep the neutral canvas quiet so the brand and accent tokens carry emphasis.
+
+## Responsive
+Below --layout-bp-md stack columns in reading order, keep navigation bounded to the viewport and let labels and actions wrap. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
+
 ## Caveats & substitutions
 ${caveats.join("\n")}
 `;
@@ -1626,7 +1645,7 @@ function buildFontsCss(fontFamilies: string[]): string {
   --font-sans-fallback: ${preferredSans}, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display-fallback: ${preferredDisplay}, ${preferredSans}, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-serif-fallback: "Iowan Old Style", "Times New Roman", serif;
-  --font-mono-fallback: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-mono-fallback: "IBM Plex Mono", "Pretendard", monospace;
 }
 `;
 }
@@ -1663,17 +1682,17 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis): string {
 @import url('./fonts/fonts.css');
 
 :root {
-  /* Neutrals */
-  --gray-10: #0f172a;
-  --gray-20: #1f2937;
-  --gray-30: #374151;
-  --gray-40: #4b5563;
+  /* Neutrals: --gray-100 is the page white, --gray-90 the darkest ink, --gray-80..--gray-10 lighten */
+  --gray-100: #ffffff;
+  --gray-90: #0f172a;
+  --gray-80: #1f2937;
+  --gray-70: #374151;
+  --gray-60: #4b5563;
   --gray-50: #6b7280;
-  --gray-60: #9ca3af;
-  --gray-70: #cbd5e1;
-  --gray-80: #e2e8f0;
-  --gray-90: #f1f5f9;
-  --gray-100: #f8fafc;
+  --gray-40: #9ca3af;
+  --gray-30: #cbd5e1;
+  --gray-20: #e2e8f0;
+  --gray-10: #f1f5f9;
 
   /* Brand */
   --primary-blue: ${primary};
@@ -1716,6 +1735,12 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis): string {
   --border-strong: #94a3b8;
   --focus-ring: ${action};
 
+  /* Paired text colors for the semantic fills */
+  --fg-on-success: #ffffff;
+  --fg-on-warning: #0f172a;
+  --fg-on-error: #ffffff;
+  --fg-on-info: #ffffff;
+
   /* Charts */
   --chart-1: #1d4ed8;
   --chart-2: #0891b2;
@@ -1732,7 +1757,7 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis): string {
   --font-display: ${display}, var(--font-display-fallback);
   --font-serif: "Iowan Old Style", "Times New Roman", serif;
   --font-sans: ${sans}, var(--font-sans-fallback);
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-mono: "IBM Plex Mono", var(--font-mono-fallback);
 
   /* Type scale */
   --fs-12: 12px;
@@ -1756,10 +1781,10 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis): string {
   --fw-black: 800;
   --lh-tight: 1.05;
   --lh-snug: 1.2;
-  --lh-base: 1.5;
+  --lh-normal: 1.5;
   --lh-relaxed: 1.7;
   --ls-tight: -0.03em;
-  --ls-base: 0;
+  --ls-normal: 0;
   --ls-wide: 0.04em;
   --ls-eyebrow: 0.12em;
 
@@ -1795,6 +1820,19 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis): string {
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --dur-slow: 320ms;${sourceAliases}${extractedColorAliases}
+}
+
+/* Layout is part of the design-system contract. */
+:root {
+  --layout-max: 1200px;
+  --layout-measure: 60ch;
+  --layout-columns: 12;
+  --layout-gutter: 24px;
+  --layout-margin: clamp(20px, 4vw, 64px);
+  --layout-section-y: clamp(56px, 8vw, 112px);
+  --layout-bp-md: 760px;
+  --layout-bp-lg: 1120px;
+  --layout-hero: 16 / 10;
 }
 `;
 }
@@ -1943,7 +1981,7 @@ function previewBody(
     case "colors-brand":
       return `<div class="eyebrow">Color</div><div class="title">Brand colors</div><div class="stack">${(sampleColors.length > 0 ? sampleColors.slice(0, 3) : ["var(--primary-blue)", "var(--blue-60)", "var(--aqua-60)"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div><div class="muted">${sampleColors.length > 0 ? "Source-derived swatches" : "Fallback swatches"}</div>`;
     case "colors-neutrals":
-      return `<div class="eyebrow">Color</div><div class="title">Neutral scale</div><div class="stack">${(sampleColors.length >= 6 ? sampleColors.slice(3, 6) : ["var(--gray-10)", "var(--fg-3)", "var(--gray-100)"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div>`;
+      return `<div class="eyebrow">Color</div><div class="title">Neutral scale</div><div class="stack">${(sampleColors.length >= 6 ? sampleColors.slice(3, 6) : ["var(--gray-90)", "var(--fg-3)", "var(--gray-100)"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div>`;
     case "colors-ramps":
       return `<div class="eyebrow">Color</div><div class="title">Accent ramps</div><div class="grid">${(sampleColors.length > 0 ? sampleColors.slice(0, 4) : ["var(--red-60)", "var(--orange-50)", "var(--green-60)", "var(--purple-60)"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div>`;
     case "colors-semantic":
@@ -2112,10 +2150,12 @@ async function appendFontFaceRule(
   const existing = await readFile(fontsCssPath, "utf8").catch(() => "");
   const safeFamily = family.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   const safeUrl = fileName.replace(/\\/g, "/").replace(/'/g, "%27");
+  // A single static face declares one weight; a 100 900 range would make the browser reuse these
+  // outlines for bold instead of synthesizing it.
   const rule = `@font-face {
   font-family: '${safeFamily}';
   src: url('./${safeUrl}') format('${fontFormatForFile(fileName)}');
-  font-weight: 100 900;
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }

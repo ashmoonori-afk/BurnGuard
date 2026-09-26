@@ -1,11 +1,13 @@
 import { Hono } from "hono";
 import { getLocalFonts } from "../services/local-fonts";
-import type {
-  ApiErrorBody,
-  ApiSuccess,
-  AppUpdateStatus,
-  PlaywrightInstallStatus,
-  PythonSettings,
+import { bundledFontFiles } from "../data/bundled-fonts";
+import {
+  parseBundledFontManifest,
+  type ApiErrorBody,
+  type ApiSuccess,
+  type AppUpdateStatus,
+  type PlaywrightInstallStatus,
+  type PythonSettings,
 } from "@bg/shared";
 import { getAppUpdater } from "../services/mac-updates";
 import {
@@ -33,6 +35,15 @@ export const settingsRoutes = new Hono();
 settingsRoutes.get("/api/settings/local-fonts", async (c) => {
   try { return c.json(ok(await getLocalFonts())); }
   catch { return c.json(fail("local_fonts_unavailable", "Local font listing is unavailable"), 503); }
+});
+
+/** Families every new project links through fonts/fonts.css, read from the installed bundle's manifest. */
+settingsRoutes.get("/api/settings/bundled-fonts", async (c) => {
+  try {
+    const manifest = (await bundledFontFiles()).get("manifest.json");
+    if (manifest === undefined) throw new Error("manifest_missing");
+    return c.json(ok(parseBundledFontManifest(JSON.parse(manifest.bytes.toString("utf8")))));
+  } catch { return c.json(fail("bundled_fonts_unavailable", "Bundled font listing is unavailable"), 503); }
 });
 
 settingsRoutes.get("/api/settings/updates", (c) => {

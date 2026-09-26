@@ -1,8 +1,9 @@
-import type {
-  BackendDetectionResult,
-  DesignSystemSummary,
-  ProjectSummary,
-  SettingsSummary,
+import {
+  DEFAULT_DISPLAY_NAME,
+  type BackendDetectionResult,
+  type DesignSystemSummary,
+  type ProjectSummary,
+  type SettingsSummary,
 } from "@bg/shared";
 
 /**
@@ -121,7 +122,7 @@ export const mockBackendDetection: BackendDetectionResult = {
 };
 
 export const mockSettings: SettingsSummary = {
-  user: { id: "local", display_name: "You" },
+  user: { id: "local", display_name: DEFAULT_DISPLAY_NAME },
   app_version: "0.4.0",
   default_backend: "claude-code",
   theme: "light",

@@ -1,10 +1,11 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { getSqlite } from "../src/db/sqlite-client";
 import { projectsDir } from "../src/lib/paths";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
-import { paletteHtml } from "../src/services/project-palette";
+import { paletteHtml, readProjectPalette } from "../src/services/project-palette";
 import { artifactOperationRoutes } from "../src/routes/artifact-operations";
 import { classifyApiRoute } from "../src/server";
 
@@ -15,6 +16,24 @@ const source = `<!doctype html><style>:root { --brand: #abc; } h1{color:#aabbcc;
 afterAll(async () => { getSqlite().prepare("DELETE FROM projects WHERE id=?").run(id); await rm(root, { recursive: true, force: true }); });
 
 describe("project palette", () => {
+  test("V12-css-app-tools-NEW-1: Given a hex declared by several custom properties When the palette is read Then the row keeps the first name unless --page-background claims it", () => {
+    const colors = new Map();
+    paletteHtml("<style>:root{--surface:#ffffff;--card:#ffffff;--page-background:#ffffff;--ink:#111111;--text:#111111}</style>", colors);
+    expect(colors.get("#ffffff").name).toBe("--page-background");
+    expect(colors.get("#111111").name).toBe("--ink");
+  });
+
+  test("CSS-26: Given --page-background and a more frequent color When the palette is read Then the --page-background row is first", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "bg-palette-order-"));
+    try {
+      await writeFile(path.join(dir, "index.html"), `<!doctype html><style>:root{--page-background:#fff;--surface:#fff;--ink:#111}${"p{color:#111}".repeat(4)}</style><p>Copy</p>`);
+      const palette = await readProjectPalette(dir, "index.html");
+      expect(palette.colors.map((color) => [color.name, color.count])).toEqual([["--page-background", 2], ["--ink", 5]]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test("Given declaration colors mixed with scripts prose strings URLs and alpha When replaced Then only opaque declaration colors change", () => {
     const colors = new Map();
     const output = paletteHtml(source, colors, { color: "#aabbcc", value: "#123456" });

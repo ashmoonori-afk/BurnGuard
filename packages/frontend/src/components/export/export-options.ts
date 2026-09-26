@@ -93,27 +93,6 @@ export const CHROMIUM_FAILURE_MESSAGE: Record<ChromiumFailure, string> = {
   get not_installed() { return t("export.chromium.not_installed"); },
 };
 
-export type ExportRetryRequest = {
-  readonly format: ExportFormat;
-  readonly options?: ExportOptions;
-};
-
-/**
- * A retry re-sends the same choice, so whatever options the entry carries
- * (asset base URL, slice format, artboard paper) ride along unchanged. Only a
- * graphic project without a resolvable entry has no safe fallback.
- */
-export function buildExportRetryRequest(
-  projectType: ProjectType,
-  format: ExportFormat,
-  model: ExportMenuModel,
-): ExportRetryRequest | null {
-  const matches = model.ok ? model.options.filter((option) => option.format === format) : [];
-  const option = matches.length === 1 ? matches[0] : undefined;
-  if (option?.options !== undefined) return { format, options: option.options };
-  return projectType === "graphic" || projectType === "logo" ? null : { format };
-}
-
 function standardOptions(): readonly ExportMenuOption[] {
   return [
     { key: "html_zip", format: "html_zip", label: t("export.format.html_zip") },

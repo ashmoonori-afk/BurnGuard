@@ -1,3 +1,6 @@
+import { EXPORT_REMOTE_FRAME_RULE } from "../design-craft";
+import { LUCIDE_REFERENCE_REL_PATH } from "../lucide-reference";
+
 export const DECK_REVIEW_PROMPT = `## Mandatory deck copy and typography review
 The design pass is finished. Perform this bounded review now, before the app commits the deck. This is not a new design request.
 1. Read the latest authored slide text in narrative order, including every slide. Re-read changed portions even if an earlier compact rule suggested reading once.
@@ -5,7 +8,7 @@ The design pass is finished. Perform this bounded review now, before the app com
 3. Use one shared heading font stack and one shared body font stack throughout the deck, through --deck-font-heading and --deck-font-body CSS variables referencing the selected design-system fonts. Keep Korean fallback order identical. Preserve explicit user choices and deliberate logo/code exceptions; never introduce a different font per slide.
 4. Check title/body/caption hierarchy and readable projection sizing. Use the latest in-app preview-report.json observations when available; do not launch a separate browser for this review or claim screenshot inspection from DOM feedback.
 5. Perform the mandatory image and artboard verification in the project instructions for every slide, including hidden slides. Replace reused content images with distinct relevant imagery unless the user explicitly requested reuse. Check image references, local hashes and visual duplicates, and compare each rendered slide's dimensions with its requested presentation size. Do not mistake preview zoom or iframe dimensions for verified slide dimensions.
-6. Apply necessary corrections in the existing files, retaining the layout and user intent. Finish with one concise Korean sentence stating the copy, font, image-reuse and artboard-size checks actually performed and any unresolved issue. Do not claim checks you did not carry out. One focused pass only; no repeated reviews or unrelated research.`;
+6. Apply necessary corrections in the existing files, retaining the layout and user intent. Finish with one concise sentence in the locale named under ## Project (when it is unknown, use the language of the slide copy) stating the copy, font, image-reuse and artboard-size checks actually performed and any unresolved issue. Do not claim checks you did not carry out. One focused pass only; no repeated reviews or unrelated research.`;
 
 /**
  * Per-type skill text injected into the prompt by `prompt-builder.ts`.
@@ -37,7 +40,7 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
 ## Per-slide content rules (strict)
 
 - Title ≤ 8 words; benefit-oriented or question-driven.
-- 2–4 bullets per slide; each ≤ 12 words, full idea (not fragment).
+- When bullets are used, 2–4 per slide; each ≤ 12 words, full idea (not fragment).
 - One takeaway per slide. Two takeaways = two slides.
 - Data slides: \`<small class="deck-source">\` footnote + one-sentence
   takeaway near the chart.
@@ -55,7 +58,7 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
 - \`arrow-steps\` — horizontal process, text inside arrows.
 - \`quote-callout\` — display-size pull quote + attribution.
 - \`logo-grid\` — monochrome logo wall.
-- \`chart\` — thin axes, dot terminators, source footnote, takeaway line.
+- \`chart\` — one native data-bg-chart figure, source footnote, takeaway line.
 - \`closing\` — short CTA / contact; visually mirrors \`cover\`.
 
 ## Visual hierarchy
@@ -71,6 +74,7 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
   inherits the scale; every other \`font-size\` is \`var(--deck-type-*)\` (or a
   \`calc()\` that scales one up), never a raw px value.
 - At 1920x1080, no rendered text may be below \`24px\`.
+- Declare \`--bg-chart-min-text: 24px\` in the same :root so native chart text meets the floor.
 - In self-review, do not shrink type or tighten spacing toward web density.
   Projection readability wins.
 
@@ -96,9 +100,14 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
   hardcode colours, font families, or scales that exist as tokens.
 - Do not introduce new palettes, font stacks, or typefaces. The design
   system owns visual identity; archetypes above describe STRUCTURE only.
-- Icons (LUCIDE_ICON_REFERENCE): Read \`packages/backend/src/harness/assets/lucide/reference.md\`. Use its inline \`<svg>\` with \`stroke="currentColor"\` and \`--icon-size\`; no external sources.
-- Keep \`.deck-slide { aspect-ratio: 16 / 9 }\` unless the user requests
-  otherwise.
+- Declare \`--deck-font-heading: var(--font-display)\` and
+  \`--deck-font-body: var(--font-body)\` in :root; font-family uses only them.
+- Icons (LUCIDE_ICON_REFERENCE): Read \`${LUCIDE_REFERENCE_REL_PATH}\` in the project. Use its inline \`<svg>\` with \`stroke="currentColor"\` and \`--icon-size\`; no external sources.
+- Keep \`.deck-slide { aspect-ratio: var(--slide-aspect, 16 / 9) }\` unless the
+  user requests otherwise.
+- The exporter paginates \`[data-slide]\` itself at 100vw x 100vh per page and
+  ignores \`@page\`/\`@media print\`: author no print rules, and no
+  \`position: fixed\` or \`backdrop-filter\` inside slides.
 - When PowerPoint/PPTX output is requested, stay text-first: use real HTML text,
   simple shapes, and flat layouts; avoid effects that only survive raster capture.
 
@@ -111,7 +120,6 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
 ## Don'ts
 
 - No external fonts or JS libraries without an explicit user request.
-- No \`<iframe>\`, \`<video>\`, \`<audio>\` — PDF export won't capture them.
+- No \`<iframe>\`, \`<video>\`, \`<audio>\`: ${EXPORT_REMOTE_FRAME_RULE}.
 - No files outside the project directory.
-- Do not override design-system tokens for colour or typography.
 `;

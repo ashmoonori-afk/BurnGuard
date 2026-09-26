@@ -1,3 +1,6 @@
+import { EXPORT_REMOTE_FRAME_RULE } from "./design-craft";
+import { LUCIDE_REFERENCE_REL_PATH } from "./lucide-reference";
+
 export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 
 ## Token budget rules (READ THESE FIRST)
@@ -11,13 +14,20 @@ export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 - Every slide is a top-level \`<section data-slide>\` directly under \`<body>\`. Preserve order unless the user asks for narrative change.
 - Preserve \`<script src="/runtime/deck-stage.js" defer></script>\`; do not set \`data-active\` statically or reimplement deck navigation.
 - Every visible text element needs a unique \`data-bg-node-id="slide-{N}-{purpose}"\`; parent slides use \`data-bg-node-id="slide-{N}"\`.
+- Every slide carries \`data-layout="<archetype>"\`: cover, agenda, two-column-problem-solution, photo-list-split, big-number, vertical-timeline, three-step-columns, arrow-steps, quote-callout, logo-grid, chart, closing; never the same archetype on three consecutive slides.
+- Respect \`body[data-deck-ready]\` CSS: slides stack before load; only the active slide renders after.
+- When \`use_speaker_notes\` is true, every slide keeps an \`<aside class="deck-notes" data-speaker-notes>\` (presenter mode only); when false, add none.
+- No \`<iframe>\`, \`<video>\`, \`<audio>\`: ${EXPORT_REMOTE_FRAME_RULE}.
 
 ## Projection scale
-- Declare and use \`--deck-type-hero: 80px; --deck-type-heading: 52px; --deck-type-body: 32px; --deck-type-caption: 24px; --deck-pad-slide: 72px; --deck-pad-block: 32px\`. Set \`.deck-slide { font-size: var(--deck-type-body) }\` so unstyled text inherits the scale; every other \`font-size\` is \`var(--deck-type-*)\` (or a \`calc()\` that scales one up), never a raw px value. When a slides surface supplies \`--slide-type-*\` and \`--slide-pad-*\`, take these values from it instead. At 1920x1080 no rendered text may be below \`24px\`; never shrink type or tighten spacing toward web density in self-review.
+- Declare and use \`--deck-type-hero: 80px; --deck-type-heading: 52px; --deck-type-body: 32px; --deck-type-caption: 24px; --deck-pad-slide: 72px; --deck-pad-block: 32px\`. Set \`.deck-slide { font-size: var(--deck-type-body) }\` so unstyled text inherits the scale; every other \`font-size\` is \`var(--deck-type-*)\` (or a \`calc()\` that scales one up), never a raw px value. When a slides surface supplies \`--slide-type-*\` and \`--slide-pad-*\`, take these values from it instead. At 1920x1080 no rendered text may be below \`24px\`; never shrink type or tighten spacing toward web density in self-review. Declare \`--bg-chart-min-text: 24px\` so native chart text meets the floor.
 
 ## Style
 - Use asymmetric layouts, oversized type or KPI numbers where useful, and avoid centered-everything except cover/closing slides.
-- Keep CSS inline in the top \`<style>\` block. Reference design-system CSS variables (see list above) and avoid new palettes, font stacks, or typefaces.`;
+- Declare \`--deck-font-heading: var(--font-display)\` and \`--deck-font-body: var(--font-body)\` in :root; font-family uses only them.
+- When PowerPoint/PPTX output is requested, stay text-first: real HTML text, simple shapes, flat layouts; no effects that only survive raster capture.
+- Icons (LUCIDE_ICON_REFERENCE): Read \`${LUCIDE_REFERENCE_REL_PATH}\` in the project. Use its inline \`<svg>\` with \`stroke="currentColor"\` and \`--icon-size\`; no external sources.
+- Keep CSS inline in the top \`<style>\` block. Reference the design-system CSS variables from the layout/surface contracts above and from colors_and_type.css (Read it for colour/type names); with no design system use the tokens you declared. Avoid new palettes, font stacks, or typefaces.`;
 
 export const COMPACT_PROTOTYPE_SKILL_MD = `# Prototype compact contract
 
@@ -32,4 +42,5 @@ export const COMPACT_PROTOTYPE_SKILL_MD = `# Prototype compact contract
 - Give subpages distinct content layouts but shared identity; propagate shared-block changes across the site map, and when \`## Active page\` exists edit it unless the request explicitly names another file (an explicit comment-edit file is authoritative).
 - Top-level semantic sections need \`data-section\` and unique \`data-bg-node-id\` values for visible text and editable parent sections.
 - Strong visual hierarchy, asymmetric sections outside true heroes, responsive down to 320 px, no hidden primary value.
-- Keep CSS in one top \`<style>\` block. Reference design-system CSS variables (see list above) and avoid new palettes, font stacks, or typefaces.`;
+- Icons (LUCIDE_ICON_REFERENCE): on demand, Read \`${LUCIDE_REFERENCE_REL_PATH}\` in the project. Use only its inline \`<svg>\`; keep \`stroke="currentColor"\` and size with \`--icon-size\`. Never use external URLs, sprites, or icon fonts.
+- Keep CSS in one top \`<style>\` block. Reference the design-system CSS variables from the layout/surface contracts above and from colors_and_type.css (Read it for colour/type names); with no design system use the tokens you declared. Avoid new palettes, font stacks, or typefaces.`;

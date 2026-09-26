@@ -91,6 +91,29 @@ describe("graphic output prompt block", () => {
     expect(block["safe_zone_css_px"]).toEqual({ top: 250, bottom: 250 });
   });
 
+  test("PH-25: Given a story-shaped single graphic When the prompt is built Then the rules block states the declared safe zone once, and a square single declares none", async () => {
+    // Given
+    const story = graphicContext({ schema_version: 1, kind: "single", frame_count: 1 }, { schema_version: 1, width: 1080, height: 1920 });
+    const square = graphicContext({ schema_version: 1, kind: "single", frame_count: 1 }, { schema_version: 1, width: 1080, height: 1080 });
+    const cards = graphicContext({ schema_version: 1, kind: "card_news", frame_count: 3 }, { schema_version: 1, width: 1080, height: 1920 });
+
+    // When
+    const storyPrompt = await promptFor(story);
+    const squarePrompt = await promptFor(square);
+    const cardsPrompt = await promptFor(cards);
+
+    // Then
+    const zone = outputBlock(storyPrompt)["safe_zone_css_px"] as { readonly top: number; readonly bottom: number };
+    expect(zone).toEqual({ top: 250, bottom: 250 });
+    const rules = storyPrompt.slice(storyPrompt.indexOf('<burnguard-graphic-rules-v1 kind="single">'), storyPrompt.indexOf("</burnguard-graphic-rules-v1>"));
+    const zoneLines = rules.split("\n").filter((line) => line.includes("safe_zone_css_px"));
+    expect(zoneLines).toHaveLength(1);
+    expect(zoneLines[0]).toContain(`${zone.top} CSS px`);
+    expect(outputBlock(squarePrompt)["safe_zone_css_px"]).toBeUndefined();
+    expect(squarePrompt).not.toContain("safe_zone_css_px");
+    expect(cardsPrompt.split("safe_zone_css_px")).toHaveLength(3);
+  });
+
   test("Given a banner set When the prompt is built Then every declared size becomes one artboard", async () => {
     // Given
     const context = graphicContext({

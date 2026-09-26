@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseUxReviewReport } from "@bg/shared";
+import { parseUxReviewReport, UX_FINDING_CODES, UX_LIMITATION_CODES } from "@bg/shared";
 import { reviewHtml } from "../src/services/ux-review";
 import { fingerprintHtmlNode } from "../src/services/file-patch";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -23,6 +23,12 @@ describe("local UX review", () => {
     const findings = reviewHtml(html, "prototype");
     expect(findings.map((finding) => finding.code)).toEqual(["heading_jump", "action_name", "input_label", "link_name", "image_alt", "long_paragraph"]);
     for (const finding of findings) expect(fingerprintHtmlNode(html, finding.node_bg_id!).fingerprint).toBeTruthy();
+    // Codes are the localization keys; details carry the values the localized copy interpolates.
+    for (const finding of findings) expect(UX_FINDING_CODES).toContain(finding.code);
+    expect(findings.map((finding) => finding.detail)).toEqual([{ previous: 1, level: 3 }, { label: "확인" }, undefined, { label: "더 보기" }, undefined, { length: 600 }]);
+    expect(reviewHtml("<h1>T</h1><button></button>", "prototype").map((finding) => [finding.code, finding.detail])).toEqual([["action_name", undefined]]);
+    expect(() => parseUxReviewReport({ ...report, findings: [{ ...findings[0], detail: { level: [3] } }] })).toThrow();
+    expect(() => parseUxReviewReport({ ...report, findings: [{ ...findings[0], detail: { "bad key": 1 } }] })).toThrow();
     expect(reviewHtml("<img>".repeat(100), "graphic")).toHaveLength(40);
     const report = { schema_version: 1, project_id: "project", artifact_revision: 1, artifact_digest: "a".repeat(64), source_path: "index.html", basis: "local_html_heuristics", limitations: ["Static only"], findings };
     expect(parseUxReviewReport(report)).toEqual(report);
@@ -36,7 +42,13 @@ describe("local UX review", () => {
   test("Given labels, decorative images and hidden content, When reviewing, Then respects semantics and project kind", () => {
     expect(reviewHtml('<h1>Title</h1><label for="x">Name</label><input id="x"><span id="label">Country</span><select aria-labelledby="label"><option>A</option></select><img alt=""><a href="/"><img alt="Home"></a><div hidden><button></button></div>', "prototype")).toEqual([]);
     expect(reviewHtml("<p>Short slide</p>", "slide_deck")).toEqual([]);
+    // Generic names are recognised in Korean, English and Chinese alike.
+    expect(reviewHtml('<h1>T</h1><button>确定</button><a href="/">更多</a><button>Submit</button><a href="/">read more</a>', "prototype").map((finding) => [finding.code, finding.detail?.label])).toEqual([["action_name", "确定"], ["link_name", "更多"], ["action_name", "Submit"], ["link_name", "read more"]]);
     expect(reviewHtml('<img data-bg-node-id="same"><img data-bg-node-id="same">', "graphic").every((finding) => finding.node_bg_id === null)).toBe(true);
+  });
+  test("Given images without alt inside closed and open details, When reviewing, Then only the open details content and the closed summary are reviewed", () => {
+    const findings = reviewHtml('<h1>Title</h1><details><summary><img data-bg-node-id="in-summary"></summary><img data-bg-node-id="closed"><a href="x.html">here</a></details><details open><img data-bg-node-id="open"></details>', "prototype");
+    expect(findings.map((finding) => [finding.code, finding.node_bg_id])).toEqual([["image_alt", "in-summary"], ["image_alt", "open"]]);
   });
   test("Given canonical project identity, When route receives traversal or stale bytes, Then rejects safely", async () => {
     await runMigrations();
@@ -52,6 +64,7 @@ describe("local UX review", () => {
       expect(response.status).toBe(200);
       const body = await response.json();
       expect(parseUxReviewReport(body.data).artifact_digest).toBe(manifest.tree_digest);
+      expect(parseUxReviewReport(body.data).limitations).toEqual([...UX_LIMITATION_CODES]);
       expect((await artifactRoutes.request(url + "?path=..%2Fprivate.html")).status).toBe(400);
       expect((await artifactRoutes.request(url + "?path=index.html&path=other.html")).status).toBe(400);
       expect((await artifactRoutes.request(url + "?unknown=1")).status).toBe(400);

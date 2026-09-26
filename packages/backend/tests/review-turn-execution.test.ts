@@ -17,8 +17,14 @@ import { createHash } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
 import { broker } from "../src/services/broker";
 import { managedFileRoutes } from "../src/routes/managed-files";
-import { selectContextAttachments } from "../src/services/context";
+import { DECK_SOURCE_PAGE_LIMIT, selectContextAttachments } from "../src/services/context";
 import { createApp } from "../src/server";
+import { reviewTurnDesign } from "../src/services/turn-design-review";
+import { RenderSessionError } from "../src/services/export-render-session";
+import { DESIGN_AUDIT_POLICY_VERSION, getProjectDesignAudit } from "../src/services/design-audit";
+import { DESIGN_AUDIT_CHECK_CODES, type DesignAuditResult } from "@bg/shared";
+import { LUCIDE_REFERENCE_REL_PATH } from "../src/harness/lucide-reference";
+import { renderLucideIconReference } from "../src/harness/assets/lucide/icons";
 
 let projectId: string;
 let sessionId: string;
@@ -46,17 +52,77 @@ function start(runAdapter: NonNullable<TurnDependencies["runAdapter"]>, text = "
   return turn;
 }
 
-test.each(["unavailable", "must_fix"] as const)("Given %s design checks When finalizing Then the prior artifact remains unchanged", async (status) => {
+function mustFixFinding(relPath: string, checkCode: "text_overflow" | "contrast" = "text_overflow"): DesignAuditResult {
+  return { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "must_fix", checks: [{ code: checkCode, status: "fail", reason: null, findings: [{ id: "fixture", check_code: checkCode, severity: "must_fix", source: { rel_path: relPath, node_bg_id: "fixture" }, evidence: "fixture", targeted_action: checkCode === "contrast" ? "increase_color_contrast" : "expand_or_reflow_text" }] }] };
+}
+
+test("Given must_fix design checks When finalizing Then the prior artifact remains unchanged", async () => {
   const before = await inspectCanonicalTree(projectDir);
   const turn = start(async (_backend, input) => {
     await writeFile(path.join(input.projectDir, "index.html"), "<!doctype html><p>Updated</p>");
     return { exitCode: 0 };
-  }, "Update a paragraph", async () => status === "unavailable"
-    ? { status: "unavailable", repairs: 0, result: null }
-    : { status: "checked", repairs: 2, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "must_fix", checks: [] } });
+  }, "Update a paragraph", async () => ({ status: "checked", repairs: 2, result: mustFixFinding("index.html") }));
   await turn.promise;
   expect(await inspectCanonicalTree(projectDir)).toEqual(before);
   expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+  const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
+  expect(JSON.parse(error!.payload_json).code).toBe("design_review_failed");
+});
+
+test("Given unavailable design checks When finalizing Then the turn commits and the review badge reports the checks as unavailable", async () => {
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  try {
+    const turn = start(async (_backend, input) => {
+      await writeFile(path.join(input.projectDir, "index.html"), "<!doctype html><p>Updated</p>");
+      return { exitCode: 0 };
+    }, "Update a paragraph", input => reviewTurnDesign({ ...input, audit: async () => { throw new RenderSessionError("chromium_not_installed", "unavailable"); } }));
+    await turn.promise;
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+    expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("<!doctype html><p>Updated</p>");
+    expect(events.filter(event => event.type === "status.error")).toEqual([]);
+    expect(events.filter(event => event.type === "tool.finished" && event.tool === "generation_design_review").at(-1)).toMatchObject({ ok: false, output: { status: "unavailable", repairs: 0 } });
+  } finally { unsubscribe(); }
+});
+
+test("Given a checked review for the committed identity When the turn commits Then the Quality panel reads the review from the audit cache", async () => {
+  let reviewed: DesignAuditResult | null = null;
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "index.html"), "<!doctype html><p>Audited</p>");
+    return { exitCode: 0 };
+  }, "Update a paragraph", async input => {
+    reviewed = { schema_version: 1, project_id: projectId, artifact_revision: input.revision, artifact_digest: (await inspectCanonicalTree(input.adapter.projectDir)).tree_digest, created_at: 1, overall_status: "ready", checks: DESIGN_AUDIT_CHECK_CODES.map(code => ({ code, status: "pass", reason: null, findings: [] })) };
+    return { status: "checked", repairs: 0, result: reviewed };
+  });
+  await turn.promise;
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+  const project = getSqlite().query<{ current_revision: number; current_digest: string }, [string]>("SELECT current_revision,current_digest FROM projects WHERE id=?").get(projectId)!;
+  expect(reviewed).toMatchObject({ artifact_revision: project.current_revision, artifact_digest: project.current_digest });
+  expect(existsSync(path.join(projectDir, ".meta", "audits", `${project.current_revision}-${project.current_digest}-${DESIGN_AUDIT_POLICY_VERSION}.json`))).toBe(true);
+  expect(await getProjectDesignAudit(projectId)).toEqual(reviewed!);
+});
+
+test("Given a pre-existing must_fix finding on an untouched page When a turn edits only index.html Then it commits without a repair", async () => {
+  await new ArtifactCoordinator(getSqlite()).run({ projectId, projectDir, kind: "turn", expectedRevision: 0, expectedArtifactDigest: digest, mutate: async (stage) => {
+    await writeFile(path.join(stage, "index.html"), "<!doctype html><p>Home</p>");
+    await writeFile(path.join(stage, "about.html"), '<!doctype html><p style="color:#777">About</p>');
+  } });
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  let repairs = 0;
+  try {
+    const turn = start(async (_backend, input) => {
+      if (input.turnId.includes("-design-repair-")) { repairs++; return { exitCode: 0 }; }
+      await writeFile(path.join(input.projectDir, "index.html"), "<!doctype html><p>Home edited</p>");
+      return { exitCode: 0 };
+    }, "Edit the home paragraph", input => reviewTurnDesign({ ...input, audit: async () => mustFixFinding("about.html", "contrast") }));
+    await turn.promise;
+    expect(repairs).toBe(0);
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+    expect(events.filter(event => event.type === "status.error")).toEqual([]);
+    expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("<!doctype html><p>Home edited</p>");
+    expect(await readFile(path.join(projectDir, "about.html"), "utf8")).toBe('<!doctype html><p style="color:#777">About</p>');
+  } finally { unsubscribe(); }
 });
 
 test("Given a deleted entrypoint after a failed write When continuing Then generated assets survive and only the repaired result is committed", async () => {
@@ -116,6 +182,19 @@ test("Given invalid generated HTML When finalizing Then no repair adapter runs a
     const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
     expect(JSON.parse(error!.payload_json).code).toBe("publication_failed");
   }
+});
+
+test("PH-01: Given a turn When the adapter runs Then the stage holds the generated icon reference the prompt names and the committed project never receives it", async () => {
+  const turn = start(async (_backend, input) => {
+    // The full skills name this path; the file is staged in every mode so a compact turn can Read it too.
+    expect(await readFile(path.join(input.projectDir, LUCIDE_REFERENCE_REL_PATH), "utf8")).toBe(renderLucideIconReference());
+    await writeFile(path.join(input.projectDir, "index.html"), "iconed");
+    return { exitCode: 0 };
+  });
+  await turn.promise;
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("iconed");
+  expect(existsSync(path.join(projectDir, ".burnguard-inputs", "lucide-icons.md"))).toBe(false);
+  expect((await inspectCanonicalTree(projectDir)).files.map((file) => file.path)).toEqual(["index.html"]);
 });
 
 test("Given prompt-directed writes When generation succeeds Then only stage changes before commit", async () => {
@@ -210,6 +289,32 @@ test("Given a running generation When staged HTML changes Then draft files and i
   } finally { unsubscribe(); }
 });
 
+test("Given a user message naming the active page When the stage writes that page Then the live preview follows it instead of the entrypoint", async () => {
+  type PreviewEvent = Extract<import('@bg/shared').NormalizedEvent, { type: 'artifact.preview' }>;
+  let resolvePreview: (event: PreviewEvent) => void = () => {};
+  const previewed = new Promise<PreviewEvent>(resolve => { resolvePreview = resolve; });
+  const unsubscribe = broker.subscribe(sessionId, event => { if (event.type === "artifact.preview" && event.active && event.version >= 2) resolvePreview(event); });
+  let served = "";
+  try {
+    const turn = startUserTurn(sessionId, { type: "user.message", text: "Edit the about page", attachments: [], active_rel_path: "about.html" }, undefined, {
+      detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "fixture", version: "test" }] }),
+      runAdapter: async (_backend, input) => {
+        await writeFile(path.join(input.projectDir, "about.html"), "<html><body><h1>About us</h1></body></html>");
+        const event = await previewed;
+        expect(event.path).toBe("about.html");
+        const response = await managedFileRoutes.request(`/api/projects/${projectId}/preview/${event.previewId}/fs/about.html`);
+        expect(response.status).toBe(200);
+        served = await response.text();
+        return { exitCode: 0 };
+      },
+      reviewDesign: async () => ({ status: "checked", repairs: 0, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "ready", checks: [] } }),
+    });
+    if (turn === null) throw new Error("turn reservation unavailable");
+    await turn.promise;
+    expect(served).toContain("About us");
+  } finally { unsubscribe(); }
+});
+
 for (const reviewFails of [false, true]) test(`Given a deck generation When mandatory copy review ${reviewFails ? "fails" : "succeeds"} Then publication ${reviewFails ? "rolls back" : "includes corrections"}`, async () => {
   getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
   const runtime = '<script src="runtime/deck-stage.js"></script>';
@@ -235,7 +340,8 @@ for (const reviewFails of [false, true]) test(`Given a deck generation When mand
     return { exitCode: 0 };
   }, "Create a large slide deck");
   await turn.promise;
-  expect(calls).toBe(reviewFails ? 5 : 3);
+  // One plan phase, one content phase, then the review: two attempts, not three.
+  expect(calls).toBe(reviewFails ? 4 : 3);
   expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(reviewFails ? "base" : '<section data-slide><h1>Reviewed wording</h1></section>' + runtime);
   const reviewTools = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type IN ('tool.started','tool.finished') ORDER BY sequence").all(sessionId)
     .map(row => JSON.parse(row.payload_json)).filter(event => event.turnId === turn.turnId && !String(event.tool).startsWith("generation_phase_"));
@@ -259,7 +365,8 @@ test("Given a deck generation that finished When the mandatory copy review fails
       return { exitCode: 0 };
     }, "Update wording");
     await turn.promise;
-    expect(calls).toBe(4);
+    // The edit changed the deck, so the review runs: one generation plus two review attempts.
+    expect(calls).toBe(3);
     expect(events.filter(event => event.type === "chat.message_end")).toEqual([]);
     expect(events.filter(event => event.type === "status.idle").map(event => event.stopReason)).toEqual(["error"]);
     const errors = events.filter(event => event.type === "status.error");
@@ -267,6 +374,84 @@ test("Given a deck generation that finished When the mandatory copy review fails
     expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
     expect(await inspectCanonicalTree(projectDir)).toEqual(before);
   } finally { unsubscribe(); }
+});
+
+test("Given a first request that names a purpose When later turns run Then the stored purpose routes edits and an explicit match still wins", async () => {
+  const purposes: (string | null)[] = [];
+  const adapter: NonNullable<TurnDependencies["runAdapter"]> = async (_backend, input) => {
+    const block = input.prompt.match(/<burnguard-research-context-v1>\n([^\n]+)\n<\/burnguard-research-context-v1>/u);
+    purposes.push(JSON.parse(block![1]!).routing.purpose);
+    await writeFile(path.join(input.projectDir, "index.html"), `<h1>Turn ${purposes.length}</h1>`);
+    return { exitCode: 0 };
+  };
+  await start(adapter, "Create a landing page").promise;
+  expect(JSON.parse(getSqlite().query<{ options_json: string }, [string]>("SELECT options_json FROM projects WHERE id=?").get(projectId)!.options_json).research_purpose).toBe("prototype.landing");
+  await start(adapter, "Polish this").promise;
+  await start(adapter, "Improve this dashboard").promise;
+  expect(purposes).toEqual(["prototype.landing", "prototype.landing", "prototype.dashboard"]);
+  expect(JSON.parse(getSqlite().query<{ options_json: string }, [string]>("SELECT options_json FROM projects WHERE id=?").get(projectId)!.options_json).research_purpose).toBe("prototype.landing");
+});
+
+test("Given a prototype brief listing about.html When the adapter writes only index.html Then the turn resumes instead of committing", async () => {
+  getSqlite().prepare("UPDATE projects SET options_json=? WHERE id=?").run(JSON.stringify({ design_brief: {
+    schema_version: 1, output_type: "prototype", audience: "Customers", objective: "Introduce the product", content_source: "none",
+    locale: "ko", brand_mode: "none", visual_mood: "formal", density: "balanced", output_size: "responsive", pages: ["about.html"],
+  } }), projectId);
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  let calls = 0;
+  try {
+    const turn = start(async (_backend, input) => {
+      calls++;
+      await writeFile(path.join(input.projectDir, "index.html"), '<h1>Home</h1><nav><a href="about.html">About</a></nav>');
+      if (calls === 2) await writeFile(path.join(input.projectDir, "about.html"), "<h1>About</h1>");
+      return { exitCode: 0 };
+    }, "Create the site");
+    await turn.promise;
+    expect(calls).toBe(2);
+    expect(events.filter(event => event.type === "tool.started").map(event => event.tool)).toContain("generation_resume_incomplete");
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+    expect(await readFile(path.join(projectDir, "about.html"), "utf8")).toBe("<h1>About</h1>");
+  } finally { unsubscribe(); }
+});
+
+test("Given a slide_deck edit that changes the deck When the copy review runs Then it receives a bounded context and at most two attempts", async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
+  const { DECK_REVIEW_PROMPT } = await import("../src/harness/skills/deck-skill");
+  const { IMAGE_ARTBOARD_COMPLETION_CHECKS } = await import("../src/harness/design-craft");
+  const reviewPrompts: string[] = [];
+  let calls = 0;
+  const turn = start(async (_backend, input) => {
+    calls++;
+    if (input.turnId.endsWith("-review")) { reviewPrompts.push(input.prompt); return { exitCode: 1 }; }
+    await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide><h1>Edited</h1></section><script src="runtime/deck-stage.js"></script>');
+    return { exitCode: 0 };
+  }, "Update wording");
+  await turn.promise;
+  expect(calls).toBe(3);
+  expect(reviewPrompts).toHaveLength(2);
+  for (const prompt of reviewPrompts) {
+    expect(prompt).toContain(DECK_REVIEW_PROMPT);
+    expect(prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
+    expect(prompt).toContain("## Deck structure");
+    expect(prompt).toContain("1 slide(s)");
+    expect(prompt.split("\n")).toContain("- locale: unknown");
+    expect(prompt).not.toContain("## Request");
+    expect(prompt).not.toContain("Update wording");
+  }
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+});
+
+test("Given a slide_deck edit that leaves the deck untouched When the turn finalizes Then no copy review runs and the turn commits", async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
+  const deck = '<section data-slide><h1>Kept</h1></section><script src="runtime/deck-stage.js"></script>';
+  await new ArtifactCoordinator(getSqlite()).run({ projectId, projectDir, kind: "turn", expectedRevision: 0, expectedArtifactDigest: digest, mutate: async stage => { await writeFile(path.join(stage, "index.html"), deck); } });
+  let calls = 0;
+  const turn = start(async () => { calls++; return { exitCode: 0 }; }, "Update wording");
+  await turn.promise;
+  expect(calls).toBe(1);
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(deck);
 });
 
 test("Given a provider that ends its message and then reports a fatal error When the turn refuses Then the buffered success terminals are withheld", async () => {
@@ -629,3 +814,86 @@ test("Given a real child tree continuously writing When its output callback fail
     if (childPid > 0) { try { process.kill(childPid, "SIGKILL"); } catch {} }
   }
 }, 15_000);
+
+test("DP-28: Given a source-mapped deck whose source exceeds the page limit When the turn starts Then no adapter runs and the published error carries deck_source_page_limit", async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck',options_json=? WHERE id=?").run(JSON.stringify({
+    design_brief: {
+      schema_version: 1, output_type: "slide_deck", audience: "Customers", objective: "Explain the source",
+      content_source: "attached", locale: "ko", brand_mode: "none", visual_mood: "formal",
+      density: "balanced", output_size: "widescreen-16x9", source_page_mapping: "one_to_one",
+    },
+  }), projectId);
+  await mkdir(path.join(projectDir, ".attachments"));
+  const pdf = await PDFDocument.create();
+  pdf.addPage().drawText("Source page one");
+  const bytes = await pdf.save();
+  const source = path.join(projectDir, ".attachments", "source.pdf");
+  await writeFile(source, bytes);
+  await writeFile(`${source}.summary.json`, JSON.stringify({ kind: "pdf", page_count: DECK_SOURCE_PAGE_LIMIT + 1, fonts: [], colors: [], notes: [], headings: [], bodies: [], pages: [] }));
+  await writeFile(`${source}.extracted.md`, "Source page one");
+  await insertAttachment({ sessionId, turnId: "source-turn", filePath: source, mimeType: "application/pdf", originalName: "source.pdf", sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+  let calls = 0;
+  const turn = start(async () => { calls++; return { exitCode: 0 }; }, "Update wording");
+  await turn.promise;
+  expect(calls).toBe(0);
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("base");
+  const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
+  expect(JSON.parse(error!.payload_json)).toMatchObject({ code: "deck_source_page_limit", notApplied: { operationId: turn.operationId, repairs: 0 } });
+});
+
+test("DP-03: Given a must_fix contrast finding on index.html When a turn changes only styles.css Then the review repairs it and refuses the turn instead of committing", async () => {
+  await new ArtifactCoordinator(getSqlite()).run({ projectId, projectDir, kind: "turn", expectedRevision: 0, expectedArtifactDigest: digest, mutate: async (stage) => {
+    await writeFile(path.join(stage, "index.html"), '<!doctype html><link rel="stylesheet" href="styles.css"><h1>Home</h1>');
+  } });
+  let repairs = 0;
+  const turn = start(async (_backend, input) => {
+    if (input.turnId.includes("-design-repair-")) { repairs++; return { exitCode: 0 }; }
+    await writeFile(path.join(input.projectDir, "styles.css"), "h1{color:#777}");
+    return { exitCode: 0 };
+  }, "Make the headings grey", input => reviewTurnDesign({ ...input, audit: async () => mustFixFinding("index.html", "contrast") }));
+  await turn.promise;
+  expect(repairs).toBe(2);
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+  expect(existsSync(path.join(projectDir, "styles.css"))).toBe(false);
+  const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
+  expect(JSON.parse(error!.payload_json).code).toBe("design_review_failed");
+});
+
+test("DP-18: Given a committed turn whose page has undersized text When the Quality panel reads the cached review Then the minimum_text_size finding carries a safe fix for the committed identity", async () => {
+  const page = '<!doctype html><html><head><style>:root{--ink:#111;--paper:#fff}html,body{margin:0;background:var(--paper);color:var(--ink)}</style></head><body><p data-bg-node-id="tiny" style="font-size:9px">tiny</p></body></html>';
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "index.html"), page);
+    return { exitCode: 0 };
+  }, "Add a caption", input => reviewTurnDesign(input));
+  await turn.promise;
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+  const project = getSqlite().query<{ current_revision: number; current_digest: string }, [string]>("SELECT current_revision,current_digest FROM projects WHERE id=?").get(projectId)!;
+  expect(existsSync(path.join(projectDir, ".meta", "audits", `${project.current_revision}-${project.current_digest}-${DESIGN_AUDIT_POLICY_VERSION}.json`))).toBe(true);
+  const tiny = (await getProjectDesignAudit(projectId)).checks.find(check => check.code === "minimum_text_size")?.findings.find(finding => finding.source.node_bg_id === "tiny");
+  const committed = (await inspectCanonicalTree(projectDir)).files.find(file => file.path === "index.html");
+  expect(tiny?.safe_fix).toEqual({ kind: "patch_html_node", rel_path: "index.html", request: { expected_revision: project.current_revision, expected_artifact_digest: project.current_digest, expected_file_hash: committed!.sha256, node_bg_id: "tiny", node_fingerprint: expect.any(String), styles: { "font-size": "12px" } } });
+}, 90_000);
+
+test("DP-30: Given a slide_deck project with a brief locale When the copy review runs Then its bounded context names that locale under ## Project", async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck',options_json=? WHERE id=?").run(JSON.stringify({
+    design_brief: {
+      schema_version: 1, output_type: "slide_deck", audience: "Customers", objective: "Explain the plan",
+      content_source: "none", locale: "en", brand_mode: "none", visual_mood: "formal",
+      density: "balanced", output_size: "widescreen-16x9",
+    },
+  }), projectId);
+  const reviewPrompts: string[] = [];
+  const turn = start(async (_backend, input) => {
+    if (input.turnId.endsWith("-review")) { reviewPrompts.push(input.prompt); return { exitCode: 1 }; }
+    await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide><h1>Edited</h1></section><script src="runtime/deck-stage.js"></script>');
+    return { exitCode: 0 };
+  }, "Update wording");
+  await turn.promise;
+  expect(reviewPrompts.length).toBeGreaterThan(0);
+  for (const prompt of reviewPrompts) {
+    const lines = prompt.split("\n");
+    expect(lines).toContain("- locale: en");
+    expect(lines.indexOf("- locale: en")).toBeLessThan(lines.indexOf("## Deck structure"));
+  }
+});

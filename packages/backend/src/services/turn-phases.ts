@@ -9,7 +9,8 @@ import { generationOutputComplete, hasDeckRuntime, hasGeneratedContent, matchesD
 export function needsGenerationPhases(projectType: string, request: string, starter = false): boolean {
   // A logo has its own explore/finalize contract; page units would contradict it.
   if (projectType === "logo") return false;
-  if ((projectType === "slide_deck" && starter) || /전체.{0,12}(다시|재작성|재구성)|\brebuild\b/iu.test(request)) return true;
+  // Only an explicit whole-document regeneration verb rebuilds; "look at the whole tone again" is a review.
+  if ((projectType === "slide_deck" && starter) || /전체\s*(?:(?:사이트|웹사이트|페이지|덱|슬라이드|문서|프레젠테이션|화면)\s*)?(?:를|을|적으로)?\s*(?:다시\s*(?:만들|구성|작성|생성|제작)|재작성|재구성)|\b(?:rebuild|regenerate|recreate)\s+(?:the\s+)?(?:whole\s+|entire\s+)?(?:site|website|deck|presentation|page|everything)\b/iu.test(request)) return true;
   // "on the last 2 slides" or "slide 3" names an edit target, not a document size.
   if (/\bon\s+(?:the\s+)?(?:\w+\s+){0,3}\d+\s*(?:pages|slides)\b|\b(?:slide|page)\s+\d+\b/iu.test(request)) return false;
   // A count or size describes a new document only when a quantity or document noun follows it, and only with creation intent.
@@ -19,7 +20,7 @@ export function needsGenerationPhases(projectType: string, request: string, star
 }
 
 /** A server-owned loop, not a request that the model merely describe phases. */
-export async function runGenerationPhases(input: AdapterRunInput, entrypoint: string, run: (input: AdapterRunInput) => Promise<AdapterRunResult>, projectType?: string, sourcePages?: readonly DeckSourcePage[]): Promise<AdapterRunResult> {
+export async function runGenerationPhases(input: AdapterRunInput, entrypoint: string, run: (input: AdapterRunInput) => Promise<AdapterRunResult>, projectType?: string, sourcePages?: readonly DeckSourcePage[], briefPages?: readonly string[]): Promise<AdapterRunResult> {
   if (sourcePages !== undefined) {
     input = {
       ...input,
@@ -87,7 +88,7 @@ export async function runGenerationPhases(input: AdapterRunInput, entrypoint: st
   placeholders = units.map((_unit, index) => scaffold.querySelector(`[data-bg-unit="${index + 1}"]`)!.innerHTML);
   for (let start = 0; start < units.length; start += 4) {
     const end = Math.min(start + 4, units.length);
-    const result = await phase("generation_phase_content", `Implement only units ${start + 1} through ${end} of ${units.length}. Their plan is ${JSON.stringify(units.slice(start, end))}. Use the shared design system. Generate only the images needed for this batch and reuse existing ones. Keep all unit containers and set data-bg-complete="true" only on completed containers. Replace the planned placeholder content, remove data-bg-placeholder and verify referenced local images exist. Save this batch to ${entrypoint}; do not implement later batches.`, async () => await savedThrough(end) && (end < units.length || await generationOutputComplete(input.projectDir, entrypoint, projectType ?? "", sourcePages?.length, sourcePages)), { from: start + 1, to: end, total: units.length });
+    const result = await phase("generation_phase_content", `Implement only units ${start + 1} through ${end} of ${units.length}. Their plan is ${JSON.stringify(units.slice(start, end))}. Use the shared design system. Generate only the images needed for this batch and reuse existing ones. Keep all unit containers and set data-bg-complete="true" only on completed containers. Replace the planned placeholder content, remove data-bg-placeholder and verify referenced local images exist. Save this batch to ${entrypoint}; do not implement later batches.`, async () => await savedThrough(end) && (end < units.length || await generationOutputComplete(input.projectDir, entrypoint, projectType ?? "", sourcePages?.length, sourcePages, briefPages)), { from: start + 1, to: end, total: units.length });
     if (result.exitCode !== 0) return result;
   }
   await input.onEvent({ id: ulid(), ts: Date.now(), type: "chat.message_end", turnId: input.turnId });

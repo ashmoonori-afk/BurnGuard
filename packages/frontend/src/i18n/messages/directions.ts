@@ -170,4 +170,8 @@ export const directionsMessages = defineMessages({
   "directions.recipe.exploded_object": { ko: "제품 분해·구조 콘셉트", en: "Exploded product and structure concepts", "zh-CN": "产品分解·结构概念" },
   "directions.recipe.photo_object": { ko: "사진을 굿즈로", en: "Photos into merchandise", "zh-CN": "照片转周边" },
   "directions.recipe.material_shift": { ko: "부분 편집·재질 변환", en: "Partial edits and material changes", "zh-CN": "局部编辑·材质转换" },
+  "directions.continue": { ko: "이 방향으로 계속하기", en: "Continue with this direction", "zh-CN": "以此方向继续" },
+  "directions.regenerateConfirm": { ko: "다시 생성하면 선택한 방향 ‘{name}’이 해제돼요. 계속할까요?", en: "Regenerating clears the selected direction ‘{name}’. Continue?", "zh-CN": "重新生成将取消已选方向“{name}”。是否继续？" },
+  "directions.regenerateAnyway": { ko: "선택 해제하고 다시 생성", en: "Clear the selection and regenerate", "zh-CN": "取消选择并重新生成" },
+  "directions.keepSelection": { ko: "선택 유지", en: "Keep the selection", "zh-CN": "保留选择" },
 });

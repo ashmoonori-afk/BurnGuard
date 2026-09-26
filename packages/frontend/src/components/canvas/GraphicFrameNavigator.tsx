@@ -28,7 +28,8 @@ export default function GraphicFrameNavigator({
   readonly iframeRef: RefObject<HTMLIFrameElement | null>;
   /** Changes when a new document finished loading, so counts are re-read. */
   readonly requestKey: string | null;
-  readonly onFrameChange?: (index: number) => void;
+  /** The revealed artboard index, or null when the document has no artboards. */
+  readonly onFrameChange?: (index: number | null) => void;
 }) {
   const t = useT();
   const [count, setCount] = useState(0);
@@ -50,6 +51,7 @@ export default function GraphicFrameNavigator({
   useEffect(() => {
     if (count === 0) {
       setRect(null);
+      changeRef.current?.(null);
       return;
     }
     let cancelled = false;

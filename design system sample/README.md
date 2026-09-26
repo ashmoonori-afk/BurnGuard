@@ -4,7 +4,7 @@ A fictional editorial-finance reference design system bundled with BurnGuard as 
 
 > **Sources**
 > - Color, type, spacing, radii, shadow, and motion tokens were synthesized for this sample from common editorial-finance design conventions. Nothing here is derived from a specific real-world institution's design system.
-> - **Brand fonts (user-supplied):** **Zen Serif** for display, **KoPub Batang** (serif) for editorial body, **Pretendard** (variable) as the primary UI sans with **KoPub Dotum** as KR fallback, and **IBM Plex Mono** (CDN) for tabular numerals. Wired up in [`fonts/fonts.css`](./fonts/fonts.css).
+> - **Brand fonts (user-supplied):** **Zen Serif** for display, **KoPub Batang** (serif) for editorial body, **Pretendard** (variable) as the primary UI sans with **KoPub Dotum** as KR fallback, and **IBM Plex Mono** for tabular numerals. Wired up in [`fonts/fonts.css`](./fonts/fonts.css).
 > - **Logos** in `assets/logos/` are placeholder SVG monograms and wordmarks (not real trademarks). Replace them when you fork this for a real brand.
 
 ---
@@ -115,7 +115,7 @@ The Northvale brand uses **photography** and **typography** as its primary visua
 
 1. **Icon set → Lucide.** The repo ships no icons. Replace the Lucide CDN if a real brand fork has its own icon library.
 2. **Tokens are sample defaults.** Spacing, type scale, radii, shadows, and motion are reasonable defaults consistent with editorial-finance peers — they are starting points, not a real institution's authoritative tokens.
-3. **Mono → IBM Plex Mono (CDN).** No brand mono is supplied. Swap if a fork has one.
+3. **Mono → IBM Plex Mono.** No brand mono is supplied. Swap if a fork has one.
 4. **Logos are placeholders.** The six SVGs in `assets/logos/` are simple monograms; replace before shipping any real-brand artifact.
 
 

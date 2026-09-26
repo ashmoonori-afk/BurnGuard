@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildExportMenuModel,
-  buildExportRetryRequest,
   classifyChromiumFailure,
   CHROMIUM_FAILURE_MESSAGE,
 } from "../src/components/export/export-options";
@@ -35,24 +34,6 @@ describe("graphic export menu model", () => {
       expect(model.options).toEqual([]);
     },
   );
-
-  test("Given graphic PNG retry When requested Then persisted exact options are reused", () => {
-    const model = buildExportMenuModel("graphic", JSON.stringify({
-      graphic_canvas: { schema_version: 1, width: 1200, height: 628 },
-    }));
-
-    expect(buildExportRetryRequest("graphic", "png", model)).toEqual({
-      format: "png",
-      options: { png_width: 1200, png_height: 628, png_dpr: 1 },
-    });
-  });
-
-  test("Given a standard retry When requested Then existing format-only semantics remain", () => {
-    const model = buildExportMenuModel("prototype", null);
-    expect(buildExportRetryRequest("prototype", "html_zip", model)).toEqual({
-      format: "html_zip",
-    });
-  });
 
   test("Given a non-graphic project When modeled Then existing actions remain available", () => {
     const model = buildExportMenuModel("prototype", null);
