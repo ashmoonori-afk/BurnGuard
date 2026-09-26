@@ -146,4 +146,5 @@ export const systemMessages = defineMessages({
   "system.preview.failed": { ko: "미리보기를 불러오지 못했어요.", en: "Could not load the preview.", "zh-CN": "无法加载预览。" },
   "system.preview.loading": { ko: "미리보기를 불러오는 중이에요.", en: "Loading preview.", "zh-CN": "正在加载预览。" },
   "system.preview.title": { ko: "디자인 시스템 미리보기", en: "Design system preview", "zh-CN": "设计系统预览" },
+  "system.tokenUnresolved": { ko: "{value} 값을 이 시스템의 토큰으로 해석하지 못했어요", en: "{value} could not be resolved from this system's tokens", "zh-CN": "无法从此系统的令牌解析 {value}" },
 });

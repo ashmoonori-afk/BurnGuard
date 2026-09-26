@@ -7,14 +7,15 @@ import {
 } from "react";
 import { cn } from "@/lib/utils";
 import { ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, MAX_ELEMENT_SIZE, rotationPatch, targetDimensions } from "@/lib/element-geometry";
+import { useQuery } from "@tanstack/react-query";
 import { parseLocalFonts } from "@bg/shared";
 import { apiFetch } from "@/api/client";
+import { getProjectPalette } from "@/api/project-palette";
 import {
   TWEAKS_STYLE_KEYS,
   type TweaksStyleKey,
   type TweaksTarget,
 } from "@/components/canvas/TweaksLayer";
-import { BRAND_PALETTE } from "./tweaks-palette";
 import {
   composeSides,
   normalizeHex,
@@ -49,7 +50,12 @@ export function buildTweakChangePreview(
   return null;
 }
 
-const BUNDLED_FONTS = ["DM Sans", "Space Grotesk", "DM Serif Display", "Bebas Neue", "IBM Plex Mono", "Gowun Batang", "Pretendard"];
+/** Shown until the manifest listing arrives; every new project links the full bundle through fonts/fonts.css. */
+const BUNDLED_FONTS_FALLBACK = ["DM Sans", "Space Grotesk", "DM Serif Display", "Bebas Neue", "IBM Plex Mono", "Gowun Batang", "Pretendard"];
+export const BUNDLED_FONTS_QUERY_KEY = ["settings", "bundled-fonts"] as const;
+export function tweaksPaletteQueryKey(projectId: string, relPath: string | null) {
+  return ["project", projectId, "tweaks-palette", relPath] as const;
+}
 
 const FONT_WEIGHTS: Array<{ value: string; label: MessageKey }> = [
   { value: "300", label: "modes.tweaks.weight300" },
@@ -79,7 +85,9 @@ export function sizeRuleFor(styleKey: SizeRuleKey, target: Pick<TweaksTarget, "i
 }
 
 /** Simple geometry first; the existing style controls remain under Advanced. */
-export default function TweaksPanel({ target, saving, onApply, onResetAll, onClear, review }: {
+export default function TweaksPanel({ projectId, relPath, target, saving, onApply, onResetAll, onClear, review }: {
+  projectId: string;
+  relPath: string | null;
   target: TweaksTarget | null;
   saving: boolean;
   onApply: ApplyFn;
@@ -107,8 +115,8 @@ export default function TweaksPanel({ target, saving, onApply, onResetAll, onCle
           <FontFamilyRow target={target} saving={saving} onApply={onApply} />
           <SizeRow target={target} styleKey="font-size" saving={saving} onApply={onApply} />
           <FontWeightRow target={target} saving={saving} onApply={onApply} />
-          <ColorRow target={target} styleKey="color" saving={saving} onApply={onApply} />
-          <ColorRow target={target} styleKey="background-color" saving={saving} onApply={onApply} />
+          <ColorRow projectId={projectId} relPath={relPath} target={target} styleKey="color" saving={saving} onApply={onApply} />
+          <ColorRow projectId={projectId} relPath={relPath} target={target} styleKey="background-color" saving={saving} onApply={onApply} />
           <SizeRow target={target} styleKey="line-height" saving={saving} onApply={onApply} />
           <SizeRow target={target} styleKey="letter-spacing" saving={saving} onApply={onApply} />
         </div>
@@ -176,6 +184,8 @@ function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; savi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<MessageKey | "">("");
   const inline = target.inline["font-family"] ?? "";
+  const bundled = useQuery({ queryKey: BUNDLED_FONTS_QUERY_KEY, queryFn: () => apiFetch<unknown>("/api/settings/bundled-fonts").then(parseLocalFonts), staleTime: Infinity });
+  const bundledFamilies = bundled.data?.families ?? BUNDLED_FONTS_FALLBACK;
   const load = async () => {
     setLoading(true); setError("");
     try {
@@ -191,12 +201,12 @@ function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; savi
       <RowLabel>{t("modes.tweaks.font")}</RowLabel>
       <select className={inputCls("min-w-0 flex-1")} value={inline} disabled={saving} onChange={(event) => onApply({ "font-family": event.target.value || null })}>
         <option value="">{t("modes.tweaks.inheritedValue", { value: target.computed["font-family"] || t("modes.tweaks.default") })}</option>
-        {inline && ![...BUNDLED_FONTS, ...families].some((family) => JSON.stringify(family) === inline) && <option value={inline}>{inline}</option>}
-        {BUNDLED_FONTS.map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
-        {families.filter((family) => !BUNDLED_FONTS.includes(family)).map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
+        {inline && ![...bundledFamilies, ...families].some((family) => JSON.stringify(family) === inline) && <option value={inline}>{inline}</option>}
+        {bundledFamilies.map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
+        {families.filter((family) => !bundledFamilies.includes(family)).map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
       </select>
     </label>
-    <p className="text-[10px] text-muted-foreground">{t("modes.tweaks.bundledFontsHint")}</p>
+    <p className="text-[10px] text-muted-foreground">{t("modes.tweaks.bundledFontsHint", { count: bundledFamilies.length })}</p>
     <button type="button" className="text-[10px] underline" disabled={loading} onClick={() => void load()}>{loading ? t("modes.tweaks.loadingFonts") : t("modes.tweaks.loadFonts")}</button>
     {error && <p role="alert" className="text-[10px] text-destructive">{t(error)}</p>}
     {families.length > 0 && <p role="status" className="text-[10px] text-muted-foreground">{t("modes.tweaks.installedFonts", { count: families.length })}</p>}
@@ -329,12 +339,49 @@ function FontWeightRow({
   );
 }
 
+/** The current page's colours, custom properties first; the app's own UI palette never appears here. */
+export function TweaksPaletteSwatches({ projectId, relPath, onPick }: { projectId: string; relPath: string | null; onPick: (hex: string) => void }) {
+  const t = useT();
+  const palette = useQuery({ queryKey: tweaksPaletteQueryKey(projectId, relPath), queryFn: () => getProjectPalette(projectId, relPath!), enabled: relPath !== null });
+  const colors = palette.data?.colors ?? [];
+  const groups = [
+    { title: "modes.tweaks.paletteTokens" as const, colors: colors.filter((color) => color.name.startsWith("--")) },
+    { title: "modes.tweaks.paletteColors" as const, colors: colors.filter((color) => !color.name.startsWith("--")) },
+  ].filter((group) => group.colors.length > 0);
+  return <>
+    {palette.isPending && <p role="status" className="mb-2 text-[10px] text-muted-foreground">{t("modes.tweaks.paletteLoading")}</p>}
+    {palette.isError && <p role="alert" className="mb-2 text-[10px] text-destructive">{t("modes.tweaks.paletteError")}</p>}
+    {palette.data && groups.length === 0 && <p className="mb-2 text-[10px] text-muted-foreground">{t("modes.tweaks.paletteEmpty")}</p>}
+    {groups.map((group) => (
+      <div key={group.title} className="mb-2 last:mb-0">
+        <div className="mb-1 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">{t(group.title)}</div>
+        <div className="grid grid-cols-8 gap-1">
+          {group.colors.map((color) => (
+            <button
+              key={color.id}
+              type="button"
+              onClick={() => onPick(color.value)}
+              title={color.name === color.value ? color.value : `${color.name} ${color.value}`}
+              className="h-5 w-5 rounded border border-border hover:ring-2 hover:ring-emerald-500"
+              style={{ backgroundColor: color.value }}
+            />
+          ))}
+        </div>
+      </div>
+    ))}
+  </>;
+}
+
 function ColorRow({
+  projectId,
+  relPath,
   target,
   styleKey,
   saving,
   onApply,
 }: {
+  projectId: string;
+  relPath: string | null;
   target: TweaksTarget;
   styleKey: TweaksStyleKey;
   saving: boolean;
@@ -429,25 +476,7 @@ function ColorRow({
       </label>
       {open && (
         <div className="absolute right-0 top-full z-20 mt-1 w-[240px] rounded border border-border bg-popover p-2 shadow-lg">
-          {BRAND_PALETTE.map((group) => (
-            <div key={group.title} className="mb-2 last:mb-0">
-              <div className="mb-1 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                {t(group.title)}
-              </div>
-              <div className="grid grid-cols-8 gap-1">
-                {group.swatches.map((s) => (
-                  <button
-                    key={s.hex}
-                    type="button"
-                    onClick={() => pick(s.hex)}
-                    title={`${s.name} ${s.hex}`}
-                    className="h-5 w-5 rounded border border-border hover:ring-2 hover:ring-emerald-500"
-                    style={{ backgroundColor: s.hex }}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+          <TweaksPaletteSwatches projectId={projectId} relPath={relPath} onPick={pick} />
           <div className="mt-2 flex items-center gap-1">
             <input
               type="text"

@@ -7,6 +7,7 @@ import ModePanel from "../src/components/modes/ModePanel";
 import type { CanvasMode } from "../src/components/modes/types";
 
 const panelProps = {
+  projectId: "project",
   comments: [],
   activeRelPath: "index.html",
   activeSlideIdx: null,

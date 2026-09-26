@@ -1468,6 +1468,7 @@ export default function ProjectView() {
             />
             <ModePanel
               mode={livePreview ? null : mode}
+              projectId={id!}
               uxReview={{
                 projectId: id!,
                 relPath: activeRelPath,
