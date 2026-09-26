@@ -85,6 +85,9 @@ import { createPagePrompt } from "@/lib/create-page-prompt";
 import { nextActiveTabAfterClose } from "@/lib/artifact-tabs";
 import { artifactOperationRefresh } from "@/lib/artifact-operation-refresh";
 import { panelGenerationFor } from "@/lib/panel-generation";
+import { resolveUndoAction, type TweaksUndoFrame } from "@/lib/tweaks-history";
+import { canvasWriteInvalidations } from "@/lib/canvas-write-queries";
+import { deriveAutoFixRunning } from "@/lib/auto-fix-pending";
 import {
   deserializeDraws,
   serializeDraws,
@@ -190,6 +193,7 @@ export default function ProjectView() {
   const [drawColor, setDrawColor] = useState("#EF4444");
   const [drawStrokeWidth, setDrawStrokeWidth] = useState(4);
   const [drawShapes, setDrawShapes] = useState<DrawShape[]>([]);
+  const [drawCanRedo, setDrawCanRedo] = useState(false);
   const [drawResetKey, setDrawResetKey] = useState("");
   const [drawLoading, setDrawLoading] = useState(false);
   const [drawError, setDrawError] = useState<MessageKey | null>(null);
@@ -201,6 +205,8 @@ export default function ProjectView() {
   const [sendPending, setSendPending] = useState(false);
   const [autoFixPending, setAutoFixPending] = useState(false);
   const autoFixRef = useRef(false);
+  /** Set once the auto-fix turn was seen running, so a composer re-enable can release the lock without racing the send. */
+  const autoFixTurnSeenRef = useRef(false);
   const [chatFocusKey, setChatFocusKey] = useState(0);
   useEffect(() => { if (chatFocusKey > 0) setChatCollapsed(false); }, [chatFocusKey]);
   const [directionActionError, setDirectionActionError] = useState<Error | null>(null);
@@ -467,11 +473,9 @@ export default function ProjectView() {
           ? mergeTweaksTargetInline(current, variables.patch.styles)
           : current,
       );
-      void queryClient.invalidateQueries({ queryKey: ["project", id, "files"] });
-      void queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] });
-      void queryClient.invalidateQueries({
-        queryKey: ["project", id, "fs", variables.relPath, "undo-info"],
-      });
+      for (const entry of canvasWriteInvalidations(id!, variables.relPath)) {
+        void queryClient.invalidateQueries({ queryKey: [...entry.queryKey], exact: entry.exact });
+      }
       void invalidateDesignAudit();
       setRefreshTick((value) => value + 1);
     },
@@ -497,11 +501,7 @@ export default function ProjectView() {
           : current,
       );
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["project", id, "files"] }),
-        queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] }),
-        queryClient.invalidateQueries({
-          queryKey: ["project", id, "fs", variables.relPath, "undo-info"],
-        }),
+        ...canvasWriteInvalidations(id!, variables.relPath).map((entry) => queryClient.invalidateQueries({ queryKey: [...entry.queryKey], exact: entry.exact })),
         invalidateDesignAudit(),
       ]);
       setRefreshTick((value) => value + 1);
@@ -529,6 +529,7 @@ export default function ProjectView() {
   useEffect(() => {
     clearSendPending(sendPendingTimeoutRef, setSendPending);
     autoFixRef.current = false;
+    autoFixTurnSeenRef.current = false;
     setAutoFixPending(false);
     setActiveTabId("design-system");
     setOpenFileTabs([]);
@@ -679,8 +680,10 @@ export default function ProjectView() {
   }, [mode, drawBlocked]);
 
   const handleLiveEvent = useCallback((event: NormalizedEvent) => {
+    if (autoFixRef.current && event.type === "status.running") autoFixTurnSeenRef.current = true;
     if (autoFixRef.current && (event.type === "status.idle" || event.type === "status.error")) {
       autoFixRef.current = false;
+      autoFixTurnSeenRef.current = false;
       setAutoFixPending(false);
       if (event.type === "status.idle" && event.stopReason !== "error" && event.stopReason !== "interrupted") {
         void retryProjectDesignAudit(id ?? "").then(mergeDesignAuditCache).catch((error: unknown) => setAuditActionError(error instanceof Error ? error : new Error(String(error))));
@@ -829,6 +832,12 @@ export default function ProjectView() {
     } else {
       setTurnStartedAt(null);
       setStopRequested(false);
+      // A snapshot-derived idle (reconnect, restart) never replays status.idle, so release the auto-fix lock here.
+      if (autoFixTurnSeenRef.current) {
+        autoFixRef.current = false;
+        autoFixTurnSeenRef.current = false;
+        setAutoFixPending(false);
+      }
     }
   }, [chatComposerDisabled]);
   useEffect(() => {
@@ -1001,15 +1010,21 @@ export default function ProjectView() {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target;
       if (!event.isTrusted || event.defaultPrevented || event.repeat || !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z" || (target instanceof HTMLElement && (target.closest("input,textarea,select,[contenteditable],[role=dialog]") || target.isContentEditable))) return;
-      if (event.shiftKey) {
-        const operationId = artifactRedo.current.revision === undoInfoQuery.data?.current_revision ? artifactRedo.current.operations.at(-1) : undefined;
-        if (!operationId) return;
-        event.preventDefault(); undoMutation.mutate({ operationId, redo: true });
-      } else if (undoInfoQuery.data?.undo_operation_id) { event.preventDefault(); undoMutation.mutate({}); }
+      const direction = event.shiftKey ? "redo" : "undo";
+      const projectOperationId = direction === "redo"
+        ? (artifactRedo.current.revision === undoInfoQuery.data?.current_revision ? artifactRedo.current.operations.at(-1) : undefined)
+        : undoInfoQuery.data?.undo_operation_id ?? undefined;
+      const action = resolveUndoAction({ mode, direction, frame: (direction === "undo" ? tweaksUndoRef : tweaksRedoRef).current.at(-1), activeRelPath: undoActiveRelPath, projectOperationId });
+      if (action.kind === "none") return;
+      event.preventDefault();
+      if (action.kind === "tweak") {
+        tweaksMutation.mutate({ relPath: action.frame.relPath, patch: { node_bg_id: action.frame.bg_id, styles: action.styles }, history: { kind: direction } });
+      } else if (direction === "redo") undoMutation.mutate({ operationId: action.operationId, redo: true });
+      else undoMutation.mutate({});
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undoActiveRelPath, mode, composerDisabled, undoMutation, undoInfoQuery.data, tweaksMutation.isPending, patchFileMutation.isPending]);
+  }, [undoActiveRelPath, mode, composerDisabled, undoMutation, undoInfoQuery.data, tweaksMutation, patchFileMutation.isPending]);
 
   useEffect(() => {
     if (!tabs.find((tab) => tab.id === activeTabId)) {
@@ -1122,6 +1137,7 @@ export default function ProjectView() {
       setMobilePane("chat");
     } catch (error) {
       autoFixRef.current = false;
+      autoFixTurnSeenRef.current = false;
       setAutoFixPending(false);
       handleWriteError("workspace.project.autoFixFailed", error);
     }
@@ -1427,6 +1443,7 @@ export default function ProjectView() {
                 } else setDrawLoadAttempt((value) => value + 1);
               }}
               drawLayerRef={drawLayerRef}
+              onDrawHistoryChange={(state) => setDrawCanRedo(state.canRedo)}
               onCommitDraws={(shapes) => {
                 if (drawBlocked) return;
                 setDrawShapes(shapes);
@@ -1468,7 +1485,7 @@ export default function ProjectView() {
               }}
               quality={{
                 onAutoFix: () => { void requestQualityFix(); },
-                autoFixPending,
+                autoFixPending: deriveAutoFixRunning({ autoFixPending, sendPending, sessionStatus: session?.status }),
                 autoFixDisabled: Boolean(composerDisabled),
                 state: auditState,
                 pendingFindingId: safeFixMutation.isPending ? safeFixMutation.variables?.findingId ?? null : null,
@@ -1558,6 +1575,7 @@ export default function ProjectView() {
               drawColor={drawColor}
               drawStrokeWidth={drawStrokeWidth}
               drawHasShapes={!drawBlocked && drawShapes.length > 0}
+              drawCanRedo={!drawBlocked && drawCanRedo}
               onChangeDrawTool={setDrawTool}
               onChangeDrawColor={setDrawColor}
               onChangeDrawWidth={setDrawStrokeWidth}
@@ -1685,18 +1703,6 @@ function requireLoadedArtifacts(
     throw new Error("artifacts_not_loaded");
   }
   return artifacts;
-}
-
-/**
- * Undo frame for Tweaks mode. Capture the style values that WERE there so
- * Cmd/Ctrl+Z can re-emit the inverse PATCH. `forward` is the original
- * change so Cmd/Ctrl+Shift+Z can replay it after an undo.
- */
-interface TweaksUndoFrame {
-  bg_id: string;
-  relPath: string;
-  forward: Partial<Record<TweaksStyleKey, string | null>>;
-  inverse: Partial<Record<TweaksStyleKey, string | null>>;
 }
 
 type TweaksHistoryIntent =

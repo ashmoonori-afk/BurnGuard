@@ -28,6 +28,7 @@ const panelProps = {
   drawColor: "#EF4444",
   drawStrokeWidth: 4,
   drawHasShapes: false,
+  drawCanRedo: false,
   onChangeDrawTool() {},
   onChangeDrawColor() {},
   onChangeDrawWidth() {},

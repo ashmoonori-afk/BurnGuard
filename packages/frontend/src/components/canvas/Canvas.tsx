@@ -6,6 +6,7 @@ import QuickComment from "./QuickComment";
 import type { CommentPinInput, CommentPoint } from "./quick-comment";
 import type { Ref, ReactNode } from "react";
 import DrawLayer, {
+  type DrawHistoryAvailability,
   type DrawLayerHandle,
   type DrawShape,
   type DrawTool,
@@ -118,6 +119,7 @@ export default function Canvas({
   drawResetKey,
   drawLayerRef,
   onCommitDraws,
+  onDrawHistoryChange,
   onActiveSlideChange,
   canUndo,
   undoPending,
@@ -165,6 +167,7 @@ export default function Canvas({
   drawResetKey: string;
   drawLayerRef: Ref<DrawLayerHandle>;
   onCommitDraws: (shapes: DrawShape[]) => void;
+  onDrawHistoryChange?: (state: DrawHistoryAvailability) => void;
   onActiveSlideChange: (value: number | null) => void;
   /** Audit fix #7 — file-level single-step undo for the active artifact. */
   canUndo?: boolean;
@@ -484,6 +487,7 @@ export default function Canvas({
           initialShapes={drawInitialShapes}
           resetKey={drawResetKey}
           onCommit={onCommitDraws}
+          onHistoryChange={onDrawHistoryChange}
         />
         {mode === "draw" && (drawLoading || drawError) && (
           <div className="absolute inset-0 grid place-items-center bg-background/80">

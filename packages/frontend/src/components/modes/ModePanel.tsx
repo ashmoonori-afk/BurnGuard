@@ -47,6 +47,7 @@ export default function ModePanel({
   drawColor,
   drawStrokeWidth,
   drawHasShapes,
+  drawCanRedo,
   onChangeDrawTool,
   onChangeDrawColor,
   onChangeDrawWidth,
@@ -84,6 +85,7 @@ export default function ModePanel({
   drawColor: string;
   drawStrokeWidth: number;
   drawHasShapes: boolean;
+  drawCanRedo: boolean;
   onChangeDrawTool: (t: DrawTool) => void;
   onChangeDrawColor: (c: string) => void;
   onChangeDrawWidth: (w: number) => void;
@@ -141,6 +143,7 @@ export default function ModePanel({
           color={drawColor}
           strokeWidth={drawStrokeWidth}
           hasShapes={drawHasShapes}
+          canRedo={drawCanRedo}
           onChangeTool={onChangeDrawTool}
           onChangeColor={onChangeDrawColor}
           onChangeWidth={onChangeDrawWidth}
