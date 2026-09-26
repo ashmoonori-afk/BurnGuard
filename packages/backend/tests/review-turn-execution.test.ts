@@ -361,6 +361,29 @@ test("Given a deck generation that finished When the mandatory copy review fails
   } finally { unsubscribe(); }
 });
 
+test("Given a prototype brief listing about.html When the adapter writes only index.html Then the turn resumes instead of committing", async () => {
+  getSqlite().prepare("UPDATE projects SET options_json=? WHERE id=?").run(JSON.stringify({ design_brief: {
+    schema_version: 1, output_type: "prototype", audience: "Customers", objective: "Introduce the product", content_source: "none",
+    locale: "ko", brand_mode: "none", visual_mood: "formal", density: "balanced", output_size: "responsive", pages: ["about.html"],
+  } }), projectId);
+  const events: import("@bg/shared").NormalizedEvent[] = [];
+  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  let calls = 0;
+  try {
+    const turn = start(async (_backend, input) => {
+      calls++;
+      await writeFile(path.join(input.projectDir, "index.html"), '<h1>Home</h1><nav><a href="about.html">About</a></nav>');
+      if (calls === 2) await writeFile(path.join(input.projectDir, "about.html"), "<h1>About</h1>");
+      return { exitCode: 0 };
+    }, "Create the site");
+    await turn.promise;
+    expect(calls).toBe(2);
+    expect(events.filter(event => event.type === "tool.started").map(event => event.tool)).toContain("generation_resume_incomplete");
+    expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+    expect(await readFile(path.join(projectDir, "about.html"), "utf8")).toBe("<h1>About</h1>");
+  } finally { unsubscribe(); }
+});
+
 test("Given a slide_deck edit that changes the deck When the copy review runs Then it receives a bounded context and at most two attempts", async () => {
   getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
   const { DECK_REVIEW_PROMPT } = await import("../src/harness/skills/deck-skill");

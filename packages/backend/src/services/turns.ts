@@ -415,6 +415,7 @@ async function runUserTurnInternal(
             payload.attachments ?? [],
           )
           : undefined;
+        const briefPages = parseStoredProjectOptions(project.options_json).design_brief?.pages;
         // Old projects carry a copied runtime. Refresh only the owned stage,
         // so the preview receives engine fixes without touching live files.
         if (project.type === "slide_deck") await prepareSlideDeckExport(stageDir, project.entrypoint);
@@ -481,8 +482,8 @@ async function runUserTurnInternal(
             try {
               const phased = needsGenerationPhases(project.type, payload.text, deckStarter);
               const result = phased
-                ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input), project.type, sourcePages)
-                : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages));
+                ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input), project.type, sourcePages, briefPages)
+                : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages, briefPages));
               if (result.exitCode !== 0 || providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
               // The copy review reads the deck this turn wrote; an edit that left the deck alone has nothing for it to read.
               if (project.type === "slide_deck" && (phased || changedTreePaths(beforeAdapter, await inspectCanonicalTree(stageDir)).includes(project.entrypoint))) {
@@ -511,7 +512,7 @@ async function runUserTurnInternal(
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "generation_deck_review", ok: reviewed });
                 if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
               }
-              if (!await generationOutputComplete(stageDir, project.entrypoint, project.type)) throw new ArtifactOperationError("turn_failed", "Generated content is incomplete");
+              if (!await generationOutputComplete(stageDir, project.entrypoint, project.type, undefined, undefined, briefPages)) throw new ArtifactOperationError("turn_failed", "Generated content is incomplete");
               await ensureThreeSceneRuntime(stageDir);
               await ensureCharts(stageDir);
               if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
@@ -529,7 +530,7 @@ async function runUserTurnInternal(
               if (blocking.length > 0 || providerReportedFailure) throw new DesignReviewError();
               designReviewResult = designReview.result;
               // A repair edits the stage after the completion gate, so repaired output is gated again.
-              if ((designReview.repairs > 0 || sourcePages !== undefined) && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages)) {
+              if ((designReview.repairs > 0 || sourcePages !== undefined) && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages, briefPages)) {
                 throw new ArtifactOperationError("publication_failed", "Design review left incomplete or remapped output");
               }
               const encodingIssues = await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal);
