@@ -1,7 +1,7 @@
 import { backendCanEverGenerateGraphics } from "../services/graphic-capability";
 import { ulid } from "ulid";
 import { Hono } from "hono";
-import { parseGenerationOptions } from "@bg/shared";
+import { BACKEND_IDS, parseGenerationOptions } from "@bg/shared";
 import { loadConfig } from "../config";
 import { detectBackends } from "../services/backends";
 import { resolveGenerationOptions } from "../services/generation-options";
@@ -375,10 +375,10 @@ sessionRoutes.patch("/api/sessions/:id/backend", async (c) => {
   if (!isRecord(body)) {
     return c.json(fail("invalid_body", "Expected a JSON object"), 400);
   }
-  const backend = body.backend_id;
-  if (backend !== "claude-code" && backend !== "codex") {
+  const backend = BACKEND_IDS.find((id) => id === body.backend_id);
+  if (backend === undefined) {
     return c.json(
-      fail("invalid_backend", "backend_id must be 'claude-code' or 'codex'"),
+      fail("invalid_backend", `backend_id must be one of ${BACKEND_IDS.join(", ")}`),
       400,
     );
   }

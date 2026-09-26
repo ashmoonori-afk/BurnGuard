@@ -1,5 +1,5 @@
 import type { CreateProjectRequest } from "@bg/shared";
-import { UpgradeContractError } from "@bg/shared";
+import { BACKEND_IDS, UpgradeContractError } from "@bg/shared";
 import { parseProjectOptions } from "../services/project-options";
 
 type ProjectInputErrorCode =
@@ -137,5 +137,5 @@ function isProjectType(
 function isBackendId(
   value: unknown,
 ): value is CreateProjectRequest["backend_id"] {
-  return value === "claude-code" || value === "codex";
+  return BACKEND_IDS.some((id) => id === value);
 }

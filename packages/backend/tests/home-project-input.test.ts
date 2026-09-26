@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { BACKEND_IDS } from "@bg/shared";
 import { homeRoutes } from "../src/routes/home";
 import { parseProjectInput, ProjectInputError } from "../src/routes/home-project-input";
 
@@ -33,6 +34,10 @@ async function createProject(body: unknown): Promise<Response> {
 }
 
 describe("home project input boundary", () => {
+  test.each([...BACKEND_IDS])("Given a create body on backend %s When parsed Then the backend is accepted exactly as the contract enumerates it", (backendId) => {
+    expect(parseProjectInput({ name: "Site", type: "prototype", design_system_id: null, backend_id: backendId }).backendId).toBe(backendId);
+  });
+
   test("Given a graphic canvas When parsed Then graphic creation uses index.html", () => {
     expect(parseProjectInput({
       name: "SNS 카드",

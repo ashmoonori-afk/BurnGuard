@@ -62,6 +62,18 @@ describe("production session route boundaries", () => {
     expect(getSqlite().query("SELECT backend_id FROM sessions WHERE id=?").get(sessionId)).toEqual({ backend_id: "claude-code" });
   });
 
+  test("Given an idle session When the backend switch names any enumerated backend Then it is accepted and only an unknown id is refused", async () => {
+    const gemini = await request(`/api/sessions/${sessionId}/backend`, "PATCH", { backend_id: "gemini" });
+    expect(gemini.status).toBe(200);
+    expect(await gemini.json()).toMatchObject({ data: { backend_id: "gemini" } });
+    expect((await request(`/api/sessions/${sessionId}/backend`, "PATCH", { backend_id: "copilot" })).status).toBe(200);
+    expect(getSqlite().query("SELECT backend_id FROM sessions WHERE id=?").get(sessionId)).toEqual({ backend_id: "copilot" });
+    const unknown = await request(`/api/sessions/${sessionId}/backend`, "PATCH", { backend_id: "unknown" });
+    expect(unknown.status).toBe(400);
+    expect(await unknown.json()).toMatchObject({ error: { code: "invalid_backend" } });
+    expect((await request(`/api/sessions/${sessionId}/backend`, "PATCH", { backend_id: "claude-code" })).status).toBe(200);
+  });
+
   test("Given checkpoint restore identities When production route restores Then it mints a new exact operation", async () => {
     const coordinator = new ArtifactCoordinator(getSqlite());
     const base = await coordinator.initialize(projectId, root);
