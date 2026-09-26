@@ -325,7 +325,8 @@ for (const reviewFails of [false, true]) test(`Given a deck generation When mand
     return { exitCode: 0 };
   }, "Create a large slide deck");
   await turn.promise;
-  expect(calls).toBe(reviewFails ? 5 : 3);
+  // One plan phase, one content phase, then the review: two attempts, not three.
+  expect(calls).toBe(reviewFails ? 4 : 3);
   expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(reviewFails ? "base" : '<section data-slide><h1>Reviewed wording</h1></section>' + runtime);
   const reviewTools = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type IN ('tool.started','tool.finished') ORDER BY sequence").all(sessionId)
     .map(row => JSON.parse(row.payload_json)).filter(event => event.turnId === turn.turnId && !String(event.tool).startsWith("generation_phase_"));
@@ -349,7 +350,8 @@ test("Given a deck generation that finished When the mandatory copy review fails
       return { exitCode: 0 };
     }, "Update wording");
     await turn.promise;
-    expect(calls).toBe(4);
+    // The edit changed the deck, so the review runs: one generation plus two review attempts.
+    expect(calls).toBe(3);
     expect(events.filter(event => event.type === "chat.message_end")).toEqual([]);
     expect(events.filter(event => event.type === "status.idle").map(event => event.stopReason)).toEqual(["error"]);
     const errors = events.filter(event => event.type === "status.error");
@@ -357,6 +359,44 @@ test("Given a deck generation that finished When the mandatory copy review fails
     expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
     expect(await inspectCanonicalTree(projectDir)).toEqual(before);
   } finally { unsubscribe(); }
+});
+
+test("Given a slide_deck edit that changes the deck When the copy review runs Then it receives a bounded context and at most two attempts", async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
+  const { DECK_REVIEW_PROMPT } = await import("../src/harness/skills/deck-skill");
+  const { IMAGE_ARTBOARD_COMPLETION_CHECKS } = await import("../src/harness/design-craft");
+  const reviewPrompts: string[] = [];
+  let calls = 0;
+  const turn = start(async (_backend, input) => {
+    calls++;
+    if (input.turnId.endsWith("-review")) { reviewPrompts.push(input.prompt); return { exitCode: 1 }; }
+    await writeFile(path.join(input.projectDir, "index.html"), '<section data-slide><h1>Edited</h1></section><script src="runtime/deck-stage.js"></script>');
+    return { exitCode: 0 };
+  }, "Update wording");
+  await turn.promise;
+  expect(calls).toBe(3);
+  expect(reviewPrompts).toHaveLength(2);
+  for (const prompt of reviewPrompts) {
+    expect(prompt).toContain(DECK_REVIEW_PROMPT);
+    expect(prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
+    expect(prompt).toContain("## Deck structure");
+    expect(prompt).toContain("1 slide(s)");
+    expect(prompt).not.toContain("## Request");
+    expect(prompt).not.toContain("Update wording");
+  }
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "failed" });
+});
+
+test("Given a slide_deck edit that leaves the deck untouched When the turn finalizes Then no copy review runs and the turn commits", async () => {
+  getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
+  const deck = '<section data-slide><h1>Kept</h1></section><script src="runtime/deck-stage.js"></script>';
+  await new ArtifactCoordinator(getSqlite()).run({ projectId, projectDir, kind: "turn", expectedRevision: 0, expectedArtifactDigest: digest, mutate: async stage => { await writeFile(path.join(stage, "index.html"), deck); } });
+  let calls = 0;
+  const turn = start(async () => { calls++; return { exitCode: 0 }; }, "Update wording");
+  await turn.promise;
+  expect(calls).toBe(1);
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(deck);
 });
 
 test("Given a provider that ends its message and then reports a fatal error When the turn refuses Then the buffered success terminals are withheld", async () => {

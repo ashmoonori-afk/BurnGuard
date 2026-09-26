@@ -25,6 +25,8 @@ import { resolveGenerationOptions } from "./generation-options";
 import { buildPrompt } from "../harness/prompt-builder";
 import type { TaskPresetObservation } from "../harness/task-preset-observation";
 import { DECK_REVIEW_PROMPT } from "../harness/skills/deck-skill";
+import { IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../harness/design-craft";
+import { summarizeDeckHtml } from "../harness/structure-extractor";
 import { runAdapterTurn } from "../adapters/registry";
 import { loadConfig } from "../config";
 import { hasAgentControlFiles } from "../security/agent-control-files";
@@ -477,20 +479,34 @@ async function runUserTurnInternal(
             };
             const runAdapter = dependencies.runAdapter ?? runAdapterTurn;
             try {
-              const result = needsGenerationPhases(project.type, payload.text, deckStarter)
+              const phased = needsGenerationPhases(project.type, payload.text, deckStarter);
+              const result = phased
                 ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input), project.type, sourcePages)
                 : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages));
               if (result.exitCode !== 0 || providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
-              if (project.type === "slide_deck") {
+              // The copy review reads the deck this turn wrote; an edit that left the deck alone has nothing for it to read.
+              if (project.type === "slide_deck" && (phased || changedTreePaths(beforeAdapter, await inspectCanonicalTree(stageDir)).includes(project.entrypoint))) {
                 const expectedSlides = sourcePages?.length ?? parse(await readFile(path.join(stageDir, project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length;
                 const toolCallId = ulid();
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.started", turnId, toolCallId, tool: "generation_deck_review", input: { scope: "all_slides" } });
                 let reviewFailed = false;
-                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: `${prompt}\n\n${DECK_REVIEW_PROMPT}\nPreserve all ${expectedSlides} slides and completed content. Replace unfinished placeholders and repair missing local images before returning.`, onEvent: async (event) => {
+                // A bounded context of its own, not the creation prompt with the review appended: the
+                // request must not precede the review instructions, and the review never replays it.
+                const deckSummary = await summarizeDeckHtml(path.join(stageDir, project.entrypoint));
+                const reviewPrompt = [
+                  "## Project", `- id: ${project.id}`, `- name: ${project.name}`, `- type: ${project.type}`, `- entrypoint: ${project.entrypoint}`, `- directory: ${stageDir}`, "",
+                  ...(sessionContext.designSystemPin ? ["<pinned_design_system>", JSON.stringify({ revision: sessionContext.designSystemPin.revision, digest: sessionContext.designSystemPin.digest }), sessionContext.designSystemPin.context, "</pinned_design_system>", ""] : []),
+                  ...(deckSummary === null ? [] : ["## Deck structure", deckSummary, ""]),
+                  ...(sourceInstructions === "" ? [] : [sourceInstructions.trim(), ""]),
+                  IMAGE_ARTBOARD_COMPLETION_CHECKS, "",
+                  DECK_REVIEW_PROMPT,
+                  `Preserve all ${expectedSlides} slides and completed content. Replace unfinished placeholders and repair missing local images before returning.`,
+                ].join("\n");
+                const review = await runWithContinuation({ ...adapterInput, turnId: `${turnId}-review`, prompt: reviewPrompt, userEvent: { type: "user.message", text: reviewPrompt }, onEvent: async (event) => {
                   // A failed review belongs to this check, not the enclosing turn: retain it and refuse below.
                   if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason !== "end_turn")) { reviewFailed = true; return; }
                   await adapterInput.onEvent(event);
-                } }, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, expectedSlides, sourcePages), { idleMs: 120_000 });
+                } }, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, expectedSlides, sourcePages), { idleMs: 120_000, attempts: 2 });
                 const reviewed = review.exitCode === 0 && !reviewFailed && !providerReportedFailure;
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "generation_deck_review", ok: reviewed });
                 if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
