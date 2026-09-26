@@ -4,13 +4,15 @@ import type { PromptPurpose } from "./prompt-purpose";
 
 const COMMON_BASELINE_IDS = ["CR-001", "CR-002", "CR-003", "CR-004", "CR-005", "CR-008", "CR-009"] as const;
 const PPTX_REQUEST_PATTERN = /\b(?:pptx|powerpoint)\b/i;
+/** Shared by the research router and the deliverable router so the two cannot drift. */
+export const DIAGRAM_REQUEST_PATTERN = /\b(?:diagram|flowchart|org(?:anization(?:al)?)? chart|process map|service topology|system topology)\b|다이어그램|흐름도|조직도|프로세스\s*맵|서비스\s*구조/iu;
 
 const INTENT_SELECTORS = [
   { intent: "company", purpose: "deck.company", pattern: /\b(?:company profile|corporate overview|company introduction)\b|(?:회사|기업)\s*(?:소개|개요)|회사소개서|기업소개서/iu },
   { intent: "sales", purpose: "deck.sales", pattern: /\b(?:sales proposal|client proposal|commercial proposal|sales deck)\b|(?:고객사?|영업)\s*(?:제안서|자료|덱|슬라이드)|영업제안서/iu },
   { intent: "report", purpose: "deck.report", pattern: /\b(?:quarterly|annual|business|status|performance)\s+report(?:\s+deck)?\b|(?:분기|연간)\s*(?:실적|업무|성과)?\s*(?:보고서|보고 자료|리포트)|(?:업무|실적|성과)\s*(?:보고서|보고 자료|리포트)/iu },
   { intent: "training", purpose: "deck.training", pattern: /\b(?:training deck|training material|employee training|onboarding training)\b|(?:신입사원|사내)?\s*교육\s*(?:자료|덱|슬라이드)|연수\s*(?:자료|덱|슬라이드)/iu },
-  { intent: "diagram", purpose: "prototype.diagram", pattern: /\b(?:diagram|flowchart|org(?:anization(?:al)?)? chart|process map|service topology|system topology)\b|다이어그램|흐름도|조직도|프로세스\s*맵|서비스\s*구조/iu },
+  { intent: "diagram", purpose: "prototype.diagram", pattern: DIAGRAM_REQUEST_PATTERN },
   { intent: "dashboard", purpose: "prototype.dashboard", pattern: /\b(?:dashboard|admin console|analytics console)\b|대시보드|관리자\s*화면|분석\s*화면/iu },
   { intent: "editorial_microsite", purpose: "prototype.editorial", pattern: /\b(?:editorial microsite|editorial site|magazine site|newsletter site)\b|편집형\s*사이트|매거진\s*사이트|뉴스레터\s*사이트/iu },
   { intent: "design_sandbox", purpose: "prototype.sandbox", pattern: /\b(?:design sandbox|design-system playground|design system playground|component gallery)\b|디자인\s*샌드박스|컴포넌트\s*(?:갤러리|쇼케이스)|디자인\s*시스템\s*문서/iu },

@@ -42,6 +42,7 @@ export function appendGraphicOutputContext(lines: string[], canvas: GraphicCanva
   lines.push("</burnguard-graphic-output-v1>");
   lines.push(`<burnguard-graphic-rules-v1 kind="${graphicSet.kind}">`);
   for (const rule of rulesForKind(graphicSet.kind, canvas)) lines.push(`- ${rule}`);
+  if (storyShaped) lines.push(`- Keep the top and bottom ${zone} CSS px of every frame (safe_zone_css_px) free of text and logos; that zone scales with the frame.`);
   if (graphicSet.kind === "product_detail") appendDetailBrief(lines, graphicSet.detail_brief);
   lines.push("</burnguard-graphic-rules-v1>");
   lines.push("- PNG is the export format, not a replacement for index.html. If generating a raster image, save it inside the output directory and reference it from the authored index.html.");
@@ -75,7 +76,6 @@ function rulesForKind(kind: GraphicSetKind, canvas: GraphicCanvasV1): readonly s
         `Author exactly ${canvas.width} × ${canvas.height} CSS px per artboard and exactly as many [data-graphic-artboard] sections as artboard_count, in declared order.`,
         "Every artboard is the same size; the first artboard is the cover and the last artboard is the call to action.",
         "One message per artboard: a single claim, no second topic, no continuation of the previous sentence.",
-        `When the frame is 9:16, keep the top and bottom ${Math.round(canvas.height * STORY_SAFE_ZONE_RATIO)} CSS px free of text and logos; that zone scales with the frame.`,
         "Give each artboard the id frame-{sequence}-{purpose} so the exporter keeps the declared order.",
       ];
     case "banner_set":

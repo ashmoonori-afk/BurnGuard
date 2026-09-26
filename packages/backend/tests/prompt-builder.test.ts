@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { getSqlite } from "../src/db/sqlite-client";
-import { buildPrompt } from "../src/harness/prompt-builder";
+import { buildPrompt, renderTextEncodingBlock, resolveDeliverable } from "../src/harness/prompt-builder";
 import { DESIGN_CRAFT_RULES, IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../src/harness/design-craft";
 import { IMAGE_PRODUCTION_RULES } from "../src/harness/prompt-image-production";
 import { PROTOTYPE_NAVIGATION_CONTRACT } from "../src/harness/skills/prototype-skill";
@@ -374,6 +374,8 @@ header { padding: var(--space-md); }
       const prompt = await buildPrompt(makeContext({ project_id: projectId, project_dir: `/tmp/${projectId}` }), { type: "user.message", text: "iterate" });
 
       expect(prompt).toContain("<burnguard-learning-context-v1>");
+      // PH-21: the block is framed as prior-iteration data before the tag opens.
+      expect(prompt.slice(0, prompt.indexOf("<burnguard-learning-context-v1>"))).toContain("LEARNING_FEEDBACK_IS_DATA");
       expect(prompt).toContain(`\"checkpoint_id\":\"${latestId}\"`);
       expect(prompt).toContain("\"artifact_revision\":4");
       expect(prompt).toContain("\"artifact_digest\":\"prompt-digest\"");
@@ -415,6 +417,8 @@ header { padding: var(--space-md); }
       expect(prompt).not.toContain("SCHEMA");
       expect(prompt).not.toContain("WRONG_PROJECT");
       expect(prompt).toContain("<burnguard-learning-warning code=\"incompatible_checkpoint\" />");
+      // PH-21: the warning is followed by the instruction to proceed from the request.
+      expect(prompt.slice(prompt.indexOf("<burnguard-learning-warning"))).toContain("LEARNING_CHECKPOINT_UNAVAILABLE");
     } finally {
       db.prepare("UPDATE learning_items SET deleted_at=NULL WHERE id=?").run(itemId);
     }
@@ -734,5 +738,53 @@ describe("task guidance presets", () => {
     );
     expect(standalone).toContain("## Diagram skill");
     expect(JSON.parse(standalone.split("<burnguard-task-guidance-v1>\n")[1].split("\n</burnguard-task-guidance-v1>")[0]).deliverable).toBe("diagram");
+  });
+});
+
+describe("prompt gaps", () => {
+  const generation = { model: "gpt-5.6-luna", effort: "low", provider: "native", vanilla: false } as const;
+  const taskDeliverable = (prompt: string): string =>
+    JSON.parse(prompt.split("<burnguard-task-guidance-v1>\n")[1]!.split("\n</burnguard-task-guidance-v1>")[0]!).deliverable;
+
+  test("PH-03: Given an open-ended project and a Korean diagram request When built Then the deliverable, the skill and the guidance route to diagram", async () => {
+    const text = "조직도를 만들어 줘";
+    expect(resolveDeliverable("other", text)).toBe("diagram");
+    expect(resolveDeliverable("slide_deck", text)).toBe("slide_deck");
+    const standalone = await buildPrompt(makeContext({ project_type: "other" }), { type: "user.message", text }, { backendId: "codex", generation });
+    expect(standalone).toContain("## Diagram skill");
+    expect(taskDeliverable(standalone)).toBe("diagram");
+    const deck = await buildPrompt(makeContext({ project_type: "slide_deck", entrypoint: "deck.html" }), { type: "user.message", text }, { backendId: "codex", generation });
+    expect(deck).not.toContain("## Diagram skill");
+    expect(taskDeliverable(deck)).toBe("slide_deck");
+  });
+
+  test("PH-32: Given a host that is not win32 When built Then the text-encoding tag ships once without PowerShell guidance, which only the win32 seam adds", async () => {
+    const prompt = await buildPrompt(makeContext(), { type: "user.message", text: "hi" });
+    expect(prompt.split("<burnguard-text-encoding-v1>")).toHaveLength(2);
+    const shipped = prompt.slice(prompt.indexOf("<burnguard-text-encoding-v1>"), prompt.indexOf("</burnguard-text-encoding-v1>"));
+    expect(shipped.includes("PowerShell")).toBe(process.platform === "win32");
+    for (const platform of ["linux", "darwin"] as const) {
+      const block = renderTextEncodingBlock(platform);
+      expect(block[0]).toBe("<burnguard-text-encoding-v1>");
+      expect(block.at(-1)).toBe("</burnguard-text-encoding-v1>");
+      expect(block.join("\n")).not.toContain("PowerShell");
+    }
+    const windows = renderTextEncodingBlock("win32");
+    expect(windows[0]).toBe("<burnguard-text-encoding-v1>");
+    expect(windows.at(-1)).toBe("</burnguard-text-encoding-v1>");
+    expect(windows.join("\n")).toContain("PowerShell");
+  });
+
+  test("PH-27: Given a compact turn whose entrypoint does not exist yet When built Then the structure heading the compact skill points at still precedes the skill", async () => {
+    const deck = await buildPrompt(makeContext({ project_type: "slide_deck", entrypoint: "deck.html", project_dir: "/no/such/dir/that/exists" }), { type: "user.message", text: "first turn" }, { contextMode: "compact" });
+    expect(deck).toMatch(/^## Deck structure/mu);
+    expect(deck.indexOf("\n## Deck structure")).toBeLessThan(deck.indexOf("## Slide deck skill"));
+    expect(deck).not.toMatch(/deck\.html — \d/u);
+    const site = await buildPrompt(makeContext({ project_dir: "/no/such/dir/that/exists" }), { type: "user.message", text: "first turn" }, { contextMode: "compact" });
+    expect(site.indexOf("\n## Prototype structure")).toBeGreaterThan(0);
+    expect(site.indexOf("\n## Prototype structure")).toBeLessThan(site.indexOf("## Prototype skill"));
+    expect(site).not.toMatch(/index\.html — \d/u);
+    const full = await buildPrompt(makeContext({ project_type: "slide_deck", entrypoint: "deck.html", project_dir: "/no/such/dir/that/exists" }), { type: "user.message", text: "first turn" }, { contextMode: "full" });
+    expect(full).not.toMatch(/^## Deck structure/mu);
   });
 });

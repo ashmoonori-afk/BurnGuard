@@ -9,6 +9,7 @@ type PrototypeSiteContext = {
   readonly entrypoint: string;
   readonly files: readonly FileInfo[];
   readonly activeRelPath?: string;
+  readonly contextMode?: "compact" | "full";
 };
 
 export async function appendPrototypeSiteContext(lines: string[], context: PrototypeSiteContext): Promise<void> {
@@ -19,6 +20,9 @@ export async function appendPrototypeSiteContext(lines: string[], context: Proto
   const entrypointSummary = await summarizePrototypeHtml(path.join(context.projectDir, context.entrypoint));
   if (entrypointSummary !== null) {
     lines.push("## Prototype structure (use this map; only Read sections you must change)", entrypointSummary, "");
+  } else if (context.contextMode === "compact") {
+    // The compact skill names this heading as its map; a first turn has no entrypoint to summarize.
+    lines.push("## Prototype structure", "No readable entrypoint yet: write the complete scaffold first, then use targeted edits.", "");
   }
   if (activeRelPath !== undefined) {
     lines.push(`## Active page: ${activeRelPath}`);
