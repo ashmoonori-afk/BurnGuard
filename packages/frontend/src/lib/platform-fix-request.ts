@@ -1,4 +1,5 @@
 import type { PlatformFindingView } from "@/components/export/export-delivery";
+import { t } from "@/i18n/t";
 
 const MAX_FINDINGS = 20;
 
@@ -16,7 +17,7 @@ export function platformFixRequest(
     page: finding.page,
     message: finding.message,
   }));
-  return `플랫폼 패키지 내보내기 점검에서 발견된 문제를 수정해 주세요.
+  return `${t("export.fixRequest.intro")}
 ${JSON.stringify(bounded)}
-해당 페이지의 실제 원인을 고치고, 기존 콘텐츠와 디자인 방향은 유지하세요. 점검을 끄거나 기준을 낮추는 방식으로 통과시키지 마세요. 수정이 끝나면 다시 내보내기를 실행합니다. 변경 내용과 남은 문제만 간결하게 알려 주세요.`;
+${t("export.fixRequest.outro")}`;
 }

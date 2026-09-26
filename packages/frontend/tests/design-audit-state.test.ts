@@ -6,6 +6,8 @@ import { DESIGN_AUDIT_ERROR_COPY } from "../src/components/modes/design-audit-co
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import QualityPanel, { type QualityPanelBinding } from "../src/components/modes/QualityPanel";
+import QualityFindingCard from "../src/components/modes/QualityFindingCard";
+import { t } from "../src/i18n/t";
 
 const DIGEST_A = "a".repeat(64);
 const DIGEST_B = "b".repeat(64);
@@ -22,7 +24,7 @@ function result(overrides: Partial<DesignAuditResult> = {}): DesignAuditResult {
 
 test("Given quality findings When current or busy Then automatic repair is enabled only for the current idle report", () => {
   const report = result({ overall_status: "must_fix", checks: [check({ status: "fail", findings: [finding()] })] });
-  const quality: QualityPanelBinding = { state: { kind: "must_fix", running: false, report }, pendingFindingId: null, focusedFindingId: null, revealResult: null, onRetry() {}, onOpenFile() {}, onReveal() {}, onApplySafeFix() {}, onAutoFix() {}, autoFixPending: false, autoFixDisabled: false };
+  const quality: QualityPanelBinding = { state: { kind: "must_fix", running: false, report }, pendingFindingId: null, focusedFindingId: null, revealResult: null, onRetry() {}, onOpenFile() {}, onReveal() {}, onApplySafeFix() {}, onAutoFix() {}, onRequestFix() {}, autoFixPending: false, autoFixDisabled: false };
   const repairButton = (binding: QualityPanelBinding) => renderToStaticMarkup(createElement(QualityPanel, { quality: binding })).match(/<button[^>]*>[\s\S]*?<\/button>/g)?.find((button) => button.includes("문제 자동 수정") || button.includes("자동으로 수정하고 있어요")) ?? "";
   expect(repairButton(quality)).not.toContain('disabled=""');
   expect(repairButton({ ...quality, autoFixPending: true })).toContain('disabled=""');
@@ -70,7 +72,18 @@ describe("design audit grouping and actions", () => {
   });
   test("Given a stale safe-fix finding When resolving actions Then reveal stays available and mutation is closed", () => {
     const withFix = finding({ safe_fix: { kind: "patch_html_node", rel_path: "index.html", request: { node_bg_id: "hero-title", styles: { "font-size": "12px" } } } });
-    expect(designAuditActionAvailability(withFix, { current: false, running: false, pendingFindingId: null })).toEqual({ canOpenFile: true, canReveal: true, canApplySafeFix: false, applying: false });
+    expect(designAuditActionAvailability(withFix, { current: false, running: false, pendingFindingId: null })).toEqual({ canOpenFile: true, canReveal: true, canApplySafeFix: false, canRequestFix: false, applying: false });
+  });
+  test("Given a current idle report When resolving actions Then the per-finding AI request is gated like auto-fix (UXM-34)", () => {
+    const plain = finding();
+    expect(designAuditActionAvailability(plain, { current: true, running: false, pendingFindingId: null }).canRequestFix).toBe(true);
+    expect(designAuditActionAvailability(plain, { current: true, running: false, pendingFindingId: null, aiDisabled: true }).canRequestFix).toBe(false);
+    expect(designAuditActionAvailability(plain, { current: true, running: true, pendingFindingId: null }).canRequestFix).toBe(false);
+    expect(designAuditActionAvailability(plain, { current: true, running: false, pendingFindingId: "other" }).canRequestFix).toBe(false);
+    const html = renderToStaticMarkup(createElement(QualityFindingCard, { finding: plain, actionContext: { current: true, running: false, pendingFindingId: null }, revealResult: null, onOpenFile() {}, onReveal() {}, onApplySafeFix() {}, onRequestFix() {} }));
+    const button = html.match(/<button[^>]*>[\s\S]*?<\/button>/g)?.find((candidate) => candidate.includes(t("modes.quality.requestFix"))) ?? "";
+    expect(button).not.toBe("");
+    expect(button).not.toContain('disabled=""');
   });
   test("Given a running audit or pending fix When resolving actions Then rerun and every fix are mutually excluded", () => {
     const withFix = finding({ safe_fix: { kind: "patch_html_node", rel_path: "index.html", request: { node_bg_id: "hero-title", styles: { "font-size": "12px" } } } });
@@ -105,7 +118,7 @@ describe("design audit state", () => {
     const settled = { renderable: true, report: null, pending: false, rerunning: false, errorCode: null, currentDigest: DIGEST_A } as const;
     expect(designAuditViewState(settled).kind).toBe("idle");
     expect(designAuditViewState({ ...settled, rerunning: true }).kind).toBe("loading");
-    const quality: QualityPanelBinding = { state: designAuditViewState(settled), pendingFindingId: null, focusedFindingId: null, revealResult: null, onRetry() {}, onOpenFile() {}, onReveal() {}, onApplySafeFix() {}, onAutoFix() {}, autoFixPending: false, autoFixDisabled: false };
+    const quality: QualityPanelBinding = { state: designAuditViewState(settled), pendingFindingId: null, focusedFindingId: null, revealResult: null, onRetry() {}, onOpenFile() {}, onReveal() {}, onApplySafeFix() {}, onAutoFix() {}, onRequestFix() {}, autoFixPending: false, autoFixDisabled: false };
     const markup = renderToStaticMarkup(createElement(QualityPanel, { quality }));
     expect(markup).toContain("다시 검사해 주세요");
     expect(markup).not.toContain("검사하고");

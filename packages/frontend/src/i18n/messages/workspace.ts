@@ -141,4 +141,7 @@ export const workspaceMessages = defineMessages({
   "workspace.canvas.identityUnavailable": { ko: "파일이 갱신되는 중이에요. 잠시 후 다시 시도해 주세요.", en: "The file is being updated. Try again in a moment.", "zh-CN": "文件正在更新中。请稍后重试。" },
   "workspace.comments.showResolved": { ko: "해결된 코멘트도 보기", en: "Show resolved comments", "zh-CN": "显示已解决的评论" },
   "workspace.project.busyTurn": { ko: "AI 작업이 진행 중이에요. 끝난 뒤 다시 시도해 주세요.", en: "An AI task is in progress. Try again once it finishes.", "zh-CN": "AI 任务正在进行中。请等待完成后重试。" },
+  "workspace.quality.fixDisplay": { ko: "품질 문제 자동 수정 요청 · {count}개", en: { one: "Quality fix request · {count} issue", other: "Quality fix request · {count} issues" }, "zh-CN": "质量问题修复请求 · {count} 项" },
+  "workspace.export.fixDisplay": { ko: "플랫폼 점검 문제 수정 요청 · {count}개", en: { one: "Platform check fix request · {count} finding", other: "Platform check fix request · {count} findings" }, "zh-CN": "平台检查问题修复请求 · {count} 项" },
+  "workspace.ux.fixDisplay": { ko: "UX 개선 요청 · {title}", en: "UX improvement request · {title}", "zh-CN": "UX 改进请求 · {title}" },
 });

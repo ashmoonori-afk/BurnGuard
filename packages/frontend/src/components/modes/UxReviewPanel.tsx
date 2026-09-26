@@ -1,4 +1,4 @@
-import { useT, type MessageKey } from "@/i18n/t";
+import { t as translate, useT, type MessageKey } from "@/i18n/t";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { UX_PATTERNS, type UxReviewReport } from "@bg/shared";
@@ -27,8 +27,10 @@ export function uxReviewErrorKey(error: unknown): MessageKey {
   return "modes.ux.loadFailed";
 }
 
+/** The prose follows the UI locale; the identity fields and the bg-auto anchor rule stay in every locale. */
 export function uxReviewRequest(report: UxReviewReport, title: string, guidance: string, nodeId: string | null = null): string {
-  return `UX 개선을 요청해요. 파일 ${JSON.stringify(report.source_path)}, 결과물 버전 ${report.artifact_revision}, digest ${report.artifact_digest}${nodeId ? `, 요소 data-bg-node-id=${JSON.stringify(nodeId)}` : ""}.\n${title}\n${guidance}\n정적 HTML 진단은 실제 사용성 검증 결과가 아니에요. 현재 파일과 근거를 먼저 확인하고 필요한 수정만 적용해 주세요. 요소 ID가 원본에 없거나 bg-auto 임시 앵커이면 관찰 근거로 대상을 확인하고, 대상을 확정할 수 없으면 임의로 수정하지 마세요. 기존 동작과 접근성을 유지하고 변경 내용과 미확인 항목을 설명해 주세요.`;
+  const node = nodeId ? translate("modes.ux.request.node", { id: JSON.stringify(nodeId) }) : "";
+  return `${translate("modes.ux.request.intro", { path: JSON.stringify(report.source_path), revision: report.artifact_revision, digest: report.artifact_digest, node })}\n${title}\n${guidance}\n${translate("modes.ux.request.outro")}`;
 }
 
 export default function UxReviewPanel({ binding }: { binding: UxReviewBinding }) {
@@ -103,7 +105,7 @@ export default function UxReviewPanel({ binding }: { binding: UxReviewBinding })
       <div className="space-y-2">{UX_PATTERNS.filter((pattern) => `${t(UX_PATTERN_COPY[pattern.id].title)} ${t(UX_PATTERN_COPY[pattern.id].description)}`.toLowerCase().includes(filter.trim().toLowerCase())).map((pattern) => <article key={pattern.id} className="rounded-md border border-border p-3">
         <h4 className="font-semibold">{t(UX_PATTERN_COPY[pattern.id].title)}</h4><p className="mt-1 break-keep text-muted-foreground">{t(UX_PATTERN_COPY[pattern.id].description)}</p>
         <details className="mt-2"><summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.ux.showGuidance")}</summary><p className="mt-1 break-keep">{t(UX_PATTERN_COPY[pattern.id].guidance)}</p></details>
-        <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} title={disabled ? t("workspace.project.busyTurn") : undefined} onClick={() => { void request(pattern.title, pattern.guidance); }}>{t("modes.ux.requestPattern")}</Button>
+        <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} title={disabled ? t("workspace.project.busyTurn") : undefined} onClick={() => { void request(t(UX_PATTERN_COPY[pattern.id].title), t(UX_PATTERN_COPY[pattern.id].guidance)); }}>{t("modes.ux.requestPattern")}</Button>
       </article>)}</div>
     </section>
     {pending && <p role="status" className="mt-3">{t("modes.ux.pending")}</p>}

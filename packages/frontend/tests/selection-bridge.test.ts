@@ -35,7 +35,7 @@ const panelProps = {
   onUndoDraw() {},
   onRedoDraw() {},
   onClearDraw() {},
-  quality: { state: { kind: "idle" as const }, pendingFindingId: null, focusedFindingId: null, revealResult: null, onRetry() {}, onOpenFile() {}, onReveal() {}, onApplySafeFix() {}, onAutoFix() {}, autoFixPending: false, autoFixDisabled: false },
+  quality: { state: { kind: "idle" as const }, pendingFindingId: null, focusedFindingId: null, revealResult: null, onRetry() {}, onOpenFile() {}, onReveal() {}, onApplySafeFix() {}, onAutoFix() {}, onRequestFix() {}, autoFixPending: false, autoFixDisabled: false },
   uxReview: { projectId: "project", relPath: "index.html", digest: "a".repeat(64), revision: 1, disabled: false, async onRequestAI() {} },
 };
 

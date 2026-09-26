@@ -16,6 +16,7 @@ export type QualityPanelBinding = {
   readonly onReveal: (finding: DesignAuditFinding) => void;
   readonly onApplySafeFix: (finding: DesignAuditFinding) => void;
   readonly onAutoFix: () => void;
+  readonly onRequestFix: (finding: DesignAuditFinding) => void;
   readonly autoFixPending: boolean;
   readonly autoFixDisabled: boolean;
 };
@@ -25,7 +26,7 @@ export default function QualityPanel({ quality }: { readonly quality: QualityPan
   const running = quality.autoFixPending || ("running" in quality.state && quality.state.running);
   const report = reportFromState(quality.state);
   const current = !running && (quality.state.kind === "error_warm" ? quality.state.current : quality.state.kind === "must_fix" || quality.state.kind === "recommended" || quality.state.kind === "ready");
-  const actionContext: DesignAuditActionContext = { current, running, pendingFindingId: quality.pendingFindingId };
+  const actionContext: DesignAuditActionContext = { current, running, pendingFindingId: quality.pendingFindingId, aiDisabled: quality.autoFixDisabled };
   const controls = designAuditControlAvailability(actionContext);
   const grouped = report === null ? null : groupDesignAuditResult(report);
   return (
@@ -69,7 +70,7 @@ export default function QualityPanel({ quality }: { readonly quality: QualityPan
 
 function FindingGroup({ title, findings, emptyCopy, actionContext, quality }: { readonly title: string; readonly findings: readonly DesignAuditFinding[]; readonly emptyCopy: string; readonly actionContext: DesignAuditActionContext; readonly quality: QualityPanelBinding }) {
   return <section className="mb-4"><h3 className="mb-2 text-xs font-semibold">{title} <span className="font-normal text-muted-foreground">{findings.length}</span></h3>
-    {findings.length === 0 ? <p className="text-xs text-muted-foreground">{emptyCopy}</p> : <div className="space-y-2">{findings.map((finding) => <QualityFindingCard key={finding.id} finding={finding} actionContext={actionContext} revealResult={quality.focusedFindingId === finding.id ? quality.revealResult : null} onOpenFile={quality.onOpenFile} onReveal={quality.onReveal} onApplySafeFix={quality.onApplySafeFix} />)}</div>}
+    {findings.length === 0 ? <p className="text-xs text-muted-foreground">{emptyCopy}</p> : <div className="space-y-2">{findings.map((finding) => <QualityFindingCard key={finding.id} finding={finding} actionContext={actionContext} revealResult={quality.focusedFindingId === finding.id ? quality.revealResult : null} onOpenFile={quality.onOpenFile} onReveal={quality.onReveal} onApplySafeFix={quality.onApplySafeFix} onRequestFix={quality.onRequestFix} />)}</div>}
   </section>;
 }
 

@@ -1,19 +1,21 @@
 import { useT } from "@/i18n/t";
 import type { DesignAuditFinding } from "@bg/shared";
-import { AlertTriangle, Eye, FileCode2, ShieldCheck, Wrench } from "lucide-react";
+import { AlertTriangle, Eye, FileCode2, ShieldCheck, WandSparkles, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { designAuditActionAvailability, type DesignAuditActionContext } from "@/lib/design-audit-state";
 import { DESIGN_AUDIT_ACTION_COPY, DESIGN_AUDIT_CHECK_COPY } from "./design-audit-copy";
 
 export type RevealResult = "found" | "not_found" | null;
 
-export default function QualityFindingCard({ finding, actionContext, revealResult, onOpenFile, onReveal, onApplySafeFix }: {
+export default function QualityFindingCard({ finding, actionContext, revealResult, onOpenFile, onReveal, onApplySafeFix, onRequestFix }: {
   readonly finding: DesignAuditFinding;
   readonly actionContext: DesignAuditActionContext;
   readonly revealResult: RevealResult;
   readonly onOpenFile: (finding: DesignAuditFinding) => void;
   readonly onReveal: (finding: DesignAuditFinding) => void;
   readonly onApplySafeFix: (finding: DesignAuditFinding) => void;
+  /** Sends this finding alone to the AI, under the same currency and busy gates as auto-fix. */
+  readonly onRequestFix: (finding: DesignAuditFinding) => void;
 }) {
   const t = useT();
   const actions = designAuditActionAvailability(finding, actionContext);
@@ -42,6 +44,7 @@ export default function QualityFindingCard({ finding, actionContext, revealResul
         {actions.canOpenFile && <Button type="button" variant="outline" size="sm" className="h-8 px-2 max-[900px]:min-h-11" onClick={() => onOpenFile(finding)}><FileCode2 />{t("modes.quality.openFile")}</Button>}
         {actions.canReveal && <Button type="button" variant="outline" size="sm" className="h-8 px-2 max-[900px]:min-h-11" onClick={() => onReveal(finding)}><Eye />{t("modes.quality.reveal")}</Button>}
         {finding.safe_fix && <Button type="button" variant="outline" size="sm" className="h-8 px-2 max-[900px]:min-h-11" disabled={!actions.canApplySafeFix} title={!actionContext.current ? t("modes.quality.staleFix") : actionContext.running ? t("modes.quality.waitForCheck") : actions.applying ? t("modes.quality.applyingFix") : actionContext.pendingFindingId !== null ? t("modes.quality.otherFix") : undefined} onClick={() => onApplySafeFix(finding)}><ShieldCheck />{actions.applying ? t("modes.quality.applying") : t("modes.quality.applyFix")}</Button>}
+        <Button type="button" variant="outline" size="sm" className="h-8 px-2 max-[900px]:min-h-11" disabled={!actions.canRequestFix} title={actionContext.aiDisabled ? t("workspace.project.busyTurn") : !actionContext.current ? t("modes.quality.staleFix") : actionContext.running ? t("modes.quality.waitForCheck") : undefined} onClick={() => onRequestFix(finding)}><WandSparkles />{t("modes.quality.requestFix")}</Button>
       </div>
       {revealResult !== null && <p className="mt-2 break-keep text-[11px] text-muted-foreground">{revealResult === "found" ? t("modes.quality.revealed") : t("modes.quality.notFound")}</p>}
     </article>

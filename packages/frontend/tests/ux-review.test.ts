@@ -1,7 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import type { UxReviewReport } from "@bg/shared";
 import { ApiError } from "../src/api/client";
 import { uxReviewErrorKey, uxReviewIsCurrent, uxReviewRequest } from "../src/components/modes/UxReviewPanel";
+import { useLocaleStore } from "../src/i18n/locale";
+import { t } from "../src/i18n/t";
+
+afterEach(() => useLocaleStore.getState().setLocale("ko"));
 
 const report: UxReviewReport = {
   schema_version: 1, project_id: "project", artifact_revision: 2,
@@ -20,12 +24,20 @@ describe("UX review request", () => {
 
   test("Given an explicit proposal When building a request Then canonical identity, node and limitations accompany the guidance", () => {
     const text = uxReviewRequest(report, "버튼 이름", "목적을 설명해 주세요.", "cta");
-    expect(text).toContain(JSON.stringify(report.source_path));
-    expect(text).toContain(report.artifact_digest);
-    expect(text).toContain('data-bg-node-id="cta"');
-    expect(text).toContain("bg-auto 임시 앵커");
-    expect(text).toContain("목적을 설명해 주세요.");
-    expect(text).toContain("실제 사용성 검증 결과가 아니에요");
+    const [intro, title, guidance, ...outro] = text.split("\n");
+    expect(intro).toBe(t("modes.ux.request.intro", { path: JSON.stringify(report.source_path), revision: 2, digest: report.artifact_digest, node: t("modes.ux.request.node", { id: JSON.stringify("cta") }) }));
+    expect(intro).toContain('data-bg-node-id="cta"');
+    expect(title).toBe("버튼 이름");
+    expect(guidance).toBe("목적을 설명해 주세요.");
+    expect(outro.join("\n")).toBe(t("modes.ux.request.outro"));
+    expect(uxReviewRequest(report, "t", "g").split("\n")[0]).toBe(t("modes.ux.request.intro", { path: JSON.stringify(report.source_path), revision: 2, digest: report.artifact_digest, node: "" }));
+  });
+
+  test("Given the en locale When building a request Then no prose line contains Hangul while the bg-auto anchor rule survives", () => {
+    useLocaleStore.getState().setLocale("en");
+    const text = uxReviewRequest(report, "Title", "Guidance", "cta");
+    expect(text).not.toMatch(/\p{Script=Hangul}/u);
+    expect(text).toContain("bg-auto");
   });
 
   test("Given a review load error When the copy key is resolved Then the code chooses the branch", () => {

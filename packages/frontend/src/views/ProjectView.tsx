@@ -1121,7 +1121,7 @@ export default function ProjectView() {
     setMobilePane("chat");
   };
 
-  const requestQualityFix = async () => {
+  const requestQualityFix = async (findings?: readonly DesignAuditFinding[]) => {
     if (composerDisabled || autoFixRef.current || !auditReport || safeFixMutation.isPending || designAuditQuery.isFetching || !isDesignAuditCurrent(auditReport, artifacts.current_digest)) return;
     autoFixRef.current = true;
     setAutoFixPending(true);
@@ -1131,7 +1131,7 @@ export default function ProjectView() {
         throw new ApiError("stale_artifact_identity", "Artifact changed", 409);
       }
       const generation = (await loadComposerDraft(session.id).catch(() => null))?.generation;
-      await sendMessage(qualityFixRequest(auditReport), [], new AbortController().signal, generation);
+      await sendMessage(qualityFixRequest(auditReport, { backendId: sessionQuery.data?.backend_id, findings }), [], new AbortController().signal, generation);
       setChatFocusKey((value) => value + 1);
       setMobilePane("chat");
     } catch (error) {
@@ -1485,6 +1485,7 @@ export default function ProjectView() {
               }}
               quality={{
                 onAutoFix: () => { void requestQualityFix(); },
+                onRequestFix: (finding) => { void requestQualityFix([finding]); },
                 autoFixPending: deriveAutoFixRunning({ autoFixPending, sendPending, sessionStatus: session?.status }),
                 autoFixDisabled: Boolean(composerDisabled),
                 state: auditState,

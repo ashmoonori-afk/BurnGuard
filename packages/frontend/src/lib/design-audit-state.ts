@@ -6,7 +6,7 @@ import type { MessageKey } from "@/i18n/t";
 export type ExportQualityGate = { readonly mustFixCount: number; readonly copyKey: MessageKey } | null;
 
 export type DesignAuditErrorCode = "project_not_found" | "project_path_unavailable" | "stale_artifact_identity" | "audit_unavailable" | "stale_revision" | "stale_artifact_digest" | "stale_file_hash" | "stale_node_fingerprint" | "file_not_found" | "node_not_found" | "network_error" | "unknown_error";
-export type DesignAuditActionContext = { readonly current: boolean; readonly running: boolean; readonly pendingFindingId: string | null };
+export type DesignAuditActionContext = { readonly current: boolean; readonly running: boolean; readonly pendingFindingId: string | null; /** The composer cannot take an AI request (a turn is running or the stream is down). */ readonly aiDisabled?: boolean };
 export type DesignAuditUnknownCheck = DesignAuditCheck & { readonly status: "skipped" | "unmeasurable"; readonly reason: NonNullable<DesignAuditCheck["reason"]> };
 export type DesignAuditGroups = {
   readonly mustFix: readonly DesignAuditFinding[];
@@ -69,6 +69,7 @@ export function designAuditActionAvailability(finding: DesignAuditFinding, conte
     canOpenFile: finding.source.rel_path.length > 0,
     canReveal: finding.source.node_bg_id !== null,
     canApplySafeFix: context.current && !context.running && context.pendingFindingId === null && finding.safe_fix !== undefined,
+    canRequestFix: context.current && !context.running && context.pendingFindingId === null && context.aiDisabled !== true,
     applying,
   } as const;
 }
