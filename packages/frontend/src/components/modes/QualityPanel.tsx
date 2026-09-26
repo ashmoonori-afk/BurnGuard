@@ -1,4 +1,4 @@
-import { useT, t } from "@/i18n/t";
+import { useT, t, type MessageKey } from "@/i18n/t";
 import type { DesignAuditFinding } from "@bg/shared";
 import { AlertCircle, CircleHelp, Loader2, RefreshCw, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,18 +88,22 @@ function reportFromState(state: DesignAuditViewState) {
   }
 }
 function statusCopy(state: DesignAuditViewState): string {
+  return t(qualityStatusKey(state));
+}
+/** Must-fix findings are "issues to fix" here and in the export gate; only a recommended report speaks of recommendations. */
+export function qualityStatusKey(state: DesignAuditViewState): MessageKey {
   switch (state.kind) {
     // `\u00A0` binds only the Korean auxiliary units (`-고 있다`, `-지 않다`)
     // so an ending never orphans onto its own line in the narrow panel.
-    case "loading": return t("modes.quality.initialCheck");
-    case "idle": return t("modes.quality.idle");
-    case "error_cold": return t("modes.quality.loadFailed");
-    case "error_warm": return t("modes.quality.warmError");
-    case "stale": return state.running ? t("modes.quality.staleRunning") : t("modes.quality.stale");
-    case "must_fix": return state.running ? t("modes.quality.rerunning") : t("modes.quality.needsImprovement");
-    case "recommended": return state.running ? t("modes.quality.rerunning") : t("modes.quality.recommendedStatus");
-    case "ready": return state.running ? t("modes.quality.passedRunning") : t("modes.quality.ready");
-    case "unavailable": return t("modes.quality.unavailable");
+    case "loading": return "modes.quality.initialCheck";
+    case "idle": return "modes.quality.idle";
+    case "error_cold": return "modes.quality.loadFailed";
+    case "error_warm": return "modes.quality.warmError";
+    case "stale": return state.running ? "modes.quality.staleRunning" : "modes.quality.stale";
+    case "must_fix": return state.running ? "modes.quality.rerunning" : "modes.quality.needsFix";
+    case "recommended": return state.running ? "modes.quality.rerunning" : "modes.quality.recommendedStatus";
+    case "ready": return state.running ? "modes.quality.passedRunning" : "modes.quality.ready";
+    case "unavailable": return "modes.quality.unavailable";
     default: return assertNever(state);
   }
 }

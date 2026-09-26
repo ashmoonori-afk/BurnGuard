@@ -1,5 +1,9 @@
 import type { DesignAuditCheck, DesignAuditFinding, DesignAuditResult } from "@bg/shared";
 import { ApiError } from "@/api/client";
+import type { MessageKey } from "@/i18n/t";
+
+/** The export menu's gate: must-fix findings of the current artifact, described as issues to fix that never block export. */
+export type ExportQualityGate = { readonly mustFixCount: number; readonly copyKey: MessageKey } | null;
 
 export type DesignAuditErrorCode = "project_not_found" | "project_path_unavailable" | "stale_artifact_identity" | "audit_unavailable" | "stale_revision" | "stale_artifact_digest" | "stale_file_hash" | "stale_node_fingerprint" | "file_not_found" | "node_not_found" | "network_error" | "unknown_error";
 export type DesignAuditActionContext = { readonly current: boolean; readonly running: boolean; readonly pendingFindingId: string | null };
@@ -39,6 +43,11 @@ export function preferDesignAuditResult(current: DesignAuditResult | null, incom
 
 export function isDesignAuditCurrent(report: DesignAuditResult, currentDigest: string): boolean {
   return report.artifact_digest === currentDigest;
+}
+
+export function exportQualityGate(report: DesignAuditResult | null, currentDigest: string): ExportQualityGate {
+  if (report === null || !isDesignAuditCurrent(report, currentDigest) || report.overall_status !== "must_fix") return null;
+  return { mustFixCount: groupDesignAuditResult(report).mustFix.length, copyKey: "export.qualityMustFix" };
 }
 
 export function groupDesignAuditResult(report: DesignAuditResult): DesignAuditGroups {

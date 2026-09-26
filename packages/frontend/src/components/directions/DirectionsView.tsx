@@ -9,7 +9,7 @@ import { ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { DirectionCard } from "./DirectionCard";
 import { GenerationStyleFields } from "./GenerationStyleFields";
-import { directionActions, directionProgress } from "@/lib/design-direction-state";
+import { directionActions, directionProgress, regenerateActivation } from "@/lib/design-direction-state";
 
 type DirectionsViewProps = {
   readonly designSystemId?: string | null;
@@ -19,6 +19,8 @@ type DirectionsViewProps = {
   readonly cancelPending: boolean;
   readonly error: Error | null;
   readonly onGenerate: (preferences: GenerationStyle) => void;
+  /** Hands the user to the composer once a direction is chosen; absent when the view has no chat pane. */
+  readonly onContinue?: () => void;
   readonly onSavePreferences: (preferences: GenerationStyle) => void;
   readonly preferencesSaving: boolean;
   readonly onCancel: () => void;
@@ -35,6 +37,7 @@ export function DirectionsView({
   cancelPending,
   error,
   onGenerate,
+  onContinue,
   onSavePreferences,
   preferencesSaving,
   onCancel,
@@ -43,6 +46,7 @@ export function DirectionsView({
   onUndo,
 }: DirectionsViewProps) {
   const t = useT();
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const systemQuery = useQuery({ queryKey: ["design-systems", "tokens", designSystemId], queryFn: () => getDesignSystemTokens(designSystemId!), enabled: !!designSystemId, retry: false });
   const staleSystem = !!state && (state.design_system?.id !== (designSystemId ?? undefined) || (!!state.design_system && !!systemQuery.data?.layout && JSON.stringify(state.design_system.layout) !== JSON.stringify(systemQuery.data.layout)));
   const systemPanel = designSystemId ? <DesignSystemLayoutPanel compact layout={systemQuery.data?.layout ?? (state?.design_system?.id === designSystemId ? state.design_system.layout : undefined)} loading={systemQuery.isPending} failed={systemQuery.isError} name={state?.design_system?.id === designSystemId ? state.design_system.name : undefined} /> : null;
@@ -97,6 +101,12 @@ export function DirectionsView({
 
   const progress = directionProgress(state);
   const loading = state.status === "loading";
+  // A regeneration drops the selection, so a selected state asks once before generating.
+  const regenerate = () => {
+    if (regenerateActivation(state.selected_id, confirmRegenerate) === "confirm") { setConfirmRegenerate(true); return; }
+    setConfirmRegenerate(false);
+    onGenerate(preferences);
+  };
 
   return (
     <DirectionShell busy={loading || actionPending}>
@@ -134,7 +144,11 @@ export function DirectionsView({
         </header>
 
         {systemPanel}
-        {staleSystem ? <div role="status" className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-4"><p className="text-sm">{t("directions.systemChanged")}</p><Button variant="outline" disabled={loading || actionPending} onClick={() => onGenerate(preferences)}>{t("directions.regenerateSystem")}</Button></div> : null}
+        {staleSystem ? <div role="status" className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-4"><p className="text-sm">{t("directions.systemChanged")}</p>
+          {confirmRegenerate && selected !== null
+            ? <div data-direction-action="regenerate-confirm" className="flex flex-wrap items-center gap-2"><p className="text-sm [word-break:keep-all]">{t("directions.regenerateConfirm", { name: selected.title })}</p><Button variant="outline" disabled={loading || actionPending} onClick={regenerate}>{t("directions.regenerateAnyway")}</Button><Button variant="ghost" onClick={() => setConfirmRegenerate(false)}>{t("directions.keepSelection")}</Button></div>
+            : <Button data-direction-action="regenerate" variant="outline" disabled={loading || actionPending} onClick={regenerate}>{t("directions.regenerateSystem")}</Button>}
+        </div> : null}
         <GenerationStyleFields value={preferences} onChange={setPreferences} disabled={loading || actionPending || preferencesSaving} />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p role="status" className="text-xs text-muted-foreground">{preferencesSaving ? t("directions.preferencesSaving") : preferencesChanged ? t("directions.preferencesChanged") : t("directions.preferencesSaved")} {t("directions.layoutExample")}</p>
@@ -167,6 +181,18 @@ export function DirectionsView({
                 ? t("directions.noSelection")
                 : t("directions.selection", { name: selected.title })}
             </p>
+            {selected !== null && onContinue !== undefined ? (
+              <Button
+                type="button"
+                variant="cta"
+                data-direction-action="continue"
+                className="min-h-11 shrink-0"
+                disabled={actionPending}
+                onClick={onContinue}
+              >
+                {t("directions.continue")}
+              </Button>
+            ) : null}
             {actions.canUndo ? (
               <Button
                 type="button"

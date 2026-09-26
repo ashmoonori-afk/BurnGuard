@@ -6,7 +6,6 @@ import ExportOptionFields from "../src/components/export/ExportOptionFields";
 import {
   DEFAULT_EXPORT_OPTION_VALUES,
   buildExportMenuModel,
-  buildExportRetryRequest,
   cafe24AssetBaseUrl,
   type ExportMenuModel,
   type ExportMenuOption,
@@ -200,30 +199,5 @@ describe("artboard PDF availability", () => {
     expect(pdf.disabledReason).toBe("mixed_frames");
     expect(pdf.note).toContain("PNG 묶음");
     expect(entry(model, "png_zip").disabledReason).toBeUndefined();
-  });
-});
-
-describe("retry keeps the chosen options", () => {
-  test("Given a Cafe24 package job When retried Then the entered asset base URL is carried unchanged", () => {
-    const values = { ...DEFAULT_EXPORT_OPTION_VALUES, assetBaseUrl: "/web/upload/burnguard/spring/" };
-    const model = buildExportMenuModel("prototype", null, values);
-
-    expect(buildExportRetryRequest("prototype", "cafe24_package", model)).toEqual({
-      format: "cafe24_package",
-      options: { asset_base_url: "/web/upload/burnguard/spring/" },
-    });
-  });
-
-  test("Given a JPEG slice job When retried Then the slice options are carried unchanged", () => {
-    const model = buildExportMenuModel(
-      "graphic",
-      graphicOptionsJson({ schema_version: 1, kind: "product_detail", frame_count: 1 }, 12_000),
-      { ...DEFAULT_EXPORT_OPTION_VALUES, sliceHeight: 3000, sliceFormat: "jpeg", jpegQuality: 90 },
-    );
-
-    expect(buildExportRetryRequest("graphic", "png_zip", model)).toEqual({
-      format: "png_zip",
-      options: { slice_height: 3000, slice_format: "jpeg", jpeg_quality: 90 },
-    });
   });
 });

@@ -33,7 +33,6 @@ export const systemMessages = defineMessages({
   "system.status.review": { ko: "검토", en: "Review", "zh-CN": "审核" },
   "system.status.published": { ko: "게시됨", en: "Published", "zh-CN": "已发布" },
   "system.template": { ko: "템플릿", en: "Template", "zh-CN": "模板" },
-  "system.publish": { ko: "게시", en: "Publish", "zh-CN": "发布" },
   "system.notFound": { ko: "디자인 시스템을 찾을 수 없어요", en: "Design system not found", "zh-CN": "找不到设计系统" },
   "system.goHome": { ko: "홈으로 이동", en: "Go home", "zh-CN": "返回首页" },
   "system.loadFailed": { ko: "디자인 시스템을 불러오지 못했어요", en: "Could not load the design system", "zh-CN": "无法加载设计系统" },

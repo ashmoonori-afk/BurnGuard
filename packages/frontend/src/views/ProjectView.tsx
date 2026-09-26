@@ -125,7 +125,7 @@ import LogoCandidatePanel from "@/components/logo/LogoCandidatePanel";
 import {
   designAuditErrorCode,
   designAuditViewState,
-  groupDesignAuditResult,
+  exportQualityGate,
   isDesignAuditCurrent,
   preferDesignAuditResult,
 } from "@/lib/design-audit-state";
@@ -888,8 +888,7 @@ export default function ProjectView() {
     setMobilePane("workspace");
     setMode("quality");
   }, [activeTabId, artifactsQuery.data?.entrypoint_url, openFileTabs, projectQuery.data, pushToast, t]);
-  const qualityGate = auditReport !== null && isDesignAuditCurrent(auditReport, artifactsQuery.data?.current_digest ?? "") && auditReport.overall_status === "must_fix"
-    ? { mustFixCount: groupDesignAuditResult(auditReport).mustFix.length } : null;
+  const qualityGate = exportQualityGate(auditReport, artifactsQuery.data?.current_digest ?? "");
 
   const handleQualityRevealResult = useCallback((nodeBgId: string, found: boolean) => {
     if (auditFocus?.nodeBgId === nodeBgId) setAuditRevealResult(found ? "found" : "not_found");
@@ -1308,6 +1307,7 @@ export default function ProjectView() {
             error={directionError}
             preferencesSaving={saveDirectionPreferencesMutation.isPending}
             onGenerate={(preferences) => generateDirectionsMutation.mutate(preferences)}
+            onContinue={() => { setMobilePane("chat"); setChatFocusKey((value) => value + 1); }}
             onSavePreferences={(preferences) => {
               if (directionState === null) return;
               saveDirectionPreferencesMutation.mutate({ generation_id: directionState.generation_id, expected_selection_revision: directionState.selection_revision, creative_preferences: preferences });

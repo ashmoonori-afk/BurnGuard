@@ -75,7 +75,6 @@ export const modesMessages = defineMessages({
   "modes.quality.staleRunning": {"ko":"이전 결과를 보여드리며 현재 결과물을 검사하고 있어요.","en":"Showing previous results while checking the current artifact.","zh-CN":"正在显示历史结果，同时检查当前作品。"},
   "modes.quality.stale": {"ko":"결과물이 바뀌어 이전 검사 결과를 보여드려요.","en":"The artifact changed. Showing previous check results.","zh-CN":"作品已更改，正在显示历史检查结果。"},
   "modes.quality.rerunning": {"ko":"최근 결과를 보여드리며 다시 검사하고 있어요.","en":"Showing the latest results while checking again.","zh-CN":"正在显示最近的结果，同时重新检查。"},
-  "modes.quality.needsImprovement": {"ko":"개선을 권장하는 항목이 있어요. 내보내기는 그대로 가능해요.","en":"Some items need improvement. Export is still available.","zh-CN":"有需要改进的项目，仍可正常导出。"},
   "modes.quality.recommendedStatus": {"ko":"고쳐야 할 문제는 없고 권장 개선이 있어요.","en":"No required fixes; some improvements are recommended.","zh-CN":"没有必须修复的问题，有建议改进项。"},
   "modes.quality.passedRunning": {"ko":"통과한 최근 결과를 보여드리며 다시 검사하고 있어요.","en":"Showing the latest passed results while checking again.","zh-CN":"正在显示最近通过的结果，同时重新检查。"},
   "modes.quality.ready": {"ko":"현재 결과물이 모든 품질 검사를 통과했어요.","en":"The current artifact passed all quality checks.","zh-CN":"当前作品已通过所有质量检查。"},
@@ -238,4 +237,5 @@ export const modesMessages = defineMessages({
   "modes.edit.imageSrc": {"ko":"이미지 주소","en":"Image source","zh-CN":"图片地址"},
   "modes.edit.imageAlt": {"ko":"대체 텍스트","en":"Alt text","zh-CN":"替代文本"},
   "modes.edit.linkHref": {"ko":"링크 주소","en":"Link address","zh-CN":"链接地址"},
+  "modes.quality.needsFix": {"ko":"고쳐야 할 문제가 있어요. 내보내기는 그대로 가능해요.","en":"There are issues to fix. Export is still available.","zh-CN":"有需要修复的问题，仍可正常导出。"},
 });

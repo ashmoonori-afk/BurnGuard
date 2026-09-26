@@ -7,6 +7,12 @@ import { apiFetch, ApiError } from "@/api/client";
 import { createExport, getExport } from "@/api/export";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { exportJobState } from "./export-job-state";
+
+/** Publishing needs an output that can still be downloaded, not merely a job that once succeeded. */
+export function shareExportReady(job: ExportJob | undefined): boolean {
+  return job !== undefined && exportJobState(job).canDownload;
+}
 
 const errors: Record<string, MessageKey> = {
   publish_size_limit: "export.share.error.publish_size_limit",
@@ -54,6 +60,7 @@ export default function VercelShare({ projectId }: { projectId: string }) {
     } catch (error) { setMessage(error instanceof ApiError ? errors[error.code] ?? "export.share.publishFailed" : "export.share.disconnected"); }
     finally { setBusy(false); }
   }
+  const ready = shareExportReady(job.data);
   return <Dialog open={open} onOpenChange={(value) => { if (!busy) { setOpen(value); if (!value) setToken(""); } }}>
     <DialogTrigger asChild><Button variant="outline" size="sm"><Share2 className="mr-1 size-4" />{t("export.share.title")}</Button></DialogTrigger>
     <DialogContent className="max-w-md"><DialogHeader><DialogTitle>{t("export.share.publishTitle")}</DialogTitle></DialogHeader>
@@ -63,9 +70,9 @@ export default function VercelShare({ projectId }: { projectId: string }) {
       <label className="text-sm">{t("export.share.token")}<input className="mt-1 w-full rounded border bg-background p-2" disabled={busy} type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} /></label>
       <label className="text-sm">{t("export.share.teamId")}<input className="mt-1 w-full rounded border bg-background p-2" disabled={busy} placeholder="team_…" value={teamId} onChange={(event) => setTeamId(event.target.value)} /></label>
       <Button variant="outline" disabled={busy || (!!jobId && !job.isError && !["succeeded", "failed"].includes(job.data?.status ?? ""))} onClick={() => void prepare()}>{t("export.share.prepare")}</Button>
-      <p role="status" className="text-sm">{busy ? t("export.share.busy") : job.isError ? t("export.share.statusFailed") : job.data?.status === "succeeded" ? t("export.share.ready", { name: String(job.data.latest_attempt?.project_revision) }) : job.data?.status === "failed" ? t("export.share.exportFailed") : jobId ? t("export.share.packaging") : t("export.share.prepareHint")}</p>
+      <p role="status" className="text-sm">{busy ? t("export.share.busy") : job.isError ? t("export.share.statusFailed") : ready && job.data?.latest_attempt ? t("export.share.ready", { name: String(job.data.latest_attempt.project_revision) }) : job.data?.status === "failed" || (job.data !== undefined && !ready && !["pending", "running"].includes(job.data.status)) ? t("export.share.exportFailed") : jobId ? t("export.share.packaging") : t("export.share.prepareHint")}</p>
       {message && <p role={message === "export.share.copied" ? "status" : "alert"} className={`text-sm ${message === "export.share.copied" ? "text-muted-foreground" : "text-destructive"}`}>{t(message)}</p>}
-      {!deployment?.ready && <Button disabled={busy || !token.trim() || job.data?.status !== "succeeded"} onClick={() => void publish()}>{deployment ? t("export.share.checkDeployment") : t("export.share.publish")}</Button>}
+      {!deployment?.ready && <Button disabled={busy || !token.trim() || !ready} onClick={() => void publish()}>{deployment ? t("export.share.checkDeployment") : t("export.share.publish")}</Button>}
       {deployment && !deployment.ready && <p className="text-sm">{t("export.share.accepted")}</p>}
       {deployment?.ready && <div className="space-y-2"><a className="break-all text-sm underline" href={deployment.url} target="_blank" rel="noreferrer">{deployment.url}</a><Button variant="outline" onClick={() => { void navigator.clipboard.writeText(deployment.url).then(() => setMessage("export.share.copied"), () => setMessage("export.share.copyFailed")); }}>{t("export.share.copyLink")}</Button><p className="text-xs text-muted-foreground">{t("export.share.protectionNote")}</p></div>}
     </DialogContent>

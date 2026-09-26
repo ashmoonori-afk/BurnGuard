@@ -49,3 +49,18 @@ test("Given a message whose zh-CN value is translated When the ko value is read 
 test("Given the logo chip copy When the registry is read Then the unused add-chip key is gone", () => {
   expect(Object.hasOwn(messages, "home.logo.chipAdd")).toBe(false);
 });
+
+test("Given the dead system header and audit-failure branches were removed When the registry is read Then their keys are gone too (UX-21, UXM-01)", async () => {
+  expect(await Bun.file(new URL("../src/components/systems/SystemHeader.tsx", import.meta.url)).exists()).toBe(false);
+  for (const key of ["system.publish", "export.auditFailed", "export.auditStopped"]) expect(Object.hasOwn(messages, key), key).toBe(false);
+});
+
+test("Given must-fix findings are labelled issues to fix When the registry is read Then the recommendation-flavoured keys are replaced (UXM-12, DP-19)", () => {
+  expect(Object.hasOwn(messages, "export.qualityRecommendations")).toBe(false);
+  expect(Object.hasOwn(messages, "modes.quality.needsImprovement")).toBe(false);
+  for (const locale of LOCALES) {
+    expect(messages["modes.quality.needsFix"][locale]).not.toBe(messages["modes.quality.recommendedStatus"][locale]);
+    const gate = messages["export.qualityMustFix"][locale];
+    expect(typeof gate === "string" ? gate : gate.other).toContain("{count}");
+  }
+});
