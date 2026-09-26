@@ -6,6 +6,9 @@ export const APP_NAME = "BurnGuard Design";
 // should always agree — verified manually at release time.
 export const APP_VERSION = "0.5.24";
 
+/** Display name seeded for a fresh profile; the shell treats it as "no name set" rather than a chosen name. */
+export const DEFAULT_DISPLAY_NAME = "You";
+
 /** Every CLI provider this app can drive. Detection, the adapter registry and the picker all read it. */
 export const BACKEND_IDS = ["claude-code", "codex", "gemini", "copilot"] as const;
 export type BackendId = (typeof BACKEND_IDS)[number];

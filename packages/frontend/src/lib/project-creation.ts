@@ -31,7 +31,9 @@ import {
 } from "@bg/shared";
 import { DETAIL_BRIEF_FIELDS } from "@/lib/graphic-set-form";
 import { t, type MessageKey } from "@/i18n/t";
+import { useLocaleStore } from "@/i18n/locale";
 
+/** Default brief locale; a built request carries the active UI locale instead. */
 export const BRIEF_LOCALE = "ko";
 export const AUDIENCE_MAX_LENGTH = 200;
 export const OBJECTIVE_MAX_LENGTH = 1000;
@@ -357,7 +359,7 @@ export function buildCreateProjectRequest(
     audience,
     objective,
     content_source: draft.contentSource,
-    locale: BRIEF_LOCALE,
+    locale: useLocaleStore.getState().locale,
     brand_mode:
       draft.type === "from_template"
         ? "template"

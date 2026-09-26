@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
 import { apiErrorCopy } from "@/lib/error-copy";
-import { t, useT } from "@/i18n/t";
+import { t, useT, type MessageKey } from "@/i18n/t";
 import ComposerAttachments from "./ComposerAttachments";
 import { VisualSourceCandidates } from "./VisualSourceCandidates";
 import {
@@ -23,6 +23,13 @@ import { useComposerDraft } from "./useComposerDraft";
 import { useComposerDocuments } from "./useComposerDocuments";
 
 type ComposerSendState = { readonly kind: "idle" } | { readonly kind: "processing" } | SendOutcome;
+
+/** The send button's text and its shortcut wording move together, so the tooltip and the accessible name never disagree. */
+export function composerSendLabels(retrying: boolean): { readonly label: MessageKey; readonly shortcut: MessageKey } {
+  return retrying
+    ? { label: "workspace.composer.retrySend", shortcut: "workspace.composer.retrySendShortcut" }
+    : { label: "workspace.composer.send", shortcut: "workspace.composer.sendShortcut" };
+}
 
 function sendStateMessage(state: ComposerSendState): string | null {
   switch (state.kind) {
@@ -123,6 +130,7 @@ export default function Composer({
   const canSend = draft.ready && documents.canSend && text.trim().length > 0 && !disabled && !sending;
   const statusMessage = sendStateMessage(sendState);
   const retrying = sendState.kind === "failed" || sendState.kind === "cancelled";
+  const sendLabels = composerSendLabels(retrying);
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -167,7 +175,7 @@ export default function Composer({
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <label htmlFor={`composer-${sessionId}`} className="text-xs font-semibold text-foreground">{translate("workspace.composer.requestLabel")}</label>
-        <span className="text-[11px] text-muted-foreground">Ctrl / ⌘ + Enter</span>
+        <span className="text-[11px] text-muted-foreground">{translate("workspace.composer.shortcutHint")}</span>
       </div>
       {activePageLabel !== null ? <div className="mb-2 w-fit max-w-full truncate rounded-full border border-border bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground" title={activePageLabel}>{activePageLabel}</div> : null}
       <ComposerAttachments
@@ -294,11 +302,11 @@ export default function Composer({
             className="h-9 gap-1.5 px-3 text-xs max-[900px]:h-11"
             disabled={!canSend}
             onClick={() => void send()}
-            aria-label={translate(retrying ? "workspace.composer.retrySendShortcut" : "workspace.composer.sendShortcut")}
-            title={translate("workspace.composer.sendShortcut")}
+            aria-label={translate(sendLabels.shortcut)}
+            title={translate(sendLabels.shortcut)}
           >
             <Send className="h-3.5 w-3.5" aria-hidden="true" />{" "}
-            {translate(retrying ? "workspace.composer.retrySend" : "workspace.composer.send")}
+            {translate(sendLabels.label)}
           </Button>
         )}
       </div>

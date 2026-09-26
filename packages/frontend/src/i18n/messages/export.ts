@@ -84,7 +84,7 @@ export const exportMessages = defineMessages({
   "export.field.coupang": { ko: "3000px · 쿠팡", en: "3000px · Coupang", "zh-CN": "3000px · Coupang" },
   "export.field.imageFormat": { ko: "이미지 형식", en: "Image format", "zh-CN": "图像格式" },
   "export.field.jpegQuality": { ko: "JPEG 품질 · {count}", en: "JPEG quality · {count}", "zh-CN": "JPEG 质量 · {count}" },
-  "export.downloadUnavailable": { ko: "Export download unavailable", en: "Export download unavailable", "zh-CN": "导出文件暂不可下载" },
+  "export.downloadUnavailable": { ko: "내보내기 파일을 내려받을 수 없어요", en: "Export download unavailable", "zh-CN": "导出文件暂不可下载" },
   "export.guide.verified": { ko: "공식 문서 확인", en: "Official docs checked", "zh-CN": "已核对官方文档" },
   "export.guide.unverified": { ko: "미확인", en: "Unverified", "zh-CN": "未验证" },
   "export.guide.prerequisites": { ko: "준비물", en: "Prerequisites", "zh-CN": "准备事项" },

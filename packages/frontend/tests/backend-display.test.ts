@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { BACKEND_IDS, GEMINI_MODELS, type BackendDetection } from "@bg/shared";
-import { BACKEND_LABELS, backendLabel, graphicBackendId } from "@/lib/backend-display";
+import { BACKEND_LABELS, backendLabel, backendOptionLabel, graphicBackendId } from "@/lib/backend-display";
+import { useLocaleStore } from "@/i18n/locale";
+import { t } from "@/i18n/t";
 
 const found = (id: BackendDetection["id"], over: Partial<BackendDetection> = {}): BackendDetection => ({
   id,
@@ -39,6 +41,20 @@ describe("Backend display", () => {
     // Nothing capable detected: fall back to Codex so the existing refusal copy still explains why.
     expect(graphicBackendId([claude], "claude-code")).toBe("codex");
     expect(graphicBackendId([], "claude-code")).toBe("codex");
+  });
+
+  test("Given a backend that is not installed When its creation option label is derived Then it names the product and the localized marker, never a bare dash", () => {
+    const original = useLocaleStore.getState().locale;
+    useLocaleStore.setState({ locale: "en" });
+    try {
+      const missing = backendOptionLabel({ id: "gemini", found: false });
+      expect(missing).toBe(t("home.creation.backendNotFound", { name: BACKEND_LABELS.gemini }));
+      expect(missing).toContain("Gemini CLI");
+      expect(missing).not.toContain(" —");
+      expect(backendOptionLabel({ id: "gemini", found: true })).toBe(BACKEND_LABELS.gemini);
+    } finally {
+      useLocaleStore.setState({ locale: original });
+    }
   });
 
   test("Given an undetected backend, then it is never chosen for a graphic project", () => {

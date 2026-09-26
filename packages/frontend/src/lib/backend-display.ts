@@ -1,4 +1,5 @@
 import { BACKEND_IDS, canGenerateGraphics, type BackendDetection, type BackendId } from "@bg/shared";
+import { t } from "@/i18n/t";
 
 /**
  * Display name per backend. Exhaustive by type, so adding a `BackendId` without naming it fails the
@@ -13,6 +14,11 @@ export const BACKEND_LABELS: Readonly<Record<BackendId, string>> = {
 
 export function backendLabel(id: BackendId): string {
   return BACKEND_LABELS[id];
+}
+
+/** Creation-panel option text: the product name, marked when the CLI is not installed. */
+export function backendOptionLabel(backend: Pick<BackendDetection, "id" | "found">): string {
+  return backend.found ? backendLabel(backend.id) : t("home.creation.backendNotFound", { name: backendLabel(backend.id) });
 }
 
 /**

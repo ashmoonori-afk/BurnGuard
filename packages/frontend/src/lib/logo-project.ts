@@ -17,7 +17,7 @@ import {
   type LogoType,
   type ProjectType,
 } from "@bg/shared";
-import type { MessageKey } from "@/i18n/t";
+import { t, type MessageKey } from "@/i18n/t";
 
 export const LOGO_CANVAS: GraphicCanvasV1 = {
   schema_version: 1,
@@ -59,14 +59,14 @@ export function latestLogoRound(manifest: LogoManifestV1): LogoRoundV1 | null {
 
 /**
  * Regenerate and select ride the ordinary send path. The sentinel is what the
- * prompt harness reads; the Korean line after it is what the person reading the
+ * prompt harness reads; the localized line after it is what the person reading the
  * transcript sees, so the turn never looks like a machine talking to itself.
  */
 export function logoActionMessage(action: LogoActionV1): string {
   const sentinel = `<${LOGO_ACTION_TAG}>${JSON.stringify(action)}</${LOGO_ACTION_TAG}>`;
   const line = action.action === "regenerate"
-    ? "다른 시안 4개를 새로 만들어주세요."
-    : `${candidateNumber(action.candidate_id)}번 시안으로 진행해주세요.`;
+    ? t("home.logo.regenerateLine")
+    : t("home.logo.selectLine", { number: candidateNumber(action.candidate_id) });
   return `${sentinel}\n${line}`;
 }
 

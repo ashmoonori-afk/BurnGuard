@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { DesignSystemColorToken, DesignSystemDetail } from "@bg/shared";
+import type { CatalogDesignSystemDetail, DesignSystemColorToken, DesignSystemDetail } from "@bg/shared";
 import { ArrowLeft, ArrowUpRight, CheckCircle2, Pencil, Plus, Upload } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -17,7 +17,8 @@ import { Input } from "@/components/ui/input";
 import { useUIStore } from "@/state/uiStore";
 import { ApiError, authorizedFetch } from "@/api/client";
 import { apiErrorCopy } from "@/lib/error-copy";
-import { useT, type MessageKey } from "@/i18n/t";
+import { t, useT, type MessageKey } from "@/i18n/t";
+import { localeTag, useLocaleStore, type Locale } from "@/i18n/locale";
 
 type FontRole = "display" | "sans" | "serif" | "mono";
 
@@ -63,6 +64,7 @@ export default function DesignSystemView({
 
 function DesignSystemEditor({ id }: { id: string }) {
   const t = useT();
+  const locale = useLocaleStore((state) => state.locale);
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
   const systemQuery = useQuery({
@@ -426,16 +428,7 @@ function DesignSystemEditor({ id }: { id: string }) {
             <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
               {catalogDetailRows(system).map((row) => {
                 const labelKey = CATALOG_DETAIL_LABELS[row.label];
-                const absentPath = (row.label === "Source URI" && system.source_uri === null)
-                  || (row.label === "SKILL.md" && system.skill_md_path === null)
-                  || (row.label === "Tokens CSS" && system.tokens_css_path === null)
-                  || (row.label === "README.md" && system.readme_md_path === null);
-                const value = row.label === "Status" ? t(STATUS_LABELS[system.status])
-                  : row.label === "Template" ? t(system.is_template ? "system.yes" : "system.no")
-                  : row.label === "Source" ? t(SOURCE_LABELS[system.source_type ?? "manual"])
-                  : row.label === "Archived" && system.archived_at === null ? t("system.no")
-                  : absentPath ? t("system.none") : row.value;
-                return <InfoRow key={row.label} label={labelKey ? t(labelKey) : row.label} value={value} />;
+                return <InfoRow key={row.label} label={labelKey ? t(labelKey) : row.label} value={catalogDetailValue(row, system, locale)} />;
               })}
             </dl>
           </details>
@@ -443,6 +436,19 @@ function DesignSystemEditor({ id }: { id: string }) {
       </div>
     </div>
   );
+}
+
+/** Localized value for one catalog detail row; the archive timestamp is shown as a date in the active locale. */
+export function catalogDetailValue(row: { readonly label: string; readonly value: string }, system: CatalogDesignSystemDetail, locale: Locale): string {
+  const absentPath = (row.label === "Source URI" && system.source_uri === null)
+    || (row.label === "SKILL.md" && system.skill_md_path === null)
+    || (row.label === "Tokens CSS" && system.tokens_css_path === null)
+    || (row.label === "README.md" && system.readme_md_path === null);
+  return row.label === "Status" ? t(STATUS_LABELS[system.status])
+    : row.label === "Template" ? t(system.is_template ? "system.yes" : "system.no")
+    : row.label === "Source" ? t(SOURCE_LABELS[system.source_type ?? "manual"])
+    : row.label === "Archived" ? (system.archived_at === null ? t("system.no") : new Date(system.archived_at).toLocaleString(localeTag(locale)))
+    : absentPath ? t("system.none") : row.value;
 }
 
 function FontUploadCard({

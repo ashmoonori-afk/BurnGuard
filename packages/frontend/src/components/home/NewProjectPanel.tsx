@@ -13,7 +13,7 @@ import type {
 import { defaultGenerationOptions } from "@bg/shared";
 import GenerationControls from "@/components/settings/GenerationControls";
 import { createProject, detectBackends } from "@/api/home";
-import { backendLabel, graphicBackendId } from "@/lib/backend-display";
+import { backendOptionLabel, graphicBackendId } from "@/lib/backend-display";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ProjectBriefFields, {
@@ -188,7 +188,7 @@ export default function NewProjectPanel({
       <h2 className="mb-3 text-xs font-semibold text-muted-foreground">{t("home.creation.basics")}</h2>
 
       <div className="space-y-4">
-        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={effectiveBackend} disabled={disabled || needsImageBackend} onChange={(event) => setBackendId(event.target.value as BackendId)}>{(detectedBackends.length > 0 ? detectedBackends : [{ id: "claude-code" as BackendId, found: true }, { id: "codex" as BackendId, found: true }]).map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendLabel(backend.id)}{backend.found ? "" : " —"}</option>)}</select><GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
+        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={effectiveBackend} disabled={disabled || needsImageBackend} onChange={(event) => setBackendId(event.target.value as BackendId)}>{(detectedBackends.length > 0 ? detectedBackends : [{ id: "claude-code" as BackendId, found: true }, { id: "codex" as BackendId, found: true }]).map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendOptionLabel(backend)}</option>)}</select><GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
         <div className="space-y-1.5">
           <label htmlFor="project-name" className={PROJECT_LABEL_CLASS}>
             {t("home.creation.name")}

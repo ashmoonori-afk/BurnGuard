@@ -128,4 +128,7 @@ export const workspaceMessages = defineMessages({
   "workspace.project.designSystem": { ko: "디자인 시스템", en: "Design system", "zh-CN": "设计系统" },
   "workspace.project.directions": { ko: "방향 정하기", en: "Choose direction", "zh-CN": "选择方向" },
   "workspace.project.designFiles": { ko: "디자인 파일", en: "Design files", "zh-CN": "设计文件" },
+
+  "workspace.composer.shortcutHint": { ko: "Cmd/Ctrl+Enter", en: "Cmd/Ctrl+Enter", "zh-CN": "Cmd/Ctrl+Enter" },
+  "workspace.comments.noNote": { ko: "메모 없음", en: "No note", "zh-CN": "无备注" },
 });
