@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,6 +10,8 @@ import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { writePreTurnSnapshot } from "../src/services/checkpoints";
 import { insertNormalizedEvent } from "../src/db/events";
 import { listSequencedSessionEvents } from "../src/db/event-sequence-repository";
+import { isUserTurnRunning } from "../src/services/turns";
+import { saveSessionAttachments } from "../src/services/attachments";
 
 const projectId = `session-routes-${process.pid}`;
 const sessionId = `${projectId}-session`;
@@ -98,6 +101,33 @@ describe("production session route boundaries", () => {
     expect((await request(`/api/sessions/${sessionId}/tool-decision`, "POST", { toolCallId: "allow", decision: "allow", reason: "ok" })).status).toBe(200);
     expect((await request(`/api/sessions/${sessionId}/tool-decision`, "POST", { toolCallId: "deny", decision: "deny" })).status).toBe(200);
     expect(getSqlite().query<{ readonly count: number }, [string]>("SELECT COUNT(*) count FROM events WHERE session_id=? AND direction='up'").get(sessionId)?.count).toBe(2);
+  });
+
+  test("Given a multipart send whose upload is still running When the client cancels before the turn starts Then no turn starts, the reservation is released and no user message is persisted", async () => {
+    const after = listSequencedSessionEvents(getSqlite(), sessionId, 0).at(-1)?.sequence ?? 0;
+    const controller = new AbortController();
+    const form = new FormData();
+    form.set("type", "user.message");
+    form.set("text", "hello");
+    form.append("files", new File(["notes"], "notes.txt", { type: "text/plain" }));
+    let savedPaths: readonly string[] = [];
+    const response = await sessionRoutes.request(`http://local/api/sessions/${sessionId}/events`, { method: "POST", body: form, signal: controller.signal }, {
+      detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "fixture" }, { id: "claude-code", found: true, binary_path: "fixture" }] }),
+      // The real saver runs to completion; the client gives up while it is still writing.
+      saveSessionAttachments: async (id, uploads) => { savedPaths = await saveSessionAttachments(id, uploads); controller.abort(); return savedPaths; },
+    });
+    expect(savedPaths).toHaveLength(1);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "request_cancelled" } });
+    expect(isUserTurnRunning(sessionId)).toBe(false);
+    // The upload was rolled back with the send.
+    expect(existsSync(savedPaths[0]!)).toBe(false);
+    expect(getSqlite().query<{ readonly count: number }, [string]>("SELECT COUNT(*) count FROM attachments WHERE session_id=? AND turn_id IS NULL").get(sessionId)?.count).toBe(0);
+    // The reservation is released: the next post is admitted and fails only on its body.
+    const next = await request(`/api/sessions/${sessionId}/events`, "POST", {});
+    expect(next.status).toBe(400);
+    expect(await next.json()).toMatchObject({ error: { code: "invalid_body" } });
+    expect(listSequencedSessionEvents(getSqlite(), sessionId, after).map((item) => item.event.type)).not.toContain("chat.user_message");
   });
 
   test("Given a session whose backend is not installed When a message is posted Then exactly one status.error and one status.idle are persisted", async () => {

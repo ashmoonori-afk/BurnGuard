@@ -93,12 +93,18 @@ async function parseActiveRelPath(value: unknown, projectId: string): Promise<st
   return value;
 }
 
-type SessionRouteDependencies = { readonly detectBackends?: typeof detectBackends };
+type SessionRouteDependencies = { readonly detectBackends?: typeof detectBackends; readonly saveSessionAttachments?: typeof saveSessionAttachments };
 
 function routeDetectBackends(environment: unknown): typeof detectBackends {
   return typeof environment === "object" && environment !== null && "detectBackends" in environment
     ? (environment as SessionRouteDependencies).detectBackends ?? detectBackends
     : detectBackends;
+}
+
+function routeSaveSessionAttachments(environment: unknown): typeof saveSessionAttachments {
+  return typeof environment === "object" && environment !== null && "saveSessionAttachments" in environment
+    ? (environment as SessionRouteDependencies).saveSessionAttachments ?? saveSessionAttachments
+    : saveSessionAttachments;
 }
 
 export const sessionRoutes = new Hono();
@@ -174,6 +180,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
     const resolveGeneration = (value: unknown) => resolveGenerationOptions(session.backend_id, value, config, selectedBackend ?? { id: session.backend_id, found: false });
     let payload: UserEvent | null = null;
     let requestedOperationId: string | undefined;
+    let uploadedAttachmentPaths: readonly string[] = [];
 
     if (contentType.includes("application/json")) {
       const body = await c.req.json<unknown>().catch(() => null);
@@ -234,7 +241,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
         let uploadSources: VisualSourceUploadRequestV1;
         try {
           uploadSources = parseVisualSourceUploadRequest(form.get("visual_sources"), fileEntries.length);
-          attachmentPaths = await saveSessionAttachments(id, fileEntries.map((file, index) => ({
+          attachmentPaths = await routeSaveSessionAttachments(c.env)(id, fileEntries.map((file, index) => ({
             file,
             role: uploadSources.sources[index]?.role ?? "ordinary_content",
             roleExplicit: uploadSources.explicit,
@@ -261,6 +268,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
             400,
           );
         }
+        uploadedAttachmentPaths = attachmentPaths;
         const selections = attachmentPaths.map((attachmentPath, index) => ({ source_type: "uploaded_attachment" as const, attachment_path: attachmentPath, role: uploadSources.sources[index]?.role ?? "ordinary_content" }));
         try {
           const canonical = await canonicalizeAttachmentRequest({ sessionId: id, requestedPaths: attachmentPaths, selections });
@@ -278,6 +286,12 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
         fail("invalid_body", "Expected a user.message payload with text"),
         400,
       );
+    }
+
+    if (c.req.raw.signal.aborted) {
+      // The sender cancelled while the upload or extraction was still running: nothing starts on their behalf.
+      await rollbackSessionAttachments(id, uploadedAttachmentPaths);
+      return c.json(fail("request_cancelled", "The send request was cancelled before the turn started"), 400);
     }
 
     const turn = startReservedUserTurn({ ...reservation, operationId: requestedOperationId ?? reservation.operationId }, payload, { detectBackends: routeDetectBackends(c.env) });

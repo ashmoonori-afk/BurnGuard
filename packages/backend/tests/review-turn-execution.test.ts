@@ -210,6 +210,32 @@ test("Given a running generation When staged HTML changes Then draft files and i
   } finally { unsubscribe(); }
 });
 
+test("Given a user message naming the active page When the stage writes that page Then the live preview follows it instead of the entrypoint", async () => {
+  type PreviewEvent = Extract<import('@bg/shared').NormalizedEvent, { type: 'artifact.preview' }>;
+  let resolvePreview: (event: PreviewEvent) => void = () => {};
+  const previewed = new Promise<PreviewEvent>(resolve => { resolvePreview = resolve; });
+  const unsubscribe = broker.subscribe(sessionId, event => { if (event.type === "artifact.preview" && event.active && event.version >= 2) resolvePreview(event); });
+  let served = "";
+  try {
+    const turn = startUserTurn(sessionId, { type: "user.message", text: "Edit the about page", attachments: [], active_rel_path: "about.html" }, undefined, {
+      detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "fixture", version: "test" }] }),
+      runAdapter: async (_backend, input) => {
+        await writeFile(path.join(input.projectDir, "about.html"), "<html><body><h1>About us</h1></body></html>");
+        const event = await previewed;
+        expect(event.path).toBe("about.html");
+        const response = await managedFileRoutes.request(`/api/projects/${projectId}/preview/${event.previewId}/fs/about.html`);
+        expect(response.status).toBe(200);
+        served = await response.text();
+        return { exitCode: 0 };
+      },
+      reviewDesign: async () => ({ status: "checked", repairs: 0, result: { schema_version: 1, project_id: projectId, artifact_revision: 1, artifact_digest: digest, created_at: 1, overall_status: "ready", checks: [] } }),
+    });
+    if (turn === null) throw new Error("turn reservation unavailable");
+    await turn.promise;
+    expect(served).toContain("About us");
+  } finally { unsubscribe(); }
+});
+
 for (const reviewFails of [false, true]) test(`Given a deck generation When mandatory copy review ${reviewFails ? "fails" : "succeeds"} Then publication ${reviewFails ? "rolls back" : "includes corrections"}`, async () => {
   getSqlite().prepare("UPDATE projects SET type='slide_deck' WHERE id=?").run(projectId);
   const runtime = '<script src="runtime/deck-stage.js"></script>';

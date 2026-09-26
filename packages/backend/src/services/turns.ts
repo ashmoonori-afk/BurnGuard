@@ -414,7 +414,7 @@ async function runUserTurnInternal(
         // Old projects carry a copied runtime. Refresh only the owned stage,
         // so the preview receives engine fixes without touching live files.
         if (project.type === "slide_deck") await prepareSlideDeckExport(stageDir, project.entrypoint);
-        stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
+        stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: payload.active_rel_path ?? project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
         const graphicBefore = graphicEntrypoint === null ? null : await readFile(graphicEntrypoint, "utf8");
         // The logo gate's expectation is captured before the agent runs, so nothing the model writes
