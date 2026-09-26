@@ -1,5 +1,13 @@
 import { decodeContract, requiredString, requiredNumber, UpgradeContractError } from "./contract-parser";
 
+/** Stable finding codes; the UI localizes copy by code and falls back to the authored strings for an unknown one. */
+export const UX_FINDING_CODES = ["page_heading", "heading_jump", "action_name", "input_label", "link_name", "image_alt", "long_paragraph"] as const;
+export type UxFindingCode = (typeof UX_FINDING_CODES)[number];
+/** Stable limitation codes; the UI localizes them and shows an unknown one verbatim. */
+export const UX_LIMITATION_CODES = ["static_heuristics", "bounded_findings"] as const;
+/** Parameters the localized finding copy interpolates (a generic label, heading levels, a length). */
+export type UxReviewFindingDetail = Readonly<Record<string, string | number>>;
+
 export interface UxReviewFinding {
   readonly id: string;
   readonly code: string;
@@ -9,6 +17,7 @@ export interface UxReviewFinding {
   readonly proposal: string;
   readonly node_bg_id: string | null;
   readonly pattern_id: string;
+  readonly detail?: UxReviewFindingDetail;
 }
 
 export interface UxReviewReport {
@@ -36,6 +45,13 @@ export const UX_PATTERNS = [
   { id: "anti-slop", title: "맥락에 맞는 디자인", description: "반복되는 장식 대신 제품의 내용과 목적을 검토합니다.", guidance: "사람의 시각적 판단이 필요한 검토입니다. 관성적인 카드 격자, 장식 배지, 과도한 그라디언트와 반복 문구를 점검하고 실제 콘텐츠의 위계와 브랜드 맥락에 필요한 요소만 남기세요. 스타일 취향을 자동 결함으로 단정하지 마세요." },
 ] as const;
 
+function parseFindingDetail(input: unknown): UxReviewFindingDetail {
+  const record = decodeContract(input);
+  const entries = Object.entries(record);
+  if (entries.length > 8 || entries.some(([key, value]) => !/^[a-z_]{1,32}$/.test(key) || !(typeof value === "string" ? value.length <= 240 : typeof value === "number" && Number.isFinite(value)))) throw new UpgradeContractError("invalid_field", "ux_review_detail");
+  return Object.fromEntries(entries) as UxReviewFindingDetail;
+}
+
 export function parseUxReviewReport(input: unknown): UxReviewReport {
   const value = decodeContract(input);
   const checkKeys = (record: Readonly<Record<string, unknown>>, keys: readonly string[]) => { if (Object.keys(record).some((key) => !keys.includes(key))) throw new UpgradeContractError("invalid_field", "ux_review"); };
@@ -48,11 +64,12 @@ export function parseUxReviewReport(input: unknown): UxReviewReport {
   if (!Array.isArray(value.limitations) || value.limitations.length > 10 || !value.limitations.every((item): item is string => typeof item === "string" && item.length <= 2000) || !Array.isArray(value.findings) || value.findings.length > 40) throw new UpgradeContractError("invalid_field", "ux_review_items");
   const findings = value.findings.map((item): UxReviewFinding => {
     const finding = decodeContract(item);
-    checkKeys(finding, ["id", "code", "priority", "title", "evidence", "proposal", "node_bg_id", "pattern_id"]);
+    checkKeys(finding, ["id", "code", "priority", "title", "evidence", "proposal", "node_bg_id", "pattern_id", "detail"]);
     if ((finding.priority !== "high" && finding.priority !== "medium") || !(finding.node_bg_id === null || typeof finding.node_bg_id === "string" && finding.node_bg_id.length > 0 && finding.node_bg_id.length <= 160)) throw new UpgradeContractError("invalid_field", "ux_review_finding");
     const pattern_id = string(finding, "pattern_id", 100);
     if (!UX_PATTERNS.some((pattern) => pattern.id === pattern_id)) throw new UpgradeContractError("invalid_field", "pattern_id");
-    return { id: string(finding, "id", 100), code: string(finding, "code", 100), priority: finding.priority, title: string(finding, "title"), evidence: string(finding, "evidence"), proposal: string(finding, "proposal"), node_bg_id: finding.node_bg_id, pattern_id };
+    const detail = finding.detail === undefined ? undefined : parseFindingDetail(finding.detail);
+    return { id: string(finding, "id", 100), code: string(finding, "code", 100), priority: finding.priority, title: string(finding, "title"), evidence: string(finding, "evidence"), proposal: string(finding, "proposal"), node_bg_id: finding.node_bg_id, pattern_id, ...(detail === undefined ? {} : { detail }) };
   });
   if (new Set(findings.map((finding) => finding.id)).size !== findings.length) throw new UpgradeContractError("invalid_field", "finding_id");
   return { schema_version: 1, project_id: string(value, "project_id", 200), artifact_revision: requiredNumber(value, "artifact_revision"), artifact_digest, source_path, basis: "local_html_heuristics", limitations: value.limitations, findings };

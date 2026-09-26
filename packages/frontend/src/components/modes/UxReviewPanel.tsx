@@ -6,6 +6,7 @@ import { getUxReview } from "@/api/ux-review";
 import { ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { UX_PATTERN_COPY } from "./ux-pattern-copy";
+import { uxFindingCopy, uxLimitationCopy } from "./ux-finding-copy";
 
 export type UxReviewBinding = {
   projectId: string;
@@ -88,14 +89,14 @@ export default function UxReviewPanel({ binding }: { binding: UxReviewBinding })
       {report && <>
         <p className="mb-3 break-all text-muted-foreground">{t("modes.ux.source", { path: report.source_path, revision: report.artifact_revision })}</p>
         {report.findings.length === 0 && <p>{t("modes.ux.noFindings")}</p>}
-        <div className="space-y-3">{report.findings.map((finding) => <article key={finding.id} className="rounded-md border border-border p-3">
-          <h3 className="font-semibold">{finding.title}</h3>
+        <div className="space-y-3">{report.findings.map((finding) => { const copy = uxFindingCopy(finding, t); return <article key={finding.id} className="rounded-md border border-border p-3">
+          <h3 className="font-semibold">{copy.title}</h3>
           <p className="mt-1 text-muted-foreground">{finding.priority === "high" ? t("modes.ux.highPriority") : t("modes.ux.recommended")}{finding.node_bg_id ? t("modes.ux.node", { id: finding.node_bg_id }) : t("modes.ux.page")}</p>
-          <p className="mt-2 break-words">{t("modes.ux.evidence", { evidence: finding.evidence })}</p>
-          <p className="mt-2 break-keep">{t("modes.ux.proposal", { proposal: finding.proposal })}</p>
-          <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} title={disabled ? t("workspace.project.busyTurn") : undefined} onClick={() => { void request(finding.title, `관찰 근거: ${finding.evidence}\n개선 제안: ${finding.proposal}`, finding.node_bg_id); }}>{t("modes.ux.requestProposal")}</Button>
-        </article>)}</div>
-        <details className="my-3"><summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.ux.limitations")}</summary><ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">{report.limitations.map((item) => <li key={item}>{item}</li>)}</ul></details>
+          <p className="mt-2 break-words">{t("modes.ux.evidence", { evidence: copy.evidence })}</p>
+          <p className="mt-2 break-keep">{t("modes.ux.proposal", { proposal: copy.proposal })}</p>
+          <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} title={disabled ? t("workspace.project.busyTurn") : undefined} onClick={() => { void request(copy.title, `${t("modes.ux.evidence", { evidence: copy.evidence })}\n${t("modes.ux.proposal", { proposal: copy.proposal })}`, finding.node_bg_id); }}>{t("modes.ux.requestProposal")}</Button>
+        </article>; })}</div>
+        <details className="my-3"><summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.ux.limitations")}</summary><ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">{report.limitations.map((item) => <li key={item}>{uxLimitationCopy(item, t)}</li>)}</ul></details>
       </>}
     </>}
     <section className="mt-4 border-t border-border pt-3" aria-labelledby="ux-pattern-title">
