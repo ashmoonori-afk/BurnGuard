@@ -1,6 +1,6 @@
 import { createCanvas, loadImage } from "./export-native-modules";
 import { parse } from "node-html-parser";
-import type { CreatePinterestMoodRequest, CreatePinterestMoodResponse } from "@bg/shared";
+import { PINTEREST_PIN_LIMIT, type CreatePinterestMoodRequest, type CreatePinterestMoodResponse } from "@bg/shared";
 import { createAcquisitionBudget, ExtractionAcquisitionError, throwIfAcquisitionAborted } from "./extraction-acquisition";
 import { DesignSystemExtractError } from "./extraction-errors";
 import { fetchWebsiteResource } from "./extraction-website";
@@ -10,9 +10,9 @@ import type { SourceAnalysis } from "./extraction-local-tree";
 
 export function parsePinterestMoodRequest(value: unknown): CreatePinterestMoodRequest {
   if (!value || typeof value !== "object" || Object.keys(value).some((key) => key !== "name" && key !== "pin_urls") ||
-    !("pin_urls" in value) || !Array.isArray(value.pin_urls) || value.pin_urls.length < 1 || value.pin_urls.length > 12 ||
+    !("pin_urls" in value) || !Array.isArray(value.pin_urls) || value.pin_urls.length < 1 || value.pin_urls.length > PINTEREST_PIN_LIMIT ||
     ("name" in value && (typeof value.name !== "string" || !value.name.trim() || value.name.length > 100))) {
-    throw new DesignSystemExtractError("invalid_pinterest_request", "Provide 1–12 public Pinterest pin URLs and an optional name (100 characters maximum).");
+    throw new DesignSystemExtractError("invalid_pinterest_request", `Provide 1–${PINTEREST_PIN_LIMIT} public Pinterest pin URLs and an optional name (100 characters maximum).`);
   }
   const urls = value.pin_urls.map((url: unknown) => {
     if (typeof url !== "string" || !/^https:\/\/(?:www\.)?pinterest\.com\/pin\/[0-9]{1,30}\/?$/.test(url.trim())) {

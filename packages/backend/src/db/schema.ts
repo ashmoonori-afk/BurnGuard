@@ -6,13 +6,14 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+import { DEFAULT_DISPLAY_NAME } from "@bg/shared";
 import { designSystemsTable, eventsTable, exportsTable, projectsTable, sessionsTable } from "./pipeline-authorities";
 
 export { designSystemsTable, eventsTable, exportsTable, projectsTable, sessionsTable };
 
 export const usersTable = sqliteTable("users", {
   id: text("id").primaryKey(),
-  displayName: text("display_name").notNull().default("You"),
+  displayName: text("display_name").notNull().default(DEFAULT_DISPLAY_NAME),
   email: text("email"),
   createdAt: integer("created_at").notNull(),
 });

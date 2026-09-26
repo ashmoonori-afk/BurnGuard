@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 import { createCanvas } from "@napi-rs/canvas";
+import { PINTEREST_PIN_LIMIT } from "@bg/shared";
 import { collectPinterestMood, imagePalette, parsePinterestMoodRequest } from "../src/services/pinterest-mood";
 import { buildExtractionProvenance } from "../src/services/extraction-provenance";
 
 test("Given public pin input, when parsing, then canonicalize duplicates and reject unsafe URLs and limits", () => {
   expect(parsePinterestMoodRequest({ pin_urls: ["https://pinterest.com/pin/123", "https://www.pinterest.com/pin/123/"] }).pin_urls).toEqual(["https://www.pinterest.com/pin/123/"]);
   for (const url of ["http://127.0.0.1/pin/1", "https://www.pinterest.com@127.0.0.1/pin/1", "https://www.pinterest.com/board/", "https://www.pinterest.com/pin/1/?token=x"]) expect(() => parsePinterestMoodRequest({ pin_urls: [url] })).toThrow();
-  expect(() => parsePinterestMoodRequest({ pin_urls: Array(13).fill("https://pinterest.com/pin/1/") })).toThrow();
+  expect(() => parsePinterestMoodRequest({ pin_urls: Array(PINTEREST_PIN_LIMIT + 1).fill("https://pinterest.com/pin/1/") })).toThrow();
 });
 
 test("Given pin image pixels and an unavailable pin, when collecting, then retain observed colors and honest partial provenance", async () => {

@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { t, useT, type MessageKey } from "@/i18n/t";
-import type { CreatePinterestMoodResponse } from "@bg/shared";
+import { PINTEREST_PIN_LIMIT, type CreatePinterestMoodResponse } from "@bg/shared";
 import { ApiError } from "@/api/client";
 import { extractPinterestMood } from "@/api/design-system";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, busyDialogProps } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-/** Mirrors the backend's invalid_pinterest_request bound, so the count is refused here instead of after the upload. */
-export const PINTEREST_PIN_LIMIT = 12;
+/** The shared bound the backend's invalid_pinterest_request enforces, so the count is refused here instead of after the upload. */
+export { PINTEREST_PIN_LIMIT };
 
 export function pinterestPinUrls(input: string): readonly string[] {
   return input.split(/\s+/).filter(Boolean);

@@ -15,7 +15,7 @@ If the user invokes this skill without any other guidance, ask them what they wa
 ## Quick reference
 
 - **Tokens:** `colors_and_type.css` — single source of truth for colors, type, spacing, radii, shadows, motion.
-- **Fonts:** `fonts/` — Zen Serif (display), KoPub Batang (serif body), Pretendard + KoPub Dotum (sans), IBM Plex Mono (CDN).
+- **Fonts:** `fonts/` — Zen Serif (display), KoPub Batang (serif body), Pretendard + KoPub Dotum (sans), IBM Plex Mono.
 - **Logos:** `assets/logos/` — six placeholder SVG lockups (Box, Outline, Reversed, Secondary, Signature, Signature Reverse).
 - **UI kit:** `ui_kits/website/` — header, hero, insights grid, market strip, callout band, footer.
 - **Voice:** institutional, restrained, third-person. Title-case headlines, sentence-case body, ALL-CAPS tracked eyebrows. No emoji. Tabular numerals everywhere.
