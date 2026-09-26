@@ -6,6 +6,7 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { systemsDir, projectsDir } from "../src/lib/paths";
 import { createApp } from "../src/server";
 import { ensureProjectDesignSystemPin, inspectProjectDesignSystemPin, readProjectDesignSystemPin } from "../src/services/project-design-system-pin";
+import { compactPinnedDesignSystemContext } from "../src/harness/prompt-design-system";
 import { blockingDesignFindings, designReviewBudgetMs, reviewTurnDesign } from "../src/services/turn-design-review";
 import { auditedSiteMap } from "../src/services/design-audit";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
@@ -43,6 +44,13 @@ test("Given a pinned system When its tokens change Then only an explicit idle-pr
   const first = await ensureProjectDesignSystemPin(id);
   expect(first?.context).not.toContain(systemDir);
   expect(first?.context).toContain('surface="website"');
+  // PH-06: the compact rendering is derived from the frozen pin alone, keeps the contracts and tokens and drops the README.
+  const compact = compactPinnedDesignSystemContext(first!);
+  expect(compact).toContain('surface="website"');
+  expect(compact).toContain("### Compact design-system handling");
+  expect(compact).toContain("--brand: #123456");
+  expect(compact).not.toContain("### README.md (excerpt)");
+  expect(first?.context).toContain("### README.md (excerpt)");
   await writeFile(path.join(systemDir, "colors_and_type.css"), ":root { --brand: #654321; }");
   expect((await ensureProjectDesignSystemPin(id))?.digest).toBe(first?.digest);
   const proposed = await inspectProjectDesignSystemPin(id);

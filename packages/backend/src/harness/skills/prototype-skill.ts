@@ -13,6 +13,8 @@
  * typography, and palette choices live in `colors_and_type.css` and
  * must NOT be re-declared here.
  */
+import { LUCIDE_REFERENCE_REL_PATH } from "../lucide-reference";
+
 export const PROTOTYPE_SKILL_MD = `# Prototype authoring conventions
 
 ## Artifact contract
@@ -94,7 +96,7 @@ export const PROTOTYPE_SKILL_MD = `# Prototype authoring conventions
   hardcode colours, font families, or scales that exist as tokens.
 - Do not introduce new palettes, font stacks, or typefaces. The design
   system owns visual identity; archetypes describe STRUCTURE only.
-- Icons (LUCIDE_ICON_REFERENCE): on demand, Read \`packages/backend/src/harness/assets/lucide/reference.md\`. Use only its inline \`<svg>\`; keep \`stroke="currentColor"\` and size with \`--icon-size\`. Never use external URLs, sprites, or icon fonts.
+- Icons (LUCIDE_ICON_REFERENCE): on demand, Read \`${LUCIDE_REFERENCE_REL_PATH}\` in the project. Use only its inline \`<svg>\`; keep \`stroke="currentColor"\` and size with \`--icon-size\`. Never use external URLs, sprites, or icon fonts.
 - Mobile first; reflow at 320 CSS pixels. Tables and diagrams may use bounded
   two-dimensional scrolling only when their relationships require it.
 - Interactive targets are at least 24 by 24 CSS pixels or have equivalent spacing.

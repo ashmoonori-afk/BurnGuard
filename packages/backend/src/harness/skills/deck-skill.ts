@@ -1,4 +1,5 @@
 import { EXPORT_REMOTE_FRAME_RULE } from "../design-craft";
+import { LUCIDE_REFERENCE_REL_PATH } from "../lucide-reference";
 
 export const DECK_REVIEW_PROMPT = `## Mandatory deck copy and typography review
 The design pass is finished. Perform this bounded review now, before the app commits the deck. This is not a new design request.
@@ -101,7 +102,7 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
   system owns visual identity; archetypes above describe STRUCTURE only.
 - Declare \`--deck-font-heading: var(--font-display)\` and
   \`--deck-font-body: var(--font-body)\` in :root; font-family uses only them.
-- Icons (LUCIDE_ICON_REFERENCE): Read \`packages/backend/src/harness/assets/lucide/reference.md\`. Use its inline \`<svg>\` with \`stroke="currentColor"\` and \`--icon-size\`; no external sources.
+- Icons (LUCIDE_ICON_REFERENCE): Read \`${LUCIDE_REFERENCE_REL_PATH}\` in the project. Use its inline \`<svg>\` with \`stroke="currentColor"\` and \`--icon-size\`; no external sources.
 - Keep \`.deck-slide { aspect-ratio: var(--slide-aspect, 16 / 9) }\` unless the
   user requests otherwise.
 - The exporter paginates \`[data-slide]\` itself at 100vw x 100vh per page and

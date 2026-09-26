@@ -856,6 +856,88 @@ describe("prompt gaps", () => {
     expect(catalog.split("\n").map((line) => line.split(" | ")[0])).toEqual(Object.keys(IMAGE_PROMPT_RECIPES));
   });
 
+  test("PH-05: Given a README whose sections ship in the layout contract When built in full mode Then those sections are not inlined again while the rest of the README is", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "bg-prompt-readme-"));
+    try {
+      const readme = path.join(tempDir, "README.md");
+      const skill = path.join(tempDir, "SKILL.md");
+      await writeFile(readme, "# Theme\n\n## Layout\nLAYOUT_RULE_TEXT\n\n## Family tokens\nFAMILY_RULE_TEXT\n\n## Image direction\nIMAGE_RULE_TEXT\n\n## Footer\nFOOTER_RULE_TEXT\n");
+      await writeFile(skill, "# Theme skill\n\n## Family tokens\nSKILL_FAMILY_TEXT\n");
+      const designSystem = { id: "readme-dedupe", name: "Dedupe", status: "published", source_type: "manual", is_template: false, dir_path: tempDir, skill_md_path: skill, tokens_css_path: null, readme_md_path: readme, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const;
+      const prompt = await buildPrompt(makeContext({}, { designSystem }), { type: "user.message", text: "Build it" }, { contextMode: "full" });
+      const layout = JSON.parse(prompt.match(/<selected_design_system_layout>\n([^\n]+)\n<\/selected_design_system_layout>/u)![1]!);
+      expect(layout.sections.map((section: { kind: string }) => section.kind)).toEqual(["layout", "family", "footer"]);
+      for (const text of ["LAYOUT_RULE_TEXT", "FAMILY_RULE_TEXT", "FOOTER_RULE_TEXT"]) expect(prompt.split(text)).toHaveLength(2);
+      const outsideLayout = prompt.replace(/<selected_design_system_layout>\n[^\n]+\n<\/selected_design_system_layout>/u, "");
+      expect(outsideLayout.split("## Family tokens")).toHaveLength(2);
+      expect(outsideLayout).toContain("SKILL_FAMILY_TEXT");
+      expect(outsideLayout).toContain("IMAGE_RULE_TEXT");
+      expect(outsideLayout).toContain("## Image direction");
+      expect(outsideLayout).not.toContain("## Layout\n");
+      expect(outsideLayout).not.toContain("## Footer");
+      expect(prompt).toContain("### README.md (excerpt)");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("DP-24: Given a SKILL.md beyond the excerpt budget When built in full mode Then the block ends at a section boundary and a marker names the path, while a short skill ships whole", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "bg-prompt-skill-"));
+    try {
+      const skill = path.join(tempDir, "SKILL.md");
+      const sections = Array.from({ length: 40 }, (_, index) => `## Section ${index}\n\n${"x".repeat(60)} paragraph ${index} line one.\n${"y".repeat(60)} paragraph ${index} line two.\n`);
+      const long = `# Long skill\n\n${sections.join("\n")}`;
+      await writeFile(skill, long);
+      const designSystem = { id: "skill-cut", name: "Cut", status: "published", source_type: "manual", is_template: false, dir_path: tempDir, skill_md_path: skill, tokens_css_path: null, readme_md_path: null, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const;
+      const prompt = await buildPrompt(makeContext({}, { designSystem }), { type: "user.message", text: "Build it" }, { contextMode: "full" });
+      expect(long.length).toBeGreaterThan(MAX_SKILL_CHARS);
+      const block = prompt.match(/### SKILL\.md\n```markdown\n([\s\S]*?)\n```\n([^\n]*)/u)!;
+      const excerpt = block[1]!;
+      expect(excerpt.length).toBeLessThanOrEqual(MAX_SKILL_CHARS);
+      expect(long.startsWith(excerpt)).toBe(true);
+      expect(long.charAt(excerpt.length)).toBe("\n");
+      expect(excerpt.endsWith("line two.")).toBe(true);
+      expect(block[2]).toContain("SKILL_MD_TRUNCATED");
+      expect(block[2]).toContain(skill);
+
+      await writeFile(skill, "# Short skill\n\nWhole text.\n");
+      const short = await buildPrompt(makeContext({}, { designSystem }), { type: "user.message", text: "Build it" }, { contextMode: "full" });
+      const shortBlock = short.match(/### SKILL\.md\n```markdown\n([\s\S]*?)\n```\n([^\n]*)/u)!;
+      expect(shortBlock[1]).toBe("# Short skill\n\nWhole text.\n");
+      expect(short).not.toContain("SKILL_MD_TRUNCATED");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("PH-06: Given a frozen pin that inlines SKILL.md When built in compact mode Then the pin ships its contracts and tokens with the compact handling but not the skill or README, which full mode keeps", async () => {
+    const context = [
+      "## Design system", "- name: Pinned", '<selected_design_system_surface surface="website">', '{"tokens":{},"sections":[]}', "</selected_design_system_surface>", "",
+      "### SKILL.md", "```markdown", "PINNED_SKILL_TEXT", "```", "",
+      "### colors_and_type.css (excerpt)", "```css", ":root { --brand: #123456; }", "```", "",
+      "### README.md (excerpt)", "```markdown", "PINNED_README_TEXT", "```", "",
+    ].join("\n");
+    const designSystemPin = { system_id: "pinned", revision: 3, digest: "pin-digest", context, tokens: "/* brand */\n:root { --brand: #123456; }\n" };
+    const compact = await buildPrompt(makeContext({}, { designSystemPin }), { type: "user.message", text: "Build it" }, { contextMode: "compact" });
+    const pinned = compact.slice(compact.indexOf("<pinned_design_system>"), compact.indexOf("</pinned_design_system>"));
+    expect(JSON.parse(pinned.split("\n")[1]!)).toEqual({ revision: 3, digest: "pin-digest" });
+    expect(pinned).toContain('surface="website"');
+    expect(pinned).toContain("### Compact design-system handling");
+    expect(pinned).toContain("--brand: #123456");
+    expect(pinned).not.toContain("### SKILL.md");
+    expect(pinned).not.toContain("PINNED_SKILL_TEXT");
+    expect(pinned).not.toContain("PINNED_README_TEXT");
+    expect(compact).not.toContain("DEFAULT_VISUAL_IDENTITY");
+
+    const full = await buildPrompt(makeContext({}, { designSystemPin }), { type: "user.message", text: "Build it" }, { contextMode: "full" });
+    const fullPinned = full.slice(full.indexOf("<pinned_design_system>"), full.indexOf("</pinned_design_system>"));
+    expect(fullPinned).toContain("### SKILL.md");
+    expect(fullPinned).toContain("PINNED_SKILL_TEXT");
+    expect(fullPinned).toContain("PINNED_README_TEXT");
+    expect(fullPinned).not.toContain("### Compact design-system handling");
+    expect(fullPinned.split("--brand: #123456")).toHaveLength(2);
+  });
+
   test("PH-32: Given a host that is not win32 When built Then the text-encoding tag ships once without PowerShell guidance, which only the win32 seam adds", async () => {
     const prompt = await buildPrompt(makeContext(), { type: "user.message", text: "hi" });
     expect(prompt.split("<burnguard-text-encoding-v1>")).toHaveLength(2);

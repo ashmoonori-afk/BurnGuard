@@ -23,6 +23,8 @@ import { reviewTurnDesign } from "../src/services/turn-design-review";
 import { RenderSessionError } from "../src/services/export-render-session";
 import { DESIGN_AUDIT_POLICY_VERSION, getProjectDesignAudit } from "../src/services/design-audit";
 import { DESIGN_AUDIT_CHECK_CODES, type DesignAuditResult } from "@bg/shared";
+import { LUCIDE_REFERENCE_REL_PATH } from "../src/harness/lucide-reference";
+import { renderLucideIconReference } from "../src/harness/assets/lucide/icons";
 
 let projectId: string;
 let sessionId: string;
@@ -180,6 +182,19 @@ test("Given invalid generated HTML When finalizing Then no repair adapter runs a
     const error = getSqlite().query<{ payload_json: string }, [string]>("SELECT payload_json FROM events WHERE session_id=? AND type='status.error' ORDER BY sequence DESC LIMIT 1").get(sessionId);
     expect(JSON.parse(error!.payload_json).code).toBe("publication_failed");
   }
+});
+
+test("PH-01: Given a turn When the adapter runs Then the stage holds the generated icon reference the prompt names and the committed project never receives it", async () => {
+  const turn = start(async (_backend, input) => {
+    // The full skills name this path; the file is staged in every mode so a compact turn can Read it too.
+    expect(await readFile(path.join(input.projectDir, LUCIDE_REFERENCE_REL_PATH), "utf8")).toBe(renderLucideIconReference());
+    await writeFile(path.join(input.projectDir, "index.html"), "iconed");
+    return { exitCode: 0 };
+  });
+  await turn.promise;
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("iconed");
+  expect(existsSync(path.join(projectDir, ".burnguard-inputs", "lucide-icons.md"))).toBe(false);
+  expect((await inspectCanonicalTree(projectDir)).files.map((file) => file.path)).toEqual(["index.html"]);
 });
 
 test("Given prompt-directed writes When generation succeeds Then only stage changes before commit", async () => {

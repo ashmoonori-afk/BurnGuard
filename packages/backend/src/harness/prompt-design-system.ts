@@ -28,6 +28,56 @@ function excerptTokensCss(content: string): string {
 }
 
 /**
+ * The SKILL.md excerpt: the whole file when it fits, otherwise the longest prefix that ends at a
+ * heading or paragraph boundary before MAX_SKILL_CHARS, so no sentence is cut mid-word.
+ */
+function excerptSkillMarkdown(content: string): { readonly text: string; readonly truncated: boolean } {
+  if (content.length <= MAX_SKILL_CHARS) return { text: content, truncated: false };
+  const head = content.slice(0, MAX_SKILL_CHARS);
+  const heading = Math.max(head.lastIndexOf("\n## "), head.lastIndexOf("\n### "));
+  const paragraph = head.lastIndexOf("\n\n");
+  // A paragraph boundary directly after a heading would strand that heading without its section.
+  const boundary = paragraph > heading && heading > 0 && /^\n#{2,3} [^\n]*$/u.test(head.slice(heading, paragraph)) ? heading : Math.max(heading, paragraph);
+  return { text: (boundary > 0 ? head.slice(0, boundary) : head).trimEnd(), truncated: true };
+}
+
+const LAYOUT_SECTION_HEADING = /^##\s+(Layout|Composition|Responsive[^\r\n]*|Family tokens|Navigation|Hero|Footer)\s*$/i;
+
+/** The README without the level-2 sections whose kind already shipped inside the layout contract. */
+function stripShippedReadmeSections(readme: string, shipped: ReadonlySet<string>): string {
+  const kept: string[] = [];
+  let skipping = false;
+  for (const line of readme.split("\n")) {
+    if (/^##\s/.test(line)) {
+      const kind = LAYOUT_SECTION_HEADING.exec(line)?.[1]?.toLowerCase().split(" ")[0];
+      skipping = kind !== undefined && shipped.has(kind);
+    }
+    if (!skipping) kept.push(line);
+  }
+  return kept.join("\n");
+}
+
+const PIN_INLINE_MARKERS = ["\n### SKILL.md\n", "\n### colors_and_type.css (excerpt)\n", "\n### README.md (excerpt)\n"] as const;
+
+/**
+ * Compact rendering of a frozen pin: the contracts before the inlined files, the token excerpt the
+ * model has no path to Read, then the compact handling. Everything comes from the pin itself, so a
+ * later change to the live system cannot leak into a pinned project.
+ */
+export function compactPinnedDesignSystemContext(pin: { readonly context: string; readonly tokens: string }): string {
+  const cuts = PIN_INLINE_MARKERS.map((marker) => pin.context.indexOf(marker)).filter((index) => index !== -1);
+  const lines = [cuts.length === 0 ? pin.context.trimEnd() : pin.context.slice(0, Math.min(...cuts)).trimEnd(), ""];
+  if (pin.tokens) lines.push("### colors_and_type.css (excerpt)", "```css", excerptTokensCss(pin.tokens), "```", "");
+  lines.push(
+    "### Compact design-system handling",
+    "- The pinned contracts and token excerpt above are the source of truth; the pinned SKILL.md and README are not inlined in compact mode. Reuse the CSS variables above and those the existing files already declare instead of inventing new palettes or type stacks.",
+    "- Prefer targeted Grep/Read ranges of the project's own files over reconstructing the design system.",
+    "",
+  );
+  return lines.join("\n");
+}
+
+/**
  * Emits the tokens and prose that only apply to the surface this project renders into: a fluid page,
  * a fixed slide, or a fixed content artboard. See doc/22-design-system-surfaces-2026-09-15.md.
  */
@@ -121,10 +171,12 @@ export async function appendDesignSystemContext(
   if (designSystem.skill_md_path) {
     const content = await read(designSystem.skill_md_path);
     if (content) {
+      const excerpt = excerptSkillMarkdown(content);
       lines.push("### SKILL.md");
       lines.push("```markdown");
-      lines.push(content.slice(0, MAX_SKILL_CHARS));
+      lines.push(excerpt.text);
       lines.push("```");
+      if (excerpt.truncated) lines.push(`SKILL_MD_TRUNCATED: the excerpt stops at a section boundary before ${MAX_SKILL_CHARS} characters; ${pinned ? "the remaining sections of the system's SKILL.md are not pinned" : `Read ${designSystem.skill_md_path} for the remaining sections`}.`);
       lines.push("");
     }
   }
@@ -141,9 +193,10 @@ export async function appendDesignSystemContext(
   // The README is written around the website: Layout, Responsive, Navigation, Hero and Footer. A
   // fixed surface already has its curated sections in the blocks above, so inlining the whole
   // document here would put back exactly the geometry the surface split removes.
+  // Sections the layout contract already carries verbatim are dropped here rather than shipped twice.
   if (designSystem.readme_md_path && surface === "website") {
-    const content = await read(designSystem.readme_md_path);
-    if (content) {
+    const content = stripShippedReadmeSections(await read(designSystem.readme_md_path), new Set(layout.sections.map((section) => section.kind)));
+    if (content.trim()) {
       lines.push("### README.md (excerpt)");
       lines.push("```markdown");
       lines.push(content.split("\n").slice(0, MAX_README_LINES).join("\n"));
