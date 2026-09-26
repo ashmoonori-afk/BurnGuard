@@ -67,7 +67,6 @@ export const homeMessages = defineMessages({
   "home.toast.fileImported": { ko: "디자인 파일을 가져왔어요", en: "Design file imported", "zh-CN": "设计文件已导入" },
   "home.toast.systemImported": { ko: "디자인 시스템을 가져왔어요", en: "Design system imported", "zh-CN": "设计系统已导入" },
   "home.toast.systemDraft": { ko: "{name} 초안을 만들었어요. 내용을 확인한 뒤 게시할 수 있어요.", en: "Created a draft of {name}. Review it before publishing.", "zh-CN": "已创建 {name} 草稿。检查内容后即可发布。" },
-  "home.toast.systemImportError": { ko: "디자인 시스템을 가져오지 못했어요", en: "Could not import design system", "zh-CN": "无法导入设计系统" },
   "home.toast.moodPartial": { ko: "무드 초안을 만들었어요. 읽지 못한 핀 {count}개는 결과에서 확인해 주세요.", en: { one: "Mood draft created. Check the result for {count} unreadable pin.", other: "Mood draft created. Check the result for {count} unreadable pins." }, "zh-CN": "已创建氛围草稿。请在结果中查看无法读取的 {count} 个 Pin。" },
   "home.toast.moodCreated": { ko: "Pinterest 무드 초안을 만들었어요.", en: "Pinterest mood draft created.", "zh-CN": "Pinterest 氛围草稿已创建。" },
   "home.systemsIntro": { ko: "프로젝트에 사용할 색상과 글꼴을 모아 두는 곳이에요. 이름과 상태로 찾거나, 가져오기를 눌러 공개 웹사이트·저장소·PPTX/PDF에서 새 초안을 만들어 보세요.", en: "Collect colors and fonts for your projects. Search by name and status, or import a public website, repository, or PPTX/PDF to create a draft.", "zh-CN": "在这里汇集项目所用的颜色和字体。按名称和状态查找，或点击导入，从公开网站、仓库、PPTX/PDF 创建新草稿。" },
@@ -351,4 +350,7 @@ export const homeMessages = defineMessages({
   "home.creation.backendNotFound": { ko: "{name} (설치되지 않음)", en: "{name} (not installed)", "zh-CN": "{name}（未安装）" },
   "home.logo.regenerateLine": { ko: "다른 시안 4개를 새로 만들어주세요.", en: "Please create 4 new concepts.", "zh-CN": "请重新生成 4 个新方案。" },
   "home.logo.selectLine": { ko: "{number}번 시안으로 진행해주세요.", en: "Please continue with concept {number}.", "zh-CN": "请以方案 {number} 继续。" },
+  "home.detectionFailed": { ko: "AI 도구 상태를 확인하지 못했어요. 다시 시도해 주세요.", en: "Could not check the AI tools. Try again.", "zh-CN": "无法检查 AI 工具状态。请重试。" },
+  "home.creation.detecting": { ko: "AI 도구를 확인하는 중…", en: "Checking AI tools…", "zh-CN": "正在检查 AI 工具…" },
+  "home.creation.detectionFailed": { ko: "AI 도구 상태를 확인하지 못했어요", en: "Could not check AI tools", "zh-CN": "无法检查 AI 工具状态" },
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { useT } from "@/i18n/t";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
@@ -13,7 +13,7 @@ import type {
 import { defaultGenerationOptions } from "@bg/shared";
 import GenerationControls from "@/components/settings/GenerationControls";
 import { createProject, detectBackends } from "@/api/home";
-import { backendOptionLabel, graphicBackendId } from "@/lib/backend-display";
+import { backendOptionLabel, backendSelectState, graphicBackendId } from "@/lib/backend-display";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ProjectBriefFields, {
@@ -59,6 +59,8 @@ export default function NewProjectPanel({
   systemsError,
   onRetrySystems,
   onPendingChange,
+  onChoosingChange,
+  backRef,
   onCreated,
 }: {
   type: ProjectType;
@@ -70,6 +72,10 @@ export default function NewProjectPanel({
   systemsError: Error | null;
   onRetrySystems: () => void;
   onPendingChange?: (pending: boolean) => void;
+  /** Reports whether the design-system picker is showing, so the host dialog can route Escape to `backRef`. */
+  onChoosingChange?: (choosing: boolean) => void;
+  /** Filled with the picker's back step while it is showing; null otherwise. */
+  backRef?: MutableRefObject<(() => void) | null>;
   onCreated: (project: CreateProjectResponse) => void;
 }) {
   const t = useT();
@@ -105,7 +111,8 @@ export default function NewProjectPanel({
   // Both formats are drawn with the image tool, so both pin the backend to a
   // draw-capable one and both wait for that backend to be ready.
   const needsImageBackend = requiresImageBackend(effectiveType);
-  const detectedBackends = detection.data?.backends ?? [];
+  const backendSelect = backendSelectState(detection);
+  const detectedBackends = backendSelect.backends;
   const effectiveBackend = needsImageBackend ? graphicBackendId(detectedBackends, backendId) : backendId;
   const generation = generationByBackend[effectiveBackend] ?? defaultGenerationOptions(effectiveBackend);
 
@@ -165,6 +172,15 @@ export default function NewProjectPanel({
     return () => onPendingChange?.(false);
   }, [disabled, onPendingChange]);
 
+  useEffect(() => {
+    onChoosingChange?.(choosingSystem);
+    if (backRef) backRef.current = choosingSystem ? () => setChoosingSystem(false) : null;
+    return () => {
+      onChoosingChange?.(false);
+      if (backRef) backRef.current = null;
+    };
+  }, [choosingSystem, onChoosingChange, backRef]);
+
   // What the user typed is a draft: it survives navigation, reload, and a
   // failed create, and each project type keeps its own.
   useEffect(() => {
@@ -199,7 +215,7 @@ export default function NewProjectPanel({
       <h2 className="mb-3 text-xs font-semibold text-muted-foreground">{t("home.creation.basics")}</h2>
 
       <div className="space-y-4">
-        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={effectiveBackend} disabled={disabled || needsImageBackend} onChange={(event) => setBackendId(event.target.value as BackendId)}>{(detectedBackends.length > 0 ? detectedBackends : [{ id: "claude-code" as BackendId, found: true }, { id: "codex" as BackendId, found: true }]).map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendOptionLabel(backend)}</option>)}</select><GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
+        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={backendSelect.placeholder === null ? effectiveBackend : ""} disabled={disabled || needsImageBackend || backendSelect.placeholder !== null} onChange={(event) => setBackendId(event.target.value as BackendId)}>{backendSelect.placeholder === null ? detectedBackends.map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendOptionLabel(backend)}</option>) : <option value="">{t(backendSelect.placeholder)}</option>}</select>{detection.isError ? <p role="alert" className="text-xs text-destructive">{apiErrorCopy(detection.error)} <button type="button" onClick={() => void detection.refetch()} className="font-medium text-accent underline underline-offset-2 hover:no-underline">{t("home.retry")}</button></p> : null}<GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
         <div className="space-y-1.5">
           <label htmlFor="project-name" className={PROJECT_LABEL_CLASS}>
             {t("home.creation.name")}

@@ -35,6 +35,11 @@ export function filterHomeCards(
   );
 }
 
+/** The recent tab is a 12-row glance; a search there runs over the full list so an older match is never reported missing. */
+export function projectSearchTab<Tab extends string>(tab: Tab | "recent", query: string): Tab | "recent" | "mine" {
+  return tab === "recent" && query.trim().length > 0 ? "mine" : tab;
+}
+
 const PROJECT_TINTS: Record<string, string> = {
   prototype: "bg-tint-rose",
   slide_deck: "bg-tint-slate",

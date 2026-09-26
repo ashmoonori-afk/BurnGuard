@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { BACKEND_IDS, GEMINI_MODELS, type BackendDetection } from "@bg/shared";
-import { BACKEND_LABELS, backendLabel, backendOptionLabel, graphicBackendId } from "@/lib/backend-display";
+import { BACKEND_IDS, GEMINI_MODELS, canGenerateGraphics, type BackendDetection } from "@bg/shared";
+import { BACKEND_LABELS, backendLabel, backendOptionLabel, backendSelectState, graphicBackendId, graphicGateCopy, hasGraphicBackend } from "@/lib/backend-display";
 import { useLocaleStore } from "@/i18n/locale";
 import { t } from "@/i18n/t";
 
@@ -61,5 +61,44 @@ describe("Backend display", () => {
     const missingCodex = { id: "codex", found: false, image_generation: true } as BackendDetection;
     const gemini = found("gemini", { models: fixtureImageModels });
     expect(graphicBackendId([missingCodex, gemini], "codex")).toBe("gemini");
+  });
+});
+
+describe("Home graphic readiness (UX-06)", () => {
+  test("Given a found image-capable non-Codex backend When readiness is derived Then graphics are ready", () => {
+    expect(hasGraphicBackend([found("claude-code"), found("gemini", { models: fixtureImageModels })])).toBe(true);
+  });
+
+  test("Given Codex found but signed out When readiness is derived Then graphics are not ready", () => {
+    expect(hasGraphicBackend([found("codex", { authenticated: false, image_generation: true })])).toBe(false);
+  });
+
+  test("Given Codex found with no authentication verdict When readiness is derived Then it follows the shared rule", () => {
+    const codex = found("codex", { image_generation: true });
+    expect(hasGraphicBackend([codex])).toBe(canGenerateGraphics(codex, ""));
+    expect(hasGraphicBackend([])).toBe(false);
+    expect(hasGraphicBackend([found("claude-code")])).toBe(false);
+  });
+});
+
+describe("Backend detection state on Home (UX-05)", () => {
+  test("Given detection failed When the panel's select state is derived Then no backend is invented and the placeholder names the failure", () => {
+    expect(backendSelectState({ isPending: false, isError: true })).toEqual({ backends: [], placeholder: "home.creation.detectionFailed" });
+  });
+
+  test("Given detection pending When the panel's select state is derived Then the placeholder says it is checking", () => {
+    expect(backendSelectState({ isPending: true, isError: false })).toEqual({ backends: [], placeholder: "home.creation.detecting" });
+  });
+
+  test("Given detection data When the panel's select state is derived Then exactly the reported backends are listed", () => {
+    const backends = [found("claude-code"), { id: "codex", found: false } as BackendDetection];
+    expect(backendSelectState({ isPending: false, isError: false, data: { backends } })).toEqual({ backends, placeholder: null });
+  });
+
+  test("Given a gated graphic tile When detection failed Then its reason is the detection failure, otherwise the Codex requirement", () => {
+    expect(graphicGateCopy(true).title).toBe("home.detectionFailed");
+    expect(graphicGateCopy(false).title).toBe("home.codexRequired");
+    expect(graphicGateCopy(false).hint).toBe("home.graphicAvailability");
+    expect(graphicGateCopy(true).hint).toBe("home.detectionFailed");
   });
 });

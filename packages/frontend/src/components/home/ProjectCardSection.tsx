@@ -16,6 +16,8 @@ interface ProjectCardSectionProps {
   readonly onRetry: () => void;
   readonly onClearQuery: () => void;
   readonly onStartProject: () => void;
+  /** The empty state's button; defaults to creating a project, so a tab whose hint names another action passes its own. */
+  readonly emptyAction?: { readonly label: string; readonly onSelect: () => void; readonly pending?: boolean };
   readonly onDelete?: (card: CardViewModel) => void;
 }
 
@@ -30,9 +32,11 @@ export default function ProjectCardSection({
   onRetry,
   onClearQuery,
   onStartProject,
+  emptyAction,
   onDelete,
 }: ProjectCardSectionProps) {
   const t = useT();
+  const action = emptyAction ?? { label: t("home.createTitle"), onSelect: onStartProject };
   if (isLoading) {
     return (
       <div
@@ -79,8 +83,8 @@ export default function ProjectCardSection({
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
           {emptyHint}
         </p>
-        <Button className="mt-4" variant="cta" onClick={onStartProject}>
-          {t("home.createTitle")}
+        <Button data-qa="empty-action" className="mt-4" variant="cta" disabled={action.pending} onClick={action.onSelect}>
+          {action.label}
         </Button>
       </div>
     );
@@ -107,14 +111,17 @@ export default function ProjectCardSection({
   }
 
   return (
-    <CardGrid>
-      {cards.map((card) => (
-        <ProjectCard
-          key={card.id}
-          {...card}
-          onDelete={onDelete ? () => onDelete(card) : undefined}
-        />
-      ))}
-    </CardGrid>
+    <>
+      {query.trim().length > 0 ? <p role="status" className="mb-3 text-sm text-muted-foreground">{t("home.searchCount", { count: cards.length })}</p> : null}
+      <CardGrid>
+        {cards.map((card) => (
+          <ProjectCard
+            key={card.id}
+            {...card}
+            onDelete={onDelete ? () => onDelete(card) : undefined}
+          />
+        ))}
+      </CardGrid>
+    </>
   );
 }

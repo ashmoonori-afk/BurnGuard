@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useT } from "@/i18n/t";
 import {
@@ -16,17 +17,29 @@ export default function DeleteProjectDialog({
   projectName,
   onConfirm,
   isPending,
+  onCloseFallbackFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectName: string;
   onConfirm: () => void;
   isPending?: boolean;
+  /** Where focus goes when the opener (a card menu) was removed by the delete itself. */
+  onCloseFallbackFocus?: () => void;
 }) {
   const t = useT();
+  const openerRef = useRef<HTMLElement | null>(null);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent
+        className="max-w-md"
+        onOpenAutoFocus={() => { openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }}
+        onCloseAutoFocus={(event) => {
+          if (openerRef.current?.isConnected) return;
+          event.preventDefault();
+          onCloseFallbackFocus?.();
+        }}
+      >
         <DialogHeader>
           <div className="h-10 w-10 rounded-md bg-destructive/10 text-destructive grid place-items-center mb-3">
             <AlertTriangle className="h-5 w-5" />

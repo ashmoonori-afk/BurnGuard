@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { DesignSystemSummary, ProjectSummary } from "@bg/shared";
 import type { CardViewModel } from "../src/components/home/mappers";
-import { filterHomeCards, projectToCard, systemToCard } from "../src/components/home/mappers";
+import { filterHomeCards, projectSearchTab, projectToCard, systemToCard } from "../src/components/home/mappers";
 
 const cards: readonly CardViewModel[] = [
   {
@@ -46,6 +46,28 @@ describe("filterHomeCards", () => {
 
   test("Given an empty query When filtering Then every card remains available", () => {
     expect(filterHomeCards(cards, " \n\t ")).toEqual(cards);
+  });
+});
+
+describe("search source on the recent tab (UX-31)", () => {
+  const projects = Array.from({ length: 13 }, (_, index) => projectToCard(projectSummary({ id: `p${index}`, name: `프로젝트 ${index}`, updated_at: 13 - index })));
+  const glance = projects.slice(0, 12);
+
+  test("Given 13 projects and a query matching only the oldest When the recent tab is searched Then the full list is the source and the match is found", () => {
+    const tab = projectSearchTab("recent", "프로젝트 12");
+    expect(tab).toBe("mine");
+    const source = tab === "mine" ? projects : glance;
+    expect(filterHomeCards(source, "프로젝트 12").map((card) => card.id)).toEqual(["p12"]);
+  });
+
+  test("Given no query When the recent tab renders Then the 12-row glance stays the source", () => {
+    expect(projectSearchTab("recent", "")).toBe("recent");
+    expect(projectSearchTab("recent", " \t")).toBe("recent");
+  });
+
+  test("Given the other tabs When searched Then they search their own list", () => {
+    expect(projectSearchTab("mine", "덱")).toBe("mine");
+    expect(projectSearchTab("examples", "덱")).toBe("examples");
   });
 });
 

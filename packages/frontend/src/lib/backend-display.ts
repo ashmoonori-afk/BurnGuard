@@ -1,5 +1,5 @@
-import { BACKEND_IDS, canGenerateGraphics, type BackendDetection, type BackendId } from "@bg/shared";
-import { t } from "@/i18n/t";
+import { BACKEND_IDS, canGenerateGraphics, type BackendDetection, type BackendDetectionResult, type BackendId } from "@bg/shared";
+import { t, type MessageKey } from "@/i18n/t";
 
 /**
  * Display name per backend. Exhaustive by type, so adding a `BackendId` without naming it fails the
@@ -34,12 +34,33 @@ export function graphicBackendId(
 ): BackendId {
   const capable = (id: BackendId): boolean => {
     const backend = backends.find((candidate) => candidate.id === id);
-    if (backend === undefined) return false;
-    // Any model that draws qualifies: the model itself is chosen after creation.
-    return canGenerateGraphics(backend, "")
-      || (backend.models ?? []).some((model) => model.image_generation === true && canGenerateGraphics(backend, model.id));
+    return backend !== undefined && canDraw(backend);
   };
   if (capable(selected)) return selected;
   if (capable("codex")) return "codex";
   return BACKEND_IDS.find((id) => capable(id)) ?? "codex";
+}
+
+/** Any model that draws qualifies: the model itself is chosen after creation. */
+function canDraw(backend: BackendDetection): boolean {
+  return canGenerateGraphics(backend, "")
+    || (backend.models ?? []).some((model) => model.image_generation === true && canGenerateGraphics(backend, model.id));
+}
+
+/** Home gates graphic and logo tiles on the same rule the creation panel and the send path use. */
+export function hasGraphicBackend(backends: readonly BackendDetection[]): boolean {
+  return backends.some(canDraw);
+}
+
+/** The creation panel's backend select lists only what detection reported; pending or failed detection is one disabled placeholder. */
+export function backendSelectState(detection: { readonly isPending: boolean; readonly isError: boolean; readonly data?: BackendDetectionResult }): { readonly backends: readonly BackendDetection[]; readonly placeholder: MessageKey | null } {
+  if (detection.data !== undefined) return { backends: detection.data.backends, placeholder: null };
+  return { backends: [], placeholder: detection.isError ? "home.creation.detectionFailed" : "home.creation.detecting" };
+}
+
+/** Why a graphic tile is gated: detection never answered, or the only drawing backend is not signed in. */
+export function graphicGateCopy(detectionFailed: boolean): { readonly title: MessageKey; readonly hint: MessageKey } {
+  return detectionFailed
+    ? { title: "home.detectionFailed", hint: "home.detectionFailed" }
+    : { title: "home.codexRequired", hint: "home.graphicAvailability" };
 }
