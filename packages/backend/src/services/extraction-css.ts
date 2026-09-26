@@ -31,6 +31,23 @@ export async function extractCssCustomProperties(content: string): Promise<Map<s
   return out;
 }
 
+/**
+ * Cascade-aware custom-property selection: the last declaration in (file, declaration) order wins,
+ * except that a dark-scheme override never replaces a base value. Keys are sorted for stable output.
+ */
+export function selectCssCustomProperties(declarations: readonly CssDeclarationEvidence[]): Map<string, string> {
+  const winners = new Map<string, { value: string; dark: boolean }>();
+  for (const declaration of [...declarations].sort((left, right) => left.fileOrder - right.fileOrder || left.declarationOrder - right.declarationOrder)) {
+    if (!declaration.property.startsWith("--")) continue;
+    const key = declaration.property.slice(2);
+    const dark = /prefers-color-scheme\s*:\s*dark/i.test(declaration.context);
+    const current = winners.get(key);
+    if (dark && current !== undefined && !current.dark) continue;
+    winners.set(key, { value: declaration.value, dark });
+  }
+  return new Map([...winners].sort(([left], [right]) => left.localeCompare(right)).map(([key, winner]) => [key, winner.value]));
+}
+
 export async function extractCssStyleSignals(content: string): Promise<CssStyleSignals> {
   return styleSignalsFromDeclarations((await parseCssSource({ content })).declarations);
 }

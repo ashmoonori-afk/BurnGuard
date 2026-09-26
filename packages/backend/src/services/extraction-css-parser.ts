@@ -29,6 +29,8 @@ export type CssDeclarationEvidence = {
   readonly sourceLocator: string;
   readonly fileOrder: number;
   readonly declarationOrder: number;
+  /** Enclosing at-rule chain such as `@media (prefers-color-scheme: dark)`, empty at the stylesheet root. */
+  readonly context: string;
   readonly parseStatus: "observed";
 };
 
@@ -148,7 +150,7 @@ function parseWorkerResult(value: unknown, limits: AcquisitionLimits): CssParseR
 
 function isCssDeclaration(value: unknown): value is CssDeclarationEvidence {
   return isRecord(value) && typeof value.property === "string" && typeof value.value === "string" && typeof value.sourceLocator === "string" &&
-    typeof value.fileOrder === "number" && typeof value.declarationOrder === "number" && value.parseStatus === "observed";
+    typeof value.fileOrder === "number" && typeof value.declarationOrder === "number" && typeof value.context === "string" && value.parseStatus === "observed";
 }
 
 function isCssIssue(value: unknown): value is CssParseIssue {

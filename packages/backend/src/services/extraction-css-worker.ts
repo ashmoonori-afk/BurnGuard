@@ -20,6 +20,7 @@ type CssDeclarationEvidence = {
   readonly sourceLocator: string;
   readonly fileOrder: number;
   readonly declarationOrder: number;
+  readonly context: string;
   readonly parseStatus: "observed";
 };
 
@@ -52,7 +53,7 @@ self.onmessage = (event: MessageEvent<ParseRequest>): void => {
         }
         return;
       }
-      declarations.push({ property, value, sourceLocator: locator, fileOrder: request.fileOrder, declarationOrder, parseStatus: "observed" });
+      declarations.push({ property, value, sourceLocator: locator, fileOrder: request.fileOrder, declarationOrder, context: atRuleContextFor(declaration), parseStatus: "observed" });
     });
     postMessage({ kind: "result", result: { declarations, issues } });
   } catch (error) {
@@ -74,6 +75,15 @@ self.onmessage = (event: MessageEvent<ParseRequest>): void => {
 
 function locatorFor(declaration: Declaration, sourceId: string): string {
   return `${sourceId}:${declaration.source?.start?.line ?? 1}:${declaration.source?.start?.column ?? 1}`;
+}
+
+/** Enclosing at-rule chain, outermost first, so token selection can tell a dark-scheme override from the base value. */
+function atRuleContextFor(declaration: Declaration): string {
+  const chain: string[] = [];
+  for (let parent = declaration.parent; parent !== undefined && parent.type !== "root"; parent = parent.parent) {
+    if (parent.type === "atrule") chain.unshift(`@${parent.name} ${parent.params}`.trim());
+  }
+  return chain.join(" ");
 }
 
 function isSafeExtractedCssValue(value: string): boolean {
