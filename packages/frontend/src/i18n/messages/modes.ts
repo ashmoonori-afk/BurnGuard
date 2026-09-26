@@ -1,6 +1,9 @@
 import { defineMessages } from "../types";
 
 export const modesMessages = defineMessages({
+  "modes.audit.status.notApplicable": {"ko":"해당 없음","en":"Not applicable","zh-CN":"不适用"},
+  "modes.audit.check.remoteResources": {"ko":"외부 자원 참조","en":"Remote resources","zh-CN":"外部资源引用"},
+  "modes.audit.action.bundleRemote": {"ko":"외부 자원을 프로젝트 안에 번들하거나 제거하세요","en":"Bundle the remote resource locally or remove it","zh-CN":"将外部资源打包到项目内或移除"},
   "modes.draw.pen": {"ko":"펜","en":"Pen","zh-CN":"画笔"},
   "modes.draw.rectangle": {"ko":"사각형","en":"Rectangle","zh-CN":"矩形"},
   "modes.draw.arrow": {"ko":"화살표","en":"Arrow","zh-CN":"箭头"},
@@ -54,7 +57,7 @@ export const modesMessages = defineMessages({
   "modes.quality.retry": {"ko":"다시 검사","en":"Check again","zh-CN":"重新检查"},
   "modes.quality.autoFixPending": {"ko":"자동으로 수정하고 있어요","en":"Fixing automatically","zh-CN":"正在自动修复"},
   "modes.quality.autoFix": {"ko":"문제 자동 수정","en":"Fix issues automatically","zh-CN":"自动修复问题"},
-  "modes.quality.description": {"ko":"현재 검사 결과를 AI에 보내 수정하고, 작업이 끝나면 다시 검사해요. 덱은 생성 완료 전에 전체 문안·글꼴·이미지 중복·아트보드 크기를 AI가 한 번 더 점검해요. 문안 기본 검사는 미완성 문구를 찾으며, 사실 검증을 대신하지 않아요.","en":"Send the current findings to AI for repair, then check again when work finishes. Before completing a deck, AI also reviews all copy, fonts, duplicate images, and artboard dimensions. Basic copy checks find unfinished wording; they do not replace fact-checking.","zh-CN":"将当前检查结果发送给 AI 修复，完成后重新检查。演示文稿生成完成前，AI 还会复查全部文案、字体、重复图片和画板尺寸。文案基础检查用于查找未完成的措辞，不能代替事实核查。"},
+  "modes.quality.description": {"ko":"현재 검사 결과를 AI에 보내 수정하고, 작업이 끝나면 다시 검사해요. 덱은 생성 완료 전에 전체 문안·글꼴·이미지 중복·아트보드 크기를 AI가 한 번 더 점검해요. 문안 기본 검사는 미완성 문구를 찾으며, 사실 검증을 대신하지 않아요. 요소 겹침은 같은 부모 안에서 위치가 지정된 요소끼리만 비교해요.","en":"Send the current findings to AI for repair, then check again when work finishes. Before completing a deck, AI also reviews all copy, fonts, duplicate images, and artboard dimensions. Basic copy checks find unfinished wording; they do not replace fact-checking. Element overlap compares only positioned siblings under the same parent.","zh-CN":"将当前检查结果发送给 AI 修复，完成后重新检查。演示文稿生成完成前，AI 还会复查全部文案、字体、重复图片和画板尺寸。文案基础检查用于查找未完成的措辞，不能代替事实核查。元素重叠仅比较同一父元素下的定位元素。"},
   "modes.quality.staleBanner": {"ko":"이전 결과예요. 현재 결과물에는 안전 수정을 적용할 수 없어요.","en":"These are previous results. Safe fixes cannot be applied to the current artifact.","zh-CN":"这是之前的结果，无法将安全修复应用到当前作品。"},
   "modes.quality.noMustFix": {"ko":"고쳐야 할 문제가 없어요.","en":"No issues to fix.","zh-CN":"没有需要修复的问题。"},
   "modes.quality.noRecommended": {"ko":"권장 개선이 없어요.","en":"No recommended improvements.","zh-CN":"没有建议改进项。"},

@@ -42,6 +42,13 @@ describe("Craft block authority", () => {
     expect(graphicToken, "the surface token must be read before the fallback").toBeLessThan(graphicFallback);
   });
 
+  test("Given the graphic contrast mandate, then it states the measured WCAG AA ratio rather than an unmeasured 7:1", () => {
+    // The audit measures 4.5:1 (3:1 for large text) and nothing else; a stricter number in the craft block
+    // reads as a gate the auditor never applies.
+    expect(flat(GRAPHIC_VISUAL_CRAFT)).not.toContain("7:1");
+    expect(flat(GRAPHIC_VISUAL_CRAFT)).toContain("4.5:1");
+  });
+
   test("Given motion guidance, then it ships only on the surface that can animate", () => {
     // A graphic artboard exports one static frame and a deck exports static slides, so motion rules on
     // those paths are instructions for something that cannot happen - and they cost the binding budget.

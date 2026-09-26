@@ -131,8 +131,9 @@ dimensions declared for that frame.
 - Mandatory: when a content surface is supplied the safe area is --content-safe
   of the short side on every edge; with no surface, 6-8%. It holds all required
   content; only a deliberate full-bleed figure crosses it.
-- Mandatory: headline contrast 7:1 or better against its local background;
-  put text on the calmest part of the background or on a translucent plate.
+- Mandatory: text contrast 4.5:1 or better against its local background (the
+  audit measures WCAG AA); aim higher for large headlines. Put text on the
+  calmest part of the background or on a translucent plate.
 - Mandatory: size in px relative to the artboard (or % of its width); no
   viewport units, no scroll, no animation — the export captures one static
   frame.
