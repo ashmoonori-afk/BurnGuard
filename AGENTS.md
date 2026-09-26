@@ -40,7 +40,7 @@ BurnGuard/
 | Capability, path containment, body caps | `packages/backend/src/security/AGENTS.md` | Request authority, raw-file headers, agent-control detection |
 | Prompt or context assembly | `packages/backend/src/harness/AGENTS.md` | Bounded summaries, 6 shipped skills, `assets/lucide/` |
 | Claude Code/Codex execution | `packages/backend/src/adapters/AGENTS.md` | Subprocess + stream normalization; argv in `codex/index.ts` |
-| Backend test isolation, smoke gates | `packages/backend/tests/AGENTS.md` | 161 Bun suites, ~22.1k LOC, platform skips |
+| Backend test isolation, smoke gates | `packages/backend/tests/AGENTS.md` | 229 Bun suites, ~34.3k LOC, platform skips |
 | Frontend package, providers, dev proxy | `packages/frontend/AGENTS.md` | Provider order, counts, i18n wiring |
 | Feature UI or canvas bridge | `packages/frontend/src/components/AGENTS.md` | 107 files / 14 feature folders; canvas sandbox |
 | Route compositions | `packages/frontend/src/views/AGENTS.md` | 5 views, 3,435 LOC; `ProjectView` invariants |

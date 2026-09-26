@@ -11,6 +11,7 @@ import { extractDesignSystemFromSource } from "../src/services/design-system-ext
 import { readDesignSystemLayout } from "../src/services/design-system-layout";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 import { assertInertSourceMarkup } from "../src/services/extraction-safety";
+import { sanitizeAcquiredWebsiteHtml } from "../src/services/extraction-html";
 
 type Route = { readonly body: string; readonly type: string };
 type Site = { readonly id: string; readonly origin: string; readonly requests: string[]; readonly root: string };
@@ -153,4 +154,22 @@ test("CSS-15: Given a relative-only homepage When website extraction runs Then t
     if (!system) throw new Error("system_missing");
     expect(missingDesignSystemLayout(await readDesignSystemLayout(system))).toEqual([]);
   });
+});
+
+test("R2-1: Given a tag-manager noscript frame, a template image, srcset and ping references and prose that mentions CSS network syntax When the website page is stripped Then the stored bytes carry none of them, pass the inert gate and keep the prose readable", () => {
+  const stored = sanitizeAcquiredWebsiteHtml([
+    "<html><head><title>Home</title></head><body>",
+    '<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-1" height="0" width="0"></iframe></noscript>',
+    '<template><img src="https://cdn.example/a.png"></template>',
+    '<img src="https://cdn.example/a.jpg" srcset="https://cdn.example/a.jpg 2x" alt="Hero">',
+    '<a href="/about" ping="https://t.example/p">About</a>',
+    "<p>Write backgrounds as url(https://example.com/x.png) and never @import them.</p>",
+    "</body></html>",
+  ].join(""));
+  expect(() => assertInertSourceMarkup(stored, "html")).not.toThrow();
+  for (const forbidden of ["<noscript", "<template", "srcset", "ping=", "googletagmanager", "cdn.example", "t.example"]) expect(stored).not.toContain(forbidden);
+  expect(stored).toContain('<img alt="Hero">');
+  expect(stored).toContain("<a>About</a>");
+  expect(stored).toContain("url&#40;https://example.com/x.png");
+  expect(stored).toContain("&#64;import them");
 });

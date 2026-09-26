@@ -623,7 +623,10 @@ export async function uploadDesignSystemFont(input: {
     // `var(--font-<role>-fallback)` only resolves when a token or fonts.css defines it (extracted
     // systems do); otherwise keep the current stack behind the new family so its fallbacks survive.
     const existingStack = tokens.get(`font-${role}`);
-    const stack = existingStack?.startsWith(`${cssString(family)},`) ? existingStack.slice(cssString(family).length + 1).trim() : existingStack;
+    const [leadingFamily, ...trailingFamilies] = existingStack?.split(",") ?? [];
+    const stack = leadingFamily !== undefined && leadingFamily.trim().replace(/^["']|["']$/gu, "") === family
+      ? trailingFamilies.join(",").trim()
+      : existingStack;
     const fallback = fallbackDefined
       ? `var(--font-${role}-fallback)`
       : stack || `"Pretendard", ${role === "serif" ? "serif" : role === "mono" ? "monospace" : "sans-serif"}`;

@@ -1,3 +1,4 @@
+import { DEFAULT_DISPLAY_NAME } from "@bg/shared";
 import { copyBundledFonts } from "../data/bundled-fonts";
 import { copyBundledLiquidGlass } from "../data/bundled-liquid-glass";
 import { mkdir, rm, writeFile } from "node:fs/promises";
@@ -48,7 +49,7 @@ export async function seedCoreData() {
     .insert(usersTable)
     .values({
       id: "local",
-      displayName: "You",
+      displayName: DEFAULT_DISPLAY_NAME,
       createdAt: now,
     })
     .onConflictDoNothing();

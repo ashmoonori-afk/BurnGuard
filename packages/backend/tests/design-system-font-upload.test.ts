@@ -56,3 +56,13 @@ test("CSS-14: Given a static font upload without a weight When fonts.css is appe
   expect(rule).toMatch(/font-weight:\s*400;/);
   expect(fontsCss).not.toContain("font-weight: 100 900");
 });
+
+test("R2-3: Given a literal stack whose quoted first family matches the upload When the same family is uploaded again Then the family appears once at the front of the stack", async () => {
+  await writeFile(tokenPath, ':root {\n  --font-sans: "Inter", "Pretendard", sans-serif;\n}\n', "utf8");
+  await writeFile(fontsCssPath, "", "utf8");
+  await uploadDesignSystemFont({ systemId: id, file: new File([figtree], "inter.woff2"), family: "Inter", role: "sans" });
+  const tokens = await readFile(tokenPath, "utf8");
+  const line = tokens.split("\n").find((entry) => entry.includes("--font-sans:")) ?? "";
+  expect(line).toMatch(/--font-sans:\s*Inter, "Pretendard", sans-serif;/);
+  expect(line.match(/Inter/g)?.length).toBe(1);
+});
