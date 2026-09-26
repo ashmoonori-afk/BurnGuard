@@ -1,16 +1,15 @@
 import { useT, type MessageKey } from "@/i18n/t";
-import { Eye, MessageSquare, MousePointer2, Paintbrush, Pencil, RefreshCw, ShieldCheck, SlidersHorizontal, Undo2, type LucideIcon } from "lucide-react";
+import { Eye, MessageSquare, Paintbrush, Pencil, RefreshCw, ShieldCheck, SlidersHorizontal, Undo2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CanvasMode } from "@/components/modes/types";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 
-const MODES: Array<{ id: CanvasMode; label: MessageKey; icon: LucideIcon; hint: MessageKey }> = [
+export const MODES: Array<{ id: CanvasMode; label: MessageKey; icon: LucideIcon; hint: MessageKey }> = [
   { id: "edit", label: "canvas.toolbar.edit", icon: Pencil, hint: "canvas.toolbar.editHint" },
   { id: "tweaks", label: "canvas.toolbar.style", icon: SlidersHorizontal, hint: "canvas.toolbar.styleHint" },
   { id: "comment", label: "canvas.toolbar.comment", icon: MessageSquare, hint: "canvas.toolbar.commentHint" },
   { id: "draw", label: "canvas.toolbar.draw", icon: Paintbrush, hint: "canvas.toolbar.drawHint" },
-  { id: "select", label: "canvas.toolbar.select", icon: MousePointer2, hint: "canvas.toolbar.selectHint" },
   { id: "quality", label: "canvas.toolbar.quality", icon: ShieldCheck, hint: "canvas.toolbar.qualityHint" },
 ];
 

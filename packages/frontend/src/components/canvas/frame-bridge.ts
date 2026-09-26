@@ -69,6 +69,8 @@ export interface FrameBgHit {
   bgId: string | null;
   tag: string | null;
   text: string | null;
+  /** True when a non-inline descendant exists, which the server's text patch refuses (`non_leaf_text_target`). */
+  hasBlockChildren?: boolean;
   attributes: Record<string, string>;
   computed: Record<string, string>;
   inline: Record<string, string>;
@@ -712,6 +714,7 @@ const BRIDGE_SCRIPT = String.raw`(function () {
         bgId: bgNode.getAttribute("data-bg-node-id"),
         tag: String(bgNode.tagName || "").toLowerCase(),
         text: String(bgNode.textContent || ""),
+        hasBlockChildren: !!(bgNode.querySelector && bgNode.querySelector(":not(span,em,strong,br,i,b,u,s,small,sup,sub,mark,code)")),
         attributes: readAttributes(bgNode),
         computed: readComputed(bgNode),
         inline: readInline(bgNode)

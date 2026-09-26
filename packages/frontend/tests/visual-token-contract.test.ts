@@ -6,7 +6,6 @@ const sourceRoot = path.join(import.meta.dir, "../src");
 
 test("Given canvas authoring chrome When audited Then selection states use semantic tokens", async () => {
   const relativePaths = [
-    "components/canvas/SelectorOverlay.tsx",
     "components/canvas/EditLayer.tsx",
     "components/canvas/CommentLayer.tsx",
     "components/modes/CommentPanel.tsx",

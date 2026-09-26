@@ -1,4 +1,4 @@
-import { useT } from "@/i18n/t";
+import { useT, type MessageKey } from "@/i18n/t";
 import { useEffect, useState } from "react";
 import type { EditTarget } from "@/components/canvas/EditLayer";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,46 @@ interface EditPatch {
   attributes?: Record<string, string | null>;
 }
 
+/** The fields the element kind promises up front; everything else stays under Advanced attributes. */
+const PRIMARY_FIELDS: Readonly<Record<string, ReadonlyArray<{ attr: string; label: MessageKey }>>> = {
+  img: [{ attr: "src", label: "modes.edit.imageSrc" }, { attr: "alt", label: "modes.edit.imageAlt" }],
+  a: [{ attr: "href", label: "modes.edit.linkHref" }],
+};
+
+function attrRowsFrom(target: EditTarget | null): AttrRow[] {
+  return target === null ? [] : Object.entries(target.attributes)
+    .filter(([k]) => k !== "data-bg-node-id")
+    .map(([key, value]) => ({ key, value }));
+}
+
+/** Null means nothing changed; otherwise only the differing text and attributes are sent. */
+export function buildEditPatch(target: EditTarget, text: string, attrRows: readonly AttrRow[]): EditPatch | null {
+  const originalAttrs: Record<string, string> = { ...target.attributes };
+  delete originalAttrs["data-bg-node-id"];
+
+  const attrDiff: Record<string, string | null> = {};
+  const currentKeys = new Set<string>();
+  for (const row of attrRows) {
+    const key = row.key.trim();
+    if (!key) continue;
+    if (key === "data-bg-node-id") continue;
+    currentKeys.add(key);
+    if (originalAttrs[key] !== row.value) {
+      attrDiff[key] = row.value;
+    }
+  }
+  for (const origKey of Object.keys(originalAttrs)) {
+    if (!currentKeys.has(origKey)) {
+      attrDiff[origKey] = null;
+    }
+  }
+
+  const patch: EditPatch = {};
+  if (target.tag !== "img" && !target.hasBlockChildren && text !== target.text) patch.text = text;
+  if (Object.keys(attrDiff).length > 0) patch.attributes = attrDiff;
+  return patch.text === undefined && patch.attributes === undefined ? null : patch;
+}
+
 export default function EditPanel({
   target,
   saving,
@@ -25,21 +65,12 @@ export default function EditPanel({
   onClear: () => void;
 }) {
   const t = useT();
-  const [text, setText] = useState("");
-  const [attrRows, setAttrRows] = useState<AttrRow[]>([]);
+  const [text, setText] = useState(target?.text ?? "");
+  const [attrRows, setAttrRows] = useState<AttrRow[]>(() => attrRowsFrom(target));
 
   useEffect(() => {
-    if (!target) {
-      setText("");
-      setAttrRows([]);
-      return;
-    }
-    setText(target.text);
-    setAttrRows(
-      Object.entries(target.attributes)
-        .filter(([k]) => k !== "data-bg-node-id")
-        .map(([key, value]) => ({ key, value })),
-    );
+    setText(target?.text ?? "");
+    setAttrRows(attrRowsFrom(target));
   }, [target]);
 
   if (!target) {
@@ -55,34 +86,14 @@ export default function EditPanel({
     );
   }
 
+  const patch = buildEditPatch(target, text, attrRows);
+  const primaryFields = PRIMARY_FIELDS[target.tag] ?? [];
+  const setAttr = (key: string, value: string) => setAttrRows((prev) =>
+    prev.some((row) => row.key === key) ? prev.map((row) => row.key === key ? { ...row, value } : row) : [...prev, { key, value }],
+  );
+
   const handleSave = () => {
-    const originalAttrs: Record<string, string> = { ...target.attributes };
-    delete originalAttrs["data-bg-node-id"];
-
-    const attrDiff: Record<string, string | null> = {};
-    const currentKeys = new Set<string>();
-    for (const row of attrRows) {
-      const key = row.key.trim();
-      if (!key) continue;
-      if (key === "data-bg-node-id") continue;
-      currentKeys.add(key);
-      if (originalAttrs[key] !== row.value) {
-        attrDiff[key] = row.value;
-      }
-    }
-    for (const origKey of Object.keys(originalAttrs)) {
-      if (!currentKeys.has(origKey)) {
-        attrDiff[origKey] = null;
-      }
-    }
-
-    const patch: EditPatch = {};
-    if (text !== target.text) patch.text = text;
-    if (Object.keys(attrDiff).length > 0) patch.attributes = attrDiff;
-
-    if (patch.text === undefined && patch.attributes === undefined) {
-      return; // nothing changed
-    }
+    if (patch === null) return; // nothing changed
     onSave(patch);
   };
 
@@ -107,18 +118,40 @@ export default function EditPanel({
         </div>
       </div>
 
-      <section className="px-4 py-3">
-        <label htmlFor="element-edit-text" className="text-xs font-medium text-muted-foreground">
-          {t("modes.edit.textContent")}
-        </label>
-        <textarea
-          id="element-edit-text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={4}
-          className="mt-2 w-full resize-y rounded-lg border border-border bg-background p-3 text-sm leading-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </section>
+      {primaryFields.length > 0 && (
+        <section className="flex flex-col gap-3 px-4 py-3">
+          {primaryFields.map((field) => (
+            <label key={field.attr} className="block text-xs font-medium text-muted-foreground">
+              {t(field.label)}
+              <input
+                value={attrRows.find((row) => row.key === field.attr)?.value ?? ""}
+                onChange={(e) => setAttr(field.attr, e.target.value)}
+                aria-label={t(field.label)}
+                className="mt-2 min-h-10 w-full rounded-lg border border-border bg-background p-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </label>
+          ))}
+        </section>
+      )}
+
+      {target.tag !== "img" && (
+        <section className="px-4 py-3">
+          <label htmlFor="element-edit-text" className="text-xs font-medium text-muted-foreground">
+            {t("modes.edit.textContent")}
+          </label>
+          <textarea
+            id="element-edit-text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={4}
+            disabled={target.hasBlockChildren}
+            className="mt-2 w-full resize-y rounded-lg border border-border bg-background p-3 text-sm leading-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          />
+          {target.hasBlockChildren && (
+            <p role="status" className="mt-2 text-xs leading-5 text-muted-foreground">{t("modes.edit.selectLeaf")}</p>
+          )}
+        </section>
+      )}
 
       <details className="border-t border-border px-4 py-3">
         <summary className="cursor-pointer text-xs leading-6">{t("modes.edit.advancedAttributes")}</summary>
@@ -182,7 +215,7 @@ export default function EditPanel({
         <Button
           type="button"
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || patch === null}
           variant="cta"
           className="min-h-11 w-full rounded-lg px-3 py-2 text-sm"
         >

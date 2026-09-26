@@ -17,6 +17,8 @@ export interface EditTarget {
   tag: string;
   text: string;
   attributes: Record<string, string>;
+  /** Mirrors the server's leaf rule: text edits are refused when a non-inline child exists. */
+  hasBlockChildren: boolean;
 }
 
 export default function EditLayer({
@@ -75,6 +77,7 @@ export default function EditLayer({
         tag: hit.tag ?? "div",
         text: hit.text ?? "",
         attributes: hit.attributes,
+        hasBlockChildren: hit.hasBlockChildren === true,
       });
     });
   };

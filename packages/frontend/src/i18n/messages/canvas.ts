@@ -11,8 +11,6 @@ export const canvasMessages = defineMessages({
   "canvas.toolbar.commentHint": {"ko":"의견을 남길 위치를 누른 뒤 내용을 적어 주세요.","en":"Click where you want to leave feedback, then write your comment.","zh-CN":"点击要留下意见的位置，然后输入内容。"},
   "canvas.toolbar.draw": {"ko":"그리기","en":"Draw","zh-CN":"绘图"},
   "canvas.toolbar.drawHint": {"ko":"결과물 위에 자유롭게 표시해요. 그린 내용은 자동 저장돼요.","en":"Draw freely over the artifact. Drawings are saved automatically.","zh-CN":"在作品上自由绘图，内容会自动保存。"},
-  "canvas.toolbar.select": {"ko":"선택","en":"Select","zh-CN":"选择"},
-  "canvas.toolbar.selectHint": {"ko":"요소를 선택하면 구조와 스타일을 확인할 수 있어요.","en":"Select an element to inspect its structure and styles.","zh-CN":"选择元素以查看结构和样式。"},
   "canvas.toolbar.quality": {"ko":"품질 점검","en":"Quality review","zh-CN":"质量检查"},
   "canvas.toolbar.qualityHint": {"ko":"내보내기 전에 레이아웃과 접근성 문제를 확인해요.","en":"Check layout and accessibility issues before exporting.","zh-CN":"导出前检查布局和无障碍问题。"},
   "canvas.toolbar.tools": {"ko":"캔버스 도구","en":"Canvas tools","zh-CN":"画布工具"},

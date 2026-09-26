@@ -453,9 +453,9 @@ export default function Canvas({
           onSelect={onSelectEditTarget}
         />
         <TweaksLayer
-          active={mode === "tweaks" || mode === "select"}
+          active={mode === "tweaks"}
           iframeRef={iframeRef}
-          selectedBgId={mode === "tweaks" || mode === "select" ? tweaksSelectedBgId : null}
+          selectedBgId={mode === "tweaks" ? tweaksSelectedBgId : null}
           target={tweaksTarget}
           saving={tweaksSaving}
           onApply={onApplyTweak}

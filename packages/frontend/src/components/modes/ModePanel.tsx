@@ -96,7 +96,7 @@ export default function ModePanel({
 
   return (
     <aside aria-label={t("modes.panel.settings")} className="flex min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1500px]:w-[288px] max-[1000px]:max-h-[40%] max-[1000px]:w-full max-[1000px]:shrink max-[1000px]:border-l-0 max-[1000px]:border-t">
-      {(mode === "select" || mode === "tweaks") && (
+      {mode === "tweaks" && (
         <TweaksPanel
           target={tweaksTarget}
           saving={tweaksSaving}
