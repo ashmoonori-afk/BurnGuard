@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { CHART_TYPES, CHART_THEMES, chartSample, parseChart, parseChartDocument, renderChart, type ChartV1, type ChartDocumentV1, type ChartType } from "@bg/shared";
 import { apiFetch } from "@/api/client";
 import { chartValidationCopy } from "@/lib/canvas-charts";
+import { chartAiRequest } from "@/lib/canvas-ai-request";
 
 const CHART_TYPE_COPY = {
   area: "canvas.chart.type.area", line: "canvas.chart.type.line", bar: "canvas.chart.type.bar",
@@ -63,7 +64,7 @@ export default function ChartPanel({ projectId, relPath, disabled, onSaved, onRe
     try {
       await apiFetch(url, { method: "PUT", body: JSON.stringify({ chart: parsed, expected_revision: document.revision, expected_artifact_digest: document.artifact_digest, expected_file_hash: document.file_hash }) });
       onSaved(); setReload(value => value + 1);
-      if (askAI) await onRequestAI(`파일 ${JSON.stringify(relPath)}의 차트 ${JSON.stringify(parsed.id)}를 다음 요청에 맞게 수정해 주세요. data-bg-chart-config의 원본 데이터를 보존하고 ChartV1 규칙을 적용하세요. 배치도 파일의 목적에 맞게 조정하세요.\n${request.trim()}`);
+      if (askAI) await onRequestAI(chartAiRequest(relPath, parsed.id, request));
       setStatus("canvas.chart.saved");
     } catch { setError("canvas.chart.saveFailed"); }
     finally { setPending(false); }

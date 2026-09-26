@@ -1,6 +1,6 @@
 import path from "node:path";
 import { ulid } from "ulid";
-import { DEFAULT_GENERATION_STYLE, parseGenerationStyle, type GenerationStyle, type DirectionDesignSystem, type DesignBriefV1, type DesignDirectionSlot, type DesignDirectionState, type ProjectType } from "@bg/shared";
+import { DEFAULT_GENERATION_STYLE, DIRECTION_CANCELLATION_ERROR, DIRECTION_INTERRUPTION_ERROR, DIRECTION_RENDER_ERROR, parseGenerationStyle, type GenerationStyle, type DirectionDesignSystem, type DesignBriefV1, type DesignDirectionSlot, type DesignDirectionState, type ProjectType } from "@bg/shared";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import {
   activeDirectionGeneration,
@@ -13,9 +13,7 @@ import {
 import { SvgDesignDirectionRenderer, type DesignDirectionRenderer } from "./design-direction-renderer";
 import { DirectionStateConflictError, getLatestDirectionState, publishDirectionState } from "./design-direction-state";
 
-export const DIRECTION_INTERRUPTION_ERROR = "Direction generation was interrupted; retry unfinished directions.";
-export const DIRECTION_CANCELLATION_ERROR = "Direction generation was cancelled; retry this direction.";
-export const DIRECTION_RENDER_ERROR = "Direction preview could not be rendered; retry this direction.";
+export { DIRECTION_CANCELLATION_ERROR, DIRECTION_INTERRUPTION_ERROR, DIRECTION_RENDER_ERROR } from "@bg/shared";
 
 export class DesignDirectionWorkflowError extends Error {
   readonly name = "DesignDirectionWorkflowError";

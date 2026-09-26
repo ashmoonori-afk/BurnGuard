@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { DEFAULT_THREE_SCENE, parseThreeScene, type ThreeObjectV1, type ThreeSceneDocumentV1, type ThreeSceneV1, type ThreeShape } from "@bg/shared";
 import { apiFetch } from "@/api/client";
 import { mountThreeScene } from "./three-scene-runtime";
+import { threeSceneAiRequest } from "@/lib/canvas-ai-request";
 
 const SHAPE_COPY = { cube: "canvas.three.cube", sphere: "canvas.three.sphere", torus: "canvas.three.torus" } as const satisfies Record<ThreeShape, MessageKey>;
 const FIELD_COPY = { position: "canvas.three.position", rotation: "canvas.three.rotation", scale: "canvas.three.scale" } as const satisfies Record<"position" | "rotation" | "scale", MessageKey>;
@@ -73,7 +74,7 @@ export default function ThreeScenePanel({ projectId, relPath, disabled, onSaved,
       </>}
       <div className="flex gap-2"><button type="button" disabled={busy} className="rounded border px-2 py-1 disabled:opacity-50" onClick={async () => { setPending(true); setError(""); try { await save(); } catch { setError("canvas.three.saveFailed"); } finally { setPending(false); } }}>{t("canvas.three.save")}</button><button type="button" disabled={pending} className="underline" onClick={() => setReload((value) => value + 1)}>{t("canvas.reloadSaved")}</button></div>
       <label className="block">{t("canvas.three.aiRequest")}<input className="mt-1 w-full rounded border bg-background p-1" value={request} onChange={(event) => setRequest(event.target.value)} placeholder={t("canvas.three.aiPlaceholder")} /></label>
-      <button type="button" disabled={busy || !request.trim()} className="rounded border px-2 py-1 disabled:opacity-50" onClick={async () => { setPending(true); setError(""); try { await save(); await onRequestAI(`파일 ${JSON.stringify(relPath)}의 data-bg-three 관리형 3D 장면을 다음 요청에 맞게 수정해 주세요. ThreeSceneV1 계약을 유지하고 변경 결과를 설명해 주세요.\n${request.trim()}`); } catch { setError("canvas.three.aiFailed"); } finally { setPending(false); } }}>{t("canvas.three.saveAndRequest")}</button>
+      <button type="button" disabled={busy || !request.trim()} className="rounded border px-2 py-1 disabled:opacity-50" onClick={async () => { setPending(true); setError(""); try { await save(); await onRequestAI(threeSceneAiRequest(relPath, request)); } catch { setError("canvas.three.aiFailed"); } finally { setPending(false); } }}>{t("canvas.three.saveAndRequest")}</button>
       {error && <p role="alert" className="text-destructive">{t(error)}</p>}{status && <p role="status">{t(status)}</p>}
     </div>
   </section>;

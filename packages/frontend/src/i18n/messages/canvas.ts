@@ -170,4 +170,6 @@ export const canvasMessages = defineMessages({
   "canvas.chart.validation.textLength": {"ko":"텍스트를 {max}자 이내로 입력해 주세요.","en":"Enter text within {max} characters.","zh-CN":"请输入不超过 {max} 个字符的文本。"},
   "canvas.chart.validation.numberRange": {"ko":"숫자는 {min}부터 {max}까지 입력할 수 있어요.","en":"Enter a number between {min} and {max}.","zh-CN":"请输入 {min} 到 {max} 之间的数字。"},
   "canvas.chart.validation.itemCount": {"ko":"항목 수는 {min}–{max}개여야 해요.","en":"The number of items must be between {min} and {max}.","zh-CN":"项目数量必须为 {min}–{max} 个。"},
+  "canvas.chart.aiRequestTemplate": {"ko":"파일 {file}의 차트 {chart}를 다음 요청에 맞게 수정해 주세요. data-bg-chart-config의 원본 데이터를 보존하고 ChartV1 규칙을 적용하세요. 배치도 파일의 목적에 맞게 조정하세요.","en":"Update chart {chart} in file {file} to match the request below. Preserve the original data in data-bg-chart-config and apply the ChartV1 rules. Adjust the layout to suit the file's purpose.","zh-CN":"请按照下面的要求修改文件 {file} 中的图表 {chart}。保留 data-bg-chart-config 中的原始数据并遵循 ChartV1 规则，同时根据文件用途调整布局。"},
+  "canvas.three.aiRequestTemplate": {"ko":"파일 {file}의 data-bg-three 관리형 3D 장면을 다음 요청에 맞게 수정해 주세요. ThreeSceneV1 계약을 유지하고 변경 결과를 설명해 주세요.","en":"Update the data-bg-three managed 3D scene in file {file} to match the request below. Keep the ThreeSceneV1 contract and describe what changed.","zh-CN":"请按照下面的要求修改文件 {file} 中由 data-bg-three 管理的 3D 场景。保持 ThreeSceneV1 契约并说明所做的更改。"},
 });

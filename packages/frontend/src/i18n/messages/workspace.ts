@@ -131,4 +131,5 @@ export const workspaceMessages = defineMessages({
 
   "workspace.composer.shortcutHint": { ko: "Cmd/Ctrl+Enter", en: "Cmd/Ctrl+Enter", "zh-CN": "Cmd/Ctrl+Enter" },
   "workspace.comments.noNote": { ko: "메모 없음", en: "No note", "zh-CN": "无备注" },
+  "workspace.project.createPagePrompt": { ko: "`{from}`에서 링크되는 `{page}` 페이지를 만들어 주세요. 같은 헤더·내비게이션·푸터를 공유해요.", en: "Create `{page}` linked from `{from}`, sharing the same header, nav and footer.", "zh-CN": "请创建从 `{from}` 链接到的 `{page}` 页面，并共用相同的页眉、导航和页脚。" },
 });

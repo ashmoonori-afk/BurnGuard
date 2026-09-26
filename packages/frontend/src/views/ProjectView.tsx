@@ -79,6 +79,7 @@ import Canvas from "@/components/canvas/Canvas";
 import ColorPalette from "@/components/canvas/ColorPalette";
 import ArtifactHistory from "@/components/canvas/ArtifactHistory";
 import { qualityFixRequest } from "@/lib/quality-fix-request";
+import { createPagePrompt } from "@/lib/create-page-prompt";
 import {
   deserializeDraws,
   serializeDraws,
@@ -900,7 +901,7 @@ export default function ProjectView() {
         body: t("workspace.project.pageUnavailableHelp"),
         tone: "warn",
         ...(canCreate ? { action: { label: t("workspace.project.createPage"), onSelect: () => {
-          setComposerPrefill(`Create \`${missing.relPath}\` linked from \`${active}\`, sharing the same header/nav/footer`);
+          setComposerPrefill(createPagePrompt(missing.relPath, active));
           setChatFocusKey((value) => value + 1);
           setMobilePane("chat");
         } } } : {}),

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { mergeComposerPrefill } from "@/lib/create-page-prompt";
 import { t, useT, type MessageKey } from "@/i18n/t";
 import ComposerAttachments from "./ComposerAttachments";
 import { VisualSourceCandidates } from "./VisualSourceCandidates";
@@ -110,11 +111,13 @@ export default function Composer({
     }
   }, [backendId, draft, settings.data]);
   const { text, setText } = draft;
+  const textRef = useRef(text);
+  textRef.current = text;
   const appliedPrefill = useRef(initialText);
   useEffect(() => {
     if (initialText !== appliedPrefill.current) {
       appliedPrefill.current = initialText;
-      setText(initialText);
+      setText(mergeComposerPrefill(textRef.current, initialText));
     }
   }, [initialText, setText]);
   const [sendState, setSendState] = useState<ComposerSendState>({ kind: "idle" });
