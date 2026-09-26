@@ -37,7 +37,8 @@ function resolveRoute(backendId: BackendId, generation: GenerationOptions): Rout
     if (backendId !== "claude-code") throw new Error("commandcode_unavailable");
     return "claude-code/commandcode";
   }
-  return backendId === "claude-code" ? "claude-code/native" : "codex/native";
+  if (backendId === "claude-code") return "claude-code/native";
+  return backendId === "codex" ? "codex/native" : "generic/native";
 }
 
 const own = <T,>(record: Readonly<Record<string, T>>, key: string): T | undefined =>
@@ -162,7 +163,7 @@ export function appendModelPromptContext(
   const claude = generation.provider === "commandcode" || backendId === "claude-code";
   const profile = claude
     ? /(?:^|[-/])opus(?:[-/]|$)/i.test(generation.model) ? "claude-opus" : "claude"
-    : "codex";
+    : backendId === "codex" ? "codex" : "generic";
   lines.push('<burnguard-model-guidance-v1>');
   lines.push(JSON.stringify({ schema_version: 1, profile, model: generation.model, provider: generation.provider, effort: generation.effort }));
   lines.push("</burnguard-model-guidance-v1>");

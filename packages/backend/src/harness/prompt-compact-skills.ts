@@ -13,6 +13,9 @@ export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 - Every slide is a top-level \`<section data-slide>\` directly under \`<body>\`. Preserve order unless the user asks for narrative change.
 - Preserve \`<script src="/runtime/deck-stage.js" defer></script>\`; do not set \`data-active\` statically or reimplement deck navigation.
 - Every visible text element needs a unique \`data-bg-node-id="slide-{N}-{purpose}"\`; parent slides use \`data-bg-node-id="slide-{N}"\`.
+- Every slide carries \`data-layout="<archetype>"\`: cover, agenda, two-column-problem-solution, photo-list-split, big-number, vertical-timeline, three-step-columns, arrow-steps, quote-callout, logo-grid, chart, closing; never the same archetype on three consecutive slides.
+- Respect \`body[data-deck-ready]\` CSS: slides stack before load; only the active slide renders after.
+- When \`use_speaker_notes\` is true, every slide keeps an \`<aside class="deck-notes" data-speaker-notes>\` (presenter mode only); when false, add none.
 - No \`<iframe>\`, \`<video>\`, \`<audio>\`: ${EXPORT_REMOTE_FRAME_RULE}.
 
 ## Projection scale
@@ -21,6 +24,7 @@ export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 ## Style
 - Use asymmetric layouts, oversized type or KPI numbers where useful, and avoid centered-everything except cover/closing slides.
 - Declare \`--deck-font-heading: var(--font-display)\` and \`--deck-font-body: var(--font-body)\` in :root; font-family uses only them.
+- When PowerPoint/PPTX output is requested, stay text-first: real HTML text, simple shapes, flat layouts; no effects that only survive raster capture.
 - Keep CSS inline in the top \`<style>\` block. Reference the design-system CSS variables from the layout/surface contracts above and from colors_and_type.css (Read it for colour/type names); with no design system use the tokens you declared. Avoid new palettes, font stacks, or typefaces.`;
 
 export const COMPACT_PROTOTYPE_SKILL_MD = `# Prototype compact contract

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { getSqlite } from "../src/db/sqlite-client";
-import { buildPrompt, renderTextEncodingBlock, resolveDeliverable } from "../src/harness/prompt-builder";
+import { buildPrompt, MAX_SKILL_CHARS, renderTextEncodingBlock, resolveDeliverable } from "../src/harness/prompt-builder";
 import { DESIGN_CRAFT_RULES, IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../src/harness/design-craft";
 import { IMAGE_PRODUCTION_RULES } from "../src/harness/prompt-image-production";
 import { PROTOTYPE_NAVIGATION_CONTRACT } from "../src/harness/skills/prototype-skill";
@@ -658,6 +658,25 @@ describe("task guidance presets", () => {
     expect(() => selectTaskPreset("codex", options("claude-sonnet-4-6", "low", "commandcode"), "slide_deck")).toThrow("commandcode_unavailable");
   });
 
+  test("PH-16: Given gemini or copilot When selecting Then a neutral route and wording apply and the legacy profile names neither codex nor claude", async () => {
+    for (const backendId of ["gemini", "copilot"] as const) {
+      const preset = selectTaskPreset(backendId, options("gemini-2.5-pro", "low"), "prototype");
+      expect(preset.route).not.toBe("codex/native");
+      expect(preset.route).not.toBe("claude-code/native");
+      expect(preset.resolution).toBe("provider_default");
+      expect(blockIds(preset)).not.toContain("wording-default-codex-v1");
+      expect(blockIds(preset)).not.toContain("wording-default-claude-v1");
+      const prompt = await buildPrompt(makeContext(), { type: "user.message", text: "build" }, { backendId, generation: options("gemini-2.5-pro", "low") });
+      const legacy = JSON.parse(prompt.split("<burnguard-model-guidance-v1>\n")[1]!.split("\n</burnguard-model-guidance-v1>")[0]!);
+      expect(legacy.profile).not.toBe("codex");
+      expect(legacy.profile).not.toBe("claude");
+      expect(JSON.parse(prompt.split("<burnguard-task-guidance-v1>\n")[1]!.split("\n</burnguard-task-guidance-v1>")[0]!).route).toBe(preset.route);
+    }
+    expect(() => selectTaskPreset("gemini", options("gemini-2.5-pro", "low", "commandcode"), "prototype")).toThrow("commandcode_unavailable");
+    // The capability rule names no backend: it applies to any session without a built-in image tool.
+    expect(DESIGN_CRAFT_RULES).not.toMatch(/\bClaude\b|CommandCode/u);
+  });
+
   test("Given every shipped combination When serializing Then the envelope stays within budget", () => {
     const worstCaseModel = "m".repeat(120);
     const models: [Parameters<typeof selectTaskPreset>[0], string, "native" | "commandcode"][] = [
@@ -667,6 +686,8 @@ describe("task guidance presets", () => {
       ["claude-code", "claude-sonnet-4-6", "native"], ["claude-code", "claude-opus-4-6", "native"],
       ["claude-code", "sonnet", "native"], ["claude-code", "opus", "native"], ["claude-code", worstCaseModel, "native"],
       ["claude-code", "claude-sonnet-4-6", "commandcode"], ["claude-code", worstCaseModel, "commandcode"],
+      ["gemini", "gemini-2.5-pro", "native"], ["gemini", worstCaseModel, "native"],
+      ["copilot", "gpt-5", "native"], ["copilot", worstCaseModel, "native"],
     ];
     let checked = 0;
     for (const [backend, model, provider] of models) {
@@ -756,6 +777,26 @@ describe("prompt gaps", () => {
     const deck = await buildPrompt(makeContext({ project_type: "slide_deck", entrypoint: "deck.html" }), { type: "user.message", text }, { backendId: "codex", generation });
     expect(deck).not.toContain("## Diagram skill");
     expect(taskDeliverable(deck)).toBe("slide_deck");
+  });
+
+  test("PH-02: Given a compact deck turn When built Then the slide deck skill section carries the notes, layout, export-ban and deck-ready contracts within budget", async () => {
+    for (const use_speaker_notes of [true, false]) {
+      const prompt = await buildPrompt(makeContext({ project_type: "slide_deck", entrypoint: "deck.html", options_json: JSON.stringify({ use_speaker_notes }) }), { type: "user.message", text: "make a deck" }, { contextMode: "compact" });
+      const skill = prompt.slice(prompt.indexOf("## Slide deck skill"), prompt.indexOf("## Visual craft"));
+      for (const token of ["use_speaker_notes", "data-speaker-notes", "deck-notes", "data-layout", "<iframe>", "data-deck-ready", "text-first"]) expect(skill).toContain(token);
+      expect(skill).not.toContain("## Layout archetypes");
+    }
+    expect(COMPACT_DECK_SKILL_MD.length).toBeLessThanOrEqual(MAX_SKILL_CHARS);
+  });
+
+  test("PH-19: Given the shipped craft rules and a product-detail graphic When built Then the audit hooks are named where the rules are stated", async () => {
+    expect(DESIGN_CRAFT_RULES).toContain("data-bg-font-exception");
+    expect(DESIGN_CRAFT_RULES).toContain("font_consistency");
+    const detail = await buildPrompt(makeContext({ project_type: "graphic", options_json: JSON.stringify({ graphic_canvas: { schema_version: 1, width: 860, height: 12_000 }, graphic_set: { schema_version: 1, kind: "product_detail", frame_count: 1 } }) }), { type: "user.message", text: "상세페이지를 만들어줘" });
+    const rules = detail.slice(detail.indexOf('<burnguard-graphic-rules-v1 kind="product_detail">'), detail.indexOf("</burnguard-graphic-rules-v1>"));
+    expect(rules).toContain("data-bg-placeholder");
+    expect(rules).toContain("supply real data");
+    expect(rules).toContain("copy_review");
   });
 
   test("PH-32: Given a host that is not win32 When built Then the text-encoding tag ships once without PowerShell guidance, which only the win32 seam adds", async () => {
