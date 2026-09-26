@@ -3,6 +3,7 @@ export * from "./app";
 export * from "./artifact";
 export * from "./artifact-operation";
 export * from "./catalog-contract";
+export * from "./chat";
 export * from "./comment";
 export * from "./connections";
 export * from "./contract-parser";

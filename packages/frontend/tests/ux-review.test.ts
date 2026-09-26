@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { UxReviewReport } from "@bg/shared";
-import { uxReviewIsCurrent, uxReviewRequest } from "../src/components/modes/UxReviewPanel";
+import { ApiError } from "../src/api/client";
+import { uxReviewErrorKey, uxReviewIsCurrent, uxReviewRequest } from "../src/components/modes/UxReviewPanel";
 
 const report: UxReviewReport = {
   schema_version: 1, project_id: "project", artifact_revision: 2,
@@ -25,5 +26,12 @@ describe("UX review request", () => {
     expect(text).toContain("bg-auto 임시 앵커");
     expect(text).toContain("목적을 설명해 주세요.");
     expect(text).toContain("실제 사용성 검증 결과가 아니에요");
+  });
+
+  test("Given a review load error When the copy key is resolved Then the code chooses the branch", () => {
+    expect(uxReviewErrorKey(new ApiError("review_unavailable", "raw", 503))).toBe("modes.ux.unavailable");
+    expect(uxReviewErrorKey(new ApiError("stale_artifact_identity", "raw", 409))).toBe("modes.ux.staleIdentity");
+    expect(uxReviewErrorKey(new ApiError("some_other_code", "raw", 500))).toBe("modes.ux.loadFailed");
+    expect(uxReviewErrorKey(new Error("fetch failed"))).toBe("modes.ux.loadFailed");
   });
 });

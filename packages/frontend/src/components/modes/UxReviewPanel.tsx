@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { UX_PATTERNS, type UxReviewReport } from "@bg/shared";
 import { getUxReview } from "@/api/ux-review";
+import { ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { UX_PATTERN_COPY } from "./ux-pattern-copy";
 
@@ -17,6 +18,13 @@ export type UxReviewBinding = {
 
 export function uxReviewIsCurrent(report: UxReviewReport, target: Pick<UxReviewBinding, "projectId" | "relPath" | "digest" | "revision">): boolean {
   return report.project_id === target.projectId && report.source_path === target.relPath && report.artifact_digest === target.digest && report.artifact_revision === target.revision;
+}
+
+/** The review route refuses with a code: identity moved under the request, or the HTML is beyond static review. */
+export function uxReviewErrorKey(error: unknown): MessageKey {
+  if (error instanceof ApiError && error.code === "stale_artifact_identity") return "modes.ux.staleIdentity";
+  if (error instanceof ApiError && error.code === "review_unavailable") return "modes.ux.unavailable";
+  return "modes.ux.loadFailed";
 }
 
 export function uxReviewRequest(report: UxReviewReport, title: string, guidance: string, nodeId: string | null = null): string {
@@ -73,7 +81,7 @@ export default function UxReviewPanel({ binding }: { binding: UxReviewBinding })
     {!supported ? <p role="status" className="mt-3">{t("modes.ux.openHtml")}</p> : <>
       <Button className="my-3 min-h-11" size="sm" variant="outline" disabled={disabled || pending || query.isFetching} onClick={() => { void query.refetch(); }}>{t("modes.ux.retry")}</Button>
       {query.isFetching && <p role="status">{t("modes.ux.reviewing")}</p>}
-      {query.isError && <p role="alert">{t("modes.ux.loadFailed")}</p>}
+      {query.isError && <p role="alert">{t(uxReviewErrorKey(query.error))}</p>}
       {report && !current && <p role="status">{t("modes.ux.stale")}</p>}
       {report && <>
         <p className="mb-3 break-all text-muted-foreground">{t("modes.ux.source", { path: report.source_path, revision: report.artifact_revision })}</p>

@@ -76,6 +76,7 @@ import { DirectionStatusBar } from "@/components/directions/DirectionStatusBar";
 import PermissionDialog from "@/components/chat/PermissionDialog";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { sendFailureTitleKey } from "@/lib/composer-send";
 import Canvas from "@/components/canvas/Canvas";
 import ColorPalette from "@/components/canvas/ColorPalette";
 import ArtifactHistory from "@/components/canvas/ArtifactHistory";
@@ -1082,10 +1083,7 @@ export default function ProjectView() {
                 void stream.refreshSnapshot().catch(() => {});
               } else {
                 pushToast({
-                  title:
-                    error instanceof ApiError && error.status === 409
-                      ? t("workspace.project.turnBusy")
-                      : t("workspace.project.sendFailed"),
+                  title: t(sendFailureTitleKey(error)),
                   body: visualSourceSendErrorCopy(error),
                   tone: "error",
                 });

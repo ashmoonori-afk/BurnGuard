@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { defaultGenerationOptions, type BackendId, type FileInfo, type GenerationOptions } from "@bg/shared";
+import { defaultGenerationOptions, MAX_USER_MESSAGE_CHARS, type BackendId, type FileInfo, type GenerationOptions } from "@bg/shared";
 import { useQuery } from "@tanstack/react-query";
 import { getSettings } from "@/api/home";
 import GenerationControls from "@/components/settings/GenerationControls";
@@ -9,6 +9,7 @@ import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { mergeComposerPrefill } from "@/lib/create-page-prompt";
+import { composerLengthState } from "@/lib/composer-send";
 import { t, useT, type MessageKey } from "@/i18n/t";
 import ComposerAttachments from "./ComposerAttachments";
 import { VisualSourceCandidates } from "./VisualSourceCandidates";
@@ -133,8 +134,9 @@ export default function Composer({
   const placeholder = useComposerPlaceholder(disabled ? disabledReason ?? "busy" : null);
 
   const sending = sendState.kind === "processing";
-  const canSend = draft.ready && documents.canSend && text.trim().length > 0 && !disabled && !sending;
-  const statusMessage = sendStateMessage(sendState);
+  const length = composerLengthState(text);
+  const canSend = draft.ready && documents.canSend && text.trim().length > 0 && length.canSend && !disabled && !sending;
+  const statusMessage = sendStateMessage(sendState) ?? (length.statusKey === null ? null : translate(length.statusKey, { limit: MAX_USER_MESSAGE_CHARS }));
   const retrying = sendState.kind === "failed" || sendState.kind === "cancelled";
   const sendLabels = composerSendLabels(retrying);
 
@@ -181,7 +183,10 @@ export default function Composer({
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <label htmlFor={`composer-${sessionId}`} className="text-xs font-semibold text-foreground">{translate("workspace.composer.requestLabel")}</label>
-        <span className="text-[11px] text-muted-foreground">{translate("workspace.composer.shortcutHint")}</span>
+        <span className="text-[11px] text-muted-foreground">
+          {length.counter !== null && <span role="status" className={cn("mr-2", !length.canSend && "text-destructive")}>{translate("workspace.composer.charCount", length.counter)}</span>}
+          {translate("workspace.composer.shortcutHint")}
+        </span>
       </div>
       {activePageLabel !== null ? <div className="mb-2 w-fit max-w-full truncate rounded-full border border-border bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground" title={activePageLabel}>{activePageLabel}</div> : null}
       <ComposerAttachments
@@ -218,6 +223,7 @@ export default function Composer({
         }}
         placeholder={placeholder}
         rows={3}
+        maxLength={MAX_USER_MESSAGE_CHARS}
         disabled={disabled || sending || !draft.ready}
         aria-label={translate("workspace.composer.messageInput")}
         onPaste={(e) => {

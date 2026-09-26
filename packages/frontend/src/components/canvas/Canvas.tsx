@@ -25,6 +25,7 @@ import {
 import type { CanvasMode } from "@/components/modes/types";
 import { authorizedFetch } from "@/api/client";
 import { embedCanvasImages } from "@/lib/canvas-images";
+import { canvasLoadErrorKey } from "@/lib/canvas-load-error";
 import { anySignal } from "@/lib/abort-signal";
 import { hydrateCanvasCharts } from "@/lib/canvas-charts";
 import { canvasPoint } from "./canvas-coordinates";
@@ -501,11 +502,7 @@ export default function Canvas({
                 {loadError.status ? ` (HTTP ${loadError.status})` : ""}
               </div>
               <div className="mt-1 text-muted-foreground">
-                {t(loadError.status === 404
-                  ? "workspace.canvas.fileNotFound"
-                  : loadError.status === 401 || loadError.status === 403
-                    ? "workspace.canvas.unauthorized"
-                    : "workspace.canvas.connectionError")}
+                {t(canvasLoadErrorKey(loadError.status))}
               </div>
               <button
                 type="button"

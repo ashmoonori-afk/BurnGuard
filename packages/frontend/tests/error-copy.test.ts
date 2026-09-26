@@ -3,9 +3,11 @@ import { apiErrorCopy } from "../src/lib/error-copy";
 
 class FakeApiError extends Error {
   readonly code: string;
-  constructor(code: string, message: string) {
+  readonly details?: unknown;
+  constructor(code: string, message: string, details?: unknown) {
     super(message);
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -25,6 +27,45 @@ const KNOWN_CODES = [
   "figma_token_missing",
   "upload_extract_failed",
   "unsafe_source_content",
+];
+
+/** Codes the routes emit that gained recovery copy; each must resolve past the generic fallback. */
+const ADDED_CODES = [
+  "graphic_requires_authenticated_codex",
+  "codex_authentication_probe_failed",
+  "acquisition_limit",
+  "acquisition_timeout",
+  "invalid_upload",
+  "invalid_font_upload",
+  "system_id_conflict",
+  "catalog_operation_failed",
+  "design_system_not_found",
+  "design_system_file_not_found",
+  "invalid_design_system",
+  "invalid_project_import",
+  "pinterest_unavailable",
+  "invalid_pinterest_request",
+  "message_too_long",
+  "turn_capacity_exhausted",
+  "active_page_unavailable",
+  "invalid_active_page",
+  "document_save_failed",
+  "artifact_prepare_failed",
+  "invalid_body",
+  "snapshot_not_found",
+  "non_leaf_text_target",
+  "invalid_attribute_url",
+  "ambiguous_node_id",
+  "node_not_found",
+  "snapshot_failed",
+  "recovery_failed",
+  "invalid_graphic_export_options",
+  "export_not_found",
+  "format_requires_web",
+  "format_requires_frames",
+  "format_requires_deck",
+  "format_requires_logo",
+  "invalid_export_format",
 ];
 
 describe("apiErrorCopy", () => {
@@ -74,5 +115,18 @@ describe("apiErrorCopy", () => {
   test("Given has_active_projects When mapped Then the copy tells the user to delete the referencing projects", () => {
     const copy = apiErrorCopy(new FakeApiError("has_active_projects", "Active projects reference this system"));
     expect(copy).toContain("삭제");
+  });
+
+  test.each(ADDED_CODES)("Given the backend code %s When mapped Then it has Korean recovery copy instead of the generic fallback", (code) => {
+    const copy = apiErrorCopy(new FakeApiError(code, "private internal error"));
+    expect(copy).not.toBe(apiErrorCopy(new FakeApiError("__unknown__", "boom")));
+    expect(/[ㄱ-힝]/u.test(copy)).toBe(true);
+  });
+
+  test("Given message_too_long with the server limit When mapped Then the copy carries the locale-formatted limit", () => {
+    const copy = apiErrorCopy(new FakeApiError("message_too_long", "Message exceeds 200000 characters", { limit: 200000 }));
+    expect(copy).toContain("200,000");
+    expect(copy).not.toContain("{limit}");
+    expect(apiErrorCopy(new FakeApiError("message_too_long", "raw"))).toContain("200,000");
   });
 });

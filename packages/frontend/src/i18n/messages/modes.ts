@@ -241,4 +241,6 @@ export const modesMessages = defineMessages({
   "modes.ux.pattern.anti-slop.title": {"ko":"맥락에 맞는 디자인","en":"Design for the context","zh-CN":"符合情境的设计"},
   "modes.ux.pattern.anti-slop.description": {"ko":"반복되는 장식 대신 제품의 내용과 목적을 검토합니다.","en":"Review the product's content and purpose rather than repeating decoration.","zh-CN":"审视产品内容和目的，而非重复使用装饰。"},
   "modes.ux.pattern.anti-slop.guidance": {"ko":"사람의 시각적 판단이 필요한 검토입니다. 관성적인 카드 격자, 장식 배지, 과도한 그라디언트와 반복 문구를 점검하고 실제 콘텐츠의 위계와 브랜드 맥락에 필요한 요소만 남기세요. 스타일 취향을 자동 결함으로 단정하지 마세요.","en":"This review requires human visual judgment. Examine habitual card grids, decorative badges, excessive gradients, and repeated copy. Keep only what serves content hierarchy and brand context. Do not treat a style preference as an automatic defect.","zh-CN":"此审查需要人的视觉判断。检查惯用卡片网格、装饰徽章、过度渐变和重复文案，仅保留符合内容层级和品牌情境的元素。不要将风格偏好自动判定为缺陷。"},
+  "modes.ux.unavailable": {"ko":"HTML이 너무 크거나 복잡해 정적 진단을 할 수 없어요. 페이지를 나누거나 줄인 뒤 다시 시도해 주세요.","en":"The HTML is too large or complex for static review. Split or reduce the page and try again.","zh-CN":"HTML 过大或过于复杂，无法进行静态诊断。请拆分或精简页面后重试。"},
+  "modes.ux.staleIdentity": {"ko":"진단하는 동안 파일이 바뀌었어요. 캔버스를 새로고침한 뒤 다시 진단해 주세요.","en":"The file changed while it was being reviewed. Refresh the canvas and review again.","zh-CN":"诊断期间文件发生了变化。请刷新画布后重新诊断。"},
 });
