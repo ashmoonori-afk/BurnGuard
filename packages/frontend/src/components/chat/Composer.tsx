@@ -12,6 +12,7 @@ import { mergeComposerPrefill } from "@/lib/create-page-prompt";
 import { composerLengthState } from "@/lib/composer-send";
 import { t, useT, type MessageKey } from "@/i18n/t";
 import ComposerAttachments from "./ComposerAttachments";
+import InterruptButton from "./InterruptButton";
 import { VisualSourceCandidates } from "./VisualSourceCandidates";
 import {
   COMPOSER_SUPPORTED_EXTENSIONS,
@@ -58,8 +59,7 @@ export default function Composer({
   onSend,
   disabled = false,
   disabledReason = null,
-  canInterrupt = false,
-  turnElapsedMs = null,
+  turnStartedAt = null,
   interruptPending = false,
   onInterrupt,
   initialText = "",
@@ -79,14 +79,11 @@ export default function Composer({
   /** Names why `disabled` is true so the placeholder can say so; a disabled composer without a reason reads as busy. */
   disabledReason?: ComposerDisabledReason;
   /**
-   * True when the current turn has exceeded the user's configured
-   * wait threshold and the backend can accept an Interrupt POST.
-   * Only surfaces the Stop button when the composer is also
+   * When the running turn started; the Stop button appears once the
+   * interrupt grace period has elapsed and only while the composer is
    * disabled — idle composers never show Stop.
    */
-  canInterrupt?: boolean;
-  /** 현재 턴 경과(ms). 중단 버튼 라벨에 mm:ss로 표시한다. */
-  turnElapsedMs?: number | null;
+  turnStartedAt?: number | null;
   interruptPending?: boolean;
   onInterrupt?: () => void;
   /**
@@ -291,22 +288,8 @@ export default function Composer({
           >
             <StopCircle className="h-3.5 w-3.5" aria-hidden="true" /> {translate("workspace.composer.cancelSend")}
           </Button>
-        ) : disabled && canInterrupt ? (
-          <Button
-            variant="destructive"
-            size="sm"
-            className="h-9 gap-1.5 px-3 text-xs max-[900px]:h-11"
-            disabled={interruptPending || !onInterrupt}
-            onClick={() => onInterrupt?.()}
-            title={translate("workspace.composer.interruptTitle")}
-          >
-            <StopCircle className="h-3.5 w-3.5" />
-            {interruptPending
-              ? translate("workspace.composer.interrupting")
-              : turnElapsedMs == null
-                ? translate("workspace.composer.interrupt")
-                : translate("workspace.composer.interruptElapsed", { time: formatElapsed(turnElapsedMs) })}
-          </Button>
+        ) : disabled && turnStartedAt !== null ? (
+          <InterruptButton busy={disabled} turnStartedAt={turnStartedAt} pending={interruptPending} onInterrupt={onInterrupt} />
         ) : (
           <Button
             variant="cta"
@@ -325,11 +308,4 @@ export default function Composer({
       <VisualSourceCandidates files={projectFiles} />
     </div>
   );
-}
-
-function formatElapsed(ms: number): string {
-  const total = Math.floor(ms / 1000);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
 }

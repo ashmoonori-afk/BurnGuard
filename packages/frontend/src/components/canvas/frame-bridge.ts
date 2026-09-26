@@ -90,7 +90,9 @@ type BridgeAction =
   | "active-slide"
   | "set-active-slide"
   | "reveal-selector"
-  | "count-selector";
+  | "count-selector"
+  | "scroll-position"
+  | "set-scroll-position";
 
 /**
  * Default timeout per request. Bumped from the original 200 ms because
@@ -370,6 +372,20 @@ export async function requestFrameActiveSlide(
   iframe: HTMLIFrameElement | null,
 ): Promise<number | null> {
   return (await requestFrameBridge(iframe, "active-slide")) as number | null;
+}
+
+export interface FrameScrollPosition { x: number; y: number }
+
+/** The document's window scroll offsets, captured before a live-preview version swap. */
+export async function requestFrameScrollPosition(iframe: HTMLIFrameElement | null): Promise<FrameScrollPosition | null> {
+  const payload = await requestFrameBridge(iframe, "scroll-position").catch(() => null);
+  if (payload === null || typeof payload !== "object" || !("x" in payload) || !("y" in payload)) return null;
+  const { x, y } = payload as { x: unknown; y: unknown };
+  return typeof x === "number" && typeof y === "number" && Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+
+export async function requestFrameSetScrollPosition(iframe: HTMLIFrameElement | null, position: FrameScrollPosition): Promise<boolean> {
+  return (await requestFrameBridge(iframe, "set-scroll-position", { x: position.x, y: position.y }).catch(() => null)) === true;
 }
 
 export async function requestFrameSetActiveSlide(
@@ -774,6 +790,15 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       } else {
         var active = document.querySelector("[data-slide][data-active]");
         response = active ? Array.prototype.indexOf.call(slides, active) : 0;
+      }
+    } else if (data.action === "scroll-position") {
+      response = { x: Number(window.scrollX) || 0, y: Number(window.scrollY) || 0 };
+    } else if (data.action === "set-scroll-position") {
+      var scrollX = payload.x, scrollY = payload.y;
+      if (typeof scrollX === "number" && typeof scrollY === "number" && isFinite(scrollX) && isFinite(scrollY)) {
+        try { window.scrollTo(scrollX, scrollY); response = true; } catch (e) { response = false; }
+      } else {
+        response = false;
       }
     } else if (data.action === "set-active-slide") {
       var targetIndex = Math.max(0, Number(payload.slideIndex) || 0);

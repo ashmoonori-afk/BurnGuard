@@ -22,8 +22,7 @@ export default function ChatPane({
   session,
   composerDisabled,
   composerDisabledReason,
-  canInterrupt,
-  turnElapsedMs,
+  turnStartedAt,
   interruptPending,
   onInterrupt,
   onSend,
@@ -49,8 +48,7 @@ export default function ChatPane({
   session: SessionInfo;
   composerDisabled?: boolean;
   composerDisabledReason?: ComposerDisabledReason;
-  canInterrupt?: boolean;
-  turnElapsedMs?: number | null;
+  turnStartedAt?: number | null;
   interruptPending?: boolean;
   onInterrupt?: () => void;
   onSend: (
@@ -148,8 +146,7 @@ export default function ChatPane({
             onSend={onSend}
             disabled={composerDisabled}
             disabledReason={composerDisabledReason}
-            canInterrupt={canInterrupt}
-            turnElapsedMs={turnElapsedMs}
+            turnStartedAt={turnStartedAt}
             interruptPending={interruptPending}
             onInterrupt={onInterrupt}
             initialText={composerInitialText}

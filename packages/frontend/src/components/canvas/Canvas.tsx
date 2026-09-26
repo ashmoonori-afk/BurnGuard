@@ -19,9 +19,12 @@ import {
   buildSandboxedArtifactSrcDoc,
   openFrameExternalLink,
   parseFramePreviewReport,
+  requestFrameScrollPosition,
   requestFrameSetActiveSlide,
+  requestFrameSetScrollPosition,
   requestFramePreviewReport,
   subscribeFrameEvent,
+  type FrameScrollPosition,
 } from "./frame-bridge";
 import type { CanvasMode } from "@/components/modes/types";
 import { authorizedFetch } from "@/api/client";
@@ -233,6 +236,8 @@ export default function Canvas({
   const [showChartTools, setShowChartTools] = useState(false);
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const slideByFileRef = useRef(new Map<string, number | null>());
+  // Page scroll survives a reload of the same file (each live-preview version) like the slide index does.
+  const scrollByFileRef = useRef(new Map<string, FrameScrollPosition>());
   const lastFrameSlideRef = useRef<number | null>(null);
   const restoreTargetSlideIdxRef = useRef<number | null>(null);
   const restoringSlideRef = useRef(false);
@@ -295,6 +300,12 @@ export default function Canvas({
     const controller = new AbortController();
     const signal = anySignal([controller.signal, AbortSignal.timeout(30_000)]);
     setLoadError(null);
+    // The outgoing document is still mounted: remember where the user was before the swap.
+    if (frameDocument !== null && frameDocument.src === src && iframeRef.current?.dataset.documentKey === frameDocument.key) {
+      void requestFrameScrollPosition(iframeRef.current).then((position) => { if (position !== null) scrollByFileRef.current.set(src, position); });
+    }
+    // Embedded assets are shared across versions of the same document and dropped on refresh or a new file.
+    const cacheScope = livePreview ? src : frameLoadKey;
 
     void authorizedFetch(src, { signal, cache: "no-store", redirect: "error" })
       .then(async (response) => {
@@ -306,7 +317,7 @@ export default function Canvas({
         }
         return response.text();
       })
-      .then((html) => embedCanvasImages(html, new URL(src, window.location.href).href, signal))
+      .then((html) => embedCanvasImages(html, new URL(src, window.location.href).href, signal, cacheScope))
       .then(hydrateCanvasCharts)
       .then((html) => {
         if (controller.signal.aborted) return;
@@ -328,7 +339,16 @@ export default function Canvas({
     return () => {
       controller.abort();
     };
+    // frameDocument and livePreview are read for the outgoing document only; they must not restart the fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frameLoadKey, graphicCanvas, src]);
+
+  useEffect(() => {
+    if (!src || loadedFrameKey !== (frameKey ?? src)) return;
+    const position = scrollByFileRef.current.get(src);
+    if (position === undefined) return;
+    void requestFrameSetScrollPosition(iframeRef.current, position);
+  }, [frameKey, loadedFrameKey, src]);
 
   useLayoutEffect(() => {
     // Push-based: deck-stage's BRIDGE_SCRIPT broadcasts active-slide-

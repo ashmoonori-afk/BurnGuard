@@ -1,3 +1,4 @@
+import { GOOGLE_FONTS_STYLE_HOST } from "@bg/shared";
 import { authorizedFetch } from "@/api/client";
 import { requestBundledFont } from "@/api/fonts";
 import { anySignal } from "@/lib/abort-signal";
@@ -6,6 +7,18 @@ import { anySignal } from "@/lib/abort-signal";
 // Leave room above the bundled stylesheet for older hashes kept after font updates.
 export const MAX_SHARED_CANVAS_FONTS = 256;
 const bundledFonts = new Map<string, Promise<string>>();
+
+// Project assets embedded for one document are reused across its live-preview
+// versions; a new scope (another file, a refresh) drops the previous entries.
+export const MAX_SCOPED_CANVAS_ASSETS = 256;
+type EmbeddedAsset = { readonly data: string; readonly bytes: number };
+let scopedAssets: { scope: string; entries: Map<string, Promise<EmbeddedAsset>> } | null = null;
+
+function scopedAssetCache(scope: string | undefined): Map<string, Promise<EmbeddedAsset>> | null {
+  if (scope === undefined) return null;
+  if (scopedAssets?.scope !== scope) scopedAssets = { scope, entries: new Map() };
+  return scopedAssets.entries;
+}
 
 function isBundledFontUrl(value: string, base: string): boolean {
   try {
@@ -86,10 +99,15 @@ export async function readCanvasImage(response: Response, budget: { remaining: n
   }
 }
 
-/** Embed project resources: opaque frames cannot send Strict cookies. */
-export async function embedCanvasImages(html: string, documentUrl: string, signal: AbortSignal): Promise<string> {
+/**
+ * Embed project resources: opaque frames cannot send Strict cookies.
+ * `cacheScope` shares embedded assets between calls for the same document
+ * (each live-preview version); a different scope starts from fresh fetches.
+ */
+export async function embedCanvasImages(html: string, documentUrl: string, signal: AbortSignal, cacheScope?: string): Promise<string> {
   const document = new DOMParser().parseFromString(html, "text/html");
   const fetched = new Map<string, Promise<string>>();
+  const scoped = scopedAssetCache(cacheScope);
   let sharedFontUsed = false;
   const resources = new AbortController();
   const boundedSignal = anySignal([signal, resources.signal, AbortSignal.timeout(15000)]);
@@ -107,7 +125,14 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
     let pending = fetched.get(key);
     if (!pending) {
       if (fetched.size >= 64) { resources.abort(); throw new Error("artifact_image_limit"); }
-      pending = (async () => {
+      const cached = scoped?.get(key);
+      if (cached) {
+        // A reused asset still counts against this document's byte budget.
+        pending = cached.then((asset) => { budget.remaining -= asset.bytes; return budget.remaining < 0 && kind === "asset" ? source : asset.data; });
+        fetched.set(key, pending);
+        return pending;
+      }
+      const embed = (async (): Promise<EmbeddedAsset | null> => {
         const response = await authorizedFetch(url, { signal: boundedSignal, redirect: "error" });
         if (!response.ok) throw Object.assign(new Error("artifact_image_load_failed"), { httpStatus: response.status });
         const mime = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
@@ -117,17 +142,24 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
         if (!validMime) {
           await response.body?.cancel();
           if (kind === "script") throw new Error("artifact_script_mime_invalid");
-          return source;
+          return null;
         }
         const blob = await readCanvasImage(response, budget, () => { if (kind !== "asset") resources.abort(); });
-        if (kind !== "asset") return blob.text();
-        return new Promise<string>((done, reject) => {
+        if (kind !== "asset") return { data: await blob.text(), bytes: blob.size };
+        return new Promise<EmbeddedAsset>((done, reject) => {
           const reader = new FileReader();
-          reader.onload = () => done(String(reader.result));
+          reader.onload = () => done({ data: String(reader.result), bytes: blob.size });
           reader.onerror = () => reject(new Error("artifact_image_read_failed"));
           reader.readAsDataURL(blob);
         });
-      })().catch((error: unknown) => {
+      })();
+      // Only a completed embed is shared; a miss, a 404 draft or an overrun is retried next version.
+      if (scoped && scoped.size < MAX_SCOPED_CANVAS_ASSETS) {
+        const shared = embed.then((asset) => { if (asset === null) throw new Error("artifact_asset_unembedded"); return asset; });
+        scoped.set(key, shared);
+        void shared.catch(() => { if (scoped.get(key) === shared) scoped.delete(key); });
+      }
+      pending = embed.then((asset) => asset === null ? source : asset.data).catch((error: unknown) => {
         // A draft may reference an image/CSS file that the generator writes next.
         if (/\/preview\//.test(new URL(documentUrl).pathname) && error !== null && typeof error === "object" && "httpStatus" in error && error.httpStatus === 404) return source;
         // An asset beyond the byte budget stays unembedded; CSS and script overruns remain fatal.
@@ -139,7 +171,18 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
     return pending;
   };
   let stylesheetCount = 0;
-  const embedStylesheet = async (css: string, base: string, ancestors: readonly string[]): Promise<string> => {
+  // CSP-allowed remote imports (Google Fonts) are hoisted ahead of every other
+  // rule of their top-level stylesheet so the canvas treats an @import like
+  // the equivalent <link> tag; every other remote import is still dropped.
+  const isHoistedImport = (href: string, base: string): boolean => {
+    try { return new URL(href, base).origin === GOOGLE_FONTS_STYLE_HOST; } catch { return false; }
+  };
+  const embedTopStylesheet = async (css: string, base: string, ancestors: readonly string[]): Promise<string> => {
+    const hoisted: string[] = [];
+    const body = await embedStylesheet(css, base, ancestors, hoisted);
+    return hoisted.length === 0 ? body : `${[...new Set(hoisted)].join("\n")}\n${body}`;
+  };
+  const embedStylesheet = async (css: string, base: string, ancestors: readonly string[], hoisted: string[]): Promise<string> => {
     boundedSignal.throwIfAborted();
     // Parse in an inert document: the browser handles escaped URLs, comments,
     // import ordering and conditional syntax without issuing resource requests.
@@ -153,6 +196,7 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
     return (await Promise.all(rules.map(async rule => {
       if (!(rule instanceof CSSImportRule)) return embedCssImages(rule.cssText, url => resolve(url, base));
       const imported = rule;
+      if (isHoistedImport(imported.href, base)) { hoisted.push(imported.cssText); return ""; }
       if (!isProjectImageUrl(imported.href, base)) return "";
       const target = new URL(imported.href, base);
       target.hash = "";
@@ -163,7 +207,7 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
       if (++stylesheetCount > 64) { resources.abort(); throw new Error("artifact_image_limit"); }
       const source = await resolve(url, base, "css");
       if (source === url) return "";
-      let content = await embedStylesheet(source, url, [...ancestors, url]);
+      let content = await embedStylesheet(source, url, [...ancestors, url], hoisted);
       // Data/blob stylesheet imports are forbidden by the artifact CSP. Inline
       // rules instead, retaining import conditions and cascade layer boundaries.
       if (imported.media.mediaText) content = `@media ${imported.media.mediaText}{${content}}`;
@@ -188,7 +232,7 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
     }))).join(", "));
   }),
   ...Array.from(document.querySelectorAll("style, [style]")).map(async element => {
-    if (element.tagName === "STYLE") element.textContent = (await embedStylesheet(element.textContent ?? "", documentUrl, [])).replace(/<\/style/gi, "<\\/style");
+    if (element.tagName === "STYLE") element.textContent = (await embedTopStylesheet(element.textContent ?? "", documentUrl, [])).replace(/<\/style/gi, "<\\/style");
     if (element.hasAttribute("style")) element.setAttribute("style", await embedCssImages(element.getAttribute("style")!, url => resolve(url)));
   }),
   ...Array.from(document.querySelectorAll('link[rel~="stylesheet"][href]')).map(async link => {
@@ -200,7 +244,7 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
     if (link.hasAttribute("media")) style.setAttribute("media", link.getAttribute("media")!);
     const target = new URL(source, documentUrl);
     target.hash = "";
-    style.textContent = (await embedStylesheet(css, target.href, [target.href])).replace(/<\/style/gi, "<\\/style");
+    style.textContent = (await embedTopStylesheet(css, target.href, [target.href])).replace(/<\/style/gi, "<\\/style");
     link.replaceWith(style);
   }),
   ...Array.from(document.querySelectorAll<HTMLScriptElement>("script[src]")).map(async script => {

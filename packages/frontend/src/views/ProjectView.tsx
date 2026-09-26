@@ -131,7 +131,7 @@ import {
 } from "@/lib/design-audit-state";
 import { isSafeCanvasPagePath, resolveCanvasNavigationAfterRefetch, resolveCanvasPageTarget, resolveCanvasSource } from "@/lib/canvas-source";
 import { t as globalT, useT, type MessageKey } from "@/i18n/t";
-import { INTERRUPT_GRACE_MS } from "@/lib/session-event-state";
+import { latestArtifactPreview } from "@/lib/live-preview";
 
 export default function ProjectView() {
   const t = useT();
@@ -791,8 +791,8 @@ export default function ProjectView() {
   const files: FileInfo[] = filesQuery.data ?? [];
   const artifacts = artifactsQuery.data ?? null;
   const session = stream.state?.session ?? null;
-  const latestPreview = [...events].reverse().find((event) => event.type === "artifact.preview");
-  const livePreview = session?.status === "running" && latestPreview?.type === "artifact.preview" && latestPreview.active && latestPreview.projectId === id ? latestPreview : null;
+  const latestPreview = useMemo(() => latestArtifactPreview(events), [events]);
+  const livePreview = session?.status === "running" && latestPreview !== undefined && latestPreview.active && latestPreview.projectId === id ? latestPreview : null;
   useEffect(() => {
     if (!livePreview) return;
     openFileAsTab(livePreview.path, setOpenFileTabs, setActiveTabId);
@@ -819,10 +819,9 @@ export default function ProjectView() {
   const composerDisabledReason: ComposerDisabledReason = chatComposerDisabled ? "busy" : directionLoading ? "directions" : stream.error ? "disconnected" : null;
 
   // Turn clock. When the composer flips from idle to busy we stamp a
-  // start time; a 1s ticker then drives re-renders so `canInterrupt`
-  // flips on once the interrupt grace period has elapsed.
+  // start time; the InterruptButton owns the 1s ticker that reveals Stop
+  // once the interrupt grace period has elapsed.
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
-  const [nowTs, setNowTs] = useState(() => Date.now());
   // The interrupt POST answers as soon as the abort is delivered, while the turn still finishes its
   // stage; Stop stays disabled from the request until the session is idle again.
   const [stopRequested, setStopRequested] = useState(false);
@@ -840,17 +839,6 @@ export default function ProjectView() {
       }
     }
   }, [chatComposerDisabled]);
-  useEffect(() => {
-    if (!chatComposerDisabled) return;
-    const handle = window.setInterval(() => setNowTs(Date.now()), 1000);
-    return () => window.clearInterval(handle);
-  }, [chatComposerDisabled]);
-  // 통제권 우선: 실행 중이면 5초 유예 뒤 항상 중단 가능. 턴 시작 시점에
-  // 체크포인트를 뜨고 되돌리기가 있으므로 중단은 복구 가능한 동작이다.
-  const turnElapsedMs =
-    turnStartedAt == null ? null : Math.max(0, nowTs - turnStartedAt);
-  const canInterrupt =
-    chatComposerDisabled && turnElapsedMs != null && turnElapsedMs >= INTERRUPT_GRACE_MS;
 
   const interruptMutation = useMutation({
     mutationFn: () => {
@@ -1242,8 +1230,7 @@ export default function ProjectView() {
           }
           composerDisabled={composerDisabled}
           composerDisabledReason={composerDisabledReason}
-          canInterrupt={canInterrupt}
-          turnElapsedMs={turnElapsedMs}
+          turnStartedAt={chatComposerDisabled ? turnStartedAt : null}
           interruptPending={interruptMutation.isPending || stopRequested}
           onInterrupt={() => interruptMutation.mutate()}
           composerInitialText={composerPrefill}
