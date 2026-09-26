@@ -91,7 +91,7 @@ export default function UxReviewPanel({ binding }: { binding: UxReviewBinding })
           <p className="mt-1 text-muted-foreground">{finding.priority === "high" ? t("modes.ux.highPriority") : t("modes.ux.recommended")}{finding.node_bg_id ? t("modes.ux.node", { id: finding.node_bg_id }) : t("modes.ux.page")}</p>
           <p className="mt-2 break-words">{t("modes.ux.evidence", { evidence: finding.evidence })}</p>
           <p className="mt-2 break-keep">{t("modes.ux.proposal", { proposal: finding.proposal })}</p>
-          <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} onClick={() => { void request(finding.title, `관찰 근거: ${finding.evidence}\n개선 제안: ${finding.proposal}`, finding.node_bg_id); }}>{t("modes.ux.requestProposal")}</Button>
+          <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} title={disabled ? t("workspace.project.busyTurn") : undefined} onClick={() => { void request(finding.title, `관찰 근거: ${finding.evidence}\n개선 제안: ${finding.proposal}`, finding.node_bg_id); }}>{t("modes.ux.requestProposal")}</Button>
         </article>)}</div>
         <details className="my-3"><summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.ux.limitations")}</summary><ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">{report.limitations.map((item) => <li key={item}>{item}</li>)}</ul></details>
       </>}
@@ -103,7 +103,7 @@ export default function UxReviewPanel({ binding }: { binding: UxReviewBinding })
       <div className="space-y-2">{UX_PATTERNS.filter((pattern) => `${t(UX_PATTERN_COPY[pattern.id].title)} ${t(UX_PATTERN_COPY[pattern.id].description)}`.toLowerCase().includes(filter.trim().toLowerCase())).map((pattern) => <article key={pattern.id} className="rounded-md border border-border p-3">
         <h4 className="font-semibold">{t(UX_PATTERN_COPY[pattern.id].title)}</h4><p className="mt-1 break-keep text-muted-foreground">{t(UX_PATTERN_COPY[pattern.id].description)}</p>
         <details className="mt-2"><summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.ux.showGuidance")}</summary><p className="mt-1 break-keep">{t(UX_PATTERN_COPY[pattern.id].guidance)}</p></details>
-        <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} onClick={() => { void request(pattern.title, pattern.guidance); }}>{t("modes.ux.requestPattern")}</Button>
+        <Button className="mt-2 min-h-11" size="sm" variant="outline" disabled={busy} title={disabled ? t("workspace.project.busyTurn") : undefined} onClick={() => { void request(pattern.title, pattern.guidance); }}>{t("modes.ux.requestPattern")}</Button>
       </article>)}</div>
     </section>
     {pending && <p role="status" className="mt-3">{t("modes.ux.pending")}</p>}

@@ -173,6 +173,7 @@ export default function ProjectView() {
   const [canvasNavigation, setCanvasNavigation] = useState<{ projectId: string; relPath: string; url: string } | null>(null);
   const [mode, setMode] = useState<CanvasMode | null>(null);
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
+  const [newCommentId, setNewCommentId] = useState<string | null>(null);
   const [activeSlideIdx, setActiveSlideIdx] = useState<number | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [tweaksTarget, setTweaksTarget] = useState<TweaksTarget | null>(null);
@@ -395,6 +396,7 @@ export default function ProjectView() {
         (prev) => (prev ? [...prev, created] : [created]),
       );
       setFocusedCommentId(created.id);
+      setNewCommentId(created.id);
     },
     onError: (error) => handleWriteError("workspace.project.createCommentFailed", error),
   });
@@ -532,6 +534,7 @@ export default function ProjectView() {
     setOpenFileTabs([]);
     setMode(null);
     setFocusedCommentId(null);
+    setNewCommentId(null);
     setActiveSlideIdx(null);
     setEditTarget(null);
     setTweaksTarget(null);
@@ -1494,6 +1497,7 @@ export default function ProjectView() {
               activeRelPath={activeRelPath}
               activeSlideIdx={activeSlideIdx}
               focusedCommentId={focusedCommentId}
+              autoFocusCommentId={newCommentId}
               onFocusComment={setFocusedCommentId}
               onUpdateCommentBody={(commentId, body) =>
                 updateCommentMutation.mutate({

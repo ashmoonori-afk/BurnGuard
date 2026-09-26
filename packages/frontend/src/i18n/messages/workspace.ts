@@ -60,7 +60,7 @@ export const workspaceMessages = defineMessages({
   "workspace.quickComment.preparing": { ko: "코멘트를 준비하고 있어요...", en: "Preparing the comment...", "zh-CN": "正在准备评论..." },
 
   "workspace.comments.heading": { ko: "코멘트", en: "Comments", "zh-CN": "评论" },
-  "workspace.comments.help": { ko: "캔버스를 클릭하면 그 자리에 핀이 생겨요. 핀은 활성 파일의 백분율 위치에 고정돼요.", en: "Click the canvas to add a pin there. Pins stay anchored to a percentage position in the active file.", "zh-CN": "点击画布即可在该位置添加标记。标记会固定在当前文件的百分比位置。" },
+  "workspace.comments.help": { ko: "캔버스를 클릭하면 그 자리에 핀이 생겨요. 핀은 클릭한 요소에 붙어 스크롤을 따라가고, 요소가 화면 밖이면 숨겨져요.", en: "Click the canvas to add a pin there. Pins attach to the clicked element and follow it while you scroll; they hide when the element is out of view.", "zh-CN": "点击画布即可在该位置添加标记。标记会附着在所点击的元素上并随滚动移动，元素移出视图时会隐藏。" },
   "workspace.comments.emptySlide": { ko: "이 슬라이드에는 아직 열린 코멘트가 없어요.", en: "This slide has no open comments yet.", "zh-CN": "此幻灯片暂无未解决的评论。" },
   "workspace.comments.emptyFile": { ko: "이 파일에는 아직 열린 코멘트가 없어요.", en: "This file has no open comments yet.", "zh-CN": "此文件暂无未解决的评论。" },
   "workspace.comments.openFile": { ko: "코멘트를 남기려면 캔버스에서 파일을 여세요.", en: "Open a file on the canvas to leave a comment.", "zh-CN": "请在画布中打开文件后再添加评论。" },
@@ -139,4 +139,6 @@ export const workspaceMessages = defineMessages({
   "workspace.composer.tooLong": { ko: "메시지가 너무 길어요. {limit}자 이내로 줄여 주세요.", en: "The message is too long. Shorten it to {limit} characters or fewer.", "zh-CN": "消息过长。请缩短到 {limit} 个字符以内。" },
   "workspace.composer.charCount": { ko: "{length} / {limit}자", en: "{length} / {limit} characters", "zh-CN": "{length} / {limit} 个字符" },
   "workspace.canvas.identityUnavailable": { ko: "파일이 갱신되는 중이에요. 잠시 후 다시 시도해 주세요.", en: "The file is being updated. Try again in a moment.", "zh-CN": "文件正在更新中。请稍后重试。" },
+  "workspace.comments.showResolved": { ko: "해결된 코멘트도 보기", en: "Show resolved comments", "zh-CN": "显示已解决的评论" },
+  "workspace.project.busyTurn": { ko: "AI 작업이 진행 중이에요. 끝난 뒤 다시 시도해 주세요.", en: "An AI task is in progress. Try again once it finishes.", "zh-CN": "AI 任务正在进行中。请等待完成后重试。" },
 });

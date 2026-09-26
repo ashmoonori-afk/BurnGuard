@@ -1,6 +1,11 @@
 import { useEffect, useState, type RefObject } from "react";
 import { requestFrameRectForBgId, type FrameRect } from "./frame-bridge";
 
+/** The bridge answers a rect for any existing node; a hidden slide yields a zero-area box, which is not a reveal. */
+export function revealOutcome(rect: FrameRect | null): boolean {
+  return rect !== null && rect.width > 0 && rect.height > 0;
+}
+
 export default function QualityLayer({ active, iframeRef, nodeBgId, requestKey, onRevealResult }: {
   readonly active: boolean;
   readonly iframeRef: RefObject<HTMLIFrameElement | null>;
@@ -14,8 +19,9 @@ export default function QualityLayer({ active, iframeRef, nodeBgId, requestKey, 
     let mounted = true;
     void requestFrameRectForBgId(iframeRef.current, nodeBgId).then((next) => {
       if (!mounted) return;
-      setRect(next);
-      onRevealResult(nodeBgId, next !== null);
+      const found = revealOutcome(next);
+      setRect(found ? next : null);
+      onRevealResult(nodeBgId, found);
     });
     return () => { mounted = false; };
   }, [active, iframeRef, nodeBgId, onRevealResult, requestKey]);

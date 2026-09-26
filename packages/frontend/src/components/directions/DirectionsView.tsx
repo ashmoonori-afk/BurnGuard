@@ -83,6 +83,7 @@ export function DirectionsView({
               variant="cta"
               className="mt-6 min-h-11"
               disabled={actionPending}
+              title={actionPending ? t("workspace.project.busyTurn") : undefined}
               onClick={() => onGenerate(preferences)}
             >
               {t("directions.generate")}

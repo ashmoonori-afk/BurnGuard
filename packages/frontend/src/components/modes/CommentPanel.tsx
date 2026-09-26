@@ -4,11 +4,27 @@ import { cn } from "@/lib/utils";
 import { useT, type MessageKey } from "@/i18n/t";
 import { localeTag, useLocaleStore } from "@/i18n/locale";
 
+/** The list follows the active file and slide; resolved comments stay archived unless the panel asks for them. */
+export function visibleComments(comments: readonly Comment[], activeRelPath: string | null, activeSlideIdx: number | null, showResolved: boolean): Comment[] {
+  return activeRelPath
+    ? comments.filter((c) => {
+        if (c.rel_path !== activeRelPath) return false;
+        if (!showResolved && c.resolved_at !== null) return false;
+        if (activeSlideIdx != null) {
+          const pinSlide = c.slide_index ?? 0;
+          if (pinSlide !== activeSlideIdx) return false;
+        }
+        return true;
+      })
+    : [];
+}
+
 export default function CommentPanel({
   comments,
   activeRelPath,
   activeSlideIdx,
   focusedId,
+  autoFocusId = null,
   onFocus,
   onUpdateBody,
   onToggleResolved,
@@ -19,6 +35,8 @@ export default function CommentPanel({
   activeRelPath: string | null;
   activeSlideIdx: number | null;
   focusedId: string | null;
+  /** A comment just created from the canvas opens its editor so the pin does not persist empty. */
+  autoFocusId?: string | null;
   onFocus: (id: string | null) => void;
   onUpdateBody: (id: string, body: string) => void;
   onToggleResolved: (id: string, resolved: boolean) => void;
@@ -26,17 +44,8 @@ export default function CommentPanel({
   editDisabled?: boolean;
 }) {
   const t = useT();
-  const visible = activeRelPath
-    ? comments.filter((c) => {
-        if (c.rel_path !== activeRelPath) return false;
-        if (c.resolved_at !== null) return false;
-        if (activeSlideIdx != null) {
-          const pinSlide = c.slide_index ?? 0;
-          if (pinSlide !== activeSlideIdx) return false;
-        }
-        return true;
-      })
-    : [];
+  const [showResolved, setShowResolved] = useState(false);
+  const visible = visibleComments(comments, activeRelPath, activeSlideIdx, showResolved);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -47,6 +56,10 @@ export default function CommentPanel({
         <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground [word-break:keep-all]">
           {t("workspace.comments.help")}
         </p>
+        <label className="mt-2 flex min-h-9 items-center gap-2 text-[11px] text-muted-foreground">
+          <input type="checkbox" data-qa="comments-show-resolved" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} className="h-4 w-4 accent-accent" />
+          {t("workspace.comments.showResolved")}
+        </label>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
@@ -66,6 +79,7 @@ export default function CommentPanel({
             index={idx + 1}
             comment={comment}
             focused={comment.id === focusedId}
+            autoFocus={comment.id === autoFocusId}
             onRequestEdit={onRequestEdit ? (body) => onRequestEdit(comment, body) : undefined}
             editDisabled={editDisabled}
             onFocus={() =>
@@ -135,6 +149,8 @@ export function CommentItem({
 
   return (
     <div
+      data-qa="comment-item"
+      data-comment-id={comment.id}
       className={cn(
         "rounded-md border text-xs bg-background",
         focused ? "border-accent" : "border-border",
@@ -166,6 +182,7 @@ export function CommentItem({
       <div className="p-2">
         <textarea
           ref={textareaRef}
+          autoFocus={autoFocus}
           value={draft}
           onChange={(e) => {
             pendingDraft.current = { body: e.target.value, dirty: true };
@@ -184,6 +201,7 @@ export function CommentItem({
         />
         {onRequestEdit && <button type="button" className="mt-1 rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
           disabled={editDisabled || sending || !draft.trim()}
+          title={editDisabled ? t("workspace.project.busyTurn") : undefined}
           onMouseDown={(event) => event.preventDefault()}
           onClick={async () => {
             setSending(true); setSendStatus(null);

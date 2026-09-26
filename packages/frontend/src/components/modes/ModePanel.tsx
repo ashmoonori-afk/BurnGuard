@@ -27,6 +27,7 @@ export default function ModePanel({
   activeRelPath,
   activeSlideIdx,
   focusedCommentId,
+  autoFocusCommentId = null,
   onFocusComment,
   onUpdateCommentBody,
   onToggleCommentResolved,
@@ -60,6 +61,7 @@ export default function ModePanel({
   activeRelPath: string | null;
   activeSlideIdx: number | null;
   focusedCommentId: string | null;
+  autoFocusCommentId?: string | null;
   onFocusComment: (id: string | null) => void;
   onUpdateCommentBody: (id: string, body: string) => void;
   onToggleCommentResolved: (id: string, resolved: boolean) => void;
@@ -112,6 +114,7 @@ export default function ModePanel({
           activeRelPath={activeRelPath}
           activeSlideIdx={activeSlideIdx}
           focusedId={focusedCommentId}
+          autoFocusId={autoFocusCommentId}
           onFocus={onFocusComment}
           onUpdateBody={onUpdateCommentBody}
           onToggleResolved={onToggleCommentResolved}

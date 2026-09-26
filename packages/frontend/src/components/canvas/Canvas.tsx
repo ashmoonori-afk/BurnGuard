@@ -472,6 +472,7 @@ export default function Canvas({
           <GraphicFrameNavigator
             iframeRef={iframeRef}
             requestKey={loadedFrameKey}
+            onFrameChange={onActiveSlideChange}
           />
         )}
         <DrawLayer
