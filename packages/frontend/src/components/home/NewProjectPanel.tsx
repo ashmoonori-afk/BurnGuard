@@ -24,7 +24,8 @@ import { GraphicSetFields } from "@/components/home/GraphicSetFields";
 import { LogoSetFields } from "@/components/home/LogoSetFields";
 import DesignSystemPicker from "./DesignSystemPicker";
 import { apiErrorCopy } from "@/lib/error-copy";
-import { readCreationDraft, writeCreationDraft } from "@/lib/creation-draft";
+import { clearCreationDraft, readCreationDraft, writeCreationDraft } from "@/lib/creation-draft";
+import { manualCanvasPatch } from "@/lib/graphic-set-form";
 import {
   INITIAL_BRIEF_FORM,
   draftProblemMessage,
@@ -32,8 +33,11 @@ import {
   PROJECT_LABEL_CLASS,
   PROTOTYPE_PAGE_PRESETS,
   buildCreateProjectRequest,
+  coerceBriefChoice,
+  contentSourceChoicesFor,
   keepSelectedDesignSystemId,
   isOriginalSampleSystem,
+  outputSizeChoicesFor,
   requiresImageBackend,
   selectableDesignSystems,
   type BriefForm,
@@ -112,6 +116,7 @@ export default function NewProjectPanel({
       catch { pushToast({ title: t("home.creation.draftMoved"), body: t("home.creation.storageLimited"), tone: "error" }); }
       setItems([]);
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      clearCreationDraft(type);
       onCreated(created);
       setForm(INITIAL_BRIEF_FORM);
       setPickedSystemId(null);
@@ -128,10 +133,16 @@ export default function NewProjectPanel({
     },
   });
 
-  const effectiveContentSource = items.some((item) => item.status === "ready") ? "attached" : form.contentSource;
+  // The brief offers only what the effective type supports; a draft value from
+  // another type falls back to the first offered choice.
+  const contentSourceChoices = contentSourceChoicesFor(effectiveType, isTemplate);
+  const outputSizeChoices = outputSizeChoicesFor(effectiveType);
+  const contentSource = coerceBriefChoice(contentSourceChoices, form.contentSource);
+  const outputSize = coerceBriefChoice(outputSizeChoices, form.outputSize);
+  const effectiveContentSource = items.some((item) => item.status === "ready") ? "attached" : contentSource;
   const canMapSourcePages = hasPaginatedContentSource(items);
   const built = buildCreateProjectRequest(
-    { ...form, sourcePageMapping: canMapSourcePages ? form.sourcePageMapping : "restructure", contentSource: effectiveContentSource, type: effectiveType, backendId: effectiveBackend, designSystemId: pickedSystemId, ...(isOriginal && isGraphic ? { graphicWidth: 1080, graphicHeight: 1350 } : {}) },
+    { ...form, sourcePageMapping: canMapSourcePages ? form.sourcePageMapping : "restructure", contentSource: effectiveContentSource, outputSize, type: effectiveType, backendId: effectiveBackend, designSystemId: pickedSystemId, ...(isOriginal && isGraphic ? { graphicWidth: 1080, graphicHeight: 1350 } : {}) },
     designSystems,
   );
   const disabled = createMutation.isPending;
@@ -286,11 +297,7 @@ export default function NewProjectPanel({
             width={isOriginal ? 1080 : form.graphicWidth}
             height={isOriginal ? 1350 : form.graphicHeight}
             disabled={disabled || isOriginal}
-            onChange={(size) => setForm((current) => ({
-              ...current,
-              graphicWidth: size.width,
-              graphicHeight: size.height,
-            }))}
+            onChange={(size) => setForm((current) => ({ ...current, ...manualCanvasPatch(size) }))}
           />
         )}
 
@@ -325,9 +332,11 @@ export default function NewProjectPanel({
         </>}
         <div className="space-y-2"><label htmlFor="project-materials" className={PROJECT_LABEL_CLASS}>{t("home.creation.attach")}</label><input id="project-materials" type="file" multiple accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")} disabled={disabled} onChange={(event) => { const picked = Array.from(event.target.files ?? []); setItems((current) => planAttachmentIntake(current, picked)); event.target.value = ""; }} className="block w-full text-sm" /><p className="text-xs text-muted-foreground">{t("home.creation.attachHint")}</p><ComposerAttachments items={items} sending={disabled} onRemove={(id) => setItems((current) => current.filter((item) => item.id !== id))} onRoleChange={(id, role) => setItems((current) => setAttachmentRole(current, id, role))} /></div>
         <ProjectBriefFields
-          form={form}
+          form={{ ...form, contentSource, outputSize }}
           disabled={disabled}
           onChange={update}
+          contentSourceChoices={contentSourceChoices}
+          outputSizeChoices={outputSizeChoices}
           showOutputSize={!isGraphic && !isLogo}
         />
 

@@ -10,6 +10,7 @@ import {
   type PlatformPreset,
 } from "@bg/shared";
 import type { MessageKey } from "@/i18n/t";
+import type { BriefForm } from "@/lib/project-creation";
 
 export type GraphicKindChoice = {
   readonly value: GraphicSetKind;
@@ -48,6 +49,18 @@ export function presetChoicesFor(kind: GraphicSetKind): readonly PresetChoice[] 
       preset.width <= GRAPHIC_CANVAS_LIMITS.maxWidth &&
       preset.height <= GRAPHIC_CANVAS_LIMITS.maxHeight,
   }));
+}
+
+/** A hand-edited canvas detaches the platform preset: its byte and frame rules only hold at its own size. */
+export function manualCanvasPatch(size: { readonly width: number; readonly height: number }): Pick<BriefForm, "graphicWidth" | "graphicHeight" | "presetId"> {
+  return { graphicWidth: size.width, graphicHeight: size.height, presetId: null };
+}
+
+/** The preset stays attached until a real count exceeds its frame limit; export rules would otherwise apply to a set the platform refuses. */
+export function presetIdForFrameCount(presetId: string | null, count: number): string | null {
+  const preset: PlatformPreset | undefined = PLATFORM_PRESETS.find((candidate) => candidate.id === presetId);
+  const maxFrames = preset?.limits.max_frames;
+  return maxFrames !== undefined && Number.isSafeInteger(count) && count > maxFrames ? null : presetId;
 }
 
 export type DetailBriefKey = keyof GraphicDetailBriefV1;

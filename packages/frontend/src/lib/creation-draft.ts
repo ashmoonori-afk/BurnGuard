@@ -69,6 +69,15 @@ export function writeCreationDraft(type: ProjectType, form: BriefForm): void {
   }
 }
 
+/** A successful create consumes the draft; the panel unmounts before its own write effect could reset it. */
+export function clearCreationDraft(type: ProjectType): void {
+  try {
+    window.localStorage.removeItem(CREATION_DRAFT_KEY(type));
+  } catch {
+    /* a stale draft is the cost of blocked storage, never a broken panel */
+  }
+}
+
 export function parseCreationDraft(raw: string | null): BriefForm {
   if (raw === null) return INITIAL_BRIEF_FORM;
   let stored: unknown;
@@ -80,6 +89,13 @@ export function parseCreationDraft(raw: string | null): BriefForm {
   }
   if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return INITIAL_BRIEF_FORM;
   const record = stored as Record<string, unknown>;
+  const graphicKind = sameShape(record["graphicKind"], INITIAL_BRIEF_FORM.graphicKind);
+  const restoredFrames = frames(record["frames"], INITIAL_BRIEF_FORM.frames);
+  // A cleared count field stores NaN as null; the banner frames the user
+  // already sized are the count, so the draft builds instead of being refused.
+  const frameCount = Number.isSafeInteger(record["frameCount"])
+    ? (record["frameCount"] as number)
+    : graphicKind === "banner_set" && restoredFrames.length > 0 ? restoredFrames.length : INITIAL_BRIEF_FORM.frameCount;
   return {
     ...INITIAL_BRIEF_FORM,
     name: sameShape(record["name"], INITIAL_BRIEF_FORM.name),
@@ -96,9 +112,9 @@ export function parseCreationDraft(raw: string | null): BriefForm {
     sourcePageMapping: record["sourcePageMapping"] === "restructure" ? "restructure" : "one_to_one",
     sectionCount: sameShape(record["sectionCount"], INITIAL_BRIEF_FORM.sectionCount),
     pages: stringList(record["pages"], INITIAL_BRIEF_FORM.pages),
-    graphicKind: sameShape(record["graphicKind"], INITIAL_BRIEF_FORM.graphicKind),
-    frameCount: sameShape(record["frameCount"], INITIAL_BRIEF_FORM.frameCount),
-    frames: frames(record["frames"], INITIAL_BRIEF_FORM.frames),
+    graphicKind,
+    frameCount,
+    frames: restoredFrames,
     presetId: typeof record["presetId"] === "string" ? record["presetId"] : INITIAL_BRIEF_FORM.presetId,
     detailBrief: detailBrief(record["detailBrief"]),
     logoBrandName: sameShape(record["logoBrandName"], INITIAL_BRIEF_FORM.logoBrandName),

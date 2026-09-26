@@ -6,6 +6,7 @@
 import { useT } from "@/i18n/t";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import type { DesignBriefContentSource, DesignBriefOutputSize } from "@bg/shared";
 import {
   AUDIENCE_MAX_LENGTH,
   CONTENT_SOURCE_CHOICES,
@@ -28,11 +29,15 @@ export default function ProjectBriefFields({
   form,
   disabled,
   onChange,
+  contentSourceChoices = CONTENT_SOURCE_CHOICES,
+  outputSizeChoices = OUTPUT_SIZE_CHOICES,
   showOutputSize = true,
 }: {
   form: BriefForm;
   disabled: boolean;
   onChange: BriefFieldChange;
+  contentSourceChoices?: readonly BriefChoice<DesignBriefContentSource>[];
+  outputSizeChoices?: readonly BriefChoice<DesignBriefOutputSize>[];
   showOutputSize?: boolean;
 }) {
   const t = useT();
@@ -80,7 +85,7 @@ export default function ProjectBriefFields({
       <ChoiceField
         id="brief-content-source"
         label={t("home.brief.source")}
-        choices={CONTENT_SOURCE_CHOICES}
+        choices={contentSourceChoices}
         value={form.contentSource}
         disabled={disabled}
         onSelect={(v) => onChange("contentSource", v)}
@@ -109,7 +114,7 @@ export default function ProjectBriefFields({
         <ChoiceField
           id="brief-output-size"
           label={t("home.brief.size")}
-          choices={OUTPUT_SIZE_CHOICES}
+          choices={outputSizeChoices}
           value={form.outputSize}
           disabled={disabled}
           onSelect={(v) => onChange("outputSize", v)}

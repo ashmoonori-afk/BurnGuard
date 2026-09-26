@@ -82,6 +82,26 @@ export const OUTPUT_SIZE_CHOICES: readonly BriefChoice<DesignBriefOutputSize>[] 
     { value: "letter", label: "home.brief.size.letter" },
   ];
 
+/** The brief only offers what applies: a template source needs a template, and a new project has no existing files. */
+export function contentSourceChoicesFor(type: ProjectType, hasTemplate: boolean): readonly BriefChoice<DesignBriefContentSource>[] {
+  return CONTENT_SOURCE_CHOICES.filter((choice) =>
+    choice.value === "none" || choice.value === "attached" || (choice.value === "template" && (type === "from_template" || hasTemplate)));
+}
+
+/** A web page is responsive by nature and a deck has a fixed page; other types keep the full list. */
+export function outputSizeChoicesFor(type: ProjectType): readonly BriefChoice<DesignBriefOutputSize>[] {
+  if (type === "prototype") return OUTPUT_SIZE_CHOICES.filter((choice) => choice.value === "responsive");
+  if (type === "slide_deck") return OUTPUT_SIZE_CHOICES.filter((choice) => choice.value !== "responsive");
+  return OUTPUT_SIZE_CHOICES;
+}
+
+/** A draft value the current type no longer offers falls back to the first offered choice. */
+export function coerceBriefChoice<T extends string>(choices: readonly BriefChoice<T>[], value: T): T {
+  const first = choices[0];
+  if (first === undefined) throw new TypeError("brief choices must not be empty");
+  return choices.some((choice) => choice.value === value) ? value : first.value;
+}
+
 export type ProjectDraft = {
   readonly name: string;
   readonly type: ProjectType;
