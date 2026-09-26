@@ -16,7 +16,7 @@ Prompt construction, structural summaries, and shipped generation skills; earned
 | Existing artifact map | `structure-extractor.ts` | Summarize HTML instead of embedding full files |
 | Project skills | `skills/*-skill.ts` | Five separate skills: deck, prototype, diagram, reference-layout, visual-craft |
 | Compact mode | `prompt-compact-skills.ts` | Stable contract references replace full prose |
-| Lucide assets | `assets/lucide/icons.ts`, `assets/lucide/reference.md` | Generated inline reference shipped with the harness; no CDN |
+| Lucide assets | `assets/lucide/icons.ts`, `assets/lucide/reference.md`, `lucide-reference.ts` | Generated inline reference; `provisionLucideIconReference` stages it at `.burnguard-inputs/lucide-icons.md` every turn so the skills can point at a project-local path; no CDN |
 
 ## CONVENTIONS
 
