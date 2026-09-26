@@ -197,6 +197,24 @@ describe("imweb code widget package", () => {
     expect(fragment).toContain("@media (min-width:600px)");
   });
 
+  test("Given an inline shared style that imports a local font sheet When the imweb package is built Then the import is inlined and its local font is reported", async () => {
+    // Given
+    const prepare = async (root: string): Promise<void> => {
+      await writeFile(path.join(root, "fonts", "brand.css"), '@font-face{font-family:"Inline Brand";src:url(./Pretendard-Regular.woff2) format("woff2")}');
+      const home = path.join(root, "home.html");
+      await writeFile(home, (await readFile(home, "utf8")).replace("/* @bg-shared-css */", "/* @bg-shared-css */@import url('./fonts/brand.css');"));
+    };
+
+    // When
+    const built = await build("imweb_package", {}, undefined, prepare);
+    const header = await built.text("common/header-code.html");
+
+    // Then
+    expect(header).not.toContain("@import");
+    expect(header).toContain('font-family:"Inline Brand"');
+    expect((await built.lint()).findings).toContainEqual(expect.objectContaining({ code: "imweb_local_font", path: "common/header-code.html" }));
+  });
+
   test("Given a small image When the fragment is built Then it is inlined as a data uri", async () => {
     expect(await (await build("imweb_package")).text("pages/home.imweb.html")).toContain("data:image/png;base64,");
   });
