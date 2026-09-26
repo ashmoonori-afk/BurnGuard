@@ -90,7 +90,7 @@ test("imported project styles render nested CSS inside the real opaque canvas sa
       new Response(compiler.stderr).text(),
     ]);
     if (exitCode !== 0) throw new Error(`Browser test bundle failed (${exitCode}): ${errors}`);
-    browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(30_000));
+    browser = await launchChromiumViaNode({}, AbortSignal.timeout(30_000));
     const page = await browser.newPage();
     const external: string[] = [];
     await page.route("**/*", route => {

@@ -64,3 +64,7 @@ test("Given must-fix findings are labelled issues to fix When the registry is re
     expect(typeof gate === "string" ? gate : gate.other).toContain("{count}");
   }
 });
+
+test("Given a turn that commits when design checks cannot run When the chat error copy is read Then it matches the transport error copy instead of asking for the checks again", () => {
+  for (const locale of LOCALES) expect(messages["chat.error.designReviewFailed"][locale]).toBe(messages["errors.design_review_failed"][locale]);
+});

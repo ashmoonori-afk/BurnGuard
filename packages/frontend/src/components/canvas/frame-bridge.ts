@@ -605,16 +605,30 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     var out = {};
     if (!node || !node.getAttribute) return out;
     var raw = node.getAttribute("style") || "";
-    var parts = raw.split(";");
-    for (var i = 0; i < parts.length; i++) {
-      var decl = parts[i].trim();
-      if (!decl) continue;
+    // Split on ";" only outside quotes and parentheses, like the server's parseInlineStyle.
+    var depth = 0, inSingle = false, inDouble = false, buf = "";
+    var commit = function () {
+      var decl = buf.trim();
+      buf = "";
+      if (!decl) return;
       var colon = decl.indexOf(":");
-      if (colon <= 0) continue;
+      if (colon <= 0) return;
       var key = decl.slice(0, colon).trim();
       var value = decl.slice(colon + 1).trim();
       if (key && value) out[key] = value;
+    };
+    for (var i = 0; i < raw.length; i++) {
+      var ch = raw.charAt(i);
+      if (ch === "'" && !inDouble) inSingle = !inSingle;
+      else if (ch === '"' && !inSingle) inDouble = !inDouble;
+      else if (!inSingle && !inDouble) {
+        if (ch === "(") depth++;
+        else if (ch === ")") { if (depth > 0) depth--; }
+        else if (ch === ";" && depth === 0) { commit(); continue; }
+      }
+      buf += ch;
     }
+    commit();
     return out;
   }
 
