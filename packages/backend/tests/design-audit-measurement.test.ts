@@ -139,3 +139,26 @@ describe("rendered page measurements", () => {
     } finally { await page.close(); }
   }, 30_000);
 });
+
+describe("finding budget", () => {
+  test("CSS-05: Given a first page with more recommended literals than the finding budget and a second page with a contrast defect When the site is audited Then the must_fix finding survives the budget", async () => {
+    const literals = Array.from({ length: 210 }, (_, index) => `<p data-bg-node-id="l${index}" style="color:#111111">Literal ${index}</p>`).join("");
+    const report = await auditTree(`<!doctype html><html><head><style>:root{--ink:#111}body{margin:0;background:#fff;color:#111}p{margin:0}</style></head><body>${literals}</body></html>`, {}, { "about.html": '<!doctype html><html><head><style>:root{--ink:#111}body{margin:0;background:#fff;color:#111}</style></head><body><p data-bg-node-id="faint" style="color:#999">Faint copy</p></body></html>' });
+    expect(report.checks.reduce((count, check) => count + check.findings.length, 0)).toBeLessThanOrEqual(200);
+    expect(report.checks.find((check) => check.code === "contrast")?.findings.map((finding) => [finding.source.rel_path, finding.source.node_bg_id, finding.severity])).toEqual([["about.html", "faint", "must_fix"]]);
+    expect(report.overall_status).toBe("must_fix");
+  }, 120_000);
+
+  test("CSS-05: Given exposed tokens and 25 stylesheet rules with literal colours When token usage is inspected Then 20 rules are reported and one anchorless summary stands for the rest", async () => {
+    const browser = await launchChromium(AbortSignal.timeout(60_000));
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      const rules = Array.from({ length: 25 }, (_, index) => `.r${index}{color:#111111}`).join("");
+      const spans = Array.from({ length: 25 }, (_, index) => `<span class="r${index}" data-bg-node-id="r${index}">x</span>`).join(" ");
+      await page.setContent(`<!doctype html><style>:root{--ink:#111;--paper:#fff}html,body{margin:0;background:var(--paper);color:var(--ink)}${rules}</style><p>${spans}</p>`);
+      const tokens = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "token_usage");
+      expect(tokens.map((finding) => finding.nodeId)).toEqual([...Array.from({ length: 20 }, (_, index) => `r${index}`), null]);
+      expect(tokens.every((finding) => finding.severity === "recommended" && finding.action === "replace_literal_with_token")).toBe(true);
+    } finally { await page.close(); await browser.close(); }
+  }, 60_000);
+});

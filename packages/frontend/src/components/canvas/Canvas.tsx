@@ -304,8 +304,6 @@ export default function Canvas({
     if (frameDocument !== null && frameDocument.src === src && iframeRef.current?.dataset.documentKey === frameDocument.key) {
       void requestFrameScrollPosition(iframeRef.current).then((position) => { if (position !== null) scrollByFileRef.current.set(src, position); });
     }
-    // Embedded assets are shared across versions of the same document and dropped on refresh or a new file.
-    const cacheScope = livePreview ? src : frameLoadKey;
 
     void authorizedFetch(src, { signal, cache: "no-store", redirect: "error" })
       .then(async (response) => {
@@ -317,7 +315,7 @@ export default function Canvas({
         }
         return response.text();
       })
-      .then((html) => embedCanvasImages(html, new URL(src, window.location.href).href, signal, cacheScope))
+      .then((html) => embedCanvasImages(html, new URL(src, window.location.href).href, signal))
       .then(hydrateCanvasCharts)
       .then((html) => {
         if (controller.signal.aborted) return;
@@ -339,7 +337,7 @@ export default function Canvas({
     return () => {
       controller.abort();
     };
-    // frameDocument and livePreview are read for the outgoing document only; they must not restart the fetch.
+    // frameDocument is read for the outgoing document only; it must not restart the fetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frameLoadKey, graphicCanvas, src]);
 

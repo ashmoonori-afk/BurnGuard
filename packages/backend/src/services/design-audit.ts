@@ -78,16 +78,21 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   if (current.tree_digest !== expectedTreeDigest) throw new DesignAuditServiceError("stale_artifact_identity", "Artifact identity changed during audit");
   const renderedFindings: DesignAuditFinding[] = [];
   const desktops: DomAuditObservation[] = []; const narrows: DomAuditObservation[] = [];
+  const rawPages: { readonly relPath: string; readonly raw: readonly DomAuditFinding[] }[] = [];
   for (let index = 0; index < auditEntrypoints.length; index += 1) {
     const pageDesktop = observations[index * viewports.length];
     const pageNarrow = observations[index * viewports.length + 1] ?? pageDesktop;
     const relPath = auditEntrypoints[index];
     if (pageDesktop === undefined || pageNarrow === undefined || relPath === undefined) throw new DesignAuditServiceError("audit_unavailable", "Rendered page audit observations are unavailable");
     desktops.push(pageDesktop); narrows.push(pageNarrow);
-    const available = 200 - siteFindings.length - renderedFindings.length;
-    if (available > 0) renderedFindings.push(...await enrichFindings(renderedRawFindings(pageDesktop, pageNarrow).slice(0, available), input, manifest, relPath));
+    rawPages.push({ relPath, raw: renderedRawFindings(pageDesktop, pageNarrow) });
   }
   if (desktops.length === 0) throw new DesignAuditServiceError("audit_unavailable", "Rendered audit observations are unavailable");
+  // The budget is shared by every page, so pressure drops recommended findings first wherever they are: a later page's must_fix survives an earlier page's advice.
+  let available = 200 - siteFindings.length;
+  const selected = rawPages.map((): DomAuditFinding[] => []);
+  for (const severity of ["must_fix", "recommended"] as const) rawPages.forEach((page, index) => { for (const finding of page.raw) if (finding.severity === severity && available > 0) { selected[index]!.push(finding); available -= 1; } });
+  for (const [index, page] of rawPages.entries()) if (selected[index]!.length > 0) renderedFindings.push(...await enrichFindings(selected[index]!, input, manifest, page.relPath));
   const findings = [...renderedFindings, ...siteFindings].slice(0, 200);
   // Site structure is never audited on a fixed canvas and a fixed canvas is never rendered narrow, so those checks cannot pass or fail there.
   const applicable = (code: DesignAuditCheckCode): boolean => !(fixedCanvas && (code === "narrow_width" || code.startsWith("site_")));

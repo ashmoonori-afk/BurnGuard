@@ -4,7 +4,7 @@ import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-
 
 declare global { var canvasCssTest: {
   bootstrapApiAuthority(): Promise<void>;
-  embedCanvasImages(html: string, url: string, signal: AbortSignal, cacheScope?: string): Promise<string>;
+  embedCanvasImages(html: string, url: string, signal: AbortSignal): Promise<string>;
   buildSandboxedArtifactSrcDoc(html: string, url: string): string;
 }; var cssImportAbort: AbortController }
 
@@ -277,29 +277,27 @@ test("Given images beyond the per-document byte budget When embedCanvasImages ru
   expect(result.stylesheet).toBe("artifact_image_limit");
 }, 30_000);
 
-test("Given two project images When embedCanvasImages runs twice under one cache scope Then each image is fetched once, and a new scope fetches again (UXW-15)", async () => {
-  const hits = new Map<string, number>();
+test("UXW-15: Given a live-preview document whose stylesheet and image bytes change between versions When embedCanvasImages runs again for the same document Then the second embed carries the new bytes", async () => {
+  let version = 0;
   const result = await withCanvasPage(pathname => {
-    const name = pathname.replace(/^\/api\/projects\/cache\/fs\//, "");
-    if (!/^assets\/(?:one|two)\.png$/.test(name)) return undefined;
-    hits.set(name, (hits.get(name) ?? 0) + 1);
-    return new Response(new Uint8Array(16), { headers: { "content-type": "image/png" } });
+    const name = pathname.replace(/^\/api\/projects\/live\/preview\/draft\/fs\//, "");
+    if (name === "styles.css") return new Response(`#probe{--version:${version}}`, { headers: { "content-type": "text/css" } });
+    if (name === "assets/hero.png") return new Response(new Uint8Array([version]), { headers: { "content-type": "image/png" } });
+    return undefined;
   }, async (page, origin) => {
-    const url = `${origin}/api/projects/cache/fs/index.html`;
-    const html = '<img src="assets/one.png"><img src="assets/two.png">';
-    const embedded = await page.evaluate(async ({ html, url }) => {
-      const api = globalThis.canvasCssTest;
-      const first = await api.embedCanvasImages(html, url, new AbortController().signal, "scope-a");
-      const second = await api.embedCanvasImages(html, url, new AbortController().signal, "scope-a");
-      return { same: first === second, embedded: (second.match(/data:image\/png;base64,/g) ?? []).length };
+    const url = `${origin}/api/projects/live/preview/draft/fs/index.html`;
+    const html = '<link rel="stylesheet" href="styles.css"><img src="assets/hero.png">';
+    const embed = () => page.evaluate(async ({ html, url }) => {
+      const embedded = new DOMParser().parseFromString(await globalThis.canvasCssTest.embedCanvasImages(html, url, new AbortController().signal), "text/html");
+      const src = embedded.querySelector("img")?.getAttribute("src") ?? "";
+      return { css: embedded.querySelector("style")?.textContent ?? "", image: src.startsWith("data:image/png;base64,") ? atob(src.slice("data:image/png;base64,".length)).charCodeAt(0) : src };
     }, { html, url });
-    const afterSameScope = [hits.get("assets/one.png"), hits.get("assets/two.png")];
-    await page.evaluate(async ({ html, url }) => { await globalThis.canvasCssTest.embedCanvasImages(html, url, new AbortController().signal, "scope-b"); }, { html, url });
-    return { embedded, afterSameScope, afterNewScope: [hits.get("assets/one.png"), hits.get("assets/two.png")] };
+    const first = await embed();
+    version = 1;
+    return { first, second: await embed() };
   });
-  expect(result.embedded).toEqual({ same: true, embedded: 2 });
-  expect(result.afterSameScope).toEqual([1, 1]);
-  expect(result.afterNewScope).toEqual([2, 2]);
+  expect(result.first).toEqual({ css: "#probe{--version:0}", image: 0 });
+  expect(result.second).toEqual({ css: "#probe{--version:1}", image: 1 });
 }, 30_000);
 
 test("Given a Google Fonts @import in a style element or a project stylesheet When embedCanvasImages runs Then it is hoisted to the top of the embedded stylesheet like a link tag would load, while other remote imports stay dropped (CSS-27)", async () => {

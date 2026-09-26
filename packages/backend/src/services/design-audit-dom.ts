@@ -162,8 +162,9 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
     measurable.token_usage = [...rootStyle].some((name) => name.startsWith("--")); if (measurable.token_usage) delete unknownReasons.token_usage;
     if (measurable.token_usage) for (const element of elements) { const inline = element.getAttribute("style") ?? ""; const match = inline.match(/(?:^|;)\s*(?:color|background(?:-color)?|border(?:-[\w-]+)?-color)\s*:\s*(#[0-9a-f]{3,8}|rgba?\([^;]+\)|hsla?\([^;]+\))/iu); if (match?.[1] !== undefined) push(element, { code: "token_usage", severity: "recommended", evidence: `Inline literal color ${match[1]} bypasses exposed design tokens`, action: "replace_literal_with_token" }); }
     // Same-origin stylesheet rules, bounded to 2000 rules: only the three colour properties, never :root/html declarations.
+    // At most 20 rule findings per page plus one anchorless summary, so a literal-heavy stylesheet cannot crowd out the page's other findings.
     if (measurable.token_usage) {
-      const literal = /^(?:#[0-9a-f]{3,8}|rgba?\(|hsla?\()/iu; let budget = 2000;
+      const literal = /^(?:#[0-9a-f]{3,8}|rgba?\(|hsla?\()/iu; let budget = 2000; let reported = 0; let summarized = 0;
       const scan = (rules: CSSRuleList): void => {
         for (const rule of rules) {
           if (budget <= 0) return; budget -= 1;
@@ -171,6 +172,8 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
             if (/(?:^|,)\s*(?::root|html)\b/iu.test(rule.selectorText)) continue;
             for (const property of ["color", "background-color", "border-color"]) {
               const value = rule.style.getPropertyValue(property).trim(); if (!literal.test(value)) continue;
+              if (reported >= 20) { summarized += 1; continue; }
+              reported += 1;
               let target: Element | null = null; try { target = document.querySelector(rule.selectorText); } catch { target = null; }
               push(target, { code: "token_usage", severity: "recommended", evidence: `Stylesheet rule ${rule.selectorText} sets ${property}: ${value}, bypassing exposed design tokens`, action: "replace_literal_with_token" });
             }
@@ -178,6 +181,7 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
         }
       };
       for (const sheet of document.styleSheets) { let rules: CSSRuleList; try { rules = sheet.cssRules; } catch { continue; } scan(rules); }
+      if (summarized > 0) push(null, { code: "token_usage", severity: "recommended", evidence: `${summarized} further stylesheet declarations set literal colours, bypassing exposed design tokens`, action: "replace_literal_with_token" });
     }
     return { findings, measurable, unknownReasons };
   }, fixedCanvas);

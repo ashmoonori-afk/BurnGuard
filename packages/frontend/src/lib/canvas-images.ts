@@ -5,20 +5,11 @@ import { anySignal } from "@/lib/abort-signal";
 
 // Public content-addressed fonts are shared by every canvas in this app window.
 // Leave room above the bundled stylesheet for older hashes kept after font updates.
+// They are the only bytes reused between documents: a project file under a live
+// preview changes between versions without a validator the client could check,
+// so every other resource is fetched afresh for each embed.
 export const MAX_SHARED_CANVAS_FONTS = 256;
 const bundledFonts = new Map<string, Promise<string>>();
-
-// Project assets embedded for one document are reused across its live-preview
-// versions; a new scope (another file, a refresh) drops the previous entries.
-export const MAX_SCOPED_CANVAS_ASSETS = 256;
-type EmbeddedAsset = { readonly data: string; readonly bytes: number };
-let scopedAssets: { scope: string; entries: Map<string, Promise<EmbeddedAsset>> } | null = null;
-
-function scopedAssetCache(scope: string | undefined): Map<string, Promise<EmbeddedAsset>> | null {
-  if (scope === undefined) return null;
-  if (scopedAssets?.scope !== scope) scopedAssets = { scope, entries: new Map() };
-  return scopedAssets.entries;
-}
 
 function isBundledFontUrl(value: string, base: string): boolean {
   try {
@@ -99,15 +90,10 @@ export async function readCanvasImage(response: Response, budget: { remaining: n
   }
 }
 
-/**
- * Embed project resources: opaque frames cannot send Strict cookies.
- * `cacheScope` shares embedded assets between calls for the same document
- * (each live-preview version); a different scope starts from fresh fetches.
- */
-export async function embedCanvasImages(html: string, documentUrl: string, signal: AbortSignal, cacheScope?: string): Promise<string> {
+/** Embed project resources: opaque frames cannot send Strict cookies. */
+export async function embedCanvasImages(html: string, documentUrl: string, signal: AbortSignal): Promise<string> {
   const document = new DOMParser().parseFromString(html, "text/html");
   const fetched = new Map<string, Promise<string>>();
-  const scoped = scopedAssetCache(cacheScope);
   let sharedFontUsed = false;
   const resources = new AbortController();
   const boundedSignal = anySignal([signal, resources.signal, AbortSignal.timeout(15000)]);
@@ -125,14 +111,7 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
     let pending = fetched.get(key);
     if (!pending) {
       if (fetched.size >= 64) { resources.abort(); throw new Error("artifact_image_limit"); }
-      const cached = scoped?.get(key);
-      if (cached) {
-        // A reused asset still counts against this document's byte budget.
-        pending = cached.then((asset) => { budget.remaining -= asset.bytes; return budget.remaining < 0 && kind === "asset" ? source : asset.data; });
-        fetched.set(key, pending);
-        return pending;
-      }
-      const embed = (async (): Promise<EmbeddedAsset | null> => {
+      pending = (async () => {
         const response = await authorizedFetch(url, { signal: boundedSignal, redirect: "error" });
         if (!response.ok) throw Object.assign(new Error("artifact_image_load_failed"), { httpStatus: response.status });
         const mime = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
@@ -142,24 +121,17 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
         if (!validMime) {
           await response.body?.cancel();
           if (kind === "script") throw new Error("artifact_script_mime_invalid");
-          return null;
+          return source;
         }
         const blob = await readCanvasImage(response, budget, () => { if (kind !== "asset") resources.abort(); });
-        if (kind !== "asset") return { data: await blob.text(), bytes: blob.size };
-        return new Promise<EmbeddedAsset>((done, reject) => {
+        if (kind !== "asset") return blob.text();
+        return new Promise<string>((done, reject) => {
           const reader = new FileReader();
-          reader.onload = () => done({ data: String(reader.result), bytes: blob.size });
+          reader.onload = () => done(String(reader.result));
           reader.onerror = () => reject(new Error("artifact_image_read_failed"));
           reader.readAsDataURL(blob);
         });
-      })();
-      // Only a completed embed is shared; a miss, a 404 draft or an overrun is retried next version.
-      if (scoped && scoped.size < MAX_SCOPED_CANVAS_ASSETS) {
-        const shared = embed.then((asset) => { if (asset === null) throw new Error("artifact_asset_unembedded"); return asset; });
-        scoped.set(key, shared);
-        void shared.catch(() => { if (scoped.get(key) === shared) scoped.delete(key); });
-      }
-      pending = embed.then((asset) => asset === null ? source : asset.data).catch((error: unknown) => {
+      })().catch((error: unknown) => {
         // A draft may reference an image/CSS file that the generator writes next.
         if (/\/preview\//.test(new URL(documentUrl).pathname) && error !== null && typeof error === "object" && "httpStatus" in error && error.httpStatus === 404) return source;
         // An asset beyond the byte budget stays unembedded; CSS and script overruns remain fatal.
