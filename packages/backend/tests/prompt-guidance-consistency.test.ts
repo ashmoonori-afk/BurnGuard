@@ -242,3 +242,49 @@ describe("image verification ownership", () => {
     }
   });
 });
+
+describe("delivery and direction guidance follow the selected design system", () => {
+  const designSystem = { id: "delivery-tokens", name: "Delivery", dir_path: "/missing/delivery-tokens", skill_md_path: null, tokens_css_path: null, readme_md_path: null } as unknown as NonNullable<BuildContext["designSystem"]>;
+
+  test("PH-18: Given a prototype with and without a design system When built Then only the branded Delivery section points at colors_and_type.css", async () => {
+    const bare = section(await buildPrompt(makeContext("prototype"), REQUEST), "## Delivery", "## Request");
+    const branded = section(await buildPrompt(makeContext("prototype", { designSystem }), REQUEST), "## Delivery", "## Request");
+
+    expect(bare).not.toContain("colors_and_type.css");
+    expect(bare).toContain("tokens you declared");
+    expect(branded).toContain("colors_and_type.css");
+  });
+
+  test("DP-11: Given a selected editorial direction When built with and without a design system Then only the branded block hands layout to the system", async () => {
+    const designDirectionState = {
+      schema_version: 1, project_id: "guidance-prototype", session_id: "s1", generation_id: "g1", status: "ready",
+      content_outline: ["outline-a"], selection_revision: 1, selection_history: [null], error: null, updated_at: 1,
+      directions: [
+        { id: "editorial", order: 0, layout_key: "editorial", title: "direction-title", summary: "summary", style_facts: ["cream-and-red-fact"], status: "ready", preview_url: "/a", error: null },
+        { id: "modular", order: 1, layout_key: "modular", title: "other-b", summary: "other", style_facts: ["fact-b"], status: "ready", preview_url: "/b", error: null },
+        { id: "narrative", order: 2, layout_key: "narrative", title: "other-c", summary: "other", style_facts: ["fact-c"], status: "ready", preview_url: "/c", error: null },
+      ],
+      selected_id: "editorial",
+    } as const;
+    const bare = section(await buildPrompt(makeContext("prototype", { designDirectionState }), REQUEST), "## Selected design direction", "## BurnGuard image production");
+    const branded = section(await buildPrompt(makeContext("prototype", { designDirectionState, designSystem }), REQUEST), "## Selected design direction", "## BurnGuard image production");
+
+    for (const block of [bare, branded]) {
+      expect(block).toContain("cream-and-red-fact");
+      expect(block).toContain("- layout: editorial");
+    }
+    expect(bare).not.toContain("design system owns");
+    expect(bare).toContain("editorial:");
+    expect(bare).toContain("modular:");
+    expect(bare).toContain("narrative:");
+    expect(branded).toContain("design system owns");
+  });
+});
+
+describe("deck review locale", () => {
+  test("PH-13: Given the deck review prompt Then the closing sentence follows the brief's locale rather than naming Korean", () => {
+    expect(DECK_REVIEW_PROMPT).toContain("locale");
+    expect(DECK_REVIEW_PROMPT).toContain("burnguard-design-brief-v1");
+    expect(DECK_REVIEW_PROMPT).not.toContain("Korean sentence");
+  });
+});

@@ -5,6 +5,7 @@ import path from "node:path";
 import { LOGO_CANDIDATE_COUNT, LOGO_FILES, LOGO_PAGE, type LogoSetV1 } from "@bg/shared";
 import { getSqlite } from "../src/db/sqlite-client";
 import { buildPrompt } from "../src/harness/prompt-builder";
+import { LOGO_REQUIRED_PAGES } from "../src/harness/prompt-logo-set";
 import { LOGO_VISUAL_CRAFT } from "../src/harness/skills/visual-craft-skill";
 import { ensureLearningSchema } from "./learning-fixture";
 
@@ -141,6 +142,22 @@ describe("logo output prompt block", () => {
     expect(pages).toBeGreaterThanOrEqual(12);
     expect(pages).toBeLessThanOrEqual(13);
     expect(rulePhases(prompt)).toEqual(["finalize"]);
+  });
+
+  test("Given a finalize-phase prompt When the rules block is read Then the guidelines rule targets one page per required_pages entry while page_count keeps the gate window", async () => {
+    const prompt = await promptFor(logoContext(exploredDir), `${SELECT}\n3번 시안으로 진행해주세요.`);
+    const rules = prompt.slice(prompt.indexOf('<burnguard-logo-rules-v1 phase="finalize">'), prompt.indexOf("</burnguard-logo-rules-v1>"));
+
+    expect(rules).toContain(`one page per required_pages entry (${LOGO_REQUIRED_PAGES.length} pages)`);
+    expect(rules).not.toContain("between 8 and 13");
+    expect(outputBlock(prompt)["page_count"]).toEqual({ min: 8, max: 13 });
+  });
+
+  test("Given a logo project whose directory does not exist When the prompt is built Then it resolves to an explore round", async () => {
+    const missing = path.join(tmpdir(), `bg-logo-prompt-missing-${process.pid}`);
+    rmSync(missing, { recursive: true, force: true });
+
+    expect(outputBlock(await promptFor(logoContext(missing), "로고 만들어줘"))).toMatchObject({ phase: "explore", round: 1 });
   });
 
   test("Given a select action that names a candidate outside the manifest When the prompt is built Then the phase falls back to explore", async () => {

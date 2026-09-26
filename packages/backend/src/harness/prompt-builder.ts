@@ -156,7 +156,12 @@ export async function buildPrompt(
     lines.push(`- title: ${selectedDirection.title.slice(0, 200)}`);
     lines.push(`- layout: ${selectedDirection.layout_key}`);
     lines.push(`- style facts: ${selectedDirection.style_facts.slice(0, 8).map((fact) => fact.slice(0, 200)).join("; ")}`);
-    lines.push("- Follow the selected content emphasis only; do not merge unselected directions. The current selected design system owns layout, palette and typography. Ignore conflicting style facts from older direction previews or a previously selected system.");
+    if (context.designSystem || context.designSystemPin) {
+      lines.push("- Follow the selected content emphasis only; do not merge unselected directions. The current selected design system owns layout, palette and typography. Ignore conflicting style facts from older direction previews or a previously selected system.");
+    } else {
+      lines.push("- Follow the selected content emphasis only; do not merge unselected directions. Apply this direction's layout and style facts (grid, type, palette); they override the default palette guidance above. Ignore conflicting style facts from older direction previews.");
+      lines.push("- Layout keys: editorial: asymmetric editorial grid with large serif display; modular: 12-column card grid; narrative: guided top-to-bottom flow.");
+    }
     lines.push("");
   }
 
@@ -312,7 +317,9 @@ export async function buildPrompt(
     `- The entrypoint \`${project.entrypoint}\` must be the primary artifact displayed in the canvas.`,
   );
   lines.push(
-    "- Keep the design consistent with the design system above. Reference tokens from colors_and_type.css by CSS variable name when styling.",
+    context.designSystem || context.designSystemPin
+      ? "- Keep the design consistent with the design system above. Reference tokens from colors_and_type.css by CSS variable name when styling."
+      : "- Style from the tokens you declared in :root (Default visual identity); keep them consistent across files.",
   );
   lines.push(
     "- For summarized .pptx/.pdf attachments, plan from the inlined summary first and Read the extracted_text_path if you need slide or page wording.",
