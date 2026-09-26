@@ -6,7 +6,7 @@
    Serif:   KoPub Batang — text serif (light/medium/bold)
             paired with KR support for editorial body copy.
    Sans:    KoPub Dotum — neutral grotesque for UI / labels.
-   Mono:    IBM Plex Mono (CDN) for tabular numerals.
+   Mono:    IBM Plex Mono (local woff2, OFL) for tabular numerals.
    ============================================================ */
 
 @font-face {
@@ -70,5 +70,10 @@
   font-display: swap;
 }
 
-/* Mono — kept on Google Fonts CDN (no brand mono uploaded) */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('./IBMPlexMono.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}

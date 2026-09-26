@@ -39,7 +39,16 @@ export function renderSlideDeck(
   <style>
     h1, h2, h3 { font-family: "Space Grotesk", "Pretendard", sans-serif; }
     code, pre, .number { font-family: "IBM Plex Mono", "Pretendard", monospace; font-variant-numeric: tabular-nums; }
-    :root { color-scheme: light; }
+    :root {
+      color-scheme: light;
+      --page-background: #eef0f3;
+      --deck-type-hero: 80px;
+      --deck-type-heading: 52px;
+      --deck-type-body: 32px;
+      --deck-type-caption: 24px;
+      --deck-pad-slide: 72px;
+      --deck-pad-block: 32px;
+    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -47,7 +56,7 @@ export function renderSlideDeck(
       background:
         radial-gradient(circle at top right, rgba(224, 107, 76, 0.16), transparent 24%),
         radial-gradient(circle at bottom left, rgba(26, 35, 48, 0.12), transparent 28%),
-        linear-gradient(180deg, #f6f1e8 0%, #efe6d8 100%);
+        var(--page-background);
       color: #18232d;
     }
     body::before {
@@ -77,7 +86,8 @@ export function renderSlideDeck(
       width: 100%;
       max-height: 100vh;
       background: #ffffff;
-      padding: clamp(24px, 6vw, 64px);
+      padding: var(--deck-pad-slide);
+      font-size: var(--deck-type-body);
       display: grid;
       place-items: center;
       border-bottom: 1px solid #e7dece;
@@ -97,12 +107,12 @@ export function renderSlideDeck(
       background: #f6f1e8;
     }
     .eyebrow {
-      font-size: 14px;
+      font-size: var(--deck-type-caption);
       font-weight: 600;
       letter-spacing: 0.16em;
       text-transform: uppercase;
       color: #a84129;
-      margin-bottom: 20px;
+      margin-bottom: var(--deck-pad-block);
     }
     .deck-slide.deck-cover .eyebrow {
       color: rgba(255, 255, 255, 0.7);
@@ -111,11 +121,11 @@ export function renderSlideDeck(
       margin: 0;
       letter-spacing: -0.03em;
     }
-    h1 { font-size: clamp(32px, 6vw, 64px); line-height: 1.15; }
-    h2 { font-size: clamp(28px, 5vw, 44px); line-height: 1.15; }
+    h1 { font-size: var(--deck-type-hero); line-height: 1.15; }
+    h2 { font-size: var(--deck-type-heading); line-height: 1.15; }
     p {
-      margin-top: 24px;
-      font-size: 20px;
+      margin-top: var(--deck-pad-block);
+      font-size: var(--deck-type-body);
       line-height: 1.55;
       color: inherit;
       opacity: 0.85;
@@ -128,7 +138,7 @@ export function renderSlideDeck(
       padding: 12px 16px;
       border-left: 3px solid #e06b4c;
       background: rgba(224, 107, 76, 0.06);
-      font-size: 13px;
+      font-size: var(--deck-type-caption);
       line-height: 1.55;
       color: #52616c;
     }

@@ -10,8 +10,22 @@ type SessionContext = NonNullable<
 type DesignSystem = NonNullable<SessionContext["designSystem"]>;
 
 export const MAX_SKILL_CHARS = 5000;
-const MAX_TOKENS_CSS_LINES = 150;
+const MAX_TOKENS_CSS_LINES = 320;
+const MAX_TOKENS_CSS_CHARS = 12_000;
 const MAX_README_LINES = 120;
+
+/**
+ * The first `:root { ... }` block of the token CSS with comments and blank lines removed, or the
+ * whole stripped file when no block closes, bounded by lines and characters. Every shipped theme's
+ * token block fits, so elevation and motion tokens reach the model along with colour and type.
+ */
+function excerptTokensCss(content: string): string {
+  const stripped = content.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter((line) => line.trim() !== "").join("\n");
+  const start = stripped.indexOf(":root");
+  const close = start === -1 ? -1 : stripped.indexOf("}", start);
+  const block = close === -1 ? stripped : stripped.slice(start, close + 1);
+  return block.split("\n").slice(0, MAX_TOKENS_CSS_LINES).join("\n").slice(0, MAX_TOKENS_CSS_CHARS);
+}
 
 /**
  * Emits the tokens and prose that only apply to the surface this project renders into: a fluid page,
@@ -119,9 +133,7 @@ export async function appendDesignSystemContext(
     if (content) {
       lines.push("### colors_and_type.css (excerpt)");
       lines.push("```css");
-      lines.push(
-        content.split("\n").slice(0, MAX_TOKENS_CSS_LINES).join("\n"),
-      );
+      lines.push(excerptTokensCss(content));
       lines.push("```");
       lines.push("");
     }
