@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveCanvasNavigation, resolveCanvasPageTarget, resolveCanvasSource } from "../src/lib/canvas-source";
+import { resolveCanvasNavigation, resolveCanvasNavigationAfterRefetch, resolveCanvasPageTarget, resolveCanvasSource } from "../src/lib/canvas-source";
 
 describe("resolveCanvasSource", () => {
   test("Given a stale active entrypoint and zero indexed files When resolved Then the empty canvas does not fetch the missing file", () => {
@@ -84,4 +84,34 @@ test("Given prototype page links When navigating Then only indexed HTML in the c
   for (const href of [null, {}, "https://example.com/index.html", "//example.com/index.html", "javascript:alert(1)", "data:text/html,hi", "/api/projects/project-2/fs/index.html", "../index.html", "missing.html", "script.js", "pages%2fabout%20us.html", "pages%5cabout%20us.html", "pages/%ZZ.html", "http://user:pass@localhost:5173/api/projects/project-1/fs/index.html"]) {
     expect(resolveCanvasNavigation(href, source, files)).toBeNull();
   }
+});
+
+describe("resolveCanvasNavigationAfterRefetch", () => {
+  const documentUrl = "http://localhost/api/projects/project-1/fs/index.html";
+
+  test("Given a stale index without the linked page When the refetched index contains it Then the target resolves without a toast", async () => {
+    let refetched = 0;
+    const target = await resolveCanvasNavigationAfterRefetch("about.html", documentUrl, ["index.html"], async () => { refetched += 1; return ["index.html", "about.html"]; });
+
+    expect(target?.relPath).toBe("about.html");
+    expect(refetched).toBe(1);
+  });
+
+  test("Given an index that already contains the linked page When navigating Then no refetch is needed", async () => {
+    let refetched = 0;
+    const target = await resolveCanvasNavigationAfterRefetch("about.html", documentUrl, ["index.html", "about.html"], async () => { refetched += 1; return []; });
+
+    expect(target?.relPath).toBe("about.html");
+    expect(refetched).toBe(0);
+  });
+
+  test("Given both indexes lack the linked page When navigating Then it resolves to nothing", async () => {
+    expect(await resolveCanvasNavigationAfterRefetch("about.html", documentUrl, ["index.html"], async () => ["index.html"])).toBeNull();
+  });
+
+  test("Given an unsafe link When navigating Then the index is not refetched", async () => {
+    let refetched = 0;
+    expect(await resolveCanvasNavigationAfterRefetch("https://evil.test/x.html", documentUrl, ["index.html"], async () => { refetched += 1; return ["x.html"]; })).toBeNull();
+    expect(refetched).toBe(0);
+  });
 });

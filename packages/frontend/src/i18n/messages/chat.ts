@@ -357,4 +357,14 @@ export const chatMessages = defineMessages({
     en: "Describe what you want to create or change.\nExample: Shorten the title and increase the spacing.",
     "zh-CN": "请描述你想创建的结果或要修改的部分。\n例如：缩短标题并增加留白。",
   },
+  "chat.composer.placeholderDisconnected": {
+    ko: "실시간 연결이 끊겨 있어요. 다시 연결되면 요청을 보낼 수 있어요.",
+    en: "The live connection is down. You can send a request once it reconnects.",
+    "zh-CN": "实时连接已断开。重新连接后即可发送请求。",
+  },
+  "chat.composer.placeholderDirections": {
+    ko: "디자인 방향을 만들고 있어요. 끝나면 요청을 보낼 수 있어요.",
+    en: "Design directions are being generated. You can send a request when they are ready.",
+    "zh-CN": "正在生成设计方向。完成后即可发送请求。",
+  },
 });

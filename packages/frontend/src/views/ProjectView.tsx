@@ -69,6 +69,7 @@ import {
   submitToolDecision,
 } from "@/api/session";
 import ChatPane from "@/components/chat/ChatPane";
+import type { ComposerDisabledReason } from "@/components/chat/useComposerPlaceholder";
 import { visualSourceSendErrorCopy } from "@/components/chat/attachment-intake";
 import { DirectionsView } from "@/components/directions/DirectionsView";
 import { DirectionStatusBar } from "@/components/directions/DirectionStatusBar";
@@ -80,6 +81,8 @@ import ColorPalette from "@/components/canvas/ColorPalette";
 import ArtifactHistory from "@/components/canvas/ArtifactHistory";
 import { qualityFixRequest } from "@/lib/quality-fix-request";
 import { createPagePrompt } from "@/lib/create-page-prompt";
+import { nextActiveTabAfterClose } from "@/lib/artifact-tabs";
+import { panelGenerationFor } from "@/lib/panel-generation";
 import {
   deserializeDraws,
   serializeDraws,
@@ -121,7 +124,7 @@ import {
   isDesignAuditCurrent,
   preferDesignAuditResult,
 } from "@/lib/design-audit-state";
-import { isSafeCanvasPagePath, resolveCanvasNavigation, resolveCanvasPageTarget, resolveCanvasSource } from "@/lib/canvas-source";
+import { isSafeCanvasPagePath, resolveCanvasNavigationAfterRefetch, resolveCanvasPageTarget, resolveCanvasSource } from "@/lib/canvas-source";
 import { t as globalT, useT, type MessageKey } from "@/i18n/t";
 import { INTERRUPT_GRACE_MS } from "@/lib/session-event-state";
 
@@ -795,6 +798,7 @@ export default function ProjectView() {
   const directionLoading = directionState?.status === "loading";
   const chatComposerDisabled = sendPending || session?.status === "running";
   const composerDisabled = chatComposerDisabled || directionLoading || stream.error;
+  const composerDisabledReason: ComposerDisabledReason = chatComposerDisabled ? "busy" : directionLoading ? "directions" : stream.error ? "disconnected" : null;
 
   // Turn clock. When the composer flips from idle to busy we stamp a
   // start time; a 1s ticker then drives re-renders so `canInterrupt`
@@ -889,9 +893,9 @@ export default function ProjectView() {
     tabs,
   ]);
 
-  const handleCanvasNavigate = useCallback((href: string) => {
+  const handleCanvasNavigate = useCallback(async (href: string) => {
     if (!canvasSrc || !id) return;
-    const target = resolveCanvasNavigation(href, new URL(canvasSrc, window.location.href).href, files.map((file) => file.rel_path));
+    const target = await resolveCanvasNavigationAfterRefetch(href, new URL(canvasSrc, window.location.href).href, files.map((file) => file.rel_path), async () => ((await filesQuery.refetch()).data ?? []).map((file) => file.rel_path));
     if (!target) {
       const missing = resolveCanvasPageTarget(href, new URL(canvasSrc, window.location.href).href);
       const active = tabs.find((tab) => tab.id === activeTabId && tab.kind === "file")?.relPath;
@@ -910,7 +914,7 @@ export default function ProjectView() {
     }
     setCanvasNavigation({ ...target, projectId: id });
     openFileAsTab(target.relPath, setOpenFileTabs, setActiveTabId);
-  }, [activeTabId, canvasSrc, files, id, pushToast, t, tabs]);
+  }, [activeTabId, canvasSrc, files, filesQuery, id, pushToast, t, tabs]);
 
   // Durable project history; file-key invalidations refresh it after any canvas save.
   const undoActiveRelPath = useMemo<string | null>(() => {
@@ -1168,12 +1172,10 @@ export default function ProjectView() {
             activeId={activeTabId}
             onSelect={(tabId) => { setActiveTabId(tabId); setMobilePane("workspace"); }}
             onClose={(tabId) => {
+              setActiveTabId(nextActiveTabAfterClose(openFileTabs, tabId, activeTabId));
               setOpenFileTabs((current) =>
                 current.filter((tab) => tab.id !== tabId),
               );
-              if (activeTabId === tabId) {
-                setActiveTabId("design-system");
-              }
             }}
           />
         }
@@ -1203,6 +1205,7 @@ export default function ProjectView() {
             updateCommentMutation.mutate({ commentId, patch: { resolved } })
           }
           composerDisabled={composerDisabled}
+          composerDisabledReason={composerDisabledReason}
           canInterrupt={canInterrupt}
           turnElapsedMs={turnElapsedMs}
           interruptPending={interruptMutation.isPending}
@@ -1295,7 +1298,8 @@ export default function ProjectView() {
         {activeTab?.kind === "file" && (
           <div className="flex min-h-0 min-w-0 flex-1 max-[1000px]:flex-col">
             <Canvas
-              loading={projectQuery.isPending || filesQuery.isPending || artifactsQuery.isPending || session?.status === "running"}
+              loading={projectQuery.isPending || filesQuery.isPending || artifactsQuery.isPending}
+              working={session?.status === "running"}
               colorPalette={activeRelPath && /\.html?$/i.test(activeRelPath) ? <div className="flex items-center gap-2">
                 {project.type === "prototype" && artifacts.pages.length > 1 ? <label className="flex items-center gap-1.5 text-xs text-muted-foreground">{t("workspace.project.page")}<select aria-label={t("workspace.project.canvasPage")} value={activeRelPath} className="h-8 max-w-44 rounded-md border border-border bg-background px-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onChange={(event) => openFileAsTab(event.target.value, setOpenFileTabs, setActiveTabId)}>{artifacts.pages.map((page) => <option key={page.rel_path} value={page.rel_path}>{page.title}</option>)}</select></label> : null}
                 <ColorPalette
@@ -1335,7 +1339,7 @@ export default function ProjectView() {
               mode={livePreview ? null : mode}
               src={canvasSrc}
               livePreview={livePreview ? { version: livePreview.version, reportUrl: `/api/projects/${encodeURIComponent(livePreview.projectId)}/preview/${encodeURIComponent(livePreview.previewId)}/report` } : undefined}
-              onNavigate={livePreview ? undefined : handleCanvasNavigate}
+              onNavigate={livePreview ? undefined : (href) => void handleCanvasNavigate(href)}
               frameKey={`${canvasSrc ?? "entrypoint"}:${livePreview?.version ?? refreshTick}`}
               onModeChange={setMode}
               onRefresh={() => {
@@ -1434,7 +1438,7 @@ export default function ProjectView() {
                 disabled: composerDisabled,
                 onRequestAI: async (text, signal) => {
                   if (composerDisabled || signal.aborted) throw new Error("session_not_ready");
-                  const generation = (await loadComposerDraft(session.id).catch(() => null))?.generation ?? { model: "", effort: "low" as const, vanilla: true, provider: "native" as const };
+                  const generation = panelGenerationFor(await loadComposerDraft(session.id).catch(() => null));
                   if (signal.aborted) throw new DOMException("Aborted", "AbortError");
                   await sendMessage(text, [], signal, generation);
                   setChatFocusKey((value) => value + 1);

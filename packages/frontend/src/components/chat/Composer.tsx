@@ -18,7 +18,7 @@ import {
   type ReadyAttachmentSource,
   type SendOutcome,
 } from "./attachment-intake";
-import { useComposerPlaceholder } from "./useComposerPlaceholder";
+import { useComposerPlaceholder, type ComposerDisabledReason } from "./useComposerPlaceholder";
 import { useComposerVisualSources } from "./useComposerVisualSources";
 import { useComposerDraft } from "./useComposerDraft";
 import { useComposerDocuments } from "./useComposerDocuments";
@@ -56,6 +56,7 @@ export default function Composer({
   backendId = "claude-code",
   onSend,
   disabled = false,
+  disabledReason = null,
   canInterrupt = false,
   turnElapsedMs = null,
   interruptPending = false,
@@ -74,6 +75,8 @@ export default function Composer({
    */
   onSend: (text: string, files: readonly ReadyAttachmentSource[], signal: AbortSignal, generation?: GenerationOptions) => void | Promise<void>;
   disabled?: boolean;
+  /** Names why `disabled` is true so the placeholder can say so; a disabled composer without a reason reads as busy. */
+  disabledReason?: ComposerDisabledReason;
   /**
    * True when the current turn has exceeded the user's configured
    * wait threshold and the backend can accept an Interrupt POST.
@@ -127,7 +130,7 @@ export default function Composer({
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const sendAbort = useRef<AbortController | null>(null);
-  const placeholder = useComposerPlaceholder(disabled);
+  const placeholder = useComposerPlaceholder(disabled ? disabledReason ?? "busy" : null);
 
   const sending = sendState.kind === "processing";
   const canSend = draft.ready && documents.canSend && text.trim().length > 0 && !disabled && !sending;

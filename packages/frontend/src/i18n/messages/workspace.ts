@@ -132,4 +132,6 @@ export const workspaceMessages = defineMessages({
   "workspace.composer.shortcutHint": { ko: "Cmd/Ctrl+Enter", en: "Cmd/Ctrl+Enter", "zh-CN": "Cmd/Ctrl+Enter" },
   "workspace.comments.noNote": { ko: "메모 없음", en: "No note", "zh-CN": "无备注" },
   "workspace.project.createPagePrompt": { ko: "`{from}`에서 링크되는 `{page}` 페이지를 만들어 주세요. 같은 헤더·내비게이션·푸터를 공유해요.", en: "Create `{page}` linked from `{from}`, sharing the same header, nav and footer.", "zh-CN": "请创建从 `{from}` 链接到的 `{page}` 页面，并共用相同的页眉、导航和页脚。" },
+  "workspace.canvas.workingTitle": { ko: "AI가 작업하고 있어요", en: "The AI is working", "zh-CN": "AI 正在工作" },
+  "workspace.canvas.workingSubtitle": { ko: "첫 결과물이 저장되면 이 자리에 나타나요.", en: "The first result will appear here once it is saved.", "zh-CN": "第一个成果保存后会显示在这里。" },
 });

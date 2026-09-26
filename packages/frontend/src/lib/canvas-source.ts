@@ -53,3 +53,16 @@ export function resolveCanvasNavigation(href: unknown, documentUrl: string, inde
   const target = resolveCanvasPageTarget(href, documentUrl);
   return target !== null && indexedRelPaths.includes(target.relPath) ? target : null;
 }
+
+/**
+ * A committed turn reloads the frame before the file index refetches, so a link clicked in that
+ * window can name a page the cached index does not know yet. One refetch settles it before the
+ * page is declared unavailable.
+ */
+export async function resolveCanvasNavigationAfterRefetch(href: unknown, documentUrl: string, indexedRelPaths: readonly string[], refetch: () => Promise<readonly string[]>): Promise<CanvasPageTarget | null> {
+  const target = resolveCanvasNavigation(href, documentUrl, indexedRelPaths);
+  if (target !== null) return target;
+  const candidate = resolveCanvasPageTarget(href, documentUrl);
+  if (candidate === null || !isSafeCanvasPagePath(candidate.relPath)) return null;
+  return resolveCanvasNavigation(href, documentUrl, await refetch());
+}

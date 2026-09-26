@@ -33,6 +33,7 @@ import { requestFrameScrollAtPoint } from "./frame-bridge";
 import { MIN_CANVAS_ZOOM, MAX_CANVAS_ZOOM, zoomCanvasAt } from "./canvas-zoom";
 import { useT } from "@/i18n/t";
 import { useLocaleStore } from "@/i18n/locale";
+import { canvasPlaceholderKeys } from "@/lib/canvas-placeholder";
 
 function buildPlaceholderSrc(locale: string, title: string, subtitle: string): string {
   return `<!doctype html>
@@ -89,6 +90,7 @@ export default function Canvas({
   mode,
   src,
   loading = false,
+  working = false,
   frameKey,
   onModeChange,
   onRefresh,
@@ -134,6 +136,8 @@ export default function Canvas({
   mode: CanvasMode | null;
   src?: string | null;
   loading?: boolean;
+  /** A turn is running; with nothing renderable yet the placeholder says so instead of "loading". */
+  working?: boolean;
   frameKey?: string;
   onModeChange: (m: CanvasMode | null) => void;
   onRefresh: () => void;
@@ -179,11 +183,8 @@ export default function Canvas({
 }) {
   const t = useT();
   const locale = useLocaleStore((state) => state.locale);
-  const placeholderSrc = buildPlaceholderSrc(
-    locale,
-    t(src || loading ? "workspace.canvas.loadingTitle" : "workspace.canvas.placeholderTitle"),
-    t(src || loading ? "workspace.canvas.loadingSubtitle" : "workspace.canvas.placeholderSubtitle"),
-  );
+  const placeholderKeys = canvasPlaceholderKeys({ src, loading, working });
+  const placeholderSrc = buildPlaceholderSrc(locale, t(placeholderKeys.title), t(placeholderKeys.subtitle));
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
