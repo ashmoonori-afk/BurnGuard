@@ -4,7 +4,7 @@ import { ensureCharts } from "./charts";
 import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
-import type { NormalizedEvent, TurnNotApplied, TurnRejectionReason, UserEvent } from "@bg/shared";
+import type { DesignAuditResult, NormalizedEvent, TurnNotApplied, TurnRejectionReason, UserEvent } from "@bg/shared";
 import { LOGO_FILES } from "@bg/shared";
 import { assignAttachmentsToTurn } from "../db/attachments";
 import {
@@ -43,7 +43,7 @@ import { generationOutputComplete } from "./generation-output";
 import { parse } from "node-html-parser";
 import { prepareSlideDeckExport } from "./export-stage";
 import { blockingDesignFindings, DesignReviewError, reviewTurnDesign } from "./turn-design-review";
-import { designAuditCanvas } from "./design-audit";
+import { designAuditCanvas, writeProjectAuditCache } from "./design-audit";
 import { assertLogoDeliverables, captureLogoTurnExpectation, LogoDeliverableError, LogoEvidenceCollector } from "./logo-deliverables";
 import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
 import { inspectCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
@@ -388,6 +388,8 @@ async function runUserTurnInternal(
   let finalizedLogoSource: string | null = null;
   /** Bounded targeted repairs of the finished deliverable; the gate allows at most one. */
   let logoRepairs = 0;
+  /** The last design measurement of the stage, cached after commit when it names the committed identity. */
+  let designReviewResult = null as DesignAuditResult | null;
   /**
    * The finite reason the completion gate refused, recorded where the domain error is still
    * itself. The artifact coordinator rethrows a fresh error carrying only the public message, so
@@ -509,6 +511,7 @@ async function runUserTurnInternal(
               // Quality audit carry that warning. Only measured, blocking defects do.
               const blocking = designReview.result === null ? [] : blockingDesignFindings(designReview.result, changedPaths);
               if (blocking.length > 0 || providerReportedFailure) throw new DesignReviewError();
+              designReviewResult = designReview.result;
               // A repair edits the stage after the completion gate, so repaired output is gated again.
               if ((designReview.repairs > 0 || sourcePages !== undefined) && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages)) {
                 throw new ArtifactOperationError("publication_failed", "Design review left incomplete or remapped output");
@@ -597,6 +600,12 @@ async function runUserTurnInternal(
     publishedOperation = operation.status === "committed";
     if (process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "after_publish") {
       throw new Error("qa_fault_after_publication");
+    }
+    // The review measured the stage that was just committed, so the Quality panel's refetch can
+    // read it instead of rendering the same tree again. A cache miss costs a render, never the turn.
+    if (publishedOperation && designReviewResult !== null && designReviewResult.artifact_revision === operation.resultRevision && designReviewResult.artifact_digest === operation.resultDigest) {
+      try { await writeProjectAuditCache(projectDir, designReviewResult); }
+      catch (error) { await appendSessionTrace(sessionId, { level: "design_audit_cache_failed", turnId, error: diagnosticError(error) }); }
     }
     if (activeTurn.interrupted) {
       await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "interrupted" });

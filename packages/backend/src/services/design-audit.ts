@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DESIGN_AUDIT_CHECK_CODES, DesignAuditContractError, LOGO_PAGE, parseDesignAuditResult, type DesignAuditCheck, type DesignAuditCheckCode, type DesignAuditFinding, type DesignAuditResult, type ProjectType } from "@bg/shared";
 import { getProjectDetail } from "../db/project-read-repository";
@@ -197,12 +197,20 @@ async function enrichFindings(raw: readonly DomAuditFinding[], input: AuditRende
   });
 }
 
+/** Caches a review measured before commit under the identity it names, so the Quality panel's first fetch after the turn needs no second render. */
+export async function writeProjectAuditCache(projectDir: string, result: DesignAuditResult): Promise<void> {
+  await writeCache(resolveWithin(projectDir, ".meta", "audits", `${result.artifact_revision}-${result.artifact_digest}-${DESIGN_AUDIT_POLICY_VERSION}.json`), result);
+}
+
 async function readCache(cachePath: string): Promise<DesignAuditResult | null> {
   try { return parseDesignAuditResult(JSON.parse(await readFile(cachePath, "utf8"))); }
   catch (error) { if (error instanceof SyntaxError || error instanceof DesignAuditContractError || error instanceof Error && Reflect.get(error, "code") === "ENOENT") return null; throw error; }
 }
 async function writeCache(cachePath: string, result: DesignAuditResult): Promise<void> {
-  await mkdir(path.dirname(cachePath), { recursive: true }); const temporary = `${cachePath}.${process.pid}.${randomUUID()}.tmp`;
+  const directory = path.dirname(cachePath);
+  await mkdir(directory, { recursive: true }); const temporary = `${cachePath}.${process.pid}.${randomUUID()}.tmp`;
   try { await writeFile(temporary, JSON.stringify(result)); await rename(temporary, cachePath); }
   finally { await rm(temporary, { force: true }); }
+  // Only the current identity is ever read back, so earlier revisions and policies are disk growth.
+  for (const name of await readdir(directory)) if (name.endsWith(".json") && name !== path.basename(cachePath)) await rm(resolveWithin(directory, name), { force: true });
 }

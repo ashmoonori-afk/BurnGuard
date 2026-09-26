@@ -21,7 +21,8 @@ import { selectContextAttachments } from "../src/services/context";
 import { createApp } from "../src/server";
 import { reviewTurnDesign } from "../src/services/turn-design-review";
 import { RenderSessionError } from "../src/services/export-render-session";
-import type { DesignAuditResult } from "@bg/shared";
+import { DESIGN_AUDIT_POLICY_VERSION, getProjectDesignAudit } from "../src/services/design-audit";
+import { DESIGN_AUDIT_CHECK_CODES, type DesignAuditResult } from "@bg/shared";
 
 let projectId: string;
 let sessionId: string;
@@ -80,6 +81,23 @@ test("Given unavailable design checks When finalizing Then the turn commits and 
     expect(events.filter(event => event.type === "status.error")).toEqual([]);
     expect(events.filter(event => event.type === "tool.finished" && event.tool === "generation_design_review").at(-1)).toMatchObject({ ok: false, output: { status: "unavailable", repairs: 0 } });
   } finally { unsubscribe(); }
+});
+
+test("Given a checked review for the committed identity When the turn commits Then the Quality panel reads the review from the audit cache", async () => {
+  let reviewed: DesignAuditResult | null = null;
+  const turn = start(async (_backend, input) => {
+    await writeFile(path.join(input.projectDir, "index.html"), "<!doctype html><p>Audited</p>");
+    return { exitCode: 0 };
+  }, "Update a paragraph", async input => {
+    reviewed = { schema_version: 1, project_id: projectId, artifact_revision: input.revision, artifact_digest: (await inspectCanonicalTree(input.adapter.projectDir)).tree_digest, created_at: 1, overall_status: "ready", checks: DESIGN_AUDIT_CHECK_CODES.map(code => ({ code, status: "pass", reason: null, findings: [] })) };
+    return { status: "checked", repairs: 0, result: reviewed };
+  });
+  await turn.promise;
+  expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: "committed" });
+  const project = getSqlite().query<{ current_revision: number; current_digest: string }, [string]>("SELECT current_revision,current_digest FROM projects WHERE id=?").get(projectId)!;
+  expect(reviewed).toMatchObject({ artifact_revision: project.current_revision, artifact_digest: project.current_digest });
+  expect(existsSync(path.join(projectDir, ".meta", "audits", `${project.current_revision}-${project.current_digest}-${DESIGN_AUDIT_POLICY_VERSION}.json`))).toBe(true);
+  expect(await getProjectDesignAudit(projectId)).toEqual(reviewed!);
 });
 
 test("Given a pre-existing must_fix finding on an untouched page When a turn edits only index.html Then it commits without a repair", async () => {
