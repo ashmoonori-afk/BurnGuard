@@ -119,9 +119,9 @@ export const DECK_VISUAL_CRAFT = `## Deck craft (DECK_VISUAL_CRAFT)
 - Structure usually beats bullets: two columns, a big number in the display
   face and accent with its unit attached plus a label and caption, a
   three-step row, or a labelled diagram. Short bullet lists are fine.
-- Charts: inline SVG filling its column, hairline axes, 2-3 series, the key
-  series in the accent, direct labels at --deck-type-caption instead of a
-  legend, one takeaway line above.
+- Charts: one native data-bg-chart figure (see Native data charts) filling its
+  column, key series in the accent, chart text floored by --bg-chart-min-text,
+  one takeaway line above.
 `;
 
 export const GRAPHIC_VISUAL_CRAFT = `## Graphic craft (GRAPHIC_VISUAL_CRAFT)

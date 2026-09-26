@@ -55,7 +55,7 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
 - \`arrow-steps\` — horizontal process, text inside arrows.
 - \`quote-callout\` — display-size pull quote + attribution.
 - \`logo-grid\` — monochrome logo wall.
-- \`chart\` — thin axes, dot terminators, source footnote, takeaway line.
+- \`chart\` — one native data-bg-chart figure, source footnote, takeaway line.
 - \`closing\` — short CTA / contact; visually mirrors \`cover\`.
 
 ## Visual hierarchy
@@ -71,6 +71,7 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
   inherits the scale; every other \`font-size\` is \`var(--deck-type-*)\` (or a
   \`calc()\` that scales one up), never a raw px value.
 - At 1920x1080, no rendered text may be below \`24px\`.
+- Declare \`--bg-chart-min-text: 24px\` in the same :root so native chart text meets the floor.
 - In self-review, do not shrink type or tighten spacing toward web density.
   Projection readability wins.
 

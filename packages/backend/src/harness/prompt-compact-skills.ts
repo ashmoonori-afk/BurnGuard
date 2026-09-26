@@ -13,7 +13,7 @@ export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 - Every visible text element needs a unique \`data-bg-node-id="slide-{N}-{purpose}"\`; parent slides use \`data-bg-node-id="slide-{N}"\`.
 
 ## Projection scale
-- Declare and use \`--deck-type-hero: 80px; --deck-type-heading: 52px; --deck-type-body: 32px; --deck-type-caption: 24px; --deck-pad-slide: 72px; --deck-pad-block: 32px\`. Set \`.deck-slide { font-size: var(--deck-type-body) }\` so unstyled text inherits the scale; every other \`font-size\` is \`var(--deck-type-*)\` (or a \`calc()\` that scales one up), never a raw px value. When a slides surface supplies \`--slide-type-*\` and \`--slide-pad-*\`, take these values from it instead. At 1920x1080 no rendered text may be below \`24px\`; never shrink type or tighten spacing toward web density in self-review.
+- Declare and use \`--deck-type-hero: 80px; --deck-type-heading: 52px; --deck-type-body: 32px; --deck-type-caption: 24px; --deck-pad-slide: 72px; --deck-pad-block: 32px\`. Set \`.deck-slide { font-size: var(--deck-type-body) }\` so unstyled text inherits the scale; every other \`font-size\` is \`var(--deck-type-*)\` (or a \`calc()\` that scales one up), never a raw px value. When a slides surface supplies \`--slide-type-*\` and \`--slide-pad-*\`, take these values from it instead. At 1920x1080 no rendered text may be below \`24px\`; never shrink type or tighten spacing toward web density in self-review. Declare \`--bg-chart-min-text: 24px\` so native chart text meets the floor.
 
 ## Style
 - Use asymmetric layouts, oversized type or KPI numbers where useful, and avoid centered-everything except cover/closing slides.
