@@ -353,4 +353,5 @@ export const homeMessages = defineMessages({
   "home.detectionFailed": { ko: "AI 도구 상태를 확인하지 못했어요. 다시 시도해 주세요.", en: "Could not check the AI tools. Try again.", "zh-CN": "无法检查 AI 工具状态。请重试。" },
   "home.creation.detecting": { ko: "AI 도구를 확인하는 중…", en: "Checking AI tools…", "zh-CN": "正在检查 AI 工具…" },
   "home.creation.detectionFailed": { ko: "AI 도구 상태를 확인하지 못했어요", en: "Could not check AI tools", "zh-CN": "无法检查 AI 工具状态" },
+  "home.pinterest.tooMany": { ko: "핀 주소는 최대 {count}개까지 넣을 수 있어요.", en: "Enter at most {count} pin URLs.", "zh-CN": "最多可输入 {count} 个 Pin 地址。" },
 });

@@ -389,6 +389,7 @@ export default function NewProjectPanel({
 
       {needsImageBackend && !graphicReady && <p role="status" className="mt-4 text-sm text-muted-foreground">{t(isLogo ? "home.creation.logoRequired" : "home.creation.graphicRequired")}</p>}
       <Button
+        data-qa="creation-submit"
         className="mt-6 h-11 w-full gap-2 rounded-xl"
         type="submit"
         variant="cta"

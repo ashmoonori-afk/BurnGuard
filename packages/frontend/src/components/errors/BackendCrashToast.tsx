@@ -16,7 +16,7 @@ export default function ToastContainer() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-toast space-y-2 w-80 pointer-events-none"
+      className="fixed bottom-4 right-4 z-toast space-y-2 w-[min(20rem,calc(100vw-2rem))] pointer-events-none"
       role="status"
       aria-live="polite"
     >
@@ -42,8 +42,9 @@ export default function ToastContainer() {
               {t.action !== undefined ? <button type="button" className="mt-2 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { t.action?.onSelect(); dismiss(t.id); }}>{t.action.label}</button> : null}
             </div>
             <button
+              type="button"
               onClick={() => dismiss(t.id)}
-              className="text-muted-foreground hover:text-foreground"
+              className="-mr-1.5 -mt-1.5 grid min-h-9 min-w-9 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={translate("shell.close")}
             >
               <X className="h-3.5 w-3.5" />

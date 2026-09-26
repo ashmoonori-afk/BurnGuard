@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Download, RefreshCw, UserRound, Sparkles, Monitor, FileOutput, Link2 } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type {
   PlaywrightInstallStatus,
   PythonSettings,
@@ -13,6 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  busyDialogProps,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,12 +37,20 @@ import { appUpdateView } from "@/lib/app-update-state";
 import { INTERRUPT_GRACE_MS } from "@/lib/session-event-state";
 
 import { t, useT, type MessageKey } from "@/i18n/t";
-import { LOCALES, useLocaleStore } from "@/i18n/locale";
+import { LOCALES, useLocaleStore, type Locale } from "@/i18n/locale";
 import ProviderConnections from "./ProviderConnections";
 
 const CHAT_CONTEXT_MODE_LABELS = { compact: "settings.compact", full: "settings.full" } as const;
 const THEME_LABELS = { light: "settings.light", dark: "settings.dark", auto: "settings.auto" } as const;
 const LANGUAGE_NAMES = { ko: "한국어", en: "English", "zh-CN": "简体中文" } as const;
+
+/** Language applies at once and is saved to the shared profile on the click itself, as settings.languageHint promises. */
+export async function persistLocale(locale: Locale, queryClient: QueryClient): Promise<SettingsSummary> {
+  useLocaleStore.getState().setLocale(locale);
+  const next = await patchSettings({ locale });
+  queryClient.setQueryData(["settings"], next);
+  return next;
+}
 
 export default function SettingsModal() {
   const open = useUIStore((s) => s.settingsOpen);
@@ -52,7 +61,6 @@ export default function SettingsModal() {
 function SettingsDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const locale = useLocaleStore((s) => s.locale);
-  const setLocale = useLocaleStore((s) => s.setLocale);
   const [providerSaving, setProviderSaving] = useState(false);
   const pushToast = useUIStore((s) => s.pushToast);
   const queryClient = useQueryClient();
@@ -226,9 +234,11 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const busy = saving || figmaTokenSaving || commandcodeSaving || providerSaving || updateApplying;
+
   return (
-    <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen && !saving && !figmaTokenSaving && !commandcodeSaving && !providerSaving && !updateApplying) onClose(); }}>
-      <DialogContent className="flex h-[min(780px,calc(100dvh-2rem))] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0" onCloseAutoFocus={(event) => { if (returnFocusTarget?.isConnected) { event.preventDefault(); returnFocusTarget.focus(); } }}>
+    <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen && !busy) onClose(); }}>
+      <DialogContent className="flex h-[min(780px,calc(100dvh-2rem))] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0" {...busyDialogProps(busy)} onCloseAutoFocus={(event) => { if (returnFocusTarget?.isConnected) { event.preventDefault(); returnFocusTarget.focus(); } }}>
         <DialogHeader className="shrink-0 border-b border-border px-5 py-5 pr-12 sm:px-7">
           <DialogTitle className="text-xl">{t("settings.title")}</DialogTitle>
           <DialogDescription>
@@ -352,7 +362,10 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
             <div className="space-y-1.5">
               <div id="language-label" className="text-xs font-medium text-muted-foreground">{t("settings.language")}</div>
               <fieldset aria-labelledby="language-label" className="flex flex-wrap gap-2">
-                {LOCALES.map((language) => <Button key={language} type="button" lang={language} aria-pressed={locale === language} variant={locale === language ? "default" : "outline"} size="sm" onClick={() => { setLocale(language); setSettings({ ...settings, locale: language }); }}>{LANGUAGE_NAMES[language]}</Button>)}
+                {LOCALES.map((language) => <Button key={language} type="button" lang={language} aria-pressed={locale === language} variant={locale === language ? "default" : "outline"} size="sm" onClick={() => {
+                  setSettings({ ...settings, locale: language });
+                  void persistLocale(language, queryClient).catch((error) => pushToast({ title: t("settings.saveFailed"), body: apiErrorCopy(error), tone: "error" }));
+                }}>{LANGUAGE_NAMES[language]}</Button>)}
               </fieldset>
               <p className="text-xs text-muted-foreground">{t("settings.languageHint")}</p>
             </div>
@@ -539,10 +552,10 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
         </div>
         <DialogFooter className="shrink-0 flex-row items-center justify-end gap-2 border-t border-border bg-card px-5 py-4 sm:px-7">
           <p className="mr-auto hidden text-xs text-muted-foreground sm:block">{t("settings.saveHint")}</p>
-          <Button variant="ghost" onClick={onClose} disabled={saving || figmaTokenSaving || commandcodeSaving || providerSaving || updateApplying}>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
             {t("settings.cancel")}
           </Button>
-          <Button variant="cta" onClick={save} disabled={saving || figmaTokenSaving || commandcodeSaving || providerSaving || updateApplying || !settings}>
+          <Button variant="cta" onClick={save} disabled={busy || !settings}>
             {t(saving ? "settings.saving" : "settings.save")}
           </Button>
         </DialogFooter>

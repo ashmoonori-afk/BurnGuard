@@ -112,7 +112,18 @@ const DialogDescription = React.forwardRef<
 ));
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
 
+/** A dialog with work in flight hides its close control and keeps Escape and outside clicks from dismissing it until the work settles. */
+function busyDialogProps(busy: boolean): {
+  readonly hideClose: boolean;
+  readonly onEscapeKeyDown: (event: { preventDefault(): void }) => void;
+  readonly onInteractOutside: (event: { preventDefault(): void }) => void;
+} {
+  const keep = (event: { preventDefault(): void }) => { if (busy) event.preventDefault(); };
+  return { hideClose: busy, onEscapeKeyDown: keep, onInteractOutside: keep };
+}
+
 export {
+  busyDialogProps,
   Dialog,
   DialogPortal,
   DialogOverlay,

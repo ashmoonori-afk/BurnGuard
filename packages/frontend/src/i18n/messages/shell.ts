@@ -24,4 +24,5 @@ export const shellMessages = defineMessages({
   "shell.work": { ko: "내 작업", en: "My work", "zh-CN": "我的工作" },
   "shell.systemWorkspace": { ko: "시스템 작업 공간", en: "System workspace", "zh-CN": "系统工作区" },
   "shell.close": { ko: "닫기", en: "Close", "zh-CN": "关闭" },
+  "shell.settingsSyncFailed": { ko: "공유 프로필을 동기화하지 못했어요. 저장된 언어로 시작해요.", en: "Could not sync the shared profile. Starting with the saved language.", "zh-CN": "无法同步共享配置。将以已保存的语言启动。" },
 });
