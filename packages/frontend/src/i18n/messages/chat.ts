@@ -371,5 +371,9 @@ export const chatMessages = defineMessages({
     ko: "답변만 남김 · 바뀐 파일이 없어요",
     en: "Answered · no files changed",
     "zh-CN": "已回复 · 没有文件更改",
+  "chat.error.deckSourcePageLimit": {
+    ko: "내용 자료의 페이지가 슬라이드 한도(80장)를 넘어 1:1로 옮길 수 없어요. 프로젝트 설정에서 페이지 수 유지를 끄거나 자료를 나눠 첨부해 주세요.",
+    en: "The content source has more pages than the 80-slide limit, so it cannot be mapped one-to-one. Turn off page-count preservation in the project settings or split the source.",
+    "zh-CN": "内容资料的页数超过 80 页的幻灯片上限，无法一一对应。请在项目设置中关闭保留页数，或拆分资料后添加。",
   },
 });

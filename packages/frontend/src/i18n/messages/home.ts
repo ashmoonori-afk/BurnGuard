@@ -178,7 +178,7 @@ export const homeMessages = defineMessages({
   "home.creation.speakerNotes": { ko: "발표자 노트 사용", en: "Use speaker notes", "zh-CN": "使用演讲者备注" },
   "home.creation.speakerNotesHint": { ko: "슬라이드 위 글자를 줄여요", en: "Keep less text on slides", "zh-CN": "减少幻灯片上的文字" },
   "home.creation.sourcePages": { ko: "원본 페이지와 1:1 대응", en: "Match source pages one-to-one", "zh-CN": "与原文页面一一对应" },
-  "home.creation.sourcePagesHint": { ko: "내용 자료로 첨부한 PDF·PPTX의 페이지 수와 순서를 유지해요. 끄면 내용을 재구성할 수 있어요. 디자인 참고 자료와 다른 파일 형식에는 적용하지 않아요.", en: "Keep the page count and order of PDF/PPTX content sources. Turn off to restructure content. Design references and other file types are excluded.", "zh-CN": "保留作为内容资料添加的 PDF/PPTX 的页数和顺序。关闭后可重新组织内容。设计参考资料及其他文件格式不适用。" },
+  "home.creation.sourcePagesHint": { ko: "내용 자료로 첨부한 PDF·PPTX의 페이지 수와 순서를 유지해요(최대 80장). 끄면 내용을 재구성할 수 있어요. 디자인 참고 자료와 다른 파일 형식에는 적용하지 않아요.", en: "Keep the page count and order of PDF/PPTX content sources (up to 80 pages). Turn off to restructure content. Design references and other file types are excluded.", "zh-CN": "保留作为内容资料添加的 PDF/PPTX 的页数和顺序（最多 80 页）。关闭后可重新组织内容。设计参考资料及其他文件格式不适用。" },
   "home.creation.copyTemplate": { ko: "템플릿을 그대로 복사", en: "Copy template as is", "zh-CN": "原样复制模板" },
   "home.creation.copyTemplateHint": { ko: "구조는 유지하고 내용만 바꿔요", en: "Keep the structure and change only the content", "zh-CN": "保留结构，仅更改内容" },
   "home.creation.graphicRequired": { ko: "그래픽을 만들려면 설정에서 Codex를 연결하고 로그인해 주세요.", en: "To create graphics, connect and sign in to Codex in Settings.", "zh-CN": "要创建平面设计，请在设置中连接并登录 Codex。" },

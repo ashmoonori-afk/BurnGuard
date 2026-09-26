@@ -78,6 +78,24 @@ test("Given selected content documents When capturing one-to-one pages Then serv
   }
 });
 
+test("Given an 81-page content source When capturing one-to-one pages Then the rejection names the page limit, not a missing input", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-source-limit-"));
+  const source = path.join(dir, "source.pdf");
+  const metadata = { kind: "pdf", page_count: 81, fonts: [], colors: [], notes: [], headings: [], bodies: [], pages: [] };
+  try {
+    await writeFile(`${source}.summary.json`, JSON.stringify(metadata));
+    const inputs = [{ id: "content", file_path: source, mime_type: "application/pdf", source_role: "ordinary_content" as const, created_at: 1 }];
+    await expect(context.readDeckSourcePages(inputs, "one_to_one")).rejects.toMatchObject({ code: "deck_source_page_limit" });
+    await writeFile(`${source}.summary.json`, JSON.stringify({ ...metadata, page_count: 80 }));
+    expect((await context.readDeckSourcePages(inputs, "one_to_one"))?.length).toBe(80);
+    await rm(`${source}.summary.json`);
+    await expect(context.readDeckSourcePages(inputs, "one_to_one")).rejects.toMatchObject({ code: "private_input_unavailable" });
+    await expect(context.readDeckSourcePages([], "one_to_one")).rejects.toMatchObject({ code: "private_input_unavailable" });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test.each(["requested", "reverse_requested", "persisted"] as const)("Given multiple source documents When mapping %s order Then source order is independent of context recency", async (mode) => {
   const dir = await mkdtemp(path.join(tmpdir(), "bg-source-order-"));
   const first = { id: "first", file_path: path.join(dir, "first.pdf"), mime_type: "application/pdf", source_role: "ordinary_content" as const, created_at: 1 };

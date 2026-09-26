@@ -20,7 +20,8 @@ export type TurnErrorCode =
   | "publication_failed"
   | "operation_conflict"
   | "operation_cancelled"
-  | "turn_failed";
+  | "turn_failed"
+  | "deck_source_page_limit";
 
 /**
  * Why a turn that ran to completion was refused, in a closed machine-readable vocabulary.

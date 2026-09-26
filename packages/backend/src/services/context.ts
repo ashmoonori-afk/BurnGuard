@@ -14,8 +14,11 @@ import { ATTACHMENT_LIMITS } from "./attachments";
 import { readImportContext } from "./project-import-init";
 import { ensureProjectDesignSystemPin } from "./project-design-system-pin";
 
+/** One-to-one decks stop at this many source pages; longer sources need restructuring or a split. */
+export const DECK_SOURCE_PAGE_LIMIT = 80;
+
 export class DeckSourceMappingError extends Error {
-  readonly code = "private_input_unavailable";
+  constructor(readonly code: "private_input_unavailable" | "deck_source_page_limit", message: string) { super(message); }
 }
 
 export async function readDeckSourcePages(
@@ -37,12 +40,15 @@ export async function readDeckSourcePages(
     if (attachment.source_role !== "ordinary_content") continue;
     if (attachment.mime_type !== "application/pdf" && attachment.mime_type !== "application/vnd.openxmlformats-officedocument.presentationml.presentation") continue;
     const summary = await readAttachmentSummaryFile(attachmentSummaryPath(attachment.file_path));
-    if (!summary || (summary.kind !== "pdf" && summary.kind !== "pptx") || summary.page_count < 1 || pages.length + summary.page_count > 80) {
-      throw new DeckSourceMappingError("Source pages cannot be mapped within the deck page limit");
+    if (!summary || (summary.kind !== "pdf" && summary.kind !== "pptx") || summary.page_count < 1) {
+      throw new DeckSourceMappingError("private_input_unavailable", "Source pages cannot be read for one-to-one mapping");
+    }
+    if (pages.length + summary.page_count > DECK_SOURCE_PAGE_LIMIT) {
+      throw new DeckSourceMappingError("deck_source_page_limit", "Source pages cannot be mapped within the deck page limit");
     }
     for (let page = 1; page <= summary.page_count; page++) pages.push({ attachmentId: attachment.id, page });
   }
-  if (pages.length === 0) throw new DeckSourceMappingError("One-to-one mapping requires a paginated source document");
+  if (pages.length === 0) throw new DeckSourceMappingError("private_input_unavailable", "One-to-one mapping requires a paginated source document");
   return pages;
 }
 

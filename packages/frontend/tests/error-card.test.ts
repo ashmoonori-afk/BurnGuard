@@ -19,6 +19,13 @@ test("Given a raw provider failure When modeled for UI Then no host path renders
   expect(html).toContain(t("chat.error.focusComposer"));
 });
 
+test("Given a deck source page-limit error When rendered Then the page-limit copy is used, not the missing-attachment copy", () => {
+  const html = renderToStaticMarkup(createElement(ErrorCard, { code: "deck_source_page_limit", message: "sanitized", recoverable: true }));
+  const shipped = (key: Parameters<typeof t>[0]) => renderToStaticMarkup(createElement("span", null, t(key))).replace(/^<span>|<\/span>$/g, "");
+  expect(html).toContain(shipped("chat.error.deckSourcePageLimit"));
+  expect(html).not.toContain(shipped("chat.error.privateInputUnavailable"));
+});
+
 test("Given stage errors When rendered in every locale Then fixed stage copy replaces raw diagnostics", () => {
   const initial = useLocaleStore.getInitialState();
   const originalInitial = initial.locale;

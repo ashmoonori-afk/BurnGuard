@@ -22,6 +22,7 @@ const COPY: Readonly<Record<TurnErrorCode, string>> = {
   operation_conflict: "다른 작업이 진행 중이에요. 잠시 후 다시 시도해 주세요.",
   operation_cancelled: "작업이 취소되었어요.",
   turn_failed: "요청을 처리하지 못했어요. 다시 시도해 주세요.",
+  deck_source_page_limit: "내용 자료의 페이지가 슬라이드 한도(80장)를 넘어 1:1로 옮길 수 없어요. 페이지 수 유지를 끄거나 자료를 나눠 주세요.",
 };
 
 /**
@@ -142,6 +143,7 @@ function knownCode(candidate: string | undefined): TurnErrorCode | undefined {
     case "operation_cancelled":
     case "publication_failed":
     case "turn_failed":
+    case "deck_source_page_limit":
       return candidate;
     case "stage_attachment_input_invalid":
     case "private_input_unavailable":
