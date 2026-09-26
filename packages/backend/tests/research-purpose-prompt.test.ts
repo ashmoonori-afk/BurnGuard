@@ -133,6 +133,28 @@ describe("research purpose prompt integration", () => {
     expect(block.advice).toEqual(expect.arrayContaining(["reflow_320_with_2d_exceptions", "non_color_state_cues", "target_size_24", "reduced_motion"]));
   });
 
+  test("PH-11: Given fixed-frame project types When built Then the reflow and target-size web baseline is dropped while the fluid web surface keeps it", async () => {
+    for (const projectType of ["graphic", "logo", "slide_deck"]) {
+      const block = researchBlock(await buildPrompt(context(projectType), { type: "user.message", text: "Polish this" }));
+      const ids = block.rules.map((rule) => rule.id);
+      expect(ids).not.toContain("CR-003");
+      expect(ids).not.toContain("CR-005");
+      expect(ids).toEqual(expect.arrayContaining(["CR-001", "CR-002", "CR-004", "CR-008", "CR-009"]));
+      expect(block.advice).not.toContain("reflow_320_with_2d_exceptions");
+      expect(block.advice).not.toContain("target_size_24");
+      expect(block.advice).toEqual(expect.arrayContaining(["non_color_state_cues", "reduced_motion"]));
+    }
+    for (const projectType of ["prototype", "from_template", "other"]) {
+      const block = researchBlock(await buildPrompt(context(projectType), { type: "user.message", text: "Polish this" }));
+      expect(block.rules.map((rule) => rule.id)).toEqual(expect.arrayContaining(["CR-003", "CR-005"]));
+      expect(block.advice).toEqual(expect.arrayContaining(["reflow_320_with_2d_exceptions", "target_size_24"]));
+    }
+    // A web purpose matched on a fixed frame cannot smuggle the reflow rule back in.
+    const dashboardDeck = researchBlock(await buildPrompt(context("slide_deck"), { type: "user.message", text: "Create an analytics dashboard deck" }));
+    expect(dashboardDeck.routing.purpose).toBe("prototype.dashboard");
+    expect(dashboardDeck.rules.map((rule) => rule.id)).not.toContain("CR-003");
+  });
+
   test("Given a diagram request When built Then SVG naming and bounded 2D advice are selected", async () => {
     const block = researchBlock(await buildPrompt(context(), { type: "user.message", text: "Create a service topology diagram" }));
     expect(block.routing.purpose).toBe("prototype.diagram");

@@ -16,7 +16,8 @@ import {
   type SelectedTaskPreset,
 } from "../src/harness/prompt-model-context";
 import type { Deliverable } from "../src/harness/prompt-task-presets";
-import { GENERATION_EFFORTS, type GenerationEffort, type GenerationOptions } from "@bg/shared";
+import { GENERATION_EFFORTS, IMAGE_PROMPT_RECIPES, type GenerationEffort, type GenerationOptions } from "@bg/shared";
+import { CHART_AUTHORING_RULES } from "../src/harness/chart-authoring";
 import { ensureLearningSchema } from "./learning-fixture";
 import {
   attachmentExtractedTextPath,
@@ -74,7 +75,7 @@ describe("buildPrompt", () => {
     expect(prompt).not.toContain("<burnguard-model-guidance-v1>");
   });
 
-  test("Given any generation mode without a design system, When assembling, Then shipped craft rules occur once before delivery", async () => {
+  test("Given any generation mode without a design system, When assembling, Then shipped craft rules occur once before delivery and the gated contracts ship only when enabled", async () => {
     for (const project_type of ["prototype", "slide_deck", "graphic", "from_template", "other"] as const) {
       for (const contextMode of ["compact", "full"] as const) {
         const prompt = await buildPrompt(makeContext({ project_type }), { type: "user.message", text: "Improve the selected element" }, { contextMode });
@@ -85,6 +86,18 @@ describe("buildPrompt", () => {
         expect(prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
         expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
         expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeGreaterThan(prompt.indexOf("## Project"));
+        // PH-07: nothing in this request enables the 3D contract; only a deck deliverable carries charts by itself.
+        expect(prompt).not.toContain("## Editable 3D scenes");
+        expect(prompt.split(CHART_AUTHORING_RULES)).toHaveLength(project_type === "slide_deck" ? 2 : 1);
+        expect(prompt).toContain("GATED_CONTRACTS");
+        expect(prompt.indexOf("GATED_CONTRACTS")).toBeLessThan(prompt.indexOf("## Delivery"));
+
+        const enabled = await buildPrompt(makeContext({ project_type }), { type: "user.message", text: "Add a revenue chart and a 3D product scene" }, { contextMode });
+        expect(enabled.split("## Editable 3D scenes")).toHaveLength(2);
+        expect(enabled.split(CHART_AUTHORING_RULES)).toHaveLength(2);
+        expect(enabled).not.toContain("GATED_CONTRACTS");
+        expect(enabled.indexOf(CHART_AUTHORING_RULES)).toBeGreaterThan(enabled.indexOf(DESIGN_CRAFT_RULES));
+        expect(enabled.indexOf(CHART_AUTHORING_RULES)).toBeLessThan(enabled.indexOf("## Delivery"));
       }
     }
   });
@@ -797,6 +810,50 @@ describe("prompt gaps", () => {
     expect(rules).toContain("data-bg-placeholder");
     expect(rules).toContain("supply real data");
     expect(rules).toContain("copy_review");
+  });
+
+  test("PH-07: Given a captured prototype and a plain edit When built Then the 3D and chart contracts are withheld until the request, brief, files or entrypoint enable them", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "bg-prompt-gating-"));
+    try {
+      await writeFile(path.join(tempDir, "index.html"), '<!doctype html><html><body><header data-section="hero" data-bg-node-id="hero"><h1>Welcome</h1></header></body></html>', "utf8");
+      const captured = makeContext({ project_dir: tempDir }, { files: [{ rel_path: "index.html", category: "html", size_bytes: 120, hash: null, updated_at: 1 }] });
+      const edit = await buildPrompt(captured, { type: "user.message", text: "Change the hero title" }, { contextMode: "compact" });
+      expect(edit).not.toContain("## Editable 3D scenes");
+      expect(edit).not.toContain(CHART_AUTHORING_RULES);
+      expect(edit).toContain("GATED_CONTRACTS");
+
+      const korean = await buildPrompt(captured, { type: "user.message", text: "매출 차트를 추가해줘" }, { contextMode: "compact" });
+      expect(korean.split(CHART_AUTHORING_RULES)).toHaveLength(2);
+      expect(korean).not.toContain("## Editable 3D scenes");
+
+      const brief = JSON.stringify({ design_brief: { schema_version: 1, output_type: "prototype", audience: "방문자", objective: "데이터 현황 안내", content_source: "none", locale: "ko-KR", brand_mode: "none", visual_mood: "formal", density: "balanced", output_size: "responsive" } });
+      const briefed = await buildPrompt(makeContext({ project_dir: tempDir, options_json: brief }), { type: "user.message", text: "Change the hero title" }, { contextMode: "compact" });
+      expect(briefed.split(CHART_AUTHORING_RULES)).toHaveLength(2);
+
+      const runtime = makeContext({ project_dir: tempDir }, { files: [{ rel_path: ".burnguard-three/runtime.js", category: "script", size_bytes: 10, hash: null, updated_at: 1 }] });
+      const scene = await buildPrompt(runtime, { type: "user.message", text: "Change the hero title" }, { contextMode: "compact" });
+      expect(scene.split("## Editable 3D scenes")).toHaveLength(2);
+
+      await writeFile(path.join(tempDir, "index.html"), '<!doctype html><html><body><main data-section="stats" data-bg-node-id="stats"><figure data-bg-chart="revenue"><script type="application/json" data-bg-chart-config>{}</script></figure></main></body></html>', "utf8");
+      const charted = await buildPrompt(captured, { type: "user.message", text: "Change the hero title" }, { contextMode: "compact" });
+      expect(charted).toContain("data-bg-chart figure(s)");
+      expect(charted.split(CHART_AUTHORING_RULES)).toHaveLength(2);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("PH-24: Given logo and diagram deliverables When built Then the image rules ship without the recipe catalog, which a prototype still receives in full", async () => {
+    const logoSet = { schema_version: 1, brand_name: "Northvale", niche: "boutique asset management", character: ["calm", "precise"], logo_type: "combination", symbol_keywords: ["mountain"] };
+    const logo = await buildPrompt(makeContext({ project_type: "logo", project_dir: "/no/such/dir/that/exists", options_json: JSON.stringify({ logo_set: logoSet }) }), { type: "user.message", text: "로고 만들어줘" });
+    expect(logo.split(IMAGE_PRODUCTION_RULES)).toHaveLength(2);
+    expect(logo).not.toContain("<burnguard-image-recipes-v1>");
+    const diagram = await buildPrompt(makeContext({ project_type: "other" }), { type: "user.message", text: "Create an onboarding flowchart diagram" });
+    expect(diagram.split(IMAGE_PRODUCTION_RULES)).toHaveLength(2);
+    expect(diagram).not.toContain("<burnguard-image-recipes-v1>");
+    const site = await buildPrompt(makeContext(), { type: "user.message", text: "Build a landing page" });
+    const catalog = site.match(/<burnguard-image-recipes-v1>\n([\s\S]*?)\n<\/burnguard-image-recipes-v1>/u)![1]!;
+    expect(catalog.split("\n").map((line) => line.split(" | ")[0])).toEqual(Object.keys(IMAGE_PROMPT_RECIPES));
   });
 
   test("PH-32: Given a host that is not win32 When built Then the text-encoding tag ships once without PowerShell guidance, which only the win32 seam adds", async () => {

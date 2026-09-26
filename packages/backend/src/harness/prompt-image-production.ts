@@ -1,4 +1,8 @@
 import { IMAGE_PROMPT_RECIPES, type ImageRecipe } from "@bg/shared";
+import type { Deliverable } from "./prompt-task-presets";
+
+/** A logo is a flat vector mark and a diagram is authored SVG; neither chooses from the photographic catalog. */
+const CATALOG_FREE_DELIVERABLES: ReadonlySet<Deliverable> = new Set(["logo", "diagram"]);
 
 export const IMAGE_PRODUCTION_RULES = `## BurnGuard image production
 Creation/redesign includes deciding each section's visual needs and producing appropriate imagery without a separate image request. Reuse suitable supplied assets; for missing photographs, product scenes or explicitly requested illustrations, invoke the available image tool and attach usable output. Prompts, empty slots and CSS decoration do not complete this step. Respect text-only requests; do not force images into clear factual tables/controls or regenerate them during unrelated edits. User requirements and brand assets override recipe defaults; saved style controls treatment.
@@ -10,8 +14,12 @@ For a series, lock identity, material and color behavior but assign a new conten
 Write the page scaffold first and attach each successful image as it becomes available. Save usable local assets and retain their prompts in the project's existing image metadata. Apply the mandatory image and artboard verification below. Keep quality findings advisory for user-directed export.
 Choose a recipe per asset from the catalog below, preferring photographic recipes unless the user asks for another treatment; use only relevant instructions and adapt the composition to the brief. The catalog is not a request to generate every example.`;
 
-export function appendImageProduction(lines: string[], recipe: ImageRecipe = "auto"): void {
+export function appendImageProduction(lines: string[], recipe: ImageRecipe = "auto", deliverable?: Deliverable): void {
   lines.push(IMAGE_PRODUCTION_RULES);
+  if (deliverable !== undefined && CATALOG_FREE_DELIVERABLES.has(deliverable)) {
+    lines.push(`The recipe catalog is omitted for a ${deliverable} deliverable; its skill above or below owns the image brief.`, "");
+    return;
+  }
   lines.push("<burnguard-image-recipes-v1>");
   const entries = recipe === "auto" ? Object.entries(IMAGE_PROMPT_RECIPES) : [[recipe, IMAGE_PROMPT_RECIPES[recipe]]] as const;
   for (const [id, entry] of entries) lines.push(`${id} | ${entry.label}: ${entry.prompt}`);

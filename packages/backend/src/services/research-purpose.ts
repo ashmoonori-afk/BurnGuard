@@ -3,6 +3,9 @@ import { loadResearchCatalog, type CatalogConfidence, type CatalogPurpose } from
 import type { PromptPurpose } from "./prompt-purpose";
 
 const COMMON_BASELINE_IDS = ["CR-001", "CR-002", "CR-003", "CR-004", "CR-005", "CR-008", "CR-009"] as const;
+/** A fixed frame has no reflow width and no pointer targets; only the fluid web surface takes those rules and their advice. */
+const FIXED_SURFACE_TYPES: ReadonlySet<ProjectType> = new Set(["slide_deck", "graphic", "logo"]);
+const FLUID_WEB_RULE_IDS: ReadonlySet<string> = new Set(["CR-003", "CR-005"]);
 const PPTX_REQUEST_PATTERN = /\b(?:pptx|powerpoint)\b/i;
 /** Shared by the research router and the deliverable router so the two cannot drift. */
 export const DIAGRAM_REQUEST_PATTERN = /\b(?:diagram|flowchart|org(?:anization(?:al)?)? chart|process map|service topology|system topology)\b|다이어그램|흐름도|조직도|프로세스\s*맵|서비스\s*구조/iu;
@@ -72,13 +75,16 @@ export function buildResearchPromptContext(input: ResearchPurposeInput): Burngua
   const selected = INTENT_SELECTORS.find((selector) => selector.pattern.test(input.request));
   const purpose = selected?.purpose ?? input.storedPurpose ?? null;
   const purposeRecord = purpose === null ? null : catalog.purposes.find((item) => item.id === purpose) ?? null;
-  const commonIds = new Set([...COMMON_BASELINE_IDS, ...(purposeRecord?.common_rule_ids ?? [])]);
+  const fixedSurface = FIXED_SURFACE_TYPES.has(input.projectType);
+  const commonIds = new Set([...COMMON_BASELINE_IDS, ...(purposeRecord?.common_rule_ids ?? [])].filter((id) => !fixedSurface || !FLUID_WEB_RULE_IDS.has(id)));
   const commonRules: readonly PromptResearchRule[] = catalog.common_rules
     .filter((rule) => commonIds.has(rule.id))
     .map((rule) => ({ id: rule.id, axis: rule.topic, directive: rule.statement, rationale: rule.limitations, confidence: rule.confidence, authority_class: rule.authority_class, source_ids: rule.source_ids }));
   const purposeRules = purposeRecord === null ? [] : promptPurposeRules(purposeRecord);
   const pptx = PPTX_REQUEST_PATTERN.test(input.request);
-  const advice: ResearchAdvice[] = ["reflow_320_with_2d_exceptions", "non_color_state_cues", "target_size_24", "reduced_motion"];
+  const advice: ResearchAdvice[] = fixedSurface
+    ? ["non_color_state_cues", "reduced_motion"]
+    : ["reflow_320_with_2d_exceptions", "non_color_state_cues", "target_size_24", "reduced_motion"];
   if (purpose === "prototype.diagram") advice.push("svg_aria_labelledby_ids");
   if (pptx) advice.push("pptx_text_first");
 

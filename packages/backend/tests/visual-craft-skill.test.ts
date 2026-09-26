@@ -137,6 +137,29 @@ describe("visual craft skill", () => {
     }
   });
 
+  test("PH-20: Given open-ended project types When built in both modes Then the core craft ships once, the default identity only without a selected or pinned system, and no per-type sentinel leaks", async () => {
+    const request = { type: "user.message", text: "Build it" } as const;
+    const pin = { system_id: "pinned", revision: 1, digest: "digest", context: "## Design system\n- name: Pinned", tokens: "" };
+    for (const projectType of ["other", "from_template"] as const) {
+      for (const contextMode of ["full", "compact"] as const) {
+        const bare = await buildPrompt(makeContext(projectType), request, { contextMode });
+        expect(countOccurrences(bare, "VISUAL_CRAFT_CORE")).toBe(1);
+        expect(sliceShippedBlock(bare, VISUAL_CRAFT_CORE)).toBe(VISUAL_CRAFT_CORE.trim());
+        expect(countOccurrences(bare, IDENTITY_SENTINEL)).toBe(1);
+        expect(sliceShippedBlock(bare, DEFAULT_VISUAL_IDENTITY)).toBe(DEFAULT_VISUAL_IDENTITY.trim());
+        for (const sentinel of [...Object.values(TYPE_SENTINELS), "LOGO_VISUAL_CRAFT"]) expect(countOccurrences(bare, sentinel)).toBe(0);
+
+        const branded = await buildPrompt(makeContext(projectType, FAKE_DESIGN_SYSTEM), request, { contextMode });
+        expect(countOccurrences(branded, "VISUAL_CRAFT_CORE")).toBe(1);
+        expect(countOccurrences(branded, IDENTITY_SENTINEL)).toBe(0);
+
+        const pinned = await buildPrompt({ ...makeContext(projectType), designSystemPin: pin }, request, { contextMode });
+        expect(countOccurrences(pinned, "VISUAL_CRAFT_CORE")).toBe(1);
+        expect(countOccurrences(pinned, IDENTITY_SENTINEL)).toBe(0);
+      }
+    }
+  });
+
   test("keeps every visual block inside the per-turn budget", () => {
     const blocks = [
       VISUAL_CRAFT_CORE,

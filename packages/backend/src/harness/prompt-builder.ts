@@ -44,6 +44,10 @@ type BuiltSessionContext = NonNullable<Awaited<ReturnType<typeof buildSessionCon
 type SessionContext = Omit<BuiltSessionContext, "history" | "importContext" | "designSystemPin"> & Partial<Pick<BuiltSessionContext, "history" | "importContext" | "designSystemPin">>;
 
 const MAX_FILES_LISTED = 60;
+/** Request, brief or file wording that enables the editable Three.js contract. */
+const THREE_SCENE_TERMS = /\b(?:3d|three(?:\.js)?|webgl)\b|data-bg-three|3차원|입체|쓰리디/iu;
+/** Request or brief wording that enables the native chart contract; a deck carries it by itself. */
+const CHART_TERMS = /\b(?:charts?|graphs?|data|plots?|kpis?|metrics?|statistics|dashboards?)\b|차트|그래프|데이터|도표|통계|지표|대시보드/iu;
 
 export type PromptContextMode = "compact" | "full";
 
@@ -142,9 +146,17 @@ export async function buildPrompt(
 
   lines.push("## Background and palette");
   lines.push("Choose the background from the current brief, imagery, brand and selected design system. Do not reuse ivory, cream or beige by default. Unless explicitly specified, select a deliberate palette for this project; preserve an existing user-selected background during unrelated edits. Define the base background as a six-digit HEX --page-background CSS variable and use it on body/artboards so the toolbar color palette can change it directly. Use complementary section backgrounds deliberately, not one automatic ivory fill.");
-  lines.push("## Editable 3D scenes (only when requested)");
-  lines.push('For basic editable Three.js scenes, author exactly one <section data-bg-three="1" style="width:100%;height:400px"><script type="application/json" data-bg-three-config>JSON</script></section> inside the HTML. BurnGuard provisions the offline bundled runtime and MIT license after a successful turn; never use CDN imports.');
-  lines.push('Scene JSON contract: {"schema_version":1,"background":"#eef2f6","objects":[{"id":"cube1","shape":"cube","color":"#3366ff","position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1]}]}. At most 16 unique IDs (ASCII letters/digits/_/-, max40); shapes cube/sphere/torus; six-digit hex colors; finite position [-50,50], rotation degrees [-360,360], scale [0.1,10]. No extra keys. Preserve and edit existing data-bg-three config when present.');
+  // The request-independent contracts are gated: the 3D scene contract ships when the request, the
+  // brief or an existing file names it, the chart contract when the request, the brief or the
+  // entrypoint map does, or always for a deck whose skill and craft reference it by name.
+  const briefText = projectOptions.design_brief === null ? "" : JSON.stringify(projectOptions.design_brief);
+  const filePaths = context.files.map((file) => file.rel_path).join("\n");
+  const threeEnabled = [userEvent.text, briefText, filePaths].some((text) => THREE_SCENE_TERMS.test(text));
+  if (threeEnabled) {
+    lines.push("## Editable 3D scenes (only when requested)");
+    lines.push('For basic editable Three.js scenes, author exactly one <section data-bg-three="1" style="width:100%;height:400px"><script type="application/json" data-bg-three-config>JSON</script></section> inside the HTML. BurnGuard provisions the offline bundled runtime and MIT license after a successful turn; never use CDN imports.');
+    lines.push('Scene JSON contract: {"schema_version":1,"background":"#eef2f6","objects":[{"id":"cube1","shape":"cube","color":"#3366ff","position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1]}]}. At most 16 unique IDs (ASCII letters/digits/_/-, max40); shapes cube/sphere/torus; six-digit hex colors; finite position [-50,50], rotation degrees [-360,360], scale [0.1,10]. No extra keys. Preserve and edit existing data-bg-three config when present.');
+  }
   lines.push("");
 
   const directionState = context.designDirectionState;
@@ -167,8 +179,12 @@ export async function buildPrompt(
     lines.push("");
   }
 
+  // A deck, prototype or graphic project already owns its structural contract, and the diagram
+  // skill carries its own type sizes and dimensions. Stacking both leaks diagram sizing into the
+  // enclosing deliverable, so a full diagram skill is emitted only for a standalone diagram.
+  const deliverable = resolveDeliverable(project.project_type, userEvent.text);
   appendGenerationStyle(lines, directionState?.creative_preferences);
-  appendImageProduction(lines, directionState?.creative_preferences?.image_recipe);
+  appendImageProduction(lines, directionState?.creative_preferences?.image_recipe, deliverable);
   lines.push("<burnguard-research-context-v1>");
   lines.push(JSON.stringify(buildResearchPromptContext({
     projectType: project.project_type,
@@ -197,8 +213,9 @@ export async function buildPrompt(
     stageInputs: options.stageAttachmentInputs,
   });
 
+  let structureSummary: string | null = null;
   if (project.entrypoint.toLowerCase().endsWith(".html") && project.project_type === "prototype") {
-    await appendPrototypeSiteContext(lines, {
+    structureSummary = await appendPrototypeSiteContext(lines, {
       projectDir: project.project_dir,
       entrypoint: project.entrypoint,
       files: context.files,
@@ -207,8 +224,8 @@ export async function buildPrompt(
     });
   } else if (project.entrypoint.toLowerCase().endsWith(".html") && project.project_type === "slide_deck") {
     const entrypointPath = path.isAbsolute(project.entrypoint) ? project.entrypoint : path.join(project.project_dir, project.entrypoint);
-    const summary = await summarizeDeckHtml(entrypointPath);
-    if (summary !== null) lines.push("## Deck structure (use this map; only Read sections you must change)", summary, "");
+    structureSummary = await summarizeDeckHtml(entrypointPath);
+    if (structureSummary !== null) lines.push("## Deck structure (use this map; only Read sections you must change)", structureSummary, "");
     // The compact skill names this heading as its map; a first turn has no deck to summarize.
     else if (contextMode === "compact") lines.push("## Deck structure", "No readable entrypoint yet: write the complete scaffold first, then use targeted edits.", "");
   }
@@ -286,23 +303,18 @@ export async function buildPrompt(
     lines.push("");
   }
 
+  // The core craft ships for every project type; a per-type block only where one exists.
   const visualCraft = selectVisualCraft(project.project_type);
-  if (visualCraft !== null) {
-    lines.push("## Visual craft");
-    lines.push(VISUAL_CRAFT_CORE.trim());
-    lines.push(visualCraft.trim());
+  lines.push("## Visual craft");
+  lines.push(VISUAL_CRAFT_CORE.trim());
+  if (visualCraft !== null) lines.push(visualCraft.trim());
+  lines.push("");
+  if (!context.designSystem && !context.designSystemPin) {
+    lines.push("## Default visual identity");
+    lines.push(DEFAULT_VISUAL_IDENTITY.trim());
     lines.push("");
-    if (!context.designSystem) {
-      lines.push("## Default visual identity");
-      lines.push(DEFAULT_VISUAL_IDENTITY.trim());
-      lines.push("");
-    }
   }
 
-  // A deck, prototype or graphic project already owns its structural contract, and the diagram
-  // skill carries its own type sizes and dimensions. Stacking both leaks diagram sizing into the
-  // enclosing deliverable, so a full diagram skill is emitted only for a standalone diagram.
-  const deliverable = resolveDeliverable(project.project_type, userEvent.text);
   if (deliverable === "diagram") {
     lines.push("## Diagram skill");
     lines.push(DIAGRAM_SKILL_MD.trim());
@@ -310,7 +322,15 @@ export async function buildPrompt(
   }
 
   lines.push(DESIGN_CRAFT_RULES);
-  lines.push(CHART_AUTHORING_RULES);
+  const chartsEnabled = deliverable === "slide_deck"
+    || [userEvent.text, briefText].some((text) => CHART_TERMS.test(text))
+    || (structureSummary?.includes("data-bg-chart") ?? false);
+  if (chartsEnabled) lines.push(CHART_AUTHORING_RULES);
+  const withheld = [
+    ...(threeEnabled ? [] : ["the editable Three.js scene contract (data-bg-three) when the request, brief or an existing file names 3D, three, WebGL, 3차원 or 입체"]),
+    ...(chartsEnabled ? [] : ["the native data chart contract (data-bg-chart JSON) when the request or brief names charts, graphs, data, 차트, 그래프 or 데이터, or the entrypoint already holds a chart figure"]),
+  ];
+  if (withheld.length > 0) lines.push(`Contracts withheld this turn (GATED_CONTRACTS), each shipped on the next turn that enables it: ${withheld.join("; ")}.`);
   // Append first, then notify: optional chaining on the callback would otherwise short-circuit the
   // whole expression and skip appending entirely whenever no observer is supplied.
   const taskGuidance = appendModelPromptContext(lines, options.backendId, options.generation, deliverable, options.taskGuidance);

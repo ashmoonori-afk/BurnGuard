@@ -67,6 +67,7 @@ export async function summarizeDeckHtml(filePath: string): Promise<string | null
   if (slides.length > MAX_SLIDES_LISTED) {
     lines.push(`- ... and ${slides.length - MAX_SLIDES_LISTED} more slide(s)`);
   }
+  appendChartCount(lines, root);
 
   if (styleStats) {
     lines.push("");
@@ -127,6 +128,7 @@ export async function summarizePrototypeHtml(
       const text = snippet ? ` "${snippet}"` : "";
       lines.push(`- ${ordinal}. <${el.tagName.toLowerCase()}>${idTag}${text}`);
     }
+    appendChartCount(lines, root);
     if (styleStats) {
       lines.push("");
       lines.push(renderStyleStats(styleStats));
@@ -149,6 +151,7 @@ export async function summarizePrototypeHtml(
   if (sections.length > MAX_SECTIONS_LISTED) {
     lines.push(`- ... and ${sections.length - MAX_SECTIONS_LISTED} more section(s)`);
   }
+  appendChartCount(lines, root);
 
   if (styleStats) {
     lines.push("");
@@ -156,6 +159,12 @@ export async function summarizePrototypeHtml(
   }
 
   return lines.join("\n");
+}
+
+/** Native chart figures already in the entrypoint; the prompt gates the chart contract on this line. */
+function appendChartCount(lines: string[], root: { querySelectorAll: (selector: string) => readonly unknown[] }): void {
+  const charts = root.querySelectorAll("[data-bg-chart]").length;
+  if (charts > 0) lines.push(`Charts: ${charts} data-bg-chart figure(s)`);
 }
 
 type ElementLike = {
