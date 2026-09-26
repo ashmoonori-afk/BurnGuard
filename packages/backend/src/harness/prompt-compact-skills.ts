@@ -1,3 +1,5 @@
+import { EXPORT_REMOTE_FRAME_RULE } from "./design-craft";
+
 export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 
 ## Token budget rules (READ THESE FIRST)
@@ -11,12 +13,14 @@ export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 - Every slide is a top-level \`<section data-slide>\` directly under \`<body>\`. Preserve order unless the user asks for narrative change.
 - Preserve \`<script src="/runtime/deck-stage.js" defer></script>\`; do not set \`data-active\` statically or reimplement deck navigation.
 - Every visible text element needs a unique \`data-bg-node-id="slide-{N}-{purpose}"\`; parent slides use \`data-bg-node-id="slide-{N}"\`.
+- No \`<iframe>\`, \`<video>\`, \`<audio>\`: ${EXPORT_REMOTE_FRAME_RULE}.
 
 ## Projection scale
 - Declare and use \`--deck-type-hero: 80px; --deck-type-heading: 52px; --deck-type-body: 32px; --deck-type-caption: 24px; --deck-pad-slide: 72px; --deck-pad-block: 32px\`. Set \`.deck-slide { font-size: var(--deck-type-body) }\` so unstyled text inherits the scale; every other \`font-size\` is \`var(--deck-type-*)\` (or a \`calc()\` that scales one up), never a raw px value. When a slides surface supplies \`--slide-type-*\` and \`--slide-pad-*\`, take these values from it instead. At 1920x1080 no rendered text may be below \`24px\`; never shrink type or tighten spacing toward web density in self-review. Declare \`--bg-chart-min-text: 24px\` so native chart text meets the floor.
 
 ## Style
 - Use asymmetric layouts, oversized type or KPI numbers where useful, and avoid centered-everything except cover/closing slides.
+- Declare \`--deck-font-heading: var(--font-display)\` and \`--deck-font-body: var(--font-body)\` in :root; font-family uses only them.
 - Keep CSS inline in the top \`<style>\` block. Reference design-system CSS variables (see list above) and avoid new palettes, font stacks, or typefaces.`;
 
 export const COMPACT_PROTOTYPE_SKILL_MD = `# Prototype compact contract

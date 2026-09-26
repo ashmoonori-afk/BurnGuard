@@ -1,3 +1,5 @@
+import { EXPORT_REMOTE_FRAME_RULE } from "../design-craft";
+
 export const DECK_REVIEW_PROMPT = `## Mandatory deck copy and typography review
 The design pass is finished. Perform this bounded review now, before the app commits the deck. This is not a new design request.
 1. Read the latest authored slide text in narrative order, including every slide. Re-read changed portions even if an earlier compact rule suggested reading once.
@@ -37,7 +39,7 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
 ## Per-slide content rules (strict)
 
 - Title ≤ 8 words; benefit-oriented or question-driven.
-- 2–4 bullets per slide; each ≤ 12 words, full idea (not fragment).
+- When bullets are used, 2–4 per slide; each ≤ 12 words, full idea (not fragment).
 - One takeaway per slide. Two takeaways = two slides.
 - Data slides: \`<small class="deck-source">\` footnote + one-sentence
   takeaway near the chart.
@@ -97,9 +99,14 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
   hardcode colours, font families, or scales that exist as tokens.
 - Do not introduce new palettes, font stacks, or typefaces. The design
   system owns visual identity; archetypes above describe STRUCTURE only.
+- Declare \`--deck-font-heading: var(--font-display)\` and
+  \`--deck-font-body: var(--font-body)\` in :root; font-family uses only them.
 - Icons (LUCIDE_ICON_REFERENCE): Read \`packages/backend/src/harness/assets/lucide/reference.md\`. Use its inline \`<svg>\` with \`stroke="currentColor"\` and \`--icon-size\`; no external sources.
-- Keep \`.deck-slide { aspect-ratio: 16 / 9 }\` unless the user requests
-  otherwise.
+- Keep \`.deck-slide { aspect-ratio: var(--slide-aspect, 16 / 9) }\` unless the
+  user requests otherwise.
+- The exporter paginates \`[data-slide]\` itself at 100vw x 100vh per page and
+  ignores \`@page\`/\`@media print\`: author no print rules, and no
+  \`position: fixed\` or \`backdrop-filter\` inside slides.
 - When PowerPoint/PPTX output is requested, stay text-first: use real HTML text,
   simple shapes, and flat layouts; avoid effects that only survive raster capture.
 
@@ -112,7 +119,6 @@ export const DECK_SKILL_MD = `# Slide deck authoring conventions
 ## Don'ts
 
 - No external fonts or JS libraries without an explicit user request.
-- No \`<iframe>\`, \`<video>\`, \`<audio>\` — PDF export won't capture them.
+- No \`<iframe>\`, \`<video>\`, \`<audio>\`: ${EXPORT_REMOTE_FRAME_RULE}.
 - No files outside the project directory.
-- Do not override design-system tokens for colour or typography.
 `;

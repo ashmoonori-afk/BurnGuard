@@ -1,8 +1,15 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { copyBundledFonts } from "../src/data/bundled-fonts";
 import { getSqlite } from "../src/db/sqlite-client";
 import { CHART_AUTHORING_RULES } from "../src/harness/chart-authoring";
-import { DESIGN_CRAFT_RULES } from "../src/harness/design-craft";
-import { buildPrompt } from "../src/harness/prompt-builder";
+import { DESIGN_CRAFT_RULES, EXPORT_REMOTE_FRAME_RULE } from "../src/harness/design-craft";
+import { buildPrompt, MAX_SKILL_CHARS } from "../src/harness/prompt-builder";
+import { COMPACT_DECK_SKILL_MD } from "../src/harness/prompt-compact-skills";
+import { DECK_REVIEW_PROMPT, DECK_SKILL_MD } from "../src/harness/skills/deck-skill";
+import { DECK_STAGE_JS } from "../src/runtime/deck-stage";
 import {
   DEFAULT_VISUAL_IDENTITY,
   MAX_VISUAL_CRAFT_CHARS,
@@ -114,5 +121,50 @@ describe("prototype viewport guidance", () => {
     for (const width of ["1280", "375", "320px"]) expect(PROTOTYPE_VISUAL_CRAFT).toContain(width);
     expect(PROTOTYPE_VISUAL_CRAFT).toContain("audits");
     expect(VISUAL_CRAFT_CORE.length + PROTOTYPE_VISUAL_CRAFT.length + DEFAULT_VISUAL_IDENTITY.length).toBeLessThanOrEqual(MAX_VISUAL_CRAFT_CHARS - 118);
+  });
+});
+
+describe("deck skill export and token contracts", () => {
+  test("PH-15: Given both deck skill variants Then each declares the deck font aliases the review prompt checks", () => {
+    for (const skill of [DECK_SKILL_MD, COMPACT_DECK_SKILL_MD]) {
+      expect(skill).toContain("--deck-font-heading: var(--font-display)");
+      expect(skill).toContain("--deck-font-body: var(--font-body)");
+    }
+    expect(DECK_REVIEW_PROMPT).toContain("--deck-font-heading");
+    expect(DECK_REVIEW_PROMPT).toContain("--deck-font-body");
+  });
+
+  test("PH-17: Given the craft rules and both deck skill variants Then the same export-failure rule and the static address fallback ship in all three", () => {
+    for (const text of [DESIGN_CRAFT_RULES, DECK_SKILL_MD, COMPACT_DECK_SKILL_MD]) expect(text).toContain(EXPORT_REMOTE_FRAME_RULE);
+    expect(EXPORT_REMOTE_FRAME_RULE).toContain("fail on any remote frame");
+    expect(DESIGN_CRAFT_RULES).toContain("static address block");
+    expect(DECK_SKILL_MD).not.toContain("PDF export won't capture them");
+  });
+
+  test("PH-28: Given the deck skill Then the aspect rule defers to --slide-aspect and the bullet cap is conditional", () => {
+    expect(DECK_SKILL_MD).toContain("aspect-ratio: var(--slide-aspect, 16 / 9)");
+    expect(DECK_SKILL_MD).toContain("When bullets are used");
+  });
+
+  test("CSS-18: Given the deck skill Then it states the exporter's own pagination so no print rules are authored, within budget", () => {
+    expect(DECK_SKILL_MD).toContain("@page");
+    expect(DECK_SKILL_MD.length).toBeLessThanOrEqual(MAX_SKILL_CHARS);
+  });
+});
+
+describe("map embeds under export", () => {
+  // Documents the exporter behaviour the prompt now describes; needs a real browser, so it runs only under the export smoke gate.
+  test.skipIf(process.env.BG_EXPORT_SMOKE !== "1")("PH-17: Given a deck slide holding a Google Maps embed When the PDF renders Then it rejects with render_failed", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "bg-map-embed-export-"));
+    try {
+      await copyBundledFonts(dir);
+      await mkdir(path.join(dir, "runtime"), { recursive: true });
+      await writeFile(path.join(dir, "runtime", "deck-stage.js"), DECK_STAGE_JS, "utf8");
+      await writeFile(path.join(dir, "deck.html"), `<!doctype html><html><head><style>html,body{margin:0}.slide{width:1280px;height:720px;background:white}[data-slide]:not([data-active]){display:none}</style></head><body><section class="slide" data-slide><h1 data-bg-node-id="one">Office</h1><iframe src="https://www.google.com/maps/embed?pb=!1m18" width="600" height="450"></iframe></section><script src="runtime/deck-stage.js"></script></body></html>`, "utf8");
+      const { renderDeckToPdf } = await import("../src/services/export-pdf");
+      await expect(renderDeckToPdf({ stagedDir: dir, entrypoint: "deck.html", outputPath: path.join(dir, "deck.pdf") })).rejects.toMatchObject({ code: "render_failed" });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
