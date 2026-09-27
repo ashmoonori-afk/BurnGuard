@@ -26,7 +26,7 @@ export async function isolatedImagePalette(
   const owned = spawnOwnedProcess({
     cmd: options.command ?? (compiled ? [process.execPath, "--bg-image-palette"] : [process.execPath, fileURLToPath(import.meta.url)]),
     env: process.env,
-    stdin: new Blob([bytes]),
+    stdin: new Blob([new Uint8Array(bytes)]),
     stdout: "pipe",
     stderr: "ignore",
   });
