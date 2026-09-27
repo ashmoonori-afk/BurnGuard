@@ -1,12 +1,14 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { extractAttachmentUpload } from "../src/services/attachment-extraction";
 import { createCanvas } from "../src/services/export-native-modules";
 import { assertDecodableImageContainer } from "../src/services/image-container";
-import { isolatedImagePalette } from "../src/services/image-palette-process";
-import { imagePalette } from "../src/services/pinterest-mood";
+import { imagePalette } from "../src/services/image-palette";
+import { isolatedImagePalette, queuedPaletteWorkers } from "../src/services/image-palette-process";
+
+type Chunk = { readonly type: string; readonly data: Buffer; readonly pad?: number };
 
 function redWebp(): Buffer {
   const canvas = createCanvas(4, 4);
@@ -16,47 +18,142 @@ function redWebp(): Buffer {
   return canvas.toBuffer("image/webp");
 }
 
-function withRiffSize(bytes: Buffer): Buffer {
-  bytes.writeUInt32LE(bytes.length - 8, 4);
-  return bytes;
+function chunksOf(webp: Buffer): Chunk[] {
+  const chunks: Chunk[] = [];
+  for (let offset = 12; offset < webp.length;) {
+    const size = webp.readUInt32LE(offset + 4);
+    chunks.push({ type: webp.toString("latin1", offset, offset + 4), data: Buffer.from(webp.subarray(offset + 8, offset + 8 + size)) });
+    offset += 8 + size + (size & 1);
+  }
+  return chunks;
 }
 
-function malformedContainers(webp: Buffer): Buffer[] {
-  const headerSize = webp.readUInt32LE(16);
-  const headerEnd = 12 + 8 + headerSize + (headerSize & 1);
-  const repeatedHeader = withRiffSize(Buffer.concat([webp.subarray(0, headerEnd), webp.subarray(12, headerEnd), webp.subarray(headerEnd)]));
-  const overrunningChunk = withRiffSize(Buffer.from(webp.subarray(0, webp.length - 2)));
-  const wrongRiffSize = Buffer.from(webp);
-  wrongRiffSize.writeUInt32LE(webp.length, 4);
-  return [repeatedHeader, overrunningChunk, wrongRiffSize];
+function encodeChunk({ type, data, pad = 0 }: Chunk): Buffer {
+  const header = Buffer.alloc(8);
+  header.write(type, 0, "latin1");
+  header.writeUInt32LE(data.length, 4);
+  return Buffer.concat([header, data, data.length & 1 ? Buffer.from([pad]) : Buffer.alloc(0)]);
 }
 
-test("Given a well-formed WebP When its palette is sampled in the isolated decoder Then the pixels decode", async () => {
-  const webp = redWebp();
-  expect(webp.toString("latin1", 12, 16)).toBe("VP8X");
-  expect(() => assertDecodableImageContainer(webp)).not.toThrow();
-  expect(await isolatedImagePalette(webp)).toEqual(["#ff0000"]);
+function webpOf(chunks: readonly Chunk[]): Buffer {
+  const body = Buffer.concat([Buffer.from("WEBP", "latin1"), ...chunks.map(encodeChunk)]);
+  const header = Buffer.alloc(8);
+  header.write("RIFF", 0, "latin1");
+  header.writeUInt32LE(body.length, 4);
+  return Buffer.concat([header, body]);
+}
+
+function extendedHeader(flags: number, reserved = 0): Chunk {
+  const data = Buffer.alloc(10);
+  data.writeUInt8(flags, 0);
+  data.writeUIntLE(reserved, 1, 3);
+  data.writeUIntLE(3, 4, 3);
+  data.writeUIntLE(3, 7, 3);
+  return { type: "VP8X", data };
+}
+
+function frame(bitstream: Chunk, x = 0): Chunk {
+  const header = Buffer.alloc(16);
+  header.writeUIntLE(x, 0, 3);
+  header.writeUIntLE(3, 6, 3);
+  header.writeUIntLE(3, 9, 3);
+  header.writeUIntLE(100, 12, 3);
+  return { type: "ANMF", data: Buffer.concat([header, encodeChunk(bitstream)]) };
+}
+
+function containers() {
+  const source = chunksOf(redWebp());
+  const icc = source.find((chunk) => chunk.type === "ICCP")!;
+  const image = source.find((chunk) => chunk.type === "VP8 ")!;
+  const animation: Chunk = { type: "ANIM", data: Buffer.alloc(6) };
+  const unknown: Chunk = { type: "ZZZZ", data: Buffer.alloc(1) };
+  const repeatedHeader = webpOf([extendedHeader(0x20), extendedHeader(0x20), icc, image]);
+  const overrunning = Buffer.from(webpOf([extendedHeader(0x20), icc, image]).subarray(0, -2));
+  overrunning.writeUInt32LE(overrunning.length - 8, 4);
+  const wrongRiffSize = webpOf([extendedHeader(0x20), icc, image]);
+  wrongRiffSize.writeUInt32LE(wrongRiffSize.length, 4);
+  return {
+    valid: {
+      still: webpOf([extendedHeader(0x20), icc, image]),
+      animated: webpOf([extendedHeader(0x22), icc, animation, frame(image)]),
+      trailingUnknown: webpOf([extendedHeader(0x20), icc, image, unknown]),
+    },
+    malformed: {
+      repeatedHeader,
+      overrunning,
+      wrongRiffSize,
+      reservedFlag: webpOf([extendedHeader(0x21), icc, image]),
+      reservedBytes: webpOf([extendedHeader(0x20, 1), icc, image]),
+      flagWithoutChunk: webpOf([extendedHeader(0x20 | 0x08), icc, image]),
+      chunkWithoutFlag: webpOf([extendedHeader(0x00), icc, image]),
+      unknownBeforeImage: webpOf([extendedHeader(0x20), icc, unknown, image]),
+      nonZeroPadding: webpOf([extendedHeader(0x20), icc, image, { ...unknown, pad: 1 }]),
+      frameBeforeAnimation: webpOf([extendedHeader(0x22), icc, frame(image), animation]),
+      shortAnimation: webpOf([extendedHeader(0x22), icc, { type: "ANIM", data: Buffer.alloc(1) }, frame(image)]),
+      frameOutsideCanvas: webpOf([extendedHeader(0x22), icc, animation, frame(image, 1)]),
+      stillWithTwoImages: webpOf([extendedHeader(0x20), icc, image, image]),
+    },
+  };
+}
+
+test("Given well-formed still, animated and trailing-extension WebP layouts When checked Then they are accepted and a still image decodes in the isolated worker", async () => {
+  const { valid } = containers();
+  for (const bytes of Object.values(valid)) expect(() => assertDecodableImageContainer(bytes)).not.toThrow();
+  expect(await isolatedImagePalette(valid.still)).toEqual(["#ff0000"]);
 });
 
-test("Given malformed WebP containers When decoded or attached Then they are refused before native decoding", async () => {
+test("Given each malformed WebP layout When decoded or attached Then it is refused before native decoding", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "bg-image-container-"));
   try {
-    for (const [index, bytes] of malformedContainers(redWebp()).entries()) {
-      expect(() => assertDecodableImageContainer(bytes)).toThrow("invalid_image_container");
-      await expect(imagePalette(bytes)).rejects.toMatchObject({ code: "invalid_image_container" });
-      await expect(isolatedImagePalette(bytes)).rejects.toMatchObject({ code: "invalid_image_container" });
-      const input = { sourcePath: path.join(root, `crafted-${index}.webp`), manifestPath: path.join(root, `crafted-${index}.json`), extractedTextPath: path.join(root, `crafted-${index}.md`), originalName: `crafted-${index}.webp` };
-      await writeFile(input.sourcePath, bytes);
-      await expect(extractAttachmentUpload(input)).rejects.toMatchObject({ code: "attachment_extract_failed" });
-      expect(await Bun.file(input.sourcePath).exists()).toBe(false);
+    for (const [name, bytes] of Object.entries(containers().malformed)) {
+      expect(() => assertDecodableImageContainer(bytes), name).toThrow("invalid_image_container");
+      await expect(imagePalette(bytes), name).rejects.toMatchObject({ code: "invalid_image_container" });
+      await expect(isolatedImagePalette(bytes), name).rejects.toMatchObject({ code: "invalid_image_container" });
     }
+    const input = { sourcePath: path.join(root, "crafted.webp"), manifestPath: path.join(root, "crafted.json"), extractedTextPath: path.join(root, "crafted.md"), originalName: "crafted.webp" };
+    await writeFile(input.sourcePath, containers().malformed.repeatedHeader);
+    await expect(extractAttachmentUpload(input)).rejects.toMatchObject({ code: "attachment_extract_failed" });
+    expect(await Bun.file(input.sourcePath).exists()).toBe(false);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("Given a decoder child that crashes or answers garbage When a palette is requested Then a typed error is returned and this process keeps working", async () => {
-  const webp = redWebp();
-  for (const script of ["process.kill(process.pid, 'SIGSEGV')", "process.stdout.write('not json')"]) {
-    await expect(isolatedImagePalette(webp, { command: [process.execPath, "-e", script] })).rejects.toMatchObject({ code: "image_decode_failed" });
+test("Given a decoder child that crashes, answers garbage or floods its reply When a palette is requested Then a typed error is returned and this process keeps working", async () => {
+  const { still } = containers().valid;
+  for (const script of ["process.kill(process.pid, 'SIGSEGV')", "process.stdout.write('not json')", "process.stdout.write('x'.repeat(1 << 20)); setInterval(() => {}, 1000)"]) {
+    await expect(isolatedImagePalette(still, { command: [process.execPath, "-e", script] })).rejects.toMatchObject({ code: "image_decode_failed" });
   }
-  expect(await isolatedImagePalette(webp)).toEqual(["#ff0000"]);
+  expect(await isolatedImagePalette(still)).toEqual(["#ff0000"]);
+});
+
+test("Given a secret in the backend environment When the decoder child runs Then the child does not receive it", async () => {
+  process.env.BG_TEST_DECODER_SENTINEL = "sentinel-secret";
+  try {
+    const probe = "process.stdout.write(JSON.stringify([process.env.BG_TEST_DECODER_SENTINEL === undefined ? '#000000' : '#ffffff']))";
+    expect(await isolatedImagePalette(containers().valid.still, { command: [process.execPath, "-e", probe] })).toEqual(["#000000"]);
+  } finally { delete process.env.BG_TEST_DECODER_SENTINEL; }
+});
+
+test("Given every decoder slot is busy When another palette is requested Then it queues until a slot is released", async () => {
+  const { still } = containers().valid;
+  const holders = [new AbortController(), new AbortController()];
+  const busy = holders.map((holder) => isolatedImagePalette(still, { signal: holder.signal, command: [process.execPath, "-e", "setInterval(() => {}, 1000)"] }).catch((error: unknown) => error));
+  const queued = isolatedImagePalette(still);
+  expect(queuedPaletteWorkers()).toBe(1);
+  holders[0]!.abort();
+  expect(await queued).toEqual(["#ff0000"]);
+  holders[1]!.abort();
+  await Promise.all(busy);
+  expect(queuedPaletteWorkers()).toBe(0);
+});
+
+test("Given the backend entry started as a decoder worker When it decodes Then it answers without touching the application profile", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "bg-palette-worker-"));
+  try {
+    const worker = Bun.spawn([process.execPath, path.resolve(import.meta.dir, "../src/index.ts"), "--bg-image-palette"], {
+      env: { PATH: process.env.PATH, BG_APP_ROOT: root }, stdin: new Blob([new Uint8Array(containers().valid.still)]), stdout: "pipe", stderr: "ignore",
+    });
+    expect(await worker.exited).toBe(0);
+    expect(JSON.parse(await new Response(worker.stdout).text())).toEqual(["#ff0000"]);
+    expect(await readdir(root)).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
