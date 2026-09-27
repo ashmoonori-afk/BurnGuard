@@ -6,6 +6,10 @@ BurnGuard is a local design workspace for Windows and macOS. Bring your Claude C
 
 [Download the app](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [Documentation](doc/README.md) · [한국어](README.ko.md) · [简体中文](README.zh-CN.md)
 
+![A one-line prompt becomes a BurnGuard landing page, then the headline is rewritten on the canvas](doc/images/burnguard-demo.gif)
+
+*Recorded on v0.5.25 with Claude Code (Sonnet, LOW reasoning) and no design system. The five-minute generation is sped up; everything else is real time.*
+
 ![BurnGuard website workspace with a conversation panel, model controls and the SONNEL sample in the canvas](doc/images/readme-website-workspace.png)
 
 *The actual editor displaying the bundled SONNEL website. Choose a model on the left, inspect the result on the right, and move between preview, editing and comments.*
