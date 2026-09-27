@@ -8,6 +8,10 @@ BurnGuard는 슬라이드·웹사이트·그래픽을 만드는 로컬 AI 작업
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [다운로드](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [시작하기](#시작하기) · [문서](doc/README.md)
 
+![한 줄 프롬프트로 BurnGuard 랜딩페이지를 만들고 캔버스에서 제목을 고치는 장면](doc/images/burnguard-demo.gif)
+
+*v0.5.25에서 Claude Code(Sonnet, 추론 강도 LOW)로 디자인 시스템 없이 녹화했습니다. 약 5분 걸린 생성 구간만 빨리 감았고 나머지는 실제 속도입니다.*
+
 > 현재 소스 기준 안내입니다. 공개 데스크톱 릴리즈에는 일부 기능이 아직 포함되지 않을 수 있습니다. 표지는 생성 이미지이며, 작업 화면은 별도 샘플 프로필에서 촬영했습니다.
 
 ## 만들 수 있는 것
