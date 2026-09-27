@@ -72,6 +72,8 @@ function containers() {
   const image = source.find((chunk) => chunk.type === "VP8 ")!;
   const animation: Chunk = { type: "ANIM", data: Buffer.alloc(6) };
   const unknown: Chunk = { type: "ZZZZ", data: Buffer.alloc(1) };
+  const hidden: Chunk = { type: "VP8 ", data: Buffer.from(image.data) };
+  hidden.data.writeUInt8(hidden.data.readUInt8(0) & ~0x10, 0);
   const repeatedHeader = webpOf([extendedHeader(0x20), extendedHeader(0x20), icc, image]);
   const overrunning = Buffer.from(webpOf([extendedHeader(0x20), icc, image]).subarray(0, -2));
   overrunning.writeUInt32LE(overrunning.length - 8, 4);
@@ -118,6 +120,10 @@ function containers() {
       canvasLargerThanImage: webpOf([extendedHeader(0x20, 0, 8), icc, image]),
       frameSmallerThanImage: webpOf([extendedHeader(0x22, 0, 8), icc, animation, frame([image], 0, 0, 2)]),
       imageWithoutKeyFrameStartCode: webpOf([extendedHeader(0x20), icc, { type: "VP8 ", data: Buffer.concat([image.data.subarray(0, 3), Buffer.from([0, 0, 0]), image.data.subarray(6)]) }]),
+      hiddenFrameSimple: webpOf([hidden]),
+      hiddenFrameExtended: webpOf([extendedHeader(0x20), icc, hidden]),
+      hiddenFrameWithAlpha: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x01), hidden]),
+      hiddenFrameAnimated: webpOf([extendedHeader(0x22), icc, animation, frame([hidden])]),
     },
   };
 }

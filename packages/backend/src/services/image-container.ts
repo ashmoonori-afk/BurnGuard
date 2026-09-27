@@ -121,8 +121,9 @@ function bitstreamDimensions(view: Buffer, bitstream: RiffChunk): { readonly wid
     const tag = view.readUIntLE(data, 3);
     const keyFrame = (tag & 0x01) === 0;
     const version = (tag >> 1) & 0x07;
+    const showFrame = (tag & 0x10) !== 0;
     const firstPartitionSize = tag >>> 5;
-    if (!keyFrame || version > 3 || firstPartitionSize > bitstream.size - 10) throw new ImageContainerError();
+    if (!keyFrame || version > 3 || !showFrame || firstPartitionSize > bitstream.size - 10) throw new ImageContainerError();
     if (view.readUInt8(data + 3) !== 0x9d || view.readUInt8(data + 4) !== 0x01 || view.readUInt8(data + 5) !== 0x2a) throw new ImageContainerError();
     width = view.readUInt16LE(data + 6) & 0x3fff;
     height = view.readUInt16LE(data + 8) & 0x3fff;
