@@ -9,6 +9,7 @@ import type {
   ExportOptions,
   FileInfo,
 } from "@bg/shared";
+import { loadConfig, VERCEL_TOKEN_PATTERN } from "../config";
 import { buildArtifactSummary, indexProjectFiles, listIndexedProjectFiles } from "../services/files";
 import { getExportAttemptDetail, getExportJob, listExportAttempts, listProjectExports } from "../db/exports";
 import { ExportLifecycleError } from "../db/export-lifecycle-repository";
@@ -43,13 +44,17 @@ artifactRoutes.post("/api/exports/:id/vercel", async (c) => {
   const body: unknown = await c.req.json().catch(() => null);
   if (!body || typeof body !== "object" || Array.isArray(body)) return c.json(fail("invalid_body", "Invalid publish request"), 400);
   const record = body as Record<string, unknown>;
-  if (Object.keys(record).some((key) => !["token", "team_id", "deployment_id"].includes(key)) || typeof record.token !== "string" || !/^[A-Za-z0-9_-]{10,256}$/.test(record.token) || (record.team_id !== undefined && (typeof record.team_id !== "string" || !/^team_[A-Za-z0-9]+$/.test(record.team_id))) || (record.deployment_id !== undefined && (typeof record.deployment_id !== "string" || !/^dpl_[A-Za-z0-9]+$/.test(record.deployment_id)))) return c.json(fail("invalid_body", "Invalid publish request"), 400);
+  if (Object.keys(record).some((key) => !["token", "team_id", "deployment_id", "badge"].includes(key)) || (record.token !== undefined && (typeof record.token !== "string" || !VERCEL_TOKEN_PATTERN.test(record.token))) || (record.badge !== undefined && typeof record.badge !== "boolean") || (record.team_id !== undefined && (typeof record.team_id !== "string" || !/^team_[A-Za-z0-9]+$/.test(record.team_id))) || (record.deployment_id !== undefined && (typeof record.deployment_id !== "string" || !/^dpl_[A-Za-z0-9]+$/.test(record.deployment_id)))) return c.json(fail("invalid_body", "Invalid publish request"), 400);
+  const config = await loadConfig();
+  const token = typeof record.token === "string" ? record.token : config.vercelToken;
+  if (token === null) return c.json(fail("publish_token_required", "A Vercel token is required"), 400);
+  const badge = typeof record.badge === "boolean" ? record.badge : config.publish.madeWithBadge;
   const { publishExport, requestVercel, VercelPublishError } = await import("../services/vercel-publish");
   try {
     if (await getExportJob(c.req.param("id")) === null) return c.json(fail("not_found", "Export not found"), 404);
     const result = record.deployment_id
-      ? await requestVercel(`/v13/deployments/${record.deployment_id}`, record.token, record.team_id as string | undefined, c.req.raw.signal)
-      : await publishExport(c.req.param("id"), record.token, record.team_id as string | undefined, c.req.raw.signal);
+      ? await requestVercel(`/v13/deployments/${record.deployment_id}`, token, record.team_id as string | undefined, c.req.raw.signal)
+      : await publishExport(c.req.param("id"), token, record.team_id as string | undefined, c.req.raw.signal, badge);
     c.header("Cache-Control", "no-store");
     return c.json(ok(result));
   } catch (error) {

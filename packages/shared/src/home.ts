@@ -97,6 +97,10 @@ export interface SettingsSummary {
    * holding the secret.
    */
   figma_token_set: boolean;
+  /** Whether a Vercel token is saved locally; the token itself is never returned. */
+  vercel_token_set: boolean;
+  /** Default for the "Made with BurnGuard" badge on published web projects. */
+  publish_made_with_badge: boolean;
 }
 
 export type SettingsPatch = Partial<
@@ -108,6 +112,7 @@ export type SettingsPatch = Partial<
     | "chat_abort_threshold_ms"
     | "chat_context_mode"
     | "generation_defaults"
+    | "publish_made_with_badge"
   > & {
     user: Partial<SettingsSummary["user"]>;
     /**
@@ -116,6 +121,8 @@ export type SettingsPatch = Partial<
      * never includes the value — only the figma_token_set boolean.
      */
     figma_personal_access_token: string | null;
+    /** Write-only; a string saves the Vercel token, null or "" clears it. */
+    vercel_token: string | null;
     commandcode_api_key: string | null;
     llm_api_keys: import("./connections").LlmApiKeysPatch;
   }
