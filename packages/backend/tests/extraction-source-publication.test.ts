@@ -9,7 +9,7 @@ import { systemsDir } from "../src/lib/paths";
 import { extractDesignSystemFromSource, persistCanonicalExtraction } from "../src/services/design-system-extract";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 import { sanitizeSourceHtml } from "../src/services/extraction-html";
-import { assertAcquirableSourceMarkup, assertInertSourceMarkup } from "../src/services/extraction-safety";
+import { assertAcquirableSourceMarkup, assertInertSourceMarkup, MAX_HIDDEN_MARKUP_DEPTH } from "../src/services/extraction-safety";
 
 // The two offending references in mdn/beginner-html-site/index.html.
 const sourceHtml = '<!doctype html><html><head><meta charset="utf-8"></head><body><h1>Source</h1><img src="images/firefox-icon.png" alt="Firefox"><p><a href="https://www.mozilla.org/en-US/about/manifesto/">Manifesto</a></p></body></html>';
@@ -132,6 +132,19 @@ test.each([
   ["an @import without whitespace", INERT_PAGE('<style>@import"https://evil.example/x.css";</style>')],
 ])("R2-1: Given %s When the inert gate runs Then the source is rejected", (_label, html) => {
   expect(() => assertInertSourceMarkup(html, "html")).toThrow(expect.objectContaining({ code: "unsafe_source_content" }));
+});
+
+const nestHidden = (depth: number, element: "template" | "noscript", inner: string): string =>
+  `${`<${element}>`.repeat(depth)}${inner}${`</${element}>`.repeat(depth)}`;
+
+test.each(["template", "noscript"] as const)("BG-0525-SRC-01: Given hidden %s markup nested within the depth limit When the inert gate runs Then benign content passes and a deep remote image is still rejected", element => {
+  expect(() => assertInertSourceMarkup(INERT_PAGE(nestHidden(MAX_HIDDEN_MARKUP_DEPTH, element, "<p>ok</p>")), "html")).not.toThrow();
+  expect(() => assertInertSourceMarkup(INERT_PAGE(nestHidden(MAX_HIDDEN_MARKUP_DEPTH, element, '<img src="https://cdn.example/a.png">')), "html")).toThrow(expect.objectContaining({ code: "unsafe_source_content" }));
+});
+
+test.each(["template", "noscript"] as const)("BG-0525-SRC-01: Given hidden %s markup nested past the depth limit When the inert gate runs Then it fails closed", element => {
+  expect(() => assertInertSourceMarkup(INERT_PAGE(nestHidden(MAX_HIDDEN_MARKUP_DEPTH + 1, element, "<p>ok</p>")), "html")).toThrow(expect.objectContaining({ code: "unsafe_source_content" }));
+  expect(() => assertInertSourceMarkup(INERT_PAGE(nestHidden(64, element, "<p>ok</p>")), "html")).toThrow(expect.objectContaining({ code: "unsafe_source_content" }));
 });
 
 test("R2-1: Given a relative srcset candidate list When the acquirable gate runs Then it is accepted like a relative src", () => {

@@ -150,7 +150,7 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 ## Changelog
 
-### Unreleased
+### 0.5.25
 
 - Generation turns commit even when the rendered design check cannot run (Chromium missing or a large site timing out); the chat shows a "review incomplete" badge instead of refusing the turn. Must-fix findings block a turn only in pages the turn changed, and a turn that edits shared CSS, scripts or images is checked across every page.
 - The Quality panel reports checks that do not apply to decks and fixed-size graphics as not applicable, measures contrast on plain gradients, treats monospace text as its own font role, scans linked stylesheets for hard-coded colours, and flags remote fonts, images and frames that exports cannot fetch.
