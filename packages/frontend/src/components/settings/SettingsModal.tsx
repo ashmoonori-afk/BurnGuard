@@ -98,6 +98,8 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
   // types a token here, hits Save, and the field clears.
   const [figmaTokenInput, setFigmaTokenInput] = useState("");
   const [figmaTokenSaving, setFigmaTokenSaving] = useState(false);
+  const [vercelTokenInput, setVercelTokenInput] = useState("");
+  const [vercelTokenSaving, setVercelTokenSaving] = useState(false);
   const [commandcodeKey, setCommandcodeKey] = useState("");
   const [commandcodeSaving, setCommandcodeSaving] = useState(false);
 
@@ -197,6 +199,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
         chat_abort_threshold_ms: settings.chat_abort_threshold_ms,
         chat_context_mode: settings.chat_context_mode,
         user: settings.user,
+        publish_made_with_badge: settings.publish_made_with_badge,
       });
       queryClient.setQueryData(["settings"], next);
       pushToast({ title: t("settings.saved"), tone: "success" });
@@ -234,7 +237,22 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const busy = saving || figmaTokenSaving || commandcodeSaving || providerSaving || updateApplying;
+  async function saveVercelToken(value: string | null) {
+    setVercelTokenSaving(true);
+    try {
+      const next = await patchSettings({ vercel_token: value });
+      setSettings((draft) => draft ? { ...draft, vercel_token_set: next.vercel_token_set } : next);
+      queryClient.setQueryData(["settings"], next);
+      setVercelTokenInput("");
+      pushToast({ title: t(value === null ? "settings.vercelDeleted" : "settings.vercelSaved"), tone: "success" });
+    } catch (err) {
+      pushToast({ title: t("settings.vercelFailed"), body: apiErrorCopy(err), tone: "error" });
+    } finally {
+      setVercelTokenSaving(false);
+    }
+  }
+
+  const busy = saving || figmaTokenSaving || vercelTokenSaving || commandcodeSaving || providerSaving || updateApplying;
 
   return (
     <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen && !busy) onClose(); }}>
@@ -541,6 +559,48 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               <p className="text-xs text-muted-foreground">
                 {t("settings.figmaHint")}
               </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="vercel-token" className="text-xs font-medium text-muted-foreground">
+                {t("settings.vercel")}
+              </label>
+              {settings.vercel_token_set ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-3 text-sm">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
+                    {t("settings.vercelConnected")}
+                  </span>
+                  <Button variant="outline" size="sm" disabled={vercelTokenSaving} onClick={() => saveVercelToken(null)}>
+                    {t("settings.disconnect")}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    id="vercel-token"
+                    type="password"
+                    disabled={vercelTokenSaving}
+                    autoComplete="off"
+                    value={vercelTokenInput}
+                    onChange={(e) => setVercelTokenInput(e.target.value)}
+                    className="flex-1 font-mono text-xs"
+                  />
+                  <Button size="sm" disabled={vercelTokenSaving || vercelTokenInput.trim().length === 0} onClick={() => saveVercelToken(vercelTokenInput.trim())}>
+                    {t(vercelTokenSaving ? "settings.saving" : "settings.save")}
+                  </Button>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">{t("settings.vercelHint")}</p>
+              <label className="flex items-center gap-2 pt-1 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-accent"
+                  checked={settings.publish_made_with_badge}
+                  onChange={(e) => setSettings((draft) => draft ? { ...draft, publish_made_with_badge: e.target.checked } : draft)}
+                />
+                {t("settings.publishBadge")}
+              </label>
             </div>
 
             <ProviderConnections connections={settings.llm_connections} onSavingChange={setProviderSaving} onSaved={(next) => setSettings((draft) => draft ? { ...draft, llm_connections: next.llm_connections } : next)} />
