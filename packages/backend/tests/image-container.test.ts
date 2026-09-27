@@ -128,6 +128,20 @@ function containers() {
   };
 }
 
+test("Given a WebP whose format tag bytes carry a high-bit alias When its palette is read Then it is refused before native decoding", async () => {
+  const extended = containers().valid.still;
+  const simple = webpOf([chunksOf(redWebp()).find((chunk) => chunk.type === "VP8 ")!]);
+  const cases = [[extended, [0, 1, 2, 3, 8, 9, 10, 11, 12, 13, 14, 15]], [simple, [12, 13, 14, 15]]] as const;
+  for (const [bytes, offsets] of cases) {
+    for (const offset of offsets) {
+      const aliased = Buffer.from(bytes);
+      aliased.writeUInt8(aliased.readUInt8(offset) | 0x80, offset);
+      await expect(imagePalette(aliased), `offset ${offset}`).rejects.toThrow();
+      await expect(isolatedImagePalette(aliased), `offset ${offset}`).rejects.toMatchObject({ code: expect.stringMatching(/^(invalid_image_container|image_decode_failed)$/) });
+    }
+  }
+});
+
 test("Given well-formed still, animated and trailing-extension WebP layouts When checked Then they are accepted and a still image decodes in the isolated worker", async () => {
   const { valid } = containers();
   for (const bytes of Object.values(valid)) expect(() => assertDecodableImageContainer(bytes)).not.toThrow();
