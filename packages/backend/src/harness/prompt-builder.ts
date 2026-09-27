@@ -16,10 +16,12 @@ import {
   VISUAL_CRAFT_BY_TYPE,
   VISUAL_CRAFT_CORE,
 } from "./skills/visual-craft-skill";
+import { TASTE_BY_TYPE, TASTE_CORE } from "./skills/taste-skill";
 import { appendAttachmentContext } from "./prompt-attachments";
 import {
   COMPACT_DECK_SKILL_MD,
   COMPACT_PROTOTYPE_SKILL_MD,
+  COMPACT_TASTE_REFERENCE,
 } from "./prompt-compact-skills";
 import { appendDesignBriefContext } from "./prompt-design-brief";
 import { appendDesignSystemContext, compactPinnedDesignSystemContext } from "./prompt-design-system";
@@ -309,6 +311,17 @@ export async function buildPrompt(
   lines.push(VISUAL_CRAFT_CORE.trim());
   if (visualCraft !== null) lines.push(visualCraft.trim());
   lines.push("");
+  if (deliverable !== "generic") {
+    lines.push("## Taste");
+    if (contextMode === "compact") {
+      lines.push(COMPACT_TASTE_REFERENCE.trim());
+    } else {
+      lines.push(TASTE_CORE.trim());
+      const taste = selectTasteByType(deliverable);
+      if (taste !== null) lines.push(taste.trim());
+    }
+    lines.push("");
+  }
   if (!context.designSystem && !context.designSystemPin) {
     lines.push("## Default visual identity");
     lines.push(DEFAULT_VISUAL_IDENTITY.trim());
@@ -415,6 +428,19 @@ function selectVisualCraft(projectType: SessionContext["project"]["project_type"
     case "logo":
       return VISUAL_CRAFT_BY_TYPE[projectType];
     default:
+      return null;
+  }
+}
+
+function selectTasteByType(deliverable: Deliverable): string | null {
+  switch (deliverable) {
+    case "prototype":
+    case "slide_deck":
+    case "graphic":
+      return TASTE_BY_TYPE[deliverable];
+    case "diagram":
+    case "logo":
+    case "generic":
       return null;
   }
 }

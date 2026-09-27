@@ -8,7 +8,7 @@ import { inspectRenderedPage } from "../src/services/design-audit-dom";
 import { auditRenderedTree } from "../src/services/design-audit";
 import { launchChromium } from "../src/services/export-render-session";
 
-const NOT_APPLICABLE_ON_FIXED = ["narrow_width", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset"];
+const NOT_APPLICABLE_ON_FIXED = ["narrow_width", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset", "eyebrow_density", "duplicate_cta_intent"];
 const DECK_RUNTIME = '<script src="/runtime/deck-stage.js" defer></script>';
 const readyDeck = `<!doctype html><html><head><style>:root{--ink:#111;--paper:#fff}body{margin:0;font:32px Arial;color:var(--ink);background:var(--paper)}[data-slide]{position:relative;width:1920px;height:1080px}[data-deck-ready] [data-slide]:not([data-active]){display:none}h1{font:52px Arial;margin:0}.a,.b{position:absolute;top:400px;width:300px;height:60px;margin:0}.a{left:100px}.b{left:600px}</style></head><body><section data-slide><h1 data-bg-node-id="title">Ready deck</h1><p class="a" data-bg-node-id="a">Alpha</p><p class="b" data-bg-node-id="b">Beta</p></section>${DECK_RUNTIME}</body></html>`;
 const tokenDeck = `<!doctype html><html><head><style>:root{--ink:#111;--slide-type-caption:24px}body{margin:0;font:32px Arial;color:var(--ink);background:white}[data-slide]{width:1920px;height:1080px}[data-deck-ready] [data-slide]:not([data-active]){display:none}h1{font:52px Arial;margin:0}p{margin:0}</style></head><body><section data-slide><h1 data-bg-node-id="title-1">First</h1></section><section data-slide><h1 data-bg-node-id="title-2">Second</h1><p data-bg-node-id="small" style="font-size:18px">Small caption</p></section>${DECK_RUNTIME}</body></html>`;
@@ -106,12 +106,43 @@ describe("rendered page measurements", () => {
     } finally { await page.close(); }
   }, 30_000);
 
-  test("Given copy that merely contains todo and copy that is exactly TBD When copy is inspected Then only the bare placeholder is reported", async () => {
+  test("Given unfinished copy and sample identities When copy is inspected Then each advisory check owns its matching findings", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     try {
-      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}</style><p data-bg-node-id="list">Todo list for the week</p><p data-bg-node-id="tbd">TBD</p><p data-bg-node-id="ph">Placeholder.</p><p data-bg-node-id="lorem">Intro lorem ipsum dolor</p><p data-bg-node-id="hint">Set an input placeholder that explains the format</p>');
-      const copy = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "copy_review").map((finding) => finding.nodeId).sort();
-      expect(copy).toEqual(["lorem", "ph", "tbd"]);
+      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}</style><p data-bg-node-id="list">Todo list for the week</p><p data-bg-node-id="tbd">TBD</p><p data-bg-node-id="ph">Placeholder.</p><p data-bg-node-id="lorem">Intro lorem ipsum dolor</p><p data-bg-node-id="john">John Doe</p><p data-bg-node-id="split">John <span>Doe</span></p><p data-bg-node-id="acme">Acme Corp</p><p data-bg-node-id="hong">홍길동</p><p data-bg-node-id="hint">Set an input placeholder that explains the format</p>');
+      const findings = (await inspectRenderedPage(page)).findings;
+      expect(findings.filter((finding) => finding.code === "copy_review").map((finding) => finding.nodeId).sort()).toEqual(["ph", "tbd"]);
+      const placeholders = findings.filter((finding) => finding.code === "placeholder_copy");
+      expect(placeholders.map((finding) => finding.nodeId).sort()).toEqual(["acme", "hong", "john", "lorem", "split"]);
+      expect(placeholders.every((finding) => finding.severity === "recommended" && finding.action === "revise_copy")).toBe(true);
+    } finally { await page.close(); }
+  }, 30_000);
+
+  test("Given visible separator dashes When copy is inspected Then each affected node is recommended for revision", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}</style><p data-bg-node-id="em">Fast — focused</p><p data-bg-node-id="en">Clear – concise</p><p data-bg-node-id="hyphen">well-made</p>');
+      const findings = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "em_dash_copy");
+      expect(findings.map((finding) => finding.nodeId)).toEqual(["em", "en"]);
+      expect(findings.every((finding) => finding.severity === "recommended" && finding.action === "revise_copy")).toBe(true);
+    } finally { await page.close(); }
+  }, 30_000);
+
+  test("Given six website sections with three direct eyebrow labels When inspected Then density above the one-per-three limit is recommended", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}.eyebrow{font:12px Arial;letter-spacing:2px}h2{font:32px Arial}</style><main><section><p class="eyebrow" data-bg-node-id="e1">FIRST</p><h2>One</h2></section><section><p class="eyebrow" data-bg-node-id="e2">SECOND</p><h2>Two</h2></section><section><p class="eyebrow" data-bg-node-id="e3">THIRD</p><h2>Three</h2></section><section><h2>Four</h2></section><section><h2>Five</h2></section><section><h2>Six</h2></section></main>');
+      const findings = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "eyebrow_density");
+      expect(findings.map((finding) => [finding.nodeId, finding.measured, finding.threshold, finding.severity])).toEqual([["e3", 3, 2, "recommended"]]);
+    } finally { await page.close(); }
+  }, 30_000);
+
+  test("Given primary calls to action with matching normalized labels or destinations When inspected Then each repeated intent is recommended", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent('<!doctype html><base href="https://audit.test/"><style>body{margin:0;background:#fff;color:#111}.primary-cta{display:inline-block;background:#111;color:#fff;padding:8px}</style><main><a class="primary-cta" data-bg-node-id="label-first" href="/alpha">Start now</a><a class="primary-cta" data-bg-node-id="label-second" href="/beta">START NOW!</a><a class="primary-cta" data-bg-node-id="href-first" href="/start">Try it</a><a class="primary-cta" data-bg-node-id="href-second" href="./start">Begin</a><a class="primary-cta" data-bg-node-id="host-one" href="https://one.test/shared">Host one</a><a class="primary-cta" data-bg-node-id="host-two" href="https://two.test/shared">Host two</a><button data-bg-node-id="secondary-one">Save</button><button data-bg-node-id="secondary-two">Save</button><a class="primary-cta" data-bg-node-id="unique" href="/contact">Contact</a></main>');
+      const findings = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "duplicate_cta_intent");
+      expect(findings.map((finding) => [finding.nodeId, finding.severity, finding.action])).toEqual([["label-second", "recommended", "revise_copy"], ["href-second", "recommended", "revise_copy"]]);
     } finally { await page.close(); }
   }, 30_000);
 

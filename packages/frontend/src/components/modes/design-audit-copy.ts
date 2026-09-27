@@ -4,6 +4,8 @@ import type { DesignAuditErrorCode } from "@/lib/design-audit-state";
 
 export const DESIGN_AUDIT_CHECK_COPY = {
   get font_consistency() { return t("modes.audit.check.fontConsistency"); }, get copy_review() { return t("modes.audit.check.copyReview"); },
+  get em_dash_copy() { return t("modes.audit.check.emDashCopy"); }, get eyebrow_density() { return t("modes.audit.check.eyebrowDensity"); },
+  get duplicate_cta_intent() { return t("modes.audit.check.duplicateCtaIntent"); }, get placeholder_copy() { return t("modes.audit.check.placeholderCopy"); },
   get text_overflow() { return t("modes.audit.check.textOverflow"); }, get element_overlap() { return t("modes.audit.check.elementOverlap"); }, get minimum_text_size() { return t("modes.audit.check.minimumTextSize"); }, get contrast() { return t("modes.audit.check.contrast"); },
   get narrow_width() { return t("modes.audit.check.narrowWidth"); }, get duplicate_node_id() { return t("modes.audit.check.duplicateNodeId"); }, get missing_image() { return t("modes.audit.check.missingImage"); }, get token_usage() { return t("modes.audit.check.tokenUsage"); },
   get site_nav_mismatch() { return t("modes.audit.check.siteNavMismatch"); }, get site_missing_aria_current() { return t("modes.audit.check.currentPage"); }, get site_dangling_link() { return t("modes.audit.check.danglingLink"); },

@@ -6,7 +6,7 @@ const checks = DESIGN_AUDIT_CHECK_CODES.map((code) => ({ code, status: "pass", r
 const valid = { schema_version: 1, project_id: "project", artifact_revision: 0, artifact_digest: digest, created_at: 1, overall_status: "ready", checks };
 
 describe("design audit result contract", () => {
-  test("Given the canonical eight checks When parsed Then identity and order are preserved", () => {
+  test("Given the canonical checks When parsed Then identity and order are preserved", () => {
     expect(parseDesignAuditResult(valid)).toEqual(valid);
   });
 

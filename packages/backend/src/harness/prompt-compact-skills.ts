@@ -1,12 +1,20 @@
 import { EXPORT_REMOTE_FRAME_RULE } from "./design-craft";
 import { LUCIDE_REFERENCE_REL_PATH } from "./lucide-reference";
 
+export const COMPACT_TASTE_REFERENCE = `# Taste compact reference (TASTE_COMPACT_REFERENCE)
+
+The brief, selected direction, design system and user instructions come first.
+Record a private design read plus variation, motion and density dials before
+generation. Avoid repeated template patterns, filler copy and duplicate CTA
+intent; keep one accent role and one corner-radius scale. Apply the matching
+project-type structural contract.`;
+
 export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 
 ## Token budget rules (READ THESE FIRST)
 - The "## Deck structure" section above is your map. Use it to plan instead of Reading the full file.
 - Use the structure summary above and bounded reads of the target; avoid unnecessary full-file rereads. Reinspect changed regions after edits and read the necessary surrounding context to diagnose failures.
-- When you do need a slide's exact markup, use \`Grep\` for \`data-bg-node-id="slide-N"\` to find the line, then \`Read\` with \`offset\`/\`limit\` covering that slide only — never the whole file.
+- When you do need a slide's exact markup, use \`Grep\` for \`data-bg-node-id="slide-N"\` to find the line, then \`Read\` with \`offset\`/\`limit\` covering that slide only; never the whole file.
 - Prefer multiple targeted \`Edit\` calls (small \`old_string\`/\`new_string\`) over a \`Write\` of the whole file. \`Write\` re-emits the entire 100 KB+ artifact and is the most expensive thing you can do.
 - For multi-slide redesigns, plan all edits before executing. Batch independent targeted edits when their inputs are current; inspect results and reread affected regions before dependent edits.
 
