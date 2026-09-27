@@ -25,6 +25,7 @@ const ACTIVE_ELEMENTS = [
 const URL_ATTRIBUTES = ["href", "src", "action", "formaction", "poster", "xlink:href", "srcset", "imagesrcset", "ping"] as const;
 /** Raw-text or inert containers whose markup a JS-disabled consumer still renders and fetches. */
 const HIDDEN_MARKUP_CONTAINERS = ["noscript", "template"] as const;
+export const MAX_HIDDEN_MARKUP_DEPTH = 8;
 const DANGEROUS_SCHEME = /^(?:javascript|data:text\/html|vbscript):/i;
 const NETWORK_STYLE = /(?:@import\b|url\s*\()/i;
 const TEXT_NODE = 3;
@@ -126,7 +127,7 @@ function assertSourceMarkup(content: string, kind: "html" | "svg", relativeRefer
   assertInertTree(parse(content, { lowerCaseTagName: true }), kind, relativeReferencesAllowed);
 }
 
-function assertInertTree(root: HTMLElement, kind: "html" | "svg", relativeReferencesAllowed: boolean): void {
+function assertInertTree(root: HTMLElement, kind: "html" | "svg", relativeReferencesAllowed: boolean, depth = 0): void {
   for (const elementName of ACTIVE_ELEMENTS) {
     if (root.querySelector(elementName) !== null) throw new ExtractionSafetyError("unsafe_source_content", `Active ${kind} element is not accepted`);
   }
@@ -147,10 +148,21 @@ function assertInertTree(root: HTMLElement, kind: "html" | "svg", relativeRefere
     }
   }
   // The parser keeps <noscript> as raw text and <template> inert, but a JS-disabled or printing
-  // consumer renders both, so their markup is held to the same rules.
-  for (const elementName of HIDDEN_MARKUP_CONTAINERS) {
-    for (const node of root.querySelectorAll(elementName)) assertInertTree(parse(node.innerHTML, { lowerCaseTagName: true }), kind, relativeReferencesAllowed);
+  // consumer renders both, so their markup is held to the same rules. Only the outermost containers
+  // are reparsed here (the recursion reaches nested ones exactly once), and nesting beyond a small
+  // depth fails closed, so crafted nested containers cannot force exponential validation work.
+  const outermost = root.querySelectorAll(HIDDEN_MARKUP_CONTAINERS.join(",")).filter(node => !hasHiddenContainerAncestor(node, root));
+  if (outermost.length > 0 && depth >= MAX_HIDDEN_MARKUP_DEPTH) {
+    throw new ExtractionSafetyError("unsafe_source_content", `Deeply nested hidden ${kind} markup is not accepted`);
   }
+  for (const node of outermost) assertInertTree(parse(node.innerHTML, { lowerCaseTagName: true }), kind, relativeReferencesAllowed, depth + 1);
+}
+
+function hasHiddenContainerAncestor(node: HTMLElement, root: HTMLElement): boolean {
+  for (let parent = node.parentNode; parent !== null && parent !== root; parent = parent.parentNode) {
+    if ((HIDDEN_MARKUP_CONTAINERS as readonly string[]).includes(parent.rawTagName?.toLowerCase() ?? "")) return true;
+  }
+  return false;
 }
 
 function isSafeRelativeReference(value: string): boolean {
