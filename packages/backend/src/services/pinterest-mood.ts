@@ -1,4 +1,6 @@
 import { createCanvas, loadImage } from "./export-native-modules";
+import { assertDecodableImageContainer } from "./image-container";
+import { isolatedImagePalette } from "./image-palette-process";
 import { parse } from "node-html-parser";
 import { PINTEREST_PIN_LIMIT, type CreatePinterestMoodRequest, type CreatePinterestMoodResponse } from "@bg/shared";
 import { createAcquisitionBudget, ExtractionAcquisitionError, throwIfAcquisitionAborted } from "./extraction-acquisition";
@@ -46,6 +48,7 @@ export async function imagePalette(bytes: Buffer): Promise<string[]> {
     }
   }
   if (!width || !height || width * height > 20_000_000) throw new Error("unsupported_image_dimensions");
+  assertDecodableImageContainer(bytes);
   const image = await loadImage(bytes);
   if (image.width * image.height > 20_000_000) throw new Error("image_dimensions");
   const context = createCanvas(64, 64).getContext("2d");
@@ -78,7 +81,7 @@ export async function collectPinterestMood(input: CreatePinterestMoodRequest, si
       const image = new URL(imageUrl);
       if (image.protocol !== "https:" || image.hostname !== "i.pinimg.com" || image.port || image.username || image.password) throw new Error("unsupported_image_host");
       const resource = await fetchResource(image, { signal, kind: "asset", maxBytes: 4_000_000, noteBytes, userAgent: "BurnGuard/1.0" });
-      const palette = await imagePalette(resource.buffer);
+      const palette = await isolatedImagePalette(resource.buffer, { signal });
       if (!palette.length) throw new Error("empty_palette");
       for (const color of palette) {
         colors.add(color);

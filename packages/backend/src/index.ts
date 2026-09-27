@@ -16,6 +16,10 @@ if (process.argv.includes("--bg-chromium-probe")) {
   const { runChromiumProbeProcess } = await import("./services/chromium-capability");
   await runChromiumProbeProcess();
 }
+if (process.argv.includes("--bg-image-palette")) {
+  const { runImagePaletteProcess } = await import("./services/image-palette-process");
+  await runImagePaletteProcess();
+}
 
 const isDesktop = process.env.BG_DESKTOP === "1";
 const ownedPort = isDesktop ? desktopPort(process.env.BG_PORT) : undefined;
