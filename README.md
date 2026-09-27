@@ -96,7 +96,7 @@ Explore **SONNEL**, **FOLIOVER**, **ODDWARD**, **VELUNE** and **HALIDE**. Each o
 | Rendering and export | Supported Chrome/Edge or Chromium; availability is shown in Settings |
 | Updates | Windows and macOS release feeds; preserve your local profile when replacing a package |
 
-Vercel publishing requires your token and optional team ID. Hosting plans and visitor access follow your Vercel settings. Cafe24 and Imweb packages require manual installation; they have not been validated in a live customer shop.
+Vercel publishing requires your token and optional team ID. A pasted token stays in memory for that publish; a token saved in Settings is kept only in this computer's local config file. Hosting plans and visitor access follow your Vercel settings. Cafe24 and Imweb packages require manual installation; they have not been validated in a live customer shop.
 
 ## Your projects stay local
 
@@ -153,6 +153,14 @@ The interface captures were selected from the repository's local `.omo/evidence`
 </details>
 
 ## Changelog
+
+### 0.5.26
+
+- Publishing a web project to Vercel adds a small "Made with BurnGuard" badge to the published site only; downloaded ZIP exports are unchanged. The badge can be turned off in Settings or per publish.
+- A Vercel token can be saved on this computer, so publishing becomes a single click. Settings only show whether a token is saved, never the token itself.
+- The READMEs open with a recorded demo of a one-line prompt becoming a landing page.
+- Hidden `<template>` and `<noscript>` markup in untrusted design-system sources is validated once per container and rejected when nested more than eight levels deep, so crafted markup can no longer stall the backend.
+- The macOS release smoke test finds the canvas Edit control by its icon instead of by toolbar position, matching the toolbar that dropped the Select mode in 0.5.25.
 
 ### 0.5.25
 
