@@ -27,8 +27,8 @@ export async function extractImageOrWordAttachment(input: AttachmentExtractionIn
     if (text.length > 1_000_000) throw new Error("docx_text_limit");
     if (!text.trim()) text = "No text was found in this Word document. Embedded images were not OCR processed.";
   } else {
-    const { imagePalette } = await import("./pinterest-mood");
-    colors = await imagePalette(bytes);
+    const { isolatedImagePalette } = await import("./image-palette-process");
+    colors = await isolatedImagePalette(bytes);
   }
   const kind = word ? "docx" : "image";
   await writeFile(input.extractedTextPath, `# Extracted attachment (${kind})\n\n${text}`, "utf8");
