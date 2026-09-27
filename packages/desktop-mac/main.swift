@@ -236,8 +236,8 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     const json = async response => { const body = await response.json(); if (!response.ok || !body.data) throw new Error(`HTTP ${response.status}`); return body.data; };
     const frame = await waitFor(() => { const value = document.querySelector('iframe'); return value?.getAttribute('aria-busy') === 'false' ? value : null; });
     const projectBefore = await json(await fetch(`/api/projects/${projectId}`));
-    const toolbar = await waitFor(() => [...document.querySelectorAll('button[aria-pressed]')].map(value => value.parentElement).find(value => value?.querySelectorAll(':scope > button').length >= 7));
-    const edit = toolbar.querySelectorAll(':scope > button')[1]; if (!edit) throw new Error('Edit control unavailable'); edit.click();
+    const edit = await waitFor(() => document.querySelector('button[aria-pressed]:has(svg.lucide-pencil)'));
+    edit.click();
     const overlay = await waitFor(() => [...frame.parentElement.children].find(value => value instanceof HTMLDivElement && value.style.pointerEvents === 'auto'));
     const rect = overlay.getBoundingClientRect(); overlay.dispatchEvent(new MouseEvent('click', {bubbles:true, clientX:rect.left + rect.width / 2, clientY:rect.top + rect.height / 2}));
     const textarea = await waitFor(() => document.getElementById('element-edit-text'));
@@ -279,7 +279,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
       const frame = await waitFor(() => { const value=document.querySelector('iframe'); return value?.getAttribute('aria-busy') === 'false' ? value : null; }).catch(error=>{throw new Error(`reload-frame: ${error}`)}); diagnostics.reloadBodyTextLength=document.body?.innerText?.length??0; diagnostics.reloadPageTitle=document.title;
       const project=await json(await fetch(`/api/projects/${projectId}`)); diagnostics.reloadedRevision=project.current_revision; diagnostics.expectedSavedRevision=savedRevision;
       if(project.current_revision!==savedRevision)throw new Error('Reloaded project revision did not match the saved revision');
-      const toolbar = await waitFor(() => [...document.querySelectorAll('button[aria-pressed]')].map(value => value.parentElement).find(value => value?.querySelectorAll(':scope > button').length >= 7)); toolbar.querySelectorAll(':scope > button')[1].click();
+      const edit = await waitFor(() => document.querySelector('button[aria-pressed]:has(svg.lucide-pencil)')); edit.click();
       const textareaReady=observePersistedTextarea(persistedText);
       const overlay = await waitFor(() => [...frame.parentElement.children].find(value => value instanceof HTMLDivElement && value.style.pointerEvents === 'auto')).catch(error=>{throw new Error(`reload-overlay: ${error}`)});
       const rect=overlay.getBoundingClientRect(); overlay.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:rect.left+rect.width/2,clientY:rect.top+rect.height/2}));
