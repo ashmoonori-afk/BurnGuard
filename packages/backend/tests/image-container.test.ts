@@ -52,11 +52,11 @@ function extendedHeader(flags: number, reserved = 0, side = 4): Chunk {
   return { type: "VP8X", data };
 }
 
-function frame(chunks: readonly Chunk[], x = 0, frameFlags = 0): Chunk {
+function frame(chunks: readonly Chunk[], x = 0, frameFlags = 0, side = 4): Chunk {
   const header = Buffer.alloc(16);
   header.writeUIntLE(x, 0, 3);
-  header.writeUIntLE(3, 6, 3);
-  header.writeUIntLE(3, 9, 3);
+  header.writeUIntLE(side - 1, 6, 3);
+  header.writeUIntLE(side - 1, 9, 3);
   header.writeUIntLE(100, 12, 3);
   header.writeUInt8(frameFlags, 15);
   return { type: "ANMF", data: Buffer.concat([header, ...chunks.map(encodeChunk)]) };
@@ -87,6 +87,7 @@ function containers() {
       lossyWithAlpha: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x01), image]),
       lossyWithExactRawAlpha: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x00, 16), image]),
       animatedWithAlpha: webpOf([extendedHeader(0x22 | 0x10), icc, animation, frame([image]), frame([alphaChunk(0x01), image])]),
+      frameInsideLargerCanvas: webpOf([extendedHeader(0x22, 0, 8), icc, animation, frame([image], 2)]),
     },
     malformed: {
       repeatedHeader,
@@ -113,6 +114,10 @@ function containers() {
       alphaUnknownCompression: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x03), image]),
       shortRawAlpha: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x00, 1), image]),
       animatedAlphaFlagWithoutAlpha: webpOf([extendedHeader(0x22 | 0x10), icc, animation, frame([image]), frame([image])]),
+      canvasSmallerThanImage: webpOf([extendedHeader(0x20, 0, 1), icc, image]),
+      canvasLargerThanImage: webpOf([extendedHeader(0x20, 0, 8), icc, image]),
+      frameSmallerThanImage: webpOf([extendedHeader(0x22, 0, 8), icc, animation, frame([image], 0, 0, 2)]),
+      imageWithoutKeyFrameStartCode: webpOf([extendedHeader(0x20), icc, { type: "VP8 ", data: Buffer.concat([image.data.subarray(0, 3), Buffer.from([0, 0, 0]), image.data.subarray(6)]) }]),
     },
   };
 }

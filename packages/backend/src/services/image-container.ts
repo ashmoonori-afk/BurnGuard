@@ -12,6 +12,7 @@ const FLAG_EXIF = 0x08;
 const FLAG_XMP = 0x04;
 const FLAG_ANIMATION = 0x02;
 const ANMF_RESERVED_FLAGS = 0xfc;
+const MAX_PIXELS = 20_000_000;
 
 /**
  * Structural check of a WebP container (RFC 9649, section 2) before any native decoder sees it:
@@ -27,6 +28,7 @@ export function assertDecodableImageContainer(bytes: Uint8Array): void {
   if (first === undefined) throw new ImageContainerError();
   if (first.type === "VP8 " || first.type === "VP8L") {
     if (rest.length !== 0) throw new ImageContainerError();
+    bitstreamDimensions(view, first);
     return;
   }
   if (first.type !== "VP8X" || first.size !== 10) throw new ImageContainerError();
@@ -34,7 +36,7 @@ export function assertDecodableImageContainer(bytes: Uint8Array): void {
   if ((flags & VP8X_RESERVED_FLAGS) !== 0 || view.readUIntLE(first.start + 9, 3) !== 0) throw new ImageContainerError();
   const canvasWidth = 1 + view.readUIntLE(first.start + 12, 3);
   const canvasHeight = 1 + view.readUIntLE(first.start + 15, 3);
-  if (canvasWidth * canvasHeight > 0xffffffff) throw new ImageContainerError();
+  if (canvasWidth * canvasHeight > MAX_PIXELS) throw new ImageContainerError();
 
   let index = 0;
   const next = (type: string): RiffChunk | undefined => rest[index]?.type === type ? rest[index++] : undefined;
@@ -55,6 +57,7 @@ export function assertDecodableImageContainer(bytes: Uint8Array): void {
     const bitstream = next("VP8 ") ?? next("VP8L");
     if (bitstream === undefined) throw new ImageContainerError();
     if (bitstream.type === "VP8 " && flags & FLAG_ALPHA && alpha === undefined) throw new ImageContainerError();
+    assertDimensions(view, bitstream, canvasWidth, canvasHeight);
     assertAlphaPairing(view, alpha, bitstream, flags, canvasWidth * canvasHeight);
   }
   // After the image data: EXIF and XMP at most once each, in either order, among unknown chunks.
@@ -95,8 +98,43 @@ function assertAnimationFrame(view: Buffer, frame: RiffChunk, canvasWidth: numbe
   if (bitstream === undefined || (bitstream.type !== "VP8 " && bitstream.type !== "VP8L")) throw new ImageContainerError();
   // Unknown chunks may follow a frame's bitstream; known ones may not.
   if (extra.some((chunk) => KNOWN_CHUNKS.has(chunk.type))) throw new ImageContainerError();
+  assertDimensions(view, bitstream, width, height);
   assertAlphaPairing(view, alpha, bitstream, flags, width * height);
   return alpha !== undefined || bitstream.type === "VP8L";
+}
+
+function assertDimensions(view: Buffer, bitstream: RiffChunk, width: number, height: number): void {
+  const actual = bitstreamDimensions(view, bitstream);
+  if (actual.width !== width || actual.height !== height) throw new ImageContainerError();
+}
+
+/**
+ * Reads the image size a VP8 key frame or VP8L header declares, so it can be held to the canvas or
+ * frame size the container declares.
+ */
+function bitstreamDimensions(view: Buffer, bitstream: RiffChunk): { readonly width: number; readonly height: number } {
+  const data = bitstream.start + 8;
+  let width: number;
+  let height: number;
+  if (bitstream.type === "VP8 ") {
+    if (bitstream.size < 10) throw new ImageContainerError();
+    const tag = view.readUIntLE(data, 3);
+    const keyFrame = (tag & 0x01) === 0;
+    const version = (tag >> 1) & 0x07;
+    const firstPartitionSize = tag >>> 5;
+    if (!keyFrame || version > 3 || firstPartitionSize > bitstream.size - 10) throw new ImageContainerError();
+    if (view.readUInt8(data + 3) !== 0x9d || view.readUInt8(data + 4) !== 0x01 || view.readUInt8(data + 5) !== 0x2a) throw new ImageContainerError();
+    width = view.readUInt16LE(data + 6) & 0x3fff;
+    height = view.readUInt16LE(data + 8) & 0x3fff;
+  } else {
+    if (bitstream.size < 5 || view.readUInt8(data) !== 0x2f) throw new ImageContainerError();
+    const bits = view.readUInt32LE(data + 1);
+    if (bits >>> 29 !== 0) throw new ImageContainerError();
+    width = (bits & 0x3fff) + 1;
+    height = ((bits >>> 14) & 0x3fff) + 1;
+  }
+  if (width === 0 || height === 0 || width * height > MAX_PIXELS) throw new ImageContainerError();
+  return { width, height };
 }
 
 /** Every chunk header and zero-padded payload must lie inside [start, end) and tile it exactly. */
