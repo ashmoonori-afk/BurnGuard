@@ -85,6 +85,8 @@ function containers() {
       trailingUnknown: webpOf([extendedHeader(0x20), icc, image, unknown]),
       metadataInEitherOrder: webpOf([extendedHeader(0x20 | 0x08 | 0x04), icc, image, { type: "XMP ", data: Buffer.alloc(4) }, unknown, { type: "EXIF", data: Buffer.alloc(4) }]),
       lossyWithAlpha: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x01), image]),
+      lossyWithExactRawAlpha: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x00, 16), image]),
+      animatedWithAlpha: webpOf([extendedHeader(0x22 | 0x10), icc, animation, frame([image]), frame([alphaChunk(0x01), image])]),
     },
     malformed: {
       repeatedHeader,
@@ -109,6 +111,8 @@ function containers() {
       emptyAlphaChunk: webpOf([extendedHeader(0x20 | 0x10), icc, { type: "ALPH", data: Buffer.alloc(0) }, image]),
       alphaReservedBits: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0xc1), image]),
       alphaUnknownCompression: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x03), image]),
+      shortRawAlpha: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x00, 1), image]),
+      animatedAlphaFlagWithoutAlpha: webpOf([extendedHeader(0x22 | 0x10), icc, animation, frame([image]), frame([image])]),
     },
   };
 }
@@ -159,6 +163,23 @@ test("Given every decoder slot is busy When another palette is requested Then it
   holders[0]!.abort();
   expect(await queued).toEqual(["#ff0000"]);
   holders[1]!.abort();
+  await Promise.all(busy);
+  expect(queuedPaletteWorkers()).toBe(0);
+});
+
+test("Given a full decoder queue or a queued caller whose deadline passes When a palette is requested Then it is refused with a typed error", async () => {
+  const { still } = containers().valid;
+  const holders = [new AbortController(), new AbortController()];
+  const busy = holders.map((holder) => isolatedImagePalette(still, { signal: holder.signal, command: [process.execPath, "-e", "setInterval(() => {}, 1000)"] }).catch((error: unknown) => error));
+  const waiters = Array.from({ length: 16 }, () => new AbortController());
+  const queued = waiters.map((waiter) => isolatedImagePalette(still, { signal: waiter.signal }).catch((error: unknown) => error));
+  expect(queuedPaletteWorkers()).toBe(16);
+  await expect(isolatedImagePalette(still)).rejects.toMatchObject({ code: "image_decode_failed" });
+  for (const waiter of waiters) waiter.abort();
+  await Promise.all(queued);
+  expect(queuedPaletteWorkers()).toBe(0);
+  await expect(isolatedImagePalette(still, { timeoutMs: 1 })).rejects.toMatchObject({ code: "image_decode_failed" });
+  for (const holder of holders) holder.abort();
   await Promise.all(busy);
   expect(queuedPaletteWorkers()).toBe(0);
 });
