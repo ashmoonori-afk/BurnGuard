@@ -12,9 +12,9 @@ import { resolveWithin } from "../security/path-boundary";
 
 export const IMPORT_CONTEXT_PATH = ".meta/import-context.json";
 export type ImportEntry = { name: string; bytes: Uint8Array };
-export const isImportedDocument = (name: string) => /^docs\//i.test(name) && /\.(pdf|pptx|docx|png|jpe?g|webp|txt|md|csv)$/i.test(name);
+export const isImportedDocument = (name: string) => /^docs\//i.test(name) && /\.(pdf|pptx|docx|png|jpe?g|webp|gif|txt|md|csv)$/i.test(name);
 export function importDocumentFiles(entries: ImportEntry[]): File[] {
-  const mime: Record<string, string> = { ".pdf": "application/pdf", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".txt": "text/plain", ".md": "text/markdown", ".csv": "text/csv" };
+  const mime: Record<string, string> = { ".pdf": "application/pdf", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".txt": "text/plain", ".md": "text/markdown", ".csv": "text/csv" };
   const files = entries.filter(entry => isImportedDocument(entry.name)).map(entry => {
     const extension = path.extname(entry.name), name = entry.name.slice(5, -extension.length).replaceAll("/", " — ");
     return new File([Buffer.from(entry.bytes)], `${Array.from(name).slice(0, 100).join("")}${extension}`, { type: mime[extension.toLowerCase()] ?? "application/octet-stream" });

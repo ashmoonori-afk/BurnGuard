@@ -119,7 +119,7 @@ sessionRoutes.post("/api/sessions/:id/documents", async (c) => {
     const files = entries.filter((entry): entry is File => entry instanceof File);
     return c.json(ok({ paths: await saveProjectDocuments(id, files) }));
   } catch (error) {
-    if (error instanceof UnsupportedAttachmentKindError) return c.json(fail(error.code, "PNG, JPG, WebP, DOCX, PDF and PPTX files are supported"), 415);
+    if (error instanceof UnsupportedAttachmentKindError) return c.json(fail(error.code, "PNG, JPG, WebP, GIF, DOCX, PDF and PPTX files are supported"), 415);
     return c.json(fail("document_save_failed", "Could not save the original document; retry the upload"), 400);
   }
 });

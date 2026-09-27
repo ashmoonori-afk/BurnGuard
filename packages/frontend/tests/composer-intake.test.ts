@@ -85,13 +85,13 @@ describe("composer attachment intake", () => {
   });
 
   test("Given the backend extractor's supported kinds When the composer screens the same names Then the composer mirror matches the backend verdict", () => {
-    const probes = ["deck.pdf", "deck.PDF", "slides.pptx", "notes.txt", "brief.MD", "data.csv", "photo.png", "archive.zip", "noextension"];
+    const probes = ["deck.pdf", "deck.PDF", "slides.pptx", "notes.txt", "brief.MD", "data.csv", "photo.png", "clip.gif", "clip.GIF", "archive.zip", "noextension"];
 
     const composerVerdicts = probes.map((name) => readyAttachmentSources(planAttachmentIntake([], [file(name)])).length === 1);
     const backendVerdicts = probes.map((name) => inferAttachmentKind(name) !== null);
 
     expect(composerVerdicts).toEqual(backendVerdicts);
-    expect([...COMPOSER_SUPPORTED_EXTENSIONS]).toEqual([".pdf", ".pptx", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".txt", ".md", ".csv"]);
+    expect([...COMPOSER_SUPPORTED_EXTENSIONS]).toEqual([".pdf", ".pptx", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".txt", ".md", ".csv"]);
   });
 });
 

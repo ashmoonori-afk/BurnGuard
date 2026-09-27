@@ -1,4 +1,5 @@
 import { createCanvas, loadImage } from "./export-native-modules";
+import { rasterForDecoding } from "./image-decode-input";
 import { parse } from "node-html-parser";
 import { PINTEREST_PIN_LIMIT, type CreatePinterestMoodRequest, type CreatePinterestMoodResponse } from "@bg/shared";
 import { createAcquisitionBudget, ExtractionAcquisitionError, throwIfAcquisitionAborted } from "./extraction-acquisition";
@@ -33,6 +34,8 @@ export async function imagePalette(bytes: Buffer): Promise<string[]> {
     if (kind === "VP8X") { width = 1 + bytes.readUIntLE(24, 3); height = 1 + bytes.readUIntLE(27, 3); }
     else if (kind === "VP8 " && bytes.subarray(23, 26).equals(Buffer.from([157, 1, 42]))) { width = bytes.readUInt16LE(26) & 16383; height = bytes.readUInt16LE(28) & 16383; }
     else if (kind === "VP8L" && bytes[20] === 47) { const bits = bytes.readUInt32LE(21); width = (bits & 16383) + 1; height = ((bits >>> 14) & 16383) + 1; }
+  } else if (bytes.length >= 10 && /^GIF8[79]a$/.test(bytes.toString("ascii", 0, 6))) {
+    width = bytes.readUInt16LE(6); height = bytes.readUInt16LE(8);
   } else if (bytes[0] === 255 && bytes[1] === 216) {
     for (let offset = 2; offset + 4 <= bytes.length;) {
       if (bytes[offset] !== 255) break;
@@ -46,7 +49,7 @@ export async function imagePalette(bytes: Buffer): Promise<string[]> {
     }
   }
   if (!width || !height || width * height > 20_000_000) throw new Error("unsupported_image_dimensions");
-  const image = await loadImage(bytes);
+  const image = await loadImage(rasterForDecoding(bytes));
   if (image.width * image.height > 20_000_000) throw new Error("image_dimensions");
   const context = createCanvas(64, 64).getContext("2d");
   context.drawImage(image, 0, 0, 64, 64);
