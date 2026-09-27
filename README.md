@@ -96,7 +96,7 @@ Explore **SONNEL**, **FOLIOVER**, **ODDWARD**, **VELUNE** and **HALIDE**. Each o
 | Rendering and export | Supported Chrome/Edge or Chromium; availability is shown in Settings |
 | Updates | Windows and macOS release feeds; preserve your local profile when replacing a package |
 
-Vercel publishing requires your token and optional team ID. Hosting plans and visitor access follow your Vercel settings. Cafe24 and Imweb packages require manual installation; they have not been validated in a live customer shop.
+Vercel publishing requires your token and optional team ID. A pasted token stays in memory for that publish; a token saved in Settings is kept only in this computer's local config file. Hosting plans and visitor access follow your Vercel settings. Cafe24 and Imweb packages require manual installation; they have not been validated in a live customer shop.
 
 ## Your projects stay local
 
