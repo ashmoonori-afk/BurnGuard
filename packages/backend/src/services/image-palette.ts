@@ -2,6 +2,7 @@ import { createCanvas, loadImage } from "./export-native-modules";
 import { assertDecodableImageContainer } from "./image-container";
 
 export async function imagePalette(bytes: Buffer): Promise<string[]> {
+  assertDecodableImageContainer(bytes);
   // Inspect raster dimensions before native decoding to bound decompressed memory.
   let width = 0; let height = 0;
   if (bytes.length >= 24 && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) && bytes.toString("ascii", 12, 16) === "IHDR") {
@@ -24,7 +25,6 @@ export async function imagePalette(bytes: Buffer): Promise<string[]> {
     }
   }
   if (!width || !height || width * height > 20_000_000) throw new Error("unsupported_image_dimensions");
-  assertDecodableImageContainer(bytes);
   const image = await loadImage(bytes);
   if (image.width * image.height > 20_000_000) throw new Error("image_dimensions");
   const context = createCanvas(64, 64).getContext("2d");

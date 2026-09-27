@@ -43,22 +43,27 @@ function webpOf(chunks: readonly Chunk[]): Buffer {
   return Buffer.concat([header, body]);
 }
 
-function extendedHeader(flags: number, reserved = 0): Chunk {
+function extendedHeader(flags: number, reserved = 0, side = 4): Chunk {
   const data = Buffer.alloc(10);
   data.writeUInt8(flags, 0);
   data.writeUIntLE(reserved, 1, 3);
-  data.writeUIntLE(3, 4, 3);
-  data.writeUIntLE(3, 7, 3);
+  data.writeUIntLE(side - 1, 4, 3);
+  data.writeUIntLE(side - 1, 7, 3);
   return { type: "VP8X", data };
 }
 
-function frame(bitstream: Chunk, x = 0): Chunk {
+function frame(chunks: readonly Chunk[], x = 0, frameFlags = 0): Chunk {
   const header = Buffer.alloc(16);
   header.writeUIntLE(x, 0, 3);
   header.writeUIntLE(3, 6, 3);
   header.writeUIntLE(3, 9, 3);
   header.writeUIntLE(100, 12, 3);
-  return { type: "ANMF", data: Buffer.concat([header, encodeChunk(bitstream)]) };
+  header.writeUInt8(frameFlags, 15);
+  return { type: "ANMF", data: Buffer.concat([header, ...chunks.map(encodeChunk)]) };
+}
+
+function alphaChunk(headerByte: number, dataBytes = 16): Chunk {
+  return { type: "ALPH", data: Buffer.concat([Buffer.from([headerByte]), Buffer.alloc(dataBytes)]) };
 }
 
 function containers() {
@@ -75,8 +80,11 @@ function containers() {
   return {
     valid: {
       still: webpOf([extendedHeader(0x20), icc, image]),
-      animated: webpOf([extendedHeader(0x22), icc, animation, frame(image)]),
+      animated: webpOf([extendedHeader(0x22), icc, animation, frame([image])]),
+      animatedFrameWithTrailingUnknown: webpOf([extendedHeader(0x22), icc, animation, frame([image, unknown])]),
       trailingUnknown: webpOf([extendedHeader(0x20), icc, image, unknown]),
+      metadataInEitherOrder: webpOf([extendedHeader(0x20 | 0x08 | 0x04), icc, image, { type: "XMP ", data: Buffer.alloc(4) }, unknown, { type: "EXIF", data: Buffer.alloc(4) }]),
+      lossyWithAlpha: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x01), image]),
     },
     malformed: {
       repeatedHeader,
@@ -88,10 +96,19 @@ function containers() {
       chunkWithoutFlag: webpOf([extendedHeader(0x00), icc, image]),
       unknownBeforeImage: webpOf([extendedHeader(0x20), icc, unknown, image]),
       nonZeroPadding: webpOf([extendedHeader(0x20), icc, image, { ...unknown, pad: 1 }]),
-      frameBeforeAnimation: webpOf([extendedHeader(0x22), icc, frame(image), animation]),
-      shortAnimation: webpOf([extendedHeader(0x22), icc, { type: "ANIM", data: Buffer.alloc(1) }, frame(image)]),
-      frameOutsideCanvas: webpOf([extendedHeader(0x22), icc, animation, frame(image, 1)]),
+      frameBeforeAnimation: webpOf([extendedHeader(0x22), icc, frame([image]), animation]),
+      shortAnimation: webpOf([extendedHeader(0x22), icc, { type: "ANIM", data: Buffer.alloc(1) }, frame([image])]),
+      frameOutsideCanvas: webpOf([extendedHeader(0x22), icc, animation, frame([image], 1)]),
+      frameReservedBits: webpOf([extendedHeader(0x22), icc, animation, frame([image], 0, 0x04)]),
+      frameWithTwoBitstreams: webpOf([extendedHeader(0x22), icc, animation, frame([image, image])]),
+      canvasAreaOverflow: webpOf([extendedHeader(0x20, 0, 0x1000000), icc, image]),
       stillWithTwoImages: webpOf([extendedHeader(0x20), icc, image, image]),
+      repeatedMetadata: webpOf([extendedHeader(0x20 | 0x04), icc, image, { type: "XMP ", data: Buffer.alloc(4) }, { type: "XMP ", data: Buffer.alloc(4) }]),
+      alphaFlagWithoutAlphaChunk: webpOf([extendedHeader(0x20 | 0x10), icc, image]),
+      alphaChunkWithoutData: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x01, 0), image]),
+      emptyAlphaChunk: webpOf([extendedHeader(0x20 | 0x10), icc, { type: "ALPH", data: Buffer.alloc(0) }, image]),
+      alphaReservedBits: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0xc1), image]),
+      alphaUnknownCompression: webpOf([extendedHeader(0x20 | 0x10), icc, alphaChunk(0x03), image]),
     },
   };
 }

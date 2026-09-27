@@ -51,15 +51,32 @@ export function assertDecodableImageContainer(bytes: Uint8Array): void {
   } else {
     const alpha = next("ALPH");
     const bitstream = next("VP8 ") ?? next("VP8L");
-    if (bitstream === undefined || (alpha !== undefined && (bitstream.type !== "VP8 " || !(flags & FLAG_ALPHA)))) throw new ImageContainerError();
+    if (bitstream === undefined) throw new ImageContainerError();
+    assertAlphaPairing(view, alpha, bitstream, flags, true);
   }
-  if (Boolean(next("EXIF")) !== Boolean(flags & FLAG_EXIF)) throw new ImageContainerError();
-  if (Boolean(next("XMP ")) !== Boolean(flags & FLAG_XMP)) throw new ImageContainerError();
-  // Only unknown chunks may follow; any further known chunk is out of order or repeated.
-  if (rest.slice(index).some((chunk) => KNOWN_CHUNKS.has(chunk.type))) throw new ImageContainerError();
+  // After the image data: EXIF and XMP at most once each, in either order, among unknown chunks.
+  const tail = rest.slice(index);
+  const metadata = (type: string): number => tail.filter((chunk) => chunk.type === type).length;
+  if (tail.some((chunk) => KNOWN_CHUNKS.has(chunk.type) && chunk.type !== "EXIF" && chunk.type !== "XMP ")) throw new ImageContainerError();
+  if (metadata("EXIF") !== (flags & FLAG_EXIF ? 1 : 0) || metadata("XMP ") !== (flags & FLAG_XMP ? 1 : 0)) throw new ImageContainerError();
 }
 
 const KNOWN_CHUNKS = new Set(["VP8 ", "VP8L", "VP8X", "ALPH", "ANIM", "ANMF", "ICCP", "EXIF", "XMP "]);
+
+/**
+ * ALPH belongs only in front of a lossy VP8 bitstream of an image flagged with alpha, and must hold a
+ * valid header byte (reserved bits zero, known pre-processing and compression) plus data. A still
+ * lossy image flagged with alpha must carry its ALPH chunk.
+ */
+function assertAlphaPairing(view: Buffer, alpha: RiffChunk | undefined, bitstream: RiffChunk, flags: number, still: boolean): void {
+  if (alpha === undefined) {
+    if (still && bitstream.type === "VP8 " && flags & FLAG_ALPHA) throw new ImageContainerError();
+    return;
+  }
+  if (bitstream.type !== "VP8 " || !(flags & FLAG_ALPHA) || alpha.size < 2) throw new ImageContainerError();
+  const header = view.readUInt8(alpha.start + 8);
+  if ((header & 0xc0) !== 0 || ((header >> 4) & 0x03) > 1 || (header & 0x03) > 1) throw new ImageContainerError();
+}
 
 function assertAnimationFrame(view: Buffer, frame: RiffChunk, canvasWidth: number, canvasHeight: number, flags: number): void {
   if (frame.size < 16) throw new ImageContainerError();
@@ -70,9 +87,12 @@ function assertAnimationFrame(view: Buffer, frame: RiffChunk, canvasWidth: numbe
   const height = 1 + view.readUIntLE(header + 9, 3);
   if ((view.readUInt8(header + 15) & ANMF_RESERVED_FLAGS) !== 0 || x + width > canvasWidth || y + height > canvasHeight) throw new ImageContainerError();
   const data = riffChunks(view, header + 16, header + frame.size);
-  const [alpha, bitstream, ...extra] = data[0]?.type === "ALPH" ? data : [undefined, ...data];
-  if (bitstream === undefined || extra.length !== 0 || (bitstream.type !== "VP8 " && bitstream.type !== "VP8L")) throw new ImageContainerError();
-  if (alpha !== undefined && (bitstream.type !== "VP8 " || !(flags & FLAG_ALPHA))) throw new ImageContainerError();
+  const alpha = data[0]?.type === "ALPH" ? data[0] : undefined;
+  const [bitstream, ...extra] = alpha === undefined ? data : data.slice(1);
+  if (bitstream === undefined || (bitstream.type !== "VP8 " && bitstream.type !== "VP8L")) throw new ImageContainerError();
+  // Unknown chunks may follow a frame's bitstream; known ones may not.
+  if (extra.some((chunk) => KNOWN_CHUNKS.has(chunk.type))) throw new ImageContainerError();
+  assertAlphaPairing(view, alpha, bitstream, flags, false);
 }
 
 /** Every chunk header and zero-padded payload must lie inside [start, end) and tile it exactly. */

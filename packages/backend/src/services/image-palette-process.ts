@@ -12,6 +12,7 @@ const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
 const MAX_REPLY_BYTES = 4_096;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_CONCURRENT_WORKERS = 2;
+const MAX_QUEUED_WORKERS = 16;
 /** The decoder child gets only what the runtime and native loader need, never credentials or app configuration. */
 const WORKER_ENVIRONMENT = ["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SystemRoot", "SYSTEMROOT", "WINDIR", "LANG"] as const;
 
@@ -25,6 +26,7 @@ export function queuedPaletteWorkers(): number {
 async function acquireWorkerSlot(signal: AbortSignal): Promise<void> {
   signal.throwIfAborted();
   if (activeWorkers < MAX_CONCURRENT_WORKERS) { activeWorkers++; return; }
+  if (waitingWorkers.length >= MAX_QUEUED_WORKERS) throw new ImageDecodeError();
   await new Promise<void>((resolve, reject) => {
     const grant = (): void => { signal.removeEventListener("abort", cancel); activeWorkers++; resolve(); };
     const cancel = (): void => { waitingWorkers.splice(waitingWorkers.indexOf(grant), 1); reject(signal.reason); };
@@ -73,7 +75,13 @@ export async function isolatedImagePalette(
   const overflow = new AbortController();
   const timeout = AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   const signal = AbortSignal.any([...(options.signal ? [options.signal] : []), timeout, overflow.signal]);
-  await acquireWorkerSlot(options.signal ?? new AbortController().signal);
+  try {
+    await acquireWorkerSlot(AbortSignal.any([...(options.signal ? [options.signal] : []), timeout]));
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    if (error instanceof ImageDecodeError) throw error;
+    throw new ImageDecodeError();
+  }
   try {
     const compiled = /\$bunfs|~BUN/i.test(import.meta.url);
     const owned = spawnOwnedProcess({
