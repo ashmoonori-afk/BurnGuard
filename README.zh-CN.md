@@ -8,6 +8,10 @@ BurnGuard 是一个用于制作幻灯片、网站和平面作品的本地 AI 工
 
 [English](README.md) · [한국어](README.ko.md) · [下载](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [快速开始](#快速开始) · [文档](doc/README.md)
 
+![一句提示词生成 BurnGuard 落地页，再在画布上改写标题](doc/images/burnguard-demo.gif)
+
+*在 v0.5.25 上使用 Claude Code（Sonnet，LOW 推理强度）且未选择设计系统录制。约五分钟的生成过程已加速，其余均为实时。*
+
 > 本文档描述当前源码分支。已发布的桌面版可能只包含较早的功能集。封面为生成图片，工作区截图来自单独的示例配置。
 
 ## 能做什么
