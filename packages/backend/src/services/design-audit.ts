@@ -14,8 +14,8 @@ import { parseStoredProjectOptions } from "./project-options";
 import { buildSiteMap, type SiteMap } from "./site-map";
 import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
 
-/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v5: taste-oriented copy and website checks). */
-export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v5";
+/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v6: measurable visual consistency and section-variety checks). */
+export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v6";
 
 /**
  * The fixed page a project renders into, or undefined for a responsive website audit. A logo
@@ -95,7 +95,7 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   for (const [index, page] of rawPages.entries()) if (selected[index]!.length > 0) renderedFindings.push(...await enrichFindings(selected[index]!, input, manifest, page.relPath));
   const findings = [...renderedFindings, ...siteFindings].slice(0, 200);
   // Site structure is never audited on a fixed canvas and a fixed canvas is never rendered narrow, so those checks cannot pass or fail there.
-  const applicable = (code: DesignAuditCheckCode): boolean => !(fixedCanvas && (code === "narrow_width" || code.startsWith("site_") || code === "eyebrow_density" || code === "duplicate_cta_intent"));
+  const applicable = (code: DesignAuditCheckCode): boolean => !(fixedCanvas && (code === "narrow_width" || code.startsWith("site_") || code === "eyebrow_density" || code === "duplicate_cta_intent" || code === "cta_label_wrap" || code === "repeated_section_structure"));
   const checks = DESIGN_AUDIT_CHECK_CODES.map((code) => buildCheck(code, findings, code === "narrow_width" ? narrows : desktops, applicable(code)));
   const overall = findings.some((finding) => finding.severity === "must_fix") ? "must_fix" : checks.every((check) => check.status === "pass" || check.status === "not_applicable") ? "ready" : "recommended";
   return parseDesignAuditResult({ schema_version: 1, project_id: input.projectId, artifact_revision: input.revision, artifact_digest: input.digest, created_at: Date.now(), overall_status: overall, checks, shared_change_divergence: sharedChangeDivergence });
@@ -181,10 +181,11 @@ function isRemoteUrl(value: string): boolean { return /^[a-z][a-z\d+.-]*:\/\//iu
 function renderedRawFindings(desktop: DomAuditObservation, narrow: DomAuditObservation): readonly DomAuditFinding[] {
   const desktopFindings = desktop.findings.filter((finding) => finding.code !== "narrow_width");
   const desktopKeys = new Set(desktopFindings.map((finding) => `${finding.code}:${finding.nodeId ?? ""}`));
+  const narrowRecommendations = narrow.findings.filter((finding) => finding.code === "cta_label_wrap" && !desktopKeys.has(`${finding.code}:${finding.nodeId ?? ""}`));
   const directNarrow = narrow.findings.filter((finding) => finding.code === "narrow_width");
   const directNarrowNodes = new Set(directNarrow.flatMap((finding) => finding.nodeId === null ? [] : [finding.nodeId]));
   const narrowDerived = narrow.findings.filter((finding) => (finding.code === "text_overflow" || finding.code === "element_overlap") && !desktopKeys.has(`${finding.code}:${finding.nodeId ?? ""}`) && (finding.nodeId === null || !directNarrowNodes.has(finding.nodeId))).map((finding): DomAuditFinding => ({ ...finding, code: "narrow_width", severity: "must_fix", action: "repair_narrow_layout", evidence: `Narrow viewport: ${finding.evidence}` }));
-  return [...desktopFindings, ...directNarrow, ...narrowDerived];
+  return [...desktopFindings, ...narrowRecommendations, ...directNarrow, ...narrowDerived];
 }
 
 async function enrichFindings(raw: readonly DomAuditFinding[], input: AuditRenderedTreeInput, manifest: CanonicalTreeManifest, relPath: string): Promise<readonly DesignAuditFinding[]> {

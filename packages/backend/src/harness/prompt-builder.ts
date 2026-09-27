@@ -46,6 +46,7 @@ type BuiltSessionContext = NonNullable<Awaited<ReturnType<typeof buildSessionCon
 type SessionContext = Omit<BuiltSessionContext, "history" | "importContext" | "designSystemPin"> & Partial<Pick<BuiltSessionContext, "history" | "importContext" | "designSystemPin">>;
 
 const MAX_FILES_LISTED = 60;
+/** Korean alternatives in these expressions are request-detection data only; they are never emitted as prompt instructions. */
 /** Request, brief or file wording that enables the editable Three.js contract. */
 const THREE_SCENE_TERMS = /\b(?:3d|three(?:\.js)?|webgl)\b|data-bg-three|3차원|입체|쓰리디/iu;
 /** Request or brief wording that enables the native chart contract; a deck carries it by itself. */
@@ -340,8 +341,8 @@ export async function buildPrompt(
     || (structureSummary?.includes("data-bg-chart") ?? false);
   if (chartsEnabled) lines.push(CHART_AUTHORING_RULES);
   const withheld = [
-    ...(threeEnabled ? [] : ["the editable Three.js scene contract (data-bg-three) when the request, brief or an existing file names 3D, three, WebGL, 3차원 or 입체"]),
-    ...(chartsEnabled ? [] : ["the native data chart contract (data-bg-chart JSON) when the request or brief names charts, graphs, data, 차트, 그래프 or 데이터, or the entrypoint already holds a chart figure"]),
+    ...(threeEnabled ? [] : ["the editable Three.js scene contract (data-bg-three) when the request, brief or an existing file names 3D, Three.js or WebGL"]),
+    ...(chartsEnabled ? [] : ["the native data chart contract (data-bg-chart JSON) when the request or brief names charts, graphs or data, or the entrypoint already holds a chart figure"]),
   ];
   if (withheld.length > 0) lines.push(`Contracts withheld this turn (GATED_CONTRACTS), each shipped on the next turn that enables it: ${withheld.join("; ")}.`);
   // Append first, then notify: optional chaining on the callback would otherwise short-circuit the

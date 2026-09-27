@@ -21,14 +21,14 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
     })));
   });
   return page.evaluate((fixedCanvas) => {
-    type Code = "text_overflow" | "element_overlap" | "minimum_text_size" | "contrast" | "narrow_width" | "duplicate_node_id" | "missing_image" | "token_usage" | "site_nav_mismatch" | "site_missing_aria_current" | "site_dangling_link" | "site_missing_shared_block" | "site_root_absolute_asset" | "font_consistency" | "copy_review" | "em_dash_copy" | "eyebrow_density" | "duplicate_cta_intent" | "placeholder_copy" | "remote_resources";
+    type Code = "text_overflow" | "element_overlap" | "minimum_text_size" | "contrast" | "narrow_width" | "duplicate_node_id" | "missing_image" | "token_usage" | "site_nav_mismatch" | "site_missing_aria_current" | "site_dangling_link" | "site_missing_shared_block" | "site_root_absolute_asset" | "font_consistency" | "copy_review" | "em_dash_copy" | "eyebrow_density" | "duplicate_cta_intent" | "cta_label_wrap" | "placeholder_copy" | "accent_color_count" | "radius_scale_count" | "repeated_section_structure" | "remote_resources";
     type Severity = "must_fix" | "recommended";
-    type Action = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path" | "align_font_roles" | "revise_copy" | "bundle_remote_resource";
+    type Action = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path" | "align_font_roles" | "revise_copy" | "keep_cta_label_single_line" | "consolidate_visual_language" | "vary_section_layout" | "bundle_remote_resource";
     type Reason = "no_measurable_candidates" | "unresolvable_rendering" | "tokens_not_exposed";
     type Finding = { code: Code; severity: Severity; nodeId: string | null; evidence: string; measured?: number; threshold?: number; action: Action; fix?: string };
     type Color = readonly [number, number, number, number];
     const findings: Finding[] = [];
-    const measurable: Record<Code, boolean> = { text_overflow: false, element_overlap: false, minimum_text_size: false, contrast: false, narrow_width: !fixedCanvas, duplicate_node_id: true, missing_image: true, token_usage: false, site_nav_mismatch: true, site_missing_aria_current: true, site_dangling_link: true, site_missing_shared_block: true, site_root_absolute_asset: true, font_consistency: false, copy_review: false, em_dash_copy: false, eyebrow_density: !fixedCanvas, duplicate_cta_intent: !fixedCanvas, placeholder_copy: false, remote_resources: true };
+    const measurable: Record<Code, boolean> = { text_overflow: false, element_overlap: false, minimum_text_size: false, contrast: false, narrow_width: !fixedCanvas, duplicate_node_id: true, missing_image: true, token_usage: false, site_nav_mismatch: true, site_missing_aria_current: true, site_dangling_link: true, site_missing_shared_block: true, site_root_absolute_asset: true, font_consistency: false, copy_review: false, em_dash_copy: false, eyebrow_density: !fixedCanvas, duplicate_cta_intent: !fixedCanvas, cta_label_wrap: !fixedCanvas, placeholder_copy: false, accent_color_count: true, radius_scale_count: true, repeated_section_structure: !fixedCanvas, remote_resources: true };
     const unknownReasons: Partial<Record<Code, Reason>> = { text_overflow: "no_measurable_candidates", element_overlap: "no_measurable_candidates", minimum_text_size: "no_measurable_candidates", contrast: "no_measurable_candidates", token_usage: "tokens_not_exposed" };
     const elements = [...document.querySelectorAll<HTMLElement>("body *")];
     const rootStyle = getComputedStyle(document.documentElement);
@@ -43,6 +43,7 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
     measurable.copy_review = textElements.length > 0;
     measurable.em_dash_copy = textElements.length > 0;
     measurable.placeholder_copy = textElements.length > 0;
+    // Korean literals in the following patterns are generated-copy detection data only; findings emit English evidence.
     const placeholderCopy = /\blorem ipsum\b|\b(?:john|jane)\s+doe\b|\bacme(?:\s+(?:inc|corp(?:oration)?))?\b|홍길동|김철수|이영희|임꺽정|성춘향|아무개/iu;
     // Mono is its own role: a generic monospace stack, or the family the page exposes as --font-mono.
     const normalizeFamily = (value: string): string => value.replace(/["']/gu, "").replace(/\s*,\s*/gu, ",").trim().toLowerCase();
@@ -65,15 +66,31 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
     }
     const placeholderElements = elements.filter((element) => {
       if (!visible(element) || element.closest("code,pre") !== null) return false;
-      const text = (element.innerText || element.textContent || "").replace(/\s+/gu, " ").trim();
-      return placeholderCopy.test(text);
+      const text = (element.innerText || element.textContent || "").replace(/\s+/gu, " ").trim(); return placeholderCopy.test(text);
     });
     for (const element of placeholderElements) {
       if (placeholderElements.some((candidate) => candidate !== element && element.contains(candidate))) continue;
       push(element, { code: "placeholder_copy", severity: "recommended", evidence: "Visible copy contains placeholder wording or a sample identity", action: "revise_copy" });
     }
+    const accentTokens = [...rootStyle].filter((name) => /^--(?:(?:color|theme)-)?(?:accent|brand|primary)$/iu.test(name)).map((name) => ({ name, value: rootStyle.getPropertyValue(name).replace(/\s+/gu, " ").trim().toLocaleLowerCase() })).filter((token) => token.value !== "");
+    const accentValues = new Set(accentTokens.map((token) => token.value)); if (accentValues.size > 1) push(document.documentElement, { code: "accent_color_count", severity: "recommended", evidence: `Found ${accentValues.size} distinct primary accent token values across ${accentTokens.map((token) => token.name).join(", ")}`, action: "consolidate_visual_language", measured: accentValues.size, threshold: 1 });
+
+    const radii = new Map<string, HTMLElement>(); for (const element of elements.filter(visible)) {
+      const style = getComputedStyle(element); const rect = element.getBoundingClientRect();
+      for (const value of [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius]) {
+        const normalized = value.replace(/\s+/gu, " ").trim().toLocaleLowerCase(); const pixels = Number.parseFloat(normalized);
+        if (normalized === "" || normalized === "0px" || normalized === "0px 0px" || normalized.includes("%") || Number.isFinite(pixels) && pixels >= Math.min(rect.width, rect.height) / 2 - 0.5) continue; if (!radii.has(normalized)) radii.set(normalized, element);
+      }
+    }
+    if (radii.size > 3) push([...radii.values()][3] ?? null, { code: "radius_scale_count", severity: "recommended", evidence: `Found ${radii.size} distinct non-pill corner radii; keep a scale of at most 3`, action: "consolidate_visual_language", measured: radii.size, threshold: 3 });
+
     if (!fixedCanvas) {
       const sections = [...new Set([...document.querySelectorAll<HTMLElement>("main section, body > section, [data-section]")])].filter(visible);
+      const sectionFamilies = sections.map((section) => { const style = getComputedStyle(section); const tracks = style.gridTemplateColumns === "none" ? 0 : style.gridTemplateColumns.trim().split(/\s+/u).length; const children = [...section.children].filter((child): child is HTMLElement => child instanceof HTMLElement && visible(child)).map((child) => { const childStyle = getComputedStyle(child); const kind = child.matches("picture,img,video,svg,figure,canvas") ? "media" : child.matches("h1,h2,h3,h4,h5,h6,p,ul,ol,blockquote") ? child.tagName.toLocaleLowerCase() : "group"; return `${kind}:${childStyle.display}:${childStyle.position}:${childStyle.gridColumnStart}/${childStyle.gridRowStart}`; }).join(","); return `${style.display}:${tracks}:${style.flexDirection}:${children}`; });
+      for (let index = 1; index < sections.length; index += 1) {
+        const family = sectionFamilies[index]; if (family === "" || family !== sectionFamilies[index - 1]) continue;
+        push(sections[index] ?? null, { code: "repeated_section_structure", severity: "recommended", evidence: `Adjacent sections repeat the ${family} layout family`, action: "vary_section_layout", measured: 2, threshold: 1 });
+      }
       const eyebrows: HTMLElement[] = [];
       for (const heading of elements.filter((element) => element.matches("h1,h2,h3,h4,h5,h6,[role=heading]") && visible(element))) {
         const candidate = heading.previousElementSibling;
@@ -118,6 +135,8 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
           if (hrefs.has(href)) duplicateActions.add(action);
           else hrefs.set(href, action);
         }
+        const range = document.createRange(); range.selectNodeContents(action);
+        const lineTops = new Set([...range.getClientRects()].filter((rect) => rect.width > 0 && rect.height > 0).map((rect) => Math.round(rect.top * 10) / 10)); if (lineTops.size > 1) push(action, { code: "cta_label_wrap", severity: "recommended", evidence: `Primary call-to-action label wraps across ${lineTops.size} rendered lines`, action: "keep_cta_label_single_line", measured: lineTops.size, threshold: 1 });
       }
       for (const action of duplicateActions) push(action, { code: "duplicate_cta_intent", severity: "recommended", evidence: "A primary call to action repeats an earlier label or destination", action: "revise_copy", measured: 2, threshold: 1 });
     }

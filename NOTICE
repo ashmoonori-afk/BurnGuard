@@ -24,6 +24,12 @@ SOFTWARE.
 
 lucide-icons/lucide - ISC License - 38 bundled icons (full license: packages/backend/src/harness/assets/lucide/LICENSE).
 
+BurnGuard's taste guidance is adapted, with changes, from StyleGallery by
+IYEN, Copyright (c) 2026 IYEN, revision e67b440.
+Source: https://github.com/changeroa/StyleGallery
+StyleGallery documentation is licensed under CC BY 4.0; code is licensed
+under the MIT License. No StyleGallery code is included in this adaptation.
+
 Windows portable builds also redistribute Node.js and playwright-core.
 Their licenses are included at resources/node/LICENSE and
 resources/node_modules/playwright-core/LICENSE, respectively.
