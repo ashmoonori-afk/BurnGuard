@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { DesignAuditCheck, DesignAuditFinding, DesignAuditResult } from "@bg/shared";
+import { DESIGN_AUDIT_CHECK_CODES, type DesignAuditCheck, type DesignAuditFinding, type DesignAuditResult } from "@bg/shared";
 import { ApiError } from "../src/api/client";
 import { designAuditActionAvailability, designAuditControlAvailability, designAuditErrorCode, designAuditViewState, groupDesignAuditResult, isDesignAuditCurrent, preferDesignAuditResult } from "../src/lib/design-audit-state";
 import { DESIGN_AUDIT_ERROR_COPY } from "../src/components/modes/design-audit-copy";
@@ -18,7 +18,7 @@ function check(overrides: Partial<DesignAuditCheck>): DesignAuditCheck {
   return { code: "contrast", status: "pass", reason: null, findings: [], ...overrides };
 }
 function result(overrides: Partial<DesignAuditResult> = {}): DesignAuditResult {
-  const checks: readonly DesignAuditCheck[] = [check({ code: "text_overflow" }), check({ code: "element_overlap" }), check({ code: "minimum_text_size" }), check({ code: "contrast" }), check({ code: "narrow_width" }), check({ code: "duplicate_node_id" }), check({ code: "missing_image" }), check({ code: "token_usage" })];
+  const checks: readonly DesignAuditCheck[] = DESIGN_AUDIT_CHECK_CODES.map((code) => check({ code }));
   return { schema_version: 1, project_id: "project-1", artifact_revision: 2, artifact_digest: DIGEST_A, created_at: 100, overall_status: "ready", checks, ...overrides };
 }
 

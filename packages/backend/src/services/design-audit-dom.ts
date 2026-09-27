@@ -21,14 +21,14 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
     })));
   });
   return page.evaluate((fixedCanvas) => {
-    type Code = "text_overflow" | "element_overlap" | "minimum_text_size" | "contrast" | "narrow_width" | "duplicate_node_id" | "missing_image" | "token_usage" | "site_nav_mismatch" | "site_missing_aria_current" | "site_dangling_link" | "site_missing_shared_block" | "site_root_absolute_asset" | "font_consistency" | "copy_review" | "remote_resources";
+    type Code = "text_overflow" | "element_overlap" | "minimum_text_size" | "contrast" | "narrow_width" | "duplicate_node_id" | "missing_image" | "token_usage" | "site_nav_mismatch" | "site_missing_aria_current" | "site_dangling_link" | "site_missing_shared_block" | "site_root_absolute_asset" | "font_consistency" | "copy_review" | "em_dash_copy" | "eyebrow_density" | "duplicate_cta_intent" | "placeholder_copy" | "remote_resources";
     type Severity = "must_fix" | "recommended";
     type Action = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path" | "align_font_roles" | "revise_copy" | "bundle_remote_resource";
     type Reason = "no_measurable_candidates" | "unresolvable_rendering" | "tokens_not_exposed";
     type Finding = { code: Code; severity: Severity; nodeId: string | null; evidence: string; measured?: number; threshold?: number; action: Action; fix?: string };
     type Color = readonly [number, number, number, number];
     const findings: Finding[] = [];
-    const measurable: Record<Code, boolean> = { text_overflow: false, element_overlap: false, minimum_text_size: false, contrast: false, narrow_width: !fixedCanvas, duplicate_node_id: true, missing_image: true, token_usage: false, site_nav_mismatch: true, site_missing_aria_current: true, site_dangling_link: true, site_missing_shared_block: true, site_root_absolute_asset: true, font_consistency: false, copy_review: false, remote_resources: true };
+    const measurable: Record<Code, boolean> = { text_overflow: false, element_overlap: false, minimum_text_size: false, contrast: false, narrow_width: !fixedCanvas, duplicate_node_id: true, missing_image: true, token_usage: false, site_nav_mismatch: true, site_missing_aria_current: true, site_dangling_link: true, site_missing_shared_block: true, site_root_absolute_asset: true, font_consistency: false, copy_review: false, em_dash_copy: false, eyebrow_density: !fixedCanvas, duplicate_cta_intent: !fixedCanvas, placeholder_copy: false, remote_resources: true };
     const unknownReasons: Partial<Record<Code, Reason>> = { text_overflow: "no_measurable_candidates", element_overlap: "no_measurable_candidates", minimum_text_size: "no_measurable_candidates", contrast: "no_measurable_candidates", token_usage: "tokens_not_exposed" };
     const elements = [...document.querySelectorAll<HTMLElement>("body *")];
     const rootStyle = getComputedStyle(document.documentElement);
@@ -41,6 +41,9 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
     const textElements = elements.filter(textBearing);
     measurable.font_consistency = textElements.length > 0;
     measurable.copy_review = textElements.length > 0;
+    measurable.em_dash_copy = textElements.length > 0;
+    measurable.placeholder_copy = textElements.length > 0;
+    const placeholderCopy = /\blorem ipsum\b|\b(?:john|jane)\s+doe\b|\bacme(?:\s+(?:inc|corp(?:oration)?))?\b|홍길동|김철수|이영희|임꺽정|성춘향|아무개/iu;
     // Mono is its own role: a generic monospace stack, or the family the page exposes as --font-mono.
     const normalizeFamily = (value: string): string => value.replace(/["']/gu, "").replace(/\s*,\s*/gu, ",").trim().toLowerCase();
     const monoToken = normalizeFamily(rootStyle.getPropertyValue("--font-mono"));
@@ -48,7 +51,8 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
     const roleFonts = new Map<string, Map<string, HTMLElement[]>>();
     for (const element of textElements) {
       const text = [...element.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent ?? "").join(" ").trim();
-      if (/\b(?:lorem ipsum|insert (?:text|title) here)\b|여기에\s*(?:내용|텍스트|제목).*입력/iu.test(text) || /^(?:todo|tbd|placeholder)[.!…]*$/iu.test(text)) push(element, { code: "copy_review", severity: "recommended", evidence: "Unfinished placeholder wording remains in visible copy", action: "revise_copy" });
+      if (/\binsert (?:text|title) here\b|여기에\s*(?:내용|텍스트|제목).*입력/iu.test(text) || /^(?:todo|tbd|placeholder)[.!…]*$/iu.test(text)) push(element, { code: "copy_review", severity: "recommended", evidence: "Unfinished placeholder wording remains in visible copy", action: "revise_copy" });
+      if (!element.closest("code,pre") && /[—–]/u.test(text)) push(element, { code: "em_dash_copy", severity: "recommended", evidence: "Visible copy uses an em dash or en dash as a separator", action: "revise_copy" });
       if (element.closest("code,pre,svg,[data-bg-font-exception]")) continue;
       const family = getComputedStyle(element).fontFamily;
       const role = element.closest("h1,h2,h3,h4,h5,h6,[role=heading]") ? "heading" : isMono(family) ? "mono" : "body";
@@ -58,6 +62,64 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
     for (const [role, fonts] of roleFonts) {
       const ordered = [...fonts].sort((a, b) => b[1].length - a[1].length);
       for (const [family, nodes] of ordered.slice(1)) for (const node of nodes) push(node, { code: "font_consistency", severity: "recommended", evidence: `${role} font differs from the shared role stack: ${family}`, action: "align_font_roles" });
+    }
+    const placeholderElements = elements.filter((element) => {
+      if (!visible(element) || element.closest("code,pre") !== null) return false;
+      const text = (element.innerText || element.textContent || "").replace(/\s+/gu, " ").trim();
+      return placeholderCopy.test(text);
+    });
+    for (const element of placeholderElements) {
+      if (placeholderElements.some((candidate) => candidate !== element && element.contains(candidate))) continue;
+      push(element, { code: "placeholder_copy", severity: "recommended", evidence: "Visible copy contains placeholder wording or a sample identity", action: "revise_copy" });
+    }
+    if (!fixedCanvas) {
+      const sections = [...new Set([...document.querySelectorAll<HTMLElement>("main section, body > section, [data-section]")])].filter(visible);
+      const eyebrows: HTMLElement[] = [];
+      for (const heading of elements.filter((element) => element.matches("h1,h2,h3,h4,h5,h6,[role=heading]") && visible(element))) {
+        const candidate = heading.previousElementSibling;
+        if (!(candidate instanceof HTMLElement) || !visible(candidate)) continue;
+        const text = candidate.textContent?.trim() ?? "";
+        if (text === "" || text.length > 80) continue;
+        const style = getComputedStyle(candidate);
+        const headingSize = Number.parseFloat(getComputedStyle(heading).fontSize);
+        const size = Number.parseFloat(style.fontSize);
+        const letterSpacing = Number.parseFloat(style.letterSpacing);
+        const letters = text.replace(/[^\p{L}]+/gu, "");
+        const uppercase = letters !== "" && letters === letters.toLocaleUpperCase() && letters !== letters.toLocaleLowerCase();
+        const smallUppercase = Number.isFinite(size) && Number.isFinite(headingSize) && size < headingSize * 0.75 && uppercase;
+        if (smallUppercase || Number.isFinite(letterSpacing) && letterSpacing >= 1) eyebrows.push(candidate);
+      }
+      const eyebrowLimit = Math.ceil(sections.length / 3);
+      if (eyebrows.length > eyebrowLimit) push(eyebrows[eyebrowLimit] ?? eyebrows[0] ?? null, { code: "eyebrow_density", severity: "recommended", evidence: `Found ${eyebrows.length} eyebrow labels across ${sections.length} sections; use at most ${eyebrowLimit}`, action: "revise_copy", measured: eyebrows.length, threshold: eyebrowLimit });
+
+      const primaryActions = elements.filter((element) => visible(element)
+        && element.matches('a[href][data-cta="primary"],button[data-cta="primary"],[role=button][data-cta="primary"],a[href][data-primary-cta],button[data-primary-cta],[role=button][data-primary-cta],a[href].primary-cta,button.primary-cta,[role=button].primary-cta,a[href].btn-primary,button.btn-primary,[role=button].btn-primary,a[href].button-primary,button.button-primary,[role=button].button-primary,a[href][class~="primary"],button[class~="primary"],[role=button][class~="primary"]')
+        && element.closest("nav,footer") === null);
+      const labels = new Map<string, HTMLElement>();
+      const hrefs = new Map<string, HTMLElement>();
+      const duplicateActions = new Set<HTMLElement>();
+      for (const action of primaryActions) {
+        const label = (action.getAttribute("aria-label") ?? action.textContent ?? "").normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+        const rawHref = action instanceof HTMLAnchorElement ? action.getAttribute("href")?.trim() ?? "" : "";
+        let href = rawHref;
+        if (rawHref !== "") {
+          try {
+            const url = new URL(rawHref, document.baseURI);
+            href = url.href;
+          } catch {
+            href = rawHref;
+          }
+        }
+        if (label !== "") {
+          if (labels.has(label)) duplicateActions.add(action);
+          else labels.set(label, action);
+        }
+        if (href !== "") {
+          if (hrefs.has(href)) duplicateActions.add(action);
+          else hrefs.set(href, action);
+        }
+      }
+      for (const action of duplicateActions) push(action, { code: "duplicate_cta_intent", severity: "recommended", evidence: "A primary call to action repeats an earlier label or destination", action: "revise_copy", measured: 2, threshold: 1 });
     }
     measurable.text_overflow = textElements.length > 0;
     measurable.minimum_text_size = textElements.length > 0;

@@ -14,8 +14,8 @@ import { parseStoredProjectOptions } from "./project-options";
 import { buildSiteMap, type SiteMap } from "./site-map";
 import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
 
-/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v4: remote resources, not-applicable checks, site-wide folding). */
-export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v4";
+/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v5: taste-oriented copy and website checks). */
+export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v5";
 
 /**
  * The fixed page a project renders into, or undefined for a responsive website audit. A logo
@@ -95,7 +95,7 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   for (const [index, page] of rawPages.entries()) if (selected[index]!.length > 0) renderedFindings.push(...await enrichFindings(selected[index]!, input, manifest, page.relPath));
   const findings = [...renderedFindings, ...siteFindings].slice(0, 200);
   // Site structure is never audited on a fixed canvas and a fixed canvas is never rendered narrow, so those checks cannot pass or fail there.
-  const applicable = (code: DesignAuditCheckCode): boolean => !(fixedCanvas && (code === "narrow_width" || code.startsWith("site_")));
+  const applicable = (code: DesignAuditCheckCode): boolean => !(fixedCanvas && (code === "narrow_width" || code.startsWith("site_") || code === "eyebrow_density" || code === "duplicate_cta_intent"));
   const checks = DESIGN_AUDIT_CHECK_CODES.map((code) => buildCheck(code, findings, code === "narrow_width" ? narrows : desktops, applicable(code)));
   const overall = findings.some((finding) => finding.severity === "must_fix") ? "must_fix" : checks.every((check) => check.status === "pass" || check.status === "not_applicable") ? "ready" : "recommended";
   return parseDesignAuditResult({ schema_version: 1, project_id: input.projectId, artifact_revision: input.revision, artifact_digest: input.digest, created_at: Date.now(), overall_status: overall, checks, shared_change_divergence: sharedChangeDivergence });
