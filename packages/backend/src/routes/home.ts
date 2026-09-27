@@ -12,7 +12,7 @@ import type {
   SettingsSummary,
 } from "@bg/shared";
 import { APP_VERSION, LLM_CONNECTIONS, parseGenerationOptions } from "@bg/shared";
-import { loadConfig, updateConfig, type AppConfig } from "../config";
+import { loadConfig, updateConfig, VERCEL_TOKEN_PATTERN, type AppConfig } from "../config";
 import {
   createProjectRecord,
   listHomeDesignSystems,
@@ -99,6 +99,8 @@ function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): Sett
     figma_token_set:
       typeof config.figmaPersonalAccessToken === "string" &&
       config.figmaPersonalAccessToken.trim().length > 0,
+    vercel_token_set: config.vercelToken !== null,
+    publish_made_with_badge: config.publish.madeWithBadge,
   };
 }
 
@@ -248,7 +250,7 @@ homeRoutes.patch("/api/settings", async (c) => {
     return c.json(fail("invalid_body", "Expected a JSON object request body"), 400);
   }
 
-  const changes: Pick<Partial<AppConfig>, "theme" | "locale" | "defaultBackend" | "figmaPersonalAccessToken" | "commandcodeApiKey" | "generationDefaults"> & {
+  const changes: Pick<Partial<AppConfig>, "theme" | "locale" | "defaultBackend" | "figmaPersonalAccessToken" | "vercelToken" | "publish" | "commandcodeApiKey" | "generationDefaults"> & {
     llmApiKeys?: LlmApiKeysPatch;
     chat?: Partial<AppConfig["chat"]>;
     user?: Partial<AppConfig["user"]>;
@@ -356,6 +358,21 @@ homeRoutes.patch("/api/settings", async (c) => {
         400,
       );
     }
+  }
+
+  if ("vercel_token" in patch) {
+    const raw = patch.vercel_token;
+    const trimmed = typeof raw === "string" ? raw.trim() : raw;
+    if (trimmed !== null && trimmed !== "" && (typeof trimmed !== "string" || !VERCEL_TOKEN_PATTERN.test(trimmed))) {
+      return c.json(fail("invalid_vercel_token", "vercel_token must be a Vercel token, an empty string or null"), 400);
+    }
+    changes.vercelToken = trimmed || null;
+  }
+  if ("publish_made_with_badge" in patch) {
+    if (typeof patch.publish_made_with_badge !== "boolean") {
+      return c.json(fail("invalid_publish_badge", "publish_made_with_badge must be a boolean"), 400);
+    }
+    changes.publish = { madeWithBadge: patch.publish_made_with_badge };
   }
 
   const config = await updateConfig((current) => ({

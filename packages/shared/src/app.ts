@@ -19,6 +19,10 @@ export type ProjectType =
   | "logo"
   | "from_template"
   | "other";
+/** Project types whose output is a web page rather than a deck, graphic or logo. */
+export function isWebProjectType(type: ProjectType): boolean {
+  return type === "prototype" || type === "from_template" || type === "other";
+}
 export type DesignSystemStatus = "draft" | "review" | "published";
 export type ThemeMode = "light" | "dark" | "auto";
 

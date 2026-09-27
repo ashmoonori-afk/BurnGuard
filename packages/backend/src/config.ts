@@ -22,8 +22,13 @@ export interface AppConfig {
   user: { id: "local"; displayName: string };
   /** OS-local Figma credential. The API exposes only figma_token_set. */
   figmaPersonalAccessToken: string | null;
+  /** OS-local Vercel credential. The API exposes only vercel_token_set. */
+  vercelToken: string | null;
+  publish: { madeWithBadge: boolean };
   appVersion: string;
 }
+
+export const VERCEL_TOKEN_PATTERN = /^[A-Za-z0-9_-]{10,256}$/;
 
 export const defaultConfig: AppConfig = {
   generationDefaults: {},
@@ -40,6 +45,8 @@ export const defaultConfig: AppConfig = {
   logs: { level: "info" },
   user: { id: "local", displayName: DEFAULT_DISPLAY_NAME },
   figmaPersonalAccessToken: null,
+  vercelToken: null,
+  publish: { madeWithBadge: true },
   appVersion: APP_VERSION,
 };
 
@@ -51,6 +58,7 @@ interface SharedConfigV1 {
   locale: AppLocale | null;
   chat: AppConfig["chat"];
   user: { displayName: string };
+  publish: AppConfig["publish"];
 }
 
 interface LocalConfigV1 {
@@ -64,6 +72,7 @@ interface LocalConfigV1 {
   harness: AppConfig["harness"];
   logs: AppConfig["logs"];
   figmaPersonalAccessToken: string | null;
+  vercelToken: string | null;
   pendingShared?: SharedConfigV1;
 }
 
@@ -95,6 +104,7 @@ function sharedFrom(input: unknown): SharedConfigV1 {
   const source = record(input);
   const chat = record(source.chat);
   const user = record(source.user);
+  const publish = record(source.publish);
   return {
     schemaVersion: 1,
     generationDefaults: generationDefaults(source),
@@ -106,6 +116,7 @@ function sharedFrom(input: unknown): SharedConfigV1 {
       contextMode: chat.contextMode === "full" ? "full" : "compact",
     },
     user: { displayName: typeof user.displayName === "string" && user.displayName.trim() ? user.displayName.trim() : defaultConfig.user.displayName },
+    publish: { madeWithBadge: typeof publish.madeWithBadge === "boolean" ? publish.madeWithBadge : defaultConfig.publish.madeWithBadge },
   };
 }
 
@@ -135,6 +146,7 @@ function localFrom(input: unknown, platform: NodeJS.Platform): LocalConfigV1 {
     },
     logs: { level: logs.level === "debug" || logs.level === "warn" || logs.level === "error" ? logs.level : "info" },
     figmaPersonalAccessToken: typeof source.figmaPersonalAccessToken === "string" && source.figmaPersonalAccessToken.trim() ? source.figmaPersonalAccessToken : null,
+    vercelToken: typeof source.vercelToken === "string" && VERCEL_TOKEN_PATTERN.test(source.vercelToken) ? source.vercelToken : null,
   };
 }
 
@@ -171,6 +183,8 @@ function effective(shared: SharedConfigV1, local: LocalConfigV1): AppConfig {
     harness: local.harness,
     logs: local.logs,
     figmaPersonalAccessToken: local.figmaPersonalAccessToken,
+    vercelToken: local.vercelToken,
+    publish: shared.publish,
     appVersion: APP_VERSION,
   };
 }
