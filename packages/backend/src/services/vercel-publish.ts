@@ -1,12 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import JSZip from "jszip";
-import type { VercelDeployment } from "@bg/shared";
+import { isWebProjectType, type VercelDeployment } from "@bg/shared";
 import { getExportJob } from "../db/exports";
 import { getProjectDetail } from "../db/project-read-repository";
 import { verifyExportDownload } from "./export-download";
 import { validateHtmlArchive, type HtmlArchiveManifest } from "./export-html-validation";
 import { sha256 } from "./export-receipt";
+import { injectMadeWithBadge } from "./publish-badge";
 
 export class VercelPublishError extends Error {
   constructor(readonly code: string) { super(code); }
@@ -25,13 +26,25 @@ export function isPublicAsset(name: string): boolean {
     && !/(?:^|\/)(?:[^/]*config[^/]*|credentials[^/]*)$/i.test(name);
 }
 
-export async function deploymentFiles(bytes: Uint8Array, expected: Omit<HtmlArchiveManifest, "entries">) {
+function withBadge(data: Uint8Array): Uint8Array {
+  let html: string;
+  try { html = new TextDecoder("utf-8", { fatal: true }).decode(data); }
+  catch { throw new VercelPublishError("publish_badge_failed"); }
+  return new TextEncoder().encode(injectMadeWithBadge(html));
+}
+
+export async function deploymentFiles(bytes: Uint8Array, expected: Omit<HtmlArchiveManifest, "entries">, options: { readonly badge?: boolean } = {}) {
   const manifest = await validateHtmlArchive(bytes, expected);
   if (!isPublicAsset(manifest.entrypoint)) throw new VercelPublishError("publish_unsafe_asset");
   const publicEntries = manifest.entries.filter((file) => isPublicAsset(file.path));
   if (publicEntries.reduce((n, file) => n + file.size, 0) > 100_000_000) throw new VercelPublishError("publish_size_limit");
   const zip = await JSZip.loadAsync(bytes, { checkCRC32: true });
-  const files = await Promise.all(publicEntries.map(async ({ path }) => ({ file: path, data: await zip.file(path)!.async("uint8array") })));
+  const badge = options.badge === true && /\.html?$/i.test(manifest.entrypoint);
+  // The badge exists only in the uploaded copy of the entrypoint; the export archive and its receipt stay untouched.
+  const files = await Promise.all(publicEntries.map(async ({ path }) => {
+    const data = await zip.file(path)!.async("uint8array");
+    return { file: path, data: badge && path === manifest.entrypoint ? withBadge(data) : data };
+  }));
   // Keep nested entrypoints in place so relative asset URLs retain their meaning.
   if (manifest.entrypoint !== "index.html") {
     if (manifest.entries.some((entry) => entry.path === "index.html")) throw new VercelPublishError("publish_entrypoint_conflict");
@@ -41,7 +54,7 @@ export async function deploymentFiles(bytes: Uint8Array, expected: Omit<HtmlArch
   return files;
 }
 
-export async function publishExport(jobId: string, token: string, teamId: string | undefined, signal: AbortSignal): Promise<VercelDeployment> {
+export async function publishExport(jobId: string, token: string, teamId: string | undefined, signal: AbortSignal, badge = false): Promise<VercelDeployment> {
   const verified = await verifyExportDownload(jobId);
   const job = await getExportJob(jobId);
   const project = await getProjectDetail(verified.projectId);
@@ -49,7 +62,7 @@ export async function publishExport(jobId: string, token: string, teamId: string
   if (verified.format !== "html_zip" || !project || !attempt || !attempt.digests.input_closure) throw new VercelPublishError("publish_export_required");
   const bytes = new Uint8Array(await readFile(verified.path));
   if (sha256(bytes) !== attempt.digests.output) throw new VercelPublishError("publish_export_changed");
-  const files = await deploymentFiles(bytes, { schema_version: 1, entrypoint: project.entrypoint, project_revision: attempt.project_revision, project_digest: attempt.project_digest, input_closure_digest: attempt.digests.input_closure });
+  const files = await deploymentFiles(bytes, { schema_version: 1, entrypoint: project.entrypoint, project_revision: attempt.project_revision, project_digest: attempt.project_digest, input_closure_digest: attempt.digests.input_closure }, { badge: badge && isWebProjectType(project.type) });
   signal.throwIfAborted();
   return requestVercel("/v13/deployments", token, teamId, signal, {
     name: `burnguard-${jobId.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40)}`,

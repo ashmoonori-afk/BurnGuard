@@ -28,10 +28,10 @@ describe("settings storage", () => {
     const local = JSON.parse(await readFile(localConfigFilePath(), "utf8"));
     expect(shared).toEqual({
       schemaVersion: 1, generationDefaults: {}, defaultBackend: "claude-code", theme: "dark", locale: "en",
-      chat: defaultConfig.chat, user: { displayName: DEFAULT_DISPLAY_NAME },
+      chat: defaultConfig.chat, user: { displayName: DEFAULT_DISPLAY_NAME }, publish: { madeWithBadge: true },
     });
     expect(JSON.stringify(shared)).not.toContain("private");
-    expect(Object.keys(local).sort()).toEqual(["autoOpenBrowser", "commandcodeApiKey", "figmaPersonalAccessToken", "harness", "llmApiKeys", "logs", "platform", "playwright", "port", "schemaVersion"].sort());
+    expect(Object.keys(local).sort()).toEqual(["autoOpenBrowser", "commandcodeApiKey", "figmaPersonalAccessToken", "harness", "llmApiKeys", "logs", "platform", "playwright", "port", "schemaVersion", "vercelToken"].sort());
     expect(local.platform).toBe(process.platform);
     expect((await loadConfig()).port).toBe(15432);
   });
@@ -49,6 +49,38 @@ describe("settings storage", () => {
     const invalid = await homeRoutes.request("http://local/api/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ locale: "fr" }) });
     expect(invalid.status).toBe(400);
     expect((await invalid.json()).error.code).toBe("invalid_locale");
+  });
+
+  test("Given a Vercel token and badge preference When patched Then only a boolean leaves the API and the token stays OS-local", async () => {
+    const secret = "fixtureVercelPrivate_0123456789";
+    const response = await homeRoutes.request("http://local/api/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ vercel_token: ` ${secret} `, publish_made_with_badge: false }) });
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).not.toContain(secret);
+    expect(JSON.parse(body).data).toMatchObject({ vercel_token_set: true, publish_made_with_badge: false });
+    const status = await (await homeRoutes.request("http://local/api/settings")).text();
+    expect(status).not.toContain(secret);
+    expect(JSON.parse(status).data.vercel_token_set).toBe(true);
+    expect(await readFile(configFilePath, "utf8")).not.toContain(secret);
+    expect(JSON.parse(await readFile(localConfigFilePath(), "utf8")).vercelToken).toBe(secret);
+    expect(JSON.parse(await readFile(configFilePath, "utf8")).publish).toEqual({ madeWithBadge: false });
+    const cleared = await homeRoutes.request("http://local/api/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ vercel_token: "" }) });
+    expect((await cleared.json()).data.vercel_token_set).toBe(false);
+    for (const [patch, code] of [[{ vercel_token: "short" }, "invalid_vercel_token"], [{ vercel_token: 42 }, "invalid_vercel_token"], [{ publish_made_with_badge: "yes" }, "invalid_publish_badge"]] as const) {
+      const invalid = await homeRoutes.request("http://local/api/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) });
+      expect(invalid.status).toBe(400);
+      expect((await invalid.json()).error.code).toBe(code);
+    }
+  });
+
+  test("Given malformed publish settings on disk When loaded Then the badge defaults on and an invalid token is dropped", async () => {
+    const shared = JSON.parse(await readFile(configFilePath, "utf8"));
+    await writeFile(configFilePath, JSON.stringify({ ...shared, publish: { madeWithBadge: "false" } }));
+    const local = JSON.parse(await readFile(localConfigFilePath(), "utf8"));
+    await writeFile(localConfigFilePath(), JSON.stringify({ ...local, vercelToken: "bad token with spaces" }));
+    const loaded = await loadConfig();
+    expect(loaded.publish).toEqual({ madeWithBadge: true });
+    expect(loaded.vercelToken).toBeNull();
   });
 
   test("Given canonical settings When GET and startup read them Then neither file is rewritten", async () => {
