@@ -99,3 +99,18 @@ test("Given a manifest whose free-text field carries an absolute POSIX path When
 
   await expect(validateHandoffPackage(await bytes(zip), "index.html", pin)).rejects.toThrow("invalid_package");
 });
+
+test("Given tampered interaction or backend-work node ids carrying absolute paths When validated Then publication validation rejects them", async () => {
+  const { renderHandoffMarkdown: markdown, renderHandoffPrompt: prompt } = await import("../src/services/export-handoff-documents");
+  for (const field of ["interactions", "unresolved_backend_work"] as const) {
+    const zip = reviewedHandoff();
+    const manifest = JSON.parse(await zip.file("handoff/manifest.json")!.async("string"));
+    expect(manifest[field].length).toBeGreaterThan(0);
+    manifest[field][0].node_id = "/Users/alice/private";
+    zip.file("handoff/manifest.json", JSON.stringify(manifest, null, 2));
+    zip.file("HANDOFF.md", markdown(manifest));
+    zip.file("handoff/prompt.md", prompt(manifest));
+
+    await expect(validateHandoffPackage(await bytes(zip), "index.html", pin)).rejects.toThrow("invalid_package");
+  }
+});

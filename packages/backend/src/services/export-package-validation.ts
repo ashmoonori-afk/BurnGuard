@@ -177,7 +177,8 @@ function handoffFreeText(manifest: HandoffManifest): readonly string[] {
     ...(manifest.design_system.name === null ? [] : [manifest.design_system.name]),
     ...manifest.pages.flatMap((page) => [page.title, ...page.regions.flatMap((region) => [region.node_id, ...(region.component === null ? [] : [region.component])])]),
     ...manifest.components.flatMap((component) => [component.name, ...component.node_ids]),
-    ...manifest.interactions.flatMap((interaction) => interaction.label === null ? [] : [interaction.label]),
+    ...manifest.interactions.flatMap((interaction) => [interaction.label, interaction.node_id].filter((value): value is string => value !== null)),
+    ...manifest.unresolved_backend_work.flatMap((item) => item.node_id === null ? [] : [item.node_id]),
     ...manifest.responsive_rules.map((rule) => rule.condition),
   ];
 }
