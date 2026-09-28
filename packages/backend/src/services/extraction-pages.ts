@@ -1,8 +1,10 @@
 import { parse, type HTMLElement } from "node-html-parser";
 import {
+  MAX_PAGE_PATH_LENGTH,
   PAGE_TYPES,
   type DesignSystemPageCoverage,
   type DesignSystemPageDifference,
+  type DesignSystemPageEvidence,
   type DesignSystemPageRecord,
   type DesignSystemPageTemplate,
   type DesignSystemPageType,
@@ -11,38 +13,68 @@ import type { SourceEvidence } from "./extraction-evidence";
 
 export type RobotsRules = { readonly allows: (path: string) => boolean; readonly sitemaps: readonly string[] };
 
+const MAX_ROBOTS_RULES = 500;
+const MAX_ROBOTS_PATTERN = 512;
+
 /**
- * robots.txt groups for `*` and BurnGuard. The longest matching Allow/Disallow prefix wins, ties go to
- * Allow, and `*`/`$` wildcards are honoured. A missing or unreadable file allows everything.
+ * Linear wildcard match of a robots.txt path pattern (`*` any run, trailing `$` end anchor) as a prefix
+ * match. Greedy two-pointer matching with a single backtrack point, so hostile patterns cannot blow up.
+ */
+export function robotsPatternMatches(pattern: string, path: string): boolean {
+  const anchored = pattern.endsWith("$");
+  const body = anchored ? pattern.slice(0, -1) : pattern;
+  let p = 0, s = 0, star = -1, mark = 0;
+  while (s < path.length) {
+    if (p < body.length && body[p] !== "*" && body[p] === path[s]) { p += 1; s += 1; continue; }
+    if (p < body.length && body[p] === "*") { star = p; mark = s; p += 1; continue; }
+    if (p === body.length && !anchored) return true;
+    if (star === -1) return false;
+    p = star + 1; mark += 1; s = mark;
+  }
+  while (p < body.length && body[p] === "*") p += 1;
+  return p === body.length;
+}
+
+/**
+ * robots.txt per RFC 9309 for the BurnGuard crawler: groups naming BurnGuard apply when present, otherwise
+ * the `*` groups; the longest matching Allow/Disallow wins and ties go to Allow. A missing or unreadable
+ * file allows everything.
  */
 export function parseRobots(text: string): RobotsRules {
-  const rules: { allow: boolean; pattern: string }[] = [];
+  type Group = { agents: string[]; rules: { allow: boolean; pattern: string }[] };
+  const groups: Group[] = [];
   const sitemaps: string[] = [];
-  let agents: string[] = [];
-  let inRules = false;
-  for (const raw of text.split(/\r?\n/).slice(0, 2000)) {
+  let current: Group | null = null;
+  let collectingAgents = false;
+  for (const raw of text.split(/\r?\n/).slice(0, 5000)) {
     const line = raw.replace(/#.*$/, "").trim();
     const match = /^([A-Za-z-]+)\s*:\s*(.*)$/.exec(line);
     if (!match) continue;
     const field = match[1]!.toLowerCase();
     const value = match[2]!.trim();
-    if (field === "sitemap") { if (value) sitemaps.push(value); continue; }
-    if (field === "user-agent") { if (inRules) { agents = []; inRules = false; } agents.push(value.toLowerCase()); continue; }
+    if (field === "sitemap") { if (value && sitemaps.length < 20) sitemaps.push(value); continue; }
+    if (field === "user-agent") {
+      if (!collectingAgents || current === null) { current = { agents: [], rules: [] }; groups.push(current); }
+      current.agents.push(value.toLowerCase());
+      collectingAgents = true;
+      continue;
+    }
     if (field !== "allow" && field !== "disallow") continue;
-    inRules = true;
-    if (!agents.some(agent => agent === "*" || agent.includes("burnguard"))) continue;
+    collectingAgents = false;
+    if (current === null || current.rules.length >= MAX_ROBOTS_RULES || value.length > MAX_ROBOTS_PATTERN) continue;
     if (field === "disallow" && value === "") continue;
-    rules.push({ allow: field === "allow", pattern: value });
+    current.rules.push({ allow: field === "allow", pattern: value });
   }
-  const matches = (pattern: string, path: string): boolean => {
-    const anchored = pattern.endsWith("$");
-    const source = (anchored ? pattern.slice(0, -1) : pattern).split("*").map(part => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*");
-    return new RegExp(`^${source}${anchored ? "$" : ""}`).test(path);
-  };
+  const specific = groups.filter(group => group.agents.some(agent => agent.includes("burnguard")));
+  const rules = (specific.length ? specific : groups.filter(group => group.agents.includes("*"))).flatMap(group => group.rules);
   return {
     sitemaps,
     allows: (path) => {
-      const best = rules.filter(rule => matches(rule.pattern, path)).sort((a, b) => b.pattern.length - a.pattern.length || Number(b.allow) - Number(a.allow))[0];
+      let best: { allow: boolean; pattern: string } | undefined;
+      for (const rule of rules) {
+        if (!robotsPatternMatches(rule.pattern, path)) continue;
+        if (!best || rule.pattern.length > best.pattern.length || (rule.pattern.length === best.pattern.length && rule.allow)) best = rule;
+      }
       return best === undefined || best.allow;
     },
   };
@@ -55,16 +87,26 @@ export function parseSitemap(xml: string, limit = 500): { readonly urls: readonl
 
 const NON_PAGE = /\.(?:pdf|png|jpe?g|gif|webp|avif|svg|ico|zip|gz|mp4|webm|mp3|css|js|json|xml|txt)$/i;
 
-/** Same-origin canonical path (no hash or query, no trailing slash except root), or null when not a page. */
-export function canonicalPagePath(href: string, base: URL): string | null {
+/**
+ * A same-origin page link as its deduplication key (no hash or query, no trailing slash except root,
+ * index.html folded) and the path that is actually fetched and checked against robots.txt. Null when
+ * the link is not a page or its key exceeds the persisted path limit.
+ */
+export function pageLink(href: string, base: URL): { readonly key: string; readonly fetchPath: string } | null {
   let url: URL;
   try { url = new URL(href, base); } catch { return null; }
   if (url.origin !== base.origin || NON_PAGE.test(url.pathname)) return null;
-  const path = url.pathname.replace(/\/{2,}/g, "/").replace(/\/index\.html?$/i, "/");
-  return path.length > 1 ? path.replace(/\/+$/, "") : "/";
+  const fetchPath = url.pathname.replace(/\/{2,}/g, "/");
+  const folded = fetchPath.replace(/\/index\.html?$/i, "/");
+  const key = folded.length > 1 ? folded.replace(/\/+$/, "") : "/";
+  return key.length <= MAX_PAGE_PATH_LENGTH ? { key, fetchPath } : null;
 }
 
-export type PageCandidate = { readonly path: string; readonly source: DesignSystemPageRecord["source"] };
+export function canonicalPagePath(href: string, base: URL): string | null {
+  return pageLink(href, base)?.key ?? null;
+}
+
+export type PageCandidate = { readonly path: string; readonly fetchPath: string; readonly source: DesignSystemPageRecord["source"] };
 
 /**
  * Ordered, deduplicated page candidates: the entry page, then navigation, footer, sitemap and other
@@ -82,10 +124,10 @@ export function discoverPages(input: {
   const ordered: PageCandidate[] = [];
   const seen = new Set<string>();
   const push = (href: string, source: PageCandidate["source"]) => {
-    const path = canonicalPagePath(href, input.base);
-    if (path === null || seen.has(path)) return;
-    seen.add(path);
-    ordered.push({ path, source });
+    const link = pageLink(href, input.base);
+    if (link === null || seen.has(link.key)) return;
+    seen.add(link.key);
+    ordered.push({ path: link.key, fetchPath: link.fetchPath, source });
   };
   push(input.base.pathname || "/", "entry");
   for (const href of anchors(root.querySelectorAll("header nav, nav, header"))) push(href, "nav");
@@ -94,7 +136,7 @@ export function discoverPages(input: {
   for (const href of anchors([root])) push(href, "link");
   const skipped: (PageCandidate & { reason: "robots" | "cap" })[] = [];
   const allowed = ordered.filter(candidate => {
-    if (candidate.source === "entry" || input.robots.allows(candidate.path)) return true;
+    if (candidate.source === "entry" || (input.robots.allows(candidate.fetchPath) && input.robots.allows(candidate.path))) return true;
     skipped.push({ ...candidate, reason: "robots" });
     return false;
   });
@@ -148,6 +190,22 @@ export function observedPatterns(evidence: SourceEvidence): string[] {
   ];
 }
 
+export function pageEvidence(evidence: SourceEvidence): DesignSystemPageEvidence {
+  return {
+    hero_media: evidence.hero?.media ?? null,
+    feature_columns: evidence.featureColumns,
+    footer_lists: evidence.footerColumns,
+    alignment: evidence.alignment,
+    icons: evidence.iconCount,
+    photos: evidence.photos,
+    illustrations: evidence.illustrations,
+    gradients: evidence.gradients,
+    background_patterns: evidence.patterns,
+    motion_ms: evidence.motionMs ? [evidence.motionMs[0], evidence.motionMs[1]] : null,
+    animations: evidence.animations,
+  };
+}
+
 export type ExtractedPage = {
   readonly path: string;
   readonly source: PageCandidate["source"];
@@ -156,37 +214,52 @@ export type ExtractedPage = {
   readonly patterns: readonly string[];
   readonly colors: readonly string[];
   readonly fonts: readonly string[];
+  readonly customProperties: Readonly<Record<string, string>>;
+  readonly evidence: DesignSystemPageEvidence;
+};
+
+const differing = (key: string, values: readonly { path: string; value: string | undefined }[]): DesignSystemPageDifference | null => {
+  const present = values.filter((value): value is { path: string; value: string } => value.value !== undefined);
+  return present.length >= 2 && new Set(present.map(value => value.value)).size > 1 ? { key, values: present } : null;
 };
 
 /**
- * Coverage document: every discovered page with its status, the first extracted page of each type as
- * that type's template, and every layout token or font that differs between extracted pages.
+ * Coverage document: every discovered page once (an extracted record wins over a skipped one for the
+ * same path), the first extracted page of each type as that type's template, and every layout token,
+ * custom property, primary font or evidence value that differs between extracted pages.
  */
 export function buildPageCoverage(input: {
   readonly limit: number;
   readonly discovered: number;
   readonly extracted: readonly ExtractedPage[];
-  readonly skipped: readonly (PageCandidate & { readonly reason: "robots" | "cap" | "fetch_failed"; readonly pageType: DesignSystemPageType })[];
+  readonly skipped: readonly (Pick<PageCandidate, "path" | "source"> & { readonly reason: "robots" | "cap" | "fetch_failed"; readonly pageType: DesignSystemPageType })[];
 }): DesignSystemPageCoverage {
+  const extracted: ExtractedPage[] = [];
+  for (const page of input.extracted) if (!extracted.some(existing => existing.path === page.path)) extracted.push(page);
+  const taken = new Set(extracted.map(page => page.path));
   const pages: DesignSystemPageRecord[] = [
-    ...input.extracted.map((page): DesignSystemPageRecord => ({ path: page.path, page_type: page.pageType, source: page.source, status: "extracted", skip_reason: null, layout_tokens: { ...page.layoutTokens }, patterns: [...page.patterns], colors: [...page.colors].slice(0, 12), fonts: [...page.fonts].slice(0, 6) })),
-    ...input.skipped.map((page): DesignSystemPageRecord => ({ path: page.path, page_type: page.pageType, source: page.source, status: "skipped", skip_reason: page.reason, layout_tokens: {}, patterns: [], colors: [], fonts: [] })),
+    ...extracted.map((page): DesignSystemPageRecord => ({ path: page.path, page_type: page.pageType, source: page.source, status: "extracted", skip_reason: null, layout_tokens: { ...page.layoutTokens }, patterns: [...page.patterns], colors: [...page.colors].slice(0, 12), fonts: [...page.fonts].slice(0, 6), custom_properties: { ...page.customProperties }, evidence: page.evidence })),
+    ...input.skipped.filter(page => !taken.has(page.path) && (taken.add(page.path), true)).map((page): DesignSystemPageRecord => ({ path: page.path, page_type: page.pageType, source: page.source, status: "skipped", skip_reason: page.reason, layout_tokens: {}, patterns: [], colors: [], fonts: [], custom_properties: {}, evidence: null })),
   ].slice(0, 200);
   const templates: DesignSystemPageTemplate[] = PAGE_TYPES.flatMap(type => {
-    const page = input.extracted.find(candidate => candidate.pageType === type);
-    return page ? [{ page_type: type, path: page.path, patterns: [...page.patterns], layout_tokens: { ...page.layoutTokens } }] : [];
+    const page = extracted.find(candidate => candidate.pageType === type);
+    return page ? [{ page_type: type, path: page.path, patterns: [...page.patterns], layout_tokens: { ...page.layoutTokens }, custom_properties: { ...page.customProperties }, evidence: page.evidence }] : [];
   });
   const differences: DesignSystemPageDifference[] = [];
-  const keys = [...new Set(input.extracted.flatMap(page => Object.keys(page.layoutTokens)))].sort();
-  for (const key of keys) {
-    const values = input.extracted.filter(page => page.layoutTokens[key] !== undefined).map(page => ({ path: page.path, value: page.layoutTokens[key]! }));
-    if (values.length >= 2 && new Set(values.map(value => value.value)).size > 1) differences.push({ key, values });
+  for (const key of [...new Set(extracted.flatMap(page => Object.keys(page.layoutTokens)))].sort()) {
+    const difference = differing(key, extracted.map(page => ({ path: page.path, value: page.layoutTokens[key] })));
+    if (difference) differences.push(difference);
   }
-  const fontValues = input.extracted.filter(page => page.fonts.length > 0).map(page => ({ path: page.path, value: page.fonts[0]! }));
-  if (fontValues.length >= 2 && new Set(fontValues.map(value => value.value)).size > 1) differences.push({ key: "primary-font", values: fontValues });
+  for (const key of [...new Set(extracted.flatMap(page => Object.keys(page.customProperties)))].sort()) {
+    const difference = differing(key, extracted.map(page => ({ path: page.path, value: page.customProperties[key] })));
+    if (difference) differences.push(difference);
+  }
+  const primaryFont = differing("primary-font", extracted.map(page => ({ path: page.path, value: page.fonts[0] })));
+  if (primaryFont) differences.push(primaryFont);
+  const alignment = differing("alignment", extracted.map(page => ({ path: page.path, value: page.evidence.alignment ?? undefined })));
+  if (alignment) differences.push(alignment);
   return { schema_version: 1, page_limit: input.limit, discovered: input.discovered, pages, templates, differences: differences.slice(0, 64) };
 }
-
 
 /** README `## Page templates` section summarising per-type templates and cross-page differences. */
 export function buildPageTemplateReadme(coverage: DesignSystemPageCoverage): string {

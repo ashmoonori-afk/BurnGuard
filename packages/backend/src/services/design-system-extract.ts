@@ -3,7 +3,7 @@ import { readDesignSystemAssetGuide } from "./design-system-assets";
 import { buildAssetGuideReadme } from "./extraction-assets";
 import { collectSourceEvidence, type SourceEvidence } from "./extraction-evidence";
 import { buildSectionPatternReadme, measureSourceLayout } from "./extraction-layout";
-import { buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, observedPatterns, parseRobots, parseSitemap } from "./extraction-pages";
+import { buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, observedPatterns, pageEvidence, parseRobots, parseSitemap } from "./extraction-pages";
 import { readDesignSystemPageCoverage } from "./design-system-pages";
 import type { CssDeclarationEvidence } from "./extraction-css";
 import {
@@ -22,6 +22,8 @@ import { parse } from "node-html-parser";
 import {
   APP_VERSION,
   DEFAULT_PAGE_LIMIT,
+  parseDesignSystemPageCoverage,
+  type DesignSystemPageCoverage,
   type CreateDesignSystemExtractionRequest,
   type CreateDesignSystemExtractionResponse,
   type CreateDesignSystemUploadRequest,
@@ -67,7 +69,7 @@ export {
 import { detectComponentSamples } from "./upload-component-detect";
 import { DesignSystemAssetEditError } from "./extraction-asset-errors";
 import { DesignSystemExtractError } from "./extraction-errors";
-import { assertAggregateAssetBytes, assertAssetCount, fetchWebsiteResource } from "./extraction-website";
+import { assertAggregateAssetBytes, assertAssetCount, ExcludedPathError, fetchWebsiteResource } from "./extraction-website";
 
 export { DesignSystemAssetEditError, DesignSystemExtractError };
 import { loadConfig } from "../config";
@@ -765,7 +767,7 @@ async function ingestWebsiteSource(
   const pageHtmlByUrl = new Map<string, string>([[url.toString(), html]]);
   const fetchText = async (target: URL, maxBytes: number): Promise<string | null> => {
     try {
-      const fetched = await fetchWebsiteResource(target, { maxBytes, kind: "html", noteBytes, signal, userAgent: `BurnGuard/${APP_VERSION} design-system-import` });
+      const fetched = await fetchWebsiteResource(target, { maxBytes, kind: "html", noteBytes, signal, userAgent: `BurnGuard/${APP_VERSION} design-system-import`, allowedOrigin: url.origin });
       return fetched.finalUrl.origin === url.origin ? fetched.text : null;
     } catch (error) {
       if (error instanceof ExtractionAcquisitionError) throw error;
@@ -792,13 +794,13 @@ async function ingestWebsiteSource(
     break;
   }
   const discovery = discoverPages({ base: url, homepageHtml: html, sitemapUrls: sitemapUrls.slice(0, 500), robots, limit: pageLimit });
-  const candidateSource = new Map(discovery.selected.map((candidate) => [candidate.path, candidate.source]));
-  const failedPages: { path: string; source: (typeof discovery.selected)[number]["source"] }[] = [];
+  const pageSource = new Map<string, (typeof discovery.selected)[number]["source"]>([[url.toString(), "entry"]]);
+  const extractedKeys = new Set([canonicalPagePath(url.toString(), url) ?? "/"]);
+  const failedPages: { path: string; source: (typeof discovery.selected)[number]["source"]; reason: "fetch_failed" | "robots" }[] = [];
 
   for (const candidate of discovery.selected.slice(1)) {
     throwIfAcquisitionAborted(signal);
-    const page = new URL(candidate.path, url);
-    if (pageHtmlByUrl.has(page.toString())) continue;
+    const page = new URL(candidate.fetchPath, url);
     try {
       const pageFetch = await fetchWebsiteResource(page, {
         maxBytes: MAX_HTML_BYTES,
@@ -806,15 +808,22 @@ async function ingestWebsiteSource(
         noteBytes,
         signal,
         userAgent: `BurnGuard/${APP_VERSION} design-system-import`,
+        allowedOrigin: url.origin,
+        allowsPath: robots.allows,
       });
-      if (pageHtmlByUrl.has(pageFetch.finalUrl.toString())) continue;
+      // A redirect may land on a page that is already extracted.
+      const finalKey = canonicalPagePath(pageFetch.finalUrl.toString(), url);
+      if (finalKey === null || extractedKeys.has(finalKey)) continue;
+      extractedKeys.add(finalKey);
+      pageSource.set(pageFetch.finalUrl.toString(), candidate.source);
       const storedPageHtml = sanitizeAcquiredWebsiteHtml(pageFetch.text);
       pageHtmlByUrl.set(pageFetch.finalUrl.toString(), pageFetch.text);
       const fileName = `page-${pageHtmlByUrl.size}.html`;
       await writeFile(path.join(pagesDir, fileName), storedPageHtml, "utf8");
     } catch (error) {
       if (error instanceof ExtractionAcquisitionError) throw error;
-      failedPages.push(candidate);
+      if (error instanceof ExcludedPathError) { failedPages.push({ ...candidate, reason: "robots" }); continue; }
+      failedPages.push({ ...candidate, reason: "fetch_failed" });
       notes.push(`Skipped linked page: ${page.toString()} (${error instanceof Error ? error.message : "fetch failed"})`);
     }
   }
@@ -1012,19 +1021,26 @@ async function ingestWebsiteSource(
         const path = canonicalPagePath(pageUrl, url) ?? "/";
         const declarations = pageDeclarations.get(pageUrl) ?? [];
         const signals = styleSignalsFromDeclarations(declarations);
+        const evidence = collectSourceEvidence([pageHtml], declarations);
+        const customProperties = Object.fromEntries([...selectCssCustomProperties(declarations)]
+          .map(([name, value]) => [`--${name}`, value.trim()] as const)
+          .filter(([name, value]) => /^--[a-zA-Z0-9_-]{1,80}$/.test(name) && value.length > 0 && value.length <= 160 && !/[<>]|url\s*\(/i.test(value) && !/\p{Cc}/u.test(value))
+          .slice(0, 48));
         return {
           path,
-          source: candidateSource.get(path) ?? "link",
-          pageType: candidateSource.get(path) === "entry" ? "home" : classifyPageType(path, pageHtml),
+          source: pageSource.get(pageUrl) ?? "link",
+          pageType: classifyPageType(path, pageHtml),
           layoutTokens: measureSourceLayout(declarations, signals.spacingValues).tokens,
-          patterns: observedPatterns(collectSourceEvidence([pageHtml], declarations)),
+          patterns: observedPatterns(evidence),
           colors: signals.colors.slice(0, 6),
           fonts: fontFamiliesFromDeclarations(declarations).slice(0, 3),
+          customProperties,
+          evidence: pageEvidence(evidence),
         };
       }),
       skipped: [
         ...discovery.skipped.map((page) => ({ ...page, pageType: classifyPageType(page.path, "") })),
-        ...failedPages.map((page) => ({ ...page, reason: "fetch_failed" as const, pageType: classifyPageType(page.path, "") })),
+        ...failedPages.map((page) => ({ ...page, pageType: classifyPageType(page.path, "") })),
       ],
     }),
   };
@@ -1464,7 +1480,11 @@ async function writeCanonicalDesignSystem(input: {
     input.systemDir,
   );
   if (input.analysis.pageCoverage) {
-    await writeText(path.join(input.systemDir, "pages.json"), `${JSON.stringify(input.analysis.pageCoverage, null, 2)}\n`, generated, input.systemDir);
+    // Publish only what the strict reader accepts, so a malformed record can never make the system unreadable.
+    let coverage: DesignSystemPageCoverage | null = null;
+    try { coverage = parseDesignSystemPageCoverage(JSON.parse(JSON.stringify(input.analysis.pageCoverage))); }
+    catch { input.analysis.notes.push("Per-page coverage was omitted because it did not pass validation."); }
+    if (coverage) await writeText(path.join(input.systemDir, "pages.json"), `${JSON.stringify(coverage, null, 2)}\n`, generated, input.systemDir);
   }
   await writeText(
     path.join(input.systemDir, "SKILL.md"),

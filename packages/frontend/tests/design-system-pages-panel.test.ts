@@ -11,9 +11,9 @@ test("Given page coverage When the panel renders in every locale Then every page
   const coverage: DesignSystemPageCoverage = {
     schema_version: 1, page_limit: 4, discovered: 3,
     pages: [
-      { path: "/", page_type: "home", source: "entry", status: "extracted", skip_reason: null, layout_tokens: {}, patterns: ["hero-sentinel"], colors: [], fonts: [] },
-      { path: "/private", page_type: "other", source: "nav", status: "skipped", skip_reason: "robots", layout_tokens: {}, patterns: [], colors: [], fonts: [] },
-      { path: "/about", page_type: "about", source: "footer", status: "skipped", skip_reason: "cap", layout_tokens: {}, patterns: [], colors: [], fonts: [] },
+      { path: "/", page_type: "home", source: "entry", status: "extracted", skip_reason: null, layout_tokens: {}, patterns: ["hero-sentinel"], colors: [], fonts: [], custom_properties: {}, evidence: null },
+      { path: "/private", page_type: "other", source: "nav", status: "skipped", skip_reason: "robots", layout_tokens: {}, patterns: [], colors: [], fonts: [], custom_properties: {}, evidence: null },
+      { path: "/about", page_type: "about", source: "footer", status: "skipped", skip_reason: "cap", layout_tokens: {}, patterns: [], colors: [], fonts: [], custom_properties: {}, evidence: null },
     ],
     templates: [],
     differences: [{ key: "--layout-max", values: [{ path: "/", value: "1140px" }, { path: "/pricing", value: "960px" }] }],

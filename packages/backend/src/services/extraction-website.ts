@@ -19,7 +19,15 @@ export type WebsiteFetchOptions = {
   readonly signal: AbortSignal;
   readonly userAgent: string;
   readonly limits?: AcquisitionLimits;
+  /** When set, every hop including redirects must stay on this origin; checked before each request. */
+  readonly allowedOrigin?: string;
+  /** When set, every hop's path must pass (e.g. robots.txt); a refusal throws ExcludedPathError before the request. */
+  readonly allowsPath?: (pathname: string) => boolean;
 };
+
+export class ExcludedPathError extends Error {
+  constructor(readonly pathname: string) { super("Website resource path is excluded"); }
+}
 
 export async function fetchWebsiteResource(
   inputUrl: URL,
@@ -28,6 +36,10 @@ export async function fetchWebsiteResource(
   let current = new URL(inputUrl.toString());
   const limits = options.limits ?? DEFAULT_ACQUISITION_LIMITS;
   for (let redirectCount = 0; redirectCount <= limits.redirects; redirectCount += 1) {
+    if (options.allowedOrigin !== undefined && current.origin !== options.allowedOrigin) {
+      throw new DesignSystemExtractError("website_fetch_failed", "Website resource redirected off the source site");
+    }
+    if (options.allowsPath !== undefined && !options.allowsPath(current.pathname)) throw new ExcludedPathError(current.pathname);
     const addresses = await resolveSafeImportAddresses(current, options.signal);
     let response: Response;
     try {

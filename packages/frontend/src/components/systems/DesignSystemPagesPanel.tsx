@@ -5,6 +5,10 @@ const typeLabels: Record<DesignSystemPageType, MessageKey> = {
   home: "system.pages.type.home", pricing: "system.pages.type.pricing", blog: "system.pages.type.blog", docs: "system.pages.type.docs",
   product: "system.pages.type.product", about: "system.pages.type.about", contact: "system.pages.type.contact", other: "system.pages.type.other",
 };
+const patternLabels: Record<string, MessageKey> = {
+  hero: "system.pages.pattern.hero", "feature-grid": "system.pages.pattern.featureGrid", "proof-strip": "system.pages.pattern.proofStrip",
+  pricing: "system.pages.pattern.pricing", testimonials: "system.pages.pattern.testimonials", footer: "system.pages.pattern.footer",
+};
 const reasonLabels: Record<NonNullable<DesignSystemPageRecord["skip_reason"]>, MessageKey> = {
   robots: "system.pages.reason.robots", cap: "system.pages.reason.cap", fetch_failed: "system.pages.reason.fetchFailed",
 };
@@ -21,7 +25,7 @@ export function DesignSystemPagesPanel({ pages }: DesignSystemPagesPanelProps) {
   const row = (page: DesignSystemPageRecord) => <li key={page.path} data-page-path={page.path} className="min-w-0 border-t border-border py-2">
     <p className="break-all font-mono text-xs">{page.path}</p>
     <p className="mt-1 text-sm"><span data-field="type">{t(typeLabels[page.page_type])}</span> · <span data-field="status">{page.status === "extracted" ? t("system.pages.extracted") : t(reasonLabels[page.skip_reason ?? "cap"])}</span></p>
-    {page.patterns.length ? <p data-field="patterns" className="mt-1 break-words text-xs text-muted-foreground">{t("system.pages.patterns")}: {page.patterns.join(", ")}</p> : null}
+    {page.patterns.length ? <p data-field="patterns" className="mt-1 break-words text-xs text-muted-foreground">{t("system.pages.patterns")}: {page.patterns.map(pattern => patternLabels[pattern] ? t(patternLabels[pattern]) : pattern).join(", ")}</p> : null}
   </li>;
   return <section className="my-5 min-w-0 rounded-2xl border border-border bg-card p-5 text-left" aria-label={t("system.pages.title")}>
     <h2 className="text-lg font-semibold">{t("system.pages.title")}</h2>
