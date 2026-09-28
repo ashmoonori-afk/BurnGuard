@@ -14,7 +14,6 @@ export type SourceEvidence = {
   readonly photos: number;
   readonly illustrations: number;
   readonly gradients: number;
-  readonly backgroundImages: number;
   readonly patterns: number;
   readonly motionMs: readonly [number, number] | null;
   readonly animations: number;
@@ -37,7 +36,18 @@ const within = (ancestor: HTMLElement, node: HTMLElement): boolean => {
   return false;
 };
 
-const SPLIT_HINT = /\b(?:split|grid|row|columns?|two-col|half|cols?-\d+|col-(?:md|lg)-\d+|flex)\b/;
+const HORIZONTAL_CLASS = /(?:^|\s)(?:row|split|two-col|half|columns|(?:(?:sm|md|lg|xl):)?grid-cols-[2-9]|(?:(?:sm|md|lg|xl):)?flex-row|col-(?:sm|md|lg|xl)-\d+)(?=\s|$)/;
+const VERTICAL_CLASS = /(?:^|\s)(?:flex-col|flex-column|grid-cols-1|stack|vertical)(?=\s|$)/;
+
+/** Horizontal only on explicit row evidence; any explicit vertical signal wins and uncertainty stays false. */
+function arrangesHorizontally(container: HTMLElement): boolean {
+  const style = (container.getAttribute("style") ?? "").toLowerCase().replace(/\s+/g, "");
+  const classes = classOf(container);
+  if (/flex-direction:column|display:block/.test(style) || (VERTICAL_CLASS.test(classes) && !/(?:sm|md|lg|xl):(?:grid-cols-[2-9]|flex-row)/.test(classes))) return false;
+  if (/display:flex/.test(style)) return true;
+  if (/display:grid/.test(style)) return /grid-template-columns:[^;]*(?:repeat\([2-9]|[^;\s]+\s[^;\s]+)/.test(container.getAttribute("style")?.toLowerCase() ?? "");
+  return HORIZONTAL_CLASS.test(classes);
+}
 
 function heroOf(root: HTMLElement): SourceEvidence["hero"] {
   const heading = root.querySelector("h1");
@@ -53,7 +63,7 @@ function heroOf(root: HTMLElement): SourceEvidence["hero"] {
     const branches = container.childNodes.filter((node): node is HTMLElement => node instanceof HTMLElement);
     const headingBranch = branches.find(branch => within(branch, heading));
     const mediaBranch = branches.find(branch => within(branch, media));
-    if (headingBranch && mediaBranch) return { media: true, arrangement: headingBranch !== mediaBranch && SPLIT_HINT.test(classOf(container)) ? "split" : centered ? "centered" : null };
+    if (headingBranch && mediaBranch) return { media: true, arrangement: headingBranch !== mediaBranch && arrangesHorizontally(container) ? "split" : centered ? "centered" : null };
   }
   return { media: true, arrangement: centered ? "centered" : null };
 }
@@ -99,7 +109,6 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
     photos: images.filter(src => /\.(?:jpe?g|webp|avif)$/.test(src)).length,
     illustrations: images.filter(src => src.endsWith(".svg")).length,
     gradients: backgrounds.filter(value => /(?<!repeating-)(?:linear|radial|conic)-gradient\(/.test(value)).length,
-    backgroundImages: backgrounds.filter(value => /url\(/.test(value)).length,
     patterns: backgrounds.filter(value => /repeating-(?:linear|radial|conic)-gradient\(/.test(value)).length + values(["background-repeat"]).filter(value => value.startsWith("repeat") && value !== "repeat-x" && value !== "repeat-y").length,
     motionMs: durations.length ? [durations[0]!, durations.at(-1)!] : null,
     animations: values(["animation", "animation-name"]).filter(value => value !== "none").length,

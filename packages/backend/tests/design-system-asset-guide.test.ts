@@ -15,7 +15,8 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { extractDesignSystemFromSource } from "../src/services/design-system-extract";
 import { systemsDir } from "../src/lib/paths";
 import { persistCanonicalExtraction, readDesignSystemTokens } from "../src/services/design-system-extract";
-import { buildAssetGuideReadme, toHexColor } from "../src/services/extraction-assets";
+import { buildAssetGuideReadme, paletteTone, toHexColor } from "../src/services/extraction-assets";
+import { parseCssSource } from "../src/services/extraction-css";
 import { collectSourceEvidence, type SourceEvidence } from "../src/services/extraction-evidence";
 import { buildSectionPatternReadme, measureSourceLayout } from "../src/services/extraction-layout";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
@@ -212,7 +213,7 @@ describe("Source evidence drives section patterns and asset style", () => {
   test("Given source HTML and CSS, then hero, feature columns, proof, pricing, testimonials, footer, alignment, icons, images, backgrounds and motion are observed", () => {
     expect(collectSourceEvidence([html], css)).toEqual({
       hero: { media: true, arrangement: null }, featureColumns: 3, proofStrip: false, pricing: true, testimonials: true, footerColumns: 3, alignment: "left",
-      icons: { count: 2, style: "outline", strokeWidth: "1.5" }, photos: 1, illustrations: 1, gradients: 1, backgroundImages: 0, patterns: 0,
+      icons: { count: 2, style: "outline", strokeWidth: "1.5" }, photos: 1, illustrations: 1, gradients: 1, patterns: 0,
       motionMs: [150, 300], animations: 0,
     });
     const patterns = extractDesignSystemLayout("", buildSectionPatternReadme(collectSourceEvidence([html], css))).sections.find(section => section.kind === "patterns")!.text;
@@ -227,8 +228,14 @@ describe("Source evidence drives section patterns and asset style", () => {
     expect(hero('<section class="hero text-center"><h1>T</h1><p>L</p><img src="a.jpg"></section>')).toEqual({ media: true, arrangement: "centered" });
     expect(hero('<section class="hero"><div><h1>T</h1></div><div><img src="a.jpg"></div></section>')).toEqual({ media: true, arrangement: null });
     expect(hero('<main><p>No headline</p></main>')).toBeNull();
-    const centred = extractDesignSystemLayout("", buildSectionPatternReadme(collectSourceEvidence(['<section class="hero text-center"><h1>T</h1><img src="a.jpg"></section>'], []))).sections.find(section => section.kind === "patterns")!.text;
-    expect(centred.split("\n").find(line => line.startsWith("- Hero"))).not.toMatch(/side by side|6-7 columns/);
+    for (const vertical of [
+      '<section class="hero"><div class="hero flex" style="display:flex;flex-direction:column;text-align:center"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>',
+      '<section class="hero"><div class="flex flex-col"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>',
+      '<section class="hero"><div class="grid grid-cols-1"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>',
+      '<section class="hero"><div class="flex"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>',
+    ]) expect(hero(vertical)?.arrangement).not.toBe("split");
+    expect(hero('<section class="hero"><div class="grid grid-cols-1 md:grid-cols-2"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
+    expect(hero('<section class="hero"><div style="display: flex"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
   });
 
   test("Given no evidence, then every section pattern and asset kind is labelled as a default", () => {
@@ -250,9 +257,18 @@ describe("Source evidence drives section patterns and asset style", () => {
   test("Given an rgb-only dark source, then colours are normalised to hex and the ground is dark", () => {
     expect(["rgb(10, 20, 30)", "rgba(10 20 30 / 50%)", "hsl(0, 100%, 50%)", "#ABC", "#11223344", "var(--x)"].map(toHexColor)).toEqual(["#0a141e", "#0a141e", "#ff0000", "#aabbcc", "#112233", null]);
     expect(["hsl(180 100% 50%)", "hsl(180deg 100% 50%)", "hsl(0.5turn 100% 50%)", "hsl(200grad 100% 50%)", "hsl(1foo 100% 50%)"].map(toHexColor)).toEqual(["#00ffff", "#00ffff", "#00ffff", "#00ffff", null]);
-    const photo = guideFor({ colors: ["rgb(10, 20, 30)", "rgb(20, 20, 40)"] }).rules.find(rule => rule.kind === "illustrations")!;
-    expect(photo.prompt).toContain("#0a141e");
-    expect(photo.prompt).toContain("dark ground");
+    expect(paletteTone(["rgb(10, 20, 30)", "rgb(20, 20, 40)"].map(color => toHexColor(color)!))).toBe("dark");
+    expect(paletteTone(["#ffffff", "#f0f0f0"])).toBe("light");
+    expect(paletteTone([])).toBeNull();
+    expect(guideFor({ colors: ["rgb(10, 20, 30)", "rgb(20, 20, 40)"] }).rules.find(rule => rule.kind === "illustrations")!.prompt).toContain("#0a141e");
+  });
+
+  test("Given animation names without timing and gradients through the real CSS parser, then only their presence is observed and fallback timing stays a default", async () => {
+    const parsed = await parseCssSource({ content: ".a { animation-name: fade; } .b { background-image: linear-gradient(90deg, #111, #222); } .c { background-image: url('/photos/team.jpg'); }", sourceId: "fixture.css", fileOrder: 0, signal: new AbortController().signal });
+    const evidence = collectSourceEvidence([], parsed.declarations);
+    expect({ motionMs: evidence.motionMs, animations: evidence.animations, gradients: evidence.gradients }).toEqual({ motionMs: null, animations: 1, gradients: 1 });
+    const motion = guideFor({ evidence }).rules.find(rule => rule.kind === "motion")!.usage!;
+    expect(motion.startsWith("Evidence: observed in the source - 1 animation declaration(s) without timing")).toBe(true);
   });
 });
 
@@ -277,7 +293,7 @@ describe("Evidence comes from the original source, not sanitized or generated HT
       const guide = parseDesignSystemAssetGuide((await readDesignSystemTokens(id)).assets);
       for (const kind of ["photography", "illustrations"]) expect(guide.rules.find(rule => rule.kind === kind)!.usage!.startsWith("Evidence: observed in the source")).toBe(true);
       const layout = (await readDesignSystemTokens(id)).layout.sections.find(section => section.kind === "patterns")!.text;
-      expect(layout).toMatch(/^- Hero \(observed\): .*side by side/m);
+      expect(layout).toMatch(/^- Hero \(observed\)/m);
     } finally {
       for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
       await server.stop(true);

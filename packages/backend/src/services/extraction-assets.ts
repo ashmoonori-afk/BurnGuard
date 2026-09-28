@@ -51,6 +51,12 @@ export function toHexColor(color: string): string | null {
 
 const brightness = (hex: string) => [1, 3, 5].reduce((sum, index) => sum + Number.parseInt(hex.slice(index, index + 2), 16), 0) / 3;
 
+/** Mean brightness of sampled hex colours: "dark" below 110 of 255, "light" otherwise, null without samples. */
+export function paletteTone(hexColors: readonly string[]): "dark" | "light" | null {
+  if (hexColors.length === 0) return null;
+  return hexColors.reduce((sum, color) => sum + brightness(color), 0) / hexColors.length < 110 ? "dark" : "light";
+}
+
 function medianRadius(radii: readonly string[]): number | null {
   const values = radii.map(value => /^(\d*\.?\d+)px$/.exec(value.trim().split(/\s+/)[0] ?? "")?.[1]).filter((value): value is string => value !== undefined).map(Number).sort((a, b) => a - b);
   return values.length ? values[Math.floor(values.length / 2)]! : null;
@@ -72,7 +78,7 @@ export function buildAssetGuideReadme(input: AssetGuideInput): string {
   const sampled = [...new Set(input.colors.map(toHexColor).filter((color): color is string => color !== null))];
   const accents = sampled.filter(color => color !== primary && color !== action).slice(0, 3);
   const palette = [primary, ...(action !== primary ? [action] : []), ...accents].join(", ");
-  const tone = sampled.length === 0 ? null : sampled.reduce((sum, color) => sum + brightness(color), 0) / sampled.length < 110 ? "dark" : "light";
+  const tone = paletteTone(sampled);
   const ground = tone === "dark" ? "a deep, low-key dark ground" : tone === "light" ? "a bright, airy light ground" : "the brand's neutral surface";
   const radius = medianRadius(input.radii);
   const corners = radius === null ? "simple geometric corners" : radius <= 2 ? "crisp square corners" : radius <= 12 ? "softly rounded corners" : "generously rounded, pill-like shapes";
@@ -86,9 +92,9 @@ export function buildAssetGuideReadme(input: AssetGuideInput): string {
     icons: `${evidence.icons.style ? observed(`${evidence.icons.count} inline SVG icons, mostly ${evidence.icons.style}${evidence.icons.strokeWidth ? ` with a ${evidence.icons.strokeWidth}px stroke` : ""}`) : DEFAULT} Use one consistent icon set of ${iconStyle} on a 24px grid at 16, 20 or 24px with ${corners}. Colour icons with the current text ink; use ${action} only for interactive or active states. Pair icons with a text label unless the meaning is universal. Never mix filled and outlined styles or add icons without a function.`,
     illustrations: `${evidence.illustrations ? observed(`${evidence.illustrations} SVG illustration image(s), presence only`) : DEFAULT} Use illustrations only for explanatory moments (empty states, onboarding, concepts), never as filler. Build them from the palette (${palette}) with flat fills, ${corners} and restrained detail, one illustration per content block at most.`,
     photography: `${evidence.photos ? observed(`${evidence.photos} photographic image(s), presence only`) : DEFAULT} Use real, candid photography of people, product and context. Crop with the subject on a rule-of-thirds line and leave calm negative space for text. Grade toward the palette with natural skin tones; never apply heavy filters, off-brand duotones or stock-photo poses. Keep one aspect ratio within a group of images.`,
-    backgrounds: `${evidence.gradients || evidence.backgroundImages ? observed(`${evidence.gradients} gradient and ${evidence.backgroundImages} image background(s)`) : tone ? observed(`a ${tone} sampled palette`) : DEFAULT} Default to ${ground} using the surface tokens${evidence.gradients ? `, with soft gradients built only from ${palette}` : ", kept flat"}. Alternate only between the neutral surface tokens and one tinted brand surface and keep text contrast at WCAG AA or better. Full-bleed imagery is reserved for one focal area and never sits behind body text.`,
+    backgrounds: `${evidence.gradients ? observed(`${evidence.gradients} gradient background(s)`) : tone ? observed(`a ${tone} sampled palette`) : DEFAULT} Default to ${ground} using the surface tokens${evidence.gradients ? `, with soft gradients built only from ${palette}` : ", kept flat"}. Alternate only between the neutral surface tokens and one tinted brand surface and keep text contrast at WCAG AA or better. Full-bleed imagery is reserved for one focal area and never sits behind body text.`,
     patterns: `${evidence.patterns ? observed(`${evidence.patterns} repeating background pattern(s)`) : DEFAULT} Use subtle geometric patterns or textures (fine grids, dots, soft noise) from the palette at low contrast (under 10% difference from the ground), only on decorative areas and never behind dense text or data.`,
-    motion: `${evidence.motionMs || evidence.animations ? observed(`transitions of ${motion}${evidence.animations ? ` and ${evidence.animations} animation declaration(s)` : ""}`) : DEFAULT} Keep motion short and purposeful: ${motion} with the --ease-standard curve, moving elements by at most 16px. 3D renders, if used, share the palette and appear once per page or frame at most. Respect prefers-reduced-motion by removing non-essential movement.`,
+    motion: `${evidence.motionMs ? observed(`transition or animation timing of ${motion}${evidence.animations ? ` and ${evidence.animations} animation declaration(s)` : ""}`) : evidence.animations ? observed(`${evidence.animations} animation declaration(s) without timing, so the timing below is a default`) : DEFAULT} Keep motion short and purposeful: ${motion} with the --ease-standard curve, moving elements by at most 16px. 3D renders, if used, share the palette and appear once per page or frame at most. Respect prefers-reduced-motion by removing non-essential movement.`,
   };
   const lighting = "soft, diffuse natural light with gentle shadows";
 
