@@ -72,6 +72,7 @@ const ERROR_COPY: Record<string, MessageKey> = {
   invalid_figma_selection: "errors.invalid_figma_import",
   unsafe_figma_asset: "errors.invalid_figma_import",
   ambiguous_figma_asset: "errors.invalid_figma_import",
+  revert_before_figma_import: "errors.revert_before_figma_import",
   figma_fetch_failed: "errors.figma_import_failed",
   figma_import_failed: "errors.figma_import_failed",
   figma_import_limit: "errors.figma_import_limit",

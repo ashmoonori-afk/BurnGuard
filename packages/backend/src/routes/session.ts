@@ -1,4 +1,6 @@
 import { backendCanEverGenerateGraphics } from "../services/graphic-capability";
+import { loadFigmaReferencePolicy } from "../services/figma-reference-policy";
+import { inspectCanonicalTree } from "../services/canonical-tree-manifest";
 import { ulid } from "ulid";
 import { Hono } from "hono";
 import { BACKEND_IDS, parseGenerationOptions } from "@bg/shared";
@@ -555,6 +557,8 @@ sessionRoutes.post(
       let publicationWrites = 0;
       const coordinator = new ArtifactCoordinator(getSqlite(), operationId !== undefined && operationId === process.env.BG_ARTIFACT_FAULT_OPERATION_ID ? { afterPublishWrite: () => { publicationWrites += 1; if (publicationWrites === 1) process.kill(process.pid, "SIGKILL"); } } : {});
       if (project.current_digest === null) await coordinator.initialize(projectId, project.dir_path);
+      // A pre-turn snapshot taken before a Figma import lacks its immutable references; refuse clearly up front.
+      if (await snapshotPredatesFigmaImport(project.dir_path, snapshotPath)) return c.json(fail("revert_before_figma_import", "This turn predates an imported Figma reference"), 409);
       const result = await coordinator.run({ projectId, projectDir: project.dir_path, kind: "restore", operationId, expectedRevision: body.expected_revision, expectedArtifactDigest: body.expected_artifact_digest, mutate: async (stage) => { await materializeManagedTree(snapshotPath, stage); } });
       if (session) await appendSessionTrace(session.id, { level: "turn_restored", turnId, operationId: result.id, revision: result.resultRevision, digest: result.resultDigest });
       return c.json(ok({ operation_id: result.id, status: result.status, base_revision: result.baseRevision, base_digest: result.baseDigest, result_revision: result.resultRevision, result_digest: result.resultDigest, diff: result.diff }));
@@ -635,3 +639,10 @@ sessionRoutes.get("/api/sessions/:id/stream", async (c) => {
     }
   });
 });
+
+async function snapshotPredatesFigmaImport(projectDir: string, snapshotPath: string): Promise<boolean> {
+  const references = (await loadFigmaReferencePolicy(projectDir)).files;
+  if (references.length === 0) return false;
+  const snapshot = new Map((await inspectCanonicalTree(snapshotPath)).files.map((file) => [file.path, file.sha256]));
+  return references.some((reference) => snapshot.get(reference.path) !== reference.sha256);
+}

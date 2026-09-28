@@ -12,6 +12,7 @@ import {
 import { getProjectDetail } from "../src/db/project-read-repository";
 import { listArtifactOperations } from "../src/db/artifact-operation-query";
 import { artifactHistory } from "../src/services/artifact-history";
+import { writePreTurnSnapshot } from "../src/services/checkpoints";
 import { parseFigmaImportDocument, stageFigmaExport } from "../src/services/figma-import";
 
 const projectIds: string[] = [];
@@ -433,5 +434,32 @@ describe("project history around Figma imports", () => {
     expect(availability.get(before.id)).toBe(false);
     expect(availability.get(after.id)).toBe(true);
     expect(history.undo_operation_id).toBe(after.id);
+  });
+});
+
+describe("chat checkpoint revert around Figma imports", () => {
+  test("Given turns before and after an import When each is reverted Then only the pre-import turn is refused with a clear code", async () => {
+    // Given
+    const project = await createProject();
+    await writePreTurnSnapshot(project.id, "turn-before-import");
+    const imported = await createApp().request(`/api/projects/${project.id}/figma/import`, { method: "POST", body: importForm(project) });
+    expect(imported.status).toBe(201);
+    await writePreTurnSnapshot(project.id, "turn-after-import");
+    const current = await getProjectDetail(project.id);
+    if (current === null || current.current_digest === null) throw new Error("artifact_identity_unavailable");
+    const revert = (turnId: string) => createApp().request(`/api/projects/${project.id}/checkpoints/${turnId}/restore`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ expected_revision: current.current_revision, expected_artifact_digest: current.current_digest }),
+    });
+
+    // When
+    const before = await revert("turn-before-import");
+    const after = await revert("turn-after-import");
+
+    // Then
+    expect(before.status).toBe(409);
+    expect((await before.json()).error.code).toBe("revert_before_figma_import");
+    expect(after.status).toBe(200);
   });
 });
