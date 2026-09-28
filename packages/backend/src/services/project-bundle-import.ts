@@ -294,25 +294,27 @@ async function cleanupImportedBundle(input: {
   readonly extraPaths?: readonly string[];
 }): Promise<boolean> {
   let failed = false;
+  // A directory is removed only after its row is gone; otherwise its owner marker and the pending
+  // receipt must survive so startup reconciliation can retry the row deletion.
+  const paths: string[] = [...(input.extraPaths ?? [])];
   if (input.project) {
-    try { getSqlite().prepare("DELETE FROM projects WHERE id=?").run(input.project.id); }
-    catch (error) {
+    try {
+      getSqlite().prepare("DELETE FROM projects WHERE id=?").run(input.project.id);
+      paths.push(input.project.dir_path);
+    } catch (error) {
       if (!(error instanceof Error)) throw error;
       failed = true;
     }
   }
   if (input.customSystemId) {
-    try { getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(input.customSystemId); }
-    catch (error) {
+    try {
+      getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(input.customSystemId);
+      if (input.customSystemDir) paths.push(input.customSystemDir);
+    } catch (error) {
       if (!(error instanceof Error)) throw error;
       failed = true;
     }
-  }
-  const paths = [
-    ...(input.project ? [input.project.dir_path] : []),
-    ...(input.customSystemDir ? [input.customSystemDir] : []),
-    ...(input.extraPaths ?? []),
-  ];
+  } else if (input.customSystemDir) paths.push(input.customSystemDir);
   const removals = await Promise.allSettled(paths.map((target) => rm(target, { recursive: true, force: true })));
   return failed || removals.some((result) => result.status === "rejected");
 }

@@ -13,6 +13,7 @@ import { getContentReceipt } from "../src/db/catalog-repository";
 import { validateCatalogReceiptTree } from "../src/services/catalog-files";
 import { projectBundleImportReceiptsDir, projectBundlePayloadStage, reconcileProjectBundleImports, writeBundleImportOwnerMarker, writeProjectBundleImportReceipt } from "../src/services/project-bundle-import-receipt";
 import { symlink } from "node:fs/promises";
+import { canCreateSymlink } from "./helpers/platform";
 import { readdir } from "node:fs/promises";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { exportProjectBundle, importProjectBundleFile } from "../src/services/project-bundle";
@@ -358,7 +359,7 @@ test("Given a pending receipt naming a project it never marked When startup reco
   expect(await getProjectDetail(victim)).not.toBeNull();
 });
 
-test("Given a receipt whose project directory is a link to another project When reconciled Then the link is never followed", async () => {
+test.skipIf(!canCreateSymlink())("Given a receipt whose project directory is a link to another project When reconciled Then the link is never followed", async () => {
   const operationId = "01J00000000000000000000003";
   const linked = "01J0000000000000000000WXYZ";
   await writeBundleImportOwnerMarker(sourceProjectDir, operationId);
