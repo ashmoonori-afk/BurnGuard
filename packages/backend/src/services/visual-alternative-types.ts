@@ -6,6 +6,7 @@ export type VisualAlternativeTurnInput = {
   readonly name: string;
   readonly prompt: string;
   readonly entrypoint: string;
+  readonly signal: AbortSignal;
 };
 
 export class VisualAlternativeServiceError extends Error {
@@ -14,6 +15,8 @@ export class VisualAlternativeServiceError extends Error {
     readonly code:
       | "alternative_not_found"
       | "alternative_not_ready"
+      | "capacity_exhausted"
+      | "operation_not_active"
       | "generation_active"
       | "project_not_found"
       | "session_busy",

@@ -89,6 +89,8 @@ const ERROR_COPY: Record<string, MessageKey> = {
   invalid_pinterest_request: "errors.invalid_pinterest_request",
   message_too_long: "errors.message_too_long",
   turn_capacity_exhausted: "errors.turn_capacity_exhausted",
+  capacity_exhausted: "errors.turn_capacity_exhausted",
+  project_path_unavailable: "errors.path_unavailable",
   active_page_unavailable: "errors.active_page_unavailable",
   invalid_active_page: "errors.invalid_active_page",
   document_save_failed: "errors.document_save_failed",

@@ -4,7 +4,7 @@ import { latestVisualAlternatives } from "../db/visual-alternative-repository";
 import { ArtifactCoordinator } from "./artifact-coordinator";
 import { materializeManagedTree } from "./artifact-tree-storage";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
-import { startVisualAlternativeTurn } from "./turns";
+import { interruptUserTurn, startVisualAlternativeTurn } from "./turns";
 import {
   VisualAlternativeServiceError,
   type VisualAlternativeTurnInput,
@@ -13,25 +13,38 @@ import {
 export async function runVisualAlternativeTurn(
   input: VisualAlternativeTurnInput,
 ): Promise<void> {
+  if (input.signal.aborted) {
+    throw new VisualAlternativeServiceError("operation_not_active");
+  }
   const payload: Extract<UserEvent, { type: "user.message" }> = {
     type: "user.message",
-    text: `<burnguard_visual_alternative>${JSON.stringify({
-      schema_version: 1,
-      ordinal: input.ordinal,
-      count: input.count,
-      name: input.name,
-    })}</burnguard_visual_alternative>\n${input.prompt}`,
+    text: input.prompt,
     active_rel_path: input.entrypoint,
   };
+  const modelText = `<burnguard_visual_alternative>${JSON.stringify({
+    schema_version: 1,
+    ordinal: input.ordinal,
+    count: input.count,
+    name: input.name,
+  })}</burnguard_visual_alternative>\n${input.prompt}`;
   const started = startVisualAlternativeTurn(
     input.sessionId,
     payload,
     input.operationId,
+    { modelText },
   );
   if (started === null) {
     throw new VisualAlternativeServiceError("session_busy");
   }
-  await started.promise;
+  const interrupt = () => {
+    interruptUserTurn(input.sessionId);
+  };
+  input.signal.addEventListener("abort", interrupt, { once: true });
+  try {
+    await started.promise;
+  } finally {
+    input.signal.removeEventListener("abort", interrupt);
+  }
 }
 
 export async function restoreVisualAlternativeBase(

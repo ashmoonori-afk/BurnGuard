@@ -6,7 +6,10 @@ import {
   type ApiSuccess,
   type CreateVisualAlternativesRequest,
 } from "@bg/shared";
+import { loadConfig } from "../config";
 import { getSqlite } from "../db/sqlite-client";
+import { projectsDir, resolveManagedPath } from "../lib/paths";
+import { PathBoundaryError } from "../security/path-boundary";
 import {
   getLatestProjectSession,
   getProjectDetail,
@@ -21,7 +24,7 @@ import { isUserTurnRunning } from "../services/turns";
 
 type AlternativeService = Pick<
   VisualAlternativeService,
-  "delete" | "generate" | "list" | "promote"
+  "cancel" | "delete" | "generate" | "list" | "promote"
 >;
 
 let service: AlternativeService = new VisualAlternativeService(getSqlite());
@@ -41,6 +44,17 @@ function ok<T>(data: T): ApiSuccess<T> {
 }
 function fail(code: string, message: string): ApiErrorBody {
   return { error: { code, message } };
+}
+function managedProjectDir(dirPath: string): string | null {
+  try {
+    return resolveManagedPath(projectsDir, dirPath);
+  } catch (error) {
+    if (error instanceof PathBoundaryError) return null;
+    throw error;
+  }
+}
+function pathUnavailable(): ApiErrorBody {
+  return fail("project_path_unavailable", "Project directory is outside managed storage");
 }
 function isIdentity(
   value: unknown,
@@ -99,21 +113,42 @@ visualAlternativeRoutes.post(
       }
       throw error;
     }
+    const projectDir = managedProjectDir(project.dir_path);
+    if (projectDir === null) return c.json(pathUnavailable(), 503);
+    const config = await loadConfig();
     try {
       const started = await service.generate({
         projectId,
         sessionId: session.id,
-        projectDir: project.dir_path,
+        projectDir,
         entrypoint: project.entrypoint,
+        maxConcurrentTurns: config.harness.maxConcurrentSessions,
         request,
       });
       return c.json(ok(await started.completion), 201);
     } catch (error) {
       if (error instanceof VisualAlternativeServiceError) {
-        return c.json(fail(error.code, "Alternative generation could not start"), 409);
+        return c.json(
+          fail(error.code, "Alternative generation could not start"),
+          error.code === "capacity_exhausted" ? 429 : 409,
+        );
       }
       throw error;
     }
+  },
+);
+
+visualAlternativeRoutes.post(
+  "/api/projects/:id/alternatives/cancel",
+  async (c) => {
+    const session = await getLatestProjectSession(c.req.param("id"));
+    if (session === null) {
+      return c.json(fail("project_session_not_found", "Project or session not found"), 404);
+    }
+    if (!service.cancel(session.id)) {
+      return c.json(fail("operation_not_active", "No alternative generation is active"), 409);
+    }
+    return c.json(ok({ cancelled: true }), 202);
   },
 );
 
@@ -125,6 +160,8 @@ visualAlternativeRoutes.post(
     if (project === null) {
       return c.json(fail("project_not_found", "Project not found"), 404);
     }
+    const projectDir = managedProjectDir(project.dir_path);
+    if (projectDir === null) return c.json(pathUnavailable(), 503);
     const body: unknown = await c.req.json().catch(() => null);
     if (!isIdentity(body)) {
       return c.json(fail("invalid_artifact_identity", "Expected artifact identity is required"), 400);
@@ -132,7 +169,7 @@ visualAlternativeRoutes.post(
     try {
       const promoted = await service.promote({
         projectId,
-        projectDir: project.dir_path,
+        projectDir,
         alternativeId: c.req.param("alternativeId"),
         expectedRevision: body.expected_revision,
         expectedDigest: body.expected_artifact_digest,

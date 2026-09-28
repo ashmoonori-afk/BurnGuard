@@ -4,12 +4,14 @@ import {
   deleteVisualAlternative,
   getVisualAlternative,
   latestVisualAlternatives,
-  releaseVisualAlternativeOperation,
   VisualAlternativeRepositoryError,
 } from "../db/visual-alternative-repository";
 import { ArtifactCoordinator } from "./artifact-coordinator";
 import { materializeManagedTree } from "./artifact-tree-storage";
-import { visualAlternativeStage } from "./visual-alternative-storage";
+import {
+  visualAlternativeStage,
+  visualAlternativeStageIdentity,
+} from "./visual-alternative-storage";
 import { VisualAlternativeServiceError } from "./visual-alternative-types";
 
 export function listVisualAlternatives(
@@ -45,7 +47,7 @@ export async function promoteVisualAlternative(input: {
   const saved = await visualAlternativeStage(
     input.db,
     input.projectDir,
-    alternative.operation_id,
+    visualAlternativeStageIdentity(alternative),
   );
   const result = await new ArtifactCoordinator(input.db).run({
     projectId: input.projectId,
@@ -68,10 +70,10 @@ export function removeVisualAlternative(
   db: Database,
   projectId: string,
   alternativeId: string,
+  now: number,
 ): void {
   try {
-    const operationId = deleteVisualAlternative(db, projectId, alternativeId);
-    releaseVisualAlternativeOperation(db, operationId);
+    deleteVisualAlternative(db, projectId, alternativeId, now);
   } catch (error) {
     if (error instanceof VisualAlternativeRepositoryError) {
       switch (error.code) {

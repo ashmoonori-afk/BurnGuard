@@ -135,6 +135,7 @@ import { t as globalT, useT, type MessageKey } from "@/i18n/t";
 import { latestArtifactPreview } from "@/lib/live-preview";
 import AlternativeCompare from "@/components/alternatives/AlternativeCompare";
 import {
+  cancelVisualAlternatives,
   deleteVisualAlternative,
   generateVisualAlternatives,
   getVisualAlternatives,
@@ -850,6 +851,10 @@ export default function ProjectView() {
     },
     onError: (error) => handleWriteError("workspace.alternatives.generateFailed", error),
   });
+  const cancelAlternativesMutation = useMutation({
+    mutationFn: () => cancelVisualAlternatives(id ?? ""),
+    onError: (error) => handleWriteError("workspace.alternatives.cancelFailed", error),
+  });
   const promoteAlternativeMutation = useMutation({
     mutationFn: (alternativeId: string) => {
       if (artifacts === null) throw new Error("artifact_identity_unavailable");
@@ -1437,11 +1442,13 @@ export default function ProjectView() {
                   state={alternativesQuery.data}
                   disabled={composerDisabled || artifacts === null}
                   generating={generateAlternativesMutation.isPending}
+                  cancelling={cancelAlternativesMutation.isPending}
                   promotingId={promoteAlternativeMutation.isPending ? promoteAlternativeMutation.variables : null}
                   deletingId={deleteAlternativeMutation.isPending ? deleteAlternativeMutation.variables : null}
                   onGenerate={async request => { await generateAlternativesMutation.mutateAsync(request); }}
                   onPromote={async alternativeId => { await promoteAlternativeMutation.mutateAsync(alternativeId); }}
                   onDelete={async alternativeId => { await deleteAlternativeMutation.mutateAsync(alternativeId); }}
+                  onCancel={async () => { await cancelAlternativesMutation.mutateAsync(); }}
                 />
                 <ArtifactHistory history={undoInfoQuery.data} disabled={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} />
               </div>}

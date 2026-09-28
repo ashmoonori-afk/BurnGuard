@@ -2,7 +2,6 @@ import type { Database } from "bun:sqlite";
 import type {
   VisualAlternativeList,
   VisualAlternativeListStatus,
-  VisualAlternativeStatus,
   VisualAlternativeSummary,
 } from "@bg/shared";
 import {
@@ -26,6 +25,9 @@ export class VisualAlternativeRepositoryError extends Error {
   }
 }
 
+const RETAINED_UNTIL = 253402300799999;
+const RELEASED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 export function createVisualAlternativeGeneration(
   db: Database,
   input: {
@@ -33,7 +35,6 @@ export function createVisualAlternativeGeneration(
     readonly projectId: string;
     readonly baseRevision: number;
     readonly baseDigest: string;
-    readonly baseManifestJson: string;
     readonly basePath: string;
     readonly alternatives: readonly {
       readonly id: string;
@@ -46,13 +47,12 @@ export function createVisualAlternativeGeneration(
   try {
     db.transaction(() => {
       db.prepare(
-        "INSERT INTO visual_alternative_generations(id,project_id,status,base_revision,base_digest,base_manifest_json,base_path,created_at,updated_at) VALUES (?,?,'generating',?,?,?,?,?,?)",
+        "INSERT INTO visual_alternative_generations(id,project_id,status,base_revision,base_digest,base_manifest_json,base_path,created_at,updated_at) VALUES (?,?,'generating',?,?,NULL,?,?,?)",
       ).run(
         input.generationId,
         input.projectId,
         input.baseRevision,
         input.baseDigest,
-        input.baseManifestJson,
         input.basePath,
         input.now,
         input.now,
@@ -86,27 +86,82 @@ export function createVisualAlternativeGeneration(
   }
 }
 
-export function transitionVisualAlternative(
+export function recordVisualAlternativeBase(
+  db: Database,
+  generationId: string,
+  manifestJson: string,
+  now: number,
+): void {
+  const result = db.prepare(
+    "UPDATE visual_alternative_generations SET base_manifest_json=?,updated_at=? WHERE id=? AND status='generating' AND base_manifest_json IS NULL",
+  ).run(manifestJson, now, generationId);
+  if (result.changes !== 1) {
+    throw new VisualAlternativeRepositoryError("invalid_transition");
+  }
+}
+
+export function startVisualAlternative(
+  db: Database,
+  id: string,
+  now: number,
+): void {
+  const result = db.prepare(
+    "UPDATE visual_alternatives SET status='generating',updated_at=? WHERE id=? AND status='pending'",
+  ).run(now, id);
+  if (result.changes !== 1) {
+    throw new VisualAlternativeRepositoryError("invalid_transition");
+  }
+}
+
+export function markVisualAlternativeReady(
   db: Database,
   input: {
     readonly id: string;
-    readonly from: VisualAlternativeStatus;
-    readonly to: VisualAlternativeStatus;
-    readonly resultRevision?: number;
-    readonly resultDigest?: string;
+    readonly projectId: string;
+    readonly operationId: string;
+    readonly resultRevision: number;
+    readonly resultDigest: string;
     readonly now: number;
   },
 ): void {
+  db.transaction(() => {
+    const updated = db.prepare(
+      "UPDATE visual_alternatives SET status='ready',result_revision=?,result_digest=?,updated_at=? WHERE id=? AND project_id=? AND operation_id=? AND status IN ('pending','generating')",
+    ).run(
+      input.resultRevision,
+      input.resultDigest,
+      input.now,
+      input.id,
+      input.projectId,
+      input.operationId,
+    );
+    if (updated.changes !== 1) {
+      throw new VisualAlternativeRepositoryError("invalid_transition");
+    }
+    const retained = db.prepare(
+      "UPDATE artifact_operations SET retention_json=json_set(retention_json,'$.retained_until',?),updated_at=? WHERE id=? AND project_id=? AND status='committed' AND result_revision=? AND result_digest=?",
+    ).run(
+      RETAINED_UNTIL,
+      input.now,
+      input.operationId,
+      input.projectId,
+      input.resultRevision,
+      input.resultDigest,
+    );
+    if (retained.changes !== 1) {
+      throw new VisualAlternativeRepositoryError("corrupt_visual_alternative");
+    }
+  })();
+}
+
+export function failVisualAlternative(
+  db: Database,
+  id: string,
+  now: number,
+): void {
   const result = db.prepare(
-    "UPDATE visual_alternatives SET status=?,result_revision=?,result_digest=?,updated_at=? WHERE id=? AND status=?",
-  ).run(
-    input.to,
-    input.resultRevision ?? null,
-    input.resultDigest ?? null,
-    input.now,
-    input.id,
-    input.from,
-  );
+    "UPDATE visual_alternatives SET status='failed',result_revision=NULL,result_digest=NULL,updated_at=? WHERE id=? AND status IN ('pending','generating')",
+  ).run(now, id);
   if (result.changes !== 1) {
     throw new VisualAlternativeRepositoryError("invalid_transition");
   }
@@ -115,15 +170,30 @@ export function transitionVisualAlternative(
 export function finishVisualAlternativeGeneration(
   db: Database,
   generationId: string,
-  status: VisualAlternativeListStatus,
   now: number,
-): void {
-  const result = db.prepare(
-    "UPDATE visual_alternative_generations SET status=?,updated_at=? WHERE id=? AND status='generating'",
-  ).run(status, now, generationId);
-  if (result.changes !== 1) {
-    throw new VisualAlternativeRepositoryError("invalid_transition");
-  }
+): VisualAlternativeListStatus {
+  return db.transaction(() => {
+    db.prepare(
+      "UPDATE visual_alternatives SET status='failed',result_revision=NULL,result_digest=NULL,updated_at=? WHERE generation_id=? AND status IN ('pending','generating')",
+    ).run(now, generationId);
+    const counts = db.query<{ readonly total: number; readonly ready: number }, [string]>(
+      "SELECT count(*) AS total, coalesce(sum(status='ready'),0) AS ready FROM visual_alternatives WHERE generation_id=?",
+    ).get(generationId);
+    const total = counts?.total ?? 0;
+    const ready = counts?.ready ?? 0;
+    const status: VisualAlternativeListStatus = total > 0 && ready === total
+      ? "ready"
+      : ready === 0
+        ? "failed"
+        : "partial";
+    const result = db.prepare(
+      "UPDATE visual_alternative_generations SET status=?,updated_at=? WHERE id=? AND status='generating'",
+    ).run(status, now, generationId);
+    if (result.changes !== 1) {
+      throw new VisualAlternativeRepositoryError("invalid_transition");
+    }
+    return status;
+  })();
 }
 
 export function latestVisualAlternatives(
@@ -164,37 +234,54 @@ export function deleteVisualAlternative(
   db: Database,
   projectId: string,
   alternativeId: string,
-): string {
-  const alternative = getVisualAlternative(db, projectId, alternativeId);
-  if (alternative === null) {
-    throw new VisualAlternativeRepositoryError("alternative_not_found");
-  }
-  if (alternative.status === "pending" || alternative.status === "generating") {
-    throw new VisualAlternativeRepositoryError("generation_active");
-  }
-  db.prepare("DELETE FROM visual_alternatives WHERE project_id=? AND id=?").run(
-    projectId,
-    alternativeId,
-  );
-  return alternative.operation_id;
+  now: number,
+): void {
+  db.transaction(() => {
+    const alternative = getVisualAlternative(db, projectId, alternativeId);
+    if (alternative === null) {
+      throw new VisualAlternativeRepositoryError("alternative_not_found");
+    }
+    if (alternative.status === "pending" || alternative.status === "generating") {
+      throw new VisualAlternativeRepositoryError("generation_active");
+    }
+    const deleted = db.prepare(
+      "DELETE FROM visual_alternatives WHERE project_id=? AND id=? AND status=? AND operation_id=?",
+    ).run(projectId, alternativeId, alternative.status, alternative.operation_id);
+    if (deleted.changes !== 1) {
+      throw new VisualAlternativeRepositoryError("invalid_transition");
+    }
+    const released = db.prepare(
+      "UPDATE artifact_operations SET retention_json=json_set(retention_json,'$.retained_until',?),updated_at=? WHERE id=? AND project_id=? AND status='committed' AND json_extract(retention_json,'$.retained_until')=?",
+    ).run(now + RELEASED_RETENTION_MS, now, alternative.operation_id, projectId, RETAINED_UNTIL);
+    if (alternative.status === "ready" && released.changes !== 1) {
+      throw new VisualAlternativeRepositoryError("corrupt_visual_alternative");
+    }
+  })();
 }
 
-export function retainVisualAlternativeOperation(
+/** Startup repair: ready rows pin their operation; nothing else keeps the alternative pin. */
+export function repairVisualAlternativeRetention(
   db: Database,
-  operationId: string,
-): void {
-  db.prepare(
-    "UPDATE artifact_operations SET retention_json=json_set(retention_json,'$.retained_until',253402300799999),updated_at=? WHERE id=? AND status='committed'",
-  ).run(Date.now(), operationId);
-}
-
-export function releaseVisualAlternativeOperation(
-  db: Database,
-  operationId: string,
-): void {
-  db.prepare(
-    "UPDATE artifact_operations SET retention_json=json_set(retention_json,'$.retained_until',?),updated_at=? WHERE id=? AND status='committed'",
-  ).run(Date.now() + 30 * 24 * 60 * 60 * 1000, Date.now(), operationId);
+  now: number,
+): { readonly retained: number; readonly released: number } {
+  return db.transaction(() => {
+    const retained = db.prepare(
+      `UPDATE artifact_operations SET retention_json=json_set(retention_json,'$.retained_until',?),updated_at=?
+        WHERE status='committed'
+          AND json_extract(retention_json,'$.retained_until') IS NOT ?
+          AND EXISTS (SELECT 1 FROM visual_alternatives a
+            WHERE a.operation_id=artifact_operations.id AND a.project_id=artifact_operations.project_id
+              AND a.status='ready' AND a.result_revision=artifact_operations.result_revision
+              AND a.result_digest=artifact_operations.result_digest)`,
+    ).run(RETAINED_UNTIL, now, RETAINED_UNTIL).changes;
+    const released = db.prepare(
+      `UPDATE artifact_operations SET retention_json=json_set(retention_json,'$.retained_until',?),updated_at=?
+        WHERE json_extract(retention_json,'$.retained_until')=?
+          AND NOT EXISTS (SELECT 1 FROM visual_alternatives a
+            WHERE a.operation_id=artifact_operations.id AND a.status='ready')`,
+    ).run(now + RELEASED_RETENTION_MS, now, RETAINED_UNTIL).changes;
+    return { retained, released };
+  })();
 }
 
 const SELECT_ALTERNATIVE = `SELECT

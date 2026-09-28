@@ -27,22 +27,26 @@ type Props = {
   readonly state: VisualAlternativeList | null | undefined;
   readonly disabled: boolean;
   readonly generating: boolean;
+  readonly cancelling: boolean;
   readonly promotingId: string | null;
   readonly deletingId: string | null;
   readonly onGenerate: (request: CreateVisualAlternativesRequest) => Promise<void>;
   readonly onPromote: (alternativeId: string) => Promise<void>;
   readonly onDelete: (alternativeId: string) => Promise<void>;
+  readonly onCancel: () => Promise<void>;
 };
 
 export default function AlternativeCompare({
   state,
   disabled,
   generating,
+  cancelling,
   promotingId,
   deletingId,
   onGenerate,
   onPromote,
   onDelete,
+  onCancel,
 }: Props) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -123,13 +127,25 @@ export default function AlternativeCompare({
               </label>
             ))}
           </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+          {generating && (
+            <button
+              type="button"
+              disabled={cancelling}
+              className="min-h-11 rounded-md border border-input px-4 text-sm font-medium disabled:opacity-50"
+              onClick={() => void onCancel()}
+            >
+              {cancelling ? t("workspace.alternatives.cancelling") : t("workspace.alternatives.cancel")}
+            </button>
+          )}
           <button
             type="submit"
             disabled={busy || disabled || prompt.trim().length === 0 || new Set(names.slice(0, count).map((name) => name.trim())).size !== count}
-            className="min-h-11 justify-self-end rounded-md bg-accent px-4 text-sm font-medium text-accent-foreground disabled:opacity-50"
+            className="min-h-11 rounded-md bg-accent px-4 text-sm font-medium text-accent-foreground disabled:opacity-50"
           >
             {generating ? t("workspace.alternatives.generating") : t("workspace.alternatives.generate")}
           </button>
+          </div>
         </form>
         {state && (
           <div className="flex flex-wrap items-center justify-between gap-3">

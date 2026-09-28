@@ -51,3 +51,10 @@ export function deleteVisualAlternative(
     { method: "DELETE" },
   );
 }
+
+export function cancelVisualAlternatives(projectId: string): Promise<{ readonly cancelled: true }> {
+  return apiFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/alternatives/cancel`,
+    { method: "POST" },
+  );
+}

@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { VisualAlternativeSummary } from "@bg/shared";
 import path from "node:path";
 import {
   parsePersistedArtifactOperation,
@@ -30,18 +31,62 @@ export type VisualAlternativeStage = {
   readonly manifest: CanonicalTreeManifest;
 };
 
+/** Every item turn starts from the restored base tree, so its operation base digest is the generation base digest. */
+export type VisualAlternativeStageIdentity = {
+  readonly projectId: string;
+  readonly operationId: string;
+  readonly baseDigest: string;
+  readonly result?: { readonly revision: number; readonly digest: string };
+};
+
+export function visualAlternativeStageIdentity(
+  alternative: VisualAlternativeSummary,
+): VisualAlternativeStageIdentity {
+  if (
+    alternative.status !== "ready" ||
+    alternative.result_revision === null ||
+    alternative.result_digest === null
+  ) {
+    throw new VisualAlternativeStorageError("alternative_not_ready");
+  }
+  return {
+    projectId: alternative.project_id,
+    operationId: alternative.operation_id,
+    baseDigest: alternative.source_digest,
+    result: {
+      revision: alternative.result_revision,
+      digest: alternative.result_digest,
+    },
+  };
+}
+
 export async function visualAlternativeStage(
   db: Database,
   projectDir: string,
-  operationId: string,
+  identity: VisualAlternativeStageIdentity,
 ): Promise<VisualAlternativeStage> {
+  const operationId = identity.operationId;
   const row = db.query<PersistedArtifactOperationRow, [string]>(
     "SELECT id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at FROM artifact_operations WHERE id=?",
   ).get(operationId);
   if (row === null) {
     throw new VisualAlternativeStorageError("alternative_not_ready");
   }
-  const operation = parsePersistedArtifactOperation(row);
+  let operation: ReturnType<typeof parsePersistedArtifactOperation>;
+  try {
+    operation = parsePersistedArtifactOperation(row);
+  } catch {
+    throw new VisualAlternativeStorageError("corrupt_visual_alternative");
+  }
+  if (
+    operation.project_id !== identity.projectId ||
+    operation.base_digest !== identity.baseDigest ||
+    (identity.result !== undefined &&
+      (operation.result_revision !== identity.result.revision ||
+        operation.result_digest !== identity.result.digest))
+  ) {
+    throw new VisualAlternativeStorageError("corrupt_visual_alternative");
+  }
   if (
     operation.status !== "committed" ||
     operation.result_revision === null ||
@@ -81,13 +126,13 @@ export async function visualAlternativeStage(
 export async function readVisualAlternativeFile(
   db: Database,
   projectDir: string,
-  operationId: string,
+  identity: VisualAlternativeStageIdentity,
   relativePath: string,
 ): Promise<{
   readonly bytes: Buffer<ArrayBuffer>;
   readonly sha256: string;
 }> {
-  const stage = await visualAlternativeStage(db, projectDir, operationId);
+  const stage = await visualAlternativeStage(db, projectDir, identity);
   const file = manifestEntry(stage.manifest, relativePath);
   if (file === null) {
     throw new VisualAlternativeStorageError("alternative_file_not_found");

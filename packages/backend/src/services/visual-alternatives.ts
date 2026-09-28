@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { rm } from "node:fs/promises";
 import { ulid } from "ulid";
 import type {
   CreateVisualAlternativesRequest,
@@ -6,10 +7,11 @@ import type {
 } from "@bg/shared";
 import {
   createVisualAlternativeGeneration,
+  failVisualAlternative,
   finishVisualAlternativeGeneration,
-  latestVisualAlternatives,
-  retainVisualAlternativeOperation,
-  transitionVisualAlternative,
+  markVisualAlternativeReady,
+  recordVisualAlternativeBase,
+  startVisualAlternative,
   VisualAlternativeRepositoryError,
 } from "../db/visual-alternative-repository";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
@@ -28,10 +30,10 @@ import {
   removeVisualAlternative,
 } from "./visual-alternative-actions";
 import {
-  beginVisualAlternativeOperation,
+  cancelVisualAlternativeOperation,
   finishVisualAlternativeOperation,
 } from "./visual-alternative-operation-registry";
-import { isUserTurnRunning } from "./turns";
+import { admitVisualAlternativeBatch } from "./turns";
 
 import {
   VisualAlternativeServiceError,
@@ -43,6 +45,8 @@ export type { VisualAlternativeTurnInput } from "./visual-alternative-types";
 
 type VisualAlternativeDependencies = {
   readonly runTurn?: (input: VisualAlternativeTurnInput) => Promise<void>;
+  readonly materializeBase?: typeof materializeManagedTree;
+  readonly restoreBase?: typeof restoreVisualAlternativeBase;
   readonly now?: () => number;
   readonly id?: () => string;
 };
@@ -52,11 +56,29 @@ type GenerateInput = {
   readonly sessionId: string;
   readonly projectDir: string;
   readonly entrypoint: string;
+  readonly maxConcurrentTurns: number;
   readonly request: CreateVisualAlternativesRequest;
+};
+
+type PlannedAlternative = {
+  readonly id: string;
+  readonly name: string;
+  readonly operationId: string;
+};
+
+type Batch = {
+  readonly input: GenerateInput;
+  readonly generationId: string;
+  readonly basePath: string;
+  readonly baseDigest: string;
+  readonly alternatives: readonly PlannedAlternative[];
+  readonly signal: AbortSignal;
 };
 
 export class VisualAlternativeService {
   private readonly runTurn: (input: VisualAlternativeTurnInput) => Promise<void>;
+  private readonly materializeBase: typeof materializeManagedTree;
+  private readonly restoreBase: typeof restoreVisualAlternativeBase;
   private readonly now: () => number;
   private readonly id: () => string;
 
@@ -65,6 +87,8 @@ export class VisualAlternativeService {
     dependencies: VisualAlternativeDependencies = {},
   ) {
     this.runTurn = dependencies.runTurn ?? runVisualAlternativeTurn;
+    this.materializeBase = dependencies.materializeBase ?? materializeManagedTree;
+    this.restoreBase = dependencies.restoreBase ?? restoreVisualAlternativeBase;
     this.now = dependencies.now ?? Date.now;
     this.id = dependencies.id ?? ulid;
   }
@@ -74,12 +98,24 @@ export class VisualAlternativeService {
     readonly completion: Promise<VisualAlternativeList>;
   }> {
     const generationId = assertSafeName(this.id());
-    if (
-      isUserTurnRunning(input.sessionId) ||
-      !beginVisualAlternativeOperation(input.sessionId, generationId)
-    ) {
+    const admission = admitVisualAlternativeBatch(
+      input.sessionId,
+      generationId,
+      input.maxConcurrentTurns,
+    );
+    if (admission === "capacity_exhausted") {
+      throw new VisualAlternativeServiceError("capacity_exhausted");
+    }
+    if (admission === "session_busy") {
       throw new VisualAlternativeServiceError("generation_active");
     }
+    let ownsGeneration = false;
+    const generationPath = resolveWithin(
+      input.projectDir,
+      ".meta",
+      "visual-alternatives",
+      generationId,
+    );
     try {
       const coordinator = new ArtifactCoordinator(this.db);
       await coordinator.initialize(input.projectId, input.projectDir);
@@ -91,22 +127,18 @@ export class VisualAlternativeService {
         generationId,
         "base",
       );
-      const baseManifest = await materializeManagedTree(input.projectDir, basePath);
-      if (baseManifest.tree_digest !== base.digest) {
-        throw new VisualAlternativeServiceError("generation_active");
-      }
       const alternatives = input.request.names.map((name) => ({
         id: assertSafeName(this.id()),
         name,
         operationId: assertSafeName(this.id()),
       }));
       try {
+        // The durable owner row exists before any base bytes are staged.
         createVisualAlternativeGeneration(this.db, {
           generationId,
           projectId: input.projectId,
           baseRevision: base.revision,
           baseDigest: base.digest,
-          baseManifestJson: JSON.stringify(baseManifest),
           basePath,
           alternatives,
           now: this.now(),
@@ -120,18 +152,39 @@ export class VisualAlternativeService {
         }
         throw error;
       }
+      ownsGeneration = true;
+      const baseManifest = await this.materializeBase(input.projectDir, basePath);
+      if (baseManifest.tree_digest !== base.digest) {
+        throw new VisualAlternativeServiceError("generation_active");
+      }
+      recordVisualAlternativeBase(
+        this.db,
+        generationId,
+        JSON.stringify(baseManifest),
+        this.now(),
+      );
       const state = requiredVisualAlternatives(this.db, input.projectId);
-      const completion = this.runGeneration(
+      const completion = this.runBatch({
         input,
         generationId,
         basePath,
+        baseDigest: base.digest,
         alternatives,
-      ).finally(() => finishVisualAlternativeOperation(input.sessionId, generationId));
+        signal: admission.signal,
+      });
       return { state, completion };
     } catch (error) {
+      if (ownsGeneration) {
+        finishVisualAlternativeGeneration(this.db, generationId, this.now());
+        await removeGenerationTree(generationPath);
+      }
       finishVisualAlternativeOperation(input.sessionId, generationId);
       throw error;
     }
+  }
+
+  cancel(sessionId: string): boolean {
+    return cancelVisualAlternativeOperation(sessionId);
   }
 
   list(projectId: string): VisualAlternativeList | null {
@@ -153,86 +206,95 @@ export class VisualAlternativeService {
   }
 
   delete(projectId: string, alternativeId: string): void {
-    removeVisualAlternative(this.db, projectId, alternativeId);
+    removeVisualAlternative(this.db, projectId, alternativeId, this.now());
   }
 
-  private async runGeneration(
-    input: GenerateInput,
-    generationId: string,
-    basePath: string,
-    alternatives: readonly {
-      readonly id: string;
-      readonly name: string;
-      readonly operationId: string;
-    }[],
-  ): Promise<VisualAlternativeList> {
-    for (const [ordinal, alternative] of alternatives.entries()) {
-      transitionVisualAlternative(this.db, {
-        id: alternative.id,
-        from: "pending",
-        to: "generating",
-        now: this.now(),
-      });
+  private async runBatch(batch: Batch): Promise<VisualAlternativeList> {
+    const { input, generationId } = batch;
+    const restored = await this.runItems(batch);
+    if (!restored) {
+      // The base could not be restored: keep the session lease and the
+      // generating row so no turn runs on the wrong tree until startup recovery.
+      console.warn("[alternatives] base restore failed; session held for recovery", generationId);
+      return requiredVisualAlternatives(this.db, input.projectId);
+    }
+    try {
+      finishVisualAlternativeGeneration(this.db, generationId, this.now());
+    } finally {
+      finishVisualAlternativeOperation(input.sessionId, generationId);
+    }
+    await removeGenerationTree(
+      resolveWithin(input.projectDir, ".meta", "visual-alternatives", generationId),
+    );
+    return requiredVisualAlternatives(this.db, input.projectId);
+  }
+
+  /** Runs items until done or cancelled; returns false when the base tree could not be restored. */
+  private async runItems(batch: Batch): Promise<boolean> {
+    const { input } = batch;
+    for (const [ordinal, alternative] of batch.alternatives.entries()) {
+      if (batch.signal.aborted) return true;
+      startVisualAlternative(this.db, alternative.id, this.now());
       try {
         await this.runTurn({
           sessionId: input.sessionId,
           operationId: alternative.operationId,
           ordinal,
-          count: alternatives.length,
+          count: batch.alternatives.length,
           name: alternative.name,
           prompt: input.request.prompt,
           entrypoint: input.entrypoint,
+          signal: batch.signal,
         });
-        const saved = await visualAlternativeStage(
-          this.db,
-          input.projectDir,
-          alternative.operationId,
-        );
-        transitionVisualAlternative(this.db, {
+        if (batch.signal.aborted) {
+          throw new VisualAlternativeServiceError("operation_not_active");
+        }
+        const saved = await visualAlternativeStage(this.db, input.projectDir, {
+          projectId: input.projectId,
+          operationId: alternative.operationId,
+          baseDigest: batch.baseDigest,
+        });
+        markVisualAlternativeReady(this.db, {
           id: alternative.id,
-          from: "generating",
-          to: "ready",
+          projectId: input.projectId,
+          operationId: alternative.operationId,
           resultRevision: saved.revision,
           resultDigest: saved.digest,
           now: this.now(),
         });
-        retainVisualAlternativeOperation(this.db, alternative.operationId);
       } catch {
-        transitionVisualAlternative(this.db, {
-          id: alternative.id,
-          from: "generating",
-          to: "failed",
-          now: this.now(),
-        });
-      } finally {
-        await restoreVisualAlternativeBase(
+        failVisualAlternative(this.db, alternative.id, this.now());
+      }
+      if (!(await this.tryRestore(batch))) return false;
+    }
+    return true;
+  }
+
+  private async tryRestore(batch: Batch): Promise<boolean> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await this.restoreBase(
           this.db,
-          input.projectId,
-          input.projectDir,
-          basePath,
+          batch.input.projectId,
+          batch.input.projectDir,
+          batch.basePath,
         );
+        return true;
+      } catch (error) {
+        if (attempt === 1) {
+          console.warn("[alternatives] base restore attempt failed", error instanceof Error ? error.name : "unknown");
+        }
       }
     }
-    const current = requiredVisualAlternatives(this.db, input.projectId);
-    const currentGeneration = current.alternatives.filter(
-      (alternative) => alternative.generation_id === generationId,
-    ).length;
-    const ready = current.alternatives.filter(
-      (alternative) =>
-        alternative.generation_id === generationId &&
-        alternative.status === "ready",
-    ).length;
-    const status = ready === currentGeneration
-      ? "ready"
-      : ready === 0
-        ? "failed"
-        : "partial";
-    finishVisualAlternativeGeneration(
-      this.db,
-      generationId,
-      status,
-      this.now(),
-    );
-    return requiredVisualAlternatives(this.db, input.projectId);
+    return false;
+  }
+}
+
+async function removeGenerationTree(generationPath: string): Promise<void> {
+  try {
+    await rm(generationPath, { recursive: true, force: true });
+  } catch {
+    // Startup recovery removes trees that no generating row owns.
+    console.warn("[alternatives] deferred base tree cleanup");
   }
 }

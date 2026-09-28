@@ -1,12 +1,22 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runMigrationsFrom } from "../src/db/migrate";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { VisualAlternativeService } from "../src/services/visual-alternatives";
-import { admitUserTurn, releaseUserTurnReservation } from "../src/services/turns";
+import {
+  admitUserTurn,
+  holdSessionsForRecovery,
+  interruptAllUserTurns,
+  releaseUserTurnReservation,
+} from "../src/services/turns";
+import { beginDirectionOperation } from "../src/services/direction-operation-registry";
+import { deleteProject } from "../src/services/project-deletion";
+import { restoreVisualAlternativeBase } from "../src/services/visual-alternative-generation";
+import { finishVisualAlternativeOperation } from "../src/services/visual-alternative-operation-registry";
 
 const roots: string[] = [];
 let db: Database;
@@ -63,6 +73,7 @@ describe("visual alternative service", () => {
       sessionId: "s",
       projectDir: root,
       entrypoint: "index.html",
+      maxConcurrentTurns: 4,
       request: {
         count: 3,
         prompt: "Explore calmer layouts.",
@@ -88,6 +99,7 @@ describe("visual alternative service", () => {
       sessionId: "s",
       projectDir: root,
       entrypoint: "index.html",
+      maxConcurrentTurns: 4,
       request: {
         count: 2,
         prompt: "Explore two more directions.",
@@ -135,6 +147,7 @@ describe("visual alternative service", () => {
       sessionId: "s",
       projectDir: root,
       entrypoint: "index.html",
+      maxConcurrentTurns: 4,
       request: {
         count: 3,
         prompt: "Explore distinct layouts.",
@@ -159,6 +172,7 @@ describe("visual alternative service", () => {
       sessionId: "failed-setup-session",
       projectDir: root,
       entrypoint: "index.html",
+      maxConcurrentTurns: 4,
       request: { count: 2, prompt: "Explore.", names: ["A", "B"] },
     })).rejects.toThrow();
     const admission = admitUserTurn("failed-setup-session", 4);
@@ -183,6 +197,7 @@ describe("visual alternative service", () => {
         sessionId: "s",
         projectDir: root,
         entrypoint: "index.html",
+        maxConcurrentTurns: 4,
         request: { count: 2, prompt: "Explore.", names: ["A", "B"] },
       })).rejects.toMatchObject({ code: "generation_active" });
       expect(db.query("SELECT COUNT(*) AS count FROM visual_alternative_generations").get()).toEqual({ count: 0 });
@@ -221,6 +236,7 @@ describe("visual alternative service", () => {
       sessionId: "s",
       projectDir: root,
       entrypoint: "index.html",
+      maxConcurrentTurns: 4,
       request: { count: 2, prompt: "First batch.", names: ["Old A", "Old B"] },
     });
     await retained.completion;
@@ -232,6 +248,7 @@ describe("visual alternative service", () => {
       sessionId: "s",
       projectDir: root,
       entrypoint: "index.html",
+      maxConcurrentTurns: 4,
       request: { count: 2, prompt: "Second batch.", names: ["New A", "New B"] },
     });
     const completed = await failed.completion;
@@ -241,4 +258,182 @@ describe("visual alternative service", () => {
     expect(completed.alternatives.filter((item) => item.generation_id === completed.generation_id).map((item) => item.status)).toEqual(["failed", "failed"]);
     expect(completed.alternatives.filter((item) => item.generation_id !== completed.generation_id).map((item) => item.status)).toEqual(["ready", "ready"]);
   });
+
+  test("Given a batch is cancelled after its first item When generation settles Then later items never run and the lease is released", async () => {
+    // Given
+    const coordinator = new ArtifactCoordinator(db);
+    await coordinator.initialize("p", root);
+    const ran: number[] = [];
+    const service: VisualAlternativeService = new VisualAlternativeService(db, {
+      runTurn: async ({ operationId, ordinal }) => {
+        ran.push(ordinal);
+        await commitAlternative(coordinator, operationId, ordinal);
+        if (ordinal === 0) service.cancel("s");
+      },
+    });
+
+    // When
+    const started = await service.generate(generateInput(["A", "B", "C"]));
+    const completed = await started.completion;
+    const admission = admitUserTurn("s", 4);
+
+    // Then
+    expect(ran).toEqual([0]);
+    expect(completed.status).toBe("failed");
+    expect(completed.alternatives.map((item) => item.status)).toEqual(["failed", "failed", "failed"]);
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("<main>Original</main>");
+    expect(admission.kind).toBe("reserved");
+    if (admission.kind === "reserved") releaseUserTurnReservation(admission.reservation);
+  });
+
+  test("Given shutdown interrupts every turn When a batch is between items Then the batch stops", async () => {
+    // Given
+    const coordinator = new ArtifactCoordinator(db);
+    await coordinator.initialize("p", root);
+    const ran: number[] = [];
+    const service = new VisualAlternativeService(db, {
+      runTurn: async ({ operationId, ordinal }) => {
+        ran.push(ordinal);
+        await commitAlternative(coordinator, operationId, ordinal);
+      },
+      restoreBase: async (...args) => {
+        await restoreVisualAlternativeBase(...args);
+        await interruptAllUserTurns();
+      },
+    });
+
+    // When
+    const started = await service.generate(generateInput(["A", "B"]));
+    const completed = await started.completion;
+
+    // Then
+    expect(ran).toEqual([0]);
+    expect(completed.alternatives.map((item) => item.status)).toEqual(["ready", "failed"]);
+    expect(completed.status).toBe("partial");
+  });
+
+  test("Given every turn slot is taken When alternatives start Then generation reports capacity without rows", async () => {
+    // Given
+    const other = admitUserTurn("other-session", 1);
+    if (other.kind !== "reserved") throw new Error("turn_reservation_missing");
+    const service = new VisualAlternativeService(db);
+
+    try {
+      // When / Then
+      await expect(service.generate({ ...generateInput(["A", "B"]), maxConcurrentTurns: 1 }))
+        .rejects.toMatchObject({ code: "capacity_exhausted" });
+      expect(db.query("SELECT COUNT(*) AS count FROM visual_alternative_generations").get()).toEqual({ count: 0 });
+    } finally {
+      releaseUserTurnReservation(other.reservation);
+    }
+  });
+
+  test("Given an active batch When turns, directions, recovery holds or deletion compete Then each is refused", async () => {
+    // Given
+    const coordinator = new ArtifactCoordinator(db);
+    await coordinator.initialize("p", root);
+    let observed: Record<string, unknown> = {};
+    const service = new VisualAlternativeService(db, {
+      runTurn: async ({ operationId, ordinal }) => {
+        if (ordinal === 0) {
+          observed = {
+            turn: admitUserTurn("s", 4).kind,
+            direction: beginDirectionOperation("s", "direction-generation"),
+            hold: holdSessionsForRecovery(["s"]),
+            deletion: await deleteProject(db, "p", { projectsRoot: path.dirname(root) }).then(() => "deleted", (error: unknown) => (error as { code?: string }).code),
+          };
+        }
+        await commitAlternative(coordinator, operationId, ordinal);
+      },
+    });
+
+    // When
+    const started = await service.generate(generateInput(["A", "B"]));
+    await started.completion;
+
+    // Then
+    expect(observed).toEqual({ turn: "session_busy", direction: null, hold: null, deletion: "project_in_use" });
+  });
+
+  test("Given the base cannot be restored When an item finishes Then the generation stays active and the session stays leased", async () => {
+    // Given
+    const coordinator = new ArtifactCoordinator(db);
+    await coordinator.initialize("p", root);
+    let restoreAttempts = 0;
+    const service = new VisualAlternativeService(db, {
+      runTurn: async ({ operationId, ordinal }) => {
+        await commitAlternative(coordinator, operationId, ordinal);
+      },
+      restoreBase: async () => {
+        restoreAttempts += 1;
+        throw new Error("disk_unavailable");
+      },
+    });
+
+    // When
+    const started = await service.generate(generateInput(["A", "B"]));
+    const completed = await started.completion;
+    const admission = admitUserTurn("s", 4);
+
+    // Then
+    try {
+      expect(restoreAttempts).toBe(2);
+      expect(completed.status).toBe("generating");
+      expect(completed.alternatives.map((item) => item.status)).toEqual(["ready", "pending"]);
+      expect(admission.kind).toBe("session_busy");
+    } finally {
+      finishVisualAlternativeOperation("s", completed.generation_id);
+    }
+  });
+
+  test("Given staging the base fails When generation starts Then the owner row fails, its tree is removed and the lease is released", async () => {
+    // Given
+    const service = new VisualAlternativeService(db, {
+      materializeBase: async (_source, target) => {
+        await mkdir(target, { recursive: true });
+        await writeFile(path.join(target, "partial.html"), "partial");
+        throw new Error("disk_full");
+      },
+    });
+
+    // When
+    await expect(service.generate(generateInput(["A", "B"]))).rejects.toThrow("disk_full");
+    const admission = admitUserTurn("s", 4);
+
+    // Then
+    expect(db.query("SELECT status FROM visual_alternative_generations").all()).toEqual([{ status: "failed" }]);
+    expect(existsSync(path.join(root, ".meta", "visual-alternatives"))).toBe(true);
+    expect(await readdir(path.join(root, ".meta", "visual-alternatives"))).toEqual([]);
+    expect(admission.kind).toBe("reserved");
+    if (admission.kind === "reserved") releaseUserTurnReservation(admission.reservation);
+  });
 });
+
+function generateInput(names: readonly string[]) {
+  return {
+    projectId: "p",
+    sessionId: "s",
+    projectDir: root,
+    entrypoint: "index.html",
+    maxConcurrentTurns: 4,
+    request: { count: names.length, prompt: "Explore.", names: [...names] },
+  };
+}
+
+async function commitAlternative(coordinator: ArtifactCoordinator, operationId: string, ordinal: number): Promise<void> {
+  const project = db.query<{ readonly current_revision: number; readonly current_digest: string }, []>(
+    "SELECT current_revision,current_digest FROM projects WHERE id='p'",
+  ).get();
+  if (project === null) throw new Error("project_fixture_missing");
+  await coordinator.run({
+    projectId: "p",
+    projectDir: root,
+    kind: "turn",
+    operationId,
+    expectedRevision: project.current_revision,
+    expectedArtifactDigest: project.current_digest,
+    mutate: async (stage) => {
+      await writeFile(path.join(stage, "index.html"), `<main>Alternative ${ordinal + 1}</main>`);
+    },
+  });
+}

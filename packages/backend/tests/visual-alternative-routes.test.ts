@@ -12,6 +12,7 @@ import {
 } from "../src/routes/visual-alternatives";
 import { managedFileRoutes } from "../src/routes/managed-files";
 import { classifyApiRoute } from "../src/server";
+import { projectsDir } from "../src/lib/paths";
 
 const roots: string[] = [];
 let root: string;
@@ -24,7 +25,8 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  root = await mkdtemp(path.join(tmpdir(), "burnguard-alternative-routes-"));
+  await mkdir(projectsDir, { recursive: true });
+  root = await mkdtemp(path.join(projectsDir, "burnguard-alternative-routes-"));
   roots.push(root);
   await writeFile(path.join(root, "index.html"), "<main>Original</main>");
   getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, projectId, root);
@@ -55,6 +57,7 @@ beforeEach(async () => {
     sessionId,
     projectDir: root,
     entrypoint: "index.html",
+    maxConcurrentTurns: 4,
     request: {
       count: 2,
       prompt: "Explore alternatives.",
@@ -142,5 +145,73 @@ describe("visual alternative routes", () => {
     expect(getSqlite().query<{ readonly count: number }, [string]>(
       "SELECT COUNT(*) AS count FROM visual_alternatives WHERE project_id=?",
     ).get(projectId)?.count).toBe(before);
+  });
+
+  test("Given a ready row whose recorded result no longer matches its operation When promoted Then the project is unchanged", async () => {
+    // Given
+    const listed = await (await visualAlternativeRoutes.request(`http://local/api/projects/${projectId}/alternatives`)).json();
+    const first = listed.data.alternatives[0];
+    getSqlite().prepare("UPDATE visual_alternatives SET result_digest=? WHERE id=?").run("f".repeat(64), first.id);
+    const identity = getSqlite().query<{ readonly current_revision: number; readonly current_digest: string }, [string]>(
+      "SELECT current_revision,current_digest FROM projects WHERE id=?",
+    ).get(projectId);
+    if (identity === null) throw new Error("project_fixture_missing");
+
+    // When
+    const promoted = await visualAlternativeRoutes.request(
+      `http://local/api/projects/${projectId}/alternatives/${first.id}/promote`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          expected_revision: identity.current_revision,
+          expected_artifact_digest: identity.current_digest,
+        }),
+      },
+    );
+
+    // Then
+    expect(promoted.status).toBe(409);
+    expect(await promoted.json()).toMatchObject({ error: { code: "corrupt_visual_alternative" } });
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("<main>Original</main>");
+  });
+
+  test("Given a project directory outside managed storage When generation is requested Then it refuses with 503 before any row", async () => {
+    // Given
+    const outside = await mkdtemp(path.join(tmpdir(), "burnguard-alternative-outside-"));
+    roots.push(outside);
+    getSqlite().prepare("UPDATE projects SET dir_path=? WHERE id=?").run(outside, projectId);
+    const before = getSqlite().query<{ readonly count: number }, [string]>(
+      "SELECT COUNT(*) AS count FROM visual_alternative_generations WHERE project_id=?",
+    ).get(projectId)?.count;
+
+    // When
+    const response = await visualAlternativeRoutes.request(
+      `http://local/api/projects/${projectId}/alternatives/generate`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ count: 2, prompt: "Explore.", names: ["A", "B"] }),
+      },
+    );
+
+    // Then
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: { code: "project_path_unavailable" } });
+    expect(getSqlite().query<{ readonly count: number }, [string]>(
+      "SELECT COUNT(*) AS count FROM visual_alternative_generations WHERE project_id=?",
+    ).get(projectId)?.count).toBe(before);
+  });
+
+  test("Given no active generation When cancel is requested Then it reports operation_not_active", async () => {
+    // When
+    const response = await visualAlternativeRoutes.request(
+      `http://local/api/projects/${projectId}/alternatives/cancel`,
+      { method: "POST" },
+    );
+
+    // Then
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "operation_not_active" } });
   });
 });

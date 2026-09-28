@@ -34,7 +34,7 @@ export interface BundleEntry {
 
 const PROJECT_EXCLUDED = [
   ".git", ".omc", ".claude", ".codex", ".burnguard-inputs", ".meta/artifact-operations",
-  ".meta/artifact-baseline",
+  ".meta/artifact-baseline", ".meta/visual-alternatives",
 ] as const;
 export async function collectProjectBundleEntries(root: string, budget: BundleBudget = createBundleBudget()): Promise<readonly BundleEntry[]> {
   return collect(root, "project", budget, projectFileKind, (relative) => {

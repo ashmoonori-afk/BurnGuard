@@ -16,7 +16,9 @@ import { isProjectDocumentPath } from "../services/project-document-paths";
 import { readProjectDocument } from "../services/project-documents";
 import { readTurnPreview, recordTurnPreview } from "../services/turn-preview";
 import { getVisualAlternative } from "../db/visual-alternative-repository";
-import { readVisualAlternativeFile, VisualAlternativeStorageError } from "../services/visual-alternative-storage";
+import { readVisualAlternativeFile, VisualAlternativeStorageError, visualAlternativeStageIdentity } from "../services/visual-alternative-storage";
+import { projectsDir, resolveManagedPath } from "../lib/paths";
+import { PathBoundaryError } from "../security/path-boundary";
 
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
 function fail(code: string, message: string, details?: unknown): ApiErrorBody { return { error: { code, message, details } }; }
@@ -76,7 +78,7 @@ managedFileRoutes.get("/api/projects/:id/alternatives/:alternativeId/fs/*", asyn
   try { relPath = decodeURIComponent(c.req.path.slice(prefix.length)); }
   catch { return c.json(fail("invalid_path", "File path is invalid"), 400); }
   try {
-    const file = await readVisualAlternativeFile(getSqlite(), project.dir_path, alternative.operation_id, relPath);
+    const file = await readVisualAlternativeFile(getSqlite(), resolveManagedPath(projectsDir, project.dir_path), visualAlternativeStageIdentity(alternative), relPath);
     const type = contentType(relPath);
     const headers: Record<string, string> = {
       ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(relPath) }),
@@ -91,6 +93,9 @@ managedFileRoutes.get("/api/projects/:id/alternatives/:alternativeId/fs/*", asyn
   } catch (error) {
     if (error instanceof VisualAlternativeStorageError) {
       return c.json(fail(error.code, "Alternative file is unavailable"), error.code === "alternative_file_not_found" ? 404 : 409);
+    }
+    if (error instanceof PathBoundaryError) {
+      return c.json(fail("project_path_unavailable", "Project directory is outside managed storage"), 503);
     }
     throw error;
   }
