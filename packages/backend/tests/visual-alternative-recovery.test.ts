@@ -317,6 +317,23 @@ describe("visual alternative recovery", () => {
     }
   });
 
+  test.skipIf(process.platform === "win32")("Given an unreadable alternatives container When startup recovers Then startup completes", async () => {
+    // Given
+    const container = path.join(projectDir, ".meta", "visual-alternatives");
+    await mkdir(path.join(container, "hidden-orphan"), { recursive: true });
+    await chmod(container, 0o000);
+
+    try {
+      // When
+      const recovered = await recoverVisualAlternatives(db, { root });
+
+      // Then
+      expect(recovered).toEqual({ recovered: 0, held: [] });
+    } finally {
+      await chmod(container, 0o755);
+    }
+  });
+
   test("Given a ready alternative of a still-generating generation When deleted Then deletion is refused", async () => {
     // Given
     await interruptedGeneration("generation-delete");

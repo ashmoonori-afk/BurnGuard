@@ -53,9 +53,18 @@ export async function removeUnownedGenerationEntries(
   projectDir: string,
   owned: ReadonlySet<string>,
 ): Promise<void> {
-  const container = await realContainer(projectDir);
-  if (container === null) return;
-  for (const entry of await readdir(container)) {
+  let container: string | null;
+  let entries: readonly string[];
+  try {
+    container = await realContainer(projectDir);
+    if (container === null) return;
+    entries = await readdir(container);
+  } catch {
+    // An unreadable container holds no authority; it must never block startup.
+    console.warn("[alternatives] deferred orphan container cleanup");
+    return;
+  }
+  for (const entry of entries) {
     if (owned.has(entry)) continue;
     // Directory entry names are single components; they need no persisted-id validation.
     try {

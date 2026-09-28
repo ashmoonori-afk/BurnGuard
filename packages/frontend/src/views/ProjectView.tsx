@@ -1452,6 +1452,7 @@ export default function ProjectView() {
                   state={alternativesQuery.data}
                   disabled={composerDisabled || artifacts === null}
                   generating={generateAlternativesMutation.isPending || alternativesQuery.data?.status === "generating"}
+                  submitting={generateAlternativesMutation.isPending}
                   cancelling={cancelAlternativesMutation.isPending}
                   promotingId={promoteAlternativeMutation.isPending ? promoteAlternativeMutation.variables : null}
                   deletingId={deleteAlternativeMutation.isPending ? deleteAlternativeMutation.variables : null}

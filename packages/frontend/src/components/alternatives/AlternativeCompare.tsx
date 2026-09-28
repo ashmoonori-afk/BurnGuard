@@ -27,6 +27,8 @@ type Props = {
   readonly state: VisualAlternativeList | null | undefined;
   readonly disabled: boolean;
   readonly generating: boolean;
+  /** This tab's request is in flight; durable generation alone never traps the dialog. */
+  readonly submitting: boolean;
   readonly cancelling: boolean;
   readonly promotingId: string | null;
   readonly deletingId: string | null;
@@ -40,6 +42,7 @@ export default function AlternativeCompare({
   state,
   disabled,
   generating,
+  submitting,
   cancelling,
   promotingId,
   deletingId,
@@ -80,7 +83,7 @@ export default function AlternativeCompare({
       </DialogTrigger>
       <DialogContent
         className="w-[calc(100%-2rem)] max-w-7xl gap-5"
-        {...busyDialogProps(busy)}
+        {...busyDialogProps(submitting || promotingId !== null || deletingId !== null)}
       >
         <DialogHeader>
           <DialogTitle>{t("workspace.alternatives.title")}</DialogTitle>
