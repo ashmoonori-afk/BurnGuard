@@ -909,37 +909,26 @@ async function ingestWebsiteSource(
 
     const pageSourceUrl = new URL(pageUrl);
     const pageSourceId = isOwnedQaAdapterResourceUrl(pageSourceUrl) ? `qa-adapter:${pageSourceUrl.pathname}` : pageUrl;
-    const inlineCssChunks: string[] = [];
+    // Parse each bounded style block once: joining a page's blocks can exceed the CSS parser's
+    // per-input limit even when every individual block is valid.
     for (const style of root.querySelectorAll("style")) {
-      inlineCssChunks.push(style.textContent);
-    }
-    for (const node of root.querySelectorAll("[style]")) {
-      const value = node.getAttribute("style");
-      if (value) inlineCssChunks.push(value.replaceAll("\n", " "));
-    }
-    if (inlineCssChunks.length > 0) {
-      const inlineCss = inlineCssChunks.join("\n");
-      const parsedCss = await parseCssSource({ content: inlineCss, sourceId: `${pageSourceId}#inline-style`, fileOrder: cssFileOrder, signal });
+      const block = await parseCssSource({ content: style.textContent, sourceId: `${pageSourceId}#style`, fileOrder: cssFileOrder, signal });
       cssFileOrder += 1;
-      cssDeclarations.push(...parsedCss.declarations);
-      cssParseIssues.push(...parsedCss.issues);
-      // Per-page cascade: each <style> block at its document position, style attributes after every sheet.
-      for (const style of root.querySelectorAll("style")) {
-        const block = await parseCssSource({ content: style.textContent, sourceId: `${pageSourceId}#style`, fileOrder: 0, signal });
-        ownDeclarations.push(...withOrder(block.declarations, cascadeOrder(style)));
-      }
-      const attributes = root.querySelectorAll("[style]").map((node) => node.getAttribute("style") ?? "").filter(Boolean).join("\n");
-      if (attributes) {
-        const attributeCss = await parseCssSource({ content: attributes, sourceId: `${pageSourceId}#style-attribute`, fileOrder: 0, signal });
-        ownDeclarations.push(...withOrder(attributeCss.declarations, cascadeNodes.length + 1));
-      }
-      mergeSignals(
-        { colors, fontSizes, fontWeights, spacingValues, radii, shadows },
-        styleSignalsFromDeclarations(parsedCss.declarations),
-      );
-      for (const family of fontFamiliesFromDeclarations(parsedCss.declarations)) {
-        fontFamilies.add(family);
-      }
+      cssDeclarations.push(...block.declarations);
+      cssParseIssues.push(...block.issues);
+      ownDeclarations.push(...withOrder(block.declarations, cascadeOrder(style)));
+      mergeSignals({ colors, fontSizes, fontWeights, spacingValues, radii, shadows }, styleSignalsFromDeclarations(block.declarations));
+      for (const family of fontFamiliesFromDeclarations(block.declarations)) fontFamilies.add(family);
+    }
+    const attributes = root.querySelectorAll("[style]").map((node) => node.getAttribute("style") ?? "").filter(Boolean).join("\n");
+    if (attributes) {
+      const parsed = await parseCssSource({ content: attributes, sourceId: `${pageSourceId}#style-attribute`, fileOrder: cssFileOrder, signal });
+      cssFileOrder += 1;
+      cssDeclarations.push(...parsed.declarations);
+      cssParseIssues.push(...parsed.issues);
+      ownDeclarations.push(...withOrder(parsed.declarations, cascadeNodes.length + 1));
+      mergeSignals({ colors, fontSizes, fontWeights, spacingValues, radii, shadows }, styleSignalsFromDeclarations(parsed.declarations));
+      for (const family of fontFamiliesFromDeclarations(parsed.declarations)) fontFamilies.add(family);
     }
 
     const pageBase = new URL(pageUrl);
@@ -1843,12 +1832,14 @@ function brandColors(analysis: SourceAnalysis): { readonly primary: string; read
 
 function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Readonly<Record<string, string>>): string {
   const { primary, action } = brandColors(analysis);
-  const sans = cssString(analysis.fontFamilies[0] ?? "Inter");
+  const sourceSans = analysis.cssVars.get("framer-font-family")?.split(",")[0]?.trim().replace(/^['"]|['"]$/g, "");
+  const sans = cssString(sourceSans || analysis.fontFamilies[0] || "Inter");
   const display = cssString(analysis.fontFamilies[1] ?? analysis.fontFamilies[0] ?? "Inter");
   const sourceAliases =
     analysis.cssVars.size === 0
       ? ""
       : `\n  /* Source-derived aliases */\n${[...analysis.cssVars.entries()]
+          .sort((left, right) => Number(toHexColor(right[1]) !== null) - Number(toHexColor(left[1]) !== null))
           .slice(0, 48)
           .map(([key, value]) => `  --src-${key}: ${value};`)
           .join("\n")}`;
@@ -1856,6 +1847,7 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Rea
     analysis.colors.length === 0
       ? ""
       : `\n  /* Sampled source colors; see extraction provenance for evidence */\n${analysis.colors
+          .filter((value) => toHexColor(value) !== null)
           .slice(0, 16)
           .map((value, index) => `  --src-color-${index + 1}: ${value};`)
           .join("\n")}`;
