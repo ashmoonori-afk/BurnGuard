@@ -14,10 +14,14 @@ import {
 import { getSqlite } from "../src/db/sqlite-client";
 import { systemsDir } from "../src/lib/paths";
 import { persistCanonicalExtraction, readDesignSystemTokens } from "../src/services/design-system-extract";
-import { buildAssetGuideReadme } from "../src/services/extraction-assets";
-import { measureSourceLayout } from "../src/services/extraction-layout";
+import { buildAssetGuideReadme, toHexColor } from "../src/services/extraction-assets";
+import { collectSourceEvidence, type SourceEvidence } from "../src/services/extraction-evidence";
+import { buildSectionPatternReadme, measureSourceLayout } from "../src/services/extraction-layout";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 import type { CssDeclarationEvidence } from "../src/services/extraction-css";
+
+const NO_EVIDENCE: SourceEvidence = collectSourceEvidence([], []);
+const guideFor = (overrides: Partial<Parameters<typeof buildAssetGuideReadme>[0]> = {}) => extractDesignSystemAssetGuide(buildAssetGuideReadme({ brandName: "Brand", primary: "#112233", action: "#112233", colors: [], fontFamilies: [], radii: [], logoPaths: [], evidence: NO_EVIDENCE, ...overrides }));
 
 const declaration = (property: string, value: string, context = ""): CssDeclarationEvidence => ({
   property, value, context, sourceLocator: "fixture.css", fileOrder: 0, declarationOrder: 0, parseStatus: "observed",
@@ -121,10 +125,13 @@ describe("Source layout measurement", () => {
   });
 
   test("Given only generic system font stacks before the brand face, then generation prompts name the brand face", () => {
-    const readme = buildAssetGuideReadme({ brandName: "Brand", primary: "#112233", action: "#112233", colors: [], fontFamilies: ["-apple-system", "BlinkMacSystemFont", "Brand Sans"], radii: [], shadows: [], logoPaths: [] });
-    const logo = extractDesignSystemAssetGuide(readme).rules.find(rule => rule.kind === "logo")!;
+    const logo = guideFor({ fontFamilies: ["-apple-system", "BlinkMacSystemFont", "Brand Sans"] }).rules.find(rule => rule.kind === "logo")!;
     expect(logo.prompt).toContain("Brand Sans");
     expect(logo.prompt).not.toContain("apple-system");
+  });
+
+  test("Given only a large breakpoint, then it is measured without a medium one", () => {
+    expect(measureSourceLayout([declaration("display", "grid", "@media (min-width: 1280px)")], []).tokens).toEqual({ "--layout-bp-lg": "1280px" });
   });
 
   test("Given no usable declarations, then nothing is claimed as measured", () => {
@@ -184,5 +191,55 @@ describe("Canonical extraction writes layout and asset guidance", () => {
       await rm(path.join(systemsDir, id), { recursive: true, force: true });
       await rm(source, { recursive: true, force: true });
     }
+  });
+});
+
+describe("Source evidence drives section patterns and asset style", () => {
+  const html = [
+    '<header><nav class="nav"><a href="/">Home</a></nav></header>',
+    '<section class="hero"><h1>Title</h1><p>Lead</p><img src="img/team.jpg" alt=""></section>',
+    '<section class="features"><svg fill="none" stroke-width="1.5"><path d="M0 0"/></svg><svg fill="none"><path stroke-width="1.5" d="M0 0"/></svg><svg class="brand-logo"><path d="M0 0"/></svg><img src="img/art.svg" alt=""></section>',
+    '<section class="pricing-plans"><h2>Plans</h2></section><section><blockquote>Great</blockquote></section>',
+    '<footer><ul><li>a</li></ul><ul><li>b</li></ul><ul><li>c</li></ul></footer>',
+  ].join("");
+  const css = [
+    declaration("grid-template-columns", "repeat(3, 1fr)"), declaration("grid-template-columns", "repeat(3, 1fr)"),
+    declaration("text-align", "left"), declaration("text-align", "left"), declaration("text-align", "center"),
+    declaration("background-image", "linear-gradient(90deg, #111, #222)"), declaration("transition", "color 150ms ease, transform .3s"),
+  ];
+
+  test("Given source HTML and CSS, then hero, feature columns, proof, pricing, testimonials, footer, alignment, icons, images, backgrounds and motion are observed", () => {
+    expect(collectSourceEvidence([html], css)).toEqual({
+      hero: "split", featureColumns: 3, proofStrip: false, pricing: true, testimonials: true, footerColumns: 3, alignment: "left",
+      icons: { count: 2, style: "outline", strokeWidth: "1.5" }, photos: 1, illustrations: 1, gradients: 1, backgroundImages: 0, patterns: 0,
+      motionMs: [150, 300], animations: 0,
+    });
+    const patterns = extractDesignSystemLayout("", buildSectionPatternReadme(collectSourceEvidence([html], css))).sections.find(section => section.kind === "patterns")!.text;
+    expect(patterns.split("\n").map(line => /^- ([^(]+) \((observed|default)\)/.exec(line)?.slice(1, 3).join(":"))).toEqual([
+      "Navigation:default", "Hero:observed", "Feature grid:observed", "Logo or proof strip:default", "Pricing:observed", "Testimonials:observed", "Call to action:default", "Footer:observed",
+    ]);
+  });
+
+  test("Given no evidence, then every section pattern and asset kind is labelled as a default", () => {
+    const patterns = extractDesignSystemLayout("", buildSectionPatternReadme(NO_EVIDENCE)).sections.find(section => section.kind === "patterns")!.text;
+    expect(patterns).not.toContain("(observed)");
+    const guide = guideFor();
+    expect(guide.rules.map(rule => rule.kind)).toEqual([...ASSET_KINDS]);
+    for (const rule of guide.rules.filter(rule => rule.kind !== "logo")) expect(rule.usage!.startsWith("Evidence: not found in the source")).toBe(true);
+    const observed = guideFor({ evidence: collectSourceEvidence([html], css) });
+    for (const kind of ["icons", "illustrations", "photography", "backgrounds", "motion"]) expect(observed.rules.find(rule => rule.kind === kind)!.usage!.startsWith("Evidence: observed in the source")).toBe(true);
+    expect(observed.rules.find(rule => rule.kind === "icons")!.prompt).toContain("1.5px");
+  });
+
+  test("Given the generated guide, then it carries no website region placement so fixed surfaces can receive it", () => {
+    const guide = guideFor({ evidence: collectSourceEvidence([html], css), logoPaths: ["assets/logos/logo.svg"] });
+    expect(JSON.stringify(guide)).not.toMatch(/navigation|footer|hero|\bsection\b|grid column/i);
+  });
+
+  test("Given an rgb-only dark source, then colours are normalised to hex and the ground is dark", () => {
+    expect(["rgb(10, 20, 30)", "rgba(10 20 30 / 50%)", "hsl(0, 100%, 50%)", "#ABC", "#11223344", "var(--x)"].map(toHexColor)).toEqual(["#0a141e", "#0a141e", "#ff0000", "#aabbcc", "#112233", null]);
+    const photo = guideFor({ colors: ["rgb(10, 20, 30)", "rgb(20, 20, 40)"] }).rules.find(rule => rule.kind === "illustrations")!;
+    expect(photo.prompt).toContain("#0a141e");
+    expect(photo.prompt).toContain("dark ground");
   });
 });

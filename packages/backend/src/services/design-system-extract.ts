@@ -1,7 +1,8 @@
 import { readDesignSystemLayout } from "./design-system-layout";
 import { readDesignSystemAssetGuide } from "./design-system-assets";
 import { buildAssetGuideReadme } from "./extraction-assets";
-import { measureSourceLayout } from "./extraction-layout";
+import { collectSourceEvidence, type SourceEvidence } from "./extraction-evidence";
+import { buildSectionPatternReadme, measureSourceLayout } from "./extraction-layout";
 import {
   copyFile,
   mkdir,
@@ -1384,7 +1385,7 @@ async function writeCanonicalDesignSystem(input: {
 
   await writeText(
     path.join(input.systemDir, "README.md"),
-    buildReadme(input.brandName, input.sourceType, input.sourceUrl, input.analysis, layoutTokens) + DERIVED_SURFACE_README_SECTIONS,
+    buildReadme(input.brandName, input.sourceType, input.sourceUrl, input.analysis, layoutTokens, collectSourceEvidence(await readSourceHtml(input.analysis), input.analysis.cssDeclarations)) + DERIVED_SURFACE_README_SECTIONS,
     generated,
     input.systemDir,
   );
@@ -1532,12 +1533,20 @@ async function writeCanonicalDesignSystem(input: {
   return { generatedFiles: [...generated].sort(), provenance };
 }
 
+/** Landing HTML and HTML UI-kit files the source supplied, each bounded, as evidence for section and asset rules. */
+async function readSourceHtml(analysis: SourceAnalysis): Promise<string[]> {
+  const files = analysis.uiKitFiles.filter((file) => /\.html?$/i.test(file.fileName)).slice(0, MAX_UPLOAD_UI_KIT_PAGES);
+  const pages = await Promise.all(files.map(async (file) => ((await stat(file.absolutePath)).size <= 1_000_000 ? readFile(file.absolutePath, "utf8") : "")));
+  return [analysis.homepageHtml ?? "", ...pages].filter(Boolean);
+}
+
 function buildReadme(
   brandName: string,
   sourceType: SupportedExtractionSource,
   sourceUrl: string,
   analysis: SourceAnalysis,
   layout: Readonly<Record<string, string>>,
+  evidence: SourceEvidence,
 ): string {
   const { primary, action } = brandColors(analysis);
   const caveats = [
@@ -1620,18 +1629,7 @@ Open with a restrained hero, follow with aligned evidence rows on flat surfaces,
 ## Responsive
 Below --layout-bp-md stack columns in reading order, keep navigation bounded to the viewport and let labels and actions wrap. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
 
-## Section patterns
-- Hero: headline and one supporting line on the left 6-7 columns with one action pair, media on the remaining columns at --layout-hero; stack copy above media below --layout-bp-md.
-- Feature grid: 3 equal columns (2 at tablet width, 1 below --layout-bp-md) of icon, short title and one sentence; align card tops and keep equal heights.
-- Logo or proof strip: one row of evenly spaced, single-colour customer logos or metrics directly under the hero.
-- Pricing: 2-4 plan cards side by side with the recommended plan emphasised by the brand accent, never by size alone; align prices and feature lists on a shared baseline.
-- Testimonials: 1-3 quotes with name and role, on a tinted brand surface or neutral card.
-- Call to action: a full-width band with one headline and one primary action before the footer.
-- Footer: a compact multi-column link index with the logo, legal line and locale or social links.
-
-## Alignment
-Align every block to the --layout-columns grid inside --layout-max; text starts on a column edge and media spans whole columns. Left-align running text and headings by default; centre only short hero or call-to-action copy. Share one vertical rhythm of --layout-section-y between sections and keep equal gutters between cards in a row.
-${buildAssetGuideReadme({ brandName, primary, action, colors: analysis.colors, fontFamilies: analysis.fontFamilies, radii: analysis.radii, shadows: analysis.shadows, logoPaths: analysis.logoFiles.slice(0, 8).map((item) => `assets/logos/${safeFileName(item.fileName)}`) })}
+${buildSectionPatternReadme(evidence)}${buildAssetGuideReadme({ brandName, primary, action, colors: analysis.colors, fontFamilies: analysis.fontFamilies, radii: analysis.radii, logoPaths: analysis.logoFiles.slice(0, 8).map((item) => `assets/logos/${safeFileName(item.fileName)}`), evidence })}
 ## Caveats & substitutions
 ${caveats.join("\n")}
 `;

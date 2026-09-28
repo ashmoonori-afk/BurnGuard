@@ -32,9 +32,9 @@ export function DesignSystemAssetsPanel({ assets, loading = false, failed = fals
       return <article key={rule.kind} className="min-w-0 rounded-xl bg-muted/40 p-3">
         <h3 className="text-sm font-semibold">{t(kindLabels[rule.kind])}</h3>
         {rule.usage ? <div className="mt-2"><h4 className="text-xs font-medium text-muted-foreground">{t("system.assets.usage")}</h4><p className="mt-1 whitespace-pre-line break-words text-sm leading-6">{rule.usage}</p></div> : null}
-        {rule.prompt ? <details className="mt-2">
+        {rule.prompt || rule.negative ? <details className="mt-2">
           <summary className="cursor-pointer text-xs font-medium">{t("system.assets.prompt")}</summary>
-          <p className="mt-2 whitespace-pre-line break-words rounded-lg bg-background p-2 font-mono text-xs leading-5">{rule.prompt}</p>
+          {rule.prompt ? <p className="mt-2 whitespace-pre-line break-words rounded-lg bg-background p-2 font-mono text-xs leading-5">{rule.prompt}</p> : null}
           {rule.negative ? <p className="mt-2 break-words text-xs leading-5 text-muted-foreground"><span className="font-medium">{t("system.assets.negative")}: </span>{rule.negative}</p> : null}
         </details> : null}
         {promptText ? <div className="mt-2 flex flex-wrap items-center gap-2">

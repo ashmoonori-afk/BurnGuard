@@ -25,6 +25,7 @@ test("Given asset guides When the panel renders in every locale Then each kind s
     { kind: "logo", usage: "logo-usage-sentinel", prompt: "logo-prompt-sentinel", negative: "logo-negative-sentinel" },
     { kind: "photography", usage: "photo-usage-sentinel", prompt: null, negative: null },
     { kind: "motion", usage: null, prompt: "motion-prompt-sentinel", negative: null },
+    { kind: "patterns", usage: null, prompt: null, negative: "patterns-negative-sentinel" },
   ] };
   for (const locale of LOCALES) {
     const snapshot = useLocaleStore.getInitialState();
@@ -35,7 +36,7 @@ test("Given asset guides When the panel renders in every locale Then each kind s
       expect(filled.headings).toEqual(guide.rules.map(rule => formatMessage(systemMessages[`system.assets.kind.${rule.kind}`][locale], locale)));
       expect(filled.visible).toContain("logo-usage-sentinel");
       expect(filled.visible).toContain("photo-usage-sentinel");
-      for (const hidden of ["logo-prompt-sentinel", "logo-negative-sentinel", "motion-prompt-sentinel"]) {
+      for (const hidden of ["logo-prompt-sentinel", "logo-negative-sentinel", "motion-prompt-sentinel", "patterns-negative-sentinel"]) {
         expect(filled.collapsed).toContain(hidden);
         expect(filled.visible).not.toContain(hidden);
       }
