@@ -266,7 +266,7 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
   });
 
   test("Given a shared stylesheet plus page-specific backgrounds, then templates and differences keep each page's own colour", async () => {
-    const shared = Array.from({ length: 14 }, (_, i) => { const hex = "#" + (i + 1).toString(16).padStart(2, "0").repeat(3); return ".t" + i + "{color:" + hex + "}.bg" + i + "{background-color:" + hex + "}.bd" + i + "{border-color:" + hex + "}"; }).join("");
+    const shared = Array.from({ length: 150 }, (_, i) => { const hex = "#" + (i + 1).toString(16).padStart(2, "0").repeat(3); return ".t" + i + "{color:" + hex + "}.bg" + i + "{background-color:" + hex + "}.bd" + i + "{border-color:" + hex + "}"; }).join("");
     const page = (css: string, title: string) => '<html><head><link rel="stylesheet" href="/shared.css"><link rel="stylesheet" href="' + css + '"></head><body><nav><a href="/pricing">Pricing</a></nav><h1>' + title + "</h1></body></html>";
     await withSite({ "/source": page("/home.css", "Home"), "/pricing": page("/pricing.css", "Pricing"), "/shared.css": shared, "/home.css": "body{background-color:#ff0000}", "/pricing.css": "body{background-color:#0000ff}" }, async (origin, id) => {
       await extractDesignSystemFromSource({ system_id: id, name: "Palette", source_type: "website", source_url: origin + "/source" });
@@ -305,11 +305,12 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
 describe("Page colour evidence forms", () => {
   test("Given substitution fallbacks and transparent colours, then fallbacks are not reported and alpha is kept", async () => {
     const page = '<html><head><link rel="stylesheet" href="/site.css"></head><body><h1>Home</h1></body></html>';
-    await withSite({ "/source": page, "/site.css": ":root{--surface:#0000ff} body{background-color:var(--surface,#ff0000)} .ghost{background-color:rgba(0,0,0,0)} .half{color:#11223380} .solid{color:#445566ff}" }, async (origin, id) => {
+    await withSite({ "/source": page, "/site.css": ":root{--surface:#0000ff} body{background-color:var(--surface,#ff0000)} .ghost{background-color:rgba(0,0,0,0)} .half{color:#11223380} .solid{color:#445566ff} .fade{border-color:rgba(255,0,0,var(--alpha))} .mix{outline-color:hsl(var(--hue) 50% 50%)}" }, async (origin, id) => {
       await extractDesignSystemFromSource({ system_id: id, name: "Colours", source_type: "website", source_url: origin + "/source" });
       const colors = parseDesignSystemPageCoverage((await readDesignSystemTokens(id)).pages).pages[0]!.colors;
       expect(colors).not.toContain("background-color: #ff0000");
       expect(colors).toEqual(expect.arrayContaining(["background-color: #00000000", "color: #11223380", "color: #445566"]));
+      expect(colors.some(color => color.startsWith("border-color: #ff0000"))).toBe(false);
     });
   });
 });

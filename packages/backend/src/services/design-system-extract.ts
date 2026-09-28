@@ -727,13 +727,14 @@ function pageColorEvidence(declarations: readonly CssDeclarationEvidence[]): str
   for (const declaration of declarations) {
     const property = declaration.property.toLowerCase();
     if (!properties.has(property)) continue;
+    // A colour function with an unresolved channel or alpha is not an observed colour at all.
+    if (/(?:rgba?|hsla?)\((?:[^()]|\([^()]*\))*(?:var|env|attr|calc)\(/i.test(declaration.value)) continue;
     // Substitution fallbacks may never apply, so only independently written literals count.
     const literal = /#[0-9a-f]{3,8}\b|(?:rgba?|hsla?)\([^()]*\)/i.exec(withoutFunctions(declaration.value, ["var", "env", "attr"]))?.[0];
     const color = literal ? colorWithAlpha(literal) : null;
     if (!color) continue;
     const entry = `${property}: ${color}`;
     if (!values.includes(entry)) values.push(entry);
-    if (values.length >= 400) break;
   }
   return values;
 }
