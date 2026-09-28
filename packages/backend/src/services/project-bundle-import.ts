@@ -145,7 +145,8 @@ async function importStagedBundle(
       project: createdProject,
       customSystemId,
       customSystemDir,
-    });
+    }) || error instanceof BundleCleanupFailure;
+    // Any failed cleanup keeps the pending receipt so startup reconciliation can finish it.
     if (cleanupFailed) throw new ProjectBundleError("project_bundle_unavailable");
     await rm(payloadStage, { recursive: true, force: true });
     await clearProjectBundleImportReceipt(operationId);
@@ -164,6 +165,10 @@ function canonicalProjectOptionsJson(value: string | null): string | null {
     if (error instanceof Error) throw new ProjectBundleError("invalid_project_bundle");
     throw error;
   }
+}
+
+class BundleCleanupFailure extends Error {
+  constructor() { super("bundle_cleanup_failed"); }
 }
 
 async function restoreDesignSystem(
@@ -221,7 +226,7 @@ async function restoreDesignSystem(
       customSystemDir: destination,
       extraPaths: [stage],
     });
-    if (cleanupFailed) throw new ProjectBundleError("project_bundle_unavailable");
+    if (cleanupFailed) throw new BundleCleanupFailure();
     throw error;
   }
   return { selected_id: id, created_id: id, created_dir: destination, missing_builtin: null };
