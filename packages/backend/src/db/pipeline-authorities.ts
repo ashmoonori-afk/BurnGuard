@@ -56,6 +56,7 @@ export const projectsTable = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
     currentRevision: integer("current_revision").notNull().default(0),
     currentDigest: text("current_digest"),
+    missingDesignSystemRef: text("missing_design_system_ref"),
   },
   (table) => [
     index("idx_projects_updated").on(table.updatedAt),

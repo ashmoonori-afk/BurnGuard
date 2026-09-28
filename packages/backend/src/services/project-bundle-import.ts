@@ -1,4 +1,5 @@
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { copyFile, mkdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
 import {
@@ -10,7 +11,7 @@ import {
 } from "@bg/shared";
 import { getSqlite } from "../db/sqlite-client";
 import { createDesignSystemRecord, createProjectRecord, getDesignSystemDetail } from "../db/seed";
-import { resolveRepoRoot, systemsDir } from "../lib/paths";
+import { projectsDir, resolveRepoRoot, systemsDir } from "../lib/paths";
 import { resolveWithin } from "../security/path-boundary";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { indexProjectFiles } from "./managed-project-files";
@@ -20,21 +21,61 @@ import { ProjectBundleError } from "./project-bundle-error";
 import { validateProjectBundleMetadata } from "./project-bundle-validation";
 import { parseProjectOptions } from "./project-options";
 import { ensureProjectDesignSystemPin } from "./project-design-system-pin";
+import { clearProjectBundleImportReceipt, writeProjectBundleImportReceipt } from "./project-bundle-import-receipt";
+import { commitDesignSystemReceipt, prepareDesignSystemReceipt } from "../db/design-system-repository";
+import { getDb } from "../db/client";
+import { ExtractionSidecarError, readValidatedExtractionSidecar } from "./extraction-sidecar";
 
 export async function importProjectBundleFile(file: File, name?: string): Promise<ProjectBundleImportResponse> {
-  const { manifest, entries } = await readProjectBundleZip(file);
-  validateProjectBundleMetadata(manifest);
+  const operationId = ulid();
+  const projectId = ulid();
+  const payloadStage = resolveWithin(projectsDir, ".bundle-imports", `${operationId}-payload`);
+  await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: projectId, system_id: null, staging_paths: [payloadStage] });
+  let manifest: Awaited<ReturnType<typeof readProjectBundleZip>>["manifest"];
+  let entries: Awaited<ReturnType<typeof readProjectBundleZip>>["entries"];
+  try {
+    await mkdir(payloadStage, { recursive: false });
+    ({ manifest, entries } = await readProjectBundleZip(file, payloadStage));
+    validateProjectBundleMetadata(manifest);
+  } catch (error) {
+    await rm(payloadStage, { recursive: true, force: true });
+    await clearProjectBundleImportReceipt(operationId);
+    throw error;
+  }
+  try { return await importStagedBundle(manifest, entries, name, operationId, projectId, payloadStage); }
+  finally { await rm(payloadStage, { recursive: true, force: true }); }
+}
+
+async function importStagedBundle(
+  manifest: Awaited<ReturnType<typeof readProjectBundleZip>>["manifest"],
+  entries: ReadonlyMap<string, string>,
+  name: string | undefined,
+  operationId: string,
+  projectId: string,
+  payloadStage: string,
+): Promise<ProjectBundleImportResponse> {
   const projectName = name?.trim() || manifest.project.name;
   if (!projectName || projectName.length > 200) throw new ProjectBundleError("invalid_project_bundle");
   const optionsJson = canonicalProjectOptionsJson(manifest.project.options_json);
   let customSystemId: string | null = null;
   let customSystemDir: string | null = null;
   let createdProject: Awaited<ReturnType<typeof createProjectRecord>> | null = null;
+  const plannedSystem = manifest.design_system.kind === "custom"
+    ? { id: `bundle-${ulid().toLowerCase()}`, stage: resolveWithin(systemsDir, `bundle-stage-${ulid().toLowerCase()}`) }
+    : null;
+  await writeProjectBundleImportReceipt({
+    schema_version: 1,
+    operation_id: operationId,
+    project_id: projectId,
+    system_id: plannedSystem?.id ?? null,
+    staging_paths: plannedSystem === null ? [payloadStage] : [payloadStage, plannedSystem.stage],
+  });
   try {
-    const system = await restoreDesignSystem(manifest.design_system, entries, manifest.files);
+    const system = await restoreDesignSystem(manifest.design_system, entries, manifest.files, plannedSystem);
     customSystemId = system.created_id;
     customSystemDir = system.created_dir;
     createdProject = await createProjectRecord({
+      projectId,
       name: projectName,
       type: manifest.project.type,
       designSystemId: null,
@@ -72,8 +113,8 @@ export async function importProjectBundleFile(file: File, name?: string): Promis
     const db = getSqlite();
     const project = createdProject;
     db.transaction(() => {
-      db.prepare("UPDATE projects SET design_system_id=?,current_revision=?,current_digest=? WHERE id=?")
-        .run(selectedSystemId, manifest.project.current_revision, manifest.project.current_digest, project.id);
+      db.prepare("UPDATE projects SET design_system_id=?,missing_design_system_ref=?,current_revision=?,current_digest=? WHERE id=?")
+        .run(selectedSystemId, system.missing_builtin, manifest.project.current_revision, manifest.project.current_digest, project.id);
       for (const attachment of manifest.attachments) {
         const relative = attachment.path.slice("project/".length);
         db.prepare(`INSERT INTO attachments(id,session_id,turn_id,file_path,mime_type,original_name,size_bytes,sha256,source_role,source_role_explicit,created_at)
@@ -88,6 +129,7 @@ export async function importProjectBundleFile(file: File, name?: string): Promis
     // Archive pin text is untrusted prompt input; the pin is rebuilt by the app renderer from the restored system.
     if (selectedSystemId !== null) await ensureProjectDesignSystemPin(createdProject.id);
     await indexProjectFiles(createdProject.id);
+    await clearProjectBundleImportReceipt(operationId);
     return {
       id: createdProject.id,
       session_id: createdProject.session_id,
@@ -101,6 +143,7 @@ export async function importProjectBundleFile(file: File, name?: string): Promis
       customSystemDir,
     });
     if (cleanupFailed) throw new ProjectBundleError("project_bundle_unavailable");
+    await clearProjectBundleImportReceipt(operationId);
     if (error instanceof ProjectBundleError) throw error;
     throw new ProjectBundleError("invalid_project_bundle");
   }
@@ -120,17 +163,18 @@ function canonicalProjectOptionsJson(value: string | null): string | null {
 
 async function restoreDesignSystem(
   system: ProjectBundleDesignSystem,
-  entries: ReadonlyMap<string, Uint8Array>,
+  entries: ReadonlyMap<string, string>,
   files: readonly ProjectBundleFile[],
+  planned: { readonly id: string; readonly stage: string } | null,
 ): Promise<{ readonly selected_id: string | null; readonly created_id: string | null; readonly created_dir: string | null; readonly missing_builtin: string | null }> {
   if (system.kind === "none") return { selected_id: null, created_id: null, created_dir: null, missing_builtin: null };
   if (system.kind === "builtin") {
     const present = await getDesignSystemDetail(system.id);
     return { selected_id: present ? system.id : null, created_id: null, created_dir: null, missing_builtin: present ? null : system.id };
   }
-  const id = `bundle-${ulid().toLowerCase()}`;
+  if (planned === null) throw new ProjectBundleError("invalid_project_bundle");
+  const { id, stage } = planned;
   const destination = resolveWithin(systemsDir, id);
-  const stage = resolveWithin(systemsDir, `bundle-stage-${ulid().toLowerCase()}`);
   await mkdir(stage, { recursive: false });
   try {
     await writeEntries({
@@ -155,6 +199,7 @@ async function restoreDesignSystem(
       readmeMdPath: system.readme_md_path ? resolveWithin(destination, system.readme_md_path) : null,
       thumbnailPath: null,
     });
+    await recordImportedContentReceipt(id, destination);
   } catch (error) {
     const cleanupFailed = await cleanupImportedBundle({
       project: null,
@@ -168,9 +213,35 @@ async function restoreDesignSystem(
   return { selected_id: id, created_id: id, created_dir: destination, missing_builtin: null };
 }
 
+/** A restored extraction keeps its catalog lifecycle: its sidecar is re-verified and a content receipt is recorded for the new copy. */
+async function recordImportedContentReceipt(systemId: string, root: string): Promise<void> {
+  let sidecar: Awaited<ReturnType<typeof readValidatedExtractionSidecar>>;
+  try { sidecar = await readValidatedExtractionSidecar(root); }
+  catch (error) {
+    if (error instanceof ExtractionSidecarError) return;
+    throw error;
+  }
+  const manifest = await inspectCanonicalTree(root);
+  const provenance: unknown = JSON.parse(await readFile(path.join(root, "extraction-provenance.json"), "utf8"));
+  if (typeof provenance !== "object" || provenance === null) throw new ProjectBundleError("invalid_project_bundle");
+  const receiptId = `bundle-${systemId}-1-${sidecar.content_digest.slice(0, 12)}`;
+  const now = Date.now();
+  prepareDesignSystemReceipt(getDb(), {
+    id: receiptId,
+    designSystemId: systemId,
+    contentRevision: 1,
+    schemaVersion: 1,
+    digest: sidecar.content_digest,
+    manifest,
+    provenance: provenance as Readonly<Record<string, unknown>>,
+    createdAt: now,
+  });
+  commitDesignSystemReceipt(getDb(), { id: receiptId, digest: sidecar.content_digest, updatedAt: now });
+}
+
 type WriteEntriesInput = {
   readonly root: string;
-  readonly entries: ReadonlyMap<string, Uint8Array>;
+  readonly entries: ReadonlyMap<string, string>;
   readonly files: readonly ProjectBundleFile[];
   readonly prefix: string;
   readonly kinds: ReadonlySet<ProjectBundleFile["kind"]>;
@@ -180,12 +251,12 @@ type WriteEntriesInput = {
 async function writeEntries(input: WriteEntriesInput): Promise<void> {
   for (const file of input.files) {
     if (!input.kinds.has(file.kind) || !file.path.startsWith(input.prefix) || input.include?.(file) === false) continue;
-    const bytes = input.entries.get(file.path);
-    if (!bytes) throw new ProjectBundleError("invalid_project_bundle");
+    const source = input.entries.get(file.path);
+    if (!source) throw new ProjectBundleError("invalid_project_bundle");
     const relative = file.path.slice(input.prefix.length);
     const target = resolveWithin(input.root, ...relative.split("/"));
     await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, bytes, { flag: "wx" });
+    await copyFile(source, target, fsConstants.COPYFILE_EXCL);
   }
 }
 

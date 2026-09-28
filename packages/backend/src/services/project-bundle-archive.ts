@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { constants } from "node:fs";
-import { lstat, open, readdir, realpath, type FileHandle } from "node:fs/promises";
+import { constants, createWriteStream } from "node:fs";
+import { lstat, mkdir, open, readdir, realpath, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import JSZip from "jszip";
@@ -79,9 +79,9 @@ export async function createProjectBundleZip(
   return bytes;
 }
 
-export async function readProjectBundleZip(file: File): Promise<{
+export async function readProjectBundleZip(file: File, stagingRoot: string): Promise<{
   readonly manifest: ProjectBundleManifest;
-  readonly entries: ReadonlyMap<string, Uint8Array>;
+  readonly entries: ReadonlyMap<string, string>;
 }> {
   if (file.size > PROJECT_BUNDLE_LIMITS.upload_bytes) throw new ProjectBundleError("project_bundle_limit");
   const archive = new Uint8Array(await file.arrayBuffer());
@@ -116,19 +116,20 @@ export async function readProjectBundleZip(file: File): Promise<{
     throw new ProjectBundleError("invalid_project_bundle");
   }
   let remaining = PROJECT_BUNDLE_LIMITS.expanded_bytes;
-  const entries = new Map<string, Uint8Array>();
+  const entries = new Map<string, string>();
   for (const expectedFile of manifest.files) {
     if (expectedFile.size_bytes > remaining || expectedFile.size_bytes > PROJECT_BUNDLE_LIMITS.entry_bytes) throw new ProjectBundleError("project_bundle_limit");
     if (declared.get(expectedFile.path)?.size !== expectedFile.size_bytes) throw new ProjectBundleError("invalid_project_bundle");
     const object = zip.file(expectedFile.path);
     if (!object || object.dir || isSymlink(object)) throw new ProjectBundleError("invalid_project_bundle");
-    const bytes = await boundedZip(object, expectedFile.size_bytes + 1);
-    remaining -= bytes.byteLength;
-    if (bytes.byteLength !== expectedFile.size_bytes ||
-      createHash("sha256").update(bytes).digest("hex") !== expectedFile.sha256) {
+    const target = resolveWithin(stagingRoot, ...expectedFile.path.split("/"));
+    await mkdir(path.dirname(target), { recursive: true });
+    const written = await boundedZipToFile(object, target, expectedFile.size_bytes + 1);
+    remaining -= written.size;
+    if (written.size !== expectedFile.size_bytes || written.sha256 !== expectedFile.sha256) {
       throw new ProjectBundleError("project_bundle_digest");
     }
-    entries.set(expectedFile.path, bytes);
+    entries.set(expectedFile.path, target);
   }
   return { manifest, entries };
 }
@@ -327,4 +328,36 @@ export function inspectCentralDirectory(archive: Uint8Array): ReadonlyMap<string
   }
   if (cursor !== directoryOffset + directorySize) invalid();
   return entries;
+}
+
+function boundedZipToFile(file: JSZip.JSZipObject, target: string, limit: number): Promise<{ readonly size: number; readonly sha256: string }> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    let settled = false;
+    const hash = createHash("sha256");
+    const fail = (error: ProjectBundleError): void => {
+      if (settled) return;
+      settled = true;
+      if (source instanceof Readable) source.destroy();
+      sink.destroy();
+      reject(error);
+    };
+    const sink = createWriteStream(target, { flags: "wx" });
+    const source = file.nodeStream("nodebuffer");
+    source.on("data", (chunk: Uint8Array) => {
+      size += chunk.length;
+      if (size > limit) { fail(new ProjectBundleError("project_bundle_limit")); return; }
+      hash.update(chunk);
+      if (!sink.write(chunk)) { source.pause(); sink.once("drain", () => source.resume()); }
+    });
+    source.on("error", () => fail(new ProjectBundleError("invalid_project_bundle")));
+    sink.on("error", () => fail(new ProjectBundleError("project_bundle_unavailable")));
+    source.on("end", () => sink.end());
+    sink.on("finish", () => {
+      if (settled) return;
+      settled = true;
+      resolve({ size, sha256: hash.digest("hex") });
+    });
+    source.resume();
+  });
 }

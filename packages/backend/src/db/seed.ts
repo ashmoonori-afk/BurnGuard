@@ -303,10 +303,11 @@ export async function createProjectRecord(input: {
   entrypoint: string;
   thumbnailPath: string | null;
   initializeArtifact?: (stage: string) => Promise<void>;
+  projectId?: string;
 }) {
   const db = getDb();
   const now = Date.now();
-  const projectId = ulid();
+  const projectId = input.projectId ?? ulid();
   const sessionId = ulid();
   const dirPath = path.join(projectsDir, projectId);
 

@@ -62,7 +62,10 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
   const system = project.design_system_id ? await getDesignSystemDetail(project.design_system_id) : null;
   let systemEntries: readonly BundleEntry[] = [];
   let systemRoot: string | null = null;
-  let designSystem: ProjectBundleDesignSystem = { kind: "none", pin: portablePin(projectId) };
+  const missingBuiltin = getSqlite().query<{ readonly ref: string | null }, [string]>("SELECT missing_design_system_ref ref FROM projects WHERE id=?").get(projectId)?.ref ?? null;
+  let designSystem: ProjectBundleDesignSystem = missingBuiltin !== null && !system
+    ? { kind: "builtin", id: missingBuiltin, pin: null }
+    : { kind: "none", pin: portablePin(projectId) };
   if (system) {
     if (system.source_type === "sample") {
       designSystem = { kind: "builtin", id: system.id, pin: portablePin(projectId) };

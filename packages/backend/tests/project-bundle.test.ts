@@ -9,6 +9,10 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { projectsDir, systemsDir } from "../src/lib/paths";
 import { getProjectDetail } from "../src/db/project-read-repository";
 import { getDesignSystemDetail } from "../src/db/seed";
+import { getContentReceipt } from "../src/db/catalog-repository";
+import { validateCatalogReceiptTree } from "../src/services/catalog-files";
+import { projectBundleImportReceiptsDir, reconcileProjectBundleImports, writeProjectBundleImportReceipt } from "../src/services/project-bundle-import-receipt";
+import { readdir } from "node:fs/promises";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { exportProjectBundle, importProjectBundleFile } from "../src/services/project-bundle";
 import { readProjectDesignSystemPin } from "../src/services/project-design-system-pin";
@@ -238,4 +242,77 @@ test("Given archived template and sample provenance for a custom system When imp
 
   expect(system?.is_template).toBe(false);
   expect(system?.source_type).toBe("manual");
+});
+
+function addBundleFile(manifest: ProjectBundleManifest, zip: JSZip, archivePath: string, text: string): ProjectBundleManifest {
+  const bytes = new TextEncoder().encode(text);
+  zip.file(archivePath, bytes);
+  return { ...manifest, files: [...manifest.files, { path: archivePath, kind: "design_system", size_bytes: bytes.byteLength, sha256: createHash("sha256").update(bytes).digest("hex") }] };
+}
+
+test("Given a leftover import receipt from a crash When startup reconciliation runs Then the uncommitted project and system are removed", async () => {
+  const exported = await exportProjectBundle(sourceProjectId);
+  const restored = await importProjectBundleFile(new File([exported.bytes], exported.filename), "Crashed import");
+  const detail = await getProjectDetail(restored.id);
+  if (!detail?.design_system_id) throw new Error("missing restored system");
+  const stage = path.join(projectsDir, ".bundle-imports", "crash-op-payload");
+  await mkdir(stage, { recursive: true });
+  await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: "crash-op", project_id: restored.id, system_id: detail.design_system_id, staging_paths: [stage] });
+
+  const result = await reconcileProjectBundleImports(getSqlite());
+
+  expect(result.rolled_back).toBe(1);
+  expect(await getProjectDetail(restored.id)).toBeNull();
+  expect(await getDesignSystemDetail(detail.design_system_id)).toBeNull();
+  expect(await readdir(projectBundleImportReceiptsDir())).toEqual([]);
+});
+
+test("Given a successful import When it completes Then no import receipt or payload stage is left behind", async () => {
+  const exported = await exportProjectBundle(sourceProjectId);
+  const restored = await importProjectBundleFile(new File([exported.bytes], exported.filename), "Clean import");
+  createdProjectIds.push(restored.id);
+  const detail = await getProjectDetail(restored.id);
+  if (detail?.design_system_id) createdSystemIds.push(detail.design_system_id);
+
+  expect(await readdir(projectBundleImportReceiptsDir())).toEqual([]);
+});
+
+test("Given a restored extraction system When imported Then it carries a committed content receipt that validates against its bytes", async () => {
+  const content = { entries: [{ path: "SKILL.md" }] };
+  const provenance = { schema_version: 1, digest_algorithm: "sha256", content_digest: createHash("sha256").update(JSON.stringify(content)).digest("hex"), content, generated_at: 1 };
+  const file = await rewrittenBundle((manifest, zip) => {
+    let next = addBundleFile(manifest, zip, "design-system/README.md", "# Extracted");
+    next = addBundleFile(next, zip, "design-system/fonts/fonts.css", "");
+    return addBundleFile(next, zip, "design-system/extraction-provenance.json", JSON.stringify(provenance));
+  });
+
+  const restored = await importProjectBundleFile(file, "Catalog receipt");
+  createdProjectIds.push(restored.id);
+  const detail = await getProjectDetail(restored.id);
+  if (!detail?.design_system_id) throw new Error("missing restored system");
+  createdSystemIds.push(detail.design_system_id);
+  const system = await getDesignSystemDetail(detail.design_system_id);
+  const receipt = getContentReceipt(getSqlite(), detail.design_system_id);
+
+  expect(receipt?.status).toBe("committed");
+  if (!receipt || !system) throw new Error("missing receipt");
+  await expect(validateCatalogReceiptTree(system.dir_path, receipt)).resolves.toMatchObject({ digest: provenance.content_digest });
+});
+
+test("Given a project restored with a missing builtin system When exported again Then the builtin reference survives", async () => {
+  const file = await rewrittenBundle((manifest, zip) => {
+    for (const entry of manifest.files.filter((item) => item.kind === "design_system")) zip.remove(entry.path);
+    return {
+      ...manifest,
+      files: manifest.files.filter((entry) => entry.kind !== "design_system"),
+      design_system: { kind: "builtin", id: "builtin-theme-gone", pin: null },
+      fonts: { families: manifest.fonts.families, files: manifest.fonts.files.filter((item) => !item.startsWith("design-system/")) },
+    };
+  });
+  const restored = await importProjectBundleFile(file, "Missing builtin round trip");
+  createdProjectIds.push(restored.id);
+
+  const again = await exportProjectBundle(restored.id);
+
+  expect(again.manifest.design_system).toEqual({ kind: "builtin", id: "builtin-theme-gone", pin: null });
 });

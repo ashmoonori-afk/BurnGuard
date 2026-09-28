@@ -32,6 +32,7 @@ import { reconcileCatalogState } from "./services/catalog-lifecycle";
 import { ensureAllProjectWatchers } from "./services/watchers";
 import { reconcileArtifactState } from "./services/artifact-recovery";
 import { reconcileProjectDeletions } from "./services/project-deletion";
+import { reconcileProjectBundleImports } from "./services/project-bundle-import-receipt";
 import { pruneExpiredArtifactOperations } from "./services/artifact-retention";
 import { reconcileExportState } from "./services/export-recovery";
 import { createProductionResearchRecoveryDependencies } from "./routes/research";
@@ -138,6 +139,7 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   await seedSampleDesignSystems();
   await runMigrations();
   await reconcileProjectDeletions(getSqlite());
+  await reconcileProjectBundleImports(getSqlite());
   await reconcileResearchOnStartup(getSqlite(), researchRecovery);
   await seedCoreData();
   await seedTutorialsOnce();
