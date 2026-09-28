@@ -5,6 +5,7 @@ import { collectSourceEvidence, withoutFunctions, type SourceEvidence } from "./
 import { buildSectionPatternReadme, measureSourceLayout } from "./extraction-layout";
 import { buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, observedPatterns, pageEvidence, parseRobots, parseSitemap } from "./extraction-pages";
 import { readDesignSystemPageCoverage } from "./design-system-pages";
+import { measureRenderedLayout, type MeasuredPageInput, type RenderedLayoutInput } from "./extraction-rendered-layout";
 import type { CssDeclarationEvidence } from "./extraction-css";
 import {
   copyFile,
@@ -24,6 +25,7 @@ import {
   DEFAULT_PAGE_LIMIT,
   parseDesignSystemPageCoverage,
   type DesignSystemPageCoverage,
+  type DesignSystemMeasuredLayout,
   type CreateDesignSystemExtractionRequest,
   type CreateDesignSystemExtractionResponse,
   type CreateDesignSystemUploadRequest,
@@ -202,7 +204,7 @@ function validateExtractionLineage(
 
 export async function extractDesignSystemFromSource(
   input: CreateDesignSystemExtractionRequest,
-  options: { readonly signal?: AbortSignal; readonly timeoutMs?: number } = {},
+  options: { readonly signal?: AbortSignal; readonly timeoutMs?: number; readonly measureLayout?: LayoutMeasurer } = {},
 ): Promise<CreateDesignSystemExtractionResponse> {
   const sourceUrl = typeof input.source_url === "string" ? input.source_url.trim() : "";
   if (!sourceUrl) {
@@ -255,7 +257,7 @@ export async function extractDesignSystemFromSource(
         ? await ingestGitSource(sourceUrl, ingestDir, budget.signal, input.name)
         : sourceType === "figma"
           ? await ingestFigmaSource(sourceUrl, ingestDir, budget.signal, input.name)
-          : await ingestWebsiteSource(sourceUrl, ingestDir, budget.signal, input.name, input.page_limit);
+          : await ingestWebsiteSource(sourceUrl, ingestDir, budget.signal, input.name, input.page_limit, options.measureLayout ?? defaultLayoutMeasurer(), budget.deadlineAt);
 
     const brandName = input.name?.trim() || analysis.brandName;
     return await persistCanonicalExtraction({
@@ -704,6 +706,39 @@ async function ingestGitSource(
   return analysis;
 }
 
+export type LayoutMeasurer = (input: RenderedLayoutInput) => Promise<DesignSystemMeasuredLayout | null>;
+const MEASURED_PAGE_LIMIT = 4;
+const MEASURE_DEADLINE_MS = 15_000;
+/** Budget left for publication after measurement; measurement is skipped when less than MEASURE_MIN_MS would remain. */
+const MEASURE_PUBLISH_RESERVE_MS = 6_000;
+const MEASURE_MIN_MS = 2_000;
+
+/** Offline rendered measurement is on unless BG_EXTRACTION_MEASURE_LAYOUT=0 (the test preload sets it off). */
+function defaultLayoutMeasurer(): LayoutMeasurer | null {
+  return process.env.BG_EXTRACTION_MEASURE_LAYOUT === "0" ? null : measureRenderedLayout;
+}
+
+/**
+ * Measurement gets its own deadline, capped to the acquisition budget left after a publication reserve, so a
+ * slow browser drops the tokens instead of exhausting the shared budget and failing the extraction.
+ */
+async function measureWithDeadline(measure: LayoutMeasurer, input: RenderedLayoutInput, budgetDeadlineAt: number): Promise<DesignSystemMeasuredLayout | null> {
+  const available = Math.min(MEASURE_DEADLINE_MS, budgetDeadlineAt - Date.now() - MEASURE_PUBLISH_RESERVE_MS);
+  if (available < MEASURE_MIN_MS) return null;
+  const controller = new AbortController();
+  const forward = () => controller.abort(input.signal.reason);
+  input.signal.addEventListener("abort", forward, { once: true });
+  const timer = setTimeout(() => controller.abort(new Error("layout_measure_deadline")), available);
+  try { return await measure({ ...input, signal: controller.signal }); }
+  catch (error) {
+    if (input.signal.aborted) throw error;
+    return null;
+  } finally {
+    clearTimeout(timer);
+    input.signal.removeEventListener("abort", forward);
+  }
+}
+
 /** Aggregate download budget exhaustion stops acquisition; a single oversized optional resource does not. */
 function isBudgetExhausted(error: unknown): boolean {
   return error instanceof AcquisitionLimitError && error.limit === "aggregate_source_bytes";
@@ -755,6 +790,8 @@ async function ingestWebsiteSource(
   signal: AbortSignal,
   preferredName?: string,
   pageLimit: number = DEFAULT_PAGE_LIMIT,
+  measureLayout: LayoutMeasurer | null = null,
+  deadlineAt: number = Number.POSITIVE_INFINITY,
 ): Promise<SourceAnalysis> {
   let url: URL;
   try {
@@ -892,6 +929,7 @@ async function ingestWebsiteSource(
     body: [] as string[],
   };
   const seenStylesheets = new Set<string>();
+  const stylesheetText = new Map<string, string>();
   let stylesheetIndex = 1;
 
   for (const [pageUrl, pageHtml] of pageHtmlByUrl) {
@@ -970,6 +1008,8 @@ async function ingestWebsiteSource(
         if (seenStylesheets.has(cssFetch.finalUrl.toString())) { addLinked(seenDeclarations ?? []); continue; }
         seenStylesheets.add(cssFetch.finalUrl.toString());
         const cssText = cssFetch.text;
+        stylesheetText.set(cssUrl.toString(), cssText);
+        stylesheetText.set(cssFetch.finalUrl.toString(), cssText);
         const fileName = `linked-${stylesheetIndex}.css`;
         stylesheetIndex += 1;
         const absolute = path.join(uploadsDir, fileName);
@@ -1062,7 +1102,18 @@ async function ingestWebsiteSource(
     );
   }
 
+  // The entry page plus the first page of each other type is rendered offline and measured.
+  const measurable: MeasuredPageInput[] = [];
+  for (const [pageUrl, pageHtml] of pageHtmlByUrl) {
+    const pagePath = canonicalPagePath(pageUrl, url) ?? "/";
+    const pageType = classifyPageType(pagePath, pageHtml);
+    if (measurable.length === 0 || (measurable.length < MEASURED_PAGE_LIMIT && !measurable.some((page) => page.pageType === pageType))) measurable.push({ path: pagePath, pageType, url: pageUrl, html: pageHtml });
+  }
+  const measuredLayout = measureLayout ? await measureWithDeadline(measureLayout, { pages: measurable, stylesheets: stylesheetText, signal }, deadlineAt) : null;
+  if (measureLayout && measuredLayout === null) notes.push("Rendered layout measurement was unavailable; measured layout tokens were not recorded.");
+
   return {
+    measuredLayout,
     brandName: preferredName?.trim() || deriveBrandNameFromHtml(url, html),
     cssDeclarations,
     cssParseIssues,
@@ -1568,6 +1619,7 @@ async function writeCanonicalDesignSystem(input: {
     generated,
     input.systemDir,
   );
+  if (input.analysis.measuredLayout) await writeText(path.join(input.systemDir, "layout-measured.json"), `${JSON.stringify(input.analysis.measuredLayout, null, 2)}\n`, generated, input.systemDir);
   if (input.analysis.pageCoverage) {
     // Publish only what the strict reader accepts, so a malformed record can never make the system unreadable.
     let coverage: DesignSystemPageCoverage | null = null;

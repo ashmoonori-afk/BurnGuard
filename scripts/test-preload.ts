@@ -12,6 +12,8 @@ Object.defineProperty(globalThis.navigator, "language", { value: "ko-KR", config
 const temporaryParent = realpathSync(tmpdir());
 const fixtureRoot = mkdtempSync(path.join(temporaryParent, "burnguard-tests-"));
 process.env.BG_APP_ROOT = fixtureRoot;
+// Extraction must not launch Chromium in ordinary suites; the measurement has its own opt-in browser test.
+process.env.BG_EXTRACTION_MEASURE_LAYOUT ??= "0";
 process.env.CODEX_HOME = path.join(fixtureRoot, ".codex");
 process.env.CLAUDE_CONFIG_DIR = path.join(fixtureRoot, ".claude");
 mkdirSync(process.env.CODEX_HOME);
