@@ -7,6 +7,8 @@ import { sanitizeHandoffText } from "./export-handoff-privacy";
 export const HANDOFF_STYLE_LIMITS = {
   rulesPerStylesheet: 2_000,
   ruleMatchesPerPage: 4_000,
+  selectorLength: 512,
+  matchedElementsPerPage: 50_000,
   responsiveRulesPerStylesheet: 200,
   tokensPerRegion: 32,
 } as const;
@@ -59,16 +61,21 @@ export function mapPageTokens(
   document: HTMLElement,
   stylesheets: readonly HandoffStylesheet[],
   tokenNames: ReadonlySet<string>,
+  signal?: AbortSignal,
 ): ReadonlyMap<string, readonly string[]> {
   const byNode = new Map<string, Set<string>>();
   let budget: number = HANDOFF_STYLE_LIMITS.ruleMatchesPerPage;
+  let matchedElements = 0;
   for (const sheet of stylesheets) {
     for (const rule of sheet.rules) {
-      if (budget <= 0) return finalizeTokens(byNode);
+      signal?.throwIfAborted();
+      if (budget <= 0 || matchedElements >= HANDOFF_STYLE_LIMITS.matchedElementsPerPage) return finalizeTokens(byNode);
       budget -= 1;
       const pinned = rule.tokens.filter((token) => tokenNames.has(token));
-      if (pinned.length === 0) continue;
-      for (const element of matchSelector(document, rule.selector)) {
+      if (pinned.length === 0 || rule.selector.length > HANDOFF_STYLE_LIMITS.selectorLength) continue;
+      const matched = matchSelector(document, rule.selector);
+      matchedElements += matched.length;
+      for (const element of matched) {
         const nodeId = element.getAttribute("data-bg-node-id")?.trim();
         if (nodeId === undefined || nodeId === "") continue;
         const current = byNode.get(nodeId) ?? new Set<string>();

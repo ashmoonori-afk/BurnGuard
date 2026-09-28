@@ -104,7 +104,7 @@ async function readHandoffSourceTexts(
     }
     textFiles += 1;
     totalBytes += file.size;
-    result.push({ path: file.path, text: await readFile(resolveWithin(root, file.path), "utf8") });
+    result.push({ path: file.path, text: await readFile(resolveWithin(root, file.path), { encoding: "utf8", ...(signal === undefined ? {} : { signal }) }) });
   }
   return result;
 }

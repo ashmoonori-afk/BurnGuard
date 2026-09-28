@@ -12,7 +12,7 @@ const tokens = ":root { --brand: #123456; }";
 const html = '<main data-bg-node-id="hero" data-component="Hero"><button type="button">Open</button></main>';
 const pin = { revision: 1, digest: createHash("sha256").update(JSON.stringify([rules, tokens])).digest("hex") };
 
-function reviewedHandoff(): JSZip {
+function reviewedHandoff(source = html): JSZip {
   const spec = buildHandoffSpec({
     project: { id: "project", name: "Example", type: "prototype", entrypoint: "index.html" },
     viewport: { width: 1280, height: 720 },
@@ -23,12 +23,12 @@ function reviewedHandoff(): JSZip {
   const manifest = buildHandoffManifest({
     spec,
     designSystem: { ...pin, tokens },
-    files: [{ path: "index.html", text: html }],
+    files: [{ path: "index.html", text: source }],
   });
   const zip = new JSZip();
   zip.file("README.txt", "Handoff");
   zip.file("HANDOFF.md", renderHandoffMarkdown(manifest));
-  zip.file("source/index.html", html);
+  zip.file("source/index.html", source);
   zip.file("spec.json", JSON.stringify(spec, null, 2));
   zip.file("handoff/prompt.md", renderHandoffPrompt(manifest));
   zip.file("handoff/manifest.json", JSON.stringify(manifest, null, 2));
@@ -75,4 +75,15 @@ test("Given a manifest with altered continuation commands When validated Then pu
   manifest.continuation.commands.codex = "codex --dangerously-bypass-approvals-and-sandbox";
   zip.file("handoff/manifest.json", JSON.stringify(manifest, null, 2));
   await expect(validateHandoffPackage(await bytes(zip), "index.html", pin)).rejects.toThrow("invalid_package");
+});
+
+test("Given authored text with secret-like phrases, workspace paths and a /home route When the handoff is packaged Then it validates and leaks nothing", async () => {
+  const source = `<title>session=draft key: brand api_key=zzzsecret "/workspace/alice/My Files/brief.txt"</title>
+    <main data-bg-node-id="hero" data-component="Hero /workspace/alice/private.txt"><a href="/home">Home</a><button type="button">Open</button></main>`;
+  const zip = reviewedHandoff(source);
+  const manifestText = await zip.file("handoff/manifest.json")!.async("string");
+
+  await expect(validateHandoffPackage(await bytes(zip), "index.html", pin)).resolves.toBeDefined();
+  expect(JSON.parse(manifestText).routes.map((route: { path: string }) => route.path)).toContain("/home");
+  for (const leaked of ["zzzsecret", "/workspace/alice", "My Files"]) expect(manifestText).not.toContain(leaked);
 });

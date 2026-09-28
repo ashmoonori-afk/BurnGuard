@@ -3,7 +3,7 @@ import { parse, type HTMLElement } from "node-html-parser";
 import type { HandoffManifest } from "@bg/shared";
 import { analyzeHandoffInteractions } from "./export-handoff-interactions";
 import { compareCodeUnits } from "./export-handoff-order";
-import { sanitizeHandoffText, sanitizeNullableHandoffText } from "./export-handoff-privacy";
+import { sanitizeHandoffRoute, sanitizeNullableHandoffText } from "./export-handoff-privacy";
 import {
   inlineTokenRefs,
   mapPageTokens,
@@ -104,7 +104,7 @@ export function analyzeHandoffSources(
         const sheet = resolved === null ? undefined : stylesheets.get(resolved);
         return sheet === undefined ? [] : [sheet];
       });
-    const pageTokens = mapPageTokens(document, [...linkedSheets, ...inlineSheets], tokenNames);
+    const pageTokens = mapPageTokens(document, [...linkedSheets, ...inlineSheets], tokenNames, signal);
     const nodes = document.querySelectorAll("[data-bg-node-id]").slice(0, HANDOFF_ANALYSIS_LIMITS.nodesPerPage);
     sourcePages.push({
       title: sanitizeNullableHandoffText(document.querySelector("title")?.text) ?? route,
@@ -228,7 +228,7 @@ function linkedRouteFromHref(owner: string, href: string, htmlPaths: ReadonlySet
   if (htmlPaths.has(`${resolved}.html`)) return routeForHtml(`${resolved}.html`);
   if (htmlPaths.has(`${resolved.replace(/\/$/u, "")}/index.html`)) return routeForHtml(`${resolved.replace(/\/$/u, "")}/index.html`);
   if (path.posix.extname(resolved) !== "") return null;
-  const route = sanitizeHandoffText(`/${resolved.replace(/\/$/u, "")}`, 160);
+  const route = sanitizeHandoffRoute(`/${resolved.replace(/\/$/u, "")}`, 160);
   return route.includes("<") ? null : route;
 }
 
