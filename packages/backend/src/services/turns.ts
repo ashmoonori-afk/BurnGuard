@@ -245,6 +245,11 @@ export type UserTurnAdmission =
 /** Sessions held by saved-file recovery: busy for new turns, but neither running turns nor turn capacity. */
 const recoveryHolds = new Map<string, symbol>();
 
+/** Whether saved-file recovery currently holds the session; project deletion treats this as in use. */
+export function isSessionHeldForRecovery(sessionId: string): boolean {
+  return recoveryHolds.has(sessionId);
+}
+
 /** Holds every given session against new turns, or returns null (holding nothing) if any is busy. */
 export function holdSessionsForRecovery(sessionIds: readonly string[]): (() => void) | null {
   if (sessionIds.some((id) => activeTurns.has(id) || recoveryHolds.has(id) || isDirectionOperationActive(id))) return null;

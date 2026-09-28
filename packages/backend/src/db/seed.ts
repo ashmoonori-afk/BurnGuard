@@ -435,7 +435,7 @@ export async function getLatestProjectSession(projectId: string) {
     })
     .from(sessionsTable)
     .where(eq(sessionsTable.projectId, projectId))
-    .orderBy(desc(sessionsTable.updatedAt))
+    .orderBy(desc(sessionsTable.updatedAt), desc(sessionsTable.id))
     .limit(1);
 
   const row = rows[0];

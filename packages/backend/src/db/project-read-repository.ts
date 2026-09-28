@@ -21,7 +21,7 @@ export async function listProjectIds(): Promise<readonly string[]> {
 }
 
 export async function getLatestProjectSession(projectId: string): Promise<SessionInfo | null> {
-  const row = getSqlite().query<SessionRow, [string]>(`${SESSION_SELECT} WHERE project_id=? ORDER BY updated_at DESC LIMIT 1`).get(projectId);
+  const row = getSqlite().query<SessionRow, [string]>(`${SESSION_SELECT} WHERE project_id=? ORDER BY updated_at DESC,id DESC LIMIT 1`).get(projectId);
   return row === null ? null : sessionInfo(row);
 }
 

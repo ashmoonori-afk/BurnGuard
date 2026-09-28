@@ -6,7 +6,7 @@ import { projectsDir, resolveManagedPath } from "../lib/paths";
 import { assertSafeName, PathBoundaryError, resolveWithin } from "../security/path-boundary";
 import { closeProjectWatcher, projectWatchers } from "./watcher-registry";
 import { ensureProjectWatcher, isProjectSignalPending } from "./watchers";
-import { isUserTurnRunning } from "./turns";
+import { isSessionHeldForRecovery, isUserTurnRunning } from "./turns";
 import { isDirectionOperationActive } from "./direction-operation-registry";
 import { isArtifactProjectBusy } from "./artifact-project-lock";
 
@@ -29,7 +29,7 @@ export async function deleteProject(db: Database, projectId: string, options: { 
       const referenced = db.query("SELECT 1 FROM learning_checkpoints WHERE project_id=? LIMIT 1").get(projectId);
       const operation = db.query("SELECT 1 FROM artifact_operations WHERE project_id=? AND status IN ('pending','working','recovering') LIMIT 1").get(projectId);
       const exporting = db.query("SELECT 1 FROM exports e JOIN export_attempts a ON a.job_id=e.id WHERE e.project_id=? AND a.status IN ('pending','running','validating','retrying','recovering') LIMIT 1").get(projectId);
-      if (referenced || operation || exporting || isArtifactProjectBusy(db, projectId) || isProjectSignalPending(projectId) || sessions.some((s) => s.status === "running" || s.status === "awaiting_tool" || isUserTurnRunning(s.id) || isDirectionOperationActive(s.id))) throw new ProjectDeletionError("project_in_use");
+      if (referenced || operation || exporting || isArtifactProjectBusy(db, projectId) || isProjectSignalPending(projectId) || sessions.some((s) => s.status === "running" || s.status === "awaiting_tool" || isUserTurnRunning(s.id) || isSessionHeldForRecovery(s.id) || isDirectionOperationActive(s.id))) throw new ProjectDeletionError("project_in_use");
       try { original = resolveManagedPath(root, project.dir_path); }
       catch (error) {
         // A legacy row outside managed storage may be removed, never its files.

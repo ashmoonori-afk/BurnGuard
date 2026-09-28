@@ -7,6 +7,7 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { persistNormalizedEvent } from "../src/db/events";
 import { projectsDir } from "../src/lib/paths";
 import { settingsRoutes } from "../src/routes/settings";
+import { deleteProject } from "../src/services/project-deletion";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import {
   buildRuntimeBackendDiagnostics,
@@ -224,6 +225,29 @@ test("Given a recovery hold When turns are admitted Then the held session is bus
   const reservation = reserveUserTurn(held);
   expect(reservation).not.toBeNull();
   if (reservation !== null) releaseUserTurnReservation(reservation);
+});
+
+test("Given a project held for recovery When deletion is requested Then the project is in use and its files remain", async () => {
+  const fixture = await managedProject();
+  const release = holdSessionsForRecovery([fixture.sessionId]);
+  if (release === null) throw new Error("Fixture recovery hold failed");
+  try {
+    await expect(deleteProject(db, fixture.projectId)).rejects.toMatchObject({ code: "project_in_use" });
+  } finally {
+    release();
+  }
+  expect(await readFile(path.join(fixture.root, "index.html"), "utf8")).toBe("saved-after-failure");
+});
+
+test("Given two failures with equal timestamps When failures are listed with a limit Then the selection is deterministic", () => {
+  const first = insertProjectSession("codex");
+  const second = insertProjectSession("codex");
+  failTurn(first.sessionId, "turn-tie-a", 9_000_000_000_000);
+  failTurn(second.sessionId, "turn-tie-b", 9_000_000_000_000);
+
+  const picked = listRecentRuntimeFailures(db, 1).map((failure) => failure.session_id);
+
+  expect(picked).toEqual([[first.sessionId, second.sessionId].sort()[0]]);
 });
 
 test("Given an active artifact operation When resume is requested Then it is refused without restoring the baseline", async () => {

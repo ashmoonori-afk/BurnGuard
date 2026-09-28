@@ -31,16 +31,21 @@ export function listRecentRuntimeFailures(
   db: Database,
   limit: number,
 ): readonly RuntimeFailureDiagnostic[] {
-  // Every project's latest session is a candidate; the limit applies only after global failure ordering.
-  const sessions = db.query<RuntimeSessionRow, []>(`SELECT s.id,p.id project_id,p.name project_name,s.backend_id,s.status
-    FROM projects p JOIN sessions s ON s.id=(SELECT id FROM sessions WHERE project_id=p.id ORDER BY ${LATEST_SESSION_ORDER} LIMIT 1)`).all();
+  // SQL orders every project's latest session by its newest failure event and applies the limit,
+  // so only bounded candidates are parsed; ties break deterministically on the session id.
+  const sessions = db.query<RuntimeSessionRow, [number]>(`SELECT id,project_id,project_name,backend_id,status FROM (
+      SELECT s.id,p.id project_id,p.name project_name,s.backend_id,s.status,
+        (SELECT MAX(json_extract(e.payload_json,'$.ts')) FROM events e
+          WHERE e.session_id=s.id AND e.direction='down'
+            AND (e.type='status.error' OR (e.type='status.idle' AND json_extract(e.payload_json,'$.stopReason')='interrupted'))) failed_at
+      FROM projects p JOIN sessions s ON s.id=(SELECT id FROM sessions WHERE project_id=p.id ORDER BY ${LATEST_SESSION_ORDER} LIMIT 1)
+    ) WHERE failed_at IS NOT NULL ORDER BY failed_at DESC,id ASC LIMIT ?`).all(limit);
   return sessions
     .flatMap((session) => {
       const failure = runtimeFailureForSession(db, session);
       return failure === null ? [] : [failure];
     })
-    .sort((left, right) => right.failed_at - left.failed_at)
-    .slice(0, limit);
+    .sort((left, right) => right.failed_at - left.failed_at || left.session_id.localeCompare(right.session_id));
 }
 
 export function runtimeFailureForSession(
