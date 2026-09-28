@@ -9,10 +9,8 @@ import { gridTrackCount, type SourceEvidence } from "./extraction-evidence";
 export function buildSectionPatternReadme(evidence: SourceEvidence): string {
   const line = (name: string, facts: string | null, defaults: string) => facts ? `- ${name} (observed): ${facts}. Default details: ${defaults}` : `- ${name} (default): ${defaults}`;
   const hero = evidence.hero;
-  const heroFacts = hero === null ? null : hero.media ? "an h1 headline with media in the opening region" : "a text-only h1 opening without media";
-  const heroDefaults = hero && !hero.media
-    ? "a text-led opening: headline, supporting line and one action pair across 7-8 columns without a media block."
-    : "headline and supporting line on 6-7 columns with one action pair, media on the remaining columns at --layout-hero; stack below --layout-bp-md.";
+  const heroFacts = hero === null ? null : hero.media ? "an h1 headline with media in the opening region" : "an h1 headline in the opening region";
+  const heroDefaults = "headline and supporting line on 6-7 columns with one action pair, media on the remaining columns at --layout-hero; stack below --layout-bp-md.";
   const lines = [
     line("Navigation", null, "the logo lockup at the start of the bar, primary links next to it and one action at the end; the bar stays within --layout-max."),
     line("Hero", heroFacts, heroDefaults),
@@ -93,7 +91,7 @@ export function measureSourceLayout(declarations: readonly CssDeclarationEvidenc
     ...values(["padding-top", "padding-bottom", "padding-block-start", "padding-block-end"]).map(px),
   ].filter((value): value is number => value !== null && value >= 48 && value <= 200);
   const rhythm = mode(vertical);
-  if (rhythm !== null) tokens["--layout-section-y"] = `clamp(${Math.round(rhythm * 0.6)}px, 8vw, ${rhythm}px)`;
+  if (rhythm !== null) tokens["--layout-section-y"] = `${rhythm}px`;
 
   // One sample per declaration, so a breakpoint that wraps more rules weighs more.
   // Viewport conditions live only in @media; @supports and @container conditions are not breakpoints.

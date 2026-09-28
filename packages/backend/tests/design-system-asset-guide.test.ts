@@ -114,7 +114,7 @@ describe("Source layout measurement", () => {
       "--layout-max": "1140px",
       "--layout-columns": "12",
       "--layout-gutter": "32px",
-      "--layout-section-y": "clamp(58px, 8vw, 96px)",
+      "--layout-section-y": "96px",
       "--layout-bp-md": "768px",
       "--layout-bp-lg": "1200px",
       "--layout-spacing-scale": "8px 16px 24px 48px 96px",
@@ -222,6 +222,8 @@ describe("Canonical extraction writes layout and asset guidance", () => {
       const provenance = JSON.parse(await readFile(path.join(root, "extraction-provenance.json"), "utf8"));
       const layoutKeys = provenance.content.entries.filter((entry: { domain: string }) => entry.domain === "layout" || entry.domain === "breakpoint").map((entry: { key: string }) => entry.key);
       expect(layoutKeys).toEqual(expect.arrayContaining(["layout-max", "layout-bp-md"]));
+      const rhythm = provenance.content.entries.find((entry: { key: string }) => entry.key === "layout-section-y");
+      expect({ state: rhythm.state, value: rhythm.candidates[0].value }).toEqual({ state: "observed", value: "96px" });
     } finally {
       getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(id);
       await rm(path.join(systemsDir, id), { recursive: true, force: true });
@@ -259,7 +261,9 @@ describe("Source evidence drives section patterns and asset style", () => {
   test("Given hero markup, then only headline and media presence are observed and arrangement is never claimed", () => {
     const hero = (markup: string) => collectSourceEvidence([markup], []).hero;
     expect(hero('<section class="hero"><div style="display:flex;flex-flow:column nowrap"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')).toEqual({ media: true });
-    expect(hero('<section class="hero"><h1>T</h1><p>L</p></section>')).toEqual({ media: false });
+    expect(hero('<section class="hero"><h1>T</h1><p>L</p></section>')).toEqual({ media: null });
+    expect(hero('<section class="hero"><header><h1>Brand</h1></header><img src="team.jpg"></section>')).toEqual({ media: true });
+    expect(hero('<section class="hero"><header><h1>Brand</h1></header><svg viewBox="0 0 10 10"><path d="M0 0"/></svg></section>')).toEqual({ media: null });
     expect(hero('<main><p>No headline</p></main>')).toBeNull();
     for (const wrapper of ["hero-content", "hero__copy"]) expect(hero(`<section class="hero"><div class="${wrapper}"><h1>Brand</h1></div><img src="team.jpg"></section>`)).toEqual({ media: true });
     expect(hero('<body><div><h1>Loose</h1></div><img src="x.jpg"></body>')).toBeNull();

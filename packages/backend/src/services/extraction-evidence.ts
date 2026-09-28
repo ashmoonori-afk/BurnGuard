@@ -2,8 +2,8 @@ import { HTMLElement, parse } from "node-html-parser";
 import type { CssDeclarationEvidence } from "./extraction-css";
 
 export type SourceEvidence = {
-  /** Null when the source has no h1. Arrangement is never inferred: it depends on the cascade. */
-  readonly hero: { readonly media: boolean } | null;
+  /** Null without an h1 in a region. Media is true when seen and null otherwise; arrangement is never inferred. */
+  readonly hero: { readonly media: true | null } | null;
   readonly featureColumns: number | null;
   readonly proofStrip: boolean;
   readonly pricing: boolean;
@@ -95,14 +95,16 @@ export function gridTrackCount(value: string): number | null {
 function heroOf(root: HTMLElement): SourceEvidence["hero"] {
   const heading = root.querySelector("h1");
   if (!heading) return null;
-  // The opening region is the nearest section/header or an element whose class token is exactly a hero
-  // name; wrappers such as hero-content never end the search. Without such a region nothing is claimed.
-  for (let region: HTMLElement | null = heading.parentNode as HTMLElement | null; region?.tagName; region = region.parentNode as HTMLElement | null) {
-    const tag = region.tagName.toLowerCase();
-    if (tag === "main" || tag === "body") return null;
-    if (tag === "section" || tag === "header" || /(?:^|\s)(?:hero|banner|masthead|jumbotron)(?=\s|$)/.test(classOf(region))) return { media: region.querySelector("img, picture, video") !== null };
+  // The outermost section, header or exact hero-class ancestor below main/body is the opening region.
+  let region: HTMLElement | null = null;
+  for (let current: HTMLElement | null = heading.parentNode as HTMLElement | null; current?.tagName; current = current.parentNode as HTMLElement | null) {
+    const tag = current.tagName.toLowerCase();
+    if (tag === "main" || tag === "body") break;
+    if (tag === "section" || tag === "header" || /(?:^|\s)(?:hero|banner|masthead|jumbotron)(?=\s|$)/.test(classOf(current))) region = current;
   }
-  return null;
+  if (!region) return null;
+  // Only media presence is observed; absence could be CSS backgrounds or markup the extractor does not read.
+  return { media: region.querySelector("img, picture, video") !== null ? true : null };
 }
 
 /**
