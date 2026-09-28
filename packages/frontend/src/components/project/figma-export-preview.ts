@@ -1,4 +1,8 @@
-import type { FigmaImportNodeSummary, FigmaImportNodeType } from "@bg/shared/figma-import";
+import {
+  FIGMA_IMPORT_LIMITS,
+  type FigmaImportNodeSummary,
+  type FigmaImportNodeType,
+} from "@bg/shared/figma-import";
 
 export type FigmaExportPreview = {
   readonly name: string;
@@ -15,17 +19,46 @@ export class FigmaExportPreviewError extends Error {
   }
 }
 
+export async function readFigmaExportPreview(
+  file: Pick<File, "size" | "text">,
+): Promise<FigmaExportPreview> {
+  if (file.size > FIGMA_IMPORT_LIMITS.documentBytes) fail();
+  try {
+    return parseFigmaExportPreview(JSON.parse(await file.text()));
+  } catch (error) {
+    if (error instanceof FigmaExportPreviewError) throw error;
+    if (error instanceof SyntaxError) fail();
+    throw error;
+  }
+}
+
+export function validateFigmaExportAssets(
+  files: readonly Pick<File, "size">[],
+): void {
+  if (files.length > FIGMA_IMPORT_LIMITS.assets) fail();
+  let bytes = 0;
+  for (const file of files) {
+    bytes += file.size;
+    if (bytes > FIGMA_IMPORT_LIMITS.assetBytes) fail();
+  }
+}
+
 export function parseFigmaExportPreview(value: unknown): FigmaExportPreview {
   if (!record(value) || !text(value["name"]) || !text(value["version"]) || !text(value["lastModified"])) fail();
   const nodes: FigmaImportNodeSummary[] = [];
+  const counter = { value: 0 };
   if (record(value["document"])) {
     for (const pageValue of array(value["document"].children)) {
       if (!record(pageValue) || pageValue.type !== "CANVAS" || !text(pageValue.name)) continue;
-      for (const nodeValue of array(pageValue.children)) addNode(nodes, nodeValue, pageValue.name);
+      for (const nodeValue of array(pageValue.children)) {
+        visitNode(nodes, nodeValue, pageValue.name, 1, counter);
+      }
     }
   } else if (record(value["nodes"])) {
     for (const wrapper of Object.values(value["nodes"])) {
-      if (record(wrapper)) addNode(nodes, wrapper.document, "Selected nodes");
+      if (record(wrapper)) {
+        visitNode(nodes, wrapper.document, "Selected nodes", 1, counter);
+      }
     }
   } else {
     fail();
@@ -39,17 +72,41 @@ export function parseFigmaExportPreview(value: unknown): FigmaExportPreview {
   };
 }
 
-function addNode(nodes: FigmaImportNodeSummary[], value: unknown, pageName: string): void {
-  if (!record(value) || !nodeId(value.id) || !text(value.name) || !importable(value.type)) return;
-  nodes.push({ node_id: value.id, name: value.name, node_type: value.type, page_name: pageName });
+function visitNode(
+  nodes: FigmaImportNodeSummary[],
+  value: unknown,
+  pageName: string,
+  depth: number,
+  counter: { value: number },
+): void {
+  if (depth > FIGMA_IMPORT_LIMITS.depth || !record(value)) fail();
+  counter.value += 1;
+  if (counter.value > FIGMA_IMPORT_LIMITS.nodes) fail();
+  if (!nodeId(value.id) || !text(value.name) || !text(value.type)) fail();
+  if (importable(value.type)) {
+    nodes.push({
+      node_id: value.id,
+      name: value.name,
+      node_type: value.type,
+      page_name: pageName,
+    });
+  }
+  for (const child of array(value.children)) {
+    visitNode(nodes, child, pageName, depth + 1, counter);
+  }
 }
 
 function importable(value: unknown): value is FigmaImportNodeType {
-  return value === "FRAME" || value === "COMPONENT" || value === "COMPONENT_SET";
+  return value === "FRAME" ||
+    value === "COMPONENT" ||
+    value === "COMPONENT_SET" ||
+    value === "INSTANCE";
 }
 
 function nodeId(value: unknown): value is string {
-  return typeof value === "string" && /^[A-Za-z0-9_-]+:[A-Za-z0-9_:;-]+$/u.test(value);
+  return text(value) &&
+    value.length <= FIGMA_IMPORT_LIMITS.idChars &&
+    /^[A-Za-z0-9_-]+:[A-Za-z0-9_:;-]+$/u.test(value);
 }
 
 function array(value: unknown): readonly unknown[] {
@@ -57,7 +114,10 @@ function array(value: unknown): readonly unknown[] {
 }
 
 function text(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0;
+  return typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= FIGMA_IMPORT_LIMITS.stringChars &&
+    !/[\r\n\0]/u.test(value);
 }
 
 function record(value: unknown): value is Readonly<Record<string, unknown>> {

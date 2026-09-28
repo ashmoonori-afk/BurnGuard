@@ -1258,6 +1258,8 @@ export default function ProjectView() {
         chatCollapsed={chatCollapsed}
         onToggleChat={() => setChatCollapsed((value) => !value)}
         project={project}
+        artifactRevision={artifacts.current_revision}
+        artifactDigest={artifacts.current_digest}
         onFigmaImported={async () => {
           await Promise.all([
             queryClient.invalidateQueries({ queryKey: ["project", id, "files"] }),

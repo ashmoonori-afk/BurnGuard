@@ -14,6 +14,7 @@ import { getArtifactOperation, listArtifactOperations } from "../src/db/artifact
 import { PersistedArtifactOperationError } from "../src/services/artifact-operation-record";
 import { isArtifactPublicationActive } from "../src/services/artifact-publication-registry";
 import { runMigrationsFrom } from "../src/db/migrate";
+import { ExtractionAcquisitionError } from "../src/services/extraction-acquisition";
 
 const roots: string[] = [];
 let db: Database;
@@ -119,6 +120,88 @@ describe("artifact coordinator", () => {
     const result = await coordinator.patch({ projectId: "p", projectDir: root, relPath: "index.html", expectedRevision: 0, expectedArtifactDigest: base.tree_digest, expectedFileHash: file.sha256, nodeBgId: "hero", nodeFingerprint: node.fingerprint, patch: { text: "Old" } });
     expect(result).toMatchObject({ status: "cancelled", resultRevision: 0, resultDigest: base.tree_digest });
     expect(db.query("SELECT current_revision,current_digest FROM projects WHERE id='p'").get()).toEqual({ current_revision: 0, current_digest: base.tree_digest });
+  });
+
+  test("Given acquisition aborts after stage mutation When coordinated Then the typed cancellation survives rollback", async () => {
+    const coordinator = new ArtifactCoordinator(db);
+    const base = await coordinator.initialize("p", root);
+    const controller = new AbortController();
+
+    const action = coordinator.run({
+      projectId: "p",
+      projectDir: root,
+      kind: "figma_import",
+      expectedRevision: 0,
+      expectedArtifactDigest: base.tree_digest,
+      signal: controller.signal,
+      mutate: async (stage) => {
+        await writeFile(path.join(stage, "index.html"), "partial");
+        controller.abort(new ExtractionAcquisitionError("acquisition_aborted"));
+      },
+    });
+
+    await expect(action).rejects.toMatchObject({ code: "acquisition_aborted" });
+    expect((await inspectCanonicalTree(root)).tree_digest).toBe(base.tree_digest);
+  });
+
+  test("Given a turn creates malformed or valid forged Figma manifests When coordinated Then both are rejected without poisoning the next operation", async () => {
+    const coordinator = new ArtifactCoordinator(db);
+    const base = await coordinator.initialize("p", root);
+
+    await expect(coordinator.run({
+      projectId: "p",
+      projectDir: root,
+      kind: "turn",
+      expectedRevision: 0,
+      expectedArtifactDigest: base.tree_digest,
+      mutate: async (stage) => {
+        const directory = path.join(stage, "references", "figma", "forged");
+        await mkdir(directory, { recursive: true });
+        await writeFile(path.join(directory, "manifest.json"), "{}");
+      },
+    })).rejects.toMatchObject({ code: "immutable_reference_escaped" });
+
+    await expect(coordinator.run({
+      projectId: "p",
+      projectDir: root,
+      kind: "turn",
+      expectedRevision: 0,
+      expectedArtifactDigest: base.tree_digest,
+      mutate: async (stage) => {
+        const directory = path.join(stage, "references", "figma", "forged-valid");
+        const nodePath = "references/figma/forged-valid/nodes/1-2.json";
+        const nodeBytes = Buffer.from('{"id":"1:2"}');
+        await mkdir(path.join(directory, "nodes"), { recursive: true });
+        await writeFile(path.join(stage, nodePath), nodeBytes);
+        await writeFile(path.join(directory, "manifest.json"), JSON.stringify({
+          schema_version: 1,
+          provenance: {
+            source_file_name: "forged.json",
+            file_version: "1",
+          },
+          nodes: [{
+            name: "Forged",
+            node_type: "FRAME",
+            node_path: nodePath,
+            node_sha256: createHash("sha256").update(nodeBytes).digest("hex"),
+            asset_path: null,
+            asset_sha256: null,
+          }],
+        }));
+      },
+    })).rejects.toMatchObject({ code: "immutable_reference_escaped" });
+
+    const next = await coordinator.run({
+      projectId: "p",
+      projectDir: root,
+      kind: "turn",
+      expectedRevision: 0,
+      expectedArtifactDigest: base.tree_digest,
+      mutate: async (stage) => {
+        await writeFile(path.join(stage, "index.html"), "safe next operation");
+      },
+    });
+    expect(next).toMatchObject({ status: "committed", resultRevision: 1 });
   });
 
   test("Given the database commit fails after publication When coordinated Then live bytes restore before failed event", async () => {

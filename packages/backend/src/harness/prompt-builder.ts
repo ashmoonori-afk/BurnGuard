@@ -39,6 +39,7 @@ import { appendVisualSourceContext } from "./prompt-visual-sources";
 import { summarizeDeckHtml } from "./structure-extractor";
 import { appendPrototypeSiteContext } from "./prompt-site-context";
 import { appendImageProduction } from "./prompt-image-production";
+import { appendFigmaReferenceContext } from "./prompt-figma-references";
 
 export { MAX_SKILL_CHARS } from "./prompt-design-system";
 
@@ -215,6 +216,7 @@ export async function buildPrompt(
     projectDir: context.project.project_dir,
     stageInputs: options.stageAttachmentInputs,
   });
+  await appendFigmaReferenceContext(lines, project.project_dir);
 
   let structureSummary: string | null = null;
   if (project.entrypoint.toLowerCase().endsWith(".html") && project.project_type === "prototype") {

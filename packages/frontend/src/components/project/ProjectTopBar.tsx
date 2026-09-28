@@ -22,6 +22,8 @@ export default function ProjectTopBar({
   chatCollapsed,
   onToggleChat,
   onFigmaImported,
+  artifactRevision,
+  artifactDigest,
 }: {
   project: ProjectDetail;
   tabsSlot?: ReactNode;
@@ -33,6 +35,8 @@ export default function ProjectTopBar({
   chatCollapsed?: boolean;
   onToggleChat?: () => void;
   onFigmaImported: () => Promise<void>;
+  artifactRevision: number;
+  artifactDigest: string;
 }) {
   const t = useT();
   const [figmaImportOpen, setFigmaImportOpen] = useState(false);
@@ -85,7 +89,14 @@ export default function ProjectTopBar({
       </div>
       </div>
       {tabsSlot && <div className="h-10 min-w-0 overflow-hidden border-t border-border bg-muted/20 max-[900px]:h-11">{tabsSlot}</div>}
-      <FigmaImportDialog projectId={project.id} open={figmaImportOpen} onOpenChange={setFigmaImportOpen} onImported={onFigmaImported} />
+      <FigmaImportDialog
+        projectId={project.id}
+        artifactRevision={artifactRevision}
+        artifactDigest={artifactDigest}
+        open={figmaImportOpen}
+        onOpenChange={setFigmaImportOpen}
+        onImported={onFigmaImported}
+      />
     </header>
   );
 }

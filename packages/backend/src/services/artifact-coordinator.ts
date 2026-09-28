@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
 import { applyHtmlNodePatch, fingerprintHtmlNode, type PatchHtmlNodeInput } from "./file-patch";
@@ -13,8 +13,19 @@ import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } f
 import { pruneExpiredArtifactOperations } from "./artifact-retention";
 import { acquireArtifactProjectLock } from "./artifact-project-lock";
 import { isArtifactMutationBlockedByAlternatives } from "./visual-alternative-operation-registry";
+import {
+  allowedFigmaReferencePaths,
+  assertFigmaManifestChangesAllowed,
+  assertFigmaReferencesPreserved,
+  loadFigmaReferencePolicy,
+  type FigmaReferencePolicy,
+} from "./figma-reference-policy";
+import {
+  ExtractionAcquisitionError,
+  throwIfAcquisitionAborted,
+} from "./extraction-acquisition";
 
-type OperationKind = "patch" | "palette" | "turn" | "restore" | "undo" | "external" | "initialize";
+type OperationKind = "patch" | "palette" | "turn" | "restore" | "undo" | "external" | "initialize" | "figma_import";
 type CoordinatorFaults = {
   readonly beforeSnapshot?: () => void;
   readonly beforePublishRead?: (relativePath: string) => void | Promise<void>;
@@ -39,6 +50,7 @@ type RunOperation = {
   readonly expectedFileHash?: string;
   readonly nodeFingerprint?: string;
   readonly publicationPolicy?: PublicationPolicy;
+  readonly signal?: AbortSignal;
 };
 type PatchOperation = {
   readonly projectId: string;
@@ -126,6 +138,7 @@ export class ArtifactCoordinator {
     const snapshotPath = path.join(ownedRoot, "snapshot");
     const stagePath = path.join(ownedRoot, "stage");
     let base: CanonicalTreeManifest;
+    let figmaReferences: FigmaReferencePolicy = { files: [], promptEntries: [] };
     // Admission (base validation through registration) is serialized with external observation and
     // adoption, so an operation is either registered before they look or validates against their result.
     const releaseAdmission = await acquireArtifactProjectLock(this.db, input.projectId);
@@ -134,7 +147,9 @@ export class ArtifactCoordinator {
         throw new ArtifactOperationError("operation_conflict", "Visual alternatives are being generated for this project");
       }
       await pruneExpiredArtifactOperations(this.db, { projectId: input.projectId, preserveOperationId: input.parentOperationId });
+      throwIfAcquisitionAborted(input.signal);
       base = await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
+      figmaReferences = await loadFigmaReferencePolicy(input.projectDir, base, input.signal);
       this.faults.beforeSnapshot?.();
       try {
         await materializeManagedTree(input.projectDir, snapshotPath);
@@ -154,8 +169,21 @@ export class ArtifactCoordinator {
     let diff: readonly ArtifactFileDiff[];
     const resultRevision = input.expectedRevision + 1;
     try {
+      throwIfAcquisitionAborted(input.signal);
       await input.mutate(stagePath);
+      throwIfAcquisitionAborted(input.signal);
+      await assertFigmaReferencesPreserved(stagePath, figmaReferences, input.signal);
       result = await inspectCanonicalTree(stagePath);
+      const stagedFigmaReferences = await loadFigmaReferencePolicy(
+        stagePath,
+        result,
+        input.signal,
+      );
+      assertFigmaManifestChangesAllowed(
+        figmaReferences,
+        stagedFigmaReferences,
+        input.kind === "figma_import",
+      );
       diff = diffManagedTrees(base, result);
       if (diff.length === 0) {
         this.terminal(id, "cancelled", input.expectedRevision, base.tree_digest);
@@ -166,10 +194,24 @@ export class ArtifactCoordinator {
       this.prepareResult(id, resultRevision, result, diff);
       beginArtifactPublication(input.projectId);
       publicationStarted = true;
-      await publishManagedTree(stagePath, input.projectDir, this.faults.afterPublishWrite, {
+      const immutableReferencePaths = mergeImmutableReferencePaths(
+        allowedFigmaReferencePaths(figmaReferences),
+        input.publicationPolicy?.immutableReferencePaths,
+      );
+      await publishManagedTree(stagePath, input.projectDir, (relativePath) => {
+        throwIfAcquisitionAborted(input.signal);
+        this.faults.afterPublishWrite?.(relativePath);
+      }, {
         ...input.publicationPolicy,
-        beforeSourceOpen: this.faults.beforePublishRead,
-        beforeSourceRead: this.faults.beforePublishSourceRead,
+        immutableReferencePaths,
+        beforeSourceOpen: async (relativePath) => {
+          throwIfAcquisitionAborted(input.signal);
+          await this.faults.beforePublishRead?.(relativePath);
+        },
+        beforeSourceRead: async (relativePath) => {
+          throwIfAcquisitionAborted(input.signal);
+          await this.faults.beforePublishSourceRead?.(relativePath);
+        },
       });
       await validateCanonicalTree(input.projectDir, result);
       this.faults.beforeDatabaseCommit?.();
@@ -194,6 +236,7 @@ export class ArtifactCoordinator {
       publishArtifactOperationEvent(this.db, { projectId: input.projectId, operationId: id, revision: input.expectedRevision, digest: base.tree_digest, outcome: "failed", diff: [] });
       if (securityFailure) throw new ArtifactOperationError("immutable_reference_escaped", "immutable_reference_escaped");
       if (error instanceof ArtifactOperationError) throw error;
+      if (error instanceof ExtractionAcquisitionError) throw error;
       throw new ArtifactOperationError("operation_failed", error instanceof Error ? error.message : "Artifact operation failed");
     }
     try { this.faults.beforeBaselineFinalize?.(); await materializeManagedTree(stagePath, this.baselinePath(input.projectDir)); }
@@ -263,6 +306,7 @@ export class ArtifactCoordinator {
     const baselinePath = this.baselinePath(projectDir);
     const base = await inspectCanonicalTree(baselinePath);
     if (base.tree_digest !== stableIdentity.digest) throw new ArtifactOperationError("recovery_unavailable", "Stable baseline does not match the database");
+    const figmaReferences = await loadFigmaReferencePolicy(baselinePath, base);
     const active = this.db.query<{ readonly id: string }, [string]>("SELECT id FROM artifact_operations WHERE project_id=? AND status IN ('pending','working','recovering') LIMIT 1").get(projectId);
     if (active !== null) {
       if (onActive === "refuse") throw new ArtifactOperationError("operation_conflict", "An artifact operation is active");
@@ -279,6 +323,31 @@ export class ArtifactCoordinator {
     this.faults.afterExternalCapture?.();
     const current = await inspectCanonicalTree(projectDir);
     if (captured.tree_digest !== current.tree_digest) return null;
+    try {
+      await assertFigmaReferencesPreserved(stagePath, figmaReferences);
+      const stagedFigmaReferences = await loadFigmaReferencePolicy(
+        stagePath,
+        captured,
+      );
+      assertFigmaManifestChangesAllowed(
+        figmaReferences,
+        stagedFigmaReferences,
+        false,
+      );
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "immutable_reference_escaped"
+      ) {
+        await publishManagedTree(snapshotPath, projectDir);
+        throw new ArtifactOperationError(
+          "immutable_reference_escaped",
+          "immutable_reference_escaped",
+        );
+      }
+      throw error;
+    }
     const runInput = { projectId, projectDir, kind: "external" as const, expectedRevision: stableIdentity.revision, expectedArtifactDigest: stableIdentity.digest, mutate: async () => {} };
     this.insertWorking(id, runInput, base, snapshotPath, stagePath);
     registered = true;
@@ -371,4 +440,20 @@ export class ArtifactCoordinator {
 
   private operationPath(projectDir: string, id: string): string { return path.join(projectDir, ".meta", "artifact-operations", id); }
   private baselinePath(projectDir: string): string { return path.join(projectDir, ".meta", "artifact-baseline", "current"); }
+}
+
+function mergeImmutableReferencePaths(
+  first: ReadonlyMap<string, ReadonlySet<string>>,
+  second: ReadonlyMap<string, ReadonlySet<string>> | undefined,
+): ReadonlyMap<string, ReadonlySet<string>> {
+  if (second === undefined || second.size === 0) return first;
+  const output = new Map<string, Set<string>>();
+  for (const source of [first, second]) {
+    for (const [digest, paths] of source) {
+      const existing = output.get(digest);
+      if (existing === undefined) output.set(digest, new Set(paths));
+      else for (const filePath of paths) existing.add(filePath);
+    }
+  }
+  return output;
 }

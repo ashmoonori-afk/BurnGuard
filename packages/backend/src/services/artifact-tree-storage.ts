@@ -18,6 +18,7 @@ export type ArtifactFileDiff = {
 
 export type PublicationPolicy = {
   readonly forbiddenSha256?: ReadonlySet<string>;
+  readonly immutableReferencePaths?: ReadonlyMap<string, ReadonlySet<string>>;
   readonly beforeSourceOpen?: (relativePath: string) => void | Promise<void>;
   readonly beforeSourceRead?: (relativePath: string) => void | Promise<void>;
 };
@@ -127,7 +128,11 @@ async function openPublicationSources(
       const current = await verifySourcePath(source, file.path);
       if (after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.nlink !== 1 || current.dev !== before.dev || current.ino !== before.ino || current.nlink !== 1 || bytes.byteLength !== file.size) throw new Error("Publication source identity changed");
       const digest = createHash("sha256").update(bytes).digest("hex");
-      if (policy.forbiddenSha256?.has(digest)) throw new ArtifactPublicationPolicyError();
+      const immutablePaths = policy.immutableReferencePaths?.get(digest);
+      if (
+        policy.forbiddenSha256?.has(digest) ||
+        (immutablePaths !== undefined && !immutablePaths.has(file.path))
+      ) throw new ArtifactPublicationPolicyError();
       if (digest !== file.sha256) throw new Error("Publication source identity changed");
       opened[opened.length - 1] = { file, handle, bytes };
     }
