@@ -23,20 +23,25 @@ test("Given page coverage When the panel renders in every locale Then every page
     const original = snapshot.locale;
     Object.assign(snapshot, { locale });
     try {
-      const cells: string[] = [];
-      let listText = "";
+      const rows: { path: string; type: string; status: string; collapsed: boolean }[] = [];
+      let differenceText = "";
       const html = renderToStaticMarkup(createElement(DesignSystemPagesPanel, { pages: coverage }));
+      let collapsed = false;
       await new HTMLRewriter()
-        .on("td", { element() { cells.push(""); }, text(chunk) { cells[cells.length - 1] += chunk.text; } })
-        .on("li", { text(chunk) { listText += chunk.text; } })
+        .on("details", { element(element) { collapsed = true; element.onEndTag(() => { collapsed = false; }); } })
+        .on("li[data-page-path]", { element(element) { rows.push({ path: element.getAttribute("data-page-path") ?? "", type: "", status: "", collapsed }); } })
+        .on("li[data-page-path] [data-field=type]", { text(chunk) { rows[rows.length - 1]!.type += chunk.text; } })
+        .on("li[data-page-path] [data-field=status]", { text(chunk) { rows[rows.length - 1]!.status += chunk.text; } })
+        .on("li[data-difference]", { text(chunk) { differenceText += chunk.text; } })
         .transform(new Response(html)).text();
       const message = (key: keyof typeof systemMessages) => formatMessage(systemMessages[key][locale], locale);
-      expect(cells).toEqual([
-        "/", message("system.pages.type.home"), message("system.pages.extracted"), "hero-sentinel",
-        "/private", message("system.pages.type.other"), message("system.pages.reason.robots"), "",
-        "/about", message("system.pages.type.about"), message("system.pages.reason.cap"), "",
+      expect(rows).toEqual([
+        { path: "/", type: message("system.pages.type.home"), status: message("system.pages.extracted"), collapsed: false },
+        { path: "/private", type: message("system.pages.type.other"), status: message("system.pages.reason.robots"), collapsed: true },
+        { path: "/about", type: message("system.pages.type.about"), status: message("system.pages.reason.cap"), collapsed: true },
       ]);
-      expect(listText).toContain("960px");
+      expect(html).toContain("hero-sentinel");
+      expect(differenceText).toContain("960px");
     } finally {
       Object.assign(snapshot, { locale: original });
     }

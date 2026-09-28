@@ -33,6 +33,13 @@ describe("Page discovery primitives", () => {
     expect(result.skipped).toEqual([{ path: "/private/x", source: "nav", reason: "robots" }, { path: "/contact", source: "sitemap", reason: "cap" }, { path: "/careers", source: "link", reason: "cap" }]);
   });
 
+  test("Given many sibling links before other page kinds, then the limit is spent on distinct page types and sections first", () => {
+    const html = `<nav>${["a", "b", "c", "d", "e", "f"].map(slug => `<a href="/browse/${slug}">${slug}</a>`).join("")}</nav><footer><a href="/help">Help</a><a href="/contact">Contact</a><a href="/news">News</a></footer>`;
+    const result = discoverPages({ base: new URL("https://e.com/"), homepageHtml: html, sitemapUrls: [], robots: parseRobots(""), limit: 4 });
+    expect(result.selected.map(candidate => candidate.path)).toEqual(["/", "/browse/a", "/help", "/contact"]);
+    expect(result.skipped.map(candidate => [candidate.path, candidate.reason])).toEqual(["b", "c", "d", "e", "f"].map(slug => [`/browse/${slug}`, "cap"]).concat([["/news", "cap"]]));
+  });
+
   test("Given paths and headings, then page types follow the path first and the heading second", () => {
     expect(["/", "/pricing", "/docs/getting-started", "/blog/post-1", "/features", "/company/team", "/contact-sales", "/x"].map(p => classifyPageType(p, ""))).toEqual(["home", "pricing", "docs", "blog", "product", "about", "contact", "other"]);
     expect(classifyPageType("/x", "<title>Plans and pricing</title>")).toBe("pricing");

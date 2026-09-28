@@ -92,13 +92,28 @@ export function discoverPages(input: {
   for (const href of anchors(root.querySelectorAll("footer"))) push(href, "footer");
   for (const href of input.sitemapUrls) push(href, "sitemap");
   for (const href of anchors([root])) push(href, "link");
-  const selected: PageCandidate[] = [];
   const skipped: (PageCandidate & { reason: "robots" | "cap" })[] = [];
-  for (const candidate of ordered) {
-    if (candidate.source !== "entry" && !input.robots.allows(candidate.path)) skipped.push({ ...candidate, reason: "robots" });
-    else if (selected.length >= input.limit) skipped.push({ ...candidate, reason: "cap" });
-    else selected.push(candidate);
-  }
+  const allowed = ordered.filter(candidate => {
+    if (candidate.source === "entry" || input.robots.allows(candidate.path)) return true;
+    skipped.push({ ...candidate, reason: "robots" });
+    return false;
+  });
+  // Spend the limit on variety first: one page per new page type, then one per new top-level section,
+  // then the rest in priority order, so a long run of sibling links cannot crowd out other page kinds.
+  const chosen = new Set<string>();
+  const types = new Set<DesignSystemPageType>();
+  const sections = new Set<string>();
+  const section = (path: string) => path.split("/")[1] ?? "";
+  const take = (candidate: PageCandidate) => { chosen.add(candidate.path); types.add(classifyPageType(candidate.path, "")); sections.add(section(candidate.path)); };
+  const passes: ((candidate: PageCandidate) => boolean)[] = [
+    candidate => candidate.source === "entry",
+    candidate => !types.has(classifyPageType(candidate.path, "")),
+    candidate => !sections.has(section(candidate.path)),
+    () => true,
+  ];
+  for (const pass of passes) for (const candidate of allowed) if (chosen.size < input.limit && !chosen.has(candidate.path) && pass(candidate)) take(candidate);
+  const selected = allowed.filter(candidate => chosen.has(candidate.path));
+  for (const candidate of allowed) if (!chosen.has(candidate.path)) skipped.push({ ...candidate, reason: "cap" });
   return { selected, skipped, discovered: ordered.length };
 }
 

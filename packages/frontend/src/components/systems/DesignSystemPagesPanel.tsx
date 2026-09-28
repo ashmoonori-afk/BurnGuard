@@ -17,23 +17,23 @@ export function DesignSystemPagesPanel({ pages }: DesignSystemPagesPanelProps) {
   const t = useT();
   if (!pages) return null;
   const extracted = pages.pages.filter(page => page.status === "extracted");
+  const skipped = pages.pages.filter(page => page.status === "skipped");
+  const row = (page: DesignSystemPageRecord) => <li key={page.path} data-page-path={page.path} className="min-w-0 border-t border-border py-2">
+    <p className="break-all font-mono text-xs">{page.path}</p>
+    <p className="mt-1 text-sm"><span data-field="type">{t(typeLabels[page.page_type])}</span> · <span data-field="status">{page.status === "extracted" ? t("system.pages.extracted") : t(reasonLabels[page.skip_reason ?? "cap"])}</span></p>
+    {page.patterns.length ? <p data-field="patterns" className="mt-1 break-words text-xs text-muted-foreground">{t("system.pages.patterns")}: {page.patterns.join(", ")}</p> : null}
+  </li>;
   return <section className="my-5 min-w-0 rounded-2xl border border-border bg-card p-5 text-left" aria-label={t("system.pages.title")}>
     <h2 className="text-lg font-semibold">{t("system.pages.title")}</h2>
     <p className="mt-1 text-sm text-muted-foreground">{t("system.pages.summary", { extracted: extracted.length, discovered: pages.discovered, limit: pages.page_limit })}</p>
-    <div className="mt-4 min-w-0 overflow-x-auto">
-      <table className="w-full min-w-[32rem] text-left text-sm">
-        <thead className="text-xs text-muted-foreground"><tr><th className="py-2 pr-3 font-medium">{t("system.pages.path")}</th><th className="py-2 pr-3 font-medium">{t("system.pages.type")}</th><th className="py-2 pr-3 font-medium">{t("system.pages.status")}</th><th className="py-2 font-medium">{t("system.pages.patterns")}</th></tr></thead>
-        <tbody>{pages.pages.map(page => <tr key={page.path} className="border-t border-border align-top">
-          <td className="break-all py-2 pr-3 font-mono text-xs">{page.path}</td>
-          <td className="py-2 pr-3">{t(typeLabels[page.page_type])}</td>
-          <td className="py-2 pr-3">{page.status === "extracted" ? t("system.pages.extracted") : t(reasonLabels[page.skip_reason ?? "cap"])}</td>
-          <td className="break-words py-2 text-xs text-muted-foreground">{page.patterns.join(", ")}</td>
-        </tr>)}</tbody>
-      </table>
-    </div>
+    <ul className="mt-4 min-w-0">{extracted.map(row)}</ul>
+    {skipped.length ? <details className="mt-3 min-w-0">
+      <summary className="cursor-pointer text-sm font-medium">{t("system.pages.skipped", { count: skipped.length })}</summary>
+      <ul className="mt-2 min-w-0">{skipped.map(row)}</ul>
+    </details> : null}
     {pages.differences.length ? <div className="mt-4 min-w-0">
       <h3 className="text-sm font-semibold">{t("system.pages.differences")}</h3>
-      <ul className="mt-2 space-y-1 text-sm">{pages.differences.map(difference => <li key={difference.key} className="break-words"><span className="font-mono text-xs">{difference.key}</span>: <span className="text-muted-foreground">{difference.values.map(value => `${value.path} ${value.value}`).join(" · ")}</span></li>)}</ul>
+      <ul className="mt-2 space-y-1 text-sm">{pages.differences.map(difference => <li key={difference.key} data-difference={difference.key} className="break-words"><span className="font-mono text-xs">{difference.key}</span>: <span className="text-muted-foreground">{difference.values.map(value => `${value.path} ${value.value}`).join(" · ")}</span></li>)}</ul>
     </div> : null}
   </section>;
 }
