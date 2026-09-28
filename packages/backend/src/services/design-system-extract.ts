@@ -1559,7 +1559,7 @@ async function writeCanonicalDesignSystem(input: {
   }
   await writeText(
     path.join(fontsDir, "fonts.css"),
-    buildFontsCss(input.analysis.fontFamilies),
+    buildFontsCss(fontRoles(input.analysis)),
     generated,
     input.systemDir,
   );
@@ -1799,9 +1799,30 @@ Read README.md first, then apply the visual and content rules from this design s
 `;
 }
 
-function buildFontsCss(fontFamilies: string[]): string {
-  const preferredSans = cssString(fontFamilies[0] ?? "Inter");
-  const preferredDisplay = cssString(fontFamilies[1] ?? fontFamilies[0] ?? "Inter");
+const MONOSPACE_FAMILY = /\b(?:mono|code|courier|consolas|menlo)\b/i;
+
+/** Leading family name of a font-family value, or null when it starts with a function such as var(). */
+function leadingFamily(value: string | undefined): string | null {
+  const match = /^\s*(?:"([^"(),]+)"|'([^'(),]+)'|([^"'(),]+?))\s*(?:,|$)/.exec(value ?? "");
+  return match?.slice(1).find(Boolean)?.trim() || null;
+}
+
+/**
+ * Font roles from source evidence. Declared Framer body/code families win; otherwise the observed families
+ * (collected alphabetically) are split so a monospace family never leads the sans or display stacks.
+ */
+function fontRoles(analysis: SourceAnalysis): { readonly sans: string; readonly display: string; readonly mono: string } {
+  const text = analysis.fontFamilies.filter((family) => !MONOSPACE_FAMILY.test(family));
+  const declaredSans = leadingFamily(analysis.cssVars.get("framer-font-family"));
+  const sans = cssString(declaredSans ?? text[0] ?? analysis.fontFamilies[0] ?? "Inter");
+  const display = declaredSans !== null ? sans : cssString(text[1] ?? text[0] ?? analysis.fontFamilies[0] ?? "Inter");
+  const mono = cssString(leadingFamily(analysis.cssVars.get("framer-code-font-family")) ?? analysis.fontFamilies.find((family) => MONOSPACE_FAMILY.test(family)) ?? "IBM Plex Mono");
+  return { sans, display, mono };
+}
+
+function buildFontsCss(roles: { readonly sans: string; readonly display: string }): string {
+  const preferredSans = roles.sans;
+  const preferredDisplay = roles.display;
   return `:root {
   --font-sans-fallback: ${preferredSans}, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display-fallback: ${preferredDisplay}, ${preferredSans}, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -1899,9 +1920,7 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Rea
   const framerInk = analysis.cssVars.get("framer-text-color");
   const ink = analysis.pageColors?.ink ?? pageHex(framerInk !== undefined ? resolvedColor(framerInk, analysis.cssVars) : null) ?? neutrals.ink;
   // Only a plain leading family name is used; function expressions such as var() fall back to the observed family.
-  const sourceSans = /^\s*(?:"([^"(),]+)"|'([^'(),]+)'|([^"'(),]+?))\s*(?:,|$)/.exec(analysis.cssVars.get("framer-font-family") ?? "");
-  const sans = cssString(sourceSans?.slice(1).find(Boolean)?.trim() || analysis.fontFamilies[0] || "Inter");
-  const display = cssString(analysis.fontFamilies[1] ?? analysis.fontFamilies[0] ?? "Inter");
+  const { sans, display, mono } = fontRoles(analysis);
   const sourceAliases =
     analysis.cssVars.size === 0
       ? ""
@@ -1998,7 +2017,7 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Rea
   --font-display: ${display}, var(--font-display-fallback);
   --font-serif: "Iowan Old Style", "Times New Roman", serif;
   --font-sans: ${sans}, var(--font-sans-fallback);
-  --font-mono: "IBM Plex Mono", var(--font-mono-fallback);
+  --font-mono: ${mono}, var(--font-mono-fallback);
 
   /* Type scale */
   --fs-12: 12px;
