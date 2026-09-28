@@ -28,11 +28,6 @@ const HIDDEN_MARKUP_CONTAINERS = ["noscript", "template"] as const;
 export const MAX_HIDDEN_MARKUP_DEPTH = 8;
 const DANGEROUS_SCHEME = /^(?:javascript|data:text\/html|vbscript):/i;
 const NETWORK_STYLE = /(?:@import\b|url\s*\()/i;
-// The only url() kept anywhere: an SVG presentation attribute whose whole value is a bare in-document
-// fragment reference. CSS contexts (<style>, style attributes) stay strict; see extraction-svg-fragment-urls tests.
-const FRAGMENT_PRESENTATION_ATTRIBUTES = new Set(["fill", "stroke", "filter", "mask", "clip-path", "marker-start", "marker-mid", "marker-end"]);
-const FRAGMENT_REFERENCE = /^url\((['"]?)#([A-Za-z_][A-Za-z0-9_.:-]{0,127})\1\)$/;
-const CANONICAL_FRAGMENT_ATTRIBUTE = /\s(?:fill|stroke|filter|mask|clip-path|marker-start|marker-mid|marker-end)="url\(#[A-Za-z_][A-Za-z0-9_.:-]{0,127}\)"/gi;
 const TEXT_NODE = 3;
 
 /** Every URL an attribute value can make the consumer fetch (srcset/imagesrcset candidates, ping list). */
@@ -111,13 +106,10 @@ export function removeActiveSourceMarkup(content: string): string {
     }
     const style = node.getAttribute("style");
     if (style !== undefined && NETWORK_STYLE.test(style)) node.removeAttribute("style");
-    // Any other attribute may also carry url(): keep only exact fragment references in SVG presentation
-    // attributes, rewritten to one canonical spelling the inert gate recognises; remove the rest.
+    // Any other attribute may carry url() too (SVG fill, stroke, filter, mask, ...): remove it, including
+    // in-document fragment references, rather than rejecting the whole page.
     for (const [attributeName, value] of Object.entries(node.attributes)) {
-      if (!NETWORK_STYLE.test(value)) continue;
-      const fragment = FRAGMENT_PRESENTATION_ATTRIBUTES.has(attributeName.toLowerCase()) ? FRAGMENT_REFERENCE.exec(value) : null;
-      if (fragment) node.setAttribute(attributeName, `url(#${fragment[2]})`);
-      else node.removeAttribute(attributeName);
+      if (NETWORK_STYLE.test(value)) node.removeAttribute(attributeName);
     }
     for (const attributeName of URL_ATTRIBUTES) node.removeAttribute(attributeName);
     for (const child of node.childNodes) {
@@ -136,8 +128,24 @@ function assertSourceMarkup(content: string, kind: "html" | "svg", relativeRefer
     ? normalized.includes("<html") && normalized.includes("<body") && normalized.includes("</body>") && normalized.includes("</html>")
     : normalized.includes("<svg") && normalized.includes("</svg>");
   if (!structurallyComplete) throw new ExtractionSafetyError("unsafe_source_content", `Malformed ${kind} source is not accepted`);
-  if (NETWORK_STYLE.test(content.replace(CANONICAL_FRAGMENT_ATTRIBUTE, ""))) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
-  assertInertTree(parse(content, { lowerCaseTagName: true }), kind, relativeReferencesAllowed);
+  if (NETWORK_STYLE.test(content)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
+  const root = parse(content, { lowerCaseTagName: true });
+  assertNoHiddenAttributeReferences(root, kind);
+  assertInertTree(root, kind, relativeReferencesAllowed);
+}
+
+/**
+ * Attribute values are checked decoded, so entity-encoded url() cannot hide from the text check above,
+ * and duplicate attribute names are refused because parsers and browsers may keep different copies.
+ */
+function assertNoHiddenAttributeReferences(root: HTMLElement, kind: "html" | "svg"): void {
+  for (const node of root.querySelectorAll("*")) {
+    const names = [...node.rawAttrs.replace(/"[^"]*"|'[^']*'/g, '""').matchAll(/(?:^|\s)([^\s=/"'>]+)(?=\s*=|\s|$)/g)].map((match) => match[1]!.toLowerCase());
+    if (new Set(names).size !== names.length) throw new ExtractionSafetyError("unsafe_source_content", `Duplicate ${kind} attributes are not accepted`);
+    for (const value of Object.values(node.attributes)) {
+      if (NETWORK_STYLE.test(value)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
+    }
+  }
 }
 
 function assertInertTree(root: HTMLElement, kind: "html" | "svg", relativeReferencesAllowed: boolean, depth = 0): void {
