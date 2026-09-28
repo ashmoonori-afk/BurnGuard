@@ -6,10 +6,15 @@ import { gridTrackCount, type SourceEvidence } from "./extraction-evidence";
  * the source shows; everything after "Default details:" and every (default) pattern is a starting point.
  * Website regions such as the logo in navigation live here rather than in the surface-neutral asset rules.
  */
-export function buildSectionPatternReadme(evidence: SourceEvidence): string {
+export function buildSectionPatternReadme(evidence: SourceEvidence, heroAssets: { readonly images: readonly string[]; readonly canvases: number } = { images: [], canvases: 0 }): string {
   const line = (name: string, facts: string | null, defaults: string) => facts ? `- ${name} (observed): ${facts}. Default details: ${defaults}` : `- ${name} (default): ${defaults}`;
   const hero = evidence.hero;
-  const heroFacts = hero === null ? null : hero.media ? "an h1 headline with media in the opening region" : "an h1 headline in the opening region";
+  const heroMedia = [
+    ...(heroAssets.images.length ? [`opening image(s) ${heroAssets.images.join(", ")} (reuse unchanged)`] : []),
+    ...(heroAssets.canvases ? [`${heroAssets.canvases} script-drawn <canvas> background(s) that could not be captured (recreate as a generated background in the palette)`] : []),
+  ].join("; ");
+  const heroBase = hero === null ? null : hero.media ? "an h1 headline with media in the opening region" : "an h1 headline in the opening region";
+  const heroFacts = heroBase && heroMedia ? `${heroBase}; ${heroMedia}` : heroBase ?? (heroMedia || null);
   const heroDefaults = "headline and supporting line on 6-7 columns with one action pair, media on the remaining columns at --layout-hero; stack below --layout-bp-md.";
   const lines = [
     line("Navigation", null, "the logo lockup at the start of the bar, primary links next to it and one action at the end; the bar stays within --layout-max."),

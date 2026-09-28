@@ -46,6 +46,8 @@ export type SourceAnalysis = {
   readonly sourceEvidence?: import("./extraction-evidence").SourceEvidence;
   /** Per-page discovery and extraction results; website sources only. */
   readonly pageCoverage?: import("@bg/shared").DesignSystemPageCoverage;
+  /** Entry-page opening-region images copied as hero assets and script-drawn canvases seen there; website sources only. */
+  readonly heroAssets?: { readonly images: ReadonlyArray<{ readonly absolutePath: string; readonly fileName: string }>; readonly canvases: number };
   /**
    * Entry-page ground and text colour (hex) from page-level rules in document order, and the entry page's
    * most used mid-tone chromatic colour; website sources only.
