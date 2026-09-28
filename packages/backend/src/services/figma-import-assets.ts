@@ -97,6 +97,8 @@ export function assignFigmaAssets(
     if (idMatches.length > 1) throw new FigmaImportError("ambiguous_figma_asset");
     const match = idMatches[0];
     if (match !== undefined) {
+      // Distinct ids can normalize to one key (a:b-c vs a-b:c); one asset never backs two references.
+      if (claimed.has(match)) throw new FigmaImportError("ambiguous_figma_asset");
       assigned.set(node.id, match);
       claimed.add(match);
     }

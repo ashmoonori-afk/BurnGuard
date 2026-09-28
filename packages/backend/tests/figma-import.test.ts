@@ -555,3 +555,38 @@ describe("Figma import asset assignment and serialization bounds", () => {
     expect(await readdir(stageDir)).toEqual([]);
   });
 });
+
+describe("Figma import id-key collisions", () => {
+  test("Given two node ids that normalize to one key and one matching asset When staged Then the ambiguous mapping is refused", async () => {
+    // Given
+    const stageDir = await mkdtemp(path.join(tmpdir(), "bg-figma-id-collision-"));
+    roots.push(stageDir);
+    const document = parseFigmaImportDocument({
+      name: "Collisions",
+      version: "1",
+      lastModified: "2026-09-27T10:15:00Z",
+      document: {
+        id: "0:0", name: "Document", type: "DOCUMENT",
+        children: [{ id: "1:0", name: "Page", type: "CANVAS", children: [
+          { id: "a:b-c", name: "First", type: "FRAME" },
+          { id: "a-b:c", name: "Second", type: "FRAME" },
+        ] }],
+      },
+    });
+
+    // When
+    const action = stageFigmaExport({
+      stage_dir: stageDir,
+      source_file_name: "collisions.json",
+      document,
+      node_ids: ["a:b-c", "a-b:c"],
+      assets: [{ relative_path: "exports/a-b-c.png", bytes: new Uint8Array([137, 80, 78, 71, 9]), media_type: "image/png" }],
+      pinned_tokens_css: "",
+      imported_at: "2026-09-27T12:00:00.000Z",
+      signal: new AbortController().signal,
+    });
+
+    // Then
+    await expect(action).rejects.toMatchObject({ code: "ambiguous_figma_asset" });
+  });
+});
