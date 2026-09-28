@@ -13,6 +13,7 @@ import { getProjectDetail } from "../src/db/project-read-repository";
 import { listArtifactOperations } from "../src/db/artifact-operation-query";
 import { artifactHistory } from "../src/services/artifact-history";
 import { writePreTurnSnapshot } from "../src/services/checkpoints";
+import { admitUserTurn, releaseUserTurnReservation } from "../src/services/turns";
 import { parseFigmaImportDocument, stageFigmaExport } from "../src/services/figma-import";
 
 const projectIds: string[] = [];
@@ -484,5 +485,28 @@ describe("repeated Figma imports", () => {
     expect({ status: second.status, body: secondBody }).toMatchObject({ status: 201 });
     expect((await getProjectDetail(project.id))?.current_revision).toBe(current.current_revision + 1);
     expect(JSON.parse(await readFile(path.join(project.dir, secondBody.data.manifest_path), "utf8")).nodes).toHaveLength(1);
+  });
+});
+
+describe("Figma import while a turn runs", () => {
+  test("Given a user turn owns the session When an import is posted Then it is refused with session_busy and nothing changes", async () => {
+    // Given
+    const project = await createProject();
+    const session = getSqlite().query<{ readonly id: string }, [string]>("SELECT id FROM sessions WHERE project_id=?").get(project.id);
+    if (session === null) throw new Error("session_missing");
+    const admission = admitUserTurn(session.id, 4);
+    if (admission.kind !== "reserved") throw new Error("turn_reservation_missing");
+
+    try {
+      // When
+      const response = await createApp().request(`/api/projects/${project.id}/figma/import`, { method: "POST", body: importForm(project) });
+
+      // Then
+      expect(response.status).toBe(409);
+      expect((await response.json()).error.code).toBe("session_busy");
+      expect((await getProjectDetail(project.id))?.current_revision).toBe(project.revision);
+    } finally {
+      releaseUserTurnReservation(admission.reservation);
+    }
   });
 });

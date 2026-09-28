@@ -22,6 +22,7 @@ export default function ProjectTopBar({
   chatCollapsed,
   onToggleChat,
   onFigmaImported,
+  figmaImportDisabled = false,
   artifactRevision,
   artifactDigest,
 }: {
@@ -35,6 +36,7 @@ export default function ProjectTopBar({
   chatCollapsed?: boolean;
   onToggleChat?: () => void;
   onFigmaImported: () => Promise<void>;
+  figmaImportDisabled?: boolean;
   artifactRevision: number;
   artifactDigest: string;
 }) {
@@ -65,7 +67,7 @@ export default function ProjectTopBar({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2 max-[600px]:ml-auto">
-        <Button variant="outline" size="sm" className="min-h-10 gap-2 px-3 max-[900px]:min-h-11" onClick={() => setFigmaImportOpen(true)}>
+        <Button variant="outline" size="sm" className="min-h-10 gap-2 px-3 max-[900px]:min-h-11" onClick={() => setFigmaImportOpen(true)} disabled={figmaImportDisabled}>
           <Figma className="h-3.5 w-3.5" />{t("workspace.figma.action")}
         </Button>
         {project.type === "slide_deck" && (

@@ -4,7 +4,8 @@ import {
   type CreateFigmaImportResponse,
 } from "@bg/shared/figma-import";
 import type { ApiErrorBody, ApiSuccess } from "@bg/shared";
-import { getProjectDetail } from "../db/project-read-repository";
+import { getLatestProjectSession, getProjectDetail } from "../db/project-read-repository";
+import { isUserTurnRunning } from "../services/turns";
 import { getSqlite } from "../db/sqlite-client";
 import {
   AcquisitionLimitError,
@@ -57,6 +58,10 @@ figmaImportRoutes.post("/api/projects/:id/figma/import", async (c) => {
       );
     }
     throw error;
+  }
+  const session = await getLatestProjectSession(project.id);
+  if (session && (session.status === "running" || isUserTurnRunning(session.id))) {
+    return c.json(fail("session_busy", "Cannot import while a turn is running"), 409);
   }
   if (!(c.req.header("content-type") ?? "").startsWith("multipart/form-data")) {
     return c.json(

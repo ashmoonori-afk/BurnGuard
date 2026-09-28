@@ -1260,6 +1260,7 @@ export default function ProjectView() {
         project={project}
         artifactRevision={artifacts.current_revision}
         artifactDigest={artifacts.current_digest}
+        figmaImportDisabled={session?.status === "running"}
         onFigmaImported={async () => {
           await Promise.all([
             queryClient.invalidateQueries({ queryKey: ["project", id, "files"] }),
