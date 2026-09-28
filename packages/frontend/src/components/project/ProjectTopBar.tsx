@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ChevronRight, PanelLeftClose, PanelLeftOpen, Play } from "lucide-react";
+import { ChevronRight, Figma, PanelLeftClose, PanelLeftOpen, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 import type { ProjectDetail } from "@bg/shared";
@@ -8,6 +8,8 @@ import VercelShare from "@/components/export/VercelShare";
 import { projectTypeLabel } from "@/lib/format";
 import { useT } from "@/i18n/t";
 import ProjectBundleButton from "./ProjectBundleButton";
+import { useState } from "react";
+import FigmaImportDialog from "./FigmaImportDialog";
 
 export default function ProjectTopBar({
   project,
@@ -19,6 +21,10 @@ export default function ProjectTopBar({
   platformFix,
   chatCollapsed,
   onToggleChat,
+  onFigmaImported,
+  figmaImportDisabled = false,
+  artifactRevision,
+  artifactDigest,
 }: {
   project: ProjectDetail;
   tabsSlot?: ReactNode;
@@ -29,8 +35,13 @@ export default function ProjectTopBar({
   platformFix?: { readonly disabled: boolean; readonly onRequest: (prompt: string) => void };
   chatCollapsed?: boolean;
   onToggleChat?: () => void;
+  onFigmaImported: () => Promise<void>;
+  figmaImportDisabled?: boolean;
+  artifactRevision: number;
+  artifactDigest: string;
 }) {
   const t = useT();
+  const [figmaImportOpen, setFigmaImportOpen] = useState(false);
   const displayName = stripInternalProjectTag(project.name);
   return (
     <header className="shrink-0 border-b border-border bg-background">
@@ -56,6 +67,9 @@ export default function ProjectTopBar({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2 max-[600px]:ml-auto">
+        <Button variant="outline" size="sm" className="min-h-10 gap-2 px-3 max-[900px]:min-h-11" onClick={() => setFigmaImportOpen(true)} disabled={figmaImportDisabled}>
+          <Figma className="h-3.5 w-3.5" />{t("workspace.figma.action")}
+        </Button>
         {project.type === "slide_deck" && (
         <Button
           variant="outline"
@@ -77,6 +91,14 @@ export default function ProjectTopBar({
       </div>
       </div>
       {tabsSlot && <div className="h-10 min-w-0 overflow-hidden border-t border-border bg-muted/20 max-[900px]:h-11">{tabsSlot}</div>}
+      <FigmaImportDialog
+        projectId={project.id}
+        artifactRevision={artifactRevision}
+        artifactDigest={artifactDigest}
+        open={figmaImportOpen}
+        onOpenChange={setFigmaImportOpen}
+        onImported={onFigmaImported}
+      />
     </header>
   );
 }

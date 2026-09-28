@@ -5,6 +5,9 @@ import { listArtifactOperations } from "../db/artifact-operation-query";
 /** Follow undo ancestry, not the most recent write: undoing an undo must not toggle two states. */
 export function artifactHistory(db: Database, projectId: string, revision: number, digest: string): ArtifactHistoryV1 {
   const rows = listArtifactOperations(db, projectId).filter(row => row.status === "committed");
+  // Imported Figma references are immutable: no revision before the latest import can be restored.
+  const importFloor = Math.max(-1, ...rows.filter(row => row.replay.kind === "figma_import").map(row => row.result_revision ?? -1));
+  const restorable = (row: (typeof rows)[number]) => row.retention.replayable && row.base_revision >= importFloor;
   const byId = new Map(rows.map(row => [row.id, row]));
   const byRevision = new Map(rows.map(row => [row.result_revision, row]));
   let next = byRevision.get(revision);
@@ -17,10 +20,10 @@ export function artifactHistory(db: Database, projectId: string, revision: numbe
     next = target ? byRevision.get(target.base_revision) : undefined;
   }
   return { schema_version: 1, current_revision: revision, current_digest: digest,
-    undo_operation_id: next && next.replay.kind !== "initialize" && next.retention.replayable ? next.id : null,
+    undo_operation_id: next && next.replay.kind !== "initialize" && restorable(next) ? next.id : null,
     entries: rows.filter(row => row.replay.kind !== "initialize" && row.base_digest !== digest).map(row => {
       const previous = byRevision.get(row.base_revision);
-      return { operation_id: row.id, revision: row.base_revision, created_at: previous?.updated_at ?? row.created_at, kind: previous?.replay.kind ?? "initialize", files: row.diff.map(file => file.path), available: row.retention.replayable };
+      return { operation_id: row.id, revision: row.base_revision, created_at: previous?.updated_at ?? row.created_at, kind: previous?.replay.kind ?? "initialize", files: row.diff.map(file => file.path), available: restorable(row) };
     }),
   };
 }

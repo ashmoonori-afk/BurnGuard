@@ -43,6 +43,7 @@ describe("request body limits", () => {
     expect(requestBodyLimitFor("/api/design-systems/upload", "POST")).toBe(64 * MiB);
     expect(requestBodyLimitFor("/api/design-systems/abc/fonts", "POST")).toBe(64 * MiB);
     expect(requestBodyLimitFor("/api/sessions/abc/events", "POST")).toBe(64 * MiB);
+    expect(requestBodyLimitFor("/api/projects/abc/figma/import", "POST")).toBe(64 * MiB);
     expect(requestBodyLimitFor("/api/projects/abc/draws/note", "PUT")).toBe(4 * MiB);
     expect(requestBodyLimitFor("/api/projects", "POST")).toBe(1 * MiB);
     expect(requestBodyLimitFor("/api/settings", "PATCH")).toBe(1 * MiB);
