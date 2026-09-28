@@ -21,13 +21,55 @@ const ACTIVE_ELEMENTS = [
   "embed",
   "form",
   "base",
+  "set",
+  "animate",
+  "animatemotion",
+  "animatetransform",
 ] as const;
-const URL_ATTRIBUTES = ["href", "src", "action", "formaction", "poster", "xlink:href", "srcset", "imagesrcset", "ping"] as const;
+const URL_ATTRIBUTES = ["href", "src", "action", "formaction", "poster", "background", "xlink:href", "srcset", "imagesrcset", "ping"] as const;
 /** Raw-text or inert containers whose markup a JS-disabled consumer still renders and fetches. */
 const HIDDEN_MARKUP_CONTAINERS = ["noscript", "template"] as const;
 export const MAX_HIDDEN_MARKUP_DEPTH = 8;
 const DANGEROUS_SCHEME = /^(?:javascript|data:text\/html|vbscript):/i;
 const NETWORK_STYLE = /(?:@import\b|url\s*\()/i;
+// CSS that can load a resource once escapes are decoded (\75 rl( is url(, @\69mport is @import) and
+// resource functions that take plain strings (image-set("https://...")).
+const CSS_RESOURCE = /(?:@import\b|url\s*\(|(?:-webkit-)?image-set\s*\(|\bimage\s*\(|cross-fade\s*\(|\belement\s*\(|\bsrc\s*\()/i;
+const MAX_URL_ATTRIBUTES_PER_ELEMENT = 64;
+
+/**
+ * Attributes a browser only ever reads as prose, never as a CSS value. Every other attribute value (SVG
+ * presentation attributes such as cursor, fill, mask, filter included) is held to the CSS resource check.
+ */
+function isProseAttribute(name: string): boolean {
+  const lower = name.toLowerCase();
+  return ["alt", "title", "placeholder", "content", "value", "label"].includes(lower) || lower.startsWith("aria-") || lower.startsWith("data-");
+}
+
+/** True when an attribute value can reach the network: CSS-parsed values are checked escape-aware. */
+function attributeCanLoadResources(name: string, value: string): boolean {
+  return NETWORK_STYLE.test(value) || (!isProseAttribute(name) && cssCanLoadResources(value));
+}
+
+function decodeCssEscapes(css: string): string {
+  // CSS input preprocessing first: CRLF, CR and FF become LF, NUL becomes U+FFFD, so an escape's
+  // single trailing whitespace swallows the whole CRLF exactly as a browser does.
+  return css
+    .replace(/\r\n|[\r\f]/g, "\n")
+    .replace(/\0/g, "\ufffd")
+    .replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?/g, (_, hex: string) => { const code = Number.parseInt(hex, 16); return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "\ufffd"; })
+    .replace(/\\([^\n\r\f0-9a-fA-F])/g, "$1");
+}
+
+/** True when CSS text can reach the network once escapes are decoded. */
+function cssCanLoadResources(css: string): boolean {
+  return CSS_RESOURCE.test(css) || CSS_RESOURCE.test(decodeCssEscapes(css));
+}
+
+/** Attribute names in source order, consuming quoted and unquoted values so they are never read as names. */
+function attributeNames(rawAttrs: string): string[] {
+  return [...rawAttrs.matchAll(/([^\s"'>/=]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?/g)].map((match) => match[1]!.toLowerCase());
+}
 const TEXT_NODE = 3;
 
 /** Every URL an attribute value can make the consumer fetch (srcset/imagesrcset candidates, ping list). */
@@ -98,14 +140,20 @@ export function removeActiveSourceMarkup(content: string): string {
     if (meta.getAttribute("http-equiv")?.trim().toLowerCase() === "refresh") meta.remove();
   }
   for (const style of root.querySelectorAll("style")) {
-    if (NETWORK_STYLE.test(style.textContent)) style.set_content("");
+    if (cssCanLoadResources(style.textContent)) style.set_content("");
   }
   for (const node of root.querySelectorAll("*")) {
     for (const attributeName of Object.keys(node.attributes)) {
       if (attributeName.toLowerCase().startsWith("on")) node.removeAttribute(attributeName);
     }
     const style = node.getAttribute("style");
-    if (style !== undefined && NETWORK_STYLE.test(style)) node.removeAttribute("style");
+    if (style !== undefined && cssCanLoadResources(style)) node.removeAttribute("style");
+    // Any other attribute may carry url() too (SVG fill, stroke, filter, mask, ...): remove it, including
+    // in-document fragment references, rather than rejecting the whole page. Removal rebuilds the
+    // attribute string, so an element with an unbounded number of them is dropped instead.
+    const urlAttributes = Object.entries(node.attributes).filter(([name, value]) => attributeCanLoadResources(name, value)).map(([name]) => name);
+    if (urlAttributes.length > MAX_URL_ATTRIBUTES_PER_ELEMENT) { node.remove(); continue; }
+    for (const attributeName of urlAttributes) node.removeAttribute(attributeName);
     for (const attributeName of URL_ATTRIBUTES) node.removeAttribute(attributeName);
     for (const child of node.childNodes) {
       // Prose that merely mentions CSS network syntax stays readable but can no longer trip the gate.
@@ -124,7 +172,24 @@ function assertSourceMarkup(content: string, kind: "html" | "svg", relativeRefer
     : normalized.includes("<svg") && normalized.includes("</svg>");
   if (!structurallyComplete) throw new ExtractionSafetyError("unsafe_source_content", `Malformed ${kind} source is not accepted`);
   if (NETWORK_STYLE.test(content)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
-  assertInertTree(parse(content, { lowerCaseTagName: true }), kind, relativeReferencesAllowed);
+  const root = parse(content, { lowerCaseTagName: true });
+  assertNoHiddenAttributeReferences(root, kind);
+  assertInertTree(root, kind, relativeReferencesAllowed);
+}
+
+/**
+ * Attribute values are checked decoded, so entity-encoded url() cannot hide from the text check above,
+ * and duplicate attribute names are refused because parsers and browsers may keep different copies.
+ */
+function assertNoHiddenAttributeReferences(root: HTMLElement, kind: "html" | "svg"): void {
+  for (const node of root.querySelectorAll("*")) {
+    const names = attributeNames(node.rawAttrs);
+    if (new Set(names).size !== names.length) throw new ExtractionSafetyError("unsafe_source_content", `Duplicate ${kind} attributes are not accepted`);
+    for (const [name, value] of Object.entries(node.attributes)) {
+      if (attributeCanLoadResources(name, value)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
+    }
+    if (node.tagName?.toLowerCase() === "style" && cssCanLoadResources(node.textContent)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
+  }
 }
 
 function assertInertTree(root: HTMLElement, kind: "html" | "svg", relativeReferencesAllowed: boolean, depth = 0): void {
