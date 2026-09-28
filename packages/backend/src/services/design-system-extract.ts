@@ -1,6 +1,6 @@
 import { readDesignSystemLayout } from "./design-system-layout";
 import { readDesignSystemAssetGuide } from "./design-system-assets";
-import { buildAssetGuideReadme, toHexColor } from "./extraction-assets";
+import { buildAssetGuideReadme, paletteTone, toHexColor } from "./extraction-assets";
 import { collectSourceEvidence, withoutFunctions, type SourceEvidence } from "./extraction-evidence";
 import { buildSectionPatternReadme, measureSourceLayout } from "./extraction-layout";
 import { buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, observedPatterns, pageEvidence, parseRobots, parseSitemap } from "./extraction-pages";
@@ -1840,8 +1840,43 @@ function isLiteralColor(value: string): boolean {
   return toHexColor(trimmed) !== null || NAMED_COLORS.has(trimmed) || /^(?:oklch|oklab|lab|lch|hwb|color|color-mix)\([^;{}]*\)$/.test(trimmed);
 }
 
+/** A literal colour value, or the literal colour a single `var(--name, fallback)` resolves to. */
+function resolvedColor(value: string, cssVars: ReadonlyMap<string, string>, depth = 0): string | null {
+  const reference = /^var\(\s*--([a-zA-Z0-9_-]+)\s*(?:,\s*(.+))?\)$/.exec(value.trim());
+  if (!reference) return isLiteralColor(value) ? value.trim() : null;
+  if (depth >= 3) return null;
+  const own = cssVars.get(reference[1]!);
+  if (own !== undefined) return resolvedColor(own, cssVars, depth + 1);
+  return reference[2] !== undefined ? resolvedColor(reference[2], cssVars, depth + 1) : null;
+}
+
+/** Scaffold neutrals for a light or a dark observed ground, so default text keeps contrast on either. */
+const NEUTRALS = {
+  light: { ink: "#0f172a", bgSubtle: "#f8fafc", bgMuted: "#eef2f7", surfaceInverse: "#0f172a", fg2: "#334155", fg3: "#64748b", fg4: "#94a3b8", border: "#dbe4ee", borderStrong: "#94a3b8" },
+  dark: { ink: "#f8fafc", bgSubtle: "#111827", bgMuted: "#1f2937", surfaceInverse: "#f8fafc", fg2: "#cbd5e1", fg3: "#94a3b8", fg4: "#64748b", border: "#334155", borderStrong: "#64748b" },
+} as const;
+
+/** The page-level colour of `properties` set on html, body or :root outside any at-rule, last declaration winning. */
+function observedPageColor(analysis: SourceAnalysis, properties: readonly string[]): string | null {
+  let found: string | null = null;
+  for (const declaration of analysis.cssDeclarations) {
+    if (declaration.context !== "" || !properties.includes(declaration.property)) continue;
+    const selectors = (declaration.selector ?? "").split(",").map((selector) => selector.trim().toLowerCase());
+    // Page-level selectors only: html, body, :root and their chains such as `html body` or `:root body`.
+    if (!selectors.some((selector) => selector.split(/\s+/).every((part) => part === "html" || part === "body" || part === ":root"))) continue;
+    found = resolvedColor(declaration.value, analysis.cssVars) ?? found;
+  }
+  return found;
+}
+
 function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Readonly<Record<string, string>>): string {
   const { primary, action } = brandColors(analysis);
+  // Declarations arrive in cascade order (stabilizeSourceAnalysis), so the last page-level rule wins.
+  const ground = observedPageColor(analysis, ["background", "background-color"]) ?? "#ffffff";
+  const groundHex = toHexColor(ground);
+  const neutrals = NEUTRALS[groundHex !== null && paletteTone([groundHex]) === "dark" ? "dark" : "light"];
+  const framerInk = analysis.cssVars.get("framer-text-color");
+  const ink = observedPageColor(analysis, ["color"]) ?? (framerInk !== undefined ? resolvedColor(framerInk, analysis.cssVars) : null) ?? neutrals.ink;
   // Only a plain leading family name is used; function expressions such as var() fall back to the observed family.
   const sourceSans = /^\s*(?:"([^"(),]+)"|'([^'(),]+)'|([^"'(),]+?))\s*(?:,|$)/.exec(analysis.cssVars.get("framer-font-family") ?? "");
   const sans = cssString(sourceSans?.slice(1).find(Boolean)?.trim() || analysis.fontFamilies[0] || "Inter");
@@ -1905,19 +1940,19 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Rea
   --info: ${action};
 
   /* Surface & text */
-  --bg: #ffffff;
-  --bg-subtle: #f8fafc;
-  --bg-muted: #eef2f7;
-  --surface: #ffffff;
-  --surface-inverse: #0f172a;
-  --fg-1: #0f172a;
-  --fg-2: #334155;
-  --fg-3: #64748b;
-  --fg-4: #94a3b8;
+  --bg: ${ground};
+  --bg-subtle: ${neutrals.bgSubtle};
+  --bg-muted: ${neutrals.bgMuted};
+  --surface: ${ground};
+  --surface-inverse: ${neutrals.surfaceInverse};
+  --fg-1: ${ink};
+  --fg-2: ${neutrals.fg2};
+  --fg-3: ${neutrals.fg3};
+  --fg-4: ${neutrals.fg4};
   --fg-on-dark: #f8fafc;
   --fg-on-brand: #ffffff;
-  --border: #dbe4ee;
-  --border-strong: #94a3b8;
+  --border: ${neutrals.border};
+  --border-strong: ${neutrals.borderStrong};
   --focus-ring: ${action};
 
   /* Paired text colors for the semantic fills */

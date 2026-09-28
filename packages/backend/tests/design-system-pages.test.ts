@@ -267,6 +267,37 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
     });
   });
 
+  test("Given a page ground and text colour declared on body through custom properties, then the canonical ground and ink use the resolved values", async () => {
+    const html = '<html><head><style>:root { --token-ground: #0f0a1c; --token-ink: #d6d6d6 } html body { background: var(--token-ground, rgb(0, 0, 0)) } body { color: var(--token-ink, #000) } .card body { background: #ff0000 } .card { background: #ffffff } @media (prefers-color-scheme: light) { body { background: #fafafa } }</style></head><body><h1>Home</h1></body></html>';
+    await withSite({ "/source": html }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Ground", source_type: "website", source_url: origin + "/source" });
+      const css = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
+      expect(css).toContain("--bg: #0f0a1c;");
+      expect(css).toContain("--surface: #0f0a1c;");
+      expect(css).toContain("--fg-1: #d6d6d6;");
+      expect((await parseCssSource({ content: css })).issues).toEqual([]);
+    });
+  });
+
+  test("Given a dark page ground without a page text colour, then canonical ink and neutrals switch to light values", async () => {
+    await withSite({ "/source": '<html><head><style>:root body { background: #0b0b0b }</style></head><body><h1>Home</h1></body></html>' }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Dark", source_type: "website", source_url: origin + "/source" });
+      const css = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
+      expect(css).toContain("--bg: #0b0b0b;");
+      expect(css).toContain("--fg-1: #f8fafc;");
+      expect(css).toContain("--fg-2: #cbd5e1;");
+    });
+  });
+
+  test("Given no body or html colours, then the canonical ground and ink keep the scaffold defaults", async () => {
+    await withSite({ "/source": '<html><head><style>.card { background: #123456; color: #fedcba }</style></head><body><h1>Home</h1></body></html>' }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Plain", source_type: "website", source_url: origin + "/source" });
+      const css = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
+      expect(css).toContain("--bg: #ffffff;");
+      expect(css).toContain("--fg-1: #0f172a;");
+    });
+  });
+
   test("Given a variable Framer font, multiline style attributes and named or modern colours, then canonical tokens stay parsable and keep those signals", async () => {
     const filler = Array.from({ length: 50 }, (_, i) => "--a" + i + ": 1px;").join("");
     const html = '<html><head><style>:root { --brand-font: "Body Sans"; --framer-font-family: var(--brand-font, sans-serif); ' + filler + ' --z-red: red; --z-modern: oklch(62% 0.2 30); --z-word: solid } body { font-family: "Body Sans", sans-serif; background: inherit; color: red; border-color: oklch(62% 0.2 30) }</style></head><body><h1 style="--brand-primary: rgb(\n 18, 52, 86); color: rgb(\n 18, 52, 86)">Home</h1></body></html>';
