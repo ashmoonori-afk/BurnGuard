@@ -7,6 +7,7 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { appendDesignSystemContext } from "../src/harness/prompt-design-system";
 import { systemsDir } from "../src/lib/paths";
 import { extractDesignSystemFromSource, readDesignSystemTokens } from "../src/services/design-system-extract";
+import { parseCssSource } from "../src/services/extraction-css";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 import { boundPageCoverage, buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, pageCoveragePromptSummary, pageLink, parseRobots, parseSitemap, robotsPatternMatches } from "../src/services/extraction-pages";
 
@@ -252,6 +253,38 @@ describe("Per-page extraction limits and ordering", () => {
 });
 
 describe("Per-page cascade, palettes and pinned-context budget", () => {
+  test("Given bounded style blocks whose combined CSS exceeds the parser limit, then canonical tokens retain observed brand and font values", async () => {
+    const padding = "/*" + "x".repeat(360_000) + "*/";
+    const extraVars = Array.from({ length: 50 }, (_, i) => "--framer-layout-" + i + ": 1px;").join("");
+    const html = '<html><head><style>:root { --brand-primary: #8b4bd7; --framer-font-family: "Site Sans", sans-serif; --token-accent: #b77dea;' + extraVars + ' } code { font-family: "Site Mono", monospace }' + padding + '</style><style>body { background: 0 0; color: #f0e4ff; font-family: "Site Sans", sans-serif }' + padding + '</style></head><body><h1>Home</h1></body></html>';
+    await withSite({ "/source": html }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Brand", source_type: "website", source_url: origin + "/source" });
+      const css = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
+      expect(css).toContain("--primary-blue: #8b4bd7;");
+      expect(css).toContain('--font-sans: "Site Sans", var(--font-sans-fallback);');
+      expect(css).toContain("--src-token-accent: #b77dea;");
+      expect(css).toContain("--src-color-1: #f0e4ff;");
+    });
+  });
+
+  test("Given a variable Framer font, multiline style attributes and named or modern colours, then canonical tokens stay parsable and keep those signals", async () => {
+    const filler = Array.from({ length: 50 }, (_, i) => "--a" + i + ": 1px;").join("");
+    const html = '<html><head><style>:root { --brand-font: "Body Sans"; --framer-font-family: var(--brand-font, sans-serif); ' + filler + ' --z-red: red; --z-modern: oklch(62% 0.2 30); --z-word: solid } body { font-family: "Body Sans", sans-serif; background: inherit; color: red; border-color: oklch(62% 0.2 30) }</style></head><body><h1 style="--brand-primary: rgb(\n 18, 52, 86); color: rgb(\n 18, 52, 86)">Home</h1></body></html>';
+    await withSite({ "/source": html }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Vars", source_type: "website", source_url: origin + "/source" });
+      const css = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
+      expect((await parseCssSource({ content: css })).issues).toEqual([]);
+      expect(css).toContain('--font-sans: "Body Sans", var(--font-sans-fallback);');
+      expect(css).toContain("--primary-blue: rgb(  18, 52, 86);");
+      expect(css).toContain("--src-z-red: red;");
+      expect(css).toContain("--src-z-modern: oklch(62% 0.2 30);");
+      expect(css).not.toContain("--src-z-word:");
+      expect(css).toMatch(/--src-color-\d+: red;/);
+      expect(css).toMatch(/--src-color-\d+: oklch\(62% 0\.2 30\);/);
+      expect(css).not.toMatch(/--src-color-\d+: inherit;/);
+    });
+  });
+
   test("Given style blocks before and after a stylesheet, then document order decides each page's winner", async () => {
     const page = (head: string, title: string) => "<html><head>" + head + '</head><body><nav><a href="/other/page">Other</a></nav><h1>' + title + "</h1></body></html>";
     await withSite({
