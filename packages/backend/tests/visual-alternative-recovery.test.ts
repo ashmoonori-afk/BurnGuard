@@ -230,7 +230,7 @@ describe("visual alternative recovery", () => {
     expect(await readFile(path.join(projectDir, "keep", "marker.html"), "utf8")).toBe("keep");
   });
 
-  test("Given orphan entries whose names are not valid ids When startup recovers Then they are removed without aborting", async () => {
+  test.skipIf(process.platform === "win32")("Given orphan entries whose names are not valid ids When startup recovers Then they are removed without aborting (POSIX-only names)", async () => {
     // Given
     const container = path.join(projectDir, ".meta", "visual-alternatives");
     await mkdir(path.join(container, "bad:name "), { recursive: true });
@@ -293,6 +293,25 @@ describe("visual alternative recovery", () => {
       expect(result).toBe("recovered");
       expect(isSessionHeldForRecovery("s-cleanup")).toBe(false);
       expect(db.query("SELECT status FROM visual_alternative_generations WHERE id='generation-cleanup'").get()).toEqual({ status: "ready" });
+    } finally {
+      await chmod(container, 0o755);
+    }
+  });
+
+  test.skipIf(process.platform === "win32")("Given an undeletable orphan tree When startup recovers Then startup completes and the tree is left for later", async () => {
+    // Given
+    const container = path.join(projectDir, ".meta", "visual-alternatives");
+    await mkdir(path.join(container, "stuck-orphan"), { recursive: true });
+    await writeFile(path.join(container, "stuck-orphan", "file.html"), "stuck");
+    await chmod(container, 0o555);
+
+    try {
+      // When
+      const recovered = await recoverVisualAlternatives(db, { root });
+
+      // Then
+      expect(recovered).toEqual({ recovered: 0, held: [] });
+      expect(existsSync(path.join(container, "stuck-orphan"))).toBe(true);
     } finally {
       await chmod(container, 0o755);
     }

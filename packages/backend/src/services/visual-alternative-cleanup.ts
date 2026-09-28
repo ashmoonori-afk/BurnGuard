@@ -58,7 +58,12 @@ export async function removeUnownedGenerationEntries(
   for (const entry of await readdir(container)) {
     if (owned.has(entry)) continue;
     // Directory entry names are single components; they need no persisted-id validation.
-    await removeContainerEntry(container, entry);
+    try {
+      await removeContainerEntry(container, entry);
+    } catch {
+      // Unowned trees hold no authority; an undeletable one must never block startup.
+      console.warn("[alternatives] deferred orphan tree cleanup");
+    }
   }
 }
 
