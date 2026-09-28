@@ -36,30 +36,43 @@ const within = (ancestor: HTMLElement, node: HTMLElement): boolean => {
   return false;
 };
 
-const HORIZONTAL_CLASS = /(?:^|\s)(?:row|split|two-col|half|columns|(?:(?:sm|md|lg|xl):)?grid-cols-[2-9]|(?:(?:sm|md|lg|xl):)?flex-row|col-(?:sm|md|lg|xl)-\d+)(?=\s|$)/;
+// Only utility-framework classes with fixed meaning (Tailwind, Bootstrap) count; author class names can be restyled.
+const HORIZONTAL_CLASS = /(?:^|\s)(?:(?:sm|md|lg|xl):)?(?:grid-cols-[2-9]|flex-row)(?=\s|$)/;
+const BOOTSTRAP_COLUMN = /(?:^|\s)col-(?:sm|md|lg|xl)-(?:[1-9]|1[01])(?=\s|$)/;
 const VERTICAL_CLASS = /(?:^|\s)(?:flex-col|flex-column|grid-cols-1|stack|vertical)(?=\s|$)/;
 
-/** Top-level track count of a grid-template-columns value, expanding repeat(N, ...); null when it cannot be read. */
+/**
+ * Column count of a grid-template-columns value: named lines are ignored, repeat(N, list) counts N times
+ * the tracks in list, and a trailing !important is dropped. Null for auto-fill/auto-fit, subgrid,
+ * masonry or anything unreadable, so callers never claim a count the source does not fix.
+ */
 export function gridTrackCount(value: string): number | null {
-  const tracks: string[] = [];
+  const tokens: string[] = [];
   let depth = 0, current = "";
-  for (const char of value.trim()) {
+  for (const char of value.replace(/!\s*important\s*$/i, "").trim()) {
     if (char === "(" || char === "[") depth += 1;
     if (char === ")" || char === "]") depth -= 1;
     if (depth < 0) return null;
-    if (depth === 0 && /\s/.test(char)) { if (current) tracks.push(current); current = ""; continue; }
+    if (depth === 0 && /\s/.test(char)) { if (current) tokens.push(current); current = ""; continue; }
     current += char;
   }
   if (depth !== 0) return null;
-  if (current) tracks.push(current);
+  if (current) tokens.push(current);
+  if (tokens.length === 0) return null;
   let count = 0;
-  for (const track of tracks) {
-    if (track.startsWith("[")) continue;
-    const repeat = /^repeat\(\s*(\d+)\s*,/i.exec(track);
-    if (/^repeat\(/i.test(track) && !repeat) return null;
-    count += repeat ? Number(repeat[1]) : 1;
+  for (const token of tokens) {
+    if (token.startsWith("[")) continue;
+    if (/^(?:subgrid|masonry|none|auto-fill|auto-fit)$/i.test(token) || token.includes("!")) return null;
+    const repeat = /^repeat\(\s*(\d+)\s*,([\s\S]*)\)$/i.exec(token);
+    if (/^repeat\(/i.test(token)) {
+      const inner = repeat ? gridTrackCount(repeat[2]!) : null;
+      if (!repeat || inner === null) return null;
+      count += Number(repeat[1]) * inner;
+      continue;
+    }
+    count += 1;
   }
-  return count;
+  return count > 0 ? count : null;
 }
 
 /** Horizontal only on explicit row evidence; any explicit vertical signal wins and uncertainty stays false. */
@@ -72,7 +85,8 @@ function arrangesHorizontally(container: HTMLElement): boolean {
     const columns = /grid-template-columns\s*:\s*([^;]+)/i.exec(container.getAttribute("style") ?? "")?.[1];
     return columns !== undefined && (gridTrackCount(columns) ?? 0) >= 2;
   }
-  return HORIZONTAL_CLASS.test(classes);
+  if (HORIZONTAL_CLASS.test(classes)) return true;
+  return /(?:^|\s)row(?=\s|$)/.test(classes) && container.childNodes.filter((node): node is HTMLElement => node instanceof HTMLElement).filter(child => BOOTSTRAP_COLUMN.test(classOf(child))).length >= 2;
 }
 
 function heroOf(root: HTMLElement): SourceEvidence["hero"] {
@@ -82,7 +96,7 @@ function heroOf(root: HTMLElement): SourceEvidence["hero"] {
   while (region && region.parentNode && !["section", "header", "main", "body"].includes(region.tagName?.toLowerCase() ?? "") && !/hero|banner|masthead|jumbotron/.test(classOf(region))) region = region.parentNode as HTMLElement;
   if (!region) return null;
   const media = region.querySelector("img, picture, video");
-  const centered = /(?:^|[\s-])(?:center|centered|text-center)\b/.test(classOf(heading) + " " + classOf(region)) || /text-align\s*:\s*center/i.test(`${heading.getAttribute("style") ?? ""} ${region.getAttribute("style") ?? ""}`);
+  const centered = /(?:^|\s)(?:(?:sm|md|lg|xl):)?text-center(?=\s|$)/.test(classOf(heading) + " " + classOf(region)) || /text-align\s*:\s*center/i.test(`${heading.getAttribute("style") ?? ""} ${region.getAttribute("style") ?? ""}`);
   if (!media) return { media: false, arrangement: centered ? "centered" : null };
   // Split only when copy and media sit in different children of a container marked as a row or grid.
   for (let container: HTMLElement | null = media.parentNode as HTMLElement | null; container && container !== region.parentNode; container = container.parentNode as HTMLElement | null) {
@@ -108,7 +122,7 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
   const alignment = aligns.length < 3 ? null : centered * 2 > aligns.length ? "center" : "left";
 
   const heroes = roots.map(heroOf).filter((value): value is NonNullable<SourceEvidence["hero"]> => value !== null);
-  const columns = values(["grid-template-columns"]).flatMap(value => [...value.matchAll(/repeat\(\s*(\d)\s*,/g)].map(match => Number(match[1]))).filter(count => count >= 2 && count <= 4);
+  const columns = values(["grid-template-columns"]).map(gridTrackCount).filter((count): count is number => count !== null && count >= 2 && count <= 4);
 
   const all = (selector: string) => roots.flatMap(root => root.querySelectorAll(selector));
   const text = roots.map(root => root.querySelectorAll("h1, h2, h3").map(heading => heading.text).join(" ")).join(" ").toLowerCase();
@@ -118,13 +132,17 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
 
   const svgs = all("svg").filter(svg => !/logo|brand/.test(classOf(svg) + classOf(svg.parentNode as HTMLElement)));
   // SVG defaults: stroke none, stroke-width 1, fill black; each value inherits from the nearest ancestor that sets it.
+  // An inline style beats the presentation attribute on the same element.
   const inherited = (node: HTMLElement, name: string, root: HTMLElement): string | null => {
     for (let current: HTMLElement | null = node; current; current = current === root ? null : current.parentNode as HTMLElement | null) {
-      const value = current.getAttribute(name);
-      if (value !== undefined && value !== null) return value.trim().toLowerCase();
+      const inline = new RegExp(`(?:^|;)\\s*${name}\\s*:\\s*([^;]+)`, "i").exec(current.getAttribute("style") ?? "")?.[1];
+      const value = inline ?? current.getAttribute(name);
+      if (value !== undefined && value !== null) return value.replace(/!\s*important/i, "").trim().toLowerCase();
     }
     return null;
   };
+  // Stylesheet paint rules cannot be matched to markup here, so they make the icon treatment unknown.
+  const stylesheetPaint = declarations.some(item => ["fill", "stroke", "stroke-width"].includes(item.property.toLowerCase()));
   const iconStyle = (svg: HTMLElement): { readonly style: "outline" | "filled" | null; readonly widths: readonly string[] } => {
     const shapes = svg.querySelectorAll("path, circle, rect, ellipse, polygon, polyline, line");
     const strokeWidths: string[] = [];
@@ -143,7 +161,7 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
   const styles = svgs.map(iconStyle);
   const classified = styles.map(entry => entry.style).filter((style): style is "outline" | "filled" => style !== null);
   const outline = classified.filter(style => style === "outline").length;
-  const iconSetStyle = classified.length < 2 ? null : outline * 2 > classified.length ? "outline" : outline * 2 < classified.length ? "filled" : null;
+  const iconSetStyle = stylesheetPaint || classified.length < 2 ? null : outline * 2 > classified.length ? "outline" : outline * 2 < classified.length ? "filled" : null;
   const strokeWidth = iconSetStyle === "outline" ? mode(styles.filter(entry => entry.style === "outline").flatMap(entry => entry.widths)) : null;
 
   const images = all("img").map(image => (image.getAttribute("src") ?? "").toLowerCase().split(/[?#]/)[0] ?? "").filter(src => !/logo|brand|icon|favicon/.test(src));

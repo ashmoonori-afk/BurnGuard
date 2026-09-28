@@ -132,6 +132,14 @@ describe("Source layout measurement", () => {
     expect(logo.prompt).not.toContain("apple-system");
   });
 
+  test("Given repeat() track lists through the real CSS parser, then page and feature columns count every repeated track", async () => {
+    const parsed = await parseCssSource({ content: ".page { grid-template-columns: repeat(8, 1fr 2fr); } .cards { grid-template-columns: repeat(2, 1fr 2fr); }", sourceId: "fixture.css", fileOrder: 0, signal: new AbortController().signal });
+    expect(measureSourceLayout(parsed.declarations, []).tokens["--layout-columns"]).toBe("16");
+    expect(collectSourceEvidence([], parsed.declarations).featureColumns).toBe(4);
+    const six = await parseCssSource({ content: ".cards { grid-template-columns: repeat(3, 1fr 2fr); }", sourceId: "six.css", fileOrder: 0, signal: new AbortController().signal });
+    expect(collectSourceEvidence([], six.declarations).featureColumns).toBeNull();
+  });
+
   test("Given only a large breakpoint, then it is measured without a medium one", () => {
     expect(measureSourceLayout([declaration("display", "grid", "@media (min-width: 1280px)")], []).tokens).toEqual({ "--layout-bp-lg": "1280px" });
   });
@@ -224,7 +232,7 @@ describe("Source evidence drives section patterns and asset style", () => {
 
   test("Given hero structures, then only a row or grid container with copy and media in different children is split, and centred copy with media below stays centred", () => {
     const hero = (markup: string) => collectSourceEvidence([markup], []).hero;
-    expect(hero('<section class="hero"><div class="row"><div class="copy"><h1>T</h1></div><div class="media"><img src="a.jpg"></div></div></section>')).toEqual({ media: true, arrangement: "split" });
+    expect(hero('<section class="hero"><div class="row"><div class="col-md-6"><h1>T</h1></div><div class="col-md-6"><img src="a.jpg"></div></div></section>')).toEqual({ media: true, arrangement: "split" });
     expect(hero('<section class="hero text-center"><h1>T</h1><p>L</p><img src="a.jpg"></section>')).toEqual({ media: true, arrangement: "centered" });
     expect(hero('<section class="hero"><div><h1>T</h1></div><div><img src="a.jpg"></div></section>')).toEqual({ media: true, arrangement: null });
     expect(hero('<main><p>No headline</p></main>')).toBeNull();
@@ -234,11 +242,14 @@ describe("Source evidence drives section patterns and asset style", () => {
       '<section class="hero"><div class="grid grid-cols-1"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>',
       '<section class="hero"><div class="flex"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>',
     ]) expect(hero(vertical)?.arrangement).not.toBe("split");
+    expect(hero('<section class="hero"><div class="split two-col"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBeNull();
+    expect(hero('<section class="hero"><div class="row"><div class="col-12"><h1>T</h1></div><div class="col-12"><img src="a.jpg"></div></div></section>')?.arrangement).toBeNull();
     expect(hero('<section class="hero"><div class="grid grid-cols-1 md:grid-cols-2"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
     expect(hero('<section class="hero"><div style="display: flex"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
     for (const columns of ["minmax(0, 1fr)", "repeat(1, 1fr)", "1fr"]) expect(hero(`<section class="hero"><div style="display:grid;grid-template-columns:${columns}"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>`)?.arrangement).not.toBe("split");
     expect(hero('<section class="hero"><div style="display:grid;grid-template-columns:minmax(0, 1fr) minmax(0, 1fr)"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
-    expect(["minmax(0, 1fr)", "repeat(1, 1fr)", "repeat(3, minmax(0, 1fr))", "[full] 1fr [mid] 2fr", "[content-start main-start] minmax(0, 1fr) [content-end main-end]", "repeat(auto-fit, 200px)", "fit-content(10px"].map(gridTrackCount)).toEqual([1, 1, 3, 2, 1, null, null]);
+    expect(["minmax(0, 1fr)", "repeat(1, 1fr)", "repeat(3, minmax(0, 1fr))", "[full] 1fr [mid] 2fr", "[content-start main-start] minmax(0, 1fr) [content-end main-end]", "repeat(auto-fit, 200px)", "fit-content(10px", "1fr !important", "repeat(3, 1fr 2fr)", "repeat(2, [a] 1fr [b] repeat(2, 10px))", "subgrid"].map(gridTrackCount)).toEqual([1, 1, 3, 2, 1, null, null, 1, 6, 6, null]);
+    expect(hero('<section class="hero"><div style="display:grid;grid-template-columns:1fr !important"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).not.toBe("split");
   });
 
   test("Given no evidence, then every section pattern and asset kind is labelled as a default", () => {
@@ -284,6 +295,9 @@ describe("Source evidence drives section patterns and asset style", () => {
     expect(icons(inheritedNone + inheritedNone)).toEqual({ count: 2, style: "filled", strokeWidth: null });
     const inheritedStroke = '<svg fill="none" stroke="currentColor" stroke-width="1.5"><path d="M0 0"/><circle r="2"/></svg>';
     expect(icons(inheritedStroke + inheritedStroke)).toEqual({ count: 2, style: "outline", strokeWidth: "1.5" });
+    const inlineOverride = '<svg fill="none" stroke="currentColor" stroke-width="2" style="fill:currentColor;stroke:none"><path d="M0 0h10v10z"/></svg>';
+    expect(icons(inlineOverride + inlineOverride)).toEqual({ count: 2, style: "filled", strokeWidth: null });
+    expect(collectSourceEvidence([outline + outline], [declaration("fill", "currentColor")]).icons).toEqual({ count: 2, style: null, strokeWidth: null });
     const noStrokeNoFillAttr = '<svg><path d="M0 0"/></svg>';
     expect(icons(noStrokeNoFillAttr + noStrokeNoFillAttr).style).toBe("filled");
   });

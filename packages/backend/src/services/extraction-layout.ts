@@ -1,5 +1,5 @@
 import type { CssDeclarationEvidence } from "./extraction-css";
-import type { SourceEvidence } from "./extraction-evidence";
+import { gridTrackCount, type SourceEvidence } from "./extraction-evidence";
 
 /**
  * README `## Section patterns` and `## Alignment`. A pattern is tagged (observed) only for the facts
@@ -82,8 +82,7 @@ export function measureSourceLayout(declarations: readonly CssDeclarationEvidenc
   const container = mode(values(["max-width"]).map(px).filter((value): value is number => value !== null && value >= 720 && value <= 1680));
   if (container !== null) tokens["--layout-max"] = `${container}px`;
 
-  const columns = values(["grid-template-columns"]).flatMap(value => [...value.matchAll(/repeat\(\s*(\d{1,2})\s*,/gi)].map(match => Number(match[1])));
-  const pageColumns = columns.filter(count => count >= 8 && count <= 24);
+  const pageColumns = values(["grid-template-columns"]).map(gridTrackCount).filter((count): count is number => count !== null && count >= 8 && count <= 24);
   if (pageColumns.length) tokens["--layout-columns"] = String(Math.max(...pageColumns));
 
   const gutter = mode(values(["column-gap", "gap", "grid-gap", "grid-column-gap"]).map(value => firstLength(value.split(/\s+/).at(-1) ?? "")).filter((value): value is number => value !== null && value >= 8 && value <= 64));
