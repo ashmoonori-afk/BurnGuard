@@ -463,3 +463,26 @@ describe("chat checkpoint revert around Figma imports", () => {
     expect(after.status).toBe(200);
   });
 });
+
+describe("repeated Figma imports", () => {
+  test("Given the same frame and asset imported twice When the second import publishes Then it commits alongside the first", async () => {
+    // Given
+    const project = await createProject();
+    const first = await createApp().request(`/api/projects/${project.id}/figma/import`, { method: "POST", body: importForm(project) });
+    expect(first.status).toBe(201);
+    const current = await getProjectDetail(project.id);
+    if (current === null || current.current_digest === null) throw new Error("artifact_identity_unavailable");
+
+    // When
+    const second = await createApp().request(`/api/projects/${project.id}/figma/import`, {
+      method: "POST",
+      body: importForm({ revision: current.current_revision, digest: current.current_digest }),
+    });
+
+    // Then
+    const secondBody = await second.json();
+    expect({ status: second.status, body: secondBody }).toMatchObject({ status: 201 });
+    expect((await getProjectDetail(project.id))?.current_revision).toBe(current.current_revision + 1);
+    expect(JSON.parse(await readFile(path.join(project.dir, secondBody.data.manifest_path), "utf8")).nodes).toHaveLength(1);
+  });
+});

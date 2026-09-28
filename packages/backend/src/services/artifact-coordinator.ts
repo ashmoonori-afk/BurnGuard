@@ -175,7 +175,7 @@ export class ArtifactCoordinator {
       throwIfAcquisitionAborted(input.signal);
       await input.mutate(stagePath);
       throwIfAcquisitionAborted(input.signal);
-      await assertFigmaReferencesPreserved(stagePath, figmaReferences, input.signal);
+      await assertFigmaReferencesPreserved(stagePath, figmaReferences, input.signal, { checkCopiedBytes: false });
       result = await inspectCanonicalTree(stagePath);
       const stagedFigmaReferences = await loadFigmaReferencePolicy(
         stagePath,
@@ -199,8 +199,12 @@ export class ArtifactCoordinator {
       this.prepareResult(id, resultRevision, result, diff);
       beginArtifactPublication(input.projectId);
       publicationStarted = true;
+      // The staged policy is already validated; it registers reference paths added by this operation.
       const immutableReferencePaths = mergeImmutableReferencePaths(
-        allowedFigmaReferencePaths(figmaReferences),
+        mergeImmutableReferencePaths(
+          allowedFigmaReferencePaths(figmaReferences),
+          allowedFigmaReferencePaths(stagedFigmaReferences),
+        ),
         input.publicationPolicy?.immutableReferencePaths,
       );
       await publishManagedTree(stagePath, input.projectDir, (relativePath) => {

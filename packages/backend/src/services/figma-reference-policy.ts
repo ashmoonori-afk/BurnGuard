@@ -111,6 +111,7 @@ export async function assertFigmaReferencesPreserved(
   root: string,
   policy: FigmaReferencePolicy,
   signal?: AbortSignal,
+  options: { readonly checkCopiedBytes?: boolean } = {},
 ): Promise<void> {
   throwIfAcquisitionAborted(signal);
   if (policy.files.length === 0) return;
@@ -120,7 +121,8 @@ export async function assertFigmaReferencesPreserved(
     throwIfAcquisitionAborted(signal);
     if (byPath.get(reference.path)?.sha256 !== reference.sha256) fail();
   }
-  assertFigmaReferencePathsAllowed(tree, policy);
+  // Operations re-check copies against their validated staged policy, which may register new import paths.
+  if (options.checkCopiedBytes !== false) assertFigmaReferencePathsAllowed(tree, policy);
 }
 
 export function allowedFigmaReferencePaths(
