@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runMigrationsFrom } from "../src/db/migrate";
@@ -208,6 +208,22 @@ describe("visual alternative recovery", () => {
     expect(isSessionHeldForRecovery("s-restore-failed")).toBe(true);
     expect(db.query("SELECT status FROM visual_alternative_generations WHERE id='generation-held'").get()).toEqual({ status: "generating" });
     expect(existsSync(path.join(projectDir, ".meta", "visual-alternatives", "generation-held", "base"))).toBe(true);
+  });
+
+  test("Given an orphan entry that is a symlink to project content When startup recovers Then only the link is removed", async () => {
+    // Given
+    const container = path.join(projectDir, ".meta", "visual-alternatives");
+    await mkdir(container, { recursive: true });
+    await mkdir(path.join(projectDir, "keep"), { recursive: true });
+    await writeFile(path.join(projectDir, "keep", "marker.html"), "keep");
+    await symlink(path.join(projectDir, "keep"), path.join(container, "linked-orphan"));
+
+    // When
+    await recoverVisualAlternatives(db, { root });
+
+    // Then
+    expect(existsSync(path.join(container, "linked-orphan"))).toBe(false);
+    expect(await readFile(path.join(projectDir, "keep", "marker.html"), "utf8")).toBe("keep");
   });
 
   test("Given an orphan tree and a stale pin When startup recovers Then the tree is removed and the pin released", async () => {

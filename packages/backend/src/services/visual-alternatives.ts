@@ -35,6 +35,12 @@ import {
   finishVisualAlternativeOperation,
 } from "./visual-alternative-operation-registry";
 import { admitVisualAlternativeBatch } from "./turns";
+import { acquireArtifactProjectLock } from "./artifact-project-lock";
+import { removeGenerationEntry } from "./visual-alternative-cleanup";
+import {
+  holdVisualAlternativeProject,
+  recoverProjectVisualAlternatives,
+} from "./visual-alternative-recovery";
 
 import {
   VisualAlternativeServiceError,
@@ -112,13 +118,17 @@ export class VisualAlternativeService {
       throw new VisualAlternativeServiceError("generation_active");
     }
     let ownsGeneration = false;
-    const generationPath = resolveWithin(
-      input.projectDir,
-      ".meta",
-      "visual-alternatives",
-      generationId,
-    );
     try {
+      // The lease is installed; under the project lock, no operation admitted before it may still commit.
+      const releaseLock = await acquireArtifactProjectLock(this.db, input.projectId);
+      try {
+        const active = this.db.query<{ readonly id: string }, [string]>(
+          "SELECT id FROM artifact_operations WHERE project_id=? AND status IN ('pending','working','recovering') LIMIT 1",
+        ).get(input.projectId);
+        if (active !== null) throw new VisualAlternativeServiceError("generation_active");
+      } finally {
+        releaseLock();
+      }
       const coordinator = new ArtifactCoordinator(this.db);
       await coordinator.initialize(input.projectId, input.projectDir);
       const base = visualAlternativeProjectIdentity(this.db, input.projectId);
@@ -181,15 +191,20 @@ export class VisualAlternativeService {
     } catch (error) {
       if (ownsGeneration) {
         finishVisualAlternativeGeneration(this.db, generationId, this.now());
-        await removeGenerationTree(generationPath);
+        await removeGenerationTree(input.projectDir, generationId);
       }
       finishVisualAlternativeOperation(input.sessionId, generationId);
       throw error;
     }
   }
 
-  cancel(projectId: string): boolean {
-    return cancelVisualAlternativeProject(projectId);
+  /** Stops a live batch, or retries recovery of a quarantined one. */
+  async cancel(projectId: string): Promise<"cancelled" | "recovered" | "recovery_pending" | "not_active"> {
+    if (cancelVisualAlternativeProject(projectId)) return "cancelled";
+    return recoverProjectVisualAlternatives(this.db, projectId, {
+      restoreBase: this.restoreBase,
+      now: this.now,
+    });
   }
 
   list(projectId: string): VisualAlternativeList | null {
@@ -218,9 +233,11 @@ export class VisualAlternativeService {
     const { input, generationId } = batch;
     const restored = await this.runItems(batch);
     if (!restored) {
-      // The base could not be restored: keep the session lease and the
-      // generating row so no turn runs on the wrong tree until startup recovery.
-      console.warn("[alternatives] base restore failed; session held for recovery", generationId);
+      // The durable 'generating' row now quarantines every artifact mutation of the project, and its
+      // sessions are held; cancel (or the next startup) retries recovery and releases both on success.
+      finishVisualAlternativeOperation(input.sessionId, generationId);
+      holdVisualAlternativeProject(this.db, input.projectId);
+      console.warn("[alternatives] base restore failed; project quarantined for recovery", generationId);
       return requiredVisualAlternatives(this.db, input.projectId);
     }
     try {
@@ -228,9 +245,7 @@ export class VisualAlternativeService {
     } finally {
       finishVisualAlternativeOperation(input.sessionId, generationId);
     }
-    await removeGenerationTree(
-      resolveWithin(input.projectDir, ".meta", "visual-alternatives", generationId),
-    );
+    await removeGenerationTree(input.projectDir, generationId);
     return requiredVisualAlternatives(this.db, input.projectId);
   }
 
@@ -299,9 +314,9 @@ export class VisualAlternativeService {
   }
 }
 
-async function removeGenerationTree(generationPath: string): Promise<void> {
+async function removeGenerationTree(projectDir: string, generationId: string): Promise<void> {
   try {
-    await rm(generationPath, { recursive: true, force: true });
+    await removeGenerationEntry(projectDir, generationId);
   } catch {
     // Startup recovery removes trees that no generating row owns.
     console.warn("[alternatives] deferred base tree cleanup");

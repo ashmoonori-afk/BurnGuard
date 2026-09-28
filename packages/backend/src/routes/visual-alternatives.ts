@@ -145,8 +145,12 @@ visualAlternativeRoutes.post(
     if (await getProjectDetail(projectId) === null) {
       return c.json(fail("project_not_found", "Project not found"), 404);
     }
-    if (!service.cancel(projectId)) {
+    const outcome = await service.cancel(projectId);
+    if (outcome === "not_active") {
       return c.json(fail("operation_not_active", "No alternative generation is active"), 409);
+    }
+    if (outcome === "recovery_pending") {
+      return c.json(fail("alternatives_recovery_pending", "The original design could not be restored yet"), 409);
     }
     return c.json(ok({ cancelled: true }), 202);
   },

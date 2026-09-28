@@ -1,7 +1,6 @@
 import type { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
-import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { ulid } from "ulid";
 import {
   failVisualAlternative,
   finishVisualAlternativeGeneration,
@@ -9,7 +8,13 @@ import {
   repairVisualAlternativeRetention,
 } from "../db/visual-alternative-repository";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
-import { assertSafeName, PathBoundaryError, resolveWithin } from "../security/path-boundary";
+import { assertSafeName, PathBoundaryError } from "../security/path-boundary";
+import {
+  realGenerationDirectory,
+  removeGenerationEntry,
+  removeUnownedGenerationEntries,
+} from "./visual-alternative-cleanup";
+import { allowVisualAlternativeRecovery } from "./visual-alternative-operation-registry";
 import {
   parseCanonicalTreeManifest,
   validateCanonicalTree,
@@ -90,10 +95,10 @@ async function recoverGeneration(
     if (!(error instanceof PathBoundaryError)) throw error;
     // Never derive paths from unsafe ids or touch files outside managed storage; settle the rows only.
     finishVisualAlternativeGeneration(db, generationId, dependencies.now());
+    releaseVisualAlternativeProject(projectId);
     return true;
   }
-  const generationPath = resolveWithin(projectDir, ".meta", "visual-alternatives", generationId);
-  const basePath = resolveWithin(projectDir, ".meta", "visual-alternatives", generationId, "base");
+  const basePath = path.join(projectDir, ".meta", "visual-alternatives", generationId, "base");
   let baseDigest: string;
   try {
     baseDigest = digest(row.base_digest);
@@ -101,9 +106,11 @@ async function recoverGeneration(
     if (row.base_manifest_json === null) {
       // Crashed while staging the base: the project tree was never changed.
       finishVisualAlternativeGeneration(db, generationId, dependencies.now());
-      await rm(generationPath, { recursive: true, force: true });
+      await removeGenerationEntry(projectDir, generationId);
       return true;
     }
+    // A symlinked container or generation entry is never followed.
+    if (await realGenerationDirectory(projectDir, generationId) === null) throw new CorruptVisualAlternative();
     const manifest = parseCanonicalTreeManifest(parseJson(row.base_manifest_json));
     if (manifest.tree_digest !== baseDigest) throw new CorruptVisualAlternative();
     await validateCanonicalTree(basePath, manifest);
@@ -115,11 +122,12 @@ async function recoverGeneration(
     if (current !== null && current.current_digest === row.base_digest) {
       // The project already holds the original base; only the staged copy is unusable.
       finishVisualAlternativeGeneration(db, generationId, dependencies.now());
-      await rm(generationPath, { recursive: true, force: true });
+      await removeGenerationEntry(projectDir, generationId);
+      releaseVisualAlternativeProject(projectId);
       return true;
     }
-    holdProjectSessions(db, projectId);
-    console.warn("[alternatives] corrupt generation base; sessions held", generationId);
+    holdVisualAlternativeProject(db, projectId);
+    console.warn("[alternatives] corrupt generation base; project quarantined", generationId);
     return false;
   }
   const alternatives = db.query<AlternativeRecoveryRow, [string, string]>(
@@ -149,26 +157,70 @@ async function recoverGeneration(
       failVisualAlternative(db, id, dependencies.now());
     }
   }
+  const restoreOperationId = ulid();
+  const disallow = allowVisualAlternativeRecovery(projectId, restoreOperationId);
   try {
     await dependencies.restoreBase(db, projectId, projectDir, basePath, {
       producedBy: new Set(alternatives.map((alternative) => text(alternative.operation_id))),
+      operationId: restoreOperationId,
     });
   } catch {
-    // Keep the generation durable and its sessions held until a later startup restores the base.
-    holdProjectSessions(db, projectId);
-    console.warn("[alternatives] base restore deferred; sessions held", generationId);
+    // The durable row keeps quarantining the project; cancel or the next startup retries.
+    holdVisualAlternativeProject(db, projectId);
+    console.warn("[alternatives] base restore deferred; project quarantined", generationId);
     return false;
+  } finally {
+    disallow();
   }
   finishVisualAlternativeGeneration(db, generationId, dependencies.now());
-  await rm(generationPath, { recursive: true, force: true });
+  await removeGenerationEntry(projectDir, generationId);
+  releaseVisualAlternativeProject(projectId);
   return true;
 }
 
-function holdProjectSessions(db: Database, projectId: string): void {
+const projectHolds = new Map<string, Map<string, () => void>>();
+
+/** Holds every session of the project against new turns until its quarantine is resolved. */
+export function holdVisualAlternativeProject(db: Database, projectId: string): void {
+  const holds = projectHolds.get(projectId) ?? new Map<string, () => void>();
+  projectHolds.set(projectId, holds);
   const sessions = db.query<{ readonly id: string }, [string]>(
     "SELECT id FROM sessions WHERE project_id=?",
   ).all(projectId);
-  holdSessionsForRecovery(sessions.map((session) => session.id));
+  for (const session of sessions) {
+    if (holds.has(session.id)) continue;
+    const release = holdSessionsForRecovery([session.id]);
+    if (release !== null) holds.set(session.id, release);
+  }
+}
+
+function releaseVisualAlternativeProject(projectId: string): void {
+  for (const release of projectHolds.get(projectId)?.values() ?? []) release();
+  projectHolds.delete(projectId);
+}
+
+/** Retries recovery of the project's quarantined generation, if any. */
+export async function recoverProjectVisualAlternatives(
+  db: Database,
+  projectId: string,
+  dependencies: RecoveryDependencies = {},
+): Promise<"recovered" | "recovery_pending" | "not_active"> {
+  const rows = db.query<GenerationRecoveryRow, [string]>(
+    `SELECT g.id,g.project_id,p.dir_path,g.base_digest,g.base_manifest_json,g.base_path
+      FROM visual_alternative_generations g
+      JOIN projects p ON p.id=g.project_id
+      WHERE g.status='generating' AND g.project_id=?`,
+  ).all(projectId);
+  if (rows.length === 0) return "not_active";
+  let converged = true;
+  for (const row of rows) {
+    converged = await recoverGeneration(db, row, {
+      root: dependencies.root ?? projectsDir,
+      restoreBase: dependencies.restoreBase ?? restoreVisualAlternativeBase,
+      now: dependencies.now ?? Date.now,
+    }) && converged;
+  }
+  return converged ? "recovered" : "recovery_pending";
 }
 
 async function removeUnownedGenerationTrees(db: Database, root: string): Promise<void> {
@@ -181,22 +233,14 @@ async function removeUnownedGenerationTrees(db: Database, root: string): Promise
     ).all().map((row) => row.id),
   );
   for (const project of projects) {
-    let container: string;
+    let projectDir: string;
     try {
-      container = resolveWithin(
-        resolveManagedPath(root, project.dir_path),
-        ".meta",
-        "visual-alternatives",
-      );
+      projectDir = resolveManagedPath(root, project.dir_path);
     } catch (error) {
       if (error instanceof PathBoundaryError) continue;
       throw error;
     }
-    if (!existsSync(container)) continue;
-    for (const entry of await readdir(container, { withFileTypes: true })) {
-      if (owned.has(entry.name)) continue;
-      await rm(resolveWithin(container, entry.name), { recursive: true, force: true });
-    }
+    await removeUnownedGenerationEntries(projectDir, owned);
   }
 }
 

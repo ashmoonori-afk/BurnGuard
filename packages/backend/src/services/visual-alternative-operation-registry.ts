@@ -1,3 +1,5 @@
+import type { Database } from "bun:sqlite";
+
 type ActiveVisualAlternativeOperation = {
   readonly generationId: string;
   readonly projectId: string;
@@ -29,13 +31,34 @@ export function isVisualAlternativeProjectLeased(projectId: string): boolean {
   return projectOperation(projectId) !== undefined;
 }
 
-/** Whether an artifact mutation must wait: a batch leases the project and the operation is not its own. */
+/** Restore operations recovery may commit while a durable generation quarantines the project. */
+const recoveryOperations = new Map<string, Set<string>>();
+
+export function allowVisualAlternativeRecovery(projectId: string, operationId: string): () => void {
+  const allowed = recoveryOperations.get(projectId) ?? new Set<string>();
+  allowed.add(operationId);
+  recoveryOperations.set(projectId, allowed);
+  return () => {
+    allowed.delete(operationId);
+    if (allowed.size === 0 && recoveryOperations.get(projectId) === allowed) recoveryOperations.delete(projectId);
+  };
+}
+
+/**
+ * Whether an artifact mutation must wait. A live batch leases the project for its own operations; a
+ * durable 'generating' row with no live batch quarantines the project until recovery restores the base.
+ */
 export function isArtifactMutationBlockedByAlternatives(
+  db: Database,
   projectId: string,
   operationId: string,
 ): boolean {
   const operation = projectOperation(projectId);
-  return operation !== undefined && !operation.operationIds.has(operationId);
+  if (operation !== undefined) return !operation.operationIds.has(operationId);
+  if (recoveryOperations.get(projectId)?.has(operationId) === true) return false;
+  return db.query<{ readonly found: number }, [string]>(
+    "SELECT 1 AS found FROM visual_alternative_generations WHERE project_id=? AND status='generating' LIMIT 1",
+  ).get(projectId) !== null;
 }
 
 /** Callers admit through `admitVisualAlternativeBatch` so turn, hold and capacity checks stay atomic. */

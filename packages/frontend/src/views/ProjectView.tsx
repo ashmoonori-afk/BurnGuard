@@ -849,7 +849,13 @@ export default function ProjectView() {
         queryClient.invalidateQueries({ queryKey: ["project", id, "fs"] }),
       ]);
       setRefreshTick((value) => value + 1);
-      pushToast({ title: t("workspace.alternatives.generated"), tone: "success" });
+      switch (state.status) {
+        case "ready": pushToast({ title: t("workspace.alternatives.generated"), tone: "success" }); break;
+        case "partial": pushToast({ title: t("workspace.alternatives.status.partial"), tone: "warn" }); break;
+        case "failed": pushToast({ title: t("workspace.alternatives.status.failed"), tone: "error" }); break;
+        case "generating": pushToast({ title: t("errors.alternatives_recovery_pending"), tone: "warn" }); break;
+        default: { const unreachable: never = state.status; return unreachable; }
+      }
     },
     onError: (error) => handleWriteError("workspace.alternatives.generateFailed", error),
     onSettled: () => queryClient.invalidateQueries({ queryKey: alternativesQueryKey }),

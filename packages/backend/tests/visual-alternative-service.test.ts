@@ -16,7 +16,7 @@ import {
 import { beginDirectionOperation } from "../src/services/direction-operation-registry";
 import { deleteProject } from "../src/services/project-deletion";
 import { restoreVisualAlternativeBase } from "../src/services/visual-alternative-generation";
-import { finishVisualAlternativeOperation } from "../src/services/visual-alternative-operation-registry";
+import { projectsDir } from "../src/lib/paths";
 
 const roots: string[] = [];
 let db: Database;
@@ -25,7 +25,8 @@ let root: string;
 beforeEach(async () => {
   db = new Database(":memory:");
   await runMigrationsFrom(db, path.join(import.meta.dir, "../src/db/migrations"));
-  root = await mkdtemp(path.join(tmpdir(), "burnguard-alternatives-"));
+  await mkdir(projectsDir, { recursive: true });
+  root = await mkdtemp(path.join(projectsDir, "burnguard-alternatives-"));
   roots.push(root);
   await writeFile(path.join(root, "index.html"), "<main>Original</main>");
   db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES ('p','P','prototype',?,'index.html','codex',1,1)").run(root);
@@ -395,13 +396,15 @@ describe("visual alternative service", () => {
     const coordinator = new ArtifactCoordinator(db);
     await coordinator.initialize("p", root);
     let restoreAttempts = 0;
+    let restoreFails = true;
     const service = new VisualAlternativeService(db, {
       runTurn: async ({ operationId, ordinal }) => {
         await commitAlternative(coordinator, operationId, ordinal);
       },
-      restoreBase: async () => {
+      restoreBase: async (...args) => {
         restoreAttempts += 1;
-        throw new Error("disk_unavailable");
+        if (restoreFails) throw new Error("disk_unavailable");
+        await restoreVisualAlternativeBase(...args);
       },
     });
 
@@ -409,16 +412,64 @@ describe("visual alternative service", () => {
     const started = await service.generate(generateInput(["A", "B"]));
     const completed = await started.completion;
     const admission = admitUserTurn("s", 4);
+    const foreign = await paletteEdit(coordinator).then(() => "committed", (error: unknown) => (error as { code?: string }).code);
+    const adoption = await coordinator.adoptExternal("p", root, () => undefined).then(() => "adopted", (error: unknown) => (error as { code?: string }).code);
+    restoreFails = false;
+    const recovered = await service.cancel("p");
+    const afterRecovery = admitUserTurn("s", 4);
 
     // Then
-    try {
-      expect(restoreAttempts).toBe(2);
-      expect(completed.status).toBe("generating");
-      expect(completed.alternatives.map((item) => item.status)).toEqual(["ready", "pending"]);
-      expect(admission.kind).toBe("session_busy");
-    } finally {
-      finishVisualAlternativeOperation("s", completed.generation_id);
-    }
+    expect(restoreAttempts).toBe(3);
+    expect(completed.status).toBe("generating");
+    expect(completed.alternatives.map((item) => item.status)).toEqual(["ready", "pending"]);
+    expect(admission.kind).toBe("session_busy");
+    expect(foreign).toBe("operation_conflict");
+    expect(adoption).toBe("operation_conflict");
+    expect(recovered).toBe("recovered");
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("<main>Original</main>");
+    expect(db.query("SELECT status FROM visual_alternative_generations").get()).toEqual({ status: "partial" });
+    expect(afterRecovery.kind).toBe("reserved");
+    if (afterRecovery.kind === "reserved") releaseUserTurnReservation(afterRecovery.reservation);
+  });
+
+  test("Given an operation admitted before the batch When alternatives start Then generation refuses before creating rows", async () => {
+    // Given
+    const coordinator = new ArtifactCoordinator(db);
+    await coordinator.initialize("p", root);
+    let releasePrepared: () => void = () => undefined;
+    let prepared: () => void = () => undefined;
+    const preparedSignal = new Promise<void>((resolve) => { prepared = resolve; });
+    const held = new Promise<void>((resolve) => { releasePrepared = resolve; });
+    const project = db.query<{ readonly current_revision: number; readonly current_digest: string }, []>(
+      "SELECT current_revision,current_digest FROM projects WHERE id='p'",
+    ).get();
+    if (project === null) throw new Error("project_fixture_missing");
+    const earlier = coordinator.run({
+      projectId: "p",
+      projectDir: root,
+      kind: "palette",
+      expectedRevision: project.current_revision,
+      expectedArtifactDigest: project.current_digest,
+      onPrepared: () => { prepared(); },
+      mutate: async (stage) => {
+        await held;
+        await writeFile(path.join(stage, "index.html"), "<main>Earlier</main>");
+      },
+    });
+    await preparedSignal;
+    const service = new VisualAlternativeService(db);
+
+    // When
+    const generation = await service.generate(generateInput(["A", "B"])).then(() => "started", (error: unknown) => (error as { code?: string }).code);
+    releasePrepared();
+    await earlier;
+    const admission = admitUserTurn("s", 4);
+
+    // Then
+    expect(generation).toBe("generation_active");
+    expect(db.query("SELECT COUNT(*) AS count FROM visual_alternative_generations").get()).toEqual({ count: 0 });
+    expect(admission.kind).toBe("reserved");
+    if (admission.kind === "reserved") releaseUserTurnReservation(admission.reservation);
   });
 
   test("Given staging the base fails When generation starts Then the owner row fails, its tree is removed and the lease is released", async () => {
@@ -453,6 +504,21 @@ function generateInput(names: readonly string[]) {
     maxConcurrentTurns: 4,
     request: { count: names.length, prompt: "Explore.", names: [...names] },
   };
+}
+
+async function paletteEdit(coordinator: ArtifactCoordinator) {
+  const project = db.query<{ readonly current_revision: number; readonly current_digest: string }, []>(
+    "SELECT current_revision,current_digest FROM projects WHERE id='p'",
+  ).get();
+  if (project === null) throw new Error("project_fixture_missing");
+  return coordinator.run({
+    projectId: "p",
+    projectDir: root,
+    kind: "palette",
+    expectedRevision: project.current_revision,
+    expectedArtifactDigest: project.current_digest,
+    mutate: async (stage) => { await writeFile(path.join(stage, "index.html"), "<main>Foreign</main>"); },
+  });
 }
 
 async function commitAlternative(coordinator: ArtifactCoordinator, operationId: string, ordinal: number): Promise<void> {

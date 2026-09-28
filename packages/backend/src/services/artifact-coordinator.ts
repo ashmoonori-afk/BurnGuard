@@ -130,7 +130,7 @@ export class ArtifactCoordinator {
     // adoption, so an operation is either registered before they look or validates against their result.
     const releaseAdmission = await acquireArtifactProjectLock(this.db, input.projectId);
     try {
-      if (isArtifactMutationBlockedByAlternatives(input.projectId, id)) {
+      if (isArtifactMutationBlockedByAlternatives(this.db, input.projectId, id)) {
         throw new ArtifactOperationError("operation_conflict", "Visual alternatives are being generated for this project");
       }
       await pruneExpiredArtifactOperations(this.db, { projectId: input.projectId, preserveOperationId: input.parentOperationId });
@@ -252,6 +252,11 @@ export class ArtifactCoordinator {
   private async observeExternalOnce(projectId: string, projectDir: string, onActive: "reject" | "refuse"): Promise<CommittedArtifactOperation | null> {
     const identity = this.projectIdentity(projectId);
     if (identity.digest === null) { await this.initializeOnce(projectId, projectDir); return null; }
+    if (isArtifactMutationBlockedByAlternatives(this.db, projectId, "")) {
+      // Leased or quarantined by visual alternatives: never adopt or roll back live bytes now.
+      if (onActive === "refuse") throw new ArtifactOperationError("operation_conflict", "Visual alternatives own this project");
+      return null;
+    }
     const stableIdentity = { revision: identity.revision, digest: identity.digest };
     const actual = await inspectCanonicalTree(projectDir);
     if (actual.tree_digest === stableIdentity.digest) return null;
