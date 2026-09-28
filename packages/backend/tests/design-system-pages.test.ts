@@ -537,4 +537,12 @@ describe("Measured layout tokens", () => {
     expect(desktop.blocks.media).toMatchObject({ width: 600, height: 300 });
     expect(desktop.gutter).toBe(24);
   }, 90_000);
+
+  test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given centred 1200px section wrappers holding a narrow centred text column, when measured, then the container is the wrapper width rather than the text column", async () => {
+    const section = (title: string) => '<section class="wrap"><h2>' + title + '</h2><p class="narrow">A narrow centred paragraph that stays well inside the wrapper width on purpose.</p><div class="panel"></div></section>';
+    const html = '<!doctype html><html><head><link rel="stylesheet" href="https://site.test/site.css"></head><body><section class="wrap"><h1>Own your AI.</h1><p class="narrow">Private expert AI systems powered by local models</p></section>' + section("One") + section("Two") + "</body></html>";
+    const css = "body{margin:0} .wrap{max-width:1200px;margin:0 auto 96px} h1,h2,p{text-align:center} .narrow{max-width:540px;margin:0 auto} .panel{height:240px;background:#222}";
+    const layout = await measureRenderedLayout({ pages: [{ path: "/", pageType: "home", url: "https://site.test/", html }], stylesheets: new Map([["https://site.test/site.css", css]]), signal: AbortSignal.timeout(60_000) });
+    expect(layout!.pages[0]!.viewports.desktop.container).toEqual({ left: 120, width: 1200 });
+  }, 90_000);
 });

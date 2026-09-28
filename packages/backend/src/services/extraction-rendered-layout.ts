@@ -111,6 +111,18 @@ function collectLayout(input: { readonly width: number; readonly height: number;
   const containerLeft = median(lefts.filter(left => left < vw / 2));
   const containerRight = median(rights.filter(right => right > vw / 2));
 
+  // The content container is the most common width among horizontally centred wrappers (40-95% of the
+  // viewport); ties go to the wider one. Centred text columns inside those wrappers are narrower and rarer.
+  const wrapperWidths = new Map<number, number>();
+  for (const el of document.querySelectorAll("body *")) {
+    if (!visible(el) || inChrome(el)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < vw * 0.4 || r.width > vw * 0.95 || Math.abs(r.left + r.width / 2 - vw / 2) > vw * 0.02) continue;
+    const width = Math.round(r.width / 10) * 10;
+    wrapperWidths.set(width, (wrapperWidths.get(width) ?? 0) + 1);
+  }
+  const containerWidth = [...wrapperWidths].sort((l, r) => r[1] - l[1] || r[0] - l[0])[0]?.[0] ?? null;
+  const centredContainer = containerWidth === null ? null : { left: clamp((vw - containerWidth) / 2), width: clamp(containerWidth) };
   // Sections follow visual order, which can differ from DOM order.
   const anchors = [...document.querySelectorAll("h1, h2")].filter(visible).map(el => ({ el, top: top(el) })).sort((a, b) => a.top - b.top);
   const blocks = [...document.querySelectorAll("body *")].filter(el => { if (!visible(el) || inChrome(el)) return false; const r = el.getBoundingClientRect(); return r.width > 120 && r.width < vw * 0.6 && r.height > 60; })
@@ -152,7 +164,7 @@ function collectLayout(input: { readonly width: number; readonly height: number;
   return {
     viewport: { width: input.width, height: input.height },
     page_height: clamp(document.documentElement.scrollHeight),
-    container: containerLeft !== null && containerRight !== null && containerRight > containerLeft ? { left: clamp(containerLeft), width: clamp(containerRight - containerLeft) } : null,
+    container: centredContainer ?? (containerLeft !== null && containerRight !== null && containerRight > containerLeft ? { left: clamp(containerLeft), width: clamp(containerRight - containerLeft) } : null),
     gutter: median(gutters),
     section_gap: median(gaps),
     type_scale: typeScale,
