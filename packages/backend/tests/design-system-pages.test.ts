@@ -561,12 +561,33 @@ describe("Measured layout prompt injection", () => {
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
 
-  test("Given the largest measured layout the parser accepts, then the injected block stays bounded", async () => {
+  test("Given the largest measured layout the parser accepts beside a worst-case page coverage and long design-system files, then the website context stays under the pinned-context limit with a bounded measured block", async () => {
+    const big = { x: 100_000, y: 100_000, width: 100_000, height: 100_000, align: "center" };
+    const maxViewport = (name: "desktop" | "mobile") => ({ viewport: { ...MEASURED_VIEWPORTS[name] }, page_height: 100_000, container: { left: 100_000, width: 100_000 }, gutter: 100_000, section_gap: 100_000, type_scale: { hero: 100_000, h2: 100_000, h3: 100_000, body: 100_000, nav: 100_000 }, blocks: { hero_heading: big, subheading: big, cta: big, media: big }, sections: Array.from({ length: 16 }, () => ({ heading: '"'.repeat(60), top: 100_000, height: 100_000, columns: 100_000, align: "center" })) });
+    const maxLayout = { schema_version: 1, method: "rendered-offline", pages: Array.from({ length: 6 }, (_, i) => ({ path: "/" + String(i).repeat(299), page_type: "other", viewports: { desktop: maxViewport("desktop"), mobile: maxViewport("mobile") } })) };
+    const coverage = buildPageCoverage({
+      limit: 24, discovered: 400,
+      extracted: Array.from({ length: 24 }, (_, i) => ({ path: "/section-" + i + "/" + "p".repeat(110), source: "link" as const, pageType: "other" as const, layoutTokens: { "--layout-max": 900 + i + "px" }, patterns: ["hero"], colors: ["background-color: #10" + String(i).padStart(4, "0")], fonts: ["Font " + i], customProperties: Object.fromEntries(Array.from({ length: 48 }, (_, k) => ["--palette-" + k, "#" + ((i * 48 + k) % 0xffffff).toString(16).padStart(6, "0")])), evidence: EVIDENCE })),
+      skipped: Array.from({ length: 200 }, (_, i) => ({ path: "/skipped-" + i + "/" + "q".repeat(110), source: "link" as const, reason: "cap" as const, pageType: "other" as const })),
+    });
     const dir = await mkdtemp(path.join(tmpdir(), "bg-measured-budget-"));
     try {
-      await writeFile(path.join(dir, "layout-measured.json"), JSON.stringify(layoutOf(6, 16, "h".repeat(60))));
-      const block = (await render(dir, "website")).match(/<selected_design_system_measured_layout>\n([^\n]+)\n/u)![1]!;
-      expect(block.length).toBeLessThan(40_000);
+      await writeFile(path.join(dir, "layout-measured.json"), JSON.stringify(maxLayout));
+      await writeFile(path.join(dir, "pages.json"), JSON.stringify(coverage, null, 2));
+      await writeFile(path.join(dir, "README.md"), "# Big\n\n## Voice\nVOICE_TEXT\n" + buildPageTemplateReadme(coverage) + "\n## Notes\n" + "n".repeat(40_000) + "\n");
+      await writeFile(path.join(dir, "SKILL.md"), "# Skill\n" + "s".repeat(60_000) + "\n");
+      await writeFile(path.join(dir, "colors_and_type.css"), ":root {\n" + Array.from({ length: 3000 }, (_, i) => "  --t" + i + ": #123456;").join("\n") + "\n}\n");
+      for (const mode of ["full", "compact"] as const) {
+        const detail = { id: "measured-budget", name: "Big", status: "draft", source_type: "website", is_template: false, dir_path: dir, skill_md_path: path.join(dir, "SKILL.md"), tokens_css_path: path.join(dir, "colors_and_type.css"), readme_md_path: path.join(dir, "README.md"), thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const;
+        const lines: string[] = [];
+        await appendDesignSystemContext(lines, detail as unknown as Parameters<typeof appendDesignSystemContext>[1], mode, "website");
+        const context = lines.join("\n");
+        expect(context.length).toBeLessThan(100_000);
+        const block = context.match(/<selected_design_system_measured_layout>\n([^\n]+)\n/u)?.[1] ?? "";
+        expect(block.length).toBeGreaterThan(0);
+        expect(block.length).toBeLessThanOrEqual(mode === "full" ? 12_000 : 6_000);
+        expect(JSON.parse(block).length).toBeGreaterThan(0);
+      }
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
 });
