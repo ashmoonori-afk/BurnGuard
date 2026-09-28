@@ -18,12 +18,15 @@ import { getLocalFonts } from "./local-fonts";
 import { readProjectBundleZip } from "./project-bundle-archive";
 import { ProjectBundleError } from "./project-bundle-error";
 import { validateProjectBundleMetadata } from "./project-bundle-validation";
+import { parseProjectOptions } from "./project-options";
+import { ensureProjectDesignSystemPin } from "./project-design-system-pin";
 
 export async function importProjectBundleFile(file: File, name?: string): Promise<ProjectBundleImportResponse> {
   const { manifest, entries } = await readProjectBundleZip(file);
   validateProjectBundleMetadata(manifest);
   const projectName = name?.trim() || manifest.project.name;
   if (!projectName || projectName.length > 200) throw new ProjectBundleError("invalid_project_bundle");
+  const optionsJson = canonicalProjectOptionsJson(manifest.project.options_json);
   let customSystemId: string | null = null;
   let customSystemDir: string | null = null;
   let createdProject: Awaited<ReturnType<typeof createProjectRecord>> | null = null;
@@ -36,7 +39,7 @@ export async function importProjectBundleFile(file: File, name?: string): Promis
       type: manifest.project.type,
       designSystemId: null,
       backendId: manifest.project.backend_id,
-      optionsJson: manifest.project.options_json,
+      optionsJson,
       entrypoint: manifest.project.entrypoint,
       thumbnailPath: null,
       initializeArtifact: async (stage) => writeEntries({
@@ -66,18 +69,11 @@ export async function importProjectBundleFile(file: File, name?: string): Promis
     const actual = await inspectCanonicalTree(createdProject.dir_path);
     if (actual.tree_digest !== manifest.project.current_digest) throw new ProjectBundleError("project_bundle_digest");
     const selectedSystemId = system.selected_id;
-    const pinSystemId = selectedSystemId ?? (manifest.design_system.kind === "none" ? null :
-      manifest.design_system.kind === "builtin" ? manifest.design_system.id : customSystemId);
     const db = getSqlite();
     const project = createdProject;
     db.transaction(() => {
       db.prepare("UPDATE projects SET design_system_id=?,current_revision=?,current_digest=? WHERE id=?")
         .run(selectedSystemId, manifest.project.current_revision, manifest.project.current_digest, project.id);
-      if (manifest.design_system.pin && pinSystemId) {
-        const pin = manifest.design_system.pin;
-        db.prepare("INSERT OR REPLACE INTO project_design_system_pins(project_id,system_id,revision,digest,context,tokens) VALUES (?,?,?,?,?,?)")
-          .run(project.id, pinSystemId, pin.revision, pin.digest, pin.context, pin.tokens);
-      }
       for (const attachment of manifest.attachments) {
         const relative = attachment.path.slice("project/".length);
         db.prepare(`INSERT INTO attachments(id,session_id,turn_id,file_path,mime_type,original_name,size_bytes,sha256,source_role,source_role_explicit,created_at)
@@ -89,6 +85,8 @@ export async function importProjectBundleFile(file: File, name?: string): Promis
         );
       }
     })();
+    // Archive pin text is untrusted prompt input; the pin is rebuilt by the app renderer from the restored system.
+    if (selectedSystemId !== null) await ensureProjectDesignSystemPin(createdProject.id);
     await indexProjectFiles(createdProject.id);
     return {
       id: createdProject.id,
@@ -105,6 +103,18 @@ export async function importProjectBundleFile(file: File, name?: string): Promis
     if (cleanupFailed) throw new ProjectBundleError("project_bundle_unavailable");
     if (error instanceof ProjectBundleError) throw error;
     throw new ProjectBundleError("invalid_project_bundle");
+  }
+}
+
+const PROJECT_OPTIONS_JSON_LIMIT = 256 * 1024;
+
+function canonicalProjectOptionsJson(value: string | null): string | null {
+  if (value === null) return null;
+  if (value.length > PROJECT_OPTIONS_JSON_LIMIT) throw new ProjectBundleError("invalid_project_bundle");
+  try { return JSON.stringify(parseProjectOptions(JSON.parse(value))); }
+  catch (error) {
+    if (error instanceof Error) throw new ProjectBundleError("invalid_project_bundle");
+    throw error;
   }
 }
 
@@ -136,9 +146,9 @@ async function restoreDesignSystem(
       name: system.name,
       description: system.description,
       status: system.status,
-      sourceType: system.source_type ?? "manual",
+      sourceType: "manual",
       sourceUri: null,
-      isTemplate: system.is_template,
+      isTemplate: false,
       dirPath: destination,
       skillMdPath: system.skill_md_path ? resolveWithin(destination, system.skill_md_path) : null,
       tokensCssPath: system.tokens_css_path ? resolveWithin(destination, system.tokens_css_path) : null,

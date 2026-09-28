@@ -3,11 +3,12 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import JSZip from "jszip";
-import { PROJECT_BUNDLE_MANIFEST_PATH, parseProjectBundleManifest } from "@bg/shared";
+import { PROJECT_BUNDLE_MANIFEST_PATH, parseProjectBundleManifest, type ProjectBundleManifest } from "@bg/shared";
 import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { projectsDir, systemsDir } from "../src/lib/paths";
 import { getProjectDetail } from "../src/db/project-read-repository";
+import { getDesignSystemDetail } from "../src/db/seed";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { exportProjectBundle, importProjectBundleFile } from "../src/services/project-bundle";
 import { readProjectDesignSystemPin } from "../src/services/project-design-system-pin";
@@ -98,7 +99,9 @@ test("Given a project with retained sources, checkpoints, a custom system, and a
   expect(await readFile(path.join(project.dir_path, "docs", "attachments", "brief.md"), "utf8")).toBe("# Retained brief");
   expect(await readFile(path.join(project.dir_path, ".meta", "checkpoints", "snapshots", "turn-1", "index.html"), "utf8")).toContain("before");
   expect(project.design_system_id).not.toBe(sourceSystemId);
-  expect(readProjectDesignSystemPin(restored.id)?.digest).toBe(manifest.design_system.pin?.digest);
+  const restoredPin = readProjectDesignSystemPin(restored.id);
+  expect(restoredPin?.system_id).toBe(project.design_system_id ?? "");
+  expect(restoredPin?.context).not.toBe(manifest.design_system.pin?.context);
   expect(manifest.credential_exclusions).toContain("config.json");
   expect(restored.warnings).toContainEqual({ code: "missing_font", reference: "Bundle Missing Font QA" });
   const attachments = await listSessionAttachments(restored.session_id);
@@ -134,7 +137,7 @@ test("Given a restored bundle When startup reconciliation and a new edit run The
   expect(await readFile(path.join(before.dir_path, "after-restore.html"), "utf8")).toContain("editable");
 });
 
-test("Given a bundle that references an unavailable builtin system When imported Then its pin survives and a warning identifies the missing ID", async () => {
+test("Given a bundle that references an unavailable builtin system When imported Then its archived pin stays inert and a warning identifies the missing ID", async () => {
   // Given
   const exported = await exportProjectBundle(sourceProjectId);
   const zip = await JSZip.loadAsync(exported.bytes);
@@ -162,7 +165,7 @@ test("Given a bundle that references an unavailable builtin system When imported
   // Then
   expect(restored.warnings).toContainEqual({ code: "missing_builtin_design_system", reference: missingId });
   expect((await getProjectDetail(restored.id))?.design_system_id).toBeNull();
-  expect(readProjectDesignSystemPin(restored.id)?.system_id).toBe(missingId);
+  expect(readProjectDesignSystemPin(restored.id)).toBeNull();
 });
 
 test("Given an external edit during export When the snapshot is confirmed Then the bundle fails instead of mixing revisions", async () => {
@@ -178,4 +181,61 @@ test("Given an external edit during export When the snapshot is confirmed Then t
   } finally {
     await writeFile(entrypoint, original);
   }
+});
+
+async function rewrittenBundle(mutate: (manifest: ProjectBundleManifest, zip: JSZip) => ProjectBundleManifest): Promise<File> {
+  const exported = await exportProjectBundle(sourceProjectId);
+  const zip = await JSZip.loadAsync(exported.bytes);
+  const entry = zip.file(PROJECT_BUNDLE_MANIFEST_PATH);
+  if (!entry) throw new Error("missing manifest");
+  const manifest = mutate(parseProjectBundleManifest(JSON.parse(await entry.async("text"))), zip);
+  zip.file(PROJECT_BUNDLE_MANIFEST_PATH, JSON.stringify(manifest));
+  return new File([await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" })], "rewritten.burnguard-project");
+}
+
+test("Given archived options with unknown fields When imported Then only allowlisted project options are stored", async () => {
+  const file = await rewrittenBundle((manifest) => ({
+    ...manifest,
+    project: { ...manifest.project, options_json: JSON.stringify({ copy_as_is: true, provider_api_key: "sk-bundle-secret", cache_dir: "/Users/someone/private" }) },
+  }));
+
+  const restored = await importProjectBundleFile(file, "Options allowlist");
+  createdProjectIds.push(restored.id);
+  const stored = (await getProjectDetail(restored.id))?.options_json ?? "";
+  const detail = await getProjectDetail(restored.id);
+  if (detail?.design_system_id) createdSystemIds.push(detail.design_system_id);
+
+  expect(JSON.parse(stored).copy_as_is).toBe(true);
+  expect(stored).not.toContain("sk-bundle-secret");
+  expect(stored).not.toContain("/Users/someone");
+});
+
+test("Given a bundle carrying server scratch inputs When imported Then it is rejected", async () => {
+  const payload = new TextEncoder().encode("scratch prompt");
+  const file = await rewrittenBundle((manifest, zip) => {
+    zip.file("project/.burnguard-inputs/prompt.txt", payload);
+    return {
+      ...manifest,
+      files: [...manifest.files, { path: "project/.burnguard-inputs/prompt.txt", kind: "attachment", size_bytes: payload.byteLength, sha256: createHash("sha256").update(payload).digest("hex") }],
+    };
+  });
+
+  await expect(importProjectBundleFile(file, "Scratch")).rejects.toMatchObject({ code: "invalid_project_bundle" });
+});
+
+test("Given archived template and sample provenance for a custom system When imported Then the copy is a plain manual system", async () => {
+  const file = await rewrittenBundle((manifest) => manifest.design_system.kind !== "custom" ? manifest : ({
+    ...manifest,
+    design_system: { ...manifest.design_system, is_template: true, source_type: "sample" },
+  }));
+
+  const restored = await importProjectBundleFile(file, "Provenance");
+  createdProjectIds.push(restored.id);
+  const detail = await getProjectDetail(restored.id);
+  if (!detail?.design_system_id) throw new Error("missing restored system");
+  createdSystemIds.push(detail.design_system_id);
+  const system = await getDesignSystemDetail(detail.design_system_id);
+
+  expect(system?.is_template).toBe(false);
+  expect(system?.source_type).toBe("manual");
 });

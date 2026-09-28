@@ -28,7 +28,7 @@ export interface BundleEntry {
 }
 
 const PROJECT_EXCLUDED = [
-  ".git", ".omc", ".claude", ".codex", ".meta/artifact-operations",
+  ".git", ".omc", ".claude", ".codex", ".burnguard-inputs", ".meta/artifact-operations",
   ".meta/artifact-baseline",
 ] as const;
 export async function collectProjectBundleEntries(root: string): Promise<readonly BundleEntry[]> {
@@ -50,10 +50,9 @@ function projectFileKind(relative: string): ProjectBundleFileKind {
     if (!relative.startsWith(".meta/checkpoints/")) throw new ProjectBundleError("invalid_project_bundle");
     return "checkpoint";
   }
-  if (folded.startsWith(".attachments/") || folded.startsWith(".burnguard-inputs/")) {
-    if (!relative.startsWith(".attachments/") && !relative.startsWith(".burnguard-inputs/")) {
-      throw new ProjectBundleError("invalid_project_bundle");
-    }
+  if (folded === ".burnguard-inputs" || folded.startsWith(".burnguard-inputs/")) throw new ProjectBundleError("invalid_project_bundle");
+  if (folded.startsWith(".attachments/")) {
+    if (!relative.startsWith(".attachments/")) throw new ProjectBundleError("invalid_project_bundle");
     return "attachment";
   }
   return "project";
@@ -97,6 +96,9 @@ export async function readProjectBundleZip(file: File): Promise<{
     manifest = parseProjectBundleManifest(JSON.parse(new TextDecoder().decode(bytes)));
   } catch (error) {
     if (error instanceof ProjectBundleError) throw error;
+    throw new ProjectBundleError("invalid_project_bundle");
+  }
+  if (manifest.files.some((entry) => /^project\/\.burnguard-inputs(?:\/|$)/iu.test(entry.path))) {
     throw new ProjectBundleError("invalid_project_bundle");
   }
   const expected = new Map(manifest.files.map((entry) => [entry.path, entry]));

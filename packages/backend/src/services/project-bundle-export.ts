@@ -18,6 +18,7 @@ import { PathBoundaryError, assertSafeName } from "../security/path-boundary";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { acquireArtifactProjectLock } from "./artifact-project-lock";
 import { readProjectDesignSystemPin } from "./project-design-system-pin";
+import { parseStoredProjectOptions } from "./project-options";
 import {
   collectDesignSystemBundleEntries,
   collectProjectBundleEntries,
@@ -93,7 +94,7 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
       type: project.type,
       entrypoint: project.entrypoint,
       backend_id: project.backend_id,
-      options_json: project.options_json,
+      options_json: project.options_json === null ? null : JSON.stringify(parseStoredProjectOptions(project.options_json)),
       current_revision: project.current_revision,
       current_digest: project.current_digest,
     },
