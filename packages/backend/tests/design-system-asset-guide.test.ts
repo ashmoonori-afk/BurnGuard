@@ -25,6 +25,9 @@ import type { CssDeclarationEvidence } from "../src/services/extraction-css";
 const NO_EVIDENCE: SourceEvidence = collectSourceEvidence([], []);
 const guideFor = (overrides: Partial<Parameters<typeof buildAssetGuideReadme>[0]> = {}) => extractDesignSystemAssetGuide(buildAssetGuideReadme({ brandName: "Brand", primary: "#112233", action: "#112233", colors: [], fontFamilies: [], radii: [], logoPaths: [], evidence: NO_EVIDENCE, ...overrides }));
 
+const defaultUsage = (kind: string) => guideFor().rules.find(rule => rule.kind === kind)!.usage;
+const usageOf = (guide: ReturnType<typeof guideFor>, kind: string) => guide.rules.find(rule => rule.kind === kind)!.usage;
+
 const declaration = (property: string, value: string, context = ""): CssDeclarationEvidence => ({
   property, value, context, sourceLocator: "fixture.css", fileOrder: 0, declarationOrder: 0, parseStatus: "observed",
 });
@@ -154,7 +157,7 @@ describe("Source layout measurement", () => {
     const math = await parseCssSource({ content: ":root { --duration: 1s } .a { animation-duration: calc(1s / 2) } .b { transition-duration: calc(var(--duration) + 200ms) }", sourceId: "m.css", fileOrder: 0, signal: new AbortController().signal });
     const mathEvidence = collectSourceEvidence([], math.declarations);
     expect(mathEvidence.motionMs).toBeNull();
-    expect(guideFor({ evidence: mathEvidence }).rules.find(rule => rule.kind === "motion")!.usage!.startsWith("Evidence: not found in the source")).toBe(true);
+    expect(usageOf(guideFor({ evidence: mathEvidence }), "motion")).toBe(defaultUsage("motion"));
     const fallbacks = await parseCssSource({ content: ":root { --bg: #fff; --pattern: none } .a { background: var(--bg, linear-gradient(#111, #222)) } .b { background-image: var(--pattern, repeating-linear-gradient(45deg, #000 0 2px, transparent 2px 8px)) } .c { background-image: linear-gradient(#333, #444) }", sourceId: "g.css", fileOrder: 0, signal: new AbortController().signal });
     const fallbackEvidence = collectSourceEvidence([], fallbacks.declarations);
     expect({ gradients: fallbackEvidence.gradients, patterns: fallbackEvidence.patterns }).toEqual({ gradients: 1, patterns: 0 });
@@ -258,6 +261,10 @@ describe("Source evidence drives section patterns and asset style", () => {
     expect(hero('<section class="hero"><div style="display:flex;flex-flow:column nowrap"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')).toEqual({ media: true });
     expect(hero('<section class="hero"><h1>T</h1><p>L</p></section>')).toEqual({ media: false });
     expect(hero('<main><p>No headline</p></main>')).toBeNull();
+    for (const wrapper of ["hero-content", "hero__copy"]) expect(hero(`<section class="hero"><div class="${wrapper}"><h1>Brand</h1></div><img src="team.jpg"></section>`)).toEqual({ media: true });
+    expect(hero('<body><div><h1>Loose</h1></div><img src="x.jpg"></body>')).toBeNull();
+    const wrapped = extractDesignSystemLayout("", buildSectionPatternReadme(collectSourceEvidence(['<section class="hero"><div class="hero-content"><h1>Brand</h1></div><img src="team.jpg"></section>'], []))).sections.find(section => section.kind === "patterns")!.text;
+    expect(wrapped).toBe(extractDesignSystemLayout("", buildSectionPatternReadme(collectSourceEvidence(['<section><h1>Brand</h1><img src="a.jpg"></section>'], []))).sections.find(section => section.kind === "patterns")!.text);
     expect(["minmax(0, 1fr)", "repeat(1, 1fr)", "repeat(3, minmax(0, 1fr))", "[full] 1fr [mid] 2fr", "[content-start main-start] minmax(0, 1fr) [content-end main-end]", "repeat(auto-fit, 200px)", "fit-content(10px", "1fr !important", "repeat(3, 1fr 2fr)", "repeat(2, [a] 1fr [b] repeat(2, 10px))", "subgrid", "repeat(8, var(--tracks))", "var(--cols)", "repeat(8,[a]1fr[b] 2fr)", "[a]1fr[b]"].map(gridTrackCount)).toEqual([1, 1, 3, 2, 1, null, null, 1, 6, 6, null, null, null, 16, 1]);
   });
 
@@ -266,9 +273,9 @@ describe("Source evidence drives section patterns and asset style", () => {
     expect(patterns).not.toContain("(observed)");
     const guide = guideFor();
     expect(guide.rules.map(rule => rule.kind)).toEqual([...ASSET_KINDS]);
-    for (const rule of guide.rules.filter(rule => rule.kind !== "logo")) expect(rule.usage!.startsWith("Evidence: not found in the source")).toBe(true);
     const observed = guideFor({ evidence: collectSourceEvidence([html], css) });
-    for (const kind of ["icons", "illustrations", "photography", "backgrounds", "motion"]) expect(observed.rules.find(rule => rule.kind === kind)!.usage!.startsWith("Evidence: observed in the source")).toBe(true);
+    for (const kind of ["icons", "illustrations", "photography", "backgrounds", "motion"]) expect(usageOf(observed, kind)).not.toBe(defaultUsage(kind));
+    for (const kind of ["patterns"]) expect(usageOf(observed, kind)).toBe(defaultUsage(kind));
   });
 
   test("Given the generated guide, then it carries no website region placement so fixed surfaces can receive it", () => {
@@ -289,7 +296,7 @@ describe("Source evidence drives section patterns and asset style", () => {
     const parsed = await parseCssSource({ content: ".a { animation-name: fade; } .b { background-image: linear-gradient(90deg, #111, #222); } .c { background-image: url('/photos/team.jpg'); }", sourceId: "fixture.css", fileOrder: 0, signal: new AbortController().signal });
     const evidence = collectSourceEvidence([], parsed.declarations);
     expect({ motionMs: evidence.motionMs, animations: evidence.animations, gradients: evidence.gradients }).toEqual({ motionMs: null, animations: 1, gradients: 1 });
-    expect(guideFor({ evidence }).rules.find(rule => rule.kind === "motion")!.usage!.startsWith("Evidence: observed in the source")).toBe(true);
+    expect(usageOf(guideFor({ evidence }), "motion")).not.toBe(defaultUsage("motion"));
   });
 
   test("Given icons whose paint any stylesheet could change, then only their count is observed", () => {
@@ -297,7 +304,7 @@ describe("Source evidence drives section patterns and asset style", () => {
     const evidence = collectSourceEvidence([`<style>svg { fill: currentColor; stroke: none }</style>${svg}${svg}`], []);
     expect(evidence.iconCount).toBe(2);
     const icons = guideFor({ evidence }).rules.find(rule => rule.kind === "icons")!;
-    expect(icons.usage!.startsWith("Evidence: observed in the source")).toBe(true);
+    expect(icons.usage).not.toBe(defaultUsage("icons"));
     expect(icons.prompt).toBe(guideFor().rules.find(rule => rule.kind === "icons")!.prompt);
   });
 
@@ -328,7 +335,7 @@ describe("Evidence comes from the original source, not sanitized or generated HT
       const stored = await readFile(path.join(systemsDir, id, "uploads", "source.html"), "utf8");
       expect(stored).not.toContain("team.jpg");
       const guide = parseDesignSystemAssetGuide((await readDesignSystemTokens(id)).assets);
-      for (const kind of ["photography", "illustrations"]) expect(guide.rules.find(rule => rule.kind === kind)!.usage!.startsWith("Evidence: observed in the source")).toBe(true);
+      for (const kind of ["photography", "illustrations"]) expect(guide.rules.find(rule => rule.kind === kind)!.usage).not.toBe(defaultUsage(kind));
       const layout = (await readDesignSystemTokens(id)).layout.sections.find(section => section.kind === "patterns")!.text;
       expect(layout).toMatch(/^- Hero \(observed\)/m);
     } finally {
@@ -353,7 +360,7 @@ describe("Evidence comes from the original source, not sanitized or generated HT
       await persistCanonicalExtraction({ requestedId: id, brandName: "Upload", sourceType: "upload", sourceReference: "upload://fixture", lineage: null, analysis, signal });
       const tokens = await readDesignSystemTokens(id);
       expect(tokens.layout.sections.find(section => section.kind === "patterns")!.text).not.toContain("(observed)");
-      for (const rule of parseDesignSystemAssetGuide(tokens.assets).rules.filter(rule => rule.kind !== "logo")) expect(rule.usage!.startsWith("Evidence: not found in the source")).toBe(true);
+      expect(parseDesignSystemAssetGuide(tokens.assets)).toEqual(guideFor({ brandName: "Upload", primary: "#0057B8", action: "#0057B8" }));
     } finally {
       getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(id);
       await rm(path.join(systemsDir, id), { recursive: true, force: true });

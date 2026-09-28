@@ -95,9 +95,14 @@ export function gridTrackCount(value: string): number | null {
 function heroOf(root: HTMLElement): SourceEvidence["hero"] {
   const heading = root.querySelector("h1");
   if (!heading) return null;
-  let region: HTMLElement | null = heading.parentNode as HTMLElement | null;
-  while (region && region.parentNode && !["section", "header", "main", "body"].includes(region.tagName?.toLowerCase() ?? "") && !/hero|banner|masthead|jumbotron/.test(classOf(region))) region = region.parentNode as HTMLElement;
-  return region ? { media: region.querySelector("img, picture, video") !== null } : null;
+  // The opening region is the nearest section/header or an element whose class token is exactly a hero
+  // name; wrappers such as hero-content never end the search. Without such a region nothing is claimed.
+  for (let region: HTMLElement | null = heading.parentNode as HTMLElement | null; region?.tagName; region = region.parentNode as HTMLElement | null) {
+    const tag = region.tagName.toLowerCase();
+    if (tag === "main" || tag === "body") return null;
+    if (tag === "section" || tag === "header" || /(?:^|\s)(?:hero|banner|masthead|jumbotron)(?=\s|$)/.test(classOf(region))) return { media: region.querySelector("img, picture, video") !== null };
+  }
+  return null;
 }
 
 /**
