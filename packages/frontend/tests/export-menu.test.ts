@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { DesignAuditCheck, DesignAuditFinding, DesignAuditResult, ExportAttempt, ExportJob, ExportStatus } from "@bg/shared";
 import { exportJobState, exportTransitions } from "../src/components/export/export-job-state";
+import { handoffCommands } from "../src/components/export/handoff-command-state";
 import { shareExportReady } from "../src/components/export/VercelShare";
 import { qualityStatusKey } from "../src/components/modes/QualityPanel";
 import { exportQualityGate } from "../src/lib/design-audit-state";
 
 const attempt: ExportAttempt = { id: "attempt", job_id: "job", parent_attempt_id: null, status: "validated", project_revision: 4, project_digest: "digest", digests: { options: "options", input_closure: null, design_system: null, renderer: "renderer", capture: null, output: "output", receipt: "receipt" }, progress: { stage: "complete", completed: 6, total: 6 }, stop_reason: null, findings: [], retention: { retained_until: 1000, output_available: true }, cancel_requested_at: null, created_at: 1, updated_at: 1 };
-const job = (overrides: Partial<ExportJob> = {}): ExportJob => ({ id: "job", project_id: "project", format: "pdf", status: "succeeded", output_path: null, error_message: null, size_bytes: 4, options: {}, latest_attempt: attempt, created_at: 1, completed_at: 2, ...overrides });
+const job = (overrides: Partial<ExportJob> = {}): ExportJob => ({ id: "job", project_id: "project", format: "pdf", status: "succeeded", output_path: null, error_message: null, size_bytes: 4, options: {}, latest_attempt: attempt, handoff_continuation: null, created_at: 1, completed_at: 2, ...overrides });
 
 const DIGEST = "a".repeat(64);
 function finding(severity: DesignAuditFinding["severity"]): DesignAuditFinding {
@@ -87,5 +88,39 @@ describe("share readiness (UXM-32)", () => {
     expect(source).not.toContain('job.data?.status === "succeeded"');
     expect(source).not.toContain('job.data?.status !== "succeeded"');
     expect(source.match(/shareExportReady\(job\.data\)/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("handoff continuation commands", () => {
+  test("Given a downloadable handoff export When continuation state is derived Then both CLI commands are available", () => {
+    const commands = handoffCommands(job({
+      format: "handoff",
+      handoff_continuation: {
+        prompt_file: "handoff/prompt.md",
+        commands: {
+          claude_code: 'claude --add-dir ./source "Read ./handoff/prompt.md and continue the production handoff."',
+          codex: 'codex --cd ./source "Read ../handoff/prompt.md and continue the production handoff."',
+        },
+      },
+    }));
+
+    expect(commands?.prompt_file).toBe("handoff/prompt.md");
+    expect(commands?.commands.claude_code).toContain("./handoff/prompt.md");
+    expect(commands?.commands.codex).toContain("../handoff/prompt.md");
+  });
+
+  test("Given a non-handoff or unavailable export When continuation state is derived Then commands stay hidden", () => {
+    expect(handoffCommands(job())).toBeNull();
+    expect(handoffCommands(job({
+      format: "handoff",
+      status: "running",
+      handoff_continuation: {
+        prompt_file: "handoff/prompt.md",
+        commands: {
+          claude_code: "claude",
+          codex: "codex",
+        },
+      },
+    }))).toBeNull();
   });
 });

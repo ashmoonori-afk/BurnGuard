@@ -26,6 +26,8 @@ export * from "./logo";
 export * from "./platform-presets";
 export * from "./platform-guides";
 export * from "./harness";
+export * from "./handoff";
+export * from "./handoff-parser";
 export * from "./home";
 export * from "./learning-contract";
 export * from "./project";

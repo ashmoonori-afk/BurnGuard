@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import JSZip from "jszip";
+import { parseHandoffManifest } from "@bg/shared";
 import { parsePng } from "./export-png-validation";
 import { canonicalJson } from "./export-receipt";
 import type { PackageEntryRole } from "./platform-package-contract";
@@ -119,7 +120,7 @@ export async function validatePptxPackage(bytes: Uint8Array, expectedSlides: num
 
 export async function validateHandoffPackage(bytes: Uint8Array, entrypoint: string, pin?: { readonly digest: string; readonly revision: number } | null): Promise<{ readonly source_files: number; readonly nodes: number }> {
   const zip = await load(bytes); const names = safeNames(zip);
-  for (const required of ["README.txt", "spec.json", "review.json", "preview.png", `source/${entrypoint}`]) if (!names.has(required)) fail("missing_part");
+  for (const required of ["README.txt", "HANDOFF.md", "spec.json", "review.json", "preview.png", "handoff/manifest.json", "handoff/prompt.md", `source/${entrypoint}`]) if (!names.has(required)) fail("missing_part");
   const png = await zip.file("preview.png")!.async("uint8array");
   const dimensions = parsePng(png);
   if (dimensions.width !== 1280 || dimensions.height !== 720) fail("invalid_package");
@@ -139,6 +140,18 @@ export async function validateHandoffPackage(bytes: Uint8Array, entrypoint: stri
   const source = await zip.file("spec.json")?.async("string"); if (source === undefined) fail("missing_part");
   let value: unknown; try { value = JSON.parse(source); } catch { fail("invalid_package"); }
   if (!isRecord(value) || value["spec_version"] !== 1 || !Array.isArray(value["pages"])) fail("invalid_package");
+  const manifestSource = await zip.file("handoff/manifest.json")?.async("string");
+  if (manifestSource === undefined) fail("missing_part");
+  let manifest: ReturnType<typeof parseHandoffManifest>;
+  try { manifest = parseHandoffManifest(manifestSource); }
+  catch (error) {
+    if (error instanceof Error) fail("invalid_package");
+    throw error;
+  }
+  if (
+    manifest.project.entrypoint !== entrypoint ||
+    manifest.continuation.prompt_file !== "handoff/prompt.md"
+  ) fail("manifest_mismatch");
   let nodes = 0;
   for (const page of value["pages"]) { if (!isRecord(page) || !Array.isArray(page["nodes"])) fail("invalid_package"); nodes += page["nodes"].length; }
   return { source_files: [...names].filter((name) => name.startsWith("source/")).length, nodes };

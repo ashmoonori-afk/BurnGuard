@@ -173,6 +173,7 @@ describe("EXTRACT_HANDOFF_FN", () => {
     expect(EXTRACT_HANDOFF_FN.startsWith("() => {")).toBe(true);
     expect(EXTRACT_HANDOFF_FN).toContain("[data-bg-node-id]");
     expect(EXTRACT_HANDOFF_FN).toContain("[data-slide]");
+    expect(EXTRACT_HANDOFF_FN).toContain("[data-graphic-artboard]");
     expect(EXTRACT_HANDOFF_FN).toContain("getComputedStyle");
     // Must read every property we committed to exposing, otherwise the
     // spec JSON loses fidelity for the listed key.

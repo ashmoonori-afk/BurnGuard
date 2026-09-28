@@ -132,6 +132,7 @@ export interface ExportJob {
   readonly size_bytes: number | null;
   readonly options: ExportOptions;
   readonly latest_attempt: import("./export-attempt").ExportAttempt | null;
+  readonly handoff_continuation: import("./handoff").HandoffContinuation | null;
   readonly created_at: number;
   readonly completed_at: number | null;
 }

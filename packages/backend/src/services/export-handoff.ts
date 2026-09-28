@@ -1,5 +1,6 @@
 import { copyFile, cp, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
+import type { HandoffPage, HandoffSpec } from "@bg/shared";
 import { isProjectDocumentPath } from "./project-document-paths";
 
 const HANDOFF_EXCLUDED_TOP_LEVEL = new Set([".meta", ".attachments", ".burnguard-inputs"]);
@@ -71,39 +72,6 @@ export const HANDOFF_STYLE_KEYS = [
   "text-align",
 ] as const;
 
-export interface HandoffNode {
-  bg_id: string;
-  tag: string;
-  parent_bg_id: string | null;
-  text: string;
-  rect: { x: number; y: number; w: number; h: number };
-  styles: Partial<Record<(typeof HANDOFF_STYLE_KEYS)[number], string>>;
-}
-
-export interface HandoffPage {
-  slide_index: number | null;
-  title: string;
-  rect: { w: number; h: number };
-  nodes: HandoffNode[];
-}
-
-export interface HandoffSpec {
-  spec_version: 1;
-  generated_at: number;
-  project: {
-    id: string;
-    name: string;
-    type: "prototype" | "slide_deck" | "graphic" | "logo" | "from_template" | "other";
-    entrypoint: string;
-  };
-  viewport: { width: number; height: number };
-  design_system: {
-    name: string | null;
-    tokens_file: string | null; // relative path inside the zip
-  };
-  pages: HandoffPage[];
-}
-
 /**
  * Pure assembler — takes the raw `page.evaluate` payload and the project
  * metadata, returns a `HandoffSpec`. Split out so tests can exercise it
@@ -171,7 +139,10 @@ export const EXTRACT_HANDOFF_FN = `() => {
   function extractNodes(root, relativeTo) {
     const baseRect = relativeTo.getBoundingClientRect();
     const out = [];
-    const els = root.querySelectorAll("[data-bg-node-id]");
+    const els = [
+      ...(root.matches && root.matches("[data-bg-node-id]") ? [root] : []),
+      ...root.querySelectorAll("[data-bg-node-id]"),
+    ];
     els.forEach((el) => {
       const rect = el.getBoundingClientRect();
       out.push({
@@ -193,19 +164,21 @@ export const EXTRACT_HANDOFF_FN = `() => {
 
   const viewport = { width: window.innerWidth, height: window.innerHeight };
   const slides = document.querySelectorAll("[data-slide]");
-  if (slides.length > 0) {
+  const artboards = document.querySelectorAll("[data-graphic-artboard]");
+  const surfaces = slides.length > 0 ? slides : artboards;
+  if (surfaces.length > 0) {
     return {
       viewport,
-      pages: Array.from(slides).map((slide, i) => {
-        const rect = slide.getBoundingClientRect();
+      pages: Array.from(surfaces).map((surface, i) => {
+        const rect = surface.getBoundingClientRect();
         return {
           slide_index: i,
-          title: "Slide " + (i + 1),
+          title: (slides.length > 0 ? "Slide " : "Artboard ") + (i + 1),
           rect: {
             w: Math.round(rect.width * 100) / 100,
             h: Math.round(rect.height * 100) / 100,
           },
-          nodes: extractNodes(slide, slide),
+          nodes: extractNodes(surface, surface),
         };
       }),
     };
