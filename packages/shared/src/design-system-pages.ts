@@ -3,7 +3,9 @@ import { isRecord, UpgradeContractError } from "./contract-parser";
 export const PAGE_TYPES = ["home", "pricing", "blog", "docs", "product", "about", "contact", "other"] as const;
 export type DesignSystemPageType = (typeof PAGE_TYPES)[number];
 export const PAGE_SOURCES = ["entry", "nav", "footer", "sitemap", "link"] as const;
-export const PAGE_SKIP_REASONS = ["robots", "cap", "fetch_failed"] as const;
+export const PAGE_SKIP_REASONS = ["robots", "cap", "fetch_failed", "budget"] as const;
+/** Serialized pages.json stays below this so the 256 KiB source reader always accepts it. */
+export const MAX_PAGE_COVERAGE_BYTES = 200_000;
 export const DEFAULT_PAGE_LIMIT = 12;
 export const MAX_PAGE_PATH_LENGTH = 300;
 export const MAX_PAGE_LIMIT = 24;
@@ -46,6 +48,7 @@ export type DesignSystemPageTemplate = {
   readonly patterns: readonly string[];
   readonly layout_tokens: Readonly<Record<string, string>>;
   readonly custom_properties: Readonly<Record<string, string>>;
+  readonly colors: readonly string[];
   readonly evidence: DesignSystemPageEvidence;
 };
 
@@ -129,8 +132,8 @@ export function parseDesignSystemPageCoverage(input: unknown): DesignSystemPageC
   });
   if (new Set(pages.map(page => page.path)).size !== pages.length) return invalid();
   const templates = input.templates.map((template): DesignSystemPageTemplate => {
-    if (!exact(template, ["page_type", "path", "patterns", "layout_tokens", "custom_properties", "evidence"])) return invalid();
-    return { page_type: pageType(template.page_type), path: path(template.path), patterns: strings(template.patterns, KEY, 16), layout_tokens: tokens(template.layout_tokens), custom_properties: properties(template.custom_properties), evidence: evidence(template.evidence) };
+    if (!exact(template, ["page_type", "path", "patterns", "layout_tokens", "custom_properties", "colors", "evidence"])) return invalid();
+    return { page_type: pageType(template.page_type), path: path(template.path), patterns: strings(template.patterns, KEY, 16), layout_tokens: tokens(template.layout_tokens), custom_properties: properties(template.custom_properties), colors: strings(template.colors, SHORT_TEXT, 12), evidence: evidence(template.evidence) };
   });
   if (new Set(templates.map(template => template.page_type)).size !== templates.length) return invalid();
   const differences = input.differences.map((difference): DesignSystemPageDifference => {

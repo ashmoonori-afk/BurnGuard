@@ -1,6 +1,7 @@
 import { ASSET_README_HEADINGS, CONTENT_TYPE_FLOOR_PX, LAYOUT_SECTION_HEADINGS, layoutSectionKind, type DesignSurface, type DesignSystemLayout } from "@bg/shared";
 import { readDesignSystemAssetGuide } from "../services/design-system-assets";
 import { readDesignSystemPageCoverage } from "../services/design-system-pages";
+import { pageCoveragePromptSummary } from "../services/extraction-pages";
 import { readDesignSystemLayout, readDesignSystemSourceFile } from "../services/design-system-layout";
 import path from "node:path";
 import { readDesignSystemSurface } from "../services/design-system-surface";
@@ -169,7 +170,7 @@ export async function appendDesignSystemContext(
   // Page-type templates are page geometry, so only the website surface receives them.
   const pages = surface === "website" ? await readDesignSystemPageCoverage(designSystem) : null;
   if (pages && (pages.templates.length || pages.differences.length)) {
-    lines.push("<selected_design_system_pages>", JSON.stringify({ templates: pages.templates, differences: pages.differences }).replace(/</g, "\\u003c"), "</selected_design_system_pages>");
+    lines.push("<selected_design_system_pages>", JSON.stringify(pageCoveragePromptSummary(pages)).replace(/</g, "\\u003c"), "</selected_design_system_pages>");
     lines.push(PAGE_REQUIREMENT, "");
   }
   // Asset rules describe brand assets rather than page geometry, so every surface receives them.

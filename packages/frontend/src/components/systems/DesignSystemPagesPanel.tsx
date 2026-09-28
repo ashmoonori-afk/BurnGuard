@@ -10,7 +10,7 @@ const patternLabels: Record<string, MessageKey> = {
   pricing: "system.pages.pattern.pricing", testimonials: "system.pages.pattern.testimonials", footer: "system.pages.pattern.footer",
 };
 const reasonLabels: Record<NonNullable<DesignSystemPageRecord["skip_reason"]>, MessageKey> = {
-  robots: "system.pages.reason.robots", cap: "system.pages.reason.cap", fetch_failed: "system.pages.reason.fetchFailed",
+  robots: "system.pages.reason.robots", cap: "system.pages.reason.cap", fetch_failed: "system.pages.reason.fetchFailed", budget: "system.pages.reason.budget",
 };
 
 interface DesignSystemPagesPanelProps {

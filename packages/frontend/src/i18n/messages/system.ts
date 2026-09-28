@@ -35,6 +35,7 @@ export const systemMessages = defineMessages({
   "system.pages.extracted": { ko: "추출됨", en: "Extracted", "zh-CN": "已提取" },
   "system.pages.reason.robots": { ko: "robots.txt로 제외", en: "Excluded by robots.txt", "zh-CN": "因 robots.txt 排除" },
   "system.pages.reason.cap": { ko: "페이지 상한 초과", en: "Over the page limit", "zh-CN": "超出页面上限" },
+  "system.pages.reason.budget": { ko: "다운로드 예산 초과로 건너뜀", en: "Skipped to stay within the download budget", "zh-CN": "为控制下载量而跳过" },
   "system.pages.reason.fetchFailed": { ko: "불러오지 못함", en: "Could not be fetched", "zh-CN": "无法获取" },
   "system.pages.differences": { ko: "페이지마다 다른 값", en: "Values that differ between pages", "zh-CN": "页面之间不同的值" },
   "system.pages.pattern.hero": { ko: "히어로", en: "Hero", "zh-CN": "首屏" },

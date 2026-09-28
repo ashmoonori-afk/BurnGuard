@@ -1,5 +1,6 @@
 import { parse, type HTMLElement } from "node-html-parser";
 import {
+  MAX_PAGE_COVERAGE_BYTES,
   MAX_PAGE_PATH_LENGTH,
   PAGE_TYPES,
   type DesignSystemPageCoverage,
@@ -136,7 +137,7 @@ export function discoverPages(input: {
   for (const href of anchors([root])) push(href, "link");
   const skipped: (PageCandidate & { reason: "robots" | "cap" })[] = [];
   const allowed = ordered.filter(candidate => {
-    if (candidate.source === "entry" || (input.robots.allows(candidate.fetchPath) && input.robots.allows(candidate.path))) return true;
+    if (candidate.source === "entry" || input.robots.allows(candidate.fetchPath)) return true;
     skipped.push({ ...candidate, reason: "robots" });
     return false;
   });
@@ -232,7 +233,7 @@ export function buildPageCoverage(input: {
   readonly limit: number;
   readonly discovered: number;
   readonly extracted: readonly ExtractedPage[];
-  readonly skipped: readonly (Pick<PageCandidate, "path" | "source"> & { readonly reason: "robots" | "cap" | "fetch_failed"; readonly pageType: DesignSystemPageType })[];
+  readonly skipped: readonly (Pick<PageCandidate, "path" | "source"> & { readonly reason: "robots" | "cap" | "fetch_failed" | "budget"; readonly pageType: DesignSystemPageType })[];
 }): DesignSystemPageCoverage {
   const extracted: ExtractedPage[] = [];
   for (const page of input.extracted) if (!extracted.some(existing => existing.path === page.path)) extracted.push(page);
@@ -243,22 +244,59 @@ export function buildPageCoverage(input: {
   ].slice(0, 200);
   const templates: DesignSystemPageTemplate[] = PAGE_TYPES.flatMap(type => {
     const page = extracted.find(candidate => candidate.pageType === type);
-    return page ? [{ page_type: type, path: page.path, patterns: [...page.patterns], layout_tokens: { ...page.layoutTokens }, custom_properties: { ...page.customProperties }, evidence: page.evidence }] : [];
+    return page ? [{ page_type: type, path: page.path, patterns: [...page.patterns], layout_tokens: { ...page.layoutTokens }, custom_properties: { ...page.customProperties }, colors: [...page.colors].slice(0, 12), evidence: page.evidence }] : [];
   });
   const differences: DesignSystemPageDifference[] = [];
   for (const key of [...new Set(extracted.flatMap(page => Object.keys(page.layoutTokens)))].sort()) {
     const difference = differing(key, extracted.map(page => ({ path: page.path, value: page.layoutTokens[key] })));
     if (difference) differences.push(difference);
   }
-  for (const key of [...new Set(extracted.flatMap(page => Object.keys(page.customProperties)))].sort()) {
-    const difference = differing(key, extracted.map(page => ({ path: page.path, value: page.customProperties[key] })));
-    if (difference) differences.push(difference);
-  }
+  const palette = differing("palette", extracted.map(page => ({ path: page.path, value: page.colors.length ? page.colors.slice(0, 6).join(" ").slice(0, 160) : undefined })));
+  if (palette) differences.push(palette);
   const primaryFont = differing("primary-font", extracted.map(page => ({ path: page.path, value: page.fonts[0] })));
   if (primaryFont) differences.push(primaryFont);
   const alignment = differing("alignment", extracted.map(page => ({ path: page.path, value: page.evidence.alignment ?? undefined })));
   if (alignment) differences.push(alignment);
-  return { schema_version: 1, page_limit: input.limit, discovered: input.discovered, pages, templates, differences: differences.slice(0, 64) };
+  // Custom properties come last: page-level palette, font and alignment differences outrank them when compacted.
+  for (const key of [...new Set(extracted.flatMap(page => Object.keys(page.customProperties)))].sort()) {
+    const difference = differing(key, extracted.map(page => ({ path: page.path, value: page.customProperties[key] })));
+    if (difference) differences.push(difference);
+  }
+  return boundPageCoverage({ schema_version: 1, page_limit: input.limit, discovered: input.discovered, pages, templates, differences: differences.slice(0, 64) });
+}
+
+const serializedBytes = (coverage: DesignSystemPageCoverage) => Buffer.byteLength(JSON.stringify(coverage, null, 2));
+
+/**
+ * Deterministic compaction until pages.json fits MAX_PAGE_COVERAGE_BYTES: fewer skipped records, then
+ * fewer custom properties and colours per page, then shorter difference lists, then no skipped records.
+ */
+export function boundPageCoverage(coverage: DesignSystemPageCoverage): DesignSystemPageCoverage {
+  const trimRecord = <T extends { custom_properties: Readonly<Record<string, string>>; colors: readonly string[] }>(record: T, properties: number, colors: number): T =>
+    ({ ...record, custom_properties: Object.fromEntries(Object.entries(record.custom_properties).slice(0, properties)), colors: record.colors.slice(0, colors) });
+  const steps: ((current: DesignSystemPageCoverage) => DesignSystemPageCoverage)[] = [
+    current => ({ ...current, pages: [...current.pages.filter(page => page.status === "extracted"), ...current.pages.filter(page => page.status === "skipped").slice(0, 60)] }),
+    current => ({ ...current, pages: current.pages.map(page => trimRecord(page, 16, 6)), templates: current.templates.map(template => trimRecord(template, 16, 6)) }),
+    current => ({ ...current, differences: current.differences.slice(0, 24).map(difference => ({ ...difference, values: difference.values.slice(0, 12) })) }),
+    current => ({ ...current, pages: current.pages.filter(page => page.status === "extracted").map(page => trimRecord(page, 4, 3)), templates: current.templates.map(template => trimRecord(template, 8, 4)) }),
+    current => ({ ...current, differences: current.differences.slice(0, 8).map(difference => ({ ...difference, values: difference.values.slice(0, 6) })) }),
+  ];
+  let current = coverage;
+  for (const step of steps) {
+    if (serializedBytes(current) <= MAX_PAGE_COVERAGE_BYTES) return current;
+    current = step(current);
+  }
+  return current;
+}
+
+/** Bounded prompt view of the templates and differences; always well below the pinned-context limit. */
+export function pageCoveragePromptSummary(coverage: DesignSystemPageCoverage, maxChars = 24_000): { readonly templates: DesignSystemPageCoverage["templates"]; readonly differences: DesignSystemPageCoverage["differences"] } {
+  let templates = coverage.templates.map(template => ({ ...template, custom_properties: Object.fromEntries(Object.entries(template.custom_properties).slice(0, 24)), colors: template.colors.slice(0, 6) }));
+  let differences = coverage.differences.slice(0, 24).map(difference => ({ ...difference, values: difference.values.slice(0, 12) }));
+  const size = () => JSON.stringify({ templates, differences }).length;
+  while (size() > maxChars && differences.length > 0) differences = differences.slice(0, -1);
+  while (size() > maxChars && templates.some(template => Object.keys(template.custom_properties).length > 0)) templates = templates.map(template => ({ ...template, custom_properties: Object.fromEntries(Object.entries(template.custom_properties).slice(0, Math.floor(Object.keys(template.custom_properties).length / 2))) }));
+  return { templates, differences };
 }
 
 /** README `## Page templates` section summarising per-type templates and cross-page differences. */

@@ -704,6 +704,11 @@ async function ingestGitSource(
   return analysis;
 }
 
+/** Aggregate download budget exhaustion stops acquisition; a single oversized optional resource does not. */
+function isBudgetExhausted(error: unknown): boolean {
+  return error instanceof AcquisitionLimitError && error.limit === "aggregate_source_bytes";
+}
+
 async function ingestWebsiteSource(
   sourceUrl: string,
   ingestDir: string,
@@ -770,7 +775,7 @@ async function ingestWebsiteSource(
       const fetched = await fetchWebsiteResource(target, { maxBytes, kind: "html", noteBytes, signal, userAgent: `BurnGuard/${APP_VERSION} design-system-import`, allowedOrigin: url.origin });
       return fetched.finalUrl.origin === url.origin ? fetched.text : null;
     } catch (error) {
-      if (error instanceof ExtractionAcquisitionError) throw error;
+      if (error instanceof ExtractionAcquisitionError || isBudgetExhausted(error)) throw error;
       return null;
     }
   };
@@ -796,10 +801,17 @@ async function ingestWebsiteSource(
   const discovery = discoverPages({ base: url, homepageHtml: html, sitemapUrls: sitemapUrls.slice(0, 500), robots, limit: pageLimit });
   const pageSource = new Map<string, (typeof discovery.selected)[number]["source"]>([[url.toString(), "entry"]]);
   const extractedKeys = new Set([canonicalPagePath(url.toString(), url) ?? "/"]);
-  const failedPages: { path: string; source: (typeof discovery.selected)[number]["source"]; reason: "fetch_failed" | "robots" }[] = [];
+  const failedPages: { path: string; source: (typeof discovery.selected)[number]["source"]; reason: "fetch_failed" | "robots" | "budget" }[] = [];
 
-  for (const candidate of discovery.selected.slice(1)) {
+  const remainingCandidates = discovery.selected.slice(1);
+  for (const [index, candidate] of remainingCandidates.entries()) {
     throwIfAcquisitionAborted(signal);
+    // Keep room in the aggregate budget for stylesheets; later pages are recorded instead of fetched.
+    if (totalDownloadedBytes > MAX_TOTAL_DOWNLOAD_BYTES * 0.6) {
+      for (const skipped of remainingCandidates.slice(index)) failedPages.push({ ...skipped, reason: "budget" });
+      notes.push(`Stopped page discovery at ${pageHtmlByUrl.size} pages to stay within the download budget.`);
+      break;
+    }
     const page = new URL(candidate.fetchPath, url);
     try {
       const pageFetch = await fetchWebsiteResource(page, {
@@ -821,7 +833,7 @@ async function ingestWebsiteSource(
       const fileName = `page-${pageHtmlByUrl.size}.html`;
       await writeFile(path.join(pagesDir, fileName), storedPageHtml, "utf8");
     } catch (error) {
-      if (error instanceof ExtractionAcquisitionError) throw error;
+      if (error instanceof ExtractionAcquisitionError || isBudgetExhausted(error)) throw error;
       if (error instanceof ExcludedPathError) { failedPages.push({ ...candidate, reason: "robots" }); continue; }
       failedPages.push({ ...candidate, reason: "fetch_failed" });
       notes.push(`Skipped linked page: ${page.toString()} (${error instanceof Error ? error.message : "fetch failed"})`);
@@ -846,6 +858,10 @@ async function ingestWebsiteSource(
     throwIfAcquisitionAborted(signal);
     const ownDeclarations: CssDeclarationEvidence[] = [];
     pageDeclarations.set(pageUrl, ownDeclarations);
+    // Page-local cascade order: this page's linked sheets in link order, then its inline styles, so a
+    // stylesheet cached from another page never carries that page's order into this one.
+    let pageOrder = 0;
+    const addLinked = (declarations: readonly CssDeclarationEvidence[]) => { const order = pageOrder++; ownDeclarations.push(...declarations.map((declaration) => ({ ...declaration, fileOrder: order }))); };
     const root = parse(pageHtml);
     throwIfAcquisitionAborted(signal);
     const sampleSet = extractHtmlComponentSamples(pageHtml, signal);
@@ -872,7 +888,7 @@ async function ingestWebsiteSource(
       const parsedCss = await parseCssSource({ content: inlineCss, sourceId: `${pageSourceId}#inline-style`, fileOrder: cssFileOrder, signal });
       cssFileOrder += 1;
       cssDeclarations.push(...parsedCss.declarations);
-      ownDeclarations.push(...parsedCss.declarations);
+      ownDeclarations.push(...parsedCss.declarations.map((declaration) => ({ ...declaration, fileOrder: Number.MAX_SAFE_INTEGER })));
       cssParseIssues.push(...parsedCss.issues);
       mergeSignals(
         { colors, fontSizes, fontWeights, spacingValues, radii, shadows },
@@ -897,7 +913,7 @@ async function ingestWebsiteSource(
         }
         // A stylesheet shared by several pages is fetched and parsed once but counts for every page.
         const cached = stylesheetDeclarations.get(cssUrl.toString());
-        if (cached) { ownDeclarations.push(...cached); continue; }
+        if (cached) { addLinked(cached); continue; }
         const cssFetch = await fetchWebsiteResource(cssUrl, {
           maxBytes: MAX_CSS_BYTES,
           kind: "css",
@@ -906,7 +922,7 @@ async function ingestWebsiteSource(
           userAgent: `BurnGuard/${APP_VERSION} design-system-import`,
         });
         const seenDeclarations = stylesheetDeclarations.get(cssFetch.finalUrl.toString());
-        if (seenStylesheets.has(cssFetch.finalUrl.toString())) { ownDeclarations.push(...(seenDeclarations ?? [])); continue; }
+        if (seenStylesheets.has(cssFetch.finalUrl.toString())) { addLinked(seenDeclarations ?? []); continue; }
         seenStylesheets.add(cssFetch.finalUrl.toString());
         const cssText = cssFetch.text;
         const fileName = `linked-${stylesheetIndex}.css`;
@@ -920,7 +936,7 @@ async function ingestWebsiteSource(
         const parsedCss = await parseCssSource({ content: cssText, sourceId: cssSourceId, fileOrder: cssFileOrder, signal });
         cssFileOrder += 1;
         cssDeclarations.push(...parsedCss.declarations);
-        ownDeclarations.push(...parsedCss.declarations);
+        addLinked(parsedCss.declarations);
         stylesheetDeclarations.set(cssUrl.toString(), parsedCss.declarations);
         stylesheetDeclarations.set(cssFetch.finalUrl.toString(), parsedCss.declarations);
         cssParseIssues.push(...parsedCss.issues);
@@ -932,7 +948,7 @@ async function ingestWebsiteSource(
           fontFamilies.add(family);
         }
       } catch (error) {
-        if (error instanceof ExtractionAcquisitionError) throw error;
+        if (error instanceof ExtractionAcquisitionError || isBudgetExhausted(error)) throw error;
         notes.push(`Skipped linked stylesheet: ${href} (${error instanceof Error ? error.message : "fetch failed"})`);
       }
     }
@@ -962,7 +978,7 @@ async function ingestWebsiteSource(
         await writeFile(absolutePath, logoFetch.buffer);
         logoFiles.push({ absolutePath, fileName: dedupedName });
       } catch (error) {
-        if (error instanceof ExtractionAcquisitionError) throw error;
+        if (error instanceof ExtractionAcquisitionError || isBudgetExhausted(error)) throw error;
         notes.push(`Skipped logo candidate: ${src} (${error instanceof Error ? error.message : "fetch failed"})`);
       }
     }

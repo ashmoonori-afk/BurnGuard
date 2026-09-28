@@ -2,13 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { parseDesignSystemPageCoverage, type DesignSystemPageEvidence } from "@bg/shared";
+import { MAX_PAGE_COVERAGE_BYTES, parseDesignSystemPageCoverage, type DesignSystemPageEvidence } from "@bg/shared";
 import { getSqlite } from "../src/db/sqlite-client";
 import { appendDesignSystemContext } from "../src/harness/prompt-design-system";
 import { systemsDir } from "../src/lib/paths";
 import { extractDesignSystemFromSource, readDesignSystemTokens } from "../src/services/design-system-extract";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
-import { buildPageCoverage, canonicalPagePath, classifyPageType, discoverPages, pageLink, parseRobots, parseSitemap, robotsPatternMatches } from "../src/services/extraction-pages";
+import { boundPageCoverage, buildPageCoverage, canonicalPagePath, classifyPageType, discoverPages, pageCoveragePromptSummary, pageLink, parseRobots, parseSitemap, robotsPatternMatches } from "../src/services/extraction-pages";
 
 const EVIDENCE: DesignSystemPageEvidence = { hero_media: null, feature_columns: null, footer_lists: null, alignment: null, icons: 0, photos: 0, illustrations: 0, gradients: 0, background_patterns: 0, motion_ms: null, animations: 0 };
 
@@ -70,7 +70,7 @@ describe("Page discovery primitives", () => {
     });
     expect(coverage.pages.map(p => [p.path, p.status])).toEqual([["/", "extracted"], ["/pricing", "extracted"], ["/private", "skipped"]]);
     expect(coverage.templates.map(t => [t.page_type, t.custom_properties["--brand-accent"], t.evidence.photos])).toEqual([["home", "#ff0000", 2], ["pricing", "#0000ff", 0]]);
-    expect(coverage.differences.map(d => d.key)).toEqual(["--layout-max", "--brand-accent", "primary-font", "alignment"]);
+    expect(coverage.differences.map(d => d.key)).toEqual(["--layout-max", "primary-font", "alignment", "--brand-accent"]);
     expect(parseDesignSystemPageCoverage(JSON.parse(JSON.stringify(coverage)))).toEqual(coverage);
     expect(() => parseDesignSystemPageCoverage({ ...coverage, extra: 1 })).toThrow();
     expect(() => parseDesignSystemPageCoverage({ ...coverage, page_limit: 99 })).toThrow();
@@ -166,5 +166,87 @@ describe("Per-page website extraction", () => {
       getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(id);
       await rm(path.join(systemsDir, id), { recursive: true, force: true });
     }
+  });
+});
+
+async function withSite(routes: Record<string, string>, run: (origin: string, id: string) => Promise<void>): Promise<void> {
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: request => {
+    const pathname = new URL(request.url).pathname;
+    const body = routes[pathname];
+    return body === undefined ? new Response("missing", { status: 404 }) : new Response(body, { headers: { "content-type": pathname.endsWith(".css") ? "text/css" : "text/html" } });
+  } });
+  const origin = "http://127.0.0.1:" + server.port;
+  const settings = {
+    BG_EXTRACTION_QA_ADAPTER_SOURCE_URL: origin + "/source",
+    BG_EXTRACTION_QA_ADAPTER_STALL_URL: origin + "/stall",
+    BG_EXTRACTION_QA_ADAPTER_RESOURCE_URLS: ["/stall", ...Object.keys(routes)].map(p => origin + p).join(","),
+    BG_EXTRACTION_QA_ADAPTER_SECRET: "per-page-fixture-secret-000000000002",
+  };
+  const previous = Object.fromEntries(Object.keys(settings).map(key => [key, process.env[key]]));
+  Object.assign(process.env, settings);
+  const id = "pages-extra-" + process.pid + "-" + Math.random().toString(36).slice(2, 8);
+  try { await run(origin, id); }
+  finally {
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    await server.stop(true);
+    getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(id);
+    await rm(path.join(systemsDir, id), { recursive: true, force: true });
+  }
+}
+
+describe("Per-page extraction limits and ordering", () => {
+  test("Given a disallowed root with an allowed directory, then the allowed directory is still discovered", () => {
+    const result = discoverPages({ base: new URL("https://e.com/"), homepageHtml: '<nav><a href="/docs/">Docs</a><a href="/private">P</a></nav>', sitemapUrls: [], robots: parseRobots("User-agent: *\nDisallow: /\nAllow: /docs/"), limit: 5 });
+    expect(result.selected.map(c => c.path)).toEqual(["/", "/docs"]);
+    expect(result.skipped.map(c => [c.path, c.reason])).toEqual([["/private", "robots"]]);
+  });
+
+  test("Given large pages, when the download budget runs low, then remaining pages are recorded as budget skips and extraction completes", async () => {
+    const padding = "<!--" + "x".repeat(850_000) + "-->";
+    const links = Array.from({ length: 9 }, (_, i) => '<a href="/s' + i + '/page">P' + i + "</a>").join("");
+    const routes: Record<string, string> = { "/source": "<html><body><nav>" + links + "</nav><h1>Home</h1>" + padding + "</body></html>" };
+    for (let i = 0; i < 9; i += 1) routes["/s" + i + "/page"] = "<html><body><h1>Page " + i + "</h1>" + padding + "</body></html>";
+    await withSite(routes, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Big", source_type: "website", source_url: origin + "/source", page_limit: 12 });
+      const coverage = parseDesignSystemPageCoverage((await readDesignSystemTokens(id)).pages);
+      const reasons = coverage.pages.map(p => p.skip_reason);
+      expect(reasons).toContain("budget");
+      expect(coverage.pages.filter(p => p.status === "extracted").length).toBeLessThan(10);
+    });
+  });
+
+  test("Given stylesheets that exceed the aggregate download budget, then extraction stops with an acquisition limit instead of continuing", async () => {
+    const big = ".a { color: #111111 }" + "/*" + "y".repeat(690_000) + "*/";
+    const sheets = Array.from({ length: 13 }, (_, i) => "/c" + i + ".css");
+    const routes: Record<string, string> = { "/source": "<html><head>" + sheets.map(s => '<link rel="stylesheet" href="' + s + '">').join("") + "</head><body><h1>Home</h1></body></html>" };
+    for (const sheet of sheets) routes[sheet] = big;
+    await withSite(routes, async (origin, id) => {
+      await expect(extractDesignSystemFromSource({ system_id: id, name: "Heavy", source_type: "website", source_url: origin + "/source" })).rejects.toMatchObject({ code: "acquisition_limit" });
+    });
+  });
+
+  test("Given two pages linking shared stylesheets in opposite orders, then each page keeps its own cascade winner", async () => {
+    const page = (first: string, second: string, title: string) => '<html><head><link rel="stylesheet" href="' + first + '"><link rel="stylesheet" href="' + second + '"></head><body><nav><a href="/other/page">Other</a></nav><h1>' + title + "</h1></body></html>";
+    await withSite({ "/source": page("/a.css", "/b.css", "Home"), "/other/page": page("/b.css", "/a.css", "Other"), "/a.css": ":root { --accent: #aa0000 }", "/b.css": ":root { --accent: #0000bb }" }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Order", source_type: "website", source_url: origin + "/source" });
+      const coverage = parseDesignSystemPageCoverage((await readDesignSystemTokens(id)).pages);
+      const accent = Object.fromEntries(coverage.pages.filter(p => p.status === "extracted").map(p => [p.path, p.custom_properties["--accent"]]));
+      expect(accent).toEqual({ "/source": "#0000bb", "/other/page": "#aa0000" });
+      expect(coverage.differences.find(d => d.key === "--accent")).toBeDefined();
+    });
+  });
+
+  test("Given a worst-case coverage document, then pages.json and the prompt summary stay within their consumer limits and literal palettes differ per page", () => {
+    const properties = (seed: number) => Object.fromEntries(Array.from({ length: 48 }, (_, i) => ["--palette-" + i, "#" + ((seed * 48 + i) % 0xffffff).toString(16).padStart(6, "0")]));
+    const coverage = buildPageCoverage({
+      limit: 24, discovered: 400,
+      extracted: Array.from({ length: 24 }, (_, i) => ({ path: "/section-" + i + "/" + "p".repeat(200), source: "link" as const, pageType: "other" as const, layoutTokens: { "--layout-max": 900 + i + "px" }, patterns: ["hero"], colors: ["#10" + String(i).padStart(4, "0"), "#ffffff"], fonts: ["Font " + i], customProperties: properties(i), evidence: EVIDENCE })),
+      skipped: Array.from({ length: 200 }, (_, i) => ({ path: "/skipped-" + i + "/" + "q".repeat(250), source: "link" as const, reason: "cap" as const, pageType: "other" as const })),
+    });
+    expect(Buffer.byteLength(JSON.stringify(coverage, null, 2))).toBeLessThanOrEqual(MAX_PAGE_COVERAGE_BYTES);
+    expect(parseDesignSystemPageCoverage(JSON.parse(JSON.stringify(coverage)))).toEqual(coverage);
+    expect(JSON.stringify(pageCoveragePromptSummary(coverage)).length).toBeLessThanOrEqual(24_000);
+    expect(coverage.differences.map(d => d.key)).toContain("palette");
+    expect(boundPageCoverage(coverage)).toEqual(coverage);
   });
 });
