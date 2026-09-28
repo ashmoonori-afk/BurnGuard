@@ -151,3 +151,27 @@ test("Given a directory whose record count under-reports its entries When opened
 
   expect(() => openParityArchive(bytes)).toThrow("inconsistent");
 });
+
+test("Given a local header that disagrees with the central directory When read for parity Then the split view is rejected", async () => {
+  const zip = new JSZip();
+  zip.file("aa.png", new Uint8Array([1, 2, 3]));
+  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const localNameAt = 30;
+  expect(view.getUint32(0, true)).toBe(0x04034b50);
+  bytes[localNameAt] = "b".charCodeAt(0);
+
+  expect(() => openParityArchive(bytes).read("aa.png", new AbortController().signal)).toThrow("inconsistent");
+});
+
+test("Given repeated reads of one entry When the aggregate read budget is exceeded Then further reads are rejected", async () => {
+  const zip = new JSZip();
+  zip.file("01.png", new Uint8Array(1_000));
+  const bytes = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+  const archive = openParityArchive(bytes, { totalReadBytes: 2_500 });
+  const signal = new AbortController().signal;
+
+  archive.read("01.png", signal);
+  archive.read("01.png", signal);
+  expect(() => archive.read("01.png", signal)).toThrow("byte budget");
+});

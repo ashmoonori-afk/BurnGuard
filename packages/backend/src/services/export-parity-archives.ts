@@ -10,6 +10,8 @@ const MAX_PARITY_ENTRY_BYTES = 128 * 1024 * 1024;
 const MAX_PARITY_ARCHIVE_ENTRIES = 4_000;
 
 type ParityArchiveEntry = {
+  readonly name: Uint8Array;
+  readonly flags: number;
   readonly method: number;
   readonly compressedSize: number;
   readonly size: number;
@@ -27,7 +29,10 @@ export type ParityArchive = {
  * be unique, every declared size is bounded up front, and each entry is inflated with a hard
  * maxOutputLength equal to its declared size, so actual output can never exceed the budget.
  */
-export function openParityArchive(bytes: Uint8Array): ParityArchive {
+export function openParityArchive(
+  bytes: Uint8Array,
+  limits: { readonly totalReadBytes?: number } = {},
+): ParityArchive {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let eocd = -1;
   for (let offset = bytes.byteLength - 22; offset >= Math.max(0, bytes.byteLength - 22 - 0xffff); offset -= 1) {
@@ -61,20 +66,44 @@ export function openParityArchive(bytes: Uint8Array): ParityArchive {
     if (total > MAX_PARITY_UNCOMPRESSED_BYTES) throw new TypeError("Parity archive exceeds its byte budget");
     const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength));
     if (entries.has(name)) throw new TypeError("Parity archive entry is duplicated");
-    entries.set(name, { method, compressedSize, size: uncompressed, crc, localHeaderOffset: view.getUint32(cursor + 42, true) });
+    entries.set(name, { name: bytes.subarray(cursor + 46, cursor + 46 + nameLength), flags, method, compressedSize, size: uncompressed, crc, localHeaderOffset: view.getUint32(cursor + 42, true) });
     cursor = next;
   }
   if (cursor !== start + size) throw new TypeError("Parity archive directory length is inconsistent");
+  const readBudget = limits.totalReadBytes ?? MAX_PARITY_UNCOMPRESSED_BYTES;
+  let readTotal = 0;
   return {
     has: (name) => entries.has(name),
     read: (name, signal) => {
       signal.throwIfAborted();
       const entry = entries.get(name);
       if (entry === undefined) throw new TypeError("Parity archive entry is missing");
+      // Every read is charged, so repeated reads of one entry cannot exceed the aggregate budget.
+      readTotal += entry.size;
+      if (readTotal > readBudget) throw new TypeError("Parity archive reads exceed their byte budget");
       const local = entry.localHeaderOffset;
       if (local + 30 > start || view.getUint32(local, true) !== 0x04034b50) throw new TypeError("Parity archive entry is invalid");
-      const dataStart = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+      const localFlags = view.getUint16(local + 6, true);
+      const localNameLength = view.getUint16(local + 26, true);
+      const localName = bytes.subarray(local + 30, local + 30 + localNameLength);
+      // The local header must describe the same entry as the central directory (no split views).
+      if (view.getUint16(local + 8, true) !== entry.method || (localFlags & 0x0809) !== (entry.flags & 0x0809) ||
+        localName.byteLength !== entry.name.byteLength || localName.some((byte, index) => byte !== entry.name[index])) {
+        throw new TypeError("Parity archive local header is inconsistent");
+      }
+      const dataStart = local + 30 + localNameLength + view.getUint16(local + 28, true);
       if (dataStart + entry.compressedSize > start) throw new TypeError("Parity archive entry is invalid");
+      if ((entry.flags & 0x0008) === 0) {
+        if (view.getUint32(local + 14, true) !== entry.crc || view.getUint32(local + 18, true) !== entry.compressedSize ||
+          view.getUint32(local + 22, true) !== entry.size) throw new TypeError("Parity archive local header is inconsistent");
+      } else {
+        let descriptor = dataStart + entry.compressedSize;
+        if (descriptor + 4 <= start && view.getUint32(descriptor, true) === 0x08074b50) descriptor += 4;
+        if (descriptor + 12 > start || view.getUint32(descriptor, true) !== entry.crc ||
+          view.getUint32(descriptor + 4, true) !== entry.compressedSize || view.getUint32(descriptor + 8, true) !== entry.size) {
+          throw new TypeError("Parity archive data descriptor is inconsistent");
+        }
+      }
       const compressed = bytes.subarray(dataStart, dataStart + entry.compressedSize);
       const output = entry.method === 0
         ? compressed
