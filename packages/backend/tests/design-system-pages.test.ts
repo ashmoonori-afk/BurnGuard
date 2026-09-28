@@ -524,13 +524,19 @@ describe("Measured layout tokens", () => {
     for (const value of broken) expect(() => parseDesignSystemMeasuredLayout(value)).toThrow();
   });
 
+  test("Given subheading and CTA type roles, then the strict parser keeps them beside the older roles", () => {
+    const withRoles = (name: "desktop" | "mobile") => ({ ...viewportLayout(name), type_scale: { hero: 64, subheading: 24, cta: 17, nav: 26 } });
+    const parsed = parseDesignSystemMeasuredLayout({ schema_version: 1, method: "rendered-offline", pages: [{ path: "/", page_type: "home", viewports: { desktop: withRoles("desktop"), mobile: withRoles("mobile") } }] });
+    expect(parsed.pages[0]!.viewports.desktop.type_scale).toEqual({ hero: 64, subheading: 24, cta: 17, nav: 26 });
+  });
+
   test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given a real Chromium, when an acquired page is measured offline, then sizes and positions come from rendering and the page script does not run", async () => {
     const html = '<!doctype html><html><head><link rel="stylesheet" href="https://site.test/site.css"><script>document.documentElement.innerHTML = "<h1 style=font-size:10px>changed</h1>"</script></head><body><main><h1>Own your AI.</h1><p class="sub">Private expert AI systems powered by local models</p><a class="cta" href="/go">Get started</a><img src="https://cdn.test/hero.png" width="600" height="300"><h2>Section two</h2><div class="cards"><div>One card with a long enough body text</div><div>Two card with a long enough body text</div><div>Three card with a long enough body text</div></div></main></body></html>';
     const css = "body{margin:0} main{max-width:960px;margin:0 auto} h1{font-size:64px;text-align:center} h2{font-size:32px} p{font-size:20px} .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px} .cards div{height:120px}";
     const layout = await measureRenderedLayout({ pages: [{ path: "/", pageType: "home", url: "https://site.test/", html }], stylesheets: new Map([["https://site.test/site.css", css]]), signal: AbortSignal.timeout(60_000) });
     expect(layout).not.toBeNull();
     const desktop = layout!.pages[0]!.viewports.desktop;
-    expect(desktop.type_scale).toMatchObject({ hero: 64, h2: 32 });
+    expect(desktop.type_scale).toMatchObject({ hero: 64, h2: 32, subheading: 20, cta: 16 });
     expect(desktop.blocks.hero_heading?.align).toBe("center");
     expect(desktop.container).toEqual({ left: 240, width: 960 });
     expect(desktop.sections.map(section => section.columns)).toEqual([1, 3]);

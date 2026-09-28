@@ -4,7 +4,7 @@ import { PAGE_TYPES, type DesignSystemPageType } from "./design-system-pages";
 /** Viewports every measured page is rendered at; widths match common desktop and phone layouts. */
 export const MEASURED_VIEWPORTS = { desktop: { width: 1440, height: 900 }, mobile: { width: 390, height: 844 } } as const;
 export type MeasuredViewportName = keyof typeof MEASURED_VIEWPORTS;
-export const MEASURED_TYPE_ROLES = ["hero", "h2", "h3", "body", "nav"] as const;
+export const MEASURED_TYPE_ROLES = ["hero", "subheading", "cta", "h2", "h3", "body", "nav"] as const;
 export type MeasuredTypeRole = (typeof MEASURED_TYPE_ROLES)[number];
 export const MEASURED_BLOCKS = ["hero_heading", "subheading", "cta", "media"] as const;
 export type MeasuredBlockName = (typeof MEASURED_BLOCKS)[number];

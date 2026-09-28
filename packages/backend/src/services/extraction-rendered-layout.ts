@@ -154,6 +154,8 @@ function collectLayout(input: { readonly width: number; readonly height: number;
   const typeScale: Record<string, number> = {};
   const put = (role: string, value: number | null) => { if (value !== null && value >= 1) typeScale[role] = round(value); };
   put("hero", h1 ? h1Size : null);
+  put("subheading", subheading ? fontOf(subheading) : null);
+  put("cta", cta ? fontOf(cta) : null);
   put("h2", median(sizesOf("h2")));
   put("h3", median(sizesOf("h3")));
   put("body", median(textLeaves.filter(el => (el.textContent ?? "").trim().length > 40 && !/^H[1-6]$/.test(el.tagName)).map(fontOf)));
