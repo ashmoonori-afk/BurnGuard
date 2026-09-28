@@ -1258,6 +1258,12 @@ export default function ProjectView() {
         chatCollapsed={chatCollapsed}
         onToggleChat={() => setChatCollapsed((value) => !value)}
         project={project}
+        onFigmaImported={async () => {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["project", id, "files"] }),
+            queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] }),
+          ]);
+        }}
         canPresent={
           project.type === "slide_deck" &&
           activeTab?.kind === "file" &&

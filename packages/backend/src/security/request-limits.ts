@@ -15,6 +15,7 @@ export { MAX_USER_MESSAGE_CHARS } from "@bg/shared";
 
 const MULTIPART_ROUTES = [
   /^\/api\/projects\/import$/,
+  /^\/api\/projects\/[^/]+\/figma\/import$/,
   /^\/api\/design-systems\/upload$/,
   /^\/api\/design-systems\/[^/]+\/fonts$/,
   /^\/api\/sessions\/[^/]+\/(?:events|documents)$/,

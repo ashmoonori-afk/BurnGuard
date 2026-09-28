@@ -24,6 +24,7 @@ export * from "./pdf-raster-budget";
 export * from "./extraction-domain";
 export * from "./extraction-provenance";
 export * from "./file-patch";
+export * from "./figma-import";
 export * from "./graphic";
 export * from "./logo";
 export * from "./platform-presets";

@@ -9,6 +9,7 @@ import { designDirectionRoutes } from "./design-directions";
 import { chartRoutes } from "./charts";
 import { DesignSystemPinError, inspectProjectDesignSystemPin, refreshProjectDesignSystemPin } from "../services/project-design-system-pin";
 import { exportProjectBundle, ProjectBundleError } from "../services/project-bundle";
+import { figmaImportRoutes } from "./figma-import";
 
 function ok<T>(data: T): ApiSuccess<T> {
   return { data };
@@ -25,6 +26,7 @@ function fail(
 export const projectRoutes = new Hono();
 projectRoutes.route("/", designDirectionRoutes);
 projectRoutes.route("/", chartRoutes);
+projectRoutes.route("/", figmaImportRoutes);
 
 projectRoutes.get("/api/projects/:id/bundle", async (c) => {
   try {
