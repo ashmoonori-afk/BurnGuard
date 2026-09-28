@@ -144,6 +144,18 @@ describe("Source layout measurement", () => {
     expect(measureSourceLayout([declaration("max-width", "80rem"), declaration("gap", "2rem"), declaration("padding", "6em 0"), declaration("display", "grid", "@media (min-width: 48em)")], ["1rem", "2em"]).tokens).toEqual({ "--layout-bp-md": "768px" });
   });
 
+  test("Given alignment, timing, breakpoint and footer edge cases, then only unambiguous values are observed", async () => {
+    const align = (...keywords: string[]) => collectSourceEvidence([], keywords.map(value => declaration("text-align", value))).alignment;
+    expect(align("right", "right", "right", "right", "left", "left", "left")).toBe("right");
+    expect(align("start", "start", "start")).toBeNull();
+    expect(align("left", "center", "right")).toBeNull();
+    const parsed = await parseCssSource({ content: ":root { --duration: 1s } .a { transition: opacity var(--duration, 200ms) } .c { transition-duration: var(--d, calc(1s + 5ms)) } .b { animation: spin-2s 3s linear }", sourceId: "t.css", fileOrder: 0, signal: new AbortController().signal });
+    expect(collectSourceEvidence([], parsed.declarations).motionMs).toEqual([3000, 3000]);
+    const contexts = await parseCssSource({ content: "@supports (max-width: 1200px) { .a { display: block } } @container (min-width: 900px) { .b { display: block } }", sourceId: "c.css", fileOrder: 0, signal: new AbortController().signal });
+    expect(measureSourceLayout(contexts.declarations, []).tokens).toEqual({});
+    expect(collectSourceEvidence([`<footer>${"<ul><li>a</li></ul>".repeat(8)}</footer>`], []).footerColumns).toBe(8);
+  });
+
   test("Given only a large breakpoint, then it is measured without a medium one", () => {
     expect(measureSourceLayout([declaration("display", "grid", "@media (min-width: 1280px)")], []).tokens).toEqual({ "--layout-bp-lg": "1280px" });
   });
@@ -239,7 +251,7 @@ describe("Source evidence drives section patterns and asset style", () => {
     expect(hero('<section class="hero"><div style="display:flex;flex-flow:column nowrap"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')).toEqual({ media: true });
     expect(hero('<section class="hero"><h1>T</h1><p>L</p></section>')).toEqual({ media: false });
     expect(hero('<main><p>No headline</p></main>')).toBeNull();
-    expect(["minmax(0, 1fr)", "repeat(1, 1fr)", "repeat(3, minmax(0, 1fr))", "[full] 1fr [mid] 2fr", "[content-start main-start] minmax(0, 1fr) [content-end main-end]", "repeat(auto-fit, 200px)", "fit-content(10px", "1fr !important", "repeat(3, 1fr 2fr)", "repeat(2, [a] 1fr [b] repeat(2, 10px))", "subgrid", "repeat(8, var(--tracks))", "var(--cols)"].map(gridTrackCount)).toEqual([1, 1, 3, 2, 1, null, null, 1, 6, 6, null, null, null]);
+    expect(["minmax(0, 1fr)", "repeat(1, 1fr)", "repeat(3, minmax(0, 1fr))", "[full] 1fr [mid] 2fr", "[content-start main-start] minmax(0, 1fr) [content-end main-end]", "repeat(auto-fit, 200px)", "fit-content(10px", "1fr !important", "repeat(3, 1fr 2fr)", "repeat(2, [a] 1fr [b] repeat(2, 10px))", "subgrid", "repeat(8, var(--tracks))", "var(--cols)", "repeat(8,[a]1fr[b] 2fr)", "[a]1fr[b]"].map(gridTrackCount)).toEqual([1, 1, 3, 2, 1, null, null, 1, 6, 6, null, null, null, 16, 1]);
   });
 
   test("Given no evidence, then every section pattern and asset kind is labelled as a default", () => {

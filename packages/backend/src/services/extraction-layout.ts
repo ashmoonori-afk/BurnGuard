@@ -21,9 +21,11 @@ export function buildSectionPatternReadme(evidence: SourceEvidence): string {
     line("Pricing", evidence.pricing ? "a pricing or plans section" : null, "2-4 plan cards side by side, the recommended plan emphasised by the brand accent rather than by size alone; prices and feature lists share a baseline."),
     line("Testimonials", evidence.testimonials ? "quotes or testimonials" : null, "1-3 quotes with name and role on a tinted brand surface or neutral card."),
     line("Call to action", null, "a full-width band with one headline and one primary action before the footer."),
-    line("Footer", evidence.footerColumns ? `a footer with ${evidence.footerColumns} link lists` : null, `a compact ${evidence.footerColumns ?? 4}-column link index with the logo, legal line and locale or social links.`),
+    line("Footer", evidence.footerColumns ? `a footer with ${evidence.footerColumns} link lists` : null, `a compact ${Math.min(6, evidence.footerColumns ?? 4)}-column link index with the logo, legal line and locale or social links.`),
   ];
-  const alignment = line("Text alignment", evidence.alignment ? `${evidence.alignment} alignment dominates the text-align declarations` : null, evidence.alignment === "center"
+  const alignment = line("Text alignment", evidence.alignment ? `${evidence.alignment} alignment dominates the text-align declarations` : null, evidence.alignment === "right"
+    ? "right-align running text and headings to match the source; keep numeric columns and captions on the same edge."
+    : evidence.alignment === "center"
     ? "centre headings and short copy blocks, but keep running text over three lines left-aligned for readability."
     : "left-align running text and headings; centre only short hero or call-to-action copy.");
   return `
@@ -94,8 +96,10 @@ export function measureSourceLayout(declarations: readonly CssDeclarationEvidenc
   if (rhythm !== null) tokens["--layout-section-y"] = `clamp(${Math.round(rhythm * 0.6)}px, 8vw, ${rhythm}px)`;
 
   // One sample per declaration, so a breakpoint that wraps more rules weighs more.
+  // Viewport conditions live only in @media; @supports and @container conditions are not breakpoints.
   const breakpoints = declarations
-    .flatMap(item => [...item.context.matchAll(/(?:min-width|max-width)\s*:\s*(\d*\.?\d+(?:px|rem|em))|width\s*[<>]=?\s*(\d*\.?\d+(?:px|rem|em))/gi)])
+    .flatMap(item => [...item.context.matchAll(/@media\b[^@]*/gi)].map(match => match[0]))
+    .flatMap(context => [...context.matchAll(/(?:min-width|max-width)\s*:\s*(\d*\.?\d+(?:px|rem|em))|width\s*[<>]=?\s*(\d*\.?\d+(?:px|rem|em))/gi)])
     .map(match => mediaPx(match[1] ?? match[2] ?? ""))
     .filter((value): value is number => value !== null);
   const md = mode(breakpoints.filter(value => value >= 560 && value <= 1024));

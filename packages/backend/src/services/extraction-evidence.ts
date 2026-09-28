@@ -9,7 +9,7 @@ export type SourceEvidence = {
   readonly pricing: boolean;
   readonly testimonials: boolean;
   readonly footerColumns: number | null;
-  readonly alignment: "left" | "center" | null;
+  readonly alignment: "left" | "center" | "right" | null;
   /** Inline SVG icons outside logos; their paint depends on the cascade, so only the count is observed. */
   readonly iconCount: number;
   readonly photos: number;
@@ -41,11 +41,14 @@ export function gridTrackCount(value: string): number | null {
   const tokens: string[] = [];
   let depth = 0, current = "";
   for (const char of value.replace(/!\s*important\s*$/i, "").trim()) {
+    // A named-line group is its own token even when written without spaces, e.g. [a]1fr[b].
+    if (char === "[" && depth === 0 && current) { tokens.push(current); current = ""; }
     if (char === "(" || char === "[") depth += 1;
     if (char === ")" || char === "]") depth -= 1;
     if (depth < 0) return null;
     if (depth === 0 && /\s/.test(char)) { if (current) tokens.push(current); current = ""; continue; }
     current += char;
+    if (char === "]" && depth === 0) { tokens.push(current); current = ""; }
   }
   if (depth !== 0) return null;
   if (current) tokens.push(current);
@@ -83,9 +86,10 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
   const roots = htmlSources.filter(html => html.length <= MAX_HTML_CHARS).map(html => parse(html, { comment: false }));
   const values = (properties: readonly string[]) => declarations.filter(item => properties.includes(item.property.toLowerCase())).map(item => item.value.toLowerCase());
 
-  const aligns = values(["text-align"]).map(value => value.trim()).filter(value => ["center", "left", "start"].includes(value));
-  const centered = aligns.filter(value => value === "center").length;
-  const alignment = aligns.length < 3 ? null : centered * 2 > aligns.length ? "center" : "left";
+  // Physical keywords only; start/end depend on writing direction, so a dominant logical value stays unknown.
+  const aligns = values(["text-align"]).map(value => value.replace(/!\s*important/, "").trim());
+  const dominant = mode(aligns);
+  const alignment = aligns.length >= 3 && dominant !== null && aligns.filter(value => value === dominant).length * 2 > aligns.length && (dominant === "left" || dominant === "center" || dominant === "right") ? dominant : null;
 
   const heroes = roots.map(heroOf).filter((value): value is NonNullable<SourceEvidence["hero"]> => value !== null);
   const columns = values(["grid-template-columns"]).map(gridTrackCount).filter((count): count is number => count !== null && count >= 2 && count <= 4);
@@ -99,7 +103,22 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
   const svgs = all("svg").filter(svg => !/logo|brand/.test(classOf(svg) + classOf(svg.parentNode as HTMLElement)));
   const images = all("img").map(image => (image.getAttribute("src") ?? "").toLowerCase().split(/[?#]/)[0] ?? "").filter(src => !/logo|brand|icon|favicon/.test(src));
   const backgrounds = values(["background", "background-image"]);
-  const durations = values(["transition", "transition-duration", "animation", "animation-duration"]).flatMap(value => [...value.matchAll(/(\d*\.?\d+)(ms|s)\b/g)].map(match => Math.round(Number(match[1]) * (match[2] === "s" ? 1000 : 1)))).filter(ms => ms > 0 && ms <= 5000).sort((a, b) => a - b);
+  // Drops every var(...) including nested parentheses, so fallback times never read as observed.
+  const withoutSubstitutions = (value: string): string => {
+    let out = "", index = 0;
+    while (index < value.length) {
+      if (/^var\(/i.test(value.slice(index, index + 4))) {
+        let depth = 0;
+        for (; index < value.length; index += 1) { if (value[index] === "(") depth += 1; if (value[index] === ")" && --depth === 0) { index += 1; break; } }
+        out += " ";
+        continue;
+      }
+      out += value[index];
+      index += 1;
+    }
+    return out;
+  };
+  const durations = values(["transition", "transition-duration", "animation", "animation-duration"]).flatMap(value => [...withoutSubstitutions(value).matchAll(/(?<![\w.-])(\d*\.?\d+)(ms|s)(?![\w-])/g)].map(match => Math.round(Number(match[1]) * (match[2] === "s" ? 1000 : 1)))).filter(ms => ms > 0 && ms <= 5000).sort((a, b) => a - b);
 
   return {
     hero: heroes[0] ?? null,
@@ -107,7 +126,7 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
     proofStrip: /\b(?:logos|clients|customers|partners|trusted)\b/.test(classes),
     pricing: /\b(?:pricing|plans?)\b/.test(classes) || /\bpricing\b|per month|\/\s?mo\b/.test(text),
     testimonials: all("blockquote").length > 0 || /\b(?:testimonials?|reviews?)\b/.test(classes),
-    footerColumns: footerColumns.length ? Math.min(6, Math.max(...footerColumns)) : null,
+    footerColumns: footerColumns.length ? Math.max(...footerColumns) : null,
     alignment,
     iconCount: svgs.length,
     photos: images.filter(src => /\.(?:jpe?g|webp|avif)$/.test(src)).length,
