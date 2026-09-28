@@ -545,4 +545,12 @@ describe("Measured layout tokens", () => {
     const layout = await measureRenderedLayout({ pages: [{ path: "/", pageType: "home", url: "https://site.test/", html }], stylesheets: new Map([["https://site.test/site.css", css]]), signal: AbortSignal.timeout(60_000) });
     expect(layout!.pages[0]!.viewports.desktop.container).toEqual({ left: 120, width: 1200 });
   }, 90_000);
+
+  test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given a full-width padded layout with one centred 720px lead paragraph, when measured, then the container stays at the text edges rather than the lone centred element", async () => {
+    const section = (title: string) => "<section><h2>" + title + "</h2><p>Left aligned body copy that runs across the full padded width of the layout for this section.</p></section>";
+    const html = '<!doctype html><html><head><link rel="stylesheet" href="https://site.test/site.css"></head><body><div class="wrap"><h1>Own your AI.</h1><p class="lead">A centred lead paragraph with its own narrow max width.</p>' + section("One") + section("Two") + section("Three") + "</div></body></html>";
+    const css = "body{margin:0} .wrap{padding:0 24px} .lead{max-width:720px;margin:0 auto;text-align:center}";
+    const layout = await measureRenderedLayout({ pages: [{ path: "/", pageType: "home", url: "https://site.test/", html }], stylesheets: new Map([["https://site.test/site.css", css]]), signal: AbortSignal.timeout(60_000) });
+    expect(layout!.pages[0]!.viewports.desktop.container).toEqual({ left: 24, width: 1392 });
+  }, 90_000);
 });

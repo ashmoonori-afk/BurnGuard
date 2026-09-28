@@ -123,6 +123,9 @@ function collectLayout(input: { readonly width: number; readonly height: number;
   }
   const containerWidth = [...wrapperWidths].sort((l, r) => r[1] - l[1] || r[0] - l[0])[0]?.[0] ?? null;
   const centredContainer = containerWidth === null ? null : { left: clamp((vw - containerWidth) / 2), width: clamp(containerWidth) };
+  // A text column is never wider than its container, so a centred candidate narrower than the text edges
+  // (a lone hero image or lead paragraph inside a full-width padded layout) cannot be the container.
+  const textContainer = containerLeft !== null && containerRight !== null && containerRight > containerLeft ? { left: clamp(containerLeft), width: clamp(containerRight - containerLeft) } : null;
   // Sections follow visual order, which can differ from DOM order.
   const anchors = [...document.querySelectorAll("h1, h2")].filter(visible).map(el => ({ el, top: top(el) })).sort((a, b) => a.top - b.top);
   const blocks = [...document.querySelectorAll("body *")].filter(el => { if (!visible(el) || inChrome(el)) return false; const r = el.getBoundingClientRect(); return r.width > 120 && r.width < vw * 0.6 && r.height > 60; })
@@ -164,7 +167,7 @@ function collectLayout(input: { readonly width: number; readonly height: number;
   return {
     viewport: { width: input.width, height: input.height },
     page_height: clamp(document.documentElement.scrollHeight),
-    container: centredContainer ?? (containerLeft !== null && containerRight !== null && containerRight > containerLeft ? { left: clamp(containerLeft), width: clamp(containerRight - containerLeft) } : null),
+    container: textContainer === null || (centredContainer !== null && centredContainer.width >= textContainer.width - 10) ? centredContainer ?? textContainer : textContainer,
     gutter: median(gutters),
     section_gap: median(gaps),
     type_scale: typeScale,
