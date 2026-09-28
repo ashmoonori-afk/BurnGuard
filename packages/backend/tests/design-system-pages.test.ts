@@ -538,3 +538,35 @@ describe("Measured layout tokens", () => {
     expect(desktop.gutter).toBe(24);
   }, 90_000);
 });
+
+describe("Measured layout prompt injection", () => {
+  const viewport = (name: "desktop" | "mobile", sections: number, heading: string) => ({ viewport: { ...MEASURED_VIEWPORTS[name] }, page_height: 9000, container: { left: 120, width: 1200 }, gutter: 24, section_gap: 96, type_scale: { hero: 64, h2: 50, h3: 32, body: 17, nav: 17 }, blocks: { hero_heading: { x: 346, y: 407, width: 749, height: 128, align: "center" }, subheading: { x: 346, y: 567, width: 749, height: 64, align: "center" }, cta: { x: 649, y: 663, width: 143, height: 38, align: "center" }, media: { x: 120, y: 70, width: 1200, height: 909, align: "center" } }, sections: Array.from({ length: sections }, (_, i) => ({ heading, top: 400 + i * 500, height: 500, columns: 3, align: "center" })) });
+  const layoutOf = (pages: number, sections: number, heading = "Own your AI") => ({ schema_version: 1, method: "rendered-offline", pages: Array.from({ length: pages }, (_, i) => ({ path: "/p" + i, page_type: i === 0 ? "home" : "other", viewports: { desktop: viewport("desktop", sections, heading), mobile: viewport("mobile", sections, heading) } })) });
+  const render = async (dir: string, surface: "website" | "slides") => {
+    const detail = { id: "measured", name: "Measured", status: "draft", source_type: "website", is_template: false, dir_path: dir, skill_md_path: null, tokens_css_path: null, readme_md_path: null, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const;
+    const lines: string[] = [];
+    await appendDesignSystemContext(lines, detail as unknown as Parameters<typeof appendDesignSystemContext>[1], "full", surface);
+    return lines.join("\n");
+  };
+
+  test("Given a measured layout, then only the website context carries it as a parsed block, and a system without one carries none", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "bg-measured-prompt-"));
+    try {
+      expect(await render(dir, "website")).not.toContain("<selected_design_system_measured_layout>");
+      const layout = layoutOf(1, 3);
+      await writeFile(path.join(dir, "layout-measured.json"), JSON.stringify(layout));
+      const block = (await render(dir, "website")).match(/<selected_design_system_measured_layout>\n([^\n]+)\n<\/selected_design_system_measured_layout>/u);
+      expect(JSON.parse(block![1]!)).toEqual(parseDesignSystemMeasuredLayout(layout).pages);
+      expect(await render(dir, "slides")).not.toContain("<selected_design_system_measured_layout>");
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+
+  test("Given the largest measured layout the parser accepts, then the injected block stays bounded", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "bg-measured-budget-"));
+    try {
+      await writeFile(path.join(dir, "layout-measured.json"), JSON.stringify(layoutOf(6, 16, "h".repeat(60))));
+      const block = (await render(dir, "website")).match(/<selected_design_system_measured_layout>\n([^\n]+)\n/u)![1]!;
+      expect(block.length).toBeLessThan(40_000);
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+});
