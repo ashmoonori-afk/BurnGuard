@@ -80,7 +80,7 @@ BurnGuard/
 - `@bg/shared` (snake_case fields) is the only transport authority; backend routes and frontend api/types never redeclare DTO shapes. Typecheck `packages/shared` before its consumers.
 - Envelopes: success `{ data, meta? }`, failure `{ error: { code, message, details? } }`. `/api/health` is public; `/api/bootstrap` GET same-origin mints the per-launch capability (32 random bytes, `HttpOnly SameSite=Strict` cookie + `x-burnguard-capability`, `timingSafeEqual`); unknown `Host` -> 421, else 403. Body caps 1 MiB JSON / 4 MiB draws / 64 MiB listed multipart -> 413.
 - SQLite rows + canonical filesystem receipts (canonical JSON, SHA-256 digest, revision, owner) are durable authority; in-memory locks, watcher suppression, and browser registries are not. Mutations run prepare/stage/validate/publish/commit with rollback or startup recovery.
-- Every `MessageKey` needs `ko` + `en` + `zh-CN`; Korean is default and fallback. `@/lib/error-copy` maps backend error codes to keys.
+- Every `MessageKey` needs `ko` + `en` + `zh-CN`. First run follows the OS language (Korean -> `ko`, Simplified Chinese -> `zh-CN`, otherwise `en`); an explicit Settings choice wins and persists. `@/lib/error-copy` maps backend error codes to keys.
 - Desktop readiness: backend prints `[burnguard-desktop] {protocol:1,pid,url}`; shells validate protocol/pid/url before showing a window and run it with `BG_DESKTOP=1 BG_NO_OPEN=1`.
 - `APP_VERSION` in `@bg/shared/app`, `BurnGuard.Desktop.csproj` `<Version>`, and the Velopack package move together.
 - Run `bun test` from the repo root: `bunfig.toml` preload mints a throwaway `BG_APP_ROOT` (must be absolute), migrates it, deletes it at exit (timeout 30000, coverage 0.8). Tests use Given/When/Then descriptions and injected seams.

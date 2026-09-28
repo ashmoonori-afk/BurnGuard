@@ -1,14 +1,32 @@
 # BurnGuard
 
-**Make websites, slides and graphics with AI. Refine them on canvas. Keep the files.**
-
-BurnGuard is a local design workspace for Windows and macOS. Bring your Claude Code or Codex connection, choose a design system, and work beside a live preview. Your projects and reusable design systems live on your computer; AI requests use your chosen provider.
-
-[Download the app](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [Documentation](doc/README.md) · [한국어](README.ko.md) · [简体中文](README.zh-CN.md)
+**Open-source Claude Design alternative that runs on the Claude Code or Codex you already pay for.**
 
 ![A one-line prompt becomes a BurnGuard landing page, then the headline is rewritten on the canvas](doc/images/burnguard-demo.gif)
 
 *Recorded on v0.5.25 with Claude Code (Sonnet, LOW reasoning) and no design system. The five-minute generation is sped up; everything else is real time.*
+
+[![Latest release](https://img.shields.io/github/v/release/ashmoonori-afk/BurnGuard)](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) [![Downloads](https://img.shields.io/github/downloads/ashmoonori-afk/BurnGuard/total)](https://github.com/ashmoonori-afk/BurnGuard/releases) [![License](https://img.shields.io/github/license/ashmoonori-afk/BurnGuard)](LICENSE) [![GitHub stars](https://img.shields.io/github/stars/ashmoonori-afk/BurnGuard?style=social)](https://github.com/ashmoonori-afk/BurnGuard/stargazers)
+
+⭐ If BurnGuard saves you time, a star helps others find it.
+
+Make websites, slides and graphics with AI, refine them on canvas and keep the files. BurnGuard is a local design workspace for Windows and macOS. Bring your Claude Code or Codex connection, choose a design system, and work beside a live preview. Your projects and reusable design systems live on your computer; AI requests use your chosen provider.
+
+[Download the app](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [Documentation](doc/README.md) · [한국어](README.ko.md) · [简体中文](README.zh-CN.md)
+
+## How it compares
+
+*As of 2026-09-28, from each product's public page or README ([sources](#comparison-sources)).*
+
+| | BurnGuard | Claude Design | OpenDesign |
+|---|---|---|---|
+| Cost model | Free, Apache-2.0. Generation runs through your own Claude Code or Codex CLI and that provider account | Included in paid Claude plans; uses your plan's usage limits, with optional extra usage | Free, Apache-2.0. Bring your own coding-agent CLI or API key; optional paid OpenDesign Cloud models |
+| Where files live | On your computer (`~/.burnguard`) | Claude's hosted workspace; export or save as a folder | Local-first desktop app; Docker self-hosting |
+| Design-system rules | 41 bundled themes, each with navigation, hero and footer layout rules; add your own from files, websites, repositories or Figma | Built from your codebase and design files; admins can lock one approved system | `DESIGN.md` design systems, skills and plugins |
+| Canvas edit | Select, resize, rotate, typography, spacing and colors on the canvas; pinned comments | Inline comments, direct text edits, generated sliders; drag, resize and align | Iterate with the agent beside a sandboxed preview; comment-mode edits partially shipped (its roadmap) |
+| Export formats | HTML ZIP, PDF, PPTX, PNG, PNG bundle, SVG, handoff package, Cafe24 and Imweb packages | PDF, PPTX, standalone HTML, folder; Canva and other connectors; Claude Code handoff | HTML, PDF, PPTX, ZIP, Markdown, MP4 |
+| Publish | One click to your own Vercel account | Organization-scoped links; connectors including Vercel | Not documented in its README |
+| OS | Windows 10/11 x64; macOS 14+ on Apple silicon | Web and Claude apps, Claude Code | macOS (Apple silicon and Intel), Windows x64; Linux from source |
 
 ![BurnGuard website workspace with a conversation panel, model controls and the SONNEL sample in the canvas](doc/images/readme-website-workspace.png)
 
@@ -222,3 +240,7 @@ The interface captures were selected from the repository's local `.omo/evidence`
 [Documentation index](doc/README.md) · [Architecture](doc/01-architecture.md) · [Design guidance](doc/design-craft.md) · [Installation and updates](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)
 
 BurnGuard is licensed under **Apache-2.0**. See [LICENSE](LICENSE), [NOTICE](NOTICE) and the [image provenance notes](doc/images/README.md).
+
+### Comparison sources
+
+Checked on 2026-09-28. Claude Design: [product page](https://claude.com/product/design) and [launch announcement](https://www.anthropic.com/news/claude-design-anthropic-labs). OpenDesign: [nexu-io/open-design README](https://github.com/nexu-io/open-design). BurnGuard: this README and [`scripts/build-mac.ts`](scripts/build-mac.ts) (macOS target). Product details change; open an issue if a row is out of date.

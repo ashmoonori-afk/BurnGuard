@@ -6,6 +6,7 @@ import DesignSystemView from "@/views/DesignSystemView";
 import SettingsView from "@/views/SettingsView";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ToastContainer from "@/components/errors/BackendCrashToast";
+import StarPrompt from "@/components/layout/StarPrompt";
 import { useTheme } from "@/hooks/useTheme";
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
       </AppShell>
       <SettingsModal />
       <ToastContainer />
+      <StarPrompt />
     </>
   );
 }

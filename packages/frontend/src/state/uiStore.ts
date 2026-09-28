@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { claimStarPrompt, type StarPromptStorage } from "@/lib/star-prompt";
 
 export type ToastTone = "info" | "success" | "warn" | "error";
 
@@ -20,6 +21,12 @@ interface UIState {
 
   cliMissingShown: boolean;
   setCliMissingShown: (shown: boolean) => void;
+
+  starPromptOwed: boolean;
+  starPromptOpen: boolean;
+  oweStarPrompt: () => void;
+  revealStarPrompt: (storage: () => StarPromptStorage, modalOpen: boolean) => void;
+  dismissStarPrompt: () => void;
 }
 
 const TOAST_AUTO_DISMISS_MS = 3000;
@@ -55,4 +62,14 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   cliMissingShown: false,
   setCliMissingShown: (cliMissingShown) => set({ cliMissingShown }),
+
+  starPromptOwed: false,
+  starPromptOpen: false,
+  oweStarPrompt: () => set({ starPromptOwed: true }),
+  revealStarPrompt: (storage, modalOpen) => {
+    if (!get().starPromptOwed || modalOpen) return;
+    set({ starPromptOwed: false });
+    if (claimStarPrompt(storage)) set({ starPromptOpen: true });
+  },
+  dismissStarPrompt: () => set({ starPromptOpen: false }),
 }));

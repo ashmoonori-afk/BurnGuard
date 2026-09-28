@@ -8,6 +8,7 @@ import { createExport, getExport } from "@/api/export";
 import { getSettings } from "@/api/home";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useUIStore } from "@/state/uiStore";
 import { exportJobState } from "./export-job-state";
 
 /** Publishing needs an output that can still be downloaded, not merely a job that once succeeded. */
@@ -27,6 +28,7 @@ const errors: Record<string, MessageKey> = {
 export default function VercelShare({ projectId, projectType }: { projectId: string; projectType: ProjectType }) {
   const t = useT();
   const queryClient = useQueryClient();
+  const oweStarPrompt = useUIStore((s) => s.oweStarPrompt);
   const [open, setOpen] = useState(false);
   const [token, setToken] = useState("");
   const [teamId, setTeamId] = useState("");
@@ -65,7 +67,7 @@ export default function VercelShare({ projectId, projectType }: { projectId: str
     try {
       const result = await apiFetch<VercelDeployment>(`/api/exports/${jobId}/vercel`, { method: "POST", body: JSON.stringify({ ...(token.trim() ? { token: token.trim() } : {}), ...(teamId.trim() ? { team_id: teamId.trim() } : {}), ...(deployment ? { deployment_id: deployment.id } : {}), ...(badgeAvailable ? { badge: badgeEnabled } : {}) }) });
       setDeployment(result);
-      if (result.ready) setToken("");
+      if (result.ready) { setToken(""); oweStarPrompt(); }
     } catch (error) { setMessage(error instanceof ApiError ? errors[error.code] ?? "export.share.publishFailed" : "export.share.disconnected"); }
     finally { setBusy(false); }
   }

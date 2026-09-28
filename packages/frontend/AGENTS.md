@@ -29,7 +29,7 @@ packages/frontend/
 | Toasts/global UI state | `src/state/uiStore.ts` | `error`/`warn` toasts persist; other tones auto-dismiss after 3s |
 | Testable logic | `src/lib/*.ts` | project-creation, design-audit, direction state, canvas geometry |
 | Backend error copy | `src/lib/error-copy.ts` | `apiErrorCopy` maps backend codes to localized `MessageKey`s, never literal strings |
-| Locale switching | `src/i18n/locale.ts` | `useLocaleStore`, `burnguard.locale` storage key, Korean default and fallback |
+| Locale switching | `src/i18n/locale.ts` | `useLocaleStore`, `burnguard.locale` storage key; first run follows the OS language, an explicit choice wins |
 | Dev server/proxy | `vite.config.ts` | `127.0.0.1:5173` strictPort; `/api` and `/runtime` proxy to `14070` |
 | Design tokens | `tailwind.config.ts`, `src/index.css` | Semantic tokens (`bg-background`, `z-toast`, `shadow-app-3`) |
 

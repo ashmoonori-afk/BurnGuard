@@ -24,5 +24,9 @@ export const shellMessages = defineMessages({
   "shell.work": { ko: "내 작업", en: "My work", "zh-CN": "我的工作" },
   "shell.systemWorkspace": { ko: "시스템 작업 공간", en: "System workspace", "zh-CN": "系统工作区" },
   "shell.close": { ko: "닫기", en: "Close", "zh-CN": "关闭" },
+  "shell.starPrompt.title": { ko: "BurnGuard는 무료 오픈소스예요", en: "BurnGuard is free and open source", "zh-CN": "BurnGuard 是免费的开源软件" },
+  "shell.starPrompt.body": { ko: "GitHub 스타 하나가 다른 분들이 BurnGuard를 찾는 데 도움이 돼요.", en: "A GitHub star helps others find it.", "zh-CN": "在 GitHub 上点一颗星，能帮助更多人发现它。" },
+  "shell.starPrompt.action": { ko: "GitHub에서 스타 주기", en: "Star on GitHub", "zh-CN": "在 GitHub 上加星" },
+  "shell.starPrompt.later": { ko: "괜찮아요", en: "No thanks", "zh-CN": "不用了" },
   "shell.settingsSyncFailed": { ko: "공유 프로필을 동기화하지 못했어요. 저장된 언어로 시작해요.", en: "Could not sync the shared profile. Starting with the saved language.", "zh-CN": "无法同步共享配置。将以已保存的语言启动。" },
 });
