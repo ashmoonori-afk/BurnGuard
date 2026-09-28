@@ -106,4 +106,83 @@ describe("buildHandoffManifest", () => {
     expect(JSON.stringify(result)).not.toContain("token=private");
     expect(JSON.stringify(result)).not.toContain("gate-secret");
   });
+
+  test("Given secrets and platform paths in authored text When the manifest is built Then no text field carries them", () => {
+    const fakeJwt = ["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiIxMjM0NTYifQ", "c2lnbmF0dXJlMTIz"].join(".");
+    const result = buildHandoffManifest({
+      spec: emptySpec("index.html"),
+      designSystem: null,
+      files: [{
+        path: "index.html",
+        text: `<title>API_KEY=abc123 C:/Users/me/site</title>
+          <main data-bg-node-id="m" data-component="Panel /opt/private/x">
+            <button type="button" aria-label="Authorization: Bearer ${fakeJwt}">Go</button>
+            <a href="file:///etc/passwd">Local</a>
+          </main>`,
+      }],
+    });
+
+    const serialized = JSON.stringify(result);
+    for (const leaked of ["abc123", "C:/Users", "/opt/private", "eyJhbGci", "file:///etc", "/etc/passwd"]) {
+      expect(serialized).not.toContain(leaked);
+    }
+  });
+
+  test("Given links in a nested page When routes are derived Then hrefs resolve against their owner and never escape the root", () => {
+    const result = buildHandoffManifest({
+      spec: emptySpec("index.html"),
+      designSystem: null,
+      files: [
+        { path: "index.html", text: '<a href="pages/about.html">About</a>' },
+        { path: "pages/about.html", text: '<a href="contact.html">Contact</a><a href="../index.html">Home</a><a href="../../outside.html">Out</a>' },
+        { path: "pages/contact.html", text: "<p>Contact</p>" },
+      ],
+    });
+
+    expect(result.routes.map((route) => [route.path, route.kind])).toEqual([
+      ["/", "page"],
+      ["/pages/about", "page"],
+      ["/pages/contact", "page"],
+    ]);
+  });
+
+  test("Given a selector with an unmatched ancestor in another page's stylesheet When tokens are mapped Then only rules that apply to the page and element count", () => {
+    const result = buildHandoffManifest({
+      spec: emptySpec("app.html"),
+      designSystem: { revision: 1, digest: "c".repeat(64), tokens: ":root { --brand: #111; --admin: #222; --linked: #333; }" },
+      files: [
+        { path: "index.html", text: '<link rel="stylesheet" href="site.css"><section class="hero" data-bg-node-id="hero"></section>' },
+        { path: "site.css", text: ".admin .hero { color: var(--admin); } section.hero { color: var(--linked); }" },
+        { path: "unlinked.css", text: ".hero { color: var(--brand); }" },
+      ],
+    });
+
+    expect(result.pages[0]?.regions[0]?.token_refs).toEqual(["--linked"]);
+  });
+
+  test("Given two pages with mocked buttons When the manifest is built Then unresolved work ids are unique and ordering is code-unit stable", () => {
+    const result = buildHandoffManifest({
+      spec: emptySpec("index.html"),
+      designSystem: null,
+      files: [
+        { path: "index.html", text: '<button type="button">A</button>' },
+        { path: "b.html", text: '<button type="button">B</button>' },
+        { path: "Z.html", text: "<p>Z</p>" },
+      ],
+    });
+
+    const ids = result.unresolved_backend_work.map((item) => item.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(result.routes.map((route) => route.path)).toEqual(["/", "/Z", "/b"]);
+  });
 });
+
+function emptySpec(entrypoint: string) {
+  return buildHandoffSpec({
+    project: { id: "p1", name: "Site", type: "prototype", entrypoint },
+    viewport: { width: 1280, height: 720 },
+    pages: [],
+    designSystem: { name: null, tokensFileInZip: null },
+    generatedAt: 1,
+  });
+}

@@ -41,13 +41,9 @@ export async function renderHandoffBundle(input: {
     const spec = buildHandoffSpec({ project: input.project, viewport: value.viewport, pages: value.pages, designSystem: { name: input.designSystemName, tokensFileInZip } });
     await writeFile(path.join(input.stagingDir, "spec.json"), JSON.stringify(spec, null, 2), "utf8");
     const sourceManifest = await inspectCanonicalTree(bundleSourceDir);
-    const sourceFiles = await Promise.all(sourceManifest.files.map(async (file) => ({
-      path: file.path,
-      text: /\.(?:css|html?)$/iu.test(file.path)
-        ? await readFile(resolveWithin(bundleSourceDir, file.path), "utf8")
-        : null,
-    })));
+    const sourceFiles = await readHandoffSourceTexts(bundleSourceDir, sourceManifest.files, input.signal);
     const handoffManifest = buildHandoffManifest({
+      signal: input.signal,
       spec,
       designSystem: input.designSystemPin === null || input.designSystemPin === undefined
         ? null
@@ -86,6 +82,33 @@ function isHandoffExtract(value: unknown): value is { readonly viewport: { reado
   const viewport = Reflect.get(value, "viewport"); const pages = Reflect.get(value, "pages");
   return typeof viewport === "object" && viewport !== null && typeof Reflect.get(viewport, "width") === "number" && typeof Reflect.get(viewport, "height") === "number" && Array.isArray(pages);
 }
+const HANDOFF_TEXT_READ_LIMITS = { files: 400, bytesPerFile: 2 * 1024 * 1024, totalBytes: 16 * 1024 * 1024 } as const;
+
+async function readHandoffSourceTexts(
+  root: string,
+  files: readonly { readonly path: string; readonly size: number }[],
+  signal: AbortSignal | undefined,
+): Promise<readonly { readonly path: string; readonly text: string | null }[]> {
+  const result: { path: string; text: string | null }[] = [];
+  let textFiles = 0;
+  let totalBytes = 0;
+  for (const file of files) {
+    signal?.throwIfAborted();
+    const readable = /\.(?:css|html?)$/iu.test(file.path) &&
+      textFiles < HANDOFF_TEXT_READ_LIMITS.files &&
+      file.size <= HANDOFF_TEXT_READ_LIMITS.bytesPerFile &&
+      totalBytes + file.size <= HANDOFF_TEXT_READ_LIMITS.totalBytes;
+    if (!readable) {
+      result.push({ path: file.path, text: null });
+      continue;
+    }
+    textFiles += 1;
+    totalBytes += file.size;
+    result.push({ path: file.path, text: await readFile(resolveWithin(root, file.path), "utf8") });
+  }
+  return result;
+}
+
 const README = `BurnGuard Handoff bundle
 ========================
 source/ contains the validated project closure.

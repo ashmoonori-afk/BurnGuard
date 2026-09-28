@@ -8,7 +8,8 @@ import {
   analyzeHandoffSources,
   type HandoffSourceFile,
 } from "./export-handoff-source-analysis";
-import { redactPrivatePaths } from "./export-handoff-privacy";
+import { compareCodeUnits } from "./export-handoff-order";
+import { sanitizeHandoffText, sanitizeNullableHandoffText } from "./export-handoff-privacy";
 
 export type HandoffManifestInput = {
   readonly spec: HandoffSpec;
@@ -18,6 +19,7 @@ export type HandoffManifestInput = {
     readonly tokens: string;
   } | null;
   readonly files: readonly HandoffSourceFile[];
+  readonly signal?: AbortSignal;
 };
 
 export function buildHandoffManifest(
@@ -26,6 +28,7 @@ export function buildHandoffManifest(
   const analysis = analyzeHandoffSources(
     input.files,
     input.designSystem?.tokens ?? "",
+    input.signal,
   );
   const sourcePath = `source/${input.spec.project.entrypoint}`;
   const renderedPages = input.spec.pages.map((page, index) => ({
@@ -35,17 +38,19 @@ export function buildHandoffManifest(
       : input.spec.project.type === "graphic"
         ? "artboard" as const
         : "page" as const,
-    title: page.title,
+    title: sanitizeHandoffText(page.title) || `Page ${index + 1}`,
     source_path: sourcePath,
-    regions: page.nodes.map((node) => {
-      const context = analysis.node_context.get(`${sourcePath}:${node.bg_id}`);
-      return {
-        node_id: node.bg_id,
-        tag: node.tag,
+    regions: page.nodes.flatMap((node) => {
+      const nodeId = sanitizeNullableHandoffText(node.bg_id, 120);
+      if (nodeId === null) return [];
+      const context = analysis.node_context.get(`${sourcePath}:${nodeId}`);
+      return [{
+        node_id: nodeId,
+        tag: sanitizeHandoffText(node.tag, 40) || "unknown",
         component: context?.component ?? null,
         route: context?.route ?? routeForEntrypoint(input.spec.project.entrypoint),
         token_refs: context?.token_refs ?? [],
-      };
+      }];
     }),
   }));
   const staticPages = analysis.source_pages
@@ -71,20 +76,20 @@ export function buildHandoffManifest(
   const relatedSourcePaths = input.files
     .filter((file) => /\.html?$/iu.test(file.path))
     .map((file) => `source/${file.path}`)
-    .sort((left, right) => left.localeCompare(right, "en"));
+    .sort(compareCodeUnits);
   const responsivePaths = [
     ...new Set(analysis.responsive_rules.map((rule) => rule.source_file)),
-  ].sort((left, right) => left.localeCompare(right, "en"));
+  ].sort(compareCodeUnits);
   return parseHandoffManifest({
     schema_version: 1,
     project: {
       ...input.spec.project,
-      name: redactPrivatePaths(input.spec.project.name),
+      name: sanitizeHandoffText(input.spec.project.name) || "Untitled project",
     },
     design_system: {
       name: input.spec.design_system.name === null
         ? null
-        : redactPrivatePaths(input.spec.design_system.name),
+        : sanitizeNullableHandoffText(input.spec.design_system.name),
       revision: input.designSystem?.revision ?? null,
       digest: input.designSystem?.digest ?? null,
       tokens_file: input.spec.design_system.tokens_file,
@@ -126,7 +131,7 @@ export function buildHandoffManifest(
           ...new Set(
             analysis.unresolved_backend_work.map((item) => item.source_file),
           ),
-        ].sort((left, right) => left.localeCompare(right, "en")),
+        ].sort(compareCodeUnits),
       },
     ],
     unresolved_backend_work: analysis.unresolved_backend_work,

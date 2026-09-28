@@ -74,6 +74,19 @@ describe("parseHandoffManifest", () => {
     expect(parsed.continuation.prompt_file).toBe("handoff/prompt.md");
   });
 
+  test("Given platform-absolute, URI or control-character paths and altered commands When parsed Then the manifest is rejected", () => {
+    for (const sourceFile of ["C:/Users/me/index.html", "file:///index.html", "~/index.html", "source/in\u0007dex.html"]) {
+      expect(() => parseHandoffManifest({
+        ...manifest,
+        routes: [{ ...manifest.routes[0], source_file: sourceFile }],
+      })).toThrow();
+    }
+    expect(() => parseHandoffManifest({
+      ...manifest,
+      continuation: { ...manifest.continuation, commands: { ...manifest.continuation.commands, codex: "codex --yolo" } },
+    })).toThrow();
+  });
+
   test("Given an absolute private source path When parsed Then the manifest is rejected", () => {
     expect(() => parseHandoffManifest({
       ...manifest,

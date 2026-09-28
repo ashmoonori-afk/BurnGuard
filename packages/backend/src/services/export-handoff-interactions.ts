@@ -1,8 +1,8 @@
 import type { HandoffManifest } from "@bg/shared";
 import type { HTMLElement } from "node-html-parser";
 import {
-  redactPrivatePaths,
   safeHandoffTarget,
+  sanitizeNullableHandoffText,
 } from "./export-handoff-privacy";
 
 export function analyzeHandoffInteractions(
@@ -42,7 +42,7 @@ export function analyzeHandoffInteractions(
     });
     if (!mocked || kind === "link") continue;
     unresolved.push({
-      id: `backend-${unresolved.length + 1}`,
+      id: `${id}:backend`,
       interaction_id: id,
       source_file: sourceFile,
       node_id: nodeId,
@@ -72,14 +72,12 @@ function isExternalBackend(target: string | null): boolean {
 }
 
 function nearestNodeId(element: HTMLElement): string | null {
-  return element.closest("[data-bg-node-id]")?.getAttribute("data-bg-node-id") ??
-    null;
+  return sanitizeNullableHandoffText(element.closest("[data-bg-node-id]")?.getAttribute("data-bg-node-id"), 120);
 }
 
 function boundedLabel(element: HTMLElement): string | null {
-  const value =
-    element.getAttribute("aria-label")?.trim() ??
-    element.getAttribute("title")?.trim() ??
-    element.text.trim().replace(/\s+/gu, " ");
-  return value === "" ? null : redactPrivatePaths(value).slice(0, 160);
+  return sanitizeNullableHandoffText(
+    element.getAttribute("aria-label") ?? element.getAttribute("title") ?? element.text,
+    160,
+  );
 }
