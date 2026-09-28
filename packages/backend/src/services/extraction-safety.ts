@@ -27,7 +27,9 @@ const URL_ATTRIBUTES = ["href", "src", "action", "formaction", "poster", "xlink:
 const HIDDEN_MARKUP_CONTAINERS = ["noscript", "template"] as const;
 export const MAX_HIDDEN_MARKUP_DEPTH = 8;
 const DANGEROUS_SCHEME = /^(?:javascript|data:text\/html|vbscript):/i;
-const NETWORK_STYLE = /(?:@import\b|url\s*\()/i;
+// url() that does not point at an in-document fragment (url(#id), optionally quoted, including the
+// entity-encoded quotes of serialized attributes) can reach the network.
+const NETWORK_STYLE = /(?:@import\b|url\s*\(\s*(?!(?:['"]|&quot;|&apos;|&#0*3[49];)?\s*#))/i;
 const TEXT_NODE = 3;
 
 /** Every URL an attribute value can make the consumer fetch (srcset/imagesrcset candidates, ping list). */
@@ -106,6 +108,10 @@ export function removeActiveSourceMarkup(content: string): string {
     }
     const style = node.getAttribute("style");
     if (style !== undefined && NETWORK_STYLE.test(style)) node.removeAttribute("style");
+    // SVG presentation attributes (fill, stroke, filter, mask, ...) and any other attribute may also carry url().
+    for (const [attributeName, value] of Object.entries(node.attributes)) {
+      if (NETWORK_STYLE.test(value)) node.removeAttribute(attributeName);
+    }
     for (const attributeName of URL_ATTRIBUTES) node.removeAttribute(attributeName);
     for (const child of node.childNodes) {
       // Prose that merely mentions CSS network syntax stays readable but can no longer trip the gate.
