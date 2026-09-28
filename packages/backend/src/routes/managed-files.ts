@@ -163,6 +163,36 @@ managedFileRoutes.get("/api/exports/:id/download", async (c) => {
   }
 });
 
+managedFileRoutes.get("/api/exports/:id/parity/pages/:page/thumbnail", async (c) => {
+  const page = Number(c.req.param("page"));
+  if (!Number.isSafeInteger(page) || page <= 0 || page > 100) {
+    return c.json(fail("invalid_parity_page", "Invalid parity page"), 400);
+  }
+  const {
+    ExportParityStorageError,
+    readExportParityThumbnail,
+  } = await import("../services/export-parity-storage");
+  try {
+    const bytes = await readExportParityThumbnail(c.req.param("id"), page);
+    return new Response(Buffer.from(bytes), {
+      headers: {
+        "Cache-Control": "private, no-store",
+        "Content-Type": "image/png",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof ExportParityStorageError)) throw error;
+    if (error.code === "not_found") {
+      return c.json(fail("export_not_found", "Export job not found"), 404);
+    }
+    if (error.code === "corrupt") {
+      return c.json(fail("export_parity_corrupt", "Export parity evidence is corrupt"), 410);
+    }
+    return c.json(fail("export_parity_unavailable", "Export parity evidence is unavailable"), 404);
+  }
+});
+
 function contentType(filePath: string): string {
   switch (path.extname(filePath).toLowerCase()) {
     case ".html": case ".htm": return "text/html; charset=utf-8";

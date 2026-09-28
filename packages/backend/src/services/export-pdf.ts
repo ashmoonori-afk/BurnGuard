@@ -35,6 +35,8 @@ export async function renderDeckToPdf(input: {
   readonly title?: string;
   readonly signal?: AbortSignal;
   readonly onPhase?: (phase: RenderPhase) => void;
+  readonly onParityPage?: (png: Uint8Array) => Promise<void> | void;
+  readonly onParityUnavailable?: () => void;
 }): Promise<PdfValidation> {
   const controller = input.signal === undefined ? new AbortController() : null;
   const signal = input.signal ?? controller?.signal;
@@ -82,6 +84,23 @@ export async function renderDeckToPdf(input: {
           else slide.style.removeProperty("display");
         }
       }, { pageIndex: index, displays: slideDisplays, elementSelector: selector });
+      if (input.onParityPage !== undefined) {
+        try {
+          await input.onParityPage(
+            new Uint8Array(
+              await session.page.locator(selector).nth(index).screenshot({
+                type: "png",
+                animations: "disabled",
+                timeout: 30_000,
+              }),
+            ),
+          );
+        } catch (error) {
+          signal.throwIfAborted();
+          input.onParityUnavailable?.();
+          void error;
+        }
+      }
       const dimensions = pdfDimensionsForPaper(paper, preflight[index]);
       const pageBytes = await session.page.pdf({ format: dimensions.format, width: dimensions.width, height: dimensions.height, landscape: dimensions.format !== undefined, printBackground: true, preferCSSPageSize: false, displayHeaderFooter: false });
       const part = await PDFDocument.load(pageBytes); const copied = await combined.copyPages(part, part.getPageIndices()); for (const page of copied) combined.addPage(page);

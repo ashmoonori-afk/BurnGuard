@@ -162,7 +162,13 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
     if (/^\/api\/design-systems\/[^/]+\/files\//.test(pathname)) return "catalog";
     return /\/(?:extract|upload|tokens|colors|fonts|pinterest)(?:\/|$)/.test(pathname) ? "system" : "catalog";
   }
-  if (/^\/api\/exports\/[^/]+\/download$/.test(pathname)) return "managed-files";
+  if (
+    /^\/api\/exports\/[^/]+\/(?:download|parity\/pages\/\d+\/thumbnail)$/.test(
+      pathname,
+    )
+  ) {
+    return "managed-files";
+  }
   if (pathname.startsWith("/api/exports")) return "artifacts";
   if (pathname.startsWith("/api/comments") || /\/comments(?:\/|$)/.test(pathname)) return "comments";
   if (pathname.startsWith("/api/sessions")) return "session";

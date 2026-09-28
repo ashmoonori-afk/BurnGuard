@@ -13,10 +13,12 @@ export async function renderToPng(input: {
   readonly deck: boolean;
   readonly signal: AbortSignal;
   readonly onPhase?: (phase: RenderPhase) => void;
+  readonly onParityPage?: (png: Uint8Array) => Promise<void> | void;
 }): Promise<PngValidation> {
   const session = await openRenderSession({ stagedDir: input.stagedDir, entrypoint: input.entrypoint, viewport: { width: input.width, height: input.height, dpr: input.dpr }, deck: input.deck, signal: input.signal, ...(input.onPhase === undefined ? {} : { onPhase: input.onPhase }) });
   try {
-    await session.page.screenshot({ path: input.outputPath, type: "png", fullPage: false, animations: "disabled" });
+    const captured = new Uint8Array(await session.page.screenshot({ path: input.outputPath, type: "png", fullPage: false, animations: "disabled" }));
+    await input.onParityPage?.(captured);
     const bytes = new Uint8Array(await readFile(input.outputPath));
     const width = input.width * input.dpr; const height = input.height * input.dpr; const canvas = createCanvas(width, height); const context = canvas.getContext("2d"); const image = await loadImage(bytes); context.drawImage(image, 0, 0, width, height); const pixels = context.getImageData(0, 0, width, height).data; const statistics = analyzePixels(Uint8Array.from(pixels), width, height);
     return validatePngStatistics(bytes, { width: input.width * input.dpr, height: input.height * input.dpr }, statistics);

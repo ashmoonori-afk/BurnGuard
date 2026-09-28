@@ -22,6 +22,7 @@ import {
 import { platformGuideView } from "./platform-guide";
 import HandoffCommands from "./HandoffCommands";
 import { handoffCommands } from "./handoff-command-state";
+import ExportParitySummary from "./ExportParitySummary";
 
 export type ExportRowActions = {
   readonly onRetry?: (job: ExportJob) => void;
@@ -147,6 +148,9 @@ export default function ExportStatusRow({
       )}
       {continuation !== null && (
         <HandoffCommands continuation={continuation} />
+      )}
+      {job.parity !== null && (
+        <ExportParitySummary jobId={job.id} parity={job.parity} />
       )}
       {findings.length > 0 && (
         <ul className="space-y-0.5 pl-6">
