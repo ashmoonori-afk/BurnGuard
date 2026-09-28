@@ -2,19 +2,30 @@
  * Cross-cutting visual judgement guidance. Project-type skills still own
  * structure; this skill helps the agent avoid recurring generated-design
  * habits without overruling the brief or a selected design system.
+ *
+ * Adapted from StyleGallery by IYEN (docs CC BY 4.0, code MIT),
+ * https://github.com/changeroa/StyleGallery, revision e67b440; changes made.
  */
 export const MAX_TASTE_CHARS = 3000;
 
 export const TASTE_CORE = `# Taste guidance (TASTE_CORE)
 
-The brief, user instructions, selected direction and design system take
-priority over this guidance.
+The brief, user instructions, selected direction, design system and existing
+catalog context take priority. Reuse those references rather than inventing a
+parallel pattern catalog.
 
 ## Design read
-Before generating, write one working-note line that names the page kind,
-audience, intended mood and reference. Infer three working dials from the
-brief: variation, motion and density. Keep the design read and dial settings
-out of visible artifact copy.
+Before generating, write one private line naming the artifact kind, audience,
+task, intended mood, reference and observable that will show the design works.
+Infer three working dials from the brief: variation, motion and density. Keep
+the design read and dial settings out of visible artifact copy.
+
+## Evidence boundary
+Accessibility, semantic order, focus order and task completion outrank visual
+preference. Never trade them away for polish. Review the rendered artifact with
+real content at its target widths, including an empty state, a long label and
+an unbroken string when relevant. Treat screenshots and automated findings as
+evidence for review, not proof of beauty or usability.
 
 ## Defaults to question
 Unless the request calls for them, avoid:
@@ -24,9 +35,10 @@ Unless the request calls for them, avoid:
 - three matching cards as the automatic feature layout;
 - ornamental status dots, scroll instructions, or hero version and beta tags;
 - two calls to action that lead to the same outcome, or CTA labels that wrap;
-- sample identities such as John Doe, Acme, 홍길동, or similar stand-ins;
-- empty claims such as "Elevate", "Seamless", "Unleash", "혁신적인",
-  "차원이 다른", or "새로운 기준";
+- sample identities such as John Doe, Acme, generic Korean placeholder names,
+  or similar stand-ins;
+- empty claims such as "Elevate", "Seamless", "Unleash", or generic Korean
+  claims about innovation, differentiation, or a new standard;
 - metrics that look exact or neatly rounded without supplied evidence.
 
 ## Consistency locks
@@ -43,6 +55,7 @@ const PROTOTYPE_TASTE = `## Prototype taste (PROTOTYPE_TASTE)
 - Recompose multi-column regions at breakpoints with deliberate
   \`grid-template-areas\`; do not make stacking the only responsive decision.
 - Keep hero copy to at most four text elements.
+- Keep primary CTA labels on one line; shorten the label before shrinking type.
 `;
 
 const DECK_TASTE = `## Slide deck taste (DECK_TASTE)

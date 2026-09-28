@@ -4,10 +4,12 @@ import { LUCIDE_REFERENCE_REL_PATH } from "./lucide-reference";
 export const COMPACT_TASTE_REFERENCE = `# Taste compact reference (TASTE_COMPACT_REFERENCE)
 
 The brief, selected direction, design system and user instructions come first.
-Record a private design read plus variation, motion and density dials before
-generation. Avoid repeated template patterns, filler copy and duplicate CTA
-intent; keep one accent role and one corner-radius scale. Apply the matching
-project-type structural contract.`;
+Record a private task, reference and observable plus variation, motion and
+density dials before generation. Accessibility and task completion outrank
+polish. Avoid repeated template patterns, filler copy and duplicate or wrapped
+CTA labels; keep one accent role and one corner-radius scale. Apply the matching
+project-type structural contract and verify the rendered result with real
+content at target widths.`;
 
 export const COMPACT_DECK_SKILL_MD = `# Slide deck compact contract
 

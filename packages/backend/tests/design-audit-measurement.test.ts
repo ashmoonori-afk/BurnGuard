@@ -8,7 +8,7 @@ import { inspectRenderedPage } from "../src/services/design-audit-dom";
 import { auditRenderedTree } from "../src/services/design-audit";
 import { launchChromium } from "../src/services/export-render-session";
 
-const NOT_APPLICABLE_ON_FIXED = ["narrow_width", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset", "eyebrow_density", "duplicate_cta_intent"];
+const NOT_APPLICABLE_ON_FIXED = ["narrow_width", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset", "eyebrow_density", "duplicate_cta_intent", "cta_label_wrap", "repeated_section_structure"];
 const DECK_RUNTIME = '<script src="/runtime/deck-stage.js" defer></script>';
 const readyDeck = `<!doctype html><html><head><style>:root{--ink:#111;--paper:#fff}body{margin:0;font:32px Arial;color:var(--ink);background:var(--paper)}[data-slide]{position:relative;width:1920px;height:1080px}[data-deck-ready] [data-slide]:not([data-active]){display:none}h1{font:52px Arial;margin:0}.a,.b{position:absolute;top:400px;width:300px;height:60px;margin:0}.a{left:100px}.b{left:600px}</style></head><body><section data-slide><h1 data-bg-node-id="title">Ready deck</h1><p class="a" data-bg-node-id="a">Alpha</p><p class="b" data-bg-node-id="b">Beta</p></section>${DECK_RUNTIME}</body></html>`;
 const tokenDeck = `<!doctype html><html><head><style>:root{--ink:#111;--slide-type-caption:24px}body{margin:0;font:32px Arial;color:var(--ink);background:white}[data-slide]{width:1920px;height:1080px}[data-deck-ready] [data-slide]:not([data-active]){display:none}h1{font:52px Arial;margin:0}p{margin:0}</style></head><body><section data-slide><h1 data-bg-node-id="title-1">First</h1></section><section data-slide><h1 data-bg-node-id="title-2">Second</h1><p data-bg-node-id="small" style="font-size:18px">Small caption</p></section>${DECK_RUNTIME}</body></html>`;
@@ -71,6 +71,12 @@ describe("design audit applicability and folding", () => {
     expect(remote?.findings[1]?.evidence).toContain("https://example.com/embed");
     expect(report.overall_status).toBe("must_fix");
   }, 60_000);
+
+  test("Given a primary CTA that wraps only at the narrow viewport When audited Then its advisory finding survives viewport folding", async () => {
+    const report = await auditTree('<!doctype html><html><head><style>:root{--ink:#111}body{margin:0;background:#fff;color:#111}.primary-cta{display:inline-block;background:#111;color:#fff;padding:8px}@media(max-width:375px){.primary-cta{width:72px}}</style></head><body><main><a class="primary-cta" data-bg-node-id="narrow-cta" href="/start">Start your project</a></main></body></html>');
+    const wrap = report.checks.find((check) => check.code === "cta_label_wrap");
+    expect(wrap?.findings.map((finding) => [finding.source.node_bg_id, finding.severity, finding.measured, finding.threshold])).toEqual([["narrow-cta", "recommended", 2, 1]]);
+  }, 60_000);
 });
 
 describe("rendered page measurements", () => {
@@ -109,6 +115,7 @@ describe("rendered page measurements", () => {
   test("Given unfinished copy and sample identities When copy is inspected Then each advisory check owns its matching findings", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     try {
+      // The Korean literal below verifies generated-copy detection data and is never model-facing instruction text.
       await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}</style><p data-bg-node-id="list">Todo list for the week</p><p data-bg-node-id="tbd">TBD</p><p data-bg-node-id="ph">Placeholder.</p><p data-bg-node-id="lorem">Intro lorem ipsum dolor</p><p data-bg-node-id="john">John Doe</p><p data-bg-node-id="split">John <span>Doe</span></p><p data-bg-node-id="acme">Acme Corp</p><p data-bg-node-id="hong">홍길동</p><p data-bg-node-id="hint">Set an input placeholder that explains the format</p>');
       const findings = (await inspectRenderedPage(page)).findings;
       expect(findings.filter((finding) => finding.code === "copy_review").map((finding) => finding.nodeId).sort()).toEqual(["ph", "tbd"]);
@@ -143,6 +150,42 @@ describe("rendered page measurements", () => {
       await page.setContent('<!doctype html><base href="https://audit.test/"><style>body{margin:0;background:#fff;color:#111}.primary-cta{display:inline-block;background:#111;color:#fff;padding:8px}</style><main><a class="primary-cta" data-bg-node-id="label-first" href="/alpha">Start now</a><a class="primary-cta" data-bg-node-id="label-second" href="/beta">START NOW!</a><a class="primary-cta" data-bg-node-id="href-first" href="/start">Try it</a><a class="primary-cta" data-bg-node-id="href-second" href="./start">Begin</a><a class="primary-cta" data-bg-node-id="host-one" href="https://one.test/shared">Host one</a><a class="primary-cta" data-bg-node-id="host-two" href="https://two.test/shared">Host two</a><button data-bg-node-id="secondary-one">Save</button><button data-bg-node-id="secondary-two">Save</button><a class="primary-cta" data-bg-node-id="unique" href="/contact">Contact</a></main>');
       const findings = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "duplicate_cta_intent");
       expect(findings.map((finding) => [finding.nodeId, finding.severity, finding.action])).toEqual([["label-second", "recommended", "revise_copy"], ["href-second", "recommended", "revise_copy"]]);
+    } finally { await page.close(); }
+  }, 30_000);
+
+  test("Given a primary call to action whose label renders on two lines When inspected Then the wrapped label is recommended", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}.primary-cta{display:inline-block;width:72px;background:#111;color:#fff;padding:8px}</style><main><a class="primary-cta" data-bg-node-id="wrapped" href="/start">Start your project</a><a class="primary-cta" data-bg-node-id="single" href="/contact" style="width:160px">Contact</a></main>');
+      const findings = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "cta_label_wrap");
+      expect(findings.map((finding) => [finding.nodeId, finding.measured, finding.threshold, finding.severity, finding.action])).toEqual([["wrapped", 2, 1, "recommended", "keep_cta_label_single_line"]]);
+    } finally { await page.close(); }
+  }, 30_000);
+
+  test("Given two distinct primary accent tokens When inspected Then the excess accent role is recommended", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent('<!doctype html><style>:root{--accent:#f00;--color-primary:#00f}body{margin:0;background:#fff;color:#111}.a{color:var(--accent)}.b{color:var(--color-primary)}</style><p class="a">Alpha</p><p class="b">Beta</p>');
+      const findings = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "accent_color_count");
+      expect(findings.map((finding) => [finding.measured, finding.threshold, finding.severity, finding.action])).toEqual([[2, 1, "recommended", "consolidate_visual_language"]]);
+    } finally { await page.close(); }
+  }, 30_000);
+
+  test("Given four non-pill corner radii When inspected Then the fourth scale step is recommended", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}.box{display:inline-block;width:100px;height:60px;background:#eee}.r1{border-radius:4px}.r2{border-radius:8px}.r3{border-radius:12px}.r4{border-radius:16px}.pill{border-radius:50%}</style><div class="box r1"></div><div class="box r2"></div><div class="box r3"></div><div class="box r4" data-bg-node-id="fourth"></div><div class="box pill"></div>');
+      const findings = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "radius_scale_count");
+      expect(findings.map((finding) => [finding.nodeId, finding.measured, finding.threshold, finding.severity, finding.action])).toEqual([["fourth", 4, 3, "recommended", "consolidate_visual_language"]]);
+    } finally { await page.close(); }
+  }, 30_000);
+
+  test("Given adjacent sections with different names but the same rendered structure When inspected Then each repeated layout is recommended", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}section{min-height:80px}</style><main><section data-section="feature"><h2>One</h2></section><section data-section="quote" data-bg-node-id="repeated-1"><h2>Two</h2></section><section data-section="stats" data-bg-node-id="repeated-2"><h2>Three</h2></section></main>');
+      const findings = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "repeated_section_structure");
+      expect(findings.map((finding) => [finding.nodeId, finding.measured, finding.threshold, finding.severity, finding.action])).toEqual([["repeated-1", 2, 1, "recommended", "vary_section_layout"], ["repeated-2", 2, 1, "recommended", "vary_section_layout"]]);
     } finally { await page.close(); }
   }, 30_000);
 
