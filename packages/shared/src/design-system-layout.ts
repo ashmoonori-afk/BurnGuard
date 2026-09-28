@@ -1,6 +1,12 @@
 import { isRecord, UpgradeContractError } from "./contract-parser";
 
-export const LAYOUT_SECTION_KINDS = ["layout", "composition", "responsive", "family", "navigation", "hero", "footer"] as const;
+export const LAYOUT_SECTION_KINDS = ["layout", "composition", "responsive", "family", "navigation", "hero", "footer", "patterns", "alignment"] as const;
+/** README level-2 heading names that carry layout sections; `layoutSectionKind` maps a match to its kind. */
+export const LAYOUT_SECTION_HEADINGS = "Layout|Composition|Responsive[^\\r\\n]*|Family tokens|Navigation|Hero|Footer|Section patterns|Alignment";
+export function layoutSectionKind(heading: string): (typeof LAYOUT_SECTION_KINDS)[number] {
+  const word = heading.toLowerCase().split(" ")[0]!;
+  return (word === "section" ? "patterns" : word) as (typeof LAYOUT_SECTION_KINDS)[number];
+}
 export const REQUIRED_LAYOUT_TOKENS = ["--layout-max", "--layout-measure", "--layout-columns", "--layout-gutter", "--layout-margin", "--layout-section-y", "--layout-bp-md", "--layout-hero"] as const;
 export type DesignSystemLayout = {
   readonly schema_version: 1;
@@ -20,8 +26,8 @@ export function extractDesignSystemLayout(css: string, readme: string): DesignSy
     if ((name in tokens || Object.keys(tokens).length < 64) && TOKEN_NAME.test(name) && TOKEN_VALUE.test(value) && !/url\s*\(/i.test(value)) tokens[name] = value;
   }
   const sections: DesignSystemLayout["sections"][number][] = [];
-  for (const match of readme.replace(/```[\s\S]*?```/g, "").matchAll(/^##\s+(Layout|Composition|Responsive[^\r\n]*|Family tokens|Navigation|Hero|Footer)\s*\r?\n([\s\S]*?)(?=^##\s|$(?![\s\S]))/gim)) {
-    const kind = match[1]!.toLowerCase().split(" ")[0] as DesignSystemLayout["sections"][number]["kind"];
+  for (const match of readme.replace(/```[\s\S]*?```/g, "").matchAll(new RegExp(`^##\\s+(${LAYOUT_SECTION_HEADINGS})\\s*\\r?\\n([\\s\\S]*?)(?=^##\\s|$(?![\\s\\S]))`, "gim"))) {
+    const kind = layoutSectionKind(match[1]!);
     const text = match[2]!.replace(/^\|.*$/gm, "").trim().slice(0, 1800);
     if (text && !sections.some(section => section.kind === kind)) sections.push({ kind, text });
   }

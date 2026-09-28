@@ -54,6 +54,7 @@ export interface DesignSystemTokensResponse {
   colors: DesignSystemColorToken[];
   token_file_path: string | null;
   layout?: import("./design-system-layout").DesignSystemLayout;
+  assets?: import("./design-system-assets").DesignSystemAssetGuide;
 }
 
 export interface UpsertDesignSystemColorRequest {

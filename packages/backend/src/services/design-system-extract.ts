@@ -1,4 +1,7 @@
 import { readDesignSystemLayout } from "./design-system-layout";
+import { readDesignSystemAssetGuide } from "./design-system-assets";
+import { buildAssetGuideReadme } from "./extraction-assets";
+import { measureSourceLayout } from "./extraction-layout";
 import {
   copyFile,
   mkdir,
@@ -498,22 +501,22 @@ export async function readDesignSystemTokens(systemId: string) {
       "Design system not found",
     );
   }
-  const layout = await readDesignSystemLayout(detail);
+  const [layout, assets] = await Promise.all([readDesignSystemLayout(detail), readDesignSystemAssetGuide(detail)]);
   if (!detail.tokens_css_path) {
-    return { layout, colors: [], token_file_path: null };
+    return { layout, assets, colors: [], token_file_path: null };
   }
 
   const tokenPath = resolveDesignSystemRecordPath(systemId, detail.dir_path, detail.tokens_css_path);
   const css = await readFile(tokenPath, "utf8").catch(() => null);
   if (css === null) {
-    return { layout, colors: [], token_file_path: tokenPath };
+    return { layout, assets, colors: [], token_file_path: tokenPath };
   }
 
   const colors = [...(await extractCssCustomProperties(css)).entries()]
     .filter(([, value]) => isColorTokenValue(value))
     .map(([name, value]) => ({ name, value }));
 
-  return { layout, colors, token_file_path: tokenPath };
+  return { layout, assets, colors, token_file_path: tokenPath };
 }
 
 export async function upsertDesignSystemColorToken(
@@ -1363,6 +1366,8 @@ async function writeCanonicalDesignSystem(input: {
 }): Promise<CanonicalWriteResult> {
   throwIfAcquisitionAborted(input.signal);
   const generated = new Set<string>();
+  const measuredLayout = measureSourceLayout(input.analysis.cssDeclarations, input.analysis.spacingValues).tokens;
+  const layoutTokens = { ...DEFAULT_LAYOUT_TOKENS, ...measuredLayout };
   const fontsDir = path.join(input.systemDir, "fonts");
   const logosDir = path.join(input.systemDir, "assets", "logos");
   const previewDir = path.join(input.systemDir, "preview");
@@ -1379,7 +1384,7 @@ async function writeCanonicalDesignSystem(input: {
 
   await writeText(
     path.join(input.systemDir, "README.md"),
-    buildReadme(input.brandName, input.sourceType, input.sourceUrl, input.analysis) + DERIVED_SURFACE_README_SECTIONS,
+    buildReadme(input.brandName, input.sourceType, input.sourceUrl, input.analysis, layoutTokens) + DERIVED_SURFACE_README_SECTIONS,
     generated,
     input.systemDir,
   );
@@ -1391,7 +1396,7 @@ async function writeCanonicalDesignSystem(input: {
   );
   await writeText(
     path.join(input.systemDir, "colors_and_type.css"),
-    buildTokensCss(input.brandName, input.analysis),
+    buildTokensCss(input.brandName, input.analysis, layoutTokens),
     generated,
     input.systemDir,
   );
@@ -1435,6 +1440,7 @@ async function writeCanonicalDesignSystem(input: {
     borders: input.analysis.borders,
     assets: input.analysis.logoFiles.map((item) => `assets/logos/${safeFileName(item.fileName)}`),
     components: input.analysis.componentSamples,
+    layout: measuredLayout,
   }), Date.now(), input.lineage);
   await writeText(
     path.join(input.systemDir, "extraction-provenance.json"),
@@ -1531,7 +1537,9 @@ function buildReadme(
   sourceType: SupportedExtractionSource,
   sourceUrl: string,
   analysis: SourceAnalysis,
+  layout: Readonly<Record<string, string>>,
 ): string {
+  const { primary, action } = brandColors(analysis);
   const caveats = [
     analysis.cssVars.size === 0
       ? "- No native CSS custom properties were detected. Canonical token defaults were synthesized."
@@ -1604,7 +1612,7 @@ canonical format so the system can be reviewed, edited, and later published.
 - Avoid decorative icon overload or novelty illustration styles
 
 ## Layout
-Use the 12-column grid, 1200px content maximum, 60ch reading measure and 24px gutters declared by the --layout-* tokens in colors_and_type.css. Page margins and section rhythm come from --layout-margin and --layout-section-y; --layout-hero is the opening media ratio.
+Use the ${layout["--layout-columns"]}-column grid, ${layout["--layout-max"]} content maximum, ${layout["--layout-measure"]} reading measure and ${layout["--layout-gutter"]} gutters declared by the --layout-* tokens in colors_and_type.css. Page margins and section rhythm come from --layout-margin and --layout-section-y (${layout["--layout-section-y"]}); --layout-hero is the opening media ratio. Breakpoints: --layout-bp-md ${layout["--layout-bp-md"]}, --layout-bp-lg ${layout["--layout-bp-lg"]}.${layout["--layout-spacing-scale"] ? ` Spacing scale observed in the source: ${layout["--layout-spacing-scale"]} (--layout-spacing-scale); pick component and section spacing from it.` : " Space components on the --sp-* 4px scale."}
 
 ## Composition
 Open with a restrained hero, follow with aligned evidence rows on flat surfaces, and close with a compact footer. Keep the neutral canvas quiet so the brand and accent tokens carry emphasis.
@@ -1612,6 +1620,18 @@ Open with a restrained hero, follow with aligned evidence rows on flat surfaces,
 ## Responsive
 Below --layout-bp-md stack columns in reading order, keep navigation bounded to the viewport and let labels and actions wrap. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
 
+## Section patterns
+- Hero: headline and one supporting line on the left 6-7 columns with one action pair, media on the remaining columns at --layout-hero; stack copy above media below --layout-bp-md.
+- Feature grid: 3 equal columns (2 at tablet width, 1 below --layout-bp-md) of icon, short title and one sentence; align card tops and keep equal heights.
+- Logo or proof strip: one row of evenly spaced, single-colour customer logos or metrics directly under the hero.
+- Pricing: 2-4 plan cards side by side with the recommended plan emphasised by the brand accent, never by size alone; align prices and feature lists on a shared baseline.
+- Testimonials: 1-3 quotes with name and role, on a tinted brand surface or neutral card.
+- Call to action: a full-width band with one headline and one primary action before the footer.
+- Footer: a compact multi-column link index with the logo, legal line and locale or social links.
+
+## Alignment
+Align every block to the --layout-columns grid inside --layout-max; text starts on a column edge and media spans whole columns. Left-align running text and headings by default; centre only short hero or call-to-action copy. Share one vertical rhythm of --layout-section-y between sections and keep equal gutters between cards in a row.
+${buildAssetGuideReadme({ brandName, primary, action, colors: analysis.colors, fontFamilies: analysis.fontFamilies, radii: analysis.radii, shadows: analysis.shadows, logoPaths: analysis.logoFiles.slice(0, 8).map((item) => `assets/logos/${safeFileName(item.fileName)}`) })}
 ## Caveats & substitutions
 ${caveats.join("\n")}
 `;
@@ -1633,6 +1653,8 @@ Read README.md first, then apply the visual and content rules from this design s
 - Logos: assets/logos/
 - Preview cards: preview/
 - UI kit: ui_kits/website/
+- Layout: README.md Layout, Section patterns and Alignment
+- Assets: README.md Asset usage and Asset generation prompts
 - Voice: concise, premium, low-hype
 - Visual rules: structured layouts, restrained accents, token-first styling
 `;
@@ -1650,17 +1672,29 @@ function buildFontsCss(fontFamilies: string[]): string {
 `;
 }
 
-function buildTokensCss(brandName: string, analysis: SourceAnalysis): string {
+const DEFAULT_LAYOUT_TOKENS: Readonly<Record<string, string>> = {
+  "--layout-max": "1200px",
+  "--layout-measure": "60ch",
+  "--layout-columns": "12",
+  "--layout-gutter": "24px",
+  "--layout-margin": "clamp(20px, 4vw, 64px)",
+  "--layout-section-y": "clamp(56px, 8vw, 112px)",
+  "--layout-bp-md": "760px",
+  "--layout-bp-lg": "1120px",
+  "--layout-hero": "16 / 10",
+};
+
+function brandColors(analysis: SourceAnalysis): { readonly primary: string; readonly action: string } {
   const primary = firstValue(
     analysis.cssVars,
     ["primary-blue", "brand-primary", "color-primary", "primary", "accent"],
     "#0057B8",
   );
-  const action = firstValue(
-    analysis.cssVars,
-    ["action-blue", "interactive", "link", "brand-action"],
-    primary,
-  );
+  return { primary, action: firstValue(analysis.cssVars, ["action-blue", "interactive", "link", "brand-action"], primary) };
+}
+
+function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Readonly<Record<string, string>>): string {
+  const { primary, action } = brandColors(analysis);
   const sans = cssString(analysis.fontFamilies[0] ?? "Inter");
   const display = cssString(analysis.fontFamilies[1] ?? analysis.fontFamilies[0] ?? "Inter");
   const sourceAliases =
@@ -1822,17 +1856,9 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis): string {
   --dur-slow: 320ms;${sourceAliases}${extractedColorAliases}
 }
 
-/* Layout is part of the design-system contract. */
+/* Layout is part of the design-system contract; measured source values replace the scaffold defaults. */
 :root {
-  --layout-max: 1200px;
-  --layout-measure: 60ch;
-  --layout-columns: 12;
-  --layout-gutter: 24px;
-  --layout-margin: clamp(20px, 4vw, 64px);
-  --layout-section-y: clamp(56px, 8vw, 112px);
-  --layout-bp-md: 760px;
-  --layout-bp-lg: 1120px;
-  --layout-hero: 16 / 10;
+${Object.entries(layout).map(([name, value]) => `  ${name}: ${value};`).join("\n")}
 }
 `;
 }

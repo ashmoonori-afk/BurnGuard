@@ -4,9 +4,9 @@ import { useT, type MessageKey } from "@/i18n/t";
 const labels: Record<string, MessageKey> = {
   "--layout-max": "system.layout.max", "--layout-measure": "system.layout.measure", "--layout-columns": "system.layout.columns",
   "--layout-gutter": "system.layout.gutter", "--layout-margin": "system.layout.margin", "--layout-section-y": "system.layout.rhythm",
-  "--layout-hero": "system.layout.hero", "--layout-bp-md": "system.layout.breakpoint",
+  "--layout-hero": "system.layout.hero", "--layout-bp-md": "system.layout.breakpoint", "--layout-spacing-scale": "system.layout.spacingScale",
 };
-const sections = { layout: "system.layout.title", composition: "system.layout.composition", responsive: "system.layout.responsive", family: "system.layout.family", navigation: "system.layout.navigation", hero: "system.layout.heroSection", footer: "system.layout.footer" } as const;
+const sections = { layout: "system.layout.title", composition: "system.layout.composition", responsive: "system.layout.responsive", family: "system.layout.family", navigation: "system.layout.navigation", hero: "system.layout.heroSection", footer: "system.layout.footer", patterns: "system.layout.patterns", alignment: "system.layout.alignment" } as const;
 const regionKinds = new Set(["navigation", "hero", "footer"]);
 const regionTokens: Record<string, readonly string[]> = {
   navigation: ["--layout-nav-pattern", "--layout-nav-position", "--layout-nav-height"],

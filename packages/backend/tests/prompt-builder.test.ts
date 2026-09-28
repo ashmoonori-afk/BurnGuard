@@ -881,6 +881,36 @@ describe("prompt gaps", () => {
     }
   });
 
+  test("PH-06: Given a README with an asset guide When built for every surface Then the guide ships once as a tagged contract, the README asset sections are not inlined again, and an older README ships no asset block", async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "bg-prompt-assets-"));
+    try {
+      const readme = path.join(tempDir, "README.md");
+      await writeFile(readme, "# Theme\n\n## Section patterns\nPATTERN_RULE_TEXT\n\n## Asset usage\n### Logo\nLOGO_USAGE_TEXT\n\n## Asset generation prompts\n### Photography\nPrompt: PHOTO_PROMPT_TEXT\nNegative: PHOTO_NEGATIVE_TEXT\n\n## Voice\nVOICE_TEXT\n");
+      const designSystem = { id: "asset-guide", name: "Assets", status: "published", source_type: "manual", is_template: false, dir_path: tempDir, skill_md_path: null, tokens_css_path: null, readme_md_path: readme, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const;
+      for (const project_type of ["prototype", "slide_deck", "graphic"] as const) {
+        const prompt = await buildPrompt(makeContext({ project_type }, { designSystem }), { type: "user.message", text: "Build it" }, { contextMode: "full" });
+        const blocks = [...prompt.matchAll(/<selected_design_system_assets>\n([^\n]+)\n<\/selected_design_system_assets>/gu)];
+        expect(blocks).toHaveLength(1);
+        expect(JSON.parse(blocks[0]![1]!)).toEqual({ schema_version: 1, rules: [
+          { kind: "logo", usage: "LOGO_USAGE_TEXT", prompt: null, negative: null },
+          { kind: "photography", usage: null, prompt: "PHOTO_PROMPT_TEXT", negative: "PHOTO_NEGATIVE_TEXT" },
+        ] });
+        for (const text of ["LOGO_USAGE_TEXT", "PHOTO_PROMPT_TEXT", "PHOTO_NEGATIVE_TEXT"]) expect(prompt.split(text)).toHaveLength(2);
+        expect(prompt).not.toContain("## Asset usage");
+        expect(prompt.includes("PATTERN_RULE_TEXT")).toBe(project_type === "prototype");
+      }
+      const website = await buildPrompt(makeContext({}, { designSystem }), { type: "user.message", text: "Build it" }, { contextMode: "full" });
+      const layout = JSON.parse(website.match(/<selected_design_system_layout>\n([^\n]+)\n<\/selected_design_system_layout>/u)![1]!);
+      expect(layout.sections).toEqual([{ kind: "patterns", text: "PATTERN_RULE_TEXT" }]);
+      expect(website).toContain("VOICE_TEXT");
+      await writeFile(readme, "# Old\n\n## Layout\nGrid.\n");
+      const legacy = await buildPrompt(makeContext({}, { designSystem }), { type: "user.message", text: "Build it" }, { contextMode: "full" });
+      expect(legacy).not.toContain("<selected_design_system_assets>");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test("DP-24: Given a SKILL.md beyond the excerpt budget When built in full mode Then the block ends at a section boundary and a marker names the path, while a short skill ships whole", async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), "bg-prompt-skill-"));
     try {

@@ -65,6 +65,8 @@ export type ExtractionAnalysisEvidence = {
   readonly borders?: readonly string[];
   readonly assets?: readonly string[];
   readonly components?: Readonly<Record<string, readonly string[]>>;
+  /** Layout tokens measured from the source CSS, keyed by custom-property name. */
+  readonly layout?: Readonly<Record<string, string>>;
 };
 
 export function discoveriesFromAnalysis(analysis: ExtractionAnalysisEvidence): readonly ExtractionDiscovery[] {
@@ -90,6 +92,10 @@ export function discoveriesFromAnalysis(analysis: ExtractionAnalysisEvidence): r
   }
   analysis.fontFamilies.forEach((value, index) => add("typography", `font-family-${index + 1}`, value, `css:font-family:${index + 1}`, 0.9));
   analysis.assets?.forEach((value) => add("asset", value, value, `asset:${value}`, 1));
+  for (const [name, value] of Object.entries(analysis.layout ?? {})) {
+    const key = name.replace(/^--/, "");
+    add(key.startsWith("layout-bp-") ? "breakpoint" : "layout", key, value, `css:measured:${key}`, 0.7);
+  }
   for (const [kind, samples] of Object.entries(analysis.components ?? {})) {
     samples.forEach((value, index) => add("component", `${kind}-${index + 1}`, value, `html:${kind}:${index + 1}`, 0.7));
   }
