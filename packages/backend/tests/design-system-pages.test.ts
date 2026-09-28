@@ -297,6 +297,18 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
     }
   });
 
+  test("Given pages whose card colours differ from the page ground, then each page record and template leads with its page background and text colour roles", async () => {
+    const page = (cards: string) => '<html><head><style>:root{--ground:#0f0a1c} html body{background:var(--ground, #000000);color:#d6d6d6} ' + cards + '</style></head><body><nav><a href="/about">About</a></nav><h1>A</h1></body></html>';
+    await withSite({ "/source": page(".x{background-color:#141926}"), "/about": page(".card{background-color:#efedff} .alt{background-color:#ffffff}") }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Roles", source_type: "website", source_url: origin + "/source" });
+      const coverage = parseDesignSystemPageCoverage((await readDesignSystemTokens(id)).pages);
+      const about = coverage.pages.find(p => p.path === "/about")!;
+      expect(about.colors.slice(0, 2)).toEqual(["page-background: #0f0a1c", "page-color: #d6d6d6"]);
+      expect(coverage.templates.find(t => t.path === "/about")!.colors.slice(0, 2)).toEqual(["page-background: #0f0a1c", "page-color: #d6d6d6"]);
+      expect(about.colors).toContain("background-color: #efedff");
+    });
+  });
+
   test("Given no named primary token, then the most used mid-tone chromatic colour (design tokens before literals) becomes the primary, a named token still wins, and neutral-only sites keep the scaffold", async () => {
     const used = (n: number, style: string) => Array.from({ length: n }, () => '<p style="' + style + '">x</p>').join("");
     const cases = [
@@ -396,9 +408,9 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
     await withSite({ "/source": page("/home.css", "Home"), "/pricing": page("/pricing.css", "Pricing"), "/shared.css": shared, "/home.css": "body{background-color:#ff0000}", "/pricing.css": "body{background-color:#0000ff}" }, async (origin, id) => {
       await extractDesignSystemFromSource({ system_id: id, name: "Palette", source_type: "website", source_url: origin + "/source" });
       const coverage = parseDesignSystemPageCoverage((await readDesignSystemTokens(id)).pages);
-      expect(coverage.templates.find(t => t.page_type === "pricing")!.colors[0]).toBe("background-color: #0000ff");
-      expect(coverage.pages.find(p => p.path === "/source")!.colors[0]).toBe("background-color: #ff0000");
-      expect(coverage.differences.find(d => d.key === "palette")!.values).toEqual([{ path: "/source", value: "background-color: #ff0000" }, { path: "/pricing", value: "background-color: #0000ff" }]);
+      expect(coverage.templates.find(t => t.page_type === "pricing")!.colors.slice(0, 2)).toEqual(["page-background: #0000ff", "background-color: #0000ff"]);
+      expect(coverage.pages.find(p => p.path === "/source")!.colors.slice(0, 2)).toEqual(["page-background: #ff0000", "background-color: #ff0000"]);
+      expect(coverage.differences.find(d => d.key === "palette")!.values).toEqual([{ path: "/source", value: "page-background: #ff0000; background-color: #ff0000" }, { path: "/pricing", value: "page-background: #0000ff; background-color: #0000ff" }]);
     });
   });
 
