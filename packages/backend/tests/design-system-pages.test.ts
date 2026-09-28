@@ -297,6 +297,23 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
     }
   });
 
+  test("Given no named primary token, then the most used mid-tone chromatic colour (design tokens before literals) becomes the primary, a named token still wins, and neutral-only sites keep the scaffold", async () => {
+    const used = (n: number, style: string) => Array.from({ length: n }, () => '<p style="' + style + '">x</p>').join("");
+    const cases = [
+      { name: "framer", head: ":root{--token-a:#b77dea;--token-b:#262146;--token-c:#1ac2e6}", body: used(3, "color:var(--token-a, #ffffff)") + used(5, "background-color:var(--token-b)") + used(1, "border-color:#ff0000") + used(6, "color:#2ec4f2"), primary: "#b77dea" },
+      { name: "literal-only", head: "body{color:#111111}", body: used(2, "color:#2ec4f2") + used(1, "background:#b77dea"), primary: "#2ec4f2" },
+      { name: "named", head: ":root{--brand-primary:#123abc;--token-a:#b77dea}", body: used(4, "color:var(--token-a)"), primary: "#123abc" },
+      { name: "neutral", head: "body{color:#111111;background:#fafafa}", body: used(3, "color:#333333"), primary: "#0057B8" },
+    ];
+    for (const item of cases) {
+      await withSite({ "/source": "<html><head><style>" + item.head + "</style></head><body>" + item.body + "</body></html>" }, async (origin, id) => {
+        await extractDesignSystemFromSource({ system_id: id, name: item.name, source_type: "website", source_url: origin + "/source" });
+        const css = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
+        expect({ name: item.name, primary: /--primary-blue: ([^;]+);/.exec(css)?.[1] }).toEqual({ name: item.name, primary: item.primary });
+      });
+    }
+  });
+
   test("Given body and code font families, then the sans and display stacks never lead with a monospace family and the mono role uses the code font", async () => {
     const cases = [
       { name: "framer", css: ':root{--framer-font-family:"Inter", sans-serif;--framer-code-font-family:"Fragment Mono", monospace} body{font-family:"Inter", sans-serif} code{font-family:"Fragment Mono", monospace}', sans: "Inter", mono: '"Fragment Mono"' },
