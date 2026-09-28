@@ -2,11 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { MAX_PAGE_COVERAGE_BYTES, parseDesignSystemPageCoverage, type DesignSystemPageEvidence } from "@bg/shared";
+import { MAX_PAGE_COVERAGE_BYTES, MEASURED_VIEWPORTS, parseDesignSystemMeasuredLayout, parseDesignSystemPageCoverage, type DesignSystemMeasuredLayout, type DesignSystemPageEvidence } from "@bg/shared";
 import { getSqlite } from "../src/db/sqlite-client";
 import { appendDesignSystemContext } from "../src/harness/prompt-design-system";
 import { systemsDir } from "../src/lib/paths";
 import { extractDesignSystemFromSource, readDesignSystemTokens } from "../src/services/design-system-extract";
+import { readDesignSystemMeasuredLayout } from "../src/services/design-system-measured-layout";
+import { measureRenderedLayout, type RenderedLayoutInput } from "../src/services/extraction-rendered-layout";
 import { parseCssSource } from "../src/services/extraction-css";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 import { boundPageCoverage, buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, pageCoveragePromptSummary, pageLink, parseRobots, parseSitemap, robotsPatternMatches } from "../src/services/extraction-pages";
@@ -465,4 +467,57 @@ describe("Page colour evidence forms", () => {
       expect(colors.some(color => color.startsWith("border-color: #ff0000"))).toBe(false);
     });
   });
+});
+
+describe("Measured layout tokens", () => {
+  const viewportLayout = (name: "desktop" | "mobile") => ({ viewport: { ...MEASURED_VIEWPORTS[name] }, page_height: 2400, container: { left: 120, width: 1200 }, gutter: 24, section_gap: 96, type_scale: { hero: 64, h2: 32, body: 20 }, blocks: { hero_heading: { x: 346, y: 407, width: 749, height: 128, align: "center" } }, sections: [{ heading: "Own your AI", top: 407, height: 900, columns: 1, align: "center" }] });
+
+  test("Given an injected measurer, when a website is extracted, then it receives the entry and one page per type with their stylesheets and the result is stored and read back", async () => {
+    const calls: RenderedLayoutInput[] = [];
+    const layout: DesignSystemMeasuredLayout = { schema_version: 1, method: "rendered-offline", pages: [{ path: "/source", page_type: "other", viewports: { desktop: viewportLayout("desktop"), mobile: viewportLayout("mobile") } }] } as DesignSystemMeasuredLayout;
+    const page = (title: string) => '<html><head><link rel="stylesheet" href="/site.css"></head><body><nav><a href="/pricing">Pricing</a><a href="/about">About</a></nav><h1>' + title + "</h1></body></html>";
+    await withSite({ "/source": page("Home"), "/pricing": page("Pricing"), "/about": page("About"), "/site.css": "h1{font-size:64px}" }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Measured", source_type: "website", source_url: origin + "/source" }, { measureLayout: async input => { calls.push(input); return layout; } });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.pages.map(p => [p.path, p.pageType])).toEqual([["/source", "other"], ["/pricing", "pricing"], ["/about", "about"]]);
+      expect(calls[0]!.stylesheets.get(origin + "/site.css")).toBe("h1{font-size:64px}");
+      const system = { dir_path: path.join(systemsDir, id) } as Parameters<typeof readDesignSystemMeasuredLayout>[0];
+      expect(await readDesignSystemMeasuredLayout(system)).toEqual(layout);
+    });
+  });
+
+  test("Given a measurer that fails, then extraction still succeeds without a measured layout file", async () => {
+    await withSite({ "/source": "<html><body><h1>Home</h1></body></html>" }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Unmeasured", source_type: "website", source_url: origin + "/source" }, { measureLayout: async () => null });
+      const system = { dir_path: path.join(systemsDir, id) } as Parameters<typeof readDesignSystemMeasuredLayout>[0];
+      expect(await readDesignSystemMeasuredLayout(system)).toBeNull();
+    });
+  });
+
+  test("Given malformed measured layouts, then the strict parser rejects them", () => {
+    const valid = { schema_version: 1, method: "rendered-offline", pages: [{ path: "/", page_type: "home", viewports: { desktop: viewportLayout("desktop"), mobile: viewportLayout("mobile") } }] };
+    expect(() => parseDesignSystemMeasuredLayout(valid)).not.toThrow();
+    const broken = [
+      { ...valid, method: "static" },
+      { ...valid, pages: [{ ...valid.pages[0], viewports: { desktop: { ...viewportLayout("desktop"), viewport: { width: 1280, height: 900 } }, mobile: viewportLayout("mobile") } }] },
+      { ...valid, pages: [{ ...valid.pages[0], viewports: { desktop: { ...viewportLayout("desktop"), type_scale: { display: 80 } }, mobile: viewportLayout("mobile") } }] },
+      { ...valid, pages: [{ ...valid.pages[0], viewports: { desktop: { ...viewportLayout("desktop"), sections: [{ heading: "<script>", top: 0, height: 1, columns: 1, align: "left" }] }, mobile: viewportLayout("mobile") } }] },
+      { ...valid, extra: true },
+    ];
+    for (const value of broken) expect(() => parseDesignSystemMeasuredLayout(value)).toThrow();
+  });
+
+  test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given a real Chromium, when an acquired page is measured offline, then sizes and positions come from rendering, scripts do not run and nothing is fetched", async () => {
+    const html = '<!doctype html><html><head><link rel="stylesheet" href="https://site.test/site.css"><script>document.documentElement.innerHTML = "<h1 style=font-size:10px>changed</h1>"</script></head><body><main><h1>Own your AI.</h1><p class="sub">Private expert AI systems powered by local models</p><a class="cta" href="/go">Get started</a><img src="https://cdn.test/hero.png" width="600" height="300"><h2>Section two</h2><div class="cards"><div>One card with a long enough body text</div><div>Two card with a long enough body text</div><div>Three card with a long enough body text</div></div></main></body></html>';
+    const css = "body{margin:0} main{max-width:960px;margin:0 auto} h1{font-size:64px;text-align:center} h2{font-size:32px} p{font-size:20px} .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px} .cards div{height:120px}";
+    const layout = await measureRenderedLayout({ pages: [{ path: "/", pageType: "home", url: "https://site.test/", html }], stylesheets: new Map([["https://site.test/site.css", css]]), signal: AbortSignal.timeout(60_000) });
+    expect(layout).not.toBeNull();
+    const desktop = layout!.pages[0]!.viewports.desktop;
+    expect(desktop.type_scale).toMatchObject({ hero: 64, h2: 32 });
+    expect(desktop.blocks.hero_heading?.align).toBe("center");
+    expect(desktop.container).toEqual({ left: 240, width: 960 });
+    expect(desktop.sections.map(section => section.columns)).toEqual([1, 3]);
+    expect(desktop.blocks.media).toMatchObject({ width: 600, height: 300 });
+    expect(desktop.gutter).toBe(24);
+  }, 90_000);
 });
