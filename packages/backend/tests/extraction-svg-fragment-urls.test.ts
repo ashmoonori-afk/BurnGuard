@@ -42,6 +42,14 @@ describe("url() outside style contexts in acquired and source HTML", () => {
   test("Given a sanitized page with duplicate attributes, then publication validation still refuses it", () => {
     expect(() => sanitizeSourceHtml(page('<svg><path fill="&#117;rl(https://evil.test/a.svg#g)" fill="url(#g)"/></svg>'))).toThrow();
   });
+
+  test("Given an SVG fragment beside an HTML table background URL, then acquisition removes both and publication refuses the original", () => {
+    const markup = page('<svg><path fill="url(#g)"/></svg><table background="https://evil.test/pixel.png"><tr><td>visible</td></tr></table>');
+    const stored = sanitizeAcquiredWebsiteHtml(markup);
+    expect(parse(stored).querySelector("table")?.getAttribute("background")).toBeUndefined();
+    expect(() => assertInertSourceMarkup(stored, "html")).not.toThrow();
+    expect(() => sanitizeSourceHtml(page('<table background="https://evil.test/pixel.png"><tr><td>visible</td></tr></table>'))).toThrow();
+  });
 });
 
 describe("CSS contexts and attribute bounds", () => {

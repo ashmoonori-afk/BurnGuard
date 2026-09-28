@@ -22,7 +22,7 @@ const ACTIVE_ELEMENTS = [
   "form",
   "base",
 ] as const;
-const URL_ATTRIBUTES = ["href", "src", "action", "formaction", "poster", "xlink:href", "srcset", "imagesrcset", "ping"] as const;
+const URL_ATTRIBUTES = ["href", "src", "action", "formaction", "poster", "background", "xlink:href", "srcset", "imagesrcset", "ping"] as const;
 /** Raw-text or inert containers whose markup a JS-disabled consumer still renders and fetches. */
 const HIDDEN_MARKUP_CONTAINERS = ["noscript", "template"] as const;
 export const MAX_HIDDEN_MARKUP_DEPTH = 8;
