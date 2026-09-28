@@ -74,6 +74,10 @@ async function measureViewport(browser: Browser, page: MeasuredPageInput, name: 
 function collectLayout(input: { readonly width: number; readonly height: number; readonly maxSections: number }): MeasuredViewportLayout {
   const vw = input.width;
   const round = (value: number) => Math.round(value);
+  // Every stored length stays inside the contract's 0..100000 px range (x may be negative), so one odd box
+  // cannot invalidate the whole measurement.
+  const MAX_PX = 100_000;
+  const clamp = (value: number, min = 0) => Math.min(MAX_PX, Math.max(min, round(value)));
   const visible = (el: Element) => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 2 && r.height > 2 && cs.visibility !== "hidden" && cs.display !== "none" && Number(cs.opacity) > 0.05; };
   const ownsText = (el: Element) => [...el.childNodes].some(node => node.nodeType === 3 && (node.textContent ?? "").trim().length > 1);
   const leafStyle = (el: Element) => getComputedStyle(ownsText(el) ? el : [...el.querySelectorAll("*")].find(child => visible(child) && ownsText(child)) ?? el);
@@ -85,7 +89,7 @@ function collectLayout(input: { readonly width: number; readonly height: number;
   const top = (el: Element) => el.getBoundingClientRect().top + window.scrollY;
   const box = (el: Element) => {
     const r = el.getBoundingClientRect();
-    return { x: round(r.left), y: round(r.top + window.scrollY), width: round(r.width), height: round(r.height), align: align(r.left, r.width, leafStyle(el).textAlign) };
+    return { x: clamp(r.left, -MAX_PX), y: clamp(r.top + window.scrollY), width: clamp(r.width), height: clamp(r.height), align: align(r.left, r.width, leafStyle(el).textAlign) };
   };
   const median = (values: number[]) => { if (values.length === 0) return null; const sorted = [...values].sort((a, b) => a - b); return round(sorted[Math.floor(sorted.length / 2)]!); };
   const inChrome = (el: Element) => el.closest("nav, header, footer") !== null;
@@ -107,7 +111,8 @@ function collectLayout(input: { readonly width: number; readonly height: number;
   const containerLeft = median(lefts.filter(left => left < vw / 2));
   const containerRight = median(rights.filter(right => right > vw / 2));
 
-  const anchors = [...document.querySelectorAll("h1, h2")].filter(visible).map(el => ({ el, top: top(el) }));
+  // Sections follow visual order, which can differ from DOM order.
+  const anchors = [...document.querySelectorAll("h1, h2")].filter(visible).map(el => ({ el, top: top(el) })).sort((a, b) => a.top - b.top);
   const blocks = [...document.querySelectorAll("body *")].filter(el => { if (!visible(el) || inChrome(el)) return false; const r = el.getBoundingClientRect(); return r.width > 120 && r.width < vw * 0.6 && r.height > 60; })
     .map(el => { const r = el.getBoundingClientRect(); return { left: round(r.left), right: round(r.right), top: round(r.top + window.scrollY), bottom: round(r.bottom + window.scrollY) }; });
   const gaps: number[] = [];
@@ -127,7 +132,7 @@ function collectLayout(input: { readonly width: number; readonly height: number;
     if (index + 1 < anchors.length && anchors[index + 1]!.top > contentBottom) gaps.push(anchors[index + 1]!.top - contentBottom);
     const heading = (anchor.el.textContent ?? "").replace(/\s+/g, " ").replace(/[<>\p{Cc}]/gu, "").trim().slice(0, 60);
     const r = anchor.el.getBoundingClientRect();
-    return { heading, top: round(anchor.top), height: round(end - anchor.top), columns, align: align(r.left, r.width, leafStyle(anchor.el).textAlign) };
+    return { heading, top: clamp(anchor.top), height: clamp(end - anchor.top), columns, align: align(r.left, r.width, leafStyle(anchor.el).textAlign) };
   });
 
   const sizesOf = (selector: string) => [...document.querySelectorAll(selector)].filter(el => visible(el) && !inChrome(el)).map(fontOf);
@@ -146,8 +151,8 @@ function collectLayout(input: { readonly width: number; readonly height: number;
   if (media) blockMap.media = box(media);
   return {
     viewport: { width: input.width, height: input.height },
-    page_height: round(document.documentElement.scrollHeight),
-    container: containerLeft !== null && containerRight !== null && containerRight > containerLeft ? { left: containerLeft, width: containerRight - containerLeft } : null,
+    page_height: clamp(document.documentElement.scrollHeight),
+    container: containerLeft !== null && containerRight !== null && containerRight > containerLeft ? { left: clamp(containerLeft), width: clamp(containerRight - containerLeft) } : null,
     gutter: median(gutters),
     section_gap: median(gaps),
     type_scale: typeScale,

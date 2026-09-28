@@ -494,6 +494,23 @@ describe("Measured layout tokens", () => {
     });
   });
 
+  test("Given a measurer that outlives the remaining acquisition budget, then extraction still succeeds without measured tokens and records a note", async () => {
+    await withSite({ "/source": "<html><body><h1>Home</h1></body></html>" }, async (origin, id) => {
+      const waitForAbort = (input: RenderedLayoutInput) => new Promise<null>((_, reject) => input.signal.addEventListener("abort", () => reject(input.signal.reason), { once: true }));
+      const result = await extractDesignSystemFromSource({ system_id: id, name: "Slow", source_type: "website", source_url: origin + "/source" }, { timeoutMs: 8_000, measureLayout: waitForAbort });
+      expect(result.extraction.notes.some(note => note.startsWith("Rendered layout measurement"))).toBe(true);
+      const system = { dir_path: path.join(systemsDir, id) } as Parameters<typeof readDesignSystemMeasuredLayout>[0];
+      expect(await readDesignSystemMeasuredLayout(system)).toBeNull();
+    });
+  }, 30_000);
+
+  test("Given a measurer that throws, then extraction still succeeds without measured tokens", async () => {
+    await withSite({ "/source": "<html><body><h1>Home</h1></body></html>" }, async (origin, id) => {
+      const result = await extractDesignSystemFromSource({ system_id: id, name: "Broken", source_type: "website", source_url: origin + "/source" }, { measureLayout: async () => { throw new Error("chromium_not_installed"); } });
+      expect(result.extraction.notes.some(note => note.startsWith("Rendered layout measurement"))).toBe(true);
+    });
+  });
+
   test("Given malformed measured layouts, then the strict parser rejects them", () => {
     const valid = { schema_version: 1, method: "rendered-offline", pages: [{ path: "/", page_type: "home", viewports: { desktop: viewportLayout("desktop"), mobile: viewportLayout("mobile") } }] };
     expect(() => parseDesignSystemMeasuredLayout(valid)).not.toThrow();
@@ -507,7 +524,7 @@ describe("Measured layout tokens", () => {
     for (const value of broken) expect(() => parseDesignSystemMeasuredLayout(value)).toThrow();
   });
 
-  test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given a real Chromium, when an acquired page is measured offline, then sizes and positions come from rendering, scripts do not run and nothing is fetched", async () => {
+  test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given a real Chromium, when an acquired page is measured offline, then sizes and positions come from rendering and the page script does not run", async () => {
     const html = '<!doctype html><html><head><link rel="stylesheet" href="https://site.test/site.css"><script>document.documentElement.innerHTML = "<h1 style=font-size:10px>changed</h1>"</script></head><body><main><h1>Own your AI.</h1><p class="sub">Private expert AI systems powered by local models</p><a class="cta" href="/go">Get started</a><img src="https://cdn.test/hero.png" width="600" height="300"><h2>Section two</h2><div class="cards"><div>One card with a long enough body text</div><div>Two card with a long enough body text</div><div>Three card with a long enough body text</div></div></main></body></html>';
     const css = "body{margin:0} main{max-width:960px;margin:0 auto} h1{font-size:64px;text-align:center} h2{font-size:32px} p{font-size:20px} .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px} .cards div{height:120px}";
     const layout = await measureRenderedLayout({ pages: [{ path: "/", pageType: "home", url: "https://site.test/", html }], stylesheets: new Map([["https://site.test/site.css", css]]), signal: AbortSignal.timeout(60_000) });
