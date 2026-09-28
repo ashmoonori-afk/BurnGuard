@@ -31,8 +31,10 @@ const DialogContent = React.forwardRef<
     hideClose?: boolean;
     /** Override the overlay layer together with content for dialogs opened from elevated portals. */
     overlayClassName?: string;
+    /** Increase or otherwise specialize the default close target for this dialog. */
+    closeClassName?: string;
   }
->(({ className, children, hideClose = false, overlayClassName, ...props }, ref) => {
+>(({ className, children, hideClose = false, overlayClassName, closeClassName, ...props }, ref) => {
   const t = useT();
   return <DialogPortal>
     <DialogOverlay className={overlayClassName} />
@@ -47,7 +49,7 @@ const DialogContent = React.forwardRef<
     >
       {children}
       {!hideClose && (
-        <DialogPrimitive.Close className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-lg text-muted-foreground ring-offset-background transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+        <DialogPrimitive.Close className={cn("absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-lg text-muted-foreground ring-offset-background transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring", closeClassName)}>
           <X className="h-4 w-4" />
           <span className="sr-only">{t("shell.close")}</span>
         </DialogPrimitive.Close>

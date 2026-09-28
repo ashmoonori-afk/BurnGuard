@@ -7,6 +7,7 @@ import ExportMenu, { type ExportQualityGate } from "@/components/export/ExportMe
 import VercelShare from "@/components/export/VercelShare";
 import { projectTypeLabel } from "@/lib/format";
 import { useT } from "@/i18n/t";
+import ProjectBundleButton from "./ProjectBundleButton";
 
 export default function ProjectTopBar({
   project,
@@ -71,6 +72,7 @@ export default function ProjectTopBar({
           <Play className="h-3.5 w-3.5" /> {t("files.project.present")}
         </Button>)}
         <VercelShare key={project.id} projectId={project.id} projectType={project.type} />
+        <ProjectBundleButton projectId={project.id} />
         <ExportMenu projectId={project.id} projectType={project.type} projectOptionsJson={project.options_json} qualityGate={qualityGate} onOpenQuality={onOpenQuality} {...(platformFix === undefined ? {} : { platformFix })} />
       </div>
       </div>
