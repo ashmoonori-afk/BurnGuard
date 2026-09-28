@@ -8,6 +8,10 @@ The [image recipe gallery](image-recipes/README.md) contains 21 original example
 
 The cover is 1942 × 809 pixels (1,750,983 bytes). Its navy/cobalt studio composition references the actual editor layout and the bundled fictional ODDWARD sample artwork. It illustrates a conversation rail, editable canvas, linked website detail page, slide and graphic. The general layout is a concept; the screenshots below remain the evidence for the actual application interface.
 
+## Social preview
+
+`social-preview.png` (1280 × 640) is the GitHub social preview card. It was rendered on 2026-09-28 by headless Chrome from [`social-preview-src/index.html`](social-preview-src/index.html), which composes the unmodified `burnguard-mark.png` and `readme-website-workspace.png` with the README's one-line description. The text makes no usage or performance claims. GitHub does not read it from the repository: upload it under Settings > General > Social preview.
+
 ## Actual interface screenshots
 
 The three 1440 × 900 screenshots were captured on 2026-09-09 using the repository's Node/Playwright browser QA and an isolated seeded local profile. They contain no user's projects or conversations and were copied without image editing.

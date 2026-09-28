@@ -46,6 +46,7 @@ import ExportOptionFields from "./ExportOptionFields";
 import { platformCheckFailureCopy, platformFindings } from "./export-delivery";
 import { platformFixRequest } from "@/lib/platform-fix-request";
 import { useExportOptionValues } from "./useExportOptionValues";
+import { countsAsStarExport } from "@/lib/star-prompt";
 
 const OPTION_ICON: Record<ExportFormat, LucideIcon> = {
   html_zip: FileDown,
@@ -73,6 +74,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
   const t = useT();
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
+  const oweStarPrompt = useUIStore((s) => s.oweStarPrompt);
   const [open, setOpen] = useState(false);
   const [optionValues, setOptionValues] = useExportOptionValues(projectId);
   const openQuality = () => {
@@ -152,6 +154,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
     for (const { job, outcome } of exportTransitions(lastStatusRef.current, jobs)) {
       if (outcome === "succeeded") {
         pushToast({ title: t("export.succeededFormat", { name: formatLabel(job.format) }), tone: "info" });
+        if (countsAsStarExport(job)) oweStarPrompt();
         continue;
       }
       const chromiumFailure = classifyChromiumFailure(job.error_message);
@@ -166,7 +169,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
         tone: "error",
       });
     }
-  }, [jobs, pushToast, jobsQuery.status, t]);
+  }, [jobs, pushToast, oweStarPrompt, jobsQuery.status, t]);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>

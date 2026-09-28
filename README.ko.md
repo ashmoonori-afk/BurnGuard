@@ -8,6 +8,10 @@ BurnGuard는 슬라이드·웹사이트·그래픽을 만드는 로컬 AI 작업
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [다운로드](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [시작하기](#시작하기) · [문서](doc/README.md)
 
+이미 결제한 Claude Code나 Codex로 동작하는 오픈소스 Claude Design 대안입니다. Claude Design·OpenDesign과의 비교표는 [영문 README](README.md#how-it-compares)에 있습니다.
+
+⭐ BurnGuard가 시간을 아껴 드렸다면, GitHub 스타 하나가 다른 분들이 BurnGuard를 찾는 데 도움이 돼요.
+
 ![한 줄 프롬프트로 BurnGuard 랜딩페이지를 만들고 캔버스에서 제목을 고치는 장면](doc/images/burnguard-demo.gif)
 
 *v0.5.25에서 Claude Code(Sonnet, 추론 강도 LOW)로 디자인 시스템 없이 녹화했습니다. 약 5분 걸린 생성 구간만 빨리 감았고 나머지는 실제 속도입니다.*

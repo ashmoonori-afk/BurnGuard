@@ -2,6 +2,10 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+// Bun exposes no system languages; pin the frontend's first-run locale detection to a Korean system,
+// the language the UI suites were written against.
+Object.defineProperty(globalThis.navigator, "languages", { value: Object.freeze(["ko-KR"]), configurable: true });
+
 // Every test process owns a new profile, even when the caller supplied a real one.
 const temporaryParent = realpathSync(tmpdir());
 const fixtureRoot = mkdtempSync(path.join(temporaryParent, "burnguard-tests-"));
