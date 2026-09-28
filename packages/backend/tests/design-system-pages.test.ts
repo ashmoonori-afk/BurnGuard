@@ -297,6 +297,30 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
     }
   });
 
+  test("Given no named primary token, then the most used mid-tone chromatic colour (design tokens before literals) becomes the primary, a named token still wins, and neutral-only sites keep the scaffold", async () => {
+    const used = (n: number, style: string) => Array.from({ length: n }, () => '<p style="' + style + '">x</p>').join("");
+    const cases = [
+      { name: "framer", head: ":root{--token-a:#b77dea;--token-b:#262146;--token-c:#1ac2e6}", body: used(3, "color:var(--token-a, #ffffff)") + used(5, "background-color:var(--token-b)") + used(1, "border-color:#ff0000") + used(6, "color:#2ec4f2"), primary: "#b77dea" },
+      { name: "literal-only", head: "body{color:#111111}", body: used(2, "color:#2ec4f2") + used(1, "background:#b77dea"), primary: "#2ec4f2" },
+      { name: "light-token", head: ":root{--token-y:#ffd54f}", body: used(3, "background:var(--token-y)"), primary: "#ffd54f" },
+      { name: "named", head: ":root{--brand-primary:#123abc;--token-a:#b77dea}", body: used(4, "color:var(--token-a)"), primary: "#123abc" },
+      { name: "neutral", head: "body{color:#111111;background:#fafafa}", body: used(3, "color:#333333"), primary: "#0057B8" },
+      { name: "feedback-states", head: "a{color:#0d6efd} .btn{background:#0d6efd} .invalid-feedback{color:#dc3545} .is-invalid{border-color:#dc3545} .is-invalid:focus{border-color:#dc3545} .alert-danger{color:#dc3545} a:hover{color:#dc3545}", body: "", primary: "#0d6efd" },
+    ];
+    for (const item of cases) {
+      await withSite({ "/source": "<html><head><style>" + item.head + "</style></head><body>" + item.body + "</body></html>" }, async (origin, id) => {
+        await extractDesignSystemFromSource({ system_id: id, name: item.name, source_type: "website", source_url: origin + "/source" });
+        const css = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
+        expect({ name: item.name, primary: /--primary-blue: ([^;]+);/.exec(css)?.[1] }).toEqual({ name: item.name, primary: item.primary });
+        // Text on brand fills must stay readable on whatever primary was chosen (WCAG AA for large text or UI).
+        const onBrand = /--fg-on-brand: ([^;]+);/.exec(css)?.[1] ?? "";
+        const luminance = (hex: string) => { const [r, g, b] = [1, 3, 5].map(i => { const c = Number.parseInt(hex.slice(i, i + 2), 16) / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
+        const [hi, lo] = [luminance(item.primary.toLowerCase()), luminance(onBrand)].sort((x, y) => y - x) as [number, number];
+        expect({ name: item.name, contrastAtLeast3: (hi + 0.05) / (lo + 0.05) >= 3 }).toEqual({ name: item.name, contrastAtLeast3: true });
+      });
+    }
+  });
+
   test("Given body and code font families, then the sans and display stacks never lead with a monospace family and the mono role uses the code font", async () => {
     const cases = [
       { name: "framer", css: ':root{--framer-font-family:"Inter", sans-serif;--framer-code-font-family:"Fragment Mono", monospace} body{font-family:"Inter", sans-serif} code{font-family:"Fragment Mono", monospace}', sans: "Inter", mono: '"Fragment Mono"' },

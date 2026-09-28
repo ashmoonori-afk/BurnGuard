@@ -921,7 +921,8 @@ async function ingestWebsiteSource(
       for (const family of fontFamiliesFromDeclarations(block.declarations)) fontFamilies.add(family);
     }
     // Newlines are CSS whitespace; flatten them so the worker's single-line value check keeps multiline attributes.
-    const attributes = root.querySelectorAll("[style]").map((node) => (node.getAttribute("style") ?? "").replaceAll("\n", " ")).filter(Boolean).join("\n");
+    // Each attribute ends with ";" so a last declaration without one cannot run into the next attribute.
+    const attributes = root.querySelectorAll("[style]").map((node) => (node.getAttribute("style") ?? "").replaceAll("\n", " ")).filter(Boolean).join(";\n");
     if (attributes) {
       const parsed = await parseCssSource({ content: attributes, sourceId: `${pageSourceId}#style-attribute`, fileOrder: cssFileOrder, signal });
       cssFileOrder += 1;
@@ -1064,7 +1065,11 @@ async function ingestWebsiteSource(
     artifactCopies: [],
     // Read before sanitization strips image sources; only typed counts and flags leave this scope.
     sourceEvidence: collectSourceEvidence([...pageHtmlByUrl.values()], cssDeclarations),
-    pageColors: pageGroundAndInk(pageDeclarations.get(url.toString()) ?? []),
+    pageColors: {
+      ...pageGroundAndInk(pageDeclarations.get(url.toString()) ?? []),
+      // The entry page carries the brand; counting every acquired page lets article or demo pages outvote it.
+      accent: mostUsedAccent(pageDeclarations.get(url.toString()) ?? [], selectCssCustomProperties(cssDeclarations)),
+    },
     pageCoverage: buildPageCoverage({
       limit: pageLimit,
       discovered: discovery.discovered,
@@ -1846,11 +1851,66 @@ const DEFAULT_LAYOUT_TOKENS: Readonly<Record<string, string>> = {
   "--layout-hero": "16 / 10",
 };
 
+/** Mid-tone chromatic colours only: saturated enough to read as a brand hue, neither near-black nor near-white. */
+function isAccentHex(hex: string): boolean {
+  const [r, g, b] = [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16) / 255) as [number, number, number];
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lightness = (max + min) / 2;
+  const saturation = max === min ? 0 : (max - min) / (1 - Math.abs(2 * lightness - 1));
+  return saturation >= 0.35 && lightness >= 0.25 && lightness <= 0.85;
+}
+
+const STATE_SELECTOR = /error|invalid|danger|alert|warning|success|disabled|:(?:hover|focus|focus-visible|focus-within|active|visited|disabled|invalid)\b/i;
+
+/** WCAG relative luminance of a six-digit hex colour. */
+function relativeLuminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((index) => {
+    const channel = Number.parseInt(hex.slice(index, index + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** White or dark ink, whichever contrasts more with the brand fill; white when the fill is not a literal colour. */
+function onBrandInk(primary: string, cssVars: ReadonlyMap<string, string>): string {
+  const hex = pageHex(resolvedColor(primary, cssVars));
+  if (hex === null) return "#ffffff";
+  const fill = relativeLuminance(hex);
+  const white = 1.05 / (fill + 0.05);
+  const dark = (fill + 0.05) / (relativeLuminance("#0f172a") + 0.05);
+  return dark > white ? "#0f172a" : "#ffffff";
+}
+
+/**
+ * The accent a page actually applies most among its mid-tone chromatic colour declarations, preferring
+ * colours applied through custom properties. First seen wins ties.
+ */
+function mostUsedAccent(declarations: readonly CssDeclarationEvidence[], cssVars: ReadonlyMap<string, string>): string | null {
+  // Colours applied through custom properties are the site's design tokens; literal colours repeated by an
+  // embedded widget or card list would otherwise outvote them, so literals only decide when no token applies.
+  const tokens = new Map<string, number>();
+  const literals = new Map<string, number>();
+  for (const declaration of declarations) {
+    if (!["color", "background", "background-color", "border-color", "fill", "stroke"].includes(declaration.property)) continue;
+    // Validation, alert and interaction-state rules carry semantic colours (error red, success green), not the brand.
+    if (STATE_SELECTOR.test(declaration.selector ?? "")) continue;
+    const hex = pageHex(resolvedColor(declaration.value, cssVars));
+    if (hex === null || !isAccentHex(hex)) continue;
+    const counts = /\bvar\(/.test(declaration.value) ? tokens : literals;
+    counts.set(hex, (counts.get(hex) ?? 0) + 1);
+  }
+  const counts = tokens.size > 0 ? tokens : literals;
+  let best: string | null = null;
+  for (const [hex, count] of counts) if (best === null || count > counts.get(best)!) best = hex;
+  return best;
+}
+
 function brandColors(analysis: SourceAnalysis): { readonly primary: string; readonly action: string } {
   const primary = firstValue(
     analysis.cssVars,
     ["primary-blue", "brand-primary", "color-primary", "primary", "accent"],
-    "#0057B8",
+    analysis.pageColors?.accent ?? "#0057B8",
   );
   return { primary, action: firstValue(analysis.cssVars, ["action-blue", "interactive", "link", "brand-action"], primary) };
 }
@@ -1992,7 +2052,7 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Rea
   --fg-3: ${neutrals.fg3};
   --fg-4: ${neutrals.fg4};
   --fg-on-dark: #f8fafc;
-  --fg-on-brand: #ffffff;
+  --fg-on-brand: ${onBrandInk(primary, analysis.cssVars)};
   --border: ${neutrals.border};
   --border-strong: ${neutrals.borderStrong};
   --focus-ring: ${action};
