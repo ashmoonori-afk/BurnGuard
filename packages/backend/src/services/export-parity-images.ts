@@ -135,7 +135,7 @@ export function parityThumbnail(
 export function attachParityThumbnails(
   source: readonly ParityPixelPage[],
   output: readonly ParityPixelPage[],
-  options: { readonly warnDimensionMismatch?: boolean } = {},
+  options: { readonly warnDimensionMismatch?: boolean; readonly expectedOutputAspects?: readonly number[] } = {},
 ): {
   readonly summary: ReturnType<typeof compareParityPages>;
   readonly thumbnails: readonly {

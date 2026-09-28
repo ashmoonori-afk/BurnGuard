@@ -174,3 +174,21 @@ describe("pure export parity comparison", () => {
     expect(collector.pages()).toEqual([]);
   });
 });
+
+describe("export parity PDF proportions", () => {
+  function flat(width: number, height: number) {
+    const rasterWidth = 8;
+    const rasterHeight = 8;
+    return { width, height, raster_width: rasterWidth, raster_height: rasterHeight, rgba: new Uint8Array(rasterWidth * rasterHeight * 4).fill(255) };
+  }
+
+  test("Given a PDF page stretched away from its paper When compared Then a dimension warning is raised even at full similarity", () => {
+    const widescreen = [16 / 9];
+    const stretched = compareParityPages({ source: [flat(1280, 720)], output: [flat(1000, 1000)], expectedOutputAspects: widescreen });
+    const matching = compareParityPages({ source: [flat(1280, 720)], output: [flat(1600, 900)], expectedOutputAspects: widescreen });
+
+    expect(stretched.pages[0]?.warnings).toContain("dimension_mismatch");
+    expect(stretched.pages[0]?.similarity_score).toBe(100);
+    expect(matching.pages[0]?.warnings).toEqual([]);
+  });
+});

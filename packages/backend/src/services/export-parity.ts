@@ -20,6 +20,7 @@ export function compareParityPages(input: {
   readonly output: readonly ParityPixelPage[];
   readonly threshold?: number;
   readonly warnDimensionMismatch?: boolean;
+  readonly expectedOutputAspects?: readonly number[];
 }): ExportParitySummary {
   const threshold = input.threshold ?? EXPORT_PARITY_SIMILARITY_THRESHOLD;
   const count = Math.min(input.source.length, input.output.length);
@@ -30,6 +31,7 @@ export function compareParityPages(input: {
       index + 1,
       threshold,
       input.warnDimensionMismatch ?? true,
+      input.expectedOutputAspects,
     ),
   );
   const warnings: ExportParityWarning[] =
@@ -80,6 +82,7 @@ function comparePage(
   page: number,
   threshold: number,
   warnDimensionMismatch: boolean,
+  expectedOutputAspects?: readonly number[],
 ): ExportParityPage {
   if (source === undefined || output === undefined) {
     throw new TypeError("Parity page pair is missing");
@@ -87,10 +90,11 @@ function comparePage(
   requirePixels(source);
   requirePixels(output);
   const similarity = similarityScore(source, output);
-  const dimensionMismatch =
-    Math.abs(source.width / source.height - output.width / output.height) /
-      (source.width / source.height) >
-    ASPECT_RATIO_TOLERANCE;
+  const outputAspect = output.width / output.height;
+  const expected = expectedOutputAspects ?? [source.width / source.height];
+  const dimensionMismatch = expected.every(
+    (aspect) => Math.abs(aspect - outputAspect) / aspect > ASPECT_RATIO_TOLERANCE,
+  );
   const warnings: ExportParityWarning[] = [
     ...(warnDimensionMismatch && dimensionMismatch
       ? ["dimension_mismatch" as const]

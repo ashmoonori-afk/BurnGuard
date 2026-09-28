@@ -5,20 +5,34 @@ import type { ParityPixelPage } from "./export-parity";
 import path from "node:path";
 
 const MAX_PARITY_PAGES = 100;
+const MAX_PARITY_UNCOMPRESSED_BYTES = 512 * 1024 * 1024;
+
+function budget(signal: AbortSignal): (bytes: Uint8Array) => Uint8Array {
+  let total = 0;
+  return (bytes) => {
+    signal.throwIfAborted();
+    total += bytes.byteLength;
+    if (total > MAX_PARITY_UNCOMPRESSED_BYTES) throw new TypeError("Parity archive exceeds its byte budget");
+    return bytes;
+  };
+}
 
 export async function zipParityImages(
   bytes: Uint8Array,
   paths: readonly string[],
+  signal: AbortSignal,
 ): Promise<readonly ParityPixelPage[]> {
   if (paths.length > MAX_PARITY_PAGES) {
     throw new TypeError("Parity page count is invalid");
   }
+  signal.throwIfAborted();
   const zip = await JSZip.loadAsync(bytes, { checkCRC32: true });
+  const account = budget(signal);
   const pages: ParityPixelPage[] = [];
   for (const path of paths) {
     const entry = zip.file(path);
     if (entry === null) throw new TypeError("Parity image is missing");
-    pages.push(await decodeParityImage(await entry.async("uint8array")));
+    pages.push(await decodeParityImage(account(await entry.async("uint8array"))));
   }
   return pages;
 }
@@ -26,6 +40,7 @@ export async function zipParityImages(
 export async function pptxParityImages(
   bytes: Uint8Array,
   slideCount: number,
+  signal: AbortSignal,
 ): Promise<readonly ParityPixelPage[]> {
   if (
     !Number.isSafeInteger(slideCount) ||
@@ -34,7 +49,9 @@ export async function pptxParityImages(
   ) {
     throw new TypeError("PPTX parity slide count is invalid");
   }
+  signal.throwIfAborted();
   const zip = await JSZip.loadAsync(bytes, { checkCRC32: true });
+  const account = budget(signal);
   const presentation = await requiredText(zip, "ppt/presentation.xml");
   const presentationRels = relationships(
     await requiredText(zip, "ppt/_rels/presentation.xml.rels"),
@@ -61,7 +78,7 @@ export async function pptxParityImages(
     const imagePath = safeZipPath(path.posix.dirname(slidePath), target);
     const entry = zip.file(imagePath);
     if (entry === null) throw new TypeError("PPTX parity image is missing");
-    const source = await decodeParityImage(await entry.async("uint8array"));
+    const source = await decodeParityImage(account(await entry.async("uint8array")));
     const geometry = pictureGeometry(picture);
     pages.push(
       composeParityPage({

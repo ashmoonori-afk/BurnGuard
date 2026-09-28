@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
-import { pptxParityImages } from "../src/services/export-parity-archives";
+import { pptxParityImages, zipParityImages } from "../src/services/export-parity-archives";
 import { decodeParityImage } from "../src/services/export-parity-images";
 import { compareParityPages } from "../src/services/export-parity";
 import { createCanvas } from "../src/services/export-native-modules";
@@ -35,6 +35,7 @@ describe("export parity archive evidence", () => {
       const pages = await pptxParityImages(
         new Uint8Array(await readFile(outputPath)),
         2,
+        new AbortController().signal,
       );
 
       // Then
@@ -80,7 +81,7 @@ describe("export parity archive evidence", () => {
       const mutated = await zip.generateAsync({ type: "uint8array" });
 
       // When
-      const output = await pptxParityImages(mutated, 1);
+      const output = await pptxParityImages(mutated, 1, new AbortController().signal);
       const summary = compareParityPages({
         source: [await decodeParityImage(png)],
         output,
@@ -94,5 +95,17 @@ describe("export parity archive evidence", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("export parity archive bounds", () => {
+  test("Given an aborted export When PNG ZIP parity is computed Then work stops before decoding", async () => {
+    const zip = new JSZip();
+    zip.file("01.png", new Uint8Array([1, 2, 3]));
+    const bytes = await zip.generateAsync({ type: "uint8array" });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(zipParityImages(bytes, ["01.png"], controller.signal)).rejects.toThrow();
   });
 });

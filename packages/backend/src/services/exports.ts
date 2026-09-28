@@ -33,7 +33,7 @@ import { canonicalJson, parseExportReceipt, receiptDigest, sha256, type ExportRe
 import type { ExportValidation } from "./export-receipt-validation";
 import { openRenderSession } from "./export-render-session";
 import { prepareSlideDeckExport } from "./export-stage";
-import { createParitySourceCollector, writeExportParityArtifacts, writeUnavailableExportParity } from "./export-parity-artifacts";
+import { EXPORT_PARITY_DIRECTORY, EXPORT_PARITY_FILE, createParitySourceCollector, writeExportParityArtifacts, writeUnavailableExportParity } from "./export-parity-artifacts";
 import type { ParityPixelPage } from "./export-parity";
 import { parseStoredProjectOptions } from "./project-options";
 import { zipDirectory } from "./zip";
@@ -145,8 +145,9 @@ async function runExport(input: RunInput): Promise<void> {
     try {
       await writeExportParityArtifacts({
         stageRoot,
-        outputPath: stagedOutput,
+        outputBytes,
         format: context.format,
+        options: context.options,
         validation,
         sourcePages: rendered.sourcePages,
         signal: paritySignal,
@@ -163,10 +164,12 @@ async function runExport(input: RunInput): Promise<void> {
         validation,
       });
     }
-    const receipt: ExportReceipt = { schema_version: 1, job_id: input.jobId, attempt_id: input.attemptId, parent_attempt_id: (await getExportJob(input.jobId))?.latest_attempt?.parent_attempt_id ?? null, format: context.format, project: { id: context.identity.projectId, revision: context.identity.revision, digest: context.identity.digest }, options: context.options, output_file: outputFile, output_size: outputInfo.size, digests: { input_closure: inputDigest, design_system: context.identity.designSystemDigest, options: sha256(canonicalJson(context.options)), renderer: context.rendererDigest, capture: context.captureDigest, output: outputDigest }, validation };
+    const parityDigest = sha256(new Uint8Array(await readFile(path.join(stageRoot, EXPORT_PARITY_DIRECTORY, EXPORT_PARITY_FILE))));
+    const receipt: ExportReceipt = { schema_version: 1, job_id: input.jobId, attempt_id: input.attemptId, parent_attempt_id: (await getExportJob(input.jobId))?.latest_attempt?.parent_attempt_id ?? null, format: context.format, project: { id: context.identity.projectId, revision: context.identity.revision, digest: context.identity.digest }, options: context.options, output_file: outputFile, output_size: outputInfo.size, digests: { input_closure: inputDigest, design_system: context.identity.designSystemDigest, options: sha256(canonicalJson(context.options)), renderer: context.rendererDigest, capture: context.captureDigest, output: outputDigest, parity: parityDigest }, validation };
     const receiptJson = canonicalJson(receipt); await writeFile(path.join(stageRoot, "receipt.json"), receiptJson);
     const rereadReceipt = parseExportReceipt(JSON.parse(await readFile(path.join(stageRoot, "receipt.json"), "utf8")));
-    if (sha256(new Uint8Array(await readFile(stagedOutput))) !== outputDigest || receiptDigest(rereadReceipt) !== sha256(receiptJson)) throw new TypeError("Staged receipt verification failed");
+    if (sha256(new Uint8Array(await readFile(stagedOutput))) !== outputDigest || receiptDigest(rereadReceipt) !== sha256(receiptJson) ||
+      sha256(new Uint8Array(await readFile(path.join(stageRoot, EXPORT_PARITY_DIRECTORY, EXPORT_PARITY_FILE)))) !== parityDigest) throw new TypeError("Staged receipt verification failed");
     await input.hooks.phase?.(input.attemptId, "after_receipt", input.controller.signal);
     input.controller.signal.throwIfAborted();
     advance(input, "validating", "publishing"); for (const scratch of ["render", "handoff", "platform", "frames"] as const) await rm(path.join(stageRoot, scratch), { recursive: true, force: true }); await mkdir(path.dirname(publishedRoot), { recursive: true }); await rm(publishedRoot, { recursive: true, force: true });

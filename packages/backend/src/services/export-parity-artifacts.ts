@@ -1,6 +1,7 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import type {
   ExportFormat,
+  ExportOptions,
   ExportParitySummary,
 } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
@@ -22,11 +23,20 @@ import type {
 
 export const EXPORT_PARITY_FILE = "parity.json";
 export const EXPORT_PARITY_DIRECTORY = "parity";
+/** Pixel parity is skipped (reported as comparison_unavailable) above this output size. */
+export const EXPORT_PARITY_MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
+
+const PAPER_ASPECTS: Readonly<Record<"a4" | "letter" | "widescreen-16x9", readonly number[]>> = {
+  a4: [210 / 297, 297 / 210],
+  letter: [8.5 / 11, 11 / 8.5],
+  "widescreen-16x9": [16 / 9],
+};
 
 export async function writeExportParityArtifacts(input: {
   readonly stageRoot: string;
-  readonly outputPath: string;
+  readonly outputBytes: Uint8Array;
   readonly format: ExportFormat;
+  readonly options: ExportOptions;
   readonly validation: ExportValidation;
   readonly sourcePages: readonly ParityPixelPage[];
   readonly signal: AbortSignal;
@@ -42,7 +52,7 @@ export async function writeExportParityArtifacts(input: {
       recursive: true,
       force: true,
     });
-    summary = structuralFallback(input.format, input.validation, true);
+    summary = structuralFallback(input.format, input.validation, input.sourcePages.length);
   }
   await writeFile(
     resolveWithin(parityRoot, EXPORT_PARITY_FILE),
@@ -63,7 +73,7 @@ export async function writeUnavailableExportParity(input: {
     force: true,
   });
   await mkdir(parityRoot, { recursive: true });
-  const summary = structuralFallback(input.format, input.validation, true);
+  const summary = structuralFallback(input.format, input.validation, 0);
   await writeFile(
     resolveWithin(parityRoot, EXPORT_PARITY_FILE),
     canonicalJson(summary),
@@ -77,22 +87,23 @@ async function pixelParity(
   parityRoot: string,
 ): Promise<ExportParitySummary> {
   if (!isPixelFormat(input.format)) {
-    return structuralFallback(input.format, input.validation, false);
+    return structuralFallback(input.format, input.validation, input.sourcePages.length);
   }
-  const outputBytes = new Uint8Array(await readFile(input.outputPath));
+  if (input.outputBytes.byteLength > EXPORT_PARITY_MAX_OUTPUT_BYTES) {
+    throw new TypeError("Export parity output exceeds its byte budget");
+  }
   const output = await outputPages(
     input.format,
-    outputBytes,
+    input.outputBytes,
     input.validation,
     input.signal,
   );
+  input.signal.throwIfAborted();
   const source = input.sourcePages;
   if (source.length === 0) {
     throw new TypeError("Export parity source evidence is unavailable");
   }
-  const result = attachParityThumbnails(source, output, {
-    warnDimensionMismatch: input.format !== "pdf",
-  });
+  const result = attachParityThumbnails(source, output, expectedAspects(input.format, input.options));
   const thumbnailsRoot = resolveWithin(parityRoot, "thumbnails");
   await mkdir(thumbnailsRoot, { recursive: true });
   for (const thumbnail of result.thumbnails) {
@@ -157,29 +168,39 @@ async function outputPages(
       return zipParityImages(
         bytes,
         validation.outputs.map((output) => output.rel_path),
+        signal,
       );
     case "pptx": {
       const count =
         "slides" in validation && typeof validation.slides === "number"
           ? validation.slides
           : 0;
-      return pptxParityImages(bytes, count);
+      return pptxParityImages(bytes, count, signal);
     }
   }
 }
 
+/** Any export without a pixel comparison is reported as comparison_unavailable, keeping the counts that are known. */
 function structuralFallback(
   format: ExportFormat,
   validation: ExportValidation,
-  comparisonUnavailable: boolean,
+  sourcePageCount: number,
 ): ExportParitySummary {
-  const count = validationPageCount(format, validation);
-  const sourceCount = format === "svg" ? 1 : null;
   return buildStructuralParity({
-    sourcePageCount: sourceCount,
-    outputPageCount: count,
-    ...(comparisonUnavailable ? { comparisonUnavailable: true } : {}),
+    sourcePageCount: sourcePageCount > 0 ? sourcePageCount : format === "svg" ? 1 : null,
+    outputPageCount: validationPageCount(format, validation),
+    comparisonUnavailable: true,
   });
+}
+
+function expectedAspects(
+  format: ExportFormat,
+  options: ExportOptions,
+): { readonly warnDimensionMismatch: boolean; readonly expectedOutputAspects?: readonly number[] } {
+  if (format !== "pdf") return { warnDimensionMismatch: true };
+  const paper = "pdf_paper" in options ? options.pdf_paper ?? "a4" : "a4";
+  if (paper === "artboard") return { warnDimensionMismatch: true };
+  return { warnDimensionMismatch: true, expectedOutputAspects: PAPER_ASPECTS[paper] };
 }
 
 function validationPageCount(

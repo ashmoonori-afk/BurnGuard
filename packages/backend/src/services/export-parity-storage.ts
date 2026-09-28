@@ -12,7 +12,8 @@ import {
   EXPORT_PARITY_FILE,
 } from "./export-parity-artifacts";
 import { parsePng } from "./export-png-validation";
-import { sha256 } from "./export-receipt";
+import { parseExportReceipt, sha256 } from "./export-receipt";
+import { buildStructuralParity } from "./export-parity";
 
 export class ExportParityStorageError extends Error {
   readonly name = "ExportParityStorageError";
@@ -76,16 +77,27 @@ async function readParitySummary(
   ) {
     return null;
   }
-  const filePath = resolveWithin(
-    exportsDir,
-    "attempts",
-    assertSafeName(attempt.id),
-    EXPORT_PARITY_DIRECTORY,
-    EXPORT_PARITY_FILE,
-  );
+  const attemptRoot = resolveWithin(exportsDir, "attempts", assertSafeName(attempt.id));
+  let expectedDigest: string | undefined;
   try {
-    return parseExportParitySummary(JSON.parse(await readFile(filePath, "utf8")));
-  } catch {
-    return null;
+    expectedDigest = parseExportReceipt(JSON.parse(await readFile(resolveWithin(attemptRoot, "receipt.json"), "utf8"))).digests.parity;
+  } catch (error) {
+    if (error instanceof Error) return unavailableParity();
+    throw error;
   }
+  // Attempts published before parity evidence existed carry no parity digest and no summary.
+  if (expectedDigest === undefined) return null;
+  try {
+    const bytes = new Uint8Array(await readFile(resolveWithin(attemptRoot, EXPORT_PARITY_DIRECTORY, EXPORT_PARITY_FILE)));
+    if (sha256(bytes) !== expectedDigest) return unavailableParity();
+    return parseExportParitySummary(JSON.parse(new TextDecoder().decode(bytes)));
+  } catch (error) {
+    if (error instanceof Error) return unavailableParity();
+    throw error;
+  }
+}
+
+/** Missing or corrupt evidence is shown as an explicit warning; it never blocks the download. */
+function unavailableParity(): ExportParitySummary {
+  return buildStructuralParity({ sourcePageCount: null, outputPageCount: null, comparisonUnavailable: true });
 }

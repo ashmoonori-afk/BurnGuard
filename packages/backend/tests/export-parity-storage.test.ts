@@ -28,8 +28,9 @@ describe("export parity receipt sidecars", () => {
       // When
       const summary = await writeExportParityArtifacts({
         stageRoot,
-        outputPath: path.join(stageRoot, "artifact.svg"),
+        outputBytes: new TextEncoder().encode("<svg/>"),
         format: "svg",
+        options: {},
         validation: { root: "svg", bytes: 64, source: null },
         sourcePages: [],
         signal: new AbortController().signal,
@@ -43,10 +44,11 @@ describe("export parity receipt sidecars", () => {
       );
       expect(stored).toEqual(summary);
       expect(stored).toMatchObject({
-        status: "pass",
+        status: "warn",
         comparison: "structural",
         source_page_count: 1,
         output_page_count: 1,
+        warnings: ["comparison_unavailable"],
       });
     } finally {
       await rm(stageRoot, { recursive: true, force: true });
@@ -106,7 +108,16 @@ describe("export parity receipt sidecars", () => {
       await mkdir(path.dirname(thumbnailPath), { recursive: true });
       await writeFile(outputPath, "output");
       await writeFile(thumbnailPath, thumbnail);
-      await writeFile(path.join(root, "parity", "parity.json"), canonicalJson(summary));
+      const parityJson = canonicalJson(summary);
+      await writeFile(path.join(root, "parity", "parity.json"), parityJson);
+      const pngOptions = { png_width: 320, png_height: 240, png_dpr: 1 };
+      const filler = "b".repeat(64);
+      await writeFile(path.join(root, "receipt.json"), canonicalJson({
+        schema_version: 1, job_id: ids.jobId, attempt_id: ids.attemptId, parent_attempt_id: null, format: "png",
+        project: { id: projectId, revision: 1, digest: "a".repeat(64) }, options: pngOptions, output_file: "artifact.png", output_size: 6,
+        digests: { input_closure: filler, design_system: null, options: sha256(canonicalJson(pngOptions)), renderer: filler, capture: filler, output: filler, parity: sha256(new TextEncoder().encode(parityJson)) },
+        validation: { width: 320, height: 240, statistics: { pixels: 76_800, visible_pixels: 76_800, differing_pixels: 100, dominant_ratio: 0.9, luminance_variance: 10, entropy: 0.2 } },
+      }));
       advanceExportAttempt(db, {
         attemptId: ids.attemptId,
         status: "running",
@@ -153,6 +164,10 @@ describe("export parity receipt sidecars", () => {
       );
       expect(corruptResponse.status).toBe(410);
       expect(invalidPageResponse.status).toBe(400);
+
+      await writeFile(path.join(root, "parity", "parity.json"), parityJson.replace('"status":"pass"', '"status":"warn"'));
+      const tamperedBody: unknown = await (await artifactRoutes.request(`http://local/api/projects/${projectId}/exports`)).json();
+      expect(tamperedBody).toMatchObject({ data: [{ id: ids.jobId, parity: { status: "warn", comparison: "structural", pages: [], warnings: ["comparison_unavailable"] } }] });
     } finally {
       db.prepare("DELETE FROM projects WHERE id=?").run(projectId);
       await rm(root, { recursive: true, force: true });
