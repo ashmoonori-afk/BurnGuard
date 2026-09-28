@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import JSZip from "jszip";
 import { parseHandoffManifest, type HandoffManifest } from "@bg/shared";
 import { renderHandoffMarkdown, renderHandoffPrompt } from "./export-handoff-documents";
-import { containsSensitiveHandoffText } from "./export-handoff-privacy";
+import { containsSensitiveHandoffFreeText, containsSensitiveHandoffText } from "./export-handoff-privacy";
 import { parsePng } from "./export-png-validation";
 import { canonicalJson } from "./export-receipt";
 import type { PackageEntryRole } from "./platform-package-contract";
@@ -166,10 +166,22 @@ export async function validateHandoffPackage(bytes: Uint8Array, entrypoint: stri
   const prompt = await zip.file("handoff/prompt.md")!.async("string");
   if (markdown !== renderHandoffMarkdown(manifest) || prompt !== renderHandoffPrompt(manifest)) fail("manifest_mismatch");
   if ([manifestSource, markdown, prompt].some(containsSensitiveHandoffText)) fail("invalid_package");
+  if (handoffFreeText(manifest).some(containsSensitiveHandoffFreeText)) fail("invalid_package");
   let nodes = 0;
   for (const page of value["pages"]) { if (!isRecord(page) || !Array.isArray(page["nodes"])) fail("invalid_package"); nodes += page["nodes"].length; }
   return { source_files: [...names].filter((name) => name.startsWith("source/")).length, nodes };
 }
+function handoffFreeText(manifest: HandoffManifest): readonly string[] {
+  return [
+    manifest.project.name,
+    ...(manifest.design_system.name === null ? [] : [manifest.design_system.name]),
+    ...manifest.pages.flatMap((page) => [page.title, ...page.regions.flatMap((region) => [region.node_id, ...(region.component === null ? [] : [region.component])])]),
+    ...manifest.components.flatMap((component) => [component.name, ...component.node_ids]),
+    ...manifest.interactions.flatMap((interaction) => interaction.label === null ? [] : [interaction.label]),
+    ...manifest.responsive_rules.map((rule) => rule.condition),
+  ];
+}
+
 function handoffManifestPaths(manifest: HandoffManifest): readonly string[] {
   return [
     manifest.continuation.prompt_file,

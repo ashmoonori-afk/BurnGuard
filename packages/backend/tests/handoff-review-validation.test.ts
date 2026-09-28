@@ -78,12 +78,24 @@ test("Given a manifest with altered continuation commands When validated Then pu
 });
 
 test("Given authored text with secret-like phrases, workspace paths and a /home route When the handoff is packaged Then it validates and leaks nothing", async () => {
-  const source = `<title>session=draft key: brand api_key=zzzsecret "/workspace/alice/My Files/brief.txt"</title>
+  const source = `<title>session=draft key: brand api_key=zzzsecret "/workspace/alice/My Files/brief.txt" "/workspace/O'Brien/My Docs/x.txt"</title>
     <main data-bg-node-id="hero" data-component="Hero /workspace/alice/private.txt"><a href="/home">Home</a><button type="button">Open</button></main>`;
   const zip = reviewedHandoff(source);
   const manifestText = await zip.file("handoff/manifest.json")!.async("string");
 
   await expect(validateHandoffPackage(await bytes(zip), "index.html", pin)).resolves.toBeDefined();
   expect(JSON.parse(manifestText).routes.map((route: { path: string }) => route.path)).toContain("/home");
-  for (const leaked of ["zzzsecret", "/workspace/alice", "My Files"]) expect(manifestText).not.toContain(leaked);
+  for (const leaked of ["zzzsecret", "/workspace/alice", "My Files", "Brien", "My Docs"]) expect(manifestText).not.toContain(leaked);
+});
+
+test("Given a manifest whose free-text field carries an absolute POSIX path When validated Then publication validation rejects it", async () => {
+  const zip = reviewedHandoff();
+  const manifest = JSON.parse(await zip.file("handoff/manifest.json")!.async("string"));
+  manifest.project.name = "Leak /Users/alice/private";
+  zip.file("handoff/manifest.json", JSON.stringify(manifest, null, 2));
+  const { renderHandoffMarkdown: markdown, renderHandoffPrompt: prompt } = await import("../src/services/export-handoff-documents");
+  zip.file("HANDOFF.md", markdown(manifest));
+  zip.file("handoff/prompt.md", prompt(manifest));
+
+  await expect(validateHandoffPackage(await bytes(zip), "index.html", pin)).rejects.toThrow("invalid_package");
 });

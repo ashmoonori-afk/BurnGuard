@@ -25,8 +25,9 @@ const UNAMBIGUOUS_PATH = new RegExp(
   "giu",
 );
 // In free text, a standalone multi-segment absolute POSIX path (not part of a URL or relative path).
-const POSIX_MULTI_SEGMENT = /(?<![\w.:/~-])\/[^\s"'<>|)\]};,/]+\/[^\s"'<>|)\]};,]*/gu;
-const QUOTED_ABSOLUTE = /(["'])(?:\/|~\/|[a-z]:[\\/]|\\\\)[^"'\n]{0,512}\1/giu;
+const POSIX_MULTI_SEGMENT = /(?<![\w.:/~-])\/[^\s"<>|)\]};,/]+\/[^\s"<>|)\]};,]*/gu;
+const DOUBLE_QUOTED_ABSOLUTE = /"(?:\/|~\/|[a-z]:[\\/]|\\\\)[^"\n]*"/giu;
+const SINGLE_QUOTED_ABSOLUTE = /'(?:\/|~\/|[a-z]:[\\/]|\\\\)[^'\n]*'/giu;
 const SECRET_ASSIGNMENT =
   /\b(token|secret|password|passwd|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key|authorization)(\s*[:=]\s*)(?!<redacted>)("[^"]*"|'[^']*'|[^\s),;&]+)/giu;
 const BEARER = /\bBearer\s+(?!<redacted>)[\w.~+/=-]+/giu;
@@ -48,7 +49,8 @@ function collapse(value: string, limit: number): string {
 
 export function sanitizeHandoffText(value: string, limit = HANDOFF_TEXT_LIMIT): string {
   const withoutPaths = replaceControlCharacters(value)
-    .replace(QUOTED_ABSOLUTE, "$1<private-path>$1")
+    .replace(DOUBLE_QUOTED_ABSOLUTE, '"<private-path>"')
+    .replace(SINGLE_QUOTED_ABSOLUTE, "'<private-path>'")
     .replace(UNAMBIGUOUS_PATH, "<private-path>")
     .replace(POSIX_MULTI_SEGMENT, "<private-path>");
   return collapse(redactSecrets(withoutPaths), limit);
@@ -74,6 +76,16 @@ export function containsSensitiveHandoffText(value: string): boolean {
   }) || [...value].some((character) => {
     const code = character.codePointAt(0) ?? 0;
     return isControlCode(code) && code !== 0x09 && code !== 0x0a && code !== 0x0d;
+  });
+}
+
+/** Free-text manifest fields must also be free of any absolute POSIX or quoted path; routes are exempt. */
+export function containsSensitiveHandoffFreeText(value: string): boolean {
+  return containsSensitiveHandoffText(value) || [POSIX_MULTI_SEGMENT, DOUBLE_QUOTED_ABSOLUTE, SINGLE_QUOTED_ABSOLUTE].some((pattern) => {
+    pattern.lastIndex = 0;
+    const found = pattern.test(value.replaceAll("<private-path>", ""));
+    pattern.lastIndex = 0;
+    return found;
   });
 }
 

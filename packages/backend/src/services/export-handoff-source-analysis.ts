@@ -107,7 +107,7 @@ export function analyzeHandoffSources(
     const pageTokens = mapPageTokens(document, [...linkedSheets, ...inlineSheets], tokenNames, signal);
     const nodes = document.querySelectorAll("[data-bg-node-id]").slice(0, HANDOFF_ANALYSIS_LIMITS.nodesPerPage);
     sourcePages.push({
-      title: sanitizeNullableHandoffText(document.querySelector("title")?.text) ?? route,
+      title: sanitizeNullableHandoffText(document.querySelector("title")?.text) ?? file.path,
       source_path: sourceFile,
       regions: nodes.flatMap((element) => {
         const nodeId = nodeIdOf(element);

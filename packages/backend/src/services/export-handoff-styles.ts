@@ -73,7 +73,7 @@ export function mapPageTokens(
       budget -= 1;
       const pinned = rule.tokens.filter((token) => tokenNames.has(token));
       if (pinned.length === 0 || rule.selector.length > HANDOFF_STYLE_LIMITS.selectorLength) continue;
-      const matched = matchSelector(document, rule.selector);
+      const matched = matchSelector(document, rule.selector).slice(0, HANDOFF_STYLE_LIMITS.matchedElementsPerPage - matchedElements);
       matchedElements += matched.length;
       for (const element of matched) {
         const nodeId = element.getAttribute("data-bg-node-id")?.trim();
