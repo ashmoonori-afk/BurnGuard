@@ -1,8 +1,11 @@
 import { readDesignSystemLayout } from "./design-system-layout";
 import { readDesignSystemAssetGuide } from "./design-system-assets";
-import { buildAssetGuideReadme } from "./extraction-assets";
-import { collectSourceEvidence, type SourceEvidence } from "./extraction-evidence";
+import { buildAssetGuideReadme, toHexColor } from "./extraction-assets";
+import { collectSourceEvidence, withoutFunctions, type SourceEvidence } from "./extraction-evidence";
 import { buildSectionPatternReadme, measureSourceLayout } from "./extraction-layout";
+import { buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, observedPatterns, pageEvidence, parseRobots, parseSitemap } from "./extraction-pages";
+import { readDesignSystemPageCoverage } from "./design-system-pages";
+import type { CssDeclarationEvidence } from "./extraction-css";
 import {
   copyFile,
   mkdir,
@@ -18,6 +21,9 @@ import { isValidFontData } from "./font-validation";
 import { parse } from "node-html-parser";
 import {
   APP_VERSION,
+  DEFAULT_PAGE_LIMIT,
+  parseDesignSystemPageCoverage,
+  type DesignSystemPageCoverage,
   type CreateDesignSystemExtractionRequest,
   type CreateDesignSystemExtractionResponse,
   type CreateDesignSystemUploadRequest,
@@ -63,7 +69,7 @@ export {
 import { detectComponentSamples } from "./upload-component-detect";
 import { DesignSystemAssetEditError } from "./extraction-asset-errors";
 import { DesignSystemExtractError } from "./extraction-errors";
-import { assertAggregateAssetBytes, assertAssetCount, fetchWebsiteResource } from "./extraction-website";
+import { assertAggregateAssetBytes, assertAssetCount, ExcludedPathError, fetchWebsiteResource } from "./extraction-website";
 
 export { DesignSystemAssetEditError, DesignSystemExtractError };
 import { loadConfig } from "../config";
@@ -249,7 +255,7 @@ export async function extractDesignSystemFromSource(
         ? await ingestGitSource(sourceUrl, ingestDir, budget.signal, input.name)
         : sourceType === "figma"
           ? await ingestFigmaSource(sourceUrl, ingestDir, budget.signal, input.name)
-          : await ingestWebsiteSource(sourceUrl, ingestDir, budget.signal, input.name);
+          : await ingestWebsiteSource(sourceUrl, ingestDir, budget.signal, input.name, input.page_limit);
 
     const brandName = input.name?.trim() || analysis.brandName;
     return await persistCanonicalExtraction({
@@ -502,22 +508,23 @@ export async function readDesignSystemTokens(systemId: string) {
       "Design system not found",
     );
   }
-  const [layout, assets] = await Promise.all([readDesignSystemLayout(detail), readDesignSystemAssetGuide(detail)]);
+  const [layout, assets, pages] = await Promise.all([readDesignSystemLayout(detail), readDesignSystemAssetGuide(detail), readDesignSystemPageCoverage(detail)]);
+  const extras = { layout, assets, ...(pages ? { pages } : {}) };
   if (!detail.tokens_css_path) {
-    return { layout, assets, colors: [], token_file_path: null };
+    return { ...extras, colors: [], token_file_path: null };
   }
 
   const tokenPath = resolveDesignSystemRecordPath(systemId, detail.dir_path, detail.tokens_css_path);
   const css = await readFile(tokenPath, "utf8").catch(() => null);
   if (css === null) {
-    return { layout, assets, colors: [], token_file_path: tokenPath };
+    return { ...extras, colors: [], token_file_path: tokenPath };
   }
 
   const colors = [...(await extractCssCustomProperties(css)).entries()]
     .filter(([, value]) => isColorTokenValue(value))
     .map(([name, value]) => ({ name, value }));
 
-  return { layout, assets, colors, token_file_path: tokenPath };
+  return { ...extras, colors, token_file_path: tokenPath };
 }
 
 export async function upsertDesignSystemColorToken(
@@ -697,11 +704,47 @@ async function ingestGitSource(
   return analysis;
 }
 
+/** Aggregate download budget exhaustion stops acquisition; a single oversized optional resource does not. */
+function isBudgetExhausted(error: unknown): boolean {
+  return error instanceof AcquisitionLimitError && error.limit === "aggregate_source_bytes";
+}
+
+/** Hex colour, with a two-digit alpha suffix when the literal is not fully opaque. */
+function colorWithAlpha(literal: string): string | null {
+  const hex = toHexColor(literal);
+  if (!hex) return null;
+  const short = /^#([0-9a-f]{4}|[0-9a-f]{8})$/i.exec(literal.trim())?.[1];
+  const functional = /^(?:rgba?|hsla?)\(([^)]*)\)$/i.exec(literal.trim())?.[1]?.split(/[\s,/]+/).filter(Boolean)[3];
+  const alpha = short ? Number.parseInt(short.length === 4 ? short[3]!.repeat(2) : short.slice(6), 16) / 255 : functional !== undefined ? (functional.endsWith("%") ? Number.parseFloat(functional) / 100 : Number.parseFloat(functional)) : 1;
+  if (!Number.isFinite(alpha) || alpha >= 1) return hex;
+  return `${hex}${Math.round(Math.max(0, alpha) * 255).toString(16).padStart(2, "0")}`;
+}
+
+/** Property-aware colour literals of a page ("background-color: #ff0000"), normalised to hex where possible. */
+function pageColorEvidence(declarations: readonly CssDeclarationEvidence[]): string[] {
+  const properties = new Set(["color", "background", "background-color", "border-color", "outline-color", "fill", "stroke"]);
+  const values: string[] = [];
+  for (const declaration of declarations) {
+    const property = declaration.property.toLowerCase();
+    if (!properties.has(property)) continue;
+    // A colour function with an unresolved channel or alpha is not an observed colour at all.
+    if (/(?:rgba?|hsla?)\((?:[^()]|\([^()]*\))*(?:var|env|attr|calc)\(/i.test(declaration.value)) continue;
+    // Substitution fallbacks may never apply, so only independently written literals count.
+    const literal = /#[0-9a-f]{3,8}\b|(?:rgba?|hsla?)\([^()]*\)/i.exec(withoutFunctions(declaration.value, ["var", "env", "attr"]))?.[0];
+    const color = literal ? colorWithAlpha(literal) : null;
+    if (!color) continue;
+    const entry = `${property}: ${color}`;
+    if (!values.includes(entry)) values.push(entry);
+  }
+  return values;
+}
+
 async function ingestWebsiteSource(
   sourceUrl: string,
   ingestDir: string,
   signal: AbortSignal,
   preferredName?: string,
+  pageLimit: number = DEFAULT_PAGE_LIMIT,
 ): Promise<SourceAnalysis> {
   let url: URL;
   try {
@@ -757,11 +800,49 @@ async function ingestWebsiteSource(
   const notes: string[] = ["Homepage HTML fetched from website URL."];
   const logoFiles: Array<{ absolutePath: string; fileName: string }> = [];
   const pageHtmlByUrl = new Map<string, string>([[url.toString(), html]]);
-  const pageQueue = collectCandidateWebsitePages(url, html, signal);
+  const fetchText = async (target: URL, maxBytes: number): Promise<string | null> => {
+    try {
+      const fetched = await fetchWebsiteResource(target, { maxBytes, kind: "html", noteBytes, signal, userAgent: `BurnGuard/${APP_VERSION} design-system-import`, allowedOrigin: url.origin });
+      return fetched.finalUrl.origin === url.origin ? fetched.text : null;
+    } catch (error) {
+      if (error instanceof ExtractionAcquisitionError || isBudgetExhausted(error)) throw error;
+      return null;
+    }
+  };
+  const robots = parseRobots((await fetchText(new URL("/robots.txt", url), 64 * 1024)) ?? "");
+  const sitemapUrls: string[] = [];
+  for (const sitemap of [...robots.sitemaps, new URL("/sitemap.xml", url).toString()].slice(0, 4)) {
+    let target: URL;
+    try { target = new URL(sitemap, url); } catch { continue; }
+    if (target.origin !== url.origin) continue;
+    const xml = await fetchText(target, 1024 * 1024);
+    if (xml === null) continue;
+    const parsed = parseSitemap(xml);
+    if (!parsed.isIndex) { sitemapUrls.push(...parsed.urls); break; }
+    for (const nested of parsed.urls.slice(0, 3)) {
+      let nestedUrl: URL;
+      try { nestedUrl = new URL(nested, url); } catch { continue; }
+      if (nestedUrl.origin !== url.origin) continue;
+      const nestedXml = await fetchText(nestedUrl, 1024 * 1024);
+      if (nestedXml !== null) sitemapUrls.push(...parseSitemap(nestedXml).urls);
+    }
+    break;
+  }
+  const discovery = discoverPages({ base: url, homepageHtml: html, sitemapUrls: sitemapUrls.slice(0, 500), robots, limit: pageLimit });
+  const pageSource = new Map<string, (typeof discovery.selected)[number]["source"]>([[url.toString(), "entry"]]);
+  const extractedKeys = new Set([canonicalPagePath(url.toString(), url) ?? "/"]);
+  const failedPages: { path: string; source: (typeof discovery.selected)[number]["source"]; reason: "fetch_failed" | "robots" | "budget" }[] = [];
 
-  for (const page of pageQueue) {
+  const remainingCandidates = discovery.selected.slice(1);
+  for (const [index, candidate] of remainingCandidates.entries()) {
     throwIfAcquisitionAborted(signal);
-    if (pageHtmlByUrl.has(page.toString())) continue;
+    // Keep room in the aggregate budget for stylesheets; later pages are recorded instead of fetched.
+    if (totalDownloadedBytes > MAX_TOTAL_DOWNLOAD_BYTES * 0.6) {
+      for (const skipped of remainingCandidates.slice(index)) failedPages.push({ ...skipped, reason: "budget" });
+      notes.push(`Stopped page discovery at ${pageHtmlByUrl.size} pages to stay within the download budget.`);
+      break;
+    }
+    const page = new URL(candidate.fetchPath, url);
     try {
       const pageFetch = await fetchWebsiteResource(page, {
         maxBytes: MAX_HTML_BYTES,
@@ -769,17 +850,27 @@ async function ingestWebsiteSource(
         noteBytes,
         signal,
         userAgent: `BurnGuard/${APP_VERSION} design-system-import`,
+        allowedOrigin: url.origin,
+        allowsPath: robots.allows,
       });
-      if (pageHtmlByUrl.has(pageFetch.finalUrl.toString())) continue;
+      // A redirect may land on a page that is already extracted.
+      const finalKey = canonicalPagePath(pageFetch.finalUrl.toString(), url);
+      if (finalKey === null || extractedKeys.has(finalKey)) continue;
+      extractedKeys.add(finalKey);
+      pageSource.set(pageFetch.finalUrl.toString(), candidate.source);
       const storedPageHtml = sanitizeAcquiredWebsiteHtml(pageFetch.text);
       pageHtmlByUrl.set(pageFetch.finalUrl.toString(), pageFetch.text);
       const fileName = `page-${pageHtmlByUrl.size}.html`;
       await writeFile(path.join(pagesDir, fileName), storedPageHtml, "utf8");
     } catch (error) {
-      if (error instanceof ExtractionAcquisitionError) throw error;
+      if (error instanceof ExtractionAcquisitionError || isBudgetExhausted(error)) throw error;
+      if (error instanceof ExcludedPathError) { failedPages.push({ ...candidate, reason: "robots" }); continue; }
+      failedPages.push({ ...candidate, reason: "fetch_failed" });
       notes.push(`Skipped linked page: ${page.toString()} (${error instanceof Error ? error.message : "fetch failed"})`);
     }
   }
+  const pageDeclarations = new Map<string, CssDeclarationEvidence[]>();
+  const stylesheetDeclarations = new Map<string, readonly CssDeclarationEvidence[]>();
 
   const componentSamples = {
     buttons: [] as string[],
@@ -795,7 +886,17 @@ async function ingestWebsiteSource(
 
   for (const [pageUrl, pageHtml] of pageHtmlByUrl) {
     throwIfAcquisitionAborted(signal);
+    const ownDeclarations: CssDeclarationEvidence[] = [];
+    pageDeclarations.set(pageUrl, ownDeclarations);
+    // Page-local cascade order: this page's linked sheets in link order, then its inline styles, so a
+    // stylesheet cached from another page never carries that page's order into this one.
     const root = parse(pageHtml);
+    // Document order of <style> blocks and stylesheet links decides which one wins for this page.
+    const cascadeNodes = root.querySelectorAll("*").filter((node) => node.tagName === "STYLE" || (node.tagName === "LINK" && (node.getAttribute("rel") ?? "").toLowerCase() === "stylesheet"));
+    const cascadeOrder = (node: unknown) => { const index = cascadeNodes.indexOf(node as (typeof cascadeNodes)[number]); return index === -1 ? cascadeNodes.length : index; };
+    const withOrder = (declarations: readonly CssDeclarationEvidence[], order: number) => declarations.map((declaration) => ({ ...declaration, fileOrder: order }));
+    let currentLinkOrder = 0;
+    const addLinked = (declarations: readonly CssDeclarationEvidence[]) => { ownDeclarations.push(...withOrder(declarations, currentLinkOrder)); };
     throwIfAcquisitionAborted(signal);
     const sampleSet = extractHtmlComponentSamples(pageHtml, signal);
     mergeStringSamples(componentSamples.buttons, sampleSet.buttons, 6);
@@ -822,6 +923,16 @@ async function ingestWebsiteSource(
       cssFileOrder += 1;
       cssDeclarations.push(...parsedCss.declarations);
       cssParseIssues.push(...parsedCss.issues);
+      // Per-page cascade: each <style> block at its document position, style attributes after every sheet.
+      for (const style of root.querySelectorAll("style")) {
+        const block = await parseCssSource({ content: style.textContent, sourceId: `${pageSourceId}#style`, fileOrder: 0, signal });
+        ownDeclarations.push(...withOrder(block.declarations, cascadeOrder(style)));
+      }
+      const attributes = root.querySelectorAll("[style]").map((node) => node.getAttribute("style") ?? "").filter(Boolean).join("\n");
+      if (attributes) {
+        const attributeCss = await parseCssSource({ content: attributes, sourceId: `${pageSourceId}#style-attribute`, fileOrder: 0, signal });
+        ownDeclarations.push(...withOrder(attributeCss.declarations, cascadeNodes.length + 1));
+      }
       mergeSignals(
         { colors, fontSizes, fontWeights, spacingValues, radii, shadows },
         styleSignalsFromDeclarations(parsedCss.declarations),
@@ -837,12 +948,16 @@ async function ingestWebsiteSource(
       throwIfAcquisitionAborted(signal);
       const href = links[idx].getAttribute("href");
       if (!href) continue;
+      currentLinkOrder = cascadeOrder(links[idx]);
       try {
         const cssUrl = new URL(href, pageBase);
         if (cssUrl.origin !== url.origin) {
           notes.push(`Skipped cross-origin stylesheet: ${href}`);
           continue;
         }
+        // A stylesheet shared by several pages is fetched and parsed once but counts for every page.
+        const cached = stylesheetDeclarations.get(cssUrl.toString());
+        if (cached) { addLinked(cached); continue; }
         const cssFetch = await fetchWebsiteResource(cssUrl, {
           maxBytes: MAX_CSS_BYTES,
           kind: "css",
@@ -850,7 +965,8 @@ async function ingestWebsiteSource(
           signal,
           userAgent: `BurnGuard/${APP_VERSION} design-system-import`,
         });
-        if (seenStylesheets.has(cssFetch.finalUrl.toString())) continue;
+        const seenDeclarations = stylesheetDeclarations.get(cssFetch.finalUrl.toString());
+        if (seenStylesheets.has(cssFetch.finalUrl.toString())) { addLinked(seenDeclarations ?? []); continue; }
         seenStylesheets.add(cssFetch.finalUrl.toString());
         const cssText = cssFetch.text;
         const fileName = `linked-${stylesheetIndex}.css`;
@@ -864,6 +980,9 @@ async function ingestWebsiteSource(
         const parsedCss = await parseCssSource({ content: cssText, sourceId: cssSourceId, fileOrder: cssFileOrder, signal });
         cssFileOrder += 1;
         cssDeclarations.push(...parsedCss.declarations);
+        addLinked(parsedCss.declarations);
+        stylesheetDeclarations.set(cssUrl.toString(), parsedCss.declarations);
+        stylesheetDeclarations.set(cssFetch.finalUrl.toString(), parsedCss.declarations);
         cssParseIssues.push(...parsedCss.issues);
         mergeSignals(
           { colors, fontSizes, fontWeights, spacingValues, radii, shadows },
@@ -873,7 +992,7 @@ async function ingestWebsiteSource(
           fontFamilies.add(family);
         }
       } catch (error) {
-        if (error instanceof ExtractionAcquisitionError) throw error;
+        if (error instanceof ExtractionAcquisitionError || isBudgetExhausted(error)) throw error;
         notes.push(`Skipped linked stylesheet: ${href} (${error instanceof Error ? error.message : "fetch failed"})`);
       }
     }
@@ -903,7 +1022,7 @@ async function ingestWebsiteSource(
         await writeFile(absolutePath, logoFetch.buffer);
         logoFiles.push({ absolutePath, fileName: dedupedName });
       } catch (error) {
-        if (error instanceof ExtractionAcquisitionError) throw error;
+        if (error instanceof ExtractionAcquisitionError || isBudgetExhausted(error)) throw error;
         notes.push(`Skipped logo candidate: ${src} (${error instanceof Error ? error.message : "fetch failed"})`);
       }
     }
@@ -955,6 +1074,35 @@ async function ingestWebsiteSource(
     artifactCopies: [],
     // Read before sanitization strips image sources; only typed counts and flags leave this scope.
     sourceEvidence: collectSourceEvidence([...pageHtmlByUrl.values()], cssDeclarations),
+    pageCoverage: buildPageCoverage({
+      limit: pageLimit,
+      discovered: discovery.discovered,
+      extracted: [...pageHtmlByUrl].map(([pageUrl, pageHtml]) => {
+        const path = canonicalPagePath(pageUrl, url) ?? "/";
+        const declarations = pageDeclarations.get(pageUrl) ?? [];
+        const signals = styleSignalsFromDeclarations(declarations);
+        const evidence = collectSourceEvidence([pageHtml], declarations);
+        const customProperties = Object.fromEntries([...selectCssCustomProperties(declarations)]
+          .map(([name, value]) => [`--${name}`, value.trim()] as const)
+          .filter(([name, value]) => /^--[a-zA-Z0-9_-]{1,80}$/.test(name) && value.length > 0 && value.length <= 160 && !/[<>]|url\s*\(/i.test(value) && !/\p{Cc}/u.test(value))
+          .slice(0, 48));
+        return {
+          path,
+          source: pageSource.get(pageUrl) ?? "link",
+          pageType: classifyPageType(path, pageHtml),
+          layoutTokens: measureSourceLayout(declarations, signals.spacingValues).tokens,
+          patterns: observedPatterns(evidence),
+          colors: pageColorEvidence(declarations),
+          fonts: fontFamiliesFromDeclarations(declarations).slice(0, 3),
+          customProperties,
+          evidence: pageEvidence(evidence),
+        };
+      }),
+      skipped: [
+        ...discovery.skipped.map((page) => ({ ...page, pageType: classifyPageType(page.path, "") })),
+        ...failedPages.map((page) => ({ ...page, pageType: classifyPageType(page.path, "") })),
+      ],
+    }),
   };
 }
 
@@ -1391,6 +1539,13 @@ async function writeCanonicalDesignSystem(input: {
     generated,
     input.systemDir,
   );
+  if (input.analysis.pageCoverage) {
+    // Publish only what the strict reader accepts, so a malformed record can never make the system unreadable.
+    let coverage: DesignSystemPageCoverage | null = null;
+    try { coverage = parseDesignSystemPageCoverage(JSON.parse(JSON.stringify(input.analysis.pageCoverage))); }
+    catch { input.analysis.notes.push("Per-page coverage was omitted because it did not pass validation."); }
+    if (coverage) await writeText(path.join(input.systemDir, "pages.json"), `${JSON.stringify(coverage, null, 2)}\n`, generated, input.systemDir);
+  }
   await writeText(
     path.join(input.systemDir, "SKILL.md"),
     buildSkill(input.brandName),
@@ -1624,7 +1779,7 @@ Open with a restrained hero, follow with aligned evidence rows on flat surfaces,
 ## Responsive
 Below --layout-bp-md stack columns in reading order, keep navigation bounded to the viewport and let labels and actions wrap. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
 
-${buildSectionPatternReadme(evidence)}${buildAssetGuideReadme({ brandName, primary, action, colors: analysis.colors, fontFamilies: analysis.fontFamilies, radii: analysis.radii, logoPaths: analysis.logoFiles.slice(0, 8).map((item) => `assets/logos/${safeFileName(item.fileName)}`), evidence })}
+${buildSectionPatternReadme(evidence)}${analysis.pageCoverage ? buildPageTemplateReadme(analysis.pageCoverage) : ""}${buildAssetGuideReadme({ brandName, primary, action, colors: analysis.colors, fontFamilies: analysis.fontFamilies, radii: analysis.radii, logoPaths: analysis.logoFiles.slice(0, 8).map((item) => `assets/logos/${safeFileName(item.fileName)}`), evidence })}
 ## Caveats & substitutions
 ${caveats.join("\n")}
 `;

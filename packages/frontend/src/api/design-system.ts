@@ -10,7 +10,7 @@ import type {
   DesignSystemPreview,
 } from "@bg/shared";
 import { apiFetch } from "./client";
-import { parseDesignSystemAssetGuide, parseDesignSystemLayout } from "@bg/shared";
+import { parseDesignSystemAssetGuide, parseDesignSystemLayout, parseDesignSystemPageCoverage } from "@bg/shared";
 
 export function extractPinterestMood(body: import("@bg/shared").CreatePinterestMoodRequest): Promise<import("@bg/shared").CreatePinterestMoodResponse> {
   return apiFetch("/api/design-systems/pinterest", { method: "POST", body: JSON.stringify(body) });
@@ -62,6 +62,7 @@ export async function getDesignSystemTokens(
     ...response,
     ...(response.layout === undefined ? {} : { layout: parseDesignSystemLayout(response.layout) }),
     ...(response.assets === undefined ? {} : { assets: parseDesignSystemAssetGuide(response.assets) }),
+    ...(response.pages === undefined ? {} : { pages: parseDesignSystemPageCoverage(response.pages) }),
   };
 }
 
