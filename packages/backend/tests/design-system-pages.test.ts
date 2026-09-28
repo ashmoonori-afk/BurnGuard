@@ -297,6 +297,21 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
     }
   });
 
+  test("Given an opening region with a large image and a script-drawn canvas, then the image is copied as a hero asset and the README hero pattern names it and the canvas", async () => {
+    const png = Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000", "hex");
+    const html = '<html><head></head><body><nav><img src="/logo.svg" alt="Brand"></nav><div><img src="/images/rings.png" alt=""><div data-framer-name="Particles Background"><canvas></canvas></div><h1>Own your AI.</h1><p>Private expert AI.</p></div><section><h2>More</h2><img src="/images/later.png" alt=""></section></body></html>';
+    await withSite({ "/source": html, "/images/rings.png": png.toString("binary"), "/images/later.png": png.toString("binary"), "/logo.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>" }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Hero", source_type: "website", source_url: origin + "/source" });
+      const dir = path.join(systemsDir, id);
+      expect((await readFile(path.join(dir, "assets", "hero", "rings.png"))).byteLength).toBeGreaterThan(0);
+      const readme = await readFile(path.join(dir, "README.md"), "utf8");
+      const hero = readme.split("\n").find(line => line.startsWith("- Hero (")) ?? "";
+      expect(hero).toContain("assets/hero/rings.png");
+      expect(hero).toContain("<canvas>");
+      expect(readme).not.toContain("assets/hero/later.png");
+    });
+  });
+
   test("Given pages whose card colours differ from the page ground, then each page record and template leads with its page background and text colour roles", async () => {
     const page = (cards: string) => '<html><head><style>:root{--ground:#0f0a1c} html body{background:var(--ground, #000000);color:#d6d6d6} ' + cards + '</style></head><body><nav><a href="/about">About</a></nav><h1>A</h1></body></html>';
     await withSite({ "/source": page(".x{background-color:#141926}"), "/about": page(".card{background-color:#efedff} .alt{background-color:#ffffff}") }, async (origin, id) => {

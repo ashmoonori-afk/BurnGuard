@@ -1029,6 +1029,28 @@ async function ingestWebsiteSource(
     }
   }
 
+  // Opening-region media of the entry page: images before the first h2/h3 become hero assets; script-drawn
+  // canvases cannot be captured statically, so only their presence is recorded.
+  const heroImages: Array<{ absolutePath: string; fileName: string }> = [];
+  const opening = openingRegionMedia(html);
+  for (const src of opening.images.slice(0, 2)) {
+    throwIfAcquisitionAborted(signal);
+    try {
+      const heroUrl = new URL(src, url);
+      const fileName = safeFileName(path.basename(heroUrl.pathname) || "hero.png");
+      if (heroImages.some((image) => image.fileName === fileName)) continue;
+      const heroFetch = await fetchWebsiteResource(heroUrl, { maxBytes: MAX_LOGO_BYTES, kind: "asset", noteBytes, signal, userAgent: `BurnGuard/${APP_VERSION} design-system-import` });
+      assetBytes += heroFetch.buffer.byteLength;
+      assertAggregateAssetBytes(assetBytes);
+      const absolutePath = path.join(websiteDir, `hero-${fileName}`);
+      await writeFile(absolutePath, heroFetch.buffer);
+      heroImages.push({ absolutePath, fileName });
+    } catch (error) {
+      if (error instanceof ExtractionAcquisitionError || isBudgetExhausted(error)) throw error;
+      notes.push(`Skipped hero image: ${src} (${error instanceof Error ? error.message : "fetch failed"})`);
+    }
+  }
+
   if (componentSamples.buttons.length > 0) {
     notes.push(
       `Detected component candidates: ${componentSamples.buttons.length} buttons, ${componentSamples.cards.length} cards, ${componentSamples.forms.length} forms.`,
@@ -1075,6 +1097,7 @@ async function ingestWebsiteSource(
     artifactCopies: [],
     // Read before sanitization strips image sources; only typed counts and flags leave this scope.
     sourceEvidence: collectSourceEvidence([...pageHtmlByUrl.values()], cssDeclarations),
+    heroAssets: { images: heroImages, canvases: opening.canvases },
     pageColors: {
       ...pageGroundAndInk(pageDeclarations.get(url.toString()) ?? []),
       // The entry page carries the brand; counting every acquired page lets article or demo pages outvote it.
@@ -1686,6 +1709,15 @@ async function writeCanonicalDesignSystem(input: {
     }
   }
 
+  const heroDir = path.join(input.systemDir, "assets", "hero");
+  for (const image of input.analysis.heroAssets?.images ?? []) {
+    throwIfAcquisitionAborted(input.signal);
+    await mkdir(heroDir, { recursive: true });
+    const dest = path.join(heroDir, safeFileName(image.fileName));
+    await copyFile(image.absolutePath, dest);
+    generated.add(toSystemRelPath(input.systemDir, dest));
+  }
+
   for (const logo of input.analysis.logoFiles.slice(0, 8)) {
     throwIfAcquisitionAborted(input.signal);
     const dest = path.join(logosDir, safeFileName(logo.fileName));
@@ -1785,7 +1817,7 @@ Open with a restrained hero, follow with aligned evidence rows on flat surfaces,
 ## Responsive
 Below --layout-bp-md stack columns in reading order, keep navigation bounded to the viewport and let labels and actions wrap. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
 
-${buildSectionPatternReadme(evidence)}${analysis.pageCoverage ? buildPageTemplateReadme(analysis.pageCoverage) : ""}${buildAssetGuideReadme({ brandName, primary, action, colors: analysis.colors, fontFamilies: analysis.fontFamilies, radii: analysis.radii, logoPaths: analysis.logoFiles.slice(0, 8).map((item) => `assets/logos/${safeFileName(item.fileName)}`), evidence })}
+${buildSectionPatternReadme(evidence, { images: (analysis.heroAssets?.images ?? []).map((image) => `assets/hero/${safeFileName(image.fileName)}`), canvases: analysis.heroAssets?.canvases ?? 0 })}${analysis.pageCoverage ? buildPageTemplateReadme(analysis.pageCoverage) : ""}${buildAssetGuideReadme({ brandName, primary, action, colors: analysis.colors, fontFamilies: analysis.fontFamilies, radii: analysis.radii, logoPaths: analysis.logoFiles.slice(0, 8).map((item) => `assets/logos/${safeFileName(item.fileName)}`), evidence })}
 ## Caveats & substitutions
 ${caveats.join("\n")}
 `;
@@ -1970,6 +2002,20 @@ function isPageSelector(selector: string): boolean {
  * page-level selectors outside any at-rule, with var() resolved only through custom properties declared in
  * the same page-level context. Conditional and component-scoped overrides therefore never leak in.
  */
+/** Image sources and canvas count in document order from the start of the page up to the first h2 or h3, skipping logos and icons. */
+function openingRegionMedia(html: string): { readonly images: readonly string[]; readonly canvases: number } {
+  const images: string[] = [];
+  let canvases = 0;
+  for (const node of parse(html).querySelectorAll("h2, h3, img, canvas")) {
+    if (node.tagName === "H2" || node.tagName === "H3") break;
+    if (node.tagName === "CANVAS") { canvases += 1; continue; }
+    const src = (node.getAttribute("src") ?? node.getAttribute("srcset")?.split(",")[0]?.trim().split(/\s+/)[0] ?? "").trim();
+    if (!src || /^data:/i.test(src) || /logo|brand|icon|favicon|avatar/i.test(src) || node.closest("nav, header") !== null) continue;
+    if (!images.includes(src)) images.push(src);
+  }
+  return { images, canvases };
+}
+
 function pageGroundAndInk(declarations: readonly CssDeclarationEvidence[]): { readonly ground: string | null; readonly ink: string | null } {
   const page = [...declarations]
     .sort((left, right) => left.fileOrder - right.fileOrder || left.declarationOrder - right.declarationOrder)
