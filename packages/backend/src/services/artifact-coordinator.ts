@@ -186,7 +186,8 @@ export class ArtifactCoordinator {
       assertFigmaManifestChangesAllowed(
         figmaReferences,
         stagedFigmaReferences,
-        input.kind === "figma_import",
+        // Imports add references; initialization (e.g. restoring a project bundle) may carry validated ones.
+        input.kind === "figma_import" || input.kind === "initialize",
       );
       diff = diffManagedTrees(base, result);
       if (diff.length === 0) {

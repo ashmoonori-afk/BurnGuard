@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -466,5 +466,92 @@ describe("Figma import asset naming", () => {
     expect(first.asset_sha256).not.toBe(second.asset_sha256);
     expect([...await readFile(path.join(stageDir, first.asset_path))]).toEqual([137, 80, 78, 71, 1]);
     expect([...await readFile(path.join(stageDir, second.asset_path))]).toEqual([137, 80, 78, 71, 2]);
+  });
+});
+
+describe("Figma import asset assignment and serialization bounds", () => {
+  function pairDocument(first: { readonly id: string; readonly name: string }, second: { readonly id: string; readonly name: string }) {
+    return parseFigmaImportDocument({
+      name: "Pairs",
+      version: "1",
+      lastModified: "2026-09-27T10:15:00Z",
+      document: {
+        id: "0:0", name: "Document", type: "DOCUMENT",
+        children: [{ id: "1:0", name: "Page", type: "CANVAS", children: [
+          { ...first, type: "FRAME" },
+          { ...second, type: "FRAME" },
+        ] }],
+      },
+    });
+  }
+  const png = (tail: number) => new Uint8Array([137, 80, 78, 71, tail]);
+
+  test("Given an id-named and a name-matching asset When staged Then the exact node-id match wins", async () => {
+    // Given
+    const stageDir = await mkdtemp(path.join(tmpdir(), "bg-figma-id-first-"));
+    roots.push(stageDir);
+
+    // When
+    const result = await stageFigmaExport({
+      stage_dir: stageDir,
+      source_file_name: "pairs.json",
+      document: pairDocument({ id: "4:1", name: "Hero" }, { id: "4:2", name: "Other" }),
+      node_ids: ["4:1"],
+      assets: [
+        { relative_path: "exports/Hero.png", bytes: png(1), media_type: "image/png" },
+        { relative_path: "exports/4-1.png", bytes: png(2), media_type: "image/png" },
+      ],
+      pinned_tokens_css: "",
+      imported_at: "2026-09-27T12:00:00.000Z",
+      signal: new AbortController().signal,
+    });
+    const manifest = JSON.parse(await readFile(path.join(stageDir, result.manifest_path), "utf8"));
+
+    // Then
+    expect([...await readFile(path.join(stageDir, manifest.nodes[0].asset_path))]).toEqual([137, 80, 78, 71, 2]);
+  });
+
+  test("Given two selected nodes sharing a name and one matching asset When staged Then the ambiguous mapping is refused", async () => {
+    // Given
+    const stageDir = await mkdtemp(path.join(tmpdir(), "bg-figma-ambiguous-"));
+    roots.push(stageDir);
+
+    // When
+    const action = stageFigmaExport({
+      stage_dir: stageDir,
+      source_file_name: "pairs.json",
+      document: pairDocument({ id: "5:1", name: "Card" }, { id: "5:2", name: "Card" }),
+      node_ids: ["5:1", "5:2"],
+      assets: [{ relative_path: "exports/Card.png", bytes: png(3), media_type: "image/png" }],
+      pinned_tokens_css: "",
+      imported_at: "2026-09-27T12:00:00.000Z",
+      signal: new AbortController().signal,
+    });
+
+    // Then
+    await expect(action).rejects.toMatchObject({ code: "ambiguous_figma_asset" });
+  });
+
+  test("Given selections whose serialized size passes the publication limit When staged Then it fails before writing", async () => {
+    // Given
+    const stageDir = await mkdtemp(path.join(tmpdir(), "bg-figma-serialized-limit-"));
+    roots.push(stageDir);
+
+    // When
+    const action = stageFigmaExport({
+      stage_dir: stageDir,
+      source_file_name: "checkout.json",
+      document: parseFigmaImportDocument(fixtureDocument()),
+      node_ids: ["1:2", "1:4"],
+      assets: [],
+      pinned_tokens_css: "",
+      imported_at: "2026-09-27T12:00:00.000Z",
+      signal: new AbortController().signal,
+      limits: acquisitionLimits({ publicationBytes: 64 }),
+    });
+
+    // Then
+    await expect(action).rejects.toMatchObject({ limit: "publication_bytes" });
+    expect(await readdir(stageDir)).toEqual([]);
   });
 });

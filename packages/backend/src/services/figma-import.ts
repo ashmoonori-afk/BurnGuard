@@ -17,7 +17,7 @@ import {
 import { mapFigmaTokens, type FigmaTokenMapping } from "./figma-import-token-mapping";
 import { FIGMA_MANIFEST_MAX_BYTES } from "./figma-reference-policy";
 import {
-  assetForFigmaNode,
+  assignFigmaAssets,
   digestFigmaBytes,
   nodeFileName,
   slugFigmaName,
@@ -77,12 +77,21 @@ export async function stageFigmaExport(input: {
   const importId = `${slugFigmaName(input.document.name) || "figma"}-${crypto.randomUUID()}`;
   const importRoot = path.posix.join("references", "figma", importId);
   const importSegments = importRoot.split("/");
-  const nodeBytes = nodes.map((node) =>
-    Buffer.from(`${JSON.stringify(node, null, 2)}\n`)
-  );
+  // Serialize compactly and stop as soon as the cumulative size passes the publication limit.
+  let serializedBytes = 0;
+  const nodeBytes = nodes.map((node) => {
+    throwIfAcquisitionAborted(input.signal);
+    const bytes = Buffer.from(`${JSON.stringify(node)}\n`);
+    serializedBytes += bytes.byteLength;
+    if (serializedBytes > limits.publicationBytes) {
+      throw new AcquisitionLimitError("publication_bytes", limits.publicationBytes, serializedBytes);
+    }
+    return bytes;
+  });
+  const assignedAssets = assignFigmaAssets(nodes, assets);
   const nodeRecords = nodes.map((node, index) => {
     throwIfAcquisitionAborted(input.signal);
-    const asset = assetForFigmaNode(node.id, node.name, assets);
+    const asset = assignedAssets.get(node.id);
     const bytes = nodeBytes[index];
     if (bytes === undefined) throw new FigmaImportError("figma_import_failed");
     const nodePath = path.posix.join(

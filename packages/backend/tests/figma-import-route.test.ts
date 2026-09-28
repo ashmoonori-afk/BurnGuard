@@ -12,6 +12,7 @@ import {
 import { getProjectDetail } from "../src/db/project-read-repository";
 import { listArtifactOperations } from "../src/db/artifact-operation-query";
 import { artifactHistory } from "../src/services/artifact-history";
+import { parseFigmaImportDocument, stageFigmaExport } from "../src/services/figma-import";
 
 const projectIds: string[] = [];
 const roots: string[] = [];
@@ -359,5 +360,38 @@ describe("project Figma file import route failures and history", () => {
     expect(operations.some((item) => item.replay.kind === "figma_import")).toBe(true);
     expect(history.undo_operation_id).toBeNull();
     expect(undo).toBe("undo_unavailable");
+  });
+});
+
+describe("project Figma references in initialization", () => {
+  test("Given validated Figma references staged by an initialization When the project is created Then the references are accepted", async () => {
+    // Given
+    const id = `project-${randomUUID()}`;
+    await mkdir(projectsDir, { recursive: true });
+    const dir = await mkdtemp(path.join(projectsDir, "figma-init-"));
+    const now = Date.now();
+    getSqlite().prepare(
+      "INSERT INTO projects (id,name,type,design_system_id,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',NULL,?,'index.html','claude-code',?,?)",
+    ).run(id, id, dir, now, now);
+    projectIds.push(id);
+    roots.push(dir);
+
+    // When
+    const initialized = await new ArtifactCoordinator(getSqlite()).initializeProject(id, dir, async (stage) => {
+      await writeFile(path.join(stage, "index.html"), "<h1>Restored</h1>");
+      await stageFigmaExport({
+        stage_dir: stage,
+        source_file_name: "figma-file.json",
+        document: parseFigmaImportDocument(JSON.parse(fixtureDocument())),
+        node_ids: ["1:2"],
+        assets: [],
+        pinned_tokens_css: "",
+        imported_at: "2026-09-27T12:00:00.000Z",
+        signal: new AbortController().signal,
+      });
+    });
+
+    // Then
+    expect(initialized.status).toBe("committed");
   });
 });

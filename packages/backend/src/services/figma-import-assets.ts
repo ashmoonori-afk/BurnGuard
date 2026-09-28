@@ -73,18 +73,51 @@ export function validateFigmaAssets(
   return output;
 }
 
-export function assetForFigmaNode(
-  nodeId: string,
-  nodeName: string,
+/**
+ * Assigns exported images to selected nodes. An exact node-id match wins; a name match is used only when the
+ * name is unique among the selection and matches exactly one unclaimed asset. Anything ambiguous is refused,
+ * because an assigned reference becomes immutable.
+ */
+export function assignFigmaAssets(
+  nodes: readonly { readonly id: string; readonly name: string }[],
   assets: readonly ValidatedFigmaAsset[],
-): ValidatedFigmaAsset | undefined {
-  const names = new Set(
-    [nodeName, nodeId, nodeId.replaceAll(":", "-")].map(figmaMatchKey).filter((key) => key !== ""),
-  );
-  return assets.find((asset) => {
+): ReadonlyMap<string, ValidatedFigmaAsset> {
+  const byKey = new Map<string, ValidatedFigmaAsset[]>();
+  for (const asset of assets) {
     const key = figmaMatchKey(asset.basename);
-    return key !== "" && names.has(key);
-  });
+    if (key !== "") byKey.set(key, [...(byKey.get(key) ?? []), asset]);
+  }
+  const assigned = new Map<string, ValidatedFigmaAsset>();
+  const claimed = new Set<ValidatedFigmaAsset>();
+  for (const node of nodes) {
+    const idMatches = [...new Set(
+      [node.id, node.id.replaceAll(":", "-")].map(figmaMatchKey).filter((key) => key !== "")
+        .flatMap((key) => byKey.get(key) ?? []),
+    )];
+    if (idMatches.length > 1) throw new FigmaImportError("ambiguous_figma_asset");
+    const match = idMatches[0];
+    if (match !== undefined) {
+      assigned.set(node.id, match);
+      claimed.add(match);
+    }
+  }
+  const nameCounts = new Map<string, number>();
+  for (const node of nodes) {
+    const key = figmaMatchKey(node.name);
+    if (key !== "") nameCounts.set(key, (nameCounts.get(key) ?? 0) + 1);
+  }
+  for (const node of nodes) {
+    if (assigned.has(node.id)) continue;
+    const key = figmaMatchKey(node.name);
+    const matches = key === "" ? [] : (byKey.get(key) ?? []).filter((asset) => !claimed.has(asset));
+    if (matches.length === 0) continue;
+    if (matches.length > 1 || (nameCounts.get(key) ?? 0) > 1) throw new FigmaImportError("ambiguous_figma_asset");
+    const match = matches[0];
+    if (match === undefined) continue;
+    assigned.set(node.id, match);
+    claimed.add(match);
+  }
+  return assigned;
 }
 
 export function nodeFileName(nodeId: string): string {
