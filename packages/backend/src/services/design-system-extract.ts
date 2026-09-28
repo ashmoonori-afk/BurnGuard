@@ -1799,7 +1799,7 @@ Read README.md first, then apply the visual and content rules from this design s
 `;
 }
 
-const MONOSPACE_FAMILY = /\b(?:mono|code|courier|consolas|menlo)\b/i;
+const MONOSPACE_FAMILY = /\b(?:mono|monospace|code|courier|consolas|menlo|monaco)\b|sfmono/i;
 
 /** Leading family name of a font-family value, or null when it starts with a function such as var(). */
 function leadingFamily(value: string | undefined): string | null {
@@ -1812,11 +1812,13 @@ function leadingFamily(value: string | undefined): string | null {
  * (collected alphabetically) are split so a monospace family never leads the sans or display stacks.
  */
 function fontRoles(analysis: SourceAnalysis): { readonly sans: string; readonly display: string; readonly mono: string } {
-  const text = analysis.fontFamilies.filter((family) => !MONOSPACE_FAMILY.test(family));
+  // Observed entries are the text before the first comma, so var() expressions arrive as fragments; only plain names count.
+  const families = analysis.fontFamilies.filter((family) => !/[()]/.test(family));
+  const text = families.filter((family) => !MONOSPACE_FAMILY.test(family));
   const declaredSans = leadingFamily(analysis.cssVars.get("framer-font-family"));
-  const sans = cssString(declaredSans ?? text[0] ?? analysis.fontFamilies[0] ?? "Inter");
-  const display = declaredSans !== null ? sans : cssString(text[1] ?? text[0] ?? analysis.fontFamilies[0] ?? "Inter");
-  const mono = cssString(leadingFamily(analysis.cssVars.get("framer-code-font-family")) ?? analysis.fontFamilies.find((family) => MONOSPACE_FAMILY.test(family)) ?? "IBM Plex Mono");
+  const sans = cssString(declaredSans ?? text[0] ?? families[0] ?? "Inter");
+  const display = declaredSans !== null ? sans : cssString(text[1] ?? text[0] ?? families[0] ?? "Inter");
+  const mono = cssString(leadingFamily(analysis.cssVars.get("framer-code-font-family")) ?? families.find((family) => MONOSPACE_FAMILY.test(family)) ?? "IBM Plex Mono");
   return { sans, display, mono };
 }
 

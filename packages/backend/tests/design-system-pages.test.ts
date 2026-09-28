@@ -301,6 +301,9 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
     const cases = [
       { name: "framer", css: ':root{--framer-font-family:"Inter", sans-serif;--framer-code-font-family:"Fragment Mono", monospace} body{font-family:"Inter", sans-serif} code{font-family:"Fragment Mono", monospace}', sans: "Inter", mono: '"Fragment Mono"' },
       { name: "plain", css: 'code{font-family:"Aa Mono", monospace} body{font-family:"Zeta Sans", sans-serif}', sans: '"Zeta Sans"', mono: '"Aa Mono"' },
+      { name: "tailwind-var", css: ':root{--font-mono:"Geist Mono"} code{font-family:var(--font-mono)} body{font-family:"Zeta Sans", sans-serif}', sans: '"Zeta Sans"', mono: '"IBM Plex Mono"' },
+      { name: "tailwind-reset", css: 'code,pre{font-family:var(--default-mono-font-family, ui-monospace, monospace)} body{font-family:"Zeta Sans", sans-serif}', sans: '"Zeta Sans"', mono: '"IBM Plex Mono"' },
+      { name: "generic-mono", css: 'code{font-family:ui-monospace, SFMono-Regular, monospace} body{font-family:"Zeta Sans", sans-serif}', sans: '"Zeta Sans"', mono: "ui-monospace" },
     ];
     for (const item of cases) {
       await withSite({ "/source": "<html><head><style>" + item.css + "</style></head><body><h1>A</h1></body></html>" }, async (origin, id) => {
