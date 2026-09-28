@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, open, readdir, type FileHandle } from "node:fs/promises";
+import { lstat, open, readdir, realpath, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import JSZip from "jszip";
@@ -141,8 +141,12 @@ async function collect(
   excluded: (relative: string) => boolean,
 ): Promise<readonly BundleEntry[]> {
   const output: BundleEntry[] = [];
+  const realRoot = await realpath(resolveWithin(root));
   const visit = async (directory: string): Promise<void> => {
+    const before = await verifiedDirectory(directory, realRoot);
     const children = (await readdir(directory, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name));
+    const after = await verifiedDirectory(directory, realRoot);
+    if (after.dev !== before.dev || after.ino !== before.ino) throw new ProjectBundleError("invalid_project_bundle");
     for (const child of children) {
       const absolute = resolveWithin(root, path.relative(root, directory), child.name);
       const relative = path.relative(root, absolute).split(path.sep).join("/").normalize("NFC");
@@ -162,7 +166,7 @@ async function collect(
       budget.bytes += info.size;
       if (budget.files > PROJECT_BUNDLE_LIMITS.files || budget.bytes > PROJECT_BUNDLE_LIMITS.expanded_bytes ||
         info.size > PROJECT_BUNDLE_LIMITS.entry_bytes) throw new ProjectBundleError("project_bundle_limit");
-      const bytes = await readStableFile(absolute, info);
+      const bytes = await readStableFile(absolute, info, path.join(realRoot, path.relative(root, absolute)));
       output.push({
         file: {
           path: `${prefix}/${relative}`,
@@ -178,13 +182,27 @@ async function collect(
   return output;
 }
 
-async function readStableFile(absolute: string, original: Awaited<ReturnType<typeof lstat>>): Promise<Uint8Array> {
+/**
+ * Node has no openat(), so a directory swapped for a link between checks is caught by re-verifying
+ * identity around each readdir and by requiring every opened file's real path to be exactly its
+ * expected managed path.
+ */
+async function verifiedDirectory(directory: string, realRoot: string): Promise<Awaited<ReturnType<typeof lstat>>> {
+  const info = await lstat(directory);
+  if (info.isSymbolicLink() || !info.isDirectory()) throw new ProjectBundleError("invalid_project_bundle");
+  const real = await realpath(directory);
+  if (real !== realRoot && !real.startsWith(realRoot + path.sep)) throw new ProjectBundleError("invalid_project_bundle");
+  return info;
+}
+
+async function readStableFile(absolute: string, original: Awaited<ReturnType<typeof lstat>>, expectedReal: string): Promise<Uint8Array> {
   const handle = await open(absolute, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const before = await handle.stat();
     if (!before.isFile() || before.nlink !== 1 || before.dev !== original.dev || before.ino !== original.ino) {
       throw new ProjectBundleError("invalid_project_bundle");
     }
+    if (await realpath(absolute) !== expectedReal) throw new ProjectBundleError("invalid_project_bundle");
     const bytes = await readHandle(handle, before.size);
     const after = await handle.stat();
     if (after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size || after.mtimeMs !== before.mtimeMs) {
