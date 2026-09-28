@@ -18,7 +18,8 @@ export type RuntimeSessionRow = {
 const RECENT_EVENT_LIMIT = 200;
 
 /** One canonical ordering decides which session represents a project for diagnostics and resume. */
-const LATEST_SESSION_ORDER = "last_active_at DESC,id DESC";
+// Matches the project view's latest-session choice (updated_at), so "Open project" lands on the resumed session.
+const LATEST_SESSION_ORDER = "updated_at DESC,id DESC";
 
 export function latestProjectSession(db: Database, projectId: string): RuntimeSessionRow | null {
   return db.query<RuntimeSessionRow, [string]>(`SELECT s.id,p.id project_id,p.name project_name,s.backend_id,s.status
@@ -30,9 +31,9 @@ export function listRecentRuntimeFailures(
   db: Database,
   limit: number,
 ): readonly RuntimeFailureDiagnostic[] {
-  const sessions = db.query<RuntimeSessionRow, [number]>(`SELECT s.id,p.id project_id,p.name project_name,s.backend_id,s.status
-    FROM projects p JOIN sessions s ON s.id=(SELECT id FROM sessions WHERE project_id=p.id ORDER BY ${LATEST_SESSION_ORDER} LIMIT 1)
-    ORDER BY s.last_active_at DESC,s.id DESC LIMIT ?`).all(Math.max(limit * 4, limit));
+  // Every project's latest session is a candidate; the limit applies only after global failure ordering.
+  const sessions = db.query<RuntimeSessionRow, []>(`SELECT s.id,p.id project_id,p.name project_name,s.backend_id,s.status
+    FROM projects p JOIN sessions s ON s.id=(SELECT id FROM sessions WHERE project_id=p.id ORDER BY ${LATEST_SESSION_ORDER} LIMIT 1)`).all();
   return sessions
     .flatMap((session) => {
       const failure = runtimeFailureForSession(db, session);

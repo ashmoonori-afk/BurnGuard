@@ -16,7 +16,7 @@ import {
   listRecentRuntimeFailures,
   runtimeFailureForSession,
 } from "./runtime-failure-diagnostics";
-import { releaseUserTurnReservation, reserveUserTurn, type UserTurnReservation } from "./turns";
+import { holdSessionsForRecovery } from "./turns";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
 import { PathBoundaryError } from "../security/path-boundary";
 
@@ -92,7 +92,7 @@ export async function resumeProjectFromSavedFiles(
   }
   assertResumable(db, projectId, sessionId);
 
-  const reservations = reserveProjectTurns(db, projectId);
+  const releaseHold = holdProjectSessions(db, projectId);
   try {
     if (await isCanonicalTreeRootMissing(projectRoot)) {
       throw new RuntimeRecoveryError("project_directory_missing");
@@ -113,7 +113,7 @@ export async function resumeProjectFromSavedFiles(
     }
     throw error;
   } finally {
-    for (const reservation of reservations) releaseUserTurnReservation(reservation);
+    releaseHold();
   }
 
   const artifact = db.query<{
@@ -142,19 +142,13 @@ function assertResumable(db: Database, projectId: string, sessionId: string): vo
   }
 }
 
-function reserveProjectTurns(db: Database, projectId: string): readonly UserTurnReservation[] {
+function holdProjectSessions(db: Database, projectId: string): () => void {
   const sessionIds = db.query<{ readonly id: string }, [string]>("SELECT id FROM sessions WHERE project_id=? ORDER BY id")
-    .all(projectId);
-  const reservations: UserTurnReservation[] = [];
-  for (const { id } of sessionIds) {
-    const reservation = reserveUserTurn(id);
-    if (reservation === null) {
-      for (const held of reservations) releaseUserTurnReservation(held);
-      throw new RuntimeRecoveryError("runtime_resume_busy");
-    }
-    reservations.push(reservation);
-  }
-  return reservations;
+    .all(projectId)
+    .map((row) => row.id);
+  const release = holdSessionsForRecovery(sessionIds);
+  if (release === null) throw new RuntimeRecoveryError("runtime_resume_busy");
+  return release;
 }
 
 function modelCatalog(

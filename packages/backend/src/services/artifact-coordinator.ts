@@ -120,23 +120,29 @@ export class ArtifactCoordinator {
   }
 
   async run(input: RunOperation): Promise<CommittedArtifactOperation> {
-    await pruneExpiredArtifactOperations(this.db, { projectId: input.projectId, preserveOperationId: input.parentOperationId });
-    const base = await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
     const id = input.operationId ?? ulid();
     const ownedRoot = this.operationPath(input.projectDir, id);
     const snapshotPath = path.join(ownedRoot, "snapshot");
     const stagePath = path.join(ownedRoot, "stage");
-    this.faults.beforeSnapshot?.();
+    let base: CanonicalTreeManifest;
+    // Admission (base validation through registration) is serialized with external observation and
+    // adoption, so an operation is either registered before they look or validates against their result.
+    const releaseAdmission = await acquireArtifactProjectLock(this.db, input.projectId);
     try {
-      await materializeManagedTree(input.projectDir, snapshotPath);
-      await validateCanonicalTree(snapshotPath, base);
-      await materializeManagedTree(input.projectDir, stagePath);
-      await validateCanonicalTree(stagePath, base);
-      this.insertWorking(id, input, base, snapshotPath, stagePath);
-    } catch (error) {
-      await rm(ownedRoot, { recursive: true, force: true });
-      throw error;
-    }
+      await pruneExpiredArtifactOperations(this.db, { projectId: input.projectId, preserveOperationId: input.parentOperationId });
+      base = await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
+      this.faults.beforeSnapshot?.();
+      try {
+        await materializeManagedTree(input.projectDir, snapshotPath);
+        await validateCanonicalTree(snapshotPath, base);
+        await materializeManagedTree(input.projectDir, stagePath);
+        await validateCanonicalTree(stagePath, base);
+        this.insertWorking(id, input, base, snapshotPath, stagePath);
+      } catch (error) {
+        await rm(ownedRoot, { recursive: true, force: true });
+        throw error;
+      }
+    } finally { releaseAdmission(); }
     input.onPrepared?.(stagePath);
     let publicationStarted = false;
     let releasePublication: (() => void) | null = null;

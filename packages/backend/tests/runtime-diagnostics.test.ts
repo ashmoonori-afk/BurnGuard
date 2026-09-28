@@ -13,7 +13,14 @@ import {
   listRecentRuntimeFailures,
   resumeProjectFromSavedFiles,
 } from "../src/services/runtime-diagnostics";
-import { releaseUserTurnReservation, reserveUserTurn } from "../src/services/turns";
+import {
+  admitUserTurn,
+  hasTurnCapacity,
+  holdSessionsForRecovery,
+  isUserTurnRunning,
+  releaseUserTurnReservation,
+  reserveUserTurn,
+} from "../src/services/turns";
 
 const db = getSqlite();
 const projectIds: string[] = [];
@@ -141,7 +148,7 @@ test("Given an older failed session and a newer successful one When failures are
   const fixture = insertProjectSession("codex");
   failTurn(fixture.sessionId, "turn-old-failure", 50);
   const newer = `${fixture.projectId}-newer`;
-  insertSession(fixture.projectId, newer, 5, 0);
+  insertSession(fixture.projectId, newer, 0, 5);
   persist(newer, { id: crypto.randomUUID(), ts: 60, type: "chat.user_message", turnId: "turn-newer", text: "done", attachmentCount: 0 });
   persist(newer, { id: crypto.randomUUID(), ts: 61, type: "status.idle", stopReason: "end_turn" });
 
@@ -169,7 +176,7 @@ test("Given saved files after a failed turn When resume is requested for the adv
 test("Given a session other than the advertised latest one When resume is requested Then it is refused", async () => {
   const fixture = await managedProject();
   const stale = `${fixture.projectId}-stale`;
-  insertSession(fixture.projectId, stale, 0, 99);
+  insertSession(fixture.projectId, stale, 99, 0);
 
   const response = await resumeRequest(fixture.projectId, stale);
   const body = await response.json();
@@ -199,6 +206,24 @@ test("Given a turn reserved for the project When resume is requested Then it is 
     releaseUserTurnReservation(reservation);
   }
   expect(await readFile(path.join(fixture.root, "index.html"), "utf8")).toBe("saved-after-failure");
+});
+
+test("Given a recovery hold When turns are admitted Then the held session is busy without counting as a running turn or using capacity", () => {
+  const held = `held-${crypto.randomUUID()}`;
+  const release = holdSessionsForRecovery([held]);
+  if (release === null) throw new Error("Fixture recovery hold failed");
+  try {
+    expect(reserveUserTurn(held)).toBeNull();
+    expect(admitUserTurn(held, 1_000).kind).toBe("session_busy");
+    expect(isUserTurnRunning(held)).toBe(false);
+    expect(holdSessionsForRecovery([held])).toBeNull();
+    expect(hasTurnCapacity(1)).toBe(true);
+  } finally {
+    release();
+  }
+  const reservation = reserveUserTurn(held);
+  expect(reservation).not.toBeNull();
+  if (reservation !== null) releaseUserTurnReservation(reservation);
 });
 
 test("Given an active artifact operation When resume is requested Then it is refused without restoring the baseline", async () => {
