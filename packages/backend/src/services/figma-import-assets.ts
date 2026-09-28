@@ -86,7 +86,9 @@ export function assetForFigmaNode(
 }
 
 export function nodeFileName(nodeId: string): string {
-  return nodeId.replaceAll(":", "-").replaceAll(";", "_");
+  // The readable prefix may collide ("a:b-c" vs "a-b:c"); the id digest keeps names injective.
+  const readable = nodeId.replaceAll(":", "-").replaceAll(";", "_");
+  return `${readable}-${createHash("sha256").update(nodeId).digest("hex").slice(0, 16)}`;
 }
 
 export function slugFigmaName(value: string): string {

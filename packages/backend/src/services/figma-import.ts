@@ -14,7 +14,8 @@ import {
   selectedFigmaNodes,
   type FigmaImportDocument,
 } from "./figma-import-model";
-import { mapFigmaTokens } from "./figma-import-token-mapping";
+import { mapFigmaTokens, type FigmaTokenMapping } from "./figma-import-token-mapping";
+import { FIGMA_MANIFEST_MAX_BYTES } from "./figma-reference-policy";
 import {
   assetForFigmaNode,
   digestFigmaBytes,
@@ -122,9 +123,15 @@ export async function stageFigmaExport(input: {
       derived_artifact: "separate",
     },
     nodes: nodeRecords,
-    token_mapping: tokenMapping,
+    token_mapping: boundTokenMapping(tokenMapping),
   };
   const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+  // The reference policy refuses larger manifests, so an import must never stage one.
+  if (manifestBytes.byteLength > FIGMA_MANIFEST_MAX_BYTES) {
+    throw new AcquisitionLimitError("publication_bytes", FIGMA_MANIFEST_MAX_BYTES, manifestBytes.byteLength);
+  }
+  const nodePaths = new Set(nodeRecords.map((record) => record.node_path));
+  if (nodePaths.size !== nodeRecords.length) throw new FigmaImportError("invalid_figma_export");
   const uniqueAssetPaths = new Set(
     nodeRecords.flatMap((record) =>
       record.asset_path === null ? [] : [record.asset_path]
@@ -210,5 +217,26 @@ export async function stageFigmaExport(input: {
     imported_asset_count: uniqueAssetPaths.size,
     unmatched_token_count: tokenMapping.unmatched.length,
     matched_token_count: tokenMapping.matches.length,
+  };
+}
+
+const TOKEN_MAPPING_ENTRIES = 512;
+const TOKEN_MAPPING_NODE_IDS = 16;
+
+/** Deterministic, bounded manifest view of the mapping; totals keep the omitted counts visible. */
+function boundTokenMapping(mapping: FigmaTokenMapping) {
+  const bound = <T extends { readonly node_ids: readonly string[] }>(entries: readonly T[]) =>
+    entries.slice(0, TOKEN_MAPPING_ENTRIES).map((entry) => ({
+      ...entry,
+      node_ids: entry.node_ids.slice(0, TOKEN_MAPPING_NODE_IDS),
+      node_count: entry.node_ids.length,
+    }));
+  return {
+    matches: bound(mapping.matches),
+    unmatched: bound(mapping.unmatched),
+    total_matches: mapping.matches.length,
+    total_unmatched: mapping.unmatched.length,
+    omitted_matches: Math.max(0, mapping.matches.length - TOKEN_MAPPING_ENTRIES),
+    omitted_unmatched: Math.max(0, mapping.unmatched.length - TOKEN_MAPPING_ENTRIES),
   };
 }

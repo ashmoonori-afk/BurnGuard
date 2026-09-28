@@ -10,7 +10,7 @@ import { throwIfAcquisitionAborted } from "./extraction-acquisition";
 import { resolveWithin } from "../security/path-boundary";
 
 const MAX_IMPORTS = 64;
-const MAX_MANIFEST_BYTES = 1_000_000;
+export const FIGMA_MANIFEST_MAX_BYTES = 1_000_000;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const MANIFEST_PATH =
   /^references\/figma\/([^/]+)\/manifest\.json$/u;
@@ -62,7 +62,7 @@ export async function loadFigmaReferencePolicy(
   const promptEntries: FigmaReferencePromptEntry[] = [];
   for (const manifestEntry of manifestEntries) {
     throwIfAcquisitionAborted(signal);
-    if (manifestEntry.size > MAX_MANIFEST_BYTES) fail();
+    if (manifestEntry.size > FIGMA_MANIFEST_MAX_BYTES) fail();
     const match = MANIFEST_PATH.exec(manifestEntry.path);
     const importId = match?.[1];
     if (importId === undefined) fail();

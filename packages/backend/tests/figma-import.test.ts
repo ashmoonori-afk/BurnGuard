@@ -335,3 +335,88 @@ describe("Figma export staging", () => {
     });
   });
 });
+
+describe("Figma import manifest bounds", () => {
+  test("Given node ids whose readable file names collide When staged Then each node gets its own file", async () => {
+    // Given
+    const stageDir = await mkdtemp(path.join(tmpdir(), "bg-figma-collide-"));
+    roots.push(stageDir);
+    const document = parseFigmaImportDocument({
+      name: "Collisions",
+      version: "1",
+      lastModified: "2026-09-27T10:15:00Z",
+      document: {
+        id: "0:0", name: "Document", type: "DOCUMENT",
+        children: [{
+          id: "1:0", name: "Page", type: "CANVAS",
+          children: [
+            { id: "a:b-c", name: "First", type: "FRAME" },
+            { id: "a-b:c", name: "Second", type: "FRAME" },
+          ],
+        }],
+      },
+    });
+
+    // When
+    const result = await stageFigmaExport({
+      stage_dir: stageDir,
+      source_file_name: "collisions.json",
+      document,
+      node_ids: ["a:b-c", "a-b:c"],
+      assets: [],
+      pinned_tokens_css: "",
+      imported_at: "2026-09-27T12:00:00.000Z",
+      signal: new AbortController().signal,
+    });
+    const manifest = JSON.parse(await readFile(path.join(stageDir, result.manifest_path), "utf8"));
+
+    // Then
+    const nodePaths = manifest.nodes.map((node: { readonly node_path: string }) => node.node_path);
+    expect(new Set(nodePaths).size).toBe(2);
+    for (const nodePath of nodePaths) {
+      expect(JSON.parse(await readFile(path.join(stageDir, nodePath), "utf8")).id).toBeString();
+    }
+  });
+
+  test("Given a valid export with a very large token mapping When staged Then the manifest stays within the reference policy limit", async () => {
+    // Given
+    const stageDir = await mkdtemp(path.join(tmpdir(), "bg-figma-large-mapping-"));
+    roots.push(stageDir);
+    const children = Array.from({ length: 900 }, (_, index) => ({
+      id: `2:${index + 1}`,
+      name: `Swatch ${index + 1}`,
+      type: "FRAME",
+      fills: [{ type: "SOLID", color: { r: (index % 30) / 30, g: Math.floor(index / 30) / 30, b: 0.5 } }],
+    }));
+    const document = parseFigmaImportDocument({
+      name: "Palette",
+      version: "1",
+      lastModified: "2026-09-27T10:15:00Z",
+      document: {
+        id: "0:0", name: "Document", type: "DOCUMENT",
+        children: [{ id: "1:0", name: "Page", type: "CANVAS", children: [{ id: "1:1", name: "Board", type: "FRAME", children }] }],
+      },
+    });
+
+    // When
+    const result = await stageFigmaExport({
+      stage_dir: stageDir,
+      source_file_name: "palette.json",
+      document,
+      node_ids: ["1:1"],
+      assets: [],
+      pinned_tokens_css: "",
+      imported_at: "2026-09-27T12:00:00.000Z",
+      signal: new AbortController().signal,
+    });
+    const raw = await readFile(path.join(stageDir, result.manifest_path));
+    const manifest = JSON.parse(raw.toString("utf8"));
+
+    // Then
+    expect(raw.byteLength).toBeLessThanOrEqual(1_000_000);
+    expect(result.unmatched_token_count).toBeGreaterThan(512);
+    expect(manifest.token_mapping.unmatched).toHaveLength(512);
+    expect(manifest.token_mapping.total_unmatched).toBe(result.unmatched_token_count);
+    expect(manifest.token_mapping.omitted_unmatched).toBe(result.unmatched_token_count - 512);
+  });
+});

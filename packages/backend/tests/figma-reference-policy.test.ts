@@ -64,7 +64,7 @@ describe("Figma immutable reference policy", () => {
 
     expect(policy.files.map((file) => file.path)).toEqual([
       expect.stringMatching(/^references\/figma\/.+\/manifest\.json$/u),
-      expect.stringMatching(/^references\/figma\/.+\/nodes\/1-2\.json$/u),
+      expect.stringMatching(/^references\/figma\/.+\/nodes\/1-2-[a-f0-9]{16}\.json$/u),
     ]);
     expect([...allowed.values()].every((paths) => paths.size === 1)).toBe(true);
   });
