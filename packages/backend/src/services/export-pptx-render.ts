@@ -9,6 +9,7 @@ export async function renderDeckToPptx(input: {
   readonly outputPath: string;
   readonly size?: PptxSize;
   readonly signal?: AbortSignal;
+  readonly onParityPage?: (png: Uint8Array) => Promise<void> | void;
 }): Promise<void> {
   const signal = input.signal ?? new AbortController().signal;
   const { openRenderSession, RenderSessionError } = await import("./export-render-session");
@@ -32,6 +33,7 @@ export async function renderDeckToPptx(input: {
       });
       if (content.width * content.height * 4 > 16_000_000) throw new PptxExportError("render_failed", "Slide exceeds capture pixel budget");
       const png = await slide.screenshot({ type: "png", animations: "disabled", timeout: 30_000 });
+      await input.onParityPage?.(new Uint8Array(png));
       captured.push({ ...content, png });
     }
     await writePptx(captured, input.outputPath, input.size ?? "16x9");

@@ -133,6 +133,7 @@ export interface ExportJob {
   readonly options: ExportOptions;
   readonly latest_attempt: import("./export-attempt").ExportAttempt | null;
   readonly handoff_continuation: import("./handoff").HandoffContinuation | null;
+  readonly parity: import("./export-parity").ExportParitySummary | null;
   readonly created_at: number;
   readonly completed_at: number | null;
 }

@@ -33,6 +33,7 @@ export type PngZipContext = {
   readonly browserSession: RenderSession;
   readonly receiptWriter: (validation: ExportValidation) => Promise<void>;
   readonly signal: AbortSignal;
+  readonly onParityPage?: (image: Uint8Array) => Promise<void> | void;
 };
 
 export type PngZipRun = {
@@ -46,6 +47,7 @@ export type PngZipRun = {
   readonly signal: AbortSignal;
   readonly budgets?: Partial<PngZipBudgets>;
   readonly now?: () => number;
+  readonly onParityPage?: (image: Uint8Array) => Promise<void> | void;
 };
 
 export type PngZipResult = { readonly validation: PngZipValidation; readonly findings: readonly SliceFinding[] };
@@ -70,6 +72,7 @@ export async function renderPngZip(context: PngZipContext): Promise<ExportValida
     options: context.options,
     receiptWriter: context.receiptWriter,
     signal: context.signal,
+    ...(context.onParityPage === undefined ? {} : { onParityPage: context.onParityPage }),
   });
   return result.validation;
 }
@@ -171,6 +174,7 @@ type OutputRecord = { readonly sequence: number; readonly total: number; readonl
 async function addOutput(batch: Batch, bytes: Uint8Array, record: OutputRecord): Promise<void> {
   const relPath = `${String(record.sequence).padStart(Math.max(2, String(record.total).length), "0")}.${record.format === "jpeg" ? "jpg" : "png"}`;
   await writeFile(path.join(batch.scratch, relPath), bytes);
+  await batch.run.onParityPage?.(bytes);
   batch.outputs.push({
     rel_path: relPath,
     width: record.width,

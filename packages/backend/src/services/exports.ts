@@ -33,10 +33,13 @@ import { canonicalJson, parseExportReceipt, receiptDigest, sha256, type ExportRe
 import type { ExportValidation } from "./export-receipt-validation";
 import { openRenderSession } from "./export-render-session";
 import { prepareSlideDeckExport } from "./export-stage";
+import { EXPORT_PARITY_DIRECTORY, EXPORT_PARITY_FILE, createParitySourceCollector, writeExportParityArtifacts, writeUnavailableExportParity } from "./export-parity-artifacts";
+import type { ParityPixelPage } from "./export-parity";
 import { parseStoredProjectOptions } from "./project-options";
 import { zipDirectory } from "./zip";
 
 const RENDERER_CONTRACT = "burnguard-export/1|playwright-core@1.59.1|pdfjs-dist@5.4.149";
+const EXPORT_PARITY_TIMEOUT_MS = 120_000;
 const active = new Map<string, AbortController>();
 export type ExportPhase = "after_snapshot" | "after_partial_render" | "after_render" | "after_validation" | "after_receipt" | "after_publish_before_db";
 export type ExportHooks = { readonly phase?: (attemptId: string, phase: ExportPhase, signal: AbortSignal) => Promise<void> | void };
@@ -135,10 +138,39 @@ async function runExport(input: RunInput): Promise<void> {
     const outputBytes = new Uint8Array(await readFile(stagedOutput)); const outputDigest = sha256(outputBytes); const outputInfo = await stat(stagedOutput);
     await input.hooks.phase?.(input.attemptId, "after_validation", input.controller.signal);
     input.controller.signal.throwIfAborted();
-    const receipt: ExportReceipt = { schema_version: 1, job_id: input.jobId, attempt_id: input.attemptId, parent_attempt_id: (await getExportJob(input.jobId))?.latest_attempt?.parent_attempt_id ?? null, format: context.format, project: { id: context.identity.projectId, revision: context.identity.revision, digest: context.identity.digest }, options: context.options, output_file: outputFile, output_size: outputInfo.size, digests: { input_closure: inputDigest, design_system: context.identity.designSystemDigest, options: sha256(canonicalJson(context.options)), renderer: context.rendererDigest, capture: context.captureDigest, output: outputDigest }, validation };
+    const paritySignal = AbortSignal.any([
+      input.controller.signal,
+      AbortSignal.timeout(EXPORT_PARITY_TIMEOUT_MS),
+    ]);
+    try {
+      await writeExportParityArtifacts({
+        stageRoot,
+        outputBytes,
+        format: context.format,
+        options: context.options,
+        validation,
+        sourcePages: rendered.sourcePages,
+        signal: paritySignal,
+      });
+    } catch (error) {
+      input.controller.signal.throwIfAborted();
+      console.warn(
+        "[export] parity evidence unavailable",
+        error instanceof Error ? error.name : "unknown",
+      );
+      await writeUnavailableExportParity({
+        stageRoot,
+        format: context.format,
+        validation,
+        sourcePageCount: rendered.sourcePages.length,
+      });
+    }
+    const parityDigest = sha256(new Uint8Array(await readFile(path.join(stageRoot, EXPORT_PARITY_DIRECTORY, EXPORT_PARITY_FILE))));
+    const receipt: ExportReceipt = { schema_version: 1, job_id: input.jobId, attempt_id: input.attemptId, parent_attempt_id: (await getExportJob(input.jobId))?.latest_attempt?.parent_attempt_id ?? null, format: context.format, project: { id: context.identity.projectId, revision: context.identity.revision, digest: context.identity.digest }, options: context.options, output_file: outputFile, output_size: outputInfo.size, digests: { input_closure: inputDigest, design_system: context.identity.designSystemDigest, options: sha256(canonicalJson(context.options)), renderer: context.rendererDigest, capture: context.captureDigest, output: outputDigest, parity: parityDigest }, validation };
     const receiptJson = canonicalJson(receipt); await writeFile(path.join(stageRoot, "receipt.json"), receiptJson);
     const rereadReceipt = parseExportReceipt(JSON.parse(await readFile(path.join(stageRoot, "receipt.json"), "utf8")));
-    if (sha256(new Uint8Array(await readFile(stagedOutput))) !== outputDigest || receiptDigest(rereadReceipt) !== sha256(receiptJson)) throw new TypeError("Staged receipt verification failed");
+    if (sha256(new Uint8Array(await readFile(stagedOutput))) !== outputDigest || receiptDigest(rereadReceipt) !== sha256(receiptJson) ||
+      sha256(new Uint8Array(await readFile(path.join(stageRoot, EXPORT_PARITY_DIRECTORY, EXPORT_PARITY_FILE)))) !== parityDigest) throw new TypeError("Staged receipt verification failed");
     await input.hooks.phase?.(input.attemptId, "after_receipt", input.controller.signal);
     input.controller.signal.throwIfAborted();
     advance(input, "validating", "publishing"); for (const scratch of ["render", "handoff", "platform", "frames"] as const) await rm(path.join(stageRoot, scratch), { recursive: true, force: true }); await mkdir(path.dirname(publishedRoot), { recursive: true }); await rm(publishedRoot, { recursive: true, force: true });
@@ -159,26 +191,43 @@ async function runExport(input: RunInput): Promise<void> {
   }
 }
 
-type RenderedOutput = { readonly validation: ExportValidation; readonly findings: readonly SliceFinding[] };
+type RenderedOutput = { readonly validation: ExportValidation; readonly findings: readonly SliceFinding[]; readonly sourcePages: readonly ParityPixelPage[] };
 
 async function renderOutput(input: RunInput, renderRoot: string, outputPath: string, manifest: CanonicalTreeManifest, inputDigest: string): Promise<RenderedOutput> {
   const { context } = input;
-  const only = (validation: ExportValidation): RenderedOutput => ({ validation, findings: [] });
+  const only = (validation: ExportValidation, sourcePages: readonly ParityPixelPage[] = []): RenderedOutput => ({ validation, findings: [], sourcePages });
   switch (context.format) {
     case "html_zip": {
       const archiveManifest = buildHtmlArchiveManifest({ schema_version: 1, entrypoint: context.project.entrypoint, project_revision: context.identity.revision, project_digest: context.identity.digest, input_closure_digest: inputDigest }, manifest.files.map((file) => ({ path: file.path, size: file.size, sha256: file.sha256 })));
       await writeFile(path.join(renderRoot, HTML_EXPORT_MANIFEST), canonicalJson(archiveManifest)); await zipDirectory(renderRoot, outputPath); await validateHtmlArchive(new Uint8Array(await readFile(outputPath)), archiveManifest); return only({ entries: archiveManifest.entries.length });
     }
-    case "png": return only(await renderToPng({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, width: context.options.png_width ?? 1280, height: context.options.png_height ?? 720, dpr: context.options.png_dpr ?? 1, deck: context.project.type === "slide_deck", signal: input.controller.signal }));
+    case "png": {
+      const collector = createParitySourceCollector(input.controller.signal);
+      const validation = await renderToPng({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, width: context.options.png_width ?? 1280, height: context.options.png_height ?? 720, dpr: context.options.png_dpr ?? 1, deck: context.project.type === "slide_deck", signal: input.controller.signal, onParityPage: collector.add });
+      return only(validation, collector.pages());
+    }
     case "svg": return only(await renderLogoSvg({ stagedDir: renderRoot, entrypointDir: path.dirname(context.project.entrypoint), outputPath }));
-    case "pdf": return only(await renderDeckToPdf({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, paper: context.options.pdf_paper, selector: context.project.type === "graphic" || context.project.type === "logo" ? "[data-graphic-artboard]" : "[data-slide]", title: `${context.project.name} r${context.identity.revision}`, signal: input.controller.signal }));
-    case "pptx": { await renderDeckToPptx({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, size: context.options.pptx_size, signal: input.controller.signal }); const slides = parse(await readFile(path.join(renderRoot, context.project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length; return only(await validatePptxPackage(new Uint8Array(await readFile(outputPath)), slides)); }
+    case "pdf": {
+      const collector = createParitySourceCollector(input.controller.signal);
+      const validation = await renderDeckToPdf({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, paper: context.options.pdf_paper, selector: context.project.type === "graphic" || context.project.type === "logo" ? "[data-graphic-artboard]" : "[data-slide]", title: `${context.project.name} r${context.identity.revision}`, signal: input.controller.signal, onParityPage: collector.add, onParityUnavailable: collector.unavailable });
+      return only(validation, collector.pages());
+    }
+    case "pptx": {
+      const collector = createParitySourceCollector(input.controller.signal);
+      await renderDeckToPptx({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, outputPath, size: context.options.pptx_size, signal: input.controller.signal, onParityPage: collector.add });
+      const slides = parse(await readFile(path.join(renderRoot, context.project.entrypoint), "utf8")).querySelectorAll("[data-slide]").length;
+      return only(await validatePptxPackage(new Uint8Array(await readFile(outputPath)), slides), collector.pages());
+    }
     case "handoff": { const bundle = path.join(path.dirname(renderRoot), "handoff"); await renderHandoffBundle({ stagedProjectDir: renderRoot, stagingDir: bundle, designSystemPin: context.designSystemPin, entrypoint: context.project.entrypoint, tokensSrcPath: null, tokensFileName: null, designSystemName: context.project.design_system_name, project: { id: context.project.id, name: context.project.name, type: context.project.type, entrypoint: context.project.entrypoint }, isDeck: context.project.type === "slide_deck", signal: input.controller.signal }); await zipDirectory(bundle, outputPath); return only(await validateHandoffPackage(new Uint8Array(await readFile(outputPath)), context.project.entrypoint, context.designSystemPin)); }
     case "cafe24_package":
     case "imweb_package": return only(await renderPlatformPackage({ stagedDir: renderRoot, outputPath, format: context.format, project: context.project, options: context.options, onFindings: (findings) => { recordPlatformFindings(input.attemptId, findings); }, signal: input.controller.signal }));
     case "png_zip": {
       const browserSession = await openRenderSession({ stagedDir: renderRoot, entrypoint: context.project.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: context.project.type === "slide_deck", signal: input.controller.signal });
-      try { return await renderPngZipWithPage({ page: capturePageFromSession(browserSession.page), stagedDir: renderRoot, outputPath, deck: context.project.type === "slide_deck", graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, receiptWriter: async () => undefined, signal: input.controller.signal }); }
+      try {
+        const collector = createParitySourceCollector(input.controller.signal);
+        const rendered = await renderPngZipWithPage({ page: capturePageFromSession(browserSession.page), stagedDir: renderRoot, outputPath, deck: context.project.type === "slide_deck", graphic_set: parseStoredProjectOptions(context.project.options_json).graphic_set, options: context.options, receiptWriter: async () => undefined, signal: input.controller.signal, onParityPage: collector.add });
+        return { ...rendered, sourcePages: collector.pages() };
+      }
       finally { await browserSession.close(); }
     }
   }

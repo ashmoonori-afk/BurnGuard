@@ -48,7 +48,7 @@ async function toJob(row: typeof exportsTable.$inferSelect): Promise<ExportJob> 
   return {
     id: row.id, project_id: row.projectId, format: row.format, status: row.status,
     output_path: row.outputPath, error_message: row.errorMessage, size_bytes: row.sizeBytes,
-    options: parseExportOptions(row.format, row.optionsJson), latest_attempt: attempt === undefined ? null : attemptDto(attempt),
+    options: parseExportOptions(row.format, row.optionsJson), latest_attempt: attempt === undefined ? null : attemptDto(attempt), parity: null,
     handoff_continuation: row.format === "handoff" && row.status === "succeeded" ? HANDOFF_CONTINUATION : null,
     created_at: row.createdAt, completed_at: row.completedAt,
   };

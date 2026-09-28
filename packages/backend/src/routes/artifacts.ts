@@ -18,6 +18,7 @@ import { isCanonicalTreeRootMissing } from "../services/canonical-tree-manifest"
 import { parseStoredProjectOptions } from "../services/project-options";
 import type { ExportQaPhase } from "../services/export-qa-barrier";
 import type { ExportServiceError } from "../services/exports";
+import { attachExportParity } from "../services/export-parity-storage";
 
 function ok<T>(data: T): ApiSuccess<T> {
   return { data };
@@ -137,7 +138,7 @@ artifactRoutes.get("/api/projects/:id/exports", async (c) => {
     return c.json(fail("project_not_found", "Project not found", { projectId }), 404);
   }
 
-  const jobs = await listProjectExports(projectId);
+  const jobs = await Promise.all((await listProjectExports(projectId)).map(attachExportParity));
   return c.json(ok(jobs satisfies ExportJob[]));
 });
 
@@ -257,5 +258,5 @@ artifactRoutes.get("/api/exports/:id", async (c) => {
     return c.json(fail("export_not_found", "Export job not found", { id }), 404);
   }
 
-  return c.json(ok(job satisfies ExportJob));
+  return c.json(ok((await attachExportParity(job)) satisfies ExportJob));
 });

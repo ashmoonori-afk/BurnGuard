@@ -13,7 +13,7 @@ export type ExportReceipt = {
   readonly options: ExportOptions;
   readonly output_file: string;
   readonly output_size: number;
-  readonly digests: { readonly input_closure: string; readonly design_system: string | null; readonly options: string; readonly renderer: string; readonly capture: string; readonly output: string };
+  readonly digests: { readonly input_closure: string; readonly design_system: string | null; readonly options: string; readonly renderer: string; readonly capture: string; readonly output: string; readonly parity?: string };
   readonly validation: ExportValidation;
 };
 export class ExportReceiptError extends Error {
@@ -28,14 +28,14 @@ export function receiptDigest(receipt: ExportReceipt): string { return sha256(ca
 export function parseExportReceipt(input: unknown): ExportReceipt {
   if (!isRecord(input) || !exact(input, ["schema_version", "job_id", "attempt_id", "parent_attempt_id", "format", "project", "options", "output_file", "output_size", "digests", "validation"]) || input["schema_version"] !== 1) fail("invalid_receipt");
   const project = input["project"]; const digests = input["digests"];
-  if (!isRecord(project) || !exact(project, ["id", "revision", "digest"]) || !isRecord(digests) || !exact(digests, ["input_closure", "design_system", "options", "renderer", "capture", "output"]) || !isRecord(input["options"])) fail("invalid_receipt");
+  if (!isRecord(project) || !exact(project, ["id", "revision", "digest"]) || !isRecord(digests) || !(exact(digests, ["input_closure", "design_system", "options", "renderer", "capture", "output"]) || exact(digests, ["input_closure", "design_system", "options", "renderer", "capture", "output", "parity"])) || !isRecord(input["options"])) fail("invalid_receipt");
   const format = input["format"];
   if (format !== "html_zip" && format !== "pdf" && format !== "png" && format !== "pptx" && format !== "handoff" && format !== "cafe24_package" && format !== "imweb_package" && format !== "png_zip" && format !== "svg") fail("invalid_receipt");
   const parent = input["parent_attempt_id"]; const design = digests["design_system"];
-  if (!string(input["job_id"]) || !string(input["attempt_id"]) || (parent !== null && !string(parent)) || !string(project["id"]) || !integer(project["revision"]) || !digest(project["digest"]) || input["output_file"] !== `artifact.${formatExtension(format)}` || !positiveInteger(input["output_size"]) || !digest(digests["input_closure"]) || (design !== null && !digest(design)) || !digest(digests["options"]) || !digest(digests["renderer"]) || !digest(digests["capture"]) || !digest(digests["output"])) fail("invalid_receipt");
+  if (!string(input["job_id"]) || !string(input["attempt_id"]) || (parent !== null && !string(parent)) || !string(project["id"]) || !integer(project["revision"]) || !digest(project["digest"]) || input["output_file"] !== `artifact.${formatExtension(format)}` || !positiveInteger(input["output_size"]) || !digest(digests["input_closure"]) || (design !== null && !digest(design)) || !digest(digests["options"]) || !digest(digests["renderer"]) || !digest(digests["capture"]) || !digest(digests["output"]) || ("parity" in digests && !digest(digests["parity"]))) fail("invalid_receipt");
   try {
     const options = parseExportOptions(format, input["options"]); if (canonicalJson(options) !== canonicalJson(input["options"]) || digests["options"] !== sha256(canonicalJson(options))) fail("invalid_receipt"); const validation = parseExportValidation(format, options, input["validation"]);
-    return { schema_version: 1, job_id: input["job_id"], attempt_id: input["attempt_id"], parent_attempt_id: parent, format, project: { id: project["id"], revision: project["revision"], digest: project["digest"] }, options, output_file: input["output_file"], output_size: input["output_size"], digests: { input_closure: digests["input_closure"], design_system: design, options: digests["options"], renderer: digests["renderer"], capture: digests["capture"], output: digests["output"] }, validation };
+    return { schema_version: 1, job_id: input["job_id"], attempt_id: input["attempt_id"], parent_attempt_id: parent, format, project: { id: project["id"], revision: project["revision"], digest: project["digest"] }, options, output_file: input["output_file"], output_size: input["output_size"], digests: { input_closure: digests["input_closure"], design_system: design, options: digests["options"], renderer: digests["renderer"], capture: digests["capture"], output: digests["output"], ...("parity" in digests && typeof digests["parity"] === "string" ? { parity: digests["parity"] } : {}) }, validation };
   } catch (error) { if (error instanceof ExportReceiptError) throw error; fail("invalid_receipt"); }
 }
 
