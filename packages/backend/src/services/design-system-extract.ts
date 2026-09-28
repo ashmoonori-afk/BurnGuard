@@ -720,6 +720,16 @@ function colorWithAlpha(literal: string): string | null {
   return `${hex}${Math.round(Math.max(0, alpha) * 255).toString(16).padStart(2, "0")}`;
 }
 
+/**
+ * A page's colour evidence led by its own ground and text colour as explicit roles, so card and section
+ * colours further down the list are never mistaken for the page background.
+ */
+function pageColorRoles(declarations: readonly CssDeclarationEvidence[]): string[] {
+  const { ground, ink } = pageGroundAndInk(declarations);
+  const roles = [...(ground ? [`page-background: ${ground}`] : []), ...(ink ? [`page-color: ${ink}`] : [])];
+  return [...roles, ...pageColorEvidence(declarations)];
+}
+
 /** Property-aware colour literals of a page ("background-color: #ff0000"), normalised to hex where possible. */
 function pageColorEvidence(declarations: readonly CssDeclarationEvidence[]): string[] {
   const properties = new Set(["color", "background", "background-color", "border-color", "outline-color", "fill", "stroke"]);
@@ -1088,7 +1098,7 @@ async function ingestWebsiteSource(
           pageType: classifyPageType(path, pageHtml),
           layoutTokens: measureSourceLayout(declarations, signals.spacingValues).tokens,
           patterns: observedPatterns(evidence),
-          colors: pageColorEvidence(declarations),
+          colors: pageColorRoles(declarations),
           fonts: fontFamiliesFromDeclarations(declarations).slice(0, 3),
           customProperties,
           evidence: pageEvidence(evidence),

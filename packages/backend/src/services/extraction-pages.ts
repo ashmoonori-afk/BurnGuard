@@ -241,7 +241,10 @@ export function buildPageCoverage(input: {
   // Colours shared by every page (usually a common stylesheet) go last so page-specific overrides survive truncation.
   const shared = unique.length > 1 ? new Set(unique[0]!.colors.filter(color => unique.every(page => page.colors.includes(color)))) : new Set<string>();
   const distinguishing = (page: ExtractedPage) => page.colors.filter(color => !shared.has(color));
-  const extracted: ExtractedPage[] = unique.map(page => ({ ...page, colors: [...distinguishing(page), ...page.colors.filter(color => shared.has(color))].slice(0, 12) }));
+  // Page-level role entries ("page-background: ...", "page-color: ...") always lead, so a consumer reads the
+  // page ground before any card or section colour; the rest keeps distinguishing-first order.
+  const isRole = (color: string) => color.startsWith("page-");
+  const extracted: ExtractedPage[] = unique.map(page => ({ ...page, colors: [...page.colors.filter(isRole), ...distinguishing(page).filter(color => !isRole(color)), ...page.colors.filter(color => shared.has(color) && !isRole(color))].slice(0, 12) }));
   const taken = new Set(extracted.map(page => page.path));
   const pages: DesignSystemPageRecord[] = [
     ...extracted.map((page): DesignSystemPageRecord => ({ path: page.path, page_type: page.pageType, source: page.source, status: "extracted", skip_reason: null, layout_tokens: { ...page.layoutTokens }, patterns: [...page.patterns], colors: [...page.colors].slice(0, 12), fonts: [...page.fonts].slice(0, 6), custom_properties: { ...page.customProperties }, evidence: page.evidence })),
