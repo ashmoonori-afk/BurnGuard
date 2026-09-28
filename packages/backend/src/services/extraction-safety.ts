@@ -27,9 +27,12 @@ const URL_ATTRIBUTES = ["href", "src", "action", "formaction", "poster", "xlink:
 const HIDDEN_MARKUP_CONTAINERS = ["noscript", "template"] as const;
 export const MAX_HIDDEN_MARKUP_DEPTH = 8;
 const DANGEROUS_SCHEME = /^(?:javascript|data:text\/html|vbscript):/i;
-// url() that does not point at an in-document fragment (url(#id), optionally quoted, including the
-// entity-encoded quotes of serialized attributes) can reach the network.
-const NETWORK_STYLE = /(?:@import\b|url\s*\(\s*(?!(?:['"]|&quot;|&apos;|&#0*3[49];)?\s*#))/i;
+const NETWORK_STYLE = /(?:@import\b|url\s*\()/i;
+// The only url() kept anywhere: an SVG presentation attribute whose whole value is a bare in-document
+// fragment reference. CSS contexts (<style>, style attributes) stay strict; see extraction-svg-fragment-urls tests.
+const FRAGMENT_PRESENTATION_ATTRIBUTES = new Set(["fill", "stroke", "filter", "mask", "clip-path", "marker-start", "marker-mid", "marker-end"]);
+const FRAGMENT_REFERENCE = /^url\((['"]?)#([A-Za-z_][A-Za-z0-9_.:-]{0,127})\1\)$/;
+const CANONICAL_FRAGMENT_ATTRIBUTE = /\s(?:fill|stroke|filter|mask|clip-path|marker-start|marker-mid|marker-end)="url\(#[A-Za-z_][A-Za-z0-9_.:-]{0,127}\)"/gi;
 const TEXT_NODE = 3;
 
 /** Every URL an attribute value can make the consumer fetch (srcset/imagesrcset candidates, ping list). */
@@ -108,9 +111,13 @@ export function removeActiveSourceMarkup(content: string): string {
     }
     const style = node.getAttribute("style");
     if (style !== undefined && NETWORK_STYLE.test(style)) node.removeAttribute("style");
-    // SVG presentation attributes (fill, stroke, filter, mask, ...) and any other attribute may also carry url().
+    // Any other attribute may also carry url(): keep only exact fragment references in SVG presentation
+    // attributes, rewritten to one canonical spelling the inert gate recognises; remove the rest.
     for (const [attributeName, value] of Object.entries(node.attributes)) {
-      if (NETWORK_STYLE.test(value)) node.removeAttribute(attributeName);
+      if (!NETWORK_STYLE.test(value)) continue;
+      const fragment = FRAGMENT_PRESENTATION_ATTRIBUTES.has(attributeName.toLowerCase()) ? FRAGMENT_REFERENCE.exec(value) : null;
+      if (fragment) node.setAttribute(attributeName, `url(#${fragment[2]})`);
+      else node.removeAttribute(attributeName);
     }
     for (const attributeName of URL_ATTRIBUTES) node.removeAttribute(attributeName);
     for (const child of node.childNodes) {
@@ -129,7 +136,7 @@ function assertSourceMarkup(content: string, kind: "html" | "svg", relativeRefer
     ? normalized.includes("<html") && normalized.includes("<body") && normalized.includes("</body>") && normalized.includes("</html>")
     : normalized.includes("<svg") && normalized.includes("</svg>");
   if (!structurallyComplete) throw new ExtractionSafetyError("unsafe_source_content", `Malformed ${kind} source is not accepted`);
-  if (NETWORK_STYLE.test(content)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
+  if (NETWORK_STYLE.test(content.replace(CANONICAL_FRAGMENT_ATTRIBUTE, ""))) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
   assertInertTree(parse(content, { lowerCaseTagName: true }), kind, relativeReferencesAllowed);
 }
 
