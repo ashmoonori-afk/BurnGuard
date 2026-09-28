@@ -297,6 +297,25 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
     }
   });
 
+  test("Given body and code font families, then the sans and display stacks never lead with a monospace family and the mono role uses the code font", async () => {
+    const cases = [
+      { name: "framer", css: ':root{--framer-font-family:"Inter", sans-serif;--framer-code-font-family:"Fragment Mono", monospace} body{font-family:"Inter", sans-serif} code{font-family:"Fragment Mono", monospace}', sans: "Inter", mono: '"Fragment Mono"' },
+      { name: "plain", css: 'code{font-family:"Aa Mono", monospace} body{font-family:"Zeta Sans", sans-serif}', sans: '"Zeta Sans"', mono: '"Aa Mono"' },
+      { name: "tailwind-var", css: ':root{--font-mono:"Geist Mono"} code{font-family:var(--font-mono)} body{font-family:"Zeta Sans", sans-serif}', sans: '"Zeta Sans"', mono: '"IBM Plex Mono"' },
+      { name: "tailwind-reset", css: 'code,pre{font-family:var(--default-mono-font-family, ui-monospace, monospace)} body{font-family:"Zeta Sans", sans-serif}', sans: '"Zeta Sans"', mono: '"IBM Plex Mono"' },
+      { name: "generic-mono", css: 'code{font-family:ui-monospace, SFMono-Regular, monospace} body{font-family:"Zeta Sans", sans-serif}', sans: '"Zeta Sans"', mono: "ui-monospace" },
+    ];
+    for (const item of cases) {
+      await withSite({ "/source": "<html><head><style>" + item.css + "</style></head><body><h1>A</h1></body></html>" }, async (origin, id) => {
+        await extractDesignSystemFromSource({ system_id: id, name: item.name, source_type: "website", source_url: origin + "/source" });
+        const tokens = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
+        const fonts = await readFile(path.join(systemsDir, id, "fonts", "fonts.css"), "utf8");
+        expect({ name: item.name, sans: /--font-sans: ([^,]+),/.exec(tokens)?.[1], mono: /--font-mono: ([^,]+),/.exec(tokens)?.[1], sansFallback: /--font-sans-fallback: ([^,]+),/.exec(fonts)?.[1], displayFallback: /--font-display-fallback: ([^,]+),/.exec(fonts)?.[1] })
+          .toEqual({ name: item.name, sans: item.sans, mono: item.mono, sansFallback: item.sans, displayFallback: item.sans });
+      });
+    }
+  });
+
   test("Given a dark page ground without a page text colour, then canonical ink and neutrals switch to light values", async () => {
     await withSite({ "/source": '<html><head><style>:root body { background: #0b0b0b }</style></head><body><h1>Home</h1></body></html>' }, async (origin, id) => {
       await extractDesignSystemFromSource({ system_id: id, name: "Dark", source_type: "website", source_url: origin + "/source" });
