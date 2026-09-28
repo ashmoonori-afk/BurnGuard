@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, RefreshCw, UserRound, Sparkles, Monitor, FileOutput, Link2 } from "lucide-react";
+import { Activity, Download, RefreshCw, UserRound, Sparkles, Monitor, FileOutput, Link2 } from "lucide-react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type {
   PlaywrightInstallStatus,
@@ -39,6 +39,7 @@ import { INTERRUPT_GRACE_MS } from "@/lib/session-event-state";
 import { t, useT, type MessageKey } from "@/i18n/t";
 import { LOCALES, useLocaleStore, type Locale } from "@/i18n/locale";
 import ProviderConnections from "./ProviderConnections";
+import RuntimeDiagnosticsSection from "./RuntimeDiagnostics";
 
 const CHAT_CONTEXT_MODE_LABELS = { compact: "settings.compact", full: "settings.full" } as const;
 const THEME_LABELS = { light: "settings.light", dark: "settings.dark", auto: "settings.auto" } as const;
@@ -266,7 +267,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
 
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <nav aria-label={t("settings.sections")} className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-muted/30 p-3 md:w-44 md:flex-col md:border-b-0 md:border-r md:p-4">
-            {[{ id: "user", title: t("settings.user"), icon: UserRound }, { id: "generation", title: t("settings.generation"), icon: Sparkles }, { id: "appearance", title: t("settings.appearance"), icon: Monitor }, { id: "files", title: t("settings.files"), icon: FileOutput }, { id: "connections", title: t("settings.connections"), icon: Link2 }].map(({ id, title, icon: Icon }) => <button key={id} type="button" onClick={() => document.getElementById(`settings-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" })} className="flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Icon className="h-4 w-4" aria-hidden="true" />{title}</button>)}
+            {[{ id: "user", title: t("settings.user"), icon: UserRound }, { id: "generation", title: t("settings.generation"), icon: Sparkles }, { id: "runtime", title: t("settings.runtime"), icon: Activity }, { id: "appearance", title: t("settings.appearance"), icon: Monitor }, { id: "files", title: t("settings.files"), icon: FileOutput }, { id: "connections", title: t("settings.connections"), icon: Link2 }].map(({ id, title, icon: Icon }) => <button key={id} type="button" onClick={() => document.getElementById(`settings-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" })} className="flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Icon className="h-4 w-4" aria-hidden="true" />{title}</button>)}
           </nav>
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain bg-muted/15 p-4 sm:p-6">
         {!settings && settingsQuery.isError ? (
@@ -354,6 +355,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
             </div>
 
             </section>
+            <RuntimeDiagnosticsSection />
             <section id="settings-appearance" aria-labelledby="settings-appearance-title" className="scroll-mt-6 space-y-5 rounded-2xl border border-border bg-card p-5">
               <div className="space-y-1"><h2 id="settings-appearance-title" className="text-base font-semibold">{t("settings.appearance")}</h2><p className="text-sm leading-6 text-muted-foreground">{t("settings.appearanceHint")}</p></div>
             <fieldset className="space-y-1.5">

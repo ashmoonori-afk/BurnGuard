@@ -45,3 +45,4 @@ export * from "./chart";
 export * from "./chart-render";
 export * from "./artifact-history";
 export * from "./image-prompt-recipes";
+export * from "./runtime-diagnostics";

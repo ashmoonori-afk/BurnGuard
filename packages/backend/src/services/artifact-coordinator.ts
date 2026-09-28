@@ -120,23 +120,29 @@ export class ArtifactCoordinator {
   }
 
   async run(input: RunOperation): Promise<CommittedArtifactOperation> {
-    await pruneExpiredArtifactOperations(this.db, { projectId: input.projectId, preserveOperationId: input.parentOperationId });
-    const base = await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
     const id = input.operationId ?? ulid();
     const ownedRoot = this.operationPath(input.projectDir, id);
     const snapshotPath = path.join(ownedRoot, "snapshot");
     const stagePath = path.join(ownedRoot, "stage");
-    this.faults.beforeSnapshot?.();
+    let base: CanonicalTreeManifest;
+    // Admission (base validation through registration) is serialized with external observation and
+    // adoption, so an operation is either registered before they look or validates against their result.
+    const releaseAdmission = await acquireArtifactProjectLock(this.db, input.projectId);
     try {
-      await materializeManagedTree(input.projectDir, snapshotPath);
-      await validateCanonicalTree(snapshotPath, base);
-      await materializeManagedTree(input.projectDir, stagePath);
-      await validateCanonicalTree(stagePath, base);
-      this.insertWorking(id, input, base, snapshotPath, stagePath);
-    } catch (error) {
-      await rm(ownedRoot, { recursive: true, force: true });
-      throw error;
-    }
+      await pruneExpiredArtifactOperations(this.db, { projectId: input.projectId, preserveOperationId: input.parentOperationId });
+      base = await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
+      this.faults.beforeSnapshot?.();
+      try {
+        await materializeManagedTree(input.projectDir, snapshotPath);
+        await validateCanonicalTree(snapshotPath, base);
+        await materializeManagedTree(input.projectDir, stagePath);
+        await validateCanonicalTree(stagePath, base);
+        this.insertWorking(id, input, base, snapshotPath, stagePath);
+      } catch (error) {
+        await rm(ownedRoot, { recursive: true, force: true });
+        throw error;
+      }
+    } finally { releaseAdmission(); }
     input.onPrepared?.(stagePath);
     let publicationStarted = false;
     let releasePublication: (() => void) | null = null;
@@ -215,10 +221,23 @@ export class ArtifactCoordinator {
     finally { release(); }
   }
 
-  private async observeExternalUntilStable(projectId: string, projectDir: string): Promise<CommittedArtifactOperation | null> {
+  /**
+   * Adopt settled on-disk bytes as the next revision without ever restoring the baseline.
+   * `admit` runs under the project lock so callers can recheck their own preconditions there;
+   * any active artifact operation refuses the adoption instead of taking the conflict path.
+   */
+  async adoptExternal(projectId: string, projectDir: string, admit: () => void): Promise<CommittedArtifactOperation | null> {
+    const release = await acquireArtifactProjectLock(this.db, projectId);
+    try {
+      admit();
+      return await this.observeExternalUntilStable(projectId, projectDir, "refuse");
+    } finally { release(); }
+  }
+
+  private async observeExternalUntilStable(projectId: string, projectDir: string, onActive: "reject" | "refuse" = "reject"): Promise<CommittedArtifactOperation | null> {
     let latest: CommittedArtifactOperation | null = null;
     for (let pass = 0; pass < 8; pass += 1) {
-      latest = await this.observeExternalOnce(projectId, projectDir) ?? latest;
+      latest = await this.observeExternalOnce(projectId, projectDir, onActive) ?? latest;
       const live = await inspectCanonicalTree(projectDir);
       if (live.tree_digest === this.projectIdentity(projectId).digest) return latest;
     }
@@ -226,7 +245,7 @@ export class ArtifactCoordinator {
     throw new ArtifactOperationError("external_changes_pending", "External files are still changing; retry after saving finishes");
   }
 
-  private async observeExternalOnce(projectId: string, projectDir: string): Promise<CommittedArtifactOperation | null> {
+  private async observeExternalOnce(projectId: string, projectDir: string, onActive: "reject" | "refuse"): Promise<CommittedArtifactOperation | null> {
     const identity = this.projectIdentity(projectId);
     if (identity.digest === null) { await this.initializeOnce(projectId, projectDir); return null; }
     const stableIdentity = { revision: identity.revision, digest: identity.digest };
@@ -236,7 +255,10 @@ export class ArtifactCoordinator {
     const base = await inspectCanonicalTree(baselinePath);
     if (base.tree_digest !== stableIdentity.digest) throw new ArtifactOperationError("recovery_unavailable", "Stable baseline does not match the database");
     const active = this.db.query<{ readonly id: string }, [string]>("SELECT id FROM artifact_operations WHERE project_id=? AND status IN ('pending','working','recovering') LIMIT 1").get(projectId);
-    if (active !== null) return this.rejectExternal(projectId, projectDir, stableIdentity, actual, base, active.id);
+    if (active !== null) {
+      if (onActive === "refuse") throw new ArtifactOperationError("operation_conflict", "An artifact operation is active");
+      return this.rejectExternal(projectId, projectDir, stableIdentity, actual, base, active.id);
+    }
     const id = ulid();
     const ownedRoot = this.operationPath(projectDir, id);
     const snapshotPath = path.join(ownedRoot, "snapshot");

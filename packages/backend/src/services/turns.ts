@@ -242,16 +242,34 @@ export type UserTurnAdmission =
   | { readonly kind: "session_busy" }
   | { readonly kind: "capacity_exhausted" };
 
+/** Sessions held by saved-file recovery: busy for new turns, but neither running turns nor turn capacity. */
+const recoveryHolds = new Map<string, symbol>();
+
+/** Whether saved-file recovery currently holds the session; project deletion treats this as in use. */
+export function isSessionHeldForRecovery(sessionId: string): boolean {
+  return recoveryHolds.has(sessionId);
+}
+
+/** Holds every given session against new turns, or returns null (holding nothing) if any is busy. */
+export function holdSessionsForRecovery(sessionIds: readonly string[]): (() => void) | null {
+  if (sessionIds.some((id) => activeTurns.has(id) || recoveryHolds.has(id) || isDirectionOperationActive(id))) return null;
+  const token = Symbol("recovery-hold");
+  for (const id of sessionIds) recoveryHolds.set(id, token);
+  return () => {
+    for (const id of sessionIds) if (recoveryHolds.get(id) === token) recoveryHolds.delete(id);
+  };
+}
+
 /** Check and acquire together, without yielding between global and per-session admission. */
 export function admitUserTurn(sessionId: string, maxConcurrentTurns: number): UserTurnAdmission {
-  if (activeTurns.has(sessionId) || isDirectionOperationActive(sessionId)) return { kind: "session_busy" };
+  if (activeTurns.has(sessionId) || recoveryHolds.has(sessionId) || isDirectionOperationActive(sessionId)) return { kind: "session_busy" };
   if (!hasTurnCapacity(maxConcurrentTurns)) return { kind: "capacity_exhausted" };
   const reservation = reserveUserTurn(sessionId);
   return reservation === null ? { kind: "session_busy" } : { kind: "reserved", reservation };
 }
 
 export function reserveUserTurn(sessionId: string, requestedOperationId?: string): UserTurnReservation | null {
-  if (activeTurns.has(sessionId) || isDirectionOperationActive(sessionId)) return null;
+  if (activeTurns.has(sessionId) || recoveryHolds.has(sessionId) || isDirectionOperationActive(sessionId)) return null;
   const reservation = { reservationId: ulid(), sessionId, turnId: ulid(), operationId: requestedOperationId ?? ulid() };
   activeTurns.set(sessionId, { reservationId: reservation.reservationId, abortController: new AbortController(), interrupted: false, decisionQueue: [], decisionHandler: null, completion: null });
   return reservation;

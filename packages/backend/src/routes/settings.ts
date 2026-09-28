@@ -21,6 +21,12 @@ import {
   startPypdfInstall,
 } from "../services/python-health";
 import { PYPDF_REQUIRED_VERSION } from "../services/pypdf-version";
+import { getSqlite } from "../db/sqlite-client";
+import {
+  getRuntimeDiagnostics,
+  resumeProjectFromSavedFiles,
+  RuntimeRecoveryError,
+} from "../services/runtime-diagnostics";
 
 function ok<T>(data: T): ApiSuccess<T> {
   return { data };
@@ -31,6 +37,35 @@ function fail(code: string, message: string, details?: unknown): ApiErrorBody {
 }
 
 export const settingsRoutes = new Hono();
+
+settingsRoutes.get("/api/settings/runtime-diagnostics", async (c) => {
+  const diagnostics = await getRuntimeDiagnostics(getSqlite());
+  c.header("Cache-Control", "no-store");
+  return c.json(ok(diagnostics));
+});
+
+settingsRoutes.post("/api/settings/runtime-diagnostics/projects/:id/resume", async (c) => {
+  const body: unknown = await c.req.json().catch(() => null);
+  const sessionId = typeof body === "object" && body !== null && !Array.isArray(body) && "session_id" in body
+    ? body.session_id
+    : undefined;
+  if (typeof sessionId !== "string" || sessionId.length === 0 || sessionId.length > 128) {
+    return c.json(fail("invalid_request", "A session_id is required"), 400);
+  }
+  try {
+    return c.json(ok(await resumeProjectFromSavedFiles(getSqlite(), c.req.param("id"), sessionId)));
+  } catch (error) {
+    if (!(error instanceof RuntimeRecoveryError)) throw error;
+    const status = error.code === "project_not_found"
+      ? 404
+      : error.code === "project_directory_missing"
+        ? 409
+        : error.code === "recovery_unavailable"
+          ? 503
+          : 409;
+    return c.json(fail(error.code, "Saved project files could not be resumed safely"), status);
+  }
+});
 
 settingsRoutes.get("/api/settings/local-fonts", async (c) => {
   try { return c.json(ok(await getLocalFonts())); }

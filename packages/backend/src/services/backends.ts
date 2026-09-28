@@ -1,11 +1,12 @@
 import { CLAUDE_MODELS, COPILOT_MODELS, GEMINI_MODELS, GENERATION_EFFORTS, type BackendDetectionResult, type BackendId, type GenerationModel } from "@bg/shared";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { spawnOwnedProcess } from "../adapters/owned-process";
 import { settleProcessStreams } from "../adapters/process-streams";
 
 const VERSION_PROBE_TIMEOUT_MS = 5_000;
+const VERSION_PROBE_OUTPUT_BYTES = 8 * 1024;
 
 let cachedValue: BackendDetectionResult | null = null;
 let cachedAt = 0;
@@ -51,18 +52,35 @@ export async function probeCodexAuthentication(binaryPath: string): Promise<bool
 }
 
 /** Read model metadata only; authentication and personal instructions never enter the API. */
-export async function readCodexModels(): Promise<GenerationModel[]> {
+export async function readCodexModels(): Promise<readonly GenerationModel[]> {
+  return (await readCodexModelCatalog()).models;
+}
+
+export interface CodexModelCatalog {
+  readonly models: readonly GenerationModel[];
+  readonly fetchedAt: number | null;
+}
+
+/** The local cache mtime is the only freshness evidence BurnGuard owns. */
+export async function readCodexModelCatalog(): Promise<CodexModelCatalog> {
+  const cachePath = path.join(process.env.CODEX_HOME ?? path.join(homedir(), ".codex"), "models_cache.json");
   try {
-    const raw: unknown = JSON.parse(await readFile(path.join(process.env.CODEX_HOME ?? path.join(homedir(), ".codex"), "models_cache.json"), "utf8"));
-    if (typeof raw !== "object" || raw === null || !("models" in raw) || !Array.isArray(raw.models)) return [];
-    return raw.models.flatMap((model: unknown): GenerationModel[] => {
+    const [contents, metadata] = await Promise.all([readFile(cachePath, "utf8"), stat(cachePath)]);
+    const raw: unknown = JSON.parse(contents);
+    if (typeof raw !== "object" || raw === null || !("models" in raw) || !Array.isArray(raw.models)) {
+      return { models: [], fetchedAt: Math.trunc(metadata.mtimeMs) };
+    }
+    const models = raw.models.flatMap((model: unknown): GenerationModel[] => {
       if (typeof model !== "object" || model === null) return [];
       const m = model as Record<string, unknown>;
       if (typeof m.slug !== "string" || !/^[a-zA-Z0-9._-]{1,120}$/.test(m.slug) || m.visibility !== "list" || !Array.isArray(m.supported_reasoning_levels)) return [];
-      const efforts = GENERATION_EFFORTS.filter((effort) => m.supported_reasoning_levels instanceof Array && m.supported_reasoning_levels.some((level: unknown) => typeof level === "object" && level !== null && "effort" in level && level.effort === effort));
+      const efforts = GENERATION_EFFORTS.filter((effort) => Array.isArray(m.supported_reasoning_levels) && m.supported_reasoning_levels.some((level: unknown) => typeof level === "object" && level !== null && "effort" in level && level.effort === effort));
       return efforts.includes("low") ? [{ id: m.slug, label: typeof m.display_name === "string" ? m.display_name.slice(0, 120) : m.slug, efforts }] : [];
     }).slice(0, 100);
-  } catch { return []; }
+    return { models, fetchedAt: Math.trunc(metadata.mtimeMs) };
+  } catch {
+    return { models: [], fetchedAt: null };
+  }
 }
 
 /**
@@ -86,8 +104,8 @@ async function probeVersion(binaryPath: string): Promise<string | undefined> {
     let stdout = "";
     let stderr = "";
     const code = await settleProcessStreams(owned, [
-      new Response(proc.stdout).text().then(text => { stdout = text; }),
-      new Response(proc.stderr).text().then(text => { stderr = text; }),
+      readBoundedProbeText(proc.stdout).then(text => { stdout = text; }),
+      readBoundedProbeText(proc.stderr).then(text => { stderr = text; }),
     ], controller.signal);
     return !controller.signal.aborted && code === 0 ? /\b\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?\b/.exec(stdout || stderr)?.[0] : undefined;
   } finally {
@@ -144,8 +162,9 @@ async function detectOne(id: BackendId, binaryNames: string[], installHint: stri
  * indeterminate, never confirmed logout — and the result is not cached, so no later request can
  * reuse it as authorization.
  */
-export async function detectBackends(options: { force?: boolean; requireCodexAuthentication?: boolean } = {}): Promise<BackendDetectionResult> {
-  if (!options.force && cachedValue && Date.now() - cachedAt < 30_000) {
+export async function detectBackends(options: { force?: boolean; requireCodexAuthentication?: boolean; skipCodexAuthentication?: boolean } = {}): Promise<BackendDetectionResult> {
+  // Runtime-only detection never reads or writes the cache, so it cannot reuse authorization state.
+  if (!options.force && options.skipCodexAuthentication !== true && cachedValue && Date.now() - cachedAt < 30_000) {
     return cachedValue;
   }
 
@@ -155,6 +174,11 @@ export async function detectBackends(options: { force?: boolean; requireCodexAut
     detectOne("gemini", ["gemini", "gemini.cmd"], "Install: https://github.com/google-gemini/gemini-cli"),
     detectOne("copilot", ["copilot", "copilot.cmd"], "Install: npm install -g @github/copilot"),
   ]);
+
+  if (options.skipCodexAuthentication === true) {
+    const models = await readCodexModels();
+    return { backends: backends.map((backend) => withCatalogue(backend, undefined, models)) };
+  }
 
   const codex = backends.find((backend) => backend.id === "codex");
   try {
@@ -169,6 +193,26 @@ export async function detectBackends(options: { force?: boolean; requireCodexAut
     const models = await readCodexModels();
     // An indeterminate Codex probe carries no `authenticated` value at all — never a confirmed logout.
     return { backends: backends.map((backend) => withCatalogue(backend, undefined, models)) };
+  }
+}
+
+async function readBoundedProbeText(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let remaining = VERSION_PROBE_OUTPUT_BYTES;
+  let output = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (remaining === 0) continue;
+      const accepted = value.subarray(0, remaining);
+      output += decoder.decode(accepted, { stream: accepted.length === value.length });
+      remaining -= accepted.length;
+    }
+    return output + decoder.decode();
+  } finally {
+    try { reader.releaseLock(); } catch { /* already released */ }
   }
 }
 

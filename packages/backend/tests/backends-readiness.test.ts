@@ -41,6 +41,9 @@ if (process.argv[2] === "--version") {
   if (readFileSync(root + "/mode", "utf8") === "version-timeout") {
     writeFileSync(root + "/version-pid", String(process.pid));
     setInterval(() => {}, 60_000);
+  } else if (readFileSync(root + "/mode", "utf8") === "version-output-limit") {
+    console.log("x".repeat(9_000) + " 9.9.9");
+    process.exit(0);
   } else { console.log("fixture-cli 1.2.3"); process.exit(0); }
 } else {
 if (process.argv.slice(2).join(" ") !== "login status") process.exit(99);
@@ -130,6 +133,28 @@ test("Given a version probe timeout, then detection waits for its wrapper child 
   const pid = Number(await readFile(path.join(root, "version-pid"), "utf8"));
   expect(() => process.kill(pid, 0)).toThrow();
 }, 20_000);
+
+test("Given runtime-only detection When Codex auth would fail Then compatibility remains available without probing login", async () => {
+  await mode("error");
+  const before = await calls();
+  const result = await detectBackends({ force: true, skipCodexAuthentication: true });
+  expect(codex(result).found).toBe(true);
+  expect(await calls()).toBe(before);
+});
+
+test("Given a warm authenticated cache When runtime-only detection runs without force Then cached authorization is not reused", async () => {
+  await mode("login");
+  expect(codex(await detectBackends({ force: true })).authenticated).toBe(true);
+  const result = await detectBackends({ skipCodexAuthentication: true });
+  expect(codex(result).authenticated).not.toBe(true);
+});
+
+test("Given excessive version output When runtime detection completes Then bytes beyond the probe bound cannot influence the version", async () => {
+  await mode("version-output-limit");
+  const result = await detectBackends({ force: true, skipCodexAuthentication: true });
+  expect(codex(result).found).toBe(true);
+  expect(codex(result).version).toBeUndefined();
+});
 
 function killFixture(pid: number): void {
   try { process.kill(pid, "SIGKILL"); }
