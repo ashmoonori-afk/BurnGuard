@@ -8,6 +8,7 @@ import {
   type CssParseIssue,
 } from "./extraction-css";
 import { AcquisitionLimitError, DEFAULT_ACQUISITION_LIMITS, throwIfAcquisitionAborted, type AcquisitionLimits } from "./extraction-acquisition";
+import { collectSourceEvidence } from "./extraction-evidence";
 import { listFilesRecursive } from "./extraction-path";
 
 const TEXT_FILE_EXTENSIONS = new Set([".css", ".scss", ".sass", ".less", ".json", ".html", ".js", ".jsx", ".ts", ".tsx", ".md"]);
@@ -41,6 +42,8 @@ export type SourceAnalysis = {
     readonly tables: string[]; readonly badges: string[]; readonly headings: string[]; readonly body: string[];
   };
   readonly artifactCopies: SourceArtifact[];
+  /** Evidence read from the original source before sanitization; absent for sources without HTML. */
+  readonly sourceEvidence?: import("./extraction-evidence").SourceEvidence;
 };
 
 export async function analyzeLocalTree(
@@ -58,6 +61,7 @@ export async function analyzeLocalTree(
   const notes: string[] = [];
   let aggregateBytes = 0;
   let cssFileOrder = 0;
+  const htmlSources: string[] = [];
 
   for (const absolutePath of allFiles) {
     throwIfAcquisitionAborted(signal);
@@ -72,6 +76,7 @@ export async function analyzeLocalTree(
     if (aggregateBytes > limits.aggregateSourceBytes) {
       throw new AcquisitionLimitError("aggregate_source_bytes", limits.aggregateSourceBytes, aggregateBytes);
     }
+    if ((extension === ".html" || extension === ".htm") && htmlSources.length < 8) htmlSources.push(await readBoundedText(absolutePath, bytes, signal));
     if (extension !== ".css") continue;
     const content = await readBoundedText(absolutePath, bytes, signal);
     const relativePath = path.relative(rootDir, absolutePath).split(path.sep).join("/");
@@ -95,6 +100,7 @@ export async function analyzeLocalTree(
     logoFiles: logoFiles.slice(0, 8), uiKitFiles, rawFiles: ["uploads/source-url.txt", "uploads/extraction-report.json"],
     homepageHtml: null, fetchedPageCount: 0,
     componentSamples: { buttons: [], cards: [], forms: [], tables: [], badges: [], headings: [], body: [] }, artifactCopies: [],
+    sourceEvidence: collectSourceEvidence(htmlSources, cssDeclarations),
   };
 }
 
