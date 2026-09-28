@@ -28,6 +28,26 @@ const HIDDEN_MARKUP_CONTAINERS = ["noscript", "template"] as const;
 export const MAX_HIDDEN_MARKUP_DEPTH = 8;
 const DANGEROUS_SCHEME = /^(?:javascript|data:text\/html|vbscript):/i;
 const NETWORK_STYLE = /(?:@import\b|url\s*\()/i;
+// CSS that can load a resource once escapes are decoded (\75 rl( is url(, @\69mport is @import) and
+// resource functions that take plain strings (image-set("https://...")).
+const CSS_RESOURCE = /(?:@import\b|url\s*\(|(?:-webkit-)?image-set\s*\(|\bimage\s*\(|cross-fade\s*\(|\belement\s*\(|\bsrc\s*\()/i;
+const MAX_URL_ATTRIBUTES_PER_ELEMENT = 64;
+
+function decodeCssEscapes(css: string): string {
+  return css
+    .replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?/g, (_, hex: string) => { const code = Number.parseInt(hex, 16); return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "\ufffd"; })
+    .replace(/\\([^\n\r\f0-9a-fA-F])/g, "$1");
+}
+
+/** True when CSS text can reach the network once escapes are decoded. */
+function cssCanLoadResources(css: string): boolean {
+  return CSS_RESOURCE.test(css) || CSS_RESOURCE.test(decodeCssEscapes(css));
+}
+
+/** Attribute names in source order, consuming quoted and unquoted values so they are never read as names. */
+function attributeNames(rawAttrs: string): string[] {
+  return [...rawAttrs.matchAll(/([^\s"'>/=]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?/g)].map((match) => match[1]!.toLowerCase());
+}
 const TEXT_NODE = 3;
 
 /** Every URL an attribute value can make the consumer fetch (srcset/imagesrcset candidates, ping list). */
@@ -98,19 +118,20 @@ export function removeActiveSourceMarkup(content: string): string {
     if (meta.getAttribute("http-equiv")?.trim().toLowerCase() === "refresh") meta.remove();
   }
   for (const style of root.querySelectorAll("style")) {
-    if (NETWORK_STYLE.test(style.textContent)) style.set_content("");
+    if (cssCanLoadResources(style.textContent)) style.set_content("");
   }
   for (const node of root.querySelectorAll("*")) {
     for (const attributeName of Object.keys(node.attributes)) {
       if (attributeName.toLowerCase().startsWith("on")) node.removeAttribute(attributeName);
     }
     const style = node.getAttribute("style");
-    if (style !== undefined && NETWORK_STYLE.test(style)) node.removeAttribute("style");
+    if (style !== undefined && cssCanLoadResources(style)) node.removeAttribute("style");
     // Any other attribute may carry url() too (SVG fill, stroke, filter, mask, ...): remove it, including
-    // in-document fragment references, rather than rejecting the whole page.
-    for (const [attributeName, value] of Object.entries(node.attributes)) {
-      if (NETWORK_STYLE.test(value)) node.removeAttribute(attributeName);
-    }
+    // in-document fragment references, rather than rejecting the whole page. Removal rebuilds the
+    // attribute string, so an element with an unbounded number of them is dropped instead.
+    const urlAttributes = Object.entries(node.attributes).filter(([, value]) => NETWORK_STYLE.test(value)).map(([name]) => name);
+    if (urlAttributes.length > MAX_URL_ATTRIBUTES_PER_ELEMENT) { node.remove(); continue; }
+    for (const attributeName of urlAttributes) node.removeAttribute(attributeName);
     for (const attributeName of URL_ATTRIBUTES) node.removeAttribute(attributeName);
     for (const child of node.childNodes) {
       // Prose that merely mentions CSS network syntax stays readable but can no longer trip the gate.
@@ -140,11 +161,12 @@ function assertSourceMarkup(content: string, kind: "html" | "svg", relativeRefer
  */
 function assertNoHiddenAttributeReferences(root: HTMLElement, kind: "html" | "svg"): void {
   for (const node of root.querySelectorAll("*")) {
-    const names = [...node.rawAttrs.replace(/"[^"]*"|'[^']*'/g, '""').matchAll(/(?:^|\s)([^\s=/"'>]+)(?=\s*=|\s|$)/g)].map((match) => match[1]!.toLowerCase());
+    const names = attributeNames(node.rawAttrs);
     if (new Set(names).size !== names.length) throw new ExtractionSafetyError("unsafe_source_content", `Duplicate ${kind} attributes are not accepted`);
-    for (const value of Object.values(node.attributes)) {
-      if (NETWORK_STYLE.test(value)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
+    for (const [name, value] of Object.entries(node.attributes)) {
+      if (NETWORK_STYLE.test(value) || (name.toLowerCase() === "style" && cssCanLoadResources(value))) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
     }
+    if (node.tagName?.toLowerCase() === "style" && cssCanLoadResources(node.textContent)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
   }
 }
 

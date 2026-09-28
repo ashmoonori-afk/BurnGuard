@@ -43,3 +43,38 @@ describe("url() outside style contexts in acquired and source HTML", () => {
     expect(() => sanitizeSourceHtml(page('<svg><path fill="&#117;rl(https://evil.test/a.svg#g)" fill="url(#g)"/></svg>'))).toThrow();
   });
 });
+
+describe("CSS contexts and attribute bounds", () => {
+  const mixed = [
+    '<svg><path fill="url(#g)"/></svg><style>body{background-image:image-set("https://evil.test/pixel" 1x)}</style>',
+    '<svg><path fill="url(#g)"/></svg><style>.a{background:' + BACKSLASH + '75 rl(https://evil.test/pixel)}</style>',
+    '<svg><path fill="url(#g)"/></svg><style>@' + BACKSLASH + '69mport "https://evil.test/a.css";</style>',
+    '<svg><path fill="url(#g)"/></svg><p style="background:-webkit-image-set(' + "'https://evil.test/x' 1x)" + '">x</p>',
+  ];
+
+  test("Given a fragment attribute next to resource-loading CSS, then website sanitization removes both and the stored copy passes the gate", () => {
+    for (const markup of mixed) {
+      const stored = sanitizeAcquiredWebsiteHtml(page(markup));
+      expect(stored).not.toContain("evil.test");
+      expect(() => assertInertSourceMarkup(stored, "html")).not.toThrow();
+      expect(() => assertInertSourceMarkup(page(markup.replace('<svg><path fill="url(#g)"/></svg>', "")), "html")).toThrow();
+    }
+  });
+
+  test("Given ordinary CSS escapes and unquoted attribute values, then they are accepted unchanged", () => {
+    const markup = '<style>.q::before{content:"' + BACKSLASH + '201C"}</style><div id= x class= x>quote</div>';
+    const stored = sanitizeAcquiredWebsiteHtml(page(markup));
+    expect(stored).toContain(BACKSLASH + "201C");
+    expect(() => assertInertSourceMarkup(page(markup), "html")).not.toThrow();
+    expect(() => assertInertSourceMarkup(page('<div FILL="a" fill="b"></div>'), "html")).toThrow();
+  });
+
+  test("Given an element with thousands of url() attributes, then stripping stays bounded and drops the element", () => {
+    const attributes = Array.from({ length: 8000 }, (_, i) => "data-x" + i + '="url(#g)"').join(" ");
+    const started = performance.now();
+    const stored = sanitizeAcquiredWebsiteHtml(page("<p>keep</p><div " + attributes + ">drop</div>"));
+    expect(performance.now() - started).toBeLessThan(3000);
+    expect(stored).toContain("keep");
+    expect(stored).not.toContain("drop");
+  });
+});
