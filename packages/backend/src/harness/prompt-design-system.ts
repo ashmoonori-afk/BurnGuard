@@ -1,7 +1,7 @@
 import { ASSET_README_HEADINGS, CONTENT_TYPE_FLOOR_PX, LAYOUT_SECTION_HEADINGS, layoutSectionKind, type DesignSurface, type DesignSystemLayout } from "@bg/shared";
 import { readDesignSystemAssetGuide } from "../services/design-system-assets";
 import { readDesignSystemPageCoverage } from "../services/design-system-pages";
-import { measuredLayoutPromptSummary, readDesignSystemMeasuredLayout } from "../services/design-system-measured-layout";
+import { measuredLayoutPromptJson, measuredLayoutPromptSummary, readDesignSystemMeasuredLayout } from "../services/design-system-measured-layout";
 import { pageCoveragePromptSummary } from "../services/extraction-pages";
 import { readDesignSystemLayout, readDesignSystemSourceFile } from "../services/design-system-layout";
 import path from "node:path";
@@ -129,7 +129,7 @@ const MEASURED_REQUIREMENT = "- REQUIRED (MEASURED LAYOUT): the source pages wer
 const MEASURED_PROMPT_CHARS = 12_000;
 const MEASURED_PROMPT_COMPACT_CHARS = 6_000;
 
-const MEASURED_SELF_CHECK = "- REQUIRED SELF-CHECK before finishing: compare the authored page with <selected_design_system_measured_layout> at both viewports. For every type role, section (order, column count, alignment), block and grid value, compare the measured and the authored value, fix every item outside its tolerance, and repeat until all pass. Do this check in your working steps; it does not change the reply format rules above.";
+const MEASURED_SELF_CHECK = "- REQUIRED SELF-CHECK before finishing: compare the authored page with <selected_design_system_measured_layout> at both viewports. For every type role, section (order, column count, alignment), block and grid value, compare the measured and the authored value, fix every item outside its tolerance, and repeat until all pass. Do this check in your working steps; it does not change the reply format rules.";
 
 const ASSET_REQUIREMENT = "- REQUIRED: place, size, crop and colour logos, icons, illustrations, photography, backgrounds, patterns and motion by the matching usage rule in the asset guide above, including clear space and its do/don't rules. When generating a new image, start from the prompt of the matching asset kind, change only the subject to what this request needs, keep its palette, lighting, composition, texture and line weight, and append its negative constraints. Reuse supplied logo files unchanged; never generate a replacement logo when one is supplied. Each rule's Evidence line names what was observed in the source; only those observed facts and the extracted palette and type are brand decisions. Every other detail of a rule and its prompt is a default starting point: follow it unless the request, supplied assets or existing files indicate otherwise. The selected surface still owns framing and the image-uniqueness rules still apply. Explicit user overrides take precedence.";
 
@@ -189,7 +189,7 @@ export async function appendDesignSystemContext(
   const measured = surface === "website" ? await readDesignSystemMeasuredLayout(designSystem) : null;
   const measuredSummary = measured ? measuredLayoutPromptSummary(measured, contextMode === "compact" ? MEASURED_PROMPT_COMPACT_CHARS : MEASURED_PROMPT_CHARS) : [];
   if (measuredSummary.length > 0) {
-    lines.push("<selected_design_system_measured_layout>", JSON.stringify(measuredSummary).replace(/</g, "\\u003c"), "</selected_design_system_measured_layout>");
+    lines.push("<selected_design_system_measured_layout>", measuredLayoutPromptJson(measuredSummary), "</selected_design_system_measured_layout>");
     lines.push(MEASURED_REQUIREMENT, MEASURED_SELF_CHECK, "");
   }
   // Asset rules describe brand assets rather than page geometry, so every surface receives them.
