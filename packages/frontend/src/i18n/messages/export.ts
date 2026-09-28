@@ -2,6 +2,10 @@ import { defineMessages } from "../types";
 
 export const exportMessages = defineMessages({
   "export.title": { ko: "내보내기", en: "Export", "zh-CN": "导出" },
+  "export.projectBundle": { ko: "프로젝트 백업", en: "Back up project", "zh-CN": "备份项目" },
+  "export.projectBundlePending": { ko: "백업하는 중…", en: "Backing up…", "zh-CN": "正在备份…" },
+  "export.projectBundleReady": { ko: "프로젝트 백업을 내려받았어요", en: "Project backup downloaded", "zh-CN": "项目备份已下载" },
+  "export.projectBundleFailed": { ko: "프로젝트를 백업하지 못했어요", en: "Could not back up project", "zh-CN": "无法备份项目" },
   "export.formats": { ko: "내보내기 형식", en: "Export format", "zh-CN": "导出格式" },
   "export.queued": { ko: "내보내기를 예약했어요", en: "Export queued", "zh-CN": "导出已加入队列" },
   "export.startFailed": { ko: "내보내기를 시작하지 못했어요", en: "Could not start export", "zh-CN": "无法开始导出" },

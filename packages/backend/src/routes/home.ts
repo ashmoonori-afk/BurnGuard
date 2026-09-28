@@ -9,6 +9,7 @@ import type {
   DesignSystemStatus,
   LlmApiKeysPatch,
   LlmConnectionId,
+  ProjectBundleImportResponse,
   SettingsSummary,
 } from "@bg/shared";
 import { APP_VERSION, LLM_CONNECTIONS, parseGenerationOptions } from "@bg/shared";
@@ -27,6 +28,10 @@ import {
 } from "./home-project-input";
 import { serveProjectThumbnail } from "./project-thumbnail-handler";
 import { importProject, ProjectImportError } from "../services/project-import";
+import {
+  importProjectBundleFile,
+  ProjectBundleError,
+} from "../services/project-bundle";
 
 const VALID_PROJECT_TABS = new Set(["recent", "mine", "examples"]);
 const VALID_SYSTEM_STATUSES = new Set<DesignSystemStatus>([
@@ -110,11 +115,26 @@ homeRoutes.post("/api/projects/import", async (c) => {
   try {
     const form = await c.req.formData().catch(() => null);
     if (!form) throw new ProjectImportError("invalid_project_import");
-    const imported = await importProject(form);
+    const source = form.get("source");
+    const files = form.getAll("files");
+    const name = form.get("name");
+    let imported: Awaited<ReturnType<typeof importProject>> | ProjectBundleImportResponse;
+    if (source === "bundle") {
+      if (files.length !== 1 || !(files[0] instanceof File) || (typeof name !== "string" && name !== null)) {
+        throw new ProjectBundleError("invalid_project_bundle");
+      }
+      imported = await importProjectBundleFile(files[0], name ?? undefined);
+    } else {
+      imported = await importProject(form);
+    }
     await ensureProjectWatcher(imported.id);
     return c.json(ok(imported), 201);
   } catch (error) {
     if (error instanceof ProjectImportError) return c.json(fail(error.code, "프로젝트 파일을 가져오지 못했어요."), error.code === "project_import_limit" ? 413 : 400);
+    if (error instanceof ProjectBundleError) {
+      const status = error.code === "project_bundle_limit" ? 413 : 400;
+      return c.json(fail(error.code, "Project bundle could not be imported"), status);
+    }
     throw error;
   }
 });

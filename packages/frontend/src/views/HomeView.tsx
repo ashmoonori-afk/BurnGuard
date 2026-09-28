@@ -84,6 +84,7 @@ export default function HomeView() {
   const [pickingSystem, setPickingSystem] = useState(false);
   const pickerBackRef = useRef<(() => void) | null>(null);
   const [projectImportOpen, setProjectImportOpen] = useState(false);
+  const projectImportTriggerRef = useRef<HTMLButtonElement>(null);
   const [projectQuery, setProjectQuery] = useState("");
   const [systemQuery, setSystemQuery] = useState("");
   const [systemStatus, setSystemStatus] = useState<"all" | "draft" | "review" | "published">("all");
@@ -316,7 +317,7 @@ export default function HomeView() {
 
   return (
     <>
-      <ProjectImportDialog open={projectImportOpen} onOpenChange={setProjectImportOpen} />
+      <ProjectImportDialog open={projectImportOpen} onOpenChange={setProjectImportOpen} returnFocusRef={projectImportTriggerRef} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="mx-auto w-full max-w-[1440px] px-4 pb-8 pt-7 sm:px-8 sm:pt-10 lg:px-10">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-5">
@@ -325,7 +326,7 @@ export default function HomeView() {
             <h1 className="text-2xl font-semibold tracking-tight sm:text-[32px] sm:leading-tight">{t(HOME_TITLES[activeTab].title)}</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{t(HOME_TITLES[activeTab].description)}</p>
           </div>
-          <div className="flex gap-2"><Button variant="outline" className="h-11" onClick={() => setProjectImportOpen(true)}>{t("home.importProject")}</Button><Button ref={createTriggerRef} variant="cta" className="h-11 gap-2 rounded-xl px-4" onClick={() => startProject()} aria-haspopup="dialog"><Plus className="h-4 w-4" aria-hidden="true" />{t("home.newProject")}</Button></div>
+          <div className="flex gap-2"><Button ref={projectImportTriggerRef} variant="outline" className="h-11" onClick={() => setProjectImportOpen(true)} aria-haspopup="dialog">{t("home.importProject")}</Button><Button ref={createTriggerRef} variant="cta" className="h-11 gap-2 rounded-xl px-4" onClick={() => startProject()} aria-haspopup="dialog"><Plus className="h-4 w-4" aria-hidden="true" />{t("home.newProject")}</Button></div>
         </div>
         {detectionQuery.data?.backends.every((backend) => !backend.found) ? <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-sm text-muted-foreground">{t("home.aiNotice")}</p><Button variant="outline" size="sm" onClick={() => setCliMissingOpen(true)}>{t("home.aiGuide")}</Button></div> : null}
         {detectionQuery.isError ? <div role="alert" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3"><p className="text-sm text-foreground">{t("home.detectionFailed")}</p><Button variant="outline" size="sm" disabled={detectionQuery.isFetching} onClick={() => void detectionQuery.refetch()}>{t("home.retry")}</Button></div> : null}

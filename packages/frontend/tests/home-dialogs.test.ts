@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ApiError } from "../src/api/client";
 import { busyDialogProps } from "../src/components/ui/dialog";
-import { ProjectImportForm, projectImportErrorCopy } from "../src/components/home/ProjectImportDialog";
+import { ProjectImportForm, projectBundleWarningKey, projectImportErrorCopy } from "../src/components/home/ProjectImportDialog";
 import { PINTEREST_PIN_LIMIT, PinterestImportForm, pinterestErrorCopy, pinterestSubmitState } from "../src/components/home/PinterestImportDialog";
 import { t } from "../src/i18n/t";
 
@@ -33,6 +33,7 @@ describe("project import error copy (UX-11)", () => {
     expect(projectImportErrorCopy(new ApiError("project_import_limit", "private", 413))).toBe(t("home.projectImport.limitError"));
     expect(projectImportErrorCopy(new ApiError("payload_too_large", "private", 413))).toBe(t("home.projectImport.limitError"));
     expect(projectImportErrorCopy(new ApiError("project_import_entrypoint", "private", 400))).toBe(t("home.projectImport.entryError"));
+    expect(projectImportErrorCopy(new ApiError("project_bundle_digest", "private", 400))).toBe(t("home.projectImport.bundleError"));
   });
 
   test("Given a failed import When the form renders Then the alert carries the mapped copy", () => {
@@ -123,12 +124,28 @@ describe("import dialog bodies (UX-33)", () => {
     const html = importForm({ files: [new File([new Uint8Array(1)], "big.zip")], name: "n", oversized: true });
     expect(submit(html)).toContain('disabled=""');
     expect(alert(html)).toBe(t("home.projectImport.limitError"));
+    expect(html).toContain("border-destructive/30");
+    expect(html).toContain("bg-destructive/10");
   });
 
   test("Given an import in flight When the project import form renders Then the pending label shows and the fields are disabled", () => {
     const html = importForm({ files: [new File(["x"], "site.zip")], name: "n", pending: true });
     expect(html).toContain(t("home.projectImport.pending"));
     expect(html.match(/<input[^>]*maxlength="200"[^>]*>/i)?.[0] ?? "").toContain('disabled=""');
+  });
+
+  test("Given bundle restore warnings When mapped Then stable message keys distinguish missing systems and fonts", () => {
+    expect(projectBundleWarningKey({ code: "missing_builtin_design_system", reference: "builtin-theme-light" })).toBe("home.projectImport.missingBuiltin");
+    expect(projectBundleWarningKey({ code: "missing_font", reference: "Example Sans" })).toBe("home.projectImport.missingFont");
+  });
+
+  test("Given bundle import selected When the form renders Then it accepts only BurnGuard project files", () => {
+    const html = importForm({ source: "bundle" });
+    expect(html).toContain('accept=".burnguard-project"');
+    expect(html).toContain(t("home.projectImport.bundle"));
+    expect(html).toContain(t("home.projectImport.bundleDetails"));
+    expect(html).not.toContain(t("home.projectImport.docs"));
+    expect(html.match(/min-h-11/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
   });
 
   test("Given a failed pin fetch When the Pinterest form renders Then the alert carries the mapped copy", () => {

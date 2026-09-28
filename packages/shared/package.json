@@ -19,6 +19,7 @@
     "./home": "./src/home.ts",
     "./graphic": "./src/graphic.ts",
     "./project": "./src/project.ts",
+    "./project-bundle": "./src/project-bundle.ts",
     "./reference-layout": "./src/reference-layout.ts",
     "./visual-source": "./src/visual-source.ts",
     "./contract-parser": "./src/contract-parser.ts",
