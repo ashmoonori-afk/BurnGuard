@@ -35,9 +35,12 @@ export function listRecentRuntimeFailures(
   // so only bounded candidates are parsed; ties break deterministically on the session id.
   const sessions = db.query<RuntimeSessionRow, [number]>(`SELECT id,project_id,project_name,backend_id,status FROM (
       SELECT s.id,p.id project_id,p.name project_name,s.backend_id,s.status,
-        (SELECT MAX(json_extract(e.payload_json,'$.ts')) FROM events e
-          WHERE e.session_id=s.id AND e.direction='down'
-            AND (e.type='status.error' OR (e.type='status.idle' AND json_extract(e.payload_json,'$.stopReason')='interrupted'))) failed_at
+        (SELECT json_extract(w.payload_json,'$.ts') FROM (
+            SELECT payload_json,type,sequence FROM events
+            WHERE session_id=s.id AND direction='down' ORDER BY sequence DESC LIMIT ${RECENT_EVENT_LIMIT}
+          ) w
+          WHERE w.type='status.error' OR (w.type='status.idle' AND json_extract(w.payload_json,'$.stopReason')='interrupted')
+          ORDER BY w.sequence DESC LIMIT 1) failed_at
       FROM projects p JOIN sessions s ON s.id=(SELECT id FROM sessions WHERE project_id=p.id ORDER BY ${LATEST_SESSION_ORDER} LIMIT 1)
     ) WHERE failed_at IS NOT NULL ORDER BY failed_at DESC,id ASC LIMIT ?`).all(limit);
   return sessions

@@ -250,6 +250,32 @@ test("Given two failures with equal timestamps When failures are listed with a l
   expect(picked).toEqual([[first.sessionId, second.sessionId].sort()[0]]);
 });
 
+test("Given a failure outside the recent event window When failures are listed with a limit Then it cannot displace a visible failure", () => {
+  const buried = insertProjectSession("codex");
+  failTurn(buried.sessionId, "turn-buried", 9_100_000_000_000);
+  for (let index = 0; index < 205; index += 1) {
+    persist(buried.sessionId, { id: crypto.randomUUID(), ts: 9_100_000_000_100 + index, type: "status.idle", stopReason: "end_turn" });
+  }
+  const visible = insertProjectSession("codex");
+  failTurn(visible.sessionId, "turn-visible", 9_000_000_000_500);
+
+  const picked = listRecentRuntimeFailures(db, 1).map((failure) => failure.session_id);
+
+  expect(picked).toEqual([visible.sessionId]);
+});
+
+test("Given failure timestamps that do not follow sequence order When failures are ranked Then the sequence-latest failure decides", () => {
+  const skewed = insertProjectSession("codex");
+  failTurn(skewed.sessionId, "turn-skew-early", 9_200_000_000_000);
+  failTurn(skewed.sessionId, "turn-skew-late", 9_000_000_000_100);
+  const steady = insertProjectSession("codex");
+  failTurn(steady.sessionId, "turn-steady", 9_000_000_000_300);
+
+  const picked = listRecentRuntimeFailures(db, 1).map((failure) => [failure.session_id, failure.turn_id]);
+
+  expect(picked).toEqual([[steady.sessionId, "turn-steady"]]);
+});
+
 test("Given an active artifact operation When resume is requested Then it is refused without restoring the baseline", async () => {
   const fixture = await managedProject();
   db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,?,'working',0,'',NULL,NULL,0,'','','[]','{}','{}','{}',1,1)")
