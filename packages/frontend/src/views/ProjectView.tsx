@@ -20,6 +20,7 @@ const ChartPanel = lazy(() => import("@/components/canvas/ChartPanel"));
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ArtifactSummary,
+  CreateVisualAlternativesRequest,
   GenerationOptions,
   GenerationStyle,
   Comment,
@@ -132,6 +133,13 @@ import {
 import { isSafeCanvasPagePath, resolveCanvasNavigationAfterRefetch, resolveCanvasPageTarget, resolveCanvasSource } from "@/lib/canvas-source";
 import { t as globalT, useT, type MessageKey } from "@/i18n/t";
 import { latestArtifactPreview } from "@/lib/live-preview";
+import AlternativeCompare from "@/components/alternatives/AlternativeCompare";
+import {
+  deleteVisualAlternative,
+  generateVisualAlternatives,
+  getVisualAlternatives,
+  promoteVisualAlternative,
+} from "@/api/visual-alternatives";
 
 export default function ProjectView() {
   const t = useT();
@@ -233,6 +241,15 @@ export default function ProjectView() {
   const artifactsQuery = useQuery({
     queryKey: ["project", id, "artifacts"],
     queryFn: () => getArtifacts(id!),
+    enabled: Boolean(id),
+  });
+  const alternativesQueryKey = useMemo(
+    () => ["project", id, "visual-alternatives"] as const,
+    [id],
+  );
+  const alternativesQuery = useQuery({
+    queryKey: alternativesQueryKey,
+    queryFn: () => getVisualAlternatives(id ?? ""),
     enabled: Boolean(id),
   });
   const designAuditQueryKey = useMemo(() => ["project", id, "design-audit"] as const, [id]);
@@ -817,6 +834,51 @@ export default function ProjectView() {
   const chatComposerDisabled = sendPending || session?.status === "running";
   const composerDisabled = chatComposerDisabled || directionLoading || stream.error;
   const composerDisabledReason: ComposerDisabledReason = chatComposerDisabled ? "busy" : directionLoading ? "directions" : stream.error ? "disconnected" : null;
+  const generateAlternativesMutation = useMutation({
+    mutationFn: (request: CreateVisualAlternativesRequest) =>
+      generateVisualAlternatives(id ?? "", request),
+    onSuccess: async (state) => {
+      queryClient.setQueryData(alternativesQueryKey, state);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["project", id] }),
+        queryClient.invalidateQueries({ queryKey: ["project", id, "files"] }),
+        queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["project", id, "fs"] }),
+      ]);
+      setRefreshTick((value) => value + 1);
+      pushToast({ title: t("workspace.alternatives.generated"), tone: "success" });
+    },
+    onError: (error) => handleWriteError("workspace.alternatives.generateFailed", error),
+  });
+  const promoteAlternativeMutation = useMutation({
+    mutationFn: (alternativeId: string) => {
+      if (artifacts === null) throw new Error("artifact_identity_unavailable");
+      return promoteVisualAlternative(id ?? "", alternativeId, {
+        expected_revision: artifacts.current_revision,
+        expected_artifact_digest: artifacts.current_digest,
+      });
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["project", id] }),
+        queryClient.invalidateQueries({ queryKey: ["project", id, "files"] }),
+        queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["project", id, "fs"] }),
+      ]);
+      setRefreshTick((value) => value + 1);
+      pushToast({ title: t("workspace.alternatives.promoted"), tone: "success" });
+    },
+    onError: (error) => handleWriteError("workspace.alternatives.promoteFailed", error),
+  });
+  const deleteAlternativeMutation = useMutation({
+    mutationFn: (alternativeId: string) =>
+      deleteVisualAlternative(id ?? "", alternativeId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: alternativesQueryKey });
+      pushToast({ title: t("workspace.alternatives.deleted"), tone: "success" });
+    },
+    onError: (error) => handleWriteError("workspace.alternatives.deleteFailed", error),
+  });
 
   // Turn clock. When the composer flips from idle to busy we stamp a
   // start time; the InterruptButton owns the 1s ticker that reveals Stop
@@ -1370,7 +1432,19 @@ export default function ProjectView() {
                 if (!id) return;
                 refreshMutation.mutate();
               }}
-              historyTools={<ArtifactHistory history={undoInfoQuery.data} disabled={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} />}
+              historyTools={<div className="flex items-center gap-1">
+                <AlternativeCompare
+                  state={alternativesQuery.data}
+                  disabled={composerDisabled || artifacts === null}
+                  generating={generateAlternativesMutation.isPending}
+                  promotingId={promoteAlternativeMutation.isPending ? promoteAlternativeMutation.variables : null}
+                  deletingId={deleteAlternativeMutation.isPending ? deleteAlternativeMutation.variables : null}
+                  onGenerate={async request => { await generateAlternativesMutation.mutateAsync(request); }}
+                  onPromote={async alternativeId => { await promoteAlternativeMutation.mutateAsync(alternativeId); }}
+                  onDelete={async alternativeId => { await deleteAlternativeMutation.mutateAsync(alternativeId); }}
+                />
+                <ArtifactHistory history={undoInfoQuery.data} disabled={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} />
+              </div>}
               canUndo={Boolean(undoInfoQuery.data?.undo_operation_id)}
               undoPending={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending}
               onUndo={() => undoMutation.mutate({})}

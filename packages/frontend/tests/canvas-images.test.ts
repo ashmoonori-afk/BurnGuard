@@ -4,6 +4,9 @@ import { MAX_SHARED_CANVAS_FONTS, embedCssImages, isProjectImageUrl, readCanvasI
 test("Given sandbox images, When resolving assets, Then only the current project is fetched and CSS images are embedded", async () => {
   const base = "http://127.0.0.1:14070/api/projects/one/fs/index.html";
   expect(isProjectImageUrl("assets/hero.png", base)).toBe(true);
+  const alternative = "http://127.0.0.1:14070/api/projects/one/alternatives/alt-1/fs/index.html";
+  expect(isProjectImageUrl("assets/hero.png", alternative)).toBe(true);
+  expect(isProjectImageUrl("/api/projects/one/alternatives/alt-2/fs/hero.png", alternative)).toBe(false);
   expect(isProjectImageUrl("http://[malformed", base)).toBe(false);
   for (const value of ["#gradient", "assets%2f..%2fsecret", "/api/projects/two/fs/hero.png", "../hero.png", "assets/../../hero.png", "https://example.com/hero.png", "//evil.test/hero.png", "data:image/png;base64,AA==", "/api/settings"]) expect(isProjectImageUrl(value, base)).toBe(false);
   const css = 'a{background:url("assets/hero.png")}b{background:url(https://example.com/image.png)}';
