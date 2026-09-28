@@ -44,8 +44,8 @@ export function gridTrackCount(value: string): number | null {
   const tracks: string[] = [];
   let depth = 0, current = "";
   for (const char of value.trim()) {
-    if (char === "(") depth += 1;
-    if (char === ")") depth -= 1;
+    if (char === "(" || char === "[") depth += 1;
+    if (char === ")" || char === "]") depth -= 1;
     if (depth < 0) return null;
     if (depth === 0 && /\s/.test(char)) { if (current) tracks.push(current); current = ""; continue; }
     current += char;
@@ -113,23 +113,38 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
   const all = (selector: string) => roots.flatMap(root => root.querySelectorAll(selector));
   const text = roots.map(root => root.querySelectorAll("h1, h2, h3").map(heading => heading.text).join(" ")).join(" ").toLowerCase();
   const classes = all("[class], [id]").map(classOf).join(" ");
-  const footerColumns = all("footer").map(footer => footer.querySelectorAll("ul, nav").length).filter(count => count >= 2);
+  // Link lists are the columns; a nav wrapper only counts when it holds no list of its own.
+  const footerColumns = all("footer").map(footer => footer.querySelectorAll("ul, ol").length + footer.querySelectorAll("nav").filter(nav => nav.querySelectorAll("ul, ol").length === 0).length).filter(count => count >= 2);
 
   const svgs = all("svg").filter(svg => !/logo|brand/.test(classOf(svg) + classOf(svg.parentNode as HTMLElement)));
-  const positiveStrokes = (svg: HTMLElement) => [svg, ...svg.querySelectorAll("*")]
-    .filter(node => (node.getAttribute("stroke") ?? "").toLowerCase() !== "none")
-    .map(node => node.getAttribute("stroke-width"))
-    .filter((value): value is string => typeof value === "string" && /^\d*\.?\d+$/.test(value) && Number(value) > 0);
-  const hasStroke = (svg: HTMLElement) => positiveStrokes(svg).length > 0 || [svg, ...svg.querySelectorAll("*")].some(node => { const stroke = (node.getAttribute("stroke") ?? "").toLowerCase(); return stroke !== "" && stroke !== "none"; });
-  // Outline needs a positive stroke and no root fill; filled needs a fill and no positive stroke; anything else stays unclassified.
-  const classified = svgs.map(svg => {
-    const fill = (svg.getAttribute("fill") ?? "").toLowerCase();
-    if (hasStroke(svg) && (fill === "none" || fill === "")) return "outline" as const;
-    if (!hasStroke(svg) && fill !== "none") return "filled" as const;
+  // SVG defaults: stroke none, stroke-width 1, fill black; each value inherits from the nearest ancestor that sets it.
+  const inherited = (node: HTMLElement, name: string, root: HTMLElement): string | null => {
+    for (let current: HTMLElement | null = node; current; current = current === root ? null : current.parentNode as HTMLElement | null) {
+      const value = current.getAttribute(name);
+      if (value !== undefined && value !== null) return value.trim().toLowerCase();
+    }
     return null;
-  }).filter((style): style is "outline" | "filled" => style !== null);
+  };
+  const iconStyle = (svg: HTMLElement): { readonly style: "outline" | "filled" | null; readonly widths: readonly string[] } => {
+    const shapes = svg.querySelectorAll("path, circle, rect, ellipse, polygon, polyline, line");
+    const strokeWidths: string[] = [];
+    let stroked = 0, filled = 0;
+    for (const shape of shapes) {
+      const stroke = inherited(shape, "stroke", svg);
+      const width = inherited(shape, "stroke-width", svg) ?? "1";
+      if (stroke !== null && stroke !== "none" && stroke !== "transparent" && /^\d*\.?\d+$/.test(width) && Number(width) > 0) { stroked += 1; strokeWidths.push(width); }
+      const fill = inherited(shape, "fill", svg);
+      if (shape.tagName.toLowerCase() !== "line" && fill !== "none" && fill !== "transparent") filled += 1;
+    }
+    if (stroked > 0 && filled === 0) return { style: "outline", widths: strokeWidths };
+    if (filled > 0 && stroked === 0) return { style: "filled", widths: [] };
+    return { style: null, widths: [] };
+  };
+  const styles = svgs.map(iconStyle);
+  const classified = styles.map(entry => entry.style).filter((style): style is "outline" | "filled" => style !== null);
   const outline = classified.filter(style => style === "outline").length;
-  const strokeWidth = mode(svgs.flatMap(positiveStrokes));
+  const iconSetStyle = classified.length < 2 ? null : outline * 2 > classified.length ? "outline" : outline * 2 < classified.length ? "filled" : null;
+  const strokeWidth = iconSetStyle === "outline" ? mode(styles.filter(entry => entry.style === "outline").flatMap(entry => entry.widths)) : null;
 
   const images = all("img").map(image => (image.getAttribute("src") ?? "").toLowerCase().split(/[?#]/)[0] ?? "").filter(src => !/logo|brand|icon|favicon/.test(src));
   const backgrounds = values(["background", "background-image"]);
@@ -143,7 +158,7 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
     testimonials: all("blockquote").length > 0 || /\b(?:testimonials?|reviews?)\b/.test(classes),
     footerColumns: footerColumns.length ? Math.min(6, Math.max(...footerColumns)) : null,
     alignment,
-    icons: { count: svgs.length, style: classified.length < 2 ? null : outline * 2 > classified.length ? "outline" : outline * 2 < classified.length ? "filled" : null, strokeWidth },
+    icons: { count: svgs.length, style: iconSetStyle, strokeWidth },
     photos: images.filter(src => /\.(?:jpe?g|webp|avif)$/.test(src)).length,
     illustrations: images.filter(src => src.endsWith(".svg")).length,
     gradients: backgrounds.filter(value => /(?<!repeating-)(?:linear|radial|conic)-gradient\(/.test(value)).length,

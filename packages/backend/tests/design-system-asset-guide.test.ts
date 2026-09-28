@@ -200,7 +200,7 @@ describe("Source evidence drives section patterns and asset style", () => {
   const html = [
     '<header><nav class="nav"><a href="/">Home</a></nav></header>',
     '<section class="hero"><h1>Title</h1><p>Lead</p><img src="img/team.jpg" alt=""></section>',
-    '<section class="features"><svg fill="none" stroke-width="1.5"><path d="M0 0"/></svg><svg fill="none"><path stroke-width="1.5" d="M0 0"/></svg><svg class="brand-logo"><path d="M0 0"/></svg><img src="img/art.svg" alt=""></section>',
+    '<section class="features"><svg fill="none" stroke="currentColor" stroke-width="1.5"><path d="M0 0"/></svg><svg fill="none"><path stroke="currentColor" stroke-width="1.5" d="M0 0"/></svg><svg class="brand-logo"><path d="M0 0"/></svg><img src="img/art.svg" alt=""></section>',
     '<section class="pricing-plans"><h2>Plans</h2></section><section><blockquote>Great</blockquote></section>',
     '<footer><ul><li>a</li></ul><ul><li>b</li></ul><ul><li>c</li></ul></footer>',
   ].join("");
@@ -238,7 +238,7 @@ describe("Source evidence drives section patterns and asset style", () => {
     expect(hero('<section class="hero"><div style="display: flex"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
     for (const columns of ["minmax(0, 1fr)", "repeat(1, 1fr)", "1fr"]) expect(hero(`<section class="hero"><div style="display:grid;grid-template-columns:${columns}"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>`)?.arrangement).not.toBe("split");
     expect(hero('<section class="hero"><div style="display:grid;grid-template-columns:minmax(0, 1fr) minmax(0, 1fr)"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
-    expect(["minmax(0, 1fr)", "repeat(1, 1fr)", "repeat(3, minmax(0, 1fr))", "[full] 1fr [mid] 2fr", "repeat(auto-fit, 200px)", "fit-content(10px"].map(gridTrackCount)).toEqual([1, 1, 3, 2, null, null]);
+    expect(["minmax(0, 1fr)", "repeat(1, 1fr)", "repeat(3, minmax(0, 1fr))", "[full] 1fr [mid] 2fr", "[content-start main-start] minmax(0, 1fr) [content-end main-end]", "repeat(auto-fit, 200px)", "fit-content(10px"].map(gridTrackCount)).toEqual([1, 1, 3, 2, 1, null, null]);
   });
 
   test("Given no evidence, then every section pattern and asset kind is labelled as a default", () => {
@@ -280,6 +280,19 @@ describe("Source evidence drives section patterns and asset style", () => {
     expect(icons(filled + filled)).toEqual({ count: 2, style: "filled", strokeWidth: null });
     expect(icons(outline + outline)).toEqual({ count: 2, style: "outline", strokeWidth: "2" });
     expect(icons(filled + outline).style).toBeNull();
+    const inheritedNone = '<svg fill="none" stroke="none"><path fill="currentColor" stroke-width="2" d="M0 0h10v10z"/></svg>';
+    expect(icons(inheritedNone + inheritedNone)).toEqual({ count: 2, style: "filled", strokeWidth: null });
+    const inheritedStroke = '<svg fill="none" stroke="currentColor" stroke-width="1.5"><path d="M0 0"/><circle r="2"/></svg>';
+    expect(icons(inheritedStroke + inheritedStroke)).toEqual({ count: 2, style: "outline", strokeWidth: "1.5" });
+    const noStrokeNoFillAttr = '<svg><path d="M0 0"/></svg>';
+    expect(icons(noStrokeNoFillAttr + noStrokeNoFillAttr).style).toBe("filled");
+  });
+
+  test("Given nested footer navigation, then each link list counts once", () => {
+    const footer = (markup: string) => collectSourceEvidence([markup], []).footerColumns;
+    expect(footer('<footer><nav><ul><li>a</li></ul></nav><nav><ul><li>b</li></ul></nav></footer>')).toBe(2);
+    expect(footer('<footer><nav><a href="/a">a</a></nav><nav><a href="/b">b</a></nav></footer>')).toBe(2);
+    expect(footer('<footer><ul><li>a</li></ul></footer>')).toBeNull();
   });
 });
 

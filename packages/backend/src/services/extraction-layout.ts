@@ -17,7 +17,9 @@ export function buildSectionPatternReadme(evidence: SourceEvidence): string {
     ? "copy on 6-7 columns with one action pair and media on the rest at --layout-hero; stack copy above media below --layout-bp-md."
     : hero?.arrangement === "centered"
       ? "one centered column with headline, supporting line and one action pair; media below the copy at --layout-hero."
-      : "headline and supporting line on 6-7 columns with one action pair, media on the remaining columns at --layout-hero; stack below --layout-bp-md.";
+      : hero && !hero.media
+        ? "a text-led opening: headline, supporting line and one action pair across 7-8 columns without a media block."
+        : "headline and supporting line on 6-7 columns with one action pair, media on the remaining columns at --layout-hero; stack below --layout-bp-md.";
   const lines = [
     line("Navigation", null, "the logo lockup at the start of the bar, primary links next to it and one action at the end; the bar stays within --layout-max."),
     line("Hero", heroFacts, heroDefaults),
