@@ -1,3 +1,5 @@
+import { isVisualAlternativeOperationActive } from "./visual-alternative-operation-registry";
+
 type ActiveDirectionOperation = {
   readonly generationId: string;
   readonly controller: AbortController;
@@ -20,7 +22,7 @@ export function activeDirectionSignal(sessionId: string, generationId: string): 
 }
 
 export function beginDirectionOperation(sessionId: string, generationId: string): AbortController | null {
-  if (activeOperations.has(sessionId) || activeOperations.size >= MAX_ACTIVE_OPERATIONS) return null;
+  if (activeOperations.has(sessionId) || isVisualAlternativeOperationActive(sessionId) || activeOperations.size >= MAX_ACTIVE_OPERATIONS) return null;
   const controller = new AbortController();
   activeOperations.set(sessionId, { generationId, controller });
   return controller;

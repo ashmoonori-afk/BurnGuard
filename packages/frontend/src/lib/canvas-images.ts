@@ -44,7 +44,7 @@ export function isProjectImageUrl(value: string, documentUrl: string): boolean {
   if (value.startsWith("#")) return false;
   try {
     const document = new URL(documentUrl);
-    const root = document.pathname.match(/^\/api\/projects\/[^/]+\/(?:preview\/[^/]+\/)?fs\//)?.[0];
+    const root = document.pathname.match(/^\/api\/projects\/[^/]+\/(?:(?:preview|alternatives)\/[^/]+\/)?fs\//)?.[0];
     const image = new URL(value, document);
     return root !== undefined && image.origin === document.origin && image.pathname.startsWith(root) && !/%(?:2f|5c)/i.test(image.pathname);
   } catch { return false; }

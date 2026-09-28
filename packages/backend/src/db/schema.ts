@@ -116,3 +116,4 @@ export const metaSchemaTable = sqliteTable("meta_schema", {
 });
 
 export * from "./pipeline-schema";
+export * from "./visual-alternative-schema";

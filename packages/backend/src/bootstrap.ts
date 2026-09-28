@@ -37,6 +37,7 @@ import { pruneExpiredArtifactOperations } from "./services/artifact-retention";
 import { reconcileExportState } from "./services/export-recovery";
 import { createProductionResearchRecoveryDependencies } from "./routes/research";
 import { reconcileResearchState, type ResearchRecoveryDependencies } from "./services/research-recovery";
+import { recoverVisualAlternatives } from "./services/visual-alternative-recovery";
 
 async function exists(target: string): Promise<boolean> {
   try {
@@ -152,6 +153,7 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   for (const project of artifactRecovery.unavailableProjects) {
     console.warn("[artifact] project recovery deferred", project.projectId, project.code);
   }
+  await recoverVisualAlternatives(getSqlite());
   await pruneExpiredArtifactOperations(getSqlite());
   await reconcileExportState(getSqlite());
   await pruneOldExports();

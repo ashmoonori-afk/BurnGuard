@@ -33,6 +33,12 @@ import { runAdapterTurn } from "../adapters/registry";
 import { loadConfig } from "../config";
 import { hasAgentControlFiles } from "../security/agent-control-files";
 import { isDirectionOperationActive } from "./direction-operation-registry";
+import {
+  activeVisualAlternativeSessions,
+  beginVisualAlternativeOperation,
+  cancelAllVisualAlternativeOperations,
+  isVisualAlternativeOperationActive,
+} from "./visual-alternative-operation-registry";
 import { buildVisualSourceManifest } from "./visual-source-manifest";
 import { captureImmutableAttachments, verifyImmutableAttachments } from "./immutable-attachment-guard";
 import { redactPrivateAttachmentPaths, withPrivateAttachmentInputs } from "./stage-attachment-inputs";
@@ -180,6 +186,8 @@ export function interruptUserTurn(sessionId: string) {
  * Ctrl+C stops the CLI subprocesses instead of orphaning them.
  */
 export async function interruptAllUserTurns(): Promise<void> {
+  // Stop batches first so no later alternative item starts after its current turn unwinds.
+  cancelAllVisualAlternativeOperations();
   const pending: Promise<unknown>[] = [];
   for (const active of activeTurns.values()) {
     active.interrupted = true;
@@ -235,7 +243,13 @@ export type UserTurnReservation = {
   readonly operationId: string;
 };
 
-export type TurnDependencies = { readonly runAdapter?: typeof runAdapterTurn; readonly detectBackends?: typeof detectBackends; readonly reviewDesign?: typeof reviewTurnDesign };
+export type TurnDependencies = {
+  readonly runAdapter?: typeof runAdapterTurn;
+  readonly detectBackends?: typeof detectBackends;
+  readonly reviewDesign?: typeof reviewTurnDesign;
+  /** App-owned model input. The stored and displayed user message keeps `payload.text`. */
+  readonly modelText?: string;
+};
 
 export type UserTurnAdmission =
   | { readonly kind: "reserved"; readonly reservation: UserTurnReservation }
@@ -252,7 +266,7 @@ export function isSessionHeldForRecovery(sessionId: string): boolean {
 
 /** Holds every given session against new turns, or returns null (holding nothing) if any is busy. */
 export function holdSessionsForRecovery(sessionIds: readonly string[]): (() => void) | null {
-  if (sessionIds.some((id) => activeTurns.has(id) || recoveryHolds.has(id) || isDirectionOperationActive(id))) return null;
+  if (sessionIds.some((id) => activeTurns.has(id) || recoveryHolds.has(id) || isDirectionOperationActive(id) || isVisualAlternativeOperationActive(id))) return null;
   const token = Symbol("recovery-hold");
   for (const id of sessionIds) recoveryHolds.set(id, token);
   return () => {
@@ -262,14 +276,18 @@ export function holdSessionsForRecovery(sessionIds: readonly string[]): (() => v
 
 /** Check and acquire together, without yielding between global and per-session admission. */
 export function admitUserTurn(sessionId: string, maxConcurrentTurns: number): UserTurnAdmission {
-  if (activeTurns.has(sessionId) || recoveryHolds.has(sessionId) || isDirectionOperationActive(sessionId)) return { kind: "session_busy" };
+  if (activeTurns.has(sessionId) || recoveryHolds.has(sessionId) || isDirectionOperationActive(sessionId) || isVisualAlternativeOperationActive(sessionId)) return { kind: "session_busy" };
   if (!hasTurnCapacity(maxConcurrentTurns)) return { kind: "capacity_exhausted" };
   const reservation = reserveUserTurn(sessionId);
   return reservation === null ? { kind: "session_busy" } : { kind: "reserved", reservation };
 }
 
 export function reserveUserTurn(sessionId: string, requestedOperationId?: string): UserTurnReservation | null {
-  if (activeTurns.has(sessionId) || recoveryHolds.has(sessionId) || isDirectionOperationActive(sessionId)) return null;
+  return reserveUserTurnInternal(sessionId, requestedOperationId, false);
+}
+
+function reserveUserTurnInternal(sessionId: string, requestedOperationId: string | undefined, visualAlternativeOwner: boolean): UserTurnReservation | null {
+  if (activeTurns.has(sessionId) || recoveryHolds.has(sessionId) || isDirectionOperationActive(sessionId) || (!visualAlternativeOwner && isVisualAlternativeOperationActive(sessionId))) return null;
   const reservation = { reservationId: ulid(), sessionId, turnId: ulid(), operationId: requestedOperationId ?? ulid() };
   activeTurns.set(sessionId, { reservationId: reservation.reservationId, abortController: new AbortController(), interrupted: false, decisionQueue: [], decisionHandler: null, completion: null });
   return reservation;
@@ -277,7 +295,17 @@ export function reserveUserTurn(sessionId: string, requestedOperationId?: string
 
 /** Whether another CLI turn may start anywhere in the process; `harness.maxConcurrentSessions` is the ceiling. */
 export function hasTurnCapacity(maxConcurrentTurns: number): boolean {
-  return activeTurns.size < maxConcurrentTurns;
+  // A visual-alternative batch holds its slot between item turns too.
+  let occupied = activeTurns.size;
+  for (const sessionId of activeVisualAlternativeSessions()) if (!activeTurns.has(sessionId)) occupied += 1;
+  return occupied < maxConcurrentTurns;
+}
+
+/** Admits a whole visual-alternative batch as one session operation, without yielding between checks. */
+export function admitVisualAlternativeBatch(sessionId: string, projectId: string, generationId: string, maxConcurrentTurns: number): AbortController | "session_busy" | "capacity_exhausted" {
+  if (activeTurns.has(sessionId) || recoveryHolds.has(sessionId) || isDirectionOperationActive(sessionId) || isVisualAlternativeOperationActive(sessionId)) return "session_busy";
+  if (!hasTurnCapacity(maxConcurrentTurns)) return "capacity_exhausted";
+  return beginVisualAlternativeOperation(sessionId, projectId, generationId) ?? "session_busy";
 }
 
 export function releaseUserTurnReservation(reservation: UserTurnReservation): void {
@@ -300,6 +328,11 @@ export function startReservedUserTurn(reservation: UserTurnReservation, payload:
 
 export function startUserTurn(sessionId: string, payload: Extract<UserEvent, { type: "user.message" }>, requestedOperationId?: string, dependencies: TurnDependencies = {}) {
   const reservation = reserveUserTurn(sessionId, requestedOperationId);
+  return reservation === null ? null : startReservedUserTurn(reservation, payload, dependencies);
+}
+
+export function startVisualAlternativeTurn(sessionId: string, payload: Extract<UserEvent, { type: "user.message" }>, requestedOperationId: string, dependencies: TurnDependencies = {}) {
+  const reservation = reserveUserTurnInternal(sessionId, requestedOperationId, true);
   return reservation === null ? null : startReservedUserTurn(reservation, payload, dependencies);
 }
 
@@ -327,7 +360,8 @@ async function runUserTurnInternal(
   const sessionContext = await buildSessionContext(sessionId);
   if (!sessionContext) throw new Error("session_not_found");
   // Previously submitted documents remain available after navigation/restart.
-  const contextPayload = { ...payload, attachments: selectContextAttachments(sessionContext.attachments, payload.attachments ?? [], payload.text) };
+  const modelPayload = dependencies.modelText === undefined ? payload : { ...payload, text: dependencies.modelText };
+  const contextPayload = { ...modelPayload, attachments: selectContextAttachments(sessionContext.attachments, payload.attachments ?? [], payload.text) };
   const visualSources = await buildVisualSourceManifest({
     projectDir: sessionContext.project.project_dir,
     attachments: sessionContext.attachments,
@@ -486,7 +520,7 @@ async function runUserTurnInternal(
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,
               generation,
               ...(generation.provider === "commandcode" ? { commandcodeApiKey: config.commandcodeApiKey ?? undefined } : {}),
-              signal: activeTurn.abortController.signal, userEvent: payload,
+              signal: activeTurn.abortController.signal, userEvent: modelPayload,
               onEvent: async (event) => {
                 // Cancellation is finalized only after the stopped writer's stage is saved.
                 if (activeTurn.interrupted && event.type === "status.error") return;

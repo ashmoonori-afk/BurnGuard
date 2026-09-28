@@ -39,6 +39,7 @@ export * from "./research-contract";
 export * from "./settings";
 export * from "./generation";
 export * from "./visual-source";
+export * from "./visual-alternative";
 export * from "./local-fonts";
 export * from "./three-scene";
 export * from "./ux-review";

@@ -10,6 +10,7 @@ import { readProjectPalette, replaceProjectPalette } from "../services/project-p
 import { inspectCanonicalTree } from "../services/canonical-tree-manifest";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
 import { artifactHistory } from "../services/artifact-history";
+import { visualAlternativeRoutes } from "./visual-alternatives";
 
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
 function fail(code: string, message: string, details?: unknown): ApiErrorBody { return { error: { code, message, details } }; }
@@ -20,6 +21,7 @@ const STYLE_NAME = /^(?:--[\w-]+|[a-z][a-z0-9-]*)$/i;
 const MAX_STYLE_VALUE_CHARS = 4096;
 
 export const artifactOperationRoutes = new Hono();
+artifactOperationRoutes.route("/", visualAlternativeRoutes);
 
 artifactOperationRoutes.get("/api/projects/:id/history", async c => {
   const project = await getProjectDetail(c.req.param("id"));

@@ -172,6 +172,25 @@ describe("project bundle hostile input", () => {
     });
   }, 60_000);
 
+  test("Given staged visual alternatives When exported Then no alternative base or stage is bundled", async () => {
+    // Given
+    const root = `${projectsDir}/bundle-export-alternatives-${process.pid}-${crypto.randomUUID()}`;
+    await mkdir(path.join(root, ".meta", "visual-alternatives", "generation", "base"), { recursive: true });
+    await writeFile(path.join(root, "index.html"), "<main>Kept</main>");
+    await writeFile(path.join(root, ".meta", "visual-alternatives", "generation", "base", "index.html"), "staged");
+
+    try {
+      // When
+      const entries = await collectProjectBundleEntries(root);
+
+      // Then
+      expect(JSON.stringify(entries.map((entry) => entry.file))).not.toContain("visual-alternatives");
+      expect(JSON.stringify(entries.map((entry) => entry.file))).toContain("index.html");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("Given Windows-unsafe or case-variant app paths When exported Then portability fails before archive creation", async () => {
     // Given
     const candidates = ["CON.txt", ".ATTACHMENTS/secret.txt", ".META/checkpoints/turn.json"];

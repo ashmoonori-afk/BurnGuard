@@ -12,6 +12,7 @@ import { adoptExistingArtifact, establishEmptyArtifactAuthority } from "./artifa
 import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
 import { pruneExpiredArtifactOperations } from "./artifact-retention";
 import { acquireArtifactProjectLock } from "./artifact-project-lock";
+import { isArtifactMutationBlockedByAlternatives } from "./visual-alternative-operation-registry";
 
 type OperationKind = "patch" | "palette" | "turn" | "restore" | "undo" | "external" | "initialize";
 type CoordinatorFaults = {
@@ -129,6 +130,9 @@ export class ArtifactCoordinator {
     // adoption, so an operation is either registered before they look or validates against their result.
     const releaseAdmission = await acquireArtifactProjectLock(this.db, input.projectId);
     try {
+      if (isArtifactMutationBlockedByAlternatives(this.db, input.projectId, id)) {
+        throw new ArtifactOperationError("operation_conflict", "Visual alternatives are being generated for this project");
+      }
       await pruneExpiredArtifactOperations(this.db, { projectId: input.projectId, preserveOperationId: input.parentOperationId });
       base = await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
       this.faults.beforeSnapshot?.();
@@ -235,6 +239,11 @@ export class ArtifactCoordinator {
   }
 
   private async observeExternalUntilStable(projectId: string, projectDir: string, onActive: "reject" | "refuse" = "reject"): Promise<CommittedArtifactOperation | null> {
+    if (isArtifactMutationBlockedByAlternatives(this.db, projectId, "")) {
+      // Leased or quarantined by visual alternatives: never adopt or roll back live bytes now.
+      if (onActive === "refuse") throw new ArtifactOperationError("operation_conflict", "Visual alternatives own this project");
+      return null;
+    }
     let latest: CommittedArtifactOperation | null = null;
     for (let pass = 0; pass < 8; pass += 1) {
       latest = await this.observeExternalOnce(projectId, projectDir, onActive) ?? latest;
