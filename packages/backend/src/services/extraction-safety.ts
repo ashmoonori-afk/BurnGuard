@@ -33,8 +33,26 @@ const NETWORK_STYLE = /(?:@import\b|url\s*\()/i;
 const CSS_RESOURCE = /(?:@import\b|url\s*\(|(?:-webkit-)?image-set\s*\(|\bimage\s*\(|cross-fade\s*\(|\belement\s*\(|\bsrc\s*\()/i;
 const MAX_URL_ATTRIBUTES_PER_ELEMENT = 64;
 
+/**
+ * Attributes a browser only ever reads as prose, never as a CSS value. Every other attribute value (SVG
+ * presentation attributes such as cursor, fill, mask, filter included) is held to the CSS resource check.
+ */
+function isProseAttribute(name: string): boolean {
+  const lower = name.toLowerCase();
+  return ["alt", "title", "placeholder", "content", "value", "label"].includes(lower) || lower.startsWith("aria-") || lower.startsWith("data-");
+}
+
+/** True when an attribute value can reach the network: CSS-parsed values are checked escape-aware. */
+function attributeCanLoadResources(name: string, value: string): boolean {
+  return NETWORK_STYLE.test(value) || (!isProseAttribute(name) && cssCanLoadResources(value));
+}
+
 function decodeCssEscapes(css: string): string {
+  // CSS input preprocessing first: CRLF, CR and FF become LF, NUL becomes U+FFFD, so an escape's
+  // single trailing whitespace swallows the whole CRLF exactly as a browser does.
   return css
+    .replace(/\r\n|[\r\f]/g, "\n")
+    .replace(/\0/g, "\ufffd")
     .replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?/g, (_, hex: string) => { const code = Number.parseInt(hex, 16); return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "\ufffd"; })
     .replace(/\\([^\n\r\f0-9a-fA-F])/g, "$1");
 }
@@ -129,7 +147,7 @@ export function removeActiveSourceMarkup(content: string): string {
     // Any other attribute may carry url() too (SVG fill, stroke, filter, mask, ...): remove it, including
     // in-document fragment references, rather than rejecting the whole page. Removal rebuilds the
     // attribute string, so an element with an unbounded number of them is dropped instead.
-    const urlAttributes = Object.entries(node.attributes).filter(([, value]) => NETWORK_STYLE.test(value)).map(([name]) => name);
+    const urlAttributes = Object.entries(node.attributes).filter(([name, value]) => attributeCanLoadResources(name, value)).map(([name]) => name);
     if (urlAttributes.length > MAX_URL_ATTRIBUTES_PER_ELEMENT) { node.remove(); continue; }
     for (const attributeName of urlAttributes) node.removeAttribute(attributeName);
     for (const attributeName of URL_ATTRIBUTES) node.removeAttribute(attributeName);
@@ -164,7 +182,7 @@ function assertNoHiddenAttributeReferences(root: HTMLElement, kind: "html" | "sv
     const names = attributeNames(node.rawAttrs);
     if (new Set(names).size !== names.length) throw new ExtractionSafetyError("unsafe_source_content", `Duplicate ${kind} attributes are not accepted`);
     for (const [name, value] of Object.entries(node.attributes)) {
-      if (NETWORK_STYLE.test(value) || (name.toLowerCase() === "style" && cssCanLoadResources(value))) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
+      if (attributeCanLoadResources(name, value)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
     }
     if (node.tagName?.toLowerCase() === "style" && cssCanLoadResources(node.textContent)) throw new ExtractionSafetyError("unsafe_source_content", `Network-capable ${kind} styles are not accepted`);
   }

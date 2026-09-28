@@ -50,7 +50,26 @@ describe("CSS contexts and attribute bounds", () => {
     '<svg><path fill="url(#g)"/></svg><style>.a{background:' + BACKSLASH + '75 rl(https://evil.test/pixel)}</style>',
     '<svg><path fill="url(#g)"/></svg><style>@' + BACKSLASH + '69mport "https://evil.test/a.css";</style>',
     '<svg><path fill="url(#g)"/></svg><p style="background:-webkit-image-set(' + "'https://evil.test/x' 1x)" + '">x</p>',
+    '<svg><path fill="url(#g)"/></svg><svg><rect cursor="&#92;75 rl(https://evil.test/cursor.png), auto"/></svg>',
+    '<svg><path fill="url(#g)"/></svg><style>body{background:' + BACKSLASH + '75\r\nrl(https://evil.test/pixel)}</style>',
+    '<svg><path fill="url(#g)"/></svg><style>@' + BACKSLASH + '69\r\nmport "https://evil.test/a.css";</style>',
+    '<svg><path fill="url(#g)"/></svg><style>body{background:' + BACKSLASH + '75\frl(https://evil.test/pixel)}</style>',
   ];
+
+  test("Given an escaped cursor url() beside a fragment reference on one SVG element, then website sanitization removes both and source sanitization rejects the page", () => {
+    const markup = '<svg><rect width="100" height="100" fill="url(#g)" cursor="&#92;75 rl(https://evil.test/cursor.png), auto"/></svg>';
+    const stored = sanitizeAcquiredWebsiteHtml(page(markup));
+    expect(parse(stored).querySelector("rect")!.attributes).toEqual({ width: "100", height: "100" });
+    expect(() => assertInertSourceMarkup(stored, "html")).not.toThrow();
+    expect(() => sanitizeSourceHtml(page(markup))).toThrow();
+  });
+
+  test("Given prose attributes that mention CSS function names, then they are kept and accepted", () => {
+    const markup = '<img alt="image (1)" title="src (draft)"><p aria-label="cross-fade (demo)">x</p>';
+    const stored = sanitizeAcquiredWebsiteHtml(page(markup));
+    expect(parse(stored).querySelector("img")!.getAttribute("alt")).toBe("image (1)");
+    expect(() => assertInertSourceMarkup(page(markup), "html")).not.toThrow();
+  });
 
   test("Given a fragment attribute next to resource-loading CSS, then website sanitization removes both and the stored copy passes the gate", () => {
     for (const markup of mixed) {
