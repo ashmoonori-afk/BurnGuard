@@ -3,6 +3,9 @@ import { readDesignSystemAssetGuide } from "./design-system-assets";
 import { buildAssetGuideReadme } from "./extraction-assets";
 import { collectSourceEvidence, type SourceEvidence } from "./extraction-evidence";
 import { buildSectionPatternReadme, measureSourceLayout } from "./extraction-layout";
+import { buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, observedPatterns, parseRobots, parseSitemap } from "./extraction-pages";
+import { readDesignSystemPageCoverage } from "./design-system-pages";
+import type { CssDeclarationEvidence } from "./extraction-css";
 import {
   copyFile,
   mkdir,
@@ -18,6 +21,7 @@ import { isValidFontData } from "./font-validation";
 import { parse } from "node-html-parser";
 import {
   APP_VERSION,
+  DEFAULT_PAGE_LIMIT,
   type CreateDesignSystemExtractionRequest,
   type CreateDesignSystemExtractionResponse,
   type CreateDesignSystemUploadRequest,
@@ -249,7 +253,7 @@ export async function extractDesignSystemFromSource(
         ? await ingestGitSource(sourceUrl, ingestDir, budget.signal, input.name)
         : sourceType === "figma"
           ? await ingestFigmaSource(sourceUrl, ingestDir, budget.signal, input.name)
-          : await ingestWebsiteSource(sourceUrl, ingestDir, budget.signal, input.name);
+          : await ingestWebsiteSource(sourceUrl, ingestDir, budget.signal, input.name, input.page_limit);
 
     const brandName = input.name?.trim() || analysis.brandName;
     return await persistCanonicalExtraction({
@@ -502,22 +506,23 @@ export async function readDesignSystemTokens(systemId: string) {
       "Design system not found",
     );
   }
-  const [layout, assets] = await Promise.all([readDesignSystemLayout(detail), readDesignSystemAssetGuide(detail)]);
+  const [layout, assets, pages] = await Promise.all([readDesignSystemLayout(detail), readDesignSystemAssetGuide(detail), readDesignSystemPageCoverage(detail)]);
+  const extras = { layout, assets, ...(pages ? { pages } : {}) };
   if (!detail.tokens_css_path) {
-    return { layout, assets, colors: [], token_file_path: null };
+    return { ...extras, colors: [], token_file_path: null };
   }
 
   const tokenPath = resolveDesignSystemRecordPath(systemId, detail.dir_path, detail.tokens_css_path);
   const css = await readFile(tokenPath, "utf8").catch(() => null);
   if (css === null) {
-    return { layout, assets, colors: [], token_file_path: tokenPath };
+    return { ...extras, colors: [], token_file_path: tokenPath };
   }
 
   const colors = [...(await extractCssCustomProperties(css)).entries()]
     .filter(([, value]) => isColorTokenValue(value))
     .map(([name, value]) => ({ name, value }));
 
-  return { layout, assets, colors, token_file_path: tokenPath };
+  return { ...extras, colors, token_file_path: tokenPath };
 }
 
 export async function upsertDesignSystemColorToken(
@@ -702,6 +707,7 @@ async function ingestWebsiteSource(
   ingestDir: string,
   signal: AbortSignal,
   preferredName?: string,
+  pageLimit: number = DEFAULT_PAGE_LIMIT,
 ): Promise<SourceAnalysis> {
   let url: URL;
   try {
@@ -757,10 +763,41 @@ async function ingestWebsiteSource(
   const notes: string[] = ["Homepage HTML fetched from website URL."];
   const logoFiles: Array<{ absolutePath: string; fileName: string }> = [];
   const pageHtmlByUrl = new Map<string, string>([[url.toString(), html]]);
-  const pageQueue = collectCandidateWebsitePages(url, html, signal);
+  const fetchText = async (target: URL, maxBytes: number): Promise<string | null> => {
+    try {
+      const fetched = await fetchWebsiteResource(target, { maxBytes, kind: "html", noteBytes, signal, userAgent: `BurnGuard/${APP_VERSION} design-system-import` });
+      return fetched.finalUrl.origin === url.origin ? fetched.text : null;
+    } catch (error) {
+      if (error instanceof ExtractionAcquisitionError) throw error;
+      return null;
+    }
+  };
+  const robots = parseRobots((await fetchText(new URL("/robots.txt", url), 64 * 1024)) ?? "");
+  const sitemapUrls: string[] = [];
+  for (const sitemap of [...robots.sitemaps, new URL("/sitemap.xml", url).toString()].slice(0, 4)) {
+    let target: URL;
+    try { target = new URL(sitemap, url); } catch { continue; }
+    if (target.origin !== url.origin) continue;
+    const xml = await fetchText(target, 1024 * 1024);
+    if (xml === null) continue;
+    const parsed = parseSitemap(xml);
+    if (!parsed.isIndex) { sitemapUrls.push(...parsed.urls); break; }
+    for (const nested of parsed.urls.slice(0, 3)) {
+      let nestedUrl: URL;
+      try { nestedUrl = new URL(nested, url); } catch { continue; }
+      if (nestedUrl.origin !== url.origin) continue;
+      const nestedXml = await fetchText(nestedUrl, 1024 * 1024);
+      if (nestedXml !== null) sitemapUrls.push(...parseSitemap(nestedXml).urls);
+    }
+    break;
+  }
+  const discovery = discoverPages({ base: url, homepageHtml: html, sitemapUrls: sitemapUrls.slice(0, 500), robots, limit: pageLimit });
+  const candidateSource = new Map(discovery.selected.map((candidate) => [candidate.path, candidate.source]));
+  const failedPages: { path: string; source: (typeof discovery.selected)[number]["source"] }[] = [];
 
-  for (const page of pageQueue) {
+  for (const candidate of discovery.selected.slice(1)) {
     throwIfAcquisitionAborted(signal);
+    const page = new URL(candidate.path, url);
     if (pageHtmlByUrl.has(page.toString())) continue;
     try {
       const pageFetch = await fetchWebsiteResource(page, {
@@ -777,9 +814,12 @@ async function ingestWebsiteSource(
       await writeFile(path.join(pagesDir, fileName), storedPageHtml, "utf8");
     } catch (error) {
       if (error instanceof ExtractionAcquisitionError) throw error;
+      failedPages.push(candidate);
       notes.push(`Skipped linked page: ${page.toString()} (${error instanceof Error ? error.message : "fetch failed"})`);
     }
   }
+  const pageDeclarations = new Map<string, CssDeclarationEvidence[]>();
+  const stylesheetDeclarations = new Map<string, readonly CssDeclarationEvidence[]>();
 
   const componentSamples = {
     buttons: [] as string[],
@@ -795,6 +835,8 @@ async function ingestWebsiteSource(
 
   for (const [pageUrl, pageHtml] of pageHtmlByUrl) {
     throwIfAcquisitionAborted(signal);
+    const ownDeclarations: CssDeclarationEvidence[] = [];
+    pageDeclarations.set(pageUrl, ownDeclarations);
     const root = parse(pageHtml);
     throwIfAcquisitionAborted(signal);
     const sampleSet = extractHtmlComponentSamples(pageHtml, signal);
@@ -821,6 +863,7 @@ async function ingestWebsiteSource(
       const parsedCss = await parseCssSource({ content: inlineCss, sourceId: `${pageSourceId}#inline-style`, fileOrder: cssFileOrder, signal });
       cssFileOrder += 1;
       cssDeclarations.push(...parsedCss.declarations);
+      ownDeclarations.push(...parsedCss.declarations);
       cssParseIssues.push(...parsedCss.issues);
       mergeSignals(
         { colors, fontSizes, fontWeights, spacingValues, radii, shadows },
@@ -843,6 +886,9 @@ async function ingestWebsiteSource(
           notes.push(`Skipped cross-origin stylesheet: ${href}`);
           continue;
         }
+        // A stylesheet shared by several pages is fetched and parsed once but counts for every page.
+        const cached = stylesheetDeclarations.get(cssUrl.toString());
+        if (cached) { ownDeclarations.push(...cached); continue; }
         const cssFetch = await fetchWebsiteResource(cssUrl, {
           maxBytes: MAX_CSS_BYTES,
           kind: "css",
@@ -850,7 +896,8 @@ async function ingestWebsiteSource(
           signal,
           userAgent: `BurnGuard/${APP_VERSION} design-system-import`,
         });
-        if (seenStylesheets.has(cssFetch.finalUrl.toString())) continue;
+        const seenDeclarations = stylesheetDeclarations.get(cssFetch.finalUrl.toString());
+        if (seenStylesheets.has(cssFetch.finalUrl.toString())) { ownDeclarations.push(...(seenDeclarations ?? [])); continue; }
         seenStylesheets.add(cssFetch.finalUrl.toString());
         const cssText = cssFetch.text;
         const fileName = `linked-${stylesheetIndex}.css`;
@@ -864,6 +911,9 @@ async function ingestWebsiteSource(
         const parsedCss = await parseCssSource({ content: cssText, sourceId: cssSourceId, fileOrder: cssFileOrder, signal });
         cssFileOrder += 1;
         cssDeclarations.push(...parsedCss.declarations);
+        ownDeclarations.push(...parsedCss.declarations);
+        stylesheetDeclarations.set(cssUrl.toString(), parsedCss.declarations);
+        stylesheetDeclarations.set(cssFetch.finalUrl.toString(), parsedCss.declarations);
         cssParseIssues.push(...parsedCss.issues);
         mergeSignals(
           { colors, fontSizes, fontWeights, spacingValues, radii, shadows },
@@ -955,6 +1005,28 @@ async function ingestWebsiteSource(
     artifactCopies: [],
     // Read before sanitization strips image sources; only typed counts and flags leave this scope.
     sourceEvidence: collectSourceEvidence([...pageHtmlByUrl.values()], cssDeclarations),
+    pageCoverage: buildPageCoverage({
+      limit: pageLimit,
+      discovered: discovery.discovered,
+      extracted: [...pageHtmlByUrl].map(([pageUrl, pageHtml]) => {
+        const path = canonicalPagePath(pageUrl, url) ?? "/";
+        const declarations = pageDeclarations.get(pageUrl) ?? [];
+        const signals = styleSignalsFromDeclarations(declarations);
+        return {
+          path,
+          source: candidateSource.get(path) ?? "link",
+          pageType: candidateSource.get(path) === "entry" ? "home" : classifyPageType(path, pageHtml),
+          layoutTokens: measureSourceLayout(declarations, signals.spacingValues).tokens,
+          patterns: observedPatterns(collectSourceEvidence([pageHtml], declarations)),
+          colors: signals.colors.slice(0, 6),
+          fonts: fontFamiliesFromDeclarations(declarations).slice(0, 3),
+        };
+      }),
+      skipped: [
+        ...discovery.skipped.map((page) => ({ ...page, pageType: classifyPageType(page.path, "") })),
+        ...failedPages.map((page) => ({ ...page, reason: "fetch_failed" as const, pageType: classifyPageType(page.path, "") })),
+      ],
+    }),
   };
 }
 
@@ -1391,6 +1463,9 @@ async function writeCanonicalDesignSystem(input: {
     generated,
     input.systemDir,
   );
+  if (input.analysis.pageCoverage) {
+    await writeText(path.join(input.systemDir, "pages.json"), `${JSON.stringify(input.analysis.pageCoverage, null, 2)}\n`, generated, input.systemDir);
+  }
   await writeText(
     path.join(input.systemDir, "SKILL.md"),
     buildSkill(input.brandName),
@@ -1624,7 +1699,7 @@ Open with a restrained hero, follow with aligned evidence rows on flat surfaces,
 ## Responsive
 Below --layout-bp-md stack columns in reading order, keep navigation bounded to the viewport and let labels and actions wrap. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.
 
-${buildSectionPatternReadme(evidence)}${buildAssetGuideReadme({ brandName, primary, action, colors: analysis.colors, fontFamilies: analysis.fontFamilies, radii: analysis.radii, logoPaths: analysis.logoFiles.slice(0, 8).map((item) => `assets/logos/${safeFileName(item.fileName)}`), evidence })}
+${buildSectionPatternReadme(evidence)}${analysis.pageCoverage ? buildPageTemplateReadme(analysis.pageCoverage) : ""}${buildAssetGuideReadme({ brandName, primary, action, colors: analysis.colors, fontFamilies: analysis.fontFamilies, radii: analysis.radii, logoPaths: analysis.logoFiles.slice(0, 8).map((item) => `assets/logos/${safeFileName(item.fileName)}`), evidence })}
 ## Caveats & substitutions
 ${caveats.join("\n")}
 `;

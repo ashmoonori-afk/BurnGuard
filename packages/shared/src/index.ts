@@ -10,6 +10,7 @@ export * from "./contract-parser";
 export * from "./design-system";
 export * from "./design-system-layout";
 export * from "./design-system-assets";
+export * from "./design-system-pages";
 export * from "./design-system-layout-preview";
 export * from "./design-surface";
 export * from "./design-brief";

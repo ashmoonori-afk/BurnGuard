@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { MAX_PAGE_LIMIT } from "@bg/shared";
 import type {
   ApiErrorBody,
   ApiSuccess,
@@ -72,7 +73,7 @@ systemRoutes.post("/api/design-systems/extract", async (c) => {
     return c.json(fail("invalid_body", "Expected a JSON object request body"), 400);
   }
 
-  const allowedFields = new Set(["source_url", "source_type", "name", "system_id", "lineage"]);
+  const allowedFields = new Set(["source_url", "source_type", "name", "system_id", "lineage", "page_limit"]);
   if (Object.keys(body).some((field) => !allowedFields.has(field))) {
     return c.json(fail("invalid_body", "Extraction request contains unsupported fields"), 400);
   }
@@ -82,7 +83,9 @@ systemRoutes.post("/api/design-systems/extract", async (c) => {
   const name = "name" in body ? body.name : undefined;
   const systemId = "system_id" in body ? body.system_id : undefined;
   const lineage = parseExtractionLineage("lineage" in body ? body.lineage : undefined);
+  const pageLimit = "page_limit" in body ? body.page_limit : undefined;
   if (
+    (pageLimit !== undefined && (typeof pageLimit !== "number" || !Number.isInteger(pageLimit) || pageLimit < 1 || pageLimit > MAX_PAGE_LIMIT)) ||
     typeof sourceUrl !== "string" ||
     (sourceType !== undefined && sourceType !== "github" && sourceType !== "website" && sourceType !== "figma") ||
     (name !== undefined && typeof name !== "string") ||
@@ -97,6 +100,7 @@ systemRoutes.post("/api/design-systems/extract", async (c) => {
     ...(name === undefined ? {} : { name }),
     ...(systemId === undefined ? {} : { system_id: systemId }),
     ...(lineage === undefined ? {} : { lineage }),
+    ...(pageLimit === undefined ? {} : { page_limit: pageLimit }),
   };
 
   try {

@@ -11,6 +11,7 @@ import {
 import { catalogDetailRows, getDesignSystem, updateDesignSystemWithConflictReload } from "@/api/design-system-metadata";
 import { DesignSystemLayoutPanel } from "@/components/systems/DesignSystemLayoutPanel";
 import { DesignSystemAssetsPanel } from "@/components/systems/DesignSystemAssetsPanel";
+import { DesignSystemPagesPanel } from "@/components/systems/DesignSystemPagesPanel";
 import SystemPreviewGrid from "@/components/systems/SystemPreviewGrid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -369,6 +370,7 @@ function DesignSystemEditor({ id }: { id: string }) {
           <SystemPreviewGrid systemId={id} onEditColors={() => colorEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} previewRefreshKey={previewRefreshKey} />
         </section>
         <div id="system-layout" className="scroll-mt-6"><DesignSystemLayoutPanel layout={tokensQuery.data?.layout} loading={tokensQuery.isPending} failed={tokensQuery.isError} /></div>
+        <DesignSystemPagesPanel pages={tokensQuery.data?.pages} />
         <div id="system-assets" className="scroll-mt-6"><DesignSystemAssetsPanel assets={tokensQuery.data?.assets} loading={tokensQuery.isPending} failed={tokensQuery.isError} /></div>
         <section id="system-style-editor" className="mt-8 scroll-mt-6">
           <div className="mb-4"><h2 className="text-lg font-semibold">{t("system.editColorsFonts")}</h2><p className="mt-1 text-sm text-muted-foreground">{t("system.styleHelp")}</p></div>

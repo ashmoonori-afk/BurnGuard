@@ -38,6 +38,8 @@ export interface CreateDesignSystemExtractionRequest {
   name?: string;
   system_id?: string;
   lineage?: DesignSystemExtractionLineageRequest;
+  /** Website sources: most pages to extract, 1..MAX_PAGE_LIMIT (default DEFAULT_PAGE_LIMIT). */
+  page_limit?: number;
 }
 
 export interface CreateDesignSystemUploadRequest {
@@ -55,6 +57,7 @@ export interface DesignSystemTokensResponse {
   token_file_path: string | null;
   layout?: import("./design-system-layout").DesignSystemLayout;
   assets?: import("./design-system-assets").DesignSystemAssetGuide;
+  pages?: import("./design-system-pages").DesignSystemPageCoverage;
 }
 
 export interface UpsertDesignSystemColorRequest {

@@ -11,7 +11,7 @@ import { AcquisitionLimitError, DEFAULT_ACQUISITION_LIMITS, throwIfAcquisitionAb
 import { collectSourceEvidence } from "./extraction-evidence";
 import { listFilesRecursive } from "./extraction-path";
 
-const TEXT_FILE_EXTENSIONS = new Set([".css", ".scss", ".sass", ".less", ".json", ".html", ".js", ".jsx", ".ts", ".tsx", ".md"]);
+const TEXT_FILE_EXTENSIONS = new Set([".css", ".scss", ".sass", ".less", ".json", ".html", ".htm", ".js", ".jsx", ".ts", ".tsx", ".md"]);
 const UI_KIT_EXTENSIONS = new Set([".html", ".jsx", ".tsx", ".css"]);
 const LOGO_EXTENSIONS = new Set([".svg", ".png", ".jpg", ".jpeg", ".webp"]);
 const READ_CHUNK_BYTES = 64 * 1024;
@@ -44,6 +44,8 @@ export type SourceAnalysis = {
   readonly artifactCopies: SourceArtifact[];
   /** Evidence read from the original source before sanitization; absent for sources without HTML. */
   readonly sourceEvidence?: import("./extraction-evidence").SourceEvidence;
+  /** Per-page discovery and extraction results; website sources only. */
+  readonly pageCoverage?: import("@bg/shared").DesignSystemPageCoverage;
 };
 
 export async function analyzeLocalTree(
