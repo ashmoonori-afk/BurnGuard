@@ -54,8 +54,8 @@ const parityTables: readonly ExpectedParity[] = [
   { table: learningCheckpointsTable, checks: [], defaults: {}, namedIndexes: ["idx_learning_checkpoints_item"], primaryKey: ["id"], unique: [] },
   { table: artifactOperationsTable, checks: ["status in ('pending','working','committed','cancelled','failed','conflicted','recovering','recovered')"], defaults: { status: "pending" }, namedIndexes: ["idx_artifact_operations_project", "uq_artifact_operations_nonterminal"], primaryKey: ["id"], unique: [] },
   { table: exportAttemptsTable, checks: ["status in ('pending','running','validating','validated','failed','cancelled','retrying','recovering','expired','corrupt')"], defaults: {}, namedIndexes: ["idx_export_attempts_job", "uq_export_attempts_nonterminal", "uq_export_attempts_parent"], primaryKey: ["id"], unique: [] },
-  { table: visualAlternativeGenerationsTable, checks: ["status in ('generating','ready','partial','failed')"], defaults: {}, namedIndexes: ["idx_visual_alternative_generations_project", "uq_visual_alternative_generation_active"], primaryKey: ["id"], unique: [] },
-  { table: visualAlternativesTable, checks: ["ordinal between 0 and 3", "status in ('pending','generating','ready','failed')"], defaults: {}, namedIndexes: ["idx_visual_alternatives_project"], primaryKey: ["id"], unique: [["generation_id", "name"], ["generation_id", "ordinal"]] },
+  { table: visualAlternativeGenerationsTable, checks: ["status in ('generating','ready','partial','failed')", "base_revision >= 0", "length(base_digest) = 64"], defaults: {}, namedIndexes: ["idx_visual_alternative_generations_project", "uq_visual_alternative_generation_active"], primaryKey: ["id"], unique: [["id", "project_id"]] },
+  { table: visualAlternativesTable, checks: ["ordinal between 0 and 3", "status in ('pending','generating','ready','failed')", "(status = 'ready') = (result_revision is not null and result_digest is not null)", "result_digest is null or length(result_digest) = 64"], defaults: {}, namedIndexes: ["idx_visual_alternatives_project"], primaryKey: ["id"], unique: [["generation_id", "name"], ["generation_id", "ordinal"], ["operation_id"]] },
 ];
 
 const dialect = new SQLiteSyncDialect();
@@ -171,10 +171,10 @@ function namedIndexes(db: Database, tableName: string) {
       const sqliteColumns = db.query<{ readonly name: string; readonly type: string; readonly required: number; readonly defaultValue: string | null; readonly pk: number }, [string]>("SELECT name,type,\"notnull\" AS required,dflt_value AS defaultValue,pk FROM pragma_table_info(?) ORDER BY cid").all(name);
       const drizzleColumnParity = config.columns.map((column) => ({ name: column.name, type: column.getSQLType().toUpperCase(), required: column.notNull ? 1 : 0 }));
       const sqliteColumnParity = sqliteColumns.map((column) => ({ name: column.name, type: column.type, required: column.required }));
-      const sqliteForeignKeys = db.query<{ readonly source: string; readonly targetTable: string; readonly target: string; readonly onDelete: string }, [string]>("SELECT \"from\" AS source,\"table\" AS targetTable,\"to\" AS target,on_delete AS onDelete FROM pragma_foreign_key_list(?) ORDER BY id DESC").all(name);
-      const drizzleForeignKeys = config.foreignKeys.map((foreignKey) => {
+      const sqliteForeignKeys = db.query<{ readonly source: string; readonly targetTable: string; readonly target: string; readonly onDelete: string }, [string]>("SELECT \"from\" AS source,\"table\" AS targetTable,\"to\" AS target,on_delete AS onDelete FROM pragma_foreign_key_list(?) ORDER BY id DESC, seq").all(name);
+      const drizzleForeignKeys = config.foreignKeys.flatMap((foreignKey) => {
         const reference = foreignKey.reference();
-        return { source: reference.columns[0]?.name, targetTable: getTableName(reference.foreignTable), target: reference.foreignColumns[0]?.name, onDelete: (foreignKey.onDelete ?? "no action").toUpperCase() };
+        return reference.columns.map((column, position) => ({ source: column.name, targetTable: getTableName(reference.foreignTable), target: reference.foreignColumns[position]?.name, onDelete: (foreignKey.onDelete ?? "no action").toUpperCase() }));
       });
       const sqliteNamedIndexes = namedIndexes(db, name);
       const drizzleIndexes = config.indexes.map((index) => ({ name: index.config.name, unique: index.config.unique, partial: index.config.where !== undefined, columns: index.config.columns.map(indexExpression) })).sort((left, right) => left.name.localeCompare(right.name));
@@ -184,7 +184,7 @@ function namedIndexes(db: Database, tableName: string) {
       const drizzleUnique = config.uniqueConstraints.map((constraint) => constraint.columns.map((column) => column.name)).sort();
       const drizzleDefaults = Object.fromEntries(config.columns.filter((column) => column.default !== undefined).map((column) => [column.name, String(column.default)]));
       const sqliteDefaults = Object.fromEntries(sqliteColumns.filter((column) => column.defaultValue !== null).map((column) => [column.name, column.defaultValue?.replaceAll("'", "")]));
-      const drizzleChecks = normalized(config.checks.map((check) => dialect.sqlToQuery(check.value).sql).join(" "));
+      const drizzleChecks = normalized(config.checks.map((check) => dialect.sqlToQuery(check.value).sql).join(" ")).replaceAll(`${name}.`, "");
 
       expect(drizzleColumnParity).toEqual(sqliteColumnParity);
       expect(drizzleForeignKeys).toEqual(sqliteForeignKeys);

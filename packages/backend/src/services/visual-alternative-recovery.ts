@@ -9,7 +9,7 @@ import {
   repairVisualAlternativeRetention,
 } from "../db/visual-alternative-repository";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
-import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
+import { assertSafeName, PathBoundaryError, resolveWithin } from "../security/path-boundary";
 import {
   parseCanonicalTreeManifest,
   validateCanonicalTree,
@@ -84,10 +84,11 @@ async function recoverGeneration(
   const projectId = text(row.project_id);
   let projectDir: string;
   try {
+    assertSafeName(generationId);
     projectDir = resolveManagedPath(dependencies.root, text(row.dir_path));
   } catch (error) {
     if (!(error instanceof PathBoundaryError)) throw error;
-    // Never touch files outside managed storage; settle the rows only.
+    // Never derive paths from unsafe ids or touch files outside managed storage; settle the rows only.
     finishVisualAlternativeGeneration(db, generationId, dependencies.now());
     return true;
   }
@@ -108,9 +109,18 @@ async function recoverGeneration(
     await validateCanonicalTree(basePath, manifest);
   } catch (error) {
     if (error instanceof PathBoundaryError) throw error;
-    console.warn("[alternatives] corrupt generation base; generation failed", generationId);
-    finishVisualAlternativeGeneration(db, generationId, dependencies.now());
-    return true;
+    const current = db.query<{ readonly current_digest: string | null }, [string]>(
+      "SELECT current_digest FROM projects WHERE id=?",
+    ).get(projectId);
+    if (current !== null && current.current_digest === row.base_digest) {
+      // The project already holds the original base; only the staged copy is unusable.
+      finishVisualAlternativeGeneration(db, generationId, dependencies.now());
+      await rm(generationPath, { recursive: true, force: true });
+      return true;
+    }
+    holdProjectSessions(db, projectId);
+    console.warn("[alternatives] corrupt generation base; sessions held", generationId);
+    return false;
   }
   const alternatives = db.query<AlternativeRecoveryRow, [string, string]>(
     "SELECT id,status,operation_id FROM visual_alternatives WHERE generation_id=? AND project_id=? ORDER BY ordinal",
@@ -140,19 +150,25 @@ async function recoverGeneration(
     }
   }
   try {
-    await dependencies.restoreBase(db, projectId, projectDir, basePath);
+    await dependencies.restoreBase(db, projectId, projectDir, basePath, {
+      producedBy: new Set(alternatives.map((alternative) => text(alternative.operation_id))),
+    });
   } catch {
-    const sessions = db.query<{ readonly id: string }, [string]>(
-      "SELECT id FROM sessions WHERE project_id=?",
-    ).all(projectId);
     // Keep the generation durable and its sessions held until a later startup restores the base.
-    holdSessionsForRecovery(sessions.map((session) => session.id));
+    holdProjectSessions(db, projectId);
     console.warn("[alternatives] base restore deferred; sessions held", generationId);
     return false;
   }
   finishVisualAlternativeGeneration(db, generationId, dependencies.now());
   await rm(generationPath, { recursive: true, force: true });
   return true;
+}
+
+function holdProjectSessions(db: Database, projectId: string): void {
+  const sessions = db.query<{ readonly id: string }, [string]>(
+    "SELECT id FROM sessions WHERE project_id=?",
+  ).all(projectId);
+  holdSessionsForRecovery(sessions.map((session) => session.id));
 }
 
 async function removeUnownedGenerationTrees(db: Database, root: string): Promise<void> {

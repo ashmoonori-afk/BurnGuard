@@ -141,11 +141,11 @@ visualAlternativeRoutes.post(
 visualAlternativeRoutes.post(
   "/api/projects/:id/alternatives/cancel",
   async (c) => {
-    const session = await getLatestProjectSession(c.req.param("id"));
-    if (session === null) {
-      return c.json(fail("project_session_not_found", "Project or session not found"), 404);
+    const projectId = c.req.param("id");
+    if (await getProjectDetail(projectId) === null) {
+      return c.json(fail("project_not_found", "Project not found"), 404);
     }
-    if (!service.cancel(session.id)) {
+    if (!service.cancel(projectId)) {
       return c.json(fail("operation_not_active", "No alternative generation is active"), 409);
     }
     return c.json(ok({ cancelled: true }), 202);

@@ -302,10 +302,10 @@ export function hasTurnCapacity(maxConcurrentTurns: number): boolean {
 }
 
 /** Admits a whole visual-alternative batch as one session operation, without yielding between checks. */
-export function admitVisualAlternativeBatch(sessionId: string, generationId: string, maxConcurrentTurns: number): AbortController | "session_busy" | "capacity_exhausted" {
+export function admitVisualAlternativeBatch(sessionId: string, projectId: string, generationId: string, maxConcurrentTurns: number): AbortController | "session_busy" | "capacity_exhausted" {
   if (activeTurns.has(sessionId) || recoveryHolds.has(sessionId) || isDirectionOperationActive(sessionId) || isVisualAlternativeOperationActive(sessionId)) return "session_busy";
   if (!hasTurnCapacity(maxConcurrentTurns)) return "capacity_exhausted";
-  return beginVisualAlternativeOperation(sessionId, generationId) ?? "session_busy";
+  return beginVisualAlternativeOperation(sessionId, projectId, generationId) ?? "session_busy";
 }
 
 export function releaseUserTurnReservation(reservation: UserTurnReservation): void {

@@ -15,6 +15,7 @@ export class VisualAlternativeServiceError extends Error {
     readonly code:
       | "alternative_not_found"
       | "alternative_not_ready"
+      | "base_diverged"
       | "capacity_exhausted"
       | "operation_not_active"
       | "generation_active"

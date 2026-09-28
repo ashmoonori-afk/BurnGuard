@@ -6,6 +6,7 @@ import {
   createVisualAlternativeGeneration,
   deleteVisualAlternative,
   markVisualAlternativeReady,
+  repairVisualAlternativeRetention,
 } from "../src/db/visual-alternative-repository";
 
 const DIGEST = "a".repeat(64);
@@ -62,6 +63,21 @@ describe("visual alternative repository constraints", () => {
       now: 2,
     })).toThrow("corrupt_visual_alternative");
     expect(db.query("SELECT status,result_revision FROM visual_alternatives WHERE id='a'").get()).toEqual({ status: "pending", result_revision: null });
+  });
+
+  test("Given a ready row whose result disagrees with its pinned operation When retention is repaired Then the pin is released", () => {
+    // Given
+    db.prepare(
+      "INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES ('op-a','p','committed',0,?,1,?,0,'','','[]','{}',?,'{}',1,1)",
+    ).run(DIGEST, "b".repeat(64), JSON.stringify({ schema_version: 1, replayable: true, retained_until: 253402300799999, pruned_at: null, prune_reason: null }));
+    db.prepare("UPDATE visual_alternatives SET status='ready',result_revision=1,result_digest=? WHERE id='a'").run("c".repeat(64));
+
+    // When
+    const repaired = repairVisualAlternativeRetention(db, 1000);
+
+    // Then
+    expect(repaired.released).toBe(1);
+    expect(db.query("SELECT json_extract(retention_json,'$.retained_until') AS until FROM artifact_operations WHERE id='op-a'").get()).toEqual({ until: 1000 + 30 * 24 * 60 * 60 * 1000 });
   });
 
   test("Given an unfinished alternative When deleted Then it is refused and kept", () => {

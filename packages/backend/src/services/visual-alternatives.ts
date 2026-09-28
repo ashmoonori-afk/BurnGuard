@@ -30,7 +30,8 @@ import {
   removeVisualAlternative,
 } from "./visual-alternative-actions";
 import {
-  cancelVisualAlternativeOperation,
+  allowVisualAlternativeMutation,
+  cancelVisualAlternativeProject,
   finishVisualAlternativeOperation,
 } from "./visual-alternative-operation-registry";
 import { admitVisualAlternativeBatch } from "./turns";
@@ -100,6 +101,7 @@ export class VisualAlternativeService {
     const generationId = assertSafeName(this.id());
     const admission = admitVisualAlternativeBatch(
       input.sessionId,
+      input.projectId,
       generationId,
       input.maxConcurrentTurns,
     );
@@ -132,6 +134,9 @@ export class VisualAlternativeService {
         name,
         operationId: assertSafeName(this.id()),
       }));
+      for (const alternative of alternatives) {
+        allowVisualAlternativeMutation(input.sessionId, generationId, alternative.operationId);
+      }
       try {
         // The durable owner row exists before any base bytes are staged.
         createVisualAlternativeGeneration(this.db, {
@@ -183,8 +188,8 @@ export class VisualAlternativeService {
     }
   }
 
-  cancel(sessionId: string): boolean {
-    return cancelVisualAlternativeOperation(sessionId);
+  cancel(projectId: string): boolean {
+    return cancelVisualAlternativeProject(projectId);
   }
 
   list(projectId: string): VisualAlternativeList | null {
@@ -271,13 +276,17 @@ export class VisualAlternativeService {
   }
 
   private async tryRestore(batch: Batch): Promise<boolean> {
+    const producedBy = new Set(batch.alternatives.map((alternative) => alternative.operationId));
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      const operationId = assertSafeName(this.id());
+      allowVisualAlternativeMutation(batch.input.sessionId, batch.generationId, operationId);
       try {
         await this.restoreBase(
           this.db,
           batch.input.projectId,
           batch.input.projectDir,
           batch.basePath,
+          { producedBy, operationId },
         );
         return true;
       } catch (error) {

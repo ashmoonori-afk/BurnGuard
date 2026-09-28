@@ -252,6 +252,8 @@ export default function ProjectView() {
     queryKey: alternativesQueryKey,
     queryFn: () => getVisualAlternatives(id ?? ""),
     enabled: Boolean(id),
+    // A batch outlives this tab's mutation (reload, navigation): follow the durable status until it settles.
+    refetchInterval: (query) => query.state.data?.status === "generating" ? 3_000 : false,
   });
   const designAuditQueryKey = useMemo(() => ["project", id, "design-audit"] as const, [id]);
   const designAuditQuery = useQuery({
@@ -850,10 +852,12 @@ export default function ProjectView() {
       pushToast({ title: t("workspace.alternatives.generated"), tone: "success" });
     },
     onError: (error) => handleWriteError("workspace.alternatives.generateFailed", error),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: alternativesQueryKey }),
   });
   const cancelAlternativesMutation = useMutation({
     mutationFn: () => cancelVisualAlternatives(id ?? ""),
     onError: (error) => handleWriteError("workspace.alternatives.cancelFailed", error),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: alternativesQueryKey }),
   });
   const promoteAlternativeMutation = useMutation({
     mutationFn: (alternativeId: string) => {
@@ -1441,7 +1445,7 @@ export default function ProjectView() {
                 <AlternativeCompare
                   state={alternativesQuery.data}
                   disabled={composerDisabled || artifacts === null}
-                  generating={generateAlternativesMutation.isPending}
+                  generating={generateAlternativesMutation.isPending || alternativesQuery.data?.status === "generating"}
                   cancelling={cancelAlternativesMutation.isPending}
                   promotingId={promoteAlternativeMutation.isPending ? promoteAlternativeMutation.variables : null}
                   deletingId={deleteAlternativeMutation.isPending ? deleteAlternativeMutation.variables : null}

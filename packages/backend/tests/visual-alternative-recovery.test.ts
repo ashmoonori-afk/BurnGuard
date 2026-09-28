@@ -121,19 +121,75 @@ describe("visual alternative recovery", () => {
     expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(before);
   });
 
-  test("Given a base digest that does not match its manifest When startup recovers Then the generation fails without a restore", async () => {
+  test("Given a corrupt base while the project holds an alternative When startup recovers Then nothing is released and the sessions are held", async () => {
     // Given
-    await interruptedGeneration("generation-corrupt");
+    addSession("s-corrupt-base");
+    const { basePath } = await interruptedGeneration("generation-corrupt");
     db.exec(`UPDATE visual_alternative_generations SET base_digest='${"0".repeat(64)}' WHERE id='generation-corrupt'`);
     let restored = false;
 
     // When
-    await recoverVisualAlternatives(db, { root, restoreBase: async () => { restored = true; } });
+    const recovered = await recoverVisualAlternatives(db, { root, restoreBase: async () => { restored = true; } });
 
     // Then
     expect(restored).toBe(false);
-    expect(db.query("SELECT status FROM visual_alternative_generations WHERE id='generation-corrupt'").get()).toEqual({ status: "failed" });
+    expect(recovered.held).toEqual(["generation-corrupt"]);
+    expect(isSessionHeldForRecovery("s-corrupt-base")).toBe(true);
+    expect(db.query("SELECT status FROM visual_alternative_generations WHERE id='generation-corrupt'").get()).toEqual({ status: "generating" });
+    expect(existsSync(basePath)).toBe(true);
+  });
+
+  test("Given a corrupt staged base while the project is still at its base When startup recovers Then the generation settles safely", async () => {
+    // Given
+    const coordinator = new ArtifactCoordinator(db);
+    const base = await coordinator.initialize("p", projectDir);
+    const basePath = path.join(projectDir, ".meta", "visual-alternatives", "generation-at-base", "base");
+    await materializeManagedTree(projectDir, basePath);
+    await writeFile(path.join(basePath, "index.html"), "tampered");
+    db.prepare(
+      "INSERT INTO visual_alternative_generations(id,project_id,status,base_revision,base_digest,base_manifest_json,base_path,created_at,updated_at) VALUES ('generation-at-base','p','generating',0,?,?,?,1,1)",
+    ).run(base.tree_digest, JSON.stringify(base), basePath);
+
+    // When
+    const recovered = await recoverVisualAlternatives(db, { root });
+
+    // Then
+    expect(recovered.held).toEqual([]);
+    expect(db.query("SELECT status FROM visual_alternative_generations WHERE id='generation-at-base'").get()).toEqual({ status: "failed" });
+    expect(existsSync(path.join(projectDir, ".meta", "visual-alternatives", "generation-at-base"))).toBe(false);
+  });
+
+  test("Given a persisted generation id that is not a safe name When startup recovers Then rows settle and no metadata is removed", async () => {
+    // Given
+    const coordinator = new ArtifactCoordinator(db);
+    const base = await coordinator.initialize("p", projectDir);
+    await mkdir(path.join(projectDir, ".meta", "keep"), { recursive: true });
+    await writeFile(path.join(projectDir, ".meta", "keep", "marker"), "keep");
+    db.prepare(
+      "INSERT INTO visual_alternative_generations(id,project_id,status,base_revision,base_digest,base_manifest_json,base_path,created_at,updated_at) VALUES ('..','p','generating',0,?,NULL,?,1,1)",
+    ).run(base.tree_digest, path.join(projectDir, ".meta", "base"));
+
+    // When
+    await recoverVisualAlternatives(db, { root });
+
+    // Then
+    expect(db.query("SELECT status FROM visual_alternative_generations WHERE id='..'").get()).toEqual({ status: "failed" });
+    expect(await readFile(path.join(projectDir, ".meta", "keep", "marker"), "utf8")).toBe("keep");
+  });
+
+  test("Given the current revision was not produced by the batch When startup recovers Then the foreign edit is kept and sessions are held", async () => {
+    // Given
+    addSession("s-foreign");
+    await interruptedGeneration("generation-foreign");
+    db.exec("UPDATE visual_alternatives SET operation_id='other-operation' WHERE id='generation-foreign-a'");
+
+    // When
+    const recovered = await recoverVisualAlternatives(db, { root });
+
+    // Then
+    expect(recovered.held).toEqual(["generation-foreign"]);
     expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("<main>Interrupted alternative</main>");
+    expect(isSessionHeldForRecovery("s-foreign")).toBe(true);
   });
 
   test("Given the base cannot be restored When startup recovers Then the generation stays durable and its sessions are held", async () => {

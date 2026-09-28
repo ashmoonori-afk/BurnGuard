@@ -52,15 +52,27 @@ export async function restoreVisualAlternativeBase(
   projectId: string,
   projectDir: string,
   basePath: string,
+  options: {
+    /** Operations the batch committed; any other current revision is foreign and is never overwritten. */
+    readonly producedBy: ReadonlySet<string>;
+    readonly operationId?: string;
+  },
 ): Promise<void> {
   const identity = visualAlternativeProjectIdentity(db, projectId);
   const coordinator = new ArtifactCoordinator(db);
   await coordinator.initialize(projectId, projectDir);
   const base = await inspectCanonicalTree(basePath);
   if (identity.digest === base.tree_digest) return;
+  const producer = db.query<{ readonly id: string }, [string, number, string]>(
+    "SELECT id FROM artifact_operations WHERE project_id=? AND status='committed' AND result_revision=? AND result_digest=?",
+  ).get(projectId, identity.revision, identity.digest);
+  if (producer === null || !options.producedBy.has(producer.id)) {
+    throw new VisualAlternativeServiceError("base_diverged");
+  }
   await coordinator.run({
     projectId,
     projectDir,
+    operationId: options.operationId,
     kind: "restore",
     expectedRevision: identity.revision,
     expectedArtifactDigest: identity.digest,

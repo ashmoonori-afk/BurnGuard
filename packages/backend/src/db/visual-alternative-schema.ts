@@ -33,6 +33,14 @@ export const visualAlternativeGenerationsTable = sqliteTable(
       "ck_visual_alternative_generations_status",
       sql`${table.status} IN ('generating','ready','partial','failed')`,
     ),
+    check(
+      "ck_visual_alternative_generations_base_revision",
+      sql`${table.baseRevision} >= 0`,
+    ),
+    check(
+      "ck_visual_alternative_generations_base_digest",
+      sql`length(${table.baseDigest}) = 64`,
+    ),
     index("idx_visual_alternative_generations_project").on(
       table.projectId,
       desc(table.createdAt),
@@ -61,7 +69,7 @@ export const visualAlternativesTable = sqliteTable(
     sourceDigest: text("source_digest").notNull(),
     resultRevision: integer("result_revision"),
     resultDigest: text("result_digest"),
-    operationId: text("operation_id").notNull().unique(),
+    operationId: text("operation_id").notNull(),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
@@ -78,6 +86,11 @@ export const visualAlternativesTable = sqliteTable(
       "ck_visual_alternatives_result",
       sql`(${table.status} = 'ready') = (${table.resultRevision} IS NOT NULL AND ${table.resultDigest} IS NOT NULL)`,
     ),
+    check(
+      "ck_visual_alternatives_result_digest",
+      sql`${table.resultDigest} IS NULL OR length(${table.resultDigest}) = 64`,
+    ),
+    unique().on(table.operationId),
     foreignKey({
       columns: [table.generationId, table.projectId],
       foreignColumns: [

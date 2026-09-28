@@ -278,7 +278,9 @@ export function repairVisualAlternativeRetention(
       `UPDATE artifact_operations SET retention_json=json_set(retention_json,'$.retained_until',?),updated_at=?
         WHERE json_extract(retention_json,'$.retained_until')=?
           AND NOT EXISTS (SELECT 1 FROM visual_alternatives a
-            WHERE a.operation_id=artifact_operations.id AND a.status='ready')`,
+            WHERE a.operation_id=artifact_operations.id AND a.project_id=artifact_operations.project_id
+              AND a.status='ready' AND a.result_revision=artifact_operations.result_revision
+              AND a.result_digest=artifact_operations.result_digest)`,
     ).run(now + RELEASED_RETENTION_MS, now, RETAINED_UNTIL).changes;
     return { retained, released };
   })();

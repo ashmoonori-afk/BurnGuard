@@ -268,7 +268,7 @@ describe("visual alternative service", () => {
       runTurn: async ({ operationId, ordinal }) => {
         ran.push(ordinal);
         await commitAlternative(coordinator, operationId, ordinal);
-        if (ordinal === 0) service.cancel("s");
+        if (ordinal === 0) service.cancel("p");
       },
     });
 
@@ -353,6 +353,41 @@ describe("visual alternative service", () => {
 
     // Then
     expect(observed).toEqual({ turn: "session_busy", direction: null, hold: null, deletion: "project_in_use" });
+  });
+
+  test("Given an active batch When another session commits to the same project Then the foreign mutation is refused and the base is restored", async () => {
+    // Given
+    const coordinator = new ArtifactCoordinator(db);
+    await coordinator.initialize("p", root);
+    let foreign: unknown = null;
+    const service = new VisualAlternativeService(db, {
+      runTurn: async ({ operationId, ordinal }) => {
+        if (ordinal === 0) {
+          const project = db.query<{ readonly current_revision: number; readonly current_digest: string }, []>(
+            "SELECT current_revision,current_digest FROM projects WHERE id='p'",
+          ).get();
+          if (project === null) throw new Error("project_fixture_missing");
+          foreign = await coordinator.run({
+            projectId: "p",
+            projectDir: root,
+            kind: "palette",
+            expectedRevision: project.current_revision,
+            expectedArtifactDigest: project.current_digest,
+            mutate: async (stage) => { await writeFile(path.join(stage, "index.html"), "<main>Foreign</main>"); },
+          }).then(() => "committed", (error: unknown) => (error as { code?: string }).code);
+        }
+        await commitAlternative(coordinator, operationId, ordinal);
+      },
+    });
+
+    // When
+    const started = await service.generate(generateInput(["A", "B"]));
+    const completed = await started.completion;
+
+    // Then
+    expect(foreign).toBe("operation_conflict");
+    expect(completed.status).toBe("ready");
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("<main>Original</main>");
   });
 
   test("Given the base cannot be restored When an item finishes Then the generation stays active and the session stays leased", async () => {

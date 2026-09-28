@@ -12,6 +12,7 @@ import { adoptExistingArtifact, establishEmptyArtifactAuthority } from "./artifa
 import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
 import { pruneExpiredArtifactOperations } from "./artifact-retention";
 import { acquireArtifactProjectLock } from "./artifact-project-lock";
+import { isArtifactMutationBlockedByAlternatives } from "./visual-alternative-operation-registry";
 
 type OperationKind = "patch" | "palette" | "turn" | "restore" | "undo" | "external" | "initialize";
 type CoordinatorFaults = {
@@ -129,6 +130,9 @@ export class ArtifactCoordinator {
     // adoption, so an operation is either registered before they look or validates against their result.
     const releaseAdmission = await acquireArtifactProjectLock(this.db, input.projectId);
     try {
+      if (isArtifactMutationBlockedByAlternatives(input.projectId, id)) {
+        throw new ArtifactOperationError("operation_conflict", "Visual alternatives are being generated for this project");
+      }
       await pruneExpiredArtifactOperations(this.db, { projectId: input.projectId, preserveOperationId: input.parentOperationId });
       base = await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
       this.faults.beforeSnapshot?.();
