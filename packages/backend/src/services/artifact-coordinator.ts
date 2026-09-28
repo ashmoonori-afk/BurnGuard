@@ -21,7 +21,9 @@ import {
   loadFigmaReferencePolicy,
   type FigmaReferencePolicy,
 } from "./figma-reference-policy";
+import { FigmaImportError } from "./figma-import-errors";
 import {
+  AcquisitionLimitError,
   ExtractionAcquisitionError,
   throwIfAcquisitionAborted,
 } from "./extraction-acquisition";
@@ -239,6 +241,8 @@ export class ArtifactCoordinator {
       if (securityFailure) throw new ArtifactOperationError("immutable_reference_escaped", "immutable_reference_escaped");
       if (error instanceof ArtifactOperationError) throw error;
       if (error instanceof ExtractionAcquisitionError) throw error;
+      // Sanitized domain errors raised while staging keep their own codes after rollback.
+      if (error instanceof AcquisitionLimitError || error instanceof FigmaImportError) throw error;
       throw new ArtifactOperationError("operation_failed", error instanceof Error ? error.message : "Artifact operation failed");
     }
     try { this.faults.beforeBaselineFinalize?.(); await materializeManagedTree(stagePath, this.baselinePath(input.projectDir)); }
@@ -254,6 +258,8 @@ export class ArtifactCoordinator {
     if (raw === null) throw new ArtifactOperationError("undo_unavailable", "Committed operation is unavailable");
     const row = parsePersistedArtifactOperation(raw);
     if (row.status !== "committed") throw new ArtifactOperationError("undo_unavailable", "Committed operation is unavailable");
+    // Imported Figma references are immutable; undoing the import would delete them.
+    if (row.replay.kind === "figma_import") throw new ArtifactOperationError("undo_unavailable", "Imported references cannot be undone");
     const snapshot = row.snapshot;
     const retention = row.retention;
     if (!retention.replayable) throw new ArtifactOperationError("undo_pruned", "Retained bytes were pruned");

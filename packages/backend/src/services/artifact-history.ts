@@ -17,10 +17,10 @@ export function artifactHistory(db: Database, projectId: string, revision: numbe
     next = target ? byRevision.get(target.base_revision) : undefined;
   }
   return { schema_version: 1, current_revision: revision, current_digest: digest,
-    undo_operation_id: next && next.replay.kind !== "initialize" && next.retention.replayable ? next.id : null,
+    undo_operation_id: next && next.replay.kind !== "initialize" && next.replay.kind !== "figma_import" && next.retention.replayable ? next.id : null,
     entries: rows.filter(row => row.replay.kind !== "initialize" && row.base_digest !== digest).map(row => {
       const previous = byRevision.get(row.base_revision);
-      return { operation_id: row.id, revision: row.base_revision, created_at: previous?.updated_at ?? row.created_at, kind: previous?.replay.kind ?? "initialize", files: row.diff.map(file => file.path), available: row.retention.replayable };
+      return { operation_id: row.id, revision: row.base_revision, created_at: previous?.updated_at ?? row.created_at, kind: previous?.replay.kind ?? "initialize", files: row.diff.map(file => file.path), available: row.retention.replayable && row.replay.kind !== "figma_import" };
     }),
   };
 }

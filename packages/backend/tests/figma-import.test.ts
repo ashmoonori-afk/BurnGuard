@@ -286,7 +286,7 @@ describe("Figma export staging", () => {
       node_id: "1:2",
       node_type: "FRAME",
       asset_path: expect.stringMatching(
-        /^references\/figma\/.+\/assets\/checkout-desktop\.png$/u,
+        /^references\/figma\/.+\/assets\/checkout-desktop-[a-f0-9]{16}\.png$/u,
       ),
     }));
   });
@@ -418,5 +418,53 @@ describe("Figma import manifest bounds", () => {
     expect(manifest.token_mapping.unmatched).toHaveLength(512);
     expect(manifest.token_mapping.total_unmatched).toBe(result.unmatched_token_count);
     expect(manifest.token_mapping.omitted_unmatched).toBe(result.unmatched_token_count - 512);
+  });
+});
+
+describe("Figma import asset naming", () => {
+  test("Given non-Latin asset and node names When staged Then each node keeps its own asset and names never collide", async () => {
+    // Given
+    const stageDir = await mkdtemp(path.join(tmpdir(), "bg-figma-unicode-"));
+    roots.push(stageDir);
+    const document = parseFigmaImportDocument({
+      name: "Unicode",
+      version: "1",
+      lastModified: "2026-09-27T10:15:00Z",
+      document: {
+        id: "0:0", name: "Document", type: "DOCUMENT",
+        children: [{
+          id: "1:0", name: "Page", type: "CANVAS",
+          children: [
+            { id: "3:1", name: "Σχέδιο", type: "FRAME" },
+            { id: "3:2", name: "Экран", type: "FRAME" },
+          ],
+        }],
+      },
+    });
+
+    // When
+    const result = await stageFigmaExport({
+      stage_dir: stageDir,
+      source_file_name: "unicode.json",
+      document,
+      node_ids: ["3:1", "3:2"],
+      assets: [
+        { relative_path: "exports/Σχέδιο.png", bytes: new Uint8Array([137, 80, 78, 71, 1]), media_type: "image/png" },
+        { relative_path: "exports/Экран.png", bytes: new Uint8Array([137, 80, 78, 71, 2]), media_type: "image/png" },
+      ],
+      pinned_tokens_css: "",
+      imported_at: "2026-09-27T12:00:00.000Z",
+      signal: new AbortController().signal,
+    });
+    const manifest = JSON.parse(await readFile(path.join(stageDir, result.manifest_path), "utf8"));
+    const byId = new Map(manifest.nodes.map((node: { readonly node_id: string; readonly asset_path: string | null; readonly asset_sha256: string | null }) => [node.node_id, node]));
+
+    // Then
+    const first = byId.get("3:1") as { readonly asset_path: string; readonly asset_sha256: string };
+    const second = byId.get("3:2") as { readonly asset_path: string; readonly asset_sha256: string };
+    expect(first.asset_path).not.toBe(second.asset_path);
+    expect(first.asset_sha256).not.toBe(second.asset_sha256);
+    expect([...await readFile(path.join(stageDir, first.asset_path))]).toEqual([137, 80, 78, 71, 1]);
+    expect([...await readFile(path.join(stageDir, second.asset_path))]).toEqual([137, 80, 78, 71, 2]);
   });
 });

@@ -56,10 +56,11 @@ export function validateFigmaAssets(
     if (basename === undefined || !mediaTypeMatches(basename, asset.media_type)) {
       failUnsafe();
     }
+    const assetDigest = digestFigmaBytes(asset.bytes);
+    // The digest keeps names distinct even when the readable part slugs to nothing (e.g. non-Latin names).
     const outputPath = `assets/${
       slugFigmaName(path.parse(basename).name) || "asset"
-    }.${asset.media_type === "image/png" ? "png" : "svg"}`;
-    const assetDigest = digestFigmaBytes(asset.bytes);
+    }-${assetDigest.slice(0, 16)}.${asset.media_type === "image/png" ? "png" : "svg"}`;
     const previous = digestsByPath.get(outputPath);
     if (previous !== undefined && previous !== assetDigest) failUnsafe();
     digestsByPath.set(outputPath, assetDigest);
@@ -77,12 +78,13 @@ export function assetForFigmaNode(
   nodeName: string,
   assets: readonly ValidatedFigmaAsset[],
 ): ValidatedFigmaAsset | undefined {
-  const names = new Set([
-    slugFigmaName(nodeName),
-    slugFigmaName(nodeId),
-    slugFigmaName(nodeId.replaceAll(":", "-")),
-  ]);
-  return assets.find((asset) => names.has(slugFigmaName(asset.basename)));
+  const names = new Set(
+    [nodeName, nodeId, nodeId.replaceAll(":", "-")].map(figmaMatchKey).filter((key) => key !== ""),
+  );
+  return assets.find((asset) => {
+    const key = figmaMatchKey(asset.basename);
+    return key !== "" && names.has(key);
+  });
 }
 
 export function nodeFileName(nodeId: string): string {
@@ -114,4 +116,13 @@ function mediaTypeMatches(
 
 function failUnsafe(): never {
   throw new FigmaImportError("unsafe_figma_asset");
+}
+
+/** Unicode-aware comparison key for matching exported file names to node names; empty never matches. */
+function figmaMatchKey(value: string): string {
+  return value.normalize("NFKC")
+    .toLocaleLowerCase("en-US")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .slice(0, 160);
 }

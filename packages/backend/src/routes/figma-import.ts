@@ -69,10 +69,14 @@ figmaImportRoutes.post("/api/projects/:id/figma/import", async (c) => {
     IMPORT_TIMEOUT_MS,
   );
   try {
-    const prepared = await parseFigmaExportForm(
-      await c.req.formData(),
-      budget.signal,
-    );
+    let form: FormData;
+    try {
+      form = await c.req.formData();
+    } catch (error) {
+      if (budget.signal.aborted) throw error;
+      throw new FigmaImportContractError("invalid_figma_request");
+    }
+    const prepared = await parseFigmaExportForm(form, budget.signal);
     const pin = await ensureProjectDesignSystemPin(project.id);
     throwIfAcquisitionAborted(budget.signal);
     const coordinator = new ArtifactCoordinator(getSqlite());

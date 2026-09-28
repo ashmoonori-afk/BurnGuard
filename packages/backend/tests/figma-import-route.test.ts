@@ -10,6 +10,8 @@ import {
   ArtifactCoordinator,
 } from "../src/services/artifact-coordinator";
 import { getProjectDetail } from "../src/db/project-read-repository";
+import { listArtifactOperations } from "../src/db/artifact-operation-query";
+import { artifactHistory } from "../src/services/artifact-history";
 
 const projectIds: string[] = [];
 const roots: string[] = [];
@@ -296,4 +298,66 @@ describe("project Figma file import route", () => {
     expect((await response.json()).error.code).toBe("invalid_figma_request");
   });
 
+});
+
+describe("project Figma file import route failures and history", () => {
+  test("Given an unsafe asset path found while staging When imported Then the sanitized 400 code survives rollback", async () => {
+    // Given
+    const project = await createProject();
+    const form = importForm(project);
+    form.set("asset_paths", "../outside.png");
+
+    // When
+    const response = await createApp().request(`/api/projects/${project.id}/figma/import`, { method: "POST", body: form });
+
+    // Then
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe("unsafe_figma_asset");
+    expect((await getProjectDetail(project.id))?.current_revision).toBe(project.revision);
+  });
+
+  test("Given a malformed multipart body When imported Then the route answers invalid_figma_request", async () => {
+    // Given
+    const project = await createProject();
+
+    // When
+    const response = await createApp().request(`/api/projects/${project.id}/figma/import`, {
+      method: "POST",
+      headers: { "content-type": "multipart/form-data; boundary=broken" },
+      body: "--not-the-boundary\r\nnonsense",
+    });
+
+    // Then
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe("invalid_figma_request");
+  });
+
+  test("Given a committed import When history is read and the import is undone Then receipts parse and undo is refused", async () => {
+    // Given
+    const project = await createProject();
+    const response = await createApp().request(`/api/projects/${project.id}/figma/import`, { method: "POST", body: importForm(project) });
+    expect(response.status).toBe(201);
+    const current = await getProjectDetail(project.id);
+    if (current === null || current.current_digest === null) throw new Error("artifact_identity_unavailable");
+    const operation = getSqlite().query<{ readonly id: string }, [string]>(
+      "SELECT id FROM artifact_operations WHERE project_id=? AND json_extract(replay_json,'$.kind')='figma_import'",
+    ).get(project.id);
+    if (operation === null) throw new Error("import_operation_missing");
+
+    // When
+    const operations = listArtifactOperations(getSqlite(), project.id);
+    const history = artifactHistory(getSqlite(), project.id, current.current_revision, current.current_digest);
+    const undo = await new ArtifactCoordinator(getSqlite()).undo({
+      projectId: project.id,
+      projectDir: project.dir,
+      operationId: operation.id,
+      expectedRevision: current.current_revision,
+      expectedArtifactDigest: current.current_digest,
+    }).then(() => "undone", (error: unknown) => (error as { code?: string }).code);
+
+    // Then
+    expect(operations.some((item) => item.replay.kind === "figma_import")).toBe(true);
+    expect(history.undo_operation_id).toBeNull();
+    expect(undo).toBe("undo_unavailable");
+  });
 });
