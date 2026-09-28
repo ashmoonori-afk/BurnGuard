@@ -21,6 +21,29 @@ export type SourceEvidence = {
 };
 
 const MAX_HTML_CHARS = 1_000_000;
+const SUBSTITUTIONS = ["var", "env", "attr"] as const;
+const SUBSTITUTIONS_AND_MATH = [...SUBSTITUTIONS, "calc", "min", "max", "clamp"] as const;
+
+/** The value with every call to the named functions removed, nested parentheses included. */
+export function withoutFunctions(value: string, names: readonly string[]): string {
+  const start = new RegExp(`^(?:${names.join("|")})\\(`, "i");
+  let out = "", index = 0;
+  while (index < value.length) {
+    const previous = value[index - 1] ?? " ";
+    if (!/[\w-]/.test(previous) && start.test(value.slice(index))) {
+      let depth = 0;
+      for (; index < value.length; index += 1) {
+        if (value[index] === "(") depth += 1;
+        if (value[index] === ")" && --depth === 0) { index += 1; break; }
+      }
+      out += " ";
+      continue;
+    }
+    out += value[index];
+    index += 1;
+  }
+  return out;
+}
 
 function mode<T>(values: readonly T[]): T | null {
   const counts = new Map<T, number>();
@@ -102,23 +125,9 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
 
   const svgs = all("svg").filter(svg => !/logo|brand/.test(classOf(svg) + classOf(svg.parentNode as HTMLElement)));
   const images = all("img").map(image => (image.getAttribute("src") ?? "").toLowerCase().split(/[?#]/)[0] ?? "").filter(src => !/logo|brand|icon|favicon/.test(src));
-  const backgrounds = values(["background", "background-image"]);
-  // Drops every var(...) including nested parentheses, so fallback times never read as observed.
-  const withoutSubstitutions = (value: string): string => {
-    let out = "", index = 0;
-    while (index < value.length) {
-      if (/^var\(/i.test(value.slice(index, index + 4))) {
-        let depth = 0;
-        for (; index < value.length; index += 1) { if (value[index] === "(") depth += 1; if (value[index] === ")" && --depth === 0) { index += 1; break; } }
-        out += " ";
-        continue;
-      }
-      out += value[index];
-      index += 1;
-    }
-    return out;
-  };
-  const durations = values(["transition", "transition-duration", "animation", "animation-duration"]).flatMap(value => [...withoutSubstitutions(value).matchAll(/(?<![\w.-])(\d*\.?\d+)(ms|s)(?![\w-])/g)].map(match => Math.round(Number(match[1]) * (match[2] === "s" ? 1000 : 1)))).filter(ms => ms > 0 && ms <= 5000).sort((a, b) => a - b);
+  // Gradients inside a substitution fallback may never apply, so only independently written ones count.
+  const backgrounds = values(["background", "background-image"]).map(value => withoutFunctions(value, SUBSTITUTIONS));
+  const durations = values(["transition", "transition-duration", "animation", "animation-duration"]).flatMap(value => [...withoutFunctions(value, SUBSTITUTIONS_AND_MATH).matchAll(/(?<![\w.-])(\d*\.?\d+)(ms|s)(?![\w-])/g)].map(match => Math.round(Number(match[1]) * (match[2] === "s" ? 1000 : 1)))).filter(ms => ms > 0 && ms <= 5000).sort((a, b) => a - b);
 
   return {
     hero: heroes[0] ?? null,

@@ -151,6 +151,13 @@ describe("Source layout measurement", () => {
     expect(align("left", "center", "right")).toBeNull();
     const parsed = await parseCssSource({ content: ":root { --duration: 1s } .a { transition: opacity var(--duration, 200ms) } .c { transition-duration: var(--d, calc(1s + 5ms)) } .b { animation: spin-2s 3s linear }", sourceId: "t.css", fileOrder: 0, signal: new AbortController().signal });
     expect(collectSourceEvidence([], parsed.declarations).motionMs).toEqual([3000, 3000]);
+    const math = await parseCssSource({ content: ":root { --duration: 1s } .a { animation-duration: calc(1s / 2) } .b { transition-duration: calc(var(--duration) + 200ms) }", sourceId: "m.css", fileOrder: 0, signal: new AbortController().signal });
+    const mathEvidence = collectSourceEvidence([], math.declarations);
+    expect(mathEvidence.motionMs).toBeNull();
+    expect(guideFor({ evidence: mathEvidence }).rules.find(rule => rule.kind === "motion")!.usage!.startsWith("Evidence: not found in the source")).toBe(true);
+    const fallbacks = await parseCssSource({ content: ":root { --bg: #fff; --pattern: none } .a { background: var(--bg, linear-gradient(#111, #222)) } .b { background-image: var(--pattern, repeating-linear-gradient(45deg, #000 0 2px, transparent 2px 8px)) } .c { background-image: linear-gradient(#333, #444) }", sourceId: "g.css", fileOrder: 0, signal: new AbortController().signal });
+    const fallbackEvidence = collectSourceEvidence([], fallbacks.declarations);
+    expect({ gradients: fallbackEvidence.gradients, patterns: fallbackEvidence.patterns }).toEqual({ gradients: 1, patterns: 0 });
     const contexts = await parseCssSource({ content: "@supports (max-width: 1200px) { .a { display: block } } @container (min-width: 900px) { .b { display: block } }", sourceId: "c.css", fileOrder: 0, signal: new AbortController().signal });
     expect(measureSourceLayout(contexts.declarations, []).tokens).toEqual({});
     expect(collectSourceEvidence([`<footer>${"<ul><li>a</li></ul>".repeat(8)}</footer>`], []).footerColumns).toBe(8);
