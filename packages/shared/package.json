@@ -22,6 +22,7 @@
     "./project-bundle": "./src/project-bundle.ts",
     "./reference-layout": "./src/reference-layout.ts",
     "./visual-source": "./src/visual-source.ts",
+    "./visual-alternative": "./src/visual-alternative.ts",
     "./contract-parser": "./src/contract-parser.ts",
     "./export": "./src/export.ts",
     "./export-parity": "./src/export-parity.ts",

@@ -10,6 +10,7 @@ import { runMigrationsFrom } from "../src/db/migrate";
 import { designSystemsTable, eventsTable, exportsTable, projectsTable, sessionsTable } from "../src/db/pipeline-authorities";
 import { artifactOperationsTable, designSystemReceiptsTable, designSystemTagsTable, exportAttemptsTable, learningCheckpointsTable, learningItemsTable, learningProgressTable } from "../src/db/pipeline-schema";
 import { attachmentsTable, commentsTable, filesTable, tweaksTable } from "../src/db/schema";
+import { visualAlternativeGenerationsTable, visualAlternativesTable } from "../src/db/visual-alternative-schema";
 
 const sourceDir = path.join(import.meta.dir, "../src/db/migrations");
 const databases: Database[] = [];
@@ -53,6 +54,8 @@ const parityTables: readonly ExpectedParity[] = [
   { table: learningCheckpointsTable, checks: [], defaults: {}, namedIndexes: ["idx_learning_checkpoints_item"], primaryKey: ["id"], unique: [] },
   { table: artifactOperationsTable, checks: ["status in ('pending','working','committed','cancelled','failed','conflicted','recovering','recovered')"], defaults: { status: "pending" }, namedIndexes: ["idx_artifact_operations_project", "uq_artifact_operations_nonterminal"], primaryKey: ["id"], unique: [] },
   { table: exportAttemptsTable, checks: ["status in ('pending','running','validating','validated','failed','cancelled','retrying','recovering','expired','corrupt')"], defaults: {}, namedIndexes: ["idx_export_attempts_job", "uq_export_attempts_nonterminal", "uq_export_attempts_parent"], primaryKey: ["id"], unique: [] },
+  { table: visualAlternativeGenerationsTable, checks: ["status in ('generating','ready','partial','failed')"], defaults: {}, namedIndexes: ["idx_visual_alternative_generations_project", "uq_visual_alternative_generation_active"], primaryKey: ["id"], unique: [] },
+  { table: visualAlternativesTable, checks: ["ordinal between 0 and 3", "status in ('pending','generating','ready','failed')"], defaults: {}, namedIndexes: ["idx_visual_alternatives_project"], primaryKey: ["id"], unique: [["generation_id", "name"], ["generation_id", "ordinal"]] },
 ];
 
 const dialect = new SQLiteSyncDialect();

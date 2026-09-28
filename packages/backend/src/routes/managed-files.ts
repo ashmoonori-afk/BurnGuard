@@ -15,6 +15,8 @@ import { rawFileHeaders } from "../security/raw-file-response";
 import { isProjectDocumentPath } from "../services/project-document-paths";
 import { readProjectDocument } from "../services/project-documents";
 import { readTurnPreview, recordTurnPreview } from "../services/turn-preview";
+import { getVisualAlternative } from "../db/visual-alternative-repository";
+import { readVisualAlternativeFile, VisualAlternativeStorageError } from "../services/visual-alternative-storage";
 
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
 function fail(code: string, message: string, details?: unknown): ApiErrorBody { return { error: { code, message, details } }; }
@@ -59,6 +61,39 @@ managedFileRoutes.post("/api/projects/:id/preview/:previewId/report", async (c) 
   // outcome, which separates an ended preview from a superseded render or a broken payload
   // without changing what a client has to handle.
   return c.json(fail("preview_report_invalid", "Preview report is stale or invalid", { outcome }), 409);
+});
+
+managedFileRoutes.get("/api/projects/:id/alternatives/:alternativeId/fs/*", async (c) => {
+  const projectId = c.req.param("id");
+  const project = await getProjectDetail(projectId);
+  const alternative = getVisualAlternative(getSqlite(), projectId, c.req.param("alternativeId"));
+  if (project === null || alternative === null) return c.json(fail("alternative_not_found", "Alternative not found"), 404);
+  if (alternative.status !== "ready" || alternative.result_revision === null || alternative.result_digest === null) {
+    return c.json(fail("alternative_not_ready", "Alternative is not ready"), 409);
+  }
+  const prefix = `/api/projects/${projectId}/alternatives/${alternative.id}/fs/`;
+  let relPath: string;
+  try { relPath = decodeURIComponent(c.req.path.slice(prefix.length)); }
+  catch { return c.json(fail("invalid_path", "File path is invalid"), 400); }
+  try {
+    const file = await readVisualAlternativeFile(getSqlite(), project.dir_path, alternative.operation_id, relPath);
+    const type = contentType(relPath);
+    const headers: Record<string, string> = {
+      ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(relPath) }),
+      "Cache-Control": "no-cache",
+      "Content-Type": type,
+      ETag: `"${file.sha256}"`,
+      "X-Burnguard-File-Hash": file.sha256,
+      "X-Burnguard-Revision": String(alternative.result_revision),
+      "X-Burnguard-Artifact-Digest": alternative.result_digest,
+    };
+    return new Response(/\.html?$/i.test(relPath) ? htmlWithEditableIds(file.bytes.toString("utf8")) : file.bytes, { headers });
+  } catch (error) {
+    if (error instanceof VisualAlternativeStorageError) {
+      return c.json(fail(error.code, "Alternative file is unavailable"), error.code === "alternative_file_not_found" ? 404 : 409);
+    }
+    throw error;
+  }
 });
 
 managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
