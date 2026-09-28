@@ -1,0 +1,138 @@
+import type { Database } from "bun:sqlite";
+import type { BackendId, NormalizedEvent } from "@bg/shared";
+import type {
+  RuntimeFailureCode,
+  RuntimeFailureDiagnostic,
+  RuntimeFailureStage,
+} from "@bg/shared/runtime-diagnostics";
+import { parsePersistedNormalizedEvent } from "../db/event-sequence-repository";
+
+export type RuntimeSessionRow = {
+  readonly id: string;
+  readonly project_id: string;
+  readonly project_name: string;
+  readonly backend_id: BackendId;
+  readonly status: "idle" | "running" | "awaiting_tool" | "error" | "terminated";
+};
+
+const RECENT_EVENT_LIMIT = 200;
+
+export function listRecentRuntimeFailures(
+  db: Database,
+  limit: number,
+): readonly RuntimeFailureDiagnostic[] {
+  const sessions = db.query<RuntimeSessionRow, [number]>(`SELECT s.id,p.id project_id,p.name project_name,s.backend_id,s.status
+    FROM sessions s JOIN projects p ON p.id=s.project_id
+    ORDER BY s.last_active_at DESC,s.id DESC LIMIT ?`).all(Math.max(limit * 4, limit));
+  const failures: RuntimeFailureDiagnostic[] = [];
+  for (const session of sessions) {
+    const failure = runtimeFailureForSession(db, session);
+    if (failure !== null) failures.push(failure);
+    if (failures.length === limit) break;
+  }
+  return failures.sort((left, right) => right.failed_at - left.failed_at);
+}
+
+export function runtimeFailureForSession(
+  db: Database,
+  session: RuntimeSessionRow,
+): RuntimeFailureDiagnostic | null {
+  const events = recentSessionEvents(db, session.id);
+  let latestTerminalIndex = -1;
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (events[index]?.type === "status.idle") {
+      latestTerminalIndex = index;
+      break;
+    }
+  }
+  const latestTerminal = latestTerminalIndex < 0 ? undefined : events[latestTerminalIndex];
+  const canResume = latestTerminal?.type === "status.idle"
+    && (latestTerminal.stopReason === "error" || latestTerminal.stopReason === "interrupted")
+    && session.status !== "running"
+    && session.status !== "awaiting_tool";
+
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.type === "status.idle" && event.stopReason === "interrupted") {
+      return failureDiagnostic(session, events, index, event.ts, "interrupted", canResume);
+    }
+    if (event?.type === "status.error") {
+      return failureDiagnostic(session, events, index, event.ts, event.code ?? "turn_failed", canResume);
+    }
+  }
+  return null;
+}
+
+function recentSessionEvents(db: Database, sessionId: string): readonly NormalizedEvent[] {
+  const rows = db.query<{
+    readonly id: string;
+    readonly payload_json: string;
+  }, [string, number]>(`SELECT id,payload_json FROM events
+    WHERE session_id=? AND direction='down'
+    ORDER BY sequence DESC LIMIT ?`).all(sessionId, RECENT_EVENT_LIMIT);
+  return rows.reverse().map((row) => parsePersistedNormalizedEvent(row.payload_json, row.id));
+}
+
+function failureDiagnostic(
+  session: RuntimeSessionRow,
+  events: readonly NormalizedEvent[],
+  eventIndex: number,
+  failedAt: number,
+  code: RuntimeFailureCode,
+  canResume: boolean,
+): RuntimeFailureDiagnostic {
+  return {
+    project_id: session.project_id,
+    project_name: session.project_name,
+    session_id: session.id,
+    backend_id: session.backend_id,
+    turn_id: nearestTurnId(events, eventIndex),
+    failed_at: failedAt,
+    stage: failureStage(code),
+    code,
+    can_resume: canResume,
+  };
+}
+
+function nearestTurnId(events: readonly NormalizedEvent[], before: number): string | null {
+  for (let index = before; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event !== undefined && "turnId" in event) return event.turnId;
+  }
+  return null;
+}
+
+function failureStage(code: RuntimeFailureCode): RuntimeFailureStage {
+  if (code === "interrupted") return "generation";
+  switch (code) {
+    case "graphic_requires_authenticated_codex":
+    case "logo_requires_authenticated_codex":
+    case "commandcode_unavailable":
+    case "unsupported_generation_model_effort":
+    case "backend_unavailable":
+      return "preflight";
+    case "agent_control_files_present":
+    case "path_unavailable":
+    case "immutable_reference_path_unavailable":
+    case "private_input_unavailable":
+    case "deck_source_page_limit":
+      return "input";
+    case "logo_deliverables_missing":
+    case "logo_image_provenance_missing":
+    case "design_review_failed":
+    case "immutable_reference_mutated":
+    case "immutable_reference_escaped":
+      return "review";
+    case "publication_failed":
+    case "operation_conflict":
+    case "operation_cancelled":
+      return "publication";
+    case "graphic_starter_unchanged":
+    case "turn_failed":
+      return "generation";
+    default: {
+      const exhaustive: never = code;
+      return exhaustive;
+    }
+  }
+}

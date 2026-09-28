@@ -27,6 +27,7 @@
     "./events": "./src/events.ts",
     "./learning-contract": "./src/learning-contract.ts",
     "./security": "./src/security.ts",
+    "./runtime-diagnostics": "./src/runtime-diagnostics.ts",
     "./updates": "./src/updates.ts"
   },
   "scripts": {

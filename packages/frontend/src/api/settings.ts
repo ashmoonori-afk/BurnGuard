@@ -1,4 +1,11 @@
-import type { AppUpdateStatus, PlaywrightInstallStatus, PythonSettings } from "@bg/shared";
+import {
+  parseRuntimeDiagnostics,
+  type AppUpdateStatus,
+  type PlaywrightInstallStatus,
+  type PythonSettings,
+  type RuntimeDiagnostics,
+  type RuntimeResumeResult,
+} from "@bg/shared";
 import { apiFetch } from "./client";
 import { t } from "@/i18n/t";
 import { anySignal } from "@/lib/abort-signal";
@@ -66,4 +73,19 @@ export async function startPypdfInstall(): Promise<PythonSettings> {
   return apiFetch<PythonSettings>("/api/settings/python/install", {
     method: "POST",
   });
+}
+
+export async function getRuntimeDiagnostics(): Promise<RuntimeDiagnostics> {
+  return parseRuntimeDiagnostics(
+    await apiFetch<unknown>("/api/settings/runtime-diagnostics"),
+  );
+}
+
+export async function resumeProjectFromSavedFiles(
+  projectId: string,
+): Promise<RuntimeResumeResult> {
+  return apiFetch<RuntimeResumeResult>(
+    `/api/settings/runtime-diagnostics/projects/${encodeURIComponent(projectId)}/resume`,
+    { method: "POST" },
+  );
 }
