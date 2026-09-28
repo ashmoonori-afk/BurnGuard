@@ -70,13 +70,15 @@ export async function reconcileProjectBundleImports(db: Database): Promise<{ rea
       continue;
     }
     if (receipt.phase === "pending") {
-      db.prepare("DELETE FROM projects WHERE id=?").run(receipt.project_id);
-      if (receipt.system_id !== null) {
+      if (await ownedByOperation(projectsDir, receipt.project_id, receipt.operation_id)) {
+        db.prepare("DELETE FROM projects WHERE id=?").run(receipt.project_id);
+        await removeOwnedDirectory(projectsDir, receipt.project_id);
+      }
+      if (receipt.system_id !== null && await ownedByOperation(systemsDir, receipt.system_id, receipt.operation_id)) {
         db.prepare("DELETE FROM design_system_receipts WHERE design_system_id=?").run(receipt.system_id);
         db.prepare("DELETE FROM design_systems WHERE id=?").run(receipt.system_id);
+        await removeOwnedDirectory(systemsDir, receipt.system_id);
       }
-      await removeOwnedDirectory(projectsDir, receipt.project_id);
-      if (receipt.system_id !== null) await removeOwnedDirectory(systemsDir, receipt.system_id);
       rolledBack += 1;
     }
     await removeOwnedDirectory(projectsDir, path.basename(projectBundlePayloadStage(receipt.operation_id)), ".bundle-imports");
@@ -86,18 +88,56 @@ export async function reconcileProjectBundleImports(db: Database): Promise<{ rea
   return { rolled_back: rolledBack, quarantined };
 }
 
-async function removeOwnedDirectory(root: string, name: string, parent?: string): Promise<void> {
-  const container = parent === undefined ? root : resolveWithin(root, parent);
-  const target = resolveWithin(container, name);
+const OWNER_MARKER = [".meta", "bundle-import-owner.json"] as const;
+
+/** Written before any row naming the directory exists, so recovery can prove the import created it. */
+export async function writeBundleImportOwnerMarker(directory: string, operationId: string): Promise<void> {
+  await mkdir(path.join(directory, OWNER_MARKER[0]), { recursive: true });
+  await writeFile(path.join(directory, ...OWNER_MARKER), JSON.stringify({ operation_id: operationId }), { encoding: "utf8", flag: "wx" });
+}
+
+export async function removeBundleImportOwnerMarker(directory: string): Promise<void> {
+  await rm(path.join(directory, ...OWNER_MARKER), { force: true });
+}
+
+async function ownedByOperation(root: string, name: string, operationId: string): Promise<boolean> {
+  const directory = await ownedChildDirectory(root, name);
+  if (directory === null) return false;
+  const marker = path.join(directory, ...OWNER_MARKER);
   let info: Awaited<ReturnType<typeof lstat>>;
-  try { info = await lstat(target); }
+  try { info = await lstat(marker); }
   catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
     throw error;
   }
-  if (info.isSymbolicLink() || !info.isDirectory()) throw new Error("bundle_import_path_not_owned");
-  if (path.dirname(await realpath(target)) !== await realpath(container)) throw new Error("bundle_import_path_not_owned");
-  await rm(target, { recursive: true, force: true });
+  if (info.isSymbolicLink() || !info.isFile() || info.size > 1024) return false;
+  let parsed: unknown;
+  try { parsed = JSON.parse(await readFile(marker, "utf8")); }
+  catch (error) {
+    if (error instanceof SyntaxError) return false;
+    throw error;
+  }
+  return typeof parsed === "object" && parsed !== null && (parsed as Record<string, unknown>)["operation_id"] === operationId;
+}
+
+/** Checks the lexical child with lstat before any realpath resolution, so a link is never followed. */
+async function ownedChildDirectory(container: string, name: string): Promise<string | null> {
+  const lexical = path.join(container, name);
+  let info: Awaited<ReturnType<typeof lstat>>;
+  try { info = await lstat(lexical); }
+  catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
+    throw error;
+  }
+  if (info.isSymbolicLink() || !info.isDirectory()) return null;
+  if (path.dirname(await realpath(lexical)) !== await realpath(container)) return null;
+  return lexical;
+}
+
+async function removeOwnedDirectory(root: string, name: string, parent?: string): Promise<void> {
+  const container = parent === undefined ? root : path.join(root, parent);
+  const target = await ownedChildDirectory(container, name);
+  if (target !== null) await rm(target, { recursive: true, force: true });
 }
 
 function isValidReceipt(value: ProjectBundleImportReceipt): boolean {

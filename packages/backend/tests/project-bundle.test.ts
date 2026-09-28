@@ -11,7 +11,8 @@ import { getProjectDetail } from "../src/db/project-read-repository";
 import { getDesignSystemDetail } from "../src/db/seed";
 import { getContentReceipt } from "../src/db/catalog-repository";
 import { validateCatalogReceiptTree } from "../src/services/catalog-files";
-import { projectBundleImportReceiptsDir, projectBundlePayloadStage, reconcileProjectBundleImports, writeProjectBundleImportReceipt } from "../src/services/project-bundle-import-receipt";
+import { projectBundleImportReceiptsDir, projectBundlePayloadStage, reconcileProjectBundleImports, writeBundleImportOwnerMarker, writeProjectBundleImportReceipt } from "../src/services/project-bundle-import-receipt";
+import { symlink } from "node:fs/promises";
 import { readdir } from "node:fs/promises";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { exportProjectBundle, importProjectBundleFile } from "../src/services/project-bundle";
@@ -264,6 +265,10 @@ test("Given a leftover import receipt from a crash When startup reconciliation r
   if (!detail?.design_system_id) throw new Error("missing restored system");
   const operationId = "01J00000000000000000000000";
   await mkdir(projectBundlePayloadStage(operationId), { recursive: true });
+  await writeBundleImportOwnerMarker(detail.dir_path, operationId);
+  const system = await getDesignSystemDetail(detail.design_system_id);
+  if (!system) throw new Error("missing restored system row");
+  await writeBundleImportOwnerMarker(system.dir_path, operationId);
   await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: restored.id, system_id: detail.design_system_id, phase: "pending" });
 
   const result = await reconcileProjectBundleImports(getSqlite());
@@ -337,4 +342,32 @@ test("Given a project restored with a missing builtin system When exported again
   const again = await exportProjectBundle(restored.id);
 
   expect(again.manifest.design_system).toEqual({ kind: "builtin", id: "builtin-theme-gone", pin: null });
+});
+
+test("Given a pending receipt naming a project it never marked When startup reconciliation runs Then that project is untouched", async () => {
+  const operationId = "01J00000000000000000000002";
+  const victim = "01J0000000000000000000ABCD";
+  const root = path.join(projectsDir, victim);
+  await mkdir(root, { recursive: true });
+  getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(victim, "Unrelated", root);
+  createdProjectIds.push(victim);
+  await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: victim, system_id: null, phase: "pending" });
+
+  await reconcileProjectBundleImports(getSqlite());
+
+  expect(await getProjectDetail(victim)).not.toBeNull();
+});
+
+test("Given a receipt whose project directory is a link to another project When reconciled Then the link is never followed", async () => {
+  const operationId = "01J00000000000000000000003";
+  const linked = "01J0000000000000000000WXYZ";
+  await writeBundleImportOwnerMarker(sourceProjectDir, operationId);
+  await symlink(sourceProjectDir, path.join(projectsDir, linked), "dir");
+  await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: linked, system_id: null, phase: "pending" });
+
+  await reconcileProjectBundleImports(getSqlite());
+
+  expect(await readFile(path.join(sourceProjectDir, "index.html"), "utf8")).toContain("portable");
+  await rm(path.join(projectsDir, linked), { force: true });
+  await rm(path.join(sourceProjectDir, ".meta", "bundle-import-owner.json"), { force: true });
 });

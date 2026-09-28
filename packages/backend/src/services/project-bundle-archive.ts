@@ -46,7 +46,8 @@ export async function collectProjectBundleEntries(root: string, budget: BundleBu
 }
 
 export async function collectDesignSystemBundleEntries(root: string, budget: BundleBudget = createBundleBudget()): Promise<readonly BundleEntry[]> {
-  return collect(root, "design-system", budget, () => "design_system", isAgentControlPath);
+  return collect(root, "design-system", budget, () => "design_system", (relative) =>
+    relative === ".meta" || relative.startsWith(".meta/") || isAgentControlPath(relative));
 }
 
 function projectFileKind(relative: string): ProjectBundleFileKind {
@@ -68,8 +69,8 @@ export async function createProjectBundleZip(
   entries: readonly BundleEntry[],
 ): Promise<Uint8Array> {
   const zip = new JSZip();
-  for (const entry of entries) zip.file(entry.file.path, entry.bytes);
-  zip.file(PROJECT_BUNDLE_MANIFEST_PATH, JSON.stringify(manifest, null, 2));
+  for (const entry of entries) zip.file(entry.file.path, entry.bytes, { createFolders: false });
+  zip.file(PROJECT_BUNDLE_MANIFEST_PATH, JSON.stringify(manifest, null, 2), { createFolders: false });
   const bytes = await zip.generateAsync({
     type: "uint8array",
     compression: "DEFLATE",

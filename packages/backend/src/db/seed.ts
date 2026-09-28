@@ -304,6 +304,7 @@ export async function createProjectRecord(input: {
   thumbnailPath: string | null;
   initializeArtifact?: (stage: string) => Promise<void>;
   projectId?: string;
+  beforeInsert?: (dirPath: string) => Promise<void>;
 }) {
   const db = getDb();
   const now = Date.now();
@@ -319,6 +320,7 @@ export async function createProjectRecord(input: {
 
   await mkdir(path.join(dirPath, ".attachments"), { recursive: true });
   await mkdir(path.join(dirPath, ".meta", "checkpoints"), { recursive: true });
+  await input.beforeInsert?.(dirPath);
   const sample = input.type === "from_template" ? PROMPT_SAMPLES.find((item) => promptSampleDesignSystemId(item.slug) === input.designSystemId) : undefined;
   const initialArtifact = input.type === "from_template" && input.designSystemId === "splash" ? SPLASH_TEMPLATE_LANDING_HTML : sample ? renderPromptSampleHtml(sample) : renderInitialArtifact({
     name: input.name,

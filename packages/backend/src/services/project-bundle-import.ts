@@ -21,7 +21,7 @@ import { ProjectBundleError } from "./project-bundle-error";
 import { validateProjectBundleMetadata } from "./project-bundle-validation";
 import { parseProjectOptions } from "./project-options";
 import { ensureProjectDesignSystemPin } from "./project-design-system-pin";
-import { clearProjectBundleImportReceipt, projectBundlePayloadStage, projectBundleSystemStage, writeProjectBundleImportReceipt } from "./project-bundle-import-receipt";
+import { clearProjectBundleImportReceipt, projectBundlePayloadStage, projectBundleSystemStage, removeBundleImportOwnerMarker, writeBundleImportOwnerMarker, writeProjectBundleImportReceipt } from "./project-bundle-import-receipt";
 import { commitDesignSystemReceipt, prepareDesignSystemReceipt } from "../db/design-system-repository";
 import { getDb } from "../db/client";
 import { ExtractionSidecarError, readValidatedExtractionSidecar } from "./extraction-sidecar";
@@ -70,11 +70,12 @@ async function importStagedBundle(
     phase: "pending",
   });
   try {
-    const system = await restoreDesignSystem(manifest.design_system, entries, manifest.files, plannedSystem);
+    const system = await restoreDesignSystem(manifest.design_system, entries, manifest.files, plannedSystem, operationId);
     customSystemId = system.created_id;
     customSystemDir = system.created_dir;
     createdProject = await createProjectRecord({
       projectId,
+      beforeInsert: (dirPath) => writeBundleImportOwnerMarker(dirPath, operationId),
       name: projectName,
       type: manifest.project.type,
       designSystemId: null,
@@ -129,6 +130,8 @@ async function importStagedBundle(
     if (selectedSystemId !== null) await ensureProjectDesignSystemPin(createdProject.id);
     await indexProjectFiles(createdProject.id);
     await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: projectId, system_id: plannedSystem?.id ?? null, phase: "committed" });
+    await removeBundleImportOwnerMarker(createdProject.dir_path);
+    if (customSystemDir !== null) await removeBundleImportOwnerMarker(customSystemDir);
     await rm(payloadStage, { recursive: true, force: true });
     await clearProjectBundleImportReceipt(operationId);
     return {
@@ -168,6 +171,7 @@ async function restoreDesignSystem(
   entries: ReadonlyMap<string, string>,
   files: readonly ProjectBundleFile[],
   planned: { readonly id: string; readonly stage: string } | null,
+  operationId: string,
 ): Promise<{ readonly selected_id: string | null; readonly created_id: string | null; readonly created_dir: string | null; readonly missing_builtin: string | null }> {
   if (system.kind === "none") return { selected_id: null, created_id: null, created_dir: null, missing_builtin: null };
   if (system.kind === "builtin") {
@@ -193,6 +197,7 @@ async function restoreDesignSystem(
       if (error instanceof ExtractionSidecarError) throw new ProjectBundleError("invalid_project_bundle");
       throw error;
     }
+    await writeBundleImportOwnerMarker(stage, operationId);
     await rename(stage, destination);
     await createDesignSystemRecord({
       id,

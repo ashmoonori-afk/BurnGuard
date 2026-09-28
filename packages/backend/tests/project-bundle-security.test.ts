@@ -9,7 +9,7 @@ import {
   PROJECT_BUNDLE_MANIFEST_PATH,
 } from "@bg/shared";
 import { importProjectBundleFile } from "../src/services/project-bundle";
-import { collectProjectBundleEntries, inspectCentralDirectory } from "../src/services/project-bundle-archive";
+import { collectProjectBundleEntries, createProjectBundleZip, inspectCentralDirectory } from "../src/services/project-bundle-archive";
 import { projectsDir } from "../src/lib/paths";
 
 function manifest(bytes: Uint8Array) {
@@ -260,4 +260,19 @@ describe("project bundle raw archive names and records", () => {
     const entries = [...inspectCentralDirectory(archive).values()];
     expect(entries.filter((entry) => entry.directory).length).toBeGreaterThan(64);
   });
+});
+
+test("Given deeply nested payload files When BurnGuard writes a bundle Then no directory records are generated", async () => {
+  const bytes = new TextEncoder().encode("x");
+  const value = manifest(bytes);
+  const entries = Array.from({ length: 50 }, (_, index) => ({
+    file: { path: `project/d${index}/e${index}/f.txt`, kind: "project" as const, size_bytes: 1, sha256: createHash("sha256").update(bytes).digest("hex") },
+    bytes,
+  }));
+  const archive = await createProjectBundleZip({ ...value, files: entries.map((entry) => entry.file) } as never, entries);
+
+  const records = [...inspectCentralDirectory(archive).values()];
+
+  expect(records.filter((record) => record.directory)).toHaveLength(0);
+  expect(records.filter((record) => !record.directory)).toHaveLength(51);
 });
