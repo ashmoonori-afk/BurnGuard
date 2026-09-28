@@ -21,7 +21,7 @@ import { ProjectBundleError } from "./project-bundle-error";
 import { validateProjectBundleMetadata } from "./project-bundle-validation";
 import { parseProjectOptions } from "./project-options";
 import { ensureProjectDesignSystemPin } from "./project-design-system-pin";
-import { clearProjectBundleImportReceipt, writeProjectBundleImportReceipt } from "./project-bundle-import-receipt";
+import { clearProjectBundleImportReceipt, projectBundlePayloadStage, projectBundleSystemStage, writeProjectBundleImportReceipt } from "./project-bundle-import-receipt";
 import { commitDesignSystemReceipt, prepareDesignSystemReceipt } from "../db/design-system-repository";
 import { getDb } from "../db/client";
 import { ExtractionSidecarError, readValidatedExtractionSidecar } from "./extraction-sidecar";
@@ -29,14 +29,13 @@ import { ExtractionSidecarError, readValidatedExtractionSidecar } from "./extrac
 export async function importProjectBundleFile(file: File, name?: string): Promise<ProjectBundleImportResponse> {
   const operationId = ulid();
   const projectId = ulid();
-  const payloadStage = resolveWithin(projectsDir, ".bundle-imports", `${operationId}-payload`);
-  await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: projectId, system_id: null, staging_paths: [payloadStage] });
+  const payloadStage = projectBundlePayloadStage(operationId);
+  await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: projectId, system_id: null, phase: "pending" });
   let manifest: Awaited<ReturnType<typeof readProjectBundleZip>>["manifest"];
   let entries: Awaited<ReturnType<typeof readProjectBundleZip>>["entries"];
   try {
     await mkdir(payloadStage, { recursive: false });
-    ({ manifest, entries } = await readProjectBundleZip(file, payloadStage));
-    validateProjectBundleMetadata(manifest);
+    ({ manifest, entries } = await readProjectBundleZip(file, payloadStage, validateProjectBundleMetadata));
   } catch (error) {
     await rm(payloadStage, { recursive: true, force: true });
     await clearProjectBundleImportReceipt(operationId);
@@ -61,14 +60,14 @@ async function importStagedBundle(
   let customSystemDir: string | null = null;
   let createdProject: Awaited<ReturnType<typeof createProjectRecord>> | null = null;
   const plannedSystem = manifest.design_system.kind === "custom"
-    ? { id: `bundle-${ulid().toLowerCase()}`, stage: resolveWithin(systemsDir, `bundle-stage-${ulid().toLowerCase()}`) }
+    ? (() => { const id = `bundle-${ulid().toLowerCase()}`; return { id, stage: projectBundleSystemStage(id) }; })()
     : null;
   await writeProjectBundleImportReceipt({
     schema_version: 1,
     operation_id: operationId,
     project_id: projectId,
     system_id: plannedSystem?.id ?? null,
-    staging_paths: plannedSystem === null ? [payloadStage] : [payloadStage, plannedSystem.stage],
+    phase: "pending",
   });
   try {
     const system = await restoreDesignSystem(manifest.design_system, entries, manifest.files, plannedSystem);
@@ -129,6 +128,8 @@ async function importStagedBundle(
     // Archive pin text is untrusted prompt input; the pin is rebuilt by the app renderer from the restored system.
     if (selectedSystemId !== null) await ensureProjectDesignSystemPin(createdProject.id);
     await indexProjectFiles(createdProject.id);
+    await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: projectId, system_id: plannedSystem?.id ?? null, phase: "committed" });
+    await rm(payloadStage, { recursive: true, force: true });
     await clearProjectBundleImportReceipt(operationId);
     return {
       id: createdProject.id,
@@ -143,6 +144,7 @@ async function importStagedBundle(
       customSystemDir,
     });
     if (cleanupFailed) throw new ProjectBundleError("project_bundle_unavailable");
+    await rm(payloadStage, { recursive: true, force: true });
     await clearProjectBundleImportReceipt(operationId);
     if (error instanceof ProjectBundleError) throw error;
     throw new ProjectBundleError("invalid_project_bundle");
@@ -184,6 +186,13 @@ async function restoreDesignSystem(
       prefix: "design-system/",
       kinds: new Set(["design_system"]),
     });
+    // Every custom system BurnGuard creates carries a verifiable extraction sidecar; without one the
+    // copy could never receive a trusted catalog receipt, so the bundle is rejected.
+    try { await readValidatedExtractionSidecar(stage); }
+    catch (error) {
+      if (error instanceof ExtractionSidecarError) throw new ProjectBundleError("invalid_project_bundle");
+      throw error;
+    }
     await rename(stage, destination);
     await createDesignSystemRecord({
       id,
@@ -213,14 +222,8 @@ async function restoreDesignSystem(
   return { selected_id: id, created_id: id, created_dir: destination, missing_builtin: null };
 }
 
-/** A restored extraction keeps its catalog lifecycle: its sidecar is re-verified and a content receipt is recorded for the new copy. */
 async function recordImportedContentReceipt(systemId: string, root: string): Promise<void> {
-  let sidecar: Awaited<ReturnType<typeof readValidatedExtractionSidecar>>;
-  try { sidecar = await readValidatedExtractionSidecar(root); }
-  catch (error) {
-    if (error instanceof ExtractionSidecarError) return;
-    throw error;
-  }
+  const sidecar = await readValidatedExtractionSidecar(root);
   const manifest = await inspectCanonicalTree(root);
   const provenance: unknown = JSON.parse(await readFile(path.join(root, "extraction-provenance.json"), "utf8"));
   if (typeof provenance !== "object" || provenance === null) throw new ProjectBundleError("invalid_project_bundle");

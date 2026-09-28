@@ -242,3 +242,22 @@ describe("project bundle raw archive validation", () => {
     });
   });
 });
+
+describe("project bundle raw archive names and records", () => {
+  test("Given Windows device, stream or trailing-dot names When the central directory is inspected Then the archive is rejected before staging", async () => {
+    for (const name of ["project/CON", "project/a.txt:ads", "project/trail."]) {
+      const zip = new JSZip();
+      zip.file(name, "x");
+      const archive = await zip.generateAsync({ type: "uint8array" });
+      expect(() => inspectCentralDirectory(archive)).toThrow();
+    }
+  });
+
+  test("Given many nested directories When the central directory is inspected Then directory records do not consume the file budget", async () => {
+    const zip = new JSZip();
+    for (let index = 0; index < 200; index += 1) zip.file(`project/d${index}/f.txt`, "x");
+    const archive = await zip.generateAsync({ type: "uint8array" });
+    const entries = [...inspectCentralDirectory(archive).values()];
+    expect(entries.filter((entry) => entry.directory).length).toBeGreaterThan(64);
+  });
+});

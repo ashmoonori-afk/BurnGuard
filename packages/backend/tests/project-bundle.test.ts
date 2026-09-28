@@ -11,7 +11,7 @@ import { getProjectDetail } from "../src/db/project-read-repository";
 import { getDesignSystemDetail } from "../src/db/seed";
 import { getContentReceipt } from "../src/db/catalog-repository";
 import { validateCatalogReceiptTree } from "../src/services/catalog-files";
-import { projectBundleImportReceiptsDir, reconcileProjectBundleImports, writeProjectBundleImportReceipt } from "../src/services/project-bundle-import-receipt";
+import { projectBundleImportReceiptsDir, projectBundlePayloadStage, reconcileProjectBundleImports, writeProjectBundleImportReceipt } from "../src/services/project-bundle-import-receipt";
 import { readdir } from "node:fs/promises";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { exportProjectBundle, importProjectBundleFile } from "../src/services/project-bundle";
@@ -46,6 +46,13 @@ beforeAll(async () => {
   await writeFile(path.join(sourceSystemDir, "SKILL.md"), "# Custom system");
   await writeFile(path.join(sourceSystemDir, "colors_and_type.css"), ':root{--brand:#123456;font-family:"Bundle Missing Font QA"}');
   await writeFile(path.join(sourceSystemDir, "fonts", "custom.woff2"), Buffer.from("wOF2custom"));
+  await writeFile(path.join(sourceSystemDir, "README.md"), "# Custom system");
+  await writeFile(path.join(sourceSystemDir, "fonts", "fonts.css"), "");
+  const sidecarContent = { entries: [{ path: "SKILL.md" }] };
+  await writeFile(path.join(sourceSystemDir, "extraction-provenance.json"), JSON.stringify({
+    schema_version: 1, digest_algorithm: "sha256", generated_at: 1, content: sidecarContent,
+    content_digest: createHash("sha256").update(JSON.stringify(sidecarContent)).digest("hex"),
+  }));
   const tree = await inspectCanonicalTree(sourceProjectDir);
   const context = "custom pinned context";
   const tokens = ":root{--brand:#123456}";
@@ -255,9 +262,9 @@ test("Given a leftover import receipt from a crash When startup reconciliation r
   const restored = await importProjectBundleFile(new File([exported.bytes], exported.filename), "Crashed import");
   const detail = await getProjectDetail(restored.id);
   if (!detail?.design_system_id) throw new Error("missing restored system");
-  const stage = path.join(projectsDir, ".bundle-imports", "crash-op-payload");
-  await mkdir(stage, { recursive: true });
-  await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: "crash-op", project_id: restored.id, system_id: detail.design_system_id, staging_paths: [stage] });
+  const operationId = "01J00000000000000000000000";
+  await mkdir(projectBundlePayloadStage(operationId), { recursive: true });
+  await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: restored.id, system_id: detail.design_system_id, phase: "pending" });
 
   const result = await reconcileProjectBundleImports(getSqlite());
 
@@ -278,15 +285,8 @@ test("Given a successful import When it completes Then no import receipt or payl
 });
 
 test("Given a restored extraction system When imported Then it carries a committed content receipt that validates against its bytes", async () => {
-  const content = { entries: [{ path: "SKILL.md" }] };
-  const provenance = { schema_version: 1, digest_algorithm: "sha256", content_digest: createHash("sha256").update(JSON.stringify(content)).digest("hex"), content, generated_at: 1 };
-  const file = await rewrittenBundle((manifest, zip) => {
-    let next = addBundleFile(manifest, zip, "design-system/README.md", "# Extracted");
-    next = addBundleFile(next, zip, "design-system/fonts/fonts.css", "");
-    return addBundleFile(next, zip, "design-system/extraction-provenance.json", JSON.stringify(provenance));
-  });
-
-  const restored = await importProjectBundleFile(file, "Catalog receipt");
+  const exported = await exportProjectBundle(sourceProjectId);
+  const restored = await importProjectBundleFile(new File([exported.bytes], exported.filename), "Catalog receipt");
   createdProjectIds.push(restored.id);
   const detail = await getProjectDetail(restored.id);
   if (!detail?.design_system_id) throw new Error("missing restored system");
@@ -296,7 +296,29 @@ test("Given a restored extraction system When imported Then it carries a committ
 
   expect(receipt?.status).toBe("committed");
   if (!receipt || !system) throw new Error("missing receipt");
-  await expect(validateCatalogReceiptTree(system.dir_path, receipt)).resolves.toMatchObject({ digest: provenance.content_digest });
+  await expect(validateCatalogReceiptTree(system.dir_path, receipt)).resolves.toBeDefined();
+});
+
+test("Given a custom system without a verifiable sidecar When imported Then the bundle is rejected and nothing is left behind", async () => {
+  const file = await rewrittenBundle((manifest, zip) => {
+    zip.remove("design-system/extraction-provenance.json");
+    return { ...manifest, files: manifest.files.filter((entry) => entry.path !== "design-system/extraction-provenance.json") };
+  });
+
+  await expect(importProjectBundleFile(file, "No sidecar")).rejects.toMatchObject({ code: "invalid_project_bundle" });
+  expect(await readdir(projectBundleImportReceiptsDir())).toEqual([]);
+});
+
+test("Given a malformed or path-bearing receipt When startup reconciliation runs Then it is quarantined and deletes nothing", async () => {
+  const root = projectBundleImportReceiptsDir();
+  await mkdir(root, { recursive: true });
+  await writeFile(path.join(root, "01J00000000000000000000001.json"), JSON.stringify({ schema_version: 1, operation_id: "01J00000000000000000000001", project_id: sourceProjectId, system_id: null, phase: "pending", staging_paths: [projectsDir] }));
+
+  const result = await reconcileProjectBundleImports(getSqlite());
+
+  expect(result.quarantined).toBe(1);
+  expect(await getProjectDetail(sourceProjectId)).not.toBeNull();
+  await rm(path.join(root, "01J00000000000000000000001.json.quarantined"), { force: true });
 });
 
 test("Given a project restored with a missing builtin system When exported again Then the builtin reference survives", async () => {

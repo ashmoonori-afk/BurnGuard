@@ -79,7 +79,11 @@ export async function createProjectBundleZip(
   return bytes;
 }
 
-export async function readProjectBundleZip(file: File, stagingRoot: string): Promise<{
+export async function readProjectBundleZip(
+  file: File,
+  stagingRoot: string,
+  validateMetadata: (manifest: ProjectBundleManifest) => void,
+): Promise<{
   readonly manifest: ProjectBundleManifest;
   readonly entries: ReadonlyMap<string, string>;
 }> {
@@ -110,6 +114,7 @@ export async function readProjectBundleZip(file: File, stagingRoot: string): Pro
   if (manifest.files.some((entry) => /^project\/\.burnguard-inputs(?:\/|$)/iu.test(entry.path))) {
     throw new ProjectBundleError("invalid_project_bundle");
   }
+  validateMetadata(manifest);
   const expected = new Map(manifest.files.map((entry) => [entry.path, entry]));
   const actualFiles = objects.filter((entry) => !entry.dir && entry.name !== PROJECT_BUNDLE_MANIFEST_PATH);
   if (actualFiles.length !== expected.size || actualFiles.some((entry) => !expected.has(archivePath(entry)))) {
@@ -282,12 +287,14 @@ export function inspectCentralDirectory(archive: Uint8Array): ReadonlyMap<string
   const directoryOffset = view.getUint32(eocd + 16, true);
   if (view.getUint16(eocd + 4, true) !== 0 || view.getUint16(eocd + 8, true) !== count ||
     count === 0xffff || directorySize === 0xffffffff || directoryOffset === 0xffffffff) invalid();
-  if (count > PROJECT_BUNDLE_LIMITS.files + 64) throw new ProjectBundleError("project_bundle_limit");
+  if (count > PROJECT_BUNDLE_LIMITS.files * 2 + 1) throw new ProjectBundleError("project_bundle_limit");
   if (directoryOffset + directorySize > eocd) invalid();
   const entries = new Map<string, CentralEntry>();
   const folded = new Set<string>();
   const decoder = new TextDecoder("utf-8", { fatal: true });
   let total = 0;
+  let fileRecords = 0;
+  let directoryRecords = 0;
   let cursor = directoryOffset;
   for (let index = 0; index < count; index += 1) {
     if (cursor + 46 > directoryOffset + directorySize || view.getUint32(cursor, true) !== CENTRAL_SIGNATURE) invalid();
@@ -315,9 +322,16 @@ export function inspectCentralDirectory(archive: Uint8Array): ReadonlyMap<string
       /^[a-z]:/iu.test(normalized) || normalized.normalize("NFC") !== normalized) invalid();
     const parts = normalized.split("/");
     if (parts.length > 32 || parts.some((part) => !part || part === "." || part === "..")) invalid();
+    for (const part of parts) {
+      try { assertSafeName(part); }
+      catch (error) { if (error instanceof PathBoundaryError) invalid(); throw error; }
+    }
     const key = normalized.toLocaleLowerCase("en-US");
     if (entries.has(normalized) || folded.has(key)) invalid();
     folded.add(key);
+    if (directory) directoryRecords += 1; else fileRecords += 1;
+    // One extra file record is the manifest; directory records are counted separately from payload files.
+    if (fileRecords > PROJECT_BUNDLE_LIMITS.files + 1 || directoryRecords > PROJECT_BUNDLE_LIMITS.files) throw new ProjectBundleError("project_bundle_limit");
     if (!directory) {
       if (size > PROJECT_BUNDLE_LIMITS.entry_bytes) throw new ProjectBundleError("project_bundle_limit");
       total += size;
