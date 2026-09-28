@@ -39,13 +39,39 @@ const within = (ancestor: HTMLElement, node: HTMLElement): boolean => {
 const HORIZONTAL_CLASS = /(?:^|\s)(?:row|split|two-col|half|columns|(?:(?:sm|md|lg|xl):)?grid-cols-[2-9]|(?:(?:sm|md|lg|xl):)?flex-row|col-(?:sm|md|lg|xl)-\d+)(?=\s|$)/;
 const VERTICAL_CLASS = /(?:^|\s)(?:flex-col|flex-column|grid-cols-1|stack|vertical)(?=\s|$)/;
 
+/** Top-level track count of a grid-template-columns value, expanding repeat(N, ...); null when it cannot be read. */
+export function gridTrackCount(value: string): number | null {
+  const tracks: string[] = [];
+  let depth = 0, current = "";
+  for (const char of value.trim()) {
+    if (char === "(") depth += 1;
+    if (char === ")") depth -= 1;
+    if (depth < 0) return null;
+    if (depth === 0 && /\s/.test(char)) { if (current) tracks.push(current); current = ""; continue; }
+    current += char;
+  }
+  if (depth !== 0) return null;
+  if (current) tracks.push(current);
+  let count = 0;
+  for (const track of tracks) {
+    if (track.startsWith("[")) continue;
+    const repeat = /^repeat\(\s*(\d+)\s*,/i.exec(track);
+    if (/^repeat\(/i.test(track) && !repeat) return null;
+    count += repeat ? Number(repeat[1]) : 1;
+  }
+  return count;
+}
+
 /** Horizontal only on explicit row evidence; any explicit vertical signal wins and uncertainty stays false. */
 function arrangesHorizontally(container: HTMLElement): boolean {
   const style = (container.getAttribute("style") ?? "").toLowerCase().replace(/\s+/g, "");
   const classes = classOf(container);
   if (/flex-direction:column|display:block/.test(style) || (VERTICAL_CLASS.test(classes) && !/(?:sm|md|lg|xl):(?:grid-cols-[2-9]|flex-row)/.test(classes))) return false;
   if (/display:flex/.test(style)) return true;
-  if (/display:grid/.test(style)) return /grid-template-columns:[^;]*(?:repeat\([2-9]|[^;\s]+\s[^;\s]+)/.test(container.getAttribute("style")?.toLowerCase() ?? "");
+  if (/display:grid/.test(style)) {
+    const columns = /grid-template-columns\s*:\s*([^;]+)/i.exec(container.getAttribute("style") ?? "")?.[1];
+    return columns !== undefined && (gridTrackCount(columns) ?? 0) >= 2;
+  }
   return HORIZONTAL_CLASS.test(classes);
 }
 
@@ -90,8 +116,20 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
   const footerColumns = all("footer").map(footer => footer.querySelectorAll("ul, nav").length).filter(count => count >= 2);
 
   const svgs = all("svg").filter(svg => !/logo|brand/.test(classOf(svg) + classOf(svg.parentNode as HTMLElement)));
-  const stroked = svgs.filter(svg => svg.getAttribute("fill") === "none" || svg.querySelector("[stroke-width]") !== null || svg.getAttribute("stroke-width") !== undefined);
-  const strokeWidth = mode(svgs.flatMap(svg => [svg.getAttribute("stroke-width"), ...svg.querySelectorAll("[stroke-width]").map(node => node.getAttribute("stroke-width"))]).filter((value): value is string => typeof value === "string" && /^\d*\.?\d+$/.test(value)));
+  const positiveStrokes = (svg: HTMLElement) => [svg, ...svg.querySelectorAll("*")]
+    .filter(node => (node.getAttribute("stroke") ?? "").toLowerCase() !== "none")
+    .map(node => node.getAttribute("stroke-width"))
+    .filter((value): value is string => typeof value === "string" && /^\d*\.?\d+$/.test(value) && Number(value) > 0);
+  const hasStroke = (svg: HTMLElement) => positiveStrokes(svg).length > 0 || [svg, ...svg.querySelectorAll("*")].some(node => { const stroke = (node.getAttribute("stroke") ?? "").toLowerCase(); return stroke !== "" && stroke !== "none"; });
+  // Outline needs a positive stroke and no root fill; filled needs a fill and no positive stroke; anything else stays unclassified.
+  const classified = svgs.map(svg => {
+    const fill = (svg.getAttribute("fill") ?? "").toLowerCase();
+    if (hasStroke(svg) && (fill === "none" || fill === "")) return "outline" as const;
+    if (!hasStroke(svg) && fill !== "none") return "filled" as const;
+    return null;
+  }).filter((style): style is "outline" | "filled" => style !== null);
+  const outline = classified.filter(style => style === "outline").length;
+  const strokeWidth = mode(svgs.flatMap(positiveStrokes));
 
   const images = all("img").map(image => (image.getAttribute("src") ?? "").toLowerCase().split(/[?#]/)[0] ?? "").filter(src => !/logo|brand|icon|favicon/.test(src));
   const backgrounds = values(["background", "background-image"]);
@@ -105,7 +143,7 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
     testimonials: all("blockquote").length > 0 || /\b(?:testimonials?|reviews?)\b/.test(classes),
     footerColumns: footerColumns.length ? Math.min(6, Math.max(...footerColumns)) : null,
     alignment,
-    icons: { count: svgs.length, style: svgs.length < 2 ? null : stroked.length * 2 >= svgs.length ? "outline" : "filled", strokeWidth },
+    icons: { count: svgs.length, style: classified.length < 2 ? null : outline * 2 > classified.length ? "outline" : outline * 2 < classified.length ? "filled" : null, strokeWidth },
     photos: images.filter(src => /\.(?:jpe?g|webp|avif)$/.test(src)).length,
     illustrations: images.filter(src => src.endsWith(".svg")).length,
     gradients: backgrounds.filter(value => /(?<!repeating-)(?:linear|radial|conic)-gradient\(/.test(value)).length,

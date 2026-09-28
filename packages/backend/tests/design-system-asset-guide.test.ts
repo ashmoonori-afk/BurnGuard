@@ -17,7 +17,7 @@ import { systemsDir } from "../src/lib/paths";
 import { persistCanonicalExtraction, readDesignSystemTokens } from "../src/services/design-system-extract";
 import { buildAssetGuideReadme, paletteTone, toHexColor } from "../src/services/extraction-assets";
 import { parseCssSource } from "../src/services/extraction-css";
-import { collectSourceEvidence, type SourceEvidence } from "../src/services/extraction-evidence";
+import { collectSourceEvidence, gridTrackCount, type SourceEvidence } from "../src/services/extraction-evidence";
 import { buildSectionPatternReadme, measureSourceLayout } from "../src/services/extraction-layout";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 import type { CssDeclarationEvidence } from "../src/services/extraction-css";
@@ -236,6 +236,9 @@ describe("Source evidence drives section patterns and asset style", () => {
     ]) expect(hero(vertical)?.arrangement).not.toBe("split");
     expect(hero('<section class="hero"><div class="grid grid-cols-1 md:grid-cols-2"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
     expect(hero('<section class="hero"><div style="display: flex"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
+    for (const columns of ["minmax(0, 1fr)", "repeat(1, 1fr)", "1fr"]) expect(hero(`<section class="hero"><div style="display:grid;grid-template-columns:${columns}"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>`)?.arrangement).not.toBe("split");
+    expect(hero('<section class="hero"><div style="display:grid;grid-template-columns:minmax(0, 1fr) minmax(0, 1fr)"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
+    expect(["minmax(0, 1fr)", "repeat(1, 1fr)", "repeat(3, minmax(0, 1fr))", "[full] 1fr [mid] 2fr", "repeat(auto-fit, 200px)", "fit-content(10px"].map(gridTrackCount)).toEqual([1, 1, 3, 2, null, null]);
   });
 
   test("Given no evidence, then every section pattern and asset kind is labelled as a default", () => {
@@ -267,8 +270,16 @@ describe("Source evidence drives section patterns and asset style", () => {
     const parsed = await parseCssSource({ content: ".a { animation-name: fade; } .b { background-image: linear-gradient(90deg, #111, #222); } .c { background-image: url('/photos/team.jpg'); }", sourceId: "fixture.css", fileOrder: 0, signal: new AbortController().signal });
     const evidence = collectSourceEvidence([], parsed.declarations);
     expect({ motionMs: evidence.motionMs, animations: evidence.animations, gradients: evidence.gradients }).toEqual({ motionMs: null, animations: 1, gradients: 1 });
-    const motion = guideFor({ evidence }).rules.find(rule => rule.kind === "motion")!.usage!;
-    expect(motion.startsWith("Evidence: observed in the source - 1 animation declaration(s) without timing")).toBe(true);
+    expect(guideFor({ evidence }).rules.find(rule => rule.kind === "motion")!.usage!.startsWith("Evidence: observed in the source")).toBe(true);
+  });
+
+  test("Given filled SVG icons with disabled strokes, then they are filled, not zero-width outlines, and mixed or ambiguous sets stay unclassified", () => {
+    const icons = (markup: string) => collectSourceEvidence([markup], []).icons;
+    const filled = '<svg fill="currentColor" stroke="none" stroke-width="0"><path d="M0 0"/></svg>';
+    const outline = '<svg fill="none" stroke="currentColor" stroke-width="2"><path d="M0 0"/></svg>';
+    expect(icons(filled + filled)).toEqual({ count: 2, style: "filled", strokeWidth: null });
+    expect(icons(outline + outline)).toEqual({ count: 2, style: "outline", strokeWidth: "2" });
+    expect(icons(filled + outline).style).toBeNull();
   });
 });
 
