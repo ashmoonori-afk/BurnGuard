@@ -8,7 +8,7 @@ import { appendDesignSystemContext } from "../src/harness/prompt-design-system";
 import { systemsDir } from "../src/lib/paths";
 import { extractDesignSystemFromSource, readDesignSystemTokens } from "../src/services/design-system-extract";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
-import { boundPageCoverage, buildPageCoverage, canonicalPagePath, classifyPageType, discoverPages, pageCoveragePromptSummary, pageLink, parseRobots, parseSitemap, robotsPatternMatches } from "../src/services/extraction-pages";
+import { boundPageCoverage, buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, pageCoveragePromptSummary, pageLink, parseRobots, parseSitemap, robotsPatternMatches } from "../src/services/extraction-pages";
 
 const EVIDENCE: DesignSystemPageEvidence = { hero_media: null, feature_columns: null, footer_lists: null, alignment: null, icons: 0, photos: 0, illustrations: 0, gradients: 0, background_patterns: 0, motion_ms: null, animations: 0 };
 
@@ -248,5 +248,56 @@ describe("Per-page extraction limits and ordering", () => {
     expect(JSON.stringify(pageCoveragePromptSummary(coverage)).length).toBeLessThanOrEqual(24_000);
     expect(coverage.differences.map(d => d.key)).toContain("palette");
     expect(boundPageCoverage(coverage)).toEqual(coverage);
+  });
+});
+
+describe("Per-page cascade, palettes and pinned-context budget", () => {
+  test("Given style blocks before and after a stylesheet, then document order decides each page's winner", async () => {
+    const page = (head: string, title: string) => "<html><head>" + head + '</head><body><nav><a href="/other/page">Other</a></nav><h1>' + title + "</h1></body></html>";
+    await withSite({
+      "/source": page('<style>:root { --accent: #aa0000 }</style><link rel="stylesheet" href="/b.css">', "Home"),
+      "/other/page": page('<link rel="stylesheet" href="/b.css"><style>:root { --accent: #aa0000 }</style>', "Other"),
+      "/b.css": ":root { --accent: #0000bb }",
+    }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Inline", source_type: "website", source_url: origin + "/source" });
+      const coverage = parseDesignSystemPageCoverage((await readDesignSystemTokens(id)).pages);
+      expect(Object.fromEntries(coverage.pages.filter(p => p.status === "extracted").map(p => [p.path, p.custom_properties["--accent"]]))).toEqual({ "/source": "#0000bb", "/other/page": "#aa0000" });
+    });
+  });
+
+  test("Given a shared stylesheet plus page-specific backgrounds, then templates and differences keep each page's own colour", async () => {
+    const shared = ".a{color:#111111}.b{color:#222222}.c{color:#333333}.d{color:#444444}.e{color:#555555}.f{color:#666666}";
+    const page = (css: string, title: string) => '<html><head><link rel="stylesheet" href="/shared.css"><link rel="stylesheet" href="' + css + '"></head><body><nav><a href="/pricing">Pricing</a></nav><h1>' + title + "</h1></body></html>";
+    await withSite({ "/source": page("/home.css", "Home"), "/pricing": page("/pricing.css", "Pricing"), "/shared.css": shared, "/home.css": "body{background-color:#ff0000}", "/pricing.css": "body{background-color:#0000ff}" }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Palette", source_type: "website", source_url: origin + "/source" });
+      const coverage = parseDesignSystemPageCoverage((await readDesignSystemTokens(id)).pages);
+      expect(coverage.templates.find(t => t.page_type === "pricing")!.colors[0]).toBe("background-color: #0000ff");
+      expect(coverage.pages.find(p => p.path === "/source")!.colors[0]).toBe("background-color: #ff0000");
+      expect(coverage.differences.find(d => d.key === "palette")!.values).toEqual([{ path: "/source", value: "background-color: #ff0000" }, { path: "/pricing", value: "background-color: #0000ff" }]);
+    });
+  });
+
+  test("Given a worst-case system, then the full website design-system context stays under the pinned-context limit and the README section is not duplicated", async () => {
+    const properties = (seed: number) => Object.fromEntries(Array.from({ length: 48 }, (_, i) => ["--palette-" + i, "#" + ((seed * 48 + i) % 0xffffff).toString(16).padStart(6, "0")]));
+    const coverage = buildPageCoverage({
+      limit: 24, discovered: 400,
+      extracted: Array.from({ length: 24 }, (_, i) => ({ path: "/section-" + i + "/" + "p".repeat(110), source: "link" as const, pageType: "other" as const, layoutTokens: { "--layout-max": 900 + i + "px" }, patterns: ["hero"], colors: ["background-color: #10" + String(i).padStart(4, "0")], fonts: ["Font " + i], customProperties: properties(i), evidence: EVIDENCE })),
+      skipped: Array.from({ length: 200 }, (_, i) => ({ path: "/skipped-" + i + "/" + "q".repeat(110), source: "link" as const, reason: "cap" as const, pageType: "other" as const })),
+    });
+    const dir = await mkdtemp(path.join(tmpdir(), "bg-pin-budget-"));
+    try {
+      await writeFile(path.join(dir, "pages.json"), JSON.stringify(coverage, null, 2));
+      await writeFile(path.join(dir, "README.md"), "# Big\n\n## Voice\nVOICE_TEXT\n" + buildPageTemplateReadme(coverage) + "\n## Notes\n" + "n".repeat(40_000) + "\n");
+      const detail = { id: "pin-budget", name: "Big", status: "draft", source_type: "website", is_template: false, dir_path: dir, skill_md_path: null, tokens_css_path: null, readme_md_path: path.join(dir, "README.md"), thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const;
+      const lines: string[] = [];
+      await appendDesignSystemContext(lines, detail as unknown as Parameters<typeof appendDesignSystemContext>[1], "full", "website");
+      const context = lines.join("\n");
+      expect(context.length).toBeLessThan(100_000);
+      expect(context).toContain("<selected_design_system_pages>");
+      expect(context).toContain("VOICE_TEXT");
+      expect(context).not.toContain("## Page templates");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

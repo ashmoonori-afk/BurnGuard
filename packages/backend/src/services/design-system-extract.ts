@@ -1,6 +1,6 @@
 import { readDesignSystemLayout } from "./design-system-layout";
 import { readDesignSystemAssetGuide } from "./design-system-assets";
-import { buildAssetGuideReadme } from "./extraction-assets";
+import { buildAssetGuideReadme, toHexColor } from "./extraction-assets";
 import { collectSourceEvidence, type SourceEvidence } from "./extraction-evidence";
 import { buildSectionPatternReadme, measureSourceLayout } from "./extraction-layout";
 import { buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, observedPatterns, pageEvidence, parseRobots, parseSitemap } from "./extraction-pages";
@@ -709,6 +709,23 @@ function isBudgetExhausted(error: unknown): boolean {
   return error instanceof AcquisitionLimitError && error.limit === "aggregate_source_bytes";
 }
 
+/** Property-aware colour literals of a page ("background-color: #ff0000"), normalised to hex where possible. */
+function pageColorEvidence(declarations: readonly CssDeclarationEvidence[]): string[] {
+  const properties = new Set(["color", "background", "background-color", "border-color", "outline-color", "fill", "stroke"]);
+  const values: string[] = [];
+  for (const declaration of declarations) {
+    const property = declaration.property.toLowerCase();
+    if (!properties.has(property)) continue;
+    const literal = /#[0-9a-f]{3,8}\b|(?:rgba?|hsla?)\([^()]*\)/i.exec(declaration.value)?.[0];
+    const hex = literal ? toHexColor(literal) : null;
+    if (!hex) continue;
+    const entry = `${property}: ${hex}`;
+    if (!values.includes(entry)) values.push(entry);
+    if (values.length >= 40) break;
+  }
+  return values;
+}
+
 async function ingestWebsiteSource(
   sourceUrl: string,
   ingestDir: string,
@@ -860,9 +877,13 @@ async function ingestWebsiteSource(
     pageDeclarations.set(pageUrl, ownDeclarations);
     // Page-local cascade order: this page's linked sheets in link order, then its inline styles, so a
     // stylesheet cached from another page never carries that page's order into this one.
-    let pageOrder = 0;
-    const addLinked = (declarations: readonly CssDeclarationEvidence[]) => { const order = pageOrder++; ownDeclarations.push(...declarations.map((declaration) => ({ ...declaration, fileOrder: order }))); };
     const root = parse(pageHtml);
+    // Document order of <style> blocks and stylesheet links decides which one wins for this page.
+    const cascadeNodes = root.querySelectorAll("*").filter((node) => node.tagName === "STYLE" || (node.tagName === "LINK" && (node.getAttribute("rel") ?? "").toLowerCase() === "stylesheet"));
+    const cascadeOrder = (node: unknown) => { const index = cascadeNodes.indexOf(node as (typeof cascadeNodes)[number]); return index === -1 ? cascadeNodes.length : index; };
+    const withOrder = (declarations: readonly CssDeclarationEvidence[], order: number) => declarations.map((declaration) => ({ ...declaration, fileOrder: order }));
+    let currentLinkOrder = 0;
+    const addLinked = (declarations: readonly CssDeclarationEvidence[]) => { ownDeclarations.push(...withOrder(declarations, currentLinkOrder)); };
     throwIfAcquisitionAborted(signal);
     const sampleSet = extractHtmlComponentSamples(pageHtml, signal);
     mergeStringSamples(componentSamples.buttons, sampleSet.buttons, 6);
@@ -888,8 +909,17 @@ async function ingestWebsiteSource(
       const parsedCss = await parseCssSource({ content: inlineCss, sourceId: `${pageSourceId}#inline-style`, fileOrder: cssFileOrder, signal });
       cssFileOrder += 1;
       cssDeclarations.push(...parsedCss.declarations);
-      ownDeclarations.push(...parsedCss.declarations.map((declaration) => ({ ...declaration, fileOrder: Number.MAX_SAFE_INTEGER })));
       cssParseIssues.push(...parsedCss.issues);
+      // Per-page cascade: each <style> block at its document position, style attributes after every sheet.
+      for (const style of root.querySelectorAll("style")) {
+        const block = await parseCssSource({ content: style.textContent, sourceId: `${pageSourceId}#style`, fileOrder: 0, signal });
+        ownDeclarations.push(...withOrder(block.declarations, cascadeOrder(style)));
+      }
+      const attributes = root.querySelectorAll("[style]").map((node) => node.getAttribute("style") ?? "").filter(Boolean).join("\n");
+      if (attributes) {
+        const attributeCss = await parseCssSource({ content: attributes, sourceId: `${pageSourceId}#style-attribute`, fileOrder: 0, signal });
+        ownDeclarations.push(...withOrder(attributeCss.declarations, cascadeNodes.length + 1));
+      }
       mergeSignals(
         { colors, fontSizes, fontWeights, spacingValues, radii, shadows },
         styleSignalsFromDeclarations(parsedCss.declarations),
@@ -905,6 +935,7 @@ async function ingestWebsiteSource(
       throwIfAcquisitionAborted(signal);
       const href = links[idx].getAttribute("href");
       if (!href) continue;
+      currentLinkOrder = cascadeOrder(links[idx]);
       try {
         const cssUrl = new URL(href, pageBase);
         if (cssUrl.origin !== url.origin) {
@@ -1048,7 +1079,7 @@ async function ingestWebsiteSource(
           pageType: classifyPageType(path, pageHtml),
           layoutTokens: measureSourceLayout(declarations, signals.spacingValues).tokens,
           patterns: observedPatterns(evidence),
-          colors: signals.colors.slice(0, 6),
+          colors: pageColorEvidence(declarations),
           fonts: fontFamiliesFromDeclarations(declarations).slice(0, 3),
           customProperties,
           evidence: pageEvidence(evidence),

@@ -235,8 +235,12 @@ export function buildPageCoverage(input: {
   readonly extracted: readonly ExtractedPage[];
   readonly skipped: readonly (Pick<PageCandidate, "path" | "source"> & { readonly reason: "robots" | "cap" | "fetch_failed" | "budget"; readonly pageType: DesignSystemPageType })[];
 }): DesignSystemPageCoverage {
-  const extracted: ExtractedPage[] = [];
-  for (const page of input.extracted) if (!extracted.some(existing => existing.path === page.path)) extracted.push(page);
+  const unique: ExtractedPage[] = [];
+  for (const page of input.extracted) if (!unique.some(existing => existing.path === page.path)) unique.push(page);
+  // Colours shared by every page (usually a common stylesheet) go last so page-specific overrides survive truncation.
+  const shared = unique.length > 1 ? new Set(unique[0]!.colors.filter(color => unique.every(page => page.colors.includes(color)))) : new Set<string>();
+  const distinguishing = (page: ExtractedPage) => page.colors.filter(color => !shared.has(color));
+  const extracted: ExtractedPage[] = unique.map(page => ({ ...page, colors: [...distinguishing(page), ...page.colors.filter(color => shared.has(color))].slice(0, 12) }));
   const taken = new Set(extracted.map(page => page.path));
   const pages: DesignSystemPageRecord[] = [
     ...extracted.map((page): DesignSystemPageRecord => ({ path: page.path, page_type: page.pageType, source: page.source, status: "extracted", skip_reason: null, layout_tokens: { ...page.layoutTokens }, patterns: [...page.patterns], colors: [...page.colors].slice(0, 12), fonts: [...page.fonts].slice(0, 6), custom_properties: { ...page.customProperties }, evidence: page.evidence })),
@@ -251,7 +255,7 @@ export function buildPageCoverage(input: {
     const difference = differing(key, extracted.map(page => ({ path: page.path, value: page.layoutTokens[key] })));
     if (difference) differences.push(difference);
   }
-  const palette = differing("palette", extracted.map(page => ({ path: page.path, value: page.colors.length ? page.colors.slice(0, 6).join(" ").slice(0, 160) : undefined })));
+  const palette = differing("palette", unique.map(page => ({ path: page.path, value: distinguishing(page).length ? distinguishing(page).slice(0, 4).join("; ").slice(0, 160) : "shared palette only" })));
   if (palette) differences.push(palette);
   const primaryFont = differing("primary-font", extracted.map(page => ({ path: page.path, value: page.fonts[0] })));
   if (primaryFont) differences.push(primaryFont);
@@ -299,16 +303,20 @@ export function pageCoveragePromptSummary(coverage: DesignSystemPageCoverage, ma
   return { templates, differences };
 }
 
-/** README `## Page templates` section summarising per-type templates and cross-page differences. */
+/**
+ * Compact README `## Page templates` section: counts, one short line per template and only the keys that
+ * differ. Full values live in pages.json and the structured prompt block, which replaces this section there.
+ */
 export function buildPageTemplateReadme(coverage: DesignSystemPageCoverage): string {
   const extracted = coverage.pages.filter(page => page.status === "extracted").length;
+  const clip = (text: string) => text.length > 200 ? `${text.slice(0, 197)}...` : text;
   const lines = [
     "",
     "## Page templates",
-    `${extracted} of ${coverage.discovered} discovered same-origin pages were extracted (limit ${coverage.page_limit}); per-page records are in pages.json.`,
+    clip(`${extracted} of ${coverage.discovered} discovered same-origin pages were extracted (limit ${coverage.page_limit}); per-page records are in pages.json.`),
     "",
-    ...coverage.templates.map(template => `- ${template.page_type} (${template.path}): patterns ${template.patterns.join(", ") || "none observed"}; layout ${Object.entries(template.layout_tokens).map(([key, value]) => `${key} ${value}`).join(", ") || "site-wide defaults"}.`),
-    ...(coverage.differences.length ? ["", "Pages differ on:", ...coverage.differences.map(difference => `- ${difference.key}: ${difference.values.map(value => `${value.path} ${value.value}`).join("; ")}`)] : []),
+    ...coverage.templates.map(template => clip(`- ${template.page_type} (${template.path}): patterns ${template.patterns.join(", ") || "none observed"}.`)),
+    ...(coverage.differences.length ? ["", clip(`Pages differ on: ${coverage.differences.slice(0, 16).map(difference => difference.key).join(", ")}${coverage.differences.length > 16 ? ", ..." : ""}.`)] : []),
     "",
   ];
   return lines.join("\n");

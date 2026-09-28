@@ -45,20 +45,22 @@ function excerptSkillMarkdown(content: string): { readonly text: string; readonl
 }
 
 const LAYOUT_SECTION_HEADING = new RegExp(`^##\\s+(${LAYOUT_SECTION_HEADINGS})\\s*$`, "i");
+const PAGE_SECTION_HEADING = /^##\s+Page templates\s*$/i;
+const MAX_README_CHARS = 12_000;
 const ASSET_SECTION_HEADING = new RegExp(`^##\\s+(${ASSET_README_HEADINGS.join("|")})\\s*$`, "i");
 
 /**
  * The README without the level-2 sections whose kind already shipped inside the layout contract, and
  * without the asset sections when the asset guide shipped.
  */
-function stripShippedReadmeSections(readme: string, shipped: ReadonlySet<string>, assetsShipped: boolean): string {
+function stripShippedReadmeSections(readme: string, shipped: ReadonlySet<string>, assetsShipped: boolean, pagesShipped = false): string {
   const kept: string[] = [];
   let skipping = false;
   for (const line of readme.split("\n")) {
     if (/^##\s/.test(line)) {
       const heading = LAYOUT_SECTION_HEADING.exec(line)?.[1];
       const kind = heading === undefined ? undefined : layoutSectionKind(heading);
-      skipping = (kind !== undefined && shipped.has(kind)) || (assetsShipped && ASSET_SECTION_HEADING.test(line));
+      skipping = (kind !== undefined && shipped.has(kind)) || (assetsShipped && ASSET_SECTION_HEADING.test(line)) || (pagesShipped && PAGE_SECTION_HEADING.test(line));
     }
     if (!skipping) kept.push(line);
   }
@@ -169,7 +171,8 @@ export async function appendDesignSystemContext(
   }
   // Page-type templates are page geometry, so only the website surface receives them.
   const pages = surface === "website" ? await readDesignSystemPageCoverage(designSystem) : null;
-  if (pages && (pages.templates.length || pages.differences.length)) {
+  const pagesShipped = pages !== null && (pages.templates.length > 0 || pages.differences.length > 0);
+  if (pages && pagesShipped) {
     lines.push("<selected_design_system_pages>", JSON.stringify(pageCoveragePromptSummary(pages)).replace(/</g, "\\u003c"), "</selected_design_system_pages>");
     lines.push(PAGE_REQUIREMENT, "");
   }
@@ -220,11 +223,11 @@ export async function appendDesignSystemContext(
   // document here would put back exactly the geometry the surface split removes.
   // Sections the layout contract already carries verbatim are dropped here rather than shipped twice.
   if (designSystem.readme_md_path && surface === "website") {
-    const content = stripShippedReadmeSections(await read(designSystem.readme_md_path), new Set(layout.sections.map((section) => section.kind)), assets.rules.length > 0);
+    const content = stripShippedReadmeSections(await read(designSystem.readme_md_path), new Set(layout.sections.map((section) => section.kind)), assets.rules.length > 0, pagesShipped);
     if (content.trim()) {
       lines.push("### README.md (excerpt)");
       lines.push("```markdown");
-      lines.push(content.split("\n").slice(0, MAX_README_LINES).join("\n"));
+      lines.push(content.split("\n").slice(0, MAX_README_LINES).join("\n").slice(0, MAX_README_CHARS));
       lines.push("```");
       lines.push("");
     }
