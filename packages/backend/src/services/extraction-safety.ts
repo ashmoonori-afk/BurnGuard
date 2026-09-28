@@ -21,6 +21,10 @@ const ACTIVE_ELEMENTS = [
   "embed",
   "form",
   "base",
+  "set",
+  "animate",
+  "animatemotion",
+  "animatetransform",
 ] as const;
 const URL_ATTRIBUTES = ["href", "src", "action", "formaction", "poster", "background", "xlink:href", "srcset", "imagesrcset", "ping"] as const;
 /** Raw-text or inert containers whose markup a JS-disabled consumer still renders and fetches. */

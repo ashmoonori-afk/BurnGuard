@@ -50,6 +50,19 @@ describe("url() outside style contexts in acquired and source HTML", () => {
     expect(() => assertInertSourceMarkup(stored, "html")).not.toThrow();
     expect(() => sanitizeSourceHtml(page('<table background="https://evil.test/pixel.png"><tr><td>visible</td></tr></table>'))).toThrow();
   });
+
+  test("Given SVG animation assigning an external image URL, then acquisition removes animation and the gate rejects the original", () => {
+    for (const animation of [
+      '<set attributeName="href" to="https://evil.test/smil.png"/>',
+      '<animate attributeName="href" values="https://evil.test/one.png;https://evil.test/two.png"/>',
+    ]) {
+      const image = '<image width="100" height="100">' + animation + '</image>';
+      const stored = sanitizeAcquiredWebsiteHtml(page('<svg><rect fill="url(#g)"/>' + image + '</svg>'));
+      expect(parse(stored).querySelector("image")?.childNodes).toHaveLength(0);
+      expect(() => assertInertSourceMarkup(stored, "html")).not.toThrow();
+      expect(() => assertInertSourceMarkup(page("<svg>" + image + "</svg>"), "html")).toThrow();
+    }
+  });
 });
 
 describe("CSS contexts and attribute bounds", () => {
