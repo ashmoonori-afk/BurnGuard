@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
-import { pptxParityImages, preflightParityArchive, zipParityImages } from "../src/services/export-parity-archives";
+import { openParityArchive, pptxParityImages, preflightParityArchive, zipParityImages } from "../src/services/export-parity-archives";
 import { decodeParityImage } from "../src/services/export-parity-images";
 import { compareParityPages } from "../src/services/export-parity";
 import { createCanvas } from "../src/services/export-native-modules";
@@ -121,4 +121,33 @@ test("Given an archive entry declaring more than the parity budget When parity i
 
   expect(() => preflightParityArchive(bytes)).toThrow("byte budget");
   await expect(zipParityImages(bytes, ["01.png"], new AbortController().signal)).rejects.toThrow("byte budget");
+});
+
+test("Given an entry that under-declares its inflated size When read for parity Then inflation stops at the declared size", async () => {
+  const zip = new JSZip();
+  zip.file("01.png", new Uint8Array(1_000_000));
+  const bytes = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let offset = 0; offset + 46 < bytes.byteLength; offset += 1) {
+    if (view.getUint32(offset, true) === 0x02014b50) view.setUint32(offset + 24, 16, true);
+  }
+
+  expect(() => openParityArchive(bytes).read("01.png", new AbortController().signal)).toThrow();
+});
+
+test("Given a directory whose record count under-reports its entries When opened for parity Then it is rejected", async () => {
+  const zip = new JSZip();
+  zip.file("01.png", new Uint8Array([1]));
+  zip.file("02.png", new Uint8Array([2]));
+  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let offset = bytes.byteLength - 22; offset >= 0; offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) {
+      view.setUint16(offset + 8, 1, true);
+      view.setUint16(offset + 10, 1, true);
+      break;
+    }
+  }
+
+  expect(() => openParityArchive(bytes)).toThrow("inconsistent");
 });

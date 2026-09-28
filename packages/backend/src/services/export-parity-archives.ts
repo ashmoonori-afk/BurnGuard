@@ -1,4 +1,4 @@
-import JSZip from "jszip";
+import { inflateRawSync } from "node:zlib";
 import { decodeParityImage } from "./export-parity-images";
 import { composeParityPage } from "./export-parity-compose";
 import type { ParityPixelPage } from "./export-parity";
@@ -9,11 +9,25 @@ const MAX_PARITY_UNCOMPRESSED_BYTES = 512 * 1024 * 1024;
 const MAX_PARITY_ENTRY_BYTES = 128 * 1024 * 1024;
 const MAX_PARITY_ARCHIVE_ENTRIES = 4_000;
 
+type ParityArchiveEntry = {
+  readonly method: number;
+  readonly compressedSize: number;
+  readonly size: number;
+  readonly crc: number;
+  readonly localHeaderOffset: number;
+};
+
+export type ParityArchive = {
+  readonly read: (name: string, signal: AbortSignal) => Uint8Array;
+  readonly has: (name: string) => boolean;
+};
+
 /**
- * Reads the central directory before JSZip inflates anything, so every entry (images and PPTX XML
- * alike) is bounded by its declared size, and the entry count and total are capped up front.
+ * Parity reads archives without JSZip: the central directory must be traversed exactly, names must
+ * be unique, every declared size is bounded up front, and each entry is inflated with a hard
+ * maxOutputLength equal to its declared size, so actual output can never exceed the budget.
  */
-export function preflightParityArchive(bytes: Uint8Array): void {
+export function openParityArchive(bytes: Uint8Array): ParityArchive {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let eocd = -1;
   for (let offset = bytes.byteLength - 22; offset >= Math.max(0, bytes.byteLength - 22 - 0xffff); offset -= 1) {
@@ -26,27 +40,58 @@ export function preflightParityArchive(bytes: Uint8Array): void {
   if (count === 0xffff || size === 0xffffffff || start === 0xffffffff || count > MAX_PARITY_ARCHIVE_ENTRIES || start + size > eocd) {
     throw new TypeError("Parity archive directory is unsupported");
   }
+  const entries = new Map<string, ParityArchiveEntry>();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
   let total = 0;
   let cursor = start;
   for (let index = 0; index < count; index += 1) {
     if (cursor + 46 > start + size || view.getUint32(cursor, true) !== 0x02014b50) throw new TypeError("Parity archive directory is invalid");
+    const flags = view.getUint16(cursor + 8, true);
+    const method = view.getUint16(cursor + 10, true);
+    const crc = view.getUint32(cursor + 16, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
     const uncompressed = view.getUint32(cursor + 24, true);
-    if (uncompressed === 0xffffffff || uncompressed > MAX_PARITY_ENTRY_BYTES) throw new TypeError("Parity archive entry exceeds its byte budget");
+    const nameLength = view.getUint16(cursor + 28, true);
+    const next = cursor + 46 + nameLength + view.getUint16(cursor + 30, true) + view.getUint16(cursor + 32, true);
+    if ((flags & 0x0001) !== 0 || (method !== 0 && method !== 8) || compressedSize === 0xffffffff || uncompressed === 0xffffffff) {
+      throw new TypeError("Parity archive entry is unsupported");
+    }
+    if (uncompressed > MAX_PARITY_ENTRY_BYTES) throw new TypeError("Parity archive entry exceeds its byte budget");
     total += uncompressed;
     if (total > MAX_PARITY_UNCOMPRESSED_BYTES) throw new TypeError("Parity archive exceeds its byte budget");
-    cursor += 46 + view.getUint16(cursor + 28, true) + view.getUint16(cursor + 30, true) + view.getUint16(cursor + 32, true);
+    const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength));
+    if (entries.has(name)) throw new TypeError("Parity archive entry is duplicated");
+    entries.set(name, { method, compressedSize, size: uncompressed, crc, localHeaderOffset: view.getUint32(cursor + 42, true) });
+    cursor = next;
   }
-}
-
-function budget(signal: AbortSignal): (bytes: Uint8Array) => Uint8Array {
-  let total = 0;
-  return (bytes) => {
-    signal.throwIfAborted();
-    total += bytes.byteLength;
-    if (total > MAX_PARITY_UNCOMPRESSED_BYTES) throw new TypeError("Parity archive exceeds its byte budget");
-    return bytes;
+  if (cursor !== start + size) throw new TypeError("Parity archive directory length is inconsistent");
+  return {
+    has: (name) => entries.has(name),
+    read: (name, signal) => {
+      signal.throwIfAborted();
+      const entry = entries.get(name);
+      if (entry === undefined) throw new TypeError("Parity archive entry is missing");
+      const local = entry.localHeaderOffset;
+      if (local + 30 > start || view.getUint32(local, true) !== 0x04034b50) throw new TypeError("Parity archive entry is invalid");
+      const dataStart = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+      if (dataStart + entry.compressedSize > start) throw new TypeError("Parity archive entry is invalid");
+      const compressed = bytes.subarray(dataStart, dataStart + entry.compressedSize);
+      const output = entry.method === 0
+        ? compressed
+        : new Uint8Array(inflateRawSync(compressed, { maxOutputLength: Math.max(1, entry.size) }));
+      if (output.byteLength !== entry.size || (Bun.hash.crc32(output) >>> 0) !== entry.crc) {
+        throw new TypeError("Parity archive entry is corrupt");
+      }
+      return output;
+    },
   };
 }
+
+/** Kept for callers that only need the up-front directory checks. */
+export function preflightParityArchive(bytes: Uint8Array): void {
+  openParityArchive(bytes);
+}
+
 
 export async function zipParityImages(
   bytes: Uint8Array,
@@ -57,14 +102,11 @@ export async function zipParityImages(
     throw new TypeError("Parity page count is invalid");
   }
   signal.throwIfAborted();
-  preflightParityArchive(bytes);
-  const zip = await JSZip.loadAsync(bytes, { checkCRC32: true });
-  const account = budget(signal);
+  const archive = openParityArchive(bytes);
   const pages: ParityPixelPage[] = [];
   for (const path of paths) {
-    const entry = zip.file(path);
-    if (entry === null) throw new TypeError("Parity image is missing");
-    pages.push(await decodeParityImage(account(await entry.async("uint8array"))));
+    if (!archive.has(path)) throw new TypeError("Parity image is missing");
+    pages.push(await decodeParityImage(archive.read(path, signal)));
   }
   return pages;
 }
@@ -82,12 +124,14 @@ export async function pptxParityImages(
     throw new TypeError("PPTX parity slide count is invalid");
   }
   signal.throwIfAborted();
-  preflightParityArchive(bytes);
-  const zip = await JSZip.loadAsync(bytes, { checkCRC32: true });
-  const account = budget(signal);
-  const presentation = await requiredText(zip, "ppt/presentation.xml");
+  const zip = openParityArchive(bytes);
+  const requiredText = (name: string): string => {
+    if (!zip.has(name)) throw new TypeError("PPTX parity part is missing");
+    return new TextDecoder().decode(zip.read(name, signal));
+  };
+  const presentation = requiredText("ppt/presentation.xml");
   const presentationRels = relationships(
-    await requiredText(zip, "ppt/_rels/presentation.xml.rels"),
+    requiredText("ppt/_rels/presentation.xml.rels"),
   );
   const size = slideSize(presentation);
   const slidePaths = [...presentation.matchAll(/<p:sldId\b[^>]*r:id="([^"]+)"/gu)]
@@ -99,9 +143,9 @@ export async function pptxParityImages(
   const pages: ParityPixelPage[] = [];
   for (const slidePath of slidePaths) {
     signal.throwIfAborted();
-    const slide = await requiredText(zip, slidePath);
+    const slide = requiredText(slidePath);
     const relationPath = `${path.posix.dirname(slidePath)}/_rels/${path.posix.basename(slidePath)}.rels`;
-    const slideRels = relationships(await requiredText(zip, relationPath));
+    const slideRels = relationships(requiredText(relationPath));
     const pictures = [...slide.matchAll(/<p:pic>[\s\S]*?<\/p:pic>/gu)];
     if (pictures.length !== 1) {
       throw new TypeError("PPTX parity requires one slide image");
@@ -110,9 +154,8 @@ export async function pptxParityImages(
     const embed = /<a:blip\b[^>]*r:embed="([^"]+)"/u.exec(picture)?.[1];
     const target = relationshipTarget(slideRels, embed, "image");
     const imagePath = safeZipPath(path.posix.dirname(slidePath), target);
-    const entry = zip.file(imagePath);
-    if (entry === null) throw new TypeError("PPTX parity image is missing");
-    const source = await decodeParityImage(account(await entry.async("uint8array")));
+    if (!zip.has(imagePath)) throw new TypeError("PPTX parity image is missing");
+    const source = await decodeParityImage(zip.read(imagePath, signal));
     const geometry = pictureGeometry(picture);
     pages.push(
       composeParityPage({
@@ -238,10 +281,4 @@ function safeZipPath(base: string, target: string): string {
     throw new TypeError("PPTX relationship path is invalid");
   }
   return value;
-}
-
-async function requiredText(zip: JSZip, name: string): Promise<string> {
-  const entry = zip.file(name);
-  if (entry === null) throw new TypeError("PPTX parity part is missing");
-  return entry.async("string");
 }
