@@ -1064,6 +1064,7 @@ async function ingestWebsiteSource(
     artifactCopies: [],
     // Read before sanitization strips image sources; only typed counts and flags leave this scope.
     sourceEvidence: collectSourceEvidence([...pageHtmlByUrl.values()], cssDeclarations),
+    pageColors: pageGroundAndInk(pageDeclarations.get(url.toString()) ?? []),
     pageCoverage: buildPageCoverage({
       limit: pageLimit,
       discovered: discovery.discovered,
@@ -1856,27 +1857,47 @@ const NEUTRALS = {
   dark: { ink: "#f8fafc", bgSubtle: "#111827", bgMuted: "#1f2937", surfaceInverse: "#f8fafc", fg2: "#cbd5e1", fg3: "#94a3b8", fg4: "#64748b", border: "#334155", borderStrong: "#64748b" },
 } as const;
 
-/** The page-level colour of `properties` set on html, body or :root outside any at-rule, last declaration winning. */
-function observedPageColor(analysis: SourceAnalysis, properties: readonly string[]): string | null {
-  let found: string | null = null;
-  for (const declaration of analysis.cssDeclarations) {
-    if (declaration.context !== "" || !properties.includes(declaration.property)) continue;
-    const selectors = (declaration.selector ?? "").split(",").map((selector) => selector.trim().toLowerCase());
-    // Page-level selectors only: html, body, :root and their chains such as `html body` or `:root body`.
-    if (!selectors.some((selector) => selector.split(/\s+/).every((part) => part === "html" || part === "body" || part === ":root"))) continue;
-    found = resolvedColor(declaration.value, analysis.cssVars) ?? found;
+/** Hex form of a literal colour; the named extremes are mapped too, other names and modern functions are not converted. */
+function pageHex(color: string | null): string | null {
+  if (color === null) return null;
+  const named = ({ black: "#000000", white: "#ffffff" } as Record<string, string>)[color.trim().toLowerCase()];
+  return named ?? toHexColor(color);
+}
+
+/** True for html, body, :root and chains of them (`html body`, `:root body`), in any selector of a list. */
+function isPageSelector(selector: string): boolean {
+  return selector.split(",").some((part) => {
+    const compounds = part.trim().toLowerCase().split(/\s+/);
+    return compounds[0] !== "" && compounds.every((compound) => compound === "html" || compound === "body" || compound === ":root");
+  });
+}
+
+/**
+ * The entry page's own ground and ink: declarations in that page's document cascade order, restricted to
+ * page-level selectors outside any at-rule, with var() resolved only through custom properties declared in
+ * the same page-level context. Conditional and component-scoped overrides therefore never leak in.
+ */
+function pageGroundAndInk(declarations: readonly CssDeclarationEvidence[]): { readonly ground: string | null; readonly ink: string | null } {
+  const page = [...declarations]
+    .sort((left, right) => left.fileOrder - right.fileOrder || left.declarationOrder - right.declarationOrder)
+    .filter((declaration) => declaration.context === "" && isPageSelector(declaration.selector ?? ""));
+  const vars = new Map<string, string>();
+  let ground: string | null = null;
+  let ink: string | null = null;
+  for (const declaration of page) if (declaration.property.startsWith("--")) vars.set(declaration.property.slice(2), declaration.value);
+  for (const declaration of page) {
+    if (declaration.property === "background" || declaration.property === "background-color") ground = pageHex(resolvedColor(declaration.value, vars)) ?? ground;
+    if (declaration.property === "color") ink = pageHex(resolvedColor(declaration.value, vars)) ?? ink;
   }
-  return found;
+  return { ground, ink };
 }
 
 function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Readonly<Record<string, string>>): string {
   const { primary, action } = brandColors(analysis);
-  // Declarations arrive in cascade order (stabilizeSourceAnalysis), so the last page-level rule wins.
-  const ground = observedPageColor(analysis, ["background", "background-color"]) ?? "#ffffff";
-  const groundHex = toHexColor(ground);
-  const neutrals = NEUTRALS[groundHex !== null && paletteTone([groundHex]) === "dark" ? "dark" : "light"];
+  const ground = analysis.pageColors?.ground ?? "#ffffff";
+  const neutrals = NEUTRALS[paletteTone([ground]) === "dark" ? "dark" : "light"];
   const framerInk = analysis.cssVars.get("framer-text-color");
-  const ink = observedPageColor(analysis, ["color"]) ?? (framerInk !== undefined ? resolvedColor(framerInk, analysis.cssVars) : null) ?? neutrals.ink;
+  const ink = analysis.pageColors?.ink ?? pageHex(framerInk !== undefined ? resolvedColor(framerInk, analysis.cssVars) : null) ?? neutrals.ink;
   // Only a plain leading family name is used; function expressions such as var() fall back to the observed family.
   const sourceSans = /^\s*(?:"([^"(),]+)"|'([^'(),]+)'|([^"'(),]+?))\s*(?:,|$)/.exec(analysis.cssVars.get("framer-font-family") ?? "");
   const sans = cssString(sourceSans?.slice(1).find(Boolean)?.trim() || analysis.fontFamilies[0] || "Inter");

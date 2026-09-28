@@ -46,6 +46,8 @@ export type SourceAnalysis = {
   readonly sourceEvidence?: import("./extraction-evidence").SourceEvidence;
   /** Per-page discovery and extraction results; website sources only. */
   readonly pageCoverage?: import("@bg/shared").DesignSystemPageCoverage;
+  /** Entry-page ground and text colour (hex) from page-level rules in document order; website sources only. */
+  readonly pageColors?: { readonly ground: string | null; readonly ink: string | null };
 };
 
 export async function analyzeLocalTree(

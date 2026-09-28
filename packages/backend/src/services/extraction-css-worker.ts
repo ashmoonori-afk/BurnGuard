@@ -83,7 +83,13 @@ function locatorFor(declaration: Declaration, sourceId: string): string {
  * so the worker output stays well inside its byte bound on stylesheets with long selectors.
  */
 function selectorFor(declaration: Declaration): string {
-  const selector = declaration.parent?.type === "rule" ? (declaration.parent as import("postcss").Rule).selector.trim() : "";
+  const parent = declaration.parent;
+  if (parent?.type !== "rule") return "";
+  // A rule nested inside another style rule is scoped by its ancestors; its own selector alone would overstate it.
+  for (let ancestor = parent.parent; ancestor !== undefined && ancestor.type !== "root"; ancestor = ancestor.parent) {
+    if (ancestor.type === "rule") return "";
+  }
+  const selector = (parent as import("postcss").Rule).selector.trim();
   return selector.length <= 40 ? selector : "";
 }
 

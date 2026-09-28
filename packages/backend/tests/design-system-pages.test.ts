@@ -279,6 +279,24 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
     });
   });
 
+  test("Given page colours spread over a linked sheet, conditional or scoped variables, nested rules and named colours, then the canonical ground and ink follow the page's own cascade", async () => {
+    const cases: { name: string; routes: Record<string, string>; bg: string; fg: string }[] = [
+      { name: "link-then-style", routes: { "/source": '<html><head><link rel="stylesheet" href="/site.css"><style>body{background:#0f0a1c;color:#d6d6d6}</style></head><body><h1>A</h1></body></html>', "/site.css": "body{background:#ffffff;color:#111111}" }, bg: "#0f0a1c", fg: "#d6d6d6" },
+      { name: "style-then-link", routes: { "/source": '<html><head><style>body{background:#0f0a1c;color:#d6d6d6}</style><link rel="stylesheet" href="/site.css"></head><body><h1>A</h1></body></html>', "/site.css": "body{background:#ffffff;color:#111111}" }, bg: "#ffffff", fg: "#111111" },
+      { name: "media-variable", routes: { "/source": "<html><head><style>:root{--ground:#0f0a1c} body{background:var(--ground)} @media (prefers-color-scheme: light){:root{--ground:#ffffff}}</style></head><body><h1>A</h1></body></html>" }, bg: "#0f0a1c", fg: "#f8fafc" },
+      { name: "scoped-variable", routes: { "/source": "<html><head><style>:root{--ground:#0f0a1c} body{background:var(--ground)} .card{--ground:#ffffff}</style></head><body><h1>A</h1></body></html>" }, bg: "#0f0a1c", fg: "#f8fafc" },
+      { name: "nested-rule", routes: { "/source": "<html><head><style>body{background:#ffffff;color:#111111} .card{body{background:#0f0a1c;color:#d6d6d6}}</style></head><body><h1>A</h1></body></html>" }, bg: "#ffffff", fg: "#111111" },
+      { name: "named-black", routes: { "/source": "<html><head><style>body{background:black}</style></head><body><h1>A</h1></body></html>" }, bg: "#000000", fg: "#f8fafc" },
+    ];
+    for (const item of cases) {
+      await withSite(item.routes, async (origin, id) => {
+        await extractDesignSystemFromSource({ system_id: id, name: item.name, source_type: "website", source_url: origin + "/source" });
+        const css = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
+        expect({ name: item.name, bg: /--bg: ([^;]+);/.exec(css)?.[1], fg: /--fg-1: ([^;]+);/.exec(css)?.[1] }).toEqual({ name: item.name, bg: item.bg, fg: item.fg });
+      });
+    }
+  });
+
   test("Given a dark page ground without a page text colour, then canonical ink and neutrals switch to light values", async () => {
     await withSite({ "/source": '<html><head><style>:root body { background: #0b0b0b }</style></head><body><h1>Home</h1></body></html>' }, async (origin, id) => {
       await extractDesignSystemFromSource({ system_id: id, name: "Dark", source_type: "website", source_url: origin + "/source" });
