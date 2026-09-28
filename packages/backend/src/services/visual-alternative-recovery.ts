@@ -94,8 +94,7 @@ async function recoverGeneration(
   } catch (error) {
     if (!(error instanceof PathBoundaryError)) throw error;
     // Never derive paths from unsafe ids or touch files outside managed storage; settle the rows only.
-    finishVisualAlternativeGeneration(db, generationId, dependencies.now());
-    releaseVisualAlternativeProject(projectId);
+    await settleGeneration(db, projectId, generationId, null, dependencies.now());
     return true;
   }
   const basePath = path.join(projectDir, ".meta", "visual-alternatives", generationId, "base");
@@ -105,8 +104,7 @@ async function recoverGeneration(
     if (path.resolve(text(row.base_path)) !== basePath) throw new CorruptVisualAlternative();
     if (row.base_manifest_json === null) {
       // Crashed while staging the base: the project tree was never changed.
-      finishVisualAlternativeGeneration(db, generationId, dependencies.now());
-      await removeGenerationEntry(projectDir, generationId);
+      await settleGeneration(db, projectId, generationId, projectDir, dependencies.now());
       return true;
     }
     // A symlinked container or generation entry is never followed.
@@ -121,9 +119,7 @@ async function recoverGeneration(
     ).get(projectId);
     if (current !== null && current.current_digest === row.base_digest) {
       // The project already holds the original base; only the staged copy is unusable.
-      finishVisualAlternativeGeneration(db, generationId, dependencies.now());
-      await removeGenerationEntry(projectDir, generationId);
-      releaseVisualAlternativeProject(projectId);
+      await settleGeneration(db, projectId, generationId, projectDir, dependencies.now());
       return true;
     }
     holdVisualAlternativeProject(db, projectId);
@@ -172,10 +168,36 @@ async function recoverGeneration(
   } finally {
     disallow();
   }
-  finishVisualAlternativeGeneration(db, generationId, dependencies.now());
-  await removeGenerationEntry(projectDir, generationId);
-  releaseVisualAlternativeProject(projectId);
+  await settleGeneration(db, projectId, generationId, projectDir, dependencies.now());
   return true;
+}
+
+/** The durable transition ends the quarantine; holds follow it, and tree cleanup is best effort. */
+async function settleGeneration(
+  db: Database,
+  projectId: string,
+  generationId: string,
+  projectDir: string | null,
+  now: number,
+): Promise<void> {
+  try {
+    finishVisualAlternativeGeneration(db, generationId, now);
+  } finally {
+    if (!isGenerationActive(db, generationId)) releaseVisualAlternativeProject(projectId);
+  }
+  if (projectDir === null) return;
+  try {
+    await removeGenerationEntry(projectDir, generationId);
+  } catch {
+    // Startup recovery removes trees that no generating row owns.
+    console.warn("[alternatives] deferred generation tree cleanup", generationId);
+  }
+}
+
+function isGenerationActive(db: Database, generationId: string): boolean {
+  return db.query<{ readonly found: number }, [string]>(
+    "SELECT 1 AS found FROM visual_alternative_generations WHERE id=? AND status='generating'",
+  ).get(generationId) !== null;
 }
 
 const projectHolds = new Map<string, Map<string, () => void>>();
@@ -199,12 +221,29 @@ function releaseVisualAlternativeProject(projectId: string): void {
   projectHolds.delete(projectId);
 }
 
-/** Retries recovery of the project's quarantined generation, if any. */
-export async function recoverProjectVisualAlternatives(
+type ProjectRecovery = "recovered" | "recovery_pending" | "not_active";
+const projectRecoveries = new Map<string, Promise<ProjectRecovery>>();
+
+/** Retries recovery of the project's quarantined generation, if any; concurrent callers share one attempt. */
+export function recoverProjectVisualAlternatives(
   db: Database,
   projectId: string,
   dependencies: RecoveryDependencies = {},
-): Promise<"recovered" | "recovery_pending" | "not_active"> {
+): Promise<ProjectRecovery> {
+  const inFlight = projectRecoveries.get(projectId);
+  if (inFlight !== undefined) return inFlight;
+  const attempt = recoverProjectOnce(db, projectId, dependencies).finally(() => {
+    projectRecoveries.delete(projectId);
+  });
+  projectRecoveries.set(projectId, attempt);
+  return attempt;
+}
+
+async function recoverProjectOnce(
+  db: Database,
+  projectId: string,
+  dependencies: RecoveryDependencies,
+): Promise<ProjectRecovery> {
   const rows = db.query<GenerationRecoveryRow, [string]>(
     `SELECT g.id,g.project_id,p.dir_path,g.base_digest,g.base_manifest_json,g.base_path
       FROM visual_alternative_generations g

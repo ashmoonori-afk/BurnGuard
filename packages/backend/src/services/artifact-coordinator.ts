@@ -239,6 +239,11 @@ export class ArtifactCoordinator {
   }
 
   private async observeExternalUntilStable(projectId: string, projectDir: string, onActive: "reject" | "refuse" = "reject"): Promise<CommittedArtifactOperation | null> {
+    if (isArtifactMutationBlockedByAlternatives(this.db, projectId, "")) {
+      // Leased or quarantined by visual alternatives: never adopt or roll back live bytes now.
+      if (onActive === "refuse") throw new ArtifactOperationError("operation_conflict", "Visual alternatives own this project");
+      return null;
+    }
     let latest: CommittedArtifactOperation | null = null;
     for (let pass = 0; pass < 8; pass += 1) {
       latest = await this.observeExternalOnce(projectId, projectDir, onActive) ?? latest;
@@ -252,11 +257,6 @@ export class ArtifactCoordinator {
   private async observeExternalOnce(projectId: string, projectDir: string, onActive: "reject" | "refuse"): Promise<CommittedArtifactOperation | null> {
     const identity = this.projectIdentity(projectId);
     if (identity.digest === null) { await this.initializeOnce(projectId, projectDir); return null; }
-    if (isArtifactMutationBlockedByAlternatives(this.db, projectId, "")) {
-      // Leased or quarantined by visual alternatives: never adopt or roll back live bytes now.
-      if (onActive === "refuse") throw new ArtifactOperationError("operation_conflict", "Visual alternatives own this project");
-      return null;
-    }
     const stableIdentity = { revision: identity.revision, digest: identity.digest };
     const actual = await inspectCanonicalTree(projectDir);
     if (actual.tree_digest === stableIdentity.digest) return null;

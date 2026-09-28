@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runMigrationsFrom } from "../src/db/migrate";
@@ -9,7 +9,11 @@ import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { materializeManagedTree } from "../src/services/artifact-tree-storage";
 import { recoverVisualAlternatives } from "../src/services/visual-alternative-recovery";
+import { restoreVisualAlternativeBase } from "../src/services/visual-alternative-generation";
 import { isSessionHeldForRecovery } from "../src/services/turns";
+import { recoverProjectVisualAlternatives } from "../src/services/visual-alternative-recovery";
+import { deleteVisualAlternative } from "../src/db/visual-alternative-repository";
+import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 
 const RETAINED_UNTIL = 253402300799999;
 const roots: string[] = [];
@@ -210,7 +214,7 @@ describe("visual alternative recovery", () => {
     expect(existsSync(path.join(projectDir, ".meta", "visual-alternatives", "generation-held", "base"))).toBe(true);
   });
 
-  test("Given an orphan entry that is a symlink to project content When startup recovers Then only the link is removed", async () => {
+  test.skipIf(!canCreateSymlink())(`Given an orphan entry that is a symlink to project content When startup recovers Then only the link is removed (${SYMLINK_SKIP_REASON})`, async () => {
     // Given
     const container = path.join(projectDir, ".meta", "visual-alternatives");
     await mkdir(container, { recursive: true });
@@ -224,6 +228,83 @@ describe("visual alternative recovery", () => {
     // Then
     expect(existsSync(path.join(container, "linked-orphan"))).toBe(false);
     expect(await readFile(path.join(projectDir, "keep", "marker.html"), "utf8")).toBe("keep");
+  });
+
+  test("Given orphan entries whose names are not valid ids When startup recovers Then they are removed without aborting", async () => {
+    // Given
+    const container = path.join(projectDir, ".meta", "visual-alternatives");
+    await mkdir(path.join(container, "bad:name "), { recursive: true });
+
+    // When
+    await recoverVisualAlternatives(db, { root });
+
+    // Then
+    expect(existsSync(path.join(container, "bad:name "))).toBe(false);
+  });
+
+  test("Given a quarantined project with changed live bytes When the watcher observes it Then observation defers instead of failing", async () => {
+    // Given
+    await interruptedGeneration("generation-observed");
+    await writeFile(path.join(projectDir, "index.html"), "<main>Edited outside</main>");
+
+    // When
+    const observed = await new ArtifactCoordinator(db).observeExternal("p", projectDir);
+
+    // Then
+    expect(observed).toBeNull();
+    expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("<main>Edited outside</main>");
+  });
+
+  test("Given concurrent recovery retries When both run Then they share one attempt and converge once", async () => {
+    // Given
+    addSession("s-concurrent");
+    await interruptedGeneration("generation-concurrent");
+    let restores = 0;
+    const restoreBase: typeof restoreVisualAlternativeBase = async (...args) => {
+      restores += 1;
+      await restoreVisualAlternativeBase(...args);
+    };
+
+    // When
+    const results = await Promise.all([
+      recoverProjectVisualAlternatives(db, "p", { root, restoreBase }),
+      recoverProjectVisualAlternatives(db, "p", { root, restoreBase }),
+    ]);
+
+    // Then
+    expect(results).toEqual(["recovered", "recovered"]);
+    expect(restores).toBe(1);
+    expect(isSessionHeldForRecovery("s-concurrent")).toBe(false);
+  });
+
+  test.skipIf(process.platform === "win32")("Given tree cleanup fails after recovery converges When the retry settles Then the sessions are released anyway", async () => {
+    // Given
+    addSession("s-cleanup");
+    await interruptedGeneration("generation-cleanup");
+    await recoverVisualAlternatives(db, { root, restoreBase: async () => { throw new Error("disk_unavailable"); } });
+    const container = path.join(projectDir, ".meta", "visual-alternatives");
+    await chmod(container, 0o555);
+
+    try {
+      // When
+      const result = await recoverProjectVisualAlternatives(db, "p", { root });
+
+      // Then
+      expect(result).toBe("recovered");
+      expect(isSessionHeldForRecovery("s-cleanup")).toBe(false);
+      expect(db.query("SELECT status FROM visual_alternative_generations WHERE id='generation-cleanup'").get()).toEqual({ status: "ready" });
+    } finally {
+      await chmod(container, 0o755);
+    }
+  });
+
+  test("Given a ready alternative of a still-generating generation When deleted Then deletion is refused", async () => {
+    // Given
+    await interruptedGeneration("generation-delete");
+    db.exec("UPDATE visual_alternatives SET status='failed' WHERE id='generation-delete-a'");
+
+    // When / Then
+    expect(() => deleteVisualAlternative(db, "p", "generation-delete-a", 2)).toThrow("generation_active");
   });
 
   test("Given an orphan tree and a stale pin When startup recovers Then the tree is removed and the pin released", async () => {

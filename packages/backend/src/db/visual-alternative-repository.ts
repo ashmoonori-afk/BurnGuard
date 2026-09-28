@@ -244,6 +244,13 @@ export function deleteVisualAlternative(
     if (alternative.status === "pending" || alternative.status === "generating") {
       throw new VisualAlternativeRepositoryError("generation_active");
     }
+    // Recovery of an unfinished generation relies on every operation it produced.
+    const parentActive = db.query<{ readonly found: number }, [string, string]>(
+      "SELECT 1 AS found FROM visual_alternative_generations WHERE id=? AND project_id=? AND status='generating'",
+    ).get(alternative.generation_id, projectId);
+    if (parentActive !== null) {
+      throw new VisualAlternativeRepositoryError("generation_active");
+    }
     const deleted = db.prepare(
       "DELETE FROM visual_alternatives WHERE project_id=? AND id=? AND status=? AND operation_id=?",
     ).run(projectId, alternativeId, alternative.status, alternative.operation_id);

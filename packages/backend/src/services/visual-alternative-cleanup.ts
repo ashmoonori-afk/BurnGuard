@@ -35,7 +35,11 @@ export async function realGenerationDirectory(projectDir: string, generationId: 
 export async function removeGenerationEntry(projectDir: string, generationId: string): Promise<void> {
   const container = await realContainer(projectDir);
   if (container === null) return;
-  const entry = path.join(container, assertSafeName(generationId));
+  await removeContainerEntry(container, assertSafeName(generationId));
+}
+
+async function removeContainerEntry(container: string, name: string): Promise<void> {
+  const entry = path.join(container, name);
   const stats = await lstat(entry).catch((error: unknown) => {
     if (isMissing(error)) return null;
     throw error;
@@ -53,7 +57,8 @@ export async function removeUnownedGenerationEntries(
   if (container === null) return;
   for (const entry of await readdir(container)) {
     if (owned.has(entry)) continue;
-    await removeGenerationEntry(projectDir, entry);
+    // Directory entry names are single components; they need no persisted-id validation.
+    await removeContainerEntry(container, entry);
   }
 }
 
