@@ -45,8 +45,15 @@ settingsRoutes.get("/api/settings/runtime-diagnostics", async (c) => {
 });
 
 settingsRoutes.post("/api/settings/runtime-diagnostics/projects/:id/resume", async (c) => {
+  const body: unknown = await c.req.json().catch(() => null);
+  const sessionId = typeof body === "object" && body !== null && !Array.isArray(body) && "session_id" in body
+    ? body.session_id
+    : undefined;
+  if (typeof sessionId !== "string" || sessionId.length === 0 || sessionId.length > 128) {
+    return c.json(fail("invalid_request", "A session_id is required"), 400);
+  }
   try {
-    return c.json(ok(await resumeProjectFromSavedFiles(getSqlite(), c.req.param("id"))));
+    return c.json(ok(await resumeProjectFromSavedFiles(getSqlite(), c.req.param("id"), sessionId)));
   } catch (error) {
     if (!(error instanceof RuntimeRecoveryError)) throw error;
     const status = error.code === "project_not_found"

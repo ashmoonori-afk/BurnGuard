@@ -17,20 +17,29 @@ export type RuntimeSessionRow = {
 
 const RECENT_EVENT_LIMIT = 200;
 
+/** One canonical ordering decides which session represents a project for diagnostics and resume. */
+const LATEST_SESSION_ORDER = "last_active_at DESC,id DESC";
+
+export function latestProjectSession(db: Database, projectId: string): RuntimeSessionRow | null {
+  return db.query<RuntimeSessionRow, [string]>(`SELECT s.id,p.id project_id,p.name project_name,s.backend_id,s.status
+    FROM projects p JOIN sessions s ON s.id=(SELECT id FROM sessions WHERE project_id=p.id ORDER BY ${LATEST_SESSION_ORDER} LIMIT 1)
+    WHERE p.id=?`).get(projectId);
+}
+
 export function listRecentRuntimeFailures(
   db: Database,
   limit: number,
 ): readonly RuntimeFailureDiagnostic[] {
   const sessions = db.query<RuntimeSessionRow, [number]>(`SELECT s.id,p.id project_id,p.name project_name,s.backend_id,s.status
-    FROM sessions s JOIN projects p ON p.id=s.project_id
+    FROM projects p JOIN sessions s ON s.id=(SELECT id FROM sessions WHERE project_id=p.id ORDER BY ${LATEST_SESSION_ORDER} LIMIT 1)
     ORDER BY s.last_active_at DESC,s.id DESC LIMIT ?`).all(Math.max(limit * 4, limit));
-  const failures: RuntimeFailureDiagnostic[] = [];
-  for (const session of sessions) {
-    const failure = runtimeFailureForSession(db, session);
-    if (failure !== null) failures.push(failure);
-    if (failures.length === limit) break;
-  }
-  return failures.sort((left, right) => right.failed_at - left.failed_at);
+  return sessions
+    .flatMap((session) => {
+      const failure = runtimeFailureForSession(db, session);
+      return failure === null ? [] : [failure];
+    })
+    .sort((left, right) => right.failed_at - left.failed_at)
+    .slice(0, limit);
 }
 
 export function runtimeFailureForSession(

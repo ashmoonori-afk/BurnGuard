@@ -1,11 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
 import type { BackendDetectionResult, NormalizedEvent } from "@bg/shared";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { runtimeBackendProfiles } from "../src/adapters/registry";
 import { getSqlite } from "../src/db/sqlite-client";
 import { persistNormalizedEvent } from "../src/db/events";
+import { projectsDir } from "../src/lib/paths";
 import { settingsRoutes } from "../src/routes/settings";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import {
@@ -13,6 +13,7 @@ import {
   listRecentRuntimeFailures,
   resumeProjectFromSavedFiles,
 } from "../src/services/runtime-diagnostics";
+import { releaseUserTurnReservation, reserveUserTurn } from "../src/services/turns";
 
 const db = getSqlite();
 const projectIds: string[] = [];
@@ -34,14 +35,50 @@ function insertProjectSession(
   const sessionId = `${projectId}-session`;
   projectIds.push(projectId);
   db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html',?,1,1)")
-    .run(projectId, "Runtime fixture", dirPath ?? `/tmp/${projectId}`, backendId);
+    .run(projectId, "Runtime fixture", dirPath ?? path.join(projectsDir, projectId), backendId);
   db.prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,?,?,1,1,1)")
     .run(sessionId, projectId, backendId, status);
   return { projectId, sessionId };
 }
 
+function insertSession(projectId: string, sessionId: string, lastActiveAt: number, updatedAt: number): void {
+  db.prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,?,?)")
+    .run(sessionId, projectId, updatedAt, lastActiveAt);
+}
+
 function persist(sessionId: string, event: NormalizedEvent): void {
   persistNormalizedEvent(db, sessionId, event);
+}
+
+function failTurn(sessionId: string, turnId: string, ts: number): void {
+  persist(sessionId, { id: crypto.randomUUID(), ts, type: "chat.user_message", turnId, text: "continue", attachmentCount: 0 });
+  persist(sessionId, { id: crypto.randomUUID(), ts: ts + 1, type: "status.error", code: "turn_failed", message: "turn_failed", recoverable: true });
+  persist(sessionId, { id: crypto.randomUUID(), ts: ts + 2, type: "status.idle", stopReason: "error" });
+}
+
+async function managedProject(): Promise<{ readonly projectId: string; readonly sessionId: string; readonly root: string }> {
+  const projectId = `runtime-project-${crypto.randomUUID()}`;
+  const root = path.join(projectsDir, projectId);
+  await mkdir(root, { recursive: true });
+  projectRoots.push(root);
+  await writeFile(path.join(root, "index.html"), "saved-before-failure");
+  projectIds.push(projectId);
+  db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)")
+    .run(projectId, "Runtime fixture", root);
+  const sessionId = `${projectId}-session`;
+  insertSession(projectId, sessionId, 1, 1);
+  await new ArtifactCoordinator(db).initialize(projectId, root);
+  failTurn(sessionId, "turn-recovery", 30);
+  await writeFile(path.join(root, "index.html"), "saved-after-failure");
+  return { projectId, sessionId, root };
+}
+
+function resumeRequest(projectId: string, sessionId: string): Promise<Response> {
+  return Promise.resolve(settingsRoutes.request(`/api/settings/runtime-diagnostics/projects/${projectId}/resume`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  }));
 }
 
 test("Given the adapter registry When runtime profiles are listed Then transport and capabilities match executed adapters", () => {
@@ -100,18 +137,23 @@ test("Given durable failed and interrupted turns When recent failures are derive
   expect(JSON.stringify(failures)).not.toContain("private prompt");
 });
 
-test("Given saved files after a failed turn When resume is requested Then disk bytes are adopted without rerunning or rolling back", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "bg-runtime-recovery-"));
-  projectRoots.push(root);
-  await writeFile(path.join(root, "index.html"), "saved-before-failure");
-  const fixture = insertProjectSession("codex", "idle", root);
-  await new ArtifactCoordinator(db).initialize(fixture.projectId, root);
-  persist(fixture.sessionId, { id: crypto.randomUUID(), ts: 30, type: "chat.user_message", turnId: "turn-recovery", text: "continue", attachmentCount: 0 });
-  persist(fixture.sessionId, { id: crypto.randomUUID(), ts: 31, type: "status.error", code: "turn_failed", message: "turn_failed", recoverable: true });
-  persist(fixture.sessionId, { id: crypto.randomUUID(), ts: 32, type: "status.idle", stopReason: "error" });
-  await writeFile(path.join(root, "index.html"), "saved-after-failure");
+test("Given an older failed session and a newer successful one When failures are listed Then the project is represented only by its latest session", () => {
+  const fixture = insertProjectSession("codex");
+  failTurn(fixture.sessionId, "turn-old-failure", 50);
+  const newer = `${fixture.projectId}-newer`;
+  insertSession(fixture.projectId, newer, 5, 0);
+  persist(newer, { id: crypto.randomUUID(), ts: 60, type: "chat.user_message", turnId: "turn-newer", text: "done", attachmentCount: 0 });
+  persist(newer, { id: crypto.randomUUID(), ts: 61, type: "status.idle", stopReason: "end_turn" });
 
-  const response = await settingsRoutes.request(`/api/settings/runtime-diagnostics/projects/${fixture.projectId}/resume`, { method: "POST" });
+  const failures = listRecentRuntimeFailures(db, 100).filter((failure) => failure.project_id === fixture.projectId);
+
+  expect(failures).toEqual([]);
+});
+
+test("Given saved files after a failed turn When resume is requested for the advertised session Then disk bytes are adopted without rerunning or rolling back", async () => {
+  const fixture = await managedProject();
+
+  const response = await resumeRequest(fixture.projectId, fixture.sessionId);
   const body = await response.json();
 
   expect(response.status).toBe(200);
@@ -121,7 +163,62 @@ test("Given saved files after a failed turn When resume is requested Then disk b
     status: "ready",
     artifact: { revision: 1 },
   });
-  expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("saved-after-failure");
+  expect(await readFile(path.join(fixture.root, "index.html"), "utf8")).toBe("saved-after-failure");
+});
+
+test("Given a session other than the advertised latest one When resume is requested Then it is refused", async () => {
+  const fixture = await managedProject();
+  const stale = `${fixture.projectId}-stale`;
+  insertSession(fixture.projectId, stale, 0, 99);
+
+  const response = await resumeRequest(fixture.projectId, stale);
+  const body = await response.json();
+
+  expect(response.status).toBe(409);
+  expect(body.error.code).toBe("runtime_resume_not_available");
+});
+
+test("Given a missing session_id When resume is requested Then the request is rejected at the edge", async () => {
+  const fixture = await managedProject();
+
+  const response = await settingsRoutes.request(`/api/settings/runtime-diagnostics/projects/${fixture.projectId}/resume`, { method: "POST" });
+
+  expect(response.status).toBe(400);
+  expect((await response.json()).error.code).toBe("invalid_request");
+});
+
+test("Given a turn reserved for the project When resume is requested Then it is refused and no bytes change", async () => {
+  const fixture = await managedProject();
+  const reservation = reserveUserTurn(fixture.sessionId);
+  if (reservation === null) throw new Error("Fixture turn reservation failed");
+  try {
+    await expect(resumeProjectFromSavedFiles(db, fixture.projectId, fixture.sessionId)).rejects.toMatchObject({
+      code: "runtime_resume_busy",
+    });
+  } finally {
+    releaseUserTurnReservation(reservation);
+  }
+  expect(await readFile(path.join(fixture.root, "index.html"), "utf8")).toBe("saved-after-failure");
+});
+
+test("Given an active artifact operation When resume is requested Then it is refused without restoring the baseline", async () => {
+  const fixture = await managedProject();
+  db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,?,'working',0,'',NULL,NULL,0,'','','[]','{}','{}','{}',1,1)")
+    .run(`op-${crypto.randomUUID()}`, fixture.projectId);
+
+  await expect(resumeProjectFromSavedFiles(db, fixture.projectId, fixture.sessionId)).rejects.toMatchObject({
+    code: "runtime_resume_busy",
+  });
+  expect(await readFile(path.join(fixture.root, "index.html"), "utf8")).toBe("saved-after-failure");
+});
+
+test("Given a project row pointing outside managed storage When resume is requested Then no filesystem work is admitted", async () => {
+  const fixture = insertProjectSession("codex", "idle", path.join(path.dirname(projectsDir), "outside-managed-root"));
+  failTurn(fixture.sessionId, "turn-outside", 70);
+
+  await expect(resumeProjectFromSavedFiles(db, fixture.projectId, fixture.sessionId)).rejects.toMatchObject({
+    code: "recovery_unavailable",
+  });
 });
 
 test("Given a successful latest turn When resume is requested Then no artifact mutation is admitted", async () => {
@@ -129,7 +226,7 @@ test("Given a successful latest turn When resume is requested Then no artifact m
   persist(fixture.sessionId, { id: crypto.randomUUID(), ts: 40, type: "chat.user_message", turnId: "turn-success", text: "done", attachmentCount: 0 });
   persist(fixture.sessionId, { id: crypto.randomUUID(), ts: 41, type: "status.idle", stopReason: "end_turn" });
 
-  await expect(resumeProjectFromSavedFiles(db, fixture.projectId)).rejects.toMatchObject({
+  await expect(resumeProjectFromSavedFiles(db, fixture.projectId, fixture.sessionId)).rejects.toMatchObject({
     code: "runtime_resume_not_available",
   });
 });

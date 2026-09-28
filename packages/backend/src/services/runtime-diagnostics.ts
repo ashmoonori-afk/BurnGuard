@@ -12,10 +12,13 @@ import { readCodexModelCatalog, detectBackends } from "./backends";
 import { isCanonicalTreeRootMissing } from "./canonical-tree-manifest";
 import { indexProjectFiles } from "./managed-project-files";
 import {
+  latestProjectSession,
   listRecentRuntimeFailures,
   runtimeFailureForSession,
-  type RuntimeSessionRow,
 } from "./runtime-failure-diagnostics";
+import { releaseUserTurnReservation, reserveUserTurn, type UserTurnReservation } from "./turns";
+import { projectsDir, resolveManagedPath } from "../lib/paths";
+import { PathBoundaryError } from "../security/path-boundary";
 
 export { listRecentRuntimeFailures } from "./runtime-failure-diagnostics";
 
@@ -65,31 +68,41 @@ export function buildRuntimeBackendDiagnostics(
   });
 }
 
+/**
+ * Adopts the saved on-disk tree for the exact session diagnostics advertised. Every session of the
+ * project holds a turn reservation for the whole recovery, so no turn can start meanwhile, and the
+ * eligibility checks are repeated under the artifact project lock right before adoption. The
+ * adopt-only coordinator path refuses active operations instead of restoring the baseline.
+ */
 export async function resumeProjectFromSavedFiles(
   db: Database,
   projectId: string,
+  sessionId: string,
 ): Promise<RuntimeResumeResult> {
   const project = db.query<{
     readonly id: string;
     readonly dir_path: string;
   }, [string]>("SELECT id,dir_path FROM projects WHERE id=?").get(projectId);
   if (project === null) throw new RuntimeRecoveryError("project_not_found");
-
-  const session = db.query<RuntimeSessionRow, [string]>(`SELECT s.id,p.id project_id,p.name project_name,s.backend_id,s.status
-    FROM sessions s JOIN projects p ON p.id=s.project_id
-    WHERE s.project_id=? ORDER BY s.updated_at DESC,s.id DESC LIMIT 1`).get(projectId);
-  if (session === null) throw new RuntimeRecoveryError("runtime_resume_not_available");
-  const failure = runtimeFailureForSession(db, session);
-  if (failure?.can_resume !== true) throw new RuntimeRecoveryError("runtime_resume_not_available");
-  if (await isCanonicalTreeRootMissing(project.dir_path)) {
-    throw new RuntimeRecoveryError("project_directory_missing");
+  let projectRoot: string;
+  try { projectRoot = resolveManagedPath(projectsDir, project.dir_path); }
+  catch (error) {
+    if (error instanceof PathBoundaryError) throw new RuntimeRecoveryError("recovery_unavailable");
+    throw error;
   }
-  const active = db.query<{ readonly id: string }, [string]>(`SELECT id FROM artifact_operations
-    WHERE project_id=? AND status IN ('pending','working','recovering') LIMIT 1`).get(projectId);
-  if (active !== null) throw new RuntimeRecoveryError("runtime_resume_busy");
+  assertResumable(db, projectId, sessionId);
 
+  const reservations = reserveProjectTurns(db, projectId);
   try {
-    await new ArtifactCoordinator(db).observeExternal(projectId, project.dir_path);
+    if (await isCanonicalTreeRootMissing(projectRoot)) {
+      throw new RuntimeRecoveryError("project_directory_missing");
+    }
+    await new ArtifactCoordinator(db).adoptExternal(projectId, projectRoot, () => {
+      assertResumable(db, projectId, sessionId);
+      const active = db.query<{ readonly id: string }, [string]>(`SELECT id FROM artifact_operations
+        WHERE project_id=? AND status IN ('pending','working','recovering') LIMIT 1`).get(projectId);
+      if (active !== null) throw new RuntimeRecoveryError("runtime_resume_busy");
+    });
     await indexProjectFiles(projectId);
   } catch (error) {
     if (error instanceof ArtifactOperationError) {
@@ -99,6 +112,8 @@ export async function resumeProjectFromSavedFiles(
       throw new RuntimeRecoveryError("recovery_unavailable");
     }
     throw error;
+  } finally {
+    for (const reservation of reservations) releaseUserTurnReservation(reservation);
   }
 
   const artifact = db.query<{
@@ -110,13 +125,36 @@ export async function resumeProjectFromSavedFiles(
   }
   return {
     project_id: projectId,
-    session_id: session.id,
+    session_id: sessionId,
     status: "ready",
     artifact: {
       revision: artifact.current_revision,
       digest: artifact.current_digest,
     },
   };
+}
+
+function assertResumable(db: Database, projectId: string, sessionId: string): void {
+  const session = latestProjectSession(db, projectId);
+  if (session === null || session.id !== sessionId) throw new RuntimeRecoveryError("runtime_resume_not_available");
+  if (runtimeFailureForSession(db, session)?.can_resume !== true) {
+    throw new RuntimeRecoveryError("runtime_resume_not_available");
+  }
+}
+
+function reserveProjectTurns(db: Database, projectId: string): readonly UserTurnReservation[] {
+  const sessionIds = db.query<{ readonly id: string }, [string]>("SELECT id FROM sessions WHERE project_id=? ORDER BY id")
+    .all(projectId);
+  const reservations: UserTurnReservation[] = [];
+  for (const { id } of sessionIds) {
+    const reservation = reserveUserTurn(id);
+    if (reservation === null) {
+      for (const held of reservations) releaseUserTurnReservation(held);
+      throw new RuntimeRecoveryError("runtime_resume_busy");
+    }
+    reservations.push(reservation);
+  }
+  return reservations;
 }
 
 function modelCatalog(

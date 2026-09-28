@@ -33,7 +33,7 @@ interface RuntimeDiagnosticsPanelProps {
   readonly resumingProjectId: string | null;
   readonly resumedProjectId: string | null;
   readonly onRefresh: () => void;
-  readonly onResume: (projectId: string) => void;
+  readonly onResume: (failure: RuntimeFailureDiagnostic) => void;
 }
 
 export default function RuntimeDiagnosticsSection() {
@@ -56,10 +56,10 @@ export default function RuntimeDiagnosticsSection() {
       diagnostics={diagnostics.data ?? null}
       pending={diagnostics.isPending}
       error={resume.error ?? diagnostics.error}
-      resumingProjectId={resume.isPending ? resume.variables : null}
+      resumingProjectId={resume.isPending ? resume.variables.projectId : null}
       resumedProjectId={resumedProjectId}
       onRefresh={() => void diagnostics.refetch()}
-      onResume={(projectId) => resume.mutate(projectId)}
+      onResume={(failure) => resume.mutate({ projectId: failure.project_id, sessionId: failure.session_id })}
     />
   );
 }
@@ -148,7 +148,7 @@ function FailureRow({
   readonly failure: RuntimeFailureDiagnostic;
   readonly resuming: boolean;
   readonly resumed: boolean;
-  readonly onResume: (projectId: string) => void;
+  readonly onResume: (failure: RuntimeFailureDiagnostic) => void;
 }) {
   const t = useT();
   return (
@@ -160,7 +160,7 @@ function FailureRow({
       {resumed
         ? <Button asChild type="button" size="sm" variant="outline"><a data-resume-project-id={failure.project_id} href={`/projects/${encodeURIComponent(failure.project_id)}`}>{t("settings.runtimeContinue")}<ArrowUpRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" /></a></Button>
         : failure.can_resume
-          ? <Button type="button" size="sm" variant="outline" data-resume-project-id={failure.project_id} disabled={resuming} onClick={() => onResume(failure.project_id)}>{t(resuming ? "settings.runtimeResuming" : "settings.runtimeResume")}</Button>
+          ? <Button type="button" size="sm" variant="outline" data-resume-project-id={failure.project_id} disabled={resuming} onClick={() => onResume(failure)}>{t(resuming ? "settings.runtimeResuming" : "settings.runtimeResume")}</Button>
           : null}
     </article>
   );

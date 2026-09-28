@@ -163,7 +163,8 @@ async function detectOne(id: BackendId, binaryNames: string[], installHint: stri
  * reuse it as authorization.
  */
 export async function detectBackends(options: { force?: boolean; requireCodexAuthentication?: boolean; skipCodexAuthentication?: boolean } = {}): Promise<BackendDetectionResult> {
-  if (!options.force && cachedValue && Date.now() - cachedAt < 30_000) {
+  // Runtime-only detection never reads or writes the cache, so it cannot reuse authorization state.
+  if (!options.force && options.skipCodexAuthentication !== true && cachedValue && Date.now() - cachedAt < 30_000) {
     return cachedValue;
   }
 

@@ -142,6 +142,13 @@ test("Given runtime-only detection When Codex auth would fail Then compatibility
   expect(await calls()).toBe(before);
 });
 
+test("Given a warm authenticated cache When runtime-only detection runs without force Then cached authorization is not reused", async () => {
+  await mode("login");
+  expect(codex(await detectBackends({ force: true })).authenticated).toBe(true);
+  const result = await detectBackends({ skipCodexAuthentication: true });
+  expect(codex(result).authenticated).not.toBe(true);
+});
+
 test("Given excessive version output When runtime detection completes Then bytes beyond the probe bound cannot influence the version", async () => {
   await mode("version-output-limit");
   const result = await detectBackends({ force: true, skipCodexAuthentication: true });

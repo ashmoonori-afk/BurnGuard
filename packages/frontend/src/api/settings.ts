@@ -81,11 +81,12 @@ export async function getRuntimeDiagnostics(): Promise<RuntimeDiagnostics> {
   );
 }
 
-export async function resumeProjectFromSavedFiles(
-  projectId: string,
-): Promise<RuntimeResumeResult> {
+export async function resumeProjectFromSavedFiles(input: {
+  readonly projectId: string;
+  readonly sessionId: string;
+}): Promise<RuntimeResumeResult> {
   return apiFetch<RuntimeResumeResult>(
-    `/api/settings/runtime-diagnostics/projects/${encodeURIComponent(projectId)}/resume`,
-    { method: "POST" },
+    `/api/settings/runtime-diagnostics/projects/${encodeURIComponent(input.projectId)}/resume`,
+    { method: "POST", body: JSON.stringify({ session_id: input.sessionId }) },
   );
 }
