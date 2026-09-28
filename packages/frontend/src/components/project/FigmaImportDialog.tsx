@@ -17,6 +17,7 @@ import {
 import {
   FigmaExportPreviewError,
   readFigmaExportPreview,
+  updateFigmaSelection,
   validateFigmaExportAssets,
 } from "./figma-export-preview";
 
@@ -40,6 +41,7 @@ export default function FigmaImportDialog({
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [nodes, setNodes] = useState<readonly FigmaImportNodeSummary[]>([]);
   const [selected, setSelected] = useState<readonly string[]>([]);
+  const [selectionLimitReached, setSelectionLimitReached] = useState(false);
   const [previewError, setPreviewError] = useState(false);
   const [result, setResult] = useState<CreateFigmaImportResponse | null>(null);
   const importMutation = useMutation({
@@ -67,13 +69,18 @@ export default function FigmaImportDialog({
     ? apiErrorCopy(importMutation.error)
     : previewError
         ? t("workspace.figma.invalidExport")
-        : null;
+        : selectionLimitReached
+            ? t("workspace.figma.selectionLimit", {
+              limit: FIGMA_IMPORT_LIMITS.selection,
+            })
+            : null;
   const canImport = selected.length > 0 && documentFile !== null;
 
   const loadFolder = async (files: readonly File[]): Promise<void> => {
     setFolderFiles(files);
     setResult(null);
     setPreviewError(false);
+    setSelectionLimitReached(false);
     const jsonFiles = files.filter((file) => file.name.toLowerCase().endsWith(".json"));
     if (jsonFiles.length !== 1) {
       setDocumentFile(null);
@@ -129,7 +136,15 @@ export default function FigmaImportDialog({
           <input
             type="checkbox"
             checked={selected.includes(node.node_id)}
-            onChange={(event) => setSelected((current) => event.target.checked ? [...current, node.node_id] : current.filter((id) => id !== node.node_id))}
+            onChange={(event) => {
+              const update = updateFigmaSelection(
+                selected,
+                node.node_id,
+                event.target.checked,
+              );
+              setSelected(update.selected);
+              setSelectionLimitReached(update.limitReached);
+            }}
           />
           <span className="min-w-0 flex-1 truncate text-sm" title={node.name}>{node.name}</span>
           <span className="font-mono text-[11px] text-muted-foreground">{node.node_type}</span>

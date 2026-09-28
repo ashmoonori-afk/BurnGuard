@@ -120,6 +120,7 @@ export async function assertFigmaReferencesPreserved(
     throwIfAcquisitionAborted(signal);
     if (byPath.get(reference.path)?.sha256 !== reference.sha256) fail();
   }
+  assertFigmaReferencePathsAllowed(tree, policy);
 }
 
 export function allowedFigmaReferencePaths(
@@ -135,6 +136,17 @@ export function allowedFigmaReferencePaths(
     }
   }
   return paths;
+}
+
+export function assertFigmaReferencePathsAllowed(
+  manifest: CanonicalTreeManifest,
+  policy: FigmaReferencePolicy,
+): void {
+  const allowedPaths = allowedFigmaReferencePaths(policy);
+  for (const file of manifest.files) {
+    const paths = allowedPaths.get(file.sha256);
+    if (paths !== undefined && !paths.has(file.path)) fail();
+  }
 }
 
 export function assertFigmaManifestChangesAllowed(
@@ -191,6 +203,7 @@ function parseManifest(
     !record(provenance) ||
     !boundedText(provenance["source_file_name"]) ||
     !boundedText(provenance["file_version"]) ||
+    !sha256(provenance["normalized_document_sha256"]) ||
     !Array.isArray(nodes) ||
     nodes.length > FIGMA_IMPORT_LIMITS.selection
   ) fail();

@@ -109,14 +109,14 @@ export async function stageFigmaExport(input: {
       file_version: input.document.version,
       last_modified: input.document.last_modified,
       imported_at: input.imported_at,
-      document_sha256: digestFigmaBytes(
+      normalized_document_sha256: digestFigmaBytes(
         Buffer.from(JSON.stringify(input.document)),
       ),
     },
     policy: {
       trust: "untrusted",
-      original_file: "preserve",
-      original_hash: "preserve",
+      uploaded_document: "not_preserved",
+      document_digest: "normalized_model",
       never_overwrite: true,
       never_copy_into_authored_output: true,
       derived_artifact: "separate",

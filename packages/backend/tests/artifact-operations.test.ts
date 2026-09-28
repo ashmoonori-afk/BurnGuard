@@ -178,6 +178,7 @@ describe("artifact coordinator", () => {
           provenance: {
             source_file_name: "forged.json",
             file_version: "1",
+            normalized_document_sha256: "0".repeat(64),
           },
           nodes: [{
             name: "Forged",
@@ -202,6 +203,49 @@ describe("artifact coordinator", () => {
       },
     });
     expect(next).toMatchObject({ status: "committed", resultRevision: 1 });
+  });
+
+  test("Given a stable tree already duplicates protected Figma bytes When importing Then staged policy rejects the duplicate before commit", async () => {
+    const nodeBytes = Buffer.from('{"id":"1:2"}');
+    const nodeDigest = createHash("sha256").update(nodeBytes).digest("hex");
+    const directory = path.join(root, "references", "figma", "existing");
+    await mkdir(path.join(directory, "nodes"), { recursive: true });
+    await writeFile(path.join(directory, "nodes", "1-2.json"), nodeBytes);
+    await writeFile(path.join(root, "copied-reference.json"), nodeBytes);
+    await writeFile(path.join(directory, "manifest.json"), JSON.stringify({
+      schema_version: 1,
+      provenance: {
+        source_file_name: "existing.json",
+        file_version: "1",
+        normalized_document_sha256: "0".repeat(64),
+      },
+      nodes: [{
+        name: "Existing",
+        node_type: "FRAME",
+        node_path: "references/figma/existing/nodes/1-2.json",
+        node_sha256: nodeDigest,
+        asset_path: null,
+        asset_sha256: null,
+      }],
+    }));
+    const coordinator = new ArtifactCoordinator(db);
+    const base = await coordinator.initialize("p", root);
+
+    await expect(coordinator.run({
+      projectId: "p",
+      projectDir: root,
+      kind: "figma_import",
+      expectedRevision: 0,
+      expectedArtifactDigest: base.tree_digest,
+      mutate: async (stage) => {
+        await writeFile(path.join(stage, "index.html"), "imported");
+      },
+    })).rejects.toMatchObject({ code: "immutable_reference_escaped" });
+
+    expect((await inspectCanonicalTree(root)).tree_digest).toBe(base.tree_digest);
+    expect(db.query("SELECT current_revision FROM projects WHERE id='p'").get()).toEqual({
+      current_revision: 0,
+    });
   });
 
   test("Given the database commit fails after publication When coordinated Then live bytes restore before failed event", async () => {

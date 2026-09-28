@@ -129,9 +129,10 @@ async function openPublicationSources(
       if (after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.nlink !== 1 || current.dev !== before.dev || current.ino !== before.ino || current.nlink !== 1 || bytes.byteLength !== file.size) throw new Error("Publication source identity changed");
       const digest = createHash("sha256").update(bytes).digest("hex");
       const immutablePaths = policy.immutableReferencePaths?.get(digest);
+      const registeredImmutablePath = immutablePaths?.has(file.path) === true;
       if (
-        policy.forbiddenSha256?.has(digest) ||
-        (immutablePaths !== undefined && !immutablePaths.has(file.path))
+        (policy.forbiddenSha256?.has(digest) && !registeredImmutablePath) ||
+        (immutablePaths !== undefined && !registeredImmutablePath)
       ) throw new ArtifactPublicationPolicyError();
       if (digest !== file.sha256) throw new Error("Publication source identity changed");
       opened[opened.length - 1] = { file, handle, bytes };

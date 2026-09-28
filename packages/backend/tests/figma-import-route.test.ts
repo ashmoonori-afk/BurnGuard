@@ -222,9 +222,56 @@ describe("project Figma file import route", () => {
       coordinator.observeExternal(project.id, project.dir),
     ).rejects.toMatchObject({ code: "immutable_reference_escaped" });
     expect(await readFile(nodePath)).toEqual(originalNode);
+    const copiedPath = path.join(project.dir, "copied-reference.json");
+    await writeFile(copiedPath, originalNode);
+    await expect(
+      coordinator.observeExternal(project.id, project.dir),
+    ).rejects.toMatchObject({ code: "immutable_reference_escaped" });
+    await expect(readFile(copiedPath)).rejects.toMatchObject({ code: "ENOENT" });
     expect((await getProjectDetail(project.id))?.current_revision).toBe(
       current.current_revision,
     );
+  });
+
+  test("Given an immutable attachment matches imported asset bytes When another file changes Then the registered Figma asset path remains publishable", async () => {
+    const project = await createProject();
+    const response = await createApp().request(
+      `/api/projects/${project.id}/figma/import`,
+      { method: "POST", body: importForm(project) },
+    );
+    const body = await response.json();
+    const manifest = JSON.parse(
+      await readFile(path.join(project.dir, body.data.manifest_path), "utf8"),
+    );
+    const assetSha256 = manifest.nodes[0]?.asset_sha256;
+    const assetPath = manifest.nodes[0]?.asset_path;
+    const current = await getProjectDetail(project.id);
+    if (
+      typeof assetSha256 !== "string" ||
+      typeof assetPath !== "string" ||
+      current === null ||
+      current.current_digest === null
+    ) throw new Error("fixture_identity_unavailable");
+
+    const operation = await new ArtifactCoordinator(getSqlite()).run({
+      projectId: project.id,
+      projectDir: project.dir,
+      kind: "turn",
+      expectedRevision: current.current_revision,
+      expectedArtifactDigest: current.current_digest,
+      publicationPolicy: { forbiddenSha256: new Set([assetSha256]) },
+      mutate: async (stage) => {
+        await writeFile(path.join(stage, "index.html"), "<h1>Updated</h1>");
+      },
+    });
+
+    expect(operation).toMatchObject({
+      status: "committed",
+      resultRevision: current.current_revision + 1,
+    });
+    expect(
+      await readFile(path.join(project.dir, assetPath)),
+    ).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
   });
 
   test("Given too many exported assets and malformed JSON When imported Then asset count is rejected before document parsing", async () => {

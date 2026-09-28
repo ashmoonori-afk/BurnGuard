@@ -4,6 +4,7 @@ import {
   FigmaExportPreviewError,
   parseFigmaExportPreview,
   readFigmaExportPreview,
+  updateFigmaSelection,
   validateFigmaExportAssets,
 } from "@/components/project/figma-export-preview";
 
@@ -98,6 +99,20 @@ describe("Figma export preview", () => {
     ).toThrow(FigmaExportPreviewError);
   });
 
+  test("Given duplicate node IDs in separate branches When previewed Then the ambiguous export is rejected", () => {
+    expect(() =>
+      parseFigmaExportPreview(fixtureDocument([{
+        id: "1:2",
+        name: "First",
+        type: "FRAME",
+      }, {
+        id: "1:2",
+        name: "Second",
+        type: "COMPONENT",
+      }]))
+    ).toThrow(FigmaExportPreviewError);
+  });
+
   test("Given more exported assets than the shared cap When validated Then the folder is rejected", () => {
     const files = Array.from(
       { length: FIGMA_IMPORT_LIMITS.assets + 1 },
@@ -107,6 +122,31 @@ describe("Figma export preview", () => {
     expect(() => validateFigmaExportAssets(files)).toThrow(
       FigmaExportPreviewError,
     );
+  });
+
+  test("Given the shared selection cap is already selected When another node is checked Then selection stays bounded and reports the limit", () => {
+    const current = Array.from(
+      { length: FIGMA_IMPORT_LIMITS.selection },
+      (_, index) => `1:${index}`,
+    );
+
+    const update = updateFigmaSelection(current, "2:1", true);
+
+    expect(update).toEqual({
+      selected: current,
+      limitReached: true,
+    });
+  });
+
+  test("Given a selection-limit warning When a selected node is unchecked Then the warning clears and the node is removed", () => {
+    const current = ["1:1", "1:2"];
+
+    const update = updateFigmaSelection(current, "1:2", false);
+
+    expect(update).toEqual({
+      selected: ["1:1"],
+      limitReached: false,
+    });
   });
 
   test("Given a REST nodes response When previewed Then nested wrapped nodes are available", () => {

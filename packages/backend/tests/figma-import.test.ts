@@ -166,6 +166,29 @@ describe("Figma import model", () => {
       expect.objectContaining({ code: "invalid_figma_export" }),
     );
   });
+
+  test("Given duplicate node IDs in separate branches When parsed Then the boundary rejects the ambiguous export", () => {
+    const duplicate = fixtureDocument();
+    if (
+      typeof duplicate !== "object" ||
+      duplicate === null ||
+      !("document" in duplicate) ||
+      typeof duplicate.document !== "object" ||
+      duplicate.document === null ||
+      !("children" in duplicate.document) ||
+      !Array.isArray(duplicate.document.children)
+    ) throw new Error("fixture_unavailable");
+    duplicate.document.children.push({
+      id: "1:2",
+      name: "Duplicate",
+      type: "CANVAS",
+      children: [],
+    });
+
+    expect(() => parseFigmaImportDocument(duplicate)).toThrow(
+      expect.objectContaining({ code: "invalid_figma_export" }),
+    );
+  });
 });
 
 describe("Figma token mapping", () => {
@@ -247,12 +270,18 @@ describe("Figma export staging", () => {
       source_file_name: "checkout.json",
       file_version: "42",
       last_modified: "2026-09-27T10:15:00Z",
+      normalized_document_sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
     }));
     expect(manifest.policy).toEqual(expect.objectContaining({
       trust: "untrusted",
+      uploaded_document: "not_preserved",
+      document_digest: "normalized_model",
       never_overwrite: true,
       never_copy_into_authored_output: true,
     }));
+    expect(manifest.provenance.document_sha256).toBeUndefined();
+    expect(manifest.policy.original_file).toBeUndefined();
+    expect(manifest.policy.original_hash).toBeUndefined();
     expect(manifest.nodes[0]).toEqual(expect.objectContaining({
       node_id: "1:2",
       node_type: "FRAME",

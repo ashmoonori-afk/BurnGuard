@@ -171,6 +171,7 @@ export const workspaceMessages = defineMessages({
   "workspace.figma.exportHelp": { ko: "최대 {maxFileMb}MB JSON 파일이 정확히 하나, 이미지는 최대 {maxAssets}개여야 해요. 이미지 이름은 선택한 프레임·컴포넌트 이름 또는 노드 ID와 맞아야 해요.", en: "Include exactly one JSON file up to {maxFileMb} MB and at most {maxAssets} images. Image names must match a selected frame or component name or node ID.", "zh-CN": "文件夹中须仅有一个最大 {maxFileMb} MB 的 JSON 文件，图像最多 {maxAssets} 个。图像名称须与所选画框、组件名称或节点 ID 匹配。" },
   "workspace.figma.nodes": { ko: "가져올 프레임·컴포넌트", en: "Frames and components to import", "zh-CN": "要导入的画框和组件" },
   "workspace.figma.invalidExport": { ko: "폴더의 Figma JSON을 읽을 수 없어요. 파일과 구조를 확인해 주세요.", en: "The Figma JSON in this folder could not be read. Check the file and its structure.", "zh-CN": "无法读取文件夹中的 Figma JSON。请检查文件及其结构。" },
+  "workspace.figma.selectionLimit": { ko: "한 번에 최대 {limit}개까지 선택할 수 있어요.", en: "Select up to {limit} items at a time.", "zh-CN": "一次最多可选择 {limit} 个项目。" },
   "workspace.figma.import": { ko: "선택 항목 가져오기", en: "Import selected items", "zh-CN": "导入所选项目" },
   "workspace.figma.importing": { ko: "가져오는 중…", en: "Importing…", "zh-CN": "正在导入…" },
   "workspace.figma.imported": { ko: "Figma 참고 자료를 저장했어요", en: "Figma source material saved", "zh-CN": "已保存 Figma 参考资料" },

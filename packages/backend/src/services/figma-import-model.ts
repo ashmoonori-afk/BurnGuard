@@ -52,16 +52,31 @@ export function parseFigmaImportDocument(
     !boundedText(value.lastModified)
   ) fail("invalid_figma_export");
   const counter = { value: 0 };
+  const seenNodeIds = new Set<string>();
   let document: FigmaImportNode;
   if (record(value.document)) {
-    document = parseNode(value.document, 0, counter, limits, signal);
+    document = parseNode(
+      value.document,
+      0,
+      counter,
+      seenNodeIds,
+      limits,
+      signal,
+    );
   } else if (record(value.nodes)) {
     const children = Object.values(value.nodes).map((wrapper) => {
       throwIfAcquisitionAborted(signal);
       if (!record(wrapper) || !record(wrapper.document)) {
         fail("invalid_figma_export");
       }
-      return parseNode(wrapper.document, 1, counter, limits, signal);
+      return parseNode(
+        wrapper.document,
+        1,
+        counter,
+        seenNodeIds,
+        limits,
+        signal,
+      );
     });
     document = syntheticDocument(value.name, children);
   } else {
@@ -151,6 +166,7 @@ function parseNode(
   value: Readonly<Record<string, unknown>>,
   depth: number,
   counter: { value: number },
+  seenNodeIds: Set<string>,
   limits: AcquisitionLimits,
   signal?: AbortSignal,
 ): FigmaImportNode {
@@ -171,11 +187,20 @@ function parseNode(
     !boundedText(value.name) ||
     !boundedText(value.type)
   ) fail("invalid_figma_export");
+  if (seenNodeIds.has(value.id)) fail("invalid_figma_export");
+  seenNodeIds.add(value.id);
   const children = value.children === undefined
     ? []
     : array(value.children).map((child) => {
       if (!record(child)) fail("invalid_figma_export");
-      return parseNode(child, depth + 1, counter, limits, signal);
+      return parseNode(
+        child,
+        depth + 1,
+        counter,
+        seenNodeIds,
+        limits,
+        signal,
+      );
     });
   return {
     id: value.id,

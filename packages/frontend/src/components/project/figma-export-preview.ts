@@ -11,6 +11,11 @@ export type FigmaExportPreview = {
   readonly nodes: readonly FigmaImportNodeSummary[];
 };
 
+export type FigmaSelectionUpdate = {
+  readonly selected: readonly string[];
+  readonly limitReached: boolean;
+};
+
 export class FigmaExportPreviewError extends Error {
   readonly name = "FigmaExportPreviewError";
 
@@ -43,21 +48,47 @@ export function validateFigmaExportAssets(
   }
 }
 
+export function updateFigmaSelection(
+  current: readonly string[],
+  nodeId: string,
+  checked: boolean,
+): FigmaSelectionUpdate {
+  if (!checked) {
+    return {
+      selected: current.filter((id) => id !== nodeId),
+      limitReached: false,
+    };
+  }
+  if (current.includes(nodeId)) {
+    return { selected: current, limitReached: false };
+  }
+  if (current.length >= FIGMA_IMPORT_LIMITS.selection) {
+    return { selected: current, limitReached: true };
+  }
+  return { selected: [...current, nodeId], limitReached: false };
+}
+
 export function parseFigmaExportPreview(value: unknown): FigmaExportPreview {
   if (!record(value) || !text(value["name"]) || !text(value["version"]) || !text(value["lastModified"])) fail();
   const nodes: FigmaImportNodeSummary[] = [];
   const counter = { value: 0 };
+  const seenNodeIds = new Set<string>();
   if (record(value["document"])) {
     for (const pageValue of array(value["document"].children)) {
       if (!record(pageValue) || pageValue.type !== "CANVAS" || !text(pageValue.name)) continue;
-      for (const nodeValue of array(pageValue.children)) {
-        visitNode(nodes, nodeValue, pageValue.name, 1, counter);
-      }
+      visitNode(nodes, pageValue, pageValue.name, 0, counter, seenNodeIds);
     }
   } else if (record(value["nodes"])) {
     for (const wrapper of Object.values(value["nodes"])) {
       if (record(wrapper)) {
-        visitNode(nodes, wrapper.document, "Selected nodes", 1, counter);
+        visitNode(
+          nodes,
+          wrapper.document,
+          "Selected nodes",
+          1,
+          counter,
+          seenNodeIds,
+        );
       }
     }
   } else {
@@ -78,11 +109,14 @@ function visitNode(
   pageName: string,
   depth: number,
   counter: { value: number },
+  seenNodeIds: Set<string>,
 ): void {
   if (depth > FIGMA_IMPORT_LIMITS.depth || !record(value)) fail();
   counter.value += 1;
   if (counter.value > FIGMA_IMPORT_LIMITS.nodes) fail();
   if (!nodeId(value.id) || !text(value.name) || !text(value.type)) fail();
+  if (seenNodeIds.has(value.id)) fail();
+  seenNodeIds.add(value.id);
   if (importable(value.type)) {
     nodes.push({
       node_id: value.id,
@@ -92,7 +126,7 @@ function visitNode(
     });
   }
   for (const child of array(value.children)) {
-    visitNode(nodes, child, pageName, depth + 1, counter);
+    visitNode(nodes, child, pageName, depth + 1, counter, seenNodeIds);
   }
 }
 

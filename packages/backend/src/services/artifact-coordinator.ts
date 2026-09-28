@@ -16,6 +16,7 @@ import { isArtifactMutationBlockedByAlternatives } from "./visual-alternative-op
 import {
   allowedFigmaReferencePaths,
   assertFigmaManifestChangesAllowed,
+  assertFigmaReferencePathsAllowed,
   assertFigmaReferencesPreserved,
   loadFigmaReferencePolicy,
   type FigmaReferencePolicy,
@@ -179,6 +180,7 @@ export class ArtifactCoordinator {
         result,
         input.signal,
       );
+      assertFigmaReferencePathsAllowed(result, stagedFigmaReferences);
       assertFigmaManifestChangesAllowed(
         figmaReferences,
         stagedFigmaReferences,
@@ -329,6 +331,7 @@ export class ArtifactCoordinator {
         stagePath,
         captured,
       );
+      assertFigmaReferencePathsAllowed(captured, stagedFigmaReferences);
       assertFigmaManifestChangesAllowed(
         figmaReferences,
         stagedFigmaReferences,
