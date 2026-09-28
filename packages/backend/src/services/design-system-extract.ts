@@ -920,7 +920,8 @@ async function ingestWebsiteSource(
       mergeSignals({ colors, fontSizes, fontWeights, spacingValues, radii, shadows }, styleSignalsFromDeclarations(block.declarations));
       for (const family of fontFamiliesFromDeclarations(block.declarations)) fontFamilies.add(family);
     }
-    const attributes = root.querySelectorAll("[style]").map((node) => node.getAttribute("style") ?? "").filter(Boolean).join("\n");
+    // Newlines are CSS whitespace; flatten them so the worker's single-line value check keeps multiline attributes.
+    const attributes = root.querySelectorAll("[style]").map((node) => (node.getAttribute("style") ?? "").replaceAll("\n", " ")).filter(Boolean).join("\n");
     if (attributes) {
       const parsed = await parseCssSource({ content: attributes, sourceId: `${pageSourceId}#style-attribute`, fileOrder: cssFileOrder, signal });
       cssFileOrder += 1;
@@ -1830,16 +1831,26 @@ function brandColors(analysis: SourceAnalysis): { readonly primary: string; read
   return { primary, action: firstValue(analysis.cssVars, ["action-blue", "interactive", "link", "brand-action"], primary) };
 }
 
+const NAMED_COLORS = new Set(("aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen transparent").split(" "));
+
+/** A literal colour: hex, named, or a colour function without unresolved substitutions. CSS-wide keywords and other words are not colours. */
+function isLiteralColor(value: string): boolean {
+  const trimmed = value.trim().toLowerCase();
+  if (/\b(?:var|env|attr)\(/.test(trimmed)) return false;
+  return toHexColor(trimmed) !== null || NAMED_COLORS.has(trimmed) || /^(?:oklch|oklab|lab|lch|hwb|color|color-mix)\([^;{}]*\)$/.test(trimmed);
+}
+
 function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Readonly<Record<string, string>>): string {
   const { primary, action } = brandColors(analysis);
-  const sourceSans = analysis.cssVars.get("framer-font-family")?.split(",")[0]?.trim().replace(/^['"]|['"]$/g, "");
-  const sans = cssString(sourceSans || analysis.fontFamilies[0] || "Inter");
+  // Only a plain leading family name is used; function expressions such as var() fall back to the observed family.
+  const sourceSans = /^\s*(?:"([^"(),]+)"|'([^'(),]+)'|([^"'(),]+?))\s*(?:,|$)/.exec(analysis.cssVars.get("framer-font-family") ?? "");
+  const sans = cssString(sourceSans?.slice(1).find(Boolean)?.trim() || analysis.fontFamilies[0] || "Inter");
   const display = cssString(analysis.fontFamilies[1] ?? analysis.fontFamilies[0] ?? "Inter");
   const sourceAliases =
     analysis.cssVars.size === 0
       ? ""
       : `\n  /* Source-derived aliases */\n${[...analysis.cssVars.entries()]
-          .sort((left, right) => Number(toHexColor(right[1]) !== null) - Number(toHexColor(left[1]) !== null))
+          .sort((left, right) => Number(isLiteralColor(right[1])) - Number(isLiteralColor(left[1])))
           .slice(0, 48)
           .map(([key, value]) => `  --src-${key}: ${value};`)
           .join("\n")}`;
@@ -1847,7 +1858,7 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Rea
     analysis.colors.length === 0
       ? ""
       : `\n  /* Sampled source colors; see extraction provenance for evidence */\n${analysis.colors
-          .filter((value) => toHexColor(value) !== null)
+          .filter(isLiteralColor)
           .slice(0, 16)
           .map((value, index) => `  --src-color-${index + 1}: ${value};`)
           .join("\n")}`;
