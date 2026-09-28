@@ -99,6 +99,35 @@ test("Given repaired output When remeasured Then the loop stops immediately", as
   expect(review.repairs).toBe(1);
   expect(review.result?.overall_status).toBe("ready");
 });
+test("Given design-system conformance findings on a clean audit When reviewing Then a targeted repair carries them and the loop stops once the page conforms", async () => {
+  const prompts: string[] = [];
+  const events: NormalizedEvent[] = [];
+  const finding = { code: "block_alignment" as const, viewport: "desktop" as const, target: "hero_heading", measured: "left", expected: "center" };
+  let checks = 0;
+  const review = await reviewTurnDesign({ ...reviewInput(events), audit: async () => result(false),
+    conformance: async () => ({ page: "/", findings: checks++ === 0 ? [finding] : [] }),
+    run: async input => { prompts.push(input.prompt); return { exitCode: 0 }; } });
+  expect(review.repairs).toBe(1);
+  expect(review.conformance).toEqual({ page: "/", findings: [] });
+  const block = /<design_system_conformance_findings>\n([^\n]+)\n<\/design_system_conformance_findings>/u.exec(prompts[0]!)?.[1];
+  expect(JSON.parse(block!)).toEqual({ page: "/", findings: [finding] });
+  const context = /<burnguard-design-repair-v1>\n([^\n]+)\n/u.exec(prompts[0]!)?.[1];
+  expect(JSON.parse(context!)).toMatchObject({ scope: "targeted_findings", image_generation: "not_requested" });
+  expect(events.at(-1)).toMatchObject({ type: "tool.finished", ok: true, output: { conformance_remaining: 0 } });
+});
+test("Given persistent conformance findings When reviewing Then two repairs run, the turn is not refused for them and the remaining count is reported", async () => {
+  const events: NormalizedEvent[] = [];
+  const finding = { code: "type_size" as const, viewport: "mobile" as const, target: "hero", measured: "32px", expected: "64px +/-2px" };
+  let repairs = 0;
+  const review = await reviewTurnDesign({ ...reviewInput(events), audit: async () => result(false), conformance: async () => ({ page: "/", findings: [finding] }), run: async () => { repairs++; return { exitCode: 0 }; } });
+  expect(repairs).toBe(2);
+  expect(review.result?.overall_status).toBe("ready");
+  expect(events.at(-1)).toMatchObject({ ok: true, output: { conformance_remaining: 1 } });
+});
+test("Given a conformance check that cannot render When reviewing Then the audit result stands and no repair is charged for it", async () => {
+  const review = await reviewTurnDesign({ ...reviewInput([]), audit: async () => result(false), conformance: async () => { throw new RenderSessionError("chromium_not_installed", "unavailable"); }, run: async () => { throw new Error("must not run"); } });
+  expect(review).toMatchObject({ status: "checked", repairs: 0, conformance: null });
+});
 test("Given unavailable Chromium When reviewing Then no repair is charged and no success is reported", async () => {
   const events: NormalizedEvent[] = [];
   const review = await reviewTurnDesign({ ...reviewInput(events), audit: async () => { throw new RenderSessionError("chromium_not_installed", "unavailable"); }, run: async () => { throw new Error("must not run"); } });

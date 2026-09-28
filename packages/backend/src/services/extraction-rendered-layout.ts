@@ -70,8 +70,8 @@ async function measureViewport(browser: Browser, page: MeasuredPageInput, name: 
   }
 }
 
-/** Runs inside the rendered page; returns plain measured values in CSS px. */
-function collectLayout(input: { readonly width: number; readonly height: number; readonly maxSections: number }): MeasuredViewportLayout {
+/** Runs inside the rendered page; returns plain measured values in CSS px. Shared by extraction and the conformance review so both measure identically. */
+export function collectLayout(input: { readonly width: number; readonly height: number; readonly maxSections: number }): MeasuredViewportLayout {
   const vw = input.width;
   const round = (value: number) => Math.round(value);
   // Every stored length stays inside the contract's 0..100000 px range (x may be negative), so one odd box

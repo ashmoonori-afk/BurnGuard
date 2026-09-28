@@ -1,0 +1,140 @@
+import { readdir, readFile } from "node:fs/promises";
+import { MEASURED_VIEWPORTS, parseDesignSystemMeasuredLayout, type MeasuredPageLayout, type MeasuredViewportLayout, type MeasuredViewportName } from "@bg/shared";
+import { resolveWithin } from "../security/path-boundary";
+import { collectLayout } from "./extraction-rendered-layout";
+import { launchChromium, openRenderSession } from "./export-render-session";
+import { registerExportBrowser } from "./export-browser-registry";
+
+/** How a generated website page departs from the measured layout it was asked to follow. Values are px or counts. */
+export type ConformanceFinding = {
+  readonly code: "type_size" | "block_alignment" | "block_position" | "container" | "section_count" | "page_height" | "literal_value";
+  readonly viewport: MeasuredViewportName | null;
+  readonly target: string;
+  readonly measured: string;
+  readonly expected: string;
+};
+export type ConformanceResult = { readonly page: string; readonly findings: readonly ConformanceFinding[] };
+
+/** Declared by generated pages so the review compares them with the measured entry they followed. */
+export const MEASURED_PAGE_META = "bg-measured-page";
+const MAX_FINDINGS = 40;
+const OPEN_TAG = "<selected_design_system_measured_layout>";
+
+/** The measured pages frozen in a project's pinned design-system context, or null when it carries none. */
+export function measuredPagesFromPinnedContext(context: string): readonly MeasuredPageLayout[] | null {
+  const start = context.indexOf(`${OPEN_TAG}\n`);
+  if (start === -1) return null;
+  const line = context.slice(start + OPEN_TAG.length + 1).split("\n", 1)[0] ?? "";
+  try {
+    return parseDesignSystemMeasuredLayout({ schema_version: 1, method: "rendered-offline", pages: JSON.parse(line) }).pages;
+  } catch {
+    return null;
+  }
+}
+
+export function selectMeasuredPage(pages: readonly MeasuredPageLayout[], declaredPath: string | null): MeasuredPageLayout | null {
+  return pages.find(page => page.path === declaredPath) ?? pages.find(page => page.page_type === "home") ?? pages[0] ?? null;
+}
+
+/** Pure comparison of one rendered viewport with its measured counterpart, using the tolerances the prompt states. */
+export function compareMeasuredViewport(expected: MeasuredViewportLayout, actual: MeasuredViewportLayout, viewport: MeasuredViewportName): ConformanceFinding[] {
+  const { width: vw, height: vh } = MEASURED_VIEWPORTS[viewport];
+  const findings: ConformanceFinding[] = [];
+  const push = (code: ConformanceFinding["code"], target: string, measured: string | number, wanted: string | number) => { findings.push({ code, viewport, target, measured: String(measured), expected: String(wanted) }); };
+  for (const [role, size] of Object.entries(expected.type_scale)) {
+    const got = actual.type_scale[role as keyof typeof actual.type_scale];
+    if (got === undefined) push("type_size", role, "missing", `${size}px`);
+    else if (Math.abs(got - size) > 2) push("type_size", role, `${got}px`, `${size}px +/-2px`);
+  }
+  for (const [name, box] of Object.entries(expected.blocks)) {
+    const got = actual.blocks[name as keyof typeof actual.blocks];
+    if (got === undefined) { push("block_position", name, "missing", `x ${box.x}px, y ${box.y}px, width ${box.width}px`); continue; }
+    if (got.align !== box.align) push("block_alignment", name, got.align, box.align);
+    const off = [["x", got.x, box.x, vw], ["y", got.y, box.y, vh], ["width", got.width, box.width, vw]] as const;
+    for (const [axis, value, wanted, span] of off) if (Math.abs(value - wanted) > span * 0.05) push("block_position", `${name}.${axis}`, `${value}px`, `${wanted}px +/-${Math.round(span * 0.05)}px`);
+  }
+  if (expected.container !== null) {
+    const got = actual.container;
+    if (got === null) push("container", "container", "missing", `left ${expected.container.left}px, width ${expected.container.width}px`);
+    else if (Math.abs(got.width - expected.container.width) > vw * 0.05 || Math.abs(got.left - expected.container.left) > vw * 0.05) push("container", "container", `left ${got.left}px, width ${got.width}px`, `left ${expected.container.left}px, width ${expected.container.width}px +/-${Math.round(vw * 0.05)}px`);
+  }
+  if (Math.abs(actual.sections.length - expected.sections.length) > 1) push("section_count", "sections", actual.sections.length, `${expected.sections.length} +/-1`);
+  const ratio = actual.page_height / Math.max(1, expected.page_height);
+  if (ratio < 0.8 || ratio > 1.25) push("page_height", "page", `${actual.page_height}px`, `${expected.page_height}px (80-125%)`);
+  return findings;
+}
+
+const LITERAL_PROPERTIES = /^(?:color|background|background-color|border(?:-(?:top|right|bottom|left))?-color|fill|stroke|font-size|font-family)$/iu;
+const ALLOWED_VALUE = /^(?:inherit|initial|unset|revert|none|transparent|currentcolor|0|auto|normal)$/iu;
+
+/**
+ * Colour, font-size and font-family declarations in authored CSS whose value is a literal instead of a
+ * design-system variable. Custom property definitions are the place literals belong, so they are skipped.
+ * One finding per property, counting occurrences and naming up to three examples.
+ */
+export function literalValueFindings(cssTexts: readonly string[]): ConformanceFinding[] {
+  const hits = new Map<string, { count: number; examples: string[] }>();
+  for (const css of cssTexts) {
+    const body = css.replace(/\/\*[\s\S]*?\*\//gu, "");
+    for (const match of body.matchAll(/(?:^|[{;\s])([a-z-]+)\s*:\s*([^;{}]+)/giu)) {
+      const property = match[1]!.toLowerCase();
+      const value = match[2]!.trim().replace(/\s*!important$/iu, "");
+      if (property.startsWith("--") || !LITERAL_PROPERTIES.test(property) || value === "" || ALLOWED_VALUE.test(value) || /\bvar\(/iu.test(value)) continue;
+      // A background shorthand is only a colour literal when it carries a colour value.
+      if (property === "background" && !/#[0-9a-f]{3,8}\b|\b(?:rgb|hsl|oklch|oklab|lab|lch|color)a?\(/iu.test(value)) continue;
+      const entry = hits.get(property) ?? { count: 0, examples: [] };
+      entry.count += 1;
+      if (entry.examples.length < 3 && !entry.examples.includes(value.slice(0, 60))) entry.examples.push(value.slice(0, 60));
+      hits.set(property, entry);
+    }
+  }
+  return [...hits].sort((a, b) => b[1].count - a[1].count).map(([property, hit]) => ({ code: "literal_value", viewport: null, target: property, measured: `${hit.count} literal value(s), e.g. ${hit.examples.join(" | ")}`, expected: "var(--...) from the design-system tokens" }));
+}
+
+async function authoredCss(projectDir: string): Promise<string[]> {
+  const out: string[] = [];
+  let budget = 2_000_000;
+  const walk = async (rel: string, depth: number): Promise<void> => {
+    if (depth > 4 || budget <= 0) return;
+    for (const entry of await readdir(resolveWithin(projectDir, rel || "."), { withFileTypes: true })) {
+      if (entry.name.startsWith(".") || budget <= 0) continue;
+      const child = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) { if (entry.name !== "node_modules" && entry.name !== "fonts") await walk(child, depth + 1); continue; }
+      if (!entry.isFile() || !/\.(?:css|html?)$/iu.test(entry.name)) continue;
+      const text = (await readFile(resolveWithin(projectDir, child), "utf8")).slice(0, budget);
+      budget -= text.length;
+      if (/\.css$/iu.test(entry.name)) out.push(text);
+      else for (const block of text.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/giu)) out.push(block[1]!);
+    }
+  };
+  await walk("", 0);
+  return out;
+}
+
+/**
+ * Renders the entrypoint at the measured viewports and compares it with the measured entry it followed, plus
+ * the literal-value check over authored CSS. Returns null when there is nothing measured to compare with.
+ */
+export async function reviewDesignSystemConformance(input: { readonly projectDir: string; readonly entrypoint: string; readonly pinnedContext: string; readonly signal: AbortSignal }): Promise<ConformanceResult | null> {
+  const pages = measuredPagesFromPinnedContext(input.pinnedContext);
+  if (pages === null || pages.length === 0) return null;
+  const html = await readFile(resolveWithin(input.projectDir, input.entrypoint), "utf8");
+  const declared = new RegExp(`<meta\\s+name=["']${MEASURED_PAGE_META}["']\\s+content=["']([^"']{1,300})["']`, "iu").exec(html)?.[1] ?? null;
+  const expected = selectMeasuredPage(pages, declared);
+  if (expected === null) return null;
+  const findings: ConformanceFinding[] = [];
+  const browser = await launchChromium(input.signal);
+  const owner = registerExportBrowser(() => browser.close());
+  try {
+    for (const name of Object.keys(MEASURED_VIEWPORTS) as MeasuredViewportName[]) {
+      const size = MEASURED_VIEWPORTS[name];
+      const session = await openRenderSession({ stagedDir: input.projectDir, entrypoint: input.entrypoint, viewport: { width: size.width, height: size.height, dpr: 1 }, deck: false, strict: false, signal: input.signal, browser });
+      try {
+        const actual = await session.page.evaluate(collectLayout, { width: size.width, height: size.height, maxSections: 16 });
+        findings.push(...compareMeasuredViewport(expected.viewports[name], actual, name));
+      } finally { await session.close(); }
+    }
+  } finally { await owner.close(); }
+  findings.push(...literalValueFindings(await authoredCss(input.projectDir)));
+  return { page: expected.path, findings: findings.slice(0, MAX_FINDINGS) };
+}
