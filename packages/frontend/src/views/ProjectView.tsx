@@ -1264,6 +1264,8 @@ export default function ProjectView() {
           await Promise.all([
             queryClient.invalidateQueries({ queryKey: ["project", id, "files"] }),
             queryClient.invalidateQueries({ queryKey: ["project", id, "artifacts"] }),
+            queryClient.invalidateQueries({ queryKey: ["project", id, "fs"] }),
+            queryClient.invalidateQueries({ queryKey: ["project", id] }),
           ]);
         }}
         canPresent={

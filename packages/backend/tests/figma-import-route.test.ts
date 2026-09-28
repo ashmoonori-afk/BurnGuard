@@ -395,3 +395,43 @@ describe("project Figma references in initialization", () => {
     expect(initialized.status).toBe("committed");
   });
 });
+
+describe("project history around Figma imports", () => {
+  test("Given edits before and after an import When history is read Then only revisions since the import are restorable", async () => {
+    // Given
+    const project = await createProject();
+    const coordinator = new ArtifactCoordinator(getSqlite());
+    const edit = async (html: string) => {
+      const current = await getProjectDetail(project.id);
+      if (current === null || current.current_digest === null) throw new Error("artifact_identity_unavailable");
+      return coordinator.run({
+        projectId: project.id,
+        projectDir: project.dir,
+        kind: "palette",
+        expectedRevision: current.current_revision,
+        expectedArtifactDigest: current.current_digest,
+        mutate: async (stage) => { await writeFile(path.join(stage, "index.html"), html); },
+      });
+    };
+    const before = await edit("<h1>Before import</h1>");
+    const afterBefore = await getProjectDetail(project.id);
+    if (afterBefore === null || afterBefore.current_digest === null) throw new Error("artifact_identity_unavailable");
+    const imported = await createApp().request(`/api/projects/${project.id}/figma/import`, {
+      method: "POST",
+      body: importForm({ revision: afterBefore.current_revision, digest: afterBefore.current_digest }),
+    });
+    expect(imported.status).toBe(201);
+    const after = await edit("<h1>After import</h1>");
+    const current = await getProjectDetail(project.id);
+    if (current === null || current.current_digest === null) throw new Error("artifact_identity_unavailable");
+
+    // When
+    const history = artifactHistory(getSqlite(), project.id, current.current_revision, current.current_digest);
+    const availability = new Map(history.entries.map((entry) => [entry.operation_id, entry.available]));
+
+    // Then
+    expect(availability.get(before.id)).toBe(false);
+    expect(availability.get(after.id)).toBe(true);
+    expect(history.undo_operation_id).toBe(after.id);
+  });
+});
