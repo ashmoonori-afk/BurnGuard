@@ -1,4 +1,4 @@
-import type { DesignSystemPageCoverage, DesignSystemPageRecord, DesignSystemPageType } from "@bg/shared";
+import { SHARED_PALETTE_MARKER, type DesignSystemPageCoverage, type DesignSystemPageRecord, type DesignSystemPageType } from "@bg/shared";
 import { useT, type MessageKey } from "@/i18n/t";
 
 const typeLabels: Record<DesignSystemPageType, MessageKey> = {
@@ -37,7 +37,7 @@ export function DesignSystemPagesPanel({ pages }: DesignSystemPagesPanelProps) {
     </details> : null}
     {pages.differences.length ? <div className="mt-4 min-w-0">
       <h3 className="text-sm font-semibold">{t("system.pages.differences")}</h3>
-      <ul className="mt-2 space-y-1 text-sm">{pages.differences.map(difference => <li key={difference.key} data-difference={difference.key} className="break-words"><span className="font-mono text-xs">{difference.key}</span>: <span className="text-muted-foreground">{difference.values.map(value => `${value.path} ${value.value}`).join(" · ")}</span></li>)}</ul>
+      <ul className="mt-2 space-y-1 text-sm">{pages.differences.map(difference => <li key={difference.key} data-difference={difference.key} className="break-words"><span className="font-mono text-xs">{difference.key}</span>: <span className="text-muted-foreground">{difference.values.map(value => `${value.path} ${value.value === SHARED_PALETTE_MARKER ? t("system.pages.sharedPalette") : value.value}`).join(" · ")}</span></li>)}</ul>
     </div> : null}
   </section>;
 }

@@ -6,6 +6,8 @@ export const PAGE_SOURCES = ["entry", "nav", "footer", "sitemap", "link"] as con
 export const PAGE_SKIP_REASONS = ["robots", "cap", "fetch_failed", "budget"] as const;
 /** Serialized pages.json stays below this so the 256 KiB source reader always accepts it. */
 export const MAX_PAGE_COVERAGE_BYTES = 200_000;
+/** Palette difference value for a page whose colours are all shared with every other page. */
+export const SHARED_PALETTE_MARKER = "=shared";
 export const DEFAULT_PAGE_LIMIT = 12;
 export const MAX_PAGE_PATH_LENGTH = 300;
 export const MAX_PAGE_LIMIT = 24;

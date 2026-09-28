@@ -1,7 +1,7 @@
 import { readDesignSystemLayout } from "./design-system-layout";
 import { readDesignSystemAssetGuide } from "./design-system-assets";
 import { buildAssetGuideReadme, toHexColor } from "./extraction-assets";
-import { collectSourceEvidence, type SourceEvidence } from "./extraction-evidence";
+import { collectSourceEvidence, withoutFunctions, type SourceEvidence } from "./extraction-evidence";
 import { buildSectionPatternReadme, measureSourceLayout } from "./extraction-layout";
 import { buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, observedPatterns, pageEvidence, parseRobots, parseSitemap } from "./extraction-pages";
 import { readDesignSystemPageCoverage } from "./design-system-pages";
@@ -709,6 +709,17 @@ function isBudgetExhausted(error: unknown): boolean {
   return error instanceof AcquisitionLimitError && error.limit === "aggregate_source_bytes";
 }
 
+/** Hex colour, with a two-digit alpha suffix when the literal is not fully opaque. */
+function colorWithAlpha(literal: string): string | null {
+  const hex = toHexColor(literal);
+  if (!hex) return null;
+  const short = /^#([0-9a-f]{4}|[0-9a-f]{8})$/i.exec(literal.trim())?.[1];
+  const functional = /^(?:rgba?|hsla?)\(([^)]*)\)$/i.exec(literal.trim())?.[1]?.split(/[\s,/]+/).filter(Boolean)[3];
+  const alpha = short ? Number.parseInt(short.length === 4 ? short[3]!.repeat(2) : short.slice(6), 16) / 255 : functional !== undefined ? (functional.endsWith("%") ? Number.parseFloat(functional) / 100 : Number.parseFloat(functional)) : 1;
+  if (!Number.isFinite(alpha) || alpha >= 1) return hex;
+  return `${hex}${Math.round(Math.max(0, alpha) * 255).toString(16).padStart(2, "0")}`;
+}
+
 /** Property-aware colour literals of a page ("background-color: #ff0000"), normalised to hex where possible. */
 function pageColorEvidence(declarations: readonly CssDeclarationEvidence[]): string[] {
   const properties = new Set(["color", "background", "background-color", "border-color", "outline-color", "fill", "stroke"]);
@@ -716,12 +727,13 @@ function pageColorEvidence(declarations: readonly CssDeclarationEvidence[]): str
   for (const declaration of declarations) {
     const property = declaration.property.toLowerCase();
     if (!properties.has(property)) continue;
-    const literal = /#[0-9a-f]{3,8}\b|(?:rgba?|hsla?)\([^()]*\)/i.exec(declaration.value)?.[0];
-    const hex = literal ? toHexColor(literal) : null;
-    if (!hex) continue;
-    const entry = `${property}: ${hex}`;
+    // Substitution fallbacks may never apply, so only independently written literals count.
+    const literal = /#[0-9a-f]{3,8}\b|(?:rgba?|hsla?)\([^()]*\)/i.exec(withoutFunctions(declaration.value, ["var", "env", "attr"]))?.[0];
+    const color = literal ? colorWithAlpha(literal) : null;
+    if (!color) continue;
+    const entry = `${property}: ${color}`;
     if (!values.includes(entry)) values.push(entry);
-    if (values.length >= 40) break;
+    if (values.length >= 400) break;
   }
   return values;
 }

@@ -2,6 +2,7 @@ import { parse, type HTMLElement } from "node-html-parser";
 import {
   MAX_PAGE_COVERAGE_BYTES,
   MAX_PAGE_PATH_LENGTH,
+  SHARED_PALETTE_MARKER,
   PAGE_TYPES,
   type DesignSystemPageCoverage,
   type DesignSystemPageDifference,
@@ -255,7 +256,7 @@ export function buildPageCoverage(input: {
     const difference = differing(key, extracted.map(page => ({ path: page.path, value: page.layoutTokens[key] })));
     if (difference) differences.push(difference);
   }
-  const palette = differing("palette", unique.map(page => ({ path: page.path, value: distinguishing(page).length ? distinguishing(page).slice(0, 4).join("; ").slice(0, 160) : "shared palette only" })));
+  const palette = differing("palette", unique.map(page => ({ path: page.path, value: distinguishing(page).length ? distinguishing(page).slice(0, 4).join("; ").slice(0, 160) : SHARED_PALETTE_MARKER })));
   if (palette) differences.push(palette);
   const primaryFont = differing("primary-font", extracted.map(page => ({ path: page.path, value: page.fonts[0] })));
   if (primaryFont) differences.push(primaryFont);

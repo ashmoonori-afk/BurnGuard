@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { DesignSystemPageCoverage } from "@bg/shared";
+import { SHARED_PALETTE_MARKER, type DesignSystemPageCoverage } from "@bg/shared";
 import { DesignSystemPagesPanel } from "../src/components/systems/DesignSystemPagesPanel";
 import { LOCALES, useLocaleStore } from "../src/i18n/locale";
 import { systemMessages } from "../src/i18n/messages/system";
@@ -16,7 +16,7 @@ test("Given page coverage When the panel renders in every locale Then every page
       { path: "/about", page_type: "about", source: "footer", status: "skipped", skip_reason: "cap", layout_tokens: {}, patterns: [], colors: [], fonts: [], custom_properties: {}, evidence: null },
     ],
     templates: [],
-    differences: [{ key: "--layout-max", values: [{ path: "/", value: "1140px" }, { path: "/pricing", value: "960px" }] }],
+    differences: [{ key: "--layout-max", values: [{ path: "/", value: "1140px" }, { path: "/pricing", value: "960px" }] }, { key: "palette", values: [{ path: "/", value: "background-color: #ff0000" }, { path: "/pricing", value: SHARED_PALETTE_MARKER }] }],
   };
   for (const locale of LOCALES) {
     const snapshot = useLocaleStore.getInitialState();
@@ -42,6 +42,8 @@ test("Given page coverage When the panel renders in every locale Then every page
       ]);
       expect(html).toContain("hero-sentinel");
       expect(differenceText).toContain("960px");
+      expect(differenceText).toContain(message("system.pages.sharedPalette"));
+      expect(differenceText).not.toContain(SHARED_PALETTE_MARKER);
     } finally {
       Object.assign(snapshot, { locale: original });
     }

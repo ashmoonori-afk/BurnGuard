@@ -37,6 +37,7 @@ export const systemMessages = defineMessages({
   "system.pages.reason.cap": { ko: "페이지 상한 초과", en: "Over the page limit", "zh-CN": "超出页面上限" },
   "system.pages.reason.budget": { ko: "다운로드 예산 초과로 건너뜀", en: "Skipped to stay within the download budget", "zh-CN": "为控制下载量而跳过" },
   "system.pages.reason.fetchFailed": { ko: "불러오지 못함", en: "Could not be fetched", "zh-CN": "无法获取" },
+  "system.pages.sharedPalette": { ko: "공용 색만 사용", en: "Shared palette only", "zh-CN": "仅使用共享配色" },
   "system.pages.differences": { ko: "페이지마다 다른 값", en: "Values that differ between pages", "zh-CN": "页面之间不同的值" },
   "system.pages.pattern.hero": { ko: "히어로", en: "Hero", "zh-CN": "首屏" },
   "system.pages.pattern.featureGrid": { ko: "기능 그리드", en: "Feature grid", "zh-CN": "功能网格" },
