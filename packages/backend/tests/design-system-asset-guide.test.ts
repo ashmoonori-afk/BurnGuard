@@ -140,6 +140,10 @@ describe("Source layout measurement", () => {
     expect(collectSourceEvidence([], six.declarations).featureColumns).toBeNull();
   });
 
+  test("Given rem and em declaration lengths, then they are not measured, while media-query em widths still are", () => {
+    expect(measureSourceLayout([declaration("max-width", "80rem"), declaration("gap", "2rem"), declaration("padding", "6em 0"), declaration("display", "grid", "@media (min-width: 48em)")], ["1rem", "2em"]).tokens).toEqual({ "--layout-bp-md": "768px" });
+  });
+
   test("Given only a large breakpoint, then it is measured without a medium one", () => {
     expect(measureSourceLayout([declaration("display", "grid", "@media (min-width: 1280px)")], []).tokens).toEqual({ "--layout-bp-lg": "1280px" });
   });
@@ -220,8 +224,8 @@ describe("Source evidence drives section patterns and asset style", () => {
 
   test("Given source HTML and CSS, then hero, feature columns, proof, pricing, testimonials, footer, alignment, icons, images, backgrounds and motion are observed", () => {
     expect(collectSourceEvidence([html], css)).toEqual({
-      hero: { media: true, arrangement: null }, featureColumns: 3, proofStrip: false, pricing: true, testimonials: true, footerColumns: 3, alignment: "left",
-      icons: { count: 2, style: "outline", strokeWidth: "1.5" }, photos: 1, illustrations: 1, gradients: 1, patterns: 0,
+      hero: { media: true }, featureColumns: 3, proofStrip: false, pricing: true, testimonials: true, footerColumns: 3, alignment: "left",
+      iconCount: 2, photos: 1, illustrations: 1, gradients: 1, patterns: 0,
       motionMs: [150, 300], animations: 0,
     });
     const patterns = extractDesignSystemLayout("", buildSectionPatternReadme(collectSourceEvidence([html], css))).sections.find(section => section.kind === "patterns")!.text;
@@ -230,26 +234,12 @@ describe("Source evidence drives section patterns and asset style", () => {
     ]);
   });
 
-  test("Given hero structures, then only a row or grid container with copy and media in different children is split, and centred copy with media below stays centred", () => {
+  test("Given hero markup, then only headline and media presence are observed and arrangement is never claimed", () => {
     const hero = (markup: string) => collectSourceEvidence([markup], []).hero;
-    expect(hero('<section class="hero"><div class="row"><div class="col-md-6"><h1>T</h1></div><div class="col-md-6"><img src="a.jpg"></div></div></section>')).toEqual({ media: true, arrangement: "split" });
-    expect(hero('<section class="hero text-center"><h1>T</h1><p>L</p><img src="a.jpg"></section>')).toEqual({ media: true, arrangement: "centered" });
-    expect(hero('<section class="hero"><div><h1>T</h1></div><div><img src="a.jpg"></div></section>')).toEqual({ media: true, arrangement: null });
+    expect(hero('<section class="hero"><div style="display:flex;flex-flow:column nowrap"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')).toEqual({ media: true });
+    expect(hero('<section class="hero"><h1>T</h1><p>L</p></section>')).toEqual({ media: false });
     expect(hero('<main><p>No headline</p></main>')).toBeNull();
-    for (const vertical of [
-      '<section class="hero"><div class="hero flex" style="display:flex;flex-direction:column;text-align:center"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>',
-      '<section class="hero"><div class="flex flex-col"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>',
-      '<section class="hero"><div class="grid grid-cols-1"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>',
-      '<section class="hero"><div class="flex"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>',
-    ]) expect(hero(vertical)?.arrangement).not.toBe("split");
-    expect(hero('<section class="hero"><div class="split two-col"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBeNull();
-    expect(hero('<section class="hero"><div class="row"><div class="col-12"><h1>T</h1></div><div class="col-12"><img src="a.jpg"></div></div></section>')?.arrangement).toBeNull();
-    expect(hero('<section class="hero"><div class="grid grid-cols-1 md:grid-cols-2"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
-    expect(hero('<section class="hero"><div style="display: flex"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
-    for (const columns of ["minmax(0, 1fr)", "repeat(1, 1fr)", "1fr"]) expect(hero(`<section class="hero"><div style="display:grid;grid-template-columns:${columns}"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>`)?.arrangement).not.toBe("split");
-    expect(hero('<section class="hero"><div style="display:grid;grid-template-columns:minmax(0, 1fr) minmax(0, 1fr)"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).toBe("split");
-    expect(["minmax(0, 1fr)", "repeat(1, 1fr)", "repeat(3, minmax(0, 1fr))", "[full] 1fr [mid] 2fr", "[content-start main-start] minmax(0, 1fr) [content-end main-end]", "repeat(auto-fit, 200px)", "fit-content(10px", "1fr !important", "repeat(3, 1fr 2fr)", "repeat(2, [a] 1fr [b] repeat(2, 10px))", "subgrid"].map(gridTrackCount)).toEqual([1, 1, 3, 2, 1, null, null, 1, 6, 6, null]);
-    expect(hero('<section class="hero"><div style="display:grid;grid-template-columns:1fr !important"><div><h1>T</h1></div><div><img src="a.jpg"></div></div></section>')?.arrangement).not.toBe("split");
+    expect(["minmax(0, 1fr)", "repeat(1, 1fr)", "repeat(3, minmax(0, 1fr))", "[full] 1fr [mid] 2fr", "[content-start main-start] minmax(0, 1fr) [content-end main-end]", "repeat(auto-fit, 200px)", "fit-content(10px", "1fr !important", "repeat(3, 1fr 2fr)", "repeat(2, [a] 1fr [b] repeat(2, 10px))", "subgrid", "repeat(8, var(--tracks))", "var(--cols)"].map(gridTrackCount)).toEqual([1, 1, 3, 2, 1, null, null, 1, 6, 6, null, null, null]);
   });
 
   test("Given no evidence, then every section pattern and asset kind is labelled as a default", () => {
@@ -260,7 +250,6 @@ describe("Source evidence drives section patterns and asset style", () => {
     for (const rule of guide.rules.filter(rule => rule.kind !== "logo")) expect(rule.usage!.startsWith("Evidence: not found in the source")).toBe(true);
     const observed = guideFor({ evidence: collectSourceEvidence([html], css) });
     for (const kind of ["icons", "illustrations", "photography", "backgrounds", "motion"]) expect(observed.rules.find(rule => rule.kind === kind)!.usage!.startsWith("Evidence: observed in the source")).toBe(true);
-    expect(observed.rules.find(rule => rule.kind === "icons")!.prompt).toContain("1.5px");
   });
 
   test("Given the generated guide, then it carries no website region placement so fixed surfaces can receive it", () => {
@@ -284,22 +273,13 @@ describe("Source evidence drives section patterns and asset style", () => {
     expect(guideFor({ evidence }).rules.find(rule => rule.kind === "motion")!.usage!.startsWith("Evidence: observed in the source")).toBe(true);
   });
 
-  test("Given filled SVG icons with disabled strokes, then they are filled, not zero-width outlines, and mixed or ambiguous sets stay unclassified", () => {
-    const icons = (markup: string) => collectSourceEvidence([markup], []).icons;
-    const filled = '<svg fill="currentColor" stroke="none" stroke-width="0"><path d="M0 0"/></svg>';
-    const outline = '<svg fill="none" stroke="currentColor" stroke-width="2"><path d="M0 0"/></svg>';
-    expect(icons(filled + filled)).toEqual({ count: 2, style: "filled", strokeWidth: null });
-    expect(icons(outline + outline)).toEqual({ count: 2, style: "outline", strokeWidth: "2" });
-    expect(icons(filled + outline).style).toBeNull();
-    const inheritedNone = '<svg fill="none" stroke="none"><path fill="currentColor" stroke-width="2" d="M0 0h10v10z"/></svg>';
-    expect(icons(inheritedNone + inheritedNone)).toEqual({ count: 2, style: "filled", strokeWidth: null });
-    const inheritedStroke = '<svg fill="none" stroke="currentColor" stroke-width="1.5"><path d="M0 0"/><circle r="2"/></svg>';
-    expect(icons(inheritedStroke + inheritedStroke)).toEqual({ count: 2, style: "outline", strokeWidth: "1.5" });
-    const inlineOverride = '<svg fill="none" stroke="currentColor" stroke-width="2" style="fill:currentColor;stroke:none"><path d="M0 0h10v10z"/></svg>';
-    expect(icons(inlineOverride + inlineOverride)).toEqual({ count: 2, style: "filled", strokeWidth: null });
-    expect(collectSourceEvidence([outline + outline], [declaration("fill", "currentColor")]).icons).toEqual({ count: 2, style: null, strokeWidth: null });
-    const noStrokeNoFillAttr = '<svg><path d="M0 0"/></svg>';
-    expect(icons(noStrokeNoFillAttr + noStrokeNoFillAttr).style).toBe("filled");
+  test("Given icons whose paint any stylesheet could change, then only their count is observed", () => {
+    const svg = '<svg fill="none" stroke="currentColor" stroke-width="2"><path d="M0 0"/></svg><svg class="brand-logo"><path d="M0 0"/></svg>';
+    const evidence = collectSourceEvidence([`<style>svg { fill: currentColor; stroke: none }</style>${svg}${svg}`], []);
+    expect(evidence.iconCount).toBe(2);
+    const icons = guideFor({ evidence }).rules.find(rule => rule.kind === "icons")!;
+    expect(icons.usage!.startsWith("Evidence: observed in the source")).toBe(true);
+    expect(icons.prompt).toBe(guideFor().rules.find(rule => rule.kind === "icons")!.prompt);
   });
 
   test("Given nested footer navigation, then each link list counts once", () => {
@@ -347,7 +327,9 @@ describe("Evidence comes from the original source, not sanitized or generated HT
       const preview = path.join(source, "page-1.html");
       await writeFile(preview, '<html><body><section class="hero"><h1>Generated preview</h1><img alt="preview"></section><blockquote>q</blockquote></body></html>');
       const signal = new AbortController().signal;
-      const base = await analyzeLocalTree(await mkdtemp(path.join(tmpdir(), "bg-asset-empty-")), "Upload", signal);
+      const empty = path.join(source, "empty");
+      await mkdir(empty);
+      const base = await analyzeLocalTree(empty, "Upload", signal);
       const analysis = { ...base, sourceEvidence: undefined, uiKitFiles: [{ absolutePath: preview, fileName: "page-1.html" }] };
       await persistCanonicalExtraction({ requestedId: id, brandName: "Upload", sourceType: "upload", sourceReference: "upload://fixture", lineage: null, analysis, signal });
       const tokens = await readDesignSystemTokens(id);

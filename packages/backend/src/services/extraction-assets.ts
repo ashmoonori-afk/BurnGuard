@@ -84,12 +84,12 @@ export function buildAssetGuideReadme(input: AssetGuideInput): string {
   const corners = radius === null ? "simple geometric corners" : radius <= 2 ? "crisp square corners" : radius <= 12 ? "softly rounded corners" : "generously rounded, pill-like shapes";
   const face = input.fontFamilies.find(family => !GENERIC_FONT.test(family.trim()));
   const type = face ? `${face} letterforms` : "clean geometric sans-serif letterforms";
-  const iconStyle = evidence.icons.style === "filled" ? "solid filled glyphs" : `line icons with a ${evidence.icons.strokeWidth ? `${evidence.icons.strokeWidth}px` : "2px"} uniform stroke`;
+  const iconStyle = "line icons with a 2px uniform stroke";
   const motion = evidence.motionMs ? `${evidence.motionMs[0]}-${evidence.motionMs[1]}ms` : "120-320ms";
 
   const usage = {
     logo: `${input.logoPaths.length ? observed(`logo files ${input.logoPaths.join(", ")} and the palette`) : "Evidence: no logo file was found in the source; supply one before publishing."} Use the supplied files unchanged: never redraw, recolour outside ${primary} or a single-colour ink/white version, stretch, rotate, outline or add effects. Show the logo once per page or frame, never as repeated decoration. Keep clear space on every side equal to the height of the logo mark and never render it below 24px tall on screen. On photos or dark grounds use the single-colour white version over a calm area.`,
-    icons: `${evidence.icons.style ? observed(`${evidence.icons.count} inline SVG icons, mostly ${evidence.icons.style}${evidence.icons.strokeWidth ? ` with a ${evidence.icons.strokeWidth}px stroke` : ""}`) : DEFAULT} Use one consistent icon set of ${iconStyle} on a 24px grid at 16, 20 or 24px with ${corners}. Colour icons with the current text ink; use ${action} only for interactive or active states. Pair icons with a text label unless the meaning is universal. Never mix filled and outlined styles or add icons without a function.`,
+    icons: `${evidence.iconCount ? observed(`${evidence.iconCount} inline SVG icons, presence only`) : DEFAULT} Use one consistent icon set of ${iconStyle} on a 24px grid at 16, 20 or 24px with ${corners}. Colour icons with the current text ink; use ${action} only for interactive or active states. Pair icons with a text label unless the meaning is universal. Never mix filled and outlined styles or add icons without a function.`,
     illustrations: `${evidence.illustrations ? observed(`${evidence.illustrations} SVG illustration image(s), presence only`) : DEFAULT} Use illustrations only for explanatory moments (empty states, onboarding, concepts), never as filler. Build them from the palette (${palette}) with flat fills, ${corners} and restrained detail, one illustration per content block at most.`,
     photography: `${evidence.photos ? observed(`${evidence.photos} photographic image(s), presence only`) : DEFAULT} Use real, candid photography of people, product and context. Crop with the subject on a rule-of-thirds line and leave calm negative space for text. Grade toward the palette with natural skin tones; never apply heavy filters, off-brand duotones or stock-photo poses. Keep one aspect ratio within a group of images.`,
     backgrounds: `${evidence.gradients ? observed(`${evidence.gradients} gradient background(s)`) : tone ? observed(`a ${tone} sampled palette`) : DEFAULT} Default to ${ground} using the surface tokens${evidence.gradients ? `, with soft gradients built only from ${palette}` : ", kept flat"}. Alternate only between the neutral surface tokens and one tinted brand surface and keep text contrast at WCAG AA or better. Full-bleed imagery is reserved for one focal area and never sits behind body text.`,
@@ -130,7 +130,7 @@ Negative: gradients, 3D bevel, drop shadow, glow, photographic texture, mockup s
 
 ### Icons
 Prompt: Consistent set of minimal ${iconStyle} on a 24x24 grid, ${corners}, monochrome dark ink on a transparent background with one accent in ${action}, generous internal padding, pixel-aligned, same visual weight across the set.
-Negative: ${evidence.icons.style === "filled" ? "outlined glyphs mixed with fills" : "filled glyphs mixed with outlines"}, gradients, shadows, 3D, skeuomorphic detail, text labels, inconsistent ${evidence.icons.style === "filled" ? "shapes" : "stroke widths"}
+Negative: filled glyphs mixed with outlines, gradients, shadows, 3D, skeuomorphic detail, text labels, inconsistent stroke widths
 
 ### Illustrations
 Prompt: Flat editorial illustration of [subject] for ${input.brandName}, limited palette ${palette}, clean vector shapes with ${corners}, subtle grain, calm composition with clear negative space for a headline, ${ground}.

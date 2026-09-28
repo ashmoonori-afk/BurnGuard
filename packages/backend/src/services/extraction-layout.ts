@@ -9,17 +9,10 @@ import { gridTrackCount, type SourceEvidence } from "./extraction-evidence";
 export function buildSectionPatternReadme(evidence: SourceEvidence): string {
   const line = (name: string, facts: string | null, defaults: string) => facts ? `- ${name} (observed): ${facts}. Default details: ${defaults}` : `- ${name} (default): ${defaults}`;
   const hero = evidence.hero;
-  const heroFacts = hero === null ? null : [
-    hero.media ? "an h1 headline with media in the opening region" : "a text-only h1 opening without media",
-    hero.arrangement === "split" ? "copy and media side by side in a row or grid" : hero.arrangement === "centered" ? "centered copy" : null,
-  ].filter(Boolean).join(", ");
-  const heroDefaults = hero?.arrangement === "split"
-    ? "copy on 6-7 columns with one action pair and media on the rest at --layout-hero; stack copy above media below --layout-bp-md."
-    : hero?.arrangement === "centered"
-      ? "one centered column with headline, supporting line and one action pair; media below the copy at --layout-hero."
-      : hero && !hero.media
-        ? "a text-led opening: headline, supporting line and one action pair across 7-8 columns without a media block."
-        : "headline and supporting line on 6-7 columns with one action pair, media on the remaining columns at --layout-hero; stack below --layout-bp-md.";
+  const heroFacts = hero === null ? null : hero.media ? "an h1 headline with media in the opening region" : "a text-only h1 opening without media";
+  const heroDefaults = hero && !hero.media
+    ? "a text-led opening: headline, supporting line and one action pair across 7-8 columns without a media block."
+    : "headline and supporting line on 6-7 columns with one action pair, media on the remaining columns at --layout-hero; stack below --layout-bp-md.";
   const lines = [
     line("Navigation", null, "the logo lockup at the start of the bar, primary links next to it and one action at the end; the bar stays within --layout-max."),
     line("Hero", heroFacts, heroDefaults),
@@ -49,11 +42,16 @@ export type SourceLayoutMeasurement = {
   readonly tokens: Readonly<Record<string, string>>;
 };
 
+/** Pixel lengths only: rem/em depend on a root or parent font size the extractor cannot resolve. */
 const px = (value: string): number | null => {
-  const match = /^(-?\d*\.?\d+)(px|rem|em)$/i.exec(value.trim());
-  if (!match) return null;
-  const number = Number(match[1]) * (match[2]!.toLowerCase() === "px" ? 1 : 16);
-  return Number.isFinite(number) ? Math.round(number) : null;
+  const match = /^(-?\d*\.?\d+)px$/i.exec(value.trim());
+  return match && Number.isFinite(Number(match[1])) ? Math.round(Number(match[1])) : null;
+};
+
+/** Media-query lengths: em and rem there resolve against the initial font size (16px), not the page root. */
+const mediaPx = (value: string): number | null => {
+  const match = /^(\d*\.?\d+)(px|rem|em)$/i.exec(value.trim());
+  return match ? Math.round(Number(match[1]) * (match[2]!.toLowerCase() === "px" ? 1 : 16)) : null;
 };
 
 /** Most frequent value; ties go to the larger value so the result does not depend on source order. */
@@ -98,7 +96,7 @@ export function measureSourceLayout(declarations: readonly CssDeclarationEvidenc
   // One sample per declaration, so a breakpoint that wraps more rules weighs more.
   const breakpoints = declarations
     .flatMap(item => [...item.context.matchAll(/(?:min-width|max-width)\s*:\s*(\d*\.?\d+(?:px|rem|em))|width\s*[<>]=?\s*(\d*\.?\d+(?:px|rem|em))/gi)])
-    .map(match => px(match[1] ?? match[2] ?? ""))
+    .map(match => mediaPx(match[1] ?? match[2] ?? ""))
     .filter((value): value is number => value !== null);
   const md = mode(breakpoints.filter(value => value >= 560 && value <= 1024));
   if (md !== null) tokens["--layout-bp-md"] = `${md}px`;
