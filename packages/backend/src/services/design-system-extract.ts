@@ -1,6 +1,6 @@
 import { readDesignSystemLayout } from "./design-system-layout";
 import { readDesignSystemAssetGuide } from "./design-system-assets";
-import { buildAssetGuideReadme, toHexColor } from "./extraction-assets";
+import { buildAssetGuideReadme, paletteTone, toHexColor } from "./extraction-assets";
 import { collectSourceEvidence, withoutFunctions, type SourceEvidence } from "./extraction-evidence";
 import { buildSectionPatternReadme, measureSourceLayout } from "./extraction-layout";
 import { buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, observedPatterns, pageEvidence, parseRobots, parseSitemap } from "./extraction-pages";
@@ -1064,6 +1064,7 @@ async function ingestWebsiteSource(
     artifactCopies: [],
     // Read before sanitization strips image sources; only typed counts and flags leave this scope.
     sourceEvidence: collectSourceEvidence([...pageHtmlByUrl.values()], cssDeclarations),
+    pageColors: pageGroundAndInk(pageDeclarations.get(url.toString()) ?? []),
     pageCoverage: buildPageCoverage({
       limit: pageLimit,
       discovered: discovery.discovered,
@@ -1840,8 +1841,63 @@ function isLiteralColor(value: string): boolean {
   return toHexColor(trimmed) !== null || NAMED_COLORS.has(trimmed) || /^(?:oklch|oklab|lab|lch|hwb|color|color-mix)\([^;{}]*\)$/.test(trimmed);
 }
 
+/** A literal colour value, or the literal colour a single `var(--name, fallback)` resolves to. */
+function resolvedColor(value: string, cssVars: ReadonlyMap<string, string>, depth = 0): string | null {
+  const reference = /^var\(\s*--([a-zA-Z0-9_-]+)\s*(?:,\s*(.+))?\)$/.exec(value.trim());
+  if (!reference) return isLiteralColor(value) ? value.trim() : null;
+  if (depth >= 3) return null;
+  const own = cssVars.get(reference[1]!);
+  if (own !== undefined) return resolvedColor(own, cssVars, depth + 1);
+  return reference[2] !== undefined ? resolvedColor(reference[2], cssVars, depth + 1) : null;
+}
+
+/** Scaffold neutrals for a light or a dark observed ground, so default text keeps contrast on either. */
+const NEUTRALS = {
+  light: { ink: "#0f172a", bgSubtle: "#f8fafc", bgMuted: "#eef2f7", surfaceInverse: "#0f172a", fg2: "#334155", fg3: "#64748b", fg4: "#94a3b8", border: "#dbe4ee", borderStrong: "#94a3b8" },
+  dark: { ink: "#f8fafc", bgSubtle: "#111827", bgMuted: "#1f2937", surfaceInverse: "#f8fafc", fg2: "#cbd5e1", fg3: "#94a3b8", fg4: "#64748b", border: "#334155", borderStrong: "#64748b" },
+} as const;
+
+/** Hex form of a literal colour; the named extremes are mapped too, other names and modern functions are not converted. */
+function pageHex(color: string | null): string | null {
+  if (color === null) return null;
+  const named = ({ black: "#000000", white: "#ffffff" } as Record<string, string>)[color.trim().toLowerCase()];
+  return named ?? toHexColor(color);
+}
+
+/** True for html, body, :root and chains of them (`html body`, `:root body`), in any selector of a list. */
+function isPageSelector(selector: string): boolean {
+  return selector.split(",").some((part) => {
+    const compounds = part.trim().toLowerCase().split(/\s+/);
+    return compounds[0] !== "" && compounds.every((compound) => compound === "html" || compound === "body" || compound === ":root");
+  });
+}
+
+/**
+ * The entry page's own ground and ink: declarations in that page's document cascade order, restricted to
+ * page-level selectors outside any at-rule, with var() resolved only through custom properties declared in
+ * the same page-level context. Conditional and component-scoped overrides therefore never leak in.
+ */
+function pageGroundAndInk(declarations: readonly CssDeclarationEvidence[]): { readonly ground: string | null; readonly ink: string | null } {
+  const page = [...declarations]
+    .sort((left, right) => left.fileOrder - right.fileOrder || left.declarationOrder - right.declarationOrder)
+    .filter((declaration) => declaration.context === "" && isPageSelector(declaration.selector ?? ""));
+  const vars = new Map<string, string>();
+  let ground: string | null = null;
+  let ink: string | null = null;
+  for (const declaration of page) if (declaration.property.startsWith("--")) vars.set(declaration.property.slice(2), declaration.value);
+  for (const declaration of page) {
+    if (declaration.property === "background" || declaration.property === "background-color") ground = pageHex(resolvedColor(declaration.value, vars)) ?? ground;
+    if (declaration.property === "color") ink = pageHex(resolvedColor(declaration.value, vars)) ?? ink;
+  }
+  return { ground, ink };
+}
+
 function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Readonly<Record<string, string>>): string {
   const { primary, action } = brandColors(analysis);
+  const ground = analysis.pageColors?.ground ?? "#ffffff";
+  const neutrals = NEUTRALS[paletteTone([ground]) === "dark" ? "dark" : "light"];
+  const framerInk = analysis.cssVars.get("framer-text-color");
+  const ink = analysis.pageColors?.ink ?? pageHex(framerInk !== undefined ? resolvedColor(framerInk, analysis.cssVars) : null) ?? neutrals.ink;
   // Only a plain leading family name is used; function expressions such as var() fall back to the observed family.
   const sourceSans = /^\s*(?:"([^"(),]+)"|'([^'(),]+)'|([^"'(),]+?))\s*(?:,|$)/.exec(analysis.cssVars.get("framer-font-family") ?? "");
   const sans = cssString(sourceSans?.slice(1).find(Boolean)?.trim() || analysis.fontFamilies[0] || "Inter");
@@ -1905,19 +1961,19 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Rea
   --info: ${action};
 
   /* Surface & text */
-  --bg: #ffffff;
-  --bg-subtle: #f8fafc;
-  --bg-muted: #eef2f7;
-  --surface: #ffffff;
-  --surface-inverse: #0f172a;
-  --fg-1: #0f172a;
-  --fg-2: #334155;
-  --fg-3: #64748b;
-  --fg-4: #94a3b8;
+  --bg: ${ground};
+  --bg-subtle: ${neutrals.bgSubtle};
+  --bg-muted: ${neutrals.bgMuted};
+  --surface: ${ground};
+  --surface-inverse: ${neutrals.surfaceInverse};
+  --fg-1: ${ink};
+  --fg-2: ${neutrals.fg2};
+  --fg-3: ${neutrals.fg3};
+  --fg-4: ${neutrals.fg4};
   --fg-on-dark: #f8fafc;
   --fg-on-brand: #ffffff;
-  --border: #dbe4ee;
-  --border-strong: #94a3b8;
+  --border: ${neutrals.border};
+  --border-strong: ${neutrals.borderStrong};
   --focus-ring: ${action};
 
   /* Paired text colors for the semantic fills */

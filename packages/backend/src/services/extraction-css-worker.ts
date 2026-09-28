@@ -21,6 +21,7 @@ type CssDeclarationEvidence = {
   readonly fileOrder: number;
   readonly declarationOrder: number;
   readonly context: string;
+  readonly selector: string;
   readonly parseStatus: "observed";
 };
 
@@ -53,7 +54,7 @@ self.onmessage = (event: MessageEvent<ParseRequest>): void => {
         }
         return;
       }
-      declarations.push({ property, value, sourceLocator: locator, fileOrder: request.fileOrder, declarationOrder, context: atRuleContextFor(declaration), parseStatus: "observed" });
+      declarations.push({ property, value, sourceLocator: locator, fileOrder: request.fileOrder, declarationOrder, context: atRuleContextFor(declaration), selector: selectorFor(declaration), parseStatus: "observed" });
     });
     postMessage({ kind: "result", result: { declarations, issues } });
   } catch (error) {
@@ -75,6 +76,21 @@ self.onmessage = (event: MessageEvent<ParseRequest>): void => {
 
 function locatorFor(declaration: Declaration, sourceId: string): string {
   return `${sourceId}:${declaration.source?.start?.line ?? 1}:${declaration.source?.start?.column ?? 1}`;
+}
+
+/**
+ * Selector of the enclosing rule. Only short selectors are kept (page-level rules such as `body`),
+ * so the worker output stays well inside its byte bound on stylesheets with long selectors.
+ */
+function selectorFor(declaration: Declaration): string {
+  const parent = declaration.parent;
+  if (parent?.type !== "rule") return "";
+  // A rule nested inside another style rule is scoped by its ancestors; its own selector alone would overstate it.
+  for (let ancestor = parent.parent; ancestor !== undefined && ancestor.type !== "root"; ancestor = ancestor.parent) {
+    if (ancestor.type === "rule") return "";
+  }
+  const selector = (parent as import("postcss").Rule).selector.trim();
+  return selector.length <= 40 ? selector : "";
 }
 
 /** Enclosing at-rule chain, outermost first, so token selection can tell a dark-scheme override from the base value. */
