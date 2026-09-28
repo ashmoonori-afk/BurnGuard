@@ -1,8 +1,9 @@
-import { parse, type HTMLElement } from "node-html-parser";
+import { HTMLElement, parse } from "node-html-parser";
 import type { CssDeclarationEvidence } from "./extraction-css";
 
 export type SourceEvidence = {
-  readonly hero: "split" | "centered" | "text" | null;
+  /** Null when the source has no h1; arrangement is null when its structure does not show one. */
+  readonly hero: { readonly media: boolean; readonly arrangement: "split" | "centered" | null } | null;
   readonly featureColumns: number | null;
   readonly proofStrip: boolean;
   readonly pricing: boolean;
@@ -31,14 +32,30 @@ function mode<T>(values: readonly T[]): T | null {
 
 const classOf = (element: HTMLElement) => `${element.getAttribute("class") ?? ""} ${element.getAttribute("id") ?? ""}`.toLowerCase();
 
-function heroOf(root: HTMLElement, centeredCss: boolean): SourceEvidence["hero"] {
+const within = (ancestor: HTMLElement, node: HTMLElement): boolean => {
+  for (let current: HTMLElement | null = node; current; current = current.parentNode as HTMLElement | null) if (current === ancestor) return true;
+  return false;
+};
+
+const SPLIT_HINT = /\b(?:split|grid|row|columns?|two-col|half|cols?-\d+|col-(?:md|lg)-\d+|flex)\b/;
+
+function heroOf(root: HTMLElement): SourceEvidence["hero"] {
   const heading = root.querySelector("h1");
   if (!heading) return null;
   let region: HTMLElement | null = heading.parentNode as HTMLElement | null;
   while (region && region.parentNode && !["section", "header", "main", "body"].includes(region.tagName?.toLowerCase() ?? "") && !/hero|banner|masthead|jumbotron/.test(classOf(region))) region = region.parentNode as HTMLElement;
   if (!region) return null;
-  if (region.querySelector("img, picture, video")) return "split";
-  return centeredCss || /center/.test(classOf(heading) + classOf(region)) ? "centered" : "text";
+  const media = region.querySelector("img, picture, video");
+  const centered = /(?:^|[\s-])(?:center|centered|text-center)\b/.test(classOf(heading) + " " + classOf(region)) || /text-align\s*:\s*center/i.test(`${heading.getAttribute("style") ?? ""} ${region.getAttribute("style") ?? ""}`);
+  if (!media) return { media: false, arrangement: centered ? "centered" : null };
+  // Split only when copy and media sit in different children of a container marked as a row or grid.
+  for (let container: HTMLElement | null = media.parentNode as HTMLElement | null; container && container !== region.parentNode; container = container.parentNode as HTMLElement | null) {
+    const branches = container.childNodes.filter((node): node is HTMLElement => node instanceof HTMLElement);
+    const headingBranch = branches.find(branch => within(branch, heading));
+    const mediaBranch = branches.find(branch => within(branch, media));
+    if (headingBranch && mediaBranch) return { media: true, arrangement: headingBranch !== mediaBranch && SPLIT_HINT.test(classOf(container)) ? "split" : centered ? "centered" : null };
+  }
+  return { media: true, arrangement: centered ? "centered" : null };
 }
 
 /**
@@ -54,7 +71,7 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
   const centered = aligns.filter(value => value === "center").length;
   const alignment = aligns.length < 3 ? null : centered * 2 > aligns.length ? "center" : "left";
 
-  const heroes = roots.map(root => heroOf(root, alignment === "center")).filter((value): value is NonNullable<SourceEvidence["hero"]> => value !== null);
+  const heroes = roots.map(heroOf).filter((value): value is NonNullable<SourceEvidence["hero"]> => value !== null);
   const columns = values(["grid-template-columns"]).flatMap(value => [...value.matchAll(/repeat\(\s*(\d)\s*,/g)].map(match => Number(match[1]))).filter(count => count >= 2 && count <= 4);
 
   const all = (selector: string) => roots.flatMap(root => root.querySelectorAll(selector));
@@ -71,7 +88,7 @@ export function collectSourceEvidence(htmlSources: readonly string[], declaratio
   const durations = values(["transition", "transition-duration", "animation", "animation-duration"]).flatMap(value => [...value.matchAll(/(\d*\.?\d+)(ms|s)\b/g)].map(match => Math.round(Number(match[1]) * (match[2] === "s" ? 1000 : 1)))).filter(ms => ms > 0 && ms <= 5000).sort((a, b) => a - b);
 
   return {
-    hero: mode(heroes),
+    hero: heroes[0] ?? null,
     featureColumns: mode(columns),
     proofStrip: /\b(?:logos|clients|customers|partners|trusted)\b/.test(classes),
     pricing: /\b(?:pricing|plans?)\b/.test(classes) || /\bpricing\b|per month|\/\s?mo\b/.test(text),

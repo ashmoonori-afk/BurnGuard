@@ -12,6 +12,7 @@ import {
   parseDesignSystemLayout,
 } from "@bg/shared";
 import { getSqlite } from "../src/db/sqlite-client";
+import { extractDesignSystemFromSource } from "../src/services/design-system-extract";
 import { systemsDir } from "../src/lib/paths";
 import { persistCanonicalExtraction, readDesignSystemTokens } from "../src/services/design-system-extract";
 import { buildAssetGuideReadme, toHexColor } from "../src/services/extraction-assets";
@@ -210,7 +211,7 @@ describe("Source evidence drives section patterns and asset style", () => {
 
   test("Given source HTML and CSS, then hero, feature columns, proof, pricing, testimonials, footer, alignment, icons, images, backgrounds and motion are observed", () => {
     expect(collectSourceEvidence([html], css)).toEqual({
-      hero: "split", featureColumns: 3, proofStrip: false, pricing: true, testimonials: true, footerColumns: 3, alignment: "left",
+      hero: { media: true, arrangement: null }, featureColumns: 3, proofStrip: false, pricing: true, testimonials: true, footerColumns: 3, alignment: "left",
       icons: { count: 2, style: "outline", strokeWidth: "1.5" }, photos: 1, illustrations: 1, gradients: 1, backgroundImages: 0, patterns: 0,
       motionMs: [150, 300], animations: 0,
     });
@@ -218,6 +219,16 @@ describe("Source evidence drives section patterns and asset style", () => {
     expect(patterns.split("\n").map(line => /^- ([^(]+) \((observed|default)\)/.exec(line)?.slice(1, 3).join(":"))).toEqual([
       "Navigation:default", "Hero:observed", "Feature grid:observed", "Logo or proof strip:default", "Pricing:observed", "Testimonials:observed", "Call to action:default", "Footer:observed",
     ]);
+  });
+
+  test("Given hero structures, then only a row or grid container with copy and media in different children is split, and centred copy with media below stays centred", () => {
+    const hero = (markup: string) => collectSourceEvidence([markup], []).hero;
+    expect(hero('<section class="hero"><div class="row"><div class="copy"><h1>T</h1></div><div class="media"><img src="a.jpg"></div></div></section>')).toEqual({ media: true, arrangement: "split" });
+    expect(hero('<section class="hero text-center"><h1>T</h1><p>L</p><img src="a.jpg"></section>')).toEqual({ media: true, arrangement: "centered" });
+    expect(hero('<section class="hero"><div><h1>T</h1></div><div><img src="a.jpg"></div></section>')).toEqual({ media: true, arrangement: null });
+    expect(hero('<main><p>No headline</p></main>')).toBeNull();
+    const centred = extractDesignSystemLayout("", buildSectionPatternReadme(collectSourceEvidence(['<section class="hero text-center"><h1>T</h1><img src="a.jpg"></section>'], []))).sections.find(section => section.kind === "patterns")!.text;
+    expect(centred.split("\n").find(line => line.startsWith("- Hero"))).not.toMatch(/side by side|6-7 columns/);
   });
 
   test("Given no evidence, then every section pattern and asset kind is labelled as a default", () => {
@@ -238,8 +249,60 @@ describe("Source evidence drives section patterns and asset style", () => {
 
   test("Given an rgb-only dark source, then colours are normalised to hex and the ground is dark", () => {
     expect(["rgb(10, 20, 30)", "rgba(10 20 30 / 50%)", "hsl(0, 100%, 50%)", "#ABC", "#11223344", "var(--x)"].map(toHexColor)).toEqual(["#0a141e", "#0a141e", "#ff0000", "#aabbcc", "#112233", null]);
+    expect(["hsl(180 100% 50%)", "hsl(180deg 100% 50%)", "hsl(0.5turn 100% 50%)", "hsl(200grad 100% 50%)", "hsl(1foo 100% 50%)"].map(toHexColor)).toEqual(["#00ffff", "#00ffff", "#00ffff", "#00ffff", null]);
     const photo = guideFor({ colors: ["rgb(10, 20, 30)", "rgb(20, 20, 40)"] }).rules.find(rule => rule.kind === "illustrations")!;
     expect(photo.prompt).toContain("#0a141e");
     expect(photo.prompt).toContain("dark ground");
+  });
+});
+
+describe("Evidence comes from the original source, not sanitized or generated HTML", () => {
+  test("Given a website with photos and SVG art, when acquired through the real fetch and sanitizer, then the published guide still observes them", async () => {
+    const page = '<!doctype html><html><head><meta charset="utf-8"></head><body><section class="hero"><div class="row"><div><h1>Brand</h1></div><div><img src="/img/team.jpg" alt="Team"></div></div></section><section><img src="/img/art.svg" alt="Art"></section></body></html>';
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response(page, { headers: { "content-type": "text/html" } }) });
+    const origin = `http://127.0.0.1:${server.port}`;
+    const settings = {
+      BG_EXTRACTION_QA_ADAPTER_SOURCE_URL: `${origin}/source`,
+      BG_EXTRACTION_QA_ADAPTER_STALL_URL: `${origin}/stall`,
+      BG_EXTRACTION_QA_ADAPTER_RESOURCE_URLS: `${origin}/source,${origin}/stall`,
+      BG_EXTRACTION_QA_ADAPTER_SECRET: "asset-guide-fixture-secret-000000001",
+    };
+    const previous = Object.fromEntries(Object.keys(settings).map(key => [key, process.env[key]]));
+    Object.assign(process.env, settings);
+    const id = `asset-website-${process.pid}`;
+    try {
+      await extractDesignSystemFromSource({ system_id: id, name: "Brand", source_type: "website", source_url: `${origin}/source` });
+      const stored = await readFile(path.join(systemsDir, id, "uploads", "source.html"), "utf8");
+      expect(stored).not.toContain("team.jpg");
+      const guide = parseDesignSystemAssetGuide((await readDesignSystemTokens(id)).assets);
+      for (const kind of ["photography", "illustrations"]) expect(guide.rules.find(rule => rule.kind === kind)!.usage!.startsWith("Evidence: observed in the source")).toBe(true);
+      const layout = (await readDesignSystemTokens(id)).layout.sections.find(section => section.kind === "patterns")!.text;
+      expect(layout).toMatch(/^- Hero \(observed\): .*side by side/m);
+    } finally {
+      for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+      await server.stop(true);
+      getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(id);
+      await rm(path.join(systemsDir, id), { recursive: true, force: true });
+    }
+  });
+
+  test("Given an upload-style analysis whose UI kit holds generated preview HTML, when persisted, then nothing from the preview is observed", async () => {
+    const id = `asset-upload-${process.pid}`;
+    const source = await mkdtemp(path.join(tmpdir(), "bg-asset-upload-"));
+    try {
+      const preview = path.join(source, "page-1.html");
+      await writeFile(preview, '<html><body><section class="hero"><h1>Generated preview</h1><img alt="preview"></section><blockquote>q</blockquote></body></html>');
+      const signal = new AbortController().signal;
+      const base = await analyzeLocalTree(await mkdtemp(path.join(tmpdir(), "bg-asset-empty-")), "Upload", signal);
+      const analysis = { ...base, sourceEvidence: undefined, uiKitFiles: [{ absolutePath: preview, fileName: "page-1.html" }] };
+      await persistCanonicalExtraction({ requestedId: id, brandName: "Upload", sourceType: "upload", sourceReference: "upload://fixture", lineage: null, analysis, signal });
+      const tokens = await readDesignSystemTokens(id);
+      expect(tokens.layout.sections.find(section => section.kind === "patterns")!.text).not.toContain("(observed)");
+      for (const rule of parseDesignSystemAssetGuide(tokens.assets).rules.filter(rule => rule.kind !== "logo")) expect(rule.usage!.startsWith("Evidence: not found in the source")).toBe(true);
+    } finally {
+      getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(id);
+      await rm(path.join(systemsDir, id), { recursive: true, force: true });
+      await rm(source, { recursive: true, force: true });
+    }
   });
 });

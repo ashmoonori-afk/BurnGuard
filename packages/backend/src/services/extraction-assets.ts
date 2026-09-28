@@ -34,7 +34,10 @@ export function toHexColor(color: string): string | null {
   let rgb: (number | null)[];
   if (parts[1]!.startsWith("rgb")) rgb = args.slice(0, 3).map(arg => channel(arg, 255));
   else {
-    const h = ((Number.parseFloat(args[0]!) % 360) + 360) % 360;
+    const hue = /^(-?\d*\.?\d+)(deg|turn|rad|grad)?$/.exec(args[0]!);
+    if (!hue) return null;
+    const scale = { deg: 1, turn: 360, rad: 180 / Math.PI, grad: 0.9 }[hue[2] as "deg" | "turn" | "rad" | "grad" ?? "deg"];
+    const h = (((Number(hue[1]) * scale) % 360) + 360) % 360;
     const s = Number.parseFloat(args[1]!) / 100;
     const l = Number.parseFloat(args[2]!) / 100;
     if (![h, s, l].every(Number.isFinite)) return null;
@@ -53,7 +56,7 @@ function medianRadius(radii: readonly string[]): number | null {
   return values.length ? values[Math.floor(values.length / 2)]! : null;
 }
 
-const observed = (what: string) => `Evidence: observed in the source - ${what}.`;
+const observed = (what: string) => `Evidence: observed in the source - ${what}; every other detail below is a default.`;
 const DEFAULT = "Evidence: not found in the source; this rule is a default to confirm or replace.";
 
 /**
@@ -79,10 +82,10 @@ export function buildAssetGuideReadme(input: AssetGuideInput): string {
   const motion = evidence.motionMs ? `${evidence.motionMs[0]}-${evidence.motionMs[1]}ms` : "120-320ms";
 
   const usage = {
-    logo: `${input.logoPaths.length ? observed(`logo files ${input.logoPaths.join(", ")}`) : "Evidence: no logo file was found in the source; supply one before publishing."} Use the supplied files unchanged: never redraw, recolour outside ${primary} or a single-colour ink/white version, stretch, rotate, outline or add effects. Show the logo once per page or frame, never as repeated decoration. Keep clear space on every side equal to the height of the logo mark and never render it below 24px tall on screen. On photos or dark grounds use the single-colour white version over a calm area.`,
+    logo: `${input.logoPaths.length ? observed(`logo files ${input.logoPaths.join(", ")} and the palette`) : "Evidence: no logo file was found in the source; supply one before publishing."} Use the supplied files unchanged: never redraw, recolour outside ${primary} or a single-colour ink/white version, stretch, rotate, outline or add effects. Show the logo once per page or frame, never as repeated decoration. Keep clear space on every side equal to the height of the logo mark and never render it below 24px tall on screen. On photos or dark grounds use the single-colour white version over a calm area.`,
     icons: `${evidence.icons.style ? observed(`${evidence.icons.count} inline SVG icons, mostly ${evidence.icons.style}${evidence.icons.strokeWidth ? ` with a ${evidence.icons.strokeWidth}px stroke` : ""}`) : DEFAULT} Use one consistent icon set of ${iconStyle} on a 24px grid at 16, 20 or 24px with ${corners}. Colour icons with the current text ink; use ${action} only for interactive or active states. Pair icons with a text label unless the meaning is universal. Never mix filled and outlined styles or add icons without a function.`,
-    illustrations: `${evidence.illustrations ? observed(`${evidence.illustrations} SVG illustration image(s)`) : DEFAULT} Use illustrations only for explanatory moments (empty states, onboarding, concepts), never as filler. Build them from the palette (${palette}) with flat fills, ${corners} and restrained detail, one illustration per content block at most.`,
-    photography: `${evidence.photos ? observed(`${evidence.photos} photographic image(s)`) : DEFAULT} Use real, candid photography of people, product and context. Crop with the subject on a rule-of-thirds line and leave calm negative space for text. Grade toward the palette with natural skin tones; never apply heavy filters, off-brand duotones or stock-photo poses. Keep one aspect ratio within a group of images.`,
+    illustrations: `${evidence.illustrations ? observed(`${evidence.illustrations} SVG illustration image(s), presence only`) : DEFAULT} Use illustrations only for explanatory moments (empty states, onboarding, concepts), never as filler. Build them from the palette (${palette}) with flat fills, ${corners} and restrained detail, one illustration per content block at most.`,
+    photography: `${evidence.photos ? observed(`${evidence.photos} photographic image(s), presence only`) : DEFAULT} Use real, candid photography of people, product and context. Crop with the subject on a rule-of-thirds line and leave calm negative space for text. Grade toward the palette with natural skin tones; never apply heavy filters, off-brand duotones or stock-photo poses. Keep one aspect ratio within a group of images.`,
     backgrounds: `${evidence.gradients || evidence.backgroundImages ? observed(`${evidence.gradients} gradient and ${evidence.backgroundImages} image background(s)`) : tone ? observed(`a ${tone} sampled palette`) : DEFAULT} Default to ${ground} using the surface tokens${evidence.gradients ? `, with soft gradients built only from ${palette}` : ", kept flat"}. Alternate only between the neutral surface tokens and one tinted brand surface and keep text contrast at WCAG AA or better. Full-bleed imagery is reserved for one focal area and never sits behind body text.`,
     patterns: `${evidence.patterns ? observed(`${evidence.patterns} repeating background pattern(s)`) : DEFAULT} Use subtle geometric patterns or textures (fine grids, dots, soft noise) from the palette at low contrast (under 10% difference from the ground), only on decorative areas and never behind dense text or data.`,
     motion: `${evidence.motionMs || evidence.animations ? observed(`transitions of ${motion}${evidence.animations ? ` and ${evidence.animations} animation declaration(s)` : ""}`) : DEFAULT} Keep motion short and purposeful: ${motion} with the --ease-standard curve, moving elements by at most 16px. 3D renders, if used, share the palette and appear once per page or frame at most. Respect prefers-reduced-motion by removing non-essential movement.`,

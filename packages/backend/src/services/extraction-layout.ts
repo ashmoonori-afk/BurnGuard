@@ -1,42 +1,47 @@
 import type { CssDeclarationEvidence } from "./extraction-css";
 import type { SourceEvidence } from "./extraction-evidence";
 
-const tag = (seen: boolean) => (seen ? "(observed)" : "(default)");
-
 /**
- * README `## Section patterns` and `## Alignment`. Each pattern is tagged (observed) when the source
- * shows it and (default) otherwise, so generation can tell extracted decisions from starting points.
+ * README `## Section patterns` and `## Alignment`. A pattern is tagged (observed) only for the facts
+ * the source shows; everything after "Default details:" and every (default) pattern is a starting point.
  * Website regions such as the logo in navigation live here rather than in the surface-neutral asset rules.
  */
 export function buildSectionPatternReadme(evidence: SourceEvidence): string {
-  const hero = evidence.hero === "centered"
-    ? "- Hero (observed): one centered column with the headline, a supporting line and one action pair; media, if any, sits below the copy at --layout-hero."
-    : evidence.hero === "text"
-      ? "- Hero (observed): a text-led opening - left-aligned headline, supporting line and action pair across 7-8 columns without a media block."
-      : `- Hero ${tag(evidence.hero === "split")}: headline and one supporting line on 6-7 columns with one action pair, media on the remaining columns at --layout-hero; stack copy above media below --layout-bp-md.`;
-  const columns = evidence.featureColumns ?? 3;
+  const line = (name: string, facts: string | null, defaults: string) => facts ? `- ${name} (observed): ${facts}. Default details: ${defaults}` : `- ${name} (default): ${defaults}`;
+  const hero = evidence.hero;
+  const heroFacts = hero === null ? null : [
+    hero.media ? "an h1 headline with media in the opening region" : "a text-only h1 opening without media",
+    hero.arrangement === "split" ? "copy and media side by side in a row or grid" : hero.arrangement === "centered" ? "centered copy" : null,
+  ].filter(Boolean).join(", ");
+  const heroDefaults = hero?.arrangement === "split"
+    ? "copy on 6-7 columns with one action pair and media on the rest at --layout-hero; stack copy above media below --layout-bp-md."
+    : hero?.arrangement === "centered"
+      ? "one centered column with headline, supporting line and one action pair; media below the copy at --layout-hero."
+      : "headline and supporting line on 6-7 columns with one action pair, media on the remaining columns at --layout-hero; stack below --layout-bp-md.";
   const lines = [
-    "- Navigation (default): the logo lockup at the start of the bar, primary links next to it and one action at the end; the bar stays within --layout-max.",
-    hero,
-    `- Feature grid ${tag(evidence.featureColumns !== null)}: ${columns} equal columns (fewer at tablet width, 1 below --layout-bp-md) of icon, short title and one sentence; align card tops and keep equal heights.`,
-    `- Logo or proof strip ${tag(evidence.proofStrip)}: one row of evenly spaced, single-colour customer logos or metrics directly under the hero.`,
-    `- Pricing ${tag(evidence.pricing)}: 2-4 plan cards side by side, the recommended plan emphasised by the brand accent rather than by size alone; prices and feature lists share a baseline.`,
-    `- Testimonials ${tag(evidence.testimonials)}: 1-3 quotes with name and role on a tinted brand surface or neutral card.`,
-    "- Call to action (default): a full-width band with one headline and one primary action before the footer.",
-    `- Footer ${tag(evidence.footerColumns !== null)}: a compact ${evidence.footerColumns ?? 4}-column link index with the logo, legal line and locale or social links.`,
+    line("Navigation", null, "the logo lockup at the start of the bar, primary links next to it and one action at the end; the bar stays within --layout-max."),
+    line("Hero", heroFacts, heroDefaults),
+    line("Feature grid", evidence.featureColumns ? `a ${evidence.featureColumns}-column grid` : null, `${evidence.featureColumns ?? 3} equal columns (fewer at tablet width, 1 below --layout-bp-md) of icon, short title and one sentence with aligned tops and equal heights.`),
+    line("Logo or proof strip", evidence.proofStrip ? "a logo, client or partner strip" : null, "one row of evenly spaced, single-colour logos or metrics directly under the hero."),
+    line("Pricing", evidence.pricing ? "a pricing or plans section" : null, "2-4 plan cards side by side, the recommended plan emphasised by the brand accent rather than by size alone; prices and feature lists share a baseline."),
+    line("Testimonials", evidence.testimonials ? "quotes or testimonials" : null, "1-3 quotes with name and role on a tinted brand surface or neutral card."),
+    line("Call to action", null, "a full-width band with one headline and one primary action before the footer."),
+    line("Footer", evidence.footerColumns ? `a footer with ${evidence.footerColumns} link lists` : null, `a compact ${evidence.footerColumns ?? 4}-column link index with the logo, legal line and locale or social links.`),
   ];
-  const alignment = evidence.alignment === "center"
-    ? "Centered alignment dominates the source (observed): centre headings and short copy blocks, but keep running text over three lines left-aligned for readability."
-    : `Left alignment ${tag(evidence.alignment === "left")}: left-align running text and headings; centre only short hero or call-to-action copy.`;
+  const alignment = line("Text alignment", evidence.alignment ? `${evidence.alignment} alignment dominates the text-align declarations` : null, evidence.alignment === "center"
+    ? "centre headings and short copy blocks, but keep running text over three lines left-aligned for readability."
+    : "left-align running text and headings; centre only short hero or call-to-action copy.");
   return `
 ## Section patterns
 ${lines.join("\n")}
 
 ## Alignment
-${alignment} Align every block to the --layout-columns grid inside --layout-max; text starts on a column edge and media spans whole columns. Share one vertical rhythm of --layout-section-y between sections and keep equal gutters between cards in a row.
+${alignment}
+- Grid (default): align every block to the --layout-columns grid inside --layout-max; text starts on a column edge and media spans whole columns. Share one vertical rhythm of --layout-section-y between sections and keep equal gutters between cards in a row.
 `;
 }
 
+/** Most frequent value; ties go to the larger value so the result does not depend on source order. */
 export type SourceLayoutMeasurement = {
   /** Only values actually observed in the source; callers fall back to scaffold defaults for the rest. */
   readonly tokens: Readonly<Record<string, string>>;

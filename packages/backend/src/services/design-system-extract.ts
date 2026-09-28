@@ -953,6 +953,8 @@ async function ingestWebsiteSource(
     fetchedPageCount: pageHtmlByUrl.size,
     componentSamples,
     artifactCopies: [],
+    // Read before sanitization strips image sources; only typed counts and flags leave this scope.
+    sourceEvidence: collectSourceEvidence([...pageHtmlByUrl.values()], cssDeclarations),
   };
 }
 
@@ -1385,7 +1387,7 @@ async function writeCanonicalDesignSystem(input: {
 
   await writeText(
     path.join(input.systemDir, "README.md"),
-    buildReadme(input.brandName, input.sourceType, input.sourceUrl, input.analysis, layoutTokens, collectSourceEvidence(await readSourceHtml(input.analysis), input.analysis.cssDeclarations)) + DERIVED_SURFACE_README_SECTIONS,
+    buildReadme(input.brandName, input.sourceType, input.sourceUrl, input.analysis, layoutTokens, input.analysis.sourceEvidence ?? collectSourceEvidence([], input.analysis.cssDeclarations)) + DERIVED_SURFACE_README_SECTIONS,
     generated,
     input.systemDir,
   );
@@ -1531,13 +1533,6 @@ async function writeCanonicalDesignSystem(input: {
   }
 
   return { generatedFiles: [...generated].sort(), provenance };
-}
-
-/** Landing HTML and HTML UI-kit files the source supplied, each bounded, as evidence for section and asset rules. */
-async function readSourceHtml(analysis: SourceAnalysis): Promise<string[]> {
-  const files = analysis.uiKitFiles.filter((file) => /\.html?$/i.test(file.fileName)).slice(0, MAX_UPLOAD_UI_KIT_PAGES);
-  const pages = await Promise.all(files.map(async (file) => ((await stat(file.absolutePath)).size <= 1_000_000 ? readFile(file.absolutePath, "utf8") : "")));
-  return [analysis.homepageHtml ?? "", ...pages].filter(Boolean);
 }
 
 function buildReadme(
