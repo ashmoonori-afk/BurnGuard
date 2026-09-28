@@ -9,7 +9,7 @@ import {
   PROJECT_BUNDLE_MANIFEST_PATH,
 } from "@bg/shared";
 import { importProjectBundleFile } from "../src/services/project-bundle";
-import { collectProjectBundleEntries } from "../src/services/project-bundle-archive";
+import { collectProjectBundleEntries, inspectCentralDirectory } from "../src/services/project-bundle-archive";
 import { projectsDir } from "../src/lib/paths";
 
 function manifest(bytes: Uint8Array) {
@@ -60,7 +60,7 @@ describe("project bundle hostile input", () => {
   test("Given a payload whose bytes do not match the manifest When imported Then digest validation rejects it", async () => {
     // Given
     const file = await bundle(new TextEncoder().encode("<h1>safe</h1>"), (zip) => {
-      zip.file("project/index.html", "<h1>tampered</h1>");
+      zip.file("project/index.html", "<h1>SAFE</h1>");
     });
 
     // When / Then
@@ -190,5 +190,55 @@ describe("project bundle hostile input", () => {
         await rm(root, { recursive: true, force: true });
       }
     }
+  });
+});
+
+function renameAll(archive: Uint8Array, from: string, to: string): Uint8Array {
+  const source = new TextEncoder().encode(from);
+  const target = new TextEncoder().encode(to);
+  if (source.length !== target.length) throw new Error("rename must keep the byte length");
+  const out = archive.slice();
+  for (let index = 0; index + source.length <= out.length; index += 1) {
+    if (source.every((byte, offset) => out[index + offset] === byte)) out.set(target, index);
+  }
+  return out;
+}
+
+function setDeclaredSize(archive: Uint8Array, name: string, size: number): Uint8Array {
+  const out = archive.slice();
+  const view = new DataView(out.buffer);
+  const encoded = new TextEncoder().encode(name);
+  for (let offset = 0; offset + 46 < out.length; offset += 1) {
+    if (view.getUint32(offset, true) !== 0x02014b50) continue;
+    const length = view.getUint16(offset + 28, true);
+    const candidate = out.subarray(offset + 46, offset + 46 + length);
+    if (length === encoded.length && candidate.every((byte, index) => byte === encoded[index])) view.setUint32(offset + 24, size, true);
+  }
+  return out;
+}
+
+describe("project bundle raw archive validation", () => {
+  test("Given raw duplicate or case-colliding entry names When the central directory is inspected Then the archive is rejected before JSZip normalization", async () => {
+    const zip = new JSZip();
+    zip.file("project/aaaa.txt", "first");
+    zip.file("project/bbbb.txt", "second");
+    const archive = await zip.generateAsync({ type: "uint8array" });
+
+    expect([...inspectCentralDirectory(archive).values()].filter((entry) => !entry.directory)).toHaveLength(2);
+    expect(() => inspectCentralDirectory(renameAll(archive, "project/bbbb.txt", "project/aaaa.txt"))).toThrow();
+    expect(() => inspectCentralDirectory(renameAll(archive, "project/bbbb.txt", "project/AAAA.txt"))).toThrow();
+    expect(() => inspectCentralDirectory(renameAll(archive, "project/bbbb.txt", "project/../b.txt"))).toThrow();
+  });
+
+  test("Given an entry that inflates beyond its declared size When imported Then decompression stops at the declared size", async () => {
+    const bytes = new TextEncoder().encode("<h1>".padEnd(4_096, "x"));
+    const file = await bundle(bytes, (_zip, value) => {
+      value.files[0] = { ...value.files[0]!, size_bytes: 1 };
+    });
+    const archive = setDeclaredSize(new Uint8Array(await file.arrayBuffer()), "project/index.html", 1);
+
+    await expect(importProjectBundleFile(new File([archive], "inflating.burnguard-project"), "Inflating")).rejects.toMatchObject({
+      code: "project_bundle_limit",
+    });
   });
 });

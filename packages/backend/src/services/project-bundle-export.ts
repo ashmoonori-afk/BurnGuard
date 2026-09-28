@@ -22,6 +22,7 @@ import { parseStoredProjectOptions } from "./project-options";
 import {
   collectDesignSystemBundleEntries,
   collectProjectBundleEntries,
+  createBundleBudget,
   createProjectBundleZip,
   type BundleEntry,
 } from "./project-bundle-archive";
@@ -55,7 +56,8 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
   const projectRoot = resolveManagedPath(projectsDir, project.dir_path);
   const live = await inspectCanonicalTree(projectRoot);
   if (live.tree_digest !== project.current_digest) throw new ProjectBundleError("project_bundle_unavailable");
-  const projectEntries = await collectProjectBundleEntries(projectRoot);
+  const budget = createBundleBudget();
+  const projectEntries = await collectProjectBundleEntries(projectRoot, budget);
   await faults.afterProjectRead?.();
   const system = project.design_system_id ? await getDesignSystemDetail(project.design_system_id) : null;
   let systemEntries: readonly BundleEntry[] = [];
@@ -66,7 +68,7 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
       designSystem = { kind: "builtin", id: system.id, pin: portablePin(projectId) };
     } else {
       systemRoot = resolveManagedPath(systemsDir, system.dir_path);
-      systemEntries = await collectDesignSystemBundleEntries(systemRoot);
+      systemEntries = await collectDesignSystemBundleEntries(systemRoot, budget);
       designSystem = {
         kind: "custom",
         original_id: system.id,

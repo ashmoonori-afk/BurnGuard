@@ -19,8 +19,13 @@ import { isProjectBundleCredentialPath, isProjectBundleProtectedPath } from "./p
 export const PROJECT_BUNDLE_LIMITS = {
   upload_bytes: 48 * 1024 * 1024,
   expanded_bytes: 128 * 1024 * 1024,
+  entry_bytes: 32 * 1024 * 1024,
   files: 10_000,
 } as const;
+
+/** Shared across the project and design-system trees so export can never exceed what import accepts. */
+export type BundleBudget = { files: number; bytes: number };
+export function createBundleBudget(): BundleBudget { return { files: 0, bytes: 0 }; }
 
 export interface BundleEntry {
   readonly file: ProjectBundleFile;
@@ -31,8 +36,8 @@ const PROJECT_EXCLUDED = [
   ".git", ".omc", ".claude", ".codex", ".burnguard-inputs", ".meta/artifact-operations",
   ".meta/artifact-baseline",
 ] as const;
-export async function collectProjectBundleEntries(root: string): Promise<readonly BundleEntry[]> {
-  return collect(root, "project", projectFileKind, (relative) => {
+export async function collectProjectBundleEntries(root: string, budget: BundleBudget = createBundleBudget()): Promise<readonly BundleEntry[]> {
+  return collect(root, "project", budget, projectFileKind, (relative) => {
     const folded = relative.toLocaleLowerCase("en-US");
     return PROJECT_EXCLUDED.some((excluded) => folded === excluded || folded.startsWith(`${excluded}/`)) ||
     (folded.startsWith(".meta/") && folded !== ".meta/checkpoints" && !folded.startsWith(".meta/checkpoints/")) ||
@@ -40,8 +45,8 @@ export async function collectProjectBundleEntries(root: string): Promise<readonl
   });
 }
 
-export async function collectDesignSystemBundleEntries(root: string): Promise<readonly BundleEntry[]> {
-  return collect(root, "design-system", () => "design_system", isAgentControlPath);
+export async function collectDesignSystemBundleEntries(root: string, budget: BundleBudget = createBundleBudget()): Promise<readonly BundleEntry[]> {
+  return collect(root, "design-system", budget, () => "design_system", isAgentControlPath);
 }
 
 function projectFileKind(relative: string): ProjectBundleFileKind {
@@ -79,11 +84,15 @@ export async function readProjectBundleZip(file: File): Promise<{
   readonly entries: ReadonlyMap<string, Uint8Array>;
 }> {
   if (file.size > PROJECT_BUNDLE_LIMITS.upload_bytes) throw new ProjectBundleError("project_bundle_limit");
+  const archive = new Uint8Array(await file.arrayBuffer());
+  const declared = inspectCentralDirectory(archive);
   let zip: JSZip;
-  try { zip = await JSZip.loadAsync(await file.arrayBuffer()); }
+  try { zip = await JSZip.loadAsync(archive); }
   catch { throw new ProjectBundleError("invalid_project_bundle"); }
   const objects = Object.values(zip.files);
-  if (objects.length > PROJECT_BUNDLE_LIMITS.files + 64) throw new ProjectBundleError("project_bundle_limit");
+  if (objects.filter((entry) => !entry.dir).length !== [...declared.values()].filter((entry) => !entry.directory).length) {
+    throw new ProjectBundleError("invalid_project_bundle");
+  }
   for (const entry of objects) {
     archivePath(entry);
     if (isSymlink(entry)) throw new ProjectBundleError("invalid_project_bundle");
@@ -109,10 +118,11 @@ export async function readProjectBundleZip(file: File): Promise<{
   let remaining = PROJECT_BUNDLE_LIMITS.expanded_bytes;
   const entries = new Map<string, Uint8Array>();
   for (const expectedFile of manifest.files) {
-    if (expectedFile.size_bytes > remaining) throw new ProjectBundleError("project_bundle_limit");
+    if (expectedFile.size_bytes > remaining || expectedFile.size_bytes > PROJECT_BUNDLE_LIMITS.entry_bytes) throw new ProjectBundleError("project_bundle_limit");
+    if (declared.get(expectedFile.path)?.size !== expectedFile.size_bytes) throw new ProjectBundleError("invalid_project_bundle");
     const object = zip.file(expectedFile.path);
     if (!object || object.dir || isSymlink(object)) throw new ProjectBundleError("invalid_project_bundle");
-    const bytes = await boundedZip(object, remaining);
+    const bytes = await boundedZip(object, expectedFile.size_bytes + 1);
     remaining -= bytes.byteLength;
     if (bytes.byteLength !== expectedFile.size_bytes ||
       createHash("sha256").update(bytes).digest("hex") !== expectedFile.sha256) {
@@ -126,11 +136,11 @@ export async function readProjectBundleZip(file: File): Promise<{
 async function collect(
   root: string,
   prefix: string,
+  budget: BundleBudget,
   kind: (relative: string) => ProjectBundleFileKind,
   excluded: (relative: string) => boolean,
 ): Promise<readonly BundleEntry[]> {
   const output: BundleEntry[] = [];
-  let total = 0;
   const visit = async (directory: string): Promise<void> => {
     const children = (await readdir(directory, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name));
     for (const child of children) {
@@ -148,9 +158,10 @@ async function collect(
       if (child.isSymbolicLink() || info.isSymbolicLink()) throw new ProjectBundleError("invalid_project_bundle");
       if (info.isDirectory()) { await visit(absolute); continue; }
       if (!info.isFile() || info.nlink !== 1) throw new ProjectBundleError("invalid_project_bundle");
-      if (output.length >= PROJECT_BUNDLE_LIMITS.files) throw new ProjectBundleError("project_bundle_limit");
-      total += info.size;
-      if (total > PROJECT_BUNDLE_LIMITS.expanded_bytes) throw new ProjectBundleError("project_bundle_limit");
+      budget.files += 1;
+      budget.bytes += info.size;
+      if (budget.files > PROJECT_BUNDLE_LIMITS.files || budget.bytes > PROJECT_BUNDLE_LIMITS.expanded_bytes ||
+        info.size > PROJECT_BUNDLE_LIMITS.entry_bytes) throw new ProjectBundleError("project_bundle_limit");
       const bytes = await readStableFile(absolute, info);
       output.push({
         file: {
@@ -227,4 +238,75 @@ function boundedZip(file: JSZip.JSZipObject, limit: number): Promise<Uint8Array>
     stream.on("end", () => resolve(Buffer.concat(chunks)));
     stream.resume();
   });
+}
+
+type CentralEntry = { readonly size: number; readonly directory: boolean };
+
+const EOCD_SIGNATURE = 0x06054b50;
+const CENTRAL_SIGNATURE = 0x02014b50;
+
+/**
+ * Validates every raw central-directory record before JSZip normalizes names or collapses
+ * duplicates: raw and case-folded uniqueness, path policy, symlink/encryption/method bans,
+ * ZIP64 rejection, entry count and declared per-entry/aggregate expansion limits.
+ */
+export function inspectCentralDirectory(archive: Uint8Array): ReadonlyMap<string, CentralEntry> {
+  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+  const invalid = (): never => { throw new ProjectBundleError("invalid_project_bundle"); };
+  let eocd = -1;
+  for (let offset = archive.byteLength - 22; offset >= Math.max(0, archive.byteLength - 22 - 0xffff); offset -= 1) {
+    if (view.getUint32(offset, true) === EOCD_SIGNATURE) { eocd = offset; break; }
+  }
+  if (eocd < 0) invalid();
+  const count = view.getUint16(eocd + 10, true);
+  const directorySize = view.getUint32(eocd + 12, true);
+  const directoryOffset = view.getUint32(eocd + 16, true);
+  if (view.getUint16(eocd + 4, true) !== 0 || view.getUint16(eocd + 8, true) !== count ||
+    count === 0xffff || directorySize === 0xffffffff || directoryOffset === 0xffffffff) invalid();
+  if (count > PROJECT_BUNDLE_LIMITS.files + 64) throw new ProjectBundleError("project_bundle_limit");
+  if (directoryOffset + directorySize > eocd) invalid();
+  const entries = new Map<string, CentralEntry>();
+  const folded = new Set<string>();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let total = 0;
+  let cursor = directoryOffset;
+  for (let index = 0; index < count; index += 1) {
+    if (cursor + 46 > directoryOffset + directorySize || view.getUint32(cursor, true) !== CENTRAL_SIGNATURE) invalid();
+    const madeBy = view.getUint16(cursor + 4, true) >> 8;
+    const flags = view.getUint16(cursor + 8, true);
+    const method = view.getUint16(cursor + 10, true);
+    const compressed = view.getUint32(cursor + 20, true);
+    const size = view.getUint32(cursor + 24, true);
+    const nameLength = view.getUint16(cursor + 28, true);
+    const extraLength = view.getUint16(cursor + 30, true);
+    const commentLength = view.getUint16(cursor + 32, true);
+    const externalAttributes = view.getUint32(cursor + 38, true);
+    const nameStart = cursor + 46;
+    if (nameStart + nameLength > directoryOffset + directorySize) invalid();
+    const rawName = archive.subarray(nameStart, nameStart + nameLength);
+    if ((flags & 0x0800) === 0 && rawName.some((byte) => byte > 0x7f)) invalid();
+    let name: string;
+    try { name = decoder.decode(rawName); }
+    catch (error) { if (error instanceof TypeError) invalid(); throw error; }
+    if ((flags & 0x0001) !== 0 || (method !== 0 && method !== 8) || compressed === 0xffffffff || size === 0xffffffff) invalid();
+    if (madeBy === 3 && ((externalAttributes >>> 16) & 0xf000) === 0xa000) invalid();
+    const directory = name.endsWith("/");
+    const normalized = directory ? name.slice(0, -1) : name;
+    if (!normalized || normalized.length > 1024 || normalized.includes("\\") || normalized.startsWith("/") ||
+      /^[a-z]:/iu.test(normalized) || normalized.normalize("NFC") !== normalized) invalid();
+    const parts = normalized.split("/");
+    if (parts.length > 32 || parts.some((part) => !part || part === "." || part === "..")) invalid();
+    const key = normalized.toLocaleLowerCase("en-US");
+    if (entries.has(normalized) || folded.has(key)) invalid();
+    folded.add(key);
+    if (!directory) {
+      if (size > PROJECT_BUNDLE_LIMITS.entry_bytes) throw new ProjectBundleError("project_bundle_limit");
+      total += size;
+      if (total > PROJECT_BUNDLE_LIMITS.expanded_bytes + 2 * 1024 * 1024) throw new ProjectBundleError("project_bundle_limit");
+    } else if (size !== 0) invalid();
+    entries.set(normalized, { size, directory });
+    cursor = nameStart + nameLength + extraLength + commentLength;
+  }
+  if (cursor !== directoryOffset + directorySize) invalid();
+  return entries;
 }
