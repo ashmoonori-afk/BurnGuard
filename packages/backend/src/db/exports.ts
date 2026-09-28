@@ -1,6 +1,6 @@
 import { and, desc, eq, lt } from "drizzle-orm";
 import { ulid } from "ulid";
-import { parseExportAttempt, parseExportOptions, type ExportAttempt, type ExportFormat, type ExportJob, type ExportOptions, type ExportStatus } from "@bg/shared";
+import { HANDOFF_CONTINUATION, parseExportAttempt, parseExportOptions, type ExportAttempt, type ExportFormat, type ExportJob, type ExportOptions, type ExportStatus } from "@bg/shared";
 import { getDb } from "./client";
 import { exportAttemptsTable } from "./pipeline-schema";
 import { exportsTable } from "./schema";
@@ -49,6 +49,7 @@ async function toJob(row: typeof exportsTable.$inferSelect): Promise<ExportJob> 
     id: row.id, project_id: row.projectId, format: row.format, status: row.status,
     output_path: row.outputPath, error_message: row.errorMessage, size_bytes: row.sizeBytes,
     options: parseExportOptions(row.format, row.optionsJson), latest_attempt: attempt === undefined ? null : attemptDto(attempt),
+    handoff_continuation: row.format === "handoff" && row.status === "succeeded" ? HANDOFF_CONTINUATION : null,
     created_at: row.createdAt, completed_at: row.completedAt,
   };
 }

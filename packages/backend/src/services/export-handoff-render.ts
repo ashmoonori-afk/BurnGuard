@@ -1,8 +1,14 @@
-import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { buildHandoffSpec, copyProjectIntoBundle, EXTRACT_HANDOFF_FN, HandoffExportError, type HandoffPage, type HandoffSpec } from "./export-handoff";
+import type { HandoffPage, HandoffSpec } from "@bg/shared";
+import { resolveWithin } from "../security/path-boundary";
+import { buildHandoffSpec, copyProjectIntoBundle, EXTRACT_HANDOFF_FN, HandoffExportError } from "./export-handoff";
+import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { inspectRenderedPage } from "./design-audit-dom";
+import { renderHandoffMarkdown, renderHandoffPrompt } from "./export-handoff-documents";
+import { buildHandoffManifest } from "./export-handoff-manifest";
 import type { DesignSystemPin } from "./project-design-system-pin";
+import type { RenderSession } from "./export-render-session";
 
 export async function renderHandoffBundle(input: {
   readonly stagedProjectDir: string;
@@ -23,7 +29,7 @@ export async function renderHandoffBundle(input: {
   try { if (!(await stat(bundledEntrypoint)).isFile()) throw new HandoffExportError("render_failed", `Bundle entrypoint missing at ${bundledEntrypoint}`); }
   catch (error) { if (error instanceof HandoffExportError) throw error; throw new HandoffExportError("render_failed", error instanceof Error ? error.message : String(error)); }
   const { openRenderSession, RenderSessionError } = await import("./export-render-session");
-  let session;
+  let session: RenderSession;
   try { session = await openRenderSession({ stagedDir: bundleSourceDir, entrypoint: input.entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: input.isDeck, signal: input.signal ?? new AbortController().signal }); }
   catch (error) { if (error instanceof RenderSessionError) throw new HandoffExportError(error.code === "deck_not_ready" ? "artifact_not_ready" : error.code === "chromium_not_installed" ? "chromium_not_installed" : error.code === "chromium_launch_timeout" ? "chromium_launch_timeout" : "render_failed", error.message); throw error; }
   try {
@@ -34,6 +40,25 @@ export async function renderHandoffBundle(input: {
     const tokensFileInZip = input.designSystemPin ? "tokens/colors_and_type.css" : input.tokensSrcPath !== null && input.tokensFileName !== null ? `tokens/${input.tokensFileName}` : null;
     const spec = buildHandoffSpec({ project: input.project, viewport: value.viewport, pages: value.pages, designSystem: { name: input.designSystemName, tokensFileInZip } });
     await writeFile(path.join(input.stagingDir, "spec.json"), JSON.stringify(spec, null, 2), "utf8");
+    const sourceManifest = await inspectCanonicalTree(bundleSourceDir);
+    const sourceFiles = await readHandoffSourceTexts(bundleSourceDir, sourceManifest.files, input.signal);
+    const handoffManifest = buildHandoffManifest({
+      signal: input.signal,
+      spec,
+      designSystem: input.designSystemPin === null || input.designSystemPin === undefined
+        ? null
+        : {
+            revision: input.designSystemPin.revision,
+            digest: input.designSystemPin.digest,
+            tokens: input.designSystemPin.tokens,
+          },
+      files: sourceFiles,
+    });
+    const handoffDir = resolveWithin(input.stagingDir, "handoff");
+    await mkdir(handoffDir, { recursive: true });
+    await writeFile(resolveWithin(handoffDir, "manifest.json"), JSON.stringify(handoffManifest, null, 2), "utf8");
+    await writeFile(resolveWithin(handoffDir, "prompt.md"), renderHandoffPrompt(handoffManifest), "utf8");
+    await writeFile(resolveWithin(input.stagingDir, "HANDOFF.md"), renderHandoffMarkdown(handoffManifest), "utf8");
     const observed = await inspectRenderedPage(page, input.isDeck);
     await page.screenshot({ path: path.join(input.stagingDir, "preview.png"), fullPage: false });
     await writeFile(path.join(input.stagingDir, "review.json"), JSON.stringify({
@@ -57,10 +82,40 @@ function isHandoffExtract(value: unknown): value is { readonly viewport: { reado
   const viewport = Reflect.get(value, "viewport"); const pages = Reflect.get(value, "pages");
   return typeof viewport === "object" && viewport !== null && typeof Reflect.get(viewport, "width") === "number" && typeof Reflect.get(viewport, "height") === "number" && Array.isArray(pages);
 }
+const HANDOFF_TEXT_READ_LIMITS = { files: 400, bytesPerFile: 2 * 1024 * 1024, totalBytes: 16 * 1024 * 1024 } as const;
+
+async function readHandoffSourceTexts(
+  root: string,
+  files: readonly { readonly path: string; readonly size: number }[],
+  signal: AbortSignal | undefined,
+): Promise<readonly { readonly path: string; readonly text: string | null }[]> {
+  const result: { path: string; text: string | null }[] = [];
+  let textFiles = 0;
+  let totalBytes = 0;
+  for (const file of files) {
+    signal?.throwIfAborted();
+    const readable = /\.(?:css|html?)$/iu.test(file.path) &&
+      textFiles < HANDOFF_TEXT_READ_LIMITS.files &&
+      file.size <= HANDOFF_TEXT_READ_LIMITS.bytesPerFile &&
+      totalBytes + file.size <= HANDOFF_TEXT_READ_LIMITS.totalBytes;
+    if (!readable) {
+      result.push({ path: file.path, text: null });
+      continue;
+    }
+    textFiles += 1;
+    totalBytes += file.size;
+    result.push({ path: file.path, text: await readFile(resolveWithin(root, file.path), { encoding: "utf8", ...(signal === undefined ? {} : { signal }) }) });
+  }
+  return result;
+}
+
 const README = `BurnGuard Handoff bundle
 ========================
 source/ contains the validated project closure.
 spec.json contains editable node geometry and styles.
+handoff/manifest.json maps regions, routes, interactions, assets and open work.
+handoff/prompt.md is the generated relative-path prompt for coding CLIs.
+HANDOFF.md is the concise human-readable view of the manifest.
 tokens/ contains the pinned colour and type tokens when available.
 design-system.md contains the pinned, format-specific design rules when available.
 preview.png is a capture of the entrypoint at 1280x720, not a whole-site visual approval.

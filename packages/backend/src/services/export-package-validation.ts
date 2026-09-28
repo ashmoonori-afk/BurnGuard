@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
 import JSZip from "jszip";
+import { parseHandoffManifest, type HandoffManifest } from "@bg/shared";
+import { renderHandoffMarkdown, renderHandoffPrompt } from "./export-handoff-documents";
+import { containsSensitiveHandoffFreeText, containsSensitiveHandoffText } from "./export-handoff-privacy";
 import { parsePng } from "./export-png-validation";
 import { canonicalJson } from "./export-receipt";
 import type { PackageEntryRole } from "./platform-package-contract";
@@ -119,7 +122,7 @@ export async function validatePptxPackage(bytes: Uint8Array, expectedSlides: num
 
 export async function validateHandoffPackage(bytes: Uint8Array, entrypoint: string, pin?: { readonly digest: string; readonly revision: number } | null): Promise<{ readonly source_files: number; readonly nodes: number }> {
   const zip = await load(bytes); const names = safeNames(zip);
-  for (const required of ["README.txt", "spec.json", "review.json", "preview.png", `source/${entrypoint}`]) if (!names.has(required)) fail("missing_part");
+  for (const required of ["README.txt", "HANDOFF.md", "spec.json", "review.json", "preview.png", "handoff/manifest.json", "handoff/prompt.md", `source/${entrypoint}`]) if (!names.has(required)) fail("missing_part");
   const png = await zip.file("preview.png")!.async("uint8array");
   const dimensions = parsePng(png);
   if (dimensions.width !== 1280 || dimensions.height !== 720) fail("invalid_package");
@@ -139,9 +142,61 @@ export async function validateHandoffPackage(bytes: Uint8Array, entrypoint: stri
   const source = await zip.file("spec.json")?.async("string"); if (source === undefined) fail("missing_part");
   let value: unknown; try { value = JSON.parse(source); } catch { fail("invalid_package"); }
   if (!isRecord(value) || value["spec_version"] !== 1 || !Array.isArray(value["pages"])) fail("invalid_package");
+  const manifestSource = await zip.file("handoff/manifest.json")?.async("string");
+  if (manifestSource === undefined) fail("missing_part");
+  let manifest: ReturnType<typeof parseHandoffManifest>;
+  try { manifest = parseHandoffManifest(manifestSource); }
+  catch (error) {
+    if (error instanceof Error) fail("invalid_package");
+    throw error;
+  }
+  const specProject = value["project"];
+  if (
+    manifest.project.entrypoint !== entrypoint ||
+    !isRecord(specProject) ||
+    manifest.project.id !== specProject["id"] ||
+    manifest.project.type !== specProject["type"] ||
+    manifest.project.entrypoint !== specProject["entrypoint"] ||
+    manifest.design_system.revision !== (pin?.revision ?? null) ||
+    manifest.design_system.digest !== (pin?.digest ?? null) ||
+    manifestSource !== JSON.stringify(manifest, null, 2)
+  ) fail("manifest_mismatch");
+  for (const referenced of handoffManifestPaths(manifest)) if (!names.has(referenced)) fail("manifest_mismatch");
+  const markdown = await zip.file("HANDOFF.md")!.async("string");
+  const prompt = await zip.file("handoff/prompt.md")!.async("string");
+  if (markdown !== renderHandoffMarkdown(manifest) || prompt !== renderHandoffPrompt(manifest)) fail("manifest_mismatch");
+  if ([manifestSource, markdown, prompt].some(containsSensitiveHandoffText)) fail("invalid_package");
+  if (handoffFreeText(manifest).some(containsSensitiveHandoffFreeText)) fail("invalid_package");
   let nodes = 0;
   for (const page of value["pages"]) { if (!isRecord(page) || !Array.isArray(page["nodes"])) fail("invalid_package"); nodes += page["nodes"].length; }
   return { source_files: [...names].filter((name) => name.startsWith("source/")).length, nodes };
+}
+function handoffFreeText(manifest: HandoffManifest): readonly string[] {
+  return [
+    manifest.project.name,
+    ...(manifest.design_system.name === null ? [] : [manifest.design_system.name]),
+    ...manifest.pages.flatMap((page) => [page.title, ...page.regions.flatMap((region) => [region.node_id, ...(region.component === null ? [] : [region.component])])]),
+    ...manifest.components.flatMap((component) => [component.name, ...component.node_ids]),
+    ...manifest.interactions.flatMap((interaction) => [interaction.label, interaction.node_id].filter((value): value is string => value !== null)),
+    ...manifest.unresolved_backend_work.flatMap((item) => item.node_id === null ? [] : [item.node_id]),
+    ...manifest.responsive_rules.map((rule) => rule.condition),
+  ];
+}
+
+function handoffManifestPaths(manifest: HandoffManifest): readonly string[] {
+  return [
+    manifest.continuation.prompt_file,
+    ...(manifest.design_system.tokens_file === null ? [] : [manifest.design_system.tokens_file]),
+    ...(manifest.design_system.rules_file === null ? [] : [manifest.design_system.rules_file]),
+    ...manifest.pages.map((page) => page.source_path),
+    ...manifest.routes.map((route) => route.source_file),
+    ...manifest.components.map((component) => component.source_file),
+    ...manifest.interactions.map((interaction) => interaction.source_file),
+    ...manifest.assets.map((asset) => asset.path),
+    ...manifest.responsive_rules.map((rule) => rule.source_file),
+    ...manifest.acceptance_checks.flatMap((check) => check.related_paths),
+    ...manifest.unresolved_backend_work.map((item) => item.source_file),
+  ];
 }
 async function load(bytes: Uint8Array): Promise<JSZip> { try { return await JSZip.loadAsync(bytes, { checkCRC32: true }); } catch { return fail("invalid_package"); } }
 function safeNames(zip: JSZip): ReadonlySet<string> {
