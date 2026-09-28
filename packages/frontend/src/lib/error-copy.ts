@@ -103,7 +103,6 @@ const ERROR_COPY: Record<string, MessageKey> = {
   message_too_long: "errors.message_too_long",
   turn_capacity_exhausted: "errors.turn_capacity_exhausted",
   capacity_exhausted: "errors.turn_capacity_exhausted",
-  project_path_unavailable: "errors.path_unavailable",
   alternatives_recovery_pending: "errors.alternatives_recovery_pending",
   active_page_unavailable: "errors.active_page_unavailable",
   invalid_active_page: "errors.invalid_active_page",
