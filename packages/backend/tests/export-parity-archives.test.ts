@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
-import { pptxParityImages, zipParityImages } from "../src/services/export-parity-archives";
+import { pptxParityImages, preflightParityArchive, zipParityImages } from "../src/services/export-parity-archives";
 import { decodeParityImage } from "../src/services/export-parity-images";
 import { compareParityPages } from "../src/services/export-parity";
 import { createCanvas } from "../src/services/export-native-modules";
@@ -108,4 +108,17 @@ describe("export parity archive bounds", () => {
 
     await expect(zipParityImages(bytes, ["01.png"], controller.signal)).rejects.toThrow();
   });
+});
+
+test("Given an archive entry declaring more than the parity budget When parity is prepared Then it is rejected before any inflation", async () => {
+  const zip = new JSZip();
+  zip.file("01.png", new Uint8Array([1, 2, 3]));
+  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let offset = 0; offset + 46 < bytes.byteLength; offset += 1) {
+    if (view.getUint32(offset, true) === 0x02014b50) view.setUint32(offset + 24, 0x7fffffff, true);
+  }
+
+  expect(() => preflightParityArchive(bytes)).toThrow("byte budget");
+  await expect(zipParityImages(bytes, ["01.png"], new AbortController().signal)).rejects.toThrow("byte budget");
 });

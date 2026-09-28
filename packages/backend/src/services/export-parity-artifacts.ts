@@ -66,6 +66,7 @@ export async function writeUnavailableExportParity(input: {
   readonly stageRoot: string;
   readonly format: ExportFormat;
   readonly validation: ExportValidation;
+  readonly sourcePageCount: number;
 }): Promise<ExportParitySummary> {
   const parityRoot = resolveWithin(input.stageRoot, EXPORT_PARITY_DIRECTORY);
   await rm(resolveWithin(parityRoot, "thumbnails"), {
@@ -73,7 +74,7 @@ export async function writeUnavailableExportParity(input: {
     force: true,
   });
   await mkdir(parityRoot, { recursive: true });
-  const summary = structuralFallback(input.format, input.validation, 0);
+  const summary = structuralFallback(input.format, input.validation, input.sourcePageCount);
   await writeFile(
     resolveWithin(parityRoot, EXPORT_PARITY_FILE),
     canonicalJson(summary),

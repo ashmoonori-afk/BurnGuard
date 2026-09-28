@@ -162,6 +162,7 @@ async function runExport(input: RunInput): Promise<void> {
         stageRoot,
         format: context.format,
         validation,
+        sourcePageCount: rendered.sourcePages.length,
       });
     }
     const parityDigest = sha256(new Uint8Array(await readFile(path.join(stageRoot, EXPORT_PARITY_DIRECTORY, EXPORT_PARITY_FILE))));

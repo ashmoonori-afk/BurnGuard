@@ -80,7 +80,10 @@ async function readParitySummary(
   const attemptRoot = resolveWithin(exportsDir, "attempts", assertSafeName(attempt.id));
   let expectedDigest: string | undefined;
   try {
-    expectedDigest = parseExportReceipt(JSON.parse(await readFile(resolveWithin(attemptRoot, "receipt.json"), "utf8"))).digests.parity;
+    // The on-disk receipt is trusted only when it matches the receipt digest the database committed.
+    const receiptBytes = new Uint8Array(await readFile(resolveWithin(attemptRoot, "receipt.json")));
+    if (sha256(receiptBytes) !== attempt.digests.receipt) return unavailableParity();
+    expectedDigest = parseExportReceipt(JSON.parse(new TextDecoder().decode(receiptBytes))).digests.parity;
   } catch (error) {
     if (error instanceof Error) return unavailableParity();
     throw error;
