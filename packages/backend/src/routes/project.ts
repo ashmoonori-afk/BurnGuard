@@ -8,6 +8,7 @@ import { processProjectFilesystemSignal } from "../services/watchers";
 import { designDirectionRoutes } from "./design-directions";
 import { chartRoutes } from "./charts";
 import { DesignSystemPinError, inspectProjectDesignSystemPin, refreshProjectDesignSystemPin } from "../services/project-design-system-pin";
+import { exportProjectBundle, ProjectBundleError } from "../services/project-bundle";
 
 function ok<T>(data: T): ApiSuccess<T> {
   return { data };
@@ -24,6 +25,27 @@ function fail(
 export const projectRoutes = new Hono();
 projectRoutes.route("/", designDirectionRoutes);
 projectRoutes.route("/", chartRoutes);
+
+projectRoutes.get("/api/projects/:id/bundle", async (c) => {
+  try {
+    const bundle = await exportProjectBundle(c.req.param("id"));
+    return new Response(Buffer.from(bundle.bytes), {
+      headers: {
+        "Content-Type": "application/vnd.burnguard.project+zip",
+        "Content-Disposition": `attachment; filename="BurnGuard-project.burnguard-project"; filename*=UTF-8''${encodeURIComponent(bundle.filename)}`,
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (error) {
+    if (error instanceof ProjectBundleError) {
+      const status = error.code === "project_bundle_not_found" ? 404 :
+        error.code === "project_bundle_limit" ? 413 : 409;
+      return c.json(fail(error.code, "Project bundle could not be exported"), status);
+    }
+    throw error;
+  }
+});
 
 projectRoutes.get("/api/projects/:id/design-system-pin", async (c) => {
   try { return c.json(ok(await inspectProjectDesignSystemPin(c.req.param("id")))); }
