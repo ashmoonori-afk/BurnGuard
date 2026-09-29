@@ -90,7 +90,7 @@ export const settingsMessages = defineMessages({
   "settings.auto": { ko: "시스템 설정", en: "System", "zh-CN": "跟随系统" },
   "settings.themeHint": { ko: "시스템 설정을 선택하면 이 컴퓨터의 밝은 화면·어두운 화면 설정을 따라가요.", en: "System follows this computer's light or dark appearance.", "zh-CN": "选择跟随系统后，将使用此电脑的浅色或深色设置。" },
   "settings.language": { ko: "언어", en: "Language", "zh-CN": "语言" },
-  "settings.languageHint": { ko: "선택한 언어는 즉시 적용되고 공유 프로필에 저장돼요.", en: "Your language applies immediately and is saved in the shared profile.", "zh-CN": "所选语言立即生效并保存在共享配置中。" },
+  "settings.languageHint": { ko: "언어 변경은 바로 적용되고 공유 프로필에 저장돼요.", en: "Language changes apply right away and are saved in the shared profile.", "zh-CN": "语言更改会立即生效，并保存在共享配置中。" },
   "settings.chromium": { ko: "내보내기용 Chromium", en: "Chromium for exports", "zh-CN": "用于导出的 Chromium" },
   "settings.installStatusFailed": { ko: "설치 상태를 확인하지 못했어요.", en: "Could not check installation status.", "zh-CN": "无法检查安装状态。" },
   "settings.chromiumRefresh": { ko: "Chromium 상태 다시 확인", en: "Refresh Chromium status", "zh-CN": "刷新 Chromium 状态" },

@@ -394,13 +394,13 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
             </fieldset>
             <div className="space-y-1.5">
               <div id="language-label" className="text-xs font-medium text-muted-foreground">{t("settings.language")}</div>
-              <fieldset aria-labelledby="language-label" className="flex flex-wrap gap-2">
+              <fieldset aria-labelledby="language-label" aria-describedby="language-hint" className="flex flex-wrap gap-2">
                 {LOCALES.map((language) => <Button key={language} type="button" lang={language} aria-pressed={locale === language} variant={locale === language ? "default" : "outline"} size="sm" onClick={() => {
                   setSettings({ ...settings, locale: language });
                   void persistLocale(language, queryClient).catch((error) => pushToast({ title: t("settings.saveFailed"), body: apiErrorCopy(error), tone: "error" }));
                 }}>{LANGUAGE_NAMES[language]}</Button>)}
               </fieldset>
-              <p className="text-xs text-muted-foreground">{t("settings.languageHint")}</p>
+              <p id="language-hint" data-bg-language-note="instant" className="text-xs text-muted-foreground">{t("settings.languageHint")}</p>
             </div>
             </section>
             <section id="settings-files" aria-labelledby="settings-files-title" className="scroll-mt-6 space-y-5 rounded-2xl border border-border bg-card p-5">
