@@ -147,9 +147,13 @@ export function collectLayout(input: { readonly width: number; readonly height: 
   const h1 = [...document.querySelectorAll("h1")].find(visible) ?? null;
   const h1Bottom = h1 ? h1.getBoundingClientRect().bottom + window.scrollY : 0;
   const h1Size = h1 ? fontOf(h1) : 0;
-  const subheading = h1 ? [...document.querySelectorAll("p, h2, h3, div, span")].filter(el => visible(el) && !inChrome(el) && top(el) >= h1Bottom - 2 && top(el) < h1Bottom + Math.min(input.height * 0.5, 320) && (el.textContent ?? "").trim().length > 20 && el.getBoundingClientRect().height < 160 && fontOf(el) < h1Size * 0.7)
+  const SUBHEADING_REACH_PX = 160;
+  const isHeading = (el: Element) => /^H[1-6]$/.test(el.tagName);
+  const subCandidates = h1 ? [...document.querySelectorAll("p, h2, h3, div, span")].filter(el => visible(el) && ownsText(el) && !inChrome(el) && top(el) >= h1Bottom - 2 && top(el) < h1Bottom + Math.min(input.height * 0.5, SUBHEADING_REACH_PX) && (el.textContent ?? "").trim().length > 20 && el.getBoundingClientRect().height < 160 && fontOf(el) < h1Size * 0.7)
     // The subtitle is the largest text block under the heading; a smaller tag line or eyebrow before it must not win.
-    .sort((a, b) => fontOf(b) - fontOf(a) || top(a) - top(b) || a.getBoundingClientRect().width - b.getBoundingClientRect().width)[0] ?? null : null;
+    .sort((a, b) => fontOf(b) - fontOf(a) || top(a) - top(b) || a.getBoundingClientRect().width - b.getBoundingClientRect().width) : [];
+  // A following section heading or a stat is never the subtitle while a plain text block sits under the h1.
+  const subheading = subCandidates.find(el => !isHeading(el)) ?? subCandidates[0] ?? null;
   const cta = h1 ? [...document.querySelectorAll("a, button")].find(el => visible(el) && !inChrome(el) && top(el) >= h1Bottom - 2 && top(el) < h1Bottom + input.height * 0.6 && (el.textContent ?? "").trim().length > 1) ?? null : null;
   const openingEnd = [...document.querySelectorAll("h2")].filter(visible).map(top)[0] ?? Number.POSITIVE_INFINITY;
   const media = [...document.querySelectorAll("img, video, canvas, picture, svg")].filter(el => visible(el) && top(el) < openingEnd && !inChrome(el) && el.getBoundingClientRect().width >= vw * 0.2)
