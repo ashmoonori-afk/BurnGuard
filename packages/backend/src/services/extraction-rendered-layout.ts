@@ -10,7 +10,7 @@ import {
   type MeasuredViewportLayout,
   type MeasuredViewportName,
 } from "@bg/shared";
-import { launchChromium } from "./export-render-session";
+import { launchChromium, RenderSessionError } from "./export-render-session";
 
 export type MeasuredPageInput = { readonly path: string; readonly pageType: DesignSystemPageType; readonly url: string; readonly html: string };
 export type RenderedLayoutInput = {
@@ -21,7 +21,16 @@ export type RenderedLayoutInput = {
   readonly launch?: (signal: AbortSignal) => Promise<Browser>;
   /** Receives a JPEG of each measured viewport, taken after measurement from the same offline render. */
   readonly captureReference?: (shot: LayoutReferenceCapture) => void;
+  /** Receives why measurement produced no layout, so the caller can record it instead of a bare "unavailable". */
+  readonly reportFailure?: (failure: LayoutMeasureFailure) => void;
 };
+/**
+ * Why a measurement produced no layout. `code` is a stable token (a RenderSessionError code for launch failures,
+ * otherwise launch_failed, render_failed, invalid_measurement, or aborted when the signal fired before any page was
+ * measured); `launchMs` is how long the browser took to start,
+ * or null when it never started. No raw browser diagnostics or paths are carried.
+ */
+export type LayoutMeasureFailure = { readonly stage: "launch" | "render" | "validate"; readonly code: string; readonly launchMs: number | null };
 export type LayoutReferenceCapture = { readonly path: string; readonly viewport: MeasuredViewportName; readonly jpeg: Uint8Array; readonly width: number; readonly height: number };
 
 const PAGE_TIMEOUT_MS = 8_000;
@@ -46,8 +55,13 @@ export async function measureRenderedLayout(input: RenderedLayoutInput): Promise
   if (pages.length === 0) return null;
   let browser: Browser | null = null;
   const measured: MeasuredPageLayout[] = [];
+  let stage: LayoutMeasureFailure["stage"] = "launch";
+  const startedAt = Date.now();
+  let launchMs: number | null = null;
   try {
     browser = await (input.launch ?? launchChromium)(input.signal);
+    launchMs = Date.now() - startedAt;
+    stage = "render";
     for (const page of pages) {
       input.signal.throwIfAborted();
       const viewports = {} as Record<MeasuredViewportName, MeasuredViewportLayout>;
@@ -55,14 +69,18 @@ export async function measureRenderedLayout(input: RenderedLayoutInput): Promise
       measured.push({ path: page.path, page_type: page.pageType, viewports });
     }
     // Only what the strict reader accepts is ever stored.
+    stage = "validate";
     return parseDesignSystemMeasuredLayout({ schema_version: 1, method: "rendered-offline", pages: measured });
   } catch (error) {
     // Pages finished before an abort are kept (the entry page is measured first), so a deadline that cuts the
     // last pages short still records the entry; the caller decides whether the abort itself must propagate.
     if (input.signal.aborted) {
       if (measured.length > 0) return parseDesignSystemMeasuredLayout({ schema_version: 1, method: "rendered-offline", pages: measured });
+      input.reportFailure?.({ stage, code: "aborted", launchMs });
       throw error;
     }
+    const code = stage === "launch" ? (error instanceof RenderSessionError ? error.code : "launch_failed") : stage === "render" ? "render_failed" : "invalid_measurement";
+    input.reportFailure?.({ stage, code, launchMs });
     return null;
   } finally {
     await browser?.close().catch(() => undefined);
