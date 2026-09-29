@@ -12,10 +12,14 @@ import path from "node:path";
 
 export const MASKED = "[masked]";
 const SECRET_HEADERS = new Set(["x-burnguard-capability", "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key"]);
-const SECRET_PARAMS = /^(?:capability|token|access_token|refresh_token|id_token|api_key|apikey|key|secret|client_secret|password)$/iu;
+const SECRET_PARAMS = /^(?:capability|token|access_token|refresh_token|id_token|api_key|apikey|key|secret|client_secret|password)$|(?:_token|_api_key|_apikey|_secret|_password|_access_key)$/iu;
 /** Values shorter than this are not treated as secrets, so masking never rewrites ordinary short words. */
 const MIN_SECRET_LENGTH = 8;
 const MIN_BODY_SECRET_LENGTH = 16;
+/** Body field names too generic to trust at short lengths ("key" can be a route segment). */
+const GENERIC_SECRET_NAME = /^(?:key|token)$/iu;
+/** Objects or arrays whose every string value is a secret, keyed by connection or provider id. */
+const SECRET_CONTAINER = /(?:^|_)(?:api_keys|api_tokens|access_tokens|secrets|credentials|passwords)$/iu;
 const HOME_PATTERNS: readonly RegExp[] = [
   /\/(?:home|Users)\/[^/\s"'<>\\]+/giu,
   /\/root(?=\/)/gu,
@@ -47,20 +51,22 @@ function bodyText(message: Record<string, Json>): string {
 }
 
 /** String values under secret-named keys anywhere in a JSON body, such as data.capability in /api/bootstrap. */
-function jsonBodySecrets(text: string): string[] {
+function jsonBodySecrets(text: string): { readonly value: string; readonly specific: boolean }[] {
   let parsed: unknown;
   try { parsed = JSON.parse(text); } catch { return []; }
-  const found: string[] = [];
-  const walk = (value: unknown, depth: number): void => {
+  const found: { value: string; specific: boolean }[] = [];
+  // Inside a secret container such as llm_api_keys every string is a secret, whatever its own key (a connection id).
+  const walk = (value: unknown, depth: number, inContainer: boolean): void => {
     if (depth > 32) return;
-    if (Array.isArray(value)) { for (const item of value) walk(item, depth + 1); return; }
+    if (typeof value === "string") { if (inContainer) found.push({ value, specific: true }); return; }
+    if (Array.isArray(value)) { for (const item of value) walk(item, depth + 1, inContainer); return; }
     if (!isObject(value)) return;
     for (const [key, child] of Object.entries(value)) {
-      if (typeof child === "string" && SECRET_PARAMS.test(key)) found.push(child);
-      else walk(child, depth + 1);
+      if (typeof child === "string" && (inContainer || SECRET_PARAMS.test(key))) found.push({ value: child, specific: inContainer || !GENERIC_SECRET_NAME.test(key) });
+      else walk(child, depth + 1, inContainer || SECRET_CONTAINER.test(key));
     }
   };
-  walk(parsed, 0);
+  walk(parsed, 0, false);
   return found;
 }
 
@@ -77,9 +83,9 @@ function collectSecrets(entries: readonly Record<string, Json>[]): Set<string> {
   for (const entry of entries) for (const side of ["request", "response"] as const) {
     const message = entry[side];
     if (!isObject(message)) continue;
-    // Body fields are named loosely (a "key" can be a route segment), so only long values count as secrets there;
-    // the capability and real tokens are far longer than MIN_BODY_SECRET_LENGTH.
-    for (const value of jsonBodySecrets(bodyText(message))) if (value.trim().length >= MIN_BODY_SECRET_LENGTH) add(value);
+    // Specific secret names and secret containers count from MIN_SECRET_LENGTH; the generic names "key" and "token"
+    // (a "key" can be a route segment) only from MIN_BODY_SECRET_LENGTH.
+    for (const found of jsonBodySecrets(bodyText(message))) if (found.value.trim().length >= (found.specific ? MIN_SECRET_LENGTH : MIN_BODY_SECRET_LENGTH)) add(found.value);
     const postData = message["postData"];
     for (const param of isObject(postData) && Array.isArray(postData["params"]) ? postData["params"].filter(isObject) : []) if (SECRET_PARAMS.test(String(param["name"] ?? ""))) add(String(param["value"] ?? ""));
     for (const header of Array.isArray(message["headers"]) ? message["headers"].filter(isObject) : []) {
