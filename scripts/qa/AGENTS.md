@@ -20,6 +20,7 @@ Evidence-producing acceptance harness (65 runners, helpers, and fixtures, ~13k L
 | HTTP scenarios | `task-4..task-8*.sh` | Extraction, catalog, learning, artifact recovery, export/faults/gates |
 | Packaging smokes | `package-smoke.mjs`, `windows-native-smoke.mjs`, `native-mac-smoke.ts` | Portable, Windows shell, macOS app |
 | Typed failures | `errors.ts` | `QaInputError`, `QaPreflightError`, `QaTimeoutError` |
+| Pre-release UX QA | `prerelease-ux-qa.md`, `har-mask.ts` | Exploratory journey prompt run before the release security gate; HAR masking CLI (capability, cookies, auth, private paths) that verifies no collected secret remains |
 
 ## CONVENTIONS
 

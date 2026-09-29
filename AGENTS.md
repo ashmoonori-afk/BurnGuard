@@ -138,6 +138,12 @@ bunx tsc -p scripts/qa/tsconfig.json --noEmit
 - Consult the nearest nested `AGENTS.md` before changing a delegated domain; this root records only cross-package constraints.
 - Doc drift to ignore: `CONTRIBUTING.md` cites a `test:e2e` script and `tests/e2e/` that do not exist (QA lives in `scripts/qa/`); `doc/README.md` advertises `ref/` and `devplan/` (gitignored, absent in a checkout) and still allows Korean. `uploads/`, `ref/`, `devplan/`, `/.omo/` are gitignored. A stray empty `NUL` file sits at the repo root (Windows artifact).
 
+## RELEASE UX QA STAGE
+
+- Before the release security gate, run the pre-release app UX QA in `scripts/qa/prerelease-ux-qa.md` against the release candidate: a real browser on an isolated `BG_APP_ROOT`, journeys J01-J07 (extract, create, generate, review/repair, pin update, export, recover a failed turn), HAR plus screenshots, and a P0-P3 report.
+- Mask every HAR with `bun scripts/qa/har-mask.ts <raw.har> <shared.har>` before it leaves the run directory. It masks the capability header, the capability cookie and every other place their values appear, authorization headers, cookies and local absolute paths, and it refuses to write output that still contains a collected secret.
+- Store the report and masked evidence under `.omo/evidence/release-<version>/ux-qa/`. An open P0 or P1 finding keeps the release unpublished unless the owner explicitly accepts it.
+
 ## RELEASE SECURITY GATE
 
 - Before every release publication, run an independent security review with a GPT-5.6 or later model, as explicitly required by the user. Follow the established Daybreak review protocol below; Daybreak-specific model access is not required. Use low reasoning effort by default.

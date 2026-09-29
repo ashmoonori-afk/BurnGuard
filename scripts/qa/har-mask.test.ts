@@ -1,0 +1,56 @@
+import { describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { HarMaskError, MASKED, maskHar } from "./har-mask";
+
+const CAPABILITY = "c4p4b1l1tyV4lu3-0123456789abcdef";
+const header = (name: string, value: string) => ({ name, value });
+const entry = (request: Record<string, unknown>, response: Record<string, unknown>) => ({ startedDateTime: "2026-09-29T01:00:00.000Z", time: 12, request: { method: "GET", httpVersion: "HTTP/1.1", headers: [], cookies: [], queryString: [], ...request }, response: { status: 200, statusText: "OK", httpVersion: "HTTP/1.1", headers: [], cookies: [], content: { size: 0, mimeType: "application/json", text: "" }, ...response } });
+const fixture = () => ({ log: { version: "1.2", creator: { name: "qa", version: "1" }, entries: [
+  entry({ url: "http://127.0.0.1:14070/api/bootstrap" }, { headers: [header("x-burnguard-capability", CAPABILITY), header("set-cookie", `burnguard_capability=${CAPABILITY}; HttpOnly; SameSite=Strict; Path=/api`)], content: { size: 60, mimeType: "application/json", text: JSON.stringify({ data: { capability: CAPABILITY } }) } }),
+  entry({ url: `http://127.0.0.1:14070/api/projects?dir=%2Fhome%2Falice%2F.burnguard%2Fprojects&capability=${CAPABILITY}`, headers: [header("x-burnguard-capability", CAPABILITY), header("Cookie", `theme=dark; burnguard_capability=${CAPABILITY}`), header("Authorization", "Bearer sk-live-provider-token-1234")], cookies: [{ name: "burnguard_capability", value: CAPABILITY }], queryString: [{ name: "capability", value: CAPABILITY }] },
+    { content: { size: 90, mimeType: "application/json", text: JSON.stringify({ data: { dir_path: "/home/alice/.burnguard/projects/p1", win: "C:\\Users\\alice\\AppData\\BurnGuard", qa: "/tmp/qa-home-77/profile" } }) } }),
+  entry({ url: "http://127.0.0.1:14070/api/sessions/s1/events" }, { content: { size: 40, mimeType: "text/event-stream; charset=utf-8", encoding: "base64", text: Buffer.from(`data: {"path":"/Users/bob/work","token":"${CAPABILITY}"}\n\n`).toString("base64") } }),
+] } });
+
+describe("HAR masking for the pre-release UX QA stage", () => {
+  test("Given a HAR with the capability in headers, cookies, query, bodies and a base64 stream plus private paths, when masked, then no secret or private path remains and placeholders take their place", () => {
+    const { har, report } = maskHar(fixture(), [{ path: "/tmp/qa-home-77", placeholder: "<qa-home>" }]);
+    const text = JSON.stringify(har);
+    for (const secret of [CAPABILITY, "sk-live-provider-token-1234", "/home/alice", "C:\\\\Users\\\\alice", "%2Fhome%2Falice", "/tmp/qa-home-77"]) expect(text).not.toContain(secret);
+    type Entry = { readonly request: { readonly url: string; readonly method: string; readonly headers: readonly { readonly name: string; readonly value: string }[] }; readonly response: { readonly status: number; readonly content: { readonly text: string } } };
+    const entries = (har as { readonly log: { readonly entries: readonly Entry[] } }).log.entries;
+    const stream = Buffer.from(String(entries[2]!.response.content.text), "base64").toString("utf8");
+    expect(stream).toBe(`data: {"path":"<home>/work","token":"${MASKED}"}\n\n`);
+    expect(JSON.parse(String(entries[1]!.response.content.text)).data).toEqual({ dir_path: "<home>/.burnguard/projects/p1", win: "<home>\\AppData\\BurnGuard", qa: "<qa-home>/profile" });
+    expect(entries[1]!.request.headers.map(item => [item.name, item.value])).toEqual([["x-burnguard-capability", MASKED], ["Cookie", MASKED], ["Authorization", MASKED]]);
+    expect(entries[1]!.request.url).toBe(`http://127.0.0.1:14070/api/projects?dir=<home>%2F.burnguard%2Fprojects&capability=${MASKED}`);
+    expect([entries[0]!.response.status, entries[1]!.request.method]).toEqual([200, "GET"]);
+    expect(report).toMatchObject({ headers: 5, cookies: 1, params: 1 });
+    expect(report.secret_values).toBeGreaterThanOrEqual(2);
+  });
+
+  test("Given input that is not a HAR, when masked, then a typed error is raised", () => {
+    expect(() => maskHar({ log: {} })).toThrow(HarMaskError);
+    expect(() => maskHar([])).toThrow(HarMaskError);
+  });
+
+  test("Given the CLI, when run on a HAR, then it writes a 0600 masked copy, prints only counts, and refuses to overwrite its input", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "bg-har-mask-"));
+    try {
+      const input = path.join(dir, "raw.har");
+      const output = path.join(dir, "shared.har");
+      await writeFile(input, JSON.stringify(fixture()));
+      const run = Bun.spawnSync(["bun", path.join(import.meta.dir, "har-mask.ts"), input, output, "--root", "/tmp/qa-home-77=<qa-home>"]);
+      expect(run.exitCode).toBe(0);
+      expect(run.stdout.toString()).not.toContain(CAPABILITY);
+      expect(JSON.parse(run.stdout.toString())).toMatchObject({ schema_version: 1, output: "shared.har" });
+      expect(await readFile(output, "utf8")).not.toContain(CAPABILITY);
+      expect((await stat(output)).mode & 0o777).toBe(0o600);
+      const same = Bun.spawnSync(["bun", path.join(import.meta.dir, "har-mask.ts"), input, input]);
+      expect(same.exitCode).toBe(1);
+      expect(JSON.parse(same.stderr.toString())).toEqual({ error: "invalid_arguments" });
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+});
