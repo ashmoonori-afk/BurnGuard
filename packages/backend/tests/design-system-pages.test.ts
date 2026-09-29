@@ -626,6 +626,22 @@ describe("Measured layout tokens", () => {
     for (const shot of shots) expect([...shot.jpeg.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
   }, 90_000);
 
+  test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given a small tag line before the real subtitle under the h1, when measured, then the subheading is the largest text block under the heading, not the first leaf", async () => {
+    const html = '<!doctype html><html><head><link rel="stylesheet" href="https://site.test/site.css"></head><body><main><h1>Own your AI.</h1><span class="tag">Private beta open for teams today</span><p class="sub">Private expert AI systems powered by local models</p><h2>Section two</h2></main></body></html>';
+    const css = "body{margin:0} main{max-width:960px;margin:0 auto} h1{font-size:64px;text-align:center} .tag{display:block;font-size:12px;text-align:center} .sub{font-size:24px;text-align:center} h2{font-size:32px}";
+    const layout = await measureRenderedLayout({ pages: [{ path: "/", pageType: "home", url: "https://site.test/", html }], stylesheets: new Map([["https://site.test/site.css", css]]), signal: AbortSignal.timeout(60_000) });
+    const desktop = layout!.pages[0]!.viewports.desktop;
+    expect(desktop.type_scale.subheading).toBe(24);
+    expect(desktop.blocks.subheading?.height).toBeGreaterThan(20);
+  }, 90_000);
+
+  test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given a larger section heading and a stat row within reach under the h1, when measured, then the real subtitle is still the subheading on both viewports", async () => {
+    const html = '<!doctype html><html><head><link rel="stylesheet" href="https://site.test/site.css"></head><body><main><h1>Own your AI.</h1><p class="sub">Private expert AI systems powered by local models</p><div class="gap"></div><div class="stats"><span class="num">300% faster than the old way</span> <small>measured</small></div><h2>A larger section heading here</h2></main></body></html>';
+    const css = "body{margin:0} main{max-width:960px;margin:0 auto} h1{font-size:64px;text-align:center} .sub{font-size:20px;text-align:center} .gap{height:240px} .stats{font-size:12px} .num{font-size:40px} h2{font-size:40px}";
+    const layout = await measureRenderedLayout({ pages: [{ path: "/", pageType: "home", url: "https://site.test/", html }], stylesheets: new Map([["https://site.test/site.css", css]]), signal: AbortSignal.timeout(60_000) });
+    for (const name of ["desktop", "mobile"] as const) expect(layout!.pages[0]!.viewports[name].type_scale.subheading).toBe(20);
+  }, 90_000);
+
   test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given centred 1200px section wrappers holding a narrow centred text column, when measured, then the container is the wrapper width rather than the text column", async () => {
     const section = (title: string) => '<section class="wrap"><h2>' + title + '</h2><p class="narrow">A narrow centred paragraph that stays well inside the wrapper width on purpose.</p><div class="panel"></div></section>';
     const html = '<!doctype html><html><head><link rel="stylesheet" href="https://site.test/site.css"></head><body><section class="wrap"><h1>Own your AI.</h1><p class="narrow">Private expert AI systems powered by local models</p></section>' + section("One") + section("Two") + "</body></html>";
