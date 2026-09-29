@@ -2154,9 +2154,9 @@ function buildTokensCss(brandName: string, analysis: SourceAnalysis, layout: Rea
   --gray-20: #e2e8f0;
   --gray-10: #f1f5f9;
 
-  /* Brand */
-  --primary-blue: ${primary};
-  --action-blue: ${action};
+  /* Brand: neutral names, whatever the hue (existing systems keep their stored names) */
+  --brand-primary: ${primary};
+  --brand-action: ${action};
 
   /* Accent ramps */
   --red-60: #dc2626;
@@ -2342,7 +2342,7 @@ function buildPreviewHtml(
     :root {
       --fg: var(--fg-1);
       --muted: var(--fg-3);
-      --accent: var(--primary-blue);
+      --accent: var(--brand-primary);
     }
     * { box-sizing: border-box; }
     body {
@@ -2384,7 +2384,7 @@ function buildPreviewHtml(
     .stack { display: grid; gap: 10px; }
     .swatch { height: 28px; border-radius: 8px; border: 1px solid rgba(15,23,42,0.06); }
     .btn { font-family: inherit; display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid transparent; font-size: 12px; font-weight: 600; }
-    .btn-primary { background: var(--action-blue); color: var(--fg-on-brand); }
+    .btn-primary { background: var(--brand-action); color: var(--fg-on-brand); }
     .btn-secondary { background: var(--surface); color: var(--fg); border-color: var(--border); }
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .field { border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 12px; background: var(--surface); }
@@ -2431,7 +2431,7 @@ function previewBody(
     case "brand-icons":
       return `<div class="eyebrow">Brand</div><div class="title">Icon direction</div><div class="muted">Quiet, geometric, interface-safe iconography.</div><div class="chips"><div class="chip">1.5px stroke</div><div class="chip">Low ornament</div><div class="chip">Grid aligned</div></div>`;
     case "colors-brand":
-      return `<div class="eyebrow">Color</div><div class="title">Brand colors</div><div class="stack">${(sampleColors.length > 0 ? sampleColors.slice(0, 3) : ["var(--primary-blue)", "var(--blue-60)", "var(--aqua-60)"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div><div class="muted">${sampleColors.length > 0 ? "Source-derived swatches" : "Fallback swatches"}</div>`;
+      return `<div class="eyebrow">Color</div><div class="title">Brand colors</div><div class="stack">${(sampleColors.length > 0 ? sampleColors.slice(0, 3) : ["var(--brand-primary)", "var(--blue-60)", "var(--aqua-60)"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div><div class="muted">${sampleColors.length > 0 ? "Source-derived swatches" : "Fallback swatches"}</div>`;
     case "colors-neutrals":
       return `<div class="eyebrow">Color</div><div class="title">Neutral scale</div><div class="stack">${(sampleColors.length >= 6 ? sampleColors.slice(3, 6) : ["var(--gray-90)", "var(--fg-3)", "var(--gray-100)"]).map((value) => `<div class="swatch" style="background:${escapeHtml(value)}"></div>`).join("")}</div>`;
     case "colors-ramps":

@@ -625,7 +625,7 @@ export function ColorTokenEditor({
                 aria-invalid={!name.trim()}
                 aria-describedby={!name.trim() ? "system-color-name-error" : undefined}
                 value={name}
-                placeholder="primary-blue"
+                placeholder="brand-primary"
                 onChange={(e) => onNameChange(e.target.value)}
                 disabled={saving || Boolean(editingToken)}
               />

@@ -38,6 +38,8 @@ describe("Design-system starter", () => {
     expect(buildStarterCss(tokens, pages)).toBe(css);
     expect(css.startsWith(STARTER_MARKER)).toBe(true);
     expect(css).toContain("--primary-blue: #b77dea;");
+    // A stored system keeps its colour-named token; the starter reads the neutral name first and falls back to it.
+    expect(css).toContain("var(--brand-primary, var(--primary-blue))");
     expect(/:root \{\n  [^}]*--m-type-hero: 64px;/u.test(css)).toBe(true);
     expect(css).toContain(':root:has(meta[name="bg-measured-page"][content="/about"]) {\n  --m-container: 1200px;');
     expect(css).not.toContain('content="/a"}b"');

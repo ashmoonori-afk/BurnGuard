@@ -93,7 +93,7 @@ export function buildStarterCss(tokensCss: string, pages: readonly MeasuredPageL
     HERO_RULES,
     ".bg-hero__title { font-family: var(--font-display, var(--font-sans)); font-size: var(--m-type-hero); line-height: var(--lh-tight, 1.1); max-width: var(--m-hero-width); margin: 0; }",
     ".bg-hero__subtitle { font-size: var(--m-type-subheading); color: var(--fg-2); max-width: var(--m-hero-width); margin: 0; }",
-    ".bg-button { display: inline-flex; align-items: center; justify-content: center; font-size: var(--m-type-cta); padding: 0.6em 1.2em; border-radius: var(--r-pill, 999px); border: 1px solid transparent; background: var(--primary-blue); color: var(--fg-on-brand); text-decoration: none; }",
+    ".bg-button { display: inline-flex; align-items: center; justify-content: center; font-size: var(--m-type-cta); padding: 0.6em 1.2em; border-radius: var(--r-pill, 999px); border: 1px solid transparent; background: var(--brand-primary, var(--primary-blue)); color: var(--fg-on-brand); text-decoration: none; }",
     ".bg-button--secondary { background: transparent; border-color: var(--border-strong); color: var(--fg-1); }",
     ".bg-section { padding-block: calc(var(--m-section-gap) / 2); }",
     ".bg-section__title { font-family: var(--font-display, var(--font-sans)); font-size: var(--m-type-h2); line-height: var(--lh-tight, 1.15); margin: 0 0 var(--m-gutter); }",
