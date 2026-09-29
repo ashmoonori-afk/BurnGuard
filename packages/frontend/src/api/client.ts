@@ -73,7 +73,27 @@ export async function authorizedFetch(
   }
   const headers = new Headers(init?.headers ?? {});
   headers.set(BURNGUARD_CAPABILITY_HEADER, launchCapability);
-  return fetch(path, { ...init, credentials: "same-origin", headers });
+  const res = await fetch(path, { ...init, credentials: "same-origin", headers });
+  if (res.status === 403) await reportAuthorityRejection(res);
+  return res;
+}
+
+const authorityRejectedListeners = new Set<() => void>();
+
+/**
+ * The request-authority gate answers a stale launch capability with 403 `forbidden`: the backend
+ * restarted and minted a new one. Listeners ask the user to reload; nothing re-bootstraps here.
+ */
+export function onAuthorityRejected(listener: () => void): () => void {
+  authorityRejectedListeners.add(listener);
+  return () => { authorityRejectedListeners.delete(listener); };
+}
+
+async function reportAuthorityRejection(res: Response): Promise<void> {
+  const body: unknown = await res.clone().json().catch(() => null);
+  const code = typeof body === "object" && body !== null && "error" in body && typeof body.error === "object" && body.error !== null && "code" in body.error ? body.error.code : null;
+  if (code !== "forbidden") return;
+  for (const listener of authorityRejectedListeners) listener();
 }
 
 /**
