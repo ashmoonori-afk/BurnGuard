@@ -495,8 +495,8 @@ describe("Measured layout tokens", () => {
   test("Given a measurer that captures screenshots, when a website is extracted, then only screenshots of measured pages are stored with a verified index and a note counts the missing views", async () => {
     const layout = { schema_version: 1, method: "rendered-offline", pages: [{ path: "/source", page_type: "other", viewports: { desktop: viewportLayout("desktop"), mobile: viewportLayout("mobile") } }] } as DesignSystemMeasuredLayout;
     const jpeg = (label: string) => new TextEncoder().encode(label);
-    const page = (title: string) => '<html><body><nav><a href="/pricing">Pricing</a></nav><h1>' + title + "</h1></body></html>";
-    await withSite({ "/source": page("Home"), "/pricing": page("Pricing") }, async (origin, id) => {
+    const page = (title: string) => '<html><body><nav><a href="/pricing">Pricing</a></nav><img src="/hero.png"><h1>' + title + "</h1></body></html>";
+    await withSite({ "/source": page("Home"), "/pricing": page("Pricing"), "/hero.png": "hero-png-bytes" }, async (origin, id) => {
       const result = await extractDesignSystemFromSource({ system_id: id, name: "Shots", source_type: "website", source_url: origin + "/source" }, { measureLayout: async input => {
         input.captureReference?.({ path: "/source", viewport: "desktop", jpeg: jpeg("source-desktop"), width: 1440, height: 2400 });
         input.captureReference?.({ path: "/pricing", viewport: "desktop", jpeg: jpeg("pricing-desktop"), width: 1440, height: 900 });
@@ -509,7 +509,12 @@ describe("Measured layout tokens", () => {
       const stored = await readFile(path.join(dir, "layout-reference", "p0-desktop.jpg"));
       expect(new TextDecoder().decode(stored)).toBe("source-desktop");
       expect(reference.shots[0]!.sha256).toBe(createHash("sha256").update(stored).digest("hex"));
-      expect(result.extraction.generated_files).toEqual(expect.arrayContaining(["layout-reference.json", "layout-reference/p0-desktop.jpg"]));
+      expect(result.extraction.generated_files).toEqual(expect.arrayContaining(["layout-reference.json", "layout-reference/p0-desktop.jpg", "layout-reference/p0-desktop.svg"]));
+      const wireframe = await readFile(path.join(dir, "layout-reference", "p0-desktop.svg"));
+      expect(reference.shots[0]!.wireframe).toEqual({ file: "layout-reference/p0-desktop.svg", size: wireframe.byteLength, sha256: createHash("sha256").update(wireframe).digest("hex") });
+      expect(wireframe.toString("utf8").startsWith("<svg ")).toBe(true);
+      const hero = await readFile(path.join(dir, "assets", "hero", "hero.png"));
+      expect(reference.hero_assets).toEqual([{ file: "assets/hero/hero.png", size: hero.byteLength, sha256: createHash("sha256").update(hero).digest("hex") }]);
       expect(result.extraction.notes.some(note => note.startsWith("Layout reference screenshots were captured for 1 of 2"))).toBe(true);
     });
   });

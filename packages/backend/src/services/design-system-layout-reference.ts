@@ -1,6 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { parseDesignSystemLayoutReference, type DesignSystemLayoutReference, type LayoutReferenceShot } from "@bg/shared";
+import { parseDesignSystemLayoutReference, type DesignSystemLayoutReference, type LayoutReferenceHeroAsset, type LayoutReferenceShot } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
 import { readManagedFile } from "./artifact-tree-storage";
 import { readDesignSystemSourceFile } from "./design-system-layout";
@@ -9,6 +9,8 @@ import { readDesignSystemSourceFile } from "./design-system-layout";
 export const STAGED_REFERENCE_DIR = ".burnguard-inputs/design-system-starter/reference";
 const OPEN_TAG = "<selected_design_system_layout_reference>";
 const CLOSE_TAG = "</selected_design_system_layout_reference>";
+const HERO_OPEN_TAG = "<selected_design_system_hero_assets>";
+const HERO_CLOSE_TAG = "</selected_design_system_hero_assets>";
 
 /** The system's layout-reference.json, or null when it has none (older, unmeasured or non-website systems). */
 export async function readDesignSystemLayoutReference(system: { readonly dir_path: string }): Promise<DesignSystemLayoutReference | null> {
@@ -23,7 +25,8 @@ export async function readDesignSystemLayoutReference(system: { readonly dir_pat
 export function layoutReferencePromptLines(reference: DesignSystemLayoutReference, pagePaths: readonly string[]): string[] {
   const shots = reference.shots.filter(shot => pagePaths.includes(shot.path));
   if (shots.length === 0) return [];
-  return [OPEN_TAG, JSON.stringify(shots).replace(/</g, "\\u003c"), CLOSE_TAG];
+  const hero = reference.hero_assets ?? [];
+  return [OPEN_TAG, JSON.stringify(shots).replace(/</g, "\\u003c"), CLOSE_TAG, ...(hero.length > 0 ? [HERO_OPEN_TAG, JSON.stringify(hero).replace(/</g, "\\u003c"), HERO_CLOSE_TAG] : [])];
 }
 
 /** The screenshots frozen in a pinned context; none when it carries no block or the block does not parse. */
@@ -36,6 +39,35 @@ export function layoutReferenceFromPinnedContext(context: string): readonly Layo
   } catch {
     return [];
   }
+}
+
+/** The hero images frozen in a pinned context; none when it carries no block or the block does not parse. */
+export function heroAssetsFromPinnedContext(context: string): readonly LayoutReferenceHeroAsset[] {
+  const start = context.indexOf(`${HERO_OPEN_TAG}\n`);
+  if (start === -1) return [];
+  const line = context.slice(start + HERO_OPEN_TAG.length + 1).split("\n", 1)[0] ?? "";
+  try {
+    return parseDesignSystemLayoutReference({ schema_version: 1, shots: [], hero_assets: JSON.parse(line) }).hero_assets ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Copies the pinned hero images into the stage as assets/hero/<name>, only while their size and SHA-256 still match the pin. */
+export async function provisionDesignSystemHeroAssets(stageDir: string, pinnedContext: string, systemDir: string | null): Promise<readonly string[]> {
+  if (systemDir === null) return [];
+  const staged: string[] = [];
+  for (const asset of heroAssetsFromPinnedContext(pinnedContext)) {
+    const bytes = await readManagedFile(systemDir, { path: asset.file, size: asset.size, sha256: asset.sha256 }).catch(() => null);
+    if (bytes === null) continue;
+    const target = resolveWithin(stageDir, ...asset.file.split("/"));
+    // A file the project already has at that path is the user's or an earlier turn's; it is never replaced.
+    if (await lstat(target).then(() => true, () => false)) continue;
+    await mkdir(resolveWithin(stageDir, ...asset.file.split("/").slice(0, -1)), { recursive: true });
+    await writeFile(target, bytes);
+    staged.push(asset.file);
+  }
+  return staged;
 }
 
 export const stagedReferencePath = (shot: LayoutReferenceShot): string => `${STAGED_REFERENCE_DIR}/${path.posix.basename(shot.file)}`;
