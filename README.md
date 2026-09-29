@@ -172,6 +172,22 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 ## Changelog
 
+### 0.5.27
+
+- Projects can be exported as portable `.burnguard-project` bundles and restored on another computer. Saved provider and access tokens and the local configuration are left out, and a restore always creates a new project.
+- The handoff export adds a machine-readable manifest, `HANDOFF.md` and a prompt for coding CLIs, with copyable commands to continue in Claude Code or Codex.
+- Settings > Runtime diagnostics lists each CLI connection with its version and capabilities and the stage where recent generations stopped; a failed or interrupted project can resume from the files already saved.
+- Visual-quality guidance now covers websites, decks, graphics, logos and diagrams. The Quality panel adds advisory checks for separator dashes, placeholder copy, eyebrow labels, repeated or wrapped primary calls to action, accent and corner-radius counts and repeated adjacent sections, and rendered journey checks for websites: links that lead nowhere, mobile navigation that scrolls sideways, invisible keyboard focus and layout shift while loading.
+- GIF attachments are accepted and images whose metadata embeds SVG text now decode. WebP files are validated before decoding, and colour sampling of untrusted images runs in a separate process.
+- Generate two to four visual alternatives of a design, compare them side by side, promote one and delete the rest.
+- PDF, PNG, PNG ZIP and PPTX exports show a per-page similarity score against the canvas. The check warns and never blocks the download.
+- A Figma JSON export (with optional frame images) can be imported as an immutable reference matched to your design-system tokens. No Figma account token is needed.
+- Website design systems are extracted page by page (navigation, footer and sitemap, respecting robots.txt), with measured layout, page colours, font roles, asset usage rules and asset prompts. With Chromium, up to four source pages are rendered offline and measured at desktop and mobile width, and reference screenshots of those pages are kept with the system.
+- Website generation with an extracted system receives the measured values as hard constraints, a starter stylesheet and page skeletons, the reference screenshots as visual targets and one explicit precedence; the review checks the page against the measured layout and repairs it once.
+- Generation guidance follows a capability profile per model family (claude-frontier, gpt-image, standard). With Claude Opus or Sonnet, BurnGuard designs a CSS and SVG logo from your tokens under seven construction rules when none is supplied, and finds openly licensed photos, illustrations and icons on Openverse and Iconify (no keys needed) instead of generating images, saving each file with its source and licence. GPT models on Codex keep generating their own images. Web search can be turned off in Settings, and the model picker recommends medium effort or higher.
+- Generation and repair prompts carry evidence rules: visual claims only from rendered evidence, checks that did not run reported as unverified, and no unmeasured numbers.
+- On first run the app follows your system language (Korean, Simplified Chinese, otherwise English); a language picked in Settings always wins. After your first successful export or publish the app asks once for a GitHub star; nothing is sent anywhere.
+
 ### 0.5.26
 
 - Publishing a web project to Vercel adds a small "Made with BurnGuard" badge to the published site only; downloaded ZIP exports are unchanged. The badge can be turned off in Settings or per publish.
