@@ -33,6 +33,11 @@ describe("export quality gate copy (UXM-12, DP-19)", () => {
     expect(qualityStatusKey({ kind: "recommended", running: false, report: recommended })).toBe("modes.quality.recommendedStatus");
   });
 
+  test("Given a recommended report whose only gap is an unverified check When the panel status is derived Then it does not claim recommendations", () => {
+    const unverified: DesignAuditResult = { ...report("recommended", []), checks: [{ code: "contrast", status: "unmeasurable", reason: "renderer_unavailable", findings: [] }] };
+    expect(qualityStatusKey({ kind: "recommended", running: false, report: unverified })).toBe("modes.quality.unverifiedStatus");
+  });
+
   test("Given a must-fix report for an older artifact When the gate is derived Then it is absent", () => {
     expect(exportQualityGate(report("must_fix", [finding("must_fix")]), "b".repeat(64))).toBeNull();
     expect(exportQualityGate(null, DIGEST)).toBeNull();
