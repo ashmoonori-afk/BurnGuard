@@ -66,6 +66,7 @@ const ERROR_COPY: Record<string, MessageKey> = {
   invalid_project_bundle: "errors.invalid_project_bundle",
   invalid_source_url: "errors.invalid_source_url",
   website_fetch_failed: "errors.website_fetch_failed",
+  website_content_refused: "errors.website_content_refused",
   figma_token_missing: "errors.figma_token_missing",
   invalid_figma_request: "errors.invalid_figma_import",
   invalid_figma_export: "errors.invalid_figma_import",

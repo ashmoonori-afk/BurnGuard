@@ -35,6 +35,7 @@ const ADDED_CODES = [
   "graphic_requires_authenticated_codex",
   "codex_authentication_probe_failed",
   "acquisition_limit",
+  "website_content_refused",
   "acquisition_timeout",
   "acquisition_aborted",
   "invalid_upload",

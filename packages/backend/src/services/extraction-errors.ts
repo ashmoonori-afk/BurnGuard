@@ -10,6 +10,7 @@ export class DesignSystemExtractError extends Error {
       | "git_clone_failed"
       | "upload_extract_failed"
       | "website_fetch_failed"
+      | "website_content_refused"
       | "figma_token_missing"
       | "figma_fetch_failed"
       | "unsafe_source_content"

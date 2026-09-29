@@ -1,6 +1,6 @@
 import { parse } from "node-html-parser";
 import { AcquisitionLimitError, DEFAULT_ACQUISITION_LIMITS, throwIfAcquisitionAborted, type AcquisitionLimits } from "./extraction-acquisition";
-import { assertAcquirableSourceMarkup, assertInertSourceMarkup, ExtractionSafetyError, removeActiveSourceMarkup, removeSourceMarkupReferences } from "./extraction-safety";
+import { assertAcquirableSourceMarkup, assertInertSourceMarkup, ExtractionSafetyError, removeActiveSourceMarkup, removeAttributeAnyCase, removeSourceMarkupReferences } from "./extraction-safety";
 
 export function sanitizeSourceHtml(html: string): string {
   assertStructurallyCompleteHtml(html);
@@ -11,7 +11,7 @@ export function sanitizeSourceHtml(html: string): string {
     const href = anchor.getAttribute("href") ?? "";
     if (!URL.canParse(href)) continue;
     const url = new URL(href);
-    if (url.protocol === "https:" && url.username === "" && url.password === "") anchor.removeAttribute("href");
+    if (url.protocol === "https:" && url.username === "" && url.password === "") removeAttributeAnyCase(anchor, "href");
   }
   assertAcquirableSourceMarkup(root.toString(), "html");
   const stored = removeSourceMarkupReferences(root.toString());
