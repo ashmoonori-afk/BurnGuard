@@ -1076,7 +1076,7 @@ async function ingestWebsiteSource(
         const dedupedName = safeFileName(
           path.basename(logoUrl.pathname) || "logo.png",
         );
-        if (logoFiles.some((logo) => logo.fileName === dedupedName)) continue;
+        if (logoFiles.some((logo) => logo.fileName.toLowerCase() === dedupedName.toLowerCase())) continue;
         const logoFetch = await fetchWebsiteResource(logoUrl, {
           maxBytes: MAX_LOGO_BYTES,
           kind: "asset",

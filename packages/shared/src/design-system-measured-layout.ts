@@ -96,7 +96,7 @@ export function parseDesignSystemLayoutReference(input: unknown): DesignSystemLa
       : invalid();
     return { path: shot.path, viewport, file: shot.file, width: count(shot.width, 100_000), height: count(shot.height, 100_000), size: count(shot.size, MAX_LAYOUT_REFERENCE_BYTES), sha256: shot.sha256, ...(wireframe ? { wireframe } : {}) };
   });
-  if (new Set(shots.map(shot => shot.file)).size !== shots.length || (heroAssets && new Set(heroAssets.map(asset => asset.file.toLowerCase())).size !== heroAssets.length)) return invalid();
+  if (new Set(shots.map(shot => shot.file)).size !== shots.length || (heroAssets && new Set(heroAssets.map(asset => asset.file)).size !== heroAssets.length)) return invalid();
   return { schema_version: 1, shots, ...(heroAssets && heroAssets.length > 0 ? { hero_assets: heroAssets } : {}) };
 }
 

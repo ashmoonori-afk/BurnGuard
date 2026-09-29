@@ -535,6 +535,15 @@ describe("Measured layout tokens", () => {
     });
   });
 
+  test("Given two logo images whose names differ only by case, when a website is extracted, then one logo file is stored", async () => {
+    const page = '<html><body><img src="/Logo.png"><img src="/logo.png"><h1>Home</h1></body></html>';
+    await withSite({ "/source": page, "/Logo.png": "first-logo-bytes", "/logo.png": "second-logo-bytes" }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "LogoCase", source_type: "website", source_url: origin + "/source" }, { measureLayout: async () => null });
+      const files = await readdir(path.join(systemsDir, id), { recursive: true });
+      expect(files.filter(name => String(name).toLowerCase().endsWith("logo.png")).length).toBe(1);
+    });
+  });
+
   test("Given a measurer that fails, then extraction still succeeds without a measured layout file", async () => {
     await withSite({ "/source": "<html><body><h1>Home</h1></body></html>" }, async (origin, id) => {
       await extractDesignSystemFromSource({ system_id: id, name: "Unmeasured", source_type: "website", source_url: origin + "/source" }, { measureLayout: async () => null });

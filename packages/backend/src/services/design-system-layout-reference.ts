@@ -47,7 +47,9 @@ export function heroAssetsFromPinnedContext(context: string): readonly LayoutRef
   if (start === -1) return [];
   const line = context.slice(start + HERO_OPEN_TAG.length + 1).split("\n", 1)[0] ?? "";
   try {
-    return parseDesignSystemLayoutReference({ schema_version: 1, shots: [], hero_assets: JSON.parse(line) }).hero_assets ?? [];
+    const assets = parseDesignSystemLayoutReference({ schema_version: 1, shots: [], hero_assets: JSON.parse(line) }).hero_assets ?? [];
+    // A pin saved before names were folded may hold two names that are one file on macOS and Windows; the first wins on every OS.
+    return assets.filter((asset, index) => assets.findIndex(other => other.file.toLowerCase() === asset.file.toLowerCase()) === index);
   } catch {
     return [];
   }
