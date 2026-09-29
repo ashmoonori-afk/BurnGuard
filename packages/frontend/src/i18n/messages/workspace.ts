@@ -27,6 +27,7 @@ export const workspaceMessages = defineMessages({
   "workspace.composer.sendShortcut": { ko: "보내기 (Cmd/Ctrl+Enter)", en: "Send (Cmd/Ctrl+Enter)", "zh-CN": "发送 (Cmd/Ctrl+Enter)" },
   "workspace.composer.retrySend": { ko: "다시 보내기", en: "Send again", "zh-CN": "重新发送" },
   "workspace.composer.send": { ko: "보내기", en: "Send", "zh-CN": "发送" },
+  "workspace.composer.noAiTool": { ko: "설치된 AI 도구가 없어서 보낼 수 없어요. 설정에서 AI 도구 상태를 확인해 주세요.", en: "No AI tool is installed, so this request cannot be sent. Check the AI tools in Settings.", "zh-CN": "未安装任何 AI 工具，因此无法发送此请求。请在设置中查看 AI 工具状态。" },
 
   "workspace.canvas.placeholderTitle": { ko: "아직 표시할 결과물이 없어요", en: "There's nothing to display yet", "zh-CN": "暂无可显示的成果" },
   "workspace.canvas.loadingTitle": { ko: "미리보기를 준비하고 있어요", en: "Preparing your preview", "zh-CN": "正在准备预览" },

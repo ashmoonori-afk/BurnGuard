@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { defaultGenerationOptions, MAX_USER_MESSAGE_CHARS, type BackendId, type FileInfo, type GenerationOptions } from "@bg/shared";
 import { useQuery } from "@tanstack/react-query";
 import { detectBackends, getSettings } from "@/api/home";
+import type { BackendDetectionResult } from "@bg/shared";
 import GenerationControls from "@/components/settings/GenerationControls";
 import { Paperclip, Send, Settings2, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,11 @@ export function composerSendLabels(retrying: boolean): { readonly label: Message
   return retrying
     ? { label: "workspace.composer.retrySend", shortcut: "workspace.composer.retrySendShortcut" }
     : { label: "workspace.composer.send", shortcut: "workspace.composer.sendShortcut" };
+}
+
+/** Every detected AI tool is missing, so no send can run. An unanswered or failed detection never blocks. */
+export function noAiToolInstalled(detection: BackendDetectionResult | undefined): boolean {
+  return detection !== undefined && detection.backends.length > 0 && detection.backends.every((backend) => !backend.found);
 }
 
 function sendStateMessage(state: ComposerSendState): string | null {
@@ -134,7 +140,8 @@ export default function Composer({
 
   const sending = sendState.kind === "processing";
   const length = composerLengthState(text);
-  const canSend = draft.ready && documents.canSend && text.trim().length > 0 && length.canSend && !disabled && !sending;
+  const noAiTool = noAiToolInstalled(detection.data);
+  const canSend = draft.ready && documents.canSend && text.trim().length > 0 && length.canSend && !disabled && !sending && !noAiTool;
   const statusMessage = sendStateMessage(sendState) ?? (length.statusKey === null ? null : translate(length.statusKey, { limit: MAX_USER_MESSAGE_CHARS }));
   const retrying = sendState.kind === "failed" || sendState.kind === "cancelled";
   const sendLabels = composerSendLabels(retrying);
@@ -241,6 +248,10 @@ export default function Composer({
         className="block min-h-[88px] w-full resize-none rounded-xl border border-input bg-muted/25 p-3 text-sm leading-relaxed placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
       />
 
+      {noAiTool && <p id={`composer-send-blocked-${sessionId}`} data-bg-send-blocked="no-ai-tool" className="mt-2 rounded-md bg-amber-500/10 px-2.5 py-2 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+        {translate("workspace.composer.noAiTool")}{" "}
+        <button type="button" onClick={() => setSettingsOpen(true)} className="font-medium underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{translate("workspace.composer.openSettings")}</button>
+      </p>}
       <div className="mt-2"><GenerationControls compact backendId={backendId} value={generation} onChange={draft.setGeneration} disabled={disabled || sending || !draft.ready} /></div>
       <div className="mt-1 flex items-center gap-1.5">
         <input
@@ -298,6 +309,7 @@ export default function Composer({
             size="sm"
             className="h-9 gap-1.5 px-3 text-xs max-[900px]:h-11"
             disabled={!canSend}
+            aria-describedby={noAiTool ? `composer-send-blocked-${sessionId}` : undefined}
             onClick={() => void send()}
             aria-label={translate(sendLabels.shortcut)}
             title={translate(sendLabels.shortcut)}
