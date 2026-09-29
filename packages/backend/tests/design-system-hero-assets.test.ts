@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { MEASURED_VIEWPORTS, parseDesignSystemLayoutReference, parseDesignSystemMeasuredLayout, type MeasuredViewportLayout } from "@bg/shared";
 import { appendDesignSystemContext } from "../src/harness/prompt-design-system";
-import { heroAssetsFromPinnedContext, provisionDesignSystemHeroAssets } from "../src/services/design-system-layout-reference";
+import { heroAssetsFromPinnedContext, layoutReferencePromptLines, provisionDesignSystemHeroAssets } from "../src/services/design-system-layout-reference";
 import { buildStarterHtml, starterPlan } from "../src/services/design-system-starter";
 
 const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -45,6 +45,14 @@ describe("Design-system hero assets", () => {
       expect(() => parseDesignSystemLayoutReference({ ...base, hero_assets: [bad] })).toThrow();
     }
     expect(() => parseDesignSystemLayoutReference({ ...base, hero_assets: [heroAsset, heroAsset, heroAsset] })).toThrow();
+    const legacyPair = [{ ...heroAsset, file: "assets/hero/Hero.png" }, { ...heroAsset, file: "assets/hero/hero.png" }];
+    expect(parseDesignSystemLayoutReference({ ...base, hero_assets: legacyPair }).hero_assets).toEqual(legacyPair);
+  });
+
+  test("Given a pin saved with two hero names that differ only by case, then the pinned context keeps the first so every OS stages the same file", () => {
+    const pair = [{ ...heroAsset, file: "assets/hero/Hero.png" }, { ...heroAsset, file: "assets/hero/hero.png" }];
+    const context = layoutReferencePromptLines(parseDesignSystemLayoutReference({ schema_version: 1, shots: [shot("desktop")], hero_assets: pair }), ["/"]).join("\n");
+    expect(heroAssetsFromPinnedContext(context).map(asset => asset.file)).toEqual(["assets/hero/Hero.png"]);
   });
 
   test("Given a system with a hero asset, then the pinned context freezes it and staging copies it only while its bytes match", async () => {

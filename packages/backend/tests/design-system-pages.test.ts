@@ -1,6 +1,6 @@
 import type { Browser } from "playwright-core";
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -516,6 +516,31 @@ describe("Measured layout tokens", () => {
       const hero = await readFile(path.join(dir, "assets", "hero", "hero.png"));
       expect(reference.hero_assets).toEqual([{ file: "assets/hero/hero.png", size: hero.byteLength, sha256: createHash("sha256").update(hero).digest("hex") }]);
       expect(result.extraction.notes.some(note => note.startsWith("Layout reference screenshots were captured for 1 of 2"))).toBe(true);
+    });
+  });
+
+  test("Given two hero images whose names differ only by case, when a website is extracted, then one is kept and the result does not depend on the file system's case rules", async () => {
+    const layout = { schema_version: 1, method: "rendered-offline", pages: [{ path: "/source", page_type: "other", viewports: { desktop: viewportLayout("desktop"), mobile: viewportLayout("mobile") } }] } as DesignSystemMeasuredLayout;
+    const page = '<html><body><img src="/Hero.png"><img src="/hero.png"><h1>Home</h1></body></html>';
+    await withSite({ "/source": page, "/Hero.png": "first-hero-bytes", "/hero.png": "second-hero-bytes" }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "Case", source_type: "website", source_url: origin + "/source" }, { measureLayout: async input => {
+        input.captureReference?.({ path: "/source", viewport: "desktop", jpeg: new TextEncoder().encode("shot"), width: 1440, height: 2400 });
+        return layout;
+      } });
+      const dir = path.join(systemsDir, id);
+      const reference = parseDesignSystemLayoutReference(JSON.parse(await readFile(path.join(dir, "layout-reference.json"), "utf8")));
+      expect(reference.hero_assets?.map(asset => asset.file)).toEqual(["assets/hero/Hero.png"]);
+      expect((await readdir(path.join(dir, "assets", "hero"))).length).toBe(1);
+      expect(await readFile(path.join(dir, "assets", "hero", "Hero.png"), "utf8")).toBe("first-hero-bytes");
+    });
+  });
+
+  test("Given two logo images whose names differ only by case, when a website is extracted, then one logo file is stored", async () => {
+    const page = '<html><body><img src="/Logo.png"><img src="/logo.png"><h1>Home</h1></body></html>';
+    await withSite({ "/source": page, "/Logo.png": "first-logo-bytes", "/logo.png": "second-logo-bytes" }, async (origin, id) => {
+      await extractDesignSystemFromSource({ system_id: id, name: "LogoCase", source_type: "website", source_url: origin + "/source" }, { measureLayout: async () => null });
+      const files = await readdir(path.join(systemsDir, id), { recursive: true });
+      expect(files.filter(name => String(name).toLowerCase().endsWith("logo.png")).length).toBe(1);
     });
   });
 
