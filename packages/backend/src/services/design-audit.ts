@@ -14,8 +14,8 @@ import { parseStoredProjectOptions } from "./project-options";
 import { buildSiteMap, type SiteMap } from "./site-map";
 import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
 
-/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v6: measurable visual consistency and section-variety checks). */
-export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v6";
+/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v7: rendered journey checks). */
+export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v7";
 
 /**
  * The fixed page a project renders into, or undefined for a responsive website audit. A logo
@@ -68,7 +68,9 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
       // Inspect every artboard in print order, including slides hidden by navigation.
       if (input.deck) await session.page.addStyleTag({ content: "html,body{height:auto!important;overflow:visible!important} [data-slide]{display:block!important;position:relative!important;inset:auto!important;transform:none!important;margin:0!important;width:1920px!important;height:1080px!important}" });
       try {
-        const observation = await inspectRenderedPage(session.page, fixedCanvas);
+        // Journey checks change focus and scroll, so they run only here, on a session closed right after, and only at
+        // the desktop width that reports them; the narrow render contributes the mobile navigation check.
+        const observation = await inspectRenderedPage(session.page, fixedCanvas, viewport.width > 375 ? "desktop" : "none");
         const remote = await remoteResourceFindings(session);
         observations.push(remote.length === 0 ? observation : { ...observation, findings: [...observation.findings, ...remote] });
       } finally { await session.close(); }
@@ -95,8 +97,8 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   for (const [index, page] of rawPages.entries()) if (selected[index]!.length > 0) renderedFindings.push(...await enrichFindings(selected[index]!, input, manifest, page.relPath));
   const findings = [...renderedFindings, ...siteFindings].slice(0, 200);
   // Site structure is never audited on a fixed canvas and a fixed canvas is never rendered narrow, so those checks cannot pass or fail there.
-  const applicable = (code: DesignAuditCheckCode): boolean => !(fixedCanvas && (code === "narrow_width" || code.startsWith("site_") || code === "eyebrow_density" || code === "duplicate_cta_intent" || code === "cta_label_wrap" || code === "repeated_section_structure"));
-  const checks = DESIGN_AUDIT_CHECK_CODES.map((code) => buildCheck(code, findings, code === "narrow_width" ? narrows : desktops, applicable(code)));
+  const applicable = (code: DesignAuditCheckCode): boolean => !(fixedCanvas && (code === "narrow_width" || code.startsWith("site_") || code.startsWith("journey_") || code === "eyebrow_density" || code === "duplicate_cta_intent" || code === "cta_label_wrap" || code === "repeated_section_structure"));
+  const checks = DESIGN_AUDIT_CHECK_CODES.map((code) => buildCheck(code, findings, code === "narrow_width" || code === "journey_mobile_nav" ? narrows : desktops, applicable(code)));
   const overall = findings.some((finding) => finding.severity === "must_fix") ? "must_fix" : checks.every((check) => check.status === "pass" || check.status === "not_applicable") ? "ready" : "recommended";
   return parseDesignAuditResult({ schema_version: 1, project_id: input.projectId, artifact_revision: input.revision, artifact_digest: input.digest, created_at: Date.now(), overall_status: overall, checks, shared_change_divergence: sharedChangeDivergence });
 }
@@ -181,7 +183,7 @@ function isRemoteUrl(value: string): boolean { return /^[a-z][a-z\d+.-]*:\/\//iu
 function renderedRawFindings(desktop: DomAuditObservation, narrow: DomAuditObservation): readonly DomAuditFinding[] {
   const desktopFindings = desktop.findings.filter((finding) => finding.code !== "narrow_width");
   const desktopKeys = new Set(desktopFindings.map((finding) => `${finding.code}:${finding.nodeId ?? ""}`));
-  const narrowRecommendations = narrow.findings.filter((finding) => finding.code === "cta_label_wrap" && !desktopKeys.has(`${finding.code}:${finding.nodeId ?? ""}`));
+  const narrowRecommendations = narrow.findings.filter((finding) => (finding.code === "cta_label_wrap" && !desktopKeys.has(`${finding.code}:${finding.nodeId ?? ""}`)) || finding.code === "journey_mobile_nav");
   const directNarrow = narrow.findings.filter((finding) => finding.code === "narrow_width");
   const directNarrowNodes = new Set(directNarrow.flatMap((finding) => finding.nodeId === null ? [] : [finding.nodeId]));
   const narrowDerived = narrow.findings.filter((finding) => (finding.code === "text_overflow" || finding.code === "element_overlap") && !desktopKeys.has(`${finding.code}:${finding.nodeId ?? ""}`) && (finding.nodeId === null || !directNarrowNodes.has(finding.nodeId))).map((finding): DomAuditFinding => ({ ...finding, code: "narrow_width", severity: "must_fix", action: "repair_narrow_layout", evidence: `Narrow viewport: ${finding.evidence}` }));

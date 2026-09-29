@@ -8,7 +8,7 @@ import { inspectRenderedPage } from "../src/services/design-audit-dom";
 import { auditRenderedTree } from "../src/services/design-audit";
 import { launchChromium } from "../src/services/export-render-session";
 
-const NOT_APPLICABLE_ON_FIXED = ["narrow_width", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset", "eyebrow_density", "duplicate_cta_intent", "cta_label_wrap", "repeated_section_structure"];
+const NOT_APPLICABLE_ON_FIXED = ["narrow_width", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset", "eyebrow_density", "duplicate_cta_intent", "cta_label_wrap", "repeated_section_structure", "journey_dead_link", "journey_mobile_nav", "journey_focus_visible", "journey_layout_shift"];
 const DECK_RUNTIME = '<script src="/runtime/deck-stage.js" defer></script>';
 const readyDeck = `<!doctype html><html><head><style>:root{--ink:#111;--paper:#fff}body{margin:0;font:32px Arial;color:var(--ink);background:var(--paper)}[data-slide]{position:relative;width:1920px;height:1080px}[data-deck-ready] [data-slide]:not([data-active]){display:none}h1{font:52px Arial;margin:0}.a,.b{position:absolute;top:400px;width:300px;height:60px;margin:0}.a{left:100px}.b{left:600px}</style></head><body><section data-slide><h1 data-bg-node-id="title">Ready deck</h1><p class="a" data-bg-node-id="a">Alpha</p><p class="b" data-bg-node-id="b">Beta</p></section>${DECK_RUNTIME}</body></html>`;
 const tokenDeck = `<!doctype html><html><head><style>:root{--ink:#111;--slide-type-caption:24px}body{margin:0;font:32px Arial;color:var(--ink);background:white}[data-slide]{width:1920px;height:1080px}[data-deck-ready] [data-slide]:not([data-active]){display:none}h1{font:52px Arial;margin:0}p{margin:0}</style></head><body><section data-slide><h1 data-bg-node-id="title-1">First</h1></section><section data-slide><h1 data-bg-node-id="title-2">Second</h1><p data-bg-node-id="small" style="font-size:18px">Small caption</p></section>${DECK_RUNTIME}</body></html>`;
@@ -72,6 +72,15 @@ describe("design audit applicability and folding", () => {
     expect(report.overall_status).toBe("must_fix");
   }, 60_000);
 
+  test("Given a navigation that scrolls sideways only at the phone viewport When audited Then the journey finding survives viewport folding as advice", async () => {
+    const links = Array.from({ length: 8 }, (_, index) => `<a href="index.html#s${index}">Section ${index}</a>`).join("");
+    const sections = Array.from({ length: 8 }, (_, index) => `<section id="s${index}"><p>Section ${index}</p></section>`).join("");
+    const report = await auditTree(`<!doctype html><html><head><style>:root{--ink:#111}body{margin:0;background:#fff;color:#111}nav{display:flex;gap:24px;white-space:nowrap}@media(max-width:375px){nav{overflow-x:auto}}</style></head><body><nav data-bg-node-id="strip">${links}</nav><main>${sections}</main></body></html>`);
+    const nav = report.checks.find((check) => check.code === "journey_mobile_nav");
+    expect(nav?.findings.map((finding) => [finding.source.node_bg_id, finding.severity, finding.targeted_action])).toEqual([["strip", "recommended", "repair_narrow_layout"]]);
+    expect(report.checks.find((check) => check.code === "journey_dead_link")?.status).toBe("pass");
+  }, 60_000);
+
   test("Given a primary CTA that wraps only at the narrow viewport When audited Then its advisory finding survives viewport folding", async () => {
     const report = await auditTree('<!doctype html><html><head><style>:root{--ink:#111}body{margin:0;background:#fff;color:#111}.primary-cta{display:inline-block;background:#111;color:#fff;padding:8px}@media(max-width:375px){.primary-cta{width:72px}}</style></head><body><main><a class="primary-cta" data-bg-node-id="narrow-cta" href="/start">Start your project</a></main></body></html>');
     const wrap = report.checks.find((check) => check.code === "cta_label_wrap");
@@ -83,6 +92,56 @@ describe("rendered page measurements", () => {
   let browser: Browser;
   beforeAll(async () => { browser = await launchChromium(AbortSignal.timeout(60_000)); });
   afterAll(async () => { await browser?.close(); });
+
+  test("Given links without a destination and controls without a focus style When the journey is inspected Then dead links and unmarked keyboard stops are reported, while working links and marked stops pass", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}.bare{outline:none}.ring{outline:none}.ring:focus-visible{box-shadow:0 0 0 3px #00f}</style><nav><a data-bg-node-id="empty" href="#">Pricing</a><a data-bg-node-id="missing" href="#faq">FAQ</a><a data-bg-node-id="script" href="javascript:void(0)">Docs</a><a data-bg-node-id="present" href="#team">Team</a><a data-bg-node-id="page" href="about.html">About</a><a data-bg-node-id="current" aria-current="page">Home</a><a data-bg-node-id="toggle" href="#" role="button">Menu</a><a data-bg-node-id="top" href="#top">Back to top</a></nav><main><section id="team"><p>Team</p></section><button data-bg-node-id="default">Default</button><button class="bare" data-bg-node-id="bare">Bare</button><button class="ring" data-bg-node-id="ring">Ring</button><div style="height:3000px"></div><a data-bg-node-id="far" href="about.html">Far link</a></main>');
+      const plain = await inspectRenderedPage(page);
+      expect(plain.findings.filter((finding) => finding.code === "journey_focus_visible")).toEqual([]);
+      expect(plain.measurable.journey_focus_visible).toBe(false);
+      const observation = await inspectRenderedPage(page, false, "desktop");
+      expect(await page.evaluate(() => [window.scrollY, document.activeElement === document.body])).toEqual([0, true]);
+      expect(observation.findings.filter((finding) => finding.code === "journey_dead_link").map((finding) => finding.nodeId)).toEqual(["empty", "missing", "script"]);
+      expect(observation.findings.filter((finding) => finding.code === "journey_focus_visible").map((finding) => finding.nodeId)).toEqual(["bare"]);
+      expect(observation.findings.some((finding) => finding.code === "journey_focus_visible" && finding.nodeId === "far")).toBe(false);
+      expect([observation.measurable.journey_dead_link, observation.measurable.journey_focus_visible]).toEqual([true, true]);
+    } finally { await page.close(); }
+  }, 60_000);
+
+  test("Given content pushed down after the first paint When the journey is inspected Then the measured layout shift is reported, and a still page reports none", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}.copy{height:600px;background:#eee}</style><main><p class="copy" data-bg-node-id="copy">Body copy</p></main>');
+      const still = await inspectRenderedPage(page, false, "desktop");
+      expect(still.measurable.journey_layout_shift).toBe(true);
+      expect(still.findings.filter((finding) => finding.code === "journey_layout_shift")).toEqual([]);
+      // A fresh page, so the shift is measured on a document that has not been inspected yet.
+      const moved = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+      try {
+      await moved.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}.copy{height:600px;background:#eee}.late{height:400px}</style><main id="main"><p class="copy" data-bg-node-id="copy">Body copy</p></main>');
+      await moved.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
+        const late = document.createElement("div"); late.className = "late"; document.getElementById("main")?.prepend(late);
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }))));
+      const shifted = (await inspectRenderedPage(moved, false, "desktop")).findings.filter((finding) => finding.code === "journey_layout_shift");
+      expect(shifted).toHaveLength(1);
+      expect(shifted[0]!.measured).toBeGreaterThan(0.1);
+      expect(shifted[0]!.threshold).toBe(0.1);
+      } finally { await moved.close(); }
+    } finally { await page.close(); }
+  }, 60_000);
+
+  test("Given a phone-width navigation that scrolls sideways and one collapsed behind a menu button When the journey is inspected Then only the scrolling navigation is reported", async () => {
+    const page = await browser.newPage({ viewport: { width: 375, height: 812 } });
+    try {
+      const links = Array.from({ length: 8 }, (_, index) => `<a href="p${index}.html">Section ${index}</a>`).join("");
+      await page.setContent(`<!doctype html><style>body{margin:0;background:#fff;color:#111}.strip{display:flex;gap:24px;overflow-x:auto;white-space:nowrap}.menu a{display:none}</style><header><nav class="strip" data-bg-node-id="strip">${links}</nav></header><footer><nav class="menu" data-bg-node-id="menu"><button>Menu</button>${links}</nav></footer><nav data-bg-node-id="drawer" style="position:fixed;top:0;left:0;width:300px;transform:translateX(400px);display:flex;gap:24px;overflow-x:auto;white-space:nowrap">${links}</nav>`);
+      const observation = await inspectRenderedPage(page);
+      expect(observation.findings.filter((finding) => finding.code === "journey_mobile_nav").map((finding) => finding.nodeId)).toEqual(["strip"]);
+      expect(observation.measurable.journey_mobile_nav).toBe(true);
+    } finally { await page.close(); }
+  }, 60_000);
 
   test("Given white text over an opaque gradient When contrast is inspected Then the worst stop is measured, while a url() background stays unresolvable", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });

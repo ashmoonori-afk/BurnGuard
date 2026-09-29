@@ -5,7 +5,12 @@ import type { DesignAuditCheckCode, DesignAuditSeverity, DesignAuditTargetedActi
 export type DomAuditFinding = { readonly code: DesignAuditCheckCode; readonly severity: DesignAuditSeverity; readonly nodeId: string | null; readonly evidence: string; readonly measured?: number; readonly threshold?: number; readonly action: DesignAuditTargetedAction; readonly fix?: string };
 export type DomAuditObservation = { readonly findings: readonly DomAuditFinding[]; readonly measurable: Readonly<Record<DesignAuditCheckCode, boolean>>; readonly unknownReasons: Readonly<Partial<Record<DesignAuditCheckCode, DesignAuditUnknownReason>>> };
 
-export async function inspectRenderedPage(page: Page, fixedCanvas = false): Promise<DomAuditObservation> {
+/**
+ * journey "desktop" adds the live-page journey checks (layout shift, keyboard focus walk) and restores scroll and
+ * focus afterwards; only the design audit asks for it, on a session it closes right after. Other callers, such as
+ * the handoff export that screenshots the same page, keep the default "none".
+ */
+export async function inspectRenderedPage(page: Page, fixedCanvas = false, journey: "none" | "desktop" = "none"): Promise<DomAuditObservation> {
   await page.evaluate(async () => {
     const pending = [...document.images].filter((image) => !image.complete);
     await Promise.all(pending.map((image) => new Promise<void>((resolve) => {
@@ -20,16 +25,16 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
       if (image.complete) done();
     })));
   });
-  return page.evaluate((fixedCanvas) => {
-    type Code = "text_overflow" | "element_overlap" | "minimum_text_size" | "contrast" | "narrow_width" | "duplicate_node_id" | "missing_image" | "token_usage" | "site_nav_mismatch" | "site_missing_aria_current" | "site_dangling_link" | "site_missing_shared_block" | "site_root_absolute_asset" | "font_consistency" | "copy_review" | "em_dash_copy" | "eyebrow_density" | "duplicate_cta_intent" | "cta_label_wrap" | "placeholder_copy" | "accent_color_count" | "radius_scale_count" | "repeated_section_structure" | "remote_resources";
+  const observation = await page.evaluate((fixedCanvas) => {
+    type Code = "text_overflow" | "element_overlap" | "minimum_text_size" | "contrast" | "narrow_width" | "duplicate_node_id" | "missing_image" | "token_usage" | "site_nav_mismatch" | "site_missing_aria_current" | "site_dangling_link" | "site_missing_shared_block" | "site_root_absolute_asset" | "font_consistency" | "copy_review" | "em_dash_copy" | "eyebrow_density" | "duplicate_cta_intent" | "cta_label_wrap" | "placeholder_copy" | "accent_color_count" | "radius_scale_count" | "repeated_section_structure" | "remote_resources" | "journey_dead_link" | "journey_mobile_nav" | "journey_focus_visible" | "journey_layout_shift";
     type Severity = "must_fix" | "recommended";
-    type Action = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path" | "align_font_roles" | "revise_copy" | "keep_cta_label_single_line" | "consolidate_visual_language" | "vary_section_layout" | "bundle_remote_resource";
+    type Action = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path" | "align_font_roles" | "revise_copy" | "keep_cta_label_single_line" | "consolidate_visual_language" | "vary_section_layout" | "bundle_remote_resource" | "add_visible_focus" | "reserve_layout_space";
     type Reason = "no_measurable_candidates" | "unresolvable_rendering" | "tokens_not_exposed";
     type Finding = { code: Code; severity: Severity; nodeId: string | null; evidence: string; measured?: number; threshold?: number; action: Action; fix?: string };
     type Color = readonly [number, number, number, number];
     const findings: Finding[] = [];
-    const measurable: Record<Code, boolean> = { text_overflow: false, element_overlap: false, minimum_text_size: false, contrast: false, narrow_width: !fixedCanvas, duplicate_node_id: true, missing_image: true, token_usage: false, site_nav_mismatch: true, site_missing_aria_current: true, site_dangling_link: true, site_missing_shared_block: true, site_root_absolute_asset: true, font_consistency: false, copy_review: false, em_dash_copy: false, eyebrow_density: !fixedCanvas, duplicate_cta_intent: !fixedCanvas, cta_label_wrap: !fixedCanvas, placeholder_copy: false, accent_color_count: true, radius_scale_count: true, repeated_section_structure: !fixedCanvas, remote_resources: true };
-    const unknownReasons: Partial<Record<Code, Reason>> = { text_overflow: "no_measurable_candidates", element_overlap: "no_measurable_candidates", minimum_text_size: "no_measurable_candidates", contrast: "no_measurable_candidates", token_usage: "tokens_not_exposed" };
+    const measurable: Record<Code, boolean> = { text_overflow: false, element_overlap: false, minimum_text_size: false, contrast: false, narrow_width: !fixedCanvas, duplicate_node_id: true, missing_image: true, token_usage: false, site_nav_mismatch: true, site_missing_aria_current: true, site_dangling_link: true, site_missing_shared_block: true, site_root_absolute_asset: true, font_consistency: false, copy_review: false, em_dash_copy: false, eyebrow_density: !fixedCanvas, duplicate_cta_intent: !fixedCanvas, cta_label_wrap: !fixedCanvas, placeholder_copy: false, accent_color_count: true, radius_scale_count: true, repeated_section_structure: !fixedCanvas, remote_resources: true, journey_dead_link: false, journey_mobile_nav: false, journey_focus_visible: false, journey_layout_shift: false };
+    const unknownReasons: Partial<Record<Code, Reason>> = { text_overflow: "no_measurable_candidates", element_overlap: "no_measurable_candidates", minimum_text_size: "no_measurable_candidates", contrast: "no_measurable_candidates", token_usage: "tokens_not_exposed", journey_dead_link: "no_measurable_candidates", journey_mobile_nav: "no_measurable_candidates", journey_focus_visible: "no_measurable_candidates", journey_layout_shift: "no_measurable_candidates" };
     const elements = [...document.querySelectorAll<HTMLElement>("body *")];
     const rootStyle = getComputedStyle(document.documentElement);
     const visible = (element: HTMLElement): boolean => { const style = getComputedStyle(element); const rect = element.getBoundingClientRect(); return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0; };
@@ -237,6 +242,39 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
       const viewport = document.documentElement.clientWidth; const overflow = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - viewport;
       if (viewport <= 375 && overflow > 1) push(null, { code: "narrow_width", severity: "must_fix", evidence: `Document exceeds narrow viewport by ${Math.round(overflow)}px`, action: "repair_narrow_layout", measured: Math.round(overflow), threshold: 0 });
       if (viewport <= 375) for (const element of elements.filter((candidate) => visible(candidate) && loadBearing(candidate))) { const rect = element.getBoundingClientRect(); if (rect.left < -1 || rect.right > viewport + 1) push(element, { code: "narrow_width", severity: "must_fix", evidence: `Element escapes 375px viewport at ${Math.round(rect.left)}..${Math.round(rect.right)}`, action: "repair_narrow_layout" }); }
+
+      // Journey: a visible link must lead somewhere - a page, a URL or an element on this page.
+      const anchors = elements.filter((element): element is HTMLAnchorElement => element instanceof HTMLAnchorElement && visible(element));
+      measurable.journey_dead_link = anchors.length > 0;
+      if (anchors.length > 0) delete unknownReasons.journey_dead_link;
+      let deadLinks = 0;
+      for (const anchor of anchors) {
+        const href = anchor.getAttribute("href")?.trim() ?? null;
+        const fragment = href !== null && href.startsWith("#") && href.length > 1 ? (() => { try { return decodeURIComponent(href.slice(1)); } catch { return href.slice(1); } })() : null;
+        // The current-page marker without a link, a JavaScript-driven button and "#top" (which scrolls to the top by
+        // definition) are deliberate, not dead ends.
+        if ((href === null && anchor.hasAttribute("aria-current")) || anchor.getAttribute("role") === "button" || (href !== null && href.toLowerCase() === "#top")) continue;
+        const reason = href === null ? "has no href" : href === "" || href === "#" ? `points to "${href}"` : /^javascript:/iu.test(href) ? "uses a javascript: URL" : fragment !== null && document.getElementById(fragment) === null && document.getElementsByName(fragment).length === 0 ? `targets #${fragment.slice(0, 60)}, which is not on the page` : null;
+        if (reason === null || deadLinks >= 20) continue;
+        deadLinks += 1;
+        const label = (anchor.textContent ?? "").replace(/\s+/gu, " ").trim().slice(0, 60);
+        push(anchor, { code: "journey_dead_link", severity: "recommended", evidence: `Link "${label}" ${reason}`, action: "create_or_repair_site_link" });
+      }
+
+      // Journey: on a phone the navigation's visible links must fit inside it without sideways scrolling or clipping.
+      if (viewport <= 375) {
+        // A closed off-canvas drawer lies wholly outside the viewport; it is not the navigation a visitor sees.
+        const navs = [...document.querySelectorAll<HTMLElement>("nav, [role=navigation]")].filter((nav) => { const box = nav.getBoundingClientRect(); return visible(nav) && nav.parentElement?.closest("nav, [role=navigation]") == null && box.right > 0 && box.left < viewport; });
+        measurable.journey_mobile_nav = navs.length > 0;
+        if (navs.length > 0) delete unknownReasons.journey_mobile_nav;
+        for (const nav of navs) {
+          const box = nav.getBoundingClientRect();
+          const links = [...nav.querySelectorAll<HTMLElement>("a, button")].filter(visible);
+          const outside = links.filter((link) => { const rect = link.getBoundingClientRect(); return rect.left < Math.max(0, box.left) - 1 || rect.right > Math.min(viewport, box.right) + 1; }).length;
+          const scrolls = nav.scrollWidth > nav.clientWidth + 1;
+          if (outside > 0 || scrolls) push(nav, { code: "journey_mobile_nav", severity: "recommended", evidence: `Navigation at ${viewport}px ${scrolls ? `scrolls sideways by ${nav.scrollWidth - nav.clientWidth}px` : "does not scroll"} and ${outside} of ${links.length} visible links fall outside its visible box`, action: "repair_narrow_layout", measured: outside, threshold: 0 });
+        }
+      }
     }
 
     for (const image of document.images) if (!image.complete || image.naturalWidth === 0 || image.currentSrc.length === 0) { const raw = image.getAttribute("src") ?? "missing src"; let safe = raw; try { const url = new URL(raw, location.href); safe = url.protocol === "file:" ? raw : `${url.protocol}//${url.host}${url.pathname}`; } catch { safe = "invalid image reference"; } push(image, { code: "missing_image", severity: "must_fix", evidence: `Image reference failed: ${safe}`, action: "restore_image_reference" }); }
@@ -266,4 +304,76 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
     }
     return { findings, measurable, unknownReasons };
   }, fixedCanvas);
+  return fixedCanvas || journey === "none" ? observation : await inspectJourney(page, observation);
+}
+
+/** Cumulative layout shift above this value is reported; it is the "good" limit for page experience. */
+const LAYOUT_SHIFT_LIMIT = 0.1;
+const MAX_FOCUS_STOPS = 20;
+
+/**
+ * Journey checks that need the live page rather than one DOM snapshot: layout shift recorded by the browser's
+ * PerformanceObserver since navigation, and the focus indicator of the first keyboard stops reached with Tab.
+ */
+async function inspectJourney(page: Page, observation: DomAuditObservation): Promise<DomAuditObservation> {
+  const findings = [...observation.findings];
+  const measurable = { ...observation.measurable };
+  const unknownReasons = { ...observation.unknownReasons };
+  const shift = await page.evaluate(() => new Promise<number | null>((resolve) => {
+    if (!PerformanceObserver.supportedEntryTypes.includes("layout-shift")) { resolve(null); return; }
+    let total = 0;
+    // Every entry counts: the audit sends no input before this point, and automation can flag load-time shifts as
+    // following recent input, which would hide exactly the shifts a visitor sees.
+    const add = (entries: PerformanceEntryList) => { for (const entry of entries) total += Number(Reflect.get(entry, "value")) || 0; };
+    const observer = new PerformanceObserver((list) => add(list.getEntries()));
+    observer.observe({ type: "layout-shift", buffered: true });
+    // Buffered entries are delivered in a task after observe(); two frames later they have all arrived. A page that
+    // produces no frames still settles through the bounded fallback.
+    let settled = false;
+    const finish = () => { if (settled) return; settled = true; add(observer.takeRecords()); observer.disconnect(); resolve(total); };
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+    setTimeout(finish, 1_000);
+  }));
+  if (shift !== null) {
+    measurable.journey_layout_shift = true;
+    delete unknownReasons.journey_layout_shift;
+    const rounded = Math.round(shift * 1000) / 1000;
+    if (rounded > LAYOUT_SHIFT_LIMIT) findings.push({ code: "journey_layout_shift", severity: "recommended", nodeId: null, evidence: `Content moved while the page loaded: cumulative layout shift ${rounded} (PerformanceObserver)`, measured: rounded, threshold: LAYOUT_SHIFT_LIMIT, action: "reserve_layout_space" });
+  }
+  // Keyboard focus is only reached by real Tab presses; each stop is compared with its own unfocused style.
+  const stops = await page.evaluate((max) => {
+    const focusable = [...document.querySelectorAll<HTMLElement>("a[href], button, input:not([type=hidden]), select, textarea, [tabindex]")].filter((element) => {
+      const style = getComputedStyle(element); const rect = element.getBoundingClientRect();
+      return element.tabIndex >= 0 && !element.hasAttribute("disabled") && style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+    }).slice(0, max);
+    const look = (element: HTMLElement) => { const style = getComputedStyle(element); return [style.outlineStyle, style.outlineWidth, style.outlineColor, style.boxShadow, style.borderColor, style.backgroundColor, style.color, style.textDecorationLine].join("|"); };
+    const baseline = new Map(focusable.map((element) => [element, look(element)]));
+    Reflect.set(window, "__bgFocusBaseline", baseline);
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    return focusable.length;
+  }, MAX_FOCUS_STOPS);
+  if (stops > 0) {
+    measurable.journey_focus_visible = true;
+    delete unknownReasons.journey_focus_visible;
+    const unmarked: (string | null)[] = [];
+    for (let index = 0; index < stops; index += 1) {
+      await page.keyboard.press("Tab");
+      const result = await page.evaluate(() => {
+        const active = document.activeElement;
+        const baseline = Reflect.get(window, "__bgFocusBaseline") as Map<Element, string> | undefined;
+        if (!(active instanceof HTMLElement) || baseline === undefined || !baseline.has(active)) return null;
+        const style = getComputedStyle(active);
+        const now = [style.outlineStyle, style.outlineWidth, style.outlineColor, style.boxShadow, style.borderColor, style.backgroundColor, style.color, style.textDecorationLine].join("|");
+        const outlined = style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0;
+        return { nodeId: active.getAttribute("data-bg-node-id"), label: (active.getAttribute("aria-label") ?? active.textContent ?? "").replace(/\s+/gu, " ").trim().slice(0, 60), marked: outlined || now !== baseline.get(active) };
+      });
+      if (result !== null && !result.marked && unmarked.length < 20) {
+        unmarked.push(result.nodeId);
+        findings.push({ code: "journey_focus_visible", severity: "recommended", nodeId: result.nodeId, evidence: `Keyboard focus on "${result.label}" shows no outline or style change`, action: "add_visible_focus" });
+      }
+    }
+  }
+  // The walk leaves focus on the last stop and the page scrolled to it; put both back for anything that reads the page next.
+  await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur?.(); Reflect.deleteProperty(window, "__bgFocusBaseline"); window.scrollTo(0, 0); });
+  return { findings, measurable, unknownReasons };
 }
