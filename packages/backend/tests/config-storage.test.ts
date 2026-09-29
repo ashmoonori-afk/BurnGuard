@@ -29,6 +29,7 @@ describe("settings storage", () => {
     expect(shared).toEqual({
       schemaVersion: 1, generationDefaults: {}, defaultBackend: "claude-code", theme: "dark", locale: "en",
       chat: defaultConfig.chat, user: { displayName: DEFAULT_DISPLAY_NAME }, publish: { madeWithBadge: true },
+      webAssets: { searchEnabled: true },
     });
     expect(JSON.stringify(shared)).not.toContain("private");
     expect(Object.keys(local).sort()).toEqual(["autoOpenBrowser", "commandcodeApiKey", "figmaPersonalAccessToken", "harness", "llmApiKeys", "logs", "platform", "playwright", "port", "schemaVersion", "vercelToken"].sort());

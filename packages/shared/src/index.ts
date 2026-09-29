@@ -41,6 +41,8 @@ export * from "./reference-layout";
 export * from "./research-contract";
 export * from "./settings";
 export * from "./generation";
+export * from "./model-profile";
+export * from "./web-assets";
 export * from "./visual-source";
 export * from "./visual-alternative";
 export * from "./local-fonts";

@@ -25,6 +25,7 @@ export interface AppConfig {
   /** OS-local Vercel credential. The API exposes only vercel_token_set. */
   vercelToken: string | null;
   publish: { madeWithBadge: boolean };
+  webAssets: { searchEnabled: boolean };
   appVersion: string;
 }
 
@@ -47,6 +48,7 @@ export const defaultConfig: AppConfig = {
   figmaPersonalAccessToken: null,
   vercelToken: null,
   publish: { madeWithBadge: true },
+  webAssets: { searchEnabled: true },
   appVersion: APP_VERSION,
 };
 
@@ -59,6 +61,7 @@ interface SharedConfigV1 {
   chat: AppConfig["chat"];
   user: { displayName: string };
   publish: AppConfig["publish"];
+  webAssets: AppConfig["webAssets"];
 }
 
 interface LocalConfigV1 {
@@ -105,6 +108,7 @@ function sharedFrom(input: unknown): SharedConfigV1 {
   const chat = record(source.chat);
   const user = record(source.user);
   const publish = record(source.publish);
+  const webAssets = record(source.webAssets);
   return {
     schemaVersion: 1,
     generationDefaults: generationDefaults(source),
@@ -117,6 +121,7 @@ function sharedFrom(input: unknown): SharedConfigV1 {
     },
     user: { displayName: typeof user.displayName === "string" && user.displayName.trim() ? user.displayName.trim() : defaultConfig.user.displayName },
     publish: { madeWithBadge: typeof publish.madeWithBadge === "boolean" ? publish.madeWithBadge : defaultConfig.publish.madeWithBadge },
+    webAssets: { searchEnabled: typeof webAssets.searchEnabled === "boolean" ? webAssets.searchEnabled : defaultConfig.webAssets.searchEnabled },
   };
 }
 
@@ -185,6 +190,7 @@ function effective(shared: SharedConfigV1, local: LocalConfigV1): AppConfig {
     figmaPersonalAccessToken: local.figmaPersonalAccessToken,
     vercelToken: local.vercelToken,
     publish: shared.publish,
+    webAssets: shared.webAssets,
     appVersion: APP_VERSION,
   };
 }

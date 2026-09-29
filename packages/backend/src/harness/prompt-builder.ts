@@ -33,6 +33,7 @@ import { DESIGN_CRAFT_RULES } from "./design-craft";
 import { CHART_AUTHORING_RULES } from "./chart-authoring";
 import { appendGenerationStyle } from "./prompt-generation-style";
 import { appendModelPromptContext, type TaskGuidanceCondition } from "./prompt-model-context";
+import { appendModelProfileContext } from "./prompt-model-profile";
 import type { Deliverable } from "./prompt-task-presets";
 import type { TaskPresetObservation } from "./task-preset-observation";
 import { appendReferenceLayoutContext } from "./prompt-reference-layout";
@@ -68,6 +69,8 @@ export interface PromptBuildOptions {
   readonly onTaskGuidance?: (observation: TaskPresetObservation | null) => void;
   /** QA-only comparison arm; production leaves this unset. */
   readonly taskGuidance?: TaskGuidanceCondition;
+  /** The web asset MCP tools are registered for this run. */
+  readonly webAssetTools?: boolean;
 }
 
 /**
@@ -333,6 +336,7 @@ export async function buildPrompt(
     lines.push(DEFAULT_VISUAL_IDENTITY.trim());
     lines.push("");
   }
+  appendModelProfileContext(lines, options.backendId, options.generation, deliverable, options.webAssetTools === true);
 
   if (deliverable === "diagram") {
     lines.push("## Diagram skill");

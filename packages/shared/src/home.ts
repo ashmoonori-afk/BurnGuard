@@ -101,6 +101,11 @@ export interface SettingsSummary {
   vercel_token_set: boolean;
   /** Default for the "Made with BurnGuard" badge on published web projects. */
   publish_made_with_badge: boolean;
+  /**
+   * Whether models without an image tool (Claude Opus/Sonnet) may search Openverse and Iconify for real,
+   * licensed assets. Off means no search query leaves the machine.
+   */
+  web_asset_search: boolean;
 }
 
 export type SettingsPatch = Partial<
@@ -113,6 +118,7 @@ export type SettingsPatch = Partial<
     | "chat_context_mode"
     | "generation_defaults"
     | "publish_made_with_badge"
+    | "web_asset_search"
   > & {
     user: Partial<SettingsSummary["user"]>;
     /**

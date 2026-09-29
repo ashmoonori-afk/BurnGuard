@@ -51,6 +51,9 @@ import { runWithContinuation } from "./turn-continuation";
 import { needsGenerationPhases, runGenerationPhases } from "./turn-phases";
 import { generationOutputComplete } from "./generation-output";
 import { parse } from "node-html-parser";
+import { resolveModelCapabilityProfile } from "@bg/shared";
+import { webAssetsMcpCommand } from "./web-assets-mcp";
+import { checkCssLogos } from "./css-logo-check";
 import { prepareSlideDeckExport } from "./export-stage";
 import { blockingDesignFindings, DesignReviewError, reviewTurnDesign } from "./turn-design-review";
 import { MEASURED_PAGE_DECLARATION, reviewDesignSystemConformance } from "./design-system-conformance";
@@ -527,11 +530,17 @@ async function runUserTurnInternal(
             // record cannot drift from the envelope the model received.
             let shippedPreset: TaskPresetObservation | null = null;
             const sourceInstructions = sourcePages === undefined ? "" : `\n<deck_source_page_mapping>\n${JSON.stringify({ schema_version: 1, mode: "one_to_one", pages: sourcePages })}\n</deck_source_page_mapping>\nKeep exactly one slide per source page in this order, with matching data-bg-source-attachment and data-bg-source-page attributes. Do not split, merge, omit or reorder source pages. Preserve their content and conditions; visual styling follows the selected design reference.`;
-            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation, onTaskGuidance: (value) => { shippedPreset = value; } }) + sourceInstructions;
+            const modelProfile = resolveModelCapabilityProfile(backendId, generation);
+            // Only the Claude Code CLI accepts the MCP registration; the setting is the network opt-out.
+            const webAssetTool = backendId === "claude-code" && modelProfile.asset_strategy === "web_search" && config.webAssets.searchEnabled
+              ? { command: webAssetsMcpCommand(stageDir) }
+              : undefined;
+            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation, webAssetTools: webAssetTool !== undefined, onTaskGuidance: (value) => { shippedPreset = value; } }) + sourceInstructions;
             await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId, task_preset: shippedPreset });
             const adapterInput: Parameters<typeof runAdapterTurn>[1] = {
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,
               generation,
+              ...(webAssetTool === undefined ? {} : { webAssetTool }),
               ...(generation.provider === "commandcode" ? { commandcodeApiKey: config.commandcodeApiKey ?? undefined } : {}),
               signal: activeTurn.abortController.signal, userEvent: modelPayload,
               onEvent: async (event) => {
@@ -595,6 +604,10 @@ async function runUserTurnInternal(
                 if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
               }
               if (!await generationOutputComplete(stageDir, project.entrypoint, project.type, undefined, undefined, briefPages)) throw new ArtifactOperationError("turn_failed", "Generated content is incomplete");
+              if (modelProfile.logo_authoring === "css_svg" && project.type !== "logo") {
+                const cssLogos = checkCssLogos(await readFile(resolveWithin(stageDir, project.entrypoint), "utf8").catch(() => ""));
+                if (cssLogos.length > 0) await appendSessionTrace(sessionId, { level: "css_logo_check", turnId, logos: cssLogos });
+              }
               await ensureThreeSceneRuntime(stageDir);
               await ensureCharts(stageDir);
               if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");

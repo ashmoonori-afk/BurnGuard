@@ -31,6 +31,11 @@ export interface AdapterRunInput {
    * refuses the run if an image call shows up regardless. Absent means the default, allowed.
    */
   imageGeneration?: "allowed" | "forbidden";
+  /**
+   * The BurnGuard web asset MCP server to register and pre-approve for this run. Set only for a model profile
+   * that sources assets from the web while web asset search is enabled; adapters without MCP support ignore it.
+   */
+  webAssetTool?: { readonly command: readonly string[] };
   onEvent: (event: NormalizedEvent) => Promise<void>;
   onStderr?: (line: string) => Promise<void>;
   /**
