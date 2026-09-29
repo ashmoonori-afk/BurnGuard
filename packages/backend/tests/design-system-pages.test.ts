@@ -265,7 +265,10 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
     await withSite({ "/source": html }, async (origin, id) => {
       await extractDesignSystemFromSource({ system_id: id, name: "Brand", source_type: "website", source_url: origin + "/source" });
       const css = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
-      expect(css).toContain("--primary-blue: #8b4bd7;");
+      expect(css).toContain("--brand-primary: #8b4bd7;");
+      // UX-011: new drafts get neutral brand names whatever the hue; the colour-named pair is never minted.
+      expect(css).toMatch(/--brand-action: [^;]+;/);
+      expect(css).not.toMatch(/--(?:primary|action)-blue:/);
       expect(css).toContain('--font-sans: "Site Sans", var(--font-sans-fallback);');
       expect(css).toContain("--src-token-accent: #b77dea;");
       expect(css).toContain("--src-color-1: #f0e4ff;");
@@ -343,7 +346,7 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
       await withSite({ "/source": "<html><head><style>" + item.head + "</style></head><body>" + item.body + "</body></html>" }, async (origin, id) => {
         await extractDesignSystemFromSource({ system_id: id, name: item.name, source_type: "website", source_url: origin + "/source" });
         const css = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
-        expect({ name: item.name, primary: /--primary-blue: ([^;]+);/.exec(css)?.[1] }).toEqual({ name: item.name, primary: item.primary });
+        expect({ name: item.name, primary: /--brand-primary: ([^;]+);/.exec(css)?.[1] }).toEqual({ name: item.name, primary: item.primary });
         // Text on brand fills must stay readable on whatever primary was chosen (WCAG AA for large text or UI).
         const onBrand = /--fg-on-brand: ([^;]+);/.exec(css)?.[1] ?? "";
         const luminance = (hex: string) => { const [r, g, b] = [1, 3, 5].map(i => { const c = Number.parseInt(hex.slice(i, i + 2), 16) / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
@@ -399,7 +402,7 @@ describe("Per-page cascade, palettes and pinned-context budget", () => {
       const css = await readFile(path.join(systemsDir, id, "colors_and_type.css"), "utf8");
       expect((await parseCssSource({ content: css })).issues).toEqual([]);
       expect(css).toContain('--font-sans: "Body Sans", var(--font-sans-fallback);');
-      expect(css).toContain("--primary-blue: rgb(  18, 52, 86);");
+      expect(css).toContain("--brand-primary: rgb(  18, 52, 86);");
       expect(css).toContain("--src-z-red: red;");
       expect(css).toContain("--src-z-modern: oklch(62% 0.2 30);");
       expect(css).not.toContain("--src-z-word:");

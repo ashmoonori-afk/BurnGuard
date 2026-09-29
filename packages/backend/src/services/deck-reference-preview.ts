@@ -59,24 +59,24 @@ small{display:block;letter-spacing:.035em}
 .specimen{display:flex;flex-direction:column;justify-content:center;border-left:1px solid currentColor;padding-left:3cqw;gap:3cqw}
 .specimen>span{font:16cqw/1 var(--font-display,sans-serif)}
 .swatches{display:flex;gap:1cqw;align-items:end}
-.swatches i{display:block;background:var(--primary-blue,#555);width:7cqw;aspect-ratio:1;border-radius:50%}
+.swatches i{display:block;background:var(--brand-primary,var(--primary-blue,#555));width:7cqw;aspect-ratio:1;border-radius:50%}
 .swatches i:nth-child(2){background:var(--orange-50,#aaa);width:5cqw}
 .swatches i:nth-child(3){background:var(--green-50,#777);width:3cqw}
 .chart{display:flex;flex-direction:column;justify-content:center;min-width:0}
 .bars{height:33cqw;display:flex;gap:3cqw;padding-top:4cqw;border-bottom:1px solid currentColor}
 .bars>div{flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;gap:1cqw}
 .bars i{width:70%;display:block;background:currentColor}
-.bars>div:last-child i{background:var(--primary-blue,#666)}
+.bars>div:last-child i{background:var(--brand-primary,var(--primary-blue,#666))}
 .bars b{font-size:2.6cqw}
 .bars span{font-size:var(--caption)}
 .closing{grid-template-columns:1fr}
 .closing h2{font-size:var(--hero);max-width:12ch}
 .closing small{align-self:end}
 .geometry{display:flex;align-items:end;position:absolute;right:0;bottom:0;width:60%;height:28%}
-.geometry i{flex:1;height:100%;background:var(--primary-blue);border-radius:50% 50% 0 0}
+.geometry i{flex:1;height:100%;background:var(--brand-primary,var(--primary-blue));border-radius:50% 50% 0 0}
 .geometry i:nth-child(2){background:var(--orange-50);border-radius:0}
 .geometry i:nth-child(3){background:var(--green-50);border-radius:50%}
-.config .cover,.config .closing{background:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.config .cover,.config .closing{background:var(--brand-primary,var(--primary-blue));color:var(--fg-on-brand,#fff)}
 .config .title{grid-column:1/-1;max-width:85%}
 .config .body{grid-template-columns:1fr;grid-template-rows:1fr 1.2fr}
 .config .narrative{gap:1cqw}
@@ -97,7 +97,7 @@ small{display:block;letter-spacing:.035em}
 .contact{display:grid;grid-template-columns:3fr 2fr;gap:1cqw;min-height:0}
 .contact img:last-child{object-position:80%}
 .freitag .slide{background-image:linear-gradient(#8883 1px,transparent 1px),linear-gradient(90deg,#8883 1px,transparent 1px);background-size:8.333% 16.667%}
-.freitag .cover{background-color:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.freitag .cover{background-color:var(--brand-primary,var(--primary-blue));color:var(--fg-on-brand,#fff)}
 .freitag .cover .visual{display:none}
 .freitag .cover:after{display:none!important}
 .freitag .body{grid-template-columns:4fr 8fr}
@@ -106,8 +106,8 @@ small{display:block;letter-spacing:.035em}
 .ibm .evidence{grid-template-columns:3fr 6fr 3fr}
 .method{font-size:var(--body);border-left:1px solid currentColor;padding-left:2cqw;align-self:center}
 .ibm .cover .title{grid-column:1;max-width:none}
-.line-art{background:repeating-conic-gradient(from 50deg at 0 50%,transparent 0deg 2deg,var(--primary-blue) 2deg 2.2deg,transparent 2.2deg 4deg);opacity:.5}
-.zip .cover{background:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.line-art{background:repeating-conic-gradient(from 50deg at 0 50%,transparent 0deg 2deg,var(--brand-primary,var(--primary-blue)) 2deg 2.2deg,transparent 2.2deg 4deg);opacity:.5}
+.zip .cover{background:var(--brand-primary,var(--primary-blue));color:var(--fg-on-brand,#fff)}
 .zip .cover:after{background:var(--surface)!important;left:67%!important;transform:skew(6deg)}
 .zip .cover .visual{display:none}
 .zip .cover .title{grid-column:1;max-width:none}
@@ -128,22 +128,22 @@ small{display:block;letter-spacing:.035em}
 .panel{border:1px solid currentColor;border-radius:1.5cqw;padding:2cqw;display:flex;align-items:center}
 .panel .chart{width:100%}
 .nike h1{background:var(--surface);color:var(--fg-1);padding:.5cqw;box-decoration-break:clone}
-.nike .evidence .chart{background:color-mix(in srgb,var(--primary-blue) 15%,var(--surface));padding:2cqw}
+.nike .evidence .chart{background:color-mix(in srgb,var(--brand-primary,var(--primary-blue)) 15%,var(--surface));padding:2cqw}
 .ace .cover{grid-template-columns:1fr}
-.organic{background:var(--primary-blue);border-radius:30% 70% 55% 45% / 50% 40% 60% 50%;color:var(--fg-on-brand,#fff);display:flex;align-items:center;justify-content:center;min-height:30cqw}
+.organic{background:var(--brand-primary,var(--primary-blue));border-radius:30% 70% 55% 45% / 50% 40% 60% 50%;color:var(--fg-on-brand,#fff);display:flex;align-items:center;justify-content:center;min-height:30cqw}
 .organic span{font-size:6cqw}
 .ace .cover .organic{position:absolute;inset:10% -10% -30% 25%;z-index:-1;opacity:.2}
 .ace .cover .title{max-width:85%}
-.island{align-self:center;border-radius:45% 55% 40% 60%;padding:5cqw 2cqw;background:color-mix(in srgb,var(--primary-blue) 18%,var(--surface));text-align:center}
+.island{align-self:center;border-radius:45% 55% 40% 60%;padding:5cqw 2cqw;background:color-mix(in srgb,var(--brand-primary,var(--primary-blue)) 18%,var(--surface));text-align:center}
 .island strong{font-size:12cqw}
-.burger .cover{grid-template-columns:1fr;background:var(--primary-blue);color:var(--fg-on-brand,#fff)}
+.burger .cover{grid-template-columns:1fr;background:var(--brand-primary,var(--primary-blue));color:var(--fg-on-brand,#fff)}
 .burger .title{max-width:90%}
 .burger .body{grid-template-columns:4fr 8fr}
 .patagonia .cover{grid-template-columns:5fr 7fr}
 .patagonia .cover .visual{position:static;z-index:0}
 .patagonia .cover .title{grid-column:2;max-width:none;color:var(--fg-1)}
 .patagonia .cover:after{display:none!important}
-.patagonia .cover{background-image:linear-gradient(transparent 78%,color-mix(in srgb,var(--primary-blue) 25%,var(--surface)) 78%)}
+.patagonia .cover{background-image:linear-gradient(transparent 78%,color-mix(in srgb,var(--brand-primary,var(--primary-blue)) 25%,var(--surface)) 78%)}
 blockquote{font:5cqw/1.15 var(--font-serif,serif);margin:0;align-self:center}
 blockquote small{margin-top:3cqw}
 .patagonia .evidence .visual{height:65%;align-self:end}

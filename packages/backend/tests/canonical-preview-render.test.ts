@@ -80,7 +80,7 @@ test("saved custom and canonical colors render after refresh without changing pr
   const geometry = await before.locator(".frame").evaluate(element => ({ padding: getComputedStyle(document.body).padding, minHeight: getComputedStyle(element).minHeight }));
   for (const value of ["#123abc", "#654321"]) {
     await upsertDesignSystemColorToken(id, { name: "catalog-accent", value });
-    await upsertDesignSystemColorToken(id, { name: "primary-blue", value });
+    await upsertDesignSystemColorToken(id, { name: "brand-primary", value });
     const frame = await preview("colors-brand");
     const state = await frame.evaluate(() => {
       const probe = document.createElement("div");
