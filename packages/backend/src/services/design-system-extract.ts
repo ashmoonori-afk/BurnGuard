@@ -1105,7 +1105,8 @@ async function ingestWebsiteSource(
     try {
       const heroUrl = new URL(src, url);
       const fileName = safeFileName(path.basename(heroUrl.pathname) || "hero.png");
-      if (heroImages.some((image) => image.fileName === fileName)) continue;
+      // Names that differ only by case are one file on macOS and Windows, so they are one image everywhere.
+      if (heroImages.some((image) => image.fileName.toLowerCase() === fileName.toLowerCase())) continue;
       const heroFetch = await fetchWebsiteResource(heroUrl, { maxBytes: MAX_LOGO_BYTES, kind: "asset", noteBytes, signal, userAgent: `BurnGuard/${APP_VERSION} design-system-import` });
       assetBytes += heroFetch.buffer.byteLength;
       assertAggregateAssetBytes(assetBytes);

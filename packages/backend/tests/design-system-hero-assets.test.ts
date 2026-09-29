@@ -45,6 +45,7 @@ describe("Design-system hero assets", () => {
       expect(() => parseDesignSystemLayoutReference({ ...base, hero_assets: [bad] })).toThrow();
     }
     expect(() => parseDesignSystemLayoutReference({ ...base, hero_assets: [heroAsset, heroAsset, heroAsset] })).toThrow();
+    expect(() => parseDesignSystemLayoutReference({ ...base, hero_assets: [{ ...heroAsset, file: "assets/hero/Hero.png" }, { ...heroAsset, file: "assets/hero/hero.png" }] })).toThrow();
   });
 
   test("Given a system with a hero asset, then the pinned context freezes it and staging copies it only while its bytes match", async () => {
