@@ -27,29 +27,26 @@ jobs run each pinning suite.
 
 ## Known gaps
 
-- Windows export smoke: on one of two gating Windows runs the PDF export and PNG render smokes failed after about 11 s
-  with the same "Owned process host could not prove process cleanup" error as the tree-cleanup flake below, and the
-  sibling run passed. If that race is real, exports on Windows can fail intermittently; a repeated-export probe on the
-  real packaged app was queued through win-probe (w05-export-loop) to measure it. The smoke runs in the non-gating
-  Windows flaky watch job.
-
-- Windows flakes seen in CI (2 of the last 8 Windows job runs, both times together on the same run): `local-fonts`
-  "host installed fonts" hits the 10 s PowerShell timeout in `getLocalFonts` (a cold PowerShell start; the same limit
-  means a slow machine reports `local_fonts_unavailable`), and `owned-process-tree` "acquisition abort reaps its
-  descendant (already aborted: false)" receives a tree-cleanup error instead of `ExtractionAcquisitionError` (the
-  cleanup receipt could not be proven). Neither is root-caused. Both suites run in the non-gating "Windows flaky watch"
-  job so the signal stays visible; the reap case looks like a real race in Windows tree cleanup and needs a real
-  Windows session to settle.
+- Windows terminate race, fixed: an owned job whose target exits while the terminate helper starts used to make
+  `terminateOwnedWindowsJob` throw "Owned process host could not prove process cleanup" (reason `helper_failed`,
+  helper exit 201). The launcher's exited receipt now proves the cleanup (`owned-process-windows.ts`), pinned by the
+  Windows sweep test in `owned-process-windows.test.ts`. Chromium closes, the export smoke and the `owned-process-tree`
+  reap case all end in that call, so they are expected to be stable now; they stay in the non-gating "Windows flaky
+  watch" job until about ten consecutive Windows runs show the Export smoke step itself passing.
+- Windows `local-fonts` "host installed fonts" hit the 10 s PowerShell timeout in `getLocalFonts` in CI (a slow
+  PowerShell start; the same limit makes a slow machine report `local_fonts_unavailable`). Not root-caused; the suite
+  runs in the watch job.
+- The `chromium-node-launch` popup and deck-runtime smoke failed on Windows ("Chromium connection aborted" after
+  about 20 s) in roughly one of two watch runs. Not root-caused; it runs in the watch job.
 - Browser-backed suites (real Chromium measurement, screenshots, the visual diff, crops and the design audit: the
   design-system pages, conformance, contrast and starter suites) run on the macOS and Windows jobs with
-  `BG_BROWSER_SMOKE=1`. The `chromium-node-launch` popup and deck-runtime smoke failed once on Windows ("Chromium
-  connection aborted" after 23 s) and passed on the sibling run; it runs in the non-gating Windows flaky watch job.
-
+  `BG_BROWSER_SMOKE=1`.
 - Long paths on Windows (over 260 characters) are not exercised; stage paths stay short by design.
 - File locking on Windows: a crop or asset overwrite can fail with EBUSY or EPERM while another process holds the
   file. Review crops are report-only: `withSectionCrops` catches any write error and returns the target without
   crops, so the turn is unaffected. Other writers are not guarded against this.
-- Case-insensitive file systems (macOS, Windows): two extracted hero images whose names differ only by case share one
-  file on disk. Staging verifies size and digest, so the loser is skipped, never mixed.
+- Case-insensitive file systems (macOS, Windows): hero and logo image names that differ only by case are one image on
+  every OS (the first wins), at extraction and when a saved pin is read, so extraction does not depend on the file
+  system's case rules.
 - Fonts and DPI: measurements and reference screenshots come from the extracting machine's installed fonts at device
   scale factor 1; SSIM comparisons are only meaningful between renders made on the same machine.
