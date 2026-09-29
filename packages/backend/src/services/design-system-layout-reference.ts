@@ -50,12 +50,15 @@ export async function provisionDesignSystemLayoutReference(stageDir: string, pin
   if (shots.length === 0 || systemDir === null) return [];
   const staged: string[] = [];
   for (const shot of shots) {
-    const bytes = await readManagedFile(systemDir, { path: shot.file, size: shot.size, sha256: shot.sha256 }).catch(() => null);
-    if (bytes === null) continue;
-    const target = stagedReferencePath(shot);
-    await mkdir(resolveWithin(stageDir, ...STAGED_REFERENCE_DIR.split("/")), { recursive: true });
-    await writeFile(resolveWithin(stageDir, ...target.split("/")), bytes);
-    staged.push(target);
+    const pinned = [{ file: shot.file, size: shot.size, sha256: shot.sha256 }, ...(shot.wireframe ? [shot.wireframe] : [])];
+    for (const item of pinned) {
+      const bytes = await readManagedFile(systemDir, { path: item.file, size: item.size, sha256: item.sha256 }).catch(() => null);
+      if (bytes === null) continue;
+      const target = `${STAGED_REFERENCE_DIR}/${path.posix.basename(item.file)}`;
+      await mkdir(resolveWithin(stageDir, ...STAGED_REFERENCE_DIR.split("/")), { recursive: true });
+      await writeFile(resolveWithin(stageDir, ...target.split("/")), bytes);
+      staged.push(target);
+    }
   }
   return staged;
 }
