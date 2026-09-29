@@ -20,6 +20,7 @@ jobs run each pinning suite.
 | Process trees | detached group | job object, no detached group | detached group | `owned-process-tree`, `owned-process-windows` | `owned-process-tree`: Ubuntu, macOS job, Windows flaky watch (non-gating); `owned-process-windows`: Windows job |
 | Native canvas binding | `darwin-arm64` package | `win32-x64-msvc` package | host package | `native-binding` | Ubuntu, OS jobs |
 | Text encoding hints | none | UTF-8 reminder block | none | `prompt-builder` (platform injected) | Ubuntu, OS jobs |
+| Multi-format export (PDF, PNG, PPTX render) | real Chromium render | real Chromium render | real Chromium render | `exports` (`BG_EXPORT_SMOKE=1`) | macOS and Windows jobs; Ubuntu runs it opt-in only |
 | Design-system outputs (wireframe SVG, starter stylesheet and skeleton) | byte-identical | byte-identical | byte-identical | `os-portability` (pinned digests) | Ubuntu, OS jobs |
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
