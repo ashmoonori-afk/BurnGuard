@@ -32,6 +32,7 @@ const KNOWN_CODES = [
 
 /** Codes the routes emit that gained recovery copy; each must resolve past the generic fallback. */
 const ADDED_CODES = [
+  "invalid_color_value",
   "graphic_requires_authenticated_codex",
   "codex_authentication_probe_failed",
   "acquisition_limit",

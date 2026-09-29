@@ -118,4 +118,5 @@ export const errorsMessages = defineMessages({
   "errors.export_not_found": { ko: "내보내기 항목을 찾을 수 없어요. 목록을 새로고침한 뒤 다시 확인해 주세요.", en: "The export was not found. Refresh the list and check again.", "zh-CN": "未找到导出项。请刷新列表后重新检查。" },
   "errors.format_requires_project_type": { ko: "이 형식은 현재 프로젝트 종류에서 사용할 수 없어요. 프로젝트를 다시 연 뒤 시도해 주세요.", en: "This format is not available for this project type. Reopen the project and try again.", "zh-CN": "此格式不适用于当前项目类型。请重新打开项目后重试。" },
   "errors.invalid_export_format": { ko: "지원하지 않는 내보내기 형식이에요. 형식을 다시 골라 주세요.", en: "This export format is not supported. Select the format again.", "zh-CN": "不支持该导出格式。请重新选择格式。" },
+  "errors.invalid_color_value": { ko: "색상 값을 확인해 주세요. #1a73e8 같은 HEX나 red 같은 CSS 색상 이름을 입력할 수 있어요.", en: "Check the color value. Enter a HEX value like #1a73e8 or a CSS color name like red.", "zh-CN": "请检查颜色值。可以输入 #1a73e8 这样的 HEX 值或 red 这样的 CSS 颜色名称。" },
 });

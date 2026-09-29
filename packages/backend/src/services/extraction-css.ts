@@ -85,13 +85,16 @@ export function fontFamiliesFromDeclarations(declarations: readonly CssDeclarati
   return [...families];
 }
 
+export const NAMED_COLORS = new Set(("aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen transparent").split(" "));
+
 export function isColorTokenValue(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed || !isSafeExtractedCssValue(trimmed) || /[;]/.test(trimmed)) return false;
   if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(trimmed)) return true;
   if (/^(?:rgb|rgba|hsl|hsla|oklch|oklab|lab|lch|color|color-mix)\(/i.test(trimmed)) return true;
   if (/^var\(--[a-zA-Z0-9_-]+\)$/.test(trimmed)) return true;
-  return /^[a-zA-Z]+$/.test(trimmed);
+  // A bare word must be a real CSS colour keyword; any other word would write an invalid token.
+  return NAMED_COLORS.has(trimmed.toLowerCase()) || trimmed.toLowerCase() === "currentcolor";
 }
 
 export function upsertCssCustomProperty(css: string, tokenName: string, value: string): string {
