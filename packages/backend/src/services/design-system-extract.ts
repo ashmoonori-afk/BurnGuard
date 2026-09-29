@@ -113,6 +113,7 @@ import {
 } from "./extraction-css";
 import { DESIGN_SURFACE_FILES, DESIGN_SURFACES } from "@bg/shared";
 import { DERIVED_SURFACE_README_SECTIONS, renderDerivedSurfaceCss } from "./design-system-surface";
+import { renderMeasuredWireframe } from "./design-system-wireframe";
 import { collectCandidateWebsitePages, extractHtmlComponentSamples, sanitizeAcquiredWebsiteHtml, sanitizeSourceHtml } from "./extraction-html";
 import { analyzeLocalTree, type SourceAnalysis } from "./extraction-local-tree";
 import {
@@ -2471,11 +2472,13 @@ async function writeLayoutReference(systemDir: string, measured: DesignSystemMea
     const index = measured.pages.findIndex((page) => page.path === shot.path);
     return index === -1 ? [] : [{ shot, index }];
   }).sort((a, b) => a.index - b.index || a.shot.viewport.localeCompare(b.shot.viewport));
+  const wireframes = entries.map(({ shot, index }) => renderMeasuredWireframe(measured.pages[index]!.viewports[shot.viewport]));
   let reference;
   try {
-    reference = parseDesignSystemLayoutReference({ schema_version: 1, shots: entries.map(({ shot, index }) => ({
+    reference = parseDesignSystemLayoutReference({ schema_version: 1, shots: entries.map(({ shot, index }, position) => ({
       path: shot.path, viewport: shot.viewport, file: `layout-reference/p${index}-${shot.viewport}.jpg`, width: shot.width, height: shot.height,
       size: shot.jpeg.byteLength, sha256: createHash("sha256").update(shot.jpeg).digest("hex"),
+      wireframe: { file: `layout-reference/p${index}-${shot.viewport}.svg`, size: Buffer.byteLength(wireframes[position]!), sha256: createHash("sha256").update(wireframes[position]!).digest("hex") },
     })) });
   } catch {
     notes.push("Layout reference screenshots were omitted because their index did not pass validation.");
@@ -2486,6 +2489,7 @@ async function writeLayoutReference(systemDir: string, measured: DesignSystemMea
     const dest = path.join(systemDir, ...entry.file.split("/"));
     await writeFile(dest, entries[position]!.shot.jpeg);
     generated.add(toSystemRelPath(systemDir, dest));
+    await writeText(path.join(systemDir, ...entry.wireframe!.file.split("/")), wireframes[position]!, generated, systemDir);
   }
   await writeText(path.join(systemDir, "layout-reference.json"), `${JSON.stringify(reference, null, 2)}\n`, generated, systemDir);
 }

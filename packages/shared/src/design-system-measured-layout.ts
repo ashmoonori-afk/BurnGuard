@@ -62,7 +62,11 @@ export type LayoutReferenceShot = {
   readonly height: number;
   readonly size: number;
   readonly sha256: string;
+  /** The block-box wireframe derived from the measured layout of this page and viewport, when one was stored. */
+  readonly wireframe?: LayoutReferenceWireframe;
 };
+/** A stored derived wireframe SVG, pinned by size and digest like the screenshot it accompanies. */
+export type LayoutReferenceWireframe = { readonly file: string; readonly size: number; readonly sha256: string };
 export type DesignSystemLayoutReference = { readonly schema_version: 1; readonly shots: readonly LayoutReferenceShot[] };
 const REFERENCE_FILE = /^layout-reference\/p[0-9]{1,2}-(?:desktop|mobile)\.jpg$/;
 
@@ -72,11 +76,15 @@ export function parseDesignSystemLayoutReference(input: unknown): DesignSystemLa
   const count = (value: unknown, max: number): number => typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= max ? value : invalid();
   if (!isRecord(input) || Object.keys(input).length !== 2 || input.schema_version !== 1 || !Array.isArray(input.shots) || input.shots.length > MAX_MEASURED_PAGES * 2) return invalid();
   const shots = input.shots.map((shot): LayoutReferenceShot => {
-    if (!isRecord(shot) || Object.keys(shot).length !== keys.length || !keys.every(key => key in shot)) return invalid();
+    if (!isRecord(shot) || !keys.every(key => key in shot) || Object.keys(shot).length !== keys.length + ("wireframe" in shot ? 1 : 0)) return invalid();
     const viewport = shot.viewport === "desktop" || shot.viewport === "mobile" ? shot.viewport : invalid();
     if (typeof shot.path !== "string" || !PATH.test(shot.path) || typeof shot.file !== "string" || !REFERENCE_FILE.test(shot.file) || !shot.file.endsWith(`-${viewport}.jpg`)) return invalid();
     if (typeof shot.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(shot.sha256)) return invalid();
-    return { path: shot.path, viewport, file: shot.file, width: count(shot.width, 100_000), height: count(shot.height, 100_000), size: count(shot.size, MAX_LAYOUT_REFERENCE_BYTES), sha256: shot.sha256 };
+    const wire = shot.wireframe;
+    const wireframe = wire === undefined ? undefined : isRecord(wire) && Object.keys(wire).length === 3 && typeof wire.file === "string" && wire.file === shot.file.replace(/\.jpg$/, ".svg") && typeof wire.sha256 === "string" && /^[0-9a-f]{64}$/.test(wire.sha256)
+      ? { file: wire.file, size: count(wire.size, MAX_LAYOUT_REFERENCE_BYTES), sha256: wire.sha256 }
+      : invalid();
+    return { path: shot.path, viewport, file: shot.file, width: count(shot.width, 100_000), height: count(shot.height, 100_000), size: count(shot.size, MAX_LAYOUT_REFERENCE_BYTES), sha256: shot.sha256, ...(wireframe ? { wireframe } : {}) };
   });
   if (new Set(shots.map(shot => shot.file)).size !== shots.length) return invalid();
   return { schema_version: 1, shots };
