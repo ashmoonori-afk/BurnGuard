@@ -11,6 +11,9 @@ import ProjectBundleButton from "./ProjectBundleButton";
 import { useState } from "react";
 import FigmaImportDialog from "./FigmaImportDialog";
 
+/** Below 600px the actions wrap so Export stays on screen instead of overflowing the header. */
+export const PROJECT_ACTIONS_CLASS = "flex shrink-0 items-center gap-2 max-[600px]:ml-auto max-[600px]:shrink max-[600px]:flex-wrap max-[600px]:justify-end";
+
 export default function ProjectTopBar({
   project,
   tabsSlot,
@@ -66,7 +69,7 @@ export default function ProjectTopBar({
           </h1>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2 max-[600px]:ml-auto">
+      <div className={PROJECT_ACTIONS_CLASS}>
         <Button variant="outline" size="sm" className="min-h-10 gap-2 px-3 max-[900px]:min-h-11" onClick={() => setFigmaImportOpen(true)} disabled={figmaImportDisabled}>
           <Figma className="h-3.5 w-3.5" />{t("workspace.figma.action")}
         </Button>
