@@ -6,6 +6,7 @@ import {
   parseDesignSystemMeasuredLayout,
   type DesignSystemMeasuredLayout,
   type DesignSystemPageType,
+  type MeasuredPageLayout,
   type MeasuredViewportLayout,
   type MeasuredViewportName,
 } from "@bg/shared";
@@ -31,9 +32,9 @@ export async function measureRenderedLayout(input: RenderedLayoutInput): Promise
   const pages = input.pages.slice(0, MAX_MEASURED_PAGES);
   if (pages.length === 0) return null;
   let browser: Browser | null = null;
+  const measured: MeasuredPageLayout[] = [];
   try {
     browser = await (input.launch ?? launchChromium)(input.signal);
-    const measured = [];
     for (const page of pages) {
       input.signal.throwIfAborted();
       const viewports = {} as Record<MeasuredViewportName, MeasuredViewportLayout>;
@@ -43,10 +44,15 @@ export async function measureRenderedLayout(input: RenderedLayoutInput): Promise
     // Only what the strict reader accepts is ever stored.
     return parseDesignSystemMeasuredLayout({ schema_version: 1, method: "rendered-offline", pages: measured });
   } catch (error) {
-    if (input.signal.aborted) throw error;
+    // Pages finished before an abort are kept (the entry page is measured first), so a deadline that cuts the
+    // last pages short still records the entry; the caller decides whether the abort itself must propagate.
+    if (input.signal.aborted) {
+      if (measured.length > 0) return parseDesignSystemMeasuredLayout({ schema_version: 1, method: "rendered-offline", pages: measured });
+      throw error;
+    }
     return null;
   } finally {
-    await browser?.close();
+    await browser?.close().catch(() => undefined);
   }
 }
 

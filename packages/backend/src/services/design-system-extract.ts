@@ -729,7 +729,12 @@ async function measureWithDeadline(measure: LayoutMeasurer, input: RenderedLayou
   const forward = () => controller.abort(input.signal.reason);
   input.signal.addEventListener("abort", forward, { once: true });
   const timer = setTimeout(() => controller.abort(new Error("layout_measure_deadline")), available);
-  try { return await measure({ ...input, signal: controller.signal }); }
+  try {
+    const measured = await measure({ ...input, signal: controller.signal });
+    // A partial result can come back after the extraction itself was cancelled; that cancellation still wins.
+    input.signal.throwIfAborted();
+    return measured;
+  }
   catch (error) {
     if (input.signal.aborted) throw error;
     return null;
@@ -1111,6 +1116,7 @@ async function ingestWebsiteSource(
   }
   const measuredLayout = measureLayout ? await measureWithDeadline(measureLayout, { pages: measurable, stylesheets: stylesheetText, signal }, deadlineAt) : null;
   if (measureLayout && measuredLayout === null) notes.push("Rendered layout measurement was unavailable; measured layout tokens were not recorded.");
+  else if (measuredLayout && measuredLayout.pages.length < measurable.length) notes.push(`Rendered layout measurement reached its deadline after ${measuredLayout.pages.length} of ${measurable.length} pages; the remaining pages were not measured.`);
 
   return {
     measuredLayout,
