@@ -14,6 +14,7 @@ Start with the [product introduction and setup](../README.md), available in [Kor
 
 - [Design guidance](design-craft.md)
 - [Native charts](charts.md)
+- [Per-OS matrix](os-matrix.md)
 - [Image production](image-production.md)
 - [Research catalog](research.md)
 - [Brand identity](brand-identity.md)
