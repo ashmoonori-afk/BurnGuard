@@ -1,3 +1,4 @@
+import type { Browser } from "playwright-core";
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -509,6 +510,27 @@ describe("Measured layout tokens", () => {
       const result = await extractDesignSystemFromSource({ system_id: id, name: "Broken", source_type: "website", source_url: origin + "/source" }, { measureLayout: async () => { throw new Error("chromium_not_installed"); } });
       expect(result.extraction.notes.some(note => note.startsWith("Rendered layout measurement"))).toBe(true);
     });
+  });
+
+  test("Given a measurement deadline that fires during a later page, then the pages measured before it are kept, an abort before any page propagates, and other failures give no layout", async () => {
+    // Contexts open in order: entry desktop, entry mobile, second page desktop, ...; failAt picks the one that fails.
+    const run = async (failAt: number, abort: boolean) => {
+      const controller = new AbortController();
+      let opened = 0;
+      const context = (index: number) => ({
+        routeWebSocket: async () => {}, route: async () => {}, close: async () => {},
+        newPage: async () => ({ goto: async () => {}, evaluate: async (_fn: unknown, arg: { width: number }) => {
+          if (index === failAt) { if (abort) controller.abort(new Error("layout_measure_deadline")); throw new Error("Chromium connection aborted"); }
+          return viewportLayout(arg.width === MEASURED_VIEWPORTS.desktop.width ? "desktop" : "mobile");
+        } }),
+      });
+      const browser = { newContext: async () => context(opened++), close: async () => {} };
+      const pages = ["/source", "/pricing"].map(p => ({ path: p, pageType: p === "/source" ? "other" as const : "pricing" as const, url: "https://site.test" + p, html: "<h1>x</h1>" }));
+      return measureRenderedLayout({ pages, stylesheets: new Map(), signal: controller.signal, launch: async () => browser as unknown as Browser });
+    };
+    expect((await run(2, true))?.pages.map(page => page.path)).toEqual(["/source"]);
+    await expect(run(0, true)).rejects.toThrow("Chromium connection aborted");
+    expect(await run(2, false)).toBeNull();
   });
 
   test("Given malformed measured layouts, then the strict parser rejects them", () => {
