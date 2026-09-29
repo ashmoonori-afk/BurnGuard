@@ -20,29 +20,38 @@ jobs run each pinning suite.
 | Process trees | detached group | job object, no detached group | detached group | `owned-process-tree`, `owned-process-windows` | `owned-process-tree`: Ubuntu, macOS job, Windows flaky watch (non-gating); `owned-process-windows`: Windows job |
 | Native canvas binding | `darwin-arm64` package | `win32-x64-msvc` package | host package | `native-binding` | Ubuntu, OS jobs |
 | Text encoding hints | none | UTF-8 reminder block | none | `prompt-builder` (platform injected) | Ubuntu, OS jobs |
+| Multi-format export (PDF, PNG, PPTX render) | real Chromium render | real Chromium render | real Chromium render | `exports` (`BG_EXPORT_SMOKE=1`) | macOS job; Windows flaky watch (non-gating); Ubuntu opt-in only |
 | Design-system outputs (wireframe SVG, starter stylesheet and skeleton) | byte-identical | byte-identical | byte-identical | `os-portability` (pinned digests) | Ubuntu, OS jobs |
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
 
 ## Known gaps
 
-- Windows flakes seen in CI (2 of the last 8 Windows job runs, both times together on the same run): `local-fonts`
-  "host installed fonts" hits the 10 s PowerShell timeout in `getLocalFonts` (a cold PowerShell start; the same limit
-  means a slow machine reports `local_fonts_unavailable`), and `owned-process-tree` "acquisition abort reaps its
-  descendant (already aborted: false)" receives a tree-cleanup error instead of `ExtractionAcquisitionError` (the
-  cleanup receipt could not be proven). Neither is root-caused. Both suites run in the non-gating "Windows flaky watch"
-  job so the signal stays visible; the reap case looks like a real race in Windows tree cleanup and needs a real
-  Windows session to settle.
+- Windows terminate race, fixed: an owned job whose target exits while the terminate helper starts used to make
+  `terminateOwnedWindowsJob` throw "Owned process host could not prove process cleanup" (reason `helper_failed`,
+  helper exit 201). The launcher's exited receipt now proves the cleanup (`owned-process-windows.ts`), pinned by the
+  "Windows owned host when the helper fails after the launcher has already exited" tests (injected stubs, every OS)
+  and by the Windows-only exit-timing sweep in `owned-process-windows.test.ts`. Forced closes of Chromium, the export
+  smoke and the `owned-process-tree` reap case go through that call. They stay in the non-gating "Windows flaky
+  watch" job until about ten consecutive Windows runs show the Export smoke step itself passing.
+- Windows export smoke teardown, still open: after #174, one Windows watch run passed all nine export tests but failed
+  an `afterAll` hook with `invalid_receipt` from `validateLaunchSettlement` at `chromium-node-launch.ts:39`. That
+  line is reached only when the close did not fail, so the launch receipt was missing or failed its job, host pid,
+  exit-code or state check. The error does not say which check failed, so the cause is unknown.
+- Windows `local-fonts` "host installed fonts" hit the 10 s PowerShell timeout in `getLocalFonts` in CI (a slow
+  PowerShell start; the same limit makes a slow machine report `local_fonts_unavailable`). Not root-caused; the suite
+  runs in the watch job.
+- The `chromium-node-launch` popup and deck-runtime smoke failed on Windows ("Chromium connection aborted" after
+  about 20 s) in roughly one of two watch runs. Not root-caused; it runs in the watch job.
 - Browser-backed suites (real Chromium measurement, screenshots, the visual diff, crops and the design audit: the
   design-system pages, conformance, contrast and starter suites) run on the macOS and Windows jobs with
-  `BG_BROWSER_SMOKE=1`. The `chromium-node-launch` popup and deck-runtime smoke failed once on Windows ("Chromium
-  connection aborted" after 23 s) and passed on the sibling run; it runs in the non-gating Windows flaky watch job.
-
+  `BG_BROWSER_SMOKE=1`.
 - Long paths on Windows (over 260 characters) are not exercised; stage paths stay short by design.
 - File locking on Windows: a crop or asset overwrite can fail with EBUSY or EPERM while another process holds the
   file. Review crops are report-only: `withSectionCrops` catches any write error and returns the target without
   crops, so the turn is unaffected. Other writers are not guarded against this.
-- Case-insensitive file systems (macOS, Windows): two extracted hero images whose names differ only by case share one
-  file on disk. Staging verifies size and digest, so the loser is skipped, never mixed.
+- Case-insensitive file systems (macOS, Windows): hero and logo image names that differ only by case are one image on
+  every OS (the first wins), at extraction and when a saved pin is read, so extraction does not depend on the file
+  system's case rules.
 - Fonts and DPI: measurements and reference screenshots come from the extracting machine's installed fonts at device
   scale factor 1; SSIM comparisons are only meaningful between renders made on the same machine.

@@ -82,6 +82,11 @@ jobs:
           packages/backend/tests/design-system-conformance.test.ts
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/design-system-starter.test.ts
+      - name: Export smoke
+        if: runner.os == 'macOS'
+        env:
+          BG_EXPORT_SMOKE: "1"
+        run: bun test --timeout 120000 packages/backend/tests/exports.test.ts
 
   windows-flaky-watch:
     name: Windows flaky watch (not gating)
@@ -110,6 +115,12 @@ jobs:
           packages/backend/tests/local-fonts.test.ts
           packages/backend/tests/owned-process-tree.test.ts
       - name: Chromium popup and deck runtime
+        if: ${{ !cancelled() }}
         env:
           BG_BROWSER_SMOKE: "1"
         run: bun test --timeout 60000 packages/backend/tests/chromium-node-launch.test.ts
+      - name: Export smoke
+        if: ${{ !cancelled() }}
+        env:
+          BG_EXPORT_SMOKE: "1"
+        run: bun test --timeout 120000 packages/backend/tests/exports.test.ts
