@@ -141,7 +141,7 @@ bunx tsc -p scripts/qa/tsconfig.json --noEmit
 ## RELEASE UX QA STAGE
 
 - Before the release security gate, run the pre-release app UX QA in `scripts/qa/prerelease-ux-qa.md` against the release candidate: a real browser on an isolated `BG_APP_ROOT`, journeys J01-J07 (extract, create, generate, review/repair, pin update, export, recover a failed turn), HAR plus screenshots, and a P0-P3 report.
-- Mask every HAR with `bun scripts/qa/har-mask.ts <raw.har> <shared.har>` before it leaves the run directory. It masks the capability header, the capability cookie and every other place their values appear, authorization headers, cookies and local absolute paths, and it refuses to write output that still contains a collected secret.
+- Mask every HAR with `bun scripts/qa/har-mask.ts <raw.har> <shared.har> --root <qa-home>=<qa-home>` before it leaves the run directory, then scan the masked file for provider diagnostics and user content the tool cannot recognise. It masks the capability (header, cookie, bootstrap body and every other place its value appears), authorization headers, cookies, secret-named params and body fields, and common home paths plus the given roots. It refuses to write output that still contains a collected secret, or when a bootstrap body carries no recognisable capability.
 - Store the report and masked evidence under `.omo/evidence/release-<version>/ux-qa/`. An open P0 or P1 finding keeps the release unpublished unless the owner explicitly accepts it.
 
 ## RELEASE SECURITY GATE

@@ -11,12 +11,13 @@ import path from "node:path";
 
 export const MASKED = "[masked]";
 const SECRET_HEADERS = new Set(["x-burnguard-capability", "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key"]);
-const SECRET_PARAMS = /^(?:capability|token|access_token|api_key|key|password)$/iu;
+const SECRET_PARAMS = /^(?:capability|token|access_token|refresh_token|id_token|api_key|apikey|key|secret|client_secret|password)$/iu;
 /** Values shorter than this are not treated as secrets, so masking never rewrites ordinary short words. */
 const MIN_SECRET_LENGTH = 8;
 const HOME_PATTERNS: readonly RegExp[] = [
-  /\/(?:home|Users)\/[^/\s"'<>\\]+/gu,
-  /[A-Za-z]:\\{1,2}Users\\{1,2}[^\\\s"'<>]+/gu,
+  /\/(?:home|Users)\/[^/\s"'<>\\]+/giu,
+  /\/root(?=\/)/gu,
+  /[A-Za-z]:\\{1,2}Users\\{1,2}[^\\\s"'<>]+/giu,
   /%2F(?:home|Users)%2F[^%\s"'&<>]+/giu,
   /[A-Za-z]%3A%5C(?:%5C)?Users%5C(?:%5C)?[^%\s"'&<>]+/giu,
 ];
@@ -25,7 +26,7 @@ const TEXT_MIME = /^(?:text\/|application\/(?:json|javascript|xml|x-www-form-url
 export type HarMaskReport = { readonly secret_values: number; readonly headers: number; readonly cookies: number; readonly params: number; readonly paths: number };
 export type PrivateRoot = { readonly path: string; readonly placeholder: string };
 export class HarMaskError extends Error {
-  constructor(readonly code: "invalid_har" | "secret_remains" | "invalid_arguments") { super(code); }
+  constructor(readonly code: "invalid_har" | "secret_remains" | "capability_not_found" | "invalid_arguments" | "output_exists" | "input_unreadable") { super(code); }
 }
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -36,12 +37,47 @@ const entriesOf = (har: Record<string, Json>): Record<string, Json>[] => {
   return log["entries"].filter(isObject);
 };
 
+/** Text of a request or response body, base64 bodies decoded; empty when there is none. */
+function bodyText(message: Record<string, Json>): string {
+  const body = isObject(message["postData"]) ? message["postData"] : isObject(message["content"]) ? message["content"] : null;
+  if (body === null || typeof body["text"] !== "string") return "";
+  return body["encoding"] === "base64" ? Buffer.from(body["text"], "base64").toString("utf8") : body["text"];
+}
+
+/** String values under secret-named keys anywhere in a JSON body, such as data.capability in /api/bootstrap. */
+function jsonBodySecrets(text: string): string[] {
+  let parsed: unknown;
+  try { parsed = JSON.parse(text); } catch { return []; }
+  const found: string[] = [];
+  const walk = (value: unknown, depth: number): void => {
+    if (depth > 32) return;
+    if (Array.isArray(value)) { for (const item of value) walk(item, depth + 1); return; }
+    if (!isObject(value)) return;
+    for (const [key, child] of Object.entries(value)) {
+      if (typeof child === "string" && SECRET_PARAMS.test(key)) found.push(child);
+      else walk(child, depth + 1);
+    }
+  };
+  walk(parsed, 0);
+  return found;
+}
+
+const isBootstrap = (entry: Record<string, Json>): boolean => {
+  const request = entry["request"];
+  if (!isObject(request)) return false;
+  try { return new URL(String(request["url"] ?? "")).pathname === "/api/bootstrap"; } catch { return false; }
+};
+
 function collectSecrets(entries: readonly Record<string, Json>[]): Set<string> {
   const secrets = new Set<string>();
-  const add = (value: string) => { const trimmed = value.trim(); if (trimmed.length >= MIN_SECRET_LENGTH) secrets.add(trimmed); };
+  // Cookie values may be wrapped in DQUOTEs; the bare value is what appears elsewhere.
+  const add = (value: string) => { const trimmed = value.trim().replace(/^"(.*)"$/u, "$1"); if (trimmed.length >= MIN_SECRET_LENGTH) secrets.add(trimmed); };
   for (const entry of entries) for (const side of ["request", "response"] as const) {
     const message = entry[side];
     if (!isObject(message)) continue;
+    for (const value of jsonBodySecrets(bodyText(message))) add(value);
+    const postData = message["postData"];
+    for (const param of isObject(postData) && Array.isArray(postData["params"]) ? postData["params"].filter(isObject) : []) if (SECRET_PARAMS.test(String(param["name"] ?? ""))) add(String(param["value"] ?? ""));
     for (const header of Array.isArray(message["headers"]) ? message["headers"].filter(isObject) : []) {
       const name = String(header["name"] ?? "").toLowerCase();
       const value = String(header["value"] ?? "");
@@ -62,6 +98,14 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const har = JSON.parse(JSON.stringify(input)) as Record<string, Json>;
   const entries = entriesOf(har);
   const secrets = [...collectSecrets(entries)].sort((a, b) => b.length - a.length);
+  // The bootstrap response is where the capability is minted. A body there that yields no capability means the
+  // format is not understood, so masking fails closed instead of trusting that nothing leaked.
+  for (const entry of entries.filter(isBootstrap)) {
+    const response = entry["response"];
+    const status = isObject(response) ? Number(response["status"]) : 0;
+    const text = isObject(response) ? bodyText(response) : "";
+    if (status >= 200 && status < 300 && text.trim() !== "" && jsonBodySecrets(text).length === 0) throw new HarMaskError("capability_not_found");
+  }
   const counts = { secret_values: secrets.length, headers: 0, cookies: 0, params: 0, paths: 0 };
   // Longer roots first, so a nested root keeps its own placeholder.
   const orderedRoots = [...roots].filter(root => root.path.length > 1).sort((a, b) => b.path.length - a.path.length);
@@ -81,6 +125,8 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   for (const entry of entries) for (const side of ["request", "response"] as const) {
     const message = entry[side];
     if (!isObject(message)) continue;
+    const postData = message["postData"];
+    for (const param of isObject(postData) && Array.isArray(postData["params"]) ? postData["params"].filter(isObject) : []) if (SECRET_PARAMS.test(String(param["name"] ?? ""))) { param["value"] = MASKED; counts.params += 1; }
     for (const header of Array.isArray(message["headers"]) ? message["headers"].filter(isObject) : []) if (SECRET_HEADERS.has(String(header["name"] ?? "").toLowerCase())) { header["value"] = MASKED; counts.headers += 1; }
     for (const cookie of Array.isArray(message["cookies"]) ? message["cookies"].filter(isObject) : []) { cookie["value"] = MASKED; counts.cookies += 1; }
     for (const param of Array.isArray(message["queryString"]) ? message["queryString"].filter(isObject) : []) if (SECRET_PARAMS.test(String(param["name"] ?? ""))) { param["value"] = MASKED; counts.params += 1; }
@@ -108,8 +154,12 @@ async function main(argv: readonly string[]): Promise<number> {
     roots.push({ path: spec.slice(0, split), placeholder: spec.slice(split + 1) });
   }
   if (input === undefined || output === undefined || path.resolve(input) === path.resolve(output)) throw new HarMaskError("invalid_arguments");
-  const { har, report } = maskHar(JSON.parse(await Bun.file(input).text()), roots);
-  await writeFile(output, `${JSON.stringify(har, null, 2)}\n`, { mode: 0o600 });
+  const raw = await Bun.file(input).text().catch(() => { throw new HarMaskError("input_unreadable"); });
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { throw new HarMaskError("invalid_har"); }
+  const { har, report } = maskHar(parsed, roots);
+  // "wx" never replaces an existing file, so a symlink or hard link to the raw input cannot be overwritten either.
+  await writeFile(output, `${JSON.stringify(har, null, 2)}\n`, { mode: 0o600, flag: "wx" }).catch((error: NodeJS.ErrnoException) => { if (error.code === "EEXIST") throw new HarMaskError("output_exists"); throw error; });
   await chmod(output, 0o600);
   process.stdout.write(`${JSON.stringify({ schema_version: 1, output: path.basename(output), ...report })}\n`);
   return 0;

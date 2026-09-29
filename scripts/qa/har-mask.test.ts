@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { HarMaskError, MASKED, maskHar } from "./har-mask";
@@ -28,7 +28,24 @@ describe("HAR masking for the pre-release UX QA stage", () => {
     expect(entries[1]!.request.url).toBe(`http://127.0.0.1:14070/api/projects?dir=<home>%2F.burnguard%2Fprojects&capability=${MASKED}`);
     expect([entries[0]!.response.status, entries[1]!.request.method]).toEqual([200, "GET"]);
     expect(report).toMatchObject({ headers: 5, cookies: 1, params: 1 });
-    expect(report.secret_values).toBeGreaterThanOrEqual(2);
+    expect(report.secret_values).toBe(2);
+  });
+
+  test("Given secrets that appear only in bodies, form params or quoted cookies, when masked, then they are collected and masked too", () => {
+    const token = "provider-token-9876543210";
+    const har = { log: { entries: [
+      entry({ url: "http://127.0.0.1:14070/api/bootstrap" }, { content: { size: 60, mimeType: "application/json", text: JSON.stringify({ ok: true, data: { capability: CAPABILITY } }) } }),
+      entry({ method: "POST", url: "http://127.0.0.1:14070/api/settings", postData: { mimeType: "application/x-www-form-urlencoded", text: `token=${token}`, params: [{ name: "token", value: token }] }, headers: [header("cookie", `theme="${"quoted-cookie-value-1234"}"`)] }, { content: { size: 40, mimeType: "application/json", text: JSON.stringify({ echo: `${CAPABILITY} ${token} quoted-cookie-value-1234 c:\\users\\alice\\x /root/.burnguard/y` }) } }),
+    ] } };
+    const text = JSON.stringify(maskHar(har).har);
+    for (const secret of [CAPABILITY, token, "quoted-cookie-value-1234", "alice", "/root/"]) expect(text).not.toContain(secret);
+  });
+
+  test("Given a bootstrap response whose body carries no recognisable capability, or a secret inside a binary-typed base64 body, when masked, then masking fails closed with a typed error", () => {
+    const unknownBootstrap = { log: { entries: [entry({ url: "http://127.0.0.1:14070/api/bootstrap" }, { content: { size: 10, mimeType: "text/plain", text: `launch ${CAPABILITY}` } })] } };
+    expect(() => maskHar(unknownBootstrap)).toThrow(new HarMaskError("capability_not_found"));
+    const binary = { log: { entries: [entry({ url: "http://127.0.0.1:14070/api/x", headers: [header("x-burnguard-capability", CAPABILITY)] }, { content: { size: 40, mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(`{"c":"${CAPABILITY}"}`).toString("base64") } })] } };
+    expect(() => maskHar(binary)).toThrow(new HarMaskError("secret_remains"));
   });
 
   test("Given input that is not a HAR, when masked, then a typed error is raised", () => {
@@ -47,7 +64,14 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       expect(run.stdout.toString()).not.toContain(CAPABILITY);
       expect(JSON.parse(run.stdout.toString())).toMatchObject({ schema_version: 1, output: "shared.har" });
       expect(await readFile(output, "utf8")).not.toContain(CAPABILITY);
-      expect((await stat(output)).mode & 0o777).toBe(0o600);
+      if (process.platform !== "win32") expect((await stat(output)).mode & 0o777).toBe(0o600);
+      const again = Bun.spawnSync(["bun", path.join(import.meta.dir, "har-mask.ts"), input, output]);
+      expect(JSON.parse(again.stderr.toString())).toEqual({ error: "output_exists" });
+      const link = path.join(dir, "link.har");
+      await symlink(input, link);
+      const viaLink = Bun.spawnSync(["bun", path.join(import.meta.dir, "har-mask.ts"), input, link]);
+      expect(JSON.parse(viaLink.stderr.toString())).toEqual({ error: "output_exists" });
+      expect(await readFile(input, "utf8")).toContain(CAPABILITY);
       const same = Bun.spawnSync(["bun", path.join(import.meta.dir, "har-mask.ts"), input, input]);
       expect(same.exitCode).toBe(1);
       expect(JSON.parse(same.stderr.toString())).toEqual({ error: "invalid_arguments" });

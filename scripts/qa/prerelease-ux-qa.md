@@ -57,6 +57,12 @@ Journeys (apply only what exists in the build; do not assume features):
 For each journey record: goal, entry, main actions and branches, success end state, preconditions and test data, and
 status: verified / partly verified / blocked / not applicable.
 
+Beyond J01-J07, map every screen you can reach - Settings, the design-system view, menus, dialogs, drawers, help -
+including secondary and collapsed actions, cancel, back and re-entry paths, and explore them in the passes below.
+Note every point where you had to rely on memory or guess to interpret a screen. Record video or a browser trace for
+short transitions when the tool supports it. Also restart the backend mid-session (the capability rotates) and check
+how the open app recovers.
+
 ## 4. Passes
 
 1. First use. Before acting on each screen: is its purpose and your location clear, do the most important information
@@ -115,6 +121,9 @@ K. Perceived performance: delay after a click, repeated loading, input lag, late
   still contains a collected secret. Keep raw HAR files inside the run's private directory and delete them when the
   report is accepted. Apply the same care to screenshots and traces: no capability, token, provider diagnostic or
   private path may be visible.
+- The tool masks what it can recognise; it cannot know provider diagnostics or personal content. After masking, scan the
+  masked HAR (URLs, request and response bodies) for provider diagnostics, prompts or personal data and remove them by
+  hand, or keep that HAR private.
 - If a tool cannot record HAR, video or a network condition, say what is missing and what replaced it. Never call a
   network summary a HAR, or report files, screens or actions that were not produced.
 
