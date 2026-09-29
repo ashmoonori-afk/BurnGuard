@@ -24,7 +24,7 @@ import {
   COMPACT_TASTE_REFERENCE,
 } from "./prompt-compact-skills";
 import { appendDesignBriefContext } from "./prompt-design-brief";
-import { appendDesignSystemContext, compactPinnedDesignSystemContext } from "./prompt-design-system";
+import { appendDesignSystemContext, appendDesignSystemStarter, compactPinnedDesignSystemContext } from "./prompt-design-system";
 import { appendGraphicOutputContext } from "./prompt-graphic-set";
 import { appendLogoOutputContext, readLogoManifestForPrompt } from "./prompt-logo-set";
 import { LOGO_SKILL_MD } from "./skills/logo-skill";
@@ -255,6 +255,7 @@ export async function buildPrompt(
       lines.push("<pinned_design_system>", JSON.stringify({ revision: context.designSystemPin.revision, digest: context.designSystemPin.digest }),
         "Use this project-pinned design system. Do not substitute a newer live system without an explicit project update.",
         contextMode === "compact" ? compactPinnedDesignSystemContext(context.designSystemPin) : context.designSystemPin.context, "</pinned_design_system>");
+      appendDesignSystemStarter(lines, context.designSystemPin.context, surfaceForProjectType(project.project_type));
     } else if (context.designSystem) await appendDesignSystemContext(lines, context.designSystem, contextMode, surfaceForProjectType(project.project_type));
   }
 
