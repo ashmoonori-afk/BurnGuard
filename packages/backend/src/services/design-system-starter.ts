@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { MeasuredBox, MeasuredPageLayout, MeasuredViewportLayout, MeasuredViewportName } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
 import { readableRole } from "./design-system-contrast";
-import { measuredPagesFromPinnedContext, selectMeasuredPage } from "./design-system-conformance";
+import { MEASURED_PAGE_DECLARATION, measuredPagesFromPinnedContext, selectMeasuredPage } from "./design-system-conformance";
 import { heroAssetsFromPinnedContext, layoutReferenceFromPinnedContext, STAGED_REFERENCE_DIR, stagedReferencePath } from "./design-system-layout-reference";
 
 /** First line of every generated starter stylesheet; a file without it was written by someone else and is never replaced. */
@@ -167,12 +167,25 @@ export function starterPlan(pinnedContext: string): StarterPlan | null {
   }) };
 }
 
+const CREATION_STARTER_MARKERS = ['data-bg-node-id="starter-root"', "Send your first prompt in chat to generate the first revision."] as const;
+
+/** True for an entrypoint nobody has written yet: missing, blank, or the untouched page a new project is created with. */
+function isFreshEntrypoint(source: string | null): boolean {
+  return source === null || source.trim() === "" || CREATION_STARTER_MARKERS.every(marker => source.includes(marker));
+}
+
+/** Whether the entrypoint already follows the pinned system: it declares its measured page, holds no skeleton placeholders and was not seeded this turn. */
+export function entrypointBuiltAgainstSystem(source: string, seededThisTurn: boolean): boolean {
+  return !seededThisTurn && MEASURED_PAGE_DECLARATION.test(source) && !source.includes("data-bg-placeholder");
+}
+
 /**
- * Makes the home skeleton the entrypoint of a fresh project (no file, or an empty one) so the model edits the class-based
+ * Makes the home skeleton the entrypoint of a fresh project (no file, an empty one, or the untouched creation page) so the model edits the class-based
  * page instead of writing one from scratch. Every skeleton block carries data-bg-placeholder, so a page the turn left
- * untouched never counts as generated content. Returns whether it seeded; a root-level entrypoint only.
+ * untouched never counts as generated content. The hero image is used only when it was staged. Returns whether it seeded;
+ * a root-level entrypoint only.
  */
-export async function seedStarterEntrypoint(stageDir: string, pinnedContext: string, entrypoint: string): Promise<boolean> {
+export async function seedStarterEntrypoint(stageDir: string, pinnedContext: string, entrypoint: string, stagedHeroAssets: readonly string[] = []): Promise<boolean> {
   if (entrypoint.includes("/")) return false;
   const plan = starterPlan(pinnedContext);
   const pages = (measuredPagesFromPinnedContext(pinnedContext) ?? []).filter(page => SAFE_PATH.test(page.path));
@@ -180,8 +193,9 @@ export async function seedStarterEntrypoint(stageDir: string, pinnedContext: str
   if (plan === null || home === null) return false;
   const file = resolveWithin(stageDir, entrypoint);
   const existing = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return null; throw error; });
-  if (existing !== null && existing.trim() !== "") return false;
-  await writeFile(file, buildStarterHtml(home, plan.pages[pages.indexOf(home)]?.hero_media), "utf8");
+  if (!isFreshEntrypoint(existing)) return false;
+  const heroMedia = plan.pages[pages.indexOf(home)]?.hero_media;
+  await writeFile(file, buildStarterHtml(home, heroMedia !== undefined && stagedHeroAssets.includes(heroMedia) ? heroMedia : undefined), "utf8");
   return true;
 }
 

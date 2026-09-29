@@ -5,7 +5,8 @@ import path from "node:path";
 import { MEASURED_VIEWPORTS, type MeasuredViewportLayout } from "@bg/shared";
 import { appendDesignSystemContext } from "../src/harness/prompt-design-system";
 import { generationOutputComplete } from "../src/services/generation-output";
-import { seedStarterEntrypoint } from "../src/services/design-system-starter";
+import { renderInitialArtifact } from "../src/db/templates";
+import { entrypointBuiltAgainstSystem, seedStarterEntrypoint } from "../src/services/design-system-starter";
 
 const viewport = (name: "desktop" | "mobile"): MeasuredViewportLayout => ({
   viewport: { ...MEASURED_VIEWPORTS[name] }, page_height: 2400, container: { left: 120, width: 1200 }, gutter: 24, section_gap: 96, type_scale: { hero: 64, subheading: 24 },
@@ -59,6 +60,30 @@ describe("Design-system starter entrypoint", () => {
       expect(await seedStarterEntrypoint(stage, await pinnedContext(false), "index.html")).toBe(false);
       expect(await readFile(path.join(stage, "index.html")).catch(() => null)).toBeNull();
     });
+  });
+
+  test("Given the page a new project is created with, then it counts as fresh and is seeded, while a page the user changed is not", async () => {
+    const context = await pinnedContext(true);
+    const creation = renderInitialArtifact({ name: "Acme", type: "prototype" });
+    await withStage(async (stage) => {
+      await writeFile(path.join(stage, "index.html"), creation);
+      expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(true);
+      expect((await readFile(path.join(stage, "index.html"), "utf8")).includes("Start a new prototype")).toBe(false);
+    });
+    await withStage(async (stage) => {
+      const edited = creation.replace("Send your first prompt in chat to generate the first revision.", "My own copy.");
+      await writeFile(path.join(stage, "index.html"), edited);
+      expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(false);
+      expect(await readFile(path.join(stage, "index.html"), "utf8")).toBe(edited);
+    });
+  });
+
+  test("Given a page that declares its measured page, then it is built against the system only when it was not seeded this turn and no placeholder remains", () => {
+    const declared = '<meta name="bg-measured-page" content="/">';
+    expect(entrypointBuiltAgainstSystem(declared, false)).toBe(true);
+    expect(entrypointBuiltAgainstSystem(declared, true)).toBe(false);
+    expect(entrypointBuiltAgainstSystem(declared + "<section data-bg-placeholder></section>", false)).toBe(false);
+    expect(entrypointBuiltAgainstSystem("<h1>No declaration</h1>", false)).toBe(false);
   });
 
   test("Given an empty entrypoint file, then it is treated as fresh and seeded", async () => {

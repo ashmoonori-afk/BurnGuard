@@ -57,7 +57,7 @@ import { checkCssLogos } from "./css-logo-check";
 import { prepareSlideDeckExport } from "./export-stage";
 import { blockingDesignFindings, DesignReviewError, reviewTurnDesign } from "./turn-design-review";
 import { MEASURED_PAGE_DECLARATION, reviewDesignSystemConformance } from "./design-system-conformance";
-import { provisionDesignSystemStarter, seedStarterEntrypoint } from "./design-system-starter";
+import { entrypointBuiltAgainstSystem, provisionDesignSystemStarter, seedStarterEntrypoint } from "./design-system-starter";
 import { provisionDesignSystemHeroAssets, provisionDesignSystemLayoutReference } from "./design-system-layout-reference";
 import { resolveManagedPath, systemsDir } from "../lib/paths";
 import { designAuditCanvas, writeProjectAuditCache } from "./design-audit";
@@ -503,8 +503,8 @@ async function runUserTurnInternal(
           const pinnedSystem = sessionContext.designSystem?.id === sessionContext.designSystemPin.system_id ? sessionContext.designSystem : null;
           const pinnedSystemDir = pinnedSystem === null ? null : resolveManagedPath(systemsDir, pinnedSystem.dir_path);
           await provisionDesignSystemLayoutReference(stageDir, sessionContext.designSystemPin.context, pinnedSystemDir);
-          await provisionDesignSystemHeroAssets(stageDir, sessionContext.designSystemPin.context, pinnedSystemDir);
-          starterSeeded = await seedStarterEntrypoint(stageDir, sessionContext.designSystemPin.context, project.entrypoint);
+          const stagedHeroAssets = await provisionDesignSystemHeroAssets(stageDir, sessionContext.designSystemPin.context, pinnedSystemDir);
+          starterSeeded = await seedStarterEntrypoint(stageDir, sessionContext.designSystemPin.context, project.entrypoint, stagedHeroAssets);
         }
         stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: payload.active_rel_path ?? project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
@@ -526,7 +526,7 @@ async function runUserTurnInternal(
         // finding that predates the turn on an untouched page cannot refuse it.
         const beforeAdapter = await inspectCanonicalTree(stageDir);
         // A page that already declares its measured entry was built against the system on an earlier turn.
-        const builtAgainstSystem = !starterSeeded && MEASURED_PAGE_DECLARATION.test(await readFile(resolveWithin(stageDir, project.entrypoint), "utf8").catch(() => ""));
+        const builtAgainstSystem = entrypointBuiltAgainstSystem(await readFile(resolveWithin(stageDir, project.entrypoint), "utf8").catch(() => ""), starterSeeded);
         const immutableSnapshots = await captureImmutableAttachments(selectedAttachments);
         try {
           await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: contextPayload.attachments, immutableSnapshots }, async (stageInputs) => {
