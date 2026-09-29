@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { COMMANDCODE_MODELS, type BackendId, type GenerationOptions } from "@bg/shared";
+import { COMMANDCODE_MODELS, effortBelowRecommendation, resolveModelCapabilityProfile, type BackendId, type GenerationOptions } from "@bg/shared";
 import { detectBackends, getSettings } from "@/api/home";
 import { useT } from "@/i18n/t";
 
@@ -12,6 +12,8 @@ export default function GenerationControls({ backendId, value, onChange, disable
   const models = value.provider === "commandcode" ? COMMANDCODE_MODELS : detection.data?.backends.find((backend) => backend.id === backendId)?.models ?? [];
   const model = models.find((candidate) => candidate.id === value.model) ?? models[0];
   const efforts = model?.efforts ?? ["low"];
+  const profile = resolveModelCapabilityProfile(backendId, value);
+  const belowRecommendation = effortBelowRecommendation(profile, value.effort);
   const selectClass = "mt-1 min-h-9 w-full rounded-lg border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const secondary = <>
     {backendId === "claude-code" && <label className="block">{t("settings.connection")}
@@ -35,6 +37,7 @@ export default function GenerationControls({ backendId, value, onChange, disable
     </div>
     {/* States that guidance follows the selection. Never surfaces preset ids, block text or prompt JSON. */}
     <p className="text-[11px] text-muted-foreground">{t("settings.taskGuidanceAdapts")}</p>
+    {profile.recommended_min_effort !== null && <p data-bg-effort-note={belowRecommendation ? "below" : "met"} className={belowRecommendation ? "rounded-md bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300" : "text-[11px] text-muted-foreground"}>{t("settings.capableModelEffortNote")}</p>}
     {compact ? <details className="text-muted-foreground">
       <summary className="cursor-pointer rounded py-1 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("settings.additional")}</summary>
       <div className="mt-1 space-y-3 rounded-lg bg-muted/40 p-2.5">{secondary}</div>

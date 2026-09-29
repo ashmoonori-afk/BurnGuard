@@ -1,3 +1,4 @@
+import { WEB_ASSET_MCP_SERVER, WEB_ASSET_TOOL_NAMES } from "@bg/shared";
 import { spawnOwnedProcess } from "../owned-process";
 import { settleProcessStreams } from "../process-streams";
 
@@ -14,6 +15,7 @@ import { settleProcessStreams } from "../process-streams";
 
 export interface RunnerOptions {
   generation?: import("@bg/shared").GenerationOptions;
+  webAssetTool?: { readonly command: readonly string[] };
   commandcodeApiKey?: string;
   binaryPath: string;
   projectDir: string;
@@ -28,9 +30,19 @@ export interface RunnerResult {
   exitCode: number;
 }
 
-export function buildClaudeCommand(options: Pick<RunnerOptions, "binaryPath" | "generation">): string[] {
+/** `--mcp-config` and `--allowedTools` take variadic values, so they sit before another flag, never last. */
+function webAssetToolArgs(tool: RunnerOptions["webAssetTool"]): string[] {
+  if (tool === undefined || tool.command.length === 0) return [];
+  const [command, ...args] = tool.command;
+  const config = { mcpServers: { [WEB_ASSET_MCP_SERVER]: { type: "stdio", command, args } } };
+  const allowed = Object.values(WEB_ASSET_TOOL_NAMES).map((name) => `mcp__${WEB_ASSET_MCP_SERVER}__${name}`);
+  return ["--mcp-config", JSON.stringify(config), "--allowedTools", allowed.join(",")];
+}
+
+export function buildClaudeCommand(options: Pick<RunnerOptions, "binaryPath" | "generation" | "webAssetTool">): string[] {
   return [options.binaryPath, "-p", "--output-format", "stream-json", "--verbose",
     "--permission-mode", "acceptEdits",
+    ...webAssetToolArgs(options.webAssetTool),
     "--effort", options.generation?.effort ?? "low",
     ...(options.generation?.model ? ["--model", options.generation.model] : []),
     ...(options.generation?.vanilla ? ["--safe-mode"] : []),

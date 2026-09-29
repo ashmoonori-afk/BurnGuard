@@ -5,6 +5,9 @@ if (process.argv.includes("--bg-image-palette")) {
 } else if (process.argv.includes("--bg-chromium-probe")) {
   const { runChromiumProbeProcess } = await import("./services/chromium-capability");
   await runChromiumProbeProcess();
+} else if (process.argv.includes("--bg-web-assets-mcp")) {
+  const { runWebAssetsMcpServer } = await import("./services/web-assets-mcp");
+  await runWebAssetsMcpServer();
 } else {
   await import("./main");
 }

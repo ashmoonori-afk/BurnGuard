@@ -106,6 +106,7 @@ function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): Sett
       config.figmaPersonalAccessToken.trim().length > 0,
     vercel_token_set: config.vercelToken !== null,
     publish_made_with_badge: config.publish.madeWithBadge,
+    web_asset_search: config.webAssets.searchEnabled,
   };
 }
 
@@ -270,7 +271,7 @@ homeRoutes.patch("/api/settings", async (c) => {
     return c.json(fail("invalid_body", "Expected a JSON object request body"), 400);
   }
 
-  const changes: Pick<Partial<AppConfig>, "theme" | "locale" | "defaultBackend" | "figmaPersonalAccessToken" | "vercelToken" | "publish" | "commandcodeApiKey" | "generationDefaults"> & {
+  const changes: Pick<Partial<AppConfig>, "theme" | "locale" | "defaultBackend" | "figmaPersonalAccessToken" | "vercelToken" | "publish" | "webAssets" | "commandcodeApiKey" | "generationDefaults"> & {
     llmApiKeys?: LlmApiKeysPatch;
     chat?: Partial<AppConfig["chat"]>;
     user?: Partial<AppConfig["user"]>;
@@ -393,6 +394,12 @@ homeRoutes.patch("/api/settings", async (c) => {
       return c.json(fail("invalid_publish_badge", "publish_made_with_badge must be a boolean"), 400);
     }
     changes.publish = { madeWithBadge: patch.publish_made_with_badge };
+  }
+  if ("web_asset_search" in patch) {
+    if (typeof patch.web_asset_search !== "boolean") {
+      return c.json(fail("invalid_web_asset_search", "web_asset_search must be a boolean"), 400);
+    }
+    changes.webAssets = { searchEnabled: patch.web_asset_search };
   }
 
   const config = await updateConfig((current) => ({

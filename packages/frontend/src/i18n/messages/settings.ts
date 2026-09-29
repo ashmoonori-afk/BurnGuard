@@ -162,5 +162,8 @@ export const settingsMessages = defineMessages({
   "settings.toolDefault": { ko: "도구 기본 모델", en: "Tool default model", "zh-CN": "工具默认模型" },
   "settings.effort": { ko: "추론 강도", en: "Reasoning effort", "zh-CN": "推理强度" },
   "settings.taskGuidanceAdapts": { ko: "작업 안내는 선택한 모델과 추론 강도에 맞춰 자동으로 조정돼요.", en: "Task guidance adapts to the selected model and reasoning effort.", "zh-CN": "任务指引会根据所选模型与推理强度自动调整。" },
+  "settings.capableModelEffortNote": { ko: "Opus와 Sonnet은 CSS로 로고를 디자인하고 라이선스가 확인된 실제 웹 에셋을 찾아 넣어요. 추론 강도는 MEDIUM 이상을 권장해요.", en: "Opus and Sonnet design logos in CSS and find real, licensed web assets. Medium effort or higher is recommended.", "zh-CN": "Opus 和 Sonnet 会用 CSS 设计标志，并查找有授权的真实网络素材。建议使用 MEDIUM 或更高的推理强度。" },
+  "settings.webAssetSearch": { ko: "Opus와 Sonnet이 Openverse와 Iconify에서 라이선스가 확인된 이미지와 아이콘을 검색하도록 허용", en: "Let Opus and Sonnet search Openverse and Iconify for licensed images and icons", "zh-CN": "允许 Opus 和 Sonnet 在 Openverse 与 Iconify 中搜索有授权的图片和图标" },
+  "settings.webAssetSearchHint": { ko: "검색어가 이 서비스들로 전송돼요. 내려받은 파일과 출처·라이선스는 프로젝트의 assets/web 폴더에 저장돼요. 끄면 네트워크 검색 없이 제공된 이미지와 기본 아이콘만 사용해요.", en: "Search words are sent to these services. Downloaded files and their source and license are saved in the project's assets/web folder. When off, only supplied images and bundled icons are used, with no network search.", "zh-CN": "搜索词会发送到这些服务。下载的文件及其来源和许可证会保存在项目的 assets/web 文件夹中。关闭后仅使用提供的图片和内置图标，不进行网络搜索。" },
   "settings.additional": { ko: "연결 및 추가 설정", en: "Connection and additional settings", "zh-CN": "连接与更多设置" },
 });

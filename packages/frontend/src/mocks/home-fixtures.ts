@@ -132,4 +132,5 @@ export const mockSettings: SettingsSummary = {
   figma_token_set: false,
   vercel_token_set: false,
   publish_made_with_badge: true,
+  web_asset_search: true,
 };

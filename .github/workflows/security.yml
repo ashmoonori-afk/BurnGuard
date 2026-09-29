@@ -32,6 +32,10 @@ jobs:
           packages/backend/tests/task-preset-evidence.test.ts
           packages/backend/tests/visual-craft-skill.test.ts
           packages/frontend/tests/generation-controls-guidance.test.ts
+          packages/backend/tests/model-profile.test.ts
+          packages/backend/tests/web-assets.test.ts
+          packages/backend/tests/css-logo-check.test.ts
+          packages/frontend/tests/generation-controls-effort-note.test.ts
       # The full suite needs a prepared workstation (Chromium, Node bridge,
       # Python + pypdf); see doc/07-manual-smoke-test.md. This gate runs the
       # boundary tests that need none of that.

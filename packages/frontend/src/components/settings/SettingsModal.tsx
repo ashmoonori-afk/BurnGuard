@@ -201,6 +201,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
         chat_context_mode: settings.chat_context_mode,
         user: settings.user,
         publish_made_with_badge: settings.publish_made_with_badge,
+        web_asset_search: settings.web_asset_search,
       });
       queryClient.setQueryData(["settings"], next);
       pushToast({ title: t("settings.saved"), tone: "success" });
@@ -312,6 +313,18 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
             /> : detectionQuery.isPending ? <p role="status" className="text-sm text-muted-foreground">{t("settings.backendChecking")}</p> : null}
             {detectionQuery.isError ? <SettingsLoadError title={t("settings.backendFailed")} error={detectionQuery.error} retry={() => void detectionQuery.refetch()} pending={detectionQuery.isFetching} /> : null}
             <GenerationControls backendId={settings.default_backend} value={settings.generation_defaults?.[settings.default_backend] ?? defaultGenerationOptions(settings.default_backend)} onChange={(generation) => setSettings({ ...settings, generation_defaults: { ...settings.generation_defaults, [settings.default_backend]: generation } })} />
+            <div className="space-y-1">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-accent"
+                  checked={settings.web_asset_search}
+                  onChange={(e) => setSettings((draft) => draft ? { ...draft, web_asset_search: e.target.checked } : draft)}
+                />
+                {t("settings.webAssetSearch")}
+              </label>
+              <p className="text-xs text-muted-foreground">{t("settings.webAssetSearchHint")}</p>
+            </div>
             <div className="space-y-2 rounded-xl border border-border p-3">
               <label htmlFor="commandcode-api-key" className="text-sm font-medium">{t("settings.commandcodeKey")}</label>
               <p className="text-xs text-muted-foreground">{t("settings.commandcodeHint")} {t(settings.commandcode_api_key_set ? "settings.keySet" : "settings.keyUnset")}</p>

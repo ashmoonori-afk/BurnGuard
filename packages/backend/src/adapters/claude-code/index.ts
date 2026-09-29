@@ -33,6 +33,7 @@ export async function runClaudeCodeTurn(
     result = await runClaudeCode({
       binaryPath: input.binaryPath,
       generation: input.generation,
+      webAssetTool: input.webAssetTool,
       commandcodeApiKey: input.commandcodeApiKey,
       projectDir: input.projectDir,
       prompt: input.prompt,
