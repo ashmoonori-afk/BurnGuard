@@ -24,6 +24,9 @@ import { parse } from "node-html-parser";
 import {
   APP_VERSION,
   DEFAULT_PAGE_LIMIT,
+  LAYOUT_REFERENCE_HERO_FILE,
+  MAX_HERO_ASSET_BYTES,
+  MAX_HERO_ASSETS,
   MAX_LAYOUT_REFERENCE_BYTES,
   parseDesignSystemLayoutReference,
   parseDesignSystemPageCoverage,
@@ -1652,7 +1655,7 @@ async function writeCanonicalDesignSystem(input: {
     input.systemDir,
   );
   if (input.analysis.measuredLayout) await writeText(path.join(input.systemDir, "layout-measured.json"), `${JSON.stringify(input.analysis.measuredLayout, null, 2)}\n`, generated, input.systemDir);
-  if (input.analysis.measuredLayout && (input.analysis.layoutReferenceShots ?? []).length > 0) await writeLayoutReference(input.systemDir, input.analysis.measuredLayout, input.analysis.layoutReferenceShots ?? [], generated, input.analysis.notes);
+  if (input.analysis.measuredLayout && (input.analysis.layoutReferenceShots ?? []).length > 0) await writeLayoutReference(input.systemDir, input.analysis.measuredLayout, input.analysis.layoutReferenceShots ?? [], generated, input.analysis.notes, input.analysis.heroAssets?.images ?? []);
   if (input.analysis.pageCoverage) {
     // Publish only what the strict reader accepts, so a malformed record can never make the system unreadable.
     let coverage: DesignSystemPageCoverage | null = null;
@@ -2467,15 +2470,21 @@ function previewBody(
  * with an index recording each file's measured page, size and digest. Only what the strict reader accepts is
  * published; a rejected index drops the screenshots with a note.
  */
-async function writeLayoutReference(systemDir: string, measured: DesignSystemMeasuredLayout, shots: readonly LayoutReferenceCapture[], generated: Set<string>, notes: string[]): Promise<void> {
+async function writeLayoutReference(systemDir: string, measured: DesignSystemMeasuredLayout, shots: readonly LayoutReferenceCapture[], generated: Set<string>, notes: string[], heroImages: readonly { readonly absolutePath: string; readonly fileName: string }[]): Promise<void> {
   const entries = shots.flatMap((shot) => {
     const index = measured.pages.findIndex((page) => page.path === shot.path);
     return index === -1 ? [] : [{ shot, index }];
   }).sort((a, b) => a.index - b.index || a.shot.viewport.localeCompare(b.shot.viewport));
+  const heroAssets: { file: string; size: number; sha256: string }[] = [];
+  for (const image of heroImages.slice(0, MAX_HERO_ASSETS)) {
+    const file = `assets/hero/${safeFileName(image.fileName)}`;
+    const bytes = await readFile(image.absolutePath).catch(() => null);
+    if (bytes !== null && LAYOUT_REFERENCE_HERO_FILE.test(file) && bytes.byteLength > 0 && bytes.byteLength <= MAX_HERO_ASSET_BYTES) heroAssets.push({ file, size: bytes.byteLength, sha256: createHash("sha256").update(bytes).digest("hex") });
+  }
   const wireframes = entries.map(({ shot, index }) => renderMeasuredWireframe(measured.pages[index]!.viewports[shot.viewport]));
   let reference;
   try {
-    reference = parseDesignSystemLayoutReference({ schema_version: 1, shots: entries.map(({ shot, index }, position) => ({
+    reference = parseDesignSystemLayoutReference({ schema_version: 1, ...(heroAssets.length > 0 ? { hero_assets: heroAssets } : {}), shots: entries.map(({ shot, index }, position) => ({
       path: shot.path, viewport: shot.viewport, file: `layout-reference/p${index}-${shot.viewport}.jpg`, width: shot.width, height: shot.height,
       size: shot.jpeg.byteLength, sha256: createHash("sha256").update(shot.jpeg).digest("hex"),
       wireframe: { file: `layout-reference/p${index}-${shot.viewport}.svg`, size: Buffer.byteLength(wireframes[position]!), sha256: createHash("sha256").update(wireframes[position]!).digest("hex") },

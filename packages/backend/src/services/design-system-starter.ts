@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { MeasuredBox, MeasuredPageLayout, MeasuredViewportLayout, MeasuredViewportName } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
 import { measuredPagesFromPinnedContext, selectMeasuredPage } from "./design-system-conformance";
-import { layoutReferenceFromPinnedContext, STAGED_REFERENCE_DIR, stagedReferencePath } from "./design-system-layout-reference";
+import { heroAssetsFromPinnedContext, layoutReferenceFromPinnedContext, STAGED_REFERENCE_DIR, stagedReferencePath } from "./design-system-layout-reference";
 
 /** First line of every generated starter stylesheet; a file without it was written by someone else and is never replaced. */
 export const STARTER_MARKER = "/* burnguard-design-system-starter v1 */";
@@ -108,7 +108,7 @@ export function buildStarterCss(tokensCss: string, pages: readonly MeasuredPageL
 }
 
 /** A skeleton page in the measured section order using the class API; a reference for the model, never published. */
-export function buildStarterHtml(page: MeasuredPageLayout): string {
+export function buildStarterHtml(page: MeasuredPageLayout, heroMedia?: string): string {
   const { desktop } = page.viewports;
   const hero = heroArrangement(desktop);
   const sections = desktop.sections.slice(1).map((section, index) => `  <section class="bg-section" data-measured-section="${index + 1}">\n    <div class="bg-container">\n      <h2 class="bg-section__title">SECTION TITLE</h2>\n      <div class="bg-grid" style="--bg-columns: ${Math.max(1, Math.min(section.columns, 6))}">\n        <article class="bg-card"><h3 class="bg-card__title">ITEM</h3><p>ITEM TEXT</p></article>\n      </div>\n    </div>\n  </section>`);
@@ -124,7 +124,7 @@ export function buildStarterHtml(page: MeasuredPageLayout): string {
     '<body class="bg-page">',
     '  <header class="bg-container bg-nav"><a href="index.html">LOGO</a><nav><a href="index.html">LINK</a></nav></header>',
     `  <section class="bg-hero bg-hero--${hero} bg-container">`,
-    '    <div class="bg-hero__media">HERO MEDIA (reuse assets/hero files when the system lists them)</div>',
+    heroMedia === undefined ? '    <div class="bg-hero__media">HERO MEDIA (reuse assets/hero files when the system lists them)</div>' : `    <div class="bg-hero__media"><img src="${heroMedia}" alt=""></div>`,
     '    <h1 class="bg-hero__title">HEADLINE</h1>',
     '    <p class="bg-hero__subtitle">SUBHEADING</p>',
     '    <a class="bg-button" href="#">CALL TO ACTION</a>',
@@ -138,7 +138,7 @@ export function buildStarterHtml(page: MeasuredPageLayout): string {
 }
 
 /** reference lists the staged screenshots of the source page by viewport, when the pin carries any. */
-export type StarterPlanPage = { readonly path: string; readonly hero: HeroArrangement; readonly skeleton: string; readonly reference?: Readonly<Partial<Record<MeasuredViewportName, string>>>; readonly wireframe?: Readonly<Partial<Record<MeasuredViewportName, string>>> };
+export type StarterPlanPage = { readonly path: string; readonly hero: HeroArrangement; readonly skeleton: string; readonly hero_media?: string; readonly reference?: Readonly<Partial<Record<MeasuredViewportName, string>>>; readonly wireframe?: Readonly<Partial<Record<MeasuredViewportName, string>>> };
 export type StarterPlan = { readonly stylesheet: string; readonly pages: readonly StarterPlanPage[] };
 
 const skeletonName = (pagePath: string): string => pagePath === "/" ? "home.html" : `${pagePath.slice(1).replace(/[^A-Za-z0-9._-]+/gu, "_").slice(0, 80)}.html`;
@@ -148,10 +148,12 @@ export function starterPlan(pinnedContext: string): StarterPlan | null {
   const pages = (measuredPagesFromPinnedContext(pinnedContext) ?? []).filter(page => SAFE_PATH.test(page.path));
   if (pages.length === 0) return null;
   const shots = layoutReferenceFromPinnedContext(pinnedContext);
+  const heroImage = heroAssetsFromPinnedContext(pinnedContext)[0]?.file;
   return { stylesheet: STARTER_CSS_PATH, pages: pages.map(page => {
     const reference = Object.fromEntries(shots.filter(shot => shot.path === page.path).map(shot => [shot.viewport, stagedReferencePath(shot)]));
     const wireframe = Object.fromEntries(shots.filter(shot => shot.path === page.path && shot.wireframe).map(shot => [shot.viewport, `${STAGED_REFERENCE_DIR}/${path.posix.basename(shot.wireframe!.file)}`]));
-    return { path: page.path, hero: heroArrangement(page.viewports.desktop), skeleton: `${STARTER_SKELETON_DIR}/${skeletonName(page.path)}`, ...(Object.keys(reference).length > 0 ? { reference } : {}), ...(Object.keys(wireframe).length > 0 ? { wireframe } : {}) };
+    const hero = heroArrangement(page.viewports.desktop);
+    return { path: page.path, hero, ...(heroImage !== undefined && (hero === "media-behind" || hero === "split") ? { hero_media: heroImage } : {}), skeleton: `${STARTER_SKELETON_DIR}/${skeletonName(page.path)}`, ...(Object.keys(reference).length > 0 ? { reference } : {}), ...(Object.keys(wireframe).length > 0 ? { wireframe } : {}) };
   }) };
 }
 
@@ -170,6 +172,6 @@ export async function provisionDesignSystemStarter(stageDir: string, pin: { read
     await writeFile(cssPath, buildStarterCss(pin.tokens, pages), "utf8");
   }
   await mkdir(resolveWithin(stageDir, ...STARTER_SKELETON_DIR.split("/")), { recursive: true });
-  for (const [index, page] of pages.entries()) await writeFile(resolveWithin(stageDir, ...plan.pages[index]!.skeleton.split("/")), buildStarterHtml(page), "utf8");
+  for (const [index, page] of pages.entries()) await writeFile(resolveWithin(stageDir, ...plan.pages[index]!.skeleton.split("/")), buildStarterHtml(page, plan.pages[index]!.hero_media), "utf8");
   return plan;
 }

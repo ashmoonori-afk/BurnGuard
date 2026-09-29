@@ -67,14 +67,24 @@ export type LayoutReferenceShot = {
 };
 /** A stored derived wireframe SVG, pinned by size and digest like the screenshot it accompanies. */
 export type LayoutReferenceWireframe = { readonly file: string; readonly size: number; readonly sha256: string };
-export type DesignSystemLayoutReference = { readonly schema_version: 1; readonly shots: readonly LayoutReferenceShot[] };
+/** Largest extracted hero image the reference pins; a larger one is not pinned. */
+export const MAX_HERO_ASSET_BYTES = 4_000_000;
+export const MAX_HERO_ASSETS = 2;
+export const LAYOUT_REFERENCE_HERO_FILE = /^assets\/hero\/[A-Za-z0-9_][A-Za-z0-9._-]{0,119}$/;
+/** An extracted hero image of the system, pinned by size and digest so a turn reuses exactly these bytes. */
+export type LayoutReferenceHeroAsset = { readonly file: string; readonly size: number; readonly sha256: string };
+export type DesignSystemLayoutReference = { readonly schema_version: 1; readonly shots: readonly LayoutReferenceShot[]; readonly hero_assets?: readonly LayoutReferenceHeroAsset[] };
 const REFERENCE_FILE = /^layout-reference\/p[0-9]{1,2}-(?:desktop|mobile)\.jpg$/;
 
 export function parseDesignSystemLayoutReference(input: unknown): DesignSystemLayoutReference {
   const invalid = (): never => { throw new UpgradeContractError("invalid_field", "design_system_layout_reference"); };
   const keys = ["path", "viewport", "file", "width", "height", "size", "sha256"];
   const count = (value: unknown, max: number): number => typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= max ? value : invalid();
-  if (!isRecord(input) || Object.keys(input).length !== 2 || input.schema_version !== 1 || !Array.isArray(input.shots) || input.shots.length > MAX_MEASURED_PAGES * 2) return invalid();
+  if (!isRecord(input) || Object.keys(input).length !== 2 + ("hero_assets" in input ? 1 : 0) || input.schema_version !== 1 || !Array.isArray(input.shots) || input.shots.length > MAX_MEASURED_PAGES * 2) return invalid();
+  const heroAssets = input.hero_assets === undefined ? undefined : !Array.isArray(input.hero_assets) || input.hero_assets.length > MAX_HERO_ASSETS ? invalid() : input.hero_assets.map((asset): LayoutReferenceHeroAsset =>
+    isRecord(asset) && Object.keys(asset).length === 3 && typeof asset.file === "string" && LAYOUT_REFERENCE_HERO_FILE.test(asset.file) && typeof asset.sha256 === "string" && /^[0-9a-f]{64}$/.test(asset.sha256)
+      ? { file: asset.file, size: count(asset.size, MAX_HERO_ASSET_BYTES), sha256: asset.sha256 }
+      : invalid());
   const shots = input.shots.map((shot): LayoutReferenceShot => {
     if (!isRecord(shot) || !keys.every(key => key in shot) || Object.keys(shot).length !== keys.length + ("wireframe" in shot ? 1 : 0)) return invalid();
     const viewport = shot.viewport === "desktop" || shot.viewport === "mobile" ? shot.viewport : invalid();
@@ -86,8 +96,8 @@ export function parseDesignSystemLayoutReference(input: unknown): DesignSystemLa
       : invalid();
     return { path: shot.path, viewport, file: shot.file, width: count(shot.width, 100_000), height: count(shot.height, 100_000), size: count(shot.size, MAX_LAYOUT_REFERENCE_BYTES), sha256: shot.sha256, ...(wireframe ? { wireframe } : {}) };
   });
-  if (new Set(shots.map(shot => shot.file)).size !== shots.length) return invalid();
-  return { schema_version: 1, shots };
+  if (new Set(shots.map(shot => shot.file)).size !== shots.length || (heroAssets && new Set(heroAssets.map(asset => asset.file)).size !== heroAssets.length)) return invalid();
+  return { schema_version: 1, shots, ...(heroAssets && heroAssets.length > 0 ? { hero_assets: heroAssets } : {}) };
 }
 
 export function parseDesignSystemMeasuredLayout(input: unknown): DesignSystemMeasuredLayout {
