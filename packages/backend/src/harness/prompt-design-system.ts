@@ -113,6 +113,38 @@ async function appendSurfaceContext(
   lines.push("");
 }
 
+/** Layout-contract kinds whose prose the measured layout and starter replace on a measured website. */
+const MEASURED_REPLACES = ["hero"] as const;
+
+/**
+ * Machine-readable precedence for a measured website. `omitted` names what was removed from the layout contract
+ * and README excerpt because the measured layout and starter set it.
+ */
+export const DESIGN_SYSTEM_CONTRACT = {
+  schema_version: 1,
+  precedence: ["user_request", "measured_layout", "observed_patterns", "layout_rules"],
+  omitted: ["hero_prose", "pattern_default_details", "default_patterns"],
+} as const;
+
+const CONTRACT_REQUIREMENT = "- REQUIRED (CONTRACT): when two design-system sources disagree, follow the precedence above, first entry first: the user's explicit request, then the measured layout and the starter, then the observed section patterns, then the remaining layout rules. Hero prose and default pattern details were removed because the measured layout sets them; do not reintroduce generic defaults in their place.";
+
+/**
+ * The website layout contract for a system with measured pages: the Hero prose is dropped, (default) section
+ * patterns are dropped, and observed patterns keep only their observed facts. Everything else is unchanged.
+ */
+export function withoutMeasuredDefaults(layout: DesignSystemLayout): DesignSystemLayout {
+  const sections = layout.sections.flatMap((section) => {
+    if ((MEASURED_REPLACES as readonly string[]).includes(section.kind)) return [];
+    if (section.kind !== "patterns") return [section];
+    const text = section.text.split("\n")
+      .filter((line) => !/^\s*-\s[^\n]*\(default\):/u.test(line))
+      .map((line) => line.replace(/\.?\s*Default details:.*$/u, "."))
+      .join("\n").trim();
+    return text === "" ? [] : [{ ...section, text }];
+  });
+  return { ...layout, sections };
+}
+
 /** Brand rules that outlive geometry: the Composition prose and the --family-* structural choices. */
 function brandInvariantsOnly(layout: DesignSystemLayout): DesignSystemLayout {
   return {
@@ -183,10 +215,18 @@ export async function appendDesignSystemContext(
   // A fixed slide or artboard has none of those, so it receives only the surface-independent brand
   // rules plus its own surface below. Suppressing the whole contract would drop the brand rules too.
   const full = await readDesignSystemLayout(designSystem);
-  const layout = surface === "website" ? full : brandInvariantsOnly(full);
+  // Rendered measurements are page geometry, so only the website surface receives them. They are read first because
+  // a measured website gets the compact contract: measured values replace the hero prose and pattern defaults.
+  const measured = surface === "website" ? await readDesignSystemMeasuredLayout(designSystem) : null;
+  const measuredSummary = measured ? measuredLayoutPromptSummary(measured, contextMode === "compact" ? MEASURED_PROMPT_COMPACT_CHARS : MEASURED_PROMPT_CHARS) : [];
+  const compactContract = measuredSummary.length > 0;
+  const layout = surface === "website" ? (compactContract ? withoutMeasuredDefaults(full) : full) : brandInvariantsOnly(full);
+  if (compactContract) {
+    lines.push("<design_system_contract>", JSON.stringify(DESIGN_SYSTEM_CONTRACT), "</design_system_contract>", CONTRACT_REQUIREMENT);
+  }
   if (Object.keys(layout.tokens).length || layout.sections.length) {
     lines.push("<selected_design_system_layout>", JSON.stringify(layout).replace(/</g, "\\u003c"), "</selected_design_system_layout>");
-    if (layout.sections.some((section) => section.kind === "patterns")) lines.push("- Section patterns tagged (observed) were found in the source and bind like the rules above; the text after 'Default details:' and patterns tagged (default) are starting points to adapt to the request.");
+    if (layout.sections.some((section) => section.kind === "patterns")) lines.push(compactContract ? "- Section patterns tagged (observed) were found in the source and bind like the rules above." : "- Section patterns tagged (observed) were found in the source and bind like the rules above; the text after 'Default details:' and patterns tagged (default) are starting points to adapt to the request.");
     lines.push(surface === "website" ? "- REQUIRED: apply this system's Layout, Composition, Responsive and Family rules. Its explicit Navigation, Hero and Footer rules define those regions and refine older generic composition rules. Preserve their distinct arrangement, placement, proportions and responsive behavior as well as the grid, reading measure, margins, gutter and section rhythm. Define supplied variables missing from older local CSS in the authored output; preserve user-authored overrides. A generic arrangement with matching fonts/colors is incomplete. These system rules take precedence over old direction previews; a selected direction controls content emphasis within this structure. Adapt to the viewport/output format, preserve fixed artboards and verify the rendered result. Explicit user overrides take precedence." : "- REQUIRED: these are this system's surface-independent brand rules, its Composition prose and Family structural decisions. Apply them to the fixed frames below as well: same ground, same emphasis device, same imagery discipline, same structural choices. Its grid, navigation, hero, footer and responsive rules are deliberately withheld because a fixed frame has none of them. Explicit user overrides take precedence.");
     lines.push("");
   }
@@ -197,10 +237,7 @@ export async function appendDesignSystemContext(
     lines.push("<selected_design_system_pages>", JSON.stringify(pageCoveragePromptSummary(pages)).replace(/</g, "\\u003c"), "</selected_design_system_pages>");
     lines.push(PAGE_REQUIREMENT, "");
   }
-  // Rendered measurements are page geometry too, so only the website surface receives them.
-  const measured = surface === "website" ? await readDesignSystemMeasuredLayout(designSystem) : null;
-  const measuredSummary = measured ? measuredLayoutPromptSummary(measured, contextMode === "compact" ? MEASURED_PROMPT_COMPACT_CHARS : MEASURED_PROMPT_CHARS) : [];
-  if (measuredSummary.length > 0) {
+  if (compactContract) {
     lines.push("<selected_design_system_measured_layout>", measuredLayoutPromptJson(measuredSummary), "</selected_design_system_measured_layout>");
     const reference = await readDesignSystemLayoutReference(designSystem);
     if (reference) lines.push(...layoutReferencePromptLines(reference, measuredSummary.map(page => page.path)));
@@ -253,7 +290,9 @@ export async function appendDesignSystemContext(
   // document here would put back exactly the geometry the surface split removes.
   // Sections the layout contract already carries verbatim are dropped here rather than shipped twice.
   if (designSystem.readme_md_path && surface === "website") {
-    const content = stripShippedReadmeSections(await read(designSystem.readme_md_path), new Set(layout.sections.map((section) => section.kind)), assets.rules.length > 0, pagesShipped);
+    // Sections the compact contract dropped must not come back through the README excerpt.
+    const shippedKinds = new Set<string>([...layout.sections.map((section) => section.kind), ...(compactContract ? MEASURED_REPLACES : [])]);
+    const content = stripShippedReadmeSections(await read(designSystem.readme_md_path), shippedKinds, assets.rules.length > 0, pagesShipped);
     if (content.trim()) {
       lines.push("### README.md (excerpt)");
       lines.push("```markdown");
