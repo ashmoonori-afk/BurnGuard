@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { MeasuredBox, MeasuredPageLayout, MeasuredViewportLayout, MeasuredViewportName } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
 import { readableRole } from "./design-system-contrast";
-import { measuredPagesFromPinnedContext, selectMeasuredPage } from "./design-system-conformance";
+import { MEASURED_PAGE_DECLARATION, measuredPagesFromPinnedContext, selectMeasuredPage } from "./design-system-conformance";
 import { heroAssetsFromPinnedContext, layoutReferenceFromPinnedContext, STAGED_REFERENCE_DIR, stagedReferencePath } from "./design-system-layout-reference";
 
 /** First line of every generated starter stylesheet; a file without it was written by someone else and is never replaced. */
@@ -121,7 +121,7 @@ export function buildStarterCss(tokensCss: string, pages: readonly MeasuredPageL
 export function buildStarterHtml(page: MeasuredPageLayout, heroMedia?: string): string {
   const { desktop } = page.viewports;
   const hero = heroArrangement(desktop);
-  const sections = desktop.sections.slice(1).map((section, index) => `  <section class="bg-section" data-measured-section="${index + 1}">\n    <div class="bg-container">\n      <h2 class="bg-section__title">SECTION TITLE</h2>\n      <div class="bg-grid" style="--bg-columns: ${Math.max(1, Math.min(section.columns, 6))}">\n        <article class="bg-card"><h3 class="bg-card__title">ITEM</h3><p>ITEM TEXT</p></article>\n      </div>\n    </div>\n  </section>`);
+  const sections = desktop.sections.slice(1).map((section, index) => `  <section class="bg-section" data-measured-section="${index + 1}" data-bg-placeholder>\n    <div class="bg-container">\n      <h2 class="bg-section__title">SECTION TITLE</h2>\n      <div class="bg-grid" style="--bg-columns: ${Math.max(1, Math.min(section.columns, 6))}">\n        <article class="bg-card"><h3 class="bg-card__title">ITEM</h3><p>ITEM TEXT</p></article>\n      </div>\n    </div>\n  </section>`);
   return [
     "<!doctype html>",
     '<html lang="en">',
@@ -132,15 +132,15 @@ export function buildStarterHtml(page: MeasuredPageLayout, heroMedia?: string): 
     `  <link rel="stylesheet" href="${STARTER_CSS_PATH}">`,
     "</head>",
     '<body class="bg-page">',
-    '  <header class="bg-container bg-nav"><a href="index.html">LOGO</a><nav><a href="index.html">LINK</a></nav></header>',
-    `  <section class="bg-hero bg-hero--${hero} bg-container">`,
+    '  <header class="bg-container bg-nav" data-bg-placeholder><a href="index.html">LOGO</a><nav><a href="index.html">LINK</a></nav></header>',
+    `  <section class="bg-hero bg-hero--${hero} bg-container" data-bg-placeholder>`,
     heroMedia === undefined ? '    <div class="bg-hero__media">HERO MEDIA (reuse assets/hero files when the system lists them)</div>' : `    <div class="bg-hero__media"><img src="${heroMedia}" alt=""></div>`,
     '    <h1 class="bg-hero__title">HEADLINE</h1>',
     '    <p class="bg-hero__subtitle">SUBHEADING</p>',
     '    <a class="bg-button" href="#">CALL TO ACTION</a>',
     "  </section>",
     ...sections,
-    '  <footer class="bg-footer"><div class="bg-container">FOOTER</div></footer>',
+    '  <footer class="bg-footer" data-bg-placeholder><div class="bg-container">FOOTER</div></footer>',
     "</body>",
     "</html>",
     "",
@@ -165,6 +165,38 @@ export function starterPlan(pinnedContext: string): StarterPlan | null {
     const hero = heroArrangement(page.viewports.desktop);
     return { path: page.path, hero, ...(heroImage !== undefined && (hero === "media-behind" || hero === "split") ? { hero_media: heroImage } : {}), skeleton: `${STARTER_SKELETON_DIR}/${skeletonName(page.path)}`, ...(Object.keys(reference).length > 0 ? { reference } : {}), ...(Object.keys(wireframe).length > 0 ? { wireframe } : {}) };
   }) };
+}
+
+const CREATION_STARTER_MARKERS = ['data-bg-node-id="starter-root"', "Send your first prompt in chat to generate the first revision."] as const;
+
+/** True for an entrypoint nobody has written yet: missing, blank, or the untouched page a new project is created with. */
+function isFreshEntrypoint(source: string | null): boolean {
+  return source === null || source.trim() === "" || CREATION_STARTER_MARKERS.every(marker => source.includes(marker));
+}
+
+/** Whether the entrypoint already follows the pinned system: it declares its measured page, holds no skeleton placeholders and was not seeded this turn. */
+export function entrypointBuiltAgainstSystem(source: string, seededThisTurn: boolean): boolean {
+  return !seededThisTurn && MEASURED_PAGE_DECLARATION.test(source) && !source.includes("data-bg-placeholder");
+}
+
+/**
+ * Makes the home skeleton the entrypoint of a fresh project (no file, an empty one, or the untouched creation page) so the model edits the class-based
+ * page instead of writing one from scratch. Every skeleton block carries data-bg-placeholder, so a page the turn left
+ * untouched never counts as generated content. The hero image is used only when it was staged. Returns whether it seeded;
+ * a root-level entrypoint only.
+ */
+export async function seedStarterEntrypoint(stageDir: string, pinnedContext: string, entrypoint: string, stagedHeroAssets: readonly string[] = []): Promise<boolean> {
+  if (entrypoint.includes("/")) return false;
+  const plan = starterPlan(pinnedContext);
+  const pages = (measuredPagesFromPinnedContext(pinnedContext) ?? []).filter(page => SAFE_PATH.test(page.path));
+  const home = selectMeasuredPage(pages, null);
+  if (plan === null || home === null) return false;
+  const file = resolveWithin(stageDir, entrypoint);
+  const existing = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return null; throw error; });
+  if (!isFreshEntrypoint(existing)) return false;
+  const heroMedia = plan.pages[pages.indexOf(home)]?.hero_media;
+  await writeFile(file, buildStarterHtml(home, heroMedia !== undefined && stagedHeroAssets.includes(heroMedia) ? heroMedia : undefined), "utf8");
+  return true;
 }
 
 /**
