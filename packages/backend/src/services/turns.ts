@@ -5,7 +5,7 @@ import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
 import type { DesignAuditResult, NormalizedEvent, TurnNotApplied, TurnRejectionReason, UserEvent } from "@bg/shared";
-import { LOGO_FILES } from "@bg/shared";
+import { LOGO_FILES, surfaceForProjectType } from "@bg/shared";
 import { assignAttachmentsToTurn } from "../db/attachments";
 import {
   persistNormalizedEvent,
@@ -53,6 +53,7 @@ import { generationOutputComplete } from "./generation-output";
 import { parse } from "node-html-parser";
 import { prepareSlideDeckExport } from "./export-stage";
 import { blockingDesignFindings, DesignReviewError, reviewTurnDesign } from "./turn-design-review";
+import { MEASURED_PAGE_DECLARATION, reviewDesignSystemConformance } from "./design-system-conformance";
 import { designAuditCanvas, writeProjectAuditCache } from "./design-audit";
 import { assertLogoDeliverables, captureLogoTurnExpectation, LogoDeliverableError, LogoEvidenceCollector } from "./logo-deliverables";
 import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
@@ -507,6 +508,8 @@ async function runUserTurnInternal(
         // What this turn changes is measured against the stage as the adapter found it, so a
         // finding that predates the turn on an untouched page cannot refuse it.
         const beforeAdapter = await inspectCanonicalTree(stageDir);
+        // A page that already declares its measured entry was built against the system on an earlier turn.
+        const builtAgainstSystem = MEASURED_PAGE_DECLARATION.test(await readFile(resolveWithin(stageDir, project.entrypoint), "utf8").catch(() => ""));
         const immutableSnapshots = await captureImmutableAttachments(selectedAttachments);
         try {
           await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: contextPayload.attachments, immutableSnapshots }, async (stageInputs) => {
@@ -587,10 +590,14 @@ async function runUserTurnInternal(
               if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
               const canvas = designAuditCanvas(project.type, project.options_json);
               const changedPaths = changedTreePaths(beforeAdapter, await inspectCanonicalTree(stageDir));
+              const pinnedContext = sessionContext.designSystemPin?.context;
               const designReview = await (dependencies.reviewDesign ?? reviewTurnDesign)({
                 adapter: adapterInput, projectId: project.id, type: project.type, entrypoint: project.entrypoint,
                 revision: project.current_revision + 1, changedPaths, ...(canvas ? { canvas } : {}),
                 ...(sessionContext.designSystemPin ? { tokensCss: sessionContext.designSystemPin.tokens } : {}),
+                ...(pinnedContext !== undefined && canvas === undefined && surfaceForProjectType(project.type) === "website"
+                  ? { conformance: (signal: AbortSignal) => reviewDesignSystemConformance({ projectDir: stageDir, entrypoint: project.entrypoint, pinnedContext, changedPaths, signal }), requestText: payload.text, conformanceRepairable: !builtAgainstSystem }
+                  : {}),
                 run: (input) => runAdapter(backendId, input),
               });
               // Checks that could not run do not refuse the turn: the review badge and the on-demand
