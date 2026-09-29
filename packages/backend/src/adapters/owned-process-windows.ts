@@ -20,7 +20,7 @@ export type WindowsJobOwnership = {
 export class OwnedProcessHostError extends Error {
   readonly code = "owned_process_host_failed";
   cleanupFailure: "launcher_kill_failed" | "launcher_exit_timeout" | null = null;
-  constructor(readonly reason: "absent_helper" | "helper_failed" | "invalid_receipt" | "receipt_timeout") {
+  constructor(readonly reason: "absent_helper" | "helper_failed" | "invalid_receipt" | "receipt_timeout", readonly helperExitCode: number | null = null) {
     super("Owned process host could not prove process cleanup");
   }
   recordCleanupFailure(failure: "launcher_kill_failed" | "launcher_exit_timeout"): void {
@@ -56,10 +56,24 @@ export async function terminateOwnedWindowsJob(input: {
   } catch {
     throw new OwnedProcessHostError("absent_helper");
   }
-  if (result.exitCode !== 0) throw new OwnedProcessHostError("helper_failed");
+  if (result.exitCode !== 0) {
+    // The launcher may have seen its target exit while the helper was starting; its exited receipt, written only after the job
+    // reached zero active processes, then proves the cleanup the helper could not (it refuses a launch receipt that is no longer running).
+    if (await launcherProvesExit(ownership, hostPid, readReceipt)) return;
+    throw new OwnedProcessHostError("helper_failed", result.exitCode);
+  }
   const contents = await readTypedReceipt(ownership.terminateReceipt, readReceipt);
   const receipt = parseTerminateReceipt(contents);
   if (receipt === null || receipt.job !== ownership.token || receipt.activeProcesses !== 0) throw new OwnedProcessHostError("invalid_receipt");
+}
+
+async function launcherProvesExit(ownership: WindowsJobOwnership, hostPid: number, readReceipt: ReceiptReader): Promise<boolean> {
+  try {
+    const receipt = parseLaunchReceipt(await readReceipt(ownership.launchReceipt));
+    return receipt !== null && receipt.job === ownership.token && receipt.hostPid === hostPid && receipt.activeProcesses === 0;
+  } catch {
+    return false;
+  }
 }
 
 export function validateLaunchSettlement(contents: string, ownership: WindowsJobOwnership, hostPid: number, exitCode: number): void {
