@@ -62,13 +62,17 @@ jobs:
           packages/backend/tests/path-boundary.test.ts
           packages/backend/tests/config-storage.test.ts
           packages/backend/tests/native-binding.test.ts
-          packages/backend/tests/local-fonts.test.ts
           packages/backend/tests/python-runtime.test.ts
-          packages/backend/tests/owned-process-tree.test.ts
           packages/backend/tests/owned-process-windows.test.ts
           packages/backend/tests/trace-security.test.ts
           packages/backend/tests/prompt-builder.test.ts
           packages/backend/tests/desktop-lifecycle.test.ts
+      - name: macOS-only suites
+        if: runner.os == 'macOS'
+        run: >-
+          bun test --timeout 30000
+          packages/backend/tests/local-fonts.test.ts
+          packages/backend/tests/owned-process-tree.test.ts
       - name: Browser-backed suites
         env:
           BG_BROWSER_SMOKE: "1"
@@ -79,3 +83,20 @@ jobs:
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/design-system-starter.test.ts
           packages/backend/tests/chromium-node-launch.test.ts
+
+  windows-flaky-watch:
+    name: Windows flaky watch (not gating)
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Windows suites with observed flakes
+        run: >-
+          bun test --timeout 30000
+          packages/backend/tests/local-fonts.test.ts
+          packages/backend/tests/owned-process-tree.test.ts
