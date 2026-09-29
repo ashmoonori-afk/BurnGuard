@@ -78,6 +78,7 @@ const ERROR_COPY: Record<string, MessageKey> = {
   figma_import_failed: "errors.figma_import_failed",
   figma_import_limit: "errors.figma_import_limit",
   upload_extract_failed: "errors.upload_extract_failed",
+  pdf_support_missing: "errors.pdf_support_missing",
   pdf_password_required: "errors.pdf_password_required",
   pdf_invalid: "errors.pdf_invalid",
   pdf_runtime_unavailable: "errors.pdf_runtime_unavailable",

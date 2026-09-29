@@ -1,5 +1,6 @@
 import { spawnOwnedProcess } from "../src/adapters/owned-process";
 import { describe, expect, spyOn, test } from "bun:test";
+import { uploadFailureCode } from "../src/services/extraction-errors";
 import { extractDesignSystemFromSource } from "../src/services/design-system-extract";
 import { mkdir, mkdtemp, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -401,6 +402,12 @@ describe("CSS extraction helpers", () => {
     expect(isColorTokenValue("#123456")).toBe(true);
     expect(isColorTokenValue("rgb(1, 2, 3)")).toBe(true);
     expect(isColorTokenValue("url(https://example.com/a.png)")).toBe(false);
+  });
+
+  test("Given the upload extractor's pypdf sentinels When the failure is classified Then a missing component is not reported as a damaged file", () => {
+    expect(uploadFailureCode("PDF upload requires the Python package 'pypdf'. Install it with 'py -3 -m pip install pypdf'.")).toBe("pdf_support_missing");
+    expect(uploadFailureCode("PDF upload requires pypdf 6.18.0 or newer; found 5.1.0. Update it from the app settings.")).toBe("pdf_support_missing");
+    expect(uploadFailureCode("pypdf.errors.PdfReadError: EOF marker not found")).toBe("upload_extract_failed");
   });
 
   test("Given a bare word as a color token value When it is validated Then only real CSS color keywords are accepted", () => {

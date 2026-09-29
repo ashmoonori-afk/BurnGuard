@@ -73,7 +73,7 @@ export {
 };
 import { detectComponentSamples } from "./upload-component-detect";
 import { DesignSystemAssetEditError } from "./extraction-asset-errors";
-import { DesignSystemExtractError } from "./extraction-errors";
+import { DesignSystemExtractError, uploadFailureCode } from "./extraction-errors";
 import { assertAggregateAssetBytes, assertAssetCount, ExcludedPathError, fetchWebsiteResource } from "./extraction-website";
 
 export { DesignSystemAssetEditError, DesignSystemExtractError };
@@ -1500,7 +1500,7 @@ export async function runPythonUploadExtractor(input: {
       }
     }
 
-    throw new DesignSystemExtractError("upload_extract_failed", lastFailure);
+    throw new DesignSystemExtractError(uploadFailureCode(lastFailure), lastFailure);
   } finally {
     await rm(scriptDir, { recursive: true, force: true }).catch(() => {});
   }
