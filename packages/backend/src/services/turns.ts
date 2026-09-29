@@ -57,7 +57,7 @@ import { checkCssLogos } from "./css-logo-check";
 import { prepareSlideDeckExport } from "./export-stage";
 import { blockingDesignFindings, DesignReviewError, reviewTurnDesign } from "./turn-design-review";
 import { MEASURED_PAGE_DECLARATION, reviewDesignSystemConformance } from "./design-system-conformance";
-import { provisionDesignSystemStarter } from "./design-system-starter";
+import { provisionDesignSystemStarter, seedStarterEntrypoint } from "./design-system-starter";
 import { provisionDesignSystemHeroAssets, provisionDesignSystemLayoutReference } from "./design-system-layout-reference";
 import { resolveManagedPath, systemsDir } from "../lib/paths";
 import { designAuditCanvas, writeProjectAuditCache } from "./design-audit";
@@ -495,6 +495,7 @@ async function runUserTurnInternal(
         if (project.type === "slide_deck") await prepareSlideDeckExport(stageDir, project.entrypoint);
         // The skills point at this file; it lives outside the canonical tree so it is never published.
         await provisionLucideIconReference(stageDir);
+        let starterSeeded = false;
         // The starter stylesheet is written before the turn's baseline, so it never counts as a change the turn made.
         if (sessionContext.designSystemPin && surfaceForProjectType(project.type) === "website") {
           await provisionDesignSystemStarter(stageDir, sessionContext.designSystemPin);
@@ -503,6 +504,7 @@ async function runUserTurnInternal(
           const pinnedSystemDir = pinnedSystem === null ? null : resolveManagedPath(systemsDir, pinnedSystem.dir_path);
           await provisionDesignSystemLayoutReference(stageDir, sessionContext.designSystemPin.context, pinnedSystemDir);
           await provisionDesignSystemHeroAssets(stageDir, sessionContext.designSystemPin.context, pinnedSystemDir);
+          starterSeeded = await seedStarterEntrypoint(stageDir, sessionContext.designSystemPin.context, project.entrypoint);
         }
         stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: payload.active_rel_path ?? project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
@@ -524,7 +526,7 @@ async function runUserTurnInternal(
         // finding that predates the turn on an untouched page cannot refuse it.
         const beforeAdapter = await inspectCanonicalTree(stageDir);
         // A page that already declares its measured entry was built against the system on an earlier turn.
-        const builtAgainstSystem = MEASURED_PAGE_DECLARATION.test(await readFile(resolveWithin(stageDir, project.entrypoint), "utf8").catch(() => ""));
+        const builtAgainstSystem = !starterSeeded && MEASURED_PAGE_DECLARATION.test(await readFile(resolveWithin(stageDir, project.entrypoint), "utf8").catch(() => ""));
         const immutableSnapshots = await captureImmutableAttachments(selectedAttachments);
         try {
           await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: contextPayload.attachments, immutableSnapshots }, async (stageInputs) => {

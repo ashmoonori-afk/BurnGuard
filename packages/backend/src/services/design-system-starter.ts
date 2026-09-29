@@ -121,7 +121,7 @@ export function buildStarterCss(tokensCss: string, pages: readonly MeasuredPageL
 export function buildStarterHtml(page: MeasuredPageLayout, heroMedia?: string): string {
   const { desktop } = page.viewports;
   const hero = heroArrangement(desktop);
-  const sections = desktop.sections.slice(1).map((section, index) => `  <section class="bg-section" data-measured-section="${index + 1}">\n    <div class="bg-container">\n      <h2 class="bg-section__title">SECTION TITLE</h2>\n      <div class="bg-grid" style="--bg-columns: ${Math.max(1, Math.min(section.columns, 6))}">\n        <article class="bg-card"><h3 class="bg-card__title">ITEM</h3><p>ITEM TEXT</p></article>\n      </div>\n    </div>\n  </section>`);
+  const sections = desktop.sections.slice(1).map((section, index) => `  <section class="bg-section" data-measured-section="${index + 1}" data-bg-placeholder>\n    <div class="bg-container">\n      <h2 class="bg-section__title">SECTION TITLE</h2>\n      <div class="bg-grid" style="--bg-columns: ${Math.max(1, Math.min(section.columns, 6))}">\n        <article class="bg-card"><h3 class="bg-card__title">ITEM</h3><p>ITEM TEXT</p></article>\n      </div>\n    </div>\n  </section>`);
   return [
     "<!doctype html>",
     '<html lang="en">',
@@ -132,15 +132,15 @@ export function buildStarterHtml(page: MeasuredPageLayout, heroMedia?: string): 
     `  <link rel="stylesheet" href="${STARTER_CSS_PATH}">`,
     "</head>",
     '<body class="bg-page">',
-    '  <header class="bg-container bg-nav"><a href="index.html">LOGO</a><nav><a href="index.html">LINK</a></nav></header>',
-    `  <section class="bg-hero bg-hero--${hero} bg-container">`,
+    '  <header class="bg-container bg-nav" data-bg-placeholder><a href="index.html">LOGO</a><nav><a href="index.html">LINK</a></nav></header>',
+    `  <section class="bg-hero bg-hero--${hero} bg-container" data-bg-placeholder>`,
     heroMedia === undefined ? '    <div class="bg-hero__media">HERO MEDIA (reuse assets/hero files when the system lists them)</div>' : `    <div class="bg-hero__media"><img src="${heroMedia}" alt=""></div>`,
     '    <h1 class="bg-hero__title">HEADLINE</h1>',
     '    <p class="bg-hero__subtitle">SUBHEADING</p>',
     '    <a class="bg-button" href="#">CALL TO ACTION</a>',
     "  </section>",
     ...sections,
-    '  <footer class="bg-footer"><div class="bg-container">FOOTER</div></footer>',
+    '  <footer class="bg-footer" data-bg-placeholder><div class="bg-container">FOOTER</div></footer>',
     "</body>",
     "</html>",
     "",
@@ -165,6 +165,24 @@ export function starterPlan(pinnedContext: string): StarterPlan | null {
     const hero = heroArrangement(page.viewports.desktop);
     return { path: page.path, hero, ...(heroImage !== undefined && (hero === "media-behind" || hero === "split") ? { hero_media: heroImage } : {}), skeleton: `${STARTER_SKELETON_DIR}/${skeletonName(page.path)}`, ...(Object.keys(reference).length > 0 ? { reference } : {}), ...(Object.keys(wireframe).length > 0 ? { wireframe } : {}) };
   }) };
+}
+
+/**
+ * Makes the home skeleton the entrypoint of a fresh project (no file, or an empty one) so the model edits the class-based
+ * page instead of writing one from scratch. Every skeleton block carries data-bg-placeholder, so a page the turn left
+ * untouched never counts as generated content. Returns whether it seeded; a root-level entrypoint only.
+ */
+export async function seedStarterEntrypoint(stageDir: string, pinnedContext: string, entrypoint: string): Promise<boolean> {
+  if (entrypoint.includes("/")) return false;
+  const plan = starterPlan(pinnedContext);
+  const pages = (measuredPagesFromPinnedContext(pinnedContext) ?? []).filter(page => SAFE_PATH.test(page.path));
+  const home = selectMeasuredPage(pages, null);
+  if (plan === null || home === null) return false;
+  const file = resolveWithin(stageDir, entrypoint);
+  const existing = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return null; throw error; });
+  if (existing !== null && existing.trim() !== "") return false;
+  await writeFile(file, buildStarterHtml(home, plan.pages[pages.indexOf(home)]?.hero_media), "utf8");
+  return true;
 }
 
 /**
