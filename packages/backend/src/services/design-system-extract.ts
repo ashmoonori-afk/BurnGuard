@@ -5,7 +5,7 @@ import { collectSourceEvidence, withoutFunctions, type SourceEvidence } from "./
 import { buildSectionPatternReadme, measureSourceLayout } from "./extraction-layout";
 import { buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, observedPatterns, pageEvidence, parseRobots, parseSitemap } from "./extraction-pages";
 import { readDesignSystemPageCoverage } from "./design-system-pages";
-import { measureRenderedLayout, type MeasuredPageInput, type RenderedLayoutInput } from "./extraction-rendered-layout";
+import { measureRenderedLayout, type LayoutReferenceCapture, type MeasuredPageInput, type RenderedLayoutInput } from "./extraction-rendered-layout";
 import type { CssDeclarationEvidence } from "./extraction-css";
 import {
   copyFile,
@@ -16,6 +16,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isValidFontData } from "./font-validation";
@@ -23,6 +24,8 @@ import { parse } from "node-html-parser";
 import {
   APP_VERSION,
   DEFAULT_PAGE_LIMIT,
+  MAX_LAYOUT_REFERENCE_BYTES,
+  parseDesignSystemLayoutReference,
   parseDesignSystemPageCoverage,
   type DesignSystemPageCoverage,
   type DesignSystemMeasuredLayout,
@@ -1114,12 +1117,18 @@ async function ingestWebsiteSource(
     const pageType = classifyPageType(pagePath, pageHtml);
     if (measurable.length === 0 || (measurable.length < MEASURED_PAGE_LIMIT && !measurable.some((page) => page.pageType === pageType))) measurable.push({ path: pagePath, pageType, url: pageUrl, html: pageHtml });
   }
-  const measuredLayout = measureLayout ? await measureWithDeadline(measureLayout, { pages: measurable, stylesheets: stylesheetText, signal }, deadlineAt) : null;
+  const shots: LayoutReferenceCapture[] = [];
+  const captureReference = (shot: LayoutReferenceCapture) => { if (shot.jpeg.byteLength <= MAX_LAYOUT_REFERENCE_BYTES) shots.push(shot); };
+  const measuredLayout = measureLayout ? await measureWithDeadline(measureLayout, { pages: measurable, stylesheets: stylesheetText, signal, captureReference }, deadlineAt) : null;
   if (measureLayout && measuredLayout === null) notes.push("Rendered layout measurement was unavailable; measured layout tokens were not recorded.");
   else if (measuredLayout && measuredLayout.pages.length < measurable.length) notes.push(`Rendered layout measurement reached its deadline after ${measuredLayout.pages.length} of ${measurable.length} pages; the remaining pages were not measured.`);
+  // A screenshot of a page that did not make it into the measured layout has nothing to be paired with.
+  const layoutReferenceShots = measuredLayout ? shots.filter((shot) => measuredLayout.pages.some((page) => page.path === shot.path)) : [];
+  if (measuredLayout && layoutReferenceShots.length < measuredLayout.pages.length * 2) notes.push(`Layout reference screenshots were captured for ${layoutReferenceShots.length} of ${measuredLayout.pages.length * 2} measured page views.`);
 
   return {
     measuredLayout,
+    layoutReferenceShots,
     brandName: preferredName?.trim() || deriveBrandNameFromHtml(url, html),
     cssDeclarations,
     cssParseIssues,
@@ -1626,6 +1635,7 @@ async function writeCanonicalDesignSystem(input: {
     input.systemDir,
   );
   if (input.analysis.measuredLayout) await writeText(path.join(input.systemDir, "layout-measured.json"), `${JSON.stringify(input.analysis.measuredLayout, null, 2)}\n`, generated, input.systemDir);
+  if (input.analysis.measuredLayout && (input.analysis.layoutReferenceShots ?? []).length > 0) await writeLayoutReference(input.systemDir, input.analysis.measuredLayout, input.analysis.layoutReferenceShots ?? [], generated, input.analysis.notes);
   if (input.analysis.pageCoverage) {
     // Publish only what the strict reader accepts, so a malformed record can never make the system unreadable.
     let coverage: DesignSystemPageCoverage | null = null;
@@ -2435,6 +2445,35 @@ function previewBody(
     case "components-badges-table":
       return `<div class="eyebrow">Components</div><div class="title">Badges & table</div><div class="chips"><div class="chip">${sampleBadge}</div><div class="chip">Draft</div></div><table><thead><tr><th>Item</th><th>Status</th></tr></thead><tbody><tr><td>${sampleTable}</td><td>Ready</td></tr><tr><td>Preview cards</td><td>Draft</td></tr></tbody></table>`;
   }
+}
+
+/**
+ * Stores the reference screenshots next to the measured layout as layout-reference/p<page index>-<viewport>.jpg
+ * with an index recording each file's measured page, size and digest. Only what the strict reader accepts is
+ * published; a rejected index drops the screenshots with a note.
+ */
+async function writeLayoutReference(systemDir: string, measured: DesignSystemMeasuredLayout, shots: readonly LayoutReferenceCapture[], generated: Set<string>, notes: string[]): Promise<void> {
+  const entries = shots.flatMap((shot) => {
+    const index = measured.pages.findIndex((page) => page.path === shot.path);
+    return index === -1 ? [] : [{ shot, index }];
+  }).sort((a, b) => a.index - b.index || a.shot.viewport.localeCompare(b.shot.viewport));
+  let reference;
+  try {
+    reference = parseDesignSystemLayoutReference({ schema_version: 1, shots: entries.map(({ shot, index }) => ({
+      path: shot.path, viewport: shot.viewport, file: `layout-reference/p${index}-${shot.viewport}.jpg`, width: shot.width, height: shot.height,
+      size: shot.jpeg.byteLength, sha256: createHash("sha256").update(shot.jpeg).digest("hex"),
+    })) });
+  } catch {
+    notes.push("Layout reference screenshots were omitted because their index did not pass validation.");
+    return;
+  }
+  await mkdir(path.join(systemDir, "layout-reference"), { recursive: true });
+  for (const [position, entry] of reference.shots.entries()) {
+    const dest = path.join(systemDir, ...entry.file.split("/"));
+    await writeFile(dest, entries[position]!.shot.jpeg);
+    generated.add(toSystemRelPath(systemDir, dest));
+  }
+  await writeText(path.join(systemDir, "layout-reference.json"), `${JSON.stringify(reference, null, 2)}\n`, generated, systemDir);
 }
 
 async function writeText(

@@ -3,6 +3,7 @@ import { readDesignSystemAssetGuide } from "../services/design-system-assets";
 import { readDesignSystemPageCoverage } from "../services/design-system-pages";
 import { measuredLayoutPromptJson, measuredLayoutPromptSummary, readDesignSystemMeasuredLayout } from "../services/design-system-measured-layout";
 import { starterPlan } from "../services/design-system-starter";
+import { layoutReferencePromptLines, readDesignSystemLayoutReference } from "../services/design-system-layout-reference";
 import { pageCoveragePromptSummary } from "../services/extraction-pages";
 import { readDesignSystemLayout, readDesignSystemSourceFile } from "../services/design-system-layout";
 import path from "node:path";
@@ -132,7 +133,7 @@ const MEASURED_PROMPT_COMPACT_CHARS = 6_000;
 
 const MEASURED_SELF_CHECK = "- REQUIRED SELF-CHECK before finishing: compare the authored page with <selected_design_system_measured_layout> at both viewports. For every type role, section (order, column count, alignment), block and grid value, compare the measured and the authored value, fix every item outside its tolerance, and repeat until all pass. Do this check in your working steps; it does not change the reply format rules.";
 
-const STARTER_REQUIREMENT = "- REQUIRED (DESIGN-SYSTEM STARTER): the server wrote the stylesheet named above (the pinned tokens, the measured values as --m-* properties and a class API) and one skeleton page per measured page. Link that stylesheet in every page before any page CSS and never edit it. Read the skeleton of the page being built (the home skeleton when no path matches) and keep its bg-measured-page meta, section order, hero modifier class and --bg-columns counts. Build with its classes: bg-page, bg-container, bg-nav, bg-hero with its modifier, bg-hero__media, bg-hero__title, bg-hero__subtitle, bg-button, bg-section, bg-section__title, bg-grid, bg-card, bg-card__title, bg-footer. Add page CSS only for what the classes do not cover, using var(--...) for every colour, font family and font size. Replace every placeholder with the request's content. Explicit user overrides take precedence.";
+const STARTER_REQUIREMENT = "- REQUIRED (DESIGN-SYSTEM STARTER): the server wrote the stylesheet named above (the pinned tokens, the measured values as --m-* properties and a class API) and one skeleton page per measured page. Link that stylesheet in every page before any page CSS and never edit it. Read the skeleton of the page being built (the home skeleton when no path matches) and keep its bg-measured-page meta, section order, hero modifier class and --bg-columns counts. Build with its classes: bg-page, bg-container, bg-nav, bg-hero with its modifier, bg-hero__media, bg-hero__title, bg-hero__subtitle, bg-button, bg-section, bg-section__title, bg-grid, bg-card, bg-card__title, bg-footer. Add page CSS only for what the classes do not cover, using var(--...) for every colour, font family and font size. Replace every placeholder with the request's content. When a page lists reference files, they are screenshots of that source page rendered offline, from the top of the page, at 1440px (desktop) and 390px (mobile) wide; hatched boxes mark media that was not captured. Open the reference of the page being built before writing it and match its visual layout at each width: the arrangement and proportions of every section, alignment, whitespace, density and visual weight. The measured values stay the exact numbers where both apply. A listed file that is missing was not available for this pin. Never copy a screenshot into the page. Explicit user overrides take precedence.";
 
 /** The starter block for a website turn whose pinned system carries measured pages; nothing otherwise. */
 export function appendDesignSystemStarter(lines: string[], pinnedContext: string, surface: DesignSurface): void {
@@ -201,6 +202,8 @@ export async function appendDesignSystemContext(
   const measuredSummary = measured ? measuredLayoutPromptSummary(measured, contextMode === "compact" ? MEASURED_PROMPT_COMPACT_CHARS : MEASURED_PROMPT_CHARS) : [];
   if (measuredSummary.length > 0) {
     lines.push("<selected_design_system_measured_layout>", measuredLayoutPromptJson(measuredSummary), "</selected_design_system_measured_layout>");
+    const reference = await readDesignSystemLayoutReference(designSystem);
+    if (reference) lines.push(...layoutReferencePromptLines(reference, measuredSummary.map(page => page.path)));
     lines.push(MEASURED_REQUIREMENT, MEASURED_SELF_CHECK, "");
   }
   // Asset rules describe brand assets rather than page geometry, so every surface receives them.

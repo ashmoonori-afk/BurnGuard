@@ -19,9 +19,22 @@ export type RenderedLayoutInput = {
   readonly stylesheets: ReadonlyMap<string, string>;
   readonly signal: AbortSignal;
   readonly launch?: (signal: AbortSignal) => Promise<Browser>;
+  /** Receives a JPEG of each measured viewport, taken after measurement from the same offline render. */
+  readonly captureReference?: (shot: LayoutReferenceCapture) => void;
 };
+export type LayoutReferenceCapture = { readonly path: string; readonly viewport: MeasuredViewportName; readonly jpeg: Uint8Array; readonly width: number; readonly height: number };
 
 const PAGE_TIMEOUT_MS = 8_000;
+/** A reference screenshot covers at most this many viewport heights from the top of the page. */
+const REFERENCE_VIEWPORT_HEIGHTS = 3;
+/**
+ * Media that was never acquired renders empty in the offline page; a neutral hatch keeps those regions visible in
+ * the reference screenshot. Applied after measurement, so it cannot change measured values.
+ */
+const REFERENCE_MEDIA_CSS = "img,video,picture,canvas,iframe,object,embed{background:repeating-linear-gradient(45deg,#c8c8c8 0 10px,#e2e2e2 10px 20px)!important;color:transparent!important}"
+  // Entrance animations start hidden and offset (inline opacity near 0 plus a transform) and only a script reveals
+  // them; the reference shows them in their final place, as a visitor sees the page.
+  + "[style*='opacity:0'][style*='transform'],[style*='opacity: 0'][style*='transform'],[data-framer-appear-id]{opacity:1!important;transform:none!important}";
 
 /**
  * Renders acquired pages offline and measures their layout. Scripts are disabled and every request is
@@ -38,7 +51,7 @@ export async function measureRenderedLayout(input: RenderedLayoutInput): Promise
     for (const page of pages) {
       input.signal.throwIfAborted();
       const viewports = {} as Record<MeasuredViewportName, MeasuredViewportLayout>;
-      for (const name of Object.keys(MEASURED_VIEWPORTS) as MeasuredViewportName[]) viewports[name] = await measureViewport(browser, page, name, input.stylesheets);
+      for (const name of Object.keys(MEASURED_VIEWPORTS) as MeasuredViewportName[]) viewports[name] = await measureViewport(browser, page, name, input.stylesheets, input.captureReference);
       measured.push({ path: page.path, page_type: page.pageType, viewports });
     }
     // Only what the strict reader accepts is ever stored.
@@ -56,7 +69,7 @@ export async function measureRenderedLayout(input: RenderedLayoutInput): Promise
   }
 }
 
-async function measureViewport(browser: Browser, page: MeasuredPageInput, name: MeasuredViewportName, stylesheets: ReadonlyMap<string, string>): Promise<MeasuredViewportLayout> {
+async function measureViewport(browser: Browser, page: MeasuredPageInput, name: MeasuredViewportName, stylesheets: ReadonlyMap<string, string>, capture: RenderedLayoutInput["captureReference"]): Promise<MeasuredViewportLayout> {
   const size = MEASURED_VIEWPORTS[name];
   const context = await browser.newContext({ javaScriptEnabled: false, serviceWorkers: "block", viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1 });
   try {
@@ -70,7 +83,19 @@ async function measureViewport(browser: Browser, page: MeasuredPageInput, name: 
     });
     const tab: Page = await context.newPage();
     await tab.goto(page.url, { waitUntil: "load", timeout: PAGE_TIMEOUT_MS });
-    return await tab.evaluate(collectLayout, { width: size.width, height: size.height, maxSections: MAX_MEASURED_SECTIONS });
+    const layout = await tab.evaluate(collectLayout, { width: size.width, height: size.height, maxSections: MAX_MEASURED_SECTIONS });
+    if (capture) {
+      const height = Math.max(size.height, Math.min(layout.page_height, size.height * REFERENCE_VIEWPORT_HEIGHTS));
+      // The reference is optional: a failed capture leaves the measured values intact, and the caller reports
+      // the missing screenshot by comparing what it received with what was measured. An abort still stops the
+      // run at the next page boundary.
+      // addStyleTag waits for a load event that never fires with scripts disabled, so the style is added directly.
+      const jpeg = await tab.evaluate((css) => { const style = document.createElement("style"); style.textContent = css; document.documentElement.append(style); }, REFERENCE_MEDIA_CSS)
+        .then(() => tab.screenshot({ type: "jpeg", quality: 70, fullPage: true, clip: { x: 0, y: 0, width: size.width, height }, animations: "disabled", timeout: PAGE_TIMEOUT_MS }))
+        .catch(() => null);
+      if (jpeg !== null) capture({ path: page.path, viewport: name, jpeg, width: size.width, height });
+    }
+    return layout;
   } finally {
     await context.close();
   }

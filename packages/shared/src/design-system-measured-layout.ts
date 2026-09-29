@@ -48,6 +48,40 @@ export type DesignSystemMeasuredLayout = {
 const PATH = /^\/[\x21-\x7e]{0,299}$/;
 const HEADING = /^[^\p{Cc}<>]{0,60}$/u;
 
+/** Largest stored reference screenshot; a larger capture is not kept. */
+export const MAX_LAYOUT_REFERENCE_BYTES = 1_500_000;
+/**
+ * A screenshot of one measured page at one viewport, rendered offline with the measurement. file is relative to
+ * the system directory; width and height are the captured CSS px (height is capped, so it can be shorter than the page).
+ */
+export type LayoutReferenceShot = {
+  readonly path: string;
+  readonly viewport: MeasuredViewportName;
+  readonly file: string;
+  readonly width: number;
+  readonly height: number;
+  readonly size: number;
+  readonly sha256: string;
+};
+export type DesignSystemLayoutReference = { readonly schema_version: 1; readonly shots: readonly LayoutReferenceShot[] };
+const REFERENCE_FILE = /^layout-reference\/p[0-9]{1,2}-(?:desktop|mobile)\.jpg$/;
+
+export function parseDesignSystemLayoutReference(input: unknown): DesignSystemLayoutReference {
+  const invalid = (): never => { throw new UpgradeContractError("invalid_field", "design_system_layout_reference"); };
+  const keys = ["path", "viewport", "file", "width", "height", "size", "sha256"];
+  const count = (value: unknown, max: number): number => typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= max ? value : invalid();
+  if (!isRecord(input) || Object.keys(input).length !== 2 || input.schema_version !== 1 || !Array.isArray(input.shots) || input.shots.length > MAX_MEASURED_PAGES * 2) return invalid();
+  const shots = input.shots.map((shot): LayoutReferenceShot => {
+    if (!isRecord(shot) || Object.keys(shot).length !== keys.length || !keys.every(key => key in shot)) return invalid();
+    const viewport = shot.viewport === "desktop" || shot.viewport === "mobile" ? shot.viewport : invalid();
+    if (typeof shot.path !== "string" || !PATH.test(shot.path) || typeof shot.file !== "string" || !REFERENCE_FILE.test(shot.file) || !shot.file.endsWith(`-${viewport}.jpg`)) return invalid();
+    if (typeof shot.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(shot.sha256)) return invalid();
+    return { path: shot.path, viewport, file: shot.file, width: count(shot.width, 100_000), height: count(shot.height, 100_000), size: count(shot.size, MAX_LAYOUT_REFERENCE_BYTES), sha256: shot.sha256 };
+  });
+  if (new Set(shots.map(shot => shot.file)).size !== shots.length) return invalid();
+  return { schema_version: 1, shots };
+}
+
 export function parseDesignSystemMeasuredLayout(input: unknown): DesignSystemMeasuredLayout {
   const invalid = (): never => { throw new UpgradeContractError("invalid_field", "design_system_measured_layout"); };
   const exact = (value: unknown, keys: readonly string[]): value is Record<string, unknown> =>
