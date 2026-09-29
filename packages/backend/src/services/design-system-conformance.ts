@@ -19,6 +19,7 @@ export type ConformanceFinding = {
 /** visual and repair_targets are report-only: per-section similarity with the reference screenshots, lowest sections first in repair_targets. */
 export type ConformanceResult = { readonly page: string; readonly findings: readonly ConformanceFinding[]; readonly visual?: readonly VisualViewportReport[]; readonly repair_targets?: readonly VisualSectionScore[] };
 const REPAIR_TARGET_COUNT = 3;
+const VISUAL_CAPTURE_TIMEOUT_MS = 8_000;
 
 /** Declared by generated pages so the review compares them with the measured entry they followed. */
 export const MEASURED_PAGE_META = "bg-measured-page";
@@ -150,7 +151,7 @@ export async function reviewDesignSystemConformance(input: { readonly projectDir
           try {
             await session.page.addStyleTag({ content: REFERENCE_MEDIA_CSS });
             const height = Math.max(size.height, Math.min(actual.page_height, size.height * REFERENCE_VIEWPORT_HEIGHTS));
-            const generated = await session.page.screenshot({ type: "png", fullPage: true, clip: { x: 0, y: 0, width: size.width, height } });
+            const generated = await session.page.screenshot({ type: "png", fullPage: true, animations: "disabled", timeout: VISUAL_CAPTURE_TIMEOUT_MS, clip: { x: 0, y: 0, width: size.width, height } });
             visual.push(await compareVisualViewport({ viewport: name, reference, generated: new Uint8Array(generated), expected: expected.viewports[name], actual }));
           } catch (error) {
             input.signal.throwIfAborted();
