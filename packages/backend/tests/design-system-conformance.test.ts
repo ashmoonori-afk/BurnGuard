@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createCanvas } from "@napi-rs/canvas";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { MEASURED_VIEWPORTS, parseDesignSystemMeasuredLayout, type MeasuredViewportLayout } from "@bg/shared";
@@ -86,5 +88,41 @@ describe("Design-system conformance", () => {
       expect(codes.has("desktop:block_alignment:hero_heading")).toBe(true);
       expect(codes.has("null:literal_value:font-size")).toBe(true);
     } finally { await rm(project, { recursive: true, force: true }); }
+  }, 90_000);
+
+  test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given a staged reference screenshot pinned in the context, when the page is reviewed, then a report-only visual score per measured section and the lowest sections are returned", async () => {
+    const project = await mkdtemp(path.join(tmpdir(), "bg-conformance-visual-project-"));
+    const system = await mkdtemp(path.join(tmpdir(), "bg-conformance-visual-system-"));
+    try {
+      const jpeg = (width: number, height: number): Uint8Array => {
+        const canvas = createCanvas(width, height);
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, width, height);
+        return new Uint8Array(canvas.toBuffer("image/jpeg"));
+      };
+      const shots = (["desktop", "mobile"] as const).map(name => ({ name, bytes: jpeg(MEASURED_VIEWPORTS[name].width, 2700) }));
+      await mkdir(path.join(system, "layout-reference"));
+      await mkdir(path.join(project, ".burnguard-inputs", "design-system-starter", "reference"), { recursive: true });
+      for (const { name, bytes } of shots) {
+        await writeFile(path.join(system, "layout-reference", `p0-${name}.jpg`), bytes);
+        await writeFile(path.join(project, ".burnguard-inputs", "design-system-starter", "reference", `p0-${name}.jpg`), bytes);
+      }
+      await writeFile(path.join(system, "layout-measured.json"), JSON.stringify(layout));
+      await writeFile(path.join(system, "layout-reference.json"), JSON.stringify({ schema_version: 1, shots: shots.map(({ name, bytes }) => ({
+        path: "/", viewport: name, file: `layout-reference/p0-${name}.jpg`, width: MEASURED_VIEWPORTS[name].width, height: 2700, size: bytes.byteLength, sha256: createHash("sha256").update(bytes).digest("hex"),
+      })) }));
+      const lines: string[] = [];
+      await appendDesignSystemContext(lines, { id: "visual", name: "Visual", status: "draft", source_type: "website", is_template: false, dir_path: system, skill_md_path: null, tokens_css_path: null, readme_md_path: null, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null }, "full", "website", true);
+      await writeFile(path.join(project, "index.html"), '<!doctype html><html><head><meta name="bg-measured-page" content="/"><style>body{margin:0;background:#fff} h1{font-size:64px;text-align:center}</style></head><body><h1>Own your AI.</h1></body></html>');
+      const result = await reviewDesignSystemConformance({ projectDir: project, entrypoint: "index.html", pinnedContext: lines.join("\n"), changedPaths: ["index.html"], signal: AbortSignal.timeout(60_000) });
+      expect(result?.visual?.map(report => [report.viewport, report.unavailable])).toEqual([["desktop", false], ["mobile", false]]);
+      expect(result?.visual?.[0]?.sections).toHaveLength(2);
+      expect(result?.repair_targets?.length).toBeGreaterThan(0);
+      expect(result!.repair_targets!.length).toBeLessThanOrEqual(3);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+      await rm(system, { recursive: true, force: true });
+    }
   }, 90_000);
 });

@@ -1,7 +1,10 @@
 import { lstat, readFile } from "node:fs/promises";
 import { MEASURED_VIEWPORTS, parseDesignSystemMeasuredLayout, type MeasuredPageLayout, type MeasuredViewportLayout, type MeasuredViewportName } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
-import { collectLayout } from "./extraction-rendered-layout";
+import { collectLayout, REFERENCE_MEDIA_CSS, REFERENCE_VIEWPORT_HEIGHTS } from "./extraction-rendered-layout";
+import { readManagedFile } from "./artifact-tree-storage";
+import { layoutReferenceFromPinnedContext, stagedReferencePath } from "./design-system-layout-reference";
+import { compareVisualViewport, visualRepairTargets, type VisualSectionScore, type VisualViewportReport } from "./design-system-visual-diff";
 import { launchChromium, openRenderSession } from "./export-render-session";
 import { registerExportBrowser } from "./export-browser-registry";
 
@@ -13,7 +16,10 @@ export type ConformanceFinding = {
   readonly measured: string;
   readonly expected: string;
 };
-export type ConformanceResult = { readonly page: string; readonly findings: readonly ConformanceFinding[] };
+/** visual and repair_targets are report-only: per-section similarity with the reference screenshots, lowest sections first in repair_targets. */
+export type ConformanceResult = { readonly page: string; readonly findings: readonly ConformanceFinding[]; readonly visual?: readonly VisualViewportReport[]; readonly repair_targets?: readonly VisualSectionScore[] };
+const REPAIR_TARGET_COUNT = 3;
+const VISUAL_CAPTURE_TIMEOUT_MS = 8_000;
 
 /** Declared by generated pages so the review compares them with the measured entry they followed. */
 export const MEASURED_PAGE_META = "bg-measured-page";
@@ -109,6 +115,13 @@ async function changedCss(projectDir: string, changedPaths: readonly string[]): 
   return out;
 }
 
+/** The pinned reference screenshot staged in the project for a page and viewport, only while it still matches its pin. */
+async function stagedReference(projectDir: string, pinnedContext: string, pagePath: string, viewport: MeasuredViewportName): Promise<Uint8Array | null> {
+  const shot = layoutReferenceFromPinnedContext(pinnedContext).find(item => item.path === pagePath && item.viewport === viewport);
+  if (shot === undefined) return null;
+  return readManagedFile(projectDir, { path: stagedReferencePath(shot), size: shot.size, sha256: shot.sha256 }).catch(() => null);
+}
+
 /**
  * Renders the entrypoint at the measured viewports and compares it with the measured entry it followed, plus
  * the literal-value check over authored CSS. Returns null when there is nothing measured to compare with.
@@ -123,6 +136,7 @@ export async function reviewDesignSystemConformance(input: { readonly projectDir
   const expected = selectMeasuredPage(pages, declared);
   if (expected === null) return null;
   const findings: ConformanceFinding[] = [];
+  const visual: VisualViewportReport[] = [];
   const browser = await launchChromium(input.signal);
   const owner = registerExportBrowser(() => browser.close());
   try {
@@ -132,9 +146,21 @@ export async function reviewDesignSystemConformance(input: { readonly projectDir
       try {
         const actual = await session.page.evaluate(collectLayout, { width: size.width, height: size.height, maxSections: 16 });
         findings.push(...compareMeasuredViewport(expected.viewports[name], actual, name));
+        const reference = await stagedReference(input.projectDir, input.pinnedContext, expected.path, name);
+        if (reference !== null) {
+          try {
+            await session.page.addStyleTag({ content: REFERENCE_MEDIA_CSS });
+            const height = Math.max(size.height, Math.min(actual.page_height, size.height * REFERENCE_VIEWPORT_HEIGHTS));
+            const generated = await session.page.screenshot({ type: "png", fullPage: true, animations: "disabled", timeout: VISUAL_CAPTURE_TIMEOUT_MS, clip: { x: 0, y: 0, width: size.width, height } });
+            visual.push(await compareVisualViewport({ viewport: name, reference, generated: new Uint8Array(generated), expected: expected.viewports[name], actual }));
+          } catch (error) {
+            input.signal.throwIfAborted();
+            visual.push({ viewport: name, unavailable: true, sections: [] });
+          }
+        }
       } finally { await session.close(); }
     }
   } finally { await owner.close(); }
   findings.push(...literalValueFindings(await changedCss(input.projectDir, input.changedPaths)));
-  return { page: expected.path, findings: findings.slice(0, MAX_FINDINGS) };
+  return { page: expected.path, findings: findings.slice(0, MAX_FINDINGS), ...(visual.length > 0 ? { visual, repair_targets: visualRepairTargets(visual, REPAIR_TARGET_COUNT) } : {}) };
 }
