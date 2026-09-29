@@ -180,12 +180,13 @@ function buildGroups(events: NormalizedEvent[]): Group[] {
   // Streamed text belongs to the turn that produced it, so the bubble can say whether that turn
   // reached the project. A delta from a different turn closes the buffer instead of joining it.
   let textTurnId = "";
+  // The open user turn and whether any bubble (its own or a repair/review child's) followed it.
   let userTurnId = "";
-  const turnsWithMessage = new Set<string>();
+  let messageSinceUser = false;
   const flushText = () => {
     if (textBuf) {
       groups.push({ kind: "message", turnId: textTurnId, text: textBuf });
-      turnsWithMessage.add(textTurnId);
+      messageSinceUser = true;
       textBuf = "";
     }
   };
@@ -195,16 +196,17 @@ function buildGroups(events: NormalizedEvent[]): Group[] {
       case "chat.user_message":
         flushText();
         userTurnId = ev.turnId;
+        messageSinceUser = false;
         groups.push({ kind: "user", ev });
         break;
       case "status.idle":
-        // A turn stopped before it wrote any message has no bubble to carry its standing.
-        if (ev.stopReason !== "interrupted") break;
-        flushText();
-        if (userTurnId && !turnsWithMessage.has(userTurnId)) {
-          groups.push({ kind: "stopped", turnId: userTurnId });
-          turnsWithMessage.add(userTurnId);
+        if (ev.stopReason === "requires_action") break;
+        if (ev.stopReason === "interrupted") {
+          // A turn stopped before it wrote any message has no bubble to carry its standing.
+          flushText();
+          if (userTurnId && !messageSinceUser) groups.push({ kind: "stopped", turnId: userTurnId });
         }
+        userTurnId = "";
         break;
       case "chat.delta":
         if (textBuf && ev.turnId !== textTurnId) flushText();

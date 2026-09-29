@@ -329,6 +329,22 @@ test("Given a turn the user stopped before it wrote any message When the stream 
   expect(html).toContain(`data-turn-id="${FIRST}" data-turn-disposition="committed"`);
 });
 
+test.each([
+  ["its own message", SECOND],
+  ["only a review child's message", `${SECOND}-review`],
+])("Given a stopped turn with %s When the stream renders Then exactly one stopped standing is shown", (_label, textTurnId) => {
+  const events: NormalizedEvent[] = [
+    { id: id(), ts: 21, type: "chat.user_message", turnId: SECOND, text: "add a slide", attachmentCount: 0 },
+    { id: id(), ts: 22, type: "status.running" },
+    { id: id(), ts: 23, type: "chat.delta", turnId: textTurnId, text: "working on it" },
+    { id: id(), ts: 24, type: "status.idle", stopReason: "interrupted" },
+  ];
+
+  const html = renderToStaticMarkup(createElement(MessageStream, { events, session: SESSION }));
+
+  expect(html.match(/data-turn-disposition="stopped"/g)?.length).toBe(1);
+});
+
 test("Given the rendered stream When a turn is refused Then its own bubble is marked not applied and the earlier turn stays committed", () => {
   const events = [...committedTurn(FIRST, "first mark delivered"), ...refusedTurn(SECOND, "second mark delivered")];
 
