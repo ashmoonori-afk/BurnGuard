@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseDesignSystemLayoutReference, type DesignSystemLayoutReference, type LayoutReferenceHeroAsset, type LayoutReferenceShot } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
@@ -60,8 +60,11 @@ export async function provisionDesignSystemHeroAssets(stageDir: string, pinnedCo
   for (const asset of heroAssetsFromPinnedContext(pinnedContext)) {
     const bytes = await readManagedFile(systemDir, { path: asset.file, size: asset.size, sha256: asset.sha256 }).catch(() => null);
     if (bytes === null) continue;
+    const target = resolveWithin(stageDir, ...asset.file.split("/"));
+    // A file the project already has at that path is the user's or an earlier turn's; it is never replaced.
+    if (await lstat(target).then(() => true, () => false)) continue;
     await mkdir(resolveWithin(stageDir, ...asset.file.split("/").slice(0, -1)), { recursive: true });
-    await writeFile(resolveWithin(stageDir, ...asset.file.split("/")), bytes);
+    await writeFile(target, bytes);
     staged.push(asset.file);
   }
   return staged;

@@ -55,6 +55,9 @@ describe("Design-system hero assets", () => {
         expect(await provisionDesignSystemHeroAssets(stage, context, null)).toEqual([]);
         expect(await provisionDesignSystemHeroAssets(stage, context, dir)).toEqual(["assets/hero/hero.png"]);
         expect(new Uint8Array(await readFile(path.join(stage, "assets", "hero", "hero.png")))).toEqual(HERO);
+        await writeFile(path.join(stage, "assets", "hero", "hero.png"), new TextEncoder().encode("user-edited"));
+        expect(await provisionDesignSystemHeroAssets(stage, context, dir)).toEqual([]);
+        expect(await readFile(path.join(stage, "assets", "hero", "hero.png"), "utf8")).toBe("user-edited");
         await rm(path.join(stage, "assets"), { recursive: true });
         await writeFile(path.join(dir, "assets", "hero", "hero.png"), new TextEncoder().encode("re-extracted"));
         expect(await provisionDesignSystemHeroAssets(stage, context, dir)).toEqual([]);
