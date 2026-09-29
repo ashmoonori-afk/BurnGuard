@@ -115,7 +115,8 @@ K. Perceived performance: delay after a click, repeated loading, input lag, late
 - Capture key screens and transitions; before/after pairs for layout shift, loading and inconsistent state. Put the
   journey or finding ID in file names. Do not claim a single still image proves a transient behaviour.
 - Masking is mandatory before anything is shared. Run
-  `bun scripts/qa/har-mask.ts <raw.har> <shared.har> --root <qa-home>=<qa-home-placeholder>` on every HAR. It masks
+  `bun scripts/qa/har-mask.ts <raw.har> <shared.har> --root <qa-home>=<qa-home-placeholder>` on every HAR (pass a home directory whose name contains a space as its own --root; the built-in home patterns stop at
+  the space). It masks
   the `x-burnguard-capability` header, the `burnguard_capability` cookie and every other occurrence of its value,
   authorization headers, cookies, secret query parameters and local absolute paths, and refuses to write output that
   still contains a collected secret. Keep raw HAR files inside the run's private directory and delete them when the

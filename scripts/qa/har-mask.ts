@@ -3,10 +3,11 @@ import { chmod, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * Masks a HAR recorded against a running BurnGuard before it is shared: the per-launch capability (header, cookie
- * and every other place its value appears), authorization headers and cookies, and local absolute paths in URLs,
- * headers, request bodies and text response bodies. The output is verified to contain none of the collected secret
- * values before it is written.
+ * Masks a HAR recorded against a running BurnGuard before it is shared: the per-launch capability (header, cookie,
+ * bootstrap body and every other place its value appears), authorization headers, cookies, secret-named query, form
+ * and JSON body fields, and home paths plus caller-given roots everywhere in the file. The output is verified to
+ * contain none of the collected secret values before it is written. Known limit: a home directory name containing a
+ * space is masked only up to the space; pass that root with --root.
  */
 
 export const MASKED = "[masked]";
@@ -14,6 +15,7 @@ const SECRET_HEADERS = new Set(["x-burnguard-capability", "authorization", "prox
 const SECRET_PARAMS = /^(?:capability|token|access_token|refresh_token|id_token|api_key|apikey|key|secret|client_secret|password)$/iu;
 /** Values shorter than this are not treated as secrets, so masking never rewrites ordinary short words. */
 const MIN_SECRET_LENGTH = 8;
+const MIN_BODY_SECRET_LENGTH = 16;
 const HOME_PATTERNS: readonly RegExp[] = [
   /\/(?:home|Users)\/[^/\s"'<>\\]+/giu,
   /\/root(?=\/)/gu,
@@ -75,7 +77,9 @@ function collectSecrets(entries: readonly Record<string, Json>[]): Set<string> {
   for (const entry of entries) for (const side of ["request", "response"] as const) {
     const message = entry[side];
     if (!isObject(message)) continue;
-    for (const value of jsonBodySecrets(bodyText(message))) add(value);
+    // Body fields are named loosely (a "key" can be a route segment), so only long values count as secrets there;
+    // the capability and real tokens are far longer than MIN_BODY_SECRET_LENGTH.
+    for (const value of jsonBodySecrets(bodyText(message))) if (value.trim().length >= MIN_BODY_SECRET_LENGTH) add(value);
     const postData = message["postData"];
     for (const param of isObject(postData) && Array.isArray(postData["params"]) ? postData["params"].filter(isObject) : []) if (SECRET_PARAMS.test(String(param["name"] ?? ""))) add(String(param["value"] ?? ""));
     for (const header of Array.isArray(message["headers"]) ? message["headers"].filter(isObject) : []) {

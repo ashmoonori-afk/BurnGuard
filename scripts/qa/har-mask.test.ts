@@ -41,6 +41,13 @@ describe("HAR masking for the pre-release UX QA stage", () => {
     for (const secret of [CAPABILITY, token, "quoted-cookie-value-1234", "alice", "/root/"]) expect(text).not.toContain(secret);
   });
 
+  test("Given short values under loosely named body fields, when masked, then they are not treated as secrets and unrelated URLs stay readable", () => {
+    const har = { log: { entries: [entry({ url: "http://127.0.0.1:14070/api/projects/abc" }, { content: { size: 30, mimeType: "application/json", text: JSON.stringify({ data: [{ key: "projects", token: "short" }] }) } })] } };
+    const masked = maskHar(har);
+    expect((masked.har as { readonly log: { readonly entries: readonly { readonly request: { readonly url: string } }[] } }).log.entries[0]!.request.url).toBe("http://127.0.0.1:14070/api/projects/abc");
+    expect(masked.report.secret_values).toBe(0);
+  });
+
   test("Given a bootstrap response whose body carries no recognisable capability, or a secret inside a binary-typed base64 body, when masked, then masking fails closed with a typed error", () => {
     const unknownBootstrap = { log: { entries: [entry({ url: "http://127.0.0.1:14070/api/bootstrap" }, { content: { size: 10, mimeType: "text/plain", text: `launch ${CAPABILITY}` } })] } };
     expect(() => maskHar(unknownBootstrap)).toThrow(new HarMaskError("capability_not_found"));
