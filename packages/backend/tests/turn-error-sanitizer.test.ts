@@ -81,6 +81,30 @@ describe("turn error event boundary", () => {
     }
   });
 
+  test("Given the selected AI tool is not installed When a message is sent Then the route reports backend_unavailable instead of an artifact failure", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "burnguard-missing-backend-"));
+    try {
+      await writeFile(path.join(root, "index.html"), "<h1>safe</h1>");
+      getSqlite().prepare("UPDATE projects SET dir_path=? WHERE id='turn-error-project'").run(root);
+
+      const response = await sessionRoutes.request(
+        "http://local/api/sessions/turn-error-session/events",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ type: "user.message", text: "safe request" }),
+        },
+        { detectBackends: async () => ({ backends: [{ id: "codex" as const, found: false, authenticated: false, image_generation: false, models: [] }] }) },
+      );
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ error: { code: "backend_unavailable" } });
+    } finally {
+      getSqlite().prepare("UPDATE projects SET dir_path='/tmp/project' WHERE id='turn-error-project'").run();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("Given a legacy project control file When generation is requested Then it is preserved and blocked before provider execution", async () => {
     const root = await mkdtemp(
       path.join(tmpdir(), "burnguard-agent-control-"),

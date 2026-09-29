@@ -322,8 +322,12 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       await setSessionStatus(id, "idle");
     });
     try { await turn.prepared; }
-    catch {
+    catch (error) {
       await completed;
+      // A missing AI tool is the user's to fix in Settings, not an artifact problem.
+      if ((error as { readonly code?: unknown } | null)?.code === "backend_unavailable") {
+        return c.json(fail("backend_unavailable", "The selected AI tool is not available"), 409);
+      }
       return c.json(
         fail(
           "artifact_prepare_failed",
