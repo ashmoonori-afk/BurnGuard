@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import type { MeasuredBox, MeasuredPageLayout, MeasuredViewportLayout } from "@bg/shared";
+import type { MeasuredBox, MeasuredPageLayout, MeasuredViewportLayout, MeasuredViewportName } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
 import { measuredPagesFromPinnedContext, selectMeasuredPage } from "./design-system-conformance";
+import { layoutReferenceFromPinnedContext, stagedReferencePath } from "./design-system-layout-reference";
 
 /** First line of every generated starter stylesheet; a file without it was written by someone else and is never replaced. */
 export const STARTER_MARKER = "/* burnguard-design-system-starter v1 */";
@@ -135,7 +136,8 @@ export function buildStarterHtml(page: MeasuredPageLayout): string {
   ].join("\n");
 }
 
-export type StarterPlanPage = { readonly path: string; readonly hero: HeroArrangement; readonly skeleton: string };
+/** reference lists the staged screenshots of the source page by viewport, when the pin carries any. */
+export type StarterPlanPage = { readonly path: string; readonly hero: HeroArrangement; readonly skeleton: string; readonly reference?: Readonly<Partial<Record<MeasuredViewportName, string>>> };
 export type StarterPlan = { readonly stylesheet: string; readonly pages: readonly StarterPlanPage[] };
 
 const skeletonName = (pagePath: string): string => pagePath === "/" ? "home.html" : `${pagePath.slice(1).replace(/[^A-Za-z0-9._-]+/gu, "_").slice(0, 80)}.html`;
@@ -144,7 +146,11 @@ const skeletonName = (pagePath: string): string => pagePath === "/" ? "home.html
 export function starterPlan(pinnedContext: string): StarterPlan | null {
   const pages = (measuredPagesFromPinnedContext(pinnedContext) ?? []).filter(page => SAFE_PATH.test(page.path));
   if (pages.length === 0) return null;
-  return { stylesheet: STARTER_CSS_PATH, pages: pages.map(page => ({ path: page.path, hero: heroArrangement(page.viewports.desktop), skeleton: `${STARTER_SKELETON_DIR}/${skeletonName(page.path)}` })) };
+  const shots = layoutReferenceFromPinnedContext(pinnedContext);
+  return { stylesheet: STARTER_CSS_PATH, pages: pages.map(page => {
+    const reference = Object.fromEntries(shots.filter(shot => shot.path === page.path).map(shot => [shot.viewport, stagedReferencePath(shot)]));
+    return { path: page.path, hero: heroArrangement(page.viewports.desktop), skeleton: `${STARTER_SKELETON_DIR}/${skeletonName(page.path)}`, ...(Object.keys(reference).length > 0 ? { reference } : {}) };
+  }) };
 }
 
 /**

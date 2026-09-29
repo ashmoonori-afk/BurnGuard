@@ -55,6 +55,8 @@ import { prepareSlideDeckExport } from "./export-stage";
 import { blockingDesignFindings, DesignReviewError, reviewTurnDesign } from "./turn-design-review";
 import { MEASURED_PAGE_DECLARATION, reviewDesignSystemConformance } from "./design-system-conformance";
 import { provisionDesignSystemStarter } from "./design-system-starter";
+import { provisionDesignSystemLayoutReference } from "./design-system-layout-reference";
+import { resolveManagedPath, systemsDir } from "../lib/paths";
 import { designAuditCanvas, writeProjectAuditCache } from "./design-audit";
 import { assertLogoDeliverables, captureLogoTurnExpectation, LogoDeliverableError, LogoEvidenceCollector } from "./logo-deliverables";
 import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
@@ -491,7 +493,12 @@ async function runUserTurnInternal(
         // The skills point at this file; it lives outside the canonical tree so it is never published.
         await provisionLucideIconReference(stageDir);
         // The starter stylesheet is written before the turn's baseline, so it never counts as a change the turn made.
-        if (sessionContext.designSystemPin && surfaceForProjectType(project.type) === "website") await provisionDesignSystemStarter(stageDir, sessionContext.designSystemPin);
+        if (sessionContext.designSystemPin && surfaceForProjectType(project.type) === "website") {
+          await provisionDesignSystemStarter(stageDir, sessionContext.designSystemPin);
+          // Reference screenshots come from the pinned system's directory and are staged only when they match the pin.
+          const pinnedSystem = sessionContext.designSystem?.id === sessionContext.designSystemPin.system_id ? sessionContext.designSystem : null;
+          await provisionDesignSystemLayoutReference(stageDir, sessionContext.designSystemPin.context, pinnedSystem === null ? null : resolveManagedPath(systemsDir, pinnedSystem.dir_path));
+        }
         stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: payload.active_rel_path ?? project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
         const graphicBefore = graphicEntrypoint === null ? null : await readFile(graphicEntrypoint, "utf8");

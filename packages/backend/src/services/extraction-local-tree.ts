@@ -50,6 +50,8 @@ export type SourceAnalysis = {
   readonly heroAssets?: { readonly images: ReadonlyArray<{ readonly absolutePath: string; readonly fileName: string }>; readonly canvases: number };
   /** Offline rendered layout measurements; website sources only, null when Chromium could not measure. */
   readonly measuredLayout?: import("@bg/shared").DesignSystemMeasuredLayout | null;
+  /** Screenshots of the measured pages from the same offline render; only pages kept in measuredLayout. */
+  readonly layoutReferenceShots?: readonly import("./extraction-rendered-layout").LayoutReferenceCapture[];
   /**
    * Entry-page ground and text colour (hex) from page-level rules in document order, and the entry page's
    * most used mid-tone chromatic colour; website sources only.

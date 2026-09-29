@@ -3,7 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { MAX_PAGE_COVERAGE_BYTES, MEASURED_VIEWPORTS, parseDesignSystemMeasuredLayout, parseDesignSystemPageCoverage, type DesignSystemMeasuredLayout, type DesignSystemPageEvidence } from "@bg/shared";
+import { createHash } from "node:crypto";
+import { MAX_LAYOUT_REFERENCE_BYTES, MAX_PAGE_COVERAGE_BYTES, MEASURED_VIEWPORTS, parseDesignSystemLayoutReference, parseDesignSystemMeasuredLayout, parseDesignSystemPageCoverage, type DesignSystemMeasuredLayout, type DesignSystemPageEvidence } from "@bg/shared";
 import { getSqlite } from "../src/db/sqlite-client";
 import { appendDesignSystemContext } from "../src/harness/prompt-design-system";
 import { systemsDir } from "../src/lib/paths";
@@ -487,6 +488,28 @@ describe("Measured layout tokens", () => {
     });
   });
 
+  test("Given a measurer that captures screenshots, when a website is extracted, then only screenshots of measured pages are stored with a verified index and a note counts the missing views", async () => {
+    const layout = { schema_version: 1, method: "rendered-offline", pages: [{ path: "/source", page_type: "other", viewports: { desktop: viewportLayout("desktop"), mobile: viewportLayout("mobile") } }] } as DesignSystemMeasuredLayout;
+    const jpeg = (label: string) => new TextEncoder().encode(label);
+    const page = (title: string) => '<html><body><nav><a href="/pricing">Pricing</a></nav><h1>' + title + "</h1></body></html>";
+    await withSite({ "/source": page("Home"), "/pricing": page("Pricing") }, async (origin, id) => {
+      const result = await extractDesignSystemFromSource({ system_id: id, name: "Shots", source_type: "website", source_url: origin + "/source" }, { measureLayout: async input => {
+        input.captureReference?.({ path: "/source", viewport: "desktop", jpeg: jpeg("source-desktop"), width: 1440, height: 2400 });
+        input.captureReference?.({ path: "/pricing", viewport: "desktop", jpeg: jpeg("pricing-desktop"), width: 1440, height: 900 });
+        input.captureReference?.({ path: "/source", viewport: "mobile", jpeg: new Uint8Array(MAX_LAYOUT_REFERENCE_BYTES + 1), width: 390, height: 2532 });
+        return layout;
+      } });
+      const dir = path.join(systemsDir, id);
+      const reference = parseDesignSystemLayoutReference(JSON.parse(await readFile(path.join(dir, "layout-reference.json"), "utf8")));
+      expect(reference.shots.map(shot => [shot.path, shot.viewport, shot.file, shot.height])).toEqual([["/source", "desktop", "layout-reference/p0-desktop.jpg", 2400]]);
+      const stored = await readFile(path.join(dir, "layout-reference", "p0-desktop.jpg"));
+      expect(new TextDecoder().decode(stored)).toBe("source-desktop");
+      expect(reference.shots[0]!.sha256).toBe(createHash("sha256").update(stored).digest("hex"));
+      expect(result.extraction.generated_files).toEqual(expect.arrayContaining(["layout-reference.json", "layout-reference/p0-desktop.jpg"]));
+      expect(result.extraction.notes.some(note => note.startsWith("Layout reference screenshots were captured for 1 of 2"))).toBe(true);
+    });
+  });
+
   test("Given a measurer that fails, then extraction still succeeds without a measured layout file", async () => {
     await withSite({ "/source": "<html><body><h1>Home</h1></body></html>" }, async (origin, id) => {
       await extractDesignSystemFromSource({ system_id: id, name: "Unmeasured", source_type: "website", source_url: origin + "/source" }, { measureLayout: async () => null });
@@ -564,6 +587,17 @@ describe("Measured layout tokens", () => {
     expect(desktop.sections.map(section => section.columns)).toEqual([1, 3]);
     expect(desktop.blocks.media).toMatchObject({ width: 600, height: 300 });
     expect(desktop.gutter).toBe(24);
+  }, 90_000);
+
+  test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given a real Chromium and a reference capture, when a tall page is measured, then each viewport yields a JPEG capped at three viewport heights and the measured values are unchanged", async () => {
+    const html = '<!doctype html><html><head><link rel="stylesheet" href="https://site.test/site.css"></head><body><h1>Own your AI.</h1><img src="https://cdn.test/hero.png" width="600" height="300"><div class="tall"></div></body></html>';
+    const css = "body{margin:0} h1{font-size:64px} .tall{height:5000px}";
+    const input = { pages: [{ path: "/", pageType: "home" as const, url: "https://site.test/", html }], stylesheets: new Map([["https://site.test/site.css", css]]), signal: AbortSignal.timeout(60_000) };
+    const shots: { viewport: string; jpeg: Uint8Array; width: number; height: number }[] = [];
+    const captured = await measureRenderedLayout({ ...input, captureReference: shot => shots.push(shot) });
+    expect(captured).toEqual(await measureRenderedLayout(input));
+    expect(shots.map(shot => [shot.viewport, shot.width, shot.height])).toEqual([["desktop", 1440, 2700], ["mobile", 390, 2532]]);
+    for (const shot of shots) expect([...shot.jpeg.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
   }, 90_000);
 
   test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given centred 1200px section wrappers holding a narrow centred text column, when measured, then the container is the wrapper width rather than the text column", async () => {
