@@ -12,7 +12,7 @@ jobs run each pinning suite.
 
 | Area | macOS arm64 | Windows x64 | Linux | Pinned by | Runs in |
 |------|-------------|-------------|-------|-----------|---------|
-| Chromium launch | Node bridge child, capability probe | Node bridge child (in-process launch freezes Bun) | same as macOS | `chromium-node-launch` | Ubuntu (opt-in smoke); `chromium-capability` runs in no workflow |
+| Chromium launch | Node bridge child, capability probe | Node bridge child (in-process launch freezes Bun) | same as macOS | `chromium-node-launch` | Ubuntu (opt-in smoke); Windows flaky watch (non-gating); `chromium-capability` runs in no workflow |
 | Local fonts | `osascript` JXA family list | PowerShell family list | `fc-list` | `local-fonts` (runs the host command) | macOS job; Windows flaky watch (non-gating) |
 | Path containment | case-sensitive compare, keeps the public `/var` spelling of `/private/var` roots | lower-cased compare, drive and UNC rejection | case-sensitive | `path-boundary` | Ubuntu, OS jobs |
 | Profile ownership | POSIX exclusive lock | named pipe | POSIX exclusive lock | `desktop-lifecycle` | OS jobs, `windows-release.yml` |
@@ -33,8 +33,10 @@ jobs run each pinning suite.
   cleanup receipt could not be proven). Neither is root-caused. Both suites run in the non-gating "Windows flaky watch"
   job so the signal stays visible; the reap case looks like a real race in Windows tree cleanup and needs a real
   Windows session to settle.
-- Browser-backed suites (real Chromium measurement, screenshots, the visual diff, crops and the design audit) run on
-  the macOS and Windows jobs with `BG_BROWSER_SMOKE=1`.
+- Browser-backed suites (real Chromium measurement, screenshots, the visual diff, crops and the design audit: the
+  design-system pages, conformance, contrast and starter suites) run on the macOS and Windows jobs with
+  `BG_BROWSER_SMOKE=1`. The `chromium-node-launch` popup and deck-runtime smoke failed once on Windows ("Chromium
+  connection aborted" after 23 s) and passed on the sibling run; it runs in the non-gating Windows flaky watch job.
 
 - Long paths on Windows (over 260 characters) are not exercised; stage paths stay short by design.
 - File locking on Windows: a crop or asset overwrite can fail with EBUSY or EPERM while another process holds the

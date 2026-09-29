@@ -82,21 +82,34 @@ jobs:
           packages/backend/tests/design-system-conformance.test.ts
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/design-system-starter.test.ts
-          packages/backend/tests/chromium-node-launch.test.ts
 
   windows-flaky-watch:
     name: Windows flaky watch (not gating)
     runs-on: windows-latest
     continue-on-error: true
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
       - run: bun install --frozen-lockfile
-      - name: Windows suites with observed flakes
+      - name: Build the Windows process host
+        run: |
+          bun scripts/build-windows-process-host.ts
+          "BG_WINDOWS_PROCESS_HOST=$env:GITHUB_WORKSPACE\dist\windows-process-host\burnguard-windows-process-host.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Suites with observed Windows flakes
         run: >-
           bun test --timeout 30000
           packages/backend/tests/local-fonts.test.ts
           packages/backend/tests/owned-process-tree.test.ts
+      - name: Chromium popup and deck runtime
+        env:
+          BG_BROWSER_SMOKE: "1"
+        run: bun test --timeout 60000 packages/backend/tests/chromium-node-launch.test.ts
