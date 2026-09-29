@@ -108,6 +108,7 @@ import {
   selectCssCustomProperties,
   styleSignalsFromDeclarations,
   isColorTokenValue,
+  NAMED_COLORS,
   upsertCssCustomProperty,
 } from "./extraction-css";
 import { DESIGN_SURFACE_FILES, DESIGN_SURFACES } from "@bg/shared";
@@ -2039,8 +2040,6 @@ function brandColors(analysis: SourceAnalysis): { readonly primary: string; read
   );
   return { primary, action: firstValue(analysis.cssVars, ["action-blue", "interactive", "link", "brand-action"], primary) };
 }
-
-const NAMED_COLORS = new Set(("aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen transparent").split(" "));
 
 /** A literal colour: hex, named, or a colour function without unresolved substitutions. CSS-wide keywords and other words are not colours. */
 function isLiteralColor(value: string): boolean {

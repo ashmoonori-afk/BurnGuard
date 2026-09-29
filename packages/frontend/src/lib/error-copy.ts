@@ -126,6 +126,7 @@ const ERROR_COPY: Record<string, MessageKey> = {
   format_requires_deck: "errors.format_requires_project_type",
   format_requires_logo: "errors.format_requires_project_type",
   invalid_export_format: "errors.invalid_export_format",
+  invalid_color_value: "errors.invalid_color_value",
 };
 
 /** Resolve at call time so changing the locale also changes error recovery copy. */

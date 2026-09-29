@@ -402,6 +402,11 @@ describe("CSS extraction helpers", () => {
     expect(isColorTokenValue("rgb(1, 2, 3)")).toBe(true);
     expect(isColorTokenValue("url(https://example.com/a.png)")).toBe(false);
   });
+
+  test("Given a bare word as a color token value When it is validated Then only real CSS color keywords are accepted", () => {
+    for (const keyword of ["tomato", "Transparent", "currentColor", "rebeccapurple"]) expect(isColorTokenValue(keyword), keyword).toBe(true);
+    for (const word of ["zzz", "inherit", "bluish", "primary"]) expect(isColorTokenValue(word), word).toBe(false);
+  });
 });
 
 describe("extractHtmlComponentSamples", () => {
