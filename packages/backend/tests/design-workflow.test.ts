@@ -117,6 +117,17 @@ test("Given design-system conformance findings on a clean audit When reviewing T
   expect(JSON.parse(context!)).toMatchObject({ scope: "targeted_findings", image_generation: "not_requested" });
   expect(events.at(-1)).toMatchObject({ type: "tool.finished", ok: true, output: { conformance_remaining: 0 } });
 });
+test("Given repair targets with section crops When a conformance repair runs Then the prompt block lists them next to the findings", async () => {
+  const prompts: string[] = [];
+  const finding = { code: "block_alignment" as const, viewport: "desktop" as const, target: "hero_heading", measured: "left", expected: "center" };
+  const target = { viewport: "desktop" as const, section: 1, heading: "Features", ssim: 0.31, overlap: 0.4, score: 0.36, crop: { reference: ".burnguard-inputs/design-system-starter/crops/desktop-s1-reference.jpg", generated: ".burnguard-inputs/design-system-starter/crops/desktop-s1-generated.jpg" } };
+  let checks = 0;
+  await reviewTurnDesign({ ...reviewInput([]), audit: async () => result(false), requestText: "Build the home page", conformanceRepairable: true,
+    conformance: async () => ({ page: "/", findings: checks++ === 0 ? [finding] : [], repair_targets: [target] }),
+    run: async input => { prompts.push(input.prompt); return { exitCode: 0 }; } });
+  const block = /<design_system_conformance_findings>\n([^\n]+)\n<\/design_system_conformance_findings>/u.exec(prompts[0]!)?.[1];
+  expect(JSON.parse(block!)).toEqual({ page: "/", findings: [finding], visual_targets: [target], user_request: "Build the home page" });
+});
 test("Given persistent conformance findings When reviewing Then one conformance repair runs, the turn is not refused for them and the remaining count is reported", async () => {
   const events: NormalizedEvent[] = [];
   const finding = { code: "type_size" as const, viewport: "mobile" as const, target: "hero", measured: "32px", expected: "64px +/-2px" };

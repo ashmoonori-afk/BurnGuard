@@ -11,9 +11,15 @@ export type VisualSectionScore = {
   /** Mean intersection over union of the measured section band and its hero blocks against the rendered ones. */
   readonly overlap: number;
   readonly score: number;
+  /** Project-relative crops of this section from the source screenshot and from the current render; the render crop is absent when the page ends before the section. */
+  readonly crop?: { readonly reference: string; readonly generated?: string };
 };
 export type VisualViewportReport = { readonly viewport: MeasuredViewportName; readonly unavailable: boolean; readonly sections: readonly VisualSectionScore[] };
 
+/** Where a review stages section crops; inside the unpublished inputs directory, never part of the artifact. */
+export const VISUAL_CROP_DIR = ".burnguard-inputs/design-system-starter/crops";
+const MAX_CROP_HEIGHT = 1600;
+const CROP_JPEG_QUALITY = 80;
 const GRID_WIDTH = 180;
 const WINDOW = 8;
 const MIN_BAND_PX = 8;
@@ -134,6 +140,21 @@ export async function compareVisualViewport(input: {
       return { viewport: input.viewport, section: index, heading: section.heading, ssim: ssim === null ? null : round3(ssim), overlap: round3(overlap), score: round3(score) };
     }),
   };
+}
+
+/** A JPEG of the rows [top, top + height) of a page image, clamped to the image and to a height cap; null when nothing is left or the bytes cannot be decoded. */
+export async function cropSectionJpeg(bytes: Uint8Array, top: number, height: number): Promise<Uint8Array | null> {
+  try {
+    const image = await loadImage(Buffer.from(bytes));
+    const start = Math.max(0, top);
+    const end = Math.min(top + height, image.height, start + MAX_CROP_HEIGHT);
+    if (end - start < MIN_BAND_PX) return null;
+    const canvas = createCanvas(image.width, end - start);
+    canvas.getContext("2d").drawImage(image, 0, start, image.width, end - start, 0, 0, image.width, end - start);
+    return new Uint8Array(canvas.toBuffer("image/jpeg", CROP_JPEG_QUALITY));
+  } catch {
+    return null;
+  }
 }
 
 /** The lowest-scoring sections across viewports: where a repair should look first. */
