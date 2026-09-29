@@ -284,21 +284,25 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
     const styles = Array.from(document.querySelectorAll("style"));
     const usage = [
       ...Array.from(document.querySelectorAll("[style]"), (element) => element.getAttribute("style") ?? ""),
+      // SVG text can name a family through its presentation attribute instead of CSS.
+      ...Array.from(document.querySelectorAll("[font-family]"), (element) => element.getAttribute("font-family") ?? ""),
       ...Array.from(document.querySelectorAll("script"), (script) => script.textContent ?? ""),
     ].join("\n");
     const pruned = pruneUnusedFontFaces(styles.map((style) => style.textContent ?? ""), usage);
+    // One pass with whole-marker matches: markers are prefixes of one another (…-4 and …-47), so
+    // sequential replacement would splice one face's data into another's marker.
     const markers = new RegExp(`${fontMarker}\\d+`, "g");
     const inlineFonts = async (text: string): Promise<string> => {
       const used = [...new Set(text.match(markers) ?? [])];
-      const data = await Promise.all(used.map((marker) => sharedFontData(deferredFonts.get(marker)!)));
-      return used.reduce((result, marker, index) => result.replaceAll(marker, data[index]!), text);
+      const data = new Map(await Promise.all(used.map(async (marker) => [marker, await sharedFontData(deferredFonts.get(marker)!)] as const)));
+      return text.replace(markers, (marker) => data.get(marker)!);
     };
     await Promise.all([
       ...styles.map(async (style, index) => { style.textContent = await inlineFonts(pruned[index]!); }),
-      ...Array.from(document.querySelectorAll("[style]")).map(async (element) => {
-        const style = element.getAttribute("style")!;
-        if (style.includes(fontMarker)) element.setAttribute("style", await inlineFonts(style));
-      }),
+      // Any attribute a bundled font URL was resolved into (style, img src/srcset) gets the data too.
+      ...Array.from(document.querySelectorAll("*")).flatMap((element) => Array.from(element.attributes)
+        .filter((attribute) => attribute.value.includes(fontMarker))
+        .map(async (attribute) => { element.setAttribute(attribute.name, await inlineFonts(attribute.value)); })),
     ]);
     boundedSignal.throwIfAborted();
   }

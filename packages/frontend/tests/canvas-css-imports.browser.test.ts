@@ -232,31 +232,35 @@ async function withCanvasPage<T>(serve: (pathname: string) => Response | undefin
   }
 }
 
-test("Given a project document linking the real shared fonts.css and using one family through a token When embedCanvasImages runs Then only that family's faces are embedded and no other face is fetched", async () => {
+test("Given a project document linking the real shared fonts.css and using two families through tokens When embedCanvasImages runs Then exactly those families' faces carry their own bytes and no other face is fetched", async () => {
   const fonts = `${import.meta.dir}/../../../assets/fonts`;
   // The same content-addressed rewrite every new project receives in fonts/fonts.css.
   const stylesheet = (await Bun.file(`${fonts}/fonts.css`).text()).replace(/url\('\.\/([^']+\.woff2)'\)/g, (_, name: string) => `url('/runtime/fonts/${"b".repeat(64)}/${name}')`);
   const blocks = stylesheet.match(/@font-face\s*\{[^{}]*\}/g) ?? [];
   const familyOf = (block: string) => /font-family\s*:\s*["']?([^"';]+)/.exec(block)?.[1]?.trim() ?? "";
-  const family = familyOf(blocks[0] ?? "");
-  const usedFaces = blocks.filter(block => familyOf(block) === family).map(block => block.match(/url\(/g)?.length ?? 0).reduce((sum, count) => sum + count, 0);
+  // The first and the last family: their deferred markers are numbered 0.. and 10+, so one marker
+  // is a textual prefix of another (…-4 and …-47) and a prefix-unsafe replacement corrupts fonts.
+  const families = [familyOf(blocks[0] ?? ""), familyOf(blocks.at(-1) ?? "")];
+  const used = blocks.filter(block => families.includes(familyOf(block)));
+  const files = used.flatMap(block => Array.from(block.matchAll(/\/b{64}\/([A-Za-z0-9_.-]+\.woff2)/g), match => match[1]!));
+  const expected = await Promise.all(files.map(async file => `data:font/woff2;base64,${Buffer.from(await Bun.file(`${fonts}/${file}`).arrayBuffer()).toString("base64")}`));
   const fetchedFonts: string[] = [];
   const result = await withCanvasPage(pathname => {
     if (pathname === "/api/projects/fonts/fs/fonts/fonts.css") return new Response(stylesheet, { headers: { "content-type": "text/css" } });
     const font = /^\/runtime\/fonts\/b{64}\/([A-Za-z0-9_.-]+\.woff2)$/.exec(pathname)?.[1];
     if (font !== undefined) fetchedFonts.push(font);
     return font === undefined ? undefined : new Response(Bun.file(`${fonts}/${font}`), { headers: { "content-type": "font/woff2" } });
-  }, (page, origin) => page.evaluate(async ({ url, family }) => {
+  }, (page, origin) => page.evaluate(async ({ url, families }) => {
     try {
-      const html = await globalThis.canvasCssTest.embedCanvasImages(`<link rel="stylesheet" href="fonts/fonts.css"><style>:root{--font-body:"${family}",sans-serif}body{font-family:var(--font-body)}</style>`, url, new AbortController().signal);
-      return { embedded: Array.from(html.matchAll(/url\("?([^"')]*)/g), match => match[1]!.startsWith("data:font/woff2;base64,")) };
+      const html = await globalThis.canvasCssTest.embedCanvasImages(`<link rel="stylesheet" href="fonts/fonts.css"><style>:root{--font-body:"${families[0]}",sans-serif}body{font-family:var(--font-body)}</style><svg><text font-family="${families[1]}">x</text></svg>`, url, new AbortController().signal);
+      return { urls: Array.from(html.matchAll(/url\("?([^"')]*)/g), match => match[1]!) };
     } catch (error) { return { error: error instanceof Error ? error.message : String(error) }; }
-  }, { url: `${origin}/api/projects/fonts/fs/index.html`, family }));
-  expect(family.length).toBeGreaterThan(0);
-  expect(usedFaces).toBeGreaterThan(0);
-  expect(usedFaces).toBeLessThan(stylesheet.match(/url\(/g)?.length ?? 0);
-  expect(result).toEqual({ embedded: Array.from({ length: usedFaces }, () => true) });
-  expect(fetchedFonts).toHaveLength(usedFaces);
+  }, { url: `${origin}/api/projects/fonts/fs/index.html`, families }));
+  expect(new Set(families).size).toBe(2);
+  expect(blocks.indexOf(used.at(-1)!)).toBeGreaterThanOrEqual(10);
+  expect(files.length).toBeLessThan(stylesheet.match(/url\(/g)?.length ?? 0);
+  expect(result).toEqual({ urls: expected });
+  expect(fetchedFonts.sort()).toEqual([...new Set(files)].sort());
 }, 30_000);
 
 test("Given images beyond the per-document byte budget When embedCanvasImages runs Then the document resolves with those images unembedded while stylesheet overruns stay fatal", async () => {
