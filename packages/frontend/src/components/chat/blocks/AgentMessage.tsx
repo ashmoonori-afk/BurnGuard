@@ -27,8 +27,6 @@ export default function AgentMessage({
   turnId: string;
   disposition: TurnDisposition;
 }) {
-  const t = useT();
-  const { key, icon: Icon, tone } = DISPOSITION_COPY[disposition];
   const refused = disposition === "not_applied" || disposition === "rejected";
   return (
     <div
@@ -40,13 +38,23 @@ export default function AgentMessage({
       <div className={`whitespace-pre-wrap break-words text-sm leading-7 ${refused ? "text-muted-foreground" : "text-foreground"}`}>
         {text}
       </div>
-      <div
-        data-qa={disposition === "not_applied" ? "turn-not-applied" : "turn-standing"}
-        className={`mt-1.5 flex items-start gap-1.5 text-[11px] leading-5 ${tone}`}
-      >
-        <Icon className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
-        <span>{t(key)}</span>
-      </div>
+      <TurnStanding disposition={disposition} />
+    </div>
+  );
+}
+
+/** Where a turn stands; also shown on its own for a turn stopped before it wrote any message. */
+export function TurnStanding({ disposition, turnId }: { disposition: TurnDisposition; turnId?: string }) {
+  const t = useT();
+  const { key, icon: Icon, tone } = DISPOSITION_COPY[disposition];
+  return (
+    <div
+      data-qa={disposition === "not_applied" ? "turn-not-applied" : "turn-standing"}
+      {...(turnId === undefined ? {} : { "data-turn-id": turnId, "data-turn-disposition": disposition })}
+      className={`mt-1.5 flex items-start gap-1.5 text-[11px] leading-5 ${tone}`}
+    >
+      <Icon className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+      <span>{t(key)}</span>
     </div>
   );
 }

@@ -313,6 +313,22 @@ test("Given a refusal with a machine reason When the error card renders Then the
   expect(html).not.toContain("operation-9");
 });
 
+test("Given a turn the user stopped before it wrote any message When the stream renders Then the turn still shows that it was stopped", () => {
+  const events: NormalizedEvent[] = [
+    ...committedTurn(FIRST, "first mark delivered"),
+    { id: id(), ts: 11, type: "chat.user_message", turnId: SECOND, text: "add a slide", attachmentCount: 0 },
+    { id: id(), ts: 12, type: "status.running" },
+    { id: id(), ts: 13, type: "tool.started", turnId: SECOND, toolCallId: "call-1", tool: "Read", input: {} },
+    { id: id(), ts: 14, type: "tool.finished", turnId: SECOND, toolCallId: "call-1", ok: true },
+    { id: id(), ts: 15, type: "status.idle", stopReason: "interrupted" },
+  ];
+
+  const html = renderToStaticMarkup(createElement(MessageStream, { events, session: SESSION }));
+
+  expect(html).toContain(`data-turn-id="${SECOND}" data-turn-disposition="stopped"`);
+  expect(html).toContain(`data-turn-id="${FIRST}" data-turn-disposition="committed"`);
+});
+
 test("Given the rendered stream When a turn is refused Then its own bubble is marked not applied and the earlier turn stays committed", () => {
   const events = [...committedTurn(FIRST, "first mark delivered"), ...refusedTurn(SECOND, "second mark delivered")];
 

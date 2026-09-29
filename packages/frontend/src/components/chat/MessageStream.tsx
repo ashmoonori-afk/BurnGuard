@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, MessageSquare } from "lucide-react";
 import type { NormalizedEvent, SessionInfo } from "@bg/shared";
-import AgentMessage from "./blocks/AgentMessage";
+import AgentMessage, { TurnStanding } from "./blocks/AgentMessage";
 import ThinkingBlock from "./blocks/ThinkingBlock";
 import ToolBadge from "./blocks/ToolBadge";
 import ErrorCard from "./blocks/ErrorCard";
@@ -105,6 +105,8 @@ export default function MessageStream({
                   disposition={turnStates.get(g.turnId)?.disposition ?? "pending"}
                 />
               );
+            case "stopped":
+              return <TurnStanding key={`stopped-${g.turnId}`} turnId={g.turnId} disposition={turnStates.get(g.turnId)?.disposition ?? "stopped"} />;
             case "thinking":
               return <ThinkingBlock key={g.ev.id} text={g.ev.text} />;
             case "tool":
@@ -162,6 +164,7 @@ type ErrorEv = Extract<NormalizedEvent, { type: "status.error" }>;
 type Group =
   | { kind: "user"; ev: UserMessageEv }
   | { kind: "message"; turnId: string; text: string }
+  | { kind: "stopped"; turnId: string }
   | { kind: "thinking"; ev: ThinkingEv }
   | { kind: "tool"; started: ToolStarted; finished: ToolFinished | null }
   | { kind: "error"; ev: ErrorEv };
@@ -177,9 +180,12 @@ function buildGroups(events: NormalizedEvent[]): Group[] {
   // Streamed text belongs to the turn that produced it, so the bubble can say whether that turn
   // reached the project. A delta from a different turn closes the buffer instead of joining it.
   let textTurnId = "";
+  let userTurnId = "";
+  const turnsWithMessage = new Set<string>();
   const flushText = () => {
     if (textBuf) {
       groups.push({ kind: "message", turnId: textTurnId, text: textBuf });
+      turnsWithMessage.add(textTurnId);
       textBuf = "";
     }
   };
@@ -188,7 +194,17 @@ function buildGroups(events: NormalizedEvent[]): Group[] {
     switch (ev.type) {
       case "chat.user_message":
         flushText();
+        userTurnId = ev.turnId;
         groups.push({ kind: "user", ev });
+        break;
+      case "status.idle":
+        // A turn stopped before it wrote any message has no bubble to carry its standing.
+        if (ev.stopReason !== "interrupted") break;
+        flushText();
+        if (userTurnId && !turnsWithMessage.has(userTurnId)) {
+          groups.push({ kind: "stopped", turnId: userTurnId });
+          turnsWithMessage.add(userTurnId);
+        }
         break;
       case "chat.delta":
         if (textBuf && ev.turnId !== textTurnId) flushText();
