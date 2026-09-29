@@ -114,7 +114,7 @@ export default function NewProjectPanel({
   const backendSelect = backendSelectState(detection);
   const detectedBackends = backendSelect.backends;
   const effectiveBackend = needsImageBackend ? graphicBackendId(detectedBackends, backendId) : backendId;
-  const generation = generationByBackend[effectiveBackend] ?? defaultGenerationOptions(effectiveBackend);
+  const generation = generationByBackend[effectiveBackend] ?? defaultGenerationOptions(effectiveBackend, detectedBackends.find((backend) => backend.id === effectiveBackend)?.models);
 
   const createMutation = useMutation({
     mutationFn: (request: CreateProjectRequest) => createProject(request),

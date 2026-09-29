@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { defaultGenerationOptions, MAX_USER_MESSAGE_CHARS, type BackendId, type FileInfo, type GenerationOptions } from "@bg/shared";
 import { useQuery } from "@tanstack/react-query";
-import { getSettings } from "@/api/home";
+import { detectBackends, getSettings } from "@/api/home";
 import GenerationControls from "@/components/settings/GenerationControls";
 import { Paperclip, Send, Settings2, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -103,14 +103,16 @@ export default function Composer({
   const draft = useComposerDraft(sessionId, initialText);
   const documents = useComposerDocuments(sessionId, draft.ready, draft.items);
   const settings = useQuery({ queryKey: ["settings"], queryFn: getSettings });
-  const generation = draft.generation ?? settings.data?.generation_defaults?.[backendId] ?? defaultGenerationOptions(backendId);
+  const detection = useQuery({ queryKey: ["backends", "detect"], queryFn: detectBackends });
+  const models = detection.data?.backends.find((backend) => backend.id === backendId)?.models;
+  const generation = draft.generation ?? settings.data?.generation_defaults?.[backendId] ?? defaultGenerationOptions(backendId, models);
   const priorBackend = useRef(backendId);
   useEffect(() => {
     if (priorBackend.current !== backendId) {
       priorBackend.current = backendId;
-      draft.setGeneration(settings.data?.generation_defaults?.[backendId] ?? defaultGenerationOptions(backendId));
+      draft.setGeneration(settings.data?.generation_defaults?.[backendId] ?? defaultGenerationOptions(backendId, models));
     }
-  }, [backendId, draft, settings.data]);
+  }, [backendId, draft, settings.data, models]);
   const { text, setText } = draft;
   const textRef = useRef(text);
   textRef.current = text;
