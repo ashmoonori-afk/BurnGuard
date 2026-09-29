@@ -40,6 +40,28 @@ async function sharedFontData(url: string): Promise<string> {
   return pending;
 }
 
+const FONT_FACE = /@font-face\s*\{[^{}]*\}/gi;
+
+/** Lower-cased family an @font-face block declares, or null when it declares none. */
+export function fontFaceFamily(block: string): string | null {
+  const match = /font-family\s*:\s*(?:"([^"]*)"|'([^']*)'|([^;}]*))/i.exec(block);
+  const family = (match?.[1] ?? match?.[2] ?? match?.[3] ?? "").trim().toLowerCase();
+  return family === "" ? null : family;
+}
+
+/**
+ * Drops @font-face rules whose family nothing else names. A mention anywhere outside the face
+ * rules (a declaration, a custom property, an inline style, a script) keeps the face, so a family
+ * reached through var(--font-*) or set from script still loads.
+ */
+export function pruneUnusedFontFaces(styles: readonly string[], usage: string): string[] {
+  const corpus = `${styles.map((css) => css.replace(FONT_FACE, " ")).join("\n")}\n${usage}`.toLowerCase();
+  return styles.map((css) => css.replace(FONT_FACE, (block) => {
+    const family = fontFaceFamily(block);
+    return family === null || corpus.includes(family) ? block : "";
+  }));
+}
+
 export function isProjectImageUrl(value: string, documentUrl: string): boolean {
   if (value.startsWith("#")) return false;
   try {
@@ -95,13 +117,19 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
   const document = new DOMParser().parseFromString(html, "text/html");
   const fetched = new Map<string, Promise<string>>();
   let sharedFontUsed = false;
+  // Bundled faces are inlined only after unused @font-face rules are pruned (UX-004): a marker
+  // stands in for each font URL until then, so an unused face is never fetched or encoded.
+  const deferredFonts = new Map<string, string>();
+  const fontMarker = `bg-deferred-font-${crypto.randomUUID()}-`;
   const resources = new AbortController();
   const boundedSignal = anySignal([signal, resources.signal, AbortSignal.timeout(15000)]);
   const budget = { remaining: 32 * 1024 * 1024 };
   const resolve = async (source: string, base = documentUrl, kind: "asset" | "css" | "script" = "asset"): Promise<string> => {
     if (kind === "asset" && isBundledFontUrl(source, base)) {
       sharedFontUsed = true;
-      return sharedFontData(new URL(source, base).href);
+      const marker = `${fontMarker}${deferredFonts.size}`;
+      deferredFonts.set(marker, new URL(source, base).href);
+      return marker;
     }
     if (!source || !isProjectImageUrl(source, base)) return source;
     const target = new URL(source, base);
@@ -252,5 +280,31 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
   }),
   ]);
   boundedSignal.throwIfAborted();
+  if (sharedFontUsed || fetched.size > 0) {
+    const styles = Array.from(document.querySelectorAll("style"));
+    const usage = [
+      ...Array.from(document.querySelectorAll("[style]"), (element) => element.getAttribute("style") ?? ""),
+      // SVG text can name a family through its presentation attribute instead of CSS.
+      ...Array.from(document.querySelectorAll("[font-family]"), (element) => element.getAttribute("font-family") ?? ""),
+      ...Array.from(document.querySelectorAll("script"), (script) => script.textContent ?? ""),
+    ].join("\n");
+    const pruned = pruneUnusedFontFaces(styles.map((style) => style.textContent ?? ""), usage);
+    // One pass with whole-marker matches: markers are prefixes of one another (…-4 and …-47), so
+    // sequential replacement would splice one face's data into another's marker.
+    const markers = new RegExp(`${fontMarker}\\d+`, "g");
+    const inlineFonts = async (text: string): Promise<string> => {
+      const used = [...new Set(text.match(markers) ?? [])];
+      const data = new Map(await Promise.all(used.map(async (marker) => [marker, await sharedFontData(deferredFonts.get(marker)!)] as const)));
+      return text.replace(markers, (marker) => data.get(marker)!);
+    };
+    await Promise.all([
+      ...styles.map(async (style, index) => { style.textContent = await inlineFonts(pruned[index]!); }),
+      // Any attribute a bundled font URL was resolved into (style, img src/srcset) gets the data too.
+      ...Array.from(document.querySelectorAll("*")).flatMap((element) => Array.from(element.attributes)
+        .filter((attribute) => attribute.value.includes(fontMarker))
+        .map(async (attribute) => { element.setAttribute(attribute.name, await inlineFonts(attribute.value)); })),
+    ]);
+    boundedSignal.throwIfAborted();
+  }
   return fetched.size === 0 && !sharedFontUsed ? html : `<!doctype html>${document.documentElement.outerHTML}`;
 }
