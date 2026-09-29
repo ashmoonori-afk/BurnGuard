@@ -2,6 +2,7 @@ import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { MeasuredBox, MeasuredPageLayout, MeasuredViewportLayout, MeasuredViewportName } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
+import { readableRole } from "./design-system-contrast";
 import { measuredPagesFromPinnedContext, selectMeasuredPage } from "./design-system-conformance";
 import { heroAssetsFromPinnedContext, layoutReferenceFromPinnedContext, STAGED_REFERENCE_DIR, stagedReferencePath } from "./design-system-layout-reference";
 
@@ -69,6 +70,14 @@ function measuredBlock(selector: string, page: MeasuredPageLayout, breakpointPx:
   ];
 }
 
+/** Text roles the class API uses, each resolved to a token that reads at 4.5:1 on the system's own background or brand colour. */
+function readableRoleProperties(tokensCss: string): string {
+  const subtitle = readableRole(tokensCss, ["--fg-2", "--fg-1"], ["--bg"]);
+  const footer = readableRole(tokensCss, ["--fg-3", "--fg-2", "--fg-1"], ["--bg"]);
+  const onBrand = readableRole(tokensCss, ["--fg-on-brand", "--fg-1", "--bg"], ["--brand-primary", "--primary-blue"]);
+  return `:root {\n  --m-fg-subtitle: var(${subtitle});\n  --m-fg-footer: var(${footer});\n  --m-fg-on-brand: var(${onBrand});\n}`;
+}
+
 /**
  * The starter stylesheet for a website built with an extracted system: the pinned tokens, the measured values
  * as --m-* properties (home at :root, other measured pages selected by the page's bg-measured-page meta, mobile
@@ -84,6 +93,7 @@ export function buildStarterCss(tokensCss: string, pages: readonly MeasuredPageL
     STARTER_MARKER,
     "/* Generated from the pinned design system and its measured pages. Link it before page CSS and do not edit it. */",
     tokensCss.trim(),
+    readableRoleProperties(tokensCss),
     ...measuredBlock(":root", home, breakpointPx),
     ...others.flatMap(page => measuredBlock(`:root:has(meta[name="bg-measured-page"][content="${page.path}"])`, page, breakpointPx)),
     "*, *::before, *::after { box-sizing: border-box; }",
@@ -93,15 +103,15 @@ export function buildStarterCss(tokensCss: string, pages: readonly MeasuredPageL
     ".bg-nav a { font-size: var(--m-type-nav); color: inherit; text-decoration: none; }",
     HERO_RULES,
     ".bg-hero__title { font-family: var(--font-display, var(--font-sans)); font-size: var(--m-type-hero); line-height: var(--lh-tight, 1.1); max-width: var(--m-hero-width); margin: 0; }",
-    ".bg-hero__subtitle { font-size: var(--m-type-subheading); color: var(--fg-2); max-width: var(--m-hero-width); margin: 0; }",
-    ".bg-button { display: inline-flex; align-items: center; justify-content: center; font-size: var(--m-type-cta); padding: 0.6em 1.2em; border-radius: var(--r-pill, 999px); border: 1px solid transparent; background: var(--brand-primary, var(--primary-blue)); color: var(--fg-on-brand); text-decoration: none; }",
+    ".bg-hero__subtitle { font-size: var(--m-type-subheading); color: var(--m-fg-subtitle); max-width: var(--m-hero-width); margin: 0; }",
+    ".bg-button { display: inline-flex; align-items: center; justify-content: center; font-size: var(--m-type-cta); padding: 0.6em 1.2em; border-radius: var(--r-pill, 999px); border: 1px solid transparent; background: var(--brand-primary, var(--primary-blue)); color: var(--m-fg-on-brand); text-decoration: none; }",
     ".bg-button--secondary { background: transparent; border-color: var(--border-strong); color: var(--fg-1); }",
     ".bg-section { padding-block: calc(var(--m-section-gap) / 2); }",
     ".bg-section__title { font-family: var(--font-display, var(--font-sans)); font-size: var(--m-type-h2); line-height: var(--lh-tight, 1.15); margin: 0 0 var(--m-gutter); }",
     ".bg-grid { display: grid; gap: var(--m-gutter); grid-template-columns: repeat(var(--bg-columns, 3), minmax(0, 1fr)); }",
     ".bg-card { background: var(--surface); color: var(--fg-1); border: 1px solid var(--border); border-radius: var(--r-8, 8px); padding: var(--m-gutter); }",
     ".bg-card__title { font-size: var(--m-type-h3); margin: 0 0 0.5em; }",
-    ".bg-footer { border-top: 1px solid var(--border); padding-block: var(--m-gutter); color: var(--fg-3); }",
+    ".bg-footer { border-top: 1px solid var(--border); padding-block: var(--m-gutter); color: var(--m-fg-footer); }",
     `@media (max-width: ${breakpointPx - 0.02}px) {\n  .bg-hero { grid-template-columns: minmax(0, 1fr); }\n  .bg-grid { grid-template-columns: minmax(0, 1fr); }\n}`,
     "",
   ].join("\n\n");
