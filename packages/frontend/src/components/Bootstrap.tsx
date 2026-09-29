@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { bootstrapApiAuthority } from "@/api/client";
+import { bootstrapApiAuthority, onAuthorityRejected } from "@/api/client";
 import { getSettings, patchSettings } from "@/api/home";
 import { synchronizePortableLocale } from "@/i18n/locale";
 import { t as translate, useT } from "@/i18n/t";
@@ -17,6 +17,17 @@ export async function runBootstrap(signal: AbortSignal, onSettingsSyncFailed: (e
   } catch (error) {
     onSettingsSyncFailed(error);
   }
+}
+
+/**
+ * A stale launch capability after a backend restart: one persistent notice with a Reload action.
+ * Automatic re-bootstrap is deliberately not done here until it has had a security review.
+ */
+export function announceBackendRestart(reload: () => void = () => window.location.reload()): void {
+  const store = useUIStore.getState();
+  const title = translate("errors.forbidden");
+  if (store.toasts.some((toast) => toast.title === title)) return;
+  store.pushToast({ title, tone: "error", action: { label: translate("shell.reload"), onSelect: reload } });
 }
 
 /** Render recovery before API consumers mount, including while bootstrap is offline. */
@@ -38,6 +49,7 @@ export default function Bootstrap({ children }: { children: ReactNode }) {
     ).finally(() => window.clearTimeout(timeout));
     return () => { active = false; controller.abort(); window.clearTimeout(timeout); };
   }, [attempt]);
+  useEffect(() => onAuthorityRejected(() => announceBackendRestart()), []);
   if (state === "ready") return children;
   return <main className="grid min-h-dvh place-items-center bg-background p-6 text-foreground">
     <div className="max-w-md space-y-4 text-center" role={state === "error" ? "alert" : "status"}>
