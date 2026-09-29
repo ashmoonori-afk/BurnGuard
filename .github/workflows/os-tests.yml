@@ -29,6 +29,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.0
       - run: bun install --frozen-lockfile
       - uses: actions/setup-dotnet@v4
         if: runner.os == 'Windows'
@@ -66,3 +69,13 @@ jobs:
           packages/backend/tests/trace-security.test.ts
           packages/backend/tests/prompt-builder.test.ts
           packages/backend/tests/desktop-lifecycle.test.ts
+      - name: Browser-backed suites
+        env:
+          BG_BROWSER_SMOKE: "1"
+        run: >-
+          bun test --timeout 60000
+          packages/backend/tests/design-system-pages.test.ts
+          packages/backend/tests/design-system-conformance.test.ts
+          packages/backend/tests/design-system-contrast.test.ts
+          packages/backend/tests/design-system-starter.test.ts
+          packages/backend/tests/chromium-node-launch.test.ts
