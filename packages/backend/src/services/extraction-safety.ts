@@ -123,7 +123,7 @@ export function assertAcquirableSourceMarkup(content: string, kind: "html" | "sv
  * exact raw name, so React's `srcSet` survived `removeAttribute("srcset")` while the gate still saw it.
  * Remove every raw spelling of the name so sanitizer and gate agree.
  */
-function removeAttributeAnyCase(node: HTMLElement, attributeName: string): void {
+export function removeAttributeAnyCase(node: HTMLElement, attributeName: string): void {
   const lower = attributeName.toLowerCase();
   for (const rawName of Object.keys(node.rawAttributes)) {
     if (rawName.toLowerCase() === lower) node.removeAttribute(rawName);

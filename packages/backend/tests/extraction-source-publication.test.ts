@@ -177,6 +177,12 @@ test("Given camelCase reference attributes When source references are removed Th
   expect(() => assertInertSourceMarkup(removeSourceMarkupReferences(INERT_PAGE('<img srcSet="a.jpg 1x" SRC="b.jpg" alt="">')), "html")).not.toThrow();
 });
 
+test("Given an uppercase HREF to public HTTPS navigation When a cloned source is sanitized Then the link text stays and the reference is stripped", () => {
+  const stored = sanitizeSourceHtml(INERT_PAGE('<a HREF="https://www.mozilla.org/">Link</a>'));
+  expect(parse(stored).querySelector("a")?.getAttribute("href")).toBeUndefined();
+  expect(parse(stored).querySelector("a")?.text).toBe("Link");
+});
+
 test("Given a website page the sanitizer refuses When the extract route runs Then it answers 400 website_content_refused", async () => {
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("<html><body><p>truncated", { headers: { "content-type": "text/html" } }) });
   const origin = `http://127.0.0.1:${server.port}`;
