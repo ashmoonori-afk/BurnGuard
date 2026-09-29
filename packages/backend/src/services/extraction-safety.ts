@@ -118,10 +118,22 @@ export function assertAcquirableSourceMarkup(content: string, kind: "html" | "sv
   assertSourceMarkup(content, kind, true);
 }
 
+/**
+ * node-html-parser reads attributes case-insensitively (getAttribute lowercases) but removes them by
+ * exact raw name, so React's `srcSet` survived `removeAttribute("srcset")` while the gate still saw it.
+ * Remove every raw spelling of the name so sanitizer and gate agree.
+ */
+function removeAttributeAnyCase(node: HTMLElement, attributeName: string): void {
+  const lower = attributeName.toLowerCase();
+  for (const rawName of Object.keys(node.rawAttributes)) {
+    if (rawName.toLowerCase() === lower) node.removeAttribute(rawName);
+  }
+}
+
 export function removeSourceMarkupReferences(content: string): string {
   const root = parse(content, { lowerCaseTagName: true });
   for (const node of root.querySelectorAll("*")) {
-    for (const attributeName of URL_ATTRIBUTES) node.removeAttribute(attributeName);
+    for (const attributeName of URL_ATTRIBUTES) removeAttributeAnyCase(node, attributeName);
   }
   return root.toString();
 }
@@ -154,7 +166,7 @@ export function removeActiveSourceMarkup(content: string): string {
     const urlAttributes = Object.entries(node.attributes).filter(([name, value]) => attributeCanLoadResources(name, value)).map(([name]) => name);
     if (urlAttributes.length > MAX_URL_ATTRIBUTES_PER_ELEMENT) { node.remove(); continue; }
     for (const attributeName of urlAttributes) node.removeAttribute(attributeName);
-    for (const attributeName of URL_ATTRIBUTES) node.removeAttribute(attributeName);
+    for (const attributeName of URL_ATTRIBUTES) removeAttributeAnyCase(node, attributeName);
     for (const child of node.childNodes) {
       // Prose that merely mentions CSS network syntax stays readable but can no longer trip the gate.
       if (child.nodeType === TEXT_NODE && NETWORK_STYLE.test(child.rawText)) {

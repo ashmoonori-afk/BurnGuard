@@ -8,8 +8,9 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { systemsDir } from "../src/lib/paths";
 import { extractDesignSystemFromSource, persistCanonicalExtraction } from "../src/services/design-system-extract";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
-import { sanitizeSourceHtml } from "../src/services/extraction-html";
-import { assertAcquirableSourceMarkup, assertInertSourceMarkup, MAX_HIDDEN_MARKUP_DEPTH } from "../src/services/extraction-safety";
+import { systemRoutes } from "../src/routes/system";
+import { sanitizeAcquiredWebsiteHtml, sanitizeSourceHtml } from "../src/services/extraction-html";
+import { assertAcquirableSourceMarkup, assertInertSourceMarkup, MAX_HIDDEN_MARKUP_DEPTH, removeSourceMarkupReferences } from "../src/services/extraction-safety";
 
 // The two offending references in mdn/beginner-html-site/index.html.
 const sourceHtml = '<!doctype html><html><head><meta charset="utf-8"></head><body><h1>Source</h1><img src="images/firefox-icon.png" alt="Firefox"><p><a href="https://www.mozilla.org/en-US/about/manifesto/">Manifesto</a></p></body></html>';
@@ -150,4 +151,57 @@ test.each(["template", "noscript"] as const)("BG-0525-SRC-01: Given hidden %s ma
 test("R2-1: Given a relative srcset candidate list When the acquirable gate runs Then it is accepted like a relative src", () => {
   expect(() => assertAcquirableSourceMarkup(INERT_PAGE('<img src="a.jpg" srcset="a.jpg 1x, b.jpg 2x" alt="">'), "html")).not.toThrow();
   expect(() => assertAcquirableSourceMarkup(INERT_PAGE('<img srcset="a.jpg 1x, https://cdn.example/b.jpg 2x" alt="">'), "html")).toThrow(expect.objectContaining({ code: "unsafe_source_content" }));
+});
+
+// Reduced from https://www.aspensearch.com/ (React SSR): camelCase srcSet/imageSrcSet next to templates,
+// noscript beacons and absolute navigation. The sanitizer used to leave the camelCase attributes behind.
+const REACT_SSR_PAGE = INERT_PAGE([
+  '<link rel="preload" as="image" imageSrcSet="https://cdn.example/a.webp 1x" href="https://cdn.example/a.webp">',
+  '<a href="https://www.example.com/about">About</a>',
+  '<picture class="contents"><source srcSet="https://cdn.example/a.avif 1x" type="image/avif">',
+  '<img loading="lazy" alt="Logo" SRC="https://cdn.example/a.svg?w=100&amp;h=80" srcSet="https://cdn.example/a.svg?dpr=2 2x, https://cdn.example/a.svg?dpr=3 3x" width="100" height="80"></picture>',
+  '<template><img src="https://cdn.example/t.png"></template><noscript><img src="https://t.example/p.gif"></noscript>',
+].join(""));
+
+test("Given a React SSR page with camelCase srcSet When website acquisition sanitizes it Then the stored page is inert and keeps its prose", () => {
+  const stored = sanitizeAcquiredWebsiteHtml(REACT_SSR_PAGE);
+  assertInertSourceMarkup(stored, "html");
+  const root = parse(stored);
+  for (const node of root.querySelectorAll("*")) {
+    expect(Object.keys(node.attributes).map(name => name.toLowerCase()).filter(name => ["src", "srcset", "imagesrcset", "href"].includes(name))).toEqual([]);
+  }
+  expect(root.querySelector("img")?.getAttribute("alt")).toBe("Logo");
+});
+
+test("Given camelCase reference attributes When source references are removed Then the inert gate accepts the result", () => {
+  expect(() => assertInertSourceMarkup(removeSourceMarkupReferences(INERT_PAGE('<img srcSet="a.jpg 1x" SRC="b.jpg" alt="">')), "html")).not.toThrow();
+});
+
+test("Given a website page the sanitizer refuses When the extract route runs Then it answers 400 website_content_refused", async () => {
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("<html><body><p>truncated", { headers: { "content-type": "text/html" } }) });
+  const origin = `http://127.0.0.1:${server.port}`;
+  const settings = {
+    BG_EXTRACTION_QA_ADAPTER_SOURCE_URL: `${origin}/source`,
+    BG_EXTRACTION_QA_ADAPTER_STALL_URL: `${origin}/stall`,
+    BG_EXTRACTION_QA_ADAPTER_RESOURCE_URLS: `${origin}/source,${origin}/stall`,
+    BG_EXTRACTION_QA_ADAPTER_SECRET: "source-publication-fixture-secret-000002",
+  };
+  const previous = Object.fromEntries(Object.keys(settings).map(key => [key, process.env[key]]));
+  Object.assign(process.env, settings);
+  try {
+    const before = (await readdir(systemsDir)).sort();
+    const response = await systemRoutes.request("/api/design-systems/extract", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Refused", source_type: "website", source_url: `${origin}/source` }),
+    });
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe("website_content_refused");
+    expect((await readdir(systemsDir)).sort()).toEqual(before);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+    await server.stop(true);
+  }
 });

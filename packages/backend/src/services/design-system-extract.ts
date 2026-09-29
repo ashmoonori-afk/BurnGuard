@@ -275,6 +275,13 @@ export async function extractDesignSystemFromSource(
   } catch (error) {
     if (error instanceof ExtractionAcquisitionError) throw new DesignSystemExtractError("acquisition_timeout", error.message);
     if (error instanceof AcquisitionLimitError) throw new DesignSystemExtractError("acquisition_limit", error.message);
+    // A refused fetched page is a property of the source, not a server fault: report it as a typed 4xx.
+    if (error instanceof ExtractionSafetyError) {
+      throw new DesignSystemExtractError(
+        error.code === "invalid_source_url" ? "invalid_source_url" : sourceType === "website" ? "website_content_refused" : "unsafe_source_content",
+        error.message,
+      );
+    }
     throw error;
   } finally {
     budget.dispose();

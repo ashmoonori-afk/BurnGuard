@@ -101,6 +101,8 @@ jobs:
           packages/backend/tests/design-direction-renderer.test.ts
           packages/backend/tests/design-direction-routes.test.ts
           packages/backend/tests/design-system-extract.test.ts
+          packages/backend/tests/extraction-source-publication.test.ts
+          packages/frontend/tests/error-copy.test.ts
           packages/backend/tests/project-import.test.ts
           packages/backend/tests/artifact-history.test.ts
           packages/backend/tests/export-pptx.test.ts
