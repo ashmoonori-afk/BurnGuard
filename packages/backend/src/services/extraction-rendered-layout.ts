@@ -35,12 +35,12 @@ export type LayoutReferenceCapture = { readonly path: string; readonly viewport:
 
 const PAGE_TIMEOUT_MS = 8_000;
 /** A reference screenshot covers at most this many viewport heights from the top of the page. */
-const REFERENCE_VIEWPORT_HEIGHTS = 3;
+export const REFERENCE_VIEWPORT_HEIGHTS = 3;
 /**
  * Media that was never acquired renders empty in the offline page; a neutral hatch keeps those regions visible in
  * the reference screenshot. Applied after measurement, so it cannot change measured values.
  */
-const REFERENCE_MEDIA_CSS = "img,video,picture,canvas,iframe,object,embed{background:repeating-linear-gradient(45deg,#c8c8c8 0 10px,#e2e2e2 10px 20px)!important;color:transparent!important}"
+export const REFERENCE_MEDIA_CSS = "img,video,picture,canvas,iframe,object,embed{background:repeating-linear-gradient(45deg,#c8c8c8 0 10px,#e2e2e2 10px 20px)!important;color:transparent!important}"
   // Entrance animations start hidden and offset (inline opacity near 0 plus a transform) and only a script reveals
   // them; the reference shows them in their final place, as a visitor sees the page.
   + "[style*='opacity:0'][style*='transform'],[style*='opacity: 0'][style*='transform'],[data-framer-appear-id]{opacity:1!important;transform:none!important}";
