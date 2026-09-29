@@ -76,6 +76,7 @@ export const modesMessages = defineMessages({
   "modes.quality.stale": {"ko":"결과물이 바뀌어 이전 검사 결과를 보여드려요.","en":"The artifact changed. Showing previous check results.","zh-CN":"作品已更改，正在显示历史检查结果。"},
   "modes.quality.rerunning": {"ko":"최근 결과를 보여드리며 다시 검사하고 있어요.","en":"Showing the latest results while checking again.","zh-CN":"正在显示最近的结果，同时重新检查。"},
   "modes.quality.recommendedStatus": {"ko":"고쳐야 할 문제는 없고 권장 개선이 있어요.","en":"No required fixes; some improvements are recommended.","zh-CN":"没有必须修复的问题，有建议改进项。"},
+  "modes.quality.unverifiedStatus": {"ko":"고쳐야 할 문제는 없지만 확인하지 못한 항목이 있어요.","en":"No required fixes; some checks could not be verified.","zh-CN":"没有必须修复的问题，但有未能确认的检查项。"},
   "modes.quality.passedRunning": {"ko":"통과한 최근 결과를 보여드리며 다시 검사하고 있어요.","en":"Showing the latest passed results while checking again.","zh-CN":"正在显示最近通过的结果，同时重新检查。"},
   "modes.quality.ready": {"ko":"현재 결과물이 모든 품질 검사를 통과했어요.","en":"The current artifact passed all quality checks.","zh-CN":"当前作品已通过所有质量检查。"},
   "modes.quality.unavailable": {"ko":"렌더링 가능한 결과물이 아직 없어요.","en":"No renderable artifact yet.","zh-CN":"尚无可渲染的作品。"},

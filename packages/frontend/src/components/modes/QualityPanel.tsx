@@ -102,7 +102,11 @@ export function qualityStatusKey(state: DesignAuditViewState): MessageKey {
     case "error_warm": return "modes.quality.warmError";
     case "stale": return state.running ? "modes.quality.staleRunning" : "modes.quality.stale";
     case "must_fix": return state.running ? "modes.quality.rerunning" : "modes.quality.needsFix";
-    case "recommended": return state.running ? "modes.quality.rerunning" : "modes.quality.recommendedStatus";
+    case "recommended": {
+      if (state.running) return "modes.quality.rerunning";
+      // A report is "recommended" when any check is unverified, even with no recommended findings to show.
+      return groupDesignAuditResult(state.report).recommended.length === 0 ? "modes.quality.unverifiedStatus" : "modes.quality.recommendedStatus";
+    }
     case "ready": return state.running ? "modes.quality.passedRunning" : "modes.quality.ready";
     case "unavailable": return "modes.quality.unavailable";
     default: return assertNever(state);
