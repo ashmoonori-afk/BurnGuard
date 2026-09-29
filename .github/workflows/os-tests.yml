@@ -30,6 +30,15 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      - uses: actions/setup-dotnet@v4
+        if: runner.os == 'Windows'
+        with:
+          dotnet-version: 8.0.x
+      - name: Build the Windows process host
+        if: runner.os == 'Windows'
+        run: |
+          bun scripts/build-windows-process-host.ts
+          "BG_WINDOWS_PROCESS_HOST=$env:GITHUB_WORKSPACE\dist\windows-process-host\burnguard-windows-process-host.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       # Suites that need no Chromium, Python or provider CLI. Platform-impossible cases skip themselves; see
       # doc/os-matrix.md for what each suite pins per OS.
       - name: Platform-sensitive suites
