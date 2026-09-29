@@ -68,8 +68,18 @@ export function canGenerateGraphics(
   return supportsImageGeneration(backend, backend.models, modelId);
 }
 
-export function defaultGenerationOptions(_backendId: BackendId): GenerationOptions {
-  return { model: "", effort: "low", vanilla: true, provider: "native" };
+/**
+ * Medium wherever the model offers it, matching the capable-model note that recommends medium or
+ * higher. Without model metadata the backend accepts only LOW, so an unknown model stays on LOW.
+ */
+export function defaultEffortFor(model: GenerationModel | undefined): GenerationEffort {
+  if (!model) return "low";
+  return model.efforts.includes("medium") ? "medium" : model.efforts[0] ?? "low";
+}
+
+/** `models` is the backend's list; the empty model id resolves to its first entry. */
+export function defaultGenerationOptions(_backendId: BackendId, models: readonly GenerationModel[] = []): GenerationOptions {
+  return { model: "", effort: defaultEffortFor(models[0]), vanilla: true, provider: "native" };
 }
 export function parseGenerationOptions(value: unknown): GenerationOptions {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("invalid_generation_options");

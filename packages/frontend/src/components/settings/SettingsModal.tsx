@@ -312,7 +312,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               detection={detectionQuery.data}
             /> : detectionQuery.isPending ? <p role="status" className="text-sm text-muted-foreground">{t("settings.backendChecking")}</p> : null}
             {detectionQuery.isError ? <SettingsLoadError title={t("settings.backendFailed")} error={detectionQuery.error} retry={() => void detectionQuery.refetch()} pending={detectionQuery.isFetching} /> : null}
-            <GenerationControls backendId={settings.default_backend} value={settings.generation_defaults?.[settings.default_backend] ?? defaultGenerationOptions(settings.default_backend)} onChange={(generation) => setSettings({ ...settings, generation_defaults: { ...settings.generation_defaults, [settings.default_backend]: generation } })} />
+            <GenerationControls backendId={settings.default_backend} value={settings.generation_defaults?.[settings.default_backend] ?? defaultGenerationOptions(settings.default_backend, detectionQuery.data?.backends.find((backend) => backend.id === settings.default_backend)?.models)} onChange={(generation) => setSettings({ ...settings, generation_defaults: { ...settings.generation_defaults, [settings.default_backend]: generation } })} />
             <div className="space-y-1">
               <label className="flex items-center gap-2 text-sm">
                 <input

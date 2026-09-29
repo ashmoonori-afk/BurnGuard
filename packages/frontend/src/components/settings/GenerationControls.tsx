@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { COMMANDCODE_MODELS, effortBelowRecommendation, resolveModelCapabilityProfile, type BackendId, type GenerationEffort, type GenerationOptions } from "@bg/shared";
+import { COMMANDCODE_MODELS, defaultEffortFor, effortBelowRecommendation, resolveModelCapabilityProfile, type BackendId, type GenerationEffort, type GenerationOptions } from "@bg/shared";
 import { detectBackends, getSettings } from "@/api/home";
 import type { MessageKey } from "@/i18n/messages";
 import { useT } from "@/i18n/t";
@@ -19,7 +19,8 @@ export default function GenerationControls({ backendId, value, onChange, disable
   const t = useT();
   const detection = useQuery({ queryKey: ["backends", "detect"], queryFn: detectBackends });
   const settings = useQuery({ queryKey: ["settings"], queryFn: getSettings });
-  const models = value.provider === "commandcode" ? COMMANDCODE_MODELS : detection.data?.backends.find((backend) => backend.id === backendId)?.models ?? [];
+  const detectedModels = detection.data?.backends.find((backend) => backend.id === backendId)?.models ?? [];
+  const models = value.provider === "commandcode" ? COMMANDCODE_MODELS : detectedModels;
   const model = models.find((candidate) => candidate.id === value.model) ?? models[0];
   const efforts = model?.efforts ?? ["low"];
   const profile = resolveModelCapabilityProfile(backendId, value);
@@ -27,7 +28,11 @@ export default function GenerationControls({ backendId, value, onChange, disable
   const selectClass = "mt-1 min-h-9 w-full rounded-lg border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const secondary = <>
     {backendId === "claude-code" && <label className="block">{t("settings.connection")}
-      <select aria-label={t("settings.modelConnection")} className={selectClass} value={value.provider} onChange={(event) => onChange({ ...value, provider: event.target.value as GenerationOptions["provider"], model: "", effort: "low" })}>
+      <select aria-label={t("settings.modelConnection")} className={selectClass} value={value.provider} onChange={(event) => {
+        const provider = event.target.value as GenerationOptions["provider"];
+        const providerModels = provider === "commandcode" ? COMMANDCODE_MODELS : detectedModels;
+        onChange({ ...value, provider, model: "", effort: defaultEffortFor(providerModels[0]) });
+      }}>
         <option value="native">{t("settings.claudeLogin")}</option>
         <option value="commandcode" disabled={!settings.data?.commandcode_api_key_set}>{t(settings.data?.commandcode_api_key_set ? "settings.commandcodeModel" : "settings.commandcodeModelNeedsKey")}</option>
       </select>
@@ -37,7 +42,7 @@ export default function GenerationControls({ backendId, value, onChange, disable
   return <fieldset disabled={disabled} className="space-y-2 text-xs disabled:opacity-60">
     <legend className="sr-only">{t("settings.generationOptions")}</legend>
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(90px,auto)] gap-2">
-      <label>{t("settings.model")}<select aria-label={t("settings.generationModel")} className={selectClass} value={value.model} onChange={(event) => onChange({ ...value, model: event.target.value, effort: "low" })}>
+      <label>{t("settings.model")}<select aria-label={t("settings.generationModel")} className={selectClass} value={value.model} onChange={(event) => onChange({ ...value, model: event.target.value, effort: defaultEffortFor(models.find((candidate) => candidate.id === event.target.value) ?? models[0]) })}>
         <option value="">{model ? t("settings.defaultModel", { name: models[0]?.label ?? "" }) : t("settings.toolDefault")}</option>
         {models.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}
       </select></label>

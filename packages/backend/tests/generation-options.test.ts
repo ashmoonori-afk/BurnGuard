@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { COMMANDCODE_MODELS, GENERATION_EFFORTS, defaultGenerationOptions, parseGenerationOptions, type BackendDetection, type GenerationOptions } from "@bg/shared";
+import { CLAUDE_MODELS, COMMANDCODE_MODELS, GENERATION_EFFORTS, defaultEffortFor, defaultGenerationOptions, parseGenerationOptions, type BackendDetection, type GenerationOptions } from "@bg/shared";
 import { defaultConfig } from "../src/config";
 import { buildCodexCommand } from "../src/adapters/codex";
 import { buildClaudeCommand, buildClaudeEnvironment } from "../src/adapters/claude-code/runner";
@@ -184,4 +184,20 @@ test("Given Claude and CommandCode listings and missing metadata When resolving 
       "unsupported_generation_model_effort",
     );
   }
+});
+
+test("Given the new-project and composer defaults When a model offers medium Then the default effort is medium and the backend accepts it", () => {
+  const claude: BackendDetection = { id: "claude-code", found: true, models: CLAUDE_MODELS };
+  const defaults = defaultGenerationOptions("claude-code", CLAUDE_MODELS);
+  expect(defaults.effort).toBe("medium");
+  expect(resolveGenerationOptions("claude-code", defaults, defaultConfig, claude).effort).toBe("medium");
+  expect(defaultEffortFor(COMMANDCODE_MODELS[0])).toBe("medium");
+});
+
+test("Given a model without medium or no model metadata When the default is built Then it falls back to an effort the backend accepts", () => {
+  expect(defaultGenerationOptions("codex", backend.models).effort).toBe("low");
+  expect(resolveGenerationOptions("codex", defaultGenerationOptions("codex", backend.models), defaultConfig, backend).effort).toBe("low");
+  expect(defaultEffortFor({ id: "hi-only", label: "Hi", efforts: ["high", "xhigh"] })).toBe("high");
+  const unknown: BackendDetection = { id: "gemini", found: true };
+  expect(resolveGenerationOptions("gemini", defaultGenerationOptions("gemini"), defaultConfig, unknown).effort).toBe("low");
 });
