@@ -70,8 +70,9 @@ describe("Design-system conformance", () => {
     expect(findings.every(finding => finding.code === "literal_value" && finding.viewport === null)).toBe(true);
   });
 
-  test("Given a turn that changed no page or stylesheet, then there is nothing to compare and no browser starts", async () => {
-    expect(await reviewDesignSystemConformance({ projectDir: tmpdir(), entrypoint: "index.html", pinnedContext: await pinnedContextFor(layout), changedPaths: ["assets/hero.png"], signal: AbortSignal.timeout(5_000) })).toBeNull();
+  test("Given a turn that did not change the entrypoint, then there is nothing to compare and no browser starts", async () => {
+    const context = await pinnedContextFor(layout);
+    for (const changedPaths of [["assets/hero.png"], ["contact.html", "styles.css"]]) expect(await reviewDesignSystemConformance({ projectDir: tmpdir(), entrypoint: "index.html", pinnedContext: context, changedPaths, signal: AbortSignal.timeout(5_000) })).toBeNull();
   });
 
   test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given a real Chromium, when a split-hero page is reviewed against a centred measured home, then rendered findings and literal values are reported", async () => {

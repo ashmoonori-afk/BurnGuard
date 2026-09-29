@@ -17,6 +17,8 @@ export type ConformanceResult = { readonly page: string; readonly findings: read
 
 /** Declared by generated pages so the review compares them with the measured entry they followed. */
 export const MEASURED_PAGE_META = "bg-measured-page";
+/** Reads the declared measured page path from a page's HTML. */
+export const MEASURED_PAGE_DECLARATION = new RegExp(`<meta\\s+name=["']${MEASURED_PAGE_META}["']\\s+content=["']([^"']{1,300})["']`, "iu");
 const MAX_FINDINGS = 40;
 const OPEN_TAG = "<selected_design_system_measured_layout>";
 
@@ -112,12 +114,12 @@ async function changedCss(projectDir: string, changedPaths: readonly string[]): 
  * the literal-value check over authored CSS. Returns null when there is nothing measured to compare with.
  */
 export async function reviewDesignSystemConformance(input: { readonly projectDir: string; readonly entrypoint: string; readonly pinnedContext: string; readonly changedPaths: readonly string[]; readonly signal: AbortSignal }): Promise<ConformanceResult | null> {
-  // A turn that changed no page or stylesheet cannot have moved the page away from the system.
-  if (!input.changedPaths.some(file => /\.(?:css|html?)$/iu.test(file))) return null;
+  // Only the entrypoint is rendered, so a turn that did not change it has nothing new to compare.
+  if (!input.changedPaths.includes(input.entrypoint)) return null;
   const pages = measuredPagesFromPinnedContext(input.pinnedContext);
   if (pages === null || pages.length === 0) return null;
   const html = await readFile(resolveWithin(input.projectDir, input.entrypoint), "utf8");
-  const declared = new RegExp(`<meta\\s+name=["']${MEASURED_PAGE_META}["']\\s+content=["']([^"']{1,300})["']`, "iu").exec(html)?.[1] ?? null;
+  const declared = MEASURED_PAGE_DECLARATION.exec(html)?.[1] ?? null;
   const expected = selectMeasuredPage(pages, declared);
   if (expected === null) return null;
   const findings: ConformanceFinding[] = [];

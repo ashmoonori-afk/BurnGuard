@@ -59,6 +59,11 @@ export async function reviewTurnDesign(input: {
   conformance?: (signal: AbortSignal) => Promise<ConformanceResult | null>;
   /** The user's request for this turn; a conformance repair must keep what it explicitly asks for. */
   requestText?: string;
+  /**
+   * True only on the turn that first builds the entrypoint against the system. Later turns may carry earlier
+   * explicit user choices the current request no longer mentions, so their findings are reported, never repaired.
+   */
+  conformanceRepairable?: boolean;
 }): Promise<TurnDesignReview> {
   const signal = input.adapter.signal ?? new AbortController().signal;
   const toolCallId = ulid();
@@ -103,7 +108,7 @@ export async function reviewTurnDesign(input: {
       }
       // Section count and page height follow the content the user asked for, so they are reported but never repaired,
       // and a conformance repair runs at most once per turn.
-      const conformanceFindings = conformanceRepairs === 0 ? (conformance?.findings ?? []).filter(finding => !REPORT_ONLY_CONFORMANCE.has(finding.code)) : [];
+      const conformanceFindings = input.conformanceRepairable === true && conformanceRepairs === 0 ? (conformance?.findings ?? []).filter(finding => !REPORT_ONLY_CONFORMANCE.has(finding.code)) : [];
       if ((!findings.length && !conformanceFindings.length) || repairs === 2) return { status: "checked", repairs, result, conformance };
       repairs++;
       if (conformanceFindings.length > 0) conformanceRepairs++;

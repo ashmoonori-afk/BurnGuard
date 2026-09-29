@@ -104,7 +104,7 @@ test("Given design-system conformance findings on a clean audit When reviewing T
   const events: NormalizedEvent[] = [];
   const finding = { code: "block_alignment" as const, viewport: "desktop" as const, target: "hero_heading", measured: "left", expected: "center" };
   let checks = 0;
-  const review = await reviewTurnDesign({ ...reviewInput(events), audit: async () => result(false), requestText: "Build the home page",
+  const review = await reviewTurnDesign({ ...reviewInput(events), audit: async () => result(false), requestText: "Build the home page", conformanceRepairable: true,
     conformance: async () => ({ page: "/", findings: checks++ === 0 ? [finding] : [] }),
     run: async input => { prompts.push(input.prompt); return { exitCode: 0 }; } });
   expect(review.repairs).toBe(1);
@@ -119,15 +119,22 @@ test("Given persistent conformance findings When reviewing Then one conformance 
   const events: NormalizedEvent[] = [];
   const finding = { code: "type_size" as const, viewport: "mobile" as const, target: "hero", measured: "32px", expected: "64px +/-2px" };
   let repairs = 0;
-  const review = await reviewTurnDesign({ ...reviewInput(events), audit: async () => result(false), conformance: async () => ({ page: "/", findings: [finding] }), run: async () => { repairs++; return { exitCode: 0 }; } });
+  const review = await reviewTurnDesign({ ...reviewInput(events), audit: async () => result(false), conformanceRepairable: true, conformance: async () => ({ page: "/", findings: [finding] }), run: async () => { repairs++; return { exitCode: 0 }; } });
   expect(repairs).toBe(1);
   expect(review.result?.overall_status).toBe("ready");
+  expect(events.at(-1)).toMatchObject({ ok: true, output: { conformance_remaining: 1 } });
+});
+test("Given a page already built against the system on an earlier turn When conformance findings appear Then they are reported and never repaired", async () => {
+  const events: NormalizedEvent[] = [];
+  const finding = { code: "block_alignment" as const, viewport: "desktop" as const, target: "hero_heading", measured: "left", expected: "center" };
+  const review = await reviewTurnDesign({ ...reviewInput(events), audit: async () => result(false), conformanceRepairable: false, requestText: "Fix the footer year", conformance: async () => ({ page: "/", findings: [finding] }), run: async () => { throw new Error("must not run"); } });
+  expect(review.repairs).toBe(0);
   expect(events.at(-1)).toMatchObject({ ok: true, output: { conformance_remaining: 1 } });
 });
 test("Given only section-count and page-height conformance findings When reviewing Then they are reported without a repair", async () => {
   const events: NormalizedEvent[] = [];
   const findings = [{ code: "section_count" as const, viewport: "desktop" as const, target: "sections", measured: "9", expected: "5 +/-1" }, { code: "page_height" as const, viewport: "desktop" as const, target: "page", measured: "20000px", expected: "11000px (80-125%)" }];
-  const review = await reviewTurnDesign({ ...reviewInput(events), audit: async () => result(false), conformance: async () => ({ page: "/", findings }), run: async () => { throw new Error("must not run"); } });
+  const review = await reviewTurnDesign({ ...reviewInput(events), audit: async () => result(false), conformanceRepairable: true, conformance: async () => ({ page: "/", findings }), run: async () => { throw new Error("must not run"); } });
   expect(review.repairs).toBe(0);
   expect(events.at(-1)).toMatchObject({ ok: true, output: { conformance_remaining: 2, conformance_status: "checked" } });
 });
