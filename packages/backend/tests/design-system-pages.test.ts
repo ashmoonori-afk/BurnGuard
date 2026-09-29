@@ -10,7 +10,8 @@ import { appendDesignSystemContext } from "../src/harness/prompt-design-system";
 import { systemsDir } from "../src/lib/paths";
 import { extractDesignSystemFromSource, readDesignSystemTokens } from "../src/services/design-system-extract";
 import { readDesignSystemMeasuredLayout } from "../src/services/design-system-measured-layout";
-import { measureRenderedLayout, type RenderedLayoutInput } from "../src/services/extraction-rendered-layout";
+import { RenderSessionError } from "../src/services/export-render-session";
+import { measureRenderedLayout, type LayoutMeasureFailure, type RenderedLayoutInput } from "../src/services/extraction-rendered-layout";
 import { parseCssSource } from "../src/services/extraction-css";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 import { boundPageCoverage, buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, pageCoveragePromptSummary, pageLink, parseRobots, parseSitemap, robotsPatternMatches } from "../src/services/extraction-pages";
@@ -522,7 +523,7 @@ describe("Measured layout tokens", () => {
     await withSite({ "/source": "<html><body><h1>Home</h1></body></html>" }, async (origin, id) => {
       const waitForAbort = (input: RenderedLayoutInput) => new Promise<null>((_, reject) => input.signal.addEventListener("abort", () => reject(input.signal.reason), { once: true }));
       const result = await extractDesignSystemFromSource({ system_id: id, name: "Slow", source_type: "website", source_url: origin + "/source" }, { timeoutMs: 8_000, measureLayout: waitForAbort });
-      expect(result.extraction.notes.some(note => note.startsWith("Rendered layout measurement"))).toBe(true);
+      expect(result.extraction.notes.some(note => note.startsWith("Rendered layout measurement") && note.includes("reason: insufficient_time"))).toBe(true);
       const system = { dir_path: path.join(systemsDir, id) } as Parameters<typeof readDesignSystemMeasuredLayout>[0];
       expect(await readDesignSystemMeasuredLayout(system)).toBeNull();
     });
@@ -531,8 +532,30 @@ describe("Measured layout tokens", () => {
   test("Given a measurer that throws, then extraction still succeeds without measured tokens", async () => {
     await withSite({ "/source": "<html><body><h1>Home</h1></body></html>" }, async (origin, id) => {
       const result = await extractDesignSystemFromSource({ system_id: id, name: "Broken", source_type: "website", source_url: origin + "/source" }, { measureLayout: async () => { throw new Error("chromium_not_installed"); } });
-      expect(result.extraction.notes.some(note => note.startsWith("Rendered layout measurement"))).toBe(true);
+      expect(result.extraction.notes.some(note => note.startsWith("Rendered layout measurement") && note.includes("reason: measurer_failed"))).toBe(true);
     });
+  });
+
+  test("Given a measurer that reports why it failed, when a website is extracted, then the note carries the reason code and the browser start state", async () => {
+    await withSite({ "/source": "<html><body><h1>Home</h1></body></html>" }, async (origin, id) => {
+      const result = await extractDesignSystemFromSource({ system_id: id, name: "Reasoned", source_type: "website", source_url: origin + "/source" }, { measureLayout: async input => {
+        input.reportFailure?.({ stage: "launch", code: "chromium_launch_timeout", launchMs: null });
+        return null;
+      } });
+      expect(result.extraction.notes.some(note => note.startsWith("Rendered layout measurement") && note.includes("reason: chromium_launch_timeout, browser did not start"))).toBe(true);
+    });
+  });
+
+  test("Given a launch or render failure, when measuring, then the failure is reported with its stage, stable code and browser start time", async () => {
+    const pages = [{ path: "/", pageType: "home" as const, url: "https://site.test/", html: "<h1>x</h1>" }];
+    const failures: LayoutMeasureFailure[] = [];
+    const notInstalled = await measureRenderedLayout({ pages, stylesheets: new Map(), signal: new AbortController().signal, reportFailure: failure => failures.push(failure), launch: async () => { throw new RenderSessionError("chromium_not_installed", "chromium_not_installed: Chromium could not be launched"); } });
+    const browser = { newContext: async () => { throw new Error("Target page, context or browser has been closed"); }, close: async () => {} };
+    const renderFailed = await measureRenderedLayout({ pages, stylesheets: new Map(), signal: new AbortController().signal, reportFailure: failure => failures.push(failure), launch: async () => browser as unknown as Browser });
+    expect([notInstalled, renderFailed]).toEqual([null, null]);
+    expect(failures.map(({ stage, code }) => [stage, code])).toEqual([["launch", "chromium_not_installed"], ["render", "render_failed"]]);
+    expect(failures[0]!.launchMs).toBeNull();
+    expect(typeof failures[1]!.launchMs).toBe("number");
   });
 
   test("Given a measurement deadline that fires during a later page, then the pages measured before it are kept, an abort before any page propagates, and other failures give no layout", async () => {

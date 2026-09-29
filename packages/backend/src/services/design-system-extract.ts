@@ -5,7 +5,7 @@ import { collectSourceEvidence, withoutFunctions, type SourceEvidence } from "./
 import { buildSectionPatternReadme, measureSourceLayout } from "./extraction-layout";
 import { buildPageCoverage, buildPageTemplateReadme, canonicalPagePath, classifyPageType, discoverPages, observedPatterns, pageEvidence, parseRobots, parseSitemap } from "./extraction-pages";
 import { readDesignSystemPageCoverage } from "./design-system-pages";
-import { measureRenderedLayout, type LayoutReferenceCapture, type MeasuredPageInput, type RenderedLayoutInput } from "./extraction-rendered-layout";
+import { measureRenderedLayout, type LayoutMeasureFailure, type LayoutReferenceCapture, type MeasuredPageInput, type RenderedLayoutInput } from "./extraction-rendered-layout";
 import type { CssDeclarationEvidence } from "./extraction-css";
 import {
   copyFile,
@@ -732,22 +732,29 @@ function defaultLayoutMeasurer(): LayoutMeasurer | null {
  * Measurement gets its own deadline, capped to the acquisition budget left after a publication reserve, so a
  * slow browser drops the tokens instead of exhausting the shared budget and failing the extraction.
  */
-async function measureWithDeadline(measure: LayoutMeasurer, input: RenderedLayoutInput, budgetDeadlineAt: number): Promise<DesignSystemMeasuredLayout | null> {
+async function measureWithDeadline(measure: LayoutMeasurer, input: RenderedLayoutInput, budgetDeadlineAt: number): Promise<{ readonly layout: DesignSystemMeasuredLayout | null; readonly unavailableReason: string | null }> {
   const available = Math.min(MEASURE_DEADLINE_MS, budgetDeadlineAt - Date.now() - MEASURE_PUBLISH_RESERVE_MS);
-  if (available < MEASURE_MIN_MS) return null;
+  if (available < MEASURE_MIN_MS) return { layout: null, unavailableReason: `insufficient_time, ${Math.max(0, available)} ms left for measurement` };
   const controller = new AbortController();
   const forward = () => controller.abort(input.signal.reason);
   input.signal.addEventListener("abort", forward, { once: true });
-  const timer = setTimeout(() => controller.abort(new Error("layout_measure_deadline")), available);
+  let deadlineReached = false;
+  const timer = setTimeout(() => { deadlineReached = true; controller.abort(new Error("layout_measure_deadline")); }, available);
+  const reported: { failure: LayoutMeasureFailure | null } = { failure: null };
+  // The browser start time tells a slow cold launch (probe plus launch eating the deadline) from a slow render.
+  const describe = (code: string) => {
+    const failure = reported.failure;
+    return `${code}${failure?.launchMs != null ? `, browser start ${failure.launchMs} ms` : failure?.stage === "launch" ? ", browser did not start" : ""}`;
+  };
   try {
-    const measured = await measure({ ...input, signal: controller.signal });
+    const measured = await measure({ ...input, signal: controller.signal, reportFailure: (failure) => { reported.failure = failure; } });
     // A partial result can come back after the extraction itself was cancelled; that cancellation still wins.
     input.signal.throwIfAborted();
-    return measured;
+    return { layout: measured, unavailableReason: measured !== null ? null : describe(deadlineReached ? `deadline of ${available} ms reached` : reported.failure?.code ?? "no_layout") };
   }
   catch (error) {
     if (input.signal.aborted) throw error;
-    return null;
+    return { layout: null, unavailableReason: describe(deadlineReached ? `deadline of ${available} ms reached` : "measurer_failed") };
   } finally {
     clearTimeout(timer);
     input.signal.removeEventListener("abort", forward);
@@ -1126,8 +1133,9 @@ async function ingestWebsiteSource(
   }
   const shots: LayoutReferenceCapture[] = [];
   const captureReference = (shot: LayoutReferenceCapture) => { if (shot.jpeg.byteLength <= MAX_LAYOUT_REFERENCE_BYTES) shots.push(shot); };
-  const measuredLayout = measureLayout ? await measureWithDeadline(measureLayout, { pages: measurable, stylesheets: stylesheetText, signal, captureReference }, deadlineAt) : null;
-  if (measureLayout && measuredLayout === null) notes.push("Rendered layout measurement was unavailable; measured layout tokens were not recorded.");
+  const measurement = measureLayout ? await measureWithDeadline(measureLayout, { pages: measurable, stylesheets: stylesheetText, signal, captureReference }, deadlineAt) : null;
+  const measuredLayout = measurement?.layout ?? null;
+  if (measurement && measuredLayout === null) notes.push(`Rendered layout measurement was unavailable (reason: ${measurement.unavailableReason ?? "unknown"}); measured layout tokens were not recorded.`);
   else if (measuredLayout && measuredLayout.pages.length < measurable.length) notes.push(`Rendered layout measurement reached its deadline after ${measuredLayout.pages.length} of ${measurable.length} pages; the remaining pages were not measured.`);
   // A screenshot of a page that did not make it into the measured layout has nothing to be paired with.
   const layoutReferenceShots = measuredLayout ? shots.filter((shot) => measuredLayout.pages.some((page) => page.path === shot.path)) : [];
