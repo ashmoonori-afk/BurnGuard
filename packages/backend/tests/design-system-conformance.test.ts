@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createCanvas } from "@napi-rs/canvas";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -114,12 +114,18 @@ describe("Design-system conformance", () => {
       })) }));
       const lines: string[] = [];
       await appendDesignSystemContext(lines, { id: "visual", name: "Visual", status: "draft", source_type: "website", is_template: false, dir_path: system, skill_md_path: null, tokens_css_path: null, readme_md_path: null, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null }, "full", "website", true);
-      await writeFile(path.join(project, "index.html"), '<!doctype html><html><head><meta name="bg-measured-page" content="/"><style>body{margin:0;background:#fff} h1{font-size:64px;text-align:center}</style></head><body><h1>Own your AI.</h1></body></html>');
+      await writeFile(path.join(project, "index.html"), '<!doctype html><html><head><meta name="bg-measured-page" content="/"><style>body{margin:0;background:#fff;min-height:3000px} h1{font-size:64px;text-align:center}</style></head><body><h1>Own your AI.</h1></body></html>');
       const result = await reviewDesignSystemConformance({ projectDir: project, entrypoint: "index.html", pinnedContext: lines.join("\n"), changedPaths: ["index.html"], signal: AbortSignal.timeout(60_000) });
       expect(result?.visual?.map(report => [report.viewport, report.unavailable])).toEqual([["desktop", false], ["mobile", false]]);
       expect(result?.visual?.[0]?.sections).toHaveLength(2);
       expect(result?.repair_targets?.length).toBeGreaterThan(0);
       expect(result!.repair_targets!.length).toBeLessThanOrEqual(3);
+      for (const target of result!.repair_targets!) {
+        for (const file of [target.crop!.reference, target.crop!.generated!]) {
+          expect(file.startsWith(".burnguard-inputs/design-system-starter/crops/")).toBe(true);
+          expect([...(await readFile(path.join(project, ...file.split("/")))).subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
+        }
+      }
     } finally {
       await rm(project, { recursive: true, force: true });
       await rm(system, { recursive: true, force: true });

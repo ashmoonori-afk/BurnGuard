@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createCanvas } from "@napi-rs/canvas";
 import { MEASURED_VIEWPORTS, type MeasuredViewportLayout } from "@bg/shared";
-import { compareVisualViewport, decodeGrayImage, sectionOverlap, ssimBand, visualRepairTargets, type GrayImage } from "../src/services/design-system-visual-diff";
+import { compareVisualViewport, cropSectionJpeg, decodeGrayImage, sectionOverlap, ssimBand, visualRepairTargets, type GrayImage } from "../src/services/design-system-visual-diff";
 
 const gray = (width: number, height: number, fill: (x: number, y: number) => number): GrayImage => {
   const data = new Uint8Array(width * height);
@@ -56,6 +56,19 @@ describe("Design-system visual diff", () => {
     expect(report.sections[0]!.score).toBeGreaterThan(report.sections[1]!.score);
     expect(report.sections[0]!.score).toBeGreaterThan(0.9);
     expect(visualRepairTargets([report], 1).map((target) => [target.viewport, target.section])).toEqual([["desktop", 1]]);
+  });
+
+  test("Given a page image, then a section crop covers exactly its rows, is clamped to the image and to the crop cap, and an out-of-range or undecodable input gives null", async () => {
+    const image = await pngOf(gray(400, 3000, (_x, y) => (y < 1000 ? 40 : y < 2000 ? 140 : 220)));
+    const middle = await decodeGrayImage((await cropSectionJpeg(image, 1000, 500))!);
+    expect([middle.width, middle.height]).toEqual([400, 500]);
+    expect(Math.abs(middle.data[0]! - 140)).toBeLessThan(6);
+    const clamped = await decodeGrayImage((await cropSectionJpeg(image, 2800, 900))!);
+    expect(clamped.height).toBe(200);
+    const capped = await decodeGrayImage((await cropSectionJpeg(image, 0, 3000))!);
+    expect(capped.height).toBe(1600);
+    expect(await cropSectionJpeg(image, 3000, 100)).toBeNull();
+    expect(await cropSectionJpeg(new Uint8Array([1, 2, 3]), 0, 100)).toBeNull();
   });
 
   test("Given undecodable bytes, then the viewport is reported as unavailable instead of throwing", async () => {
