@@ -31,8 +31,13 @@ jobs run each pinning suite.
   `terminateOwnedWindowsJob` throw "Owned process host could not prove process cleanup" (reason `helper_failed`,
   helper exit 201). The launcher's exited receipt now proves the cleanup (`owned-process-windows.ts`), pinned by the
   Windows sweep test in `owned-process-windows.test.ts`. Chromium closes, the export smoke and the `owned-process-tree`
-  reap case all end in that call, so they are expected to be stable now; they stay in the non-gating "Windows flaky
-  watch" job until about ten consecutive Windows runs show the Export smoke step itself passing.
+  reap case all end in that call. They stay in the non-gating "Windows flaky watch" job until about ten consecutive
+  Windows runs show the Export smoke step itself passing.
+- Windows export smoke teardown, still open: after #174, one Windows watch run passed all nine export tests but failed
+  an `afterAll` hook with `invalid_receipt` from `validateLaunchSettlement` (via `terminateBrowser`). The likely
+  mechanism, not proven: a forced close that fails makes `controlWindowsJob` kill the launcher before it writes its
+  exited receipt, so the later settlement throws and masks the original close failure. The helper's stderr code is not
+  yet carried on the error, which is why the original cause is unknown.
 - Windows `local-fonts` "host installed fonts" hit the 10 s PowerShell timeout in `getLocalFonts` in CI (a slow
   PowerShell start; the same limit makes a slow machine report `local_fonts_unavailable`). Not root-caused; the suite
   runs in the watch job.
