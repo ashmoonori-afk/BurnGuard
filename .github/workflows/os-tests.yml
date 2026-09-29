@@ -109,6 +109,7 @@ jobs:
           bun test --timeout 30000
           packages/backend/tests/local-fonts.test.ts
           packages/backend/tests/owned-process-tree.test.ts
+          packages/backend/tests/owned-process-windows-budget.test.ts
       - name: Chromium popup and deck runtime
         env:
           BG_BROWSER_SMOKE: "1"
