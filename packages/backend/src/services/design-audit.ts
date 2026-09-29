@@ -68,7 +68,9 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
       // Inspect every artboard in print order, including slides hidden by navigation.
       if (input.deck) await session.page.addStyleTag({ content: "html,body{height:auto!important;overflow:visible!important} [data-slide]{display:block!important;position:relative!important;inset:auto!important;transform:none!important;margin:0!important;width:1920px!important;height:1080px!important}" });
       try {
-        const observation = await inspectRenderedPage(session.page, fixedCanvas);
+        // Journey checks change focus and scroll, so they run only here, on a session closed right after, and only at
+        // the desktop width that reports them; the narrow render contributes the mobile navigation check.
+        const observation = await inspectRenderedPage(session.page, fixedCanvas, viewport.width > 375 ? "desktop" : "none");
         const remote = await remoteResourceFindings(session);
         observations.push(remote.length === 0 ? observation : { ...observation, findings: [...observation.findings, ...remote] });
       } finally { await session.close(); }

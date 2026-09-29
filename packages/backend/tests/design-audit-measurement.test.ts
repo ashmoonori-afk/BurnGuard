@@ -96,10 +96,15 @@ describe("rendered page measurements", () => {
   test("Given links without a destination and controls without a focus style When the journey is inspected Then dead links and unmarked keyboard stops are reported, while working links and marked stops pass", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     try {
-      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}.bare{outline:none}.ring{outline:none}.ring:focus-visible{box-shadow:0 0 0 3px #00f}</style><nav><a data-bg-node-id="empty" href="#">Pricing</a><a data-bg-node-id="missing" href="#faq">FAQ</a><a data-bg-node-id="script" href="javascript:void(0)">Docs</a><a data-bg-node-id="present" href="#team">Team</a><a data-bg-node-id="page" href="about.html">About</a></nav><main><section id="team"><p>Team</p></section><button data-bg-node-id="default">Default</button><button class="bare" data-bg-node-id="bare">Bare</button><button class="ring" data-bg-node-id="ring">Ring</button></main>');
-      const observation = await inspectRenderedPage(page);
+      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}.bare{outline:none}.ring{outline:none}.ring:focus-visible{box-shadow:0 0 0 3px #00f}</style><nav><a data-bg-node-id="empty" href="#">Pricing</a><a data-bg-node-id="missing" href="#faq">FAQ</a><a data-bg-node-id="script" href="javascript:void(0)">Docs</a><a data-bg-node-id="present" href="#team">Team</a><a data-bg-node-id="page" href="about.html">About</a><a data-bg-node-id="current" aria-current="page">Home</a><a data-bg-node-id="toggle" href="#" role="button">Menu</a><a data-bg-node-id="top" href="#top">Back to top</a></nav><main><section id="team"><p>Team</p></section><button data-bg-node-id="default">Default</button><button class="bare" data-bg-node-id="bare">Bare</button><button class="ring" data-bg-node-id="ring">Ring</button><div style="height:3000px"></div><a data-bg-node-id="far" href="about.html">Far link</a></main>');
+      const plain = await inspectRenderedPage(page);
+      expect(plain.findings.filter((finding) => finding.code === "journey_focus_visible")).toEqual([]);
+      expect(plain.measurable.journey_focus_visible).toBe(false);
+      const observation = await inspectRenderedPage(page, false, "desktop");
+      expect(await page.evaluate(() => [window.scrollY, document.activeElement === document.body])).toEqual([0, true]);
       expect(observation.findings.filter((finding) => finding.code === "journey_dead_link").map((finding) => finding.nodeId)).toEqual(["empty", "missing", "script"]);
       expect(observation.findings.filter((finding) => finding.code === "journey_focus_visible").map((finding) => finding.nodeId)).toEqual(["bare"]);
+      expect(observation.findings.some((finding) => finding.code === "journey_focus_visible" && finding.nodeId === "far")).toBe(false);
       expect([observation.measurable.journey_dead_link, observation.measurable.journey_focus_visible]).toEqual([true, true]);
     } finally { await page.close(); }
   }, 60_000);
@@ -108,10 +113,10 @@ describe("rendered page measurements", () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     try {
       await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}.copy{height:600px;background:#eee}</style><main><p class="copy" data-bg-node-id="copy">Body copy</p></main>');
-      const still = await inspectRenderedPage(page);
+      const still = await inspectRenderedPage(page, false, "desktop");
       expect(still.measurable.journey_layout_shift).toBe(true);
       expect(still.findings.filter((finding) => finding.code === "journey_layout_shift")).toEqual([]);
-      // A fresh page: the Tab presses of the first inspection count as recent input and would exempt a shift that follows them.
+      // A fresh page, so the shift is measured on a document that has not been inspected yet.
       const moved = await browser.newPage({ viewport: { width: 1280, height: 900 } });
       try {
       await moved.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}.copy{height:600px;background:#eee}.late{height:400px}</style><main id="main"><p class="copy" data-bg-node-id="copy">Body copy</p></main>');
@@ -119,7 +124,7 @@ describe("rendered page measurements", () => {
         const late = document.createElement("div"); late.className = "late"; document.getElementById("main")?.prepend(late);
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       }))));
-      const shifted = (await inspectRenderedPage(moved)).findings.filter((finding) => finding.code === "journey_layout_shift");
+      const shifted = (await inspectRenderedPage(moved, false, "desktop")).findings.filter((finding) => finding.code === "journey_layout_shift");
       expect(shifted).toHaveLength(1);
       expect(shifted[0]!.measured).toBeGreaterThan(0.1);
       expect(shifted[0]!.threshold).toBe(0.1);
@@ -131,7 +136,7 @@ describe("rendered page measurements", () => {
     const page = await browser.newPage({ viewport: { width: 375, height: 812 } });
     try {
       const links = Array.from({ length: 8 }, (_, index) => `<a href="p${index}.html">Section ${index}</a>`).join("");
-      await page.setContent(`<!doctype html><style>body{margin:0;background:#fff;color:#111}.strip{display:flex;gap:24px;overflow-x:auto;white-space:nowrap}.menu a{display:none}</style><header><nav class="strip" data-bg-node-id="strip">${links}</nav></header><footer><nav class="menu" data-bg-node-id="menu"><button>Menu</button>${links}</nav></footer>`);
+      await page.setContent(`<!doctype html><style>body{margin:0;background:#fff;color:#111}.strip{display:flex;gap:24px;overflow-x:auto;white-space:nowrap}.menu a{display:none}</style><header><nav class="strip" data-bg-node-id="strip">${links}</nav></header><footer><nav class="menu" data-bg-node-id="menu"><button>Menu</button>${links}</nav></footer><nav data-bg-node-id="drawer" style="position:fixed;top:0;left:0;width:300px;transform:translateX(400px);display:flex;gap:24px;overflow-x:auto;white-space:nowrap">${links}</nav>`);
       const observation = await inspectRenderedPage(page);
       expect(observation.findings.filter((finding) => finding.code === "journey_mobile_nav").map((finding) => finding.nodeId)).toEqual(["strip"]);
       expect(observation.measurable.journey_mobile_nav).toBe(true);

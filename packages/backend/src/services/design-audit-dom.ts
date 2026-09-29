@@ -5,7 +5,12 @@ import type { DesignAuditCheckCode, DesignAuditSeverity, DesignAuditTargetedActi
 export type DomAuditFinding = { readonly code: DesignAuditCheckCode; readonly severity: DesignAuditSeverity; readonly nodeId: string | null; readonly evidence: string; readonly measured?: number; readonly threshold?: number; readonly action: DesignAuditTargetedAction; readonly fix?: string };
 export type DomAuditObservation = { readonly findings: readonly DomAuditFinding[]; readonly measurable: Readonly<Record<DesignAuditCheckCode, boolean>>; readonly unknownReasons: Readonly<Partial<Record<DesignAuditCheckCode, DesignAuditUnknownReason>>> };
 
-export async function inspectRenderedPage(page: Page, fixedCanvas = false): Promise<DomAuditObservation> {
+/**
+ * journey "desktop" adds the live-page journey checks (layout shift, keyboard focus walk) and restores scroll and
+ * focus afterwards; only the design audit asks for it, on a session it closes right after. Other callers, such as
+ * the handoff export that screenshots the same page, keep the default "none".
+ */
+export async function inspectRenderedPage(page: Page, fixedCanvas = false, journey: "none" | "desktop" = "none"): Promise<DomAuditObservation> {
   await page.evaluate(async () => {
     const pending = [...document.images].filter((image) => !image.complete);
     await Promise.all(pending.map((image) => new Promise<void>((resolve) => {
@@ -246,6 +251,9 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
       for (const anchor of anchors) {
         const href = anchor.getAttribute("href")?.trim() ?? null;
         const fragment = href !== null && href.startsWith("#") && href.length > 1 ? (() => { try { return decodeURIComponent(href.slice(1)); } catch { return href.slice(1); } })() : null;
+        // The current-page marker without a link, a JavaScript-driven button and "#top" (which scrolls to the top by
+        // definition) are deliberate, not dead ends.
+        if ((href === null && anchor.hasAttribute("aria-current")) || anchor.getAttribute("role") === "button" || (href !== null && href.toLowerCase() === "#top")) continue;
         const reason = href === null ? "has no href" : href === "" || href === "#" ? `points to "${href}"` : /^javascript:/iu.test(href) ? "uses a javascript: URL" : fragment !== null && document.getElementById(fragment) === null && document.getElementsByName(fragment).length === 0 ? `targets #${fragment.slice(0, 60)}, which is not on the page` : null;
         if (reason === null || deadLinks >= 20) continue;
         deadLinks += 1;
@@ -255,7 +263,8 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
 
       // Journey: on a phone the navigation's visible links must fit inside it without sideways scrolling or clipping.
       if (viewport <= 375) {
-        const navs = [...document.querySelectorAll<HTMLElement>("nav, [role=navigation]")].filter((nav) => visible(nav) && nav.parentElement?.closest("nav, [role=navigation]") == null);
+        // A closed off-canvas drawer lies wholly outside the viewport; it is not the navigation a visitor sees.
+        const navs = [...document.querySelectorAll<HTMLElement>("nav, [role=navigation]")].filter((nav) => { const box = nav.getBoundingClientRect(); return visible(nav) && nav.parentElement?.closest("nav, [role=navigation]") == null && box.right > 0 && box.left < viewport; });
         measurable.journey_mobile_nav = navs.length > 0;
         if (navs.length > 0) delete unknownReasons.journey_mobile_nav;
         for (const nav of navs) {
@@ -295,7 +304,7 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false): Prom
     }
     return { findings, measurable, unknownReasons };
   }, fixedCanvas);
-  return fixedCanvas ? observation : await inspectJourney(page, observation);
+  return fixedCanvas || journey === "none" ? observation : await inspectJourney(page, observation);
 }
 
 /** Cumulative layout shift above this value is reported; it is the "good" limit for page experience. */
@@ -318,8 +327,12 @@ async function inspectJourney(page: Page, observation: DomAuditObservation): Pro
     const add = (entries: PerformanceEntryList) => { for (const entry of entries) total += Number(Reflect.get(entry, "value")) || 0; };
     const observer = new PerformanceObserver((list) => add(list.getEntries()));
     observer.observe({ type: "layout-shift", buffered: true });
-    // Buffered entries are delivered in a task after observe(); two frames later they have all arrived.
-    requestAnimationFrame(() => requestAnimationFrame(() => { add(observer.takeRecords()); observer.disconnect(); resolve(total); }));
+    // Buffered entries are delivered in a task after observe(); two frames later they have all arrived. A page that
+    // produces no frames still settles through the bounded fallback.
+    let settled = false;
+    const finish = () => { if (settled) return; settled = true; add(observer.takeRecords()); observer.disconnect(); resolve(total); };
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+    setTimeout(finish, 1_000);
   }));
   if (shift !== null) {
     measurable.journey_layout_shift = true;
@@ -360,5 +373,7 @@ async function inspectJourney(page: Page, observation: DomAuditObservation): Pro
       }
     }
   }
+  // The walk leaves focus on the last stop and the page scrolled to it; put both back for anything that reads the page next.
+  await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur?.(); Reflect.deleteProperty(window, "__bgFocusBaseline"); window.scrollTo(0, 0); });
   return { findings, measurable, unknownReasons };
 }
