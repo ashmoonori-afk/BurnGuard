@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -84,6 +84,36 @@ for (const scenario of [
   const ownership = testWindowsOwnership();
   const readReceipt = async (receiptPath: string) => receiptPath === ownership.launchReceipt ? runningReceipt : scenario.receipt;
   await expect(terminateOwnedWindowsJob({ ownership, hostPid: 50, hostExit: new Promise(() => {}), timeoutMs: 2_250, runCommand: async () => ({ exitCode: scenario.exitCode, stdout: "", stderr: "" }), readReceipt })).rejects.toBeInstanceOf(OwnedProcessHostError);
+});
+
+describe("Windows owned host when the helper fails after the launcher has already exited", () => {
+  const helperFailed = (exitCode: number) => async () => ({ exitCode, stdout: "", stderr: "" });
+  const sequence = (receipts: readonly string[], ownership: WindowsJobOwnership) => {
+    let launchReads = 0;
+    return async (receiptPath: string) => {
+      if (receiptPath !== ownership.launchReceipt) return terminatedReceipt;
+      const next = receipts[Math.min(launchReads, receipts.length - 1)]!;
+      launchReads += 1;
+      return next;
+    };
+  };
+
+  test("Given the launch receipt now proves this job exited with no active processes, then cleanup is proven and the terminate succeeds", async () => {
+    const ownership = testWindowsOwnership();
+    await expect(terminateOwnedWindowsJob({ ownership, hostPid: 50, hostExit: new Promise(() => {}), timeoutMs: 2_250, runCommand: helperFailed(201), readReceipt: sequence([runningReceipt, finalReceipt], ownership) })).resolves.toBeUndefined();
+  });
+
+  test("Given the launch receipt is still running, another job's, another host's or unreadable, then the helper failure is reported with its exit code", async () => {
+    const otherJob = JSON.stringify({ schema_version: 1, operation: "launch", state: "exited", job_token: "b".repeat(32), host_pid: 50, target_pid: 51, target_exit_code: 0, active_processes: 0 });
+    const otherHost = JSON.stringify({ schema_version: 1, operation: "launch", state: "exited", job_token: jobToken, host_pid: 99, target_pid: 51, target_exit_code: 0, active_processes: 0 });
+    for (const later of [runningReceipt, otherJob, otherHost, "not-json"]) {
+      const ownership = testWindowsOwnership();
+      await expect(terminateOwnedWindowsJob({ ownership, hostPid: 50, hostExit: new Promise(() => {}), timeoutMs: 2_250, runCommand: helperFailed(201), readReceipt: sequence([runningReceipt, later], ownership) })).rejects.toMatchObject({ reason: "helper_failed", helperExitCode: 201 });
+    }
+    const unreadable = testWindowsOwnership();
+    let reads = 0;
+    await expect(terminateOwnedWindowsJob({ ownership: unreadable, hostPid: 50, hostExit: new Promise(() => {}), timeoutMs: 2_250, runCommand: helperFailed(204), readReceipt: async () => { reads += 1; if (reads > 1) throw new Error("gone"); return runningReceipt; } })).rejects.toMatchObject({ reason: "helper_failed", helperExitCode: 204 });
+  });
 });
 
 test("Windows owned host converts an absent helper into a typed cleanup error", async () => {
@@ -239,3 +269,16 @@ test.skipIf(process.platform !== "win32")("Given an owned root exits with a live
     await rm(root, { recursive: true, force: true });
   }
 }, 15_000);
+
+test.skipIf(process.platform !== "win32")("Given a target that exits while the terminate helper is starting, when the job is force-closed, then cleanup is still proven at every exit timing", async () => {
+  const failures: string[] = [];
+  for (let round = 0; round < 2; round += 1) {
+    for (let delayMs = 0; delayMs <= 600; delayMs += 25) {
+      const owned = spawnOwnedProcess({ cmd: [process.execPath, "-e", `setTimeout(() => process.exit(0), ${delayMs})`], stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+      try { await closeOwnedProcess(owned, { timeoutMs: 3_000 }); }
+      catch (error) { failures.push(`${delayMs}ms:${String((error as { reason?: string }).reason)}:${String((error as { helperExitCode?: number | null }).helperExitCode)}`); }
+      await owned.proc.exited.catch(() => undefined);
+    }
+  }
+  expect(failures).toEqual([]);
+}, 180_000);
