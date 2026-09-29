@@ -13,6 +13,8 @@ export const DESIGN_AUDIT_CHECK_COPY = {
   get site_nav_mismatch() { return t("modes.audit.check.siteNavMismatch"); }, get site_missing_aria_current() { return t("modes.audit.check.currentPage"); }, get site_dangling_link() { return t("modes.audit.check.danglingLink"); },
   get site_missing_shared_block() { return t("modes.audit.check.sharedBlock"); }, get site_root_absolute_asset() { return t("modes.audit.check.absoluteAsset"); },
   get remote_resources() { return t("modes.audit.check.remoteResources"); },
+  get journey_dead_link() { return t("modes.audit.check.journeyDeadLink"); }, get journey_mobile_nav() { return t("modes.audit.check.journeyMobileNav"); },
+  get journey_focus_visible() { return t("modes.audit.check.journeyFocusVisible"); }, get journey_layout_shift() { return t("modes.audit.check.journeyLayoutShift"); },
 } as const satisfies Record<DesignAuditCheckCode, string>;
 
 export const DESIGN_AUDIT_STATUS_COPY = {
@@ -31,6 +33,7 @@ export const DESIGN_AUDIT_ACTION_COPY = {
   get repair_site_navigation() { return t("modes.audit.action.siteNavigation"); }, get mark_current_page() { return t("modes.audit.action.currentPage"); },
   get create_or_repair_site_link() { return t("modes.audit.action.siteLink"); }, get add_shared_blocks() { return t("modes.audit.action.sharedBlocks"); },
   get relativize_asset_path() { return t("modes.audit.action.assetPath"); }, get bundle_remote_resource() { return t("modes.audit.action.bundleRemote"); },
+  get add_visible_focus() { return t("modes.audit.action.visibleFocus"); }, get reserve_layout_space() { return t("modes.audit.action.reserveSpace"); },
 } as const satisfies Record<DesignAuditTargetedAction, string>;
 
 export const DESIGN_AUDIT_UNKNOWN_COPY = {
