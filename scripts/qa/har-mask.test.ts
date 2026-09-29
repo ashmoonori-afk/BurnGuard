@@ -41,6 +41,31 @@ describe("HAR masking for the pre-release UX QA stage", () => {
     for (const secret of [CAPABILITY, token, "quoted-cookie-value-1234", "alice", "/root/"]) expect(text).not.toContain(secret);
   });
 
+  test("Given BurnGuard settings requests carrying provider tokens, when masked, then every token field value is masked everywhere", () => {
+    // Fake values are assembled at runtime so no secret-shaped literal sits in the source.
+    const fake = (label: string, length: number) => [label, "q".repeat(length)].join("-");
+    const tokens = { vercel_token: fake("vercel", 6), figma_personal_access_token: fake("figd", 20), commandcode_api_key: fake("cc", 20) };
+    const har = { log: { entries: [entry({ method: "PATCH", url: "http://127.0.0.1:14070/api/settings", postData: { mimeType: "application/json", text: JSON.stringify({ ...tokens, llm_api_keys: { gemini: fake("gemini", 12), xai: fake("xai", 8) }, theme_name: "a-long-ordinary-theme-name" }) } }, { content: { size: 20, mimeType: "application/json", text: JSON.stringify({ data: { saved: true, echo: Object.values(tokens).join(" ") } }) } })] } };
+    const { har: masked, report } = maskHar(har);
+    const text = JSON.stringify(masked);
+    for (const value of [...Object.values(tokens), fake("gemini", 12), fake("xai", 8)]) expect(text).not.toContain(value);
+    expect(text).toContain("a-long-ordinary-theme-name");
+    expect(report.secret_values).toBe(5);
+  });
+
+  test("Given a design-system tokens response, when masked, then token values stay readable in it and in artifact pages", () => {
+    const family = "Inter, system-ui, sans-serif";
+    const har = { log: { entries: [
+      entry({ url: "http://127.0.0.1:14070/api/design-systems/neon/tokens" }, { content: { size: 80, mimeType: "application/json", text: JSON.stringify({ data: { layout: { tokens: { "--font-body": family, "--sp-2": "calc(4px * 2)" } }, pages: [{ layout_tokens: { "--layout-max": "1200px-wide" } }] } }) } }),
+      entry({ url: "http://127.0.0.1:14070/runtime/projects/p1/index.html" }, { content: { size: 40, mimeType: "text/html", text: `<style>body{font-family:${family}}</style>` } }),
+    ] } };
+    const { har: masked, report } = maskHar(har);
+    const text = JSON.stringify(masked);
+    expect(text.split(family).length - 1).toBe(2);
+    expect(text).toContain("calc(4px * 2)");
+    expect(report.secret_values).toBe(0);
+  });
+
   test("Given short values under loosely named body fields, when masked, then they are not treated as secrets and unrelated URLs stay readable", () => {
     const har = { log: { entries: [entry({ url: "http://127.0.0.1:14070/api/projects/abc" }, { content: { size: 30, mimeType: "application/json", text: JSON.stringify({ data: [{ key: "projects", token: "short" }] }) } })] } };
     const masked = maskHar(har);
