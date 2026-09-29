@@ -26,7 +26,8 @@ export type RenderedLayoutInput = {
 };
 /**
  * Why a measurement produced no layout. `code` is a stable token (a RenderSessionError code for launch failures,
- * otherwise launch_failed, render_failed or invalid_measurement); `launchMs` is how long the browser took to start,
+ * otherwise launch_failed, render_failed, invalid_measurement, or aborted when the signal fired before any page was
+ * measured); `launchMs` is how long the browser took to start,
  * or null when it never started. No raw browser diagnostics or paths are carried.
  */
 export type LayoutMeasureFailure = { readonly stage: "launch" | "render" | "validate"; readonly code: string; readonly launchMs: number | null };

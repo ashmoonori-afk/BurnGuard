@@ -522,7 +522,7 @@ describe("Measured layout tokens", () => {
   test("Given a measurer that outlives the remaining acquisition budget, then extraction still succeeds without measured tokens and records a note", async () => {
     await withSite({ "/source": "<html><body><h1>Home</h1></body></html>" }, async (origin, id) => {
       const waitForAbort = (input: RenderedLayoutInput) => new Promise<null>((_, reject) => input.signal.addEventListener("abort", () => reject(input.signal.reason), { once: true }));
-      const result = await extractDesignSystemFromSource({ system_id: id, name: "Slow", source_type: "website", source_url: origin + "/source" }, { timeoutMs: 8_000, measureLayout: waitForAbort });
+      const result = await extractDesignSystemFromSource({ system_id: id, name: "Slow", source_type: "website", source_url: origin + "/source" }, { timeoutMs: 7_500, measureLayout: waitForAbort });
       expect(result.extraction.notes.some(note => note.startsWith("Rendered layout measurement") && note.includes("reason: insufficient_time"))).toBe(true);
       const system = { dir_path: path.join(systemsDir, id) } as Parameters<typeof readDesignSystemMeasuredLayout>[0];
       expect(await readDesignSystemMeasuredLayout(system)).toBeNull();
