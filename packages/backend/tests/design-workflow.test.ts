@@ -7,6 +7,7 @@ import { systemsDir, projectsDir } from "../src/lib/paths";
 import { createApp } from "../src/server";
 import { ensureProjectDesignSystemPin, inspectProjectDesignSystemPin, readProjectDesignSystemPin } from "../src/services/project-design-system-pin";
 import { compactPinnedDesignSystemContext } from "../src/harness/prompt-design-system";
+import { EVIDENCE_RULES } from "../src/harness/evidence-rules";
 import { blockingDesignFindings, designReviewBudgetMs, reviewTurnDesign } from "../src/services/turn-design-review";
 import { auditedSiteMap } from "../src/services/design-audit";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
@@ -87,6 +88,7 @@ test("Given persistent findings When reviewing Then exactly two repairs run and 
   const review = await reviewTurnDesign({ ...reviewInput(events), audit: async () => result(true), run: async input => {
     repairs++;
     expect(input.prompt).toContain("<design_review_findings>");
+    expect(input.prompt.split(EVIDENCE_RULES)).toHaveLength(2);
     return { exitCode: 0 };
   } });
   expect(repairs).toBe(2);

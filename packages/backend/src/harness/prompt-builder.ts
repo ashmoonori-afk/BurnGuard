@@ -9,6 +9,7 @@ import { buildResearchPromptContext, DIAGRAM_REQUEST_PATTERN } from "../services
 import { selectPromptLearning } from "../db/learning-store";
 import { getSqlite } from "../db/sqlite-client";
 import { DECK_SKILL_MD } from "./skills/deck-skill";
+import { EVIDENCE_RULES } from "./evidence-rules";
 import { DIAGRAM_SKILL_MD } from "./skills/diagram-skill";
 import { PROTOTYPE_NAVIGATION_CONTRACT, PROTOTYPE_SKILL_MD } from "./skills/prototype-skill";
 import {
@@ -115,6 +116,7 @@ export async function buildPrompt(
   lines.push("For creation, once the request authorizes it, write a complete renderable HTML scaffold to the entrypoint early, then save incremental HTML/CSS/image updates as sections become ready. For an edit, preserve the existing entrypoint and save targeted changes instead. Await any required image-regeneration approval before image calls or file changes. BurnGuard automatically renders the working files in its built-in canvas during this turn; do not wait until the end to write everything.");
   lines.push("The app writes ../preview-report.json outside the output directory after its canvas renders. Read it for current-page image loading and horizontal overflow observations; check observed_at/version and do not treat old observations as a check of your latest edit. This is DOM feedback, not a screenshot or a full visual review. Missing feedback means the canvas has not reported yet, not that browser access was denied. Do not wait or poll indefinitely.");
   lines.push("Use built-in canvas feedback for the checks it covers. When an actual screenshot or visual inspection is needed, use available rendering/capture tools, or recreate a supplied app interface from its source as described in the image-production rules. A CLI sandbox refusing a separate Chrome/Playwright process says nothing about the app's already running preview. Never report that the built-in screen is blocked or ask for browser permission unless an actual app error establishes that. Be precise about which checks you performed.");
+  lines.push(EVIDENCE_RULES);
   lines.push("", "## Project");
   lines.push(`- id: ${project.project_id}`);
   lines.push(`- name: ${project.project_name}`);

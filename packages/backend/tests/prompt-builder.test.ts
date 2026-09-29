@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { getSqlite } from "../src/db/sqlite-client";
 import { buildPrompt, MAX_SKILL_CHARS, renderTextEncodingBlock, resolveDeliverable } from "../src/harness/prompt-builder";
 import { DESIGN_CRAFT_RULES, IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../src/harness/design-craft";
+import { EVIDENCE_RULES } from "../src/harness/evidence-rules";
 import { IMAGE_PRODUCTION_RULES } from "../src/harness/prompt-image-production";
 import { PROTOTYPE_NAVIGATION_CONTRACT } from "../src/harness/skills/prototype-skill";
 import { COMPACT_DECK_SKILL_MD } from "../src/harness/prompt-compact-skills";
@@ -82,6 +83,8 @@ describe("buildPrompt", () => {
         expect(prompt.split(DESIGN_CRAFT_RULES)).toHaveLength(2);
         expect(prompt.split(IMAGE_PRODUCTION_RULES)).toHaveLength(2);
         expect(prompt.split("<burnguard-text-encoding-v1>")).toHaveLength(2);
+        expect(prompt.split(EVIDENCE_RULES)).toHaveLength(2);
+        expect(prompt.indexOf(EVIDENCE_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
         expect(prompt.indexOf(IMAGE_PRODUCTION_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
         expect(prompt.split(IMAGE_ARTBOARD_COMPLETION_CHECKS)).toHaveLength(2);
         expect(prompt.indexOf(DESIGN_CRAFT_RULES)).toBeLessThan(prompt.indexOf("## Delivery"));
