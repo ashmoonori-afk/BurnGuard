@@ -217,7 +217,7 @@ test.skipIf(process.platform !== "win32")("Given an opaque-owned target already 
 test.skipIf(process.platform !== "win32")("Given an owned root exits with a live child When the host settles Then the child is gone and an unrelated sentinel survives", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "bg-windows-job-natural-exit-"));
   const childSource = `Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response('fixture')});console.log('READY');await new Promise(()=>{})`;
-  const targetSource = `const child=Bun.spawn([process.execPath,'-e',${JSON.stringify(childSource)}],{stdin:'ignore',stdout:'pipe',stderr:'ignore'});await child.stdout.getReader().read();console.log(child.pid);`;
+  const targetSource = `const child=Bun.spawn([process.execPath,'-e',${JSON.stringify(childSource)}],{stdin:'ignore',stdout:'pipe',stderr:'ignore'});await child.stdout.getReader().read();await Bun.write(Bun.stdout,String(child.pid));process.exit(0);`;
   const owned = spawnOwnedProcess({ cmd: [process.execPath, "-e", targetSource], cwd: root, stdin: "ignore", stdout: "pipe", stderr: "ignore" });
   const sentinel = Bun.spawn([process.execPath, "-e", childSource], { cwd: root, stdin: "ignore", stdout: "pipe", stderr: "ignore" });
   const targetReader = owned.proc.stdout.getReader();
