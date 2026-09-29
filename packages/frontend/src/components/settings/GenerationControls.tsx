@@ -1,7 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { COMMANDCODE_MODELS, effortBelowRecommendation, resolveModelCapabilityProfile, type BackendId, type GenerationOptions } from "@bg/shared";
+import { COMMANDCODE_MODELS, effortBelowRecommendation, resolveModelCapabilityProfile, type BackendId, type GenerationEffort, type GenerationOptions } from "@bg/shared";
 import { detectBackends, getSettings } from "@/api/home";
+import type { MessageKey } from "@/i18n/messages";
 import { useT } from "@/i18n/t";
+
+export const EFFORT_LABELS: Readonly<Record<GenerationEffort, MessageKey>> = {
+  low: "settings.effort.low",
+  medium: "settings.effort.medium",
+  high: "settings.effort.high",
+  xhigh: "settings.effort.xhigh",
+  max: "settings.effort.max",
+  ultra: "settings.effort.ultra",
+};
 
 export default function GenerationControls({ backendId, value, onChange, disabled = false, compact = false }: {
   backendId: BackendId; value: GenerationOptions; onChange: (value: GenerationOptions) => void; disabled?: boolean; compact?: boolean;
@@ -32,7 +42,7 @@ export default function GenerationControls({ backendId, value, onChange, disable
         {models.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}
       </select></label>
       <label>{t("settings.effort")}<select aria-label={t("settings.effort")} className={selectClass} value={value.effort} onChange={(event) => onChange({ ...value, effort: event.target.value as GenerationOptions["effort"] })}>
-        {efforts.map((effort) => <option key={effort} value={effort}>{effort.toUpperCase()}</option>)}
+        {efforts.map((effort) => <option key={effort} value={effort}>{t(EFFORT_LABELS[effort])}</option>)}
       </select></label>
     </div>
     {/* States that guidance follows the selection. Never surfaces preset ids, block text or prompt JSON. */}
