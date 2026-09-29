@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import { MEASURED_VIEWPORTS, parseDesignSystemMeasuredLayout, type MeasuredPageLayout, type MeasuredViewportLayout, type MeasuredViewportName } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
 import { collectLayout } from "./extraction-rendered-layout";
@@ -91,23 +91,19 @@ export function literalValueFindings(cssTexts: readonly string[]): ConformanceFi
   return [...hits].sort((a, b) => b[1].count - a[1].count).map(([property, hit]) => ({ code: "literal_value", viewport: null, target: property, measured: `${hit.count} literal value(s), e.g. ${hit.examples.join(" | ")}`, expected: "var(--...) from the design-system tokens" }));
 }
 
-async function authoredCss(projectDir: string): Promise<string[]> {
+/** Authored CSS in the files this turn changed: stylesheets plus inline style blocks of HTML pages, bounded. */
+async function changedCss(projectDir: string, changedPaths: readonly string[]): Promise<string[]> {
   const out: string[] = [];
   let budget = 2_000_000;
-  const walk = async (rel: string, depth: number): Promise<void> => {
-    if (depth > 4 || budget <= 0) return;
-    for (const entry of await readdir(resolveWithin(projectDir, rel || "."), { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || budget <= 0) continue;
-      const child = rel ? `${rel}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) { if (entry.name !== "node_modules" && entry.name !== "fonts") await walk(child, depth + 1); continue; }
-      if (!entry.isFile() || !/\.(?:css|html?)$/iu.test(entry.name)) continue;
-      const text = (await readFile(resolveWithin(projectDir, child), "utf8")).slice(0, budget);
-      budget -= text.length;
-      if (/\.css$/iu.test(entry.name)) out.push(text);
-      else for (const block of text.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/giu)) out.push(block[1]!);
-    }
-  };
-  await walk("", 0);
+  for (const relPath of changedPaths.filter(file => /\.(?:css|html?)$/iu.test(file)).slice(0, 200)) {
+    if (budget <= 0) break;
+    const info = await lstat(resolveWithin(projectDir, relPath)).catch(() => null);
+    if (info === null || !info.isFile()) continue;
+    const text = (await readFile(resolveWithin(projectDir, relPath), "utf8")).slice(0, budget);
+    budget -= text.length;
+    if (/\.css$/iu.test(relPath)) out.push(text);
+    else for (const block of text.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/giu)) out.push(block[1]!);
+  }
   return out;
 }
 
@@ -115,7 +111,9 @@ async function authoredCss(projectDir: string): Promise<string[]> {
  * Renders the entrypoint at the measured viewports and compares it with the measured entry it followed, plus
  * the literal-value check over authored CSS. Returns null when there is nothing measured to compare with.
  */
-export async function reviewDesignSystemConformance(input: { readonly projectDir: string; readonly entrypoint: string; readonly pinnedContext: string; readonly signal: AbortSignal }): Promise<ConformanceResult | null> {
+export async function reviewDesignSystemConformance(input: { readonly projectDir: string; readonly entrypoint: string; readonly pinnedContext: string; readonly changedPaths: readonly string[]; readonly signal: AbortSignal }): Promise<ConformanceResult | null> {
+  // A turn that changed no page or stylesheet cannot have moved the page away from the system.
+  if (!input.changedPaths.some(file => /\.(?:css|html?)$/iu.test(file))) return null;
   const pages = measuredPagesFromPinnedContext(input.pinnedContext);
   if (pages === null || pages.length === 0) return null;
   const html = await readFile(resolveWithin(input.projectDir, input.entrypoint), "utf8");
@@ -135,6 +133,6 @@ export async function reviewDesignSystemConformance(input: { readonly projectDir
       } finally { await session.close(); }
     }
   } finally { await owner.close(); }
-  findings.push(...literalValueFindings(await authoredCss(input.projectDir)));
+  findings.push(...literalValueFindings(await changedCss(input.projectDir, input.changedPaths)));
   return { page: expected.path, findings: findings.slice(0, MAX_FINDINGS) };
 }

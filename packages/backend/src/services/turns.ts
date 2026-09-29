@@ -594,7 +594,7 @@ async function runUserTurnInternal(
                 revision: project.current_revision + 1, changedPaths, ...(canvas ? { canvas } : {}),
                 ...(sessionContext.designSystemPin ? { tokensCss: sessionContext.designSystemPin.tokens } : {}),
                 ...(pinnedContext !== undefined && canvas === undefined && surfaceForProjectType(project.type) === "website"
-                  ? { conformance: (signal: AbortSignal) => reviewDesignSystemConformance({ projectDir: stageDir, entrypoint: project.entrypoint, pinnedContext, signal }) }
+                  ? { conformance: (signal: AbortSignal) => reviewDesignSystemConformance({ projectDir: stageDir, entrypoint: project.entrypoint, pinnedContext, changedPaths, signal }), requestText: payload.text }
                   : {}),
                 run: (input) => runAdapter(backendId, input),
               });

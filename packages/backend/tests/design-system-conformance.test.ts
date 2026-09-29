@@ -70,11 +70,15 @@ describe("Design-system conformance", () => {
     expect(findings.every(finding => finding.code === "literal_value" && finding.viewport === null)).toBe(true);
   });
 
+  test("Given a turn that changed no page or stylesheet, then there is nothing to compare and no browser starts", async () => {
+    expect(await reviewDesignSystemConformance({ projectDir: tmpdir(), entrypoint: "index.html", pinnedContext: await pinnedContextFor(layout), changedPaths: ["assets/hero.png"], signal: AbortSignal.timeout(5_000) })).toBeNull();
+  });
+
   test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given a real Chromium, when a split-hero page is reviewed against a centred measured home, then rendered findings and literal values are reported", async () => {
     const project = await mkdtemp(path.join(tmpdir(), "bg-conformance-project-"));
     try {
       await writeFile(path.join(project, "index.html"), '<!doctype html><html><head><meta name="bg-measured-page" content="/"><style>body{margin:0} .hero{display:flex;max-width:1200px;margin:0 auto} h1{font-size:88px;margin:0;text-align:left;width:600px} p{font-size:14px;color:#fff}</style></head><body><section class="hero"><div><h1>Own your AI.</h1><p>Private expert AI systems powered by local models</p></div></section></body></html>');
-      const result = await reviewDesignSystemConformance({ projectDir: project, entrypoint: "index.html", pinnedContext: await pinnedContextFor(layout), signal: AbortSignal.timeout(60_000) });
+      const result = await reviewDesignSystemConformance({ projectDir: project, entrypoint: "index.html", pinnedContext: await pinnedContextFor(layout), changedPaths: ["index.html"], signal: AbortSignal.timeout(60_000) });
       expect(result?.page).toBe("/");
       const codes = new Set(result!.findings.map(finding => `${finding.viewport}:${finding.code}:${finding.target}`));
       expect(codes.has("desktop:type_size:hero")).toBe(true);
