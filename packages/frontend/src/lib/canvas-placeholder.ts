@@ -16,3 +16,12 @@ export function canvasPlaceholderKeys({ src, loading, working }: CanvasPlacehold
   if (working) return { title: "workspace.canvas.workingTitle", subtitle: "workspace.canvas.workingSubtitle" };
   return { title: "workspace.canvas.placeholderTitle", subtitle: "workspace.canvas.placeholderSubtitle" };
 }
+
+/**
+ * The fetched document is in the frame but has not painted yet. A heavy srcdoc otherwise shows a
+ * blank white frame after the "preparing" placeholder, so a rendering state covers it until the
+ * frame reports document-loaded (after load and one animation frame).
+ */
+export function canvasRenderingVisible({ hasDocument, painted, failed }: { readonly hasDocument: boolean; readonly painted: boolean; readonly failed: boolean }): boolean {
+  return hasDocument && !painted && !failed;
+}

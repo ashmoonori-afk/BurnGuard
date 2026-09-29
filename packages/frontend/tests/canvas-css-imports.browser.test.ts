@@ -101,7 +101,7 @@ test("imported project styles render nested CSS inside the real opaque canvas sa
     await page.addScriptTag({ content: script });
     await page.evaluate(() => globalThis.canvasCssTest.bootstrapApiAuthority());
     const sharedLoads = await page.evaluate(async ({ origin, sharedFont }) => {
-      const html = `<style>@font-face{font-family:Shared;src:url('${sharedFont}')}</style>`;
+      const html = `<style>@font-face{font-family:Shared;src:url('${sharedFont}')}body{font-family:Shared}</style>`;
       const render = (project: string) => globalThis.canvasCssTest.embedCanvasImages(html, `${origin}/api/projects/${project}/fs/index.html`, new AbortController().signal);
       const concurrent = await Promise.all([render("one"), render("two")]);
       const later = await render("three");
@@ -109,6 +109,14 @@ test("imported project styles render nested CSS inside the real opaque canvas sa
     }, { origin, sharedFont });
     expect(sharedLoads).toBe(true);
     expect(requests.filter(request => request.path === sharedFont)).toEqual([{ path: sharedFont, capability: null }]);
+    // UX-004: a face no rule, token or script names is dropped before any font is fetched.
+    const unusedFont = `/runtime/fonts/${"c".repeat(64)}/Figtree.woff2`;
+    const unused = await page.evaluate(async ({ origin, unusedFont }) => globalThis.canvasCssTest.embedCanvasImages(
+      `<style>@font-face{font-family:Unused Face;src:url('${unusedFont}')}body{color:red}</style>`, `${origin}/api/projects/four/fs/index.html`, new AbortController().signal,
+    ), { origin, unusedFont });
+    expect(unused).not.toContain("Unused Face");
+    expect(unused).not.toContain("data:font/woff2");
+    expect(requests.some(request => request.path === unusedFont)).toBe(false);
     const mount = async (input: string, documentRoot = root) => {
       const embedded = await page.evaluate(async ({ input, url }) => {
         const api = globalThis.canvasCssTest;
@@ -224,23 +232,31 @@ async function withCanvasPage<T>(serve: (pathname: string) => Response | undefin
   }
 }
 
-test("Given a project document linking the real shared fonts.css When embedCanvasImages runs Then it resolves and every face is an embedded woff2", async () => {
+test("Given a project document linking the real shared fonts.css and using one family through a token When embedCanvasImages runs Then only that family's faces are embedded and no other face is fetched", async () => {
   const fonts = `${import.meta.dir}/../../../assets/fonts`;
   // The same content-addressed rewrite every new project receives in fonts/fonts.css.
   const stylesheet = (await Bun.file(`${fonts}/fonts.css`).text()).replace(/url\('\.\/([^']+\.woff2)'\)/g, (_, name: string) => `url('/runtime/fonts/${"b".repeat(64)}/${name}')`);
-  const faces = stylesheet.match(/url\(/g)?.length ?? 0;
+  const blocks = stylesheet.match(/@font-face\s*\{[^{}]*\}/g) ?? [];
+  const familyOf = (block: string) => /font-family\s*:\s*["']?([^"';]+)/.exec(block)?.[1]?.trim() ?? "";
+  const family = familyOf(blocks[0] ?? "");
+  const usedFaces = blocks.filter(block => familyOf(block) === family).map(block => block.match(/url\(/g)?.length ?? 0).reduce((sum, count) => sum + count, 0);
+  const fetchedFonts: string[] = [];
   const result = await withCanvasPage(pathname => {
     if (pathname === "/api/projects/fonts/fs/fonts/fonts.css") return new Response(stylesheet, { headers: { "content-type": "text/css" } });
     const font = /^\/runtime\/fonts\/b{64}\/([A-Za-z0-9_.-]+\.woff2)$/.exec(pathname)?.[1];
+    if (font !== undefined) fetchedFonts.push(font);
     return font === undefined ? undefined : new Response(Bun.file(`${fonts}/${font}`), { headers: { "content-type": "font/woff2" } });
-  }, (page, origin) => page.evaluate(async url => {
+  }, (page, origin) => page.evaluate(async ({ url, family }) => {
     try {
-      const html = await globalThis.canvasCssTest.embedCanvasImages('<link rel="stylesheet" href="fonts/fonts.css">', url, new AbortController().signal);
+      const html = await globalThis.canvasCssTest.embedCanvasImages(`<link rel="stylesheet" href="fonts/fonts.css"><style>:root{--font-body:"${family}",sans-serif}body{font-family:var(--font-body)}</style>`, url, new AbortController().signal);
       return { embedded: Array.from(html.matchAll(/url\("?([^"')]*)/g), match => match[1]!.startsWith("data:font/woff2;base64,")) };
     } catch (error) { return { error: error instanceof Error ? error.message : String(error) }; }
-  }, `${origin}/api/projects/fonts/fs/index.html`));
-  expect(faces).toBeGreaterThan(0);
-  expect(result).toEqual({ embedded: Array.from({ length: faces }, () => true) });
+  }, { url: `${origin}/api/projects/fonts/fs/index.html`, family }));
+  expect(family.length).toBeGreaterThan(0);
+  expect(usedFaces).toBeGreaterThan(0);
+  expect(usedFaces).toBeLessThan(stylesheet.match(/url\(/g)?.length ?? 0);
+  expect(result).toEqual({ embedded: Array.from({ length: usedFaces }, () => true) });
+  expect(fetchedFonts).toHaveLength(usedFaces);
 }, 30_000);
 
 test("Given images beyond the per-document byte budget When embedCanvasImages runs Then the document resolves with those images unembedded while stylesheet overruns stay fatal", async () => {

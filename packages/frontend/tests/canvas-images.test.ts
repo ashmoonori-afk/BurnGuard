@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { MAX_SHARED_CANVAS_FONTS, embedCssImages, isProjectImageUrl, readCanvasImage } from "../src/lib/canvas-images";
+import { MAX_SHARED_CANVAS_FONTS, embedCssImages, fontFaceFamily, isProjectImageUrl, pruneUnusedFontFaces, readCanvasImage } from "../src/lib/canvas-images";
 
 test("Given sandbox images, When resolving assets, Then only the current project is fetched and CSS images are embedded", async () => {
   const base = "http://127.0.0.1:14070/api/projects/one/fs/index.html";
@@ -53,4 +53,22 @@ test("Given the bundled shared fonts.css When its distinct woff2 faces are count
   const faces = new Set(Array.from(css.matchAll(/url\('\.\/([^']+\.woff2)'\)/g), match => match[1]));
   expect(faces.size).toBeGreaterThan(0);
   expect(faces.size).toBeLessThan(MAX_SHARED_CANVAS_FONTS);
+});
+
+test("Given @font-face rules When families are read Then quoted, single-quoted and bare names parse and a nameless face is kept", () => {
+  expect(fontFaceFamily('@font-face{font-family:"Brand Sans";src:url(a.woff2)}')).toBe("brand sans");
+  expect(fontFaceFamily("@font-face{font-family:'Mono';src:url(b.woff2)}")).toBe("mono");
+  expect(fontFaceFamily("@font-face{font-family: Serif Two ;src:url(c.woff2)}")).toBe("serif two");
+  expect(fontFaceFamily("@font-face{src:url(d.woff2)}")).toBeNull();
+});
+
+test("Given faces used directly, through a token, from script, or not at all When pruned Then only unreferenced faces are removed", () => {
+  const faces = '@font-face{font-family:"Used";src:url(u)}@font-face{font-family:"Token";src:url(t)}@font-face{font-family:"Scripted";src:url(s)}@font-face{font-family:"Unused";src:url(x)}@font-face{src:url(n)}';
+  const [pruned] = pruneUnusedFontFaces([`${faces}h1{font-family:Used}:root{--font-display:"Token",serif}`], 'ctx.font = "12px Scripted"');
+  expect(pruned).toContain('font-family:"Used"');
+  expect(pruned).toContain('font-family:"Token"');
+  expect(pruned).toContain('font-family:"Scripted"');
+  expect(pruned).toContain("src:url(n)");
+  expect(pruned).not.toContain("Unused");
+  expect(pruneUnusedFontFaces(['@font-face{font-family:"Only";src:url(o)}', "p{font-family:only}"], "")[0]).toContain('"Only"');
 });

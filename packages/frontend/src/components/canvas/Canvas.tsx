@@ -38,7 +38,7 @@ import { requestFrameScrollAtPoint } from "./frame-bridge";
 import { MIN_CANVAS_ZOOM, MAX_CANVAS_ZOOM, zoomCanvasAt } from "./canvas-zoom";
 import { useT } from "@/i18n/t";
 import { useLocaleStore } from "@/i18n/locale";
-import { canvasPlaceholderKeys } from "@/lib/canvas-placeholder";
+import { canvasPlaceholderKeys, canvasRenderingVisible } from "@/lib/canvas-placeholder";
 
 function buildPlaceholderSrc(locale: string, title: string, subtitle: string): string {
   return `<!doctype html>
@@ -453,6 +453,11 @@ export default function Canvas({
             allow="fullscreen"
             className="absolute inset-0 h-full w-full rounded-md border-0 bg-background"
           />
+        )}
+        {src && canvasRenderingVisible({ hasDocument: frameSrcDoc !== null && !livePreview, painted: loadedFrameKey === (frameKey ?? src), failed: loadError !== null }) && (
+          <div data-bg-canvas-rendering="" role="status" className="pointer-events-none absolute inset-0 grid place-items-center rounded-md bg-background">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" aria-hidden="true" />{t("workspace.canvas.renderingTitle")}</div>
+          </div>
         )}
         <CommentLayer
           active={mode === "comment"}
