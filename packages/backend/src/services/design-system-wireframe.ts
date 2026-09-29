@@ -1,5 +1,6 @@
 import type { MeasuredViewportLayout } from "@bg/shared";
 
+const MAX_DRAWN_COLUMNS = 12;
 const escapeXml = (text: string): string => text.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[char] ?? char);
 
 /**
@@ -23,14 +24,15 @@ export function renderMeasuredWireframe(layout: MeasuredViewportLayout): string 
   for (const [index, section] of layout.sections.entries()) {
     out.push(`<rect data-kind="section" x="0" y="${section.top}" width="${width}" height="${section.height}" fill="#f4f4f4" stroke="#3c3c3c"/>`);
     out.push(`<text x="8" y="${section.top + 18}" fill="#3c3c3c">${index + 1}. ${escapeXml(section.heading)} (${section.columns} col, ${section.align})</text>`);
-    for (let column = 0; column < section.columns; column += 1) {
+    for (let column = 0; column < Math.min(section.columns, MAX_DRAWN_COLUMNS); column += 1) {
       const gutter = layout.gutter ?? 0;
-      const columnWidth = Math.max(0, Math.round((span - gutter * (section.columns - 1)) / section.columns));
+      const drawn = Math.min(section.columns, MAX_DRAWN_COLUMNS);
+      const columnWidth = Math.max(0, Math.round((span - gutter * (drawn - 1)) / drawn));
       out.push(`<rect data-kind="column" x="${left + column * (columnWidth + gutter)}" y="${section.top + 24}" width="${columnWidth}" height="${Math.max(0, section.height - 32)}" fill="none" stroke="#9a9a9a" stroke-dasharray="3 3"/>`);
     }
   }
   for (const [name, box] of Object.entries(layout.blocks)) {
-    out.push(`<rect data-kind="block" data-name="${name}" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" fill="#d8e6ff" fill-opacity="0.6" stroke="#1f4fbf"/>`);
+    out.push(`<rect data-kind="block" data-name="${escapeXml(name)}" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" fill="#d8e6ff" fill-opacity="0.6" stroke="#1f4fbf"/>`);
     out.push(`<text x="${box.x + 6}" y="${box.y + 18}" fill="#1f4fbf">${escapeXml(name)}</text>`);
   }
   out.push("</svg>");

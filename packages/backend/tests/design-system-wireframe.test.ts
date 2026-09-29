@@ -29,6 +29,13 @@ describe("Design-system block-box wireframe", () => {
     expect(svg).toContain('data-kind="container"');
   });
 
+  test("Given a hostile column count, then the drawn columns and the SVG size stay bounded", () => {
+    const hostile = { ...layout, sections: Array.from({ length: 16 }, (_, i) => ({ heading: `S${i}`, top: i * 100, height: 90, columns: 100_000, align: "left" as const })) };
+    const svg = renderMeasuredWireframe(hostile);
+    expect(svg.match(/data-kind="column"/g)).toHaveLength(16 * 12);
+    expect(Buffer.byteLength(svg)).toBeLessThan(200_000);
+  });
+
   test("Given untrusted heading text, then the SVG is inert: escaped text, no script, no external references", () => {
     const svg = renderMeasuredWireframe(layout);
     expect(svg).toContain("Features &amp; &lt;more&gt;");
