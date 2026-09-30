@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { HarMaskError, MASKED, maskHar } from "./har-mask";
+import { HarMaskError, MASKED, maskHar, type PrivateRoot } from "./har-mask";
 
 const CAPABILITY = "c4p4b1l1tyV4lu3-0123456789abcdef";
 const header = (name: string, value: string) => ({ name, value });
@@ -108,5 +108,81 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       expect(same.exitCode).toBe(1);
       expect(JSON.parse(same.stderr.toString())).toEqual({ error: "invalid_arguments" });
     } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+});
+
+type MaskedEntry = { readonly request: { readonly url: string; readonly postData?: { readonly text: string } }; readonly response: { readonly content: { readonly text: string } } };
+const API = "http://127.0.0.1:14070/api/projects";
+const bootstrap = () => entry({ url: "http://127.0.0.1:14070/api/bootstrap" }, { content: { size: 60, mimeType: "application/json", text: JSON.stringify({ data: { capability: CAPABILITY } }) } });
+const jsonBody = (value: unknown) => ({ content: { size: 80, mimeType: "application/json", text: JSON.stringify(value) } });
+/** Masks a HAR made of the bootstrap entry plus the given ones; returns the serialized result and the given entries, masked. */
+const mask = (entries: readonly unknown[], roots: readonly PrivateRoot[] = []) => {
+  const { har } = maskHar({ log: { entries: [bootstrap(), ...entries] } }, roots);
+  return { text: JSON.stringify(har), entries: (har as { readonly log: { readonly entries: readonly MaskedEntry[] } }).log.entries.slice(1) };
+};
+const qaHome = (root: string): PrivateRoot[] => [{ path: root, placeholder: "<qa-home>" }];
+
+// Every case feeds maskHar a path string of a fixed flavor, so the Windows and POSIX cases both run on every host OS.
+describe("HAR masking of caller-given roots in the forms a HAR carries them", () => {
+  test("Given a Windows drive root passed with --root, when the HAR carries it JSON-escaped, with forward slashes, in another letter case and percent-encoded, then every form becomes the placeholder", () => {
+    const root = "D:\\bg-qa\\run-42";
+    const url = `${API}?dir=${encodeURIComponent(`${root}\\projects`)}&alt=${encodeURIComponent(root).toLowerCase()}`;
+    const masked = mask([entry({ url }, jsonBody({ data: { dir_path: `${root}\\projects\\p1`, slashes: "D:/bg-qa/run-42/projects/p1", lower: "d:\\BG-QA\\RUN-42\\p2", file_url: "file:///D:/bg-qa/run-42/index.html" } }))], qaHome(root));
+    expect(masked.text.toLowerCase()).not.toContain("bg-qa");
+    expect(JSON.parse(masked.entries[0]!.response.content.text).data).toEqual({ dir_path: "<qa-home>\\projects\\p1", slashes: "<qa-home>/projects/p1", lower: "<qa-home>\\p2", file_url: "file:///<qa-home>/index.html" });
+    expect(masked.entries[0]!.request.url).toBe(`${API}?dir=<qa-home>%5Cprojects&alt=<qa-home>`);
+  });
+
+  test("Given a Windows UNC root passed with --root, when the HAR carries it JSON-escaped, with forward slashes and percent-encoded, then every form becomes the placeholder", () => {
+    const root = "\\\\qa-server\\share\\run-42";
+    const masked = mask([entry({ url: `${API}?dir=${encodeURIComponent(root)}` }, jsonBody({ data: { profile: `${root}\\profile`, slashes: "//qa-server/share/run-42/profile" } }))], qaHome(root));
+    expect(masked.text).not.toContain("qa-server");
+    expect(JSON.parse(masked.entries[0]!.response.content.text).data).toEqual({ profile: "<qa-home>\\profile", slashes: "<qa-home>/profile" });
+    expect(masked.entries[0]!.request.url).toBe(`${API}?dir=<qa-home>`);
+  });
+
+  test.each(["/tmp/qa-home-77", "/home/qa/project", "/Users/qa/project"])("Given the POSIX root %s passed with --root, when a request URL carries it percent-encoded in either hex case, then the URL and the body show only the placeholder", root => {
+    const url = `${API}?dir=${encodeURIComponent(`${root}/projects`)}&alt=${encodeURIComponent(root).replaceAll("%2F", "%2f")}`;
+    const masked = mask([entry({ url, queryString: [{ name: "dir", value: `${root}/projects` }] }, jsonBody({ data: { dir_path: `${root}/projects/p1` } }))], qaHome(root));
+    expect(masked.text).not.toContain(root);
+    expect(masked.text.toLowerCase()).not.toContain(encodeURIComponent(root).toLowerCase());
+    expect(masked.entries[0]!.request.url).toBe(`${API}?dir=<qa-home>%2Fprojects&alt=<qa-home>`);
+    expect(JSON.parse(masked.entries[0]!.response.content.text).data).toEqual({ dir_path: "<qa-home>/projects/p1" });
+  });
+
+  test.each(["NFC", "NFD"] as const)("Given a macOS root with an accented name passed with --root in %s, when the HAR carries it in both Unicode normal forms, raw and percent-encoded, then every form becomes the placeholder", form => {
+    const composed = "/Volumes/QA/caf\u00e9-run";
+    const decomposed = composed.normalize("NFD");
+    const url = `${API}?dir=${encodeURIComponent(decomposed)}&alt=${encodeURIComponent(composed)}`;
+    const masked = mask([entry({ url }, jsonBody({ data: { nfd: `${decomposed}/p1`, nfc: `${composed}/p2` } }))], qaHome(composed.normalize(form)));
+    expect(masked.text).not.toContain("caf");
+    expect(masked.text).not.toContain("-run");
+    expect(JSON.parse(masked.entries[0]!.response.content.text).data).toEqual({ nfd: "<qa-home>/p1", nfc: "<qa-home>/p2" });
+    expect(masked.entries[0]!.request.url).toBe(`${API}?dir=<qa-home>&alt=<qa-home>`);
+  });
+
+  test("Given a root with spaces passed with --root, when a URL carries the spaces as %20 or as form-encoded plus signs, then both forms become the placeholder", () => {
+    const root = "/Volumes/QA Disk/run 42";
+    const masked = mask([entry({ url: `${API}?dir=${encodeURIComponent(root)}&alt=%2FVolumes%2FQA+Disk%2Frun+42` }, jsonBody({ data: { dir_path: `${root}/p1` } }))], qaHome(root));
+    expect(masked.text).not.toContain("Disk");
+    expect(masked.entries[0]!.request.url).toBe(`${API}?dir=<qa-home>&alt=<qa-home>`);
+  });
+});
+
+describe("HAR masking of collected secrets that need JSON escaping", () => {
+  // Assembled at runtime so no secret-shaped literal sits in the source: one value holds a quote, one a backslash.
+  const quoted = ["hunter2", "quoted-pass-0123"].join("\"");
+  const backslashed = ["pa", "ss-word-back-0123"].join("\\");
+
+  test("Given secret-named JSON body fields whose values hold a quote or a backslash, when masked, then the escaped values are masked in the request body and in a response that echoes them", () => {
+    const masked = mask([entry({ method: "PATCH", url: "http://127.0.0.1:14070/api/settings", postData: { mimeType: "application/json", text: JSON.stringify({ password: quoted, client_secret: backslashed }) } }, jsonBody({ data: { echo: `${quoted} ${backslashed}` } }))]);
+    for (const part of ["quoted-pass-0123", "ss-word-back-0123"]) expect(masked.text).not.toContain(part);
+    expect(JSON.parse(masked.entries[0]!.request.postData!.text)).toEqual({ password: MASKED, client_secret: MASKED });
+    expect(JSON.parse(masked.entries[0]!.response.content.text).data).toEqual({ echo: `${MASKED} ${MASKED}` });
+  });
+
+  test("Given a secret that needs JSON escaping inside a binary-typed base64 body, when masked, then masking fails closed with secret_remains", () => {
+    const echoed = { content: { size: 40, mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(JSON.stringify({ echo: quoted })).toString("base64") } };
+    expect(() => mask([entry({ method: "PATCH", url: "http://127.0.0.1:14070/api/settings", postData: { mimeType: "application/json", text: JSON.stringify({ password: quoted }) } }, echoed)])).toThrow(new HarMaskError("secret_remains"));
   });
 });

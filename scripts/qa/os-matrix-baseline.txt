@@ -366,6 +366,5 @@ packages/frontend/tests/visual-token-contract.test.ts
 packages/frontend/tests/workspace-narrow-layout.test.ts
 packages/shared/tests/runtime-diagnostics.test.ts
 scripts/qa/clipboard-paste-fixtures.test.js
-scripts/qa/har-mask.test.ts
 scripts/qa/release-draft-state.test.js
 scripts/qa/task-8-gates.test.ts
