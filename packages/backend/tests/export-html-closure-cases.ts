@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
 import { CanonicalTreeManifestError, canonicalTreePath, inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
-import { ExportClosureError, localAssetReferences, resolveStaticClosure } from "../src/services/export-closure";
+import { cssUrlValues, ExportClosureError, localAssetReferences, resolveStaticClosure } from "../src/services/export-closure";
 import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "../src/services/export-html-validation";
 import { canonicalJson, sha256 } from "../src/services/export-receipt";
 
@@ -112,6 +112,80 @@ describe("export HTML closure boundaries", () => {
       // When / Then
       expect(await refusedScans()).toEqual([["index.html", 1], ["big.css", 10_000]]);
     } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  test("Given a script with more imports than the cap, parseable or not When the closure scans it Then the scan stops one past the remaining budget instead of collecting every import", async () => {
+    // Given: a module the parser reads, and a script that does not parse, which falls back to the textual scan.
+    for (const script of ['import "./a.js";\n'.repeat(10_050), `const = ;\n${'import("./a.js");\n'.repeat(10_050)}`]) {
+      const root = await mkdtemp(path.join(tmpdir(), "bg-export-closure-script-"));
+      const scans: [string, number][] = [];
+      try {
+        await writeFile(path.join(root, "index.html"), page("", '<script type="module" src="app.js"></script>'));
+        await writeFile(path.join(root, "app.js"), script); await writeFile(path.join(root, "a.js"), "export {};\n");
+        // When / Then: the page spent one reference on the script, so 10,000 are the remaining budget plus one.
+        await expect(resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root), (file, collected) => { scans.push([file, collected]); })).rejects.toMatchObject({ code: "closure_limit", asset: "./a.js" });
+        expect(scans).toEqual([["index.html", 1], ["app.js", 10_000], ["a.js", 0]]);
+      } finally { await rm(root, { recursive: true, force: true }); }
+    }
+  });
+
+  test("Given CSS values that repeat url( and never close a reference When the url() scan runs Then the characters it examines grow linearly with the value and nothing is collected", () => {
+    // Given: shapes that made a backtracking pattern retry from every opener: no delimiter at all, a quote that closes nothing,
+    // a quote before a long whitespace run, whitespace after each opener, and a quoted opener.
+    const shapes: readonly ((repeats: number) => string)[] = [
+      (repeats) => "url(".repeat(repeats),
+      (repeats) => `${"URL(".repeat(repeats)}"x"y${")".repeat(repeats)}`,
+      (repeats) => `${"url(".repeat(repeats)}"${" ".repeat(repeats)}x`,
+      (repeats) => "url( \t".repeat(repeats),
+      (repeats) => "url('".repeat(repeats),
+    ];
+    for (const shape of shapes) {
+      const examined = [10_000, 20_000, 40_000].map((repeats) => {
+        const value = shape(repeats); const values: string[] = [];
+        // When
+        const count = cssUrlValues(value, values, Number.POSITIVE_INFINITY);
+        // Then: a bounded number of looks per character, whatever the length.
+        expect(values).toEqual([]);
+        expect(count).toBeGreaterThan(0);
+        expect(count).toBeLessThanOrEqual(4 * value.length);
+        return count;
+      });
+      // Then: twice the input costs twice the work, not four times.
+      expect(examined[1]).toBeLessThanOrEqual(2 * (examined[0] ?? 0) + 8);
+      expect(examined[2]).toBeLessThanOrEqual(2 * (examined[1] ?? 0) + 8);
+    }
+  });
+
+  test("Given url() values in each accepted spelling, with LF and CRLF, Windows paths and POSIX paths When the url() scan runs Then it collects the same raw references in order and honours the limit", () => {
+    const collected = (value: string, limit = Number.POSITIVE_INFINITY, values: string[] = []): readonly string[] => { cssUrlValues(value, values, limit); return values; };
+    // When / Then: case, quotes and whitespace around a reference.
+    expect(collected(`url(a.png) URL( "b.png" ) Url('c.png') url( d.png )`)).toEqual(["a.png", "b.png", "c.png", "d.png "]);
+    expect(collected('url(\n"a.png"\n) url(\r\n"b.png"\r\n)')).toEqual(["a.png", "b.png"]);
+    expect(collected(`url("a.png') url(url(b.png) url(c.png url(d.png)`)).toEqual(["a.png", "url(b.png", "c.png url(d.png"]);
+    // When / Then: nothing to collect, and an opener that closes nothing does not hide the reference after it.
+    expect(collected(`url() url("") url(") url('a'b) url(c.png`)).toEqual([]);
+    expect(collected(`url( ) url( ") url("a"b) url(c.png)`)).toEqual([" ", " ", "c.png"]);
+    // When / Then: Windows spellings (drive letter, backslashes, UNC share) reach the resolver unchanged, which refuses them.
+    expect(collected(String.raw`url(C:\Users\qa\project\a.png)`)).toEqual([String.raw`C:\Users\qa\project\a.png`]);
+    expect(collected(String.raw`url("\\server\share\a.png") url('images\a.png')`)).toEqual([String.raw`\\server\share\a.png`, String.raw`images\a.png`]);
+    // When / Then: POSIX spellings reach the resolver unchanged, which reads them as project-root-relative.
+    expect(collected("url(/home/qa/project/a.png)")).toEqual(["/home/qa/project/a.png"]);
+    expect(collected(`url("/Users/qa/project/a.png")`)).toEqual(["/Users/qa/project/a.png"]);
+    // When / Then: the limit counts what the list already holds.
+    expect(collected("url(a) url(b) url(c)", 2)).toEqual(["a", "b"]);
+    expect(collected("url(a) url(b) url(c)", 2, ["held"])).toEqual(["held", "a"]);
+    expect(collected("url(a)", 1, ["held"])).toEqual(["held"]);
+  });
+
+  test("Given a 200 KB CSS value of 40,000 url( openers that close no reference, in a style attribute, a style element and a linked stylesheet When the closure resolves Then the value yields no reference and the reference after it is still followed", async () => {
+    // Given: balanced parentheses, so the stylesheet parses; the quote after the openers is what no opener can close on.
+    const openers = `${"url(".repeat(40_000)}'x'y${")".repeat(40_000)}`;
+    // When / Then
+    expect(await closureOutcome({ "index.html": page("", `<div style="background:${openers}"></div>`) })).toBe("resolved:");
+    expect(await closureOutcome({ "index.html": page("", `<div style="background:${openers} url(a.png)"></div>`), "a.png": "image" })).toBe("resolved:a.png");
+    expect(await closureOutcome({ "index.html": page(`<style>.a{background:${openers} url(a.png)}</style>`, ""), "a.png": "image" })).toBe("resolved:a.png");
+    expect(await closureOutcome({ "index.html": page('<link rel="stylesheet" href="big.css">', ""), "big.css": `.a{background:${openers} url(a.png)}`, "a.png": "image" })).toBe("resolved:a.png,big.css");
+    expect(await closureOutcome({ "index.html": page('<link rel="stylesheet" href="big.css">', ""), "big.css": `.a{background:${openers} url(gone.png)}` })).toBe("missing_asset:gone.png");
   });
 
   test("Given a srcset past the reference cap followed by a style element that does not parse When the closure resolves Then it is refused at the cap and the rest of the document is never scanned", async () => {

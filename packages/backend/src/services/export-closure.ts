@@ -41,7 +41,7 @@ export async function resolveStaticClosure(root: string, entrypoint: string, man
     const limit = MAX_REFERENCES - count + 1;
     const rawReferences = extension === ".html" || extension === ".htm"
       ? htmlReferences(content, relativePath, limit)
-      : extension === ".css" ? cssReferences(content, relativePath, limit) : scriptReferences(content, relativePath);
+      : extension === ".css" ? cssReferences(content, relativePath, limit) : scriptReferences(content, relativePath, limit);
     onScan?.(relativePath, rawReferences.length);
     for (const raw of rawReferences) {
       count += 1;
@@ -160,19 +160,96 @@ function cssReferences(source: string, file: string, limit: number, values: stri
   return values;
 }
 
-/** One match at a time, not a spread of every match: appends to `values` and stops once it holds `limit` of them. */
-function cssUrlValues(value: string, values: string[], limit: number): void {
-  const pattern = /url\(\s*["']?([^"')]+)["']?\s*\)/giu;
-  for (let match = pattern.exec(value); match !== null && values.length < limit; match = pattern.exec(value)) values.push(match[1] ?? "");
+const DOUBLE_QUOTE = 0x22;
+const SINGLE_QUOTE = 0x27;
+const OPEN_PAREN = 0x28;
+const CLOSE_PAREN = 0x29;
+
+/** The characters `\s` matches in a pattern. */
+function isPatternSpace(code: number): boolean {
+  return (code >= 0x09 && code <= 0x0d) || code === 0x20 || code === 0xa0 || code === 0x1680 || (code >= 0x2000 && code <= 0x200a)
+    || code === 0x2028 || code === 0x2029 || code === 0x202f || code === 0x205f || code === 0x3000 || code === 0xfeff;
 }
 
-function scriptReferences(source: string, file: string): readonly string[] {
+/**
+ * Collects what `/url\(\s*["']?([^"')]+)["']?\s*\)/giu` captures, in one forward pass instead of that pattern: on a value
+ * that repeats `url(` and closes none of them, the pattern rescans the rest of the value from every opener. Every opener
+ * before the next quote or `)` closes on that same character, so it is found once and its outcome is kept.
+ * Appends to `values` and stops once it holds `limit` of them. Returns how many characters it examined: the test seam
+ * that pins the pass as linear (at most four looks per character).
+ */
+export function cssUrlValues(value: string, values: string[], limit: number): number {
+  const length = value.length;
+  let examined = 0;
+  // The first quote or `)` at or after the last place asked (`length`: none), and where a reference that closes on it ends (-1: it closes none).
+  let delimiter = -1;
+  let closedEnd = -1;
+  const closeFrom = (from: number): number => {
+    if (delimiter >= from) return closedEnd;
+    delimiter = from;
+    for (; delimiter < length; delimiter += 1) {
+      examined += 1;
+      const code = value.charCodeAt(delimiter);
+      if (code === DOUBLE_QUOTE || code === SINGLE_QUOTE || code === CLOSE_PAREN) break;
+    }
+    closedEnd = -1;
+    if (delimiter === length) return closedEnd;
+    let close = delimiter;
+    if (value.charCodeAt(close) !== CLOSE_PAREN) {
+      close += 1;
+      while (close < length && isPatternSpace(value.charCodeAt(close))) { close += 1; examined += 1; }
+    }
+    if (value.charCodeAt(close) === CLOSE_PAREN) closedEnd = close + 1;
+    return closedEnd;
+  };
+  let index = 0;
+  while (values.length < limit) {
+    let open = -1;
+    for (; index + 3 < length; index += 1) {
+      examined += 1;
+      // `| 0x20` lowers an ASCII letter; no other character folds to "u", "r" or "l".
+      if ((value.charCodeAt(index) | 0x20) === 0x75 && (value.charCodeAt(index + 1) | 0x20) === 0x72 && (value.charCodeAt(index + 2) | 0x20) === 0x6c && value.charCodeAt(index + 3) === OPEN_PAREN) { open = index + 4; break; }
+    }
+    if (open === -1) break;
+    let content = open;
+    while (content < length && isPatternSpace(value.charCodeAt(content))) { content += 1; examined += 1; }
+    // An opener that closes nothing: the next one is looked for right after it.
+    index = open;
+    if (content === length) continue;
+    const first = value.charCodeAt(content);
+    if (first === DOUBLE_QUOTE || first === SINGLE_QUOTE) {
+      const end = closeFrom(content + 1);
+      if (end !== -1 && delimiter > content + 1) { values.push(value.slice(content + 1, delimiter)); index = end; }
+      // The pattern gives back one whitespace character to have a non-empty capture before a quote it then reads as the closing one.
+      else if (content > open && value.charCodeAt(content + 1) === CLOSE_PAREN) { values.push(value.slice(content - 1, content)); index = content + 2; }
+    } else if (first === CLOSE_PAREN) {
+      // The same give-back for `url( )`.
+      if (content > open) { values.push(value.slice(content - 1, content)); index = content + 1; }
+    } else {
+      const end = closeFrom(content);
+      if (end !== -1) { values.push(value.slice(content, delimiter)); index = end; }
+    }
+  }
+  return examined;
+}
+
+/** Collects imports in source order and stops once it holds `limit` of them. */
+function scriptReferences(source: string, file: string, limit: number): readonly string[] {
   if (!file.endsWith(".js") && !file.endsWith(".mjs") && !file.endsWith(".cjs")) return [];
+  const values: string[] = [];
   // A parser, not a pattern: comments, string and template literals and regex literals are not imports.
-  try { return IMPORT_SCANNER.scanImports(source).filter((entry) => entry.kind === "import-statement" || entry.kind === "dynamic-import").map((entry) => entry.path); }
-  catch { /* Not parseable as a module: keep the textual scan so an import a browser may still run cannot slip past. */ }
+  try {
+    for (const entry of IMPORT_SCANNER.scanImports(source)) {
+      if (values.length >= limit) break;
+      if (entry.kind === "import-statement" || entry.kind === "dynamic-import") values.push(entry.path);
+    }
+    return values;
+  } catch { /* Not parseable as a module: keep the textual scan so an import a browser may still run cannot slip past. */ }
   const patterns = [/(?:import|export)\s+(?:[^"']+?\s+from\s+)?["']([^"']+)["']/gu, /import\(\s*["']([^"']+)["']\s*\)/gu];
-  return patterns.flatMap((pattern) => [...source.matchAll(pattern)].map((match) => match[1] ?? ""));
+  for (const pattern of patterns) {
+    for (let match = pattern.exec(source); match !== null && values.length < limit; match = pattern.exec(source)) values.push(match[1] ?? "");
+  }
+  return values;
 }
 
 function resolveReference(raw: string, owner: string): string | null {
