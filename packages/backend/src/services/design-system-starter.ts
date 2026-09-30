@@ -78,6 +78,17 @@ function readableRoleProperties(tokensCss: string): string {
   return `:root {\n  --m-fg-subtitle: var(${subtitle});\n  --m-fg-footer: var(${footer});\n  --m-fg-on-brand: var(${onBrand});\n}`;
 }
 
+/** From the starter stylesheet's directory back to the project root, where the pinned tokens' relative references (fonts/fonts.css) resolve. */
+const TO_PROJECT_ROOT = "../".repeat(STARTER_CSS_PATH.split("/").length - 1);
+const rebaseReference = (reference: string): string => /^(?:[a-z][a-z0-9+.-]*:|\/|#)/iu.test(reference) ? reference : `${TO_PROJECT_ROOT}${reference.replace(/^(?:\.\/)+/u, "")}`;
+
+/** The token CSS was written for the project root; inlined one directory deeper, its relative url() and @import targets are rebased so they name the same files. */
+function rebaseTokenReferences(tokensCss: string): string {
+  return tokensCss
+    .replace(/url\(\s*(["']?)([^"')]+?)\1\s*\)/giu, (_match, quote: string, reference: string) => `url(${quote}${rebaseReference(reference)}${quote})`)
+    .replace(/(@import\s+)(["'])([^"']+)\2/giu, (_match, head: string, quote: string, reference: string) => `${head}${quote}${rebaseReference(reference)}${quote}`);
+}
+
 /**
  * The starter stylesheet for a website built with an extracted system: the pinned tokens, the measured values
  * as --m-* properties (home at :root, other measured pages selected by the page's bg-measured-page meta, mobile
@@ -92,7 +103,7 @@ export function buildStarterCss(tokensCss: string, pages: readonly MeasuredPageL
   return [
     STARTER_MARKER,
     "/* Generated from the pinned design system and its measured pages. Link it before page CSS and do not edit it. */",
-    tokensCss.trim(),
+    rebaseTokenReferences(tokensCss.trim()),
     readableRoleProperties(tokensCss),
     ...measuredBlock(":root", home, breakpointPx),
     ...others.flatMap(page => measuredBlock(`:root:has(meta[name="bg-measured-page"][content="${page.path}"])`, page, breakpointPx)),
@@ -151,7 +162,17 @@ export function buildStarterHtml(page: MeasuredPageLayout, heroMedia?: string): 
 export type StarterPlanPage = { readonly path: string; readonly hero: HeroArrangement; readonly skeleton: string; readonly hero_media?: string; readonly reference?: Readonly<Partial<Record<MeasuredViewportName, string>>>; readonly wireframe?: Readonly<Partial<Record<MeasuredViewportName, string>>> };
 export type StarterPlan = { readonly stylesheet: string; readonly pages: readonly StarterPlanPage[] };
 
-const skeletonName = (pagePath: string): string => pagePath === "/" ? "home.html" : `${pagePath.slice(1).replace(/[^A-Za-z0-9._-]+/gu, "_").slice(0, 80)}.html`;
+/** One skeleton file name per page, in page order. A name an earlier page already took (compared case-folded, for Windows and macOS) gets a numeric suffix. */
+function skeletonNames(pagePaths: readonly string[]): string[] {
+  const taken = new Set<string>();
+  return pagePaths.map(pagePath => {
+    const base = pagePath === "/" ? "home" : pagePath.slice(1).replace(/[^A-Za-z0-9._-]+/gu, "_").slice(0, 80);
+    let name = base;
+    for (let suffix = 2; taken.has(name.toLowerCase()); suffix += 1) name = `${base}-${suffix}`;
+    taken.add(name.toLowerCase());
+    return `${name}.html`;
+  });
+}
 
 /** What the starter provides for a pinned context, or null when the pin carries no measured pages. */
 export function starterPlan(pinnedContext: string): StarterPlan | null {
@@ -159,11 +180,12 @@ export function starterPlan(pinnedContext: string): StarterPlan | null {
   if (pages.length === 0) return null;
   const shots = layoutReferenceFromPinnedContext(pinnedContext);
   const heroImage = heroAssetsFromPinnedContext(pinnedContext)[0]?.file;
-  return { stylesheet: STARTER_CSS_PATH, pages: pages.map(page => {
+  const skeletons = skeletonNames(pages.map(page => page.path));
+  return { stylesheet: STARTER_CSS_PATH, pages: pages.map((page, index) => {
     const reference = Object.fromEntries(shots.filter(shot => shot.path === page.path).map(shot => [shot.viewport, stagedReferencePath(shot)]));
     const wireframe = Object.fromEntries(shots.filter(shot => shot.path === page.path && shot.wireframe).map(shot => [shot.viewport, `${STAGED_REFERENCE_DIR}/${path.posix.basename(shot.wireframe!.file)}`]));
     const hero = heroArrangement(page.viewports.desktop);
-    return { path: page.path, hero, ...(heroImage !== undefined && (hero === "media-behind" || hero === "split") ? { hero_media: heroImage } : {}), skeleton: `${STARTER_SKELETON_DIR}/${skeletonName(page.path)}`, ...(Object.keys(reference).length > 0 ? { reference } : {}), ...(Object.keys(wireframe).length > 0 ? { wireframe } : {}) };
+    return { path: page.path, hero, ...(heroImage !== undefined && (hero === "media-behind" || hero === "split") ? { hero_media: heroImage } : {}), skeleton: `${STARTER_SKELETON_DIR}/${skeletons[index]!}`, ...(Object.keys(reference).length > 0 ? { reference } : {}), ...(Object.keys(wireframe).length > 0 ? { wireframe } : {}) };
   }) };
 }
 

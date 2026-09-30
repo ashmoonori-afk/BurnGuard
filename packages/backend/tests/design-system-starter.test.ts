@@ -5,7 +5,11 @@ import path from "node:path";
 import { MEASURED_VIEWPORTS, parseDesignSystemMeasuredLayout, type MeasuredViewportLayout } from "@bg/shared";
 import { appendDesignSystemContext, appendDesignSystemStarter } from "../src/harness/prompt-design-system";
 import { literalValueFindings, reviewDesignSystemConformance } from "../src/services/design-system-conformance";
-import { buildStarterCss, heroArrangement, provisionDesignSystemStarter, STARTER_CSS_PATH, STARTER_MARKER, starterPlan } from "../src/services/design-system-starter";
+import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
+import { buildStarterCss, heroArrangement, provisionDesignSystemStarter, seedStarterEntrypoint, STARTER_CSS_PATH, STARTER_MARKER, starterPlan } from "../src/services/design-system-starter";
+import { resolveStaticClosure } from "../src/services/export-closure";
+import { prepareBundledFontExport } from "../src/services/export-stage";
+import { ensureTokensCssImportsFonts } from "../src/services/extraction-css";
 
 const viewport = (name: "desktop" | "mobile", hero: number, align: "center" | "left"): MeasuredViewportLayout => ({
   viewport: { ...MEASURED_VIEWPORTS[name] }, page_height: 2000, container: { left: name === "desktop" ? 120 : 20, width: name === "desktop" ? 1200 : 350 }, gutter: 24, section_gap: 96,
@@ -20,10 +24,10 @@ const layout = { schema_version: 1, method: "rendered-offline", pages: [
 ] };
 const tokens = ":root {\n  --bg: #0f0a1c;\n  --fg-1: #d6d6d6;\n  --primary-blue: #b77dea;\n  --layout-bp-md: 900px;\n}";
 
-async function pinnedContext(): Promise<string> {
+async function pinnedContext(measured: { readonly pages: readonly unknown[] } = layout): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), "bg-starter-system-"));
   try {
-    await writeFile(path.join(dir, "layout-measured.json"), JSON.stringify(layout));
+    await writeFile(path.join(dir, "layout-measured.json"), JSON.stringify(measured));
     const system = { id: "starter", name: "Starter", status: "draft", source_type: "website", is_template: false, dir_path: dir, skill_md_path: null, tokens_css_path: null, readme_md_path: null, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const;
     const lines: string[] = [];
     await appendDesignSystemContext(lines, system, "full", "website", true);
@@ -107,4 +111,53 @@ describe("Design-system starter", () => {
       expect(result!.findings.filter(finding => finding.code === "literal_value")).toEqual([]);
     } finally { await rm(stage, { recursive: true, force: true }); }
   }, 90_000);
+
+  test("Given an extracted system whose token CSS imports ./fonts/fonts.css, When the starter seeds a fresh website and the export closure is resolved, Then every stylesheet the page loads exists in the project", async () => {
+    const stage = await mkdtemp(path.join(tmpdir(), "bg-starter-closure-"));
+    try {
+      const context = await pinnedContext();
+      // The extraction writes its token file through this helper, so the pinned tokens start with the relative font import.
+      const extracted = ensureTokensCssImportsFonts(`${tokens}\n`);
+      expect(extracted).toContain("./fonts/fonts.css");
+      await mkdir(path.join(stage, "fonts"), { recursive: true });
+      await writeFile(path.join(stage, "fonts", "fonts.css"), "/* project font store */\n");
+      await provisionDesignSystemStarter(stage, { context, tokens: extracted });
+      expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(true);
+
+      // The same font preparation and strict closure runExport performs before rendering.
+      await prepareBundledFontExport(stage);
+      const closure = await resolveStaticClosure(stage, "index.html", await inspectCanonicalTree(stage)).then(
+        resolved => resolved.referenced_paths,
+        (error: unknown) => error instanceof Error ? error.message : String(error),
+      );
+      expect(closure).toEqual(expect.arrayContaining([STARTER_CSS_PATH, "fonts/fonts.css"]));
+    } finally { await rm(stage, { recursive: true, force: true }); }
+  });
+
+  test("Given token CSS with relative, root-relative, remote and data references, When the starter stylesheet is built, Then only the relative ones are rebased to the stylesheet's directory", () => {
+    const pages = parseDesignSystemMeasuredLayout(layout).pages;
+    const css = buildStarterCss(`@import "fonts/extra.css";\n@import url("./fonts/fonts.css");\n:root { --a: url(assets/a.png); --b: url('/b.png'); --c: url(https://example.com/c.png); --d: url(data:image/png;base64,AAAA); --e: url(#e); }`, pages);
+    expect(css).toContain('@import "../fonts/extra.css";');
+    expect(css).toContain('@import url("../fonts/fonts.css");');
+    expect(css).toContain("--a: url(../assets/a.png);");
+    expect(css).toContain("--b: url('/b.png'); --c: url(https://example.com/c.png); --d: url(data:image/png;base64,AAAA); --e: url(#e);");
+  });
+
+  test("Given measured pages at / and /home, When the starter plan is built and provisioned, Then each measured page gets its own skeleton file", async () => {
+    const stage = await mkdtemp(path.join(tmpdir(), "bg-starter-skeletons-"));
+    try {
+      const page = (pagePath: string, pageType: string, hero: number) => ({ path: pagePath, page_type: pageType, viewports: { desktop: viewport("desktop", hero, "center"), mobile: viewport("mobile", hero - 16, "center") } });
+      // /home and /Home collide with the home page's name and, on case-insensitive filesystems, with each other.
+      const context = await pinnedContext({ ...layout, pages: [page("/", "home", 64), page("/home", "other", 48), page("/Home", "other", 40)] });
+      const plan = starterPlan(context);
+      const skeletons = plan?.pages.map(entry => entry.skeleton) ?? [];
+      expect(skeletons.length).toBe(3);
+      expect(new Set(skeletons.map(name => name.toLowerCase())).size).toBe(3);
+
+      await provisionDesignSystemStarter(stage, { context, tokens });
+      for (const entry of plan!.pages) {
+        expect(await readFile(path.join(stage, ...entry.skeleton.split("/")), "utf8")).toContain(`<meta name="bg-measured-page" content="${entry.path}">`);
+      }
+    } finally { await rm(stage, { recursive: true, force: true }); }
+  });
 });
