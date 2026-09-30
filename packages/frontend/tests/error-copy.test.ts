@@ -73,7 +73,25 @@ const ADDED_CODES = [
   "invalid_export_format",
 ];
 
+/** Codes the Settings routes and the settings PATCH emit; Settings renders exactly apiErrorCopy(error) for them. */
+const SETTINGS_CODES = [
+  "local_fonts_unavailable",
+  "bundled_fonts_unavailable",
+  "update_unsupported",
+  "update_not_ready",
+  "install_in_progress",
+  "python_not_found",
+  "invalid_locale",
+  "invalid_theme",
+];
+
 describe("apiErrorCopy", () => {
+  test.each(SETTINGS_CODES)("Given the Settings backend code %s When mapped Then it has its own recovery copy instead of the generic fallback", (code) => {
+    const copy = apiErrorCopy(new FakeApiError(code, "private internal error"));
+    expect(copy).not.toBe(apiErrorCopy(new FakeApiError("__unknown__", "boom")));
+    expect(copy).not.toBe("private internal error");
+  });
+
   test("Given a PDF extraction failure When mapped Then it offers the matching recovery step", () => {
     for (const [code, step] of Object.entries({ pdf_password_required: "암호를 해제", pdf_invalid: "다시 저장", pdf_runtime_unavailable: "업데이트", pdf_extraction_timeout: "나누어", pdf_size_limit: "줄이거나", pdf_page_limit: "페이지", pdf_text_limit: "텍스트", attachment_extract_failed: "새 사본" })) {
       expect(apiErrorCopy(new FakeApiError(code, "private internal error"))).toContain(step);

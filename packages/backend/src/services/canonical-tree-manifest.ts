@@ -52,22 +52,44 @@ export async function isCanonicalTreeRootMissing(root: string): Promise<boolean>
   }
 }
 
+export type InspectedCanonicalTree = {
+  readonly manifest: CanonicalTreeManifest;
+  /** Manifest path -> the spelling the file system returned, for entries whose on-disk name is not NFC. */
+  readonly diskPaths: ReadonlyMap<string, string>;
+};
+
+/**
+ * Where a manifest entry lives on disk. A decomposed (NFD) name is not found through its NFC manifest path on
+ * file systems that do not normalize names (ext4, NTFS), so live files are addressed by their on-disk spelling.
+ */
+export function diskPathOf(root: string, tree: InspectedCanonicalTree, manifestPath: string, flavor: Pick<typeof path, "join"> = path): string {
+  return flavor.join(root, tree.diskPaths.get(manifestPath) ?? manifestPath);
+}
+
 export async function inspectCanonicalTree(
   root: string,
   limits: CanonicalTreeLimits = DEFAULT_CANONICAL_TREE_LIMITS,
 ): Promise<CanonicalTreeManifest> {
+  return (await inspectCanonicalTreeOnDisk(root, limits)).manifest;
+}
+
+export async function inspectCanonicalTreeOnDisk(
+  root: string,
+  limits: CanonicalTreeLimits = DEFAULT_CANONICAL_TREE_LIMITS,
+): Promise<InspectedCanonicalTree> {
   const rootInfo = await lstat(root).catch(() => null);
   if (rootInfo?.isSymbolicLink()) throw new CanonicalTreeManifestError("unsafe_tree_entry", "Canonical tree root cannot be a link");
   if (!rootInfo?.isDirectory()) throw new CanonicalTreeManifestError("tree_missing", "Canonical tree directory is missing");
   const files: CanonicalTreeEntry[] = [];
+  const diskPaths = new Map<string, string>();
   const canonicalPaths = new Set<string>();
   let bytes = 0;
-  const visit = async (directory: string): Promise<void> => {
+  const visit = async (base: string, directory: string): Promise<void> => {
     const entries = (await readdir(directory, { withFileTypes: true })).sort((left, right) => compareText(left.name, right.name));
     for (const entry of entries) {
-      const target = resolveWithin(root, path.relative(root, directory), entry.name);
+      const target = resolveWithin(base, path.relative(base, directory), entry.name);
       const info = await lstat(target);
-      const relativePath = path.relative(root, target).split(path.sep).join("/");
+      const relativePath = canonicalTreePath(base, target);
       const topLevel = relativePath.split("/")[0];
       if (topLevel !== undefined && EXCLUDED_PROJECT_DIRECTORIES.has(topLevel)) continue;
       if (
@@ -79,7 +101,7 @@ export async function inspectCanonicalTree(
       }
       if (entry.isSymbolicLink() || info.isSymbolicLink()) throw new CanonicalTreeManifestError("unsafe_tree_entry", "Canonical tree cannot contain links");
       if (info.isDirectory()) {
-        await visit(target);
+        await visit(base, target);
         continue;
       }
       if (!info.isFile() || info.nlink > 1) throw new CanonicalTreeManifestError("unsafe_tree_entry", "Canonical tree contains an unsafe file");
@@ -90,17 +112,34 @@ export async function inspectCanonicalTree(
       bytes += info.size;
       if (bytes > limits.bytes) throw new CanonicalTreeManifestError("tree_limit_exceeded", "Canonical tree byte limit exceeded");
       const content = await readFile(target);
-      files.push({ path: relativePath.normalize("NFC"), size: content.byteLength, sha256: createHash("sha256").update(content).digest("hex") });
+      const manifestPath = relativePath.normalize("NFC");
+      if (manifestPath !== relativePath) diskPaths.set(manifestPath, relativePath);
+      files.push({ path: manifestPath, size: content.byteLength, sha256: createHash("sha256").update(content).digest("hex") });
     }
   };
   try {
-    await visit(root);
+    // The caller's spelling can be an alias of the directory (a junction or symlinked parent, a Windows 8.3 short name);
+    // entries are named from the spelling `resolveWithin` returns for them, so the root is resolved the same way first.
+    const base = resolveWithin(root);
+    await visit(base, base);
   } catch (error) {
     if (error instanceof PathBoundaryError) throw new CanonicalTreeManifestError("unsafe_tree_entry", error.message);
     throw error;
   }
   files.sort((left, right) => compareText(left.path, right.path));
-  return { schema_version: 1, digest_algorithm: "sha256", tree_digest: digestEntries(files), files, publication_state: "validated" };
+  return { manifest: { schema_version: 1, digest_algorithm: "sha256", tree_digest: digestEntries(files), files, publication_state: "validated" }, diskPaths };
+}
+
+/**
+ * Manifest path of `target` below `base`. Both must carry the spelling `resolveWithin` returns: an alias of the same
+ * directory is a different string, and is refused rather than named with `..` segments.
+ */
+export function canonicalTreePath(base: string, target: string, flavor: path.PlatformPath = path): string {
+  const relative = flavor.relative(base, target);
+  if (relative === "" || relative === ".." || relative.startsWith(`..${flavor.sep}`) || flavor.isAbsolute(relative)) {
+    throw new CanonicalTreeManifestError("unsafe_tree_entry", "Canonical tree entry is outside its root");
+  }
+  return relative.split(flavor.sep).join("/");
 }
 
 export function parseCanonicalTreeManifest(
