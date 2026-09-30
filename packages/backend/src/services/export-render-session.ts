@@ -4,11 +4,13 @@ import path from "node:path";
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import { chromium } from "./playwright-runtime";
 import { resolveWithin } from "../security/path-boundary";
-import { isChromiumLaunchable } from "./chromium-capability";
+import { chromiumLaunchCapability, recordChromiumLaunched } from "./chromium-capability";
+import { anyBrowserOnDisk, systemBrowserCandidates } from "./chromium-browser-paths";
 import { registerExportBrowser } from "./export-browser-registry";
 import { chromiumNodeCommand, launchChromiumViaNode } from "./chromium-node-launch";
 import { DECK_STAGE_JS } from "../runtime/deck-stage";
 import { readBundledFontUrl } from "../data/bundled-fonts";
+import { keepAbortSignalArmed } from "../lib/abort-signal";
 
 export type RenderViewport = { readonly width: number; readonly height: number; readonly dpr: 1 | 2 };
 export type RenderFinding = { readonly code: "console_error" | "page_error" | "request_failed" | "remote_request" | "font_error"; readonly path: string | null };
@@ -22,6 +24,7 @@ export class RenderSessionError extends Error {
 
 export async function openRenderSession(input: { readonly stagedDir: string; readonly entrypoint: string; readonly viewport: RenderViewport; readonly deck: boolean; readonly signal: AbortSignal; readonly strict?: boolean; readonly browser?: Browser; readonly onPhase?: (phase: RenderPhase) => void }): Promise<RenderSession> {
   if (input.signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled");
+  keepAbortSignalArmed(input.signal);
   const browser = input.browser ?? await launchChromium(input.signal);
   let context: BrowserContext | null = null;
   const owner = input.browser === undefined ? registerExportBrowser(() => browser.close()) : { close: async () => { await context?.close(); } };
@@ -101,15 +104,21 @@ export type ChromiumLauncher = (options: ChromiumLaunchAttempt) => Promise<Brows
 type LaunchOutcome = { readonly kind: "browser"; readonly browser: Browser } | { readonly kind: "failed"; readonly error: unknown } | { readonly kind: "timeout" } | { readonly kind: "aborted" };
 const LAUNCH_ATTEMPTS: readonly ChromiumLaunchAttempt[] = [{ headless: true }, { headless: true, channel: "chrome" }, { headless: true, channel: "msedge" }];
 
-export async function launchChromium(signal: AbortSignal, launch: ChromiumLauncher = (options) => chromiumNodeCommand() !== null ? launchChromiumViaNode(options, signal) : chromium.launch(options), installed: () => Promise<boolean> = async () => (await stat(chromium.executablePath())).isFile()): Promise<Browser> {
+/** Playwright's own build or a system Chrome or Edge, the channels the launcher falls back to. */
+const browserOnDisk = (): Promise<boolean> => anyBrowserOnDisk([chromium.executablePath(), ...systemBrowserCandidates(process.platform, process.env)], async (candidate) => (await stat(candidate)).isFile());
+
+export async function launchChromium(signal: AbortSignal, launch: ChromiumLauncher = (options) => chromiumNodeCommand() !== null ? launchChromiumViaNode(options, signal) : chromium.launch(options), installed: () => Promise<boolean> = browserOnDisk, isolated: boolean = chromiumNodeCommand() !== null): Promise<Browser> {
   // A launch that never completes its handshake blocks the Bun event loop, so
   // the in-process attempt below would freeze every other request and even the
   // timer meant to cap it. The child-process probe answers that question
   // without touching this loop; when it says no, fail immediately.
-  const usable = await isChromiumLaunchable(undefined, { waitForResult: true, signal });
+  keepAbortSignalArmed(signal);
+  const capability = await chromiumLaunchCapability(undefined, { waitForResult: true, signal });
   if (signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled");
-  if (!usable) {
-    // The probe cannot tell a hung launch from a missing browser; the bundled executable on disk can.
+  // A probe without an answer (a slow cold start) is not a "no". A launch isolated in the Node child cannot stall
+  // this loop and is capped below, so it is still attempted; an in-process launch is not.
+  if (capability === "unusable" || (capability === "inconclusive" && !isolated)) {
+    // The probe cannot tell a hung launch from a missing browser; a browser on disk can.
     const code = (await installed().catch(() => false)) ? "chromium_launch_timeout" : "chromium_not_installed";
     throw new RenderSessionError(code, `${code}: Chromium could not be launched on this host`);
   }
@@ -117,7 +126,7 @@ export async function launchChromium(signal: AbortSignal, launch: ChromiumLaunch
   for (const options of LAUNCH_ATTEMPTS) {
     if (signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled");
     const channel = options.channel ?? "bundled"; tried.push(channel); const attempt = launch(options); const outcome = await settleLaunch(attempt, timeoutMs, signal);
-    if (outcome.kind === "browser") return outcome.browser;
+    if (outcome.kind === "browser") { recordChromiumLaunched(); return outcome.browser; }
     // A timed out or aborted attempt can still connect later: close whatever process it ends up owning.
     if (outcome.kind !== "failed") void attempt.then((browser) => { void browser.close().catch(() => undefined); }, () => undefined);
     if (outcome.kind === "aborted") throw new RenderSessionError("render_aborted", "Render was cancelled");
