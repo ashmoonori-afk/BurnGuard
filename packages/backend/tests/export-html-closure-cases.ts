@@ -73,6 +73,61 @@ describe("export HTML closure boundaries", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
+  const closureOutcome = async (files: Readonly<Record<string, string>>): Promise<string> => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-export-closure-scan-"));
+    try {
+      for (const [name, content] of Object.entries(files)) await writeFile(path.join(root, name), content);
+      return `resolved:${(await resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root))).referenced_paths.join(",")}`;
+    } catch (error) {
+      if (!(error instanceof ExportClosureError)) throw error;
+      return `${error.code}:${error.asset}`;
+    } finally { await rm(root, { recursive: true, force: true }); }
+  };
+  const page = (head: string, body: string): string => `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
+
+  test("Given a script whose commented-out line mentions an import When the export closure resolves Then the export is not refused", async () => {
+    // Given
+    const files = {
+      "index.html": page("", '<script type="module" src="app.js"></script>'),
+      "app.js": '// import { legacy } from "./legacy-helpers.js";\n/* export * from "./gone.js"; */\ndocument.body.dataset.ready = "1";\n',
+    };
+    // When / Then
+    expect(await closureOutcome(files)).toBe("resolved:app.js");
+  });
+
+  test("Given a script whose UI string reads like an import statement When the export closure resolves Then the export is not refused", async () => {
+    // Given
+    const files = {
+      "index.html": page("", '<script src="app.js"></script>'),
+      "app.js": "const hint = \"Tap to import contacts from 'Google'\";\ndocument.title = hint;\n",
+    };
+    // When / Then
+    expect(await closureOutcome(files)).toBe("resolved:app.js");
+  });
+
+  test("Given real imports beside a commented one, or a script that does not parse When the export closure resolves Then local imports are followed and remote imports still fail closed", async () => {
+    // Given
+    const html = page("", '<script type="module" src="app.js"></script>');
+    const imports = '// import "./gone.js";\nimport { a } from "./a.js";\nexport * from "./b.js";\nconst c = await import("./c.js");\nconsole.log(a, c);\n';
+    // When / Then
+    expect(await closureOutcome({ "index.html": html, "app.js": imports, "a.js": "export const a = 1;\n", "b.js": "export const b = 2;\n", "c.js": "export default 3;\n" })).toBe("resolved:a.js,app.js,b.js,c.js");
+    expect(await closureOutcome({ "index.html": html, "app.js": imports, "a.js": "export const a = 1;\n", "b.js": "export const b = 2;\n" })).toBe("missing_asset:c.js");
+    expect(await closureOutcome({ "index.html": html, "app.js": 'import x from "https://cdn.example/x.js";\nx();\n' })).toBe("remote_asset:https://cdn.example/x.js");
+    expect(await closureOutcome({ "index.html": html, "app.js": 'const = ;\nimport("https://cdn.example/x.js");\n' })).toBe("remote_asset:https://cdn.example/x.js");
+  });
+
+  test("Given a page with a canonical link to its public URL When the export closure resolves Then the non-fetched metadata link is not treated as a remote asset", async () => {
+    // Given
+    const metadata = '<link rel="canonical" href="https://example.com/landing"><link rel="Alternate" hreflang="en" href="https://example.com/en">';
+    // When / Then
+    expect(await closureOutcome({ "index.html": page(metadata, "<main>Landing</main>") })).toBe("resolved:");
+    // Given: relations a browser does fetch, and a link that names none.
+    for (const fetched of ['<link rel="stylesheet" href="https://example.com/a.css">', '<link rel="alternate stylesheet" href="https://example.com/a.css">', '<link href="https://example.com/a.css">']) {
+      // When / Then
+      expect(await closureOutcome({ "index.html": page(fetched, "<main>Landing</main>") })).toBe("remote_asset:https://example.com/a.css");
+    }
+  });
+
   test.skipIf(!canCreateSymlink())(`Given the temp directory reached through a link When an HTML archive is validated Then the entrypoint closure resolves (${SYMLINK_SKIP_REASON})`, async () => {
     // Given
     const real = await mkdtemp(path.join(tmpdir(), "bg-html-validate-real-")); const link = `${real}-link`; await symlink(real, link, "dir");
