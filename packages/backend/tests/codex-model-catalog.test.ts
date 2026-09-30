@@ -61,7 +61,9 @@ test("Given unparseable or wrongly shaped cache files When read Then they never 
   await writeFile(file, "{ not json");
   expect(await readCodexModelCatalog()).toEqual({ models: [], fetchedAt: null });
   await writeFile(file, JSON.stringify({ models: "nope" }));
-  expect((await readCodexModelCatalog()).models).toEqual([]);
+  const wrongShape = await readCodexModelCatalog();
+  expect(wrongShape.models).toEqual([]);
+  expect(wrongShape.fetchedAt).not.toBeNull();
   await writeFile(file, JSON.stringify([1, 2, 3]));
   expect((await readCodexModelCatalog()).models).toEqual([]);
 });

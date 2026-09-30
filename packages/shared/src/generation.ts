@@ -21,8 +21,8 @@ export interface GenerationModel {
 }
 /**
  * Static by necessity: no supported CLI except Codex offers a scriptable model listing. Claude Code has
- * no list command (only aliases in `--help`), Gemini CLI has open requests for one (gemini-cli #7512,
- * #27847), and Copilot CLI shows model strings only in the interactive `/model` picker (copilot-cli
+ * no list command (only aliases in `--help`), Gemini CLI has none (requested in gemini-cli #27847,
+ * still open; an earlier request, #7512, was closed as stale), and Copilot CLI shows model strings only in the interactive `/model` picker (copilot-cli
  * #700). Codex is discovered at runtime from its own `models_cache.json` (see `readCodexModelCatalog`).
  */
 export const CLAUDE_MODELS: readonly GenerationModel[] = [
