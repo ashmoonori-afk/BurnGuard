@@ -6,6 +6,7 @@ import { chromium } from "./playwright-runtime";
 import { resolveRepoRoot } from "../lib/paths";
 import { registerExportBrowser } from "./export-browser-registry";
 import { closeOwnedProcess, settleOwnedProcess, spawnOwnedProcess } from "../adapters/owned-process";
+import { keepAbortSignalArmed } from "../lib/abort-signal";
 
 export function chromiumNodeCommand(): { readonly node: string; readonly script: string; readonly cwd: string } | null {
   const root = resolveRepoRoot();
@@ -19,6 +20,7 @@ export function chromiumNodeCommand(): { readonly node: string; readonly script:
 export async function launchChromiumViaNode(options: { readonly channel?: string }, signal: AbortSignal, command = chromiumNodeCommand()): Promise<Browser> {
   if (command === null) throw new Error("Node Chromium runtime is unavailable");
   signal.throwIfAborted();
+  keepAbortSignalArmed(signal);
   const owned = spawnOwnedProcess({ cmd: [command.node, command.script, JSON.stringify(options)], cwd: command.cwd, stdin: "pipe", stdout: "pipe", stderr: "ignore" });
   const child = owned.proc;
   let closing: Promise<void> | null = null;

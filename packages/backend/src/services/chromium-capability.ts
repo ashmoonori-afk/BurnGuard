@@ -17,16 +17,31 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { chromiumNodeCommand } from "./chromium-node-launch";
 import { closeOwnedProcess, settleOwnedProcess, spawnOwnedProcess } from "../adapters/owned-process";
+import { keepAbortSignalArmed } from "../lib/abort-signal";
 
 const PROBE_TIMEOUT_MS = 45_000;
+/** Must match PROBE_INCONCLUSIVE_EXIT_CODE in chromium-node-bridge.mjs. */
+const PROBE_INCONCLUSIVE_EXIT_CODE = 2;
 
 /** Re-probe this long after a negative answer: the user may install a browser. */
 const NEGATIVE_TTL_MS = 10 * 60_000;
 
-type Capability = { readonly usable: boolean; readonly checkedAt: number };
+/**
+ * Re-probe this long after a probe that gave no answer (it ran out of time or could not run). That says
+ * nothing about the browser: a cold first launch has taken 25 s on a Windows CI runner and more than 45 s once,
+ * so it must not be held as a negative answer.
+ */
+const INCONCLUSIVE_TTL_MS = 60_000;
+
+/** `true` and `false` are answers about the browser; "inconclusive" means the probe produced none. */
+export type ChromiumProbeResult = boolean | "inconclusive";
+export type ChromiumCapability = "usable" | "unusable" | "inconclusive";
+type Capability = { readonly verdict: ChromiumCapability; readonly checkedAt: number };
 
 let cached: Capability | null = null;
-let inFlight: Promise<boolean> | null = null;
+let inFlight: Promise<ChromiumCapability> | null = null;
+
+function toVerdict(result: ChromiumProbeResult): ChromiumCapability { return result === true ? "usable" : result === false ? "unusable" : "inconclusive"; }
 
 /** Test seam: forget the cached answer. */
 export function resetChromiumCapability(): void {
@@ -35,9 +50,14 @@ export function resetChromiumCapability(): void {
 }
 
 /** Test seam: pretend the probe already ran. */
-export function setChromiumCapabilityForTesting(usable: boolean, checkedAt = Date.now()): void {
-  cached = { usable, checkedAt };
+export function setChromiumCapabilityForTesting(result: ChromiumProbeResult, checkedAt = Date.now()): void {
+  cached = { verdict: toVerdict(result), checkedAt };
   inFlight = null;
+}
+
+/** A completed launch is stronger evidence than any probe. */
+export function recordChromiumLaunched(): void {
+  cached = { verdict: "usable", checkedAt: Date.now() };
 }
 
 export function chromiumCapabilityTimeoutMs(): number {
@@ -54,34 +74,36 @@ export function chromiumCapabilityTimeoutMs(): number {
 const PROBE_WAIT_MS = 2_000;
 
 /**
- * True when a headless Chromium launch completed in a child process. Cached
- * for the process lifetime on success, and for {@link NEGATIVE_TTL_MS} on
- * failure. Concurrent callers share one probe. Capability polling returns
- * quickly; a render can wait for the bounded probe without blocking the loop.
+ * Whether a headless Chromium launch completed in a child process. "usable" is cached for the process
+ * lifetime, "unusable" for {@link NEGATIVE_TTL_MS} and "inconclusive" for {@link INCONCLUSIVE_TTL_MS}.
+ * Concurrent callers share one probe. Capability polling returns quickly; a render can wait for the bounded
+ * probe without blocking the loop. A caller that stops waiting, or whose probe could not run, concludes nothing.
  */
-export async function isChromiumLaunchable(
-  runProbe: () => Promise<boolean> = spawnLaunchProbe,
+export async function chromiumLaunchCapability(
+  runProbe: () => Promise<ChromiumProbeResult> = spawnLaunchProbe,
   options: { readonly waitForResult?: boolean; readonly signal?: AbortSignal } = {},
-): Promise<boolean> {
-  if (options.signal?.aborted) return false;
-  if (process.env.BG_CHROMIUM_ASSUME_USABLE === "1") return true;
-  const now = Date.now();
-  if (cached !== null && (cached.usable || now - cached.checkedAt < NEGATIVE_TTL_MS)) {
-    return cached.usable;
+): Promise<ChromiumCapability> {
+  if (options.signal?.aborted) return "inconclusive";
+  if (options.signal !== undefined) keepAbortSignalArmed(options.signal);
+  if (process.env.BG_CHROMIUM_ASSUME_USABLE === "1") return "usable";
+  if (cached !== null) {
+    const age = Date.now() - cached.checkedAt;
+    if (cached.verdict === "usable" || age < (cached.verdict === "unusable" ? NEGATIVE_TTL_MS : INCONCLUSIVE_TTL_MS)) return cached.verdict;
   }
   if (inFlight === null) {
-    const current = Promise.resolve().then(runProbe).catch(() => false).then((usable) => {
-      if (inFlight === current) { cached = { usable, checkedAt: Date.now() }; inFlight = null; }
-      return usable;
+    const current = Promise.resolve().then(runProbe).catch((): ChromiumProbeResult => "inconclusive").then((result) => {
+      const verdict = toVerdict(result);
+      if (inFlight === current) { cached = { verdict, checkedAt: Date.now() }; inFlight = null; }
+      return verdict;
     });
     inFlight = current;
   }
   const probe = inFlight;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let abort: (() => void) | undefined;
-  const gaveUp = new Promise<false>((resolve) => {
-    timer = setTimeout(() => resolve(false), options.waitForResult ? chromiumCapabilityTimeoutMs() : probeWaitMs());
-    abort = () => resolve(false);
+  const gaveUp = new Promise<"inconclusive">((resolve) => {
+    timer = setTimeout(() => resolve("inconclusive"), options.waitForResult ? chromiumCapabilityTimeoutMs() : probeWaitMs());
+    abort = () => resolve("inconclusive");
     options.signal?.addEventListener("abort", abort, { once: true });
   });
   try {
@@ -90,6 +112,14 @@ export async function isChromiumLaunchable(
     if (timer !== undefined) clearTimeout(timer);
     if (abort !== undefined) options.signal?.removeEventListener("abort", abort);
   }
+}
+
+/** True only when the capability is "usable"; see {@link chromiumLaunchCapability}. */
+export async function isChromiumLaunchable(
+  runProbe: () => Promise<ChromiumProbeResult> = spawnLaunchProbe,
+  options: { readonly waitForResult?: boolean; readonly signal?: AbortSignal } = {},
+): Promise<boolean> {
+  return (await chromiumLaunchCapability(runProbe, options)) === "usable";
 }
 
 function probeWaitMs(): number {
@@ -116,7 +146,7 @@ process.exit(1);
  * The child inherits this package's cwd, so it resolves the same
  * playwright-core the renderer uses.
  */
-export async function spawnLaunchProbe(node = chromiumNodeCommand(), timeoutMs = chromiumCapabilityTimeoutMs()): Promise<boolean> {
+export async function spawnLaunchProbe(node = chromiumNodeCommand(), timeoutMs = chromiumCapabilityTimeoutMs()): Promise<ChromiumProbeResult> {
   const compiled = /\$bunfs|~BUN/i.test(import.meta.url);
   const fallback = compiled ? [process.execPath, "--bg-chromium-probe"] : [process.execPath, "-e", PROBE_SOURCE];
   const owned = spawnOwnedProcess({
@@ -129,14 +159,19 @@ export async function spawnLaunchProbe(node = chromiumNodeCommand(), timeoutMs =
   const child = owned.proc;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let forcedClose: Promise<void> | undefined;
-  const expired = new Promise<false>((resolve, reject) => {
+  let timedOut = false;
+  const expired = new Promise<void>((resolve, reject) => {
     timer = setTimeout(() => {
+      timedOut = true;
       forcedClose = closeOwnedProcess(owned, { timeoutMs: 3_000 });
-      void forcedClose.then(() => resolve(false), reject);
+      void forcedClose.then(resolve, reject);
     }, timeoutMs);
   });
   try {
     const exitCode = await Promise.race([child.exited, expired]);
+    // A probe that ran out of time, here or in the child, saw no answer; only a finished probe can say "no browser".
+    // The child killed at the deadline exits non-zero, so the deadline is checked before its exit code.
+    if (timedOut || exitCode === PROBE_INCONCLUSIVE_EXIT_CODE) return "inconclusive";
     if (exitCode !== 0) return false;
     return (await new Response(child.stdout).text()).includes("usable");
   } finally {

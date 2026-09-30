@@ -16,6 +16,7 @@ import {
   type ApiSuccess,
   type GenerationOptions,
   type NormalizedEvent,
+  type TurnErrorCode,
   type UploadedVisualSourceSelection,
   type UserEvent,
   type VisualSourceUploadRequestV1,
@@ -59,6 +60,19 @@ import {
   startReservedUserTurn,
   submitToolDecisionToTurn,
 } from "../services/turns";
+import { turnErrorCode } from "../services/turn-error-sanitizer";
+
+/**
+ * Refusals a turn raises before it records the message: the sender can fix each one and retry, so
+ * they answer 409 with their own code. Any other failure before preparation stays a server fault.
+ */
+const PRE_TURN_REFUSALS: Readonly<Partial<Record<TurnErrorCode, string>>> = {
+  backend_unavailable: "The selected AI tool is not available",
+  agent_control_files_present: "Project contains AI tool control files",
+  unsupported_generation_model_effort: "The selected model or effort is not available",
+  graphic_requires_authenticated_codex: "Graphic generation requires an authenticated image-capable connection",
+  logo_requires_authenticated_codex: "Logo generation requires an authenticated image-capable connection",
+};
 
 function ok<T>(data: T): ApiSuccess<T> {
   return { data };
@@ -324,9 +338,13 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
     try { await turn.prepared; }
     catch (error) {
       await completed;
-      // A missing AI tool is the user's to fix in Settings, not an artifact problem.
-      if ((error as { readonly code?: unknown } | null)?.code === "backend_unavailable") {
-        return c.json(fail("backend_unavailable", "The selected AI tool is not available"), 409);
+      // A refusal the sender can fix (tool, model, control files) is theirs to resolve, not an artifact problem.
+      const refusalCode = turnErrorCode(error);
+      const refusal = PRE_TURN_REFUSALS[refusalCode];
+      if (refusal !== undefined) {
+        // The turn decides these before it records the message or binds uploads, so the retry starts clean.
+        await rollbackSessionAttachments(id, uploadedAttachmentPaths);
+        return c.json(fail(refusalCode, refusal), 409);
       }
       return c.json(
         fail(
