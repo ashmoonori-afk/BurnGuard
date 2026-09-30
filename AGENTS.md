@@ -25,7 +25,7 @@ BurnGuard/
 ├── samples/               # seeded corpus, 4 brands x 3 formats, staged by package-runtime.ts
 ├── design system themes/  # 10 bundled themes -> systems/builtin-theme-<slug>  (path has spaces)
 ├── design system sample/  # Northvale Capital reference system (uploads/ never committed)
-├── .github/workflows/     # security, windows-release, macos-release
+├── .github/workflows/     # security (Ubuntu + guards), os-tests (macOS arm64, Windows x64), windows-release, macos-release
 └── bunfig.toml            # preloads scripts/test-preload.ts for EVERY bun test
 ```
 
@@ -124,6 +124,8 @@ bun scripts/qa/preflight.ts --json
 node scripts/qa/e2e-smoke.mjs [--only core]
 bash scripts/qa/task-8-gates.sh
 bunx tsc -p scripts/qa/tsconfig.json --noEmit
+bun scripts/qa/check-os-matrix-coverage.ts   # every test file is in os-tests.yml or the shrink-only baseline
+bun scripts/qa/check-flake-patterns.ts       # launch-path flake patterns in packages/backend/src
 ```
 
 ## NOTES
@@ -137,6 +139,20 @@ bunx tsc -p scripts/qa/tsconfig.json --noEmit
 - Vite uses strict port `5173`, proxies `/api` and `/runtime`, and sends `frame-ancestors 'none'` + `X-Frame-Options: DENY`. Windows is the primary local target; macOS packaging and shell QA are also present.
 - Consult the nearest nested `AGENTS.md` before changing a delegated domain; this root records only cross-package constraints.
 - Doc drift to ignore: `CONTRIBUTING.md` cites a `test:e2e` script and `tests/e2e/` that do not exist (QA lives in `scripts/qa/`); `doc/README.md` advertises `ref/` and `devplan/` (gitignored, absent in a checkout) and still allows Korean. `uploads/`, `ref/`, `devplan/`, `/.omo/` are gitignored. A stray empty `NUL` file sits at the repo root (Windows artifact).
+
+## CI FAILURES AND OS COVERAGE
+
+- An OS-specific or intermittent CI failure is a product bug until a root cause proves otherwise. "Runner problem" is a conclusion that needs evidence, never a starting assumption.
+- One rerun at most. The second occurrence of the same failure anywhere gets a root-cause PR before anything else merges.
+- A local Linux pass is not evidence for Windows or macOS. Only CI on the exact head is: confirm from the macOS arm64 and Windows x64 job logs that the new tests ran and show `(pass)`.
+- Every new test file must run in the OS matrix: list it in `.github/workflows/os-tests.yml` (macOS and Windows) and in `.github/workflows/security.yml` (Ubuntu). `bun scripts/qa/check-os-matrix-coverage.ts` fails the Security job when a test file is in neither an `os-tests.yml` list nor `scripts/qa/os-matrix-baseline.txt`, when the baseline names a missing or already covered file, or when a workflow names a file that does not exist. The baseline lists the suites that were Linux-only on 2026-09-30; entries may only be removed (`--base-ref origin/main` rejects growth), and a new test never goes there.
+- Never skip a test on one OS. Use the form that OS supports instead (a directory junction where a symlink needs privileges on Windows, an injected `path.win32`/`path.posix` flavor, an injected platform) and add explicit Windows-path and POSIX-path cases for anything that touches paths, separators, fonts, packaging, browser launch or file locks.
+- `bun scripts/qa/check-flake-patterns.ts` fails the Security job on the launch-path patterns behind the 2026-09-30 failures: a raw `AbortSignal.timeout()` handed to a launch entry point instead of `AbortSignal.any([...])` or `keepAbortSignalArmed` (`packages/backend/src/lib/abort-signal.ts`), a Playwright-loading module that removes an abort listener without arming the signal, a Playwright `launch`/`launchServer`/`connect` call that relies on the library's `timeout` option, and `launchServer` outside `launchWithin`/`probeChannels`.
+- Details, the per-OS table and the hardening log: `doc/os-matrix.md`.
+
+## HARDENING
+
+- 2026-09-30, browser launch in CI (PR #195, issues #192 and #196; log in `doc/os-matrix.md`). Windows: playwright-core 1.59.1 does not apply `launchServer`'s `timeout`, a probe stopped at its deadline was cached as "no browser" for ten minutes, and only Playwright's own build counted as installed. macOS: Bun 1.3.14 cancels the timer of an `AbortSignal.timeout()` signal when its last abort listener is removed, so the caller's deadline never fired. Pinned by `chromium-launch-hardening`, `chromium-bridge-probe`, `chromium-capability`, `chromium-browser-paths` and `export-render-launch` on Ubuntu, macOS and Windows, and by the two guard scripts above. Same day, OS-coverage gap: the suites added by PRs #178 and #190 were named by no workflow and ran on Linux only; the coverage guard closes that.
 
 ## RELEASE UX QA STAGE
 

@@ -55,9 +55,12 @@ jobs:
         run: >-
           bun test --timeout 30000
           packages/backend/tests/os-portability.test.ts
+          packages/backend/tests/decomposed-file-names.test.ts
           packages/backend/tests/design-system-wireframe.test.ts
           packages/backend/tests/design-system-visual-diff.test.ts
           packages/backend/tests/design-system-hero-assets.test.ts
+          packages/backend/tests/extraction-website-acquisition.test.ts
+          packages/backend/tests/extraction-website-boundaries.test.ts
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/design-system-starter.test.ts
           packages/backend/tests/design-system-starter-entrypoint.test.ts
@@ -66,6 +69,7 @@ jobs:
           packages/backend/tests/design-system-pages.test.ts
           packages/backend/tests/design-workflow.test.ts
           packages/backend/tests/generation-output.test.ts
+          packages/backend/tests/export-validation.test.ts
           packages/backend/tests/path-boundary.test.ts
           packages/backend/tests/config-storage.test.ts
           packages/backend/tests/native-binding.test.ts
@@ -75,12 +79,39 @@ jobs:
           packages/backend/tests/prompt-builder.test.ts
           packages/backend/tests/desktop-lifecycle.test.ts
           packages/frontend/tests/side-input.test.ts
+          packages/frontend/tests/error-copy.test.ts
+          packages/frontend/tests/i18n-messages.test.ts
+          packages/backend/tests/session-routes.test.ts
+          packages/backend/tests/turn-error-sanitizer.test.ts
+          scripts/qa/har-mask.test.ts
+          packages/backend/tests/design-system-route-error-bodies.test.ts
+          packages/backend/tests/export-failure-message.test.ts
+          packages/backend/tests/chromium-capability.test.ts
+          packages/backend/tests/chromium-bridge-probe.test.ts
+          packages/backend/tests/chromium-browser-paths.test.ts
+          packages/backend/tests/export-render-launch.test.ts
+          packages/backend/tests/chromium-process-tree.test.ts
+          packages/backend/tests/chromium-launch-hardening.test.ts
+          scripts/qa/check-os-matrix-coverage.test.ts
+          scripts/qa/check-flake-patterns.test.ts
+      # The first Windows PowerShell start on a runner loads .NET Framework and System.Drawing cold (1-9 s usually, over
+      # 25 s on a slow runner), which is the font enumeration's whole limit; it is paid here, outside that limit.
+      - name: Warm Windows PowerShell
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: Add-Type -AssemblyName System.Drawing; (New-Object System.Drawing.Text.InstalledFontCollection).Families.Count
       # Host font enumeration and process-tree cleanup; see doc/os-matrix.md for the Windows timing evidence.
       - name: Host fonts and process-tree suites
         run: >-
           bun test --timeout 30000
           packages/backend/tests/local-fonts.test.ts
           packages/backend/tests/owned-process-tree.test.ts
+      # The runner has no Playwright build, so the suites launch its system Chrome. The first launch and the first page
+      # on a fresh runner are cold starts (3-25 s measured, over 45 s once); they happen here under their own budget,
+      # with each channel's result and time in the log, and fail the job by name when no browser starts or renders.
+      # See doc/os-matrix.md.
+      - name: Warm the system browser
+        run: bun scripts/warm-browser.ts
       - name: Browser-backed suites
         env:
           BG_BROWSER_SMOKE: "1"

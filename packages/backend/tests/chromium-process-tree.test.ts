@@ -22,7 +22,7 @@ for (const kind of ["bridge", "probe"] as const) {
     const command = { node, script, cwd: root };
     try {
       if (kind === "bridge") await expect(launchChromiumViaNode({}, AbortSignal.timeout(15000), command)).rejects.toThrow();
-      else expect(await spawnLaunchProbe(command, 5000)).toBe(false);
+      else expect(await spawnLaunchProbe(command, 5000)).toBe("inconclusive");
       const ids = JSON.parse(await readFile(receipt, "utf8")) as { parent: number; child: number };
       expect(present(ids.parent)).toBe(false);
       expect(present(ids.child)).toBe(false);

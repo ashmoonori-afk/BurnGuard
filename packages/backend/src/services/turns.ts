@@ -359,6 +359,32 @@ async function runUserTurnInternal(
 
   const backendId = session.backend_id;
   await setSessionStatus(sessionId, "running");
+  // Every refusal the sender can fix is decided before anything is recorded. The route answers such
+  // a send with 409 and the composer keeps the draft, so a message recorded here would be duplicated
+  // by the retry and its uploads would stay bound to a turn that never ran.
+  // Graphic projects are rejected below unless they selected Codex, so only a Codex turn depends
+  // on the authentication answer. Other backends stay usable while a Codex probe is indeterminate.
+  const detection = await (dependencies.detectBackends ?? detectBackends)({ force: true, requireCodexAuthentication: backendId === "codex" });
+  const backend = detection.backends.find((b) => b.id === backendId);
+
+  // The caller publishes the one sanitized error and idle for a turn that fails before preparation.
+  if (!backend?.found || !backend.binary_path) throw Object.assign(new Error("backend_unavailable"), { code: "backend_unavailable" });
+
+  const binaryPath = backend.binary_path;
+  const config = await loadConfig();
+  const project = await getProjectDetail(session.project_id);
+  if (project === null) throw new Error("project_not_found");
+  if (await hasAgentControlFiles(project.dir_path)) {
+    throw Object.assign(new Error("agent_control_files_present"), {
+      code: "agent_control_files_present",
+    });
+  }
+  const generation = resolveGenerationOptions(backendId, payload.generation, config, backend);
+  // The selected model decides whether this backend can draw, so the gate follows resolution.
+  if (project.type === "graphic") ensureGraphicCapableBackend(backend, generation.model);
+  // A logo is drawn with the same image capability; only the refusal code differs, so the client
+  // can name the deliverable the user actually asked for.
+  if (project.type === "logo" && !isGraphicCapableBackend(backend, generation.model)) throw new Error("logo_requires_authenticated_codex");
   const attachmentCount = await assignAttachmentsToTurn(
     sessionId,
     payload.attachments ?? [],
@@ -404,36 +430,13 @@ async function runUserTurnInternal(
     type: "status.running",
   });
 
-  // Graphic projects are rejected below unless they selected Codex, so only a Codex turn depends
-  // on the authentication answer. Other backends stay usable while a Codex probe is indeterminate.
-  const detection = await (dependencies.detectBackends ?? detectBackends)({ force: true, requireCodexAuthentication: backendId === "codex" });
-  const backend = detection.backends.find((b) => b.id === backendId);
-
-  // The caller publishes the one sanitized error and idle for a turn that fails before preparation.
-  if (!backend?.found || !backend.binary_path) throw Object.assign(new Error("backend_unavailable"), { code: "backend_unavailable" });
-
-  const binaryPath = backend.binary_path;
-  const config = await loadConfig();
   const projectDir = sessionContext.project.project_dir;
-  const project = await getProjectDetail(sessionContext.project.project_id);
-  if (project === null) throw new Error("project_not_found");
   // The first request that names a research purpose fixes it for the project, so later edits that
   // name none keep running under its rules instead of falling back to the baseline.
   const researchPurpose = matchResearchPurpose(payload.text);
   if (researchPurpose !== null && parseStoredProjectOptions(project.options_json).research_purpose === null) {
     getSqlite().prepare("UPDATE projects SET options_json=? WHERE id=? AND options_json IS ?").run(withResearchPurpose(project.options_json, researchPurpose), project.id, project.options_json);
   }
-  if (await hasAgentControlFiles(projectDir)) {
-    throw Object.assign(new Error("agent_control_files_present"), {
-      code: "agent_control_files_present",
-    });
-  }
-  const generation = resolveGenerationOptions(backendId, payload.generation, config, backend);
-  // The selected model decides whether this backend can draw, so the gate follows resolution.
-  if (project.type === "graphic") ensureGraphicCapableBackend(backend, generation.model);
-  // A logo is drawn with the same image capability; only the refusal code differs, so the client
-  // can name the deliverable the user actually asked for.
-  if (project.type === "logo" && !isGraphicCapableBackend(backend, generation.model)) throw new Error("logo_requires_authenticated_codex");
   const coordinator = new ArtifactCoordinator(getSqlite());
   const base = await coordinator.initialize(project.id, projectDir);
   // The revert route only offers a rollback when a pre-turn snapshot exists,

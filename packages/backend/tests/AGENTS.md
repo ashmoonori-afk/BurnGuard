@@ -24,6 +24,7 @@ tests/
 | Touch export pipeline | `export-validation`, `export-recovery`, `exports`, `export-pdf`, `export-pptx` | `export-validation` side-effect imports `export-pdf-deadline-cases.ts` |
 | Touch prompts/skills | `prompt-builder`, `reference-layout-prompt`, `visual-craft-skill`, `design-brief-prompt` | Assert machine tags and ordering, never prose |
 | Touch provider adapters | `claude-code-parser`, `codex-parser`, `owned-process-tree`, `chromium-process-tree` | Real child processes; POSIX-only cases are skipped |
+| Touch the Chromium launch path | `chromium-launch-hardening`, `chromium-capability`, `chromium-bridge-probe`, `chromium-browser-paths`, `export-render-launch` | Regression pins for the 2026-09-30 root causes; no real browser, every OS |
 | Touch migrations/repos | `graphic-migration`, `research-migration`, `checkpoints`, `pipeline-repositories` | In-memory SQLite via `runMigrationsFrom` |
 
 ## CONVENTIONS
@@ -32,7 +33,8 @@ tests/
 - Name tests as Given/When/Then prose; assert exact status codes, error `code` strings, digests, and DB rows rather than snapshots.
 - Prefer real seams over mocks; the deliberate exception is `attachment-intake.test.ts`, which mocks `attachment-extraction` because the real path shells out to Python.
 - Gate expensive surfaces behind env flags: `BG_UPLOAD_SMOKE=1` (Python/PPTX extraction), `BG_BROWSER_SMOKE=1` (real Chromium launch), `BG_EXPORT_SMOKE=1` (PDF/PNG/PPTX render). Default runs must pass with none of them set.
-- Skip platform-impossible cases explicitly: `test.skipIf(!canCreateSymlink())` with `SYMLINK_SKIP_REASON`, and named skips for POSIX-only process and macOS-only QA CLI cases. A skip always states its reason.
+- Every new test file is listed in `.github/workflows/os-tests.yml` (macOS and Windows) and `.github/workflows/security.yml` (Ubuntu) in the same change; `bun scripts/qa/check-os-matrix-coverage.ts` fails CI otherwise. A local Linux pass is not evidence for the other two.
+- Do not skip a new case on one OS: use the form that OS supports (a directory junction instead of a privileged symlink on Windows, an injected platform or `path.win32`/`path.posix` flavor) and add explicit Windows-path and POSIX-path cases. The existing `test.skipIf(!canCreateSymlink())` with `SYMLINK_SKIP_REASON` and the named POSIX-only process and macOS-only QA CLI skips are legacy; each states its reason.
 - Create unique fixture IDs (`process.pid`, `crypto.randomUUID`) and clean rows, temp roots, watchers, and browsers in `afterEach`/`afterAll`; several Windows I/O suites raise their own timeout to 30-60s.
 - Inject fault and timing knobs instead of patching internals: `BG_CATALOG_FAULT`, `BG_ARTIFACT_QA`, `BG_CHROMIUM_LAUNCH_TIMEOUT_MS`, `BG_CHROMIUM_ASSUME_USABLE`, `BG_THUMBNAIL_*`.
 

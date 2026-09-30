@@ -17,7 +17,7 @@ Core artifact, extraction, export, research, and runtime workflows; earned this 
 | Design directions | `design-direction-workflow.ts` | One active generation per session, monotonic state |
 | Watchers/recovery | `watchers.ts`, `*-recovery.ts` | Startup convergence and external-write conflicts |
 | Catalog two-phase ops | `catalog-lifecycle.ts`, `catalog-service.ts` | Filesystem plus DB copy/trash/restore/purge with receipts |
-| Chromium availability | `chromium-capability.ts`, `playwright-runtime.ts` | Child-process probe; `playwright-core` pinned at 1.59.1 |
+| Chromium availability | `chromium-capability.ts`, `chromium-browser-paths.ts`, `playwright-runtime.ts` | Child-process probe (usable, unusable, inconclusive); system Chrome or Edge counts as installed (`browserOnDisk` in `export-render-session.ts`, host injectable); `playwright-core` pinned at 1.59.1 |
 | Chromium launch host | `chromium-node-bridge.mjs` | Node child owns the browser; in-process launch freezes the Bun loop on Windows |
 
 ## CONVENTIONS
@@ -38,5 +38,6 @@ Core artifact, extraction, export, research, and runtime workflows; earned this 
 - Do not publish output before receipt, digest, renderer identity, and canonical tree validation succeed.
 - Do not treat in-memory locks, watcher suppression, or browser registries as durable authority.
 - Do not launch Chromium on the Bun server event loop before the child-process probe succeeds.
+- Do not rely on Playwright's `timeout` option for `launch`, `launchServer` or `connect`, and do not hand a raw `AbortSignal.timeout()` to the launch path: race the call against an owned deadline and arm the caller's signal with `keepAbortSignalArmed` (`../lib/abort-signal.ts`). `scripts/qa/check-flake-patterns.ts` rejects both in CI.
 - Do not put backticks or `${` into `upload-extractor-py.ts` embedded `String.raw` content.
 - Do not swallow cleanup errors when they affect authority; distinguish cleanup from correctness-critical rollback.
