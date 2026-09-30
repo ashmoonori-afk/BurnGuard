@@ -97,6 +97,7 @@ jobs:
           packages/backend/tests/app-update-routes.test.ts
           packages/backend/tests/native-binding.test.ts
           packages/backend/tests/os-portability.test.ts
+          packages/backend/tests/decomposed-file-names.test.ts
           packages/backend/tests/charts.test.ts
           packages/backend/tests/image-prompt-recipes.test.ts
           packages/backend/tests/design-direction-contract.test.ts

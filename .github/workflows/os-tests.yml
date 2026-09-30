@@ -55,6 +55,7 @@ jobs:
         run: >-
           bun test --timeout 30000
           packages/backend/tests/os-portability.test.ts
+          packages/backend/tests/decomposed-file-names.test.ts
           packages/backend/tests/design-system-wireframe.test.ts
           packages/backend/tests/design-system-visual-diff.test.ts
           packages/backend/tests/design-system-hero-assets.test.ts

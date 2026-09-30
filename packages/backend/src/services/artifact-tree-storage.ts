@@ -3,7 +3,7 @@ import { constants } from "node:fs";
 import { lstat, mkdir, open, readFile, readdir, rename, rm, unlink, writeFile, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import type { CanonicalTreeEntry, CanonicalTreeManifest } from "./canonical-tree-manifest";
-import { DEFAULT_CANONICAL_TREE_LIMITS, inspectCanonicalTree, validateCanonicalTree } from "./canonical-tree-manifest";
+import { DEFAULT_CANONICAL_TREE_LIMITS, diskPathOf, inspectCanonicalTree, inspectCanonicalTreeOnDisk, validateCanonicalTree } from "./canonical-tree-manifest";
 import { isProjectDocumentPath } from "./project-document-paths";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 
@@ -30,13 +30,14 @@ export class ArtifactPublicationPolicyError extends Error {
 }
 
 export async function materializeManagedTree(source: string, destination: string): Promise<CanonicalTreeManifest> {
-  const manifest = await inspectCanonicalTree(source);
+  const tree = await inspectCanonicalTreeOnDisk(source);
+  const manifest = tree.manifest;
   await rm(destination, { recursive: true, force: true });
   await mkdir(destination, { recursive: true });
   for (const file of manifest.files) {
     const target = path.join(destination, file.path);
     await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, await readFile(path.join(source, file.path)));
+    await writeFile(target, await readFile(diskPathOf(source, tree, file.path)));
   }
   return validateCanonicalTree(destination, manifest);
 }
@@ -64,10 +65,12 @@ export async function publishManagedTree(
   const sourceManifest = await inspectCanonicalTree(source);
   const opened = await openPublicationSources(source, sourceManifest.files, policy);
   try {
-    const destinationManifest = await inspectCanonicalTree(destination);
+    const destinationTree = await inspectCanonicalTreeOnDisk(destination);
     const sourcePaths = new Set(sourceManifest.files.map((file) => file.path));
-    for (const file of [...destinationManifest.files].reverse()) {
-      if (!sourcePaths.has(file.path)) await unlink(path.join(destination, file.path));
+    for (const file of [...destinationTree.manifest.files].reverse()) {
+      // A name that is not NFC on disk goes too: it is rewritten under its manifest path below, and leaving it would
+      // put two spellings of one path side by side on file systems that keep them apart.
+      if (!sourcePaths.has(file.path) || destinationTree.diskPaths.has(file.path)) await unlink(diskPathOf(destination, destinationTree, file.path));
     }
     // A removed directory can become a file in the same publication.
     await removeEmptyManagedDirectories(destination);

@@ -24,6 +24,7 @@ jobs run each pinning suite.
 | Design-system outputs (wireframe SVG, starter stylesheet and skeleton) | byte-identical | byte-identical | byte-identical | `os-portability` (pinned digests) | Ubuntu, OS jobs |
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
+| Decomposed (NFD) file names in a managed tree | APFS finds a name through either spelling | NTFS keeps NFC and NFD apart: live files are read through the on-disk spelling, and a publication rewrites the name as NFC | ext4: same as Windows | `decomposed-file-names` (real files on the host file system; drive, UNC and POSIX roots with the path flavor injected) | Ubuntu, OS jobs |
 
 ## Known gaps
 

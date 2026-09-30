@@ -52,14 +52,36 @@ export async function isCanonicalTreeRootMissing(root: string): Promise<boolean>
   }
 }
 
+export type InspectedCanonicalTree = {
+  readonly manifest: CanonicalTreeManifest;
+  /** Manifest path -> the spelling the file system returned, for entries whose on-disk name is not NFC. */
+  readonly diskPaths: ReadonlyMap<string, string>;
+};
+
+/**
+ * Where a manifest entry lives on disk. A decomposed (NFD) name is not found through its NFC manifest path on
+ * file systems that do not normalize names (ext4, NTFS), so live files are addressed by their on-disk spelling.
+ */
+export function diskPathOf(root: string, tree: InspectedCanonicalTree, manifestPath: string, flavor: Pick<typeof path, "join"> = path): string {
+  return flavor.join(root, tree.diskPaths.get(manifestPath) ?? manifestPath);
+}
+
 export async function inspectCanonicalTree(
   root: string,
   limits: CanonicalTreeLimits = DEFAULT_CANONICAL_TREE_LIMITS,
 ): Promise<CanonicalTreeManifest> {
+  return (await inspectCanonicalTreeOnDisk(root, limits)).manifest;
+}
+
+export async function inspectCanonicalTreeOnDisk(
+  root: string,
+  limits: CanonicalTreeLimits = DEFAULT_CANONICAL_TREE_LIMITS,
+): Promise<InspectedCanonicalTree> {
   const rootInfo = await lstat(root).catch(() => null);
   if (rootInfo?.isSymbolicLink()) throw new CanonicalTreeManifestError("unsafe_tree_entry", "Canonical tree root cannot be a link");
   if (!rootInfo?.isDirectory()) throw new CanonicalTreeManifestError("tree_missing", "Canonical tree directory is missing");
   const files: CanonicalTreeEntry[] = [];
+  const diskPaths = new Map<string, string>();
   const canonicalPaths = new Set<string>();
   let bytes = 0;
   const visit = async (directory: string): Promise<void> => {
@@ -90,7 +112,9 @@ export async function inspectCanonicalTree(
       bytes += info.size;
       if (bytes > limits.bytes) throw new CanonicalTreeManifestError("tree_limit_exceeded", "Canonical tree byte limit exceeded");
       const content = await readFile(target);
-      files.push({ path: relativePath.normalize("NFC"), size: content.byteLength, sha256: createHash("sha256").update(content).digest("hex") });
+      const manifestPath = relativePath.normalize("NFC");
+      if (manifestPath !== relativePath) diskPaths.set(manifestPath, relativePath);
+      files.push({ path: manifestPath, size: content.byteLength, sha256: createHash("sha256").update(content).digest("hex") });
     }
   };
   try {
@@ -100,7 +124,7 @@ export async function inspectCanonicalTree(
     throw error;
   }
   files.sort((left, right) => compareText(left.path, right.path));
-  return { schema_version: 1, digest_algorithm: "sha256", tree_digest: digestEntries(files), files, publication_state: "validated" };
+  return { manifest: { schema_version: 1, digest_algorithm: "sha256", tree_digest: digestEntries(files), files, publication_state: "validated" }, diskPaths };
 }
 
 export function parseCanonicalTreeManifest(
