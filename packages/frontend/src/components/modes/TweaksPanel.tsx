@@ -17,11 +17,11 @@ import {
   type TweaksTarget,
 } from "@/components/canvas/TweaksLayer";
 import {
-  composeSides,
+  applySideDraft,
   normalizeHex,
-  normalizeSideDraft,
   numericFromLength,
   parseSides,
+  sideDisplay,
   type Sides,
   type SideStyle,
 } from "./tweaks-utils";
@@ -520,47 +520,43 @@ function SidesRow({
   const t = useT();
   const inline = target.inline[styleKey] ?? "";
   const computed = target.computed[styleKey] ?? "";
-  const initial = numericSidesFrom(inline || computed);
-  const [sides, setSides] = useState<Sides>(initial);
+  const authored = inline || computed;
+  const [sides, setSides] = useState<Sides | null>(() => parseSides(authored));
 
   useEffect(() => {
-    setSides(numericSidesFrom(inline || computed));
-  }, [inline, computed, target.bg_id, styleKey]);
+    setSides(parseSides(authored));
+  }, [authored, target.bg_id, styleKey]);
+
+  // A shorthand the four inputs cannot represent stays read-only, so a commit never rewrites it.
+  if (!sides) {
+    return (
+      <div className="flex items-center gap-2 text-[11px]">
+        <RowLabel>{styleKey}</RowLabel>
+        <input aria-label={styleKey} title={authored} type="text" value={authored} readOnly disabled className={inputCls("min-w-0 flex-1 text-[10px] px-1")} />
+      </div>
+    );
+  }
 
   const commitSide = (side: keyof Sides) => (rawValue: string) => {
-    const trimmed = normalizeSideDraft(styleKey, rawValue);
-    if (trimmed === null) return sides[side];
-    const next: Sides = { ...sides, [side]: trimmed };
-    setSides(next);
-    const allEmpty =
-      !next.top && !next.right && !next.bottom && !next.left;
-    if (allEmpty) {
+    const result = applySideDraft(styleKey, sides, side, rawValue);
+    if (!result) return sideDisplay(sides[side]);
+    setSides(result.sides);
+    if (result.shorthand === "") {
       if (inline) onApply({ [styleKey]: null });
-      return trimmed;
+    } else if (result.shorthand !== inline) {
+      onApply({ [styleKey]: result.shorthand });
     }
-    const withUnit: Sides = {
-      top: next.top === "" ? "0px" : `${next.top}px`,
-      right: next.right === "" ? "0px" : `${next.right}px`,
-      bottom: next.bottom === "" ? "0px" : `${next.bottom}px`,
-      left: next.left === "" ? "0px" : `${next.left}px`,
-    };
-    const shorthand = composeSides(withUnit);
-    if (shorthand && shorthand !== inline) {
-      onApply({ [styleKey]: shorthand });
-    } else if (!shorthand && inline) {
-      onApply({ [styleKey]: null });
-    }
-    return trimmed;
+    return sideDisplay(result.sides[side]);
   };
 
   return (
     <div className="flex items-center gap-2 text-[11px]">
       <RowLabel>{styleKey}</RowLabel>
       <div className="flex min-w-0 flex-1 items-center gap-1">
-        <SideInput title={t("modes.tweaks.top")} value={sides.top} onCommit={commitSide("top")} disabled={saving} />
-        <SideInput title={t("modes.tweaks.right")} value={sides.right} onCommit={commitSide("right")} disabled={saving} />
-        <SideInput title={t("modes.tweaks.bottom")} value={sides.bottom} onCommit={commitSide("bottom")} disabled={saving} />
-        <SideInput title={t("modes.tweaks.left")} value={sides.left} onCommit={commitSide("left")} disabled={saving} />
+        <SideInput title={t("modes.tweaks.top")} value={sideDisplay(sides.top)} onCommit={commitSide("top")} disabled={saving} />
+        <SideInput title={t("modes.tweaks.right")} value={sideDisplay(sides.right)} onCommit={commitSide("right")} disabled={saving} />
+        <SideInput title={t("modes.tweaks.bottom")} value={sideDisplay(sides.bottom)} onCommit={commitSide("bottom")} disabled={saving} />
+        <SideInput title={t("modes.tweaks.left")} value={sideDisplay(sides.left)} onCommit={commitSide("left")} disabled={saving} />
       </div>
       <span className="w-6 shrink-0 text-[10px] text-muted-foreground">px</span>
     </div>
@@ -630,16 +626,6 @@ export function handleEnterEscape(
   } finally {
     handledBlurInputs.delete(input);
   }
-}
-
-function numericSidesFrom(raw: string): Sides {
-  const parsed = parseSides(raw);
-  return {
-    top: numericFromLength(parsed.top),
-    right: numericFromLength(parsed.right),
-    bottom: numericFromLength(parsed.bottom),
-    left: numericFromLength(parsed.left),
-  };
 }
 
 function parseDraftLength(value: string): number | null {

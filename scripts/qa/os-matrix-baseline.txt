@@ -341,7 +341,6 @@ packages/frontend/tests/settings-language-note.test.ts
 packages/frontend/tests/settings-locale.test.ts
 packages/frontend/tests/settings-localization.test.ts
 packages/frontend/tests/settings-system-review.test.ts
-packages/frontend/tests/side-input.test.ts
 packages/frontend/tests/sidebar-identity.test.ts
 packages/frontend/tests/star-prompt.test.ts
 packages/frontend/tests/theme-launch.test.ts

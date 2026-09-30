@@ -135,6 +135,7 @@ jobs:
           scripts/qa/check-flake-patterns.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts
+          packages/frontend/tests/side-input.test.ts
           packages/frontend/tests/i18n-messages.test.ts
           scripts/qa/har-mask.test.ts
           packages/backend/tests/design-system-route-error-bodies.test.ts
