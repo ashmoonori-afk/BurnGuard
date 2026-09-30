@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
@@ -133,7 +133,9 @@ describe("export HTML closure boundaries", () => {
 
   test.skipIf(!canCreateSymlink())(`Given the temp directory reached through a link When an HTML archive is validated Then the entrypoint closure resolves (${SYMLINK_SKIP_REASON})`, async () => {
     // Given
-    const real = await mkdtemp(path.join(tmpdir(), "bg-html-validate-real-")); const link = `${real}-link`; await symlink(real, link, "dir");
+    // The target and the link share one parent that is removed recursively: Bun on Windows fails with EFAULT when it removes a directory link on its own.
+    const base = await mkdtemp(path.join(tmpdir(), "bg-html-validate-link-")); const real = path.join(base, "real"); const link = path.join(base, "link");
+    await mkdir(real); await symlink(real, link, "dir");
     const saved = { TMPDIR: process.env["TMPDIR"], TEMP: process.env["TEMP"], TMP: process.env["TMP"] };
     const html = new TextEncoder().encode("<html><body><img src=asset.png></body></html>"); const asset = Uint8Array.from([1, 2, 3]);
     const expected = { schema_version: 1 as const, entrypoint: "index.html", project_revision: 7, project_digest: digest, input_closure_digest: "b".repeat(64) };
@@ -146,7 +148,7 @@ describe("export HTML closure boundaries", () => {
       expect((await validateHtmlArchive(bytes, expected)).entries).toEqual(manifest.entries);
     } finally {
       for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
-      await rm(link, { force: true }); await rm(real, { recursive: true, force: true });
+      await rm(base, { recursive: true, force: true });
     }
   });
 });
