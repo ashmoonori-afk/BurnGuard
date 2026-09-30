@@ -31,6 +31,17 @@ export function sanitizeAcquiredWebsiteHtml(html: string): string {
   return stored;
 }
 
+/**
+ * A fetched SVG logo or hero image is published under assets/ and held to the same inert gate as
+ * pages, so design-tool output such as fill="url(#g)" is stripped here instead of rolling back the
+ * whole import at publication. A file that still fails the gate is rejected for the caller to skip.
+ */
+export function sanitizeAcquiredWebsiteSvg(svg: string): string {
+  const stored = removeActiveSourceMarkup(svg);
+  assertInertSourceMarkup(stored, "svg");
+  return stored;
+}
+
 function assertStructurallyCompleteHtml(html: string): void {
   // Do not let parser serialization repair a source the acquisition gate rejects.
   const normalized = html.toLowerCase();

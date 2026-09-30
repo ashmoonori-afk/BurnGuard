@@ -117,7 +117,7 @@ import {
 import { DESIGN_SURFACE_FILES, DESIGN_SURFACES } from "@bg/shared";
 import { DERIVED_SURFACE_README_SECTIONS, renderDerivedSurfaceCss } from "./design-system-surface";
 import { renderMeasuredWireframe } from "./design-system-wireframe";
-import { collectCandidateWebsitePages, extractHtmlComponentSamples, sanitizeAcquiredWebsiteHtml, sanitizeSourceHtml } from "./extraction-html";
+import { collectCandidateWebsitePages, extractHtmlComponentSamples, sanitizeAcquiredWebsiteHtml, sanitizeAcquiredWebsiteSvg, sanitizeSourceHtml } from "./extraction-html";
 import { analyzeLocalTree, type SourceAnalysis } from "./extraction-local-tree";
 import {
   contentTypeForDesignSystemFile,
@@ -811,6 +811,11 @@ function pageColorEvidence(declarations: readonly CssDeclarationEvidence[]): str
   return values;
 }
 
+/** Publication gates every .svg as inert markup, so fetched SVG images are stripped before they are stored. */
+function acquiredImageBytes(fileName: string, buffer: Buffer): Buffer | string {
+  return path.extname(fileName).toLowerCase() === ".svg" ? sanitizeAcquiredWebsiteSvg(buffer.toString("utf8")) : buffer;
+}
+
 async function ingestWebsiteSource(
   sourceUrl: string,
   ingestDir: string,
@@ -1065,12 +1070,11 @@ async function ingestWebsiteSource(
       }
     }
 
-    const images = root.querySelectorAll("img");
-    assertAssetCount(images.length);
-    for (const image of images) {
+    // Only logo-like images are fetched, so the asset limit bounds those candidates, not every <img>.
+    const logoCandidates = root.querySelectorAll("img").map((image) => image.getAttribute("src")).filter((src): src is string => !!src && /logo|brand/i.test(src));
+    assertAssetCount(logoCandidates.length);
+    for (const src of logoCandidates) {
       throwIfAcquisitionAborted(signal);
-      const src = image.getAttribute("src");
-      if (!src || !/logo|brand/i.test(src)) continue;
       try {
         const logoUrl = new URL(src, pageBase);
         const dedupedName = safeFileName(
@@ -1087,7 +1091,7 @@ async function ingestWebsiteSource(
         assetBytes += logoFetch.buffer.byteLength;
         assertAggregateAssetBytes(assetBytes);
         const absolutePath = path.join(websiteDir, dedupedName);
-        await writeFile(absolutePath, logoFetch.buffer);
+        await writeFile(absolutePath, acquiredImageBytes(dedupedName, logoFetch.buffer));
         logoFiles.push({ absolutePath, fileName: dedupedName });
       } catch (error) {
         if (error instanceof ExtractionAcquisitionError || isBudgetExhausted(error)) throw error;
@@ -1111,7 +1115,7 @@ async function ingestWebsiteSource(
       assetBytes += heroFetch.buffer.byteLength;
       assertAggregateAssetBytes(assetBytes);
       const absolutePath = path.join(websiteDir, `hero-${fileName}`);
-      await writeFile(absolutePath, heroFetch.buffer);
+      await writeFile(absolutePath, acquiredImageBytes(fileName, heroFetch.buffer));
       heroImages.push({ absolutePath, fileName });
     } catch (error) {
       if (error instanceof ExtractionAcquisitionError || isBudgetExhausted(error)) throw error;
