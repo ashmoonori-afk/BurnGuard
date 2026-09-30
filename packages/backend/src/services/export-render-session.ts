@@ -10,6 +10,7 @@ import { registerExportBrowser } from "./export-browser-registry";
 import { chromiumNodeCommand, launchChromiumViaNode } from "./chromium-node-launch";
 import { DECK_STAGE_JS } from "../runtime/deck-stage";
 import { readBundledFontUrl } from "../data/bundled-fonts";
+import { keepAbortSignalArmed } from "../lib/abort-signal";
 
 export type RenderViewport = { readonly width: number; readonly height: number; readonly dpr: 1 | 2 };
 export type RenderFinding = { readonly code: "console_error" | "page_error" | "request_failed" | "remote_request" | "font_error"; readonly path: string | null };
@@ -23,6 +24,7 @@ export class RenderSessionError extends Error {
 
 export async function openRenderSession(input: { readonly stagedDir: string; readonly entrypoint: string; readonly viewport: RenderViewport; readonly deck: boolean; readonly signal: AbortSignal; readonly strict?: boolean; readonly browser?: Browser; readonly onPhase?: (phase: RenderPhase) => void }): Promise<RenderSession> {
   if (input.signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled");
+  keepAbortSignalArmed(input.signal);
   const browser = input.browser ?? await launchChromium(input.signal);
   let context: BrowserContext | null = null;
   const owner = input.browser === undefined ? registerExportBrowser(() => browser.close()) : { close: async () => { await context?.close(); } };
@@ -110,6 +112,7 @@ export async function launchChromium(signal: AbortSignal, launch: ChromiumLaunch
   // the in-process attempt below would freeze every other request and even the
   // timer meant to cap it. The child-process probe answers that question
   // without touching this loop; when it says no, fail immediately.
+  keepAbortSignalArmed(signal);
   const capability = await chromiumLaunchCapability(undefined, { waitForResult: true, signal });
   if (signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled");
   // A probe without an answer (a slow cold start) is not a "no". A launch isolated in the Node child cannot stall

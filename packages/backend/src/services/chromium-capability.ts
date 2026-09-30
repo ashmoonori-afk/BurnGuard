@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { chromiumNodeCommand } from "./chromium-node-launch";
 import { closeOwnedProcess, settleOwnedProcess, spawnOwnedProcess } from "../adapters/owned-process";
+import { keepAbortSignalArmed } from "../lib/abort-signal";
 
 const PROBE_TIMEOUT_MS = 45_000;
 /** Must match PROBE_INCONCLUSIVE_EXIT_CODE in chromium-node-bridge.mjs. */
@@ -83,6 +84,7 @@ export async function chromiumLaunchCapability(
   options: { readonly waitForResult?: boolean; readonly signal?: AbortSignal } = {},
 ): Promise<ChromiumCapability> {
   if (options.signal?.aborted) return "inconclusive";
+  if (options.signal !== undefined) keepAbortSignalArmed(options.signal);
   if (process.env.BG_CHROMIUM_ASSUME_USABLE === "1") return "usable";
   if (cached !== null) {
     const age = Date.now() - cached.checkedAt;

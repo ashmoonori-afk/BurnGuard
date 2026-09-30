@@ -97,6 +97,15 @@ describe("chromium launch", () => {
     });
   }
 
+  test("Given a caller's timeout signal When a launch has listened on it and stopped Then the deadline still fires", async () => {
+    const signal = AbortSignal.timeout(200);
+
+    await launchChromium(signal, async () => fakeBrowser());
+    const fired = await new Promise<boolean>((resolve) => { const timer = setTimeout(() => { resolve(false); }, 5_000); signal.addEventListener("abort", () => { clearTimeout(timer); resolve(true); }, { once: true }); });
+
+    expect(fired).toBe(true);
+  });
+
   test("Given a render cancelled while a launch is pending When the signal aborts Then the wait ends as a cancelled render", async () => {
     const controller = new AbortController();
     setTimeout(() => { controller.abort(); }, 20);

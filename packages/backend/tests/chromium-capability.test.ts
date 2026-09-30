@@ -209,6 +209,23 @@ describe("chromium launch capability without an answer", () => {
   });
 });
 
+describe("caller deadline", () => {
+  test("Given a caller's timeout signal When the capability wait has listened on it and stopped Then the deadline still fires", async () => {
+    const signal = AbortSignal.timeout(200);
+
+    expect(await chromiumLaunchCapability(async () => true, { waitForResult: true, signal })).toBe("usable");
+
+    expect(await firesWithin(signal, 5_000)).toBe(true);
+  });
+});
+
+function firesWithin(signal: AbortSignal, ms: number): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => { resolve(false); }, ms);
+    signal.addEventListener("abort", () => { clearTimeout(timer); resolve(true); }, { once: true });
+  });
+}
+
 describe("chromium launch probe child", () => {
   async function probeWith(body: string, timeoutMs: number): Promise<boolean | "inconclusive"> {
     const dir = await mkdtemp(path.join(tmpdir(), "bg-probe-child-"));
