@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveCanvasNavigation, resolveCanvasNavigationAfterRefetch, resolveCanvasPageTarget, resolveCanvasSource } from "../src/lib/canvas-source";
+import { isSafeCanvasPagePath, resolveCanvasNavigation, resolveCanvasNavigationAfterRefetch, resolveCanvasPageTarget, resolveCanvasSource } from "../src/lib/canvas-source";
 
 describe("resolveCanvasSource", () => {
   test("Given a stale active entrypoint and zero indexed files When resolved Then the empty canvas does not fetch the missing file", () => {
@@ -113,5 +113,66 @@ describe("resolveCanvasNavigationAfterRefetch", () => {
     let refetched = 0;
     expect(await resolveCanvasNavigationAfterRefetch("https://evil.test/x.html", documentUrl, ["index.html"], async () => { refetched += 1; return ["x.html"]; })).toBeNull();
     expect(refetched).toBe(0);
+  });
+});
+
+describe("canvas page links with ordinary file names", () => {
+  const documentUrl = "http://127.0.0.1:14070/api/projects/p1/fs/index.html";
+
+  test("Given a just-written page named about_us.html missing from the cached index When its link is clicked Then the index is refetched and the page opens", async () => {
+    let refetches = 0;
+    const target = await resolveCanvasNavigationAfterRefetch("about_us.html", documentUrl, ["index.html"], async () => {
+      refetches += 1;
+      return ["index.html", "about_us.html"];
+    });
+
+    expect(refetches).toBe(1);
+    expect(target?.relPath).toBe("about_us.html");
+  });
+
+  test("Given missing pages named with an underscore or a version dot When the create-page action is gated Then those names are accepted", () => {
+    for (const relPath of ["contact_us.html", "pricing.v2.html", "_draft.html", "pages/about_us.html", "docs.v2/release-notes_1.0.html", "Landing.HTML"]) {
+      expect(isSafeCanvasPagePath(relPath)).toBe(true);
+    }
+  });
+
+  test("Given an accented page name When it arrives precomposed or decomposed Then both forms are accepted", () => {
+    const precomposed = "caf\u00e9.html";
+    const decomposed = "cafe\u0301.html";
+
+    expect(decomposed).toBe(precomposed.normalize("NFD"));
+    expect(isSafeCanvasPagePath(precomposed)).toBe(true);
+    expect(isSafeCanvasPagePath(decomposed)).toBe(true);
+  });
+
+  test("Given names with dot segments, hidden or dangling dots When gated Then they are rejected", () => {
+    for (const relPath of ["../about_us.html", "pages/../about_us.html", "./about_us.html", ".hidden.html", "about_us..html", "pages./about_us.html", "about_us.html.", ".html", "pages//about_us.html", "about us.html", "about_us.htm", "about\u0060us.html", "\u0301.html"]) {
+      expect(isSafeCanvasPagePath(relPath)).toBe(false);
+    }
+  });
+
+  test("Given Windows path flavours When gated Then drive letters, backslashes and UNC roots are rejected", () => {
+    for (const relPath of ["C:\\Users\\qa\\project\\about_us.html", "C:/Users/qa/project/about_us.html", "pages\\about_us.html", "\\\\server\\share\\about_us.html", "//server/share/about_us.html"]) {
+      expect(isSafeCanvasPagePath(relPath)).toBe(false);
+    }
+  });
+
+  test("Given POSIX absolute paths When gated Then they are rejected while the same names stay accepted as relative paths", () => {
+    for (const relPath of ["/home/qa/project/about_us.html", "/Users/qa/project/about_us.html"]) {
+      expect(isSafeCanvasPagePath(relPath)).toBe(false);
+      expect(isSafeCanvasPagePath(relPath.slice(1))).toBe(true);
+    }
+  });
+
+  test("Given links that encode a Windows or POSIX separator When navigating Then the index is not refetched", async () => {
+    let refetches = 0;
+    for (const href of ["pages%5cabout_us.html", "pages%2fabout_us.html", "..%5cabout_us.html", "%2e%2e/%2e%2e/about_us.html"]) {
+      expect(await resolveCanvasNavigationAfterRefetch(href, documentUrl, ["index.html"], async () => {
+        refetches += 1;
+        return ["index.html", "about_us.html", "pages/about_us.html"];
+      })).toBeNull();
+    }
+
+    expect(refetches).toBe(0);
   });
 });

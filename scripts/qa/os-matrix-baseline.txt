@@ -262,7 +262,6 @@ packages/frontend/tests/canvas-interaction.test.ts
 packages/frontend/tests/canvas-load-error.test.ts
 packages/frontend/tests/canvas-placeholder.test.ts
 packages/frontend/tests/canvas-scroll-restore.test.ts
-packages/frontend/tests/canvas-source.test.ts
 packages/frontend/tests/canvas-write-queries.test.ts
 packages/frontend/tests/canvas-zoom.test.ts
 packages/frontend/tests/catalog-detail-value.test.ts
