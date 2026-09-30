@@ -105,7 +105,10 @@ namespace BurnGuard.ProcessHost
                 if (!Native.GetExitCodeProcess(process.Process, out targetExit)) Fail(HostExit.NativeFailure, "target_exit_failed");
                 if (ActiveProcesses(job) != 0 && !Native.TerminateJobObject(job, targetExit)) Fail(HostExit.NativeFailure, "terminate_descendants_failed");
                 WaitForActiveZero(completionPort, zero, job, args.TimeoutMs);
-                WriteReceipt(args.Receipt, "{\"schema_version\":1,\"operation\":\"launch\",\"state\":\"exited\",\"job_token\":\"" + args.Job + "\",\"host_pid\":" + Native.GetCurrentProcessId() + ",\"target_pid\":" + process.ProcessId + ",\"target_exit_code\":" + targetExit + ",\"active_processes\":0}");
+                // The exited receipt goes to its own file instead of replacing the running one: ReplaceFile cannot remove a
+                // receipt another process has open without delete sharing (ERROR_UNABLE_TO_REMOVE_REPLACED, seen on CI
+                // runners right after a short-lived target exited), and every receipt file is then written exactly once.
+                WriteReceipt(ExitedReceiptPath(args.Receipt), "{\"schema_version\":1,\"operation\":\"launch\",\"state\":\"exited\",\"job_token\":\"" + args.Job + "\",\"host_pid\":" + Native.GetCurrentProcessId() + ",\"target_pid\":" + process.ProcessId + ",\"target_exit_code\":" + targetExit + ",\"active_processes\":0}");
                 return targetExit > 255 ? 255 : (int)targetExit;
             }
             finally
@@ -258,6 +261,9 @@ namespace BurnGuard.ProcessHost
             finally { Marshal.FreeHGlobal(buffer); }
         }
 
+        internal static string ExitedReceiptPath(string launchReceipt) =>
+            Path.Combine(Path.GetDirectoryName(launchReceipt), Path.GetFileNameWithoutExtension(launchReceipt) + ".exited" + Path.GetExtension(launchReceipt));
+
         private static void WriteReceipt(string path, string json)
         {
             try
@@ -267,7 +273,7 @@ namespace BurnGuard.ProcessHost
                 if (File.Exists(path)) File.Replace(temporary, path, null);
                 else File.Move(temporary, path);
             }
-            catch { Fail(HostExit.ReceiptFailure, "receipt_write_failed"); }
+            catch (Exception error) { Fail(HostExit.ReceiptFailure, "receipt_write_failed 0x" + error.HResult.ToString("x8")); }
         }
 
         private static Arguments Parse(string[] args)

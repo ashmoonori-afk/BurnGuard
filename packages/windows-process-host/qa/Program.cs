@@ -96,7 +96,7 @@ internal static class ProcessHostChecks
             var exited = host.WaitForExit(5_000);
             var remaining = Math.Max(0, 5_000 - (int)watch.ElapsedMilliseconds);
             var streams = exited && Task.WaitAll(new Task[] { output, error }, remaining);
-            var receiptText = File.Exists(receipt) ? File.ReadAllText(receipt) : "";
+            var receiptText = File.Exists(ExitedReceipt(receipt)) ? File.ReadAllText(ExitedReceipt(receipt)) : "";
             WriteArgumentEvidence(target, arguments, exited ? host.ExitCode : (int?)null, output.IsCompleted ? output.Result : "", error.IsCompleted ? error.Result : "", receiptText);
             if (!exited || !streams) throw new Exception("argument fixture deadline: " + Path.GetExtension(target));
             if (host.ExitCode != 0) throw new Exception("argument fixture host exit: " + Path.GetExtension(target) + ":" + host.ExitCode);
@@ -107,7 +107,7 @@ internal static class ProcessHostChecks
                 var expected = "arg:" + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(arguments[index]));
                 Equal(lines[index], expected, "argument bytes changed at " + index);
             }
-            ExactLaunch(Receipt(receipt), token, host.Id, 0);
+            ExactLaunch(Receipt(ExitedReceipt(receipt)), token, host.Id, 0);
         }
     }
 
@@ -126,7 +126,7 @@ internal static class ProcessHostChecks
                 {
                     if (!host.WaitForExit(5_000)) throw new Exception("root-exit host deadline");
                     Equal(host.ExitCode, 23, "host must preserve target exit code");
-                    var receipt = Receipt(launch);
+                    var receipt = Receipt(ExitedReceipt(launch));
                     ExactLaunch(receipt, token, host.Id, 23);
                     Signaled(childHandle, 5_000, "root-exit child survived job cleanup");
                     Present(sentinelPid, "unrelated sentinel was terminated");
@@ -215,6 +215,8 @@ internal static class ProcessHostChecks
         return task.Result;
     }
 
+    private static string ExitedReceipt(string launchReceipt) =>
+        Path.Combine(Path.GetDirectoryName(launchReceipt), Path.GetFileNameWithoutExtension(launchReceipt) + ".exited" + Path.GetExtension(launchReceipt));
     private static Dictionary<string, object> Receipt(string path) => new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(path));
     private static void ExactLaunch(Dictionary<string, object> value, string token, int hostPid, int exitCode)
     {

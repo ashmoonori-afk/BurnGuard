@@ -11,6 +11,8 @@ export type WindowsJobOwnership = {
   readonly helperPath: string;
   readonly receiptRoot: string;
   readonly launchReceipt: string;
+  /** Written once by the launcher when its job is empty; the running launch receipt is never replaced. */
+  readonly exitReceipt: string;
   readonly terminateReceipt: string;
   readonly receiptVersion: () => number;
   readonly waitForReceiptChange: (version: number) => { readonly promise: Promise<number>; readonly cancel: () => void };
@@ -69,7 +71,7 @@ export async function terminateOwnedWindowsJob(input: {
 
 async function launcherProvesExit(ownership: WindowsJobOwnership, hostPid: number, readReceipt: ReceiptReader): Promise<boolean> {
   try {
-    const receipt = parseLaunchReceipt(await readReceipt(ownership.launchReceipt));
+    const receipt = parseLaunchReceipt(await readReceipt(ownership.exitReceipt));
     return receipt !== null && receipt.job === ownership.token && receipt.hostPid === hostPid && receipt.activeProcesses === 0;
   } catch {
     return false;
@@ -104,7 +106,7 @@ async function awaitLaunchAuthority(input: {
       const contents = await input.readReceipt(input.ownership.launchReceipt);
       const running = parseRunningReceipt(contents);
       if (running !== null && running.job === input.ownership.token && running.hostPid === input.hostPid && running.activeProcesses >= 1) return "running";
-      const exited = parseLaunchReceipt(contents);
+      const exited = parseLaunchReceipt(await input.readReceipt(input.ownership.exitReceipt).catch(() => ""));
       if (exited !== null && exited.job === input.ownership.token && exited.hostPid === input.hostPid && exited.activeProcesses === 0) return "exited";
     } catch {
       if (hostExited) throw new OwnedProcessHostError("invalid_receipt");
@@ -164,7 +166,7 @@ function positiveInteger(value: unknown): value is number {
 }
 
 function validOwnership(ownership: WindowsJobOwnership): boolean {
-  return JOB_TOKEN_PATTERN.test(ownership.token) && pathIsAbsolute(ownership.launchReceipt) && pathIsAbsolute(ownership.terminateReceipt);
+  return JOB_TOKEN_PATTERN.test(ownership.token) && pathIsAbsolute(ownership.launchReceipt) && pathIsAbsolute(ownership.exitReceipt) && pathIsAbsolute(ownership.terminateReceipt);
 }
 
 function pathIsAbsolute(value: string): boolean {
