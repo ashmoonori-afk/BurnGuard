@@ -197,6 +197,10 @@ lexically around the call), and abort-listener removal in modules that do not lo
 - File locking on Windows: a crop or asset overwrite can fail with EBUSY or EPERM while another process holds the
   file. Review crops are report-only: `withSectionCrops` catches any write error and returns the target without
   crops, so the turn is unaffected. Other writers are not guarded against this.
+- Refused sends: a send the route answers with 409 before the turn records anything (`backend_unavailable`, a model
+  that cannot draw, control files) removes its own upload again through `rollbackSessionAttachments`. There is no
+  OS-specific branch; `session-routes` runs that rollback against the host file system on the Ubuntu and OS jobs. A
+  Windows handle held by another process on the just-written upload would fail the removal like any other writer.
 - Case-insensitive file systems (macOS, Windows): hero and logo image names that differ only by case are one image on
   every OS (the first wins), at extraction and when a saved pin is read, so extraction does not depend on the file
   system's case rules.

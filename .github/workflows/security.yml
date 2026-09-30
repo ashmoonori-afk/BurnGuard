@@ -73,6 +73,7 @@ jobs:
           packages/backend/tests/owned-process-tree.test.ts
           packages/backend/tests/research-source-loader.test.ts
           packages/backend/tests/session-recovery.test.ts
+          packages/backend/tests/session-routes.test.ts
           packages/backend/tests/review-turn-execution.test.ts
           packages/backend/tests/turn-continuation.test.ts
           packages/backend/tests/turn-phases.test.ts

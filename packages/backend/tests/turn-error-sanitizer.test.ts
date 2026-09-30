@@ -54,13 +54,16 @@ describe("turn error event boundary", () => {
           body: JSON.stringify({ type: "user.message", text: "safe request" }),
         },
         {
+          // The turn decides its refusals before it reads the project, so the tool has to be usable
+          // for the send to reach the private path at all.
           detectBackends: async () => {
             readinessCalls += 1;
-            return readyCodex();
+            return { backends: (await readyCodex()).backends.map((backend) => ({ ...backend, binary_path: "fixture" })) };
           },
         },
       );
-      expect(readinessCalls).toBe(1);
+      // Once for the route's pre-check and once for the turn's own gate; the fault follows the gate.
+      expect(readinessCalls).toBe(2);
       const body = (await response.json()) as {
         readonly error: { readonly code: string };
       };

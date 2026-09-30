@@ -23,7 +23,17 @@ beforeAll(async () => {
   getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, projectId, root);
   getSqlite().prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(sessionId, projectId);
 });
-afterAll(async () => { getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId); await rm(root, { recursive: true, force: true }); });
+const graphicProjectId = `${projectId}-graphic`;
+const graphicSessionId = `${graphicProjectId}-session`;
+let graphicRoot = "";
+afterAll(async () => {
+  for (const id of [projectId, graphicProjectId]) getSqlite().prepare("DELETE FROM projects WHERE id=?").run(id);
+  await Promise.all([root, graphicRoot].filter((dir) => dir !== "").map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+function userMessagesAfter(id: string, after: number): number {
+  return listSequencedSessionEvents(getSqlite(), id, after).filter((item) => item.event.type === "chat.user_message").length;
+}
 
 function request(route: string, method = "GET", body?: unknown): Promise<Response> {
   return sessionRoutes.request(`http://local${route}`, { method, headers: body === undefined ? undefined : jsonHeaders, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -130,15 +140,73 @@ describe("production session route boundaries", () => {
     expect(listSequencedSessionEvents(getSqlite(), sessionId, after).map((item) => item.event.type)).not.toContain("chat.user_message");
   });
 
-  test("Given a session whose backend is not installed When a message is posted Then exactly one status.error and one status.idle are persisted", async () => {
+  test("Given a session whose backend is not installed When a message is posted Then it is refused with 409 backend_unavailable, exactly one status.error and one status.idle are persisted and the refused message is not recorded as sent", async () => {
+    // Given
     const after = listSequencedSessionEvents(getSqlite(), sessionId, 0).at(-1)?.sequence ?? 0;
+
+    // When
     const response = await sessionRoutes.request(`http://local/api/sessions/${sessionId}/events`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ type: "user.message", text: "hello" }) }, {
       detectBackends: async () => ({ backends: [{ id: "codex", found: false }, { id: "claude-code", found: false }] }),
     });
-    expect(response.status).toBe(500);
+
+    // Then
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "backend_unavailable" } });
     const events = listSequencedSessionEvents(getSqlite(), sessionId, after).map(item => item.event);
     expect(events.filter(event => event.type === "status.error").map(event => event.code)).toEqual(["backend_unavailable"]);
     expect(events.filter(event => event.type === "status.idle").map(event => event.stopReason)).toEqual(["error"]);
     expect(getSqlite().query("SELECT status FROM sessions WHERE id=?").get(sessionId)).toEqual({ status: "idle" });
+    // The composer keeps the draft after a refusal, so a recorded message would be duplicated by the retry.
+    expect(userMessagesAfter(sessionId, after)).toBe(0);
+    expect(isUserTurnRunning(sessionId)).toBe(false);
+  });
+
+  test("Given a session whose backend is not installed When a multipart message with an upload is posted Then the refused upload is rolled back instead of being bound to the dead turn", async () => {
+    // Given
+    const form = new FormData();
+    form.set("type", "user.message");
+    form.set("text", "hello");
+    form.append("files", new File(["notes"], "refused-notes.txt", { type: "text/plain" }));
+    let savedPaths: readonly string[] = [];
+
+    // When
+    const response = await sessionRoutes.request(`http://local/api/sessions/${sessionId}/events`, { method: "POST", body: form }, {
+      detectBackends: async () => ({ backends: [{ id: "codex", found: false }, { id: "claude-code", found: false }] }),
+      saveSessionAttachments: async (id, uploads) => { savedPaths = await saveSessionAttachments(id, uploads); return savedPaths; },
+    });
+
+    // Then
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "backend_unavailable" } });
+    expect(savedPaths).toHaveLength(1);
+    expect(existsSync(savedPaths[0]!)).toBe(false);
+    expect(getSqlite().query<{ readonly count: number }, [string, string]>("SELECT COUNT(*) count FROM attachments WHERE session_id=? AND file_path=?").get(sessionId, savedPaths[0]!)?.count).toBe(0);
+  });
+
+  test("Given a graphic project on an image-capable backend When the send selects a text-only model Then the route refuses with 409 graphic_requires_authenticated_codex instead of 500 artifact_prepare_failed and records no message", async () => {
+    // Given
+    graphicRoot = await mkdtemp(path.join(tmpdir(), "burnguard-session-routes-graphic-"));
+    await writeFile(path.join(graphicRoot, "index.html"), "<!doctype html><html><body>base</body></html>");
+    getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'graphic',?,'index.html','codex',1,1)").run(graphicProjectId, graphicProjectId, graphicRoot);
+    getSqlite().prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(graphicSessionId, graphicProjectId);
+
+    // When
+    const response = await sessionRoutes.request(`http://local/api/sessions/${graphicSessionId}/events`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ type: "user.message", text: "draw a poster", generation: { model: "text-only", effort: "low", vanilla: false, provider: "native" } }) }, {
+      detectBackends: async () => ({ backends: [{
+        id: "codex", found: true, binary_path: "fixture", authenticated: true,
+        models: [
+          { id: "text-only", label: "Text only", efforts: ["low"], image_generation: false },
+          { id: "image-model", label: "Image model", efforts: ["low"], image_generation: true },
+        ],
+      }] }),
+    });
+
+    // Then
+    const body = await response.json() as { readonly error?: { readonly code?: string } };
+    expect({ status: response.status, code: body.error?.code }).toEqual({ status: 409, code: "graphic_requires_authenticated_codex" });
+    const events = listSequencedSessionEvents(getSqlite(), graphicSessionId, 0).map(item => item.event);
+    expect(events.filter(event => event.type === "status.error").map(event => event.code)).toEqual(["graphic_requires_authenticated_codex"]);
+    expect(userMessagesAfter(graphicSessionId, 0)).toBe(0);
+    expect(getSqlite().query("SELECT status FROM sessions WHERE id=?").get(graphicSessionId)).toEqual({ status: "idle" });
   });
 });

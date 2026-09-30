@@ -78,6 +78,8 @@ jobs:
           packages/backend/tests/trace-security.test.ts
           packages/backend/tests/prompt-builder.test.ts
           packages/backend/tests/desktop-lifecycle.test.ts
+          packages/backend/tests/session-routes.test.ts
+          packages/backend/tests/turn-error-sanitizer.test.ts
           scripts/qa/har-mask.test.ts
           packages/backend/tests/design-system-route-error-bodies.test.ts
           packages/backend/tests/export-failure-message.test.ts
