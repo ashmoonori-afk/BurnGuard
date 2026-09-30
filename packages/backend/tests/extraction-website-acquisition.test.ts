@@ -173,3 +173,29 @@ test("R2-1: Given a tag-manager noscript frame, a template image, srcset and pin
   expect(stored).toContain("url&#40;https://example.com/x.png");
   expect(stored).toContain("&#64;import them");
 });
+
+test("IMPORT-1: Given a homepage whose logo is an ordinary SVG with a gradient fill url(#g) When website extraction runs Then the import still publishes a draft with an inert copy of the logo", async () => {
+  const logo = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><defs><linearGradient id="g"><stop offset="0" stop-color="#123456"/></linearGradient></defs><rect width="10" height="10" fill="url(#g)"/></svg>';
+  await withQaWebsite("svg-logo", () => ({
+    "/source": { type: "text/html", body: '<!doctype html><html><head><meta charset="utf-8"><title>Acme</title></head><body><header><img src="/logo.svg" alt="Acme"></header><h1>Acme</h1></body></html>' },
+    "/logo.svg": { type: "image/svg+xml", body: logo },
+  }), async ({ id, origin, requests, root }) => {
+    const result = await extractDesignSystemFromSource({ system_id: id, name: "Acme", source_type: "website", source_url: `${origin}/source` });
+    expect(result.system.status).toBe("draft");
+    expect(requests).toContain("/logo.svg");
+    const published = await readFile(path.join(root, "assets/logos/logo.svg"), "utf8");
+    expect(() => assertInertSourceMarkup(published, "svg")).not.toThrow();
+    expect(parse(published).querySelector("rect")?.getAttribute("width")).toBe("10");
+  });
+});
+
+test("IMPORT-2: Given a homepage with 65 product images and no logo candidates When website extraction runs Then the import still publishes a draft instead of failing on the asset-count limit", async () => {
+  const images = Array.from({ length: 65 }, (_, index) => `<img src="/products/item-${index}.png" alt="Item ${index}">`).join("");
+  await withQaWebsite("many-images", () => ({
+    "/source": { type: "text/html", body: `<!doctype html><html><head><meta charset="utf-8"><title>Shop</title></head><body><h1>Shop</h1><main>${images}</main></body></html>` },
+  }), async ({ id, origin, requests }) => {
+    const result = await extractDesignSystemFromSource({ system_id: id, name: "Shop", source_type: "website", source_url: `${origin}/source` });
+    expect(result.system.status).toBe("draft");
+    expect(requests.filter((request) => request.startsWith("/products/"))).toEqual([]);
+  });
+});
