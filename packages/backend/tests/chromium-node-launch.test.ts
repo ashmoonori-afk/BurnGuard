@@ -26,8 +26,11 @@ test.skipIf(!systemChromeAvailable)("system Chrome confines popup requests and c
   const requests: string[] = [];
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) { requests.push(request.url); return new Response("fixture"); } });
   let browser: Awaited<ReturnType<typeof launchChromiumViaNode>> | undefined;
+  // launchChromiumViaNode closes the browser whenever its signal aborts, so the signal must live as long as the test uses
+  // the browser; the launch itself is bounded by the bridge's own launch deadline.
+  const lifetime = new AbortController();
   try {
-    browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(20000));
+    browser = await launchChromiumViaNode({ channel: "chrome" }, lifetime.signal);
     await mkdir(stagedDir);
     await writeFile(path.join(root, "outside.html"), "OUTSIDE_FIXTURE");
     await writeFile(path.join(stagedDir, "inside.js"), "window.insideLoaded = true;");
@@ -64,8 +67,8 @@ test.skipIf(!systemChromeAvailable)("system Chrome confines popup requests and c
       expect(session.findings).toContainEqual({ code: "remote_request", path: "file:outside-artifact" });
       expect(JSON.stringify(session.findings)).not.toContain(root);
     } finally { await session.close(); }
-  } finally { await browser?.close(); await server.stop(true); await rm(root, { recursive: true, force: true }); }
-}, 30000);
+  } finally { await browser?.close(); lifetime.abort(); await server.stop(true); await rm(root, { recursive: true, force: true }); }
+}, 60000);
 
 for (const surface of ["export", "thumbnail"] as const) test.skipIf(!systemChromeAvailable)(`system Chrome ${surface} denies WebSockets before any upstream connection`, async () => {
   await mkdir(projectsDir, { recursive: true });
@@ -85,7 +88,8 @@ for (const surface of ["export", "thumbnail"] as const) test.skipIf(!systemChrom
     await writeFile(path.join(root, "local.js"), "window.localAssetLoaded=true");
     await writeFile(path.join(root, "index.html"), `<!doctype html><html><head><script src="local.js"></script></head><body style="background:#123456;color:white"><h1>Local render</h1><script>window.socketSettled=new Promise((resolve,reject)=>{const socket=new WebSocket('${socketUrl}');const timer=setTimeout(()=>reject(new Error('socket_event_timeout')),5000);socket.onclose=event=>{clearTimeout(timer);resolve(event.code)};});</script></body></html>`);
     if (surface === "export") {
-      const browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(20000));
+      const lifetime = new AbortController();
+      const browser = await launchChromiumViaNode({ channel: "chrome" }, lifetime.signal);
       try {
         const session = await openRenderSession({ stagedDir: root, entrypoint: "index.html", viewport: { width: 640, height: 360, dpr: 1 }, deck: false, strict: false, signal: AbortSignal.timeout(15000), browser });
         try {
@@ -96,7 +100,7 @@ for (const surface of ["export", "thumbnail"] as const) test.skipIf(!systemChrom
           expect(session.findings).toContainEqual({ code: "remote_request", path: `ws://127.0.0.1:${server.port}/socket` });
           expect(parsePng(new Uint8Array(await session.page.screenshot()))).toEqual({ width: 640, height: 360 });
         } finally { await session.close(); }
-      } finally { await browser.close(); }
+      } finally { await browser.close(); lifetime.abort(); }
     } else {
       // Exercise the actual thumbnail default renderer, not an injected image writer.
       process.env.BG_THUMBNAIL_RESPONSE_DEADLINE_MS = "30000";
