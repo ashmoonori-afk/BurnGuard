@@ -25,6 +25,7 @@ jobs run each pinning suite.
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
 | Export closure import scan (LF and CRLF scripts) | same references | same references | same references | `export-validation` | Ubuntu, OS jobs |
+| Canonical tree root reached through an alias | symlinked parent resolved; `/var` spelling kept | junction parent and 8.3 short name resolved | symlinked parent resolved | `export-validation` (real junction/symlink and short name; `path.win32`/`path.posix` injected for the naming rule) | Ubuntu, OS jobs |
 | Export closure references written as Windows paths (drive letter, backslash, UNC) or POSIX absolute paths | Windows forms refused; POSIX absolute is project-root-relative | same | same | `export-validation` | Ubuntu, OS jobs |
 
 ## Known gaps

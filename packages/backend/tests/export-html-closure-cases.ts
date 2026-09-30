@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
-import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
+import { CanonicalTreeManifestError, canonicalTreePath, inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { ExportClosureError, localAssetReferences, resolveStaticClosure } from "../src/services/export-closure";
 import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "../src/services/export-html-validation";
 import { canonicalJson, sha256 } from "../src/services/export-receipt";
-import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 
 const digest = "a".repeat(64);
 
@@ -171,11 +171,12 @@ describe("export HTML closure boundaries", () => {
     expect(await referenceOutcomes("/a.png")).toEqual(["resolved:a.png", "resolved:a.png", "resolved:a.png,app.js"]);
   });
 
-  test.skipIf(!canCreateSymlink())(`Given the temp directory reached through a link When an HTML archive is validated Then the entrypoint closure resolves (${SYMLINK_SKIP_REASON})`, async () => {
+  test("Given the temp directory reached through a link (a junction on Windows, a symlink elsewhere) When an HTML archive is validated Then the entrypoint closure resolves", async () => {
     // Given
     // The target and the link share one parent that is removed recursively: Bun on Windows fails with EFAULT when it removes a directory link on its own.
     const base = await mkdtemp(path.join(tmpdir(), "bg-html-validate-link-")); const real = path.join(base, "real"); const link = path.join(base, "link");
-    await mkdir(real); await symlink(real, link, "dir");
+    // "junction" needs no privilege on Windows and is an ordinary symlink on every other OS, so this case never skips.
+    await mkdir(real); await symlink(real, link, "junction");
     const saved = { TMPDIR: process.env["TMPDIR"], TEMP: process.env["TEMP"], TMP: process.env["TMP"] };
     const html = new TextEncoder().encode("<html><body><img src=asset.png></body></html>"); const asset = Uint8Array.from([1, 2, 3]);
     const expected = { schema_version: 1 as const, entrypoint: "index.html", project_revision: 7, project_digest: digest, input_closure_digest: "b".repeat(64) };
@@ -190,5 +191,66 @@ describe("export HTML closure boundaries", () => {
       for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
       await rm(base, { recursive: true, force: true });
     }
+  });
+});
+
+describe("export closure root aliases", () => {
+  test("Given a project root reached through a linked parent, and on Windows through its 8.3 short name When the tree is inspected and the closure resolves Then entries, digest and references match the direct spelling", async () => {
+    const base = await mkdtemp(path.join(tmpdir(), "bg-export-alias-"));
+    try {
+      // Given
+      const real = path.join(base, "real"); const project = path.join(real, "bg long project directory");
+      await mkdir(path.join(project, "assets"), { recursive: true });
+      await writeFile(path.join(project, "index.html"), '<html><body><img src="assets/a.png"><script type="module" src="app.js"></script></body></html>');
+      await writeFile(path.join(project, "app.js"), 'import "./assets/lib.js";\n'); await writeFile(path.join(project, "assets", "a.png"), "image"); await writeFile(path.join(project, "assets", "lib.js"), "export {};\n");
+      // A junction on Windows (no privilege needed), a symlink on every other OS.
+      const link = path.join(base, "link"); await symlink(real, link, "junction");
+      const aliases = [path.join(link, "bg long project directory")];
+      if (process.platform === "win32") {
+        // NTFS gives the only long name in a fresh directory the short name BGLONG~1. CI must prove it; a volume with 8.3 names turned off has no such alias.
+        const short = path.join(real, "BGLONG~1");
+        if (process.env["CI"] !== undefined || existsSync(short)) aliases.push(short);
+      }
+      const direct = await inspectCanonicalTree(project);
+      expect(direct.files.map((file) => file.path)).toEqual(["app.js", "assets/a.png", "assets/lib.js", "index.html"]);
+      for (const alias of aliases) {
+        // When
+        const manifest = await inspectCanonicalTree(alias);
+        // Then
+        expect(manifest).toEqual(direct);
+        expect((await resolveStaticClosure(alias, "index.html", manifest)).referenced_paths).toEqual(["app.js", "assets/a.png", "assets/lib.js"]);
+      }
+      // Then: a root that is itself the link stays refused on every OS.
+      await expect(inspectCanonicalTree(link)).rejects.toMatchObject({ code: "unsafe_tree_entry" });
+    } finally { await rm(base, { recursive: true, force: true }); }
+  });
+
+  const refusedAlias = (base: string, target: string, flavor: path.PlatformPath): string => {
+    try { return canonicalTreePath(base, target, flavor); }
+    catch (error) { if (!(error instanceof CanonicalTreeManifestError)) throw error; return error.code; }
+  };
+
+  test("Given Windows spellings of a root and its entry (drive letter, case, UNC share) When the manifest path is named Then it is root-relative with forward slashes, and a junction, 8.3 short-name or other-drive alias of the root is refused", () => {
+    // Given
+    const entry = String.raw`C:\Users\qa\project\assets\a.png`;
+    // When / Then: the spelling realpath returns, whatever the case of the drive or a directory.
+    expect(canonicalTreePath(String.raw`C:\Users\qa\project`, entry, path.win32)).toBe("assets/a.png");
+    expect(canonicalTreePath(String.raw`c:\users\QA\project`, entry, path.win32)).toBe("assets/a.png");
+    expect(canonicalTreePath(String.raw`\\server\share\project`, String.raw`\\server\share\project\assets\a.png`, path.win32)).toBe("assets/a.png");
+    // When / Then: another spelling of the same directory is not a prefix of the entry.
+    expect(refusedAlias(String.raw`C:\Users\QAUSER~1\project`, String.raw`C:\Users\qa-user-long\project\assets\a.png`, path.win32)).toBe("unsafe_tree_entry");
+    expect(refusedAlias(String.raw`C:\junction\project`, entry, path.win32)).toBe("unsafe_tree_entry");
+    expect(refusedAlias(String.raw`D:\Users\qa\project`, entry, path.win32)).toBe("unsafe_tree_entry");
+    expect(refusedAlias(String.raw`C:\Users\qa\project`, String.raw`C:\Users\qa\project`, path.win32)).toBe("unsafe_tree_entry");
+  });
+
+  test("Given POSIX spellings of a root and its entry When the manifest path is named Then it is root-relative, and a symlinked, /private or differently cased alias of the root is refused", () => {
+    // When / Then: Linux and macOS home directories.
+    expect(canonicalTreePath("/home/qa/project", "/home/qa/project/assets/a.png", path.posix)).toBe("assets/a.png");
+    expect(canonicalTreePath("/Users/qa/project", "/Users/qa/project/assets/a.png", path.posix)).toBe("assets/a.png");
+    // When / Then: another spelling of the same directory is not a prefix of the entry.
+    expect(refusedAlias("/home/qa/link/project", "/home/qa/real/project/assets/a.png", path.posix)).toBe("unsafe_tree_entry");
+    expect(refusedAlias("/var/folders/qa/project", "/private/var/folders/qa/project/assets/a.png", path.posix)).toBe("unsafe_tree_entry");
+    expect(refusedAlias("/Users/QA/project", "/Users/qa/project/assets/a.png", path.posix)).toBe("unsafe_tree_entry");
   });
 });
