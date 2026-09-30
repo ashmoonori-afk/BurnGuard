@@ -74,12 +74,24 @@ jobs:
           packages/backend/tests/trace-security.test.ts
           packages/backend/tests/prompt-builder.test.ts
           packages/backend/tests/desktop-lifecycle.test.ts
+          packages/backend/tests/chromium-capability.test.ts
+          packages/backend/tests/chromium-bridge-probe.test.ts
+          packages/backend/tests/chromium-browser-paths.test.ts
+          packages/backend/tests/export-render-launch.test.ts
+          packages/backend/tests/chromium-process-tree.test.ts
       # Host font enumeration and process-tree cleanup; see doc/os-matrix.md for the Windows timing evidence.
       - name: Host fonts and process-tree suites
         run: >-
           bun test --timeout 30000
           packages/backend/tests/local-fonts.test.ts
           packages/backend/tests/owned-process-tree.test.ts
+      # The runner has no Playwright build, so the suites launch its system Chrome. The first launch on a fresh
+      # runner is a cold start (3-25 s measured, over 45 s once); it happens here under its own budget, with each
+      # channel's result and time in the log, and fails the job by name when no browser starts. See doc/os-matrix.md.
+      - name: Warm the system browser
+        env:
+          BG_CHROMIUM_PROBE_CHANNEL_TIMEOUT_MS: "180000"
+        run: node packages/backend/src/services/chromium-node-bridge.mjs --probe
       - name: Browser-backed suites
         env:
           BG_BROWSER_SMOKE: "1"
