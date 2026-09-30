@@ -104,8 +104,8 @@ export type ChromiumLauncher = (options: ChromiumLaunchAttempt) => Promise<Brows
 type LaunchOutcome = { readonly kind: "browser"; readonly browser: Browser } | { readonly kind: "failed"; readonly error: unknown } | { readonly kind: "timeout" } | { readonly kind: "aborted" };
 const LAUNCH_ATTEMPTS: readonly ChromiumLaunchAttempt[] = [{ headless: true }, { headless: true, channel: "chrome" }, { headless: true, channel: "msedge" }];
 
-/** Playwright's own build or a system Chrome or Edge, the channels the launcher falls back to. */
-const browserOnDisk = (): Promise<boolean> => anyBrowserOnDisk([chromium.executablePath(), ...systemBrowserCandidates(process.platform, process.env)], async (candidate) => (await stat(candidate)).isFile());
+/** Playwright's own build or a system Chrome or Edge, the channels the launcher falls back to. The host is injectable so each OS's lookup is tested on every OS. */
+export const browserOnDisk = (platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env, isFile: (candidate: string) => Promise<boolean> = async (candidate) => (await stat(candidate)).isFile(), bundled: string = chromium.executablePath()): Promise<boolean> => anyBrowserOnDisk([bundled, ...systemBrowserCandidates(platform, env)], isFile);
 
 export async function launchChromium(signal: AbortSignal, launch: ChromiumLauncher = (options) => chromiumNodeCommand() !== null ? launchChromiumViaNode(options, signal) : chromium.launch(options), installed: () => Promise<boolean> = browserOnDisk, isolated: boolean = chromiumNodeCommand() !== null): Promise<Browser> {
   // A launch that never completes its handshake blocks the Bun event loop, so
