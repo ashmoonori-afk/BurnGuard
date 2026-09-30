@@ -67,8 +67,8 @@ jobs:
           packages/backend/tests/trace-security.test.ts
           packages/backend/tests/prompt-builder.test.ts
           packages/backend/tests/desktop-lifecycle.test.ts
-      - name: macOS-only suites
-        if: runner.os == 'macOS'
+      # Host font enumeration and process-tree cleanup; see doc/os-matrix.md for the Windows timing evidence.
+      - name: Host fonts and process-tree suites
         run: >-
           bun test --timeout 30000
           packages/backend/tests/local-fonts.test.ts
@@ -82,17 +82,26 @@ jobs:
           packages/backend/tests/design-system-conformance.test.ts
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/design-system-starter.test.ts
+      - name: Chromium popup and deck runtime
+        if: runner.os == 'Windows'
+        env:
+          BG_BROWSER_SMOKE: "1"
+        run: bun test --timeout 60000 packages/backend/tests/chromium-node-launch.test.ts
       - name: Export smoke
-        if: runner.os == 'macOS'
         env:
           BG_EXPORT_SMOKE: "1"
         run: bun test --timeout 120000 packages/backend/tests/exports.test.ts
 
-  windows-flaky-watch:
-    name: Windows flaky watch (not gating)
-    runs-on: windows-latest
-    continue-on-error: true
-    timeout-minutes: 20
+  # TEMPORARY stability proof for the suites moved out of the old non-gating watch job; removed before merge.
+  windows-repeat:
+    name: Windows repeat ${{ matrix.run }}
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -101,26 +110,63 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24.13.0
+      - run: bun install --frozen-lockfile
       - uses: actions/setup-dotnet@v4
+        if: runner.os == 'Windows'
         with:
           dotnet-version: 8.0.x
-      - run: bun install --frozen-lockfile
       - name: Build the Windows process host
+        if: runner.os == 'Windows'
         run: |
           bun scripts/build-windows-process-host.ts
           "BG_WINDOWS_PROCESS_HOST=$env:GITHUB_WORKSPACE\dist\windows-process-host\burnguard-windows-process-host.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Suites with observed Windows flakes
+      # Suites that need no Chromium, Python or provider CLI. Platform-impossible cases skip themselves; see
+      # doc/os-matrix.md for what each suite pins per OS.
+      - name: Platform-sensitive suites
+        run: >-
+          bun test --timeout 30000
+          packages/backend/tests/os-portability.test.ts
+          packages/backend/tests/design-system-wireframe.test.ts
+          packages/backend/tests/design-system-visual-diff.test.ts
+          packages/backend/tests/design-system-hero-assets.test.ts
+          packages/backend/tests/design-system-contrast.test.ts
+          packages/backend/tests/design-system-starter.test.ts
+          packages/backend/tests/design-system-starter-entrypoint.test.ts
+          packages/backend/tests/design-system-layout-reference.test.ts
+          packages/backend/tests/design-system-conformance.test.ts
+          packages/backend/tests/design-system-pages.test.ts
+          packages/backend/tests/design-workflow.test.ts
+          packages/backend/tests/generation-output.test.ts
+          packages/backend/tests/path-boundary.test.ts
+          packages/backend/tests/config-storage.test.ts
+          packages/backend/tests/native-binding.test.ts
+          packages/backend/tests/python-runtime.test.ts
+          packages/backend/tests/owned-process-windows.test.ts
+          packages/backend/tests/trace-security.test.ts
+          packages/backend/tests/prompt-builder.test.ts
+          packages/backend/tests/desktop-lifecycle.test.ts
+      # Host font enumeration and process-tree cleanup; see doc/os-matrix.md for the Windows timing evidence.
+      - name: Host fonts and process-tree suites
         run: >-
           bun test --timeout 30000
           packages/backend/tests/local-fonts.test.ts
           packages/backend/tests/owned-process-tree.test.ts
+      - name: Browser-backed suites
+        env:
+          BG_BROWSER_SMOKE: "1"
+        run: >-
+          bun test --timeout 60000
+          packages/backend/tests/design-system-pages.test.ts
+          packages/backend/tests/design-system-conformance.test.ts
+          packages/backend/tests/design-system-contrast.test.ts
+          packages/backend/tests/design-system-starter.test.ts
       - name: Chromium popup and deck runtime
-        if: ${{ !cancelled() }}
+        if: runner.os == 'Windows'
         env:
           BG_BROWSER_SMOKE: "1"
         run: bun test --timeout 60000 packages/backend/tests/chromium-node-launch.test.ts
       - name: Export smoke
-        if: ${{ !cancelled() }}
         env:
           BG_EXPORT_SMOKE: "1"
         run: bun test --timeout 120000 packages/backend/tests/exports.test.ts
+
