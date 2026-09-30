@@ -50,6 +50,9 @@ jobs run each pinning suite.
 | Design-system outputs (wireframe SVG, starter stylesheet and skeleton) | byte-identical | byte-identical | byte-identical | `os-portability` (pinned digests) | Ubuntu, OS jobs |
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
+| Canvas page-path gate (index refetch, "Create page" action) | one shared rule on a URL-decoded project-relative path; accepts decomposed (NFD) names | same rule; drive letters, backslashes and UNC roots rejected | same rule | `canvas-source` (Windows and POSIX path flavours as literals) | Ubuntu, OS jobs |
+| HAR root masking (`har-mask.ts --root`) | one host-independent matcher: NFC and NFD names, any letter case | same matcher: drive and UNC roots, either separator, JSON-doubled backslashes, any letter case | same matcher | `scripts/qa/har-mask.test.ts` (path flavor given as a string, every case on every OS) | Ubuntu, OS jobs |
+| Failure text in design-system API errors and the export job `error_message` | fixed copy plus a domain error code; no `/Users/...` path, no errno text | same; no drive-letter or UNC path | same; no `/home/...` path | `design-system-route-error-bodies`, `export-failure-message` (path flavor injected) | Ubuntu, OS jobs |
 | Decomposed (NFD) file names in a managed tree | APFS finds a name through either spelling | NTFS keeps NFC and NFD apart: live files are read through the on-disk spelling, and a publication rewrites the name as NFC | ext4: same as Windows | `decomposed-file-names` (real files on the host file system; drive, UNC and POSIX roots with the path flavor injected) | Ubuntu, OS jobs |
 | Website import acquisition (SVG logo sanitising, logo-candidate limit, public 192.0.x hosts, same-origin stylesheet redirects) | same | same | same | `extraction-website-acquisition`, `extraction-website-boundaries` | Ubuntu, OS jobs |
 | Export closure import scan (LF and CRLF scripts) | same references | same references | same references | `export-validation` | Ubuntu, OS jobs |
@@ -231,6 +234,10 @@ lexically around the call), and abort-listener removal in modules that do not lo
 - File locking on Windows: a crop or asset overwrite can fail with EBUSY or EPERM while another process holds the
   file. Review crops are report-only: `withSectionCrops` catches any write error and returns the target without
   crops, so the turn is unaffected. Other writers are not guarded against this.
+- Refused sends: a send the route answers with 409 before the turn records anything (`backend_unavailable`, a model
+  that cannot draw, control files) removes its own upload again through `rollbackSessionAttachments`. There is no
+  OS-specific branch; `session-routes` runs that rollback against the host file system on the Ubuntu and OS jobs. A
+  Windows handle held by another process on the just-written upload would fail the removal like any other writer.
 - Case-insensitive file systems (macOS, Windows): hero and logo image names that differ only by case are one image on
   every OS (the first wins), at extraction and when a saved pin is read, so extraction does not depend on the file
   system's case rules.

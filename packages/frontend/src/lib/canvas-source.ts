@@ -7,8 +7,15 @@ export type CanvasSourceInput = {
 
 type CanvasPageTarget = { readonly relPath: string; readonly url: string };
 
+// A word is letters, digits and "_"; combining marks may follow its first character so a name that
+// macOS reports decomposed (NFD) passes like its precomposed form. Words join with "-" or ".", which
+// keeps "..", hidden and dangling-dot segments, separators, drive colons and spaces out.
+const PAGE_WORD = String.raw`[\p{L}\p{N}_][\p{L}\p{N}\p{M}_]*`;
+const PAGE_SEGMENT = `${PAGE_WORD}(?:[-.]${PAGE_WORD})*`;
+const SAFE_PAGE_PATH = new RegExp(`^(?:${PAGE_SEGMENT}/)*${PAGE_SEGMENT}\\.html$`, "iu");
+
 export function isSafeCanvasPagePath(relPath: string): boolean {
-  return /^(?:[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*\/)*[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*\.html$/iu.test(relPath);
+  return SAFE_PAGE_PATH.test(relPath);
 }
 
 export function resolveCanvasSource({ projectId, activeRelPath, indexedRelPaths, entrypointUrl }: CanvasSourceInput): string | null {

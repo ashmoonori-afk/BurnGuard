@@ -46,6 +46,12 @@ test("Given a message whose zh-CN value is translated When the ko value is read 
   expect(entry.ko).not.toBe(entry.en);
 });
 
+test("Given the shell tagline When read for every locale Then ko is translated rather than the English copy", () => {
+  const entry = messages["shell.tagline"];
+  expect(entry.ko).toMatch(/\p{Script=Hangul}/u);
+  expect(entry.ko).not.toBe(entry.en);
+});
+
 test("Given the logo chip copy When the registry is read Then the unused add-chip key is gone", () => {
   expect(Object.hasOwn(messages, "home.logo.chipAdd")).toBe(false);
 });

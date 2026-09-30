@@ -201,7 +201,6 @@ packages/backend/tests/sample-design-system-fonts.test.ts
 packages/backend/tests/seeded-project-html.test.ts
 packages/backend/tests/serve-path-boundary.test.ts
 packages/backend/tests/session-recovery.test.ts
-packages/backend/tests/session-routes.test.ts
 packages/backend/tests/settings-backend-persistence.test.ts
 packages/backend/tests/settings-bundled-fonts.test.ts
 packages/backend/tests/settings-installers.test.ts
@@ -220,7 +219,6 @@ packages/backend/tests/theme-previews.test.ts
 packages/backend/tests/three-scene.test.ts
 packages/backend/tests/tool-decision-channel.test.ts
 packages/backend/tests/turn-continuation.test.ts
-packages/backend/tests/turn-error-sanitizer.test.ts
 packages/backend/tests/turn-phases.test.ts
 packages/backend/tests/turn-preview-report.test.ts
 packages/backend/tests/turn-snapshot.test.ts
@@ -264,7 +262,6 @@ packages/frontend/tests/canvas-interaction.test.ts
 packages/frontend/tests/canvas-load-error.test.ts
 packages/frontend/tests/canvas-placeholder.test.ts
 packages/frontend/tests/canvas-scroll-restore.test.ts
-packages/frontend/tests/canvas-source.test.ts
 packages/frontend/tests/canvas-write-queries.test.ts
 packages/frontend/tests/canvas-zoom.test.ts
 packages/frontend/tests/catalog-detail-value.test.ts
@@ -299,7 +296,6 @@ packages/frontend/tests/draws-authority.test.ts
 packages/frontend/tests/edit-target.test.ts
 packages/frontend/tests/element-geometry.test.ts
 packages/frontend/tests/error-card.test.ts
-packages/frontend/tests/error-copy.test.ts
 packages/frontend/tests/export-delivery-status.test.ts
 packages/frontend/tests/export-menu.test.ts
 packages/frontend/tests/export-option-values.test.ts
@@ -318,7 +314,6 @@ packages/frontend/tests/home-dialogs.test.ts
 packages/frontend/tests/home-search.test.ts
 packages/frontend/tests/home-view.test.ts
 packages/frontend/tests/i18n-locale.test.ts
-packages/frontend/tests/i18n-messages.test.ts
 packages/frontend/tests/installed-fonts.test.ts
 packages/frontend/tests/live-preview.test.ts
 packages/frontend/tests/logo-export-options.test.ts
@@ -345,7 +340,6 @@ packages/frontend/tests/settings-language-note.test.ts
 packages/frontend/tests/settings-locale.test.ts
 packages/frontend/tests/settings-localization.test.ts
 packages/frontend/tests/settings-system-review.test.ts
-packages/frontend/tests/side-input.test.ts
 packages/frontend/tests/sidebar-identity.test.ts
 packages/frontend/tests/star-prompt.test.ts
 packages/frontend/tests/theme-launch.test.ts
@@ -366,6 +360,5 @@ packages/frontend/tests/visual-token-contract.test.ts
 packages/frontend/tests/workspace-narrow-layout.test.ts
 packages/shared/tests/runtime-diagnostics.test.ts
 scripts/qa/clipboard-paste-fixtures.test.js
-scripts/qa/har-mask.test.ts
 scripts/qa/release-draft-state.test.js
 scripts/qa/task-8-gates.test.ts

@@ -12,7 +12,7 @@ export const shellMessages = defineMessages({
   "shell.systems": { ko: "디자인 시스템", en: "Design systems", "zh-CN": "设计系统" },
   "shell.navigation": { ko: "워크스페이스 탐색", en: "Workspace navigation", "zh-CN": "工作区导航" },
   "shell.home": { ko: "BurnGuard 홈", en: "BurnGuard home", "zh-CN": "BurnGuard 首页" },
-  "shell.tagline": { ko: "Design workspace", en: "Design workspace", "zh-CN": "设计工作区" },
+  "shell.tagline": { ko: "디자인 워크스페이스", en: "Design workspace", "zh-CN": "设计工作区" },
   "shell.settings": { ko: "설정", en: "Settings", "zh-CN": "设置" },
   "shell.create": { ko: "새 프로젝트", en: "New project", "zh-CN": "新建项目" },
   "shell.menu": { ko: "주 메뉴", en: "Main menu", "zh-CN": "主菜单" },
