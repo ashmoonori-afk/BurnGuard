@@ -24,6 +24,7 @@ jobs run each pinning suite.
 | Design-system outputs (wireframe SVG, starter stylesheet and skeleton) | byte-identical | byte-identical | byte-identical | `os-portability` (pinned digests) | Ubuntu, OS jobs |
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
+| Failure text in design-system API errors and the export job `error_message` | fixed copy plus a domain error code; no `/Users/...` path, no errno text | same; no drive-letter or UNC path | same; no `/home/...` path | `design-system-route-error-bodies`, `export-failure-message` (path flavor injected) | Ubuntu, OS jobs |
 
 ## Known gaps
 

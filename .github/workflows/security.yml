@@ -114,6 +114,8 @@ jobs:
           packages/backend/tests/chromium-node-launch.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts
+          packages/backend/tests/design-system-route-error-bodies.test.ts
+          packages/backend/tests/export-failure-message.test.ts
       # Advisories with no compatible upstream fix are allowlisted by id.
       # Remove image-size ids when a release after 2.0.2 exists; affected
       # ICNS/JXL/HEIF inputs never reach PPTXGenJS here. Remove the router ids

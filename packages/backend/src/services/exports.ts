@@ -75,6 +75,16 @@ export function exportStopReason(error: unknown): ExportStopReason {
   return "render_failed";
 }
 
+/**
+ * The persisted message reaches the job DTO, and raw exception text carries absolute private paths and errno
+ * diagnostics. Only fixed copy and a domain error's lowercase code are kept; errno codes are uppercase.
+ */
+function exportFailureMessage(error: unknown, cancelled: boolean): string {
+  if (cancelled) return "Export cancelled";
+  const code: unknown = error instanceof Error ? Reflect.get(error, "code") : undefined;
+  return typeof code === "string" && /^[a-z][a-z0-9_]{0,63}$/u.test(code) ? `Export failed: ${code}` : "Export failed";
+}
+
 export class ExportServiceError extends Error {
   readonly name = "ExportServiceError";
   constructor(readonly code: "project_not_found" | "source_changed" | "format_requires_deck" | "format_requires_web" | "format_requires_frames" | "pdf_resource_limit" | "attempt_not_found" | "invalid_graphic_export_options" | "format_requires_logo", message: string) { super(message); }
@@ -186,7 +196,7 @@ async function runExport(input: RunInput): Promise<void> {
     if (stageRoot !== null) await rm(stageRoot, { recursive: true, force: true }).catch(() => undefined);
     if (publishedRoot !== null) await rm(publishedRoot, { recursive: true, force: true }).catch(() => undefined);
     const cancelled = input.controller.signal.aborted || db.query<{ readonly requested: number }, [string]>("SELECT cancel_requested_at IS NOT NULL requested FROM export_attempts WHERE id=?").get(input.attemptId)?.requested === 1; const reason: ExportStopReason = cancelled ? "user_cancelled" : exportStopReason(error);
-    failExportAttempt(db, { jobId: input.jobId, attemptId: input.attemptId, status: cancelled ? "cancelled" : "failed", reason, message: error instanceof Error ? error.message : String(error) });
+    failExportAttempt(db, { jobId: input.jobId, attemptId: input.attemptId, status: cancelled ? "cancelled" : "failed", reason, message: exportFailureMessage(error, cancelled) });
     emit(context.identity, input, cancelled ? "cancelled" : "failed", { stage: "rendering", completed: 2, total: 6 }, reason);
   }
 }
