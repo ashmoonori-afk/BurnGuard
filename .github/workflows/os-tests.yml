@@ -74,6 +74,7 @@ jobs:
           packages/backend/tests/trace-security.test.ts
           packages/backend/tests/prompt-builder.test.ts
           packages/backend/tests/desktop-lifecycle.test.ts
+          scripts/qa/har-mask.test.ts
       # Host font enumeration and process-tree cleanup; see doc/os-matrix.md for the Windows timing evidence.
       - name: Host fonts and process-tree suites
         run: >-

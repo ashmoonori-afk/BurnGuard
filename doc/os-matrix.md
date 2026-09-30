@@ -24,6 +24,7 @@ jobs run each pinning suite.
 | Design-system outputs (wireframe SVG, starter stylesheet and skeleton) | byte-identical | byte-identical | byte-identical | `os-portability` (pinned digests) | Ubuntu, OS jobs |
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
+| HAR root masking (`har-mask.ts --root`) | one host-independent matcher: NFC and NFD names, any letter case | same matcher: drive and UNC roots, either separator, JSON-doubled backslashes, any letter case | same matcher | `scripts/qa/har-mask.test.ts` (path flavor given as a string, every case on every OS) | Ubuntu, OS jobs |
 
 ## Known gaps
 
