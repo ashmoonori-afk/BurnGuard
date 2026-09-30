@@ -78,6 +78,8 @@ jobs:
           packages/backend/tests/trace-security.test.ts
           packages/backend/tests/prompt-builder.test.ts
           packages/backend/tests/desktop-lifecycle.test.ts
+          packages/backend/tests/design-system-route-error-bodies.test.ts
+          packages/backend/tests/export-failure-message.test.ts
           packages/backend/tests/chromium-capability.test.ts
           packages/backend/tests/chromium-bridge-probe.test.ts
           packages/backend/tests/chromium-browser-paths.test.ts

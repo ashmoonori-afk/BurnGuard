@@ -50,6 +50,7 @@ jobs run each pinning suite.
 | Design-system outputs (wireframe SVG, starter stylesheet and skeleton) | byte-identical | byte-identical | byte-identical | `os-portability` (pinned digests) | Ubuntu, OS jobs |
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
+| Failure text in design-system API errors and the export job `error_message` | fixed copy plus a domain error code; no `/Users/...` path, no errno text | same; no drive-letter or UNC path | same; no `/home/...` path | `design-system-route-error-bodies`, `export-failure-message` (path flavor injected) | Ubuntu, OS jobs |
 | Decomposed (NFD) file names in a managed tree | APFS finds a name through either spelling | NTFS keeps NFC and NFD apart: live files are read through the on-disk spelling, and a publication rewrites the name as NFC | ext4: same as Windows | `decomposed-file-names` (real files on the host file system; drive, UNC and POSIX roots with the path flavor injected) | Ubuntu, OS jobs |
 | Website import acquisition (SVG logo sanitising, logo-candidate limit, public 192.0.x hosts, same-origin stylesheet redirects) | same | same | same | `extraction-website-acquisition`, `extraction-website-boundaries` | Ubuntu, OS jobs |
 | Export closure import scan (LF and CRLF scripts) | same references | same references | same references | `export-validation` | Ubuntu, OS jobs |
