@@ -55,9 +55,39 @@ jobs run each pinning suite.
 | Export closure import scan (LF and CRLF scripts) | same references | same references | same references | `export-validation` | Ubuntu, OS jobs |
 | Canonical tree root reached through an alias | symlinked parent resolved; `/var` spelling kept | junction parent and 8.3 short name resolved | symlinked parent resolved | `export-validation` (real junction/symlink and short name; `path.win32`/`path.posix` injected for the naming rule) | Ubuntu, OS jobs |
 | Export closure references written as Windows paths (drive letter, backslash, UNC) or POSIX absolute paths | Windows forms refused; POSIX absolute is project-root-relative | same | same | `export-validation` | Ubuntu, OS jobs |
+| Export closure reference cap (a scan stops one reference past the remaining budget) | same counts | same counts | same counts | `export-validation` (injected scan probe; no timing assertion) | Ubuntu, OS jobs |
 | CI guards (OS-matrix coverage, launch-path flake patterns) | same result | same result, backslash spellings normalized | same result | `check-os-matrix-coverage`, `check-flake-patterns` (`scripts/qa`) | Ubuntu, OS jobs; the guards themselves run on Ubuntu |
 
 ## Hardening log
+
+### 2026-09-30: export closure scan ran past the reference cap
+
+The `export-validation` case with a million CSS `url()` values took 21.1-27.4 s on Windows x64 in seven CI runs and
+timed out at 30.6 s (the limit is 30 s) in run [36688196795](https://github.com/ashmoonori-afk/BurnGuard/actions/runs/36688196795), the push run of PR #199; the pull-request run of
+the same head passed at 22.2 s. macOS arm64 took 4.3-7.3 s and Ubuntu 5.5-6.8 s.
+
+Root cause, measured on Linux with Bun 1.3.14 (14.6 s for the case, about 13.0 s of it product code and 0.3 s the
+fixture):
+
+1. `resolveStaticClosure` collected every reference of a file before it applied the 10,000-reference cap: one spread
+   of a million regular-expression matches for a `style` value, one array of every `srcset` candidate. 1.0-2.1 s per
+   document.
+2. `localAssetReferences` (the import inventory) resolved each of the million identical values on its own, a `URL`
+   object, a decode and a path normalization per value plus a one-element array for `flatMap`. 4.1-5.8 s per document,
+   about 10 s of the case.
+
+Why Windows needed four times as long as Linux for the same work was not measured per stage. It is inferred: the work
+is dominated by allocating and collecting millions of short-lived objects, and no file or process call is in the hot
+part.
+
+Fix (this log's pull request): every collector takes the remaining reference budget and stops one reference past it,
+matching one `url()` at a time; the inventory resolves each distinct value once. The case takes 2.8-3.7 s on Linux with
+Bun 1.3.14. One refusal code moved: a document that is already past the cap when a later `style` element fails to
+parse is refused as `closure_limit`, no longer as `malformed_html`.
+
+Prevention: `export-validation` counts the references each scan collects through an injected probe (10,001 for a
+page, the remaining budget plus one for a linked stylesheet) and checks that content after the cap is never scanned.
+Neither case measures time.
 
 ### 2026-09-30: browser launch in CI, and suites that ran on Linux only
 
@@ -157,6 +187,10 @@ lexically around the call), and abort-listener removal in modules that do not lo
 - Browser-backed suites (real Chromium measurement, screenshots, the visual diff, crops and the design audit: the
   design-system pages, conformance, contrast and starter suites) run on the macOS and Windows jobs with
   `BG_BROWSER_SMOKE=1`.
+- Export closure scan, remaining cost: a `style` element is still parsed whole by PostCSS before its references are
+  counted (about 1 s for 10 MB), and the import inventory still lists every reference of a document. Open: the CSS
+  `url()` pattern is quadratic on a value that repeats `url(` without a closing parenthesis (40,000 repeats, 160 KB,
+  took 25 s on Linux); the reference cap does not bound it because no reference is ever matched.
 - Long paths on Windows (over 260 characters) are not exercised; stage paths stay short by design.
 - File locking on Windows: a crop or asset overwrite can fail with EBUSY or EPERM while another process holds the
   file. Review crops are report-only: `withSectionCrops` catches any write error and returns the target without
