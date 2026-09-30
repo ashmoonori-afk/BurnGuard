@@ -50,6 +50,7 @@ jobs run each pinning suite.
 | Design-system outputs (wireframe SVG, starter stylesheet and skeleton) | byte-identical | byte-identical | byte-identical | `os-portability` (pinned digests) | Ubuntu, OS jobs |
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
+| Decomposed (NFD) file names in a managed tree | APFS finds a name through either spelling | NTFS keeps NFC and NFD apart: live files are read through the on-disk spelling, and a publication rewrites the name as NFC | ext4: same as Windows | `decomposed-file-names` (real files on the host file system; drive, UNC and POSIX roots with the path flavor injected) | Ubuntu, OS jobs |
 | Website import acquisition (SVG logo sanitising, logo-candidate limit, public 192.0.x hosts, same-origin stylesheet redirects) | same | same | same | `extraction-website-acquisition`, `extraction-website-boundaries` | Ubuntu, OS jobs |
 | Export closure import scan (LF and CRLF scripts) | same references | same references | same references | `export-validation` | Ubuntu, OS jobs |
 | Canonical tree root reached through an alias | symlinked parent resolved; `/var` spelling kept | junction parent and 8.3 short name resolved | symlinked parent resolved | `export-validation` (real junction/symlink and short name; `path.win32`/`path.posix` injected for the naming rule) | Ubuntu, OS jobs |
