@@ -59,9 +59,39 @@ jobs run each pinning suite.
 | Canonical tree root reached through an alias | symlinked parent resolved; `/var` spelling kept | junction parent and 8.3 short name resolved | symlinked parent resolved | `export-validation` (real junction/symlink and short name; `path.win32`/`path.posix` injected for the naming rule) | Ubuntu, OS jobs |
 | Export closure references written as Windows paths (drive letter, backslash, UNC) or POSIX absolute paths | Windows forms refused; POSIX absolute is project-root-relative | same | same | `export-validation` | Ubuntu, OS jobs |
 | Export closure reference cap (a scan stops one reference past the remaining budget) | same counts | same counts | same counts | `export-validation` (injected scan probe; no timing assertion) | Ubuntu, OS jobs |
+| Export closure CSS `url()` scan (one forward pass; LF and CRLF values, Windows-path and POSIX-path values) | same references, same work | same references, same work | same references, same work | `export-validation` (the scan reports the characters it examined; no timing assertion) | Ubuntu, OS jobs |
 | CI guards (OS-matrix coverage, launch-path flake patterns) | same result | same result, backslash spellings normalized | same result | `check-os-matrix-coverage`, `check-flake-patterns` (`scripts/qa`) | Ubuntu, OS jobs; the guards themselves run on Ubuntu |
 
 ## Hardening log
+
+### 2026-09-30: export closure `url()` scan was quadratic
+
+Issue [#201](https://github.com/ashmoonori-afk/BurnGuard/issues/201), found while profiling the closure for #200. A CSS value that repeats `url(` and closes none of them as a
+reference kept one export busy for seconds: on Linux with Bun 1.4.2 a `style` attribute with 10,000 openers took 1.2 s
+and one with 40,000 openers (200 KB) took 17.8 s. The 10,000-reference cap did not bound it, because no reference was
+ever matched.
+
+Root cause: `cssUrlValues` in `export-closure.ts` matched `/url\(\s*["']?([^"')]+)["']?\s*\)/giu`. From every opener
+the pattern ran to the next quote or `)` (or to the end of the value), failed there and started again at the next
+opener: openers times the remaining length. A `style` attribute is not parsed as a stylesheet, so any such value
+reached the pattern. A `style` element or a linked stylesheet reached it only when its parentheses balance (PostCSS
+refuses an unclosed one as `malformed_html` first), for example openers, a quoted word, another word, then the closing
+parentheses.
+
+Fix (this log's pull request): one forward pass. Every opener before the next quote or `)` closes on that same
+character, so it is found once and its outcome is kept. The pass collects exactly what the pattern captured, including
+the single whitespace character the pattern gave back for `url( )`; no refusal code changes. The 40,000-opener value
+takes 13 ms. In the same change `scriptReferences` takes the remaining reference budget like the other collectors and
+stops one import past it.
+
+Neither the cost nor the fix was measured on Windows or macOS. The scan is string work with no file, process or
+platform call and no OS branch; the CI runs of the pull request are the evidence for those two.
+
+Prevention: `export-validation` reads the number of characters the scan examined, for five shapes that repeat an
+opener: at most four looks per character, and twice the value at most twice the count. It also pins the collected
+values for each accepted spelling (LF and CRLF, Windows-path and POSIX-path values, each asserted on its own), runs
+the closure over the 200 KB value in a `style` attribute, a `style` element and a linked stylesheet, and counts the
+imports a script scan collects through the injected probe. None of these cases measures time.
 
 ### 2026-09-30: export closure scan ran past the reference cap
 
@@ -85,8 +115,11 @@ part.
 
 Fix (this log's pull request): every collector takes the remaining reference budget and stops one reference past it,
 matching one `url()` at a time; the inventory resolves each distinct value once. The case takes 2.8-3.7 s on Linux with
-Bun 1.3.14. One refusal code moved: a document that is already past the cap when a later `style` element fails to
-parse is refused as `closure_limit`, no longer as `malformed_html`.
+Bun 1.3.14. Refusal codes moved for one kind of document, and it is still refused: a document that is already past the
+cap when a later `style` element fails to parse is no longer refused as `malformed_html`, because that element is never
+scanned. It gets the refusal its first 10,001 references produce: `closure_limit` when the first 10,000 all resolve,
+otherwise the `remote_asset`, `unsafe_asset` or `missing_asset` of the first one that does not, or the `malformed_html`
+of a linked stylesheet among them. (Corrected after the review of #200, which first recorded only `closure_limit`.)
 
 Prevention: `export-validation` counts the references each scan collects through an injected probe (10,001 for a
 page, the remaining budget plus one for a linked stylesheet) and checks that content after the cap is never scanned.
@@ -191,9 +224,12 @@ lexically around the call), and abort-listener removal in modules that do not lo
   design-system pages, conformance, contrast and starter suites) run on the macOS and Windows jobs with
   `BG_BROWSER_SMOKE=1`.
 - Export closure scan, remaining cost: a `style` element is still parsed whole by PostCSS before its references are
-  counted (about 1 s for 10 MB), and the import inventory still lists every reference of a document. Open: the CSS
-  `url()` pattern is quadratic on a value that repeats `url(` without a closing parenthesis (40,000 repeats, 160 KB,
-  took 25 s on Linux); the reference cap does not bound it because no reference is ever matched.
+  counted (about 1 s for 10 MB), a script is still parsed whole before its imports are counted, and the import
+  inventory still lists every reference of a document. The CSS `url()` scan, fixed: it was quadratic on a value that
+  repeats `url(` without closing a reference (hardening log above). Open: the two textual import patterns, used only
+  for a script that does not parse, are quadratic on a script that repeats `import` without a quoted specifier (20,000
+  repeats, 180 KB, took 6.0 s on Linux with Bun 1.4.2); the reference cap does not bound it because no import is ever
+  matched.
 - Long paths on Windows (over 260 characters) are not exercised; stage paths stay short by design.
 - File locking on Windows: a crop or asset overwrite can fail with EBUSY or EPERM while another process holds the
   file. Review crops are report-only: `withSectionCrops` catches any write error and returns the target without
