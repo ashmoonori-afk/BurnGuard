@@ -200,6 +200,24 @@ async function withSite(routes: Record<string, string>, run: (origin: string, id
   }
 }
 
+describe("Website brand name from the page title", () => {
+  // IMPORT-3: a hyphen inside a word belongs to the brand; only a spaced hyphen, a dash or a pipe separates title parts.
+  test.each([
+    ["Coca-Cola | Home", "Coca-Cola"],
+    ["T-Mobile", "T-Mobile"],
+    ["Mercedes-Benz - Luxury Cars", "Mercedes-Benz"],
+    ["Rolls-Royce \u2013 Motor Cars", "Rolls-Royce"],
+    ["Acme \u2014 Home", "Acme"],
+    ["Acme|Home", "Acme"],
+    ["Acme\r\n- Home", "Acme"],
+  ])("Given the page title %j and no explicit name, when a website is extracted, then the brand name is %j", async (title, brand) => {
+    await withSite({ "/source": "<html><head><title>" + title + "</title></head><body><h1>Refresh</h1></body></html>" }, async (origin, id) => {
+      const result = await extractDesignSystemFromSource({ system_id: id, source_type: "website", source_url: origin + "/source" });
+      expect(result.extraction.brand_name).toBe(brand);
+    });
+  });
+});
+
 describe("Per-page extraction limits and ordering", () => {
   test("Given a disallowed root with an allowed directory, then the allowed directory is still discovered", () => {
     const result = discoverPages({ base: new URL("https://e.com/"), homepageHtml: '<nav><a href="/docs/">Docs</a><a href="/private">P</a></nav>', sitemapUrls: [], robots: parseRobots("User-agent: *\nDisallow: /\nAllow: /docs/"), limit: 5 });
