@@ -15,6 +15,7 @@ Root build, development, and packaging orchestration across Bun, .NET 8, and Swi
 | macOS app, DMG, release | `build-mac.ts`, `package-mac-release.ts` | macOS-gated; needs `build:frontend` first |
 | Regenerate design-system surfaces | `build-theme-surfaces.ts` | `bun run surfaces`; rewrites `surfaces/*.css` and the three generated README sections for every shipped design system from its own layout tokens plus an authored spec, so it is run deliberately and is not part of `bun run build` |
 | Regenerate the theme catalogue | `build-theme-catalogue.ts` | `bun run catalogue`; rewrites the committed `design system themes/catalogue.html` from the registry, so it is run deliberately and is not part of `bun run build` |
+| Warm the CI browser | `warm-browser.ts` | Run by `os-tests.yml` before the browser suites: bridge probe with a long budget per channel, then one render through the product measurement path; non-zero exit when no browser starts or renders |
 | Test bootstrap | `test-preload.ts` | `bunfig.toml` preload: temp `BG_APP_ROOT`, migrations, owned cleanup |
 | QA acceptance harness | `qa/` | Evidence receipts, browser fixtures, HTTP scenarios - see `qa/AGENTS.md` |
 
