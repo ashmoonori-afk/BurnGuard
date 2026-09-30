@@ -131,6 +131,46 @@ describe("export HTML closure boundaries", () => {
     }
   });
 
+  // References are URL text, resolved with POSIX rules on every OS; an image, a fetched link and a module import share one resolver.
+  const referenceOutcomes = async (reference: string): Promise<readonly string[]> => [
+    await closureOutcome({ "index.html": page("", `<img src="${reference}">`), "a.png": "image" }),
+    await closureOutcome({ "index.html": page(`<link rel="stylesheet" href="${reference}">`, ""), "a.png": "image" }),
+    await closureOutcome({ "index.html": page("", '<script type="module" src="app.js"></script>'), "app.js": `import ${JSON.stringify(reference)};\n`, "a.png": "image" }),
+  ];
+
+  test("Given references written as Windows paths with a drive letter, backslashes or a UNC share When the export closure resolves Then each is refused and no host path is read", async () => {
+    // Given: a browser reads a drive letter as a URL scheme and a backslash as a slash, so none of these names a project file.
+    const refused: readonly (readonly [string, string])[] = [
+      [String.raw`C:\Users\qa\project\a.png`, "remote_asset"],
+      ["C:/Users/qa/project/a.png", "remote_asset"],
+      ["file:///C:/Users/qa/project/a.png", "remote_asset"],
+      [String.raw`\\server\share\a.png`, "unsafe_asset"],
+      [String.raw`images\a.png`, "unsafe_asset"],
+      [String.raw`..\a.png`, "unsafe_asset"],
+      ["images%5Ca.png", "unsafe_asset"],
+    ];
+    for (const [reference, code] of refused) {
+      // When / Then
+      expect(await referenceOutcomes(reference)).toEqual([`${code}:${reference}`, `${code}:${reference}`, `${code}:${reference}`]);
+    }
+  });
+
+  test("Given references written as POSIX absolute paths When the export closure resolves Then they resolve against the project root and never against the host file system", async () => {
+    // Given: a leading slash is root-relative to the project, and a file: URL is remote.
+    const outcomes: readonly (readonly [string, string])[] = [
+      ["/home/qa/project/a.png", "missing_asset:home/qa/project/a.png"],
+      ["/Users/qa/project/a.png", "missing_asset:Users/qa/project/a.png"],
+      ["file:///home/qa/project/a.png", "remote_asset:file:///home/qa/project/a.png"],
+      ["file:///Users/qa/project/a.png", "remote_asset:file:///Users/qa/project/a.png"],
+    ];
+    for (const [reference, outcome] of outcomes) {
+      // When / Then
+      expect(await referenceOutcomes(reference)).toEqual([outcome, outcome, outcome]);
+    }
+    // When / Then: the same spelling that does name a project file resolves to it.
+    expect(await referenceOutcomes("/a.png")).toEqual(["resolved:a.png", "resolved:a.png", "resolved:a.png,app.js"]);
+  });
+
   test.skipIf(!canCreateSymlink())(`Given the temp directory reached through a link When an HTML archive is validated Then the entrypoint closure resolves (${SYMLINK_SKIP_REASON})`, async () => {
     // Given
     // The target and the link share one parent that is removed recursively: Bun on Windows fails with EFAULT when it removes a directory link on its own.
