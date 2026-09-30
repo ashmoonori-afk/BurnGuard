@@ -111,6 +111,7 @@ jobs:
           packages/backend/tests/project-import.test.ts
           packages/backend/tests/artifact-history.test.ts
           packages/backend/tests/export-pptx.test.ts
+          packages/backend/tests/export-validation.test.ts
           packages/backend/tests/chromium-node-launch.test.ts
           packages/backend/tests/chromium-capability.test.ts
           packages/backend/tests/chromium-bridge-probe.test.ts

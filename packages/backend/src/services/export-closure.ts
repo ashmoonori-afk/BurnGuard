@@ -9,6 +9,8 @@ const MAX_DEPTH = 16;
 const MAX_REFERENCES = 10_000;
 const MAX_DATA_IMAGE_BYTES = 2 * 1024 * 1024;
 const HTML_ATTRIBUTES = ["src", "poster", "href", "xlink:href"] as const;
+const METADATA_LINK_RELATIONS: ReadonlySet<string> = new Set(["canonical", "alternate"]);
+const IMPORT_SCANNER = new Bun.Transpiler({ loader: "js" });
 
 export class ExportClosureError extends Error {
   readonly name = "ExportClosureError";
@@ -68,7 +70,7 @@ function htmlReferences(source: string, file: string): readonly string[] {
   const values: string[] = [];
   for (const element of document.querySelectorAll("link,script,img,source,video,audio,input,object,embed,use,image")) {
     for (const attribute of HTML_ATTRIBUTES) {
-      if (attribute === "href" && element.tagName === "A") continue;
+      if (attribute === "href" && (element.tagName === "A" || (element.tagName === "LINK" && isMetadataLink(element.getAttribute("rel"))))) continue;
       const value = element.getAttribute(attribute);
       if (value !== undefined) values.push(value);
     }
@@ -79,6 +81,12 @@ function htmlReferences(source: string, file: string): readonly string[] {
   for (const style of document.querySelectorAll("style")) for (const url of cssReferences(style.text, file)) values.push(url);
   for (const element of document.querySelectorAll("[style]")) for (const url of cssUrlValues(element.getAttribute("style") ?? "")) values.push(url);
   return values;
+}
+
+/** True only when every relation is one a browser never fetches; any other relation, or none, keeps the href under the closure rules. */
+function isMetadataLink(rel: string | undefined): boolean {
+  const relations = (rel ?? "").toLowerCase().split(/[ \t\n\f\r]+/u).filter((relation) => relation !== "");
+  return relations.length > 0 && relations.every((relation) => METADATA_LINK_RELATIONS.has(relation));
 }
 
 /**
@@ -130,6 +138,9 @@ function cssUrlValues(value: string): readonly string[] {
 
 function scriptReferences(source: string, file: string): readonly string[] {
   if (!file.endsWith(".js") && !file.endsWith(".mjs") && !file.endsWith(".cjs")) return [];
+  // A parser, not a pattern: comments, string and template literals and regex literals are not imports.
+  try { return IMPORT_SCANNER.scanImports(source).filter((entry) => entry.kind === "import-statement" || entry.kind === "dynamic-import").map((entry) => entry.path); }
+  catch { /* Not parseable as a module: keep the textual scan so an import a browser may still run cannot slip past. */ }
   const patterns = [/(?:import|export)\s+(?:[^"']+?\s+from\s+)?["']([^"']+)["']/gu, /import\(\s*["']([^"']+)["']\s*\)/gu];
   return patterns.flatMap((pattern) => [...source.matchAll(pattern)].map((match) => match[1] ?? ""));
 }
