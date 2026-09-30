@@ -167,8 +167,10 @@ internal static class ProcessHostChecks
                     if (!control.WaitForExit(5_000)) throw new Exception("terminate helper deadline");
                     Equal(control.ExitCode, 0, "terminate helper failed after launcher death");
                     ExactTerminate(Receipt(terminate), token);
-                    Signaled(targetHandle, 0, "target survived terminate receipt");
-                    Signaled(childHandle, 0, "child survived terminate receipt");
+                    // The receipt proves the job has no active process; Windows signals each process object a moment later,
+                    // so a zero wait here raced the kernel (seen once in 40 CI runs).
+                    Signaled(targetHandle, 5_000, "target survived terminate receipt");
+                    Signaled(childHandle, 5_000, "child survived terminate receipt");
                     Present(sentinelPid, "unrelated sentinel was terminated");
                 }
             }
