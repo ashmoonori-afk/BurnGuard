@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, rmdir, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
@@ -10,6 +10,12 @@ import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } f
 import { canonicalJson, sha256 } from "../src/services/export-receipt";
 
 const digest = "a".repeat(64);
+
+/**
+ * Removes a directory link itself, never what it points at and never through a recursive walk: a Windows junction is a
+ * directory entry (rmdir), a POSIX symlink is a file entry (unlink). Bun's `rm` fails with EFAULT on a Windows directory link.
+ */
+const removeDirectoryLink = (link: string): Promise<void> => (process.platform === "win32" ? rmdir(link) : unlink(link));
 
 describe("export HTML closure boundaries", () => {
   test("Given data URIs the artifact CSP admits and a srcset data candidate When closure resolves Then only local files are referenced and non-image data fails closed", async () => {
@@ -116,6 +122,9 @@ describe("export HTML closure boundaries", () => {
     expect(await closureOutcome({ "index.html": html, "app.js": imports, "a.js": "export const a = 1;\n", "b.js": "export const b = 2;\n", "c.js": "export default 3;\n" })).toBe("resolved:a.js,app.js,b.js,c.js");
     expect(await closureOutcome({ "index.html": html, "app.js": imports, "a.js": "export const a = 1;\n", "b.js": "export const b = 2;\n" })).toBe("missing_asset:c.js");
     expect(await closureOutcome({ "index.html": html, "app.js": 'import x from "https://cdn.example/x.js";\nx();\n' })).toBe("remote_asset:https://cdn.example/x.js");
+    // An import whose binding is never used, and a side-effect import, must not be trimmed away by the parser.
+    expect(await closureOutcome({ "index.html": html, "app.js": 'import x from "https://cdn.example/x.js";\n' })).toBe("remote_asset:https://cdn.example/x.js");
+    expect(await closureOutcome({ "index.html": html, "app.js": 'import "https://cdn.example/x.js";\n' })).toBe("remote_asset:https://cdn.example/x.js");
     expect(await closureOutcome({ "index.html": html, "app.js": 'const = ;\nimport("https://cdn.example/x.js");\n' })).toBe("remote_asset:https://cdn.example/x.js");
   });
 
@@ -162,6 +171,7 @@ describe("export HTML closure boundaries", () => {
       ["/Users/qa/project/a.png", "missing_asset:Users/qa/project/a.png"],
       ["file:///home/qa/project/a.png", "remote_asset:file:///home/qa/project/a.png"],
       ["file:///Users/qa/project/a.png", "remote_asset:file:///Users/qa/project/a.png"],
+      ["../../etc/passwd", "unsafe_asset:../../etc/passwd"],
     ];
     for (const [reference, outcome] of outcomes) {
       // When / Then
@@ -171,12 +181,17 @@ describe("export HTML closure boundaries", () => {
     expect(await referenceOutcomes("/a.png")).toEqual(["resolved:a.png", "resolved:a.png", "resolved:a.png,app.js"]);
   });
 
-  test("Given the temp directory reached through a link (a junction on Windows, a symlink elsewhere) When an HTML archive is validated Then the entrypoint closure resolves", async () => {
+  test("Given the temp directory reached through a link (a junction on Windows, a symlink elsewhere), and on Windows through its 8.3 short name When an HTML archive is validated Then the entrypoint closure resolves", async () => {
     // Given
-    // The target and the link share one parent that is removed recursively: Bun on Windows fails with EFAULT when it removes a directory link on its own.
-    const base = await mkdtemp(path.join(tmpdir(), "bg-html-validate-link-")); const real = path.join(base, "real"); const link = path.join(base, "link");
+    const base = await mkdtemp(path.join(tmpdir(), "bg-html-validate-link-")); const real = path.join(base, "bg long temp directory"); const link = path.join(base, "link");
     // "junction" needs no privilege on Windows and is an ordinary symlink on every other OS, so this case never skips.
     await mkdir(real); await symlink(real, link, "junction");
+    const temps = [link];
+    if (process.platform === "win32") {
+      // NTFS gives the only long name in a fresh directory the short name BGLONG~1. CI must prove it; a volume with 8.3 names turned off has no such alias.
+      const short = path.join(base, "BGLONG~1");
+      if (process.env["CI"] !== undefined || existsSync(short)) temps.push(short);
+    }
     const saved = { TMPDIR: process.env["TMPDIR"], TEMP: process.env["TEMP"], TMP: process.env["TMP"] };
     const html = new TextEncoder().encode("<html><body><img src=asset.png></body></html>"); const asset = Uint8Array.from([1, 2, 3]);
     const expected = { schema_version: 1 as const, entrypoint: "index.html", project_revision: 7, project_digest: digest, input_closure_digest: "b".repeat(64) };
@@ -184,19 +199,21 @@ describe("export HTML closure boundaries", () => {
     const zip = new JSZip(); zip.file("index.html", html); zip.file("asset.png", asset); zip.file(HTML_EXPORT_MANIFEST, canonicalJson(manifest));
     const bytes = await zip.generateAsync({ type: "uint8array" });
     try {
-      process.env["TMPDIR"] = link; process.env["TEMP"] = link; process.env["TMP"] = link;
-      // When / Then
-      expect((await validateHtmlArchive(bytes, expected)).entries).toEqual(manifest.entries);
+      for (const temp of temps) {
+        process.env["TMPDIR"] = temp; process.env["TEMP"] = temp; process.env["TMP"] = temp;
+        // When / Then
+        expect((await validateHtmlArchive(bytes, expected)).entries).toEqual(manifest.entries);
+      }
     } finally {
       for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
-      await rm(base, { recursive: true, force: true });
+      await removeDirectoryLink(link); await rm(base, { recursive: true, force: true });
     }
   });
 });
 
 describe("export closure root aliases", () => {
   test("Given a project root reached through a linked parent, and on Windows through its 8.3 short name When the tree is inspected and the closure resolves Then entries, digest and references match the direct spelling", async () => {
-    const base = await mkdtemp(path.join(tmpdir(), "bg-export-alias-"));
+    const base = await mkdtemp(path.join(tmpdir(), "bg-export-alias-")); const link = path.join(base, "link");
     try {
       // Given
       const real = path.join(base, "real"); const project = path.join(real, "bg long project directory");
@@ -204,7 +221,7 @@ describe("export closure root aliases", () => {
       await writeFile(path.join(project, "index.html"), '<html><body><img src="assets/a.png"><script type="module" src="app.js"></script></body></html>');
       await writeFile(path.join(project, "app.js"), 'import "./assets/lib.js";\n'); await writeFile(path.join(project, "assets", "a.png"), "image"); await writeFile(path.join(project, "assets", "lib.js"), "export {};\n");
       // A junction on Windows (no privilege needed), a symlink on every other OS.
-      const link = path.join(base, "link"); await symlink(real, link, "junction");
+      await symlink(real, link, "junction");
       const aliases = [path.join(link, "bg long project directory")];
       if (process.platform === "win32") {
         // NTFS gives the only long name in a fresh directory the short name BGLONG~1. CI must prove it; a volume with 8.3 names turned off has no such alias.
@@ -222,7 +239,7 @@ describe("export closure root aliases", () => {
       }
       // Then: a root that is itself the link stays refused on every OS.
       await expect(inspectCanonicalTree(link)).rejects.toMatchObject({ code: "unsafe_tree_entry" });
-    } finally { await rm(base, { recursive: true, force: true }); }
+    } finally { await removeDirectoryLink(link); await rm(base, { recursive: true, force: true }); }
   });
 
   const refusedAlias = (base: string, target: string, flavor: path.PlatformPath): string => {
