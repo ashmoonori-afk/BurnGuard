@@ -24,6 +24,7 @@ jobs run each pinning suite.
 | Design-system outputs (wireframe SVG, starter stylesheet and skeleton) | byte-identical | byte-identical | byte-identical | `os-portability` (pinned digests) | Ubuntu, OS jobs |
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
+| Export closure import scan (LF and CRLF scripts) | same references | same references | same references | `export-validation` | Ubuntu, OS jobs |
 
 ## Known gaps
 

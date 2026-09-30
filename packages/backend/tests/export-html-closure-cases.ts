@@ -86,13 +86,16 @@ describe("export HTML closure boundaries", () => {
   const page = (head: string, body: string): string => `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
 
   test("Given a script whose commented-out line mentions an import When the export closure resolves Then the export is not refused", async () => {
-    // Given
-    const files = {
-      "index.html": page("", '<script type="module" src="app.js"></script>'),
-      "app.js": '// import { legacy } from "./legacy-helpers.js";\n/* export * from "./gone.js"; */\ndocument.body.dataset.ready = "1";\n',
-    };
-    // When / Then
-    expect(await closureOutcome(files)).toBe("resolved:app.js");
+    // Given: the same script saved with LF and with CRLF line endings, as a Windows editor writes it.
+    for (const eol of ["\n", "\r\n"]) {
+      const files = {
+        "index.html": page("", '<script type="module" src="app.js"></script>'),
+        "app.js": ['// import { legacy } from "./legacy-helpers.js";', '/* export * from "./gone.js"; */', 'import { a } from "./a.js";', "document.body.dataset.ready = String(a);", ""].join(eol),
+        "a.js": ["export const a = 1;", ""].join(eol),
+      };
+      // When / Then
+      expect(await closureOutcome(files)).toBe("resolved:a.js,app.js");
+    }
   });
 
   test("Given a script whose UI string reads like an import statement When the export closure resolves Then the export is not refused", async () => {
