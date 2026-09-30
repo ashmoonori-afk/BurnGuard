@@ -22,6 +22,34 @@ export function normalizeSideDraft(style: SideStyle, input: string): string | nu
   return String(style === "margin" ? value : Math.max(0, value));
 }
 
+const CSS_WIDE_KEYWORDS = new Set(["inherit", "initial", "unset", "revert", "revert-layer"]);
+
+/**
+ * Split a shorthand at top-level whitespace, keeping functions such as
+ * `calc(1px + 2px)` whole. Returns null for a top-level `/` (elliptical
+ * border-radius) or unbalanced parentheses.
+ */
+function splitSideTokens(value: string): string[] | null {
+  const tokens: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const char of value) {
+    if (char === "(") depth += 1;
+    else if (char === ")") depth -= 1;
+    if (depth < 0) return null;
+    if (depth === 0 && char === "/") return null;
+    if (depth === 0 && /\s/.test(char)) {
+      if (current) tokens.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  if (depth !== 0) return null;
+  if (current) tokens.push(current);
+  return tokens;
+}
+
 /**
  * Parse a CSS box-model shorthand (padding / margin / border-radius) into
  * explicit 4-side values using CSS's standard collapsing rules:
@@ -29,12 +57,16 @@ export function normalizeSideDraft(style: SideStyle, input: string): string | nu
  *   2 tokens: top+bottom | right+left
  *   3 tokens: top | right+left | bottom
  *   4 tokens: top | right | bottom | left
- * Non-numeric tokens ("auto", "inherit") pass through untouched so the
- * caller can decide how to surface them.
+ * Each side keeps its authored token ("auto", "50%", "2rem") untouched.
+ * Returns null when the value cannot be edited one side at a time: an
+ * elliptical radius, more than four tokens, a CSS-wide keyword, or a
+ * `var()` reference that may expand to several sides.
  */
-export function parseSides(value: string): Sides {
+export function parseSides(value: string): Sides | null {
   if (!value) return { top: "", right: "", bottom: "", left: "" };
-  const tokens = value.trim().split(/\s+/).filter(Boolean);
+  const tokens = splitSideTokens(value);
+  if (!tokens || tokens.length > 4) return null;
+  if (tokens.some((token) => CSS_WIDE_KEYWORDS.has(token.toLowerCase()) || /var\(/i.test(token))) return null;
   if (tokens.length === 1) {
     const v = tokens[0] ?? "";
     return { top: v, right: v, bottom: v, left: v };
@@ -76,6 +108,43 @@ export function composeSides(sides: Sides): string {
   if (top === bottom && right === left) return `${top} ${right}`;
   if (right === left) return `${top} ${right} ${bottom}`;
   return `${top} ${right} ${bottom} ${left}`;
+}
+
+/**
+ * What a side input shows for an authored token: the bare number for a
+ * px length (the editor's only unit), otherwise the token as written.
+ */
+export function sideDisplay(token: string): string {
+  const match = token.match(/^(-?\d*\.?\d+)px$/i);
+  return match ? (match[1] ?? "") : token;
+}
+
+/**
+ * Apply one edited side to the authored side tokens. Returns null when
+ * the draft is unchanged or rejected, so nothing is written. Otherwise
+ * returns the next tokens and the shorthand to write ("" drops the
+ * override); sides the user did not edit keep their authored token.
+ */
+export function applySideDraft(
+  style: SideStyle,
+  sides: Sides,
+  side: keyof Sides,
+  draft: string,
+): { sides: Sides; shorthand: string } | null {
+  if (draft.trim() === sideDisplay(sides[side])) return null;
+  const normalized = normalizeSideDraft(style, draft);
+  if (normalized === null) return null;
+  const next: Sides = { ...sides, [side]: normalized === "" ? "" : `${normalized}px` };
+  if (!next.top && !next.right && !next.bottom && !next.left) return { sides: next, shorthand: "" };
+  return {
+    sides: next,
+    shorthand: composeSides({
+      top: next.top || "0px",
+      right: next.right || "0px",
+      bottom: next.bottom || "0px",
+      left: next.left || "0px",
+    }),
+  };
 }
 
 /**
