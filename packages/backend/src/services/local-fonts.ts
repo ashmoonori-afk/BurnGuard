@@ -4,6 +4,7 @@ import { parseLocalFonts, type LocalFontsV1 } from "@bg/shared";
 
 const run = promisify(execFile);
 let pending: Promise<LocalFontsV1> | null = null;
+const LOCAL_FONTS_TIMEOUT_MS = 25_000;
 
 function parseJsonFamilies(stdout: string): string[] { return JSON.parse(stdout.replace(/^\uFEFF/, "")) as string[]; }
 
@@ -22,7 +23,10 @@ export function getLocalFonts(): Promise<LocalFontsV1> {
   const command = familyListCommand(process.platform);
   if (!command) return Promise.reject(new Error("local_fonts_unavailable"));
   // Cache only this family-name snapshot; no font files or private paths leave the process.
-  pending ??= run(command.file, command.args, { windowsHide: true, timeout: 10000, maxBuffer: 2 * 1024 * 1024, encoding: "utf8" })
+  // The first Windows PowerShell start on a machine loads .NET Framework and System.Drawing cold. A warm enumeration takes about
+  // 0.3 s, but cold starts measured on GitHub Windows runners took 1 to 9 s and crossed 10 s under load, so 10 s rejected
+  // a working host. 25 s bounds a hung PowerShell without failing a slow cold start.
+  pending ??= run(command.file, command.args, { windowsHide: true, timeout: LOCAL_FONTS_TIMEOUT_MS, maxBuffer: 2 * 1024 * 1024, encoding: "utf8" })
     .then(({ stdout }) => parseLocalFonts({ schema_version: 1, families: command.parse(stdout).slice().sort((left, right) => left.localeCompare(right)) }))
     .catch(() => { pending = null; throw new Error("local_fonts_unavailable"); });
   return pending;

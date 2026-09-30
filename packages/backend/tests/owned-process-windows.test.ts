@@ -15,7 +15,7 @@ function asyncReceiptChange(): { readonly promise: Promise<number>; readonly can
 function testWindowsOwnership(onDispose: () => void = () => {}): WindowsJobOwnership {
   return {
     kind: "windows-job", token: jobToken, helperPath: "C:\\BurnGuard\\burnguard-windows-process-host.exe",
-    receiptRoot: "/tmp/bg-owned-test", launchReceipt: "/tmp/bg-owned-test/launch.json", terminateReceipt: "/tmp/bg-owned-test/terminate.json",
+    receiptRoot: "/tmp/bg-owned-test", launchReceipt: "/tmp/bg-owned-test/launch.json", exitReceipt: "/tmp/bg-owned-test/launch.exited.json", terminateReceipt: "/tmp/bg-owned-test/terminate.json",
     receiptVersion: () => 1, waitForReceiptChange: asyncReceiptChange, closeWatcher: onDispose,
   };
 }
@@ -91,7 +91,7 @@ describe("Windows owned host when the helper fails after the launcher has alread
   const sequence = (receipts: readonly string[], ownership: WindowsJobOwnership) => {
     let launchReads = 0;
     return async (receiptPath: string) => {
-      if (receiptPath !== ownership.launchReceipt) return terminatedReceipt;
+      if (receiptPath !== ownership.launchReceipt && receiptPath !== ownership.exitReceipt) return terminatedReceipt;
       const next = receipts[Math.min(launchReads, receipts.length - 1)]!;
       launchReads += 1;
       return next;
@@ -170,10 +170,15 @@ test("Windows terminate forwards the exact budget remaining after launch authori
 test("Windows launch settlement requires the final exact-token zero-active receipt", async () => {
   const validOwnership = testWindowsOwnership();
   const validOwned = { proc: { pid: 50, exited: Promise.resolve(17), kill: () => {} }, ownership: validOwnership };
-  await expect(settleOwnedProcess(validOwned, 17, async () => finalReceipt)).resolves.toBeUndefined();
+  // The launcher never replaces its running receipt; the exited receipt is a separate file.
+  await expect(settleOwnedProcess(validOwned, 17, async (receiptPath) => receiptPath === validOwnership.exitReceipt ? finalReceipt : runningReceipt)).resolves.toBeUndefined();
   const invalidOwnership = testWindowsOwnership();
   const invalidOwned = { proc: { pid: 50, exited: Promise.resolve(17), kill: () => {} }, ownership: invalidOwnership };
   await expect(settleOwnedProcess(invalidOwned, 17, async () => "{}")).rejects.toBeInstanceOf(OwnedProcessHostError);
+  // A launcher that failed before writing its exited receipt (204, 205, 206) is named by its exit code.
+  const missingOwnership = testWindowsOwnership();
+  const missingOwned = { proc: { pid: 50, exited: Promise.resolve(206), kill: () => {} }, ownership: missingOwnership };
+  await expect(settleOwnedProcess(missingOwned, 206, async () => { throw Object.assign(new Error("missing"), { code: "ENOENT" }); })).rejects.toMatchObject({ reason: "invalid_receipt", helperExitCode: 206 });
 });
 
 for (const scenario of [
@@ -185,7 +190,7 @@ for (const scenario of [
   const receipt = JSON.stringify({ schema_version: 1, operation: "launch", state: "exited", job_token: jobToken, host_pid: 50, target_pid: 51, target_exit_code: scenario.targetExitCode, active_processes: 0 });
   const validate = () => validateLaunchSettlement(receipt, testWindowsOwnership(), 50, scenario.hostExit);
   if (scenario.valid) expect(validate).not.toThrow();
-  else expect(validate).toThrow(expect.objectContaining({ reason: "invalid_receipt" }));
+  else expect(validate).toThrow(expect.objectContaining({ reason: "invalid_receipt", helperExitCode: scenario.hostExit }));
 });
 
 test("Windows host settlement waits for terminate receipt consumption before disposal", async () => {

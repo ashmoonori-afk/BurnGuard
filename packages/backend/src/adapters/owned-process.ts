@@ -73,7 +73,7 @@ export function settleOwnedProcess(
   lifecycle.settlement ??= (async () => {
     try {
       if (lifecycle.control !== undefined) await lifecycle.control;
-      const contents = await readReceipt(ownership.launchReceipt).catch(() => { throw new OwnedProcessHostError("invalid_receipt"); });
+      const contents = await readReceipt(ownership.exitReceipt).catch(() => { throw new OwnedProcessHostError("invalid_receipt", exitCode); });
       validateLaunchSettlement(contents, ownership, owned.proc.pid, exitCode);
     } finally {
       await disposeWindowsOwnership(ownership);
@@ -159,6 +159,8 @@ function createWindowsOwnership(): WindowsJobOwnership {
   const token = randomBytes(16).toString("hex");
   const receiptRoot = mkdtempSync(path.join(tmpdir(), "burnguard-owned-process-"));
   const launchReceipt = path.join(receiptRoot, "launch.json");
+  // Must match ExitedReceiptPath in packages/windows-process-host/Program.cs.
+  const exitReceipt = path.join(receiptRoot, "launch.exited.json");
   const terminateReceipt = path.join(receiptRoot, "terminate.json");
   let version = 0;
   const waiters = new Set<(next: number) => void>();
@@ -173,6 +175,7 @@ function createWindowsOwnership(): WindowsJobOwnership {
     helperPath,
     receiptRoot,
     launchReceipt,
+    exitReceipt,
     terminateReceipt,
     receiptVersion: () => version,
     waitForReceiptChange: (observed) => {
