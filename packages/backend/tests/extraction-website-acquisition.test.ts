@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -198,4 +198,31 @@ test("IMPORT-2: Given a homepage with 65 product images and no logo candidates W
     expect(result.system.status).toBe("draft");
     expect(requests.filter((request) => request.startsWith("/products/"))).toEqual([]);
   });
+});
+
+test("IMPORT-6: Given a same-origin stylesheet link that redirects to another origin When website extraction runs Then the off-origin stylesheet is never requested", async () => {
+  const source = "https://93.184.215.14";
+  const foreign = "151.101.1.1";
+  const requestedHosts: string[] = [];
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Redirect</title><link rel="stylesheet" href="/site.css"></head><body><h1>Redirect</h1></body></html>';
+  const fakeSite = async (input: string | URL | Request): Promise<Response> => {
+    const url = new URL(input instanceof Request ? input.url : input.toString());
+    requestedHosts.push(`${url.hostname}${url.pathname}`);
+    if (url.hostname === "93.184.215.14" && url.pathname === "/") return new Response(html, { headers: { "content-type": "text/html" } });
+    if (url.hostname === "93.184.215.14" && url.pathname === "/site.css") return new Response(null, { status: 302, headers: { location: `https://${foreign}/theme.css` } });
+    if (url.hostname === foreign) return new Response(":root{--foreign:#abcdef}", { headers: { "content-type": "text/css" } });
+    return new Response("missing", { status: 404 });
+  };
+  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(Object.assign(fakeSite, { preconnect: globalThis.fetch.preconnect }));
+  const id = `website-css-redirect-${process.pid}`;
+  try {
+    await extractDesignSystemFromSource({ system_id: id, name: "Redirect", source_type: "website", source_url: `${source}/` });
+    expect(requestedHosts).toContain("93.184.215.14/site.css");
+    expect(requestedHosts.filter((entry) => entry.startsWith(foreign))).toEqual([]);
+    expect((await readReport(path.join(systemsDir, id))).detected_css_vars.some(([name]) => name === "foreign")).toBe(false);
+  } finally {
+    fetchSpy.mockRestore();
+    getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(id);
+    await rm(path.join(systemsDir, id), { recursive: true, force: true });
+  }
 });

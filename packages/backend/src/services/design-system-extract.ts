@@ -1035,6 +1035,7 @@ async function ingestWebsiteSource(
           noteBytes,
           signal,
           userAgent: `BurnGuard/${APP_VERSION} design-system-import`,
+          allowedOrigin: url.origin,
         });
         const seenDeclarations = stylesheetDeclarations.get(cssFetch.finalUrl.toString());
         if (seenStylesheets.has(cssFetch.finalUrl.toString())) { addLinked(seenDeclarations ?? []); continue; }
