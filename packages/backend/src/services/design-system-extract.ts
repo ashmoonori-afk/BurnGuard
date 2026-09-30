@@ -2588,7 +2588,8 @@ function deriveBrandNameFromGitUrl(sourceUrl: string): string {
 function deriveBrandNameFromHtml(url: URL, html: string): string {
   const root = parse(html);
   const title = root.querySelector("title")?.text.trim();
-  if (title) return normalizeBrandName(title.split(/[|\-–—]/)[0] ?? title);
+  // A hyphen separates title parts only beside whitespace; inside a word it belongs to the brand ("Coca-Cola").
+  if (title) return normalizeBrandName(title.split(/[|–—]|\s-|-\s/)[0] ?? title);
   return normalizeBrandName(url.hostname.replace(/^www\./, "").split(".")[0] ?? "Website");
 }
 
