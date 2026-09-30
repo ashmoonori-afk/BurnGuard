@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
+  chromiumLaunchCapability,
   isChromiumLaunchable,
   resetChromiumCapability,
   setChromiumCapabilityForTesting,
+  spawnLaunchProbe,
 } from "../src/services/chromium-capability";
 
 beforeEach(() => resetChromiumCapability());
@@ -153,5 +158,78 @@ describe("chromium launch capability", () => {
     finish(false);
     expect(await old).toBe(false);
     expect(await isChromiumLaunchable(async () => false)).toBe(true);
+  });
+});
+
+describe("chromium launch capability without an answer", () => {
+  test("Given a probe that ends without an answer When asked Then the capability is inconclusive and polling reads it as not launchable", async () => {
+    const probe = async (): Promise<"inconclusive"> => "inconclusive";
+
+    expect(await chromiumLaunchCapability(probe)).toBe("inconclusive");
+    expect(await isChromiumLaunchable(probe)).toBe(false);
+  });
+
+  test("Given a probe that throws When asked Then nothing is concluded about the browser", async () => {
+    expect(await chromiumLaunchCapability(async () => { throw new TypeError("spawn failed"); })).toBe("inconclusive");
+  });
+
+  test("Given an unanswered probe from nine minutes ago When asked again Then the probe reruns, where a real negative answer of that age is kept", async () => {
+    const age = Date.now() - 9 * 60_000;
+    let probes = 0;
+    const probe = async (): Promise<boolean> => { probes += 1; return true; };
+
+    setChromiumCapabilityForTesting("inconclusive", age);
+    expect(await chromiumLaunchCapability(probe)).toBe("usable");
+    expect(probes).toBe(1);
+
+    setChromiumCapabilityForTesting(false, age);
+    expect(await chromiumLaunchCapability(probe)).toBe("unusable");
+    expect(probes).toBe(1);
+  });
+
+  test("Given a fresh unanswered probe When asked again Then the probe is not repeated at once", async () => {
+    setChromiumCapabilityForTesting("inconclusive");
+    let probes = 0;
+
+    expect(await chromiumLaunchCapability(async () => { probes += 1; return true; })).toBe("inconclusive");
+    expect(probes).toBe(0);
+  });
+
+  test("Given a render whose wait is cancelled When the probe is still running Then that caller concludes nothing and the probe keeps its own answer", async () => {
+    let finish!: (usable: boolean) => void;
+    const probe = (): Promise<boolean> => new Promise((resolve) => { finish = resolve; });
+    const controller = new AbortController();
+    const cancelled = chromiumLaunchCapability(probe, { waitForResult: true, signal: controller.signal });
+    controller.abort();
+
+    expect(await cancelled).toBe("inconclusive");
+    const waiting = chromiumLaunchCapability(probe, { waitForResult: true });
+    finish(true);
+    expect(await waiting).toBe("usable");
+  });
+});
+
+describe("chromium launch probe child", () => {
+  async function probeWith(body: string, timeoutMs: number): Promise<boolean | "inconclusive"> {
+    const dir = await mkdtemp(path.join(tmpdir(), "bg-probe-child-"));
+    try {
+      const script = path.join(dir, "probe.mjs");
+      await writeFile(script, body);
+      return await spawnLaunchProbe({ node: process.execPath, script, cwd: dir }, timeoutMs);
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  }
+
+  for (const [name, body, expected] of [
+    ["reports a usable browser", 'process.stdout.write("usable", () => { process.exit(0); });', true],
+    ["finds no browser", "process.exit(1);", false],
+    ["ran out of time on a channel", "process.exit(2);", "inconclusive"],
+  ] as const) {
+    test(`Given a probe child that ${name} When the probe runs Then the result is ${String(expected)}`, async () => {
+      expect(await probeWith(body, 20_000)).toBe(expected);
+    });
+  }
+
+  test("Given a probe child that never answers When its deadline passes Then the result is inconclusive rather than a missing browser", async () => {
+    expect(await probeWith("setInterval(() => undefined, 1_000);", 250)).toBe("inconclusive");
   });
 });

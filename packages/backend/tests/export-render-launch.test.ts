@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Browser } from "playwright-core";
-import { resetChromiumCapability, setChromiumCapabilityForTesting } from "../src/services/chromium-capability";
+import { chromiumLaunchCapability, resetChromiumCapability, setChromiumCapabilityForTesting } from "../src/services/chromium-capability";
 import { launchChromium, RenderSessionError, type ChromiumLauncher } from "../src/services/export-render-session";
 
 const previousTimeout = process.env.BG_CHROMIUM_LAUNCH_TIMEOUT_MS;
@@ -12,8 +12,8 @@ afterEach(() => { resetChromiumCapability(); if (previousTimeout === undefined) 
 
 function fakeBrowser(onClose: () => void = () => undefined): Browser { return { close: async (): Promise<void> => { onClose(); } } as unknown as Browser; }
 
-async function launchFailure(signal: AbortSignal, launch: ChromiumLauncher, installed?: () => Promise<boolean>): Promise<RenderSessionError> {
-  const error: unknown = await launchChromium(signal, launch, installed).then(() => null, (reason: unknown) => reason);
+async function launchFailure(signal: AbortSignal, launch: ChromiumLauncher, installed?: () => Promise<boolean>, isolated?: boolean): Promise<RenderSessionError> {
+  const error: unknown = await launchChromium(signal, launch, installed, isolated).then(() => null, (reason: unknown) => reason);
   if (!(error instanceof RenderSessionError)) throw new TypeError(`expected a RenderSessionError, got ${String(error)}`);
   return error;
 }
@@ -68,6 +68,29 @@ describe("chromium launch", () => {
       let launches = 0;
 
       const error = await launchFailure(new AbortController().signal, async () => { launches += 1; return fakeBrowser(); }, async () => installed);
+
+      expect(error.code).toBe(code);
+      expect(launches).toBe(0);
+    });
+  }
+
+  test("Given an unanswered probe and a launcher isolated in a child process When Chromium is launched Then the launch is attempted and its success is remembered", async () => {
+    setChromiumCapabilityForTesting("inconclusive");
+    const channels: Array<string | undefined> = [];
+
+    const browser = await launchChromium(new AbortController().signal, async (options) => { channels.push(options.channel); if (options.channel === undefined) throw new Error("Executable doesn't exist"); return fakeBrowser(); }, async () => false, true);
+
+    expect(browser).not.toBeNull();
+    expect(channels).toEqual([undefined, "chrome"]);
+    expect(await chromiumLaunchCapability(async () => false)).toBe("usable");
+  });
+
+  for (const [installed, code] of [[false, "chromium_not_installed"], [true, "chromium_launch_timeout"]] as const) {
+    test(`Given an unanswered probe, an in-process launcher and a browser on disk=${installed} When Chromium is launched Then the failure is ${code} and this event loop is never risked`, async () => {
+      setChromiumCapabilityForTesting("inconclusive");
+      let launches = 0;
+
+      const error = await launchFailure(new AbortController().signal, async () => { launches += 1; return fakeBrowser(); }, async () => installed, false);
 
       expect(error.code).toBe(code);
       expect(launches).toBe(0);
