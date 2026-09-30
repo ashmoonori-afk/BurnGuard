@@ -24,6 +24,7 @@ jobs run each pinning suite.
 | Design-system outputs (wireframe SVG, starter stylesheet and skeleton) | byte-identical | byte-identical | byte-identical | `os-portability` (pinned digests) | Ubuntu, OS jobs |
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
+| Website import acquisition (SVG logo sanitising, logo-candidate limit, public 192.0.x hosts, same-origin stylesheet redirects) | same | same | same | `extraction-website-acquisition`, `extraction-website-boundaries` | Ubuntu, OS jobs |
 
 ## Known gaps
 
