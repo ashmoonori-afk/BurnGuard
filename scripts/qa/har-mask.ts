@@ -5,9 +5,11 @@ import path from "node:path";
 /**
  * Masks a HAR recorded against a running BurnGuard before it is shared: the per-launch capability (header, cookie,
  * bootstrap body and every other place its value appears), authorization headers, cookies, secret-named query, form
- * and JSON body fields, and home paths plus caller-given roots everywhere in the file. The output is verified to
- * contain none of the collected secret values before it is written. Known limit: a home directory name containing a
- * space is masked only up to the space; pass that root with --root.
+ * and JSON body fields, and home paths plus caller-given roots everywhere in the file. Secrets and roots are matched
+ * in the forms a HAR carries them: as is, percent-encoded and JSON-escaped; roots also with either path separator, in
+ * any letter case and in both Unicode normal forms. The output is verified to contain none of the collected secret
+ * values before it is written. Known limit: a home directory name containing a space is masked only up to the space;
+ * pass that root with --root.
  */
 
 export const MASKED = "[masked]";
@@ -28,6 +30,29 @@ const HOME_PATTERNS: readonly RegExp[] = [
   /[A-Za-z]%3A%5C(?:%5C)?Users%5C(?:%5C)?[^%\s"'&<>]+/giu,
 ];
 const TEXT_MIME = /^(?:text\/|application\/(?:json|javascript|xml|x-www-form-urlencoded|x-ndjson)|image\/svg\+xml)/iu;
+/** A path separator as a HAR carries it: a slash, a backslash (doubled by each level of JSON escaping) or either one percent-encoded. */
+const SEPARATOR = String.raw`(?:/|\\+|%2F|(?:%5C)+)`;
+const REGEXP_SYNTAX = /[\\^$.*+?()[\]{}|/]/gu;
+
+/** A value as it appears inside a JSON string: quotes, backslashes and control characters escaped. */
+const jsonEscaped = (value: string): string => JSON.stringify(value).slice(1, -1);
+/** The forms a secret takes in a HAR string: as is, percent-encoded (query and form values) and JSON-escaped (JSON bodies). */
+const secretForms = (secret: string): string[] => [...new Set([secret, encodeURIComponent(secret), jsonEscaped(secret)])];
+
+/**
+ * Matches a caller-given root however the HAR spells it, on any host OS: either separator for "/" and "\", each
+ * character as is, percent-encoded or JSON-escaped, a space also as "+", any letter case (Windows and macOS file
+ * systems ignore case, and so do percent-escape hex digits) and both Unicode normal forms (macOS reports names in NFD).
+ */
+function rootPattern(root: string): RegExp {
+  const source = (form: string): string => [...form].map(char => {
+    if (char === "/" || char === "\\") return SEPARATOR;
+    const encoded = [...new TextEncoder().encode(char)].map(byte => `%${byte.toString(16).padStart(2, "0")}`).join("");
+    const forms = new Set([char, encoded, jsonEscaped(char), ...(char === " " ? ["+"] : [])]);
+    return `(?:${[...forms].map(item => item.replace(REGEXP_SYNTAX, "\\$&")).join("|")})`;
+  }).join("");
+  return new RegExp([...new Set([root, root.normalize("NFC"), root.normalize("NFD")])].map(source).join("|"), "giu");
+}
 
 export type HarMaskReport = { readonly secret_values: number; readonly headers: number; readonly cookies: number; readonly params: number; readonly paths: number };
 export type PrivateRoot = { readonly path: string; readonly placeholder: string };
@@ -118,11 +143,11 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   }
   const counts = { secret_values: secrets.length, headers: 0, cookies: 0, params: 0, paths: 0 };
   // Longer roots first, so a nested root keeps its own placeholder.
-  const orderedRoots = [...roots].filter(root => root.path.length > 1).sort((a, b) => b.path.length - a.path.length);
+  const orderedRoots = [...roots].filter(root => root.path.length > 1).sort((a, b) => b.path.length - a.path.length).map(root => ({ pattern: rootPattern(root.path), placeholder: root.placeholder }));
   const scrub = (text: string): string => {
     let out = text;
-    for (const secret of secrets) out = out.replaceAll(secret, MASKED).replaceAll(encodeURIComponent(secret), MASKED);
-    for (const root of orderedRoots) { const next = out.replaceAll(root.path, root.placeholder); if (next !== out) counts.paths += 1; out = next; }
+    for (const secret of secrets) for (const form of secretForms(secret)) out = out.replaceAll(form, MASKED);
+    for (const root of orderedRoots) { const next = out.replace(root.pattern, () => root.placeholder); if (next !== out) counts.paths += 1; out = next; }
     for (const pattern of HOME_PATTERNS) { const next = out.replace(pattern, "<home>"); if (next !== out) counts.paths += 1; out = next; }
     return out;
   };
@@ -149,7 +174,8 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const masked = walk(har);
   const serialized = JSON.stringify(masked);
   const decodedBodies = entriesOf(masked as Record<string, Json>).flatMap(entry => { const content = isObject(entry["response"]) ? entry["response"]["content"] : null; return isObject(content) && content["encoding"] === "base64" && typeof content["text"] === "string" ? [Buffer.from(content["text"], "base64").toString("latin1")] : []; });
-  if (secrets.some(secret => serialized.includes(secret) || decodedBodies.some(body => body.includes(secret)))) throw new HarMaskError("secret_remains");
+  // The serialized HAR holds every string JSON-escaped once more, so each form is searched for in that escaping.
+  if (secrets.some(secret => secretForms(secret).some(form => serialized.includes(jsonEscaped(form)) || decodedBodies.some(body => body.includes(form))))) throw new HarMaskError("secret_remains");
   return { har: masked, report: counts };
 }
 

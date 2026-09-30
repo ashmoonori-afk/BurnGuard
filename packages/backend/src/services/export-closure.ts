@@ -9,6 +9,8 @@ const MAX_DEPTH = 16;
 const MAX_REFERENCES = 10_000;
 const MAX_DATA_IMAGE_BYTES = 2 * 1024 * 1024;
 const HTML_ATTRIBUTES = ["src", "poster", "href", "xlink:href"] as const;
+const METADATA_LINK_RELATIONS: ReadonlySet<string> = new Set(["canonical", "alternate"]);
+const IMPORT_SCANNER = new Bun.Transpiler({ loader: "js" });
 
 export class ExportClosureError extends Error {
   readonly name = "ExportClosureError";
@@ -19,7 +21,10 @@ export class ExportClosureError extends Error {
 
 export type ExportClosure = { readonly entrypoint: string; readonly referenced_paths: readonly string[] };
 
-export async function resolveStaticClosure(root: string, entrypoint: string, manifest: CanonicalTreeManifest): Promise<ExportClosure> {
+/** Test seam: reports how many raw references one file's scan collected. */
+export type ClosureScanProbe = (file: string, collected: number) => void;
+
+export async function resolveStaticClosure(root: string, entrypoint: string, manifest: CanonicalTreeManifest, onScan?: ClosureScanProbe): Promise<ExportClosure> {
   const files = new Set(manifest.files.map((file) => file.path));
   if (!files.has(entrypoint)) throw new ExportClosureError("missing_asset", entrypoint);
   const visited = new Set<string>();
@@ -32,9 +37,12 @@ export async function resolveStaticClosure(root: string, entrypoint: string, man
     visited.add(relativePath);
     const content = await readFile(resolveWithin(root, relativePath), "utf8");
     const extension = path.posix.extname(relativePath).toLowerCase();
+    // One past the remaining budget is enough to refuse: a scan never collects what the cap below would reject anyway.
+    const limit = MAX_REFERENCES - count + 1;
     const rawReferences = extension === ".html" || extension === ".htm"
-      ? htmlReferences(content, relativePath)
-      : extension === ".css" ? cssReferences(content, relativePath) : scriptReferences(content, relativePath);
+      ? htmlReferences(content, relativePath, limit)
+      : extension === ".css" ? cssReferences(content, relativePath, limit) : scriptReferences(content, relativePath);
+    onScan?.(relativePath, rawReferences.length);
     for (const raw of rawReferences) {
       count += 1;
       if (count > MAX_REFERENCES) throw new ExportClosureError("closure_limit", raw);
@@ -54,42 +62,65 @@ export async function resolveStaticClosure(root: string, entrypoint: string, man
 /** Best-effort inventory for imports; strict export validation still uses the full closure. */
 export function localAssetReferences(source: string, file: string): readonly string[] {
   let values: readonly string[];
-  try { values = /\.css$/i.test(file) ? cssReferences(source, file) : htmlReferences(`<html><body>${source}</body></html>`, file); }
+  try { values = /\.css$/i.test(file) ? cssReferences(source, file, Number.POSITIVE_INFINITY) : htmlReferences(`<html><body>${source}</body></html>`, file, Number.POSITIVE_INFINITY); }
   catch { return []; }
-  return values.flatMap(value => {
-    try { const resolved = resolveReference(value, file); return resolved ? [resolved] : []; }
-    catch { return []; }
-  });
+  // Documents repeat their references: each distinct value is resolved once (null: not a local path, or refused).
+  const resolvedByValue = new Map<string, string | null>();
+  const resolved: string[] = [];
+  for (const value of values) {
+    let local = resolvedByValue.get(value);
+    if (local === undefined) {
+      try { local = resolveReference(value, file) || null; }
+      catch { local = null; }
+      resolvedByValue.set(value, local);
+    }
+    if (local !== null) resolved.push(local);
+  }
+  return resolved;
 }
 
-function htmlReferences(source: string, file: string): readonly string[] {
+/** Collects raw references in document order and stops once `limit` of them are held. */
+function htmlReferences(source: string, file: string, limit: number): readonly string[] {
   const document = parse(source);
   if (document.querySelector("html") === null || document.querySelector("body") === null) throw new ExportClosureError("malformed_html", file);
   const values: string[] = [];
   for (const element of document.querySelectorAll("link,script,img,source,video,audio,input,object,embed,use,image")) {
     for (const attribute of HTML_ATTRIBUTES) {
-      if (attribute === "href" && element.tagName === "A") continue;
+      if (values.length >= limit) return values;
+      if (attribute === "href" && (element.tagName === "A" || (element.tagName === "LINK" && isMetadataLink(element.getAttribute("rel"))))) continue;
       const value = element.getAttribute(attribute);
       if (value !== undefined) values.push(value);
     }
     const srcset = element.getAttribute("srcset");
-    // A loop, not a spread: a huge attribute must reach the reference cap instead of overflowing the call stack.
-    if (srcset !== undefined) for (const url of srcsetUrls(srcset)) values.push(url);
+    if (srcset !== undefined) srcsetUrls(srcset, values, limit);
   }
-  for (const style of document.querySelectorAll("style")) for (const url of cssReferences(style.text, file)) values.push(url);
-  for (const element of document.querySelectorAll("[style]")) for (const url of cssUrlValues(element.getAttribute("style") ?? "")) values.push(url);
+  for (const style of document.querySelectorAll("style")) {
+    if (values.length >= limit) return values;
+    cssReferences(style.text, file, limit, values);
+  }
+  if (values.length >= limit) return values;
+  for (const element of document.querySelectorAll("[style]")) {
+    if (values.length >= limit) return values;
+    cssUrlValues(element.getAttribute("style") ?? "", values, limit);
+  }
   return values;
+}
+
+/** True only when every relation is one a browser never fetches; any other relation, or none, keeps the href under the closure rules. */
+function isMetadataLink(rel: string | undefined): boolean {
+  const relations = (rel ?? "").toLowerCase().split(/[ \t\n\f\r]+/u).filter((relation) => relation !== "");
+  return relations.length > 0 && relations.every((relation) => METADATA_LINK_RELATIONS.has(relation));
 }
 
 /**
  * HTML candidate grammar, in one linear pass: a URL is a run without ASCII whitespace (so a comma inside a data: URL
  * stays in it), and its descriptors end at the first comma outside parentheses, exactly where a browser starts the next candidate.
+ * Appends to `urls` and stops once it holds `limit` values.
  */
-function srcsetUrls(srcset: string): readonly string[] {
+function srcsetUrls(srcset: string, urls: string[], limit: number): void {
   const space = (character: string | undefined): boolean => character === " " || character === "\t" || character === "\n" || character === "\f" || character === "\r";
-  const urls: string[] = [];
   let index = 0;
-  while (index < srcset.length) {
+  while (index < srcset.length && urls.length < limit) {
     while (index < srcset.length && (space(srcset[index]) || srcset[index] === ",")) index += 1;
     const start = index;
     while (index < srcset.length && !space(srcset[index])) index += 1;
@@ -105,31 +136,41 @@ function srcsetUrls(srcset: string): readonly string[] {
       else if (character === "," && !inParens) { index += 1; break; }
     }
   }
-  return urls;
 }
 
-function cssReferences(source: string, file: string): readonly string[] {
+/** Appends to `values` and stops once it holds `limit` of them; the stylesheet is still parsed whole, so malformed CSS is refused either way. */
+function cssReferences(source: string, file: string, limit: number, values: string[] = []): readonly string[] {
   let root: postcss.Root;
   // `map: false`: project CSS is untrusted, so a `sourceMappingURL` comment must
   // not make PostCSS read a file on this host. The stable file name is the only
   // detail exposed; dependency exception text is not.
   try { root = postcss.parse(source, { from: file, map: false }); }
   catch { throw new ExportClosureError("malformed_html", file); }
-  const values: string[] = [];
   root.walkAtRules("import", (rule) => {
+    if (values.length >= limit) return false;
     const match = /^(?:url\()?\s*["']?([^"')\s]+)["']?/.exec(rule.params);
     if (match?.[1] !== undefined) values.push(match[1]);
+    return undefined;
   });
-  root.walkDecls((declaration) => { for (const url of cssUrlValues(declaration.value)) values.push(url); });
+  root.walkDecls((declaration) => {
+    if (values.length >= limit) return false;
+    cssUrlValues(declaration.value, values, limit);
+    return undefined;
+  });
   return values;
 }
 
-function cssUrlValues(value: string): readonly string[] {
-  return [...value.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/giu)].map((match) => match[1] ?? "");
+/** One match at a time, not a spread of every match: appends to `values` and stops once it holds `limit` of them. */
+function cssUrlValues(value: string, values: string[], limit: number): void {
+  const pattern = /url\(\s*["']?([^"')]+)["']?\s*\)/giu;
+  for (let match = pattern.exec(value); match !== null && values.length < limit; match = pattern.exec(value)) values.push(match[1] ?? "");
 }
 
 function scriptReferences(source: string, file: string): readonly string[] {
   if (!file.endsWith(".js") && !file.endsWith(".mjs") && !file.endsWith(".cjs")) return [];
+  // A parser, not a pattern: comments, string and template literals and regex literals are not imports.
+  try { return IMPORT_SCANNER.scanImports(source).filter((entry) => entry.kind === "import-statement" || entry.kind === "dynamic-import").map((entry) => entry.path); }
+  catch { /* Not parseable as a module: keep the textual scan so an import a browser may still run cannot slip past. */ }
   const patterns = [/(?:import|export)\s+(?:[^"']+?\s+from\s+)?["']([^"']+)["']/gu, /import\(\s*["']([^"']+)["']\s*\)/gu];
   return patterns.flatMap((pattern) => [...source.matchAll(pattern)].map((match) => match[1] ?? ""));
 }

@@ -36,6 +36,15 @@ function fail(
   return { error: { code, message, details } };
 }
 
+/**
+ * An unexpected failure's message carries absolute managed paths and errno text, so the body gets fixed copy
+ * and only the error code or class name is logged.
+ */
+function unexpectedFailure(code: string, message: string, error: unknown): ApiErrorBody {
+  console.warn("[design-system] request failed", code, error instanceof Error ? String(Reflect.get(error, "code") ?? error.name) : "unknown");
+  return fail(code, message);
+}
+
 function parseExtractionLineage(input: unknown): DesignSystemExtractionLineageRequest | null | undefined {
   if (input === undefined) return undefined;
   if (typeof input !== "object" || input === null) return null;
@@ -110,13 +119,7 @@ systemRoutes.post("/api/design-systems/extract", async (c) => {
     if (err instanceof DesignSystemExtractError) {
       return c.json(fail(err.code, err.message), err.code === "publication_failed" ? 500 : err.code === "acquisition_timeout" ? 408 : 400);
     }
-    return c.json(
-      fail(
-        "design_system_extract_failed",
-        err instanceof Error ? err.message : String(err),
-      ),
-      500,
-    );
+    return c.json(unexpectedFailure("design_system_extract_failed", "Design system extraction failed", err), 500);
   }
 });
 
@@ -154,13 +157,7 @@ systemRoutes.post("/api/design-systems/upload", async (c) => {
     if (err instanceof DesignSystemExtractError) {
       return c.json(fail(err.code, err.message), err.code === "publication_failed" ? 500 : err.code === "acquisition_timeout" ? 408 : 400);
     }
-    return c.json(
-      fail(
-        "design_system_upload_failed",
-        err instanceof Error ? err.message : String(err),
-      ),
-      500,
-    );
+    return c.json(unexpectedFailure("design_system_upload_failed", "Design system upload failed", err), 500);
   }
 });
 
@@ -185,13 +182,7 @@ systemRoutes.get("/api/design-systems/:id/tokens", async (c) => {
     if (err instanceof DesignSystemAssetEditError) {
       return c.json(fail(err.code, err.message), err.code === "design_system_not_found" ? 404 : 400);
     }
-    return c.json(
-      fail(
-        "design_system_tokens_failed",
-        err instanceof Error ? err.message : String(err),
-      ),
-      500,
-    );
+    return c.json(unexpectedFailure("design_system_tokens_failed", "Design system tokens could not be read", err), 500);
   }
 });
 
@@ -211,13 +202,7 @@ systemRoutes.patch("/api/design-systems/:id/colors", async (c) => {
     if (err instanceof DesignSystemAssetEditError) {
       return c.json(fail(err.code, err.message), err.code === "design_system_not_found" ? 404 : 400);
     }
-    return c.json(
-      fail(
-        "design_system_color_update_failed",
-        err instanceof Error ? err.message : String(err),
-      ),
-      500,
-    );
+    return c.json(unexpectedFailure("design_system_color_update_failed", "Design system color could not be saved", err), 500);
   }
 });
 
@@ -260,12 +245,6 @@ systemRoutes.post("/api/design-systems/:id/fonts", async (c) => {
     if (err instanceof DesignSystemAssetEditError) {
       return c.json(fail(err.code, err.message), err.code === "design_system_not_found" ? 404 : 400);
     }
-    return c.json(
-      fail(
-        "design_system_font_upload_failed",
-        err instanceof Error ? err.message : String(err),
-      ),
-      500,
-    );
+    return c.json(unexpectedFailure("design_system_font_upload_failed", "Design system font could not be uploaded", err), 500);
   }
 });
