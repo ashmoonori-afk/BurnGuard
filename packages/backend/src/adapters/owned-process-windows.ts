@@ -79,7 +79,8 @@ async function launcherProvesExit(ownership: WindowsJobOwnership, hostPid: numbe
 export function validateLaunchSettlement(contents: string, ownership: WindowsJobOwnership, hostPid: number, exitCode: number): void {
   const receipt = parseLaunchReceipt(contents);
   if (receipt === null || receipt.job !== ownership.token || receipt.hostPid !== hostPid || Math.min(receipt.targetExitCode, 255) !== exitCode || receipt.activeProcesses !== 0) {
-    throw new OwnedProcessHostError("invalid_receipt");
+    // The launcher's own exit code says why its exited receipt is missing (204 cleanup timeout, 205 incomplete, 206 write failure).
+    throw new OwnedProcessHostError("invalid_receipt", exitCode);
   }
 }
 

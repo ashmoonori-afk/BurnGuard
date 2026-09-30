@@ -185,7 +185,7 @@ for (const scenario of [
   const receipt = JSON.stringify({ schema_version: 1, operation: "launch", state: "exited", job_token: jobToken, host_pid: 50, target_pid: 51, target_exit_code: scenario.targetExitCode, active_processes: 0 });
   const validate = () => validateLaunchSettlement(receipt, testWindowsOwnership(), 50, scenario.hostExit);
   if (scenario.valid) expect(validate).not.toThrow();
-  else expect(validate).toThrow(expect.objectContaining({ reason: "invalid_receipt" }));
+  else expect(validate).toThrow(expect.objectContaining({ reason: "invalid_receipt", helperExitCode: scenario.hostExit }));
 });
 
 test("Windows host settlement waits for terminate receipt consumption before disposal", async () => {

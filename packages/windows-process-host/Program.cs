@@ -204,21 +204,22 @@ namespace BurnGuard.ProcessHost
 
         private static void WaitForActiveZero(IntPtr completionPort, IntPtr zeroEvent, IntPtr job, int timeoutMs)
         {
+            // The job's accounting is the authority for "no process left"; the completion-port message is only a wake-up.
+            // Windows does not guarantee delivery of job notification messages (SetInformationJobObject,
+            // JOBOBJECT_ASSOCIATE_COMPLETION_PORT), so a dropped ACTIVE_PROCESS_ZERO message must not turn an empty job
+            // into a cleanup timeout. Every wake-up, and the final timeout, re-reads the job's active process count.
             var watch = Stopwatch.StartNew();
-            while (true)
+            while (ActiveProcesses(job) != 0)
             {
                 var remaining = timeoutMs - (int)watch.ElapsedMilliseconds;
                 if (remaining <= 0) Fail(HostExit.CleanupTimeout, "job_zero_timeout");
                 uint message;
                 UIntPtr key;
                 IntPtr overlapped;
-                if (!Native.GetQueuedCompletionStatus(completionPort, out message, out key, out overlapped, (uint)remaining))
+                if (!Native.GetQueuedCompletionStatus(completionPort, out message, out key, out overlapped, (uint)remaining) && ActiveProcesses(job) != 0)
                     Fail(HostExit.CleanupTimeout, "job_completion_timeout");
-                if (message != JobObjectMsgActiveProcessZero) continue;
-                if (!Native.SetEvent(zeroEvent)) Fail(HostExit.NativeFailure, "zero_event_failed");
-                if (ActiveProcesses(job) != 0) Fail(HostExit.CleanupIncomplete, "active_processes_nonzero");
-                return;
             }
+            if (!Native.SetEvent(zeroEvent)) Fail(HostExit.NativeFailure, "zero_event_failed");
         }
 
         private static uint ActiveProcesses(IntPtr job)
