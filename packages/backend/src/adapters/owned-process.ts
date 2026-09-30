@@ -73,7 +73,7 @@ export function settleOwnedProcess(
   lifecycle.settlement ??= (async () => {
     try {
       if (lifecycle.control !== undefined) await lifecycle.control;
-      const contents = await readReceipt(ownership.exitReceipt).catch(() => { throw new OwnedProcessHostError("invalid_receipt"); });
+      const contents = await readReceipt(ownership.exitReceipt).catch(() => { throw new OwnedProcessHostError("invalid_receipt", exitCode); });
       validateLaunchSettlement(contents, ownership, owned.proc.pid, exitCode);
     } finally {
       await disposeWindowsOwnership(ownership);

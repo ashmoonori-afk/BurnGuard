@@ -175,6 +175,10 @@ test("Windows launch settlement requires the final exact-token zero-active recei
   const invalidOwnership = testWindowsOwnership();
   const invalidOwned = { proc: { pid: 50, exited: Promise.resolve(17), kill: () => {} }, ownership: invalidOwnership };
   await expect(settleOwnedProcess(invalidOwned, 17, async () => "{}")).rejects.toBeInstanceOf(OwnedProcessHostError);
+  // A launcher that failed before writing its exited receipt (204, 205, 206) is named by its exit code.
+  const missingOwnership = testWindowsOwnership();
+  const missingOwned = { proc: { pid: 50, exited: Promise.resolve(206), kill: () => {} }, ownership: missingOwnership };
+  await expect(settleOwnedProcess(missingOwned, 206, async () => { throw Object.assign(new Error("missing"), { code: "ENOENT" }); })).rejects.toMatchObject({ reason: "invalid_receipt", helperExitCode: 206 });
 });
 
 for (const scenario of [
