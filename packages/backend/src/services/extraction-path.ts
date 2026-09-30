@@ -46,9 +46,11 @@ export function isUnsafeImportHostname(hostname: string): boolean {
     const parts = host.split(".").map((part) => Number.parseInt(part, 10));
     const a = parts[0];
     const b = parts[1];
+    const c = parts[2];
+    // Within 192.0.0.0/16 only 192.0.0.0/24 (IETF protocol assignments) and 192.0.2.0/24 (TEST-NET-1) are reserved.
     return a === 10 || a === 127 || a === 0 || a !== undefined && a >= 224 || (a === 169 && b === 254) ||
       (a === 100 && b !== undefined && b >= 64 && b <= 127) ||
-      (a === 172 && b !== undefined && b >= 16 && b <= 31) || (a === 192 && (b === 168 || b === 0)) ||
+      (a === 172 && b !== undefined && b >= 16 && b <= 31) || (a === 192 && (b === 168 || (b === 0 && (c === 0 || c === 2)))) ||
       (a === 198 && (b === 18 || b === 19));
   }
   if (ipVersion !== 6) return false;

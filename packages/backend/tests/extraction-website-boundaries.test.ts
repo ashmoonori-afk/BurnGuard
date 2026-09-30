@@ -84,6 +84,22 @@ describe("production website acquisition boundaries", () => {
     expect(isUnsafeImportHostname("2606:4700:4700::1111")).toBe(false);
   });
 
+  test("IMPORT-5: Given the public WordPress.com address 192.0.78.9 When the import host policy classifies it Then it is not treated as private or local", () => {
+    expect(isUnsafeImportHostname("192.0.78.9")).toBe(false);
+    for (const host of ["192.0.0.1", "192.0.2.1", "192.168.1.1", "::ffff:192.0.2.1"]) expect(isUnsafeImportHostname(host), host).toBe(true);
+  });
+
+  test("IMPORT-5: Given a hostname whose DNS answer is the WordPress.com address When import addresses are resolved Then the public address is returned instead of a blocked-host error", async () => {
+    const refusedDns = async (): Promise<never> => { throw new Error("ECONNREFUSED"); };
+    const resolver = { resolve4: refusedDns, resolve6: refusedDns, cancel: () => {} };
+    const systemLookup = async () => [{ address: "192.0.78.9", family: 4 }];
+    const outcome = await resolveSafeImportAddresses(new URL("https://example-blog.wordpress.com/"), new AbortController().signal, resolver, systemLookup).then(
+      (addresses) => ({ ok: true as const, addresses: addresses.map((entry) => entry.address) }),
+      (error: unknown) => ({ ok: false as const, code: error instanceof Error && "code" in error ? String(error.code) : String(error) }),
+    );
+    expect(outcome).toEqual({ ok: true, addresses: ["192.0.78.9"] });
+  });
+
   test("Given unresolvable or mixed public and private DNS answers When acquisition resolves Then it fails before connection", async () => {
     const signal = new AbortController().signal;
     const url = new URL("https://fixture.example/source");
