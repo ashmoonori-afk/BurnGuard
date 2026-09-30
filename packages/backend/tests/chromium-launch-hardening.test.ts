@@ -1,15 +1,15 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Browser } from "playwright-core";
-import { keepAbortSignalArmed } from "../src/lib/abort-signal";
-import { isChromiumLaunchable, resetChromiumCapability, spawnLaunchProbe } from "../src/services/chromium-capability";
+import { isChromiumLaunchable, resetChromiumCapability, setChromiumCapabilityForTesting, spawnLaunchProbe } from "../src/services/chromium-capability";
 import { chromiumNodeCommand, launchChromiumViaNode } from "../src/services/chromium-node-launch";
 import { launchChromium, RenderSessionError } from "../src/services/export-render-session";
 
-// Regression suite for the 2026-09-30 launch failures (doc/os-matrix.md, HARDENING). Every case goes through an
-// entry point that existed before the fix, so it fails by assertion on the code that shipped the defect.
+// Regression suite for the 2026-09-30 launch failures (doc/os-matrix.md, "Hardening log"). Every case goes through
+// an entry point that already existed before the fix (PR #195), so it fails by assertion on the code that shipped
+// the defect instead of failing to load.
 
 const BRIDGE = path.join(import.meta.dir, "..", "src", "services", "chromium-node-bridge.mjs");
 const CHANNELS = ["bundled", "chrome", "msedge"] as const;
@@ -42,6 +42,7 @@ async function tempRoot(prefix: string): Promise<string> {
 
 beforeEach(() => resetChromiumCapability());
 afterEach(async () => {
+  setSystemTime();
   resetChromiumCapability();
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -72,6 +73,13 @@ async function runBridgeProbe(behaviours: readonly [ChannelBehaviour, ChannelBeh
   } finally { clearTimeout(deadline); }
 }
 
+async function neverAnsweringProbe(): Promise<{ readonly node: string; readonly script: string; readonly cwd: string }> {
+  const root = await tempRoot("bg-probe-deadline-");
+  const script = path.join(root, "probe.mjs");
+  await writeFile(script, "setInterval(() => undefined, 1_000);");
+  return { node: process.execPath, script, cwd: root };
+}
+
 function fakeBrowser(): Browser { return { close: async (): Promise<void> => undefined } as unknown as Browser; }
 
 function firesWithin(signal: AbortSignal, ms: number): Promise<boolean> {
@@ -98,10 +106,7 @@ describe("bridge launch deadline in the real probe child", () => {
 
 describe("probe stopped at its deadline", () => {
   test("Given a probe child killed at its deadline When Chromium is launched afterwards Then the missing answer is not held as a missing browser and the launch is attempted", async () => {
-    const root = await tempRoot("bg-probe-deadline-");
-    const script = path.join(root, "probe.mjs");
-    await writeFile(script, "setInterval(() => undefined, 1_000);");
-    const command = { node: process.execPath, script, cwd: root };
+    const command = await neverAnsweringProbe();
     let launches = 0;
 
     const answered = await isChromiumLaunchable(() => spawnLaunchProbe(command, 250), { waitForResult: true });
@@ -111,6 +116,18 @@ describe("probe stopped at its deadline", () => {
     expect(answered).toBe(false);
     expect({ outcome, launches }).toEqual({ outcome: "launched", launches: 1 });
     expect(await isChromiumLaunchable(async () => false)).toBe(true);
+  }, 25_000);
+
+  test("Given a probe child killed at its deadline When two minutes have passed Then the next caller probes again instead of reading a ten-minute negative answer", async () => {
+    const command = await neverAnsweringProbe();
+    let probes = 0;
+
+    const answered = await isChromiumLaunchable(() => spawnLaunchProbe(command, 250), { waitForResult: true });
+    setSystemTime(new Date(Date.now() + 2 * 60_000));
+    const usable = await isChromiumLaunchable(async () => { probes += 1; return true; }, { waitForResult: true });
+
+    expect(answered).toBe(false);
+    expect({ usable, probes }).toEqual({ usable: true, probes: 1 });
   }, 25_000);
 });
 
@@ -127,16 +144,22 @@ describe("caller deadline across the launch path", () => {
     expect(await firesWithin(signal, 15_000)).toBe(true);
   }, 25_000);
 
-  test("Given a caller's timeout signal kept armed When its only other listener is added and removed Then the deadline still fires", async () => {
+  test("Given a caller's timeout signal When the capability wait has listened on it and stopped Then the deadline still fires", async () => {
     const signal = AbortSignal.timeout(200);
-    const listener = (): void => undefined;
 
-    keepAbortSignalArmed(signal);
-    keepAbortSignalArmed(signal);
-    signal.addEventListener("abort", listener, { once: true });
-    await Promise.resolve();
-    signal.removeEventListener("abort", listener);
+    const usable = await isChromiumLaunchable(async () => true, { waitForResult: true, signal });
 
+    expect(usable).toBe(true);
+    expect(await firesWithin(signal, 5_000)).toBe(true);
+  });
+
+  test("Given a caller's timeout signal When a launch attempt has listened on it and stopped Then the deadline still fires", async () => {
+    setChromiumCapabilityForTesting(true);
+    const signal = AbortSignal.timeout(200);
+
+    const browser = await launchChromium(signal, async () => fakeBrowser());
+
+    expect(browser).not.toBeNull();
     expect(await firesWithin(signal, 5_000)).toBe(true);
   });
 });

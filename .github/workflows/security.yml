@@ -20,6 +20,13 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run lint
+      # A test file that os-tests.yml does not name runs on Linux only. Each one must be in an os-tests.yml list or in
+      # the baseline of suites not yet covered, which may only shrink; see doc/os-matrix.md.
+      - name: OS-matrix coverage guard
+        run: bun scripts/qa/check-os-matrix-coverage.ts --base-ref origin/main
+      # Code shapes behind the 2026-09-30 launch failures; see doc/os-matrix.md, "Hardening log".
+      - name: Flake-pattern guard
+        run: bun scripts/qa/check-flake-patterns.ts
       - run: bun run build:frontend
       - name: Task guidance and reviewed example gate
         run: >-
@@ -121,6 +128,9 @@ jobs:
           packages/backend/tests/chromium-browser-paths.test.ts
           packages/backend/tests/export-render-launch.test.ts
           packages/backend/tests/chromium-process-tree.test.ts
+          packages/backend/tests/chromium-launch-hardening.test.ts
+          scripts/qa/check-os-matrix-coverage.test.ts
+          scripts/qa/check-flake-patterns.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts
       # Advisories with no compatible upstream fix are allowlisted by id.

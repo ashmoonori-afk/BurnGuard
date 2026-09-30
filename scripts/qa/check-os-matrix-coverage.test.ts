@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   BASELINE_PATH,
+  baselineAtMergeBase,
   checkCoverage,
   checkRepository,
   formatBaseline,
@@ -14,6 +15,7 @@ import {
   UBUNTU_WORKFLOW,
   writeBaseline,
   type CoverageInput,
+  type GitRunner,
 } from "./check-os-matrix-coverage";
 
 const LISTED = "packages/backend/tests/listed.test.ts";
@@ -134,6 +136,36 @@ describe("coverage check", () => {
 
     expect(codes(checkCoverage(input({ testFiles, baseline: [BASELINED, other] })))).toEqual([`baseline_not_sorted ${BASELINE_PATH}`]);
     expect(codes(checkCoverage(input({ baseline: [BASELINED, BASELINED] })))).toEqual([`baseline_not_sorted ${BASELINE_PATH}`]);
+  });
+});
+
+describe("baseline at the merge base", () => {
+  const FORK_POINT = "1111111111111111111111111111111111111111";
+  function fakeGit(baselineAtForkPoint: string | null, asked: string[] = []): GitRunner {
+    return (args) => {
+      asked.push(args.join(" "));
+      if (args[0] === "merge-base") return args[2] === "origin/main" ? { exitCode: 0, stdout: `${FORK_POINT}\n` } : { exitCode: 1, stdout: "" };
+      if (baselineAtForkPoint === null) return { exitCode: 128, stdout: "" };
+      return { exitCode: 0, stdout: args[0] === "show" ? baselineAtForkPoint : "" };
+    };
+  }
+
+  test("Given a branch behind a main that already removed an entry When the previous baseline is read Then it is the fork point's, so the branch has not grown it", () => {
+    const asked: string[] = [];
+
+    const previous = baselineAtMergeBase("origin/main", fakeGit(formatBaseline([BASELINED]).replaceAll("\n", "\r\n"), asked));
+
+    expect(previous).toEqual([BASELINED]);
+    expect(asked).toEqual(["merge-base HEAD origin/main", `cat-file -e ${FORK_POINT}:${BASELINE_PATH}`, `show ${FORK_POINT}:${BASELINE_PATH}`]);
+    expect(checkCoverage(input({ previousBaseline: previous }))).toEqual([]);
+  });
+
+  test("Given a fork point from before the baseline existed When the previous baseline is read Then there is nothing to compare with", () => {
+    expect(baselineAtMergeBase("origin/main", fakeGit(null))).toBeNull();
+  });
+
+  test("Given a ref that shares no history with HEAD When the previous baseline is read Then the check is refused instead of passing unchecked", () => {
+    expect(() => baselineAtMergeBase("origin/unknown", fakeGit(null))).toThrow(TypeError);
   });
 });
 

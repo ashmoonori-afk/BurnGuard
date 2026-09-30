@@ -4,7 +4,9 @@
  * the suites added by PRs #178 and #190 missed macOS and Windows. Every test file must be named by an os-tests.yml
  * step or by the baseline of suites not yet covered; the baseline may only shrink.
  *
- *   bun scripts/qa/check-os-matrix-coverage.ts [--base-ref <git ref>]   check (exit 1 on any problem)
+ *   bun scripts/qa/check-os-matrix-coverage.ts [--base-ref <git ref>]   check (exit 1 on any problem); with a base
+ *                                                                       ref the baseline may not have grown since
+ *                                                                       the merge base of HEAD and that ref
  *   bun scripts/qa/check-os-matrix-coverage.ts --write-baseline         regenerate the baseline
  */
 import { existsSync } from "node:fs";
@@ -26,6 +28,7 @@ const BASELINE_HEADER = [
 
 export type CoverageProblemCode = "not_in_os_matrix" | "baseline_file_missing" | "baseline_entry_covered" | "baseline_not_sorted" | "baseline_grew" | "listed_file_missing";
 export type CoverageProblem = { readonly code: CoverageProblemCode; readonly path: string; readonly source: string };
+export type GitRunner = (args: readonly string[]) => { readonly exitCode: number; readonly stdout: string };
 export type CoverageInput = {
   readonly testFiles: readonly string[];
   readonly osListed: readonly string[];
@@ -138,15 +141,27 @@ const HELP: Record<CoverageProblemCode, string> = {
   baseline_file_missing: "baseline names a file that no longer exists: delete the line",
   baseline_entry_covered: "baseline names a file that os-tests.yml already runs: delete the line",
   baseline_not_sorted: "baseline is not sorted or has duplicates: rerun with --write-baseline and keep only removals",
-  baseline_grew: "baseline gained an entry: a test file must be added to os-tests.yml, never to the baseline",
+  baseline_grew: "baseline gained an entry since the merge base: a test file must be added to os-tests.yml, never to the baseline",
   listed_file_missing: "workflow lists a test file that does not exist",
 };
 
-function baselineAt(root: string, ref: string): readonly string[] | null {
-  const git = (args: readonly string[]) => Bun.spawnSync({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "ignore" });
-  if (git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).exitCode !== 0) throw new TypeError("base ref is not a commit in this checkout");
-  if (git(["cat-file", "-e", `${ref}:${BASELINE_PATH}`]).exitCode !== 0) return null;
-  return parseBaseline(new TextDecoder().decode(git(["show", `${ref}:${BASELINE_PATH}`]).stdout));
+/**
+ * The baseline at the merge base of HEAD and the ref, or null when that commit has none. The merge base, not the
+ * ref's tip: a branch that is behind a main which already removed entries has not grown the baseline.
+ */
+export function baselineAtMergeBase(ref: string, git: GitRunner): readonly string[] | null {
+  const mergeBase = git(["merge-base", "HEAD", ref]);
+  const base = mergeBase.stdout.trim();
+  if (mergeBase.exitCode !== 0 || base === "") throw new TypeError("base ref has no merge base with HEAD in this checkout");
+  if (git(["cat-file", "-e", `${base}:${BASELINE_PATH}`]).exitCode !== 0) return null;
+  return parseBaseline(git(["show", `${base}:${BASELINE_PATH}`]).stdout);
+}
+
+function gitIn(root: string): GitRunner {
+  return (args) => {
+    const result = Bun.spawnSync({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "ignore" });
+    return { exitCode: result.exitCode, stdout: new TextDecoder().decode(result.stdout) };
+  };
 }
 
 if (import.meta.main) {
@@ -159,7 +174,10 @@ if (import.meta.main) {
   const refIndex = args.indexOf("--base-ref");
   const ref = refIndex === -1 ? undefined : args[refIndex + 1];
   if (refIndex !== -1 && (ref === undefined || ref === "")) { console.error("os-matrix coverage: --base-ref needs a git ref"); process.exit(2); }
-  const report = await checkRepository(root, ref === undefined ? null : baselineAt(root, ref));
+  let previousBaseline: readonly string[] | null = null;
+  try { if (ref !== undefined) previousBaseline = baselineAtMergeBase(ref, gitIn(root)); }
+  catch (error) { console.error(`os-matrix coverage: ${error instanceof Error ? error.message : String(error)}`); process.exit(2); }
+  const report = await checkRepository(root, previousBaseline);
   for (const problem of report.problems) console.error(`${problem.code}\t${problem.path}\t(${problem.source}) ${HELP[problem.code]}`);
   console.log(`os-matrix coverage: ${report.testFiles} test files, ${report.inOsMatrix} in the OS matrix, ${report.baselined} in the baseline, ${report.problems.length} problems`);
   process.exit(report.problems.length === 0 ? 0 : 1);
