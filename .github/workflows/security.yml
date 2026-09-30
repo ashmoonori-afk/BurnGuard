@@ -112,7 +112,13 @@ jobs:
           packages/backend/tests/project-import.test.ts
           packages/backend/tests/artifact-history.test.ts
           packages/backend/tests/export-pptx.test.ts
+          packages/backend/tests/export-validation.test.ts
           packages/backend/tests/chromium-node-launch.test.ts
+          packages/backend/tests/chromium-capability.test.ts
+          packages/backend/tests/chromium-bridge-probe.test.ts
+          packages/backend/tests/chromium-browser-paths.test.ts
+          packages/backend/tests/export-render-launch.test.ts
+          packages/backend/tests/chromium-process-tree.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts
       # Advisories with no compatible upstream fix are allowlisted by id.
