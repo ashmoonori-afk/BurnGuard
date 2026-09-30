@@ -31,8 +31,8 @@ export const MODEL_CAPABILITY_PROFILES: Readonly<Record<ModelCapabilityProfileId
   standard: { id: "standard", logo_authoring: "supplied_or_text", asset_strategy: "supplied_only", recommended_min_effort: null },
 };
 
-/** Opus and Sonnet in any id shape: `opus`, `claude-sonnet-4-6`, `claude-opus-5-5`, `opus[1m]`. Haiku is not frontier. */
-const CLAUDE_FRONTIER_MODEL = /(?:^|[^a-z])(?:opus|sonnet)(?:[^a-z]|$)/i;
+/** Opus, Sonnet, Fable and Mythos in any id shape: `opus`, `claude-sonnet-4-6`, `claude-fable-5-1`, `opus[1m]`. Haiku is not frontier. */
+const CLAUDE_FRONTIER_MODEL = /(?:^|[^a-z])(?:opus|sonnet|fable|mythos)(?:[^a-z]|$)/i;
 const GPT_MODEL = /(?:^|[^a-z])gpt(?:[^a-z]|$)/i;
 
 /**
