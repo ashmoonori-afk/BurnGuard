@@ -91,6 +91,46 @@ describe("export HTML closure boundaries", () => {
   };
   const page = (head: string, body: string): string => `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
 
+  test("Given far more references than the cap in a style attribute, a style element, a srcset or a linked stylesheet When the closure scans them Then each scan stops one past the remaining budget instead of collecting every value", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-export-closure-bound-"));
+    const urls = "url(a.png)".repeat(100_000);
+    const refusedScans = async (): Promise<readonly (readonly [string, number])[]> => {
+      const scans: [string, number][] = [];
+      await expect(resolveStaticClosure(root, "index.html", await inspectCanonicalTree(root), (file, collected) => { scans.push([file, collected]); })).rejects.toMatchObject({ code: "closure_limit", asset: "a.png" });
+      return scans;
+    };
+    try {
+      await writeFile(path.join(root, "a.png"), "image"); await writeFile(path.join(root, "big.css"), `.a{background:${urls}}`);
+      for (const body of [`<div style="background:${urls}"></div>`, `<style>.a{background:${urls}}</style>`, `<img srcset="${"a.png 1x, ".repeat(100_000)}">`]) {
+        // Given
+        await writeFile(path.join(root, "index.html"), page("", body));
+        // When / Then: 10,000 references are allowed, so the 10,001st is the last one the refusal needs.
+        expect(await refusedScans()).toEqual([["index.html", 10_001]]);
+      }
+      // Given: a stylesheet reached after the page has already spent one reference on its link.
+      await writeFile(path.join(root, "index.html"), page('<link rel="stylesheet" href="big.css">', ""));
+      // When / Then
+      expect(await refusedScans()).toEqual([["index.html", 1], ["big.css", 10_000]]);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  test("Given a srcset past the reference cap followed by a style element that does not parse When the closure resolves Then it is refused at the cap and the rest of the document is never scanned", async () => {
+    // Given: attributes are scanned before style elements, so only a scan that runs on past the cap reaches the stylesheet.
+    const overCap = `<img srcset="${"a.png 1x, ".repeat(20_000)}">`;
+    // When / Then
+    expect(await closureOutcome({ "index.html": page("", `${overCap}<style>.a{</style>`), "a.png": "image" })).toBe("closure_limit:a.png");
+    // When / Then: within the cap, the same stylesheet is still refused as malformed.
+    expect(await closureOutcome({ "index.html": page("", '<img src="a.png"><style>.a{</style>'), "a.png": "image" })).toBe("malformed_html:index.html");
+  });
+
+  test("Given repeated, remote, fragment and escaping references When the import inventory lists local assets Then every local occurrence is kept in document order and the rest are dropped", () => {
+    // Given
+    const body = '<img src="a.png"><img src="https://cdn.example/x.png"><img src="a.png"><img src="#top"><img src="../../out.png"><img src="img/b.png"><div style="background:url(a.png)"></div>';
+    // When / Then
+    expect(localAssetReferences(body, "pages/index.html")).toEqual(["pages/a.png", "pages/a.png", "pages/img/b.png", "pages/a.png"]);
+    expect(localAssetReferences(".a{background:url(a.png)} .b{background:url(a.png)} .c{background:url(//cdn.example/x.png)}", "styles/main.css")).toEqual(["styles/a.png", "styles/a.png"]);
+  });
+
   test("Given a script whose commented-out line mentions an import When the export closure resolves Then the export is not refused", async () => {
     // Given: the same script saved with LF and with CRLF line endings, as a Windows editor writes it.
     for (const eol of ["\n", "\r\n"]) {
