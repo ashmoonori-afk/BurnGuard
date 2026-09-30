@@ -24,6 +24,7 @@ jobs run each pinning suite.
 | Design-system outputs (wireframe SVG, starter stylesheet and skeleton) | byte-identical | byte-identical | byte-identical | `os-portability` (pinned digests) | Ubuntu, OS jobs |
 | Stage paths with spaces and non-ASCII characters | supported | supported | supported | `os-portability` | Ubuntu, OS jobs |
 | CRLF entrypoints | fresh-page and measured-page checks unaffected | unaffected | unaffected | `os-portability` | Ubuntu, OS jobs |
+| Canvas page-path gate (index refetch, "Create page" action) | one shared rule on a URL-decoded project-relative path; accepts decomposed (NFD) names | same rule; drive letters, backslashes and UNC roots rejected | same rule | `canvas-source` (Windows and POSIX path flavours as literals) | Ubuntu, OS jobs |
 
 ## Known gaps
 
