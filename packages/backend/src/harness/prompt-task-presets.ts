@@ -140,11 +140,17 @@ const CODEX_MODELS: Readonly<Record<string, ModelPreset>> = {
   "gpt-5.6-sol": preset("codex/native", "gpt-5.6-sol", "sol"),
   "gpt-5.5": preset("codex/native", "gpt-5.5", "gpt55"),
   "gpt-6-astra": preset("codex/native", "gpt-6-astra", "astra"),
+  // developers.openai.com/api/docs/models: GPT-6 Luna and GPT-6.1 Sol.
+  "gpt-6-luna": preset("codex/native", "gpt-6-luna", "luna"),
+  "gpt-6.1-sol": preset("codex/native", "gpt-6.1-sol", "sol"),
 };
 
 const claudeModels = (route: Route): Readonly<Record<string, ModelPreset>> => ({
   "claude-sonnet-4-6": preset(route, "claude-sonnet-4-6", "sonnet"),
   "claude-opus-4-6": preset(route, "claude-opus-4-6", "opus"),
+  "claude-sonnet-5-5": preset(route, "claude-sonnet-5-5", "sonnet"),
+  "claude-opus-5-5": preset(route, "claude-opus-5-5", "opus"),
+  "claude-fable-5-1": preset(route, "claude-fable-5-1", "opus"),
 });
 
 const CLAUDE_ALIASES: Readonly<Record<string, string>> = {

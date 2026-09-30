@@ -22,6 +22,11 @@ export interface GenerationModel {
 export const CLAUDE_MODELS: readonly GenerationModel[] = [
   { id: "sonnet", label: "Sonnet", efforts: ["low", "medium", "high"] },
   { id: "opus", label: "Opus", efforts: ["low", "medium", "high"] },
+  // Explicit IDs: platform.claude.com/docs/en/models/overview; effort levels: .../build-with-claude/effort.
+  { id: "fable", label: "Fable", efforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-fable-5-1", label: "Claude Fable 5.1", efforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-opus-5-5", label: "Claude Opus 5.5", efforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", efforts: ["low", "medium", "high", "xhigh", "max"] },
 ];
 export const COMMANDCODE_MODELS: readonly GenerationModel[] = [
   { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", efforts: ["low", "medium", "high"] },
@@ -31,6 +36,10 @@ export const COMMANDCODE_MODELS: readonly GenerationModel[] = [
 export const GEMINI_MODELS: readonly GenerationModel[] = [
   { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", efforts: ["low", "medium", "high"], image_generation: false },
   { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", efforts: ["low", "medium"], image_generation: false },
+  // Model IDs from the Gemini CLI configuration reference (geminicli.com/docs/reference/configuration).
+  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (preview)", efforts: ["low", "medium", "high"], image_generation: false },
+  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", efforts: ["low", "medium"], image_generation: false },
+  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", efforts: ["low", "medium"], image_generation: false },
 ];
 /**
  * GitHub Copilot CLI models: deliberately empty. The CLI selects a model from the account's
