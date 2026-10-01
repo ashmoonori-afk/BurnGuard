@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
 import { CanonicalTreeManifestError, canonicalTreePath, inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
-import { cssUrlValues, ExportClosureError, localAssetReferences, resolveStaticClosure } from "../src/services/export-closure";
+import { cssUrlValues, ExportClosureError, localAssetReferences, resolveStaticClosure, scriptImportValues } from "../src/services/export-closure";
 import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "../src/services/export-html-validation";
 import { canonicalJson, sha256 } from "../src/services/export-receipt";
 
@@ -127,6 +127,73 @@ describe("export HTML closure boundaries", () => {
         expect(scans).toEqual([["index.html", 1], ["app.js", 10_000], ["a.js", 0]]);
       } finally { await rm(root, { recursive: true, force: true }); }
     }
+  });
+
+  // The two textual patterns the fallback scan replaced: the reference its collected values must equal.
+  const patternImportValues = (source: string): readonly string[] => {
+    const values: string[] = [];
+    for (const pattern of [/(?:import|export)\s+(?:[^"']+?\s+from\s+)?["']([^"']+)["']/gu, /import\(\s*["']([^"']+)["']\s*\)/gu]) {
+      for (let match = pattern.exec(source); match !== null; match = pattern.exec(source)) values.push(match[1] ?? "");
+    }
+    return values;
+  };
+  const scannedImportValues = (source: string, limit = Number.POSITIVE_INFINITY, values: string[] = []): readonly string[] => { scriptImportValues(source, values, limit); return values; };
+
+  test("Given scripts that repeat import or export and never complete an import When the textual import scan runs Then the characters it examines grow linearly with the script and nothing is collected", () => {
+    // Given: shapes that made the patterns retry from every keyword: no quote at all, one quote that opens nothing,
+    // an empty specifier, a call whose quotes never close the call, and CRLF whitespace after each keyword.
+    const shapes: readonly ((repeats: number) => string)[] = [
+      (repeats) => "import ".repeat(repeats),
+      (repeats) => `${"export a from ".repeat(repeats)}'`,
+      (repeats) => `${"import ".repeat(repeats)}""`,
+      (repeats) => "import(' ".repeat(repeats),
+      (repeats) => "import\t\r\n".repeat(repeats),
+    ];
+    for (const shape of shapes) {
+      const examined = [10_000, 20_000, 40_000].map((repeats) => {
+        const source = shape(repeats); const values: string[] = [];
+        // When
+        const count = scriptImportValues(source, values, Number.POSITIVE_INFINITY);
+        // Then: a bounded number of looks per character, whatever the length.
+        expect(values).toEqual([]);
+        expect(count).toBeGreaterThan(0);
+        expect(count).toBeLessThanOrEqual(8 * source.length);
+        return count;
+      });
+      // Then: twice the script costs twice the work, not four times (the slack covers the few looks a script's end saves).
+      expect(examined[1]).toBeLessThanOrEqual(2 * (examined[0] ?? 0) + 32);
+      expect(examined[2]).toBeLessThanOrEqual(2 * (examined[1] ?? 0) + 32);
+    }
+  });
+
+  test("Given import statements, re-exports and import calls with LF and CRLF, Windows paths and POSIX paths When the textual import scan runs Then it collects what the patterns collected, in order, and honours the limit", () => {
+    // When / Then: statements first, then calls, as the two patterns ran one after the other.
+    expect(scannedImportValues('import a from "./a.js";\nimport "./b.js";\nexport { c } from \'./c.js\';\nimport("./d.js");\n')).toEqual(["./a.js", "./b.js", "./c.js", "./d.js"]);
+    expect(scannedImportValues("import a from\r\n\"./a.js\";\r\nimport(\r\n'./b.js'\r\n);\r\n")).toEqual(["./a.js", "./b.js"]);
+    // When / Then: Windows spellings (drive letter, backslashes, UNC share) reach the resolver unchanged, which refuses them.
+    expect(scannedImportValues(String.raw`import a from "C:\Users\qa\a.js"; import("\\server\share\b.js");`)).toEqual([String.raw`C:\Users\qa\a.js`, String.raw`\\server\share\b.js`]);
+    // When / Then: POSIX spellings reach the resolver unchanged, which reads them as project-root-relative.
+    expect(scannedImportValues("import \"/home/qa/project/a.js\"; export * from '/Users/qa/b.js';")).toEqual(["/home/qa/project/a.js", "/Users/qa/b.js"]);
+    // When / Then: nothing that is not an import with a quoted, non-empty specifier.
+    expect(scannedImportValues('import x from y; import ""; importer("a.js"); import( "b.js" + c);')).toEqual([]);
+    // When / Then: the limit counts what the list already holds.
+    expect(scannedImportValues('import "a"; import "b"; import("c")', 2)).toEqual(["a", "b"]);
+    expect(scannedImportValues('import "a"; import "b"; import("c")', 2, ["held"])).toEqual(["held", "a"]);
+    // When / Then: a fixed-seed corpus of keyword, whitespace, quote and parenthesis sequences agrees with the patterns.
+    const tokens = ["import", "export", "from", " ", "\t", "\r\n", '"', "'", "(", ")", "a", "./b.js", "x;"];
+    let seed = 203;
+    const next = (bound: number): number => { seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648; return seed % bound; };
+    for (let sample = 0; sample < 4_000; sample += 1) {
+      const source = Array.from({ length: 1 + next(24) }, () => tokens[next(tokens.length)] ?? "").join("");
+      expect({ source, values: scannedImportValues(source) }).toEqual({ source, values: [...patternImportValues(source)] });
+    }
+  });
+
+  test("Given a script that does not parse and repeats import 20,000 times before a real import When the export closure resolves Then the repeats yield no reference and the import after them is still followed", async () => {
+    const files = { "index.html": page("", '<script type="module" src="app.js"></script>'), "a.js": "export {};\n" };
+    // When / Then
+    expect(await closureOutcome({ ...files, "app.js": `const = ;\n${"import ".repeat(20_000)}import "./a.js";\n` })).toBe("resolved:a.js,app.js");
+    expect(await closureOutcome({ ...files, "app.js": `const = ;\n${"import ".repeat(20_000)}import("./gone.js");\n` })).toBe("missing_asset:gone.js");
   });
 
   test("Given CSS values that repeat url( and never close a reference When the url() scan runs Then the characters it examines grow linearly with the value and nothing is collected", () => {

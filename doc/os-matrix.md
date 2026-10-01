@@ -59,10 +59,34 @@ jobs run each pinning suite.
 | Canonical tree root reached through an alias | symlinked parent resolved; `/var` spelling kept | junction parent and 8.3 short name resolved | symlinked parent resolved | `export-validation` (real junction/symlink and short name; `path.win32`/`path.posix` injected for the naming rule) | Ubuntu, OS jobs |
 | Export closure references written as Windows paths (drive letter, backslash, UNC) or POSIX absolute paths | Windows forms refused; POSIX absolute is project-root-relative | same | same | `export-validation` | Ubuntu, OS jobs |
 | Export closure reference cap (a scan stops one reference past the remaining budget) | same counts | same counts | same counts | `export-validation` (injected scan probe; no timing assertion) | Ubuntu, OS jobs |
+| Export closure textual import scan for a script that does not parse (one forward pass; LF and CRLF, Windows-path and POSIX-path specifiers) | same imports, same work | same imports, same work | same imports, same work | `export-validation` (the scan reports the characters it examined; no timing assertion) | Ubuntu, OS jobs |
 | Export closure CSS `url()` scan (one forward pass; LF and CRLF values, Windows-path and POSIX-path values) | same references, same work | same references, same work | same references, same work | `export-validation` (the scan reports the characters it examined; no timing assertion) | Ubuntu, OS jobs |
 | CI guards (OS-matrix coverage, launch-path flake patterns) | same result | same result, backslash spellings normalized | same result | `check-os-matrix-coverage`, `check-flake-patterns` (`scripts/qa`) | Ubuntu, OS jobs; the guards themselves run on Ubuntu |
 
 ## Hardening log
+
+### 2026-10-01: export closure textual import scan was quadratic
+
+Issue [#203](https://github.com/ashmoonori-afk/BurnGuard/issues/203), found while fixing #201. When a script does not
+parse as a module, `scriptReferences` in `export-closure.ts` falls back to two textual patterns,
+`/(?:import|export)\s+(?:[^"']+?\s+from\s+)?["']([^"']+)["']/gu` and `/import\(\s*["']([^"']+)["']\s*\)/gu`. From every
+`import` or `export` the first pattern ran on to the next quote, failed and started again at the next keyword: on Linux
+with Bun 1.4.2, `import ` repeated 10,000 times took 2.3 s and 20,000 times 12.1 s. The reference cap did not bound it,
+because no import was ever matched.
+
+Fix (this log's pull request): `scriptImportValues`, one forward pass per pattern. No quote can stand between a keyword
+and its specifier, so the specifier opens on the first quote after the keyword; that quote, the one closing the
+specifier and the whitespace before it are each found once and kept for every later keyword. The pass collects exactly
+what the patterns collected, statements first and then calls; no refusal code changes.
+
+The cost was not measured on Windows or macOS. The scan is string work with no file, process or platform call and no OS
+branch; the CI runs of the pull request are the evidence for those two.
+
+Prevention: `export-validation` reads the number of characters the scan examined, for five shapes that repeat a keyword
+without completing an import: at most eight looks per character, and twice the script at most twice the count. It
+checks the collected values against the two patterns on a fixed-seed corpus and on LF and CRLF, Windows-path and
+POSIX-path imports, and resolves the closure of a script that does not parse and repeats `import` 20,000 times before a
+real import. None of these cases measures time.
 
 ### 2026-09-30: export closure `url()` scan was quadratic
 
@@ -226,10 +250,9 @@ lexically around the call), and abort-listener removal in modules that do not lo
 - Export closure scan, remaining cost: a `style` element is still parsed whole by PostCSS before its references are
   counted (about 1 s for 10 MB), a script is still parsed whole before its imports are counted, and the import
   inventory still lists every reference of a document. The CSS `url()` scan, fixed: it was quadratic on a value that
-  repeats `url(` without closing a reference (hardening log above). Open: the two textual import patterns, used only
-  for a script that does not parse, are quadratic on a script that repeats `import` without a quoted specifier (20,000
-  repeats, 180 KB, took 6.0 s on Linux with Bun 1.4.2); the reference cap does not bound it because no import is ever
-  matched.
+  repeats `url(` without closing a reference (hardening log above). The textual import scan, fixed (issue #203): the
+  two patterns used for a script that does not parse were quadratic on a script that repeats `import` without a quoted
+  specifier (hardening log above).
 - Long paths on Windows (over 260 characters) are not exercised; stage paths stay short by design.
 - File locking on Windows: a crop or asset overwrite can fail with EBUSY or EPERM while another process holds the
   file. Review crops are report-only: `withSectionCrops` catches any write error and returns the target without
