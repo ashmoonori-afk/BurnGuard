@@ -72,6 +72,7 @@ const PRE_TURN_REFUSALS: Readonly<Partial<Record<TurnErrorCode, string>>> = {
   unsupported_generation_model_effort: "The selected model or effort is not available",
   graphic_requires_authenticated_codex: "Graphic generation requires an authenticated image-capable connection",
   logo_requires_authenticated_codex: "Logo generation requires an authenticated image-capable connection",
+  operation_conflict: "Another operation is changing this project; retry when it finishes",
 };
 
 function ok<T>(data: T): ApiSuccess<T> {
@@ -109,7 +110,7 @@ async function parseActiveRelPath(value: unknown, projectId: string): Promise<st
   return value;
 }
 
-type SessionRouteDependencies = { readonly detectBackends?: typeof detectBackends; readonly saveSessionAttachments?: typeof saveSessionAttachments };
+type SessionRouteDependencies = { readonly detectBackends?: typeof detectBackends; readonly saveSessionAttachments?: typeof saveSessionAttachments; readonly rollbackSessionAttachments?: typeof rollbackSessionAttachments };
 
 function routeDetectBackends(environment: unknown): typeof detectBackends {
   return typeof environment === "object" && environment !== null && "detectBackends" in environment
@@ -121,6 +122,24 @@ function routeSaveSessionAttachments(environment: unknown): typeof saveSessionAt
   return typeof environment === "object" && environment !== null && "saveSessionAttachments" in environment
     ? (environment as SessionRouteDependencies).saveSessionAttachments ?? saveSessionAttachments
     : saveSessionAttachments;
+}
+
+/**
+ * Rolls back the uploads of a send that never started. The unbound rows go first; when only a file
+ * removal fails afterwards (for example a handle Windows still holds), nothing stays bound, so the
+ * send keeps its typed answer instead of becoming a 500.
+ */
+async function rollbackUnstartedUploads(environment: unknown, sessionId: string, filePaths: readonly string[]): Promise<void> {
+  const rollback = typeof environment === "object" && environment !== null && "rollbackSessionAttachments" in environment
+    ? (environment as SessionRouteDependencies).rollbackSessionAttachments ?? rollbackSessionAttachments
+    : rollbackSessionAttachments;
+  try { await rollback(sessionId, filePaths); }
+  catch (error) {
+    const unbound = getSqlite().query<{ readonly id: string }, [string, string]>("SELECT id FROM attachments WHERE session_id=? AND file_path=? AND turn_id IS NULL");
+    if (filePaths.some((filePath) => unbound.get(sessionId, filePath) !== null)) throw error;
+    const code = error instanceof Error && "code" in error && typeof error.code === "string" && /^[A-Za-z0-9_.-]{1,100}$/.test(error.code) ? error.code : undefined;
+    await appendSessionTrace(sessionId, { level: "attachment_rollback_incomplete", ...(code === undefined ? {} : { code }) });
+  }
 }
 
 export const sessionRoutes = new Hono();
@@ -290,7 +309,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
           const canonical = await canonicalizeAttachmentRequest({ sessionId: id, requestedPaths: attachmentPaths, selections });
           payload = { type: "user.message", text, ...(activeRelPath === undefined ? {} : { active_rel_path: activeRelPath }), attachments: [...canonical.paths], visualSources: canonical.selections, generation };
         } catch (error) {
-          await rollbackSessionAttachments(id, attachmentPaths);
+          await rollbackUnstartedUploads(c.env, id, attachmentPaths);
           if (error instanceof AttachmentRequestError) return c.json(fail(error.code, "Attachment selection is invalid"), 400);
           throw error;
         }
@@ -306,7 +325,7 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
 
     if (c.req.raw.signal.aborted) {
       // The sender cancelled while the upload or extraction was still running: nothing starts on their behalf.
-      await rollbackSessionAttachments(id, uploadedAttachmentPaths);
+      await rollbackUnstartedUploads(c.env, id, uploadedAttachmentPaths);
       return c.json(fail("request_cancelled", "The send request was cancelled before the turn started"), 400);
     }
 
@@ -340,10 +359,11 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       await completed;
       // A refusal the sender can fix (tool, model, control files) is theirs to resolve, not an artifact problem.
       const refusalCode = turnErrorCode(error);
-      const refusal = PRE_TURN_REFUSALS[refusalCode];
+      // Only a refusal raised before the turn recorded the message or bound uploads is the sender's to retry;
+      // the same code raised later is a server fault, and the rollback below must never touch bound uploads.
+      const refusal = turn.recorded() ? undefined : PRE_TURN_REFUSALS[refusalCode];
       if (refusal !== undefined) {
-        // The turn decides these before it records the message or binds uploads, so the retry starts clean.
-        await rollbackSessionAttachments(id, uploadedAttachmentPaths);
+        await rollbackUnstartedUploads(c.env, id, uploadedAttachmentPaths);
         return c.json(fail(refusalCode, refusal), 409);
       }
       return c.json(

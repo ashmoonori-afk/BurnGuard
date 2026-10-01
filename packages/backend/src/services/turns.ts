@@ -37,6 +37,7 @@ import {
   activeVisualAlternativeSessions,
   beginVisualAlternativeOperation,
   cancelAllVisualAlternativeOperations,
+  isArtifactMutationBlockedByAlternatives,
   isVisualAlternativeOperationActive,
 } from "./visual-alternative-operation-registry";
 import { buildVisualSourceManifest } from "./visual-source-manifest";
@@ -326,11 +327,13 @@ export function startReservedUserTurn(reservation: UserTurnReservation, payload:
   let resolvePrepared: () => void = () => {};
   let rejectPrepared: (error: unknown) => void = () => {};
   const prepared = new Promise<void>((resolve, reject) => { resolvePrepared = resolve; rejectPrepared = reject; });
-  const promise = runUserTurnInternal(sessionId, payload, activeTurn, turnId, operationId, resolvePrepared, dependencies)
+  let recorded = false;
+  const promise = runUserTurnInternal(sessionId, payload, activeTurn, turnId, operationId, resolvePrepared, () => { recorded = true; }, dependencies)
     .catch(async (error: unknown) => { rejectPrepared(error); await setSessionStatus(sessionId, "idle"); throw error; })
     .finally(() => activeTurns.delete(sessionId));
   activeTurn.completion = promise;
-  return { promise, prepared, turnId, operationId };
+  // `recorded` tells whether the turn passed its refusal gates and began binding uploads and recording the message.
+  return { promise, prepared, turnId, operationId, recorded: () => recorded };
 }
 
 export function startUserTurn(sessionId: string, payload: Extract<UserEvent, { type: "user.message" }>, requestedOperationId?: string, dependencies: TurnDependencies = {}) {
@@ -350,6 +353,7 @@ async function runUserTurnInternal(
   turnId: string,
   operationId: string,
   onPrepared: () => void,
+  onRecording: () => void,
   dependencies: TurnDependencies,
 ) {
   const session = await getSessionInfo(sessionId);
@@ -385,6 +389,9 @@ async function runUserTurnInternal(
   // A logo is drawn with the same image capability; only the refusal code differs, so the client
   // can name the deliverable the user actually asked for.
   if (project.type === "logo" && !isGraphicCapableBackend(backend, generation.model)) throw new Error("logo_requires_authenticated_codex");
+  // The artifact operation below would refuse this too, but only after the message is recorded.
+  if (isArtifactMutationBlockedByAlternatives(getSqlite(), project.id, operationId)) throw new ArtifactOperationError("operation_conflict", "Visual alternatives are being generated for this project");
+  onRecording();
   const attachmentCount = await assignAttachmentsToTurn(
     sessionId,
     payload.attachments ?? [],
