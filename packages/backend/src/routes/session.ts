@@ -329,7 +329,17 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
       return c.json(fail("request_cancelled", "The send request was cancelled before the turn started"), 400);
     }
 
-    const turn = startReservedUserTurn({ ...reservation, operationId: requestedOperationId ?? reservation.operationId }, payload, { detectBackends: routeDetectBackends(c.env) });
+    // The failure is published inside the turn, before it releases the session, so a send admitted next
+    // cannot have this turn's status.error, status.idle or final idle status land on top of its own run.
+    let failurePublished: Promise<void> = Promise.resolve();
+    const publishFailure = async (error: unknown): Promise<void> => {
+      await persistAndPublish(id, { id: ulid(), ts: Date.now(), type: "status.error", code: "turn_failed", message: "turn_failed", recoverable: true }, error);
+      await persistAndPublishRoute(id, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "error" });
+    };
+    const turn = startReservedUserTurn({ ...reservation, operationId: requestedOperationId ?? reservation.operationId }, payload, {
+      detectBackends: routeDetectBackends(c.env),
+      onFailed: (error) => (failurePublished = publishFailure(error)),
+    });
     if (!turn) {
       return c.json(
         fail("session_busy", "A turn is already running for this session", { id }),
@@ -338,22 +348,8 @@ sessionRoutes.post("/api/sessions/:id/events", async (c) => {
     }
 
     started = true;
-    const completed = turn.promise.catch(async (error: unknown) => {
-      await persistAndPublish(
-        id,
-        {
-          id: ulid(),
-          ts: Date.now(),
-          type: "status.error",
-          code: "turn_failed",
-          message: "turn_failed",
-          recoverable: true,
-        },
-        error,
-      );
-      await persistAndPublishRoute(id, { id: ulid(), ts: Date.now(), type: "status.idle", stopReason: "error" });
-      await setSessionStatus(id, "idle");
-    });
+    // The turn's own failure was published before release; only a failed publication surfaces here.
+    const completed = turn.promise.catch(() => failurePublished);
     try { await turn.prepared; }
     catch (error) {
       await completed;
