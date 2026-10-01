@@ -487,7 +487,7 @@ function stabilizeSourceAnalysis(analysis: SourceAnalysis): SourceAnalysis {
     borders: sorted(analysis.borders),
     notes: sorted(analysis.notes),
     logoFiles: [...analysis.logoFiles].sort((left, right) => left.fileName.localeCompare(right.fileName)),
-    uiKitFiles: [...analysis.uiKitFiles].sort((left, right) => left.fileName.localeCompare(right.fileName)),
+    uiKitFiles: [...analysis.uiKitFiles].sort((left, right) => left.fileName.localeCompare(right.fileName, undefined, { numeric: true })),
     rawFiles: sorted(analysis.rawFiles),
     componentSamples: {
       buttons: sorted(analysis.componentSamples.buttons),
@@ -2589,7 +2589,8 @@ function deriveBrandNameFromHtml(url: URL, html: string): string {
   const root = parse(html);
   const title = root.querySelector("title")?.text.trim();
   // A hyphen separates title parts only beside whitespace; inside a word it belongs to the brand ("Coca-Cola").
-  if (title) return normalizeBrandName(title.split(/[|–—]|\s-|-\s/)[0] ?? title);
+  const titleBrand = title ? normalizeBrandName(title.split(/[|–—]|\s-|-\s/)[0] ?? title) : "";
+  if (titleBrand) return titleBrand;
   return normalizeBrandName(url.hostname.replace(/^www\./, "").split(".")[0] ?? "Website");
 }
 
