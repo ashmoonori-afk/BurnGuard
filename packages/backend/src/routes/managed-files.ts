@@ -104,7 +104,7 @@ managedFileRoutes.get("/api/projects/:id/alternatives/:alternativeId/fs/*", asyn
 managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
   const projectId = c.req.param("id");
   const prefix = `/api/projects/${projectId}/fs/`;
-  const relPath = c.req.path.startsWith(prefix) ? decodeURIComponent(c.req.path.slice(prefix.length)) : "";
+  const relPath = c.req.path.startsWith(prefix) ? decodeURIComponent(c.req.path.slice(prefix.length)).normalize("NFC") : "";
   const resolved = await resolveProjectFile(projectId, relPath);
   if (resolved === null) return c.json(fail("file_not_found", "Project file not found", { projectId, relPath }), 404);
   if (isProjectDocumentPath(resolved.relPath)) {

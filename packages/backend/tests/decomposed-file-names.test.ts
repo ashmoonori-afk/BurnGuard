@@ -13,6 +13,8 @@ import { managedFileRoutes } from "../src/routes/managed-files";
 import { sequencedBroker } from "../src/services/broker";
 import { digestEntries, diskPathOf, inspectCanonicalTree, inspectCanonicalTreeOnDisk, type InspectedCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { enqueueProjectExport } from "../src/services/exports";
+import { indexProjectFiles } from "../src/services/managed-project-files";
+import { resolveCanvasNavigation } from "../../frontend/src/lib/canvas-source";
 
 // A two-syllable Korean name: precomposed (NFC) and decomposed (NFD), as macOS tools, syncs and zips write it.
 const NFC = "\uB85C\uACE0.svg";
@@ -169,6 +171,26 @@ describe("decomposed (NFD) file names in a managed tree", () => {
     // Then
     expect(response.status).toBe(200);
     expect(await response.text()).toBe(SVG);
+  });
+
+  test("Given an indexed NFD-named HTML file When the exact canvas navigation URL is requested Then the page is returned", async () => {
+    // Given: the index preserves the disk spelling while the manifest uses NFC.
+    const { projectId } = await createProject("canvas-serve", true);
+    const page = "caf\u00e9.html";
+    const diskName = page.normalize("NFD");
+    await writeFile(path.join(projectsDir, projectId, diskName), HTML);
+    const files = await indexProjectFiles(projectId);
+    expect(files?.some((file) => file.rel_path === diskName)).toBe(true);
+    if (files === null) throw new Error("Project file index is unavailable");
+    const target = resolveCanvasNavigation(page, `http://local/api/projects/${projectId}/fs/index.html`, files.map((file) => file.rel_path));
+    expect(target?.relPath).toBe(diskName);
+    expect(target?.url).toBe(`http://local/api/projects/${projectId}/fs/${encodeURIComponent(diskName)}`);
+    if (target === null) throw new Error("Canvas navigation target is unavailable");
+    // When
+    const response = await managedFileRoutes.request(target.url);
+    // Then
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("<title>NFD</title>");
   });
 });
 
