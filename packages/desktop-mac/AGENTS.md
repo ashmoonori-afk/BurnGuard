@@ -12,8 +12,8 @@ Single-file Swift `WKWebView` shell (`main.swift`, 287 LOC) that launches and ow
 | Argument contract | `parseArguments` | Only `["--smoke-test", "--smoke-report"]`; any other argument shape is rejected |
 | Window/webview | `createWindow` | `WKWebViewConfiguration`, navigation delegate installed before the first load |
 | Backend ownership | `startService` | `Process` rooted at `Bundle.main.bundleURL`, stdin/stdout/stderr pipes retained for drain and shutdown |
-| Readiness protocol | `consumeServiceOutput` | Line-buffered; only `[burnguard-desktop] ` JSON with a matching `protocol` version and `url` is accepted |
-| Navigation policy | `isAppURL`, `webView(_:decidePolicyFor:)`, `createWebViewWith`, `openExternal` | Host must equal the backend origin host; everything else is cancelled. Main-frame link clicks and `window.open` to absolute `http(s)` without userinfo open in the default browser, never in a second web view |
+| Readiness protocol | `consumeServiceOutput` | Line-buffered; only `[burnguard-desktop] ` JSON with `protocol` 1, the spawned backend's `pid` and `url` equal to `http://127.0.0.1:<BG_PORT>` is accepted, as on Windows |
+| Navigation policy | `isAppURL`, `webView(_:decidePolicyFor:)`, `createWebViewWith`, `openExternal` | Host must equal the backend origin host; everything else is cancelled. Main-frame navigation to `/api/` or `/runtime/` is cancelled (`isTopLevelAppRoute`), and media-capture requests are denied. Main-frame link clicks and `window.open` to absolute `http(s)` without userinfo open in the default browser, never in a second web view |
 | Smoke report | `webView(_:didFinish:)`, `writeReport` | Evaluates page JS, records `title`/`bodyTextLength`, writes pretty JSON to the report path |
 | Failure path | `fail` | Smoke run writes the failure into the report; interactive run shows an `NSAlert` |
 

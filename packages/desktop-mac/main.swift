@@ -12,6 +12,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var serviceOutput: Pipe?
     private var outputBuffer = Data()
     private var origin: URL?
+    private var expectedOrigin: String?
     private var smokeReportPath: String?
     private var smokeProjectId: String?
     private var smokePageReport: [String: Any]?
@@ -74,6 +75,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             decisionHandler(trustedSource && isAppDownloadURL(url) ? .download : .cancel)
             return
         }
+        // Like the Windows shell, raw API and runtime responses never replace the SPA at the top level.
+        if navigationAction.targetFrame?.isMainFrame == true, isAppURL(url), !isTopLevelAppRoute(url) {
+            decisionHandler(.cancel)
+            return
+        }
         // Parent-owned link clicks that leave the app open in the default browser, mirroring the Windows shell.
         if navigationAction.navigationType == .linkActivated, navigationAction.sourceFrame.isMainFrame,
            navigationAction.targetFrame?.isMainFrame != false {
@@ -106,6 +112,17 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         // window.open never gets a second web view; external targets go to the default browser instead.
         if let url = navigationAction.request.url { openExternal(url) }
         return nil
+    }
+
+    // The Windows shell denies every WebView2 permission request; camera and microphone are denied here too.
+    func webView(
+        _ webView: WKWebView,
+        requestMediaCapturePermissionFor securityOrigin: WKSecurityOrigin,
+        initiatedByFrame frame: WKFrameInfo,
+        type: WKMediaCaptureType,
+        decisionHandler: @escaping (WKPermissionDecision) -> Void
+    ) {
+        decisionHandler(.deny)
     }
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
@@ -394,7 +411,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         let serviceURL = Bundle.main.bundleURL
             .appendingPathComponent("Contents/MacOS/burnguard-design")
         guard FileManager.default.isExecutableFile(atPath: serviceURL.path) else {
-            throw NSError(domain: "BurnGuard", code: 1, userInfo: [NSLocalizedDescriptionKey: "Contents/MacOS/service/burnguard-service is missing or not executable."])
+            throw NSError(domain: "BurnGuard", code: 1, userInfo: [NSLocalizedDescriptionKey: "Contents/MacOS/burnguard-design is missing or not executable."])
         }
 
         let input = Pipe()
@@ -408,10 +425,13 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         environment["PATH"] = (userPaths + searchPath).joined(separator: ":")
         environment["BG_DESKTOP"] = "1"
         environment["BG_NO_OPEN"] = "1"
+        environment["BG_DEV"] = "0"
         environment["BG_UPDATE_WAIT_PID"] = String(ProcessInfo.processInfo.processIdentifier)
-        if environment["BG_PORT"] == nil {
-            environment["BG_PORT"] = "14070"
-        }
+        // The readiness line must name exactly this port, so the backend may not scan for another one.
+        let port = environment["BG_PORT"] ?? "14070"
+        environment["BG_PORT"] = port
+        environment.removeValue(forKey: "BG_SCAN_PORT")
+        expectedOrigin = "http://127.0.0.1:\(port)"
         process.executableURL = serviceURL
         process.standardInput = input
         process.standardOutput = output
@@ -466,6 +486,9 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                 return
             }
             guard let urlString = message["url"] as? String,
+                  let pid = message["pid"] as? Int32,
+                  let service, pid == service.processIdentifier,
+                  urlString == expectedOrigin,
                   let url = URL(string: urlString) else {
                 fail("BurnGuard 시작 응답을 확인할 수 없습니다.")
                 return
@@ -484,6 +507,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             host == originHost &&
             url.port == origin.port &&
             url.user == nil
+    }
+
+    private func isTopLevelAppRoute(_ url: URL) -> Bool {
+        let path = (URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath ?? url.path).lowercased()
+        return !path.hasPrefix("/api/") && !path.hasPrefix("/runtime/")
     }
 
     private func openExternal(_ url: URL) {

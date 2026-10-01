@@ -238,7 +238,6 @@ packages/backend/tests/visual-source-security.test.ts
 packages/backend/tests/watchers.test.ts
 packages/backend/tests/web-assets.test.ts
 packages/backend/tests/zip.test.ts
-packages/desktop-mac/main.test.ts
 packages/frontend/tests/abort-signal.test.ts
 packages/frontend/tests/app-update-state.test.ts
 packages/frontend/tests/artifact-csp.test.ts
