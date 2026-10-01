@@ -176,6 +176,17 @@ describe("HAR masking of caller-given roots in the forms a HAR carries them", ()
     expect(masked.entries[0]!.request.url).toBe(`${API}?dir=<qa-home>%252Fp1`);
   });
 
+  test.each([4, 6])("Given a Unicode Windows root nested %i levels deep in JSON, when masked, then the decoded path is the placeholder", levels => {
+    const root = "D:\\QA\\caf\u00e9-run";
+    let text = root;
+    for (let level = 0; level < levels; level += 1) text = JSON.stringify({ echo: text });
+    const masked = mask([entry({ url: API }, { content: { size: text.length, mimeType: "application/json", text } })], qaHome(root));
+    let decoded = masked.entries[0]!.response.content.text;
+    for (let level = 0; level < levels; level += 1) decoded = JSON.parse(decoded).echo;
+    expect(decoded).toBe("<qa-home>");
+    expect(masked.text).not.toContain("caf");
+  });
+
   test.each(["\\\\qa-server\\share\\run-42", "D:\\bg-qa\\run-42", "/tmp/qa-home-77"])("Given the root %s, when its pattern is built, then it has no unbounded quantifier and a long backslash run before the root still masks it", root => {
     // An unbounded separator quantifier makes matching polynomial on long backslash runs; counting them pins the bound without timing anything.
     const source = rootPattern(root).source;

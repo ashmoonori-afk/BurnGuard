@@ -166,12 +166,29 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const counts = { secret_values: secrets.length, headers: 0, cookies: 0, params: 0, paths: 0 };
   // Longer roots first, so a nested root keeps its own placeholder.
   const orderedRoots = [...roots].filter(root => root.path.length > 1).sort((a, b) => b.path.length - a.path.length).map(root => ({ pattern: rootPattern(root.path), placeholder: root.placeholder }));
+  const scrubPaths = (text: string): string => {
+    let out = text;
+    for (const root of orderedRoots) { const next = out.replace(root.pattern, () => root.placeholder); if (next !== out) counts.paths += 1; out = next; }
+    for (const pattern of HOME_PATTERNS) { const next = out.replace(pattern, "<home>"); if (next !== out) counts.paths += 1; out = next; }
+    // Decode nested JSON instead of enlarging separator quantifiers: UNC patterns must stay bounded.
+    if (out.includes("\\".repeat(9))) {
+      let parsed: unknown;
+      try { parsed = JSON.parse(out); } catch (error) { if (error instanceof SyntaxError) return out; throw error; }
+      const nestedPaths = (value: unknown): unknown => {
+        if (typeof value === "string") return scrubPaths(value);
+        if (Array.isArray(value)) return value.map(nestedPaths);
+        if (isObject(value)) return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, nestedPaths(child)]));
+        return value;
+      };
+      const masked = nestedPaths(parsed);
+      if (JSON.stringify(masked) !== JSON.stringify(parsed)) out = JSON.stringify(masked);
+    }
+    return out;
+  };
   const scrub = (text: string): string => {
     let out = text;
     for (const secret of secrets) for (const form of secretForms(secret)) out = out.replaceAll(form, MASKED);
-    for (const root of orderedRoots) { const next = out.replace(root.pattern, () => root.placeholder); if (next !== out) counts.paths += 1; out = next; }
-    for (const pattern of HOME_PATTERNS) { const next = out.replace(pattern, "<home>"); if (next !== out) counts.paths += 1; out = next; }
-    return out;
+    return scrubPaths(out);
   };
   const walk = (value: Json): Json => {
     if (typeof value === "string") return scrub(value);
