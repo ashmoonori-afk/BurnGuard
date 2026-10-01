@@ -255,7 +255,6 @@ packages/frontend/tests/bridge-inline-style.test.ts
 packages/frontend/tests/brief-choices.test.ts
 packages/frontend/tests/canvas-ai-request.test.ts
 packages/frontend/tests/canvas-css-imports.browser.test.ts
-packages/frontend/tests/canvas-edit-review.test.ts
 packages/frontend/tests/canvas-images.test.ts
 packages/frontend/tests/canvas-interaction.test.ts
 packages/frontend/tests/canvas-load-error.test.ts

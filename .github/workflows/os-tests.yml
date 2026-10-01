@@ -64,6 +64,7 @@ jobs:
           packages/backend/tests/extraction-website-boundaries.test.ts
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/design-system-starter.test.ts
+          packages/frontend/tests/canvas-edit-review.test.ts
           packages/backend/tests/design-system-starter-entrypoint.test.ts
           packages/backend/tests/design-system-layout-reference.test.ts
           packages/backend/tests/design-system-conformance.test.ts
