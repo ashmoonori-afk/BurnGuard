@@ -11,7 +11,9 @@ import { writePreTurnSnapshot } from "../src/services/checkpoints";
 import { insertNormalizedEvent } from "../src/db/events";
 import { listSequencedSessionEvents } from "../src/db/event-sequence-repository";
 import { isUserTurnRunning } from "../src/services/turns";
-import { saveSessionAttachments } from "../src/services/attachments";
+import { broker } from "../src/services/broker";
+import { beginVisualAlternativeOperation, finishVisualAlternativeOperation } from "../src/services/visual-alternative-operation-registry";
+import { rollbackSessionAttachments, saveSessionAttachments } from "../src/services/attachments";
 
 const projectId = `session-routes-${process.pid}`;
 const sessionId = `${projectId}-session`;
@@ -181,6 +183,94 @@ describe("production session route boundaries", () => {
     expect(savedPaths).toHaveLength(1);
     expect(existsSync(savedPaths[0]!)).toBe(false);
     expect(getSqlite().query<{ readonly count: number }, [string, string]>("SELECT COUNT(*) count FROM attachments WHERE session_id=? AND file_path=?").get(sessionId, savedPaths[0]!)?.count).toBe(0);
+  });
+
+  test("Given a visual-alternative batch leasing the project from another session When a multipart message is posted Then it is refused with 409 operation_conflict before the message is recorded and the upload is rolled back", async () => {
+    // Given
+    const after = listSequencedSessionEvents(getSqlite(), sessionId, 0).at(-1)?.sequence ?? 0;
+    const leaseSession = `${sessionId}-alternatives`;
+    expect(beginVisualAlternativeOperation(leaseSession, projectId, "lease-before-send")).not.toBeNull();
+    const form = new FormData();
+    form.set("type", "user.message");
+    form.set("text", "hello");
+    form.append("files", new File(["notes"], "leased-notes.txt", { type: "text/plain" }));
+    let savedPaths: readonly string[] = [];
+
+    // When
+    let response: Response;
+    try {
+      response = await sessionRoutes.request(`http://local/api/sessions/${sessionId}/events`, { method: "POST", body: form }, {
+        detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "fixture" }, { id: "claude-code", found: true, binary_path: "fixture" }] }),
+        saveSessionAttachments: async (id, uploads) => { savedPaths = await saveSessionAttachments(id, uploads); return savedPaths; },
+      });
+    } finally { finishVisualAlternativeOperation(leaseSession, "lease-before-send"); }
+
+    // Then
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "operation_conflict" } });
+    expect(userMessagesAfter(sessionId, after)).toBe(0);
+    expect(savedPaths).toHaveLength(1);
+    expect(existsSync(savedPaths[0]!)).toBe(false);
+    expect(getSqlite().query<{ readonly count: number }, [string, string]>("SELECT COUNT(*) count FROM attachments WHERE session_id=? AND file_path=?").get(sessionId, savedPaths[0]!)?.count).toBe(0);
+    expect(isUserTurnRunning(sessionId)).toBe(false);
+  });
+
+  test("Given a send whose message is already recorded When the artifact operation then refuses with operation_conflict Then the route answers 500 and keeps the upload bound to the recorded turn instead of rolling it back", async () => {
+    // Given: a batch leases the project the moment the user message is published.
+    const after = listSequencedSessionEvents(getSqlite(), sessionId, 0).at(-1)?.sequence ?? 0;
+    const leaseSession = `${sessionId}-alternatives`;
+    let leased = false;
+    const unsubscribe = broker.subscribe(sessionId, (event) => {
+      if (event.type === "chat.user_message") leased = beginVisualAlternativeOperation(leaseSession, projectId, "lease-after-record") !== null;
+    });
+    const form = new FormData();
+    form.set("type", "user.message");
+    form.set("text", "hello");
+    form.append("files", new File(["notes"], "recorded-notes.txt", { type: "text/plain" }));
+    let savedPaths: readonly string[] = [];
+
+    // When
+    let response: Response;
+    try {
+      response = await sessionRoutes.request(`http://local/api/sessions/${sessionId}/events`, { method: "POST", body: form }, {
+        detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "fixture" }, { id: "claude-code", found: true, binary_path: "fixture" }] }),
+        saveSessionAttachments: async (id, uploads) => { savedPaths = await saveSessionAttachments(id, uploads); return savedPaths; },
+      });
+    } finally { unsubscribe(); finishVisualAlternativeOperation(leaseSession, "lease-after-record"); }
+
+    // Then
+    expect(leased).toBe(true);
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({ error: { code: "artifact_prepare_failed" } });
+    expect(userMessagesAfter(sessionId, after)).toBe(1);
+    expect(listSequencedSessionEvents(getSqlite(), sessionId, after).flatMap((item) => item.event.type === "status.error" ? [item.event.code] : [])).toEqual(["operation_conflict"]);
+    expect(savedPaths).toHaveLength(1);
+    expect(existsSync(savedPaths[0]!)).toBe(true);
+    expect(getSqlite().query<{ readonly count: number }, [string, string]>("SELECT COUNT(*) count FROM attachments WHERE session_id=? AND file_path=? AND turn_id IS NOT NULL").get(sessionId, savedPaths[0]!)?.count).toBe(1);
+    expect(isUserTurnRunning(sessionId)).toBe(false);
+  });
+
+  test("Given a refused multipart send When removing the rolled-back upload file fails Then the route still answers 409 with the refusal code and no unbound attachment row remains", async () => {
+    // Given: the row is deleted, then the file removal fails as it does when Windows holds a handle on it.
+    const form = new FormData();
+    form.set("type", "user.message");
+    form.set("text", "hello");
+    form.append("files", new File(["notes"], "held-notes.txt", { type: "text/plain" }));
+    let savedPaths: readonly string[] = [];
+
+    // When
+    const response = await sessionRoutes.request(`http://local/api/sessions/${sessionId}/events`, { method: "POST", body: form }, {
+      detectBackends: async () => ({ backends: [{ id: "codex", found: false }, { id: "claude-code", found: false }] }),
+      saveSessionAttachments: async (id, uploads) => { savedPaths = await saveSessionAttachments(id, uploads); return savedPaths; },
+      rollbackSessionAttachments: async (id, paths) => { await rollbackSessionAttachments(id, paths); throw Object.assign(new Error("resource busy"), { code: "EBUSY" }); },
+    });
+
+    // Then
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "backend_unavailable" } });
+    expect(savedPaths).toHaveLength(1);
+    expect(getSqlite().query<{ readonly count: number }, [string, string]>("SELECT COUNT(*) count FROM attachments WHERE session_id=? AND file_path=?").get(sessionId, savedPaths[0]!)?.count).toBe(0);
+    expect(isUserTurnRunning(sessionId)).toBe(false);
   });
 
   test("Given a graphic project on an image-capable backend When the send selects a text-only model Then the route refuses with 409 graphic_requires_authenticated_codex instead of 500 artifact_prepare_failed and records no message", async () => {
