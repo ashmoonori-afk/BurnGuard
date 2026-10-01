@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parse } from "node-html-parser";
@@ -225,4 +225,27 @@ test("IMPORT-6: Given a same-origin stylesheet link that redirects to another or
     getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(id);
     await rm(path.join(systemsDir, id), { recursive: true, force: true });
   }
+});
+
+test("IMPORT-4: Given twelve extracted pages in discovery order When the draft is published Then the eight UI-kit pages are the first eight in discovery order, not a lexical page-10 before page-2 selection", async () => {
+  const sections = Array.from({ length: 11 }, (_, index) => `/section${index + 1}`);
+  const html = (title: string, body: string) => `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body>${body}</body></html>`;
+  await withQaWebsite("ui-kit-order", () => ({
+    "/source": { type: "text/html", body: html("Multi", `<nav>${sections.map((href) => `<a href="${href}">${href}</a>`).join("")}</nav><h1>Home</h1>`) },
+    ...Object.fromEntries(sections.map((href) => [href, { type: "text/html", body: html(href, `<h1>${href}</h1>`) }])),
+  }), async ({ id, origin, root }) => {
+    const result = await extractDesignSystemFromSource({ system_id: id, name: "Multi", source_type: "website", source_url: `${origin}/source` });
+    expect(result.system.status).toBe("draft");
+    const published = (await readdir(path.join(root, "ui_kits", "website"))).filter((name) => name.endsWith(".html")).sort();
+    expect(published).toEqual(["index.html", "page-2.html", "page-3.html", "page-4.html", "page-5.html", "page-6.html", "page-7.html", "page-8.html"]);
+  });
+});
+
+test("IMPORT-3: Given a page title whose first segment is empty and no explicit name When website extraction runs Then the derived brand name falls back to the hostname", async () => {
+  await withQaWebsite("empty-title-segment", () => ({
+    "/source": { type: "text/html", body: '<!doctype html><html><head><meta charset="utf-8"><title>| Home</title></head><body><h1>Home</h1></body></html>' },
+  }), async ({ id, origin }) => {
+    const result = await extractDesignSystemFromSource({ system_id: id, source_type: "website", source_url: `${origin}/source` });
+    expect(result.extraction.brand_name).toBe("127");
+  });
 });
