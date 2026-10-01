@@ -104,6 +104,7 @@ jobs:
           packages/frontend/tests/backend-display.test.ts
           packages/backend/tests/config-storage.test.ts
           packages/backend/tests/mac-updates.test.ts
+          packages/backend/tests/mac-updates-version-order.test.ts
           packages/backend/tests/app-update-routes.test.ts
           packages/backend/tests/native-binding.test.ts
           packages/backend/tests/os-portability.test.ts
