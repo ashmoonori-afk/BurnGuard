@@ -43,11 +43,27 @@ export async function getExportAttemptDetail(attemptId: string): Promise<ExportA
   return row === undefined ? null : attemptDto(row);
 }
 
+/**
+ * Every message written today is fixed copy, but rows failed before #202 still hold raw exception text with
+ * absolute paths and errno codes. Anything outside the written copy is served as "Export failed", keeping a leading
+ * lowercase domain code (errno codes are uppercase) as "Export failed: <code>" like exportFailureMessage does, so
+ * the export menu can still classify Chromium failures. A new fixed message must be added here or it is masked.
+ */
+const FIXED_EXPORT_MESSAGES = new Set([
+  "Export failed", "Export cancelled", "Export recovery found no owned output", "Export receipt or output is corrupt",
+  "Legacy export has no validated receipt", "Export retention expired",
+]);
+function publicErrorMessage(message: string | null): string | null {
+  if (message === null || FIXED_EXPORT_MESSAGES.has(message) || /^Export failed: [a-z][a-z0-9_]{0,63}$/u.test(message)) return message;
+  const code = /^([a-z][a-z0-9_]{0,63}):/u.exec(message)?.[1];
+  return code === undefined ? "Export failed" : `Export failed: ${code}`;
+}
+
 async function toJob(row: typeof exportsTable.$inferSelect): Promise<ExportJob> {
   const attempt = (await getDb().select().from(exportAttemptsTable).where(eq(exportAttemptsTable.jobId, row.id)).orderBy(desc(exportAttemptsTable.createdAt)).limit(1))[0];
   return {
     id: row.id, project_id: row.projectId, format: row.format, status: row.status,
-    output_path: row.outputPath, error_message: row.errorMessage, size_bytes: row.sizeBytes,
+    output_path: row.outputPath, error_message: publicErrorMessage(row.errorMessage), size_bytes: row.sizeBytes,
     options: parseExportOptions(row.format, row.optionsJson), latest_attempt: attempt === undefined ? null : attemptDto(attempt), parity: null,
     handoff_continuation: row.format === "handoff" && row.status === "succeeded" ? HANDOFF_CONTINUATION : null,
     created_at: row.createdAt, completed_at: row.completedAt,
