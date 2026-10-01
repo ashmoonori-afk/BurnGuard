@@ -68,7 +68,8 @@ export async function loadFilePreview(
       remaining -= bytes.length;
       if (bytes.length < value.length) {
         await reader.cancel();
-        return { kind: "text", text: text + decoder.decode(), truncated: true };
+        // No flush: a cut inside a multi-byte sequence is dropped, not decoded as U+FFFD.
+        return { kind: "text", text, truncated: true };
       }
     }
   } finally {

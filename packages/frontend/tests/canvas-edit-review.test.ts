@@ -131,6 +131,26 @@ describe("canvas review regressions", () => {
     }
   });
 
+  test("Given a text file whose preview cut splits a multi-byte character When previewed Then the partial character is dropped", async () => {
+    const limit = 1024 * 1024;
+    const body = new TextEncoder().encode(`${"a".repeat(limit - 1)}\uD55Ctail`);
+    const preview = await loadFilePreview("project", { rel_path: "notes.txt", category: "document" }, new AbortController().signal, async () => new Response(body, { headers: { "content-type": "text/plain; charset=utf-8" } }));
+    expect(preview).toEqual({ kind: "text", text: "a".repeat(limit - 1), truncated: true });
+  });
+
+  test("Given a text file whose preview cut lands on a character boundary When previewed Then the whole character is kept", async () => {
+    const limit = 1024 * 1024;
+    const body = new TextEncoder().encode(`${"a".repeat(limit - 3)}\uD55Ctail`);
+    const preview = await loadFilePreview("project", { rel_path: "notes.txt", category: "document" }, new AbortController().signal, async () => new Response(body, { headers: { "content-type": "text/plain; charset=utf-8" } }));
+    expect(preview).toEqual({ kind: "text", text: `${"a".repeat(limit - 3)}\uD55C`, truncated: true });
+  });
+
+  test("Given a short text file that ends with an invalid byte When previewed Then it still decodes to a replacement character", async () => {
+    const body = new Uint8Array([0x61, 0x62, 0xe2, 0x82]);
+    const preview = await loadFilePreview("project", { rel_path: "notes.txt", category: "document" }, new AbortController().signal, async () => new Response(body, { headers: { "content-type": "text/plain; charset=utf-8" } }));
+    expect(preview).toEqual({ kind: "text", text: "ab\uFFFD", truncated: false });
+  });
+
   test("Given a cancelled file request When it is superseded Then cancellation reaches the caller", async () => {
     const controller = new AbortController();
     const pending = loadFilePreview("project", { rel_path: "old.txt", category: "document" }, controller.signal, async (_url, init) => new Promise<Response>((_resolve, reject) => {

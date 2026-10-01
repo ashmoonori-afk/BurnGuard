@@ -59,6 +59,7 @@ jobs:
           packages/backend/tests/font-validation.test.ts
           packages/backend/tests/bundled-fonts.test.ts
           packages/backend/tests/bundled-font-reference.test.ts
+          packages/frontend/tests/canvas-edit-review.test.ts
           packages/backend/tests/daisyui-seed-themes.test.ts
           packages/backend/tests/theme-previews.test.ts
           packages/backend/tests/catalog.test.ts
