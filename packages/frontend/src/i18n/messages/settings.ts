@@ -119,7 +119,7 @@ export const settingsMessages = defineMessages({
   "settings.updateStatusFailed": { ko: "업데이트 상태 조회 실패", en: "Could not load update status", "zh-CN": "无法获取更新状态" },
   "settings.updateScheduleFailed": { ko: "업데이트 재시작을 예약하지 못했습니다. BurnGuard를 다시 실행해 주세요.", en: "Could not schedule the update restart. Relaunch BurnGuard.", "zh-CN": "无法安排更新重启。请重新启动 BurnGuard。" },
   "settings.updateDisconnected": { ko: "업데이트가 적용되는 동안 연결이 끊겼어요. BurnGuard를 다시 열어 주세요.", en: "The connection was lost while applying the update. Reopen BurnGuard.", "zh-CN": "应用更新时连接中断。请重新打开 BurnGuard。" },
-  "settings.updateUnsupported": { ko: "자동 업데이트는 설치 패키지에서 사용할 수 있습니다", en: "Automatic updates are available in installed packages", "zh-CN": "自动更新仅适用于安装包版本" },
+  "settings.updateUnsupported": { ko: "자동 업데이트는 설치 패키지에서 사용할 수 있습니다.", en: "Automatic updates are available in installed packages.", "zh-CN": "自动更新仅适用于安装包版本。" },
   "settings.updateCurrent": { ko: "최신 버전입니다 ({version})", en: "You're up to date ({version})", "zh-CN": "已是最新版本（{version}）" },
   "settings.updateIdle": { ko: "업데이트 대기 중", en: "Waiting to check for updates", "zh-CN": "等待检查更新" },
   "settings.updateChecking": { ko: "업데이트 확인 중…", en: "Checking for updates…", "zh-CN": "正在检查更新…" },
