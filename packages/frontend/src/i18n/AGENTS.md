@@ -19,7 +19,7 @@ Typed three-locale message registry (16 files, 1,936 LOC) behind every user-faci
 - Every key defines all three locales; `MessageDefinition` makes a missing locale a typecheck failure, so translation gaps never reach runtime.
 - Key namespace equals the pack file name (`shell.*` lives in `messages/shell.ts`); a new pack must be imported into both arrays in `messages/index.ts`.
 - First-run locale follows the OS primary language (`detectSystemLocale`: Korean -> `ko`, Simplified Chinese -> `zh-CN`, anything else -> `en`). A stored explicit choice (localStorage, then the shared profile once saved from Settings) always wins; the detected locale is never persisted on its own.
-- Plural messages use `{ one, other }` and are selected by `Intl.PluralRules`; numeric params are formatted by `Intl.NumberFormat` for the active locale.
+- Plural messages use `{ one, other }` and are selected by `Intl.PluralRules`; numeric params are formatted by `Intl.NumberFormat` for the active locale, except identifier params (`revision`), which keep their raw digits.
 - `localStorage` access is wrapped: a `DOMException` (private mode, blocked storage) degrades to the default locale, any other error rethrows.
 - Non-React callers (`@/lib/error-copy`, helpers) use `t`; components use `useT()` so a locale switch re-renders.
 

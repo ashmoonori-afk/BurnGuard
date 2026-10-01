@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { LOCALES } from "../src/i18n/locale";
 import { messagePacks, messages } from "../src/i18n/messages";
+import { formatMessage } from "../src/i18n/t";
 import type { Message, MessageDefinition } from "../src/i18n/types";
 
 function placeholders(message: Message): string[] {
@@ -50,6 +51,19 @@ test("Given the shell tagline When read for every locale Then ko is translated r
   const entry = messages["shell.tagline"];
   expect(entry.ko).toMatch(/\p{Script=Hangul}/u);
   expect(entry.ko).not.toBe(entry.en);
+});
+
+test("Given a numeric artifact revision above 999 When interpolated in every locale Then it keeps its raw digits (I18N-3)", () => {
+  for (const locale of LOCALES) {
+    const source = formatMessage(messages["modes.ux.source"][locale], locale, { path: "index.html", revision: 1234 });
+    const intro = formatMessage(messages["modes.quality.fixRequest.intro"][locale], locale, { revision: 1234567, digest: "d" });
+    expect(source.match(/\d[\d,.\s\u00a0]*\d/g), `${locale} source`).toEqual(["1234"]);
+    expect(intro.match(/\d[\d,.\s\u00a0]*\d/g), `${locale} intro`).toEqual(["1234567"]);
+  }
+});
+
+test("Given a numeric quantity param When interpolated in en Then it is still grouped for the locale", () => {
+  expect(formatMessage("{count} files", "en", { count: 1234 })).toBe("1,234 files");
 });
 
 test("Given the logo chip copy When the registry is read Then the unused add-chip key is gone", () => {
