@@ -56,7 +56,7 @@ import { webAssetsMcpCommand } from "./web-assets-mcp";
 import { checkCssLogos } from "./css-logo-check";
 import { prepareSlideDeckExport } from "./export-stage";
 import { blockingDesignFindings, DesignReviewError, reviewTurnDesign } from "./turn-design-review";
-import { MEASURED_PAGE_DECLARATION, reviewDesignSystemConformance } from "./design-system-conformance";
+import { reviewDesignSystemConformance } from "./design-system-conformance";
 import { entrypointBuiltAgainstSystem, provisionDesignSystemStarter, seedStarterEntrypoint } from "./design-system-starter";
 import { provisionDesignSystemHeroAssets, provisionDesignSystemLayoutReference } from "./design-system-layout-reference";
 import { resolveManagedPath, systemsDir } from "../lib/paths";

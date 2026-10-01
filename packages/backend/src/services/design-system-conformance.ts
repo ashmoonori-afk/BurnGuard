@@ -1,3 +1,4 @@
+import { parse } from "node-html-parser";
 import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { MEASURED_VIEWPORTS, parseDesignSystemMeasuredLayout, type MeasuredPageLayout, type MeasuredViewportLayout, type MeasuredViewportName } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
@@ -23,8 +24,16 @@ const VISUAL_CAPTURE_TIMEOUT_MS = 8_000;
 
 /** Declared by generated pages so the review compares them with the measured entry they followed. */
 export const MEASURED_PAGE_META = "bg-measured-page";
-/** Reads the declared measured page path from a page's HTML. */
-export const MEASURED_PAGE_DECLARATION = new RegExp(`<meta\\s+name=["']${MEASURED_PAGE_META}["']\\s+content=["']([^"']{1,300})["']`, "iu");
+const MAX_DECLARED_PAGE_LENGTH = 300;
+/** Reads the declared measured page path from a page's HTML, whatever the attribute order or extra attributes, like the starter CSS selector does. */
+export function declaredMeasuredPage(html: string): string | null {
+  for (const meta of parse(html).querySelectorAll("meta")) {
+    if (meta.getAttribute("name")?.toLowerCase() !== MEASURED_PAGE_META) continue;
+    const content = meta.getAttribute("content");
+    if (content !== undefined && content.length > 0 && content.length <= MAX_DECLARED_PAGE_LENGTH) return content;
+  }
+  return null;
+}
 const MAX_FINDINGS = 40;
 const OPEN_TAG = "<selected_design_system_measured_layout>";
 
@@ -156,7 +165,7 @@ export async function reviewDesignSystemConformance(input: { readonly projectDir
   const pages = measuredPagesFromPinnedContext(input.pinnedContext);
   if (pages === null || pages.length === 0) return null;
   const html = await readFile(resolveWithin(input.projectDir, input.entrypoint), "utf8");
-  const declared = MEASURED_PAGE_DECLARATION.exec(html)?.[1] ?? null;
+  const declared = declaredMeasuredPage(html);
   const expected = selectMeasuredPage(pages, declared);
   if (expected === null) return null;
   const findings: ConformanceFinding[] = [];

@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { MeasuredBox, MeasuredPageLayout, MeasuredViewportLayout, MeasuredViewportName } from "@bg/shared";
 import { resolveWithin } from "../security/path-boundary";
 import { readableRole } from "./design-system-contrast";
-import { MEASURED_PAGE_DECLARATION, measuredPagesFromPinnedContext, selectMeasuredPage } from "./design-system-conformance";
+import { declaredMeasuredPage, measuredPagesFromPinnedContext, selectMeasuredPage } from "./design-system-conformance";
 import { heroAssetsFromPinnedContext, layoutReferenceFromPinnedContext, STAGED_REFERENCE_DIR, stagedReferencePath } from "./design-system-layout-reference";
 
 /** First line of every generated starter stylesheet; a file without it was written by someone else and is never replaced. */
@@ -198,7 +198,7 @@ function isFreshEntrypoint(source: string | null): boolean {
 
 /** Whether the entrypoint already follows the pinned system: it declares its measured page, holds no skeleton placeholders and was not seeded this turn. */
 export function entrypointBuiltAgainstSystem(source: string, seededThisTurn: boolean): boolean {
-  return !seededThisTurn && MEASURED_PAGE_DECLARATION.test(source) && !source.includes("data-bg-placeholder");
+  return !seededThisTurn && declaredMeasuredPage(source) !== null && !source.includes("data-bg-placeholder");
 }
 
 /**
