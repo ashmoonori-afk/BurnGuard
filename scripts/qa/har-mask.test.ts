@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { HarMaskError, MASKED, maskHar, type PrivateRoot } from "./har-mask";
+import { HarMaskError, MASKED, maskHar, rootPattern, type PrivateRoot } from "./har-mask";
 
 const CAPABILITY = "c4p4b1l1tyV4lu3-0123456789abcdef";
 const header = (name: string, value: string) => ({ name, value });
@@ -96,7 +96,9 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       expect(run.stdout.toString()).not.toContain(CAPABILITY);
       expect(JSON.parse(run.stdout.toString())).toMatchObject({ schema_version: 1, output: "shared.har" });
       expect(await readFile(output, "utf8")).not.toContain(CAPABILITY);
-      if (process.platform !== "win32") expect((await stat(output)).mode & 0o777).toBe(0o600);
+      // Windows has no group or other mode bits: the file inherits the evidence directory's ACL, and Node maps the requested
+      // 0600 to "writable by its owner", which stat reports as 0666 (a read-only file would read 0444).
+      expect((await stat(output)).mode & 0o777).toBe(process.platform === "win32" ? 0o666 : 0o600);
       const again = Bun.spawnSync(["bun", path.join(import.meta.dir, "har-mask.ts"), input, output]);
       expect(JSON.parse(again.stderr.toString())).toEqual({ error: "output_exists" });
       const link = path.join(dir, "link.har");
@@ -161,6 +163,43 @@ describe("HAR masking of caller-given roots in the forms a HAR carries them", ()
     expect(masked.entries[0]!.request.url).toBe(`${API}?dir=<qa-home>&alt=<qa-home>`);
   });
 
+  test.each(["/Volumes/QA/caf\u00e9-run", "D:\\QA\\caf\u00e9-run"])("Given the root %s with a non-ASCII character, when a JSON body writes that character as a \\u escape at one and two escaping levels, then every form becomes the placeholder", root => {
+    const escaped = (levels: number) => root.replaceAll("\\", "\\".repeat(2 ** levels)).replace("\u00e9", `${"\\".repeat(2 ** (levels - 1))}u00E9`);
+    const text = `{"data":{"one":"${escaped(1)}-p1","two":"${escaped(2)}-p2"}}`;
+    const masked = mask([entry({ url: API }, { content: { size: 80, mimeType: "application/json", text } })], qaHome(root));
+    expect(masked.text).not.toContain("caf");
+    expect(masked.entries[0]!.response.content.text).toBe(`{"data":{"one":"<qa-home>-p1","two":"<qa-home>-p2"}}`);
+  });
+
+  test.each(["/Volumes/QA/caf\u00e9-run", "D:\\QA\\caf\u00e9-run", "\\\\qa-server\\share\\run-42"])("Given the root %s, when a URL carries it double-percent-encoded, then it becomes the placeholder", root => {
+    const masked = mask([entry({ url: `${API}?dir=${encodeURIComponent(encodeURIComponent(`${root}/p1`))}` }, jsonBody({ data: {} }))], qaHome(root));
+    expect(masked.entries[0]!.request.url).toBe(`${API}?dir=<qa-home>%252Fp1`);
+  });
+
+  test.each([4, 6])("Given a Unicode Windows root nested %i levels deep in JSON, when masked, then the decoded path is the placeholder", levels => {
+    const root = "D:\\QA\\caf\u00e9-run";
+    let text = root;
+    for (let level = 0; level < levels; level += 1) text = JSON.stringify({ echo: text });
+    const masked = mask([entry({ url: API }, { content: { size: text.length, mimeType: "application/json", text } })], qaHome(root));
+    let decoded = masked.entries[0]!.response.content.text;
+    for (let level = 0; level < levels; level += 1) decoded = JSON.parse(decoded).echo;
+    expect(decoded).toBe("<qa-home>");
+    expect(masked.text).not.toContain("caf");
+  });
+
+  test.each(["\\\\qa-server\\share\\run-42", "D:\\bg-qa\\run-42", "/tmp/qa-home-77"])("Given the root %s, when its pattern is built, then it has no unbounded quantifier and a long backslash run before the root still masks it", root => {
+    // An unbounded separator quantifier makes matching polynomial on long backslash runs; counting them pins the bound without timing anything.
+    const source = rootPattern(root).source;
+    let unbounded = 0;
+    for (let index = 0; index < source.length; index += 1) {
+      if (source[index] === "\\") { index += 1; continue; }
+      if (source[index] === "+" || source[index] === "*" || (source[index] === "{" && /^\{\d+,\}/u.test(source.slice(index)))) unbounded += 1;
+    }
+    expect(unbounded).toBe(0);
+    const masked = mask([entry({ url: API }, jsonBody({ data: { run: `${"\\".repeat(2048)}x ${root}` } }))], qaHome(root));
+    expect(JSON.parse(masked.entries[0]!.response.content.text).data).toEqual({ run: `${"\\".repeat(2048)}x <qa-home>` });
+  });
+
   test("Given a root with spaces passed with --root, when a URL carries the spaces as %20 or as form-encoded plus signs, then both forms become the placeholder", () => {
     const root = "/Volumes/QA Disk/run 42";
     const masked = mask([entry({ url: `${API}?dir=${encodeURIComponent(root)}&alt=%2FVolumes%2FQA+Disk%2Frun+42` }, jsonBody({ data: { dir_path: `${root}/p1` } }))], qaHome(root));
@@ -179,6 +218,26 @@ describe("HAR masking of collected secrets that need JSON escaping", () => {
     for (const part of ["quoted-pass-0123", "ss-word-back-0123"]) expect(masked.text).not.toContain(part);
     expect(JSON.parse(masked.entries[0]!.request.postData!.text)).toEqual({ password: MASKED, client_secret: MASKED });
     expect(JSON.parse(masked.entries[0]!.response.content.text).data).toEqual({ echo: `${MASKED} ${MASKED}` });
+  });
+
+  test("Given secrets that need JSON escaping echoed as JSON nested inside a JSON string, when masked, then the double-escaped values are masked", () => {
+    const nested = JSON.stringify({ password: quoted, client_secret: backslashed });
+    const masked = mask([entry({ method: "PATCH", url: "http://127.0.0.1:14070/api/settings", postData: { mimeType: "application/json", text: nested } }, jsonBody({ data: { echo: nested } }))]);
+    for (const part of ["quoted-pass-0123", "ss-word-back-0123"]) expect(masked.text).not.toContain(part);
+    expect(JSON.parse(JSON.parse(masked.entries[0]!.response.content.text).data.echo)).toEqual({ password: MASKED, client_secret: MASKED });
+  });
+
+  test.each([2, 6])("Given a secret that needs JSON escaping nested %i levels deep inside a binary-typed base64 body, when masked, then masking fails closed with secret_remains", levels => {
+    let echo: string = quoted;
+    for (let level = 0; level < levels; level += 1) echo = JSON.stringify({ echo });
+    const echoed = { content: { size: 40, mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(echo).toString("base64") } };
+    expect(() => mask([entry({ method: "PATCH", url: "http://127.0.0.1:14070/api/settings", postData: { mimeType: "application/json", text: JSON.stringify({ password: quoted }) } }, echoed)])).toThrow(new HarMaskError("secret_remains"));
+  });
+
+  test("Given a secret that needs JSON escaping nested deeper than masking unescapes inside a text body, when masked, then masking fails closed with secret_remains", () => {
+    let echo: string = quoted;
+    for (let level = 0; level < 8; level += 1) echo = JSON.stringify({ echo });
+    expect(() => mask([entry({ method: "PATCH", url: "http://127.0.0.1:14070/api/settings", postData: { mimeType: "application/json", text: JSON.stringify({ password: quoted }) } }, jsonBody({ data: echo }))])).toThrow(new HarMaskError("secret_remains"));
   });
 
   test("Given a secret that needs JSON escaping inside a binary-typed base64 body, when masked, then masking fails closed with secret_remains", () => {

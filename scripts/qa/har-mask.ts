@@ -6,7 +6,8 @@ import path from "node:path";
  * Masks a HAR recorded against a running BurnGuard before it is shared: the per-launch capability (header, cookie,
  * bootstrap body and every other place its value appears), authorization headers, cookies, secret-named query, form
  * and JSON body fields, and home paths plus caller-given roots everywhere in the file. Secrets and roots are matched
- * in the forms a HAR carries them: as is, percent-encoded and JSON-escaped; roots also with either path separator, in
+ * in the forms a HAR carries them: as is, percent-encoded and JSON-escaped (also as JSON nested in JSON strings); roots
+ * also double-percent-encoded, with \u escapes, with either path separator, in
  * any letter case and in both Unicode normal forms. The output is verified to contain none of the collected secret
  * values before it is written. Known limit: a home directory name containing a space is masked only up to the space;
  * pass that root with --root.
@@ -30,26 +31,47 @@ const HOME_PATTERNS: readonly RegExp[] = [
   /[A-Za-z]%3A%5C(?:%5C)?Users%5C(?:%5C)?[^%\s"'&<>]+/giu,
 ];
 const TEXT_MIME = /^(?:text\/|application\/(?:json|javascript|xml|x-www-form-urlencoded|x-ndjson)|image\/svg\+xml)/iu;
-/** A path separator as a HAR carries it: a slash, a backslash (doubled by each level of JSON escaping) or either one percent-encoded. */
-const SEPARATOR = String.raw`(?:/|\\+|%2F|(?:%5C)+)`;
+/**
+ * A run of backslashes as JSON escaping writes one: doubled by each level, bounded so that adjacent separators cannot
+ * backtrack polynomially over a long backslash run (an unbounded run made a UNC root cubic).
+ */
+const BACKSLASHES = String.raw`\\{1,8}`;
+/** A path separator as a HAR carries it: a slash, a backslash (doubled by each level of JSON escaping) or either one percent-encoded once or twice. */
+const SEPARATOR = String.raw`(?:/|${BACKSLASHES}|%2F|%252F|(?:%5C){1,8}|(?:%255C){1,8})`;
+/** JSON-escaping levels whose forms of a secret are masked; the fail-closed check covers every deeper level. */
+const SECRET_ESCAPE_LEVELS = 4;
 const REGEXP_SYNTAX = /[\\^$.*+?()[\]{}|/]/gu;
 
 /** A value as it appears inside a JSON string: quotes, backslashes and control characters escaped. */
 const jsonEscaped = (value: string): string => JSON.stringify(value).slice(1, -1);
-/** The forms a secret takes in a HAR string: as is, percent-encoded (query and form values) and JSON-escaped (JSON bodies). */
-const secretForms = (secret: string): string[] => [...new Set([secret, encodeURIComponent(secret), jsonEscaped(secret)])];
+/**
+ * The forms a secret takes in a HAR string: as is, percent-encoded (query and form values) and JSON-escaped once per
+ * level of JSON nested inside a JSON string, longest first.
+ */
+const secretForms = (secret: string): string[] => {
+  const forms = [secret, encodeURIComponent(secret)];
+  for (let level = 0, escaped = secret; level < SECRET_ESCAPE_LEVELS; level += 1) { escaped = jsonEscaped(escaped); forms.push(escaped); }
+  return [...new Set(forms)].sort((a, b) => b.length - a.length);
+};
+/**
+ * A value's trace at any JSON-escaping depth: once escaped, each further level only adds backslashes, so with the
+ * backslashes removed every depth reads the same.
+ */
+const escapeTrace = (value: string): string => jsonEscaped(value).replaceAll("\\", "");
 
 /**
  * Matches a caller-given root however the HAR spells it, on any host OS: either separator for "/" and "\", each
- * character as is, percent-encoded or JSON-escaped, a space also as "+", any letter case (Windows and macOS file
- * systems ignore case, and so do percent-escape hex digits) and both Unicode normal forms (macOS reports names in NFD).
+ * character as is, percent-encoded once or twice, JSON-escaped or as a \u escape at any JSON nesting level, a space also
+ * as "+", any letter case (Windows and macOS file systems ignore case, and so do hex digits) and both Unicode normal
+ * forms (macOS reports names in NFD).
  */
-function rootPattern(root: string): RegExp {
+export function rootPattern(root: string): RegExp {
   const source = (form: string): string => [...form].map(char => {
     if (char === "/" || char === "\\") return SEPARATOR;
     const encoded = [...new TextEncoder().encode(char)].map(byte => `%${byte.toString(16).padStart(2, "0")}`).join("");
-    const forms = new Set([char, encoded, jsonEscaped(char), ...(char === " " ? ["+"] : [])]);
-    return `(?:${[...forms].map(item => item.replace(REGEXP_SYNTAX, "\\$&")).join("|")})`;
+    const forms = new Set([char, encoded, encoded.replaceAll("%", "%25"), jsonEscaped(char), ...(char === " " ? ["+"] : [])]);
+    const unicodeEscape = [...Array(char.length).keys()].map(index => `${BACKSLASHES}u${char.charCodeAt(index).toString(16).padStart(4, "0")}`).join("");
+    return `(?:${[...[...forms].map(item => item.replace(REGEXP_SYNTAX, "\\$&")), unicodeEscape].join("|")})`;
   }).join("");
   return new RegExp([...new Set([root, root.normalize("NFC"), root.normalize("NFD")])].map(source).join("|"), "giu");
 }
@@ -144,12 +166,29 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const counts = { secret_values: secrets.length, headers: 0, cookies: 0, params: 0, paths: 0 };
   // Longer roots first, so a nested root keeps its own placeholder.
   const orderedRoots = [...roots].filter(root => root.path.length > 1).sort((a, b) => b.path.length - a.path.length).map(root => ({ pattern: rootPattern(root.path), placeholder: root.placeholder }));
+  const scrubPaths = (text: string): string => {
+    let out = text;
+    for (const root of orderedRoots) { const next = out.replace(root.pattern, () => root.placeholder); if (next !== out) counts.paths += 1; out = next; }
+    for (const pattern of HOME_PATTERNS) { const next = out.replace(pattern, "<home>"); if (next !== out) counts.paths += 1; out = next; }
+    // Decode nested JSON instead of enlarging separator quantifiers: UNC patterns must stay bounded.
+    if (out.includes("\\".repeat(9))) {
+      let parsed: unknown;
+      try { parsed = JSON.parse(out); } catch (error) { if (error instanceof SyntaxError) return out; throw error; }
+      const nestedPaths = (value: unknown): unknown => {
+        if (typeof value === "string") return scrubPaths(value);
+        if (Array.isArray(value)) return value.map(nestedPaths);
+        if (isObject(value)) return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, nestedPaths(child)]));
+        return value;
+      };
+      const masked = nestedPaths(parsed);
+      if (JSON.stringify(masked) !== JSON.stringify(parsed)) out = JSON.stringify(masked);
+    }
+    return out;
+  };
   const scrub = (text: string): string => {
     let out = text;
     for (const secret of secrets) for (const form of secretForms(secret)) out = out.replaceAll(form, MASKED);
-    for (const root of orderedRoots) { const next = out.replace(root.pattern, () => root.placeholder); if (next !== out) counts.paths += 1; out = next; }
-    for (const pattern of HOME_PATTERNS) { const next = out.replace(pattern, "<home>"); if (next !== out) counts.paths += 1; out = next; }
-    return out;
+    return scrubPaths(out);
   };
   const walk = (value: Json): Json => {
     if (typeof value === "string") return scrub(value);
@@ -174,8 +213,9 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const masked = walk(har);
   const serialized = JSON.stringify(masked);
   const decodedBodies = entriesOf(masked as Record<string, Json>).flatMap(entry => { const content = isObject(entry["response"]) ? entry["response"]["content"] : null; return isObject(content) && content["encoding"] === "base64" && typeof content["text"] === "string" ? [Buffer.from(content["text"], "base64").toString("latin1")] : []; });
-  // The serialized HAR holds every string JSON-escaped once more, so each form is searched for in that escaping.
-  if (secrets.some(secret => secretForms(secret).some(form => serialized.includes(jsonEscaped(form)) || decodedBodies.some(body => body.includes(form))))) throw new HarMaskError("secret_remains");
+  // Compared by escape trace, a secret is found at any JSON nesting depth, including depths masking does not unescape.
+  const traces = [serialized.replaceAll("\\", ""), ...decodedBodies.map(escapeTrace)];
+  if (secrets.some(secret => [secret, encodeURIComponent(secret)].some(form => traces.some(trace => trace.includes(escapeTrace(form)))))) throw new HarMaskError("secret_remains");
   return { har: masked, report: counts };
 }
 
