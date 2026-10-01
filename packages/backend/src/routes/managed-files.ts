@@ -8,7 +8,7 @@ import { getProjectDetail } from "../db/project-read-repository";
 import { ArtifactCoordinator } from "../services/artifact-coordinator";
 import { readManagedFile } from "../services/artifact-tree-storage";
 import { ArtifactIdentityError, requireArtifactIdentity } from "../services/artifact-identity";
-import { inspectCanonicalTree } from "../services/canonical-tree-manifest";
+import { diskPathOf, inspectCanonicalTreeOnDisk } from "../services/canonical-tree-manifest";
 import { resolveDrawFile, resolveProjectFile } from "../services/managed-project-files";
 import { FilePatchError, fingerprintHtmlNode, htmlWithEditableIds } from "../services/file-patch";
 import { rawFileHeaders } from "../security/raw-file-response";
@@ -27,8 +27,8 @@ export const managedFileRoutes = new Hono();
 
 async function inspectArtifactRead(projectId: string, projectDir: string) {
   await new ArtifactCoordinator(getSqlite()).observeExternal(projectId, projectDir);
-  const manifest = await inspectCanonicalTree(projectDir);
-  return { manifest, project: await getProjectDetail(projectId) };
+  const tree = await inspectCanonicalTreeOnDisk(projectDir);
+  return { tree, manifest: tree.manifest, project: await getProjectDetail(projectId) };
 }
 
 // Share only concurrent reads, never a settled snapshot. The next request still
@@ -104,7 +104,7 @@ managedFileRoutes.get("/api/projects/:id/alternatives/:alternativeId/fs/*", asyn
 managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
   const projectId = c.req.param("id");
   const prefix = `/api/projects/${projectId}/fs/`;
-  const relPath = c.req.path.startsWith(prefix) ? decodeURIComponent(c.req.path.slice(prefix.length)) : "";
+  const relPath = c.req.path.startsWith(prefix) ? decodeURIComponent(c.req.path.slice(prefix.length)).normalize("NFC") : "";
   const resolved = await resolveProjectFile(projectId, relPath);
   if (resolved === null) return c.json(fail("file_not_found", "Project file not found", { projectId, relPath }), 404);
   if (isProjectDocumentPath(resolved.relPath)) {
@@ -114,17 +114,25 @@ managedFileRoutes.get("/api/projects/:id/fs/*", async (c) => {
       return new Response(document.bytes, { headers: { ...rawFileHeaders(c.req.raw, { contentType: type, filename: document.filename }), "Content-Type": type, "Cache-Control": "no-store", ETag: `"${document.sha256}"` } });
     } catch { return c.json(fail("document_unavailable", "The saved document is missing or changed"), 404); }
   }
+  let read: Awaited<ReturnType<typeof artifactRead>> | undefined;
   try {
-    if (!(await stat(resolved.absolutePath)).isFile()) return c.json(fail("not_a_file", "Requested path is not a file", { relPath }), 400);
+    let info = await stat(resolved.absolutePath).catch(() => null);
+    if (info === null) {
+      // A decomposed (NFD) name on disk is not found through the NFC request path on ext4 and NTFS, so the file is
+      // looked up again through the spelling the tree inspection returned.
+      read = await artifactRead(projectId, resolved.project.dir_path);
+      info = await stat(diskPathOf(resolved.project.dir_path, read.tree, resolved.relPath));
+    }
+    if (!info.isFile()) return c.json(fail("not_a_file", "Requested path is not a file", { relPath }), 400);
   } catch (error) {
     if (error instanceof Error) return c.json(fail("file_not_found", "Project file not found", { projectId, relPath }), 404);
     throw error;
   }
-  const { project, manifest } = await artifactRead(projectId, resolved.project.dir_path);
+  const { project, manifest, tree } = read ?? await artifactRead(projectId, resolved.project.dir_path);
   const file = manifest.files.find((entry) => entry.path === resolved.relPath);
   if (project === null || project.current_digest !== manifest.tree_digest || file === undefined) return c.json(fail("artifact_identity_unavailable", "Artifact identity is unavailable"), 409);
   let bytes: Buffer<ArrayBuffer>;
-  try { bytes = await readManagedFile(resolved.project.dir_path, file); }
+  try { bytes = await readManagedFile(resolved.project.dir_path, file, {}, tree.diskPaths); }
   catch { return c.json(fail("artifact_identity_unavailable", "Artifact changed while loading"), 409); }
   const type = contentType(resolved.absolutePath);
   const headers: Record<string, string> = { ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(resolved.absolutePath) }), "Cache-Control": "no-cache", "Content-Type": type, ETag: `"${file.sha256}"`, "X-Burnguard-File-Hash": file.sha256, "X-Burnguard-Revision": String(project.current_revision), "X-Burnguard-Artifact-Digest": project.current_digest };

@@ -62,8 +62,9 @@ export async function publishManagedTree(
   afterWrite?: (relativePath: string) => void,
   policy: PublicationPolicy = {},
 ): Promise<CanonicalTreeManifest> {
-  const sourceManifest = await inspectCanonicalTree(source);
-  const opened = await openPublicationSources(source, sourceManifest.files, policy);
+  const sourceTree = await inspectCanonicalTreeOnDisk(source);
+  const sourceManifest = sourceTree.manifest;
+  const opened = await openPublicationSources(source, sourceManifest.files, policy, sourceTree.diskPaths);
   try {
     const destinationTree = await inspectCanonicalTreeOnDisk(destination);
     const sourcePaths = new Set(sourceManifest.files.map((file) => file.path));
@@ -74,6 +75,9 @@ export async function publishManagedTree(
     }
     // A removed directory can become a file in the same publication.
     await removeEmptyManagedDirectories(destination);
+    // A decomposed directory kept alive by a skipped file (an agent file) takes its NFC name, so the files written
+    // below land beside that file instead of in a second spelling of the same directory.
+    await renameDecomposedDirectories(destination);
     for (const candidate of opened) {
       const target = path.join(destination, candidate.file.path);
       await mkdir(path.dirname(target), { recursive: true });
@@ -93,8 +97,9 @@ export async function publishManagedTree(
   return validateCanonicalTree(destination, sourceManifest);
 }
 
-export async function readManagedFile(source: string, file: CanonicalTreeEntry, policy: PublicationPolicy = {}): Promise<Buffer<ArrayBuffer>> {
-  const opened = await openPublicationSources(source, [file], policy);
+/** `diskPaths` is the on-disk spelling of entries whose name is not NFC there (`inspectCanonicalTreeOnDisk`). */
+export async function readManagedFile(source: string, file: CanonicalTreeEntry, policy: PublicationPolicy = {}, diskPaths: ReadonlyMap<string, string> = new Map()): Promise<Buffer<ArrayBuffer>> {
+  const opened = await openPublicationSources(source, [file], policy, diskPaths);
   try { return Buffer.from(opened[0]!.bytes); }
   finally { await opened[0]!.handle.close(); }
 }
@@ -115,20 +120,23 @@ async function openPublicationSources(
   source: string,
   files: readonly CanonicalTreeEntry[],
   policy: PublicationPolicy,
+  diskPaths: ReadonlyMap<string, string>,
 ): Promise<readonly { readonly file: CanonicalTreeEntry; readonly handle: FileHandle; readonly bytes: Uint8Array }[]> {
   const opened: { file: CanonicalTreeEntry; handle: FileHandle; bytes: Uint8Array }[] = [];
   try {
     for (const file of files) {
+      // A decomposed (NFD) name is not found through its NFC manifest path on ext4 and NTFS.
+      const onDisk = diskPaths.get(file.path) ?? file.path;
       await policy.beforeSourceOpen?.(file.path);
-      const original = await verifySourcePath(source, file.path);
-      const handle = await open(path.join(source, file.path), constants.O_RDONLY | constants.O_NOFOLLOW);
+      const original = await verifySourcePath(source, onDisk);
+      const handle = await open(path.join(source, onDisk), constants.O_RDONLY | constants.O_NOFOLLOW);
       opened.push({ file, handle, bytes: new Uint8Array() });
       const before = await handle.stat();
       if (!before.isFile() || before.nlink !== 1 || before.dev !== original.dev || before.ino !== original.ino || before.size !== file.size || before.size > DEFAULT_CANONICAL_TREE_LIMITS.bytes) throw new Error("Publication source identity changed");
       await policy.beforeSourceRead?.(file.path);
       const bytes = await readHandleBytes(handle, file.size);
       const after = await handle.stat();
-      const current = await verifySourcePath(source, file.path);
+      const current = await verifySourcePath(source, onDisk);
       if (after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.nlink !== 1 || current.dev !== before.dev || current.ino !== before.ino || current.nlink !== 1 || bytes.byteLength !== file.size) throw new Error("Publication source identity changed");
       const digest = createHash("sha256").update(bytes).digest("hex");
       const immutablePaths = policy.immutableReferencePaths?.get(digest);
@@ -169,6 +177,29 @@ async function removeEmptyManagedDirectories(root: string, current = root): Prom
     if (isProjectDocumentPath(path.relative(root, target))) continue;
     await removeEmptyManagedDirectories(root, target);
     if ((await readdir(target)).length === 0) await rm(target, { recursive: true });
+  }
+}
+
+async function renameDecomposedDirectories(root: string, current = root): Promise<void> {
+  for (const entry of await readdir(current, { withFileTypes: true })) {
+    if (!entry.isDirectory() || (current === root && isExcluded(entry.name))) continue;
+    let target = path.join(current, entry.name);
+    if (isProjectDocumentPath(path.relative(root, target))) continue;
+    const composed = path.join(current, entry.name.normalize("NFC"));
+    // APFS finds the NFC spelling of the same directory; a distinct NFC directory is left as it is.
+    if (composed !== target && !(await pathExists(composed))) {
+      await rename(target, composed);
+      target = composed;
+    }
+    await renameDecomposedDirectories(root, target);
+  }
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  try { await lstat(target); return true; }
+  catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+    throw error;
   }
 }
 
