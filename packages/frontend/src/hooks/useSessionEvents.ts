@@ -62,7 +62,15 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
         handlers.setError(false);
         handlers.setStale(false);
         if (!seen && item.sequence > snapshot.sequence) handlers.onLive(item.event);
-      }, () => { if (active) handlers.setError(true); }, {
+      }, (report) => {
+        if (!active) return;
+        if (report.kind === "connection") { handlers.setError(true); return; }
+        // A bad payload leaves the EventSource healthy: flag the view stale and resync instead of failing closed.
+        handlers.setStale(true);
+        refreshSessionSnapshot(sessionId, stateRef, handlers.setState, api)
+          .then(() => { if (active) handlers.setStale(false); })
+          .catch(() => { if (active) handlers.setStale(true); });
+      }, {
         afterSequence: stateRef.current.sequence,
         onOpen: () => {
           if (!active) return;

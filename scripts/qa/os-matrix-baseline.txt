@@ -335,7 +335,6 @@ packages/frontend/tests/runtime-diagnostics.test.ts
 packages/frontend/tests/selection-bridge.test.ts
 packages/frontend/tests/session-multipart.test.ts
 packages/frontend/tests/session-review.test.ts
-packages/frontend/tests/session-stream.test.ts
 packages/frontend/tests/settings-language-note.test.ts
 packages/frontend/tests/settings-locale.test.ts
 packages/frontend/tests/settings-localization.test.ts
