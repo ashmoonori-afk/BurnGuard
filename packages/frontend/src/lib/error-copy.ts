@@ -121,6 +121,7 @@ const ERROR_COPY: Record<string, MessageKey> = {
   document_save_failed: "errors.document_save_failed",
   artifact_prepare_failed: "errors.artifact_prepare_failed",
   invalid_body: "errors.invalid_body",
+  invalid_request: "errors.invalid_body",
   snapshot_not_found: "errors.snapshot_not_found",
   non_leaf_text_target: "errors.non_leaf_text_target",
   invalid_attribute_url: "errors.invalid_attribute_url",

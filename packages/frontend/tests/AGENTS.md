@@ -19,7 +19,7 @@
 ## CONVENTIONS
 
 - Filename states the contract under test (feature or state name), not the source file path; suites import production symbols through `@/` and `@bg/shared`.
-- Test prose follows Given/When/Then; files use CRLF, matching `.gitattributes`.
+- Test prose follows Given/When/Then; files use LF (`.gitattributes` pins line endings only for `*.sh`, `*.command`, `*.bat` and `*.cmd`).
 - `bunfig.toml` preloads `scripts/test-preload.ts` for every run: a disposable `BG_APP_ROOT`, migrations, and owned cleanup. Never point a test at a real `~/.burnguard`.
 - Browser coverage is opt-in by filename suffix; on Windows a Chromium launch must not block the Bun event loop, so browser suites stay isolated from the plain suites.
 - Async assertions subscribe to the exact event, promise, or store change first, then trigger the action; the shared timeout is 30,000 ms.
