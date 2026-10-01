@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { checkCssLogos, type CssLogoRuleId } from "../src/services/css-logo-check";
+import { checkCssLogos, type CssLogoRuleId, type CssLogoRuleResult } from "../src/services/css-logo-check";
+
+const rule = (html: string, id: CssLogoRuleId): CssLogoRuleResult | undefined => checkCssLogos(html)[0]?.find((result) => result.rule === id);
 
 const statuses = (html: string): Record<CssLogoRuleId, string> => {
   const [logo] = checkCssLogos(html);
@@ -29,6 +31,31 @@ describe("CSS logo construction check", () => {
     expect(result.LOGO_LINE).toBe("fail");
     expect(result.LOGO_COUNTERS).toBe("fail");
     expect(result.LOGO_COLOR).toBe("fail");
+  });
+
+  test("Given a monoline mark of a rounded square and round-capped lines When LOGO_LINE is measured Then it passes because a line has no corner to vote with", () => {
+    const html = `<svg data-bg-css-logo role="img" aria-label="Acme" viewBox="0 0 48 48" fill="none" stroke="var(--brand-ink)" stroke-width="4" stroke-linecap="round">
+      <rect x="6" y="6" width="36" height="36" rx="8"/><line x1="16" y1="24" x2="32" y2="24"/><line x1="24" y1="16" x2="24" y2="32"/></svg>`;
+    expect(rule(html, "LOGO_LINE")).toEqual({ rule: "LOGO_LINE", status: "pass", measured: 1, limit: 1 });
+  });
+
+  test("Given a rounded square and a two-point polyline without joins When LOGO_LINE is measured Then the open polyline ends do not vote a sharp corner", () => {
+    const html = `<svg data-bg-css-logo viewBox="0 0 48 48" fill="none" stroke="var(--brand-ink)" stroke-width="4" stroke-linecap="round">
+      <rect x="6" y="6" width="36" height="36" rx="8"/><polyline points="16,24 32,24"/></svg>`;
+    expect(rule(html, "LOGO_LINE")).toEqual({ rule: "LOGO_LINE", status: "pass", measured: 1, limit: 1 });
+  });
+
+  test("Given a rounded square and a polyline with a mitred join When LOGO_LINE is measured Then the join still votes sharp and the rule fails", () => {
+    const html = `<svg data-bg-css-logo viewBox="0 0 48 48" fill="none" stroke="var(--brand-ink)" stroke-width="4" stroke-linecap="round">
+      <rect x="6" y="6" width="36" height="36" rx="8"/><polyline points="8,32 24,16 40,32"/></svg>`;
+    expect(rule(html, "LOGO_LINE")).toEqual({ rule: "LOGO_LINE", status: "fail", measured: 2, limit: 1 });
+  });
+
+  test("Given a mark painted only by a page CSS rule When checked Then colour and line are self-checks instead of a zero-colour failure", () => {
+    const html = `<style>.mark path { fill: var(--brand-primary); }</style>
+      <svg class="mark" data-bg-css-logo role="img" aria-label="Acme" viewBox="0 0 32 32"><path d="M0 0H32V32H0Z"/></svg>`;
+    expect(rule(html, "LOGO_COLOR")).toEqual({ rule: "LOGO_COLOR", status: "self_check" });
+    expect(rule(html, "LOGO_LINE")).toEqual({ rule: "LOGO_LINE", status: "self_check" });
   });
 
   test("Given a page without a marked logo When checked Then nothing is reported", () => {

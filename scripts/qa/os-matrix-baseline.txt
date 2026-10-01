@@ -40,7 +40,6 @@ packages/backend/tests/codex-runner.test.ts
 packages/backend/tests/content-type-ladder.test.ts
 packages/backend/tests/craft-block-authority.test.ts
 packages/backend/tests/creation-sections.test.ts
-packages/backend/tests/css-logo-check.test.ts
 packages/backend/tests/css-source-map-boundary.test.ts
 packages/backend/tests/daisyui-seed-themes.test.ts
 packages/backend/tests/deck-references.test.ts

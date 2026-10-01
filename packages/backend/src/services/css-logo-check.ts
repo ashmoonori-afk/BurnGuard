@@ -80,10 +80,12 @@ export function checkCssLogoSvg(svg: HTMLElement): readonly CssLogoRuleResult[] 
   const widths = new Set(stroked.map((shape) => Number.parseFloat(inherited(shape, "stroke-width", svg) ?? "1")).filter(Number.isFinite));
 
   // Corner treatment: stroked joins and rect radii are either all round or all sharp. Circles, ellipses and
-  // unstroked paths carry no measurable corner, so they do not vote.
+  // unstroked paths carry no measurable corner, so they do not vote. A line, and a polyline of two points, has
+  // only open ends (caps) and no join, so it does not vote either.
   const corners = new Set<string>();
   for (const shape of shapes) {
     const tag = shape.rawTagName.toLowerCase();
+    if (tag === "line" || (tag === "polyline" && numbers(shape.getAttribute("points")).length < 6)) continue;
     if (tag === "rect") corners.add(Number.parseFloat(shape.getAttribute("rx") ?? shape.getAttribute("ry") ?? "0") > 0 ? "round" : "sharp");
     else if (stroked.includes(shape) && tag !== "circle" && tag !== "ellipse") corners.add(inherited(shape, "stroke-linejoin", svg)?.toLowerCase() === "round" ? "round" : "sharp");
     else if (tag === "polygon" || tag === "polyline") corners.add("sharp");
@@ -105,16 +107,23 @@ export function checkCssLogoSvg(svg: HTMLElement): readonly CssLogoRuleResult[] 
     }
   }
 
+  // No paint on the markup means the mark is painted by page stylesheet rules this check does not resolve, so
+  // colour and line (whose strokes may come from those rules too) are left to the model's self-check.
+  const painted = colors.size > 0;
   const measuredLine = widths.size <= 1 && corners.size <= 1;
   return [
     { rule: "LOGO_FORM", status: shapes.length >= 1 && shapes.length <= CSS_LOGO_MAX_SHAPES ? "pass" : "fail", measured: shapes.length, limit: CSS_LOGO_MAX_SHAPES },
-    { rule: "LOGO_LINE", status: measuredLine ? "pass" : "fail", measured: Math.max(widths.size, corners.size), limit: 1 },
+    painted
+      ? { rule: "LOGO_LINE", status: measuredLine ? "pass" : "fail", measured: Math.max(widths.size, corners.size), limit: 1 }
+      : { rule: "LOGO_LINE", status: "self_check" },
     { rule: "LOGO_NEGATIVE_SPACE", status: "self_check" },
     { rule: "LOGO_GRID", status: gridShare >= CSS_LOGO_GRID_SHARE ? "pass" : "fail", measured: Math.round(gridShare * 100) / 100, limit: Math.round(CSS_LOGO_GRID_SHARE * 100) / 100 },
     Number.isFinite(thinnestAtSmallest)
       ? { rule: "LOGO_COUNTERS", status: thinnestAtSmallest >= 1 ? "pass" : "fail", measured: Math.round(thinnestAtSmallest * 100) / 100, limit: 1 }
       : { rule: "LOGO_COUNTERS", status: "self_check" },
-    { rule: "LOGO_COLOR", status: colors.size >= 1 && colors.size <= CSS_LOGO_MAX_COLORS ? "pass" : "fail", measured: colors.size, limit: CSS_LOGO_MAX_COLORS },
+    painted
+      ? { rule: "LOGO_COLOR", status: colors.size <= CSS_LOGO_MAX_COLORS ? "pass" : "fail", measured: colors.size, limit: CSS_LOGO_MAX_COLORS }
+      : { rule: "LOGO_COLOR", status: "self_check" },
     { rule: "LOGO_SIMPLIFY", status: "self_check" },
   ];
 }
