@@ -245,11 +245,92 @@ function scriptReferences(source: string, file: string, limit: number): readonly
     }
     return values;
   } catch { /* Not parseable as a module: keep the textual scan so an import a browser may still run cannot slip past. */ }
-  const patterns = [/(?:import|export)\s+(?:[^"']+?\s+from\s+)?["']([^"']+)["']/gu, /import\(\s*["']([^"']+)["']\s*\)/gu];
-  for (const pattern of patterns) {
-    for (let match = pattern.exec(source); match !== null && values.length < limit; match = pattern.exec(source)) values.push(match[1] ?? "");
-  }
+  scriptImportValues(source, values, limit);
   return values;
+}
+
+/** Whether `source` holds `import` or `export` at `index`. */
+function isImportKeyword(source: string, index: number): boolean {
+  return source.startsWith("import", index) || source.startsWith("export", index);
+}
+
+/**
+ * The first quote at or after a position, for positions asked in non-decreasing order: a quote found once answers every
+ * later question up to it, so each character is examined at most once. `length` when there is none.
+ */
+function quoteCursor(source: string, count: (examined: number) => void): (from: number) => number {
+  let found = -1;
+  return (from) => {
+    if (found >= from) return found;
+    found = from;
+    let examined = 0;
+    while (found < source.length && source.charCodeAt(found) !== DOUBLE_QUOTE && source.charCodeAt(found) !== SINGLE_QUOTE) { found += 1; examined += 1; }
+    count(examined + 1);
+    return found;
+  };
+}
+
+/**
+ * Collects what `/(?:import|export)\s+(?:[^"']+?\s+from\s+)?["']([^"']+)["']/gu` and then `/import\(\s*["']([^"']+)["']\s*\)/gu`
+ * capture, in one forward pass each instead of those patterns: on a script that repeats `import` without a quoted
+ * specifier, the patterns rescan the rest of the script from every keyword. Between a keyword and its specifier no quote
+ * can appear, so the specifier always opens on the first quote after the keyword, and that quote is found once.
+ * Appends to `values` and stops once it holds `limit` of them. Returns how many characters it examined: the test seam
+ * that pins the pass as linear (at most eight looks per character).
+ */
+export function scriptImportValues(source: string, values: string[], limit: number): number {
+  const length = source.length;
+  let examined = 0;
+  const count = (looks: number): void => { examined += looks; };
+  // Statements: a keyword, whitespace, then either the specifier or `<anything> from` between whitespace before it.
+  const openQuote = quoteCursor(source, count);
+  const closeQuote = quoteCursor(source, count);
+  // The start of the whitespace run that ends at the last opening quote looked at.
+  let runQuote = -1;
+  let runStart = -1;
+  for (let index = 0; index + 6 < length && values.length < limit; index += 1) {
+    examined += 1;
+    if (!isImportKeyword(source, index)) continue;
+    const keywordEnd = index + 6;
+    if (!isPatternSpace(source.charCodeAt(keywordEnd))) continue;
+    const open = openQuote(keywordEnd);
+    if (open === length) break;
+    const close = closeQuote(open + 1);
+    // No quote after this one: no later keyword finds two either.
+    if (close === length) break;
+    if (close === open + 1) continue;
+    if (runQuote !== open) {
+      runQuote = open; runStart = open;
+      while (runStart > keywordEnd && isPatternSpace(source.charCodeAt(runStart - 1))) { runStart -= 1; examined += 1; }
+    }
+    // `from` must end where the non-empty whitespace before the quote starts (it cannot end in whitespace), with
+    // whitespace before it and room for the whitespace and the non-empty clause after the keyword.
+    const from = runStart - 4;
+    const matched = runStart === keywordEnd
+      || (runStart < open && from >= keywordEnd + 3 && source.startsWith("from", from) && isPatternSpace(source.charCodeAt(from - 1)));
+    if (!matched) continue;
+    values.push(source.slice(open + 1, close));
+    index = close;
+  }
+  // Calls: `import(`, optional whitespace, the quoted specifier, optional whitespace, `)`.
+  const callClose = quoteCursor(source, count);
+  for (let index = 0; index + 7 < length && values.length < limit; index += 1) {
+    examined += 1;
+    if (!source.startsWith("import(", index)) continue;
+    let open = index + 7;
+    while (open < length && isPatternSpace(source.charCodeAt(open))) { open += 1; examined += 1; }
+    const quote = source.charCodeAt(open);
+    if (quote !== DOUBLE_QUOTE && quote !== SINGLE_QUOTE) continue;
+    const close = callClose(open + 1);
+    if (close === length) break;
+    if (close === open + 1) continue;
+    let end = close + 1;
+    while (end < length && isPatternSpace(source.charCodeAt(end))) { end += 1; examined += 1; }
+    if (source.charCodeAt(end) !== CLOSE_PAREN) continue;
+    values.push(source.slice(open + 1, close));
+    index = end;
+  }
+  return examined;
 }
 
 function resolveReference(raw: string, owner: string): string | null {
