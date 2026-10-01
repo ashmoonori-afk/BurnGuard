@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,7 +10,7 @@ import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { writePreTurnSnapshot } from "../src/services/checkpoints";
 import { insertNormalizedEvent } from "../src/db/events";
 import { listSequencedSessionEvents } from "../src/db/event-sequence-repository";
-import { isUserTurnRunning } from "../src/services/turns";
+import { admitUserTurn, isUserTurnRunning, releaseUserTurnReservation, type UserTurnAdmission } from "../src/services/turns";
 import { broker } from "../src/services/broker";
 import { beginVisualAlternativeOperation, finishVisualAlternativeOperation } from "../src/services/visual-alternative-operation-registry";
 import { rollbackSessionAttachments, saveSessionAttachments } from "../src/services/attachments";
@@ -161,6 +161,30 @@ describe("production session route boundaries", () => {
     // The composer keeps the draft after a refusal, so a recorded message would be duplicated by the retry.
     expect(userMessagesAfter(sessionId, after)).toBe(0);
     expect(isUserTurnRunning(sessionId)).toBe(false);
+  });
+
+  test("Given a turn that failed before preparation When another send is admitted before the failed turn has published its status.error and status.idle Then admission is refused as session_busy", async () => {
+    // Given: the failed turn's status.error publication logs this diagnostic synchronously before it persists anything.
+    let admission: UserTurnAdmission | null = null;
+    const consoleSpy = spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      if (admission === null && args[0] === "[turn] error diagnostic") admission = admitUserTurn(sessionId, 8);
+    });
+
+    // When
+    let response: Response;
+    try {
+      response = await sessionRoutes.request(`http://local/api/sessions/${sessionId}/events`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ type: "user.message", text: "hello" }) }, {
+        detectBackends: async () => ({ backends: [{ id: "codex", found: false }, { id: "claude-code", found: false }] }),
+      });
+    } finally { consoleSpy.mockRestore(); }
+    const observed = admission as UserTurnAdmission | null;
+    if (observed?.kind === "reserved") releaseUserTurnReservation(observed.reservation);
+
+    // Then: the failed turn still owed its terminal events and its final idle status, which would land on the admitted turn.
+    expect(response.status).toBe(409);
+    expect(observed?.kind).toBe("session_busy");
+    expect(isUserTurnRunning(sessionId)).toBe(false);
+    expect(getSqlite().query("SELECT status FROM sessions WHERE id=?").get(sessionId)).toEqual({ status: "idle" });
   });
 
   test("Given a session whose backend is not installed When a multipart message with an upload is posted Then the refused upload is rolled back instead of being bound to the dead turn", async () => {

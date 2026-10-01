@@ -257,6 +257,8 @@ export type TurnDependencies = {
   readonly reviewDesign?: typeof reviewTurnDesign;
   /** App-owned model input. The stored and displayed user message keeps `payload.text`. */
   readonly modelText?: string;
+  /** Publishes a failed turn's terminal events; awaited before the session is released, so no new turn sees them land. */
+  readonly onFailed?: (error: unknown) => Promise<void>;
 };
 
 export type UserTurnAdmission =
@@ -329,7 +331,12 @@ export function startReservedUserTurn(reservation: UserTurnReservation, payload:
   const prepared = new Promise<void>((resolve, reject) => { resolvePrepared = resolve; rejectPrepared = reject; });
   let recorded = false;
   const promise = runUserTurnInternal(sessionId, payload, activeTurn, turnId, operationId, resolvePrepared, () => { recorded = true; }, dependencies)
-    .catch(async (error: unknown) => { rejectPrepared(error); await setSessionStatus(sessionId, "idle"); throw error; })
+    .catch(async (error: unknown) => {
+      rejectPrepared(error);
+      try { await dependencies.onFailed?.(error); }
+      finally { await setSessionStatus(sessionId, "idle"); }
+      throw error;
+    })
     .finally(() => activeTurns.delete(sessionId));
   activeTurn.completion = promise;
   // `recorded` tells whether the turn passed its refusal gates and began binding uploads and recording the message.
