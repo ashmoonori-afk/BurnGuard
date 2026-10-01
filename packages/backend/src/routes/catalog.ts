@@ -215,7 +215,7 @@ function catalogError(c: Context, error: unknown): Response {
     return c.json(fail(error.code, error.message), 409);
   }
   if (error instanceof CatalogFileError) {
-    return c.json(fail(error.code, error.message), error.code === "unsafe_catalog_path" || error.code === "catalog_digest_mismatch" || error.code === "catalog_manifest_unverifiable" ? 409 : 500);
+    return c.json(fail(error.code, "Catalog operation failed"), error.code === "unsafe_catalog_path" || error.code === "catalog_digest_mismatch" || error.code === "catalog_manifest_unverifiable" ? 409 : 500);
   }
   console.warn("[catalog] request failed", error instanceof Error ? String(Reflect.get(error, "code") ?? error.name) : "unknown");
   return c.json(fail("catalog_operation_failed", "Catalog operation failed"), 500);

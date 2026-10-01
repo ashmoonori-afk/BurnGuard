@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as researchRepository from "../src/db/research-repository";
 import { getSqlite } from "../src/db/sqlite-client";
+import { systemsDir } from "../src/lib/paths";
 import { catalogRoutes } from "../src/routes/catalog";
 import { learningRoutes } from "../src/routes/learning";
 import { createResearchRoutes } from "../src/routes/research";
@@ -81,6 +82,30 @@ const ROUTES = [
 ] as const;
 
 describe("route fallback error bodies", () => {
+  test("Given a private out-of-root DB path When previews are read Then the wrapped boundary error does not expose the path", async () => {
+    // Given
+    const id = `private-previews-${crypto.randomUUID()}`;
+    const privatePath = path.join(path.parse(systemsDir).root, "home", "private-user", "private-catalog");
+    const db = getSqlite();
+    db.prepare(`INSERT INTO design_systems
+      (id,name,status,source_type,is_template,dir_path,skill_md_path,tokens_css_path,readme_md_path,created_at,updated_at)
+      VALUES (?,?,'published','manual',0,?,'SKILL.md','tokens.css','README.md',100,100)`).run(id, id, privatePath);
+    try {
+      // When
+      const response = await catalogRoutes.fetch(new Request(`http://127.0.0.1:14070/api/design-systems/${id}/previews`));
+      const text = await response.text();
+
+      // Then
+      expect(response.status).toBe(409);
+      expect(JSON.parse(text)).toMatchObject({ error: { code: "unsafe_catalog_path" } });
+      expect(text).not.toContain(JSON.stringify(privatePath).slice(1, -1));
+      expect(text).not.toContain("private-user");
+      expect(text).not.toContain("private-catalog");
+    } finally {
+      db.prepare("DELETE FROM design_systems WHERE id=?").run(id);
+    }
+  });
+
   for (const route of ROUTES) {
     for (const [flavor, cases] of [["Windows", WINDOWS_CASES], ["POSIX", POSIX_CASES]] as const) {
       test.each(cases)(`Given ${flavor} %s When the ${route.name} route hits that filesystem error Then neither the body nor the log carries the path or errno text`, async (_label, errno, reason, privatePath, fragments) => {
