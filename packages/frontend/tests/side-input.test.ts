@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import TweaksPanel from "../src/components/modes/TweaksPanel";
 import type { TweaksTarget } from "../src/components/canvas/TweaksLayer";
-import { applySideDraft, normalizeSideDraft, parseSides, sideDisplay } from "../src/components/modes/tweaks-utils";
+import { applySideDraft, normalizeSideDraft, parseSides, sideApplyPatch, sideDisplay, sidesUnitLabel } from "../src/components/modes/tweaks-utils";
 import { t } from "../src/i18n/t";
 
 const base: TweaksTarget = { bg_id: "card", tag: "div", computed: { width: "200px", height: "100px" }, inline: {}, geometry: { width: 200, height: 100 } };
@@ -17,6 +17,16 @@ function render(inline: Record<string, string>): string {
 function sideValues(html: string, side: "top" | "right" | "bottom" | "left"): string[] {
   const label = t(`modes.tweaks.${side}`);
   return [...html.matchAll(new RegExp(`<input[^>]*aria-label="${label}"[^>]*>`, "g"))].map((match) => match[0].match(/value="([^"]*)"/)?.[1] ?? "<none>");
+}
+
+const SIDES_ROW_ORDER = ["padding", "margin", "border-radius"] as const;
+
+/** HTML slice for one side row, bounded by its RowLabel text and the next row's. */
+function rowHtml(html: string, styleKey: (typeof SIDES_ROW_ORDER)[number]): string {
+  const start = html.indexOf(`>${styleKey}<`);
+  const nextKey = SIDES_ROW_ORDER[SIDES_ROW_ORDER.indexOf(styleKey) + 1];
+  const end = nextKey ? html.indexOf(`>${nextKey}<`, start) : html.length;
+  return html.slice(start, end === -1 ? html.length : end);
 }
 
 describe("side editor keeps authored side values", () => {
@@ -63,6 +73,29 @@ describe("side editor keeps authored side values", () => {
   test("Given authored tokens When displayed Then only px lengths lose their unit", () => {
     expect(["24px", "-0.5PX", "0", "auto", "50%", "2rem", ""].map(sideDisplay)).toEqual(["24", "-0.5", "0", "auto", "50%", "2rem", ""]);
   });
+
+  test("Given sides that are all px lengths or unauthored When the unit label is derived Then it reads px", () => {
+    expect(sidesUnitLabel({ top: "8px", right: "8px", bottom: "8px", left: "8px" })).toBe("px");
+    expect(sidesUnitLabel({ top: "", right: "", bottom: "", left: "" })).toBe("px");
+    expect(sidesUnitLabel({ top: "8px", right: "", bottom: "0px", left: "-1.5px" })).toBe("px");
+  });
+
+  test("Given a side that is not a px length When the unit label is derived Then it is empty instead of mislabeling the value", () => {
+    expect(sidesUnitLabel({ top: "0px", right: "auto", bottom: "0px", left: "auto" })).toBe("");
+    expect(sidesUnitLabel({ top: "50%", right: "50%", bottom: "50%", left: "50%" })).toBe("");
+    expect(sidesUnitLabel({ top: "2rem", right: "8px", bottom: "2rem", left: "8px" })).toBe("");
+  });
+
+  test("Given inline margin '0 auto' When the Style panel renders Then the margin row omits the px label while the untouched padding row keeps it", () => {
+    const html = render({ margin: "0 auto" });
+    expect(rowHtml(html, "margin")).not.toContain(">px<");
+    expect(rowHtml(html, "padding")).toContain(">px<");
+  });
+
+  test("Given inline border-radius 50% When the Style panel renders Then the border-radius row omits the px label", () => {
+    const html = render({ "border-radius": "50%" });
+    expect(rowHtml(html, "border-radius")).not.toContain(">px<");
+  });
 });
 
 describe("side editor commits one side", () => {
@@ -91,6 +124,24 @@ describe("side editor commits one side", () => {
   test("Given px sides When one is cleared Then it writes 0px, and clearing the last one drops the override", () => {
     expect(applySideDraft("padding", sidesOf("8px 4px"), "top", "")?.shorthand).toBe("0px 4px 8px");
     expect(applySideDraft("padding", { top: "8px", right: "", bottom: "", left: "" }, "top", "")).toEqual({ sides: { top: "", right: "", bottom: "", left: "" }, shorthand: "" });
+  });
+});
+
+describe("side editor decides what a commit applies", () => {
+  test("Given a non-empty shorthand that changed When deciding the patch Then it writes the new shorthand", () => {
+    expect(sideApplyPatch("20px auto 0", "0 auto")).toBe("20px auto 0");
+  });
+
+  test("Given a shorthand equal to the current inline value When deciding the patch Then nothing is applied", () => {
+    expect(sideApplyPatch("8px", "8px")).toBeUndefined();
+  });
+
+  test("Given every side cleared While an inline override exists When deciding the patch Then the override is dropped", () => {
+    expect(sideApplyPatch("", "8px")).toBeNull();
+  });
+
+  test("Given every side cleared While there was no inline override When deciding the patch Then nothing is applied", () => {
+    expect(sideApplyPatch("", "")).toBeUndefined();
   });
 });
 
