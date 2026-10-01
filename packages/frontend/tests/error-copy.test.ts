@@ -83,6 +83,7 @@ const SETTINGS_CODES = [
   "python_not_found",
   "invalid_locale",
   "invalid_theme",
+  "invalid_request",
 ];
 
 describe("apiErrorCopy", () => {
