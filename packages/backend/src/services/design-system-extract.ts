@@ -1510,7 +1510,9 @@ export async function runPythonUploadExtractor(input: {
       }
     }
 
-    throw new DesignSystemExtractError(uploadFailureCode(lastFailure), lastFailure);
+    // stderr and spawn errors carry the input path, the temp script path and errno text, so only the code survives.
+    const code = uploadFailureCode(lastFailure);
+    throw new DesignSystemExtractError(code, code === "pdf_support_missing" ? "PDF upload requires the pypdf component" : "Upload extraction failed");
   } finally {
     await rm(scriptDir, { recursive: true, force: true }).catch(() => {});
   }

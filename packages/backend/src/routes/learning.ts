@@ -91,5 +91,6 @@ function learningError(c: Context, error: unknown): Response {
       case "artifact_identity_mismatch": case "incompatible_schema": case "invalid_parent": case "duplicate_id": case "corrupt_item": return c.json(fail(error.code, error.message), 409);
     }
   }
-  return c.json(fail("learning_operation_failed", error instanceof Error ? error.message : "Unknown learning failure"), 500);
+  console.warn("[learning] request failed", error instanceof Error ? String(Reflect.get(error, "code") ?? error.name) : "unknown");
+  return c.json(fail("learning_operation_failed", "Learning operation failed"), 500);
 }
