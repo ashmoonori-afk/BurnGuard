@@ -43,7 +43,7 @@ export async function summarizeDeckHtml(filePath: string): Promise<string | null
 
   const lines: string[] = [];
   lines.push(
-    `${path.basename(filePath)} — ${html.length.toLocaleString("en-US")}B, ${slides.length} slide(s)`,
+    `${path.basename(filePath)} — ${Buffer.byteLength(html, "utf8").toLocaleString("en-US")}B, ${slides.length} slide(s)`,
   );
   if (slides.length === 0) {
     lines.push("(no `<section data-slide>` found — file may be empty or non-conforming)");
@@ -96,7 +96,7 @@ export async function summarizePrototypeHtml(
 
   const lines: string[] = [];
   lines.push(
-    `${path.basename(filePath)} — ${html.length.toLocaleString("en-US")}B, ${sections.length} section(s)`,
+    `${path.basename(filePath)} — ${Buffer.byteLength(html, "utf8").toLocaleString("en-US")}B, ${sections.length} section(s)`,
   );
   if (sections.length === 0) {
     // Fall back to top-level semantic landmarks so Claude still gets a map.
@@ -190,8 +190,12 @@ function firstMeaningfulText(el: ElementLike): string {
 }
 
 function truncateSnippet(text: string): string {
-  return text.length > TEXT_SNIPPET_MAX
-    ? `${text.slice(0, TEXT_SNIPPET_MAX - 3)}...`
+  // Slice by code point, never by UTF-16 code unit — a naive `text.slice`
+  // can land inside a surrogate pair (e.g. an emoji) and leave a lone
+  // surrogate that becomes U+FFFD once the prompt is encoded to UTF-8.
+  const codePoints = Array.from(text);
+  return codePoints.length > TEXT_SNIPPET_MAX
+    ? `${codePoints.slice(0, TEXT_SNIPPET_MAX - 3).join("")}...`
     : text;
 }
 

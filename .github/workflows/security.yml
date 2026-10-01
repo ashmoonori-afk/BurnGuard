@@ -64,6 +64,7 @@ jobs:
           packages/backend/tests/artifact-anchor-routes.test.ts
           packages/frontend/tests/quick-comment.test.ts
           packages/frontend/tests/canvas-interaction.test.ts
+          packages/backend/tests/structure-extractor.test.ts
           packages/frontend/tests/workspace-narrow-layout.test.ts
           packages/frontend/tests/turn-disposition.test.ts
           packages/frontend/tests/export-menu.test.ts
