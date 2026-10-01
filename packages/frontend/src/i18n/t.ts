@@ -4,6 +4,9 @@ import type { Message, MessageParams } from "./types";
 
 export type { MessageKey } from "./messages";
 
+// Identifier params render their raw digits: "Version 1234", never "Version 1,234".
+const IDENTIFIER_PARAMS: ReadonlySet<string> = new Set(["revision"]);
+
 export function formatMessage(message: Message, locale: Locale, params: MessageParams = {}): string {
   const template = typeof message === "string"
     ? message
@@ -11,6 +14,7 @@ export function formatMessage(message: Message, locale: Locale, params: MessageP
   return template.replace(/\{(\w+)\}/g, (token: string, name: string) => {
     const value = params[name];
     if (value === undefined) return token;
+    if (typeof value === "number" && IDENTIFIER_PARAMS.has(name)) return String(value);
     return typeof value === "number" ? new Intl.NumberFormat(localeTag(locale)).format(value) : value;
   });
 }
