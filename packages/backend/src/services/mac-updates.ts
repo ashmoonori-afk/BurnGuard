@@ -84,7 +84,22 @@ export function compareVersions(left: string, right: string): number {
   if (a.prerelease === b.prerelease) return 0;
   if (a.prerelease === null) return 1;
   if (b.prerelease === null) return -1;
-  return a.prerelease < b.prerelease ? -1 : 1;
+  return comparePrerelease(a.prerelease.split("."), b.prerelease.split("."));
+}
+
+/** SemVer 2.0.0 section 11: numeric identifiers compare numerically and sort below alphanumeric ones; a shorter set sorts lower. */
+function comparePrerelease(left: readonly string[], right: readonly string[]): number {
+  for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
+    const l = left[index] ?? "";
+    const r = right[index] ?? "";
+    if (l === r) continue;
+    const lNumeric = /^\d+$/.test(l);
+    const rNumeric = /^\d+$/.test(r);
+    if (lNumeric && rNumeric) return BigInt(l) < BigInt(r) ? -1 : 1;
+    if (lNumeric !== rNumeric) return lNumeric ? -1 : 1;
+    return l < r ? -1 : 1;
+  }
+  return left.length - right.length;
 }
 
 /** The newest full package for this app that is newer than `currentVersion`, or null. */
