@@ -8,9 +8,10 @@ import { getExportJob } from "../src/db/exports";
 import { getSqlite } from "../src/db/sqlite-client";
 import { projectsDir } from "../src/lib/paths";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
-import { materializeManagedTree, publishManagedTree } from "../src/services/artifact-tree-storage";
+import { materializeManagedTree, publishManagedTree, readManagedFile } from "../src/services/artifact-tree-storage";
+import { managedFileRoutes } from "../src/routes/managed-files";
 import { sequencedBroker } from "../src/services/broker";
-import { digestEntries, diskPathOf, inspectCanonicalTree, type InspectedCanonicalTree } from "../src/services/canonical-tree-manifest";
+import { digestEntries, diskPathOf, inspectCanonicalTree, inspectCanonicalTreeOnDisk, type InspectedCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { enqueueProjectExport } from "../src/services/exports";
 
 // A two-syllable Korean name: precomposed (NFC) and decomposed (NFD), as macOS tools, syncs and zips write it.
@@ -126,6 +127,48 @@ describe("decomposed (NFD) file names in a managed tree", () => {
     // Then
     expect(await names(path.join(live, "assets"))).toEqual(["keep.svg"]);
     expect(published.files.map((file) => file.path)).toEqual(["assets/keep.svg", "index.html"]);
+  });
+
+  test("Given a staged tree in which the agent wrote a decomposed name When it is published Then the live tree holds the bytes under the NFC path", async () => {
+    const live = await tree({ "index.html": HTML });
+    const stage = await tree({ "index.html": HTML, [`assets/${NFD}`]: SVG });
+    // When
+    const published = await publishManagedTree(stage, live);
+    // Then
+    expect(published.files.map((file) => file.path)).toEqual([`assets/${NFC}`, "index.html"]);
+    expect(await names(path.join(live, "assets"))).toEqual([NFC]);
+    expect(await readFile(path.join(live, "assets", NFC), "utf8")).toBe(SVG);
+  });
+
+  test("Given a live directory with a decomposed name that also holds a skipped agent file When a staged tree is published Then one directory holds both", async () => {
+    const directory = "\uC790\uC0B0";
+    const live = await tree({ "index.html": HTML, [`${directory.normalize("NFD")}/AGENTS.md`]: "agent", [`${directory.normalize("NFD")}/${NFD}`]: SVG });
+    const stage = await tree({ "index.html": HTML, [`${directory}/${NFC}`]: SVG });
+    // When
+    await publishManagedTree(stage, live);
+    // Then: no second spelling of the directory is left beside the published one.
+    expect(await names(live)).toEqual(["index.html", directory]);
+    expect(await names(path.join(live, directory))).toEqual(["AGENTS.md", NFC]);
+    expect(await readFile(path.join(live, directory, "AGENTS.md"), "utf8")).toBe("agent");
+  });
+
+  test("Given a live file with a decomposed name When it is read through its NFC manifest entry and the inspected disk paths Then its bytes are returned", async () => {
+    const live = await tree({ "index.html": HTML, [`assets/${NFD}`]: SVG });
+    const inspected = await inspectCanonicalTreeOnDisk(live);
+    const entry = inspected.manifest.files.find((file) => file.path === `assets/${NFC}`);
+    // When
+    const bytes = await readManagedFile(live, entry!, {}, inspected.diskPaths);
+    // Then
+    expect(bytes.toString("utf8")).toBe(SVG);
+  });
+
+  test("Given a project whose asset name is decomposed on disk When the managed-files route serves its NFC path Then the asset is returned", async () => {
+    const { projectId } = await createProject("serve", true);
+    // When
+    const response = await managedFileRoutes.request(`http://local/api/projects/${projectId}/fs/assets/${encodeURIComponent(NFC)}`);
+    // Then
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe(SVG);
   });
 });
 

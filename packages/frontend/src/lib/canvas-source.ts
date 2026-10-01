@@ -13,9 +13,11 @@ type CanvasPageTarget = { readonly relPath: string; readonly url: string };
 const PAGE_WORD = String.raw`[\p{L}\p{N}_][\p{L}\p{N}\p{M}_]*`;
 const PAGE_SEGMENT = `${PAGE_WORD}(?:[-.]${PAGE_WORD})*`;
 const SAFE_PAGE_PATH = new RegExp(`^(?:${PAGE_SEGMENT}/)*${PAGE_SEGMENT}\\.html$`, "iu");
+// The backend refuses Windows device names in every segment (`assertSafeName`), so such a page could never be written.
+const WINDOWS_RESERVED_SEGMENT = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu;
 
 export function isSafeCanvasPagePath(relPath: string): boolean {
-  return SAFE_PAGE_PATH.test(relPath);
+  return SAFE_PAGE_PATH.test(relPath) && !relPath.split("/").some((segment) => WINDOWS_RESERVED_SEGMENT.test(segment));
 }
 
 export function resolveCanvasSource({ projectId, activeRelPath, indexedRelPaths, entrypointUrl }: CanvasSourceInput): string | null {
@@ -58,7 +60,16 @@ export function resolveCanvasPageTarget(href: unknown, documentUrl: string): Can
 /** Resolve frame navigation only to indexed HTML inside this project's file boundary. */
 export function resolveCanvasNavigation(href: unknown, documentUrl: string, indexedRelPaths: readonly string[]): CanvasPageTarget | null {
   const target = resolveCanvasPageTarget(href, documentUrl);
-  return target !== null && indexedRelPaths.includes(target.relPath) ? target : null;
+  if (target === null) return null;
+  // A link and the index can spell one name in different normalization forms (macOS writes NFD); the indexed
+  // spelling is the one the file route serves.
+  const wanted = target.relPath.normalize("NFC");
+  const relPath = indexedRelPaths.find((candidate) => candidate.normalize("NFC") === wanted);
+  if (relPath === undefined) return null;
+  if (relPath === target.relPath) return target;
+  const url = new URL(target.url);
+  url.pathname = `${url.pathname.match(/^\/api\/projects\/[^/]+\/fs\//u)?.[0] ?? ""}${encodePath(relPath)}`;
+  return { relPath, url: url.href };
 }
 
 /**

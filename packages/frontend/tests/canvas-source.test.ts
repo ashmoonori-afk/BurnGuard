@@ -145,6 +145,23 @@ describe("canvas page links with ordinary file names", () => {
     expect(isSafeCanvasPagePath(decomposed)).toBe(true);
   });
 
+  test("Given a link and an indexed page spelled in different normalization forms When navigating Then the indexed spelling resolves", () => {
+    const precomposed = "caf\u00e9.html";
+    const decomposed = precomposed.normalize("NFD");
+
+    expect(resolveCanvasNavigation(encodeURIComponent(decomposed), documentUrl, ["index.html", precomposed])).toEqual({ relPath: precomposed, url: `http://127.0.0.1:14070/api/projects/p1/fs/${encodeURIComponent(precomposed)}` });
+    expect(resolveCanvasNavigation(`pages/${encodeURIComponent(precomposed)}#top`, documentUrl, ["index.html", `pages/${decomposed}`])).toEqual({ relPath: `pages/${decomposed}`, url: `http://127.0.0.1:14070/api/projects/p1/fs/pages/${encodeURIComponent(decomposed)}#top` });
+  });
+
+  test("Given Windows reserved device names When gated Then they are rejected while longer names that start with them stay accepted", () => {
+    for (const relPath of ["con.html", "CON.html", "pages/nul.html", "aux/index.html", "lpt1.html", "com9.page.html", "prn.html"]) {
+      expect(isSafeCanvasPagePath(relPath)).toBe(false);
+    }
+    for (const relPath of ["console.html", "com10.html", "nul-free.html", "pages/auxiliary.html"]) {
+      expect(isSafeCanvasPagePath(relPath)).toBe(true);
+    }
+  });
+
   test("Given names with dot segments, hidden or dangling dots When gated Then they are rejected", () => {
     for (const relPath of ["../about_us.html", "pages/../about_us.html", "./about_us.html", ".hidden.html", "about_us..html", "pages./about_us.html", "about_us.html.", ".html", "pages//about_us.html", "about us.html", "about_us.htm", "about\u0060us.html", "\u0301.html"]) {
       expect(isSafeCanvasPagePath(relPath)).toBe(false);
