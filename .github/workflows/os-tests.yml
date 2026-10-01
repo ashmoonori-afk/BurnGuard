@@ -49,6 +49,10 @@ jobs:
           dotnet build packages/windows-process-host/qa-host/BurnGuard.ProcessHost.Qa.csproj -c Release -o dist/windows-process-host-qa --nologo
           $env:BG_WINDOWS_PROCESS_HOST_QA = "$env:GITHUB_WORKSPACE\dist\windows-process-host-qa\burnguard-windows-process-host-qa.exe"
           dotnet run --project packages/windows-process-host/qa/ProcessHostChecks.csproj -c Release
+      # Proves the native macOS shell compiles on every pull request, with the flags scripts/build-mac.ts uses.
+      - name: Typecheck the native macOS shell
+        if: runner.os == 'macOS'
+        run: swiftc -typecheck -swift-version 5 -target arm64-apple-macos14.0 -sdk "$(xcrun --sdk macosx --show-sdk-path)" packages/desktop-mac/main.swift
       # Suites that need no Chromium, Python or provider CLI. Platform-impossible cases skip themselves; see
       # doc/os-matrix.md for what each suite pins per OS.
       - name: Platform-sensitive suites
@@ -76,6 +80,7 @@ jobs:
           packages/backend/tests/structure-extractor.test.ts
           packages/backend/tests/export-validation.test.ts
           packages/backend/tests/path-boundary.test.ts
+          packages/desktop-mac/main.test.ts
           packages/backend/tests/config-storage.test.ts
           packages/backend/tests/native-binding.test.ts
           packages/backend/tests/python-runtime.test.ts

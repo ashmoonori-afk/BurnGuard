@@ -3,6 +3,10 @@
 *.command text eol=lf
 *.sh      text eol=lf
 
+# Keep native source and workflows stable for exact-text contract tests.
+*.swift text eol=lf
+.github/workflows/*.yml text eol=lf
+
 # Keep Windows scripts as CRLF for cmd.exe compatibility.
 *.bat text eol=crlf
 *.cmd text eol=crlf

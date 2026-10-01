@@ -106,6 +106,77 @@ describe("macOS download destination", () => {
   });
 });
 
+const windowsSource = await readFile(path.join(import.meta.dir, "../desktop-windows/Program.cs"), "utf8");
+const buildMacSource = await readFile(path.join(import.meta.dir, "../../scripts/build-mac.ts"), "utf8");
+const osTestsWorkflow = await readFile(path.join(import.meta.dir, "../../.github/workflows/os-tests.yml"), "utf8");
+
+/** Every `<name>["KEY"] = "VALUE"` assignment in `text`, keyed by KEY. */
+function assignments(text: string, name: string): Record<string, string> {
+  const pattern = new RegExp(`${name}\\["(\\w+)"\\] = "([^"]*)"`, "g");
+  return Object.fromEntries([...text.matchAll(pattern)].map((match) => [match[1], match[2]]));
+}
+
+describe("macOS shell keeps the Windows shell's desktop contract", () => {
+  test("Given a readiness line When the macOS shell consumes it Then the pid and the loopback origin are validated before the origin is trusted", () => {
+    const windowsOrigin = /var expected = "([^"]+)" \+ port;/.exec(windowsSource)?.[1];
+    expect(windowsOrigin).toBe("http://127.0.0.1:");
+    expect(windowsSource).toContain('Convert.ToInt32(data["pid"]) != service.Id');
+    const service = body("private func startService()");
+    expect(/expectedOrigin = "([^"\\]+)\\\(port\)"/.exec(service)?.[1]).toBe(windowsOrigin);
+    const consume = body("private func consumeServiceOutput(");
+    const trusted = consume.indexOf("origin = url");
+    for (const check of ['let pid = message["pid"] as? Int32', "pid == service.processIdentifier", "urlString == expectedOrigin"]) {
+      expect(consume.indexOf(check)).toBeGreaterThan(-1);
+      expect(consume.indexOf(check)).toBeLessThan(trusted);
+    }
+  });
+
+  test("Given an inherited environment When the macOS shell builds the backend environment Then BG_DEV is forced to 0 and the desktop overrides match the Windows shell", () => {
+    const windows = assignments(windowsSource, "start\\.EnvironmentVariables");
+    const mac = assignments(body("private func startService()"), "environment");
+    expect(windows.BG_DEV).toBe("0");
+    for (const key of ["BG_DESKTOP", "BG_NO_OPEN", "BG_DEV"]) expect(mac[key]).toBe(windows[key]);
+    expect(windowsSource).toContain('start.EnvironmentVariables.Remove("BG_SCAN_PORT")');
+    expect(body("private func startService()")).toContain('environment.removeValue(forKey: "BG_SCAN_PORT")');
+  });
+
+  test("Given the backend binary is missing When the macOS shell reports it Then the message names the path that was actually checked", () => {
+    const service = body("private func startService()");
+    const checked = /appendingPathComponent\("([^"]+)"\)/.exec(service)?.[1];
+    const message = /NSLocalizedDescriptionKey: "([^"]+)"/.exec(service)?.[1];
+    expect(checked).toBe("Contents/MacOS/burnguard-design");
+    expect(message?.startsWith(`${checked} `)).toBe(true);
+  });
+
+  test("Given a main-frame navigation to an app API or runtime route When the macOS policy runs Then it is cancelled with the Windows shell's prefixes, ignoring case", () => {
+    const windowsRoute = /bool IsTopLevelAppRoute\(Uri uri\) => (.+);/.exec(windowsSource)?.[1] ?? "";
+    const windowsPrefixes = [...windowsRoute.matchAll(/StartsWith\("([^"]+)", StringComparison\.OrdinalIgnoreCase\)/g)].map((match) => match[1]);
+    expect(windowsPrefixes).toEqual(["/api/", "/runtime/"]);
+    const route = body("private func isTopLevelAppRoute(_ url: URL) -> Bool");
+    expect([...route.matchAll(/hasPrefix\("([^"]+)"\)/g)].map((match) => match[1])).toEqual(windowsPrefixes);
+    expect(route).toContain(".lowercased()");
+    const policy = body("decidePolicyFor navigationAction: WKNavigationAction");
+    const guard = policy.indexOf("if navigationAction.targetFrame?.isMainFrame == true, isAppURL(url), !isTopLevelAppRoute(url) {\n            decisionHandler(.cancel)\n            return\n        }");
+    expect(guard).toBeGreaterThan(policy.indexOf("navigationAction.shouldPerformDownload"));
+    expect(guard).toBeLessThan(policy.indexOf("decisionHandler(isAppURL(url) ? .allow : .cancel)"));
+  });
+
+  test("Given WKWebView asks for camera or microphone When the UI delegate answers Then it denies, on an API the deployment target provides", () => {
+    expect(windowsSource).toContain("PermissionRequested");
+    expect(source).toMatch(/requestMediaCapturePermissionFor securityOrigin: WKSecurityOrigin,\s*initiatedByFrame frame: WKFrameInfo,\s*type: WKMediaCaptureType,\s*decisionHandler: @escaping \(WKPermissionDecision\) -> Void\s*\) \{/);
+    expect(body("requestMediaCapturePermissionFor securityOrigin")).toMatch(/^\{\s*decisionHandler\(\.deny\)\s*\}$/);
+    // WKUIDelegate media-capture decisions exist from macOS 12.
+    expect(Number(/-target arm64-apple-macos(\d+)\./.exec(buildMacSource)?.[1])).toBeGreaterThanOrEqual(12);
+  });
+
+  test("Given a pull request When the macOS OS-tests job runs Then it typechecks main.swift with the build's Swift version and target", () => {
+    const build = /swiftc\} -O (-swift-version \d+ -target \S+) -sdk/.exec(buildMacSource)?.[1];
+    expect(build).toBe("-swift-version 5 -target arm64-apple-macos14.0");
+    const step = /- name: Typecheck the native macOS shell\n\s+if: runner\.os == 'macOS'\n\s+run: swiftc -typecheck (.+) packages\/desktop-mac\/main\.swift\n/.exec(osTestsWorkflow)?.[1];
+    expect(step).toBe(`${build} -sdk "$(xcrun --sdk macosx --show-sdk-path)"`);
+  });
+});
+
 describe("macOS shutdown ordering", () => {
   test("Given a running backend When quit is requested Then termination waits for the backend's exit and a repeated quit is cancelled", () => {
     const terminate = body("func applicationShouldTerminate(");
