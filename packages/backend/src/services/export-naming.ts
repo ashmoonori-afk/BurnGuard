@@ -111,8 +111,12 @@ export function slugifyProjectName(name: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
-  // Drop a high surrogate orphaned by the code-unit cut; encodeURIComponent rejects it.
-  const truncated = stripped.slice(0, FILENAME_MAX_LEN).replace(/[\uD800-\uDBFF]$/u, "");
+  // Drop a high surrogate orphaned by the code-unit cut (encodeURIComponent rejects it), then
+  // re-trim hyphens the cut may have exposed.
+  const truncated = stripped
+    .slice(0, FILENAME_MAX_LEN)
+    .replace(/[\uD800-\uDBFF]$/u, "")
+    .replace(/-+$/, "");
   return truncated.length > 0 ? truncated : "export";
 }
 
@@ -163,6 +167,10 @@ export function buildContentDisposition(filename: string): string {
     // Drop double-quotes too — they would terminate the quoted-string.
     .replace(/[^\x20-\x7E]/g, "_")
     .replace(/"/g, "_");
-  const utf8 = encodeURIComponent(filename);
+  // RFC 8187 attr-char excludes ' ( ) * which encodeURIComponent leaves raw.
+  const utf8 = encodeURIComponent(filename).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
   return `attachment; filename="${asciiSafe}"; filename*=UTF-8''${utf8}`;
 }

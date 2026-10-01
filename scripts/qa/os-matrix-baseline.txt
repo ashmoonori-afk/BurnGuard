@@ -75,7 +75,6 @@ packages/backend/tests/examples-tab-filter.test.ts
 packages/backend/tests/export-gc.test.ts
 packages/backend/tests/export-handoff.test.ts
 packages/backend/tests/export-mixed-artboard.test.ts
-packages/backend/tests/export-naming.test.ts
 packages/backend/tests/export-options.test.ts
 packages/backend/tests/export-parity-archives.test.ts
 packages/backend/tests/export-parity-storage.test.ts
