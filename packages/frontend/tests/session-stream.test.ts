@@ -116,3 +116,62 @@ test("Given a launch capability the backend no longer accepts When the stream is
     stop();
   }
 });
+
+test("Given an open, healthy session stream When one payload fails envelope validation Then the workspace is not marked disconnected and the snapshot is resynced", async () => {
+  let snapshots = 0;
+  let reportError: (err: { kind: "parse" | "connection"; message: string }) => void = () => {};
+  const subscribed = deferred();
+  const flagged = deferred();
+  const resynced = deferred();
+  const flags: string[] = [];
+  const handlers: SessionStreamHandlers = {
+    setState: () => {},
+    setError: (value) => { flags.push(`error:${value}`); if (value) flagged.resolve(); },
+    setStale: (value) => { flags.push(`stale:${value}`); if (value) flagged.resolve(); },
+    onLive: () => {},
+  };
+  const stop = openSessionStream("s1", { current: null }, handlers, {
+    getSessionSnapshot: async () => { snapshots += 1; if (snapshots === 2) resynced.resolve(); return snapshot(0); },
+    listSessionEvents: async () => [],
+    subscribeSessionStream: (_id, _onEvent, onError) => { reportError = (err) => onError?.(err); subscribed.resolve(); return () => {}; },
+  });
+  try {
+    await subscribed.promise;
+
+    reportError({ kind: "parse", message: "invalid_event_envelope" });
+    await flagged.promise;
+
+    expect(flags).not.toContain("error:true");
+    expect(flags).toContain("stale:true");
+    await resynced.promise;
+    expect(snapshots).toBe(2);
+  } finally {
+    stop();
+  }
+});
+
+test("Given an open session stream When the connection itself drops Then the workspace is marked disconnected", async () => {
+  let reportError: (err: { kind: "parse" | "connection"; message: string }) => void = () => {};
+  const subscribed = deferred();
+  const flags: string[] = [];
+  const handlers: SessionStreamHandlers = {
+    setState: () => {},
+    setError: (value) => { flags.push(`error:${value}`); },
+    setStale: () => {},
+    onLive: () => {},
+  };
+  const stop = openSessionStream("s1", { current: null }, handlers, {
+    getSessionSnapshot: async () => snapshot(0),
+    listSessionEvents: async () => [],
+    subscribeSessionStream: (_id, _onEvent, onError) => { reportError = (err) => onError?.(err); subscribed.resolve(); return () => {}; },
+  });
+  try {
+    await subscribed.promise;
+
+    reportError({ kind: "connection", message: "stream_error" });
+
+    expect(flags.at(-1)).toBe("error:true");
+  } finally {
+    stop();
+  }
+});
