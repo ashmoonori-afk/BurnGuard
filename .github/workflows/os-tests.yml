@@ -70,6 +70,7 @@ jobs:
           packages/backend/tests/design-system-pages.test.ts
           packages/backend/tests/design-workflow.test.ts
           packages/backend/tests/generation-output.test.ts
+          packages/backend/tests/structure-extractor.test.ts
           packages/backend/tests/export-validation.test.ts
           packages/backend/tests/path-boundary.test.ts
           packages/backend/tests/config-storage.test.ts

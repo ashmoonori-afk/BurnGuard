@@ -131,6 +131,32 @@ describe("summarizeDeckHtml", () => {
   });
 });
 
+describe("summarizeDeckHtml truncation and byte-size reporting", () => {
+  const LONE_SURROGATE =
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u;
+
+  test("Given a slide heading with an emoji at the snippet cut, When the deck is summarized for the prompt, Then the summary holds no lone UTF-16 surrogate", async () => {
+    const heading = `${"a".repeat(56)}\u{1F680} launch plan for the quarter`;
+    const filePath = await makeTempFile(
+      "deck.html",
+      `<html><body><section data-slide><h1>${heading}</h1></section></body></html>`,
+    );
+    const summary = await summarizeDeckHtml(filePath);
+    expect(summary).not.toBeNull();
+    expect(LONE_SURROGATE.test(summary!)).toBe(false);
+  });
+
+  test("Given a deck header with multi-byte UTF-8 characters, When the deck is summarized, Then the header's B figure is the file's UTF-8 byte size", async () => {
+    const html = `<html><body><section data-slide><h1>\ubd84\uae30 \uc2e4\uc801 \ubcf4\uace0</h1><p>\ub9e4\ucd9c\uacfc \uc601\uc5c5\uc774\uc775 \uc694\uc57d</p></section></body></html>`;
+    const filePath = await makeTempFile("deck.html", html);
+    const summary = await summarizeDeckHtml(filePath);
+    const reported = /^deck\.html \u2014 ([\d,]+)B,/u
+      .exec(summary ?? "")?.[1]
+      ?.replace(/,/g, "");
+    expect(Number(reported)).toBe(Buffer.byteLength(html, "utf8"));
+  });
+});
+
 describe("summarizePrototypeHtml", () => {
   test("lists data-section landmarks with text snippets", async () => {
     const filePath = await makeTempFile("index.html", samplePrototype);
@@ -163,5 +189,15 @@ describe("summarizePrototypeHtml", () => {
     expect(text).toContain("<main>");
     expect(text).toContain("<footer>");
     expect(text).toContain("Hello");
+  });
+
+  test("Given a prototype header with multi-byte UTF-8 characters, When the prototype is summarized, Then the header's B figure is the file's UTF-8 byte size", async () => {
+    const html = `<html><body><main data-section="hero"><h1>\ubd84\uae30 \uc2e4\uc801 \ubcf4\uace0</h1><p>\ub9e4\ucd9c\uacfc \uc601\uc5c5\uc774\uc775 \uc694\uc57d</p></main></body></html>`;
+    const filePath = await makeTempFile("index.html", html);
+    const summary = await summarizePrototypeHtml(filePath);
+    const reported = /^index\.html \u2014 ([\d,]+)B,/u
+      .exec(summary ?? "")?.[1]
+      ?.replace(/,/g, "");
+    expect(Number(reported)).toBe(Buffer.byteLength(html, "utf8"));
   });
 });

@@ -208,7 +208,6 @@ packages/backend/tests/site-design-audit.test.ts
 packages/backend/tests/site-map.test.ts
 packages/backend/tests/stage-attachment-inputs.test.ts
 packages/backend/tests/starter-templates.test.ts
-packages/backend/tests/structure-extractor.test.ts
 packages/backend/tests/surface-image-language.test.ts
 packages/backend/tests/task-preset-adoption.test.ts
 packages/backend/tests/task-preset-comparison.test.ts
