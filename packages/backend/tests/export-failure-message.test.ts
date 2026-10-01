@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { SequencedEventEnvelope } from "@bg/shared";
+import { parseExportOptions, type SequencedEventEnvelope } from "@bg/shared";
 import { runMigrations } from "../src/db/migrate-local";
 import { getExportJob } from "../src/db/exports";
 import { getSqlite } from "../src/db/sqlite-client";
+import { artifactRoutes } from "../src/routes/artifacts";
 import { exportsDir, projectsDir } from "../src/lib/paths";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { sequencedBroker } from "../src/services/broker";
@@ -166,5 +167,68 @@ describe("export failure message", () => {
       expect(status).toBe("cancelled");
       expectNoPrivateDiagnostic(message, LINUX_STAGE, ["/home", "qa/", ".staging"]);
     });
+  });
+});
+
+describe("legacy export rows", () => {
+  /** Inserts a failed row the way builds before #202 persisted it: the raw exception text as error_message. */
+  function seedLegacyRow(message: string): string {
+    const id = `legacy-export-${process.pid}-${crypto.randomUUID().slice(0, 8)}`;
+    getSqlite().prepare("INSERT INTO exports(id,project_id,format,status,output_path,error_message,size_bytes,options_json,created_at,completed_at) VALUES (?,?,'html_zip','failed',NULL,?,NULL,?,1,2)").run(id, prototype.projectId, message, JSON.stringify(parseExportOptions("html_zip", {})));
+    return id;
+  }
+
+  async function apiText(url: string): Promise<{ readonly status: number; readonly text: string }> {
+    const response = await artifactRoutes.fetch(new Request(`http://127.0.0.1:14070${url}`));
+    return { status: response.status, text: await response.text() };
+  }
+
+  test.each([
+    ["Windows", `ENOENT: no such file or directory, open '${WINDOWS_STAGE}'`, "Export failed", WINDOWS_STAGE, ["C:", "Users", "qa\\", ".burnguard", ".staging", "01ATTEMPT"]],
+    ["Windows UNC", `EBUSY: resource busy or locked, open '${WINDOWS_UNC}'`, "Export failed", WINDOWS_UNC, ["fileserver", "profiles", "logo.svg"]],
+    ["POSIX", `EACCES: permission denied, open '${LINUX_STAGE}'`, "Export failed", LINUX_STAGE, ["/home", "qa/", ".burnguard", ".staging", "01ATTEMPT"]],
+    ["macOS", `chromium_not_installed: Chromium could not be launched\nchrome: spawn ${MAC_CHROME} ENOENT`, "Export failed: chromium_not_installed", MAC_CHROME, ["/Applications", "Google Chrome", "MacOS"]],
+  ] as const)("Given a %s legacy row whose error_message is raw exception text When the export is read through the API Then neither the job nor the project list carries the path or errno text", async (_flavor, legacyMessage, expected, privatePath, fragments) => {
+    // Given
+    const id = seedLegacyRow(legacyMessage);
+    try {
+      // When
+      const job = await apiText(`/api/exports/${id}`);
+      const list = await apiText(`/api/projects/${prototype.projectId}/exports`);
+      // Then
+      expect([job.status, list.status]).toEqual([200, 200]);
+      const served = (JSON.parse(job.text) as { readonly data: { readonly error_message: string | null } }).data.error_message;
+      expect(served).toBe(expected);
+      const listed = (JSON.parse(list.text) as { readonly data: ReadonlyArray<{ readonly id: string; readonly error_message: string | null }> }).data.find((row) => row.id === id);
+      expect(listed?.error_message).toBe(expected);
+      for (const text of [job.text, list.text]) {
+        expect(text).not.toContain(privatePath);
+        expect(text).not.toMatch(ERRNO);
+        for (const fragment of fragments) expect(text).not.toContain(fragment);
+      }
+    } finally {
+      getSqlite().prepare("DELETE FROM exports WHERE id=?").run(id);
+    }
+  });
+
+  test.each([
+    "Export failed",
+    "Export failed: chromium_launch_timeout",
+    "Export cancelled",
+    "Export recovery found no owned output",
+    "Export receipt or output is corrupt",
+    "Legacy export has no validated receipt",
+    "Export retention expired",
+  ])("Given a row whose error_message is the fixed copy %p When it is read through the API Then the copy is served unchanged", async (fixed) => {
+    // Given
+    const id = seedLegacyRow(fixed);
+    try {
+      // When
+      const job = await apiText(`/api/exports/${id}`);
+      // Then
+      expect((JSON.parse(job.text) as { readonly data: { readonly error_message: string | null } }).data.error_message).toBe(fixed);
+    } finally {
+      getSqlite().prepare("DELETE FROM exports WHERE id=?").run(id);
+    }
   });
 });
