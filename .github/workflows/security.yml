@@ -57,6 +57,7 @@ jobs:
           packages/frontend/tests/session-stream.test.ts
           packages/backend/tests/css-source-map-boundary.test.ts
           packages/backend/tests/font-validation.test.ts
+          packages/backend/tests/export-naming.test.ts
           packages/backend/tests/bundled-fonts.test.ts
           packages/backend/tests/bundled-font-reference.test.ts
           packages/backend/tests/daisyui-seed-themes.test.ts

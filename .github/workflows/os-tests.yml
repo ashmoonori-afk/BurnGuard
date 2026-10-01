@@ -62,6 +62,7 @@ jobs:
           packages/frontend/tests/session-stream.test.ts
           packages/backend/tests/extraction-website-acquisition.test.ts
           packages/backend/tests/extraction-website-boundaries.test.ts
+          packages/backend/tests/export-naming.test.ts
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/design-system-starter.test.ts
           packages/backend/tests/design-system-starter-entrypoint.test.ts

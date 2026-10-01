@@ -65,6 +65,26 @@ describe("slugifyProjectName", () => {
     const long = "a".repeat(500);
     expect(slugifyProjectName(long).length).toBeLessThanOrEqual(80);
   });
+
+  test("Given a long name whose 80th character is a word break When slugified Then no trailing hyphen remains and the filename has no doubled hyphen", () => {
+    // Given
+    const name = `${"a".repeat(79)} final review`;
+    // When
+    const slug = slugifyProjectName(name);
+    const filename = buildDownloadFilename({ projectName: name, revision: 2, format: "pdf", projectType: "slide_deck" });
+    // Then
+    expect(slug).toBe("a".repeat(79));
+    expect(filename).not.toContain("--");
+  });
+
+  test("Given a hyphen then an emoji straddling the 80-unit cut When slugified Then the orphan surrogate and the exposed hyphen are both dropped", () => {
+    // Given
+    const name = `${"a".repeat(78)} \u{1F680}`;
+    // When
+    const slug = slugifyProjectName(name);
+    // Then
+    expect(slug).toBe("a".repeat(78));
+  });
 });
 
 describe("buildDownloadFilename", () => {
@@ -171,5 +191,24 @@ describe("buildContentDisposition", () => {
     expect(slug).not.toMatch(/[\uD800-\uDBFF]$/u);
     const encoded = /filename\*=UTF-8''(.+)$/u.exec(header)?.[1] ?? "";
     expect(decodeURIComponent(encoded)).toBe(`${slug}-html-r2.zip`);
+  });
+
+  test("Given a project name with an apostrophe and parentheses When the download header is built Then filename* uses only RFC 8187 attr-char", () => {
+    // Given
+    const filename = buildDownloadFilename({ projectName: "Bob's deck (draft)", revision: 1, format: "pdf", projectType: "slide_deck" });
+    // When
+    const header = buildContentDisposition(filename);
+    const extValue = /filename\*=UTF-8''(.*)$/u.exec(header)?.[1] ?? "";
+    // Then
+    expect(extValue).toBe("Bob%27s-deck-%28draft%29-deck-r1.pdf");
+    expect(extValue).toMatch(/^(?:[A-Za-z0-9!#$&+\-.^_`|~]|%[0-9A-F]{2})+$/u);
+    expect(decodeURIComponent(extValue)).toBe(filename);
+  });
+
+  test("Given a filename containing an asterisk When the download header is built Then the asterisk is percent-encoded in filename*", () => {
+    // Given / When
+    const header = buildContentDisposition("a*b.zip");
+    // Then
+    expect(/filename\*=UTF-8''(.*)$/u.exec(header)?.[1]).toBe("a%2Ab.zip");
   });
 });
