@@ -97,9 +97,10 @@ export function parseSides(value: string): Sides | null {
 
 /**
  * Compose 4-side values back into the shortest equivalent CSS shorthand.
- * Assumes every input already carries a unit (e.g. "0px" not "0") so
- * string equality is reliable for collapse checks. Returns "" when
- * every side is empty (signal to drop the override).
+ * Each side is already final CSS token text - a px length like "0px", or
+ * an authored token such as "auto" or "50%" kept as-is - so plain string
+ * equality is reliable for collapse checks. Returns "" when every side is
+ * empty (signal to drop the override).
  */
 export function composeSides(sides: Sides): string {
   const { top, right, bottom, left } = sides;
@@ -117,6 +118,30 @@ export function composeSides(sides: Sides): string {
 export function sideDisplay(token: string): string {
   const match = token.match(/^(-?\d*\.?\d+)px$/i);
   return match ? (match[1] ?? "") : token;
+}
+
+/**
+ * The unit label shown beside the four side inputs. Every input already
+ * displays its own unit inline ("50%", "auto", "2rem") except a plain px
+ * length, which `sideDisplay` strips down to a bare number - so the
+ * shared label only applies when every side is a px length (or empty,
+ * the default before anything is authored). Returns "" otherwise so the
+ * caller omits the label instead of mislabeling a non-px value.
+ */
+export function sidesUnitLabel(sides: Sides): string {
+  const isPxOrEmpty = (token: string) => token === "" || /^-?\d*\.?\d+px$/i.test(token);
+  return isPxOrEmpty(sides.top) && isPxOrEmpty(sides.right) && isPxOrEmpty(sides.bottom) && isPxOrEmpty(sides.left) ? "px" : "";
+}
+
+/**
+ * Decide what a commit should apply to the style, given the shorthand
+ * `applySideDraft` just produced and the style's current inline value.
+ * Returns undefined when nothing changed (no `onApply` call needed),
+ * null to clear the inline override, or the shorthand to write.
+ */
+export function sideApplyPatch(shorthand: string, inline: string): string | null | undefined {
+  if (shorthand === "") return inline ? null : undefined;
+  return shorthand !== inline ? shorthand : undefined;
 }
 
 /**

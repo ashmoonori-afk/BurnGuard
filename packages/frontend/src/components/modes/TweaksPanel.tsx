@@ -21,7 +21,9 @@ import {
   normalizeHex,
   numericFromLength,
   parseSides,
+  sideApplyPatch,
   sideDisplay,
+  sidesUnitLabel,
   type Sides,
   type SideStyle,
 } from "./tweaks-utils";
@@ -541,13 +543,12 @@ function SidesRow({
     const result = applySideDraft(styleKey, sides, side, rawValue);
     if (!result) return sideDisplay(sides[side]);
     setSides(result.sides);
-    if (result.shorthand === "") {
-      if (inline) onApply({ [styleKey]: null });
-    } else if (result.shorthand !== inline) {
-      onApply({ [styleKey]: result.shorthand });
-    }
+    const patch = sideApplyPatch(result.shorthand, inline);
+    if (patch !== undefined) onApply({ [styleKey]: patch });
     return sideDisplay(result.sides[side]);
   };
+
+  const unitLabel = sidesUnitLabel(sides);
 
   return (
     <div className="flex items-center gap-2 text-[11px]">
@@ -558,7 +559,7 @@ function SidesRow({
         <SideInput title={t("modes.tweaks.bottom")} value={sideDisplay(sides.bottom)} onCommit={commitSide("bottom")} disabled={saving} />
         <SideInput title={t("modes.tweaks.left")} value={sideDisplay(sides.left)} onCommit={commitSide("left")} disabled={saving} />
       </div>
-      <span className="w-6 shrink-0 text-[10px] text-muted-foreground">px</span>
+      {unitLabel && <span className="w-6 shrink-0 text-[10px] text-muted-foreground">{unitLabel}</span>}
     </div>
   );
 }
