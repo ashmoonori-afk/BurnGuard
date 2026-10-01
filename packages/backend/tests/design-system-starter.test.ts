@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { MEASURED_VIEWPORTS, parseDesignSystemMeasuredLayout, type MeasuredViewportLayout } from "@bg/shared";
 import { appendDesignSystemContext, appendDesignSystemStarter } from "../src/harness/prompt-design-system";
-import { literalValueFindings, reviewDesignSystemConformance } from "../src/services/design-system-conformance";
+import { literalValueFindings, declaredMeasuredPage, reviewDesignSystemConformance } from "../src/services/design-system-conformance";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
-import { buildStarterCss, heroArrangement, provisionDesignSystemStarter, seedStarterEntrypoint, STARTER_CSS_PATH, STARTER_MARKER, starterPlan } from "../src/services/design-system-starter";
+import { buildStarterCss, entrypointBuiltAgainstSystem, heroArrangement, provisionDesignSystemStarter, seedStarterEntrypoint, STARTER_CSS_PATH, STARTER_MARKER, starterPlan } from "../src/services/design-system-starter";
 import { resolveStaticClosure } from "../src/services/export-closure";
 import { prepareBundledFontExport } from "../src/services/export-stage";
 import { ensureTokensCssImportsFonts } from "../src/services/extraction-css";
@@ -159,5 +159,31 @@ describe("Design-system starter", () => {
         expect(await readFile(path.join(stage, ...entry.skeleton.split("/")), "utf8")).toContain(`<meta name="bg-measured-page" content="${entry.path}">`);
       }
     } finally { await rm(stage, { recursive: true, force: true }); }
+  });
+});
+
+const measuredPageHtml = (meta: string): string => `<!doctype html><html><head>${meta}<link rel="stylesheet" href="design-system/system.css"></head><body class="bg-page"><h1>Built</h1></body></html>`;
+
+describe("Measured page declaration", () => {
+  const cases: ReadonlyArray<readonly [string, string, string]> = [
+    ["name before content", '<meta name="bg-measured-page" content="/about">', "/about"],
+    ["content before name", '<meta content="/about" name="bg-measured-page">', "/about"],
+    ["an attribute between name and content", '<meta name="bg-measured-page" data-bg-node-id="n1" content="/pricing">', "/pricing"],
+    ["an attribute before both and single quotes", "<meta data-x='1' content='/pricing' name='bg-measured-page' />", "/pricing"],
+  ];
+  for (const [label, meta, expected] of cases) {
+    test(`Given a bg-measured-page meta with ${label}, When the declaration is read, Then it yields the declared path and the page counts as built against the system`, () => {
+      const html = measuredPageHtml(meta);
+      expect(declaredMeasuredPage(html)).toBe(expected);
+      expect(entrypointBuiltAgainstSystem(html, false)).toBe(true);
+    });
+  }
+
+  test("Given a meta with another name or no content, When the declaration is read, Then nothing is declared", () => {
+    for (const meta of ['<meta content="/about" name="viewport">', '<meta name="bg-measured-page">', "<meta name=\"bg-measured-page\" content=\"\">"]) {
+      const html = measuredPageHtml(meta);
+      expect(declaredMeasuredPage(html)).toBeNull();
+      expect(entrypointBuiltAgainstSystem(html, false)).toBe(false);
+    }
   });
 });

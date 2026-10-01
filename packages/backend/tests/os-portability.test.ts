@@ -6,7 +6,7 @@ import path from "node:path";
 import { MEASURED_VIEWPORTS, parseDesignSystemMeasuredLayout } from "@bg/shared";
 import { renderInitialArtifact } from "../src/db/templates";
 import { appendDesignSystemContext } from "../src/harness/prompt-design-system";
-import { MEASURED_PAGE_DECLARATION } from "../src/services/design-system-conformance";
+import { declaredMeasuredPage } from "../src/services/design-system-conformance";
 import { renderMeasuredWireframe } from "../src/services/design-system-wireframe";
 import { buildStarterCss, buildStarterHtml, entrypointBuiltAgainstSystem, seedStarterEntrypoint } from "../src/services/design-system-starter";
 
@@ -48,7 +48,7 @@ describe(`OS portability on ${process.platform}`, () => {
       await writeFile(path.join(stage, "index.html"), renderInitialArtifact({ name: "Acme", type: "prototype" }));
       expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(true);
       const html = await readFile(path.join(stage, "index.html"), "utf8");
-      expect(MEASURED_PAGE_DECLARATION.exec(html)?.[1]).toBe("/");
+      expect(declaredMeasuredPage(html)).toBe("/");
       expect(entrypointBuiltAgainstSystem(html, false)).toBe(false);
     } finally { await rm(base, { recursive: true, force: true }); }
   });
