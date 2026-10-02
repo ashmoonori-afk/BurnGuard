@@ -155,7 +155,6 @@ packages/backend/tests/png-zip-slicing.test.ts
 packages/backend/tests/png-zip.test.ts
 packages/backend/tests/preset-observation.test.ts
 packages/backend/tests/project-bundle-contract.test.ts
-packages/backend/tests/project-bundle-routes.test.ts
 packages/backend/tests/project-bundle-security.test.ts
 packages/backend/tests/project-bundle.test.ts
 packages/backend/tests/project-directory-recovery.test.ts
@@ -277,7 +276,6 @@ packages/frontend/tests/create-page-prompt.test.ts
 packages/frontend/tests/creation-draft.test.ts
 packages/frontend/tests/deck-fit.browser.test.ts
 packages/frontend/tests/deck-preview.test.ts
-packages/frontend/tests/deck-sandbox.browser.test.ts
 packages/frontend/tests/design-audit-state.test.ts
 packages/frontend/tests/design-direction-state.test.ts
 packages/frontend/tests/design-system-assets-panel.test.ts

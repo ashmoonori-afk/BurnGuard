@@ -105,7 +105,12 @@ test("local authored scripts run in the opaque sandbox in parser/defer order, wi
     await frame.locator("[data-active] h1").click();
     await frame.locator("body").press("ArrowRight");
     expect(await frame.locator("[data-slide][data-active] h1").textContent()).toBe("TWO");
-    await frame.getByRole("button", { name: "Previous slide" }).click();
+    const previous = frame.getByRole("button", { name: "Previous slide" });
+    const previousBox = await previous.boundingBox();
+    if (previousBox === null) throw new Error("missing_previous_slide_bounds");
+    await page.mouse.move(previousBox.x + previousBox.width / 2, previousBox.y + previousBox.height / 2);
+    await previous.hover();
+    await previous.click();
     expect(await frame.locator("[data-slide][data-active] h1").textContent()).toBe("ONE");
 
     requests.length = 0;
