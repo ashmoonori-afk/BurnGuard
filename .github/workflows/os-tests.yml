@@ -95,6 +95,8 @@ jobs:
           packages/backend/tests/session-routes.test.ts
           packages/backend/tests/turn-error-sanitizer.test.ts
           scripts/qa/har-mask.test.ts
+          scripts/qa/task-8-gates.test.ts
+          packages/backend/tests/design-system-extract.test.ts
           packages/backend/tests/design-system-route-error-bodies.test.ts
           packages/backend/tests/export-failure-message.test.ts
           packages/backend/tests/route-unexpected-error-bodies.test.ts
