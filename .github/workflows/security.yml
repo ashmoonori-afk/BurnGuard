@@ -164,6 +164,7 @@ jobs:
       - name: Authored sandbox and contrast browser boundaries
         env:
           BG_BROWSER_SMOKE: "1"
+          DEBUG: "pw:api"
         run: bun test --timeout 60000 packages/frontend/tests/deck-sandbox.browser.test.ts packages/backend/tests/design-system-contrast.test.ts
       # Advisories with no compatible upstream fix are allowlisted by id.
       # Remove image-size ids when a release after 2.0.2 exists; affected

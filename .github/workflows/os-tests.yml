@@ -139,6 +139,7 @@ jobs:
       - name: Browser-backed suites
         env:
           BG_BROWSER_SMOKE: "1"
+          DEBUG: "pw:api"
         run: >-
           bun test --timeout 60000
           packages/backend/tests/design-system-pages.test.ts
