@@ -61,7 +61,6 @@ packages/backend/tests/design-direction-routes.test.ts
 packages/backend/tests/design-direction-workflow.test.ts
 packages/backend/tests/design-system-asset-guide.test.ts
 packages/backend/tests/design-system-contract.test.ts
-packages/backend/tests/design-system-extract.test.ts
 packages/backend/tests/design-system-font-upload.test.ts
 packages/backend/tests/design-system-layout.test.ts
 packages/backend/tests/design-system-provenance.test.ts
@@ -355,4 +354,3 @@ packages/frontend/tests/workspace-narrow-layout.test.ts
 packages/shared/tests/runtime-diagnostics.test.ts
 scripts/qa/clipboard-paste-fixtures.test.js
 scripts/qa/release-draft-state.test.js
-scripts/qa/task-8-gates.test.ts

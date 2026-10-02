@@ -1,7 +1,9 @@
+import * as ownedProcess from "../src/adapters/owned-process";
 import { spawnOwnedProcess } from "../src/adapters/owned-process";
 import { describe, expect, spyOn, test } from "bun:test";
 import { uploadFailureCode } from "../src/services/extraction-errors";
 import { extractDesignSystemFromSource } from "../src/services/design-system-extract";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -60,7 +62,7 @@ describe("Git extraction transport policy", () => {
 
   test("supported inferred and explicit Git providers disable redirect following in argv", async () => {
     const stopped = new Error("fixture_transport_stopped");
-    const spawn = spyOn(Bun, "spawn").mockImplementation(() => { throw stopped; });
+    const spawn = spyOn(ownedProcess, "spawnOwnedProcess").mockImplementation(() => { throw stopped; });
     try {
       for (const host of ["github.com", "www.github.com", "gitlab.com", "www.gitlab.com", "bitbucket.org", "www.bitbucket.org"]) {
         for (const source_type of [undefined, "github"] as const) {
@@ -81,13 +83,13 @@ describe("Git extraction transport policy", () => {
     const root = await mkdtemp(path.join(tmpdir(), "bg-git-config-"));
     const previous = { ...process.env };
     const stopped = new Error("fixture_transport_stopped");
-    const spawn = spyOn(Bun, "spawn").mockImplementation(() => { throw stopped; });
+    const spawn = spyOn(ownedProcess, "spawnOwnedProcess").mockImplementation(() => { throw stopped; });
     try {
       await writeFile(path.join(root, ".gitconfig"), '[url "file:///fixture/"]\n insteadOf = https://github.com/\n[credential]\n helper = !unexpected-helper\n');
       Object.assign(process.env, { HOME: root, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "url.file:///fixture/.insteadOf", GIT_CONFIG_VALUE_0: "https://github.com/", GIT_CONFIG_PARAMETERS: "'credential.helper=unexpected'", GIT_ASKPASS: "unexpected", SSH_ASKPASS: "unexpected", GIT_DIR: root });
       await expect(extractDesignSystemFromSource({ source_url: "https://github.com/owner/repo" })).rejects.toBe(stopped);
       const options = spawn.mock.calls[0]?.[0];
-      if (!options || Array.isArray(options) || !("env" in options) || !options.env) throw new Error("isolated Git environment missing");
+      if (!options?.env) throw new Error("isolated Git environment missing");
       for (const name of ["GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_ASKPASS", "SSH_ASKPASS", "GIT_DIR"]) expect(options.env).not.toHaveProperty(name);
       spawn.mockRestore();
       const probe = Bun.spawn(["git", "config", "--get-regexp", "url\\.|credential\\."], { env: options.env, cwd: root, stdout: "pipe", stderr: "pipe" });
@@ -110,14 +112,24 @@ describe("Git extraction transport policy", () => {
   });
 
   test("clone failure exposes only a bounded public error without child stderr", async () => {
-    const actualSpawn = Bun.spawn.bind(Bun);
-    const spawn = spyOn(Bun, "spawn").mockImplementation(options => actualSpawn([process.execPath, "-e", "process.stderr.write('PRIVATE_CLONE_SENTINEL'.repeat(10000));process.exit(1)"], { stdout: "ignore", stderr: options && !Array.isArray(options) && "stderr" in options && options.stderr === "ignore" ? "ignore" : "pipe" }));
+    const actualSpawn = ownedProcess.spawnOwnedProcess;
+    let child: ReturnType<typeof spawnOwnedProcess> | undefined;
+    const spawn = spyOn(ownedProcess, "spawnOwnedProcess").mockImplementation(options => {
+      child = actualSpawn({ ...options, cmd: [process.execPath, "-e", "process.stderr.write('PRIVATE_CLONE_SENTINEL'.repeat(10000));process.exit(1)"] });
+      return child;
+    });
     try {
       const error: unknown = await extractDesignSystemFromSource({ source_url: "https://github.com/owner/repo" }).catch(error => error);
+      expect(spawn).toHaveBeenCalledTimes(1);
+      expect(spawn.mock.calls[0]?.[0].stderr).toBe("ignore");
+      expect(child).toBeDefined();
+      expect(child?.proc.stderr ?? null).toBeNull();
       expect(error).toMatchObject({ code: "git_clone_failed" });
       if (!(error instanceof Error)) throw new Error("clone failure missing");
       expect(error.message.length).toBeLessThan(256);
       expect(error.message).not.toContain("PRIVATE_CLONE_SENTINEL");
+      expect(await child?.proc.exited).toBe(1);
+      if (child?.ownership.kind === "windows-job") expect(existsSync(child.ownership.receiptRoot)).toBe(false);
     } finally { spawn.mockRestore(); }
   });
 
