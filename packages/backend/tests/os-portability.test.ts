@@ -45,8 +45,9 @@ describe(`OS portability on ${process.platform}`, () => {
     const stage = path.join(base, "dossier \u00e9t\u00e9 \u6771\u4eac", "stage dir");
     try {
       await mkdir(stage, { recursive: true });
-      await writeFile(path.join(stage, "index.html"), renderInitialArtifact({ name: "Acme", type: "prototype" }));
-      expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(true);
+      const creation = renderInitialArtifact({ name: "Acme", type: "prototype" });
+      await writeFile(path.join(stage, "index.html"), creation);
+      expect(await seedStarterEntrypoint(stage, context, "index.html", creation)).toBe(true);
       const html = await readFile(path.join(stage, "index.html"), "utf8");
       expect(declaredMeasuredPage(html)).toBe("/");
       expect(entrypointBuiltAgainstSystem(html, false)).toBe(false);
@@ -59,7 +60,7 @@ describe(`OS portability on ${process.platform}`, () => {
     const stage = await mkdtemp(path.join(tmpdir(), "bg-portable-crlf-"));
     try {
       await writeFile(path.join(stage, "index.html"), creation);
-      expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(true);
+      expect(await seedStarterEntrypoint(stage, context, "index.html", renderInitialArtifact({ name: "Acme", type: "prototype" }))).toBe(true);
       const built = (await readFile(path.join(stage, "index.html"), "utf8")).replace(/ data-bg-placeholder(?:="[^"]*")?/g, "");
       expect(entrypointBuiltAgainstSystem(built.replace(/\n/g, "\r\n"), false)).toBe(true);
     } finally { await rm(stage, { recursive: true, force: true }); }

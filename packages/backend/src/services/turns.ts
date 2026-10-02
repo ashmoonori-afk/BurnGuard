@@ -14,6 +14,7 @@ import {
 } from "../db/events";
 import { getProjectDetail, getSessionInfo } from "../db/seed";
 import { getSqlite } from "../db/sqlite-client";
+import { renderInitialArtifact } from "../db/templates";
 import { broker, sequencedBroker } from "./broker";
 import { buildSessionContext, DeckSourceMappingError, readDeckSourcePages, selectContextAttachments } from "./context";
 import { parseStoredProjectOptions, withResearchPurpose } from "./project-options";
@@ -521,7 +522,7 @@ async function runUserTurnInternal(
           const pinnedSystemDir = pinnedSystem === null ? null : resolveManagedPath(systemsDir, pinnedSystem.dir_path);
           await provisionDesignSystemLayoutReference(stageDir, sessionContext.designSystemPin.context, pinnedSystemDir);
           const stagedHeroAssets = await provisionDesignSystemHeroAssets(stageDir, sessionContext.designSystemPin.context, pinnedSystemDir);
-          starterSeeded = await seedStarterEntrypoint(stageDir, sessionContext.designSystemPin.context, project.entrypoint, stagedHeroAssets);
+          starterSeeded = await seedStarterEntrypoint(stageDir, sessionContext.designSystemPin.context, project.entrypoint, renderInitialArtifact({ name: project.name, type: project.type }), stagedHeroAssets);
         }
         stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: payload.active_rel_path ?? project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;

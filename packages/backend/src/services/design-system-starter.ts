@@ -189,11 +189,9 @@ export function starterPlan(pinnedContext: string): StarterPlan | null {
   }) };
 }
 
-const CREATION_STARTER_MARKERS = ['data-bg-node-id="starter-root"', "Send your first prompt in chat to generate the first revision."] as const;
-
 /** True for an entrypoint nobody has written yet: missing, blank, or the untouched page a new project is created with. */
-function isFreshEntrypoint(source: string | null): boolean {
-  return source === null || source.trim() === "" || CREATION_STARTER_MARKERS.every(marker => source.includes(marker));
+function isFreshEntrypoint(source: string | null, creationSource: string): boolean {
+  return source === null || source.trim() === "" || source.replace(/\r\n/g, "\n") === creationSource.replace(/\r\n/g, "\n");
 }
 
 /** Whether the entrypoint already follows the pinned system: it declares its measured page, holds no skeleton placeholders and was not seeded this turn. */
@@ -207,7 +205,7 @@ export function entrypointBuiltAgainstSystem(source: string, seededThisTurn: boo
  * untouched never counts as generated content. The hero image is used only when it was staged. Returns whether it seeded;
  * a root-level entrypoint only.
  */
-export async function seedStarterEntrypoint(stageDir: string, pinnedContext: string, entrypoint: string, stagedHeroAssets: readonly string[] = []): Promise<boolean> {
+export async function seedStarterEntrypoint(stageDir: string, pinnedContext: string, entrypoint: string, creationSource: string, stagedHeroAssets: readonly string[] = []): Promise<boolean> {
   if (entrypoint.includes("/")) return false;
   const plan = starterPlan(pinnedContext);
   const pages = (measuredPagesFromPinnedContext(pinnedContext) ?? []).filter(page => SAFE_PATH.test(page.path));
@@ -215,7 +213,7 @@ export async function seedStarterEntrypoint(stageDir: string, pinnedContext: str
   if (plan === null || home === null) return false;
   const file = resolveWithin(stageDir, entrypoint);
   const existing = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return null; throw error; });
-  if (!isFreshEntrypoint(existing)) return false;
+  if (!isFreshEntrypoint(existing, creationSource)) return false;
   const heroMedia = plan.pages[pages.indexOf(home)]?.hero_media;
   await writeFile(file, buildStarterHtml(home, heroMedia !== undefined && stagedHeroAssets.includes(heroMedia) ? heroMedia : undefined), "utf8");
   return true;
