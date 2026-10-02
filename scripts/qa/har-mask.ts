@@ -90,6 +90,21 @@ const entriesOf = (har: Record<string, Json>): Record<string, Json>[] => {
   return log["entries"].filter(isObject);
 };
 
+/** Visit decoded strings and keys in Unicode-escaped JSON; preserve unknown text and unchanged JSON spelling. */
+function encodedJson(text: string, transform: (value: string) => string): string {
+  if (!text.includes("\\u") && !text.includes("%")) return text;
+  let parsed: Json;
+  try { parsed = JSON.parse(text) as Json; } catch (error) { if (error instanceof SyntaxError) return text; throw error; }
+  const walk = (value: Json): Json => {
+    if (typeof value === "string") return transform(value);
+    if (Array.isArray(value)) return value.map(walk);
+    if (isObject(value)) return Object.fromEntries(Object.entries(value).map(([key, child]) => [transform(key), walk(child)]));
+    return value;
+  };
+  const transformed = JSON.stringify(walk(parsed));
+  return transformed === JSON.stringify(parsed) ? text : transformed;
+}
+
 /** Text of a request or response body, base64 bodies decoded; empty when there is none. */
 function bodyText(message: Record<string, Json>): string {
   const body = isObject(message["postData"]) ? message["postData"] : isObject(message["content"]) ? message["content"] : null;
@@ -188,7 +203,7 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const scrub = (text: string): string => {
     let out = text;
     for (const secret of secrets) for (const form of secretForms(secret)) out = out.replaceAll(form, MASKED);
-    return scrubPaths(out);
+    return encodedJson(scrubPaths(out), scrub);
   };
   const walk = (value: Json): Json => {
     if (typeof value === "string") return scrub(value);
@@ -212,10 +227,29 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   }
   const masked = walk(har);
   const serialized = JSON.stringify(masked);
-  const decodedBodies = entriesOf(masked as Record<string, Json>).flatMap(entry => { const content = isObject(entry["response"]) ? entry["response"]["content"] : null; return isObject(content) && content["encoding"] === "base64" && typeof content["text"] === "string" ? [Buffer.from(content["text"], "base64").toString("latin1")] : []; });
+  const decodedBodies = entriesOf(masked as Record<string, Json>).flatMap(entry => { const content = isObject(entry["response"]) ? entry["response"]["content"] : null; return isObject(content) && content["encoding"] === "base64" && typeof content["text"] === "string" ? [Buffer.from(content["text"], "base64").toString("utf8")] : []; });
   // Compared by escape trace, a secret is found at any JSON nesting depth, including depths masking does not unescape.
   const traces = [serialized.replaceAll("\\", ""), ...decodedBodies.map(escapeTrace)];
   if (secrets.some(secret => [secret, encodeURIComponent(secret)].some(form => traces.some(trace => trace.includes(escapeTrace(form)))))) throw new HarMaskError("secret_remains");
+  // Binary bodies are not rewritten. JSON and the two URL-encoding levels supported for private roots must still fail closed.
+  const checkEncoded = (text: string): string => {
+    const candidates = [text];
+    for (let level = 0, decoded = text; level < 2; level += 1) {
+      const next = decoded.replace(/(?:%[0-9a-f]{2})+/gi, sequence => {
+        try { return decodeURIComponent(sequence); } catch { return sequence; }
+      });
+      if (next === decoded) break;
+      candidates.push(next);
+      decoded = next;
+    }
+    for (const candidate of candidates) {
+      const trace = escapeTrace(candidate);
+      if (secrets.some(secret => secretForms(secret).some(form => trace.includes(escapeTrace(form))))) throw new HarMaskError("secret_remains");
+      encodedJson(candidate, checkEncoded);
+    }
+    return text;
+  };
+  for (const text of [serialized, ...decodedBodies]) checkEncoded(text);
   return { har: masked, report: counts };
 }
 
