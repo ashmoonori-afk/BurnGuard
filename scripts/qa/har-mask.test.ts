@@ -214,6 +214,63 @@ describe("HAR masking of collected secrets that need JSON escaping", () => {
   const quoted = ["hunter2", "quoted-pass-0123"].join("\"");
   const backslashed = ["pa", "ss-word-back-0123"].join("\\");
 
+  test.each([1, 2])("Given a collected password echoed at URL-encoding depth %s with lowercase hex, then sharing fails closed", depth => {
+    const password = ["percent", "secret", "012345"].join("/ +");
+    let echo = password;
+    for (let level = 0; level < depth; level += 1) echo = encodeURIComponent(echo).replace(/%[0-9A-F]{2}/g, sequence => sequence.toLowerCase());
+    const input = { log: { entries: [entry({ method: "PATCH", url: API, postData: { mimeType: "application/json", text: JSON.stringify({ password }) } }, { content: { mimeType: "application/json", text: JSON.stringify({ echo }) } })] } };
+    expect(() => maskHar(input)).toThrow("secret_remains");
+  });
+
+  test.each(["plain", "base64", "nested"] as const)("Given a collected password echoed with Unicode JSON escapes in a %s text body, when masked, then semantic decoding recovers only the placeholder", encoding => {
+    const password = ["private", "pass", "012345"].join("-");
+    const escaped = [...password].map(char => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`).join("");
+    let text = `{"echo":"${escaped}","${escaped}":"ordinary","keep":"readable","items":["${escaped}"]}`;
+    if (encoding === "nested") text = JSON.stringify({ echo: text });
+    const input = { log: { entries: [entry({ method: "PATCH", url: API, postData: { mimeType: "application/json", text: JSON.stringify({ password }) } }, { content: { size: text.length, mimeType: "application/json", text: encoding === "base64" ? Buffer.from(text).toString("base64") : text, ...(encoding === "base64" ? { encoding } : {}) } })] } };
+    const original = JSON.stringify(input);
+    const result = maskHar(input);
+    const output = JSON.parse(JSON.stringify(result.har)) as { readonly log: { readonly entries: readonly MaskedEntry[] } };
+    let decoded = output.log.entries[0]!.response.content.text;
+    if (encoding === "base64") decoded = Buffer.from(decoded, "base64").toString("utf8");
+    if (encoding === "nested") decoded = JSON.parse(decoded).echo;
+    expect(JSON.parse(decoded)).toEqual({ echo: MASKED, [MASKED]: "ordinary", keep: "readable", items: [MASKED] });
+    expect(JSON.stringify(JSON.parse(decoded))).not.toContain(password);
+    expect(JSON.parse(output.log.entries[0]!.request.postData!.text)).toEqual({ password: MASKED });
+    expect(result.report.secret_values).toBe(1);
+    expect(JSON.stringify(input)).toBe(original);
+  });
+
+  test("Given a collected password in URL-encoded Unicode JSON, then sharing fails closed", () => {
+    const password = ["private", "pass", "012345"].join("-");
+    const escaped = [...password].map(char => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`).join("");
+    const echo = encodeURIComponent(`"${escaped}"`);
+    const input = { log: { entries: [entry({ method: "PATCH", url: API, postData: { mimeType: "application/json", text: JSON.stringify({ password }) } }, { content: { mimeType: "application/json", text: JSON.stringify({ echo }) } })] } };
+    expect(() => maskHar(input)).toThrow("secret_remains");
+  });
+
+  test("Given a collected UTF-8 password in a binary base64 body, then sharing fails closed without rewriting it", () => {
+    const password = ["private", "p\u00e4ss", "012345"].join("-");
+    const text = Buffer.from(password, "utf8").toString("base64");
+    const input = { log: { entries: [entry({ method: "PATCH", url: API, postData: { mimeType: "application/json", text: JSON.stringify({ password }) } }, { content: { mimeType: "application/octet-stream", encoding: "base64", text } })] } };
+    expect(() => maskHar(input)).toThrow("secret_remains");
+    expect(input.log.entries[0]!.response.content.text).toBe(text);
+  });
+
+  test("Given a collected password echoed with Unicode JSON escapes in a binary base64 body, when masked, then the residual check fails closed", () => {
+    const password = ["private", "pass", "012345"].join("-");
+    const escaped = [...password].map(char => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`).join("");
+    const text = `{"echo":"${escaped}"}`;
+    const echoed = { content: { size: text.length, mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(text).toString("base64") } };
+    expect(() => mask([entry({ method: "PATCH", url: API, postData: { mimeType: "application/json", text: JSON.stringify({ password }) } }, echoed)])).toThrow(new HarMaskError("secret_remains"));
+  });
+
+  test("Given unrelated Unicode-escaped JSON and unknown text, when masked, then both keep their original bytes", () => {
+    const texts = [' { "echo" : "\\u0061" } ', 'unknown \\u0061 text'];
+    const masked = mask(texts.map(text => entry({ url: API }, { content: { size: text.length, mimeType: "text/plain", text } })));
+    expect(masked.entries.map(item => item.response.content.text)).toEqual(texts);
+  });
+
   test("Given secret-named JSON body fields whose values hold a quote or a backslash, when masked, then the escaped values are masked in the request body and in a response that echoes them", () => {
     const masked = mask([entry({ method: "PATCH", url: "http://127.0.0.1:14070/api/settings", postData: { mimeType: "application/json", text: JSON.stringify({ password: quoted, client_secret: backslashed }) } }, jsonBody({ data: { echo: `${quoted} ${backslashed}` } }))]);
     for (const part of ["quoted-pass-0123", "ss-word-back-0123"]) expect(masked.text).not.toContain(part);
