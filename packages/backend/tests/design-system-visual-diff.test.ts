@@ -45,7 +45,15 @@ test("Given a relocated compiled visual-diff entrypoint, then it decodes PNG thr
     child = Bun.spawn([process.execPath, "build", entry, "--compile", "--outfile", binary, "--external", "@napi-rs/canvas", "--external", "pdfjs-dist"], { stdout: "pipe", stderr: "pipe" });
     const [compiled, , compileError] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect(compiled, compileError).toBe(0);
-    child = Bun.spawn([binary, image], { cwd: root, env: { ...process.env, BG_APP_ROOT: path.join(root, "profile") }, stdout: "pipe", stderr: "pipe" });
+    const env: NodeJS.ProcessEnv = { ...process.env, BG_APP_ROOT: path.join(root, "profile") };
+    // Desktop packaging ships Windows/macOS bindings. Ubuntu still executes the
+    // real compiled decoder, using NAPI-RS's explicit library path for its ABI.
+    if (process.platform === "linux") {
+      const binding = packages.find(name => name.endsWith(`linux-${process.arch}-gnu`));
+      if (binding === undefined) throw new Error("missing_staged_linux_canvas_binding");
+      env.NAPI_RS_NATIVE_LIBRARY_PATH = path.join(modules, binding, path.basename(canvasRequire.resolve(binding)));
+    }
+    child = Bun.spawn([binary, image], { cwd: root, env, stdout: "pipe", stderr: "pipe" });
     const [exit, output, error] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect(exit, error).toBe(0);
     expect(JSON.parse(output.trim().split("\n").at(-1)!)).toEqual({ width: 16, height: 16, pixel: 96 });
