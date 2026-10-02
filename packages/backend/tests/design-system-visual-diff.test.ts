@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { createCanvas } from "@napi-rs/canvas";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { MEASURED_VIEWPORTS, type MeasuredViewportLayout } from "@bg/shared";
 import { compareVisualViewport, cropSectionJpeg, decodeGrayImage, sectionOverlap, ssimBand, visualRepairTargets, type GrayImage } from "../src/services/design-system-visual-diff";
 
@@ -12,6 +17,51 @@ const layout = (sections: MeasuredViewportLayout["sections"], blocks: MeasuredVi
   viewport: { ...MEASURED_VIEWPORTS.desktop }, page_height: 1000, container: null, gutter: null, section_gap: null, type_scale: {}, blocks, sections,
 });
 const section = (top: number, height: number) => ({ heading: `S${top}`, top, height, columns: 1, align: "left" as const });
+
+test("Given a relocated compiled visual-diff entrypoint, then it decodes PNG through the staged native runtime", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "bg-visual-package-"));
+  let child: ReturnType<typeof Bun.spawn> | undefined;
+  try {
+    const modules = path.join(root, "node_modules");
+    await mkdir(path.join(root, "resources"), { recursive: true });
+    await writeFile(path.join(root, "resources", "burnguard-runtime.json"), "{}");
+    const require = createRequire(import.meta.path);
+    const canvasManifest = require.resolve("@napi-rs/canvas/package.json");
+    const canvasRequire = createRequire(canvasManifest);
+    const optional = Object.keys((await Bun.file(canvasManifest).json()).optionalDependencies);
+    const packages = ["@napi-rs/canvas", "pdfjs-dist"];
+    for (const name of optional) {
+      if (canvasRequire.resolve.paths(name)?.some(root => existsSync(path.join(root, name, "package.json")))) packages.push(name);
+    }
+    for (const name of packages) {
+      const source = path.dirname(name.startsWith("@napi-rs/canvas-") ? canvasRequire.resolve(name) : require.resolve(`${name}/package.json`));
+      await cp(source, path.join(modules, name), { recursive: true, dereference: true });
+    }
+    const entry = path.join(root, "entry.ts");
+    const binary = path.join(root, process.platform === "win32" ? "visual.exe" : "visual");
+    const image = path.join(root, "fixture.png");
+    await writeFile(image, await pngOf(gray(16, 16, () => 96)));
+    await writeFile(entry, `import { decodeGrayImage } from ${JSON.stringify(path.resolve(import.meta.dir, "../src/services/design-system-visual-diff.ts").replaceAll("\\", "/"))};\nconst image = await decodeGrayImage(new Uint8Array(await Bun.file(process.argv[2]).arrayBuffer()));\nconsole.log(JSON.stringify({ width: image.width, height: image.height, pixel: image.data[0] }));\n`);
+    child = Bun.spawn([process.execPath, "build", entry, "--compile", "--outfile", binary, "--external", "@napi-rs/canvas", "--external", "pdfjs-dist"], { stdout: "pipe", stderr: "pipe" });
+    const [compiled, , compileError] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+    expect(compiled, compileError).toBe(0);
+    const env: NodeJS.ProcessEnv = { ...process.env, BG_APP_ROOT: path.join(root, "profile") };
+    // Desktop packaging ships Windows/macOS bindings. Ubuntu still executes the
+    // real compiled decoder, using NAPI-RS's explicit library path for its ABI.
+    if (process.platform === "linux") {
+      const binding = packages.find(name => name.endsWith(`linux-${process.arch}-gnu`));
+      if (binding === undefined) throw new Error("missing_staged_linux_canvas_binding");
+      env.NAPI_RS_NATIVE_LIBRARY_PATH = path.join(modules, binding, path.basename(canvasRequire.resolve(binding)));
+    }
+    child = Bun.spawn([binary, image], { cwd: root, env, stdout: "pipe", stderr: "pipe" });
+    const [exit, output, error] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+    expect(exit, error).toBe(0);
+    expect(JSON.parse(output.trim().split("\n").at(-1)!)).toEqual({ width: 16, height: 16, pixel: 96 });
+  } finally {
+    if (child && child.exitCode === null) { child.kill(); await child.exited; }
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60000);
 
 async function pngOf(image: GrayImage): Promise<Uint8Array> {
   const canvas = createCanvas(image.width, image.height);

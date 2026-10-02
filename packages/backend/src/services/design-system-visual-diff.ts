@@ -1,4 +1,4 @@
-import { createCanvas, loadImage } from "@napi-rs/canvas";
+import { createCanvas, loadImage } from "./export-native-modules";
 import type { MeasuredBox, MeasuredViewportLayout, MeasuredViewportName } from "@bg/shared";
 
 export type GrayImage = { readonly width: number; readonly height: number; readonly data: Uint8Array };
