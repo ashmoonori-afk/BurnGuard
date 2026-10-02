@@ -73,18 +73,18 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
   }
 }
 
-function fullscreenExited(page: Page): Promise<void> {
-  const exited = page.evaluate(() => new Promise<void>((resolve, reject) => {
-    if (!document.fullscreenElement) { resolve(); return; }
+function fullscreenState(page: Page, active: boolean): Promise<void> {
+  const settled = page.evaluate(active => new Promise<void>((resolve, reject) => {
+    if (Boolean(document.fullscreenElement) === active) { resolve(); return; }
     const changed = () => {
-      if (document.fullscreenElement) return;
+      if (Boolean(document.fullscreenElement) !== active) return;
       clearTimeout(timer); document.removeEventListener("fullscreenchange", changed); resolve();
     };
-    const timer = setTimeout(() => { document.removeEventListener("fullscreenchange", changed); reject(new Error("fullscreen_exit_timeout")); }, 5000);
+    const timer = setTimeout(() => { document.removeEventListener("fullscreenchange", changed); reject(new Error("fullscreen_state_timeout")); }, 5000);
     document.addEventListener("fullscreenchange", changed);
-  }));
-  exited.catch(() => {});
-  return exited;
+  }), active);
+  settled.catch(() => {});
+  return settled;
 }
 
 test("local authored scripts run in the opaque sandbox in parser/defer order, without authority leakage", async () => {
@@ -141,19 +141,24 @@ test("local authored scripts run in the opaque sandbox in parser/defer order, wi
 
 test("presentation loads runtime and notes, forwards focused page Escape but preserves authored input and composition", async () => {
   await withBrowser(async (page, base) => {
+    const entered = fullscreenState(page, true);
     await page.evaluate(src => globalThis.deckTest.present(src), `${base}${root}deck.html`);
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
     const frame = page.frameLocator("main iframe");
     await frame.locator("[data-slide] h1").first().waitFor();
+    // Iframe load can precede fullscreen entry; settle this mount before dismissal.
+    await entered;
     // Subscribe before dismissal: fullscreen exit is asynchronous and belongs to
     // this overlay, not the subsequent mount. This is page input, not OS Escape.
-    const exited = fullscreenExited(page);
+    const exited = fullscreenState(page, false);
     await frame.locator("body").press("Escape");
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
     await exited;
+    const reentered = fullscreenState(page, true);
     await page.evaluate(src => globalThis.deckTest.present(src), `${base}${root}deck.html`);
     await frame.locator("body[data-deck-ready][data-presenter]").waitFor();
+    await reentered;
     expect(await frame.locator(".deck-notes").isVisible()).toBe(true);
     for (const selector of ["input", "textarea", "select", "#editable"]) {
       await frame.locator(selector === "#editable" ? "[contenteditable]" : selector).focus();
@@ -172,7 +177,7 @@ test("presentation loads runtime and notes, forwards focused page Escape but pre
     await page.evaluate(() => window.postMessage({ __bgFrameBridge: true, type: "event", event: "present-dismiss", payload: { documentKey: "forged" } }, "*"));
     expect(await dialog.count()).toBe(1);
     await frame.locator("body").evaluate(() => Reflect.set(window, "cancelEscape", false));
-    const finalExit = fullscreenExited(page);
+    const finalExit = fullscreenState(page, false);
     await frame.locator("body").press("Escape");
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
     await finalExit;
