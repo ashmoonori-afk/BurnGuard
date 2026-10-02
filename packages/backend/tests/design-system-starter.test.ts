@@ -122,7 +122,7 @@ describe("Design-system starter", () => {
       await mkdir(path.join(stage, "fonts"), { recursive: true });
       await writeFile(path.join(stage, "fonts", "fonts.css"), "/* project font store */\n");
       await provisionDesignSystemStarter(stage, { context, tokens: extracted });
-      expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(true);
+      expect(await seedStarterEntrypoint(stage, context, "index.html", "")).toBe(true);
 
       // The same font preparation and strict closure runExport performs before rendering.
       await prepareBundledFontExport(stage);
