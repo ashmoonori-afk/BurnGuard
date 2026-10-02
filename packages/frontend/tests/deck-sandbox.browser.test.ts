@@ -66,6 +66,13 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     await page.goto(base);
     await page.addScriptTag({ content: script });
     await page.evaluate(() => globalThis.deckTest.bootstrapApiAuthority());
+    await page.evaluate(() => {
+      const launch = document.createElement("button");
+      launch.type = "button";
+      launch.textContent = "Present test fixture";
+      launch.addEventListener("click", () => { void globalThis.deckTest.present("/api/projects/deck-test/fs/deck.html"); });
+      document.body.appendChild(launch);
+    });
     await action(page, base, requests);
     expect(browserErrors).toEqual([]);
   } finally {
@@ -141,9 +148,9 @@ test("local authored scripts run in the opaque sandbox in parser/defer order, wi
 }, 30000);
 
 test("presentation remounts after its owned fullscreen exit and forwards focused page Escape", async () => {
-  await withBrowser(async (page, base) => {
+  await withBrowser(async (page) => {
     const entered = fullscreenState(page, true);
-    await page.evaluate(src => globalThis.deckTest.present(src), `${base}${root}deck.html`);
+    await page.getByRole("button", { name: "Present test fixture" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
     const frame = page.frameLocator("main iframe");
@@ -156,7 +163,7 @@ test("presentation remounts after its owned fullscreen exit and forwards focused
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
     await exited;
     const reentered = fullscreenState(page, true);
-    await page.evaluate(src => globalThis.deckTest.present(src), `${base}${root}deck.html`);
+    await page.getByRole("button", { name: "Present test fixture" }).click();
     await frame.locator("body[data-deck-ready][data-presenter]").waitFor();
     await reentered;
     expect(await frame.locator(".deck-notes").isVisible()).toBe(true);
@@ -180,8 +187,8 @@ async function settleFrameMessages(page: Page): Promise<void> {
 }
 
 test("presentation fullscreen fallback preserves authored input, composition and untrusted source isolation", async () => {
-  await withBrowser(async (page, base) => {
-    await page.evaluate(src => globalThis.deckTest.present(src), `${base}${root}deck.html`);
+  await withBrowser(async (page) => {
+    await page.getByRole("button", { name: "Present test fixture" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
     const frame = page.frameLocator("main iframe");
