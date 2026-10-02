@@ -34,7 +34,6 @@ packages/backend/tests/charts.test.ts
 packages/backend/tests/checkpoints.test.ts
 packages/backend/tests/claude-code-parser.test.ts
 packages/backend/tests/codex-image-outputs.test.ts
-packages/backend/tests/codex-model-catalog.test.ts
 packages/backend/tests/codex-parser.test.ts
 packages/backend/tests/codex-runner.test.ts
 packages/backend/tests/content-type-ladder.test.ts
@@ -135,7 +134,6 @@ packages/backend/tests/lucide-icons.test.ts
 packages/backend/tests/mac-updates.test.ts
 packages/backend/tests/mass-research.test.ts
 packages/backend/tests/migration-pipeline-upgrade.test.ts
-packages/backend/tests/model-lists.test.ts
 packages/backend/tests/model-profile.test.ts
 packages/backend/tests/multi-provider-backends.test.ts
 packages/backend/tests/original-samples.test.ts
@@ -155,7 +153,6 @@ packages/backend/tests/png-zip-slicing.test.ts
 packages/backend/tests/png-zip.test.ts
 packages/backend/tests/preset-observation.test.ts
 packages/backend/tests/project-bundle-contract.test.ts
-packages/backend/tests/project-bundle-routes.test.ts
 packages/backend/tests/project-bundle-security.test.ts
 packages/backend/tests/project-bundle.test.ts
 packages/backend/tests/project-directory-recovery.test.ts
@@ -207,7 +204,6 @@ packages/backend/tests/stage-attachment-inputs.test.ts
 packages/backend/tests/starter-templates.test.ts
 packages/backend/tests/surface-image-language.test.ts
 packages/backend/tests/task-preset-adoption.test.ts
-packages/backend/tests/task-preset-comparison.test.ts
 packages/backend/tests/task-preset-evidence.test.ts
 packages/backend/tests/taste-skill.test.ts
 packages/backend/tests/test-isolation.test.ts
@@ -244,7 +240,6 @@ packages/frontend/tests/artifact-operation-refresh.test.ts
 packages/frontend/tests/artifact-tabs.test.ts
 packages/frontend/tests/auto-fix-pending.test.ts
 packages/frontend/tests/backend-display.test.ts
-packages/frontend/tests/backend-restart-notice.test.ts
 packages/frontend/tests/backend-toggle.test.ts
 packages/frontend/tests/bootstrap-shell.test.ts
 packages/frontend/tests/bridge-inline-style.test.ts
@@ -277,7 +272,6 @@ packages/frontend/tests/create-page-prompt.test.ts
 packages/frontend/tests/creation-draft.test.ts
 packages/frontend/tests/deck-fit.browser.test.ts
 packages/frontend/tests/deck-preview.test.ts
-packages/frontend/tests/deck-sandbox.browser.test.ts
 packages/frontend/tests/design-audit-state.test.ts
 packages/frontend/tests/design-direction-state.test.ts
 packages/frontend/tests/design-system-assets-panel.test.ts
@@ -329,7 +323,6 @@ packages/frontend/tests/runtime-diagnostics.test.ts
 packages/frontend/tests/selection-bridge.test.ts
 packages/frontend/tests/session-multipart.test.ts
 packages/frontend/tests/session-review.test.ts
-packages/frontend/tests/settings-language-note.test.ts
 packages/frontend/tests/settings-locale.test.ts
 packages/frontend/tests/settings-localization.test.ts
 packages/frontend/tests/settings-system-review.test.ts
@@ -350,7 +343,6 @@ packages/frontend/tests/ux-review.test.ts
 packages/frontend/tests/visual-alternative-compare.test.ts
 packages/frontend/tests/visual-source-selection.test.ts
 packages/frontend/tests/visual-token-contract.test.ts
-packages/frontend/tests/workspace-narrow-layout.test.ts
 packages/shared/tests/runtime-diagnostics.test.ts
 scripts/qa/clipboard-paste-fixtures.test.js
 scripts/qa/release-draft-state.test.js

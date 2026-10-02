@@ -101,7 +101,7 @@ describe("chromium launch", () => {
     const signal = AbortSignal.timeout(200);
 
     await launchChromium(signal, async () => fakeBrowser());
-    const fired = await new Promise<boolean>((resolve) => { const timer = setTimeout(() => { resolve(false); }, 5_000); signal.addEventListener("abort", () => { clearTimeout(timer); resolve(true); }, { once: true }); });
+    const fired = signal.aborted || await new Promise<boolean>((resolve) => { const timer = setTimeout(() => { resolve(false); }, 5_000); signal.addEventListener("abort", () => { clearTimeout(timer); resolve(true); }, { once: true }); });
 
     expect(fired).toBe(true);
   });

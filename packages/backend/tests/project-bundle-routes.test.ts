@@ -5,6 +5,7 @@ import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { getProjectDetail } from "../src/db/project-read-repository";
 import { createApp } from "../src/server";
+import { closeProjectWatcher } from "../src/services/watcher-registry";
 
 const capability = "bundle-route-capability";
 const authority = "127.0.0.1:14070";
@@ -14,6 +15,7 @@ beforeAll(runMigrations);
 
 afterAll(async () => {
   for (const projectId of created) {
+    closeProjectWatcher(projectId);
     const project = await getProjectDetail(projectId);
     getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId);
     if (project) await rm(project.dir_path, { recursive: true, force: true });

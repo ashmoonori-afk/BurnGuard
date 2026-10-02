@@ -79,7 +79,7 @@ test("Given cleanup LOW When assembled on each route Then archived model guidanc
   }
 });
 
-test("Given the real planner CLI When invoked Then planning never reports collected artifacts", () => {
+test("Given the real planner CLI When invoked Then planning never reports collected artifacts", async () => {
   const cases = [
     { gate: "0", args: ["--mode", "compare"], status: "skipped", exit: 0 },
     { gate: "1", args: ["--mode", "examples"], status: "blocked", exit: 2 },
@@ -87,11 +87,12 @@ test("Given the real planner CLI When invoked Then planning never reports collec
     { gate: "1", args: ["--mode", "compare", "--condition", "task-low", "--condition", "post-low"], status: "planned", exit: 0 },
   ];
   for (const item of cases) {
-    const child = Bun.spawnSync([process.execPath, "scripts/qa/task-preset-comparison.ts", ...item.args], {
-      env: { ...process.env, BG_TASK_PRESET_SMOKE: item.gate }, stdout: "pipe", stderr: "pipe", timeout: 10000,
+    const child = Bun.spawn([process.execPath, "scripts/qa/task-preset-comparison.ts", ...item.args], {
+      env: { ...process.env, BG_TASK_PRESET_SMOKE: item.gate }, stdin: "ignore", stdout: "pipe", stderr: "pipe", timeout: 10000,
     });
-    expect(child.exitCode).toBe(item.exit);
-    const result = JSON.parse(child.stdout.toString());
+    const [exit, stdout] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+    expect(exit).toBe(item.exit);
+    const result = JSON.parse(stdout);
     expect(result.status).toBe(item.status);
     expect(result.status).not.toBe("collected");
     if (item.status === "planned") {

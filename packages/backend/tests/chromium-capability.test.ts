@@ -220,6 +220,7 @@ describe("caller deadline", () => {
 });
 
 function firesWithin(signal: AbortSignal, ms: number): Promise<boolean> {
+  if (signal.aborted) return Promise.resolve(true);
   return new Promise<boolean>((resolve) => {
     const timer = setTimeout(() => { resolve(false); }, ms);
     signal.addEventListener("abort", () => { clearTimeout(timer); resolve(true); }, { once: true });
