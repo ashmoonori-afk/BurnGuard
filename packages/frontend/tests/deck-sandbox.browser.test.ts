@@ -10,7 +10,7 @@ declare global { var deckTest: {
   canvas(html: string, url: string): Promise<string>;
   present(src: string): Promise<void>;
   embedCanvasImages(html: string, url: string, signal: AbortSignal): Promise<string>;
-}; var scriptAbort: AbortController }
+}; var scriptAbort: AbortController; var presentationLoad: Promise<void> }
 const root = "/api/projects/deck-test/fs/";
 const html = `<!doctype html><html><head>
 <script>window.order=[];window.blobs=[];window.revoked=[];
@@ -70,7 +70,7 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
       const launch = document.createElement("button");
       launch.type = "button";
       launch.textContent = "Present test fixture";
-      launch.addEventListener("click", () => { void globalThis.deckTest.present("/api/projects/deck-test/fs/deck.html"); });
+      launch.addEventListener("click", () => { globalThis.presentationLoad = globalThis.deckTest.present("/api/projects/deck-test/fs/deck.html"); });
       document.body.appendChild(launch);
     });
     await action(page, base, requests);
@@ -151,6 +151,7 @@ test("presentation remounts after its owned fullscreen exit and forwards focused
   await withBrowser(async (page) => {
     const entered = fullscreenState(page, true);
     await page.getByRole("button", { name: "Present test fixture" }).click();
+    await page.evaluate(() => globalThis.presentationLoad);
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
     const frame = page.frameLocator("main iframe");
@@ -164,6 +165,7 @@ test("presentation remounts after its owned fullscreen exit and forwards focused
     await exited;
     const reentered = fullscreenState(page, true);
     await page.getByRole("button", { name: "Present test fixture" }).click();
+    await page.evaluate(() => globalThis.presentationLoad);
     await frame.locator("body[data-deck-ready][data-presenter]").waitFor();
     await reentered;
     expect(await frame.locator(".deck-notes").isVisible()).toBe(true);
@@ -189,6 +191,7 @@ async function settleFrameMessages(page: Page): Promise<void> {
 test("presentation fullscreen fallback preserves authored input, composition and untrusted source isolation", async () => {
   await withBrowser(async (page) => {
     await page.getByRole("button", { name: "Present test fixture" }).click();
+    await page.evaluate(() => globalThis.presentationLoad);
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
     const frame = page.frameLocator("main iframe");
