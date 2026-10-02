@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir } from "node:fs/promises";
-import { chromium, type Browser, type Page } from "../../backend/node_modules/playwright-core";
+import type { Browser, Page } from "../../backend/node_modules/playwright-core";
 import { Hono } from "../../backend/node_modules/hono";
 import { createRequestAuthority } from "../../backend/src/security/request-authority";
 import { DECK_STAGE_JS } from "../../backend/src/runtime/deck-stage";
@@ -28,13 +27,16 @@ URL.revokeObjectURL=u=>{revoked.push(u);revoke(u)};</script>
 <script>order.push('body');window.addEventListener('keydown',e=>{if(e.key==='Escape' && window.cancelEscape)e.preventDefault()});</script>
 </body></html>`;
 
-async function withBrowser(action: (page: Page, base: string, requests: { path: string; capability: string | null; status: number }[]) => Promise<void>) {
+async function withBrowser(action: (page: Page, base: string, requests: { path: string; capability: string | null; status: number }[]) => Promise<void>, allowFullscreen = true) {
   const requests: { path: string; capability: string | null; status: number }[] = [];
   const app = new Hono();
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: request => app.fetch(request) });
   const base = server.url.origin;
   app.use("/api/*", createRequestAuthority({ capability: "deck-private-test", appAuthority: server.url.host }));
-  app.get("/", c => c.html("<!doctype html><html><body></body></html>"));
+  app.get("/", c => {
+    if (!allowFullscreen) c.header("Permissions-Policy", "fullscreen=()");
+    return c.html("<!doctype html><html><body></body></html>");
+  });
   app.get(`${root}deck.html`, c => c.html(html));
   app.get(`${root}runtime/:name`, c => {
     const name = c.req.param("name");
@@ -55,10 +57,8 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     const compiler = Bun.spawn([process.execPath, "build", `${import.meta.dir}/fixtures/deck-browser.tsx`, "--target=browser", "--format=iife", "--minify"], { stdout: "pipe", stderr: "pipe" });
     const [code, script, errors] = await Promise.all([compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text()]);
     if (code !== 0) throw new Error(errors);
-    // Use the Playwright-matched browser for iframe/fullscreen lifecycle coverage.
-    browser = process.platform === "win32"
-      ? await launchChromiumViaNode({}, AbortSignal.timeout(20_000))
-      : await chromium.launch({ headless: true });
+    // Use the shipped Node browser path for iframe/fullscreen lifecycle coverage.
+    browser = await launchChromiumViaNode({}, AbortSignal.timeout(20_000));
     const page = await browser.newPage();
     page.setDefaultTimeout(5000);
     const browserErrors: string[] = [];
@@ -140,7 +140,7 @@ test("local authored scripts run in the opaque sandbox in parser/defer order, wi
   });
 }, 30000);
 
-test("presentation loads runtime and notes, forwards focused page Escape but preserves authored input and composition", async () => {
+test("presentation remounts after its owned fullscreen exit and forwards focused page Escape", async () => {
   await withBrowser(async (page, base) => {
     const entered = fullscreenState(page, true);
     await page.evaluate(src => globalThis.deckTest.present(src), `${base}${root}deck.html`);
@@ -150,39 +150,49 @@ test("presentation loads runtime and notes, forwards focused page Escape but pre
     await frame.locator("[data-slide] h1").first().waitFor();
     // Iframe load can precede fullscreen entry; settle this mount before dismissal.
     await entered;
-    // Subscribe before dismissal: fullscreen exit is asynchronous and belongs to
-    // this overlay, not the subsequent mount. This is page input, not OS Escape.
+    // Subscribe before dismissal: fullscreen exit belongs to this overlay.
     const exited = fullscreenState(page, false);
     await frame.locator("body").press("Escape");
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
     await exited;
     const reentered = fullscreenState(page, true);
     await page.evaluate(src => globalThis.deckTest.present(src), `${base}${root}deck.html`);
-    try {
-      await frame.locator("body[data-deck-ready][data-presenter]").waitFor();
-    } catch (error) {
-      const state = await page.evaluate(() => ({
-        dialogs: document.querySelectorAll('[role="dialog"]').length,
-        fullscreen: document.fullscreenElement?.getAttribute("aria-label") ?? null,
-        alerts: [...document.querySelectorAll('[role="alert"]')].map(node => node.textContent),
-        frames: [...document.querySelectorAll("main iframe")].map(node => ({
-          connected: node.isConnected,
-          srcDocLength: (node as HTMLIFrameElement).srcdoc.length,
-          width: node.getBoundingClientRect().width,
-          height: node.getBoundingClientRect().height,
-        })),
-      }));
-      console.error("CI_PRESENTATION_REOPEN", JSON.stringify(state));
-      console.error(error);
-      await mkdir(".omo/evidence", { recursive: true });
-      await page.screenshot({ path: ".omo/evidence/presentation-ci.png" });
-      throw error;
-    }
+    await frame.locator("body[data-deck-ready][data-presenter]").waitFor();
     await reentered;
+    expect(await frame.locator(".deck-notes").isVisible()).toBe(true);
+    const finalExit = fullscreenState(page, false);
+    await frame.locator("body").press("Escape");
+    await dialog.waitFor({ state: "hidden", timeout: 3000 });
+    await finalExit;
+  });
+}, 30000);
+
+async function settleFrameMessages(page: Page): Promise<void> {
+  const settled = page.evaluate(() => new Promise<void>((resolve, reject) => {
+    const stop = () => { window.clearTimeout(timer); window.removeEventListener("message", listener); };
+    const listener = (event: MessageEvent) => { if (event.data === "qa-input-fence") { stop(); resolve(); } };
+    const timer = window.setTimeout(() => { stop(); reject(new Error("frame_message_fence_deadline")); }, 5000);
+    window.addEventListener("message", listener);
+  }));
+  settled.catch(() => undefined);
+  await page.frameLocator("main iframe").locator("body").evaluate(() => parent.postMessage("qa-input-fence", "*"));
+  await settled;
+}
+
+test("presentation fullscreen fallback preserves authored input, composition and untrusted source isolation", async () => {
+  await withBrowser(async (page, base) => {
+    await page.evaluate(src => globalThis.deckTest.present(src), `${base}${root}deck.html`);
+    const dialog = page.getByRole("dialog");
+    await dialog.waitFor();
+    const frame = page.frameLocator("main iframe");
+    await frame.locator("body[data-deck-ready][data-presenter]").waitFor();
+    expect(await page.evaluate(() => document.fullscreenEnabled)).toBe(false);
+    expect(await page.evaluate(() => document.fullscreenElement === null)).toBe(true);
     expect(await frame.locator(".deck-notes").isVisible()).toBe(true);
     for (const selector of ["input", "textarea", "select", "#editable"]) {
       await frame.locator(selector === "#editable" ? "[contenteditable]" : selector).focus();
       await page.keyboard.press("Escape");
+      await settleFrameMessages(page);
       expect(await dialog.count()).toBe(1);
     }
     await frame.locator("body").evaluate(body => {
@@ -192,14 +202,14 @@ test("presentation loads runtime and notes, forwards focused page Escape but pre
     });
     await frame.locator("body").evaluate(body => { body.tabIndex = -1; body.focus(); });
     await page.keyboard.press("Escape");
+    await settleFrameMessages(page);
     expect(await dialog.count()).toBe(1);
     // Same envelope from a different source must never dismiss the overlay.
     await page.evaluate(() => window.postMessage({ __bgFrameBridge: true, type: "event", event: "present-dismiss", payload: { documentKey: "forged" } }, "*"));
+    await settleFrameMessages(page);
     expect(await dialog.count()).toBe(1);
     await frame.locator("body").evaluate(() => Reflect.set(window, "cancelEscape", false));
-    const finalExit = fullscreenState(page, false);
     await frame.locator("body").press("Escape");
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
-    await finalExit;
-  });
+  }, false);
 }, 30000);
