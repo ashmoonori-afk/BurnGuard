@@ -35,7 +35,7 @@ describe("Design-system starter entrypoint", () => {
   test("Given a fresh stage and a measured home, then the class-based skeleton becomes the entrypoint and an untouched skeleton is never complete", async () => {
     const context = await pinnedContext(true);
     await withStage(async (stage) => {
-      expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(true);
+      expect(await seedStarterEntrypoint(stage, context, "index.html", "")).toBe(true);
       const html = await readFile(path.join(stage, "index.html"), "utf8");
       expect(html).toContain('<meta name="bg-measured-page" content="/">');
       expect(html).toContain('href="design-system/system.css"');
@@ -51,13 +51,13 @@ describe("Design-system starter entrypoint", () => {
     const context = await pinnedContext(true);
     await withStage(async (stage) => {
       await writeFile(path.join(stage, "index.html"), "<!doctype html><h1>Mine</h1>");
-      expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(false);
+      expect(await seedStarterEntrypoint(stage, context, "index.html", "")).toBe(false);
       expect(await readFile(path.join(stage, "index.html"), "utf8")).toBe("<!doctype html><h1>Mine</h1>");
     });
     await withStage(async (stage) => {
-      expect(await seedStarterEntrypoint(stage, context, "pages/index.html")).toBe(false);
+      expect(await seedStarterEntrypoint(stage, context, "pages/index.html", "")).toBe(false);
       expect(await readFile(path.join(stage, "pages", "index.html")).catch(() => null)).toBeNull();
-      expect(await seedStarterEntrypoint(stage, await pinnedContext(false), "index.html")).toBe(false);
+      expect(await seedStarterEntrypoint(stage, await pinnedContext(false), "index.html", "")).toBe(false);
       expect(await readFile(path.join(stage, "index.html")).catch(() => null)).toBeNull();
     });
   });
@@ -67,13 +67,13 @@ describe("Design-system starter entrypoint", () => {
     const creation = renderInitialArtifact({ name: "Acme", type: "prototype" });
     await withStage(async (stage) => {
       await writeFile(path.join(stage, "index.html"), creation);
-      expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(true);
+      expect(await seedStarterEntrypoint(stage, context, "index.html", creation)).toBe(true);
       expect((await readFile(path.join(stage, "index.html"), "utf8")).includes("Start a new prototype")).toBe(false);
     });
     await withStage(async (stage) => {
       const edited = creation.replace("Send your first prompt in chat to generate the first revision.", "My own copy.");
       await writeFile(path.join(stage, "index.html"), edited);
-      expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(false);
+      expect(await seedStarterEntrypoint(stage, context, "index.html", creation)).toBe(false);
       expect(await readFile(path.join(stage, "index.html"), "utf8")).toBe(edited);
     });
   });
@@ -86,12 +86,29 @@ describe("Design-system starter entrypoint", () => {
     expect(entrypointBuiltAgainstSystem("<h1>No declaration</h1>", false)).toBe(false);
   });
 
+  test("Given authored CSS, content or title edits retaining the creation markers, then seeding preserves the page", async () => {
+    const context = await pinnedContext(true);
+    const creation = renderInitialArtifact({ name: "Acme", type: "prototype" });
+    const edits = [
+      creation.replace("</style>", "body { outline: 3px solid #123456; }</style>"),
+      creation.replace("</body>", '<section data-authored="true">Authored content</section></body>'),
+      creation.replace(/<title>[\s\S]*?<\/title>/, "<title>Authored title</title>"),
+    ];
+    for (const edited of edits) {
+      await withStage(async (stage) => {
+        await writeFile(path.join(stage, "index.html"), edited);
+        expect(await seedStarterEntrypoint(stage, context, "index.html", creation)).toBe(false);
+        expect(await readFile(path.join(stage, "index.html"), "utf8")).toBe(edited);
+      });
+    }
+  });
+
   test("Given an empty entrypoint file, then it is treated as fresh and seeded", async () => {
     const context = await pinnedContext(true);
     await withStage(async (stage) => {
       await mkdir(stage, { recursive: true });
       await writeFile(path.join(stage, "index.html"), "  \n");
-      expect(await seedStarterEntrypoint(stage, context, "index.html")).toBe(true);
+      expect(await seedStarterEntrypoint(stage, context, "index.html", "")).toBe(true);
       expect((await readFile(path.join(stage, "index.html"), "utf8")).includes("bg-measured-page")).toBe(true);
     });
   });
