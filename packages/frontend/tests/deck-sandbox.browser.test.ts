@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { mkdir } from "node:fs/promises";
 import { chromium, type Browser, type Page } from "../../backend/node_modules/playwright-core";
 import { Hono } from "../../backend/node_modules/hono";
 import { createRequestAuthority } from "../../backend/src/security/request-authority";
@@ -157,7 +158,26 @@ test("presentation loads runtime and notes, forwards focused page Escape but pre
     await exited;
     const reentered = fullscreenState(page, true);
     await page.evaluate(src => globalThis.deckTest.present(src), `${base}${root}deck.html`);
-    await frame.locator("body[data-deck-ready][data-presenter]").waitFor();
+    try {
+      await frame.locator("body[data-deck-ready][data-presenter]").waitFor();
+    } catch (error) {
+      const state = await page.evaluate(() => ({
+        dialogs: document.querySelectorAll('[role="dialog"]').length,
+        fullscreen: document.fullscreenElement?.getAttribute("aria-label") ?? null,
+        alerts: [...document.querySelectorAll('[role="alert"]')].map(node => node.textContent),
+        frames: [...document.querySelectorAll("main iframe")].map(node => ({
+          connected: node.isConnected,
+          srcDocLength: (node as HTMLIFrameElement).srcdoc.length,
+          width: node.getBoundingClientRect().width,
+          height: node.getBoundingClientRect().height,
+        })),
+      }));
+      console.error("CI_PRESENTATION_REOPEN", JSON.stringify(state));
+      console.error(error);
+      await mkdir(".omo/evidence", { recursive: true });
+      await page.screenshot({ path: ".omo/evidence/presentation-ci.png" });
+      throw error;
+    }
     await reentered;
     expect(await frame.locator(".deck-notes").isVisible()).toBe(true);
     for (const selector of ["input", "textarea", "select", "#editable"]) {

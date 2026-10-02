@@ -147,6 +147,13 @@ jobs:
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/design-system-starter.test.ts
           packages/frontend/tests/deck-sandbox.browser.test.ts
+      - name: Preserve presentation failure view
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: presentation-${{ runner.os }}-${{ github.run_id }}
+          path: .omo/evidence/presentation-ci.png
+          if-no-files-found: ignore
       - name: Chromium popup and deck runtime
         if: runner.os == 'Windows'
         env:

@@ -166,6 +166,13 @@ jobs:
           BG_BROWSER_SMOKE: "1"
           DEBUG: "pw:api"
         run: bun test --timeout 60000 packages/frontend/tests/deck-sandbox.browser.test.ts packages/backend/tests/design-system-contrast.test.ts
+      - name: Preserve presentation failure view
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: presentation-security-${{ github.run_id }}
+          path: .omo/evidence/presentation-ci.png
+          if-no-files-found: ignore
       # Advisories with no compatible upstream fix are allowlisted by id.
       # Remove image-size ids when a release after 2.0.2 exists; affected
       # ICNS/JXL/HEIF inputs never reach PPTXGenJS here. Remove the router ids
