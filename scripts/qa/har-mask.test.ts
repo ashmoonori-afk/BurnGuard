@@ -101,8 +101,9 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       expect((await stat(output)).mode & 0o777).toBe(process.platform === "win32" ? 0o666 : 0o600);
       const again = Bun.spawnSync(["bun", path.join(import.meta.dir, "har-mask.ts"), input, output]);
       expect(JSON.parse(again.stderr.toString())).toEqual({ error: "output_exists" });
-      const link = path.join(dir, "link.har");
-      await symlink(input, link);
+      const alias = path.join(dir, "alias");
+      await symlink(dir, alias, process.platform === "win32" ? "junction" : "dir");
+      const link = path.join(alias, "raw.har");
       const viaLink = Bun.spawnSync(["bun", path.join(import.meta.dir, "har-mask.ts"), input, link]);
       expect(JSON.parse(viaLink.stderr.toString())).toEqual({ error: "output_exists" });
       expect(await readFile(input, "utf8")).toContain(CAPABILITY);
