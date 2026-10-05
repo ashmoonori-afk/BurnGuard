@@ -287,14 +287,19 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   // A secret carried as base64 or hex of its bytes (a Basic credential echoed, btoa in a page) is probed too: the base64
   // characters fixed by the secret alone at each of the three byte alignments, standard and URL-safe, and both hex cases.
   const derivedForms = (secret: string): string[] => {
-    const bytes = Buffer.from(secret, "utf8");
-    const forms = [bytes.toString("hex"), bytes.toString("hex").toUpperCase()];
-    for (let shift = 0; shift < 3; shift += 1) {
-      const core = Buffer.concat([Buffer.alloc(shift), bytes]).toString("base64").slice(shift === 0 ? 0 : 4, -4);
-      forms.push(core, core.replaceAll("+", "-").replaceAll("/", "_"));
+    // The secret's bytes as UTF-8, as Latin-1 (what browser btoa encodes) when every character fits, and as UTF-16LE.
+    const encodings = [Buffer.from(secret, "utf8"), Buffer.from(secret, "utf16le"), ...([...secret].every(char => char.charCodeAt(0) <= 0xff) ? [Buffer.from(secret, "latin1")] : [])];
+    const forms: string[] = [];
+    for (const bytes of encodings) {
+      forms.push(bytes.toString("hex"), bytes.toString("hex").toUpperCase());
+      for (let shift = 0; shift < 3; shift += 1) {
+        const core = Buffer.concat([Buffer.alloc(shift), bytes]).toString("base64").slice(shift === 0 ? 0 : 4, -4);
+        forms.push(core, core.replaceAll("+", "-").replaceAll("/", "_"));
+      }
     }
     return [...new Set(forms)].filter(form => form.length >= MIN_SECRET_LENGTH);
   };
+
   const probes = [...spellings.map(spelling => new RegExp(spelling.source, "u")), ...secrets.flatMap(derivedForms).map(form => new RegExp(form.replace(REGEXP_SYNTAX, "\\$&"), "u"))];
   // Decodes like a forgiving reader (URLSearchParams): invalid UTF-8 becomes U+FFFD instead of hiding the whole run.
   const percentDecoded = (text: string): string => text.replace(/(?:%[0-9a-f]{2})+/giu, sequence => Buffer.from(sequence.slice(1).split("%").map(hex => Number.parseInt(hex, 16))).toString("utf8"));
@@ -330,7 +335,15 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   });
   const styleDecoded = (text: string): string => text.replace(/\\([0-9a-fA-F]{1,6})(?:\r\n|[ \t\n\r\f])?/gu, (_match, hex: string) => codePoint(hex, 16));
   const stringsOf = (value: unknown): string[] => typeof value === "string" ? [value] : Array.isArray(value) ? value.flatMap(stringsOf) : isObject(value) ? Object.entries(value).flatMap(([key, child]) => [key, ...stringsOf(child)]) : [];
-  const DECODERS: readonly ((text: string) => string)[] = [percentDecoded, text => percentDecoded(text.replaceAll("+", " ")), jsonUnescaped, htmlDecoded, scriptDecoded, styleDecoded];
+  // Besides the decodings above: JavaScript's legacy unescape (Latin-1 %XX and %uXXXX), the newline normalization
+  // browsers apply to HTML and template literals (CRLF and CR read as LF), and base64 with its line breaks removed (MIME
+  // wraps at 76 characters and atob ignores whitespace), so the base64 probes see the unbroken text.
+  const legacyUnescaped = (text: string): string => text.replace(/%u([0-9a-fA-F]{4})|%([0-9a-fA-F]{2})/gu, (_match, unit: string | undefined, byte: string | undefined) => String.fromCharCode(Number.parseInt(unit ?? byte ?? "", 16)));
+  const withoutWhitespace = (text: string): string => text.replace(/[\t\n\f\r ]+/gu, "");
+  const DECODERS: readonly ((text: string) => string)[] = [percentDecoded, text => percentDecoded(text.replaceAll("+", " ")), jsonUnescaped, htmlDecoded, scriptDecoded, styleDecoded, legacyUnescaped, text => text.replace(/\r\n?/gu, "\n"), withoutWhitespace];
+  // Removing whitespace only serves the base64 probes; the single path below never builds on it, since it would erase
+  // the spaces of a secret that later decodings still have to reveal.
+  const PATH_DECODERS = DECODERS.filter(decode => decode !== withoutWhitespace);
   const MAX_DECODE_ROUNDS = 6;
   const MAX_DECODINGS = 64;
   const MAX_JSON_DEPTH = 8;
@@ -360,8 +373,8 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
           for (let step = 0; step < 64; step += 1) {
             if (probes.some(probe => probe.test(text))) return true;
             let decoded = text;
-            for (const decode of DECODERS) {
-              if (probes.some(probe => probe.test(decode(text)))) return true;
+            if (DECODERS.some(decode => probes.some(probe => probe.test(decode(text))))) return true;
+            for (const decode of PATH_DECODERS) {
               decoded = decode(decoded);
               if (probes.some(probe => probe.test(decoded))) return true;
             }
