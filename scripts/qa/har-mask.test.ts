@@ -122,6 +122,9 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       ["synthetic \u000bvalue 493827", "<script>globalThis.echo=\"synthetic \\vvalue 493827\";</script>"],
       ["synthetic \u20ac value 493827", "<div>synthetic &#128; value 493827</div>"],
       ["synthetic caf\u00e9value 493827", "<div>synthetic caf&eacutevalue 493827</div>"],
+      ["synthetic caf\u00e9value; 493827", "<div>synthetic caf&eacutevalue; 493827</div>"],
+      [plain, `<script>globalThis.echo="synthetic \\u{0000006f}rdinary 493827";</script>`],
+      [plain, `<script>globalThis.echo=atob("${Buffer.from(plain, "utf16le").swap16().toString("base64")}");</script>`],
       ["synthetic caf\u00e9 value 493827", `<script>globalThis.echo=atob("${Buffer.from("synthetic caf\u00e9 value 493827", "latin1").toString("base64")}");</script>`],
       [`synthetic-provider-${"0123456789abcdef".repeat(3)}`, `<script>globalThis.echo=atob("${Buffer.from(`synthetic-provider-${"0123456789abcdef".repeat(3)}`).toString("base64").replace(/.{76}/u, "$&\n")}");</script>`],
       ["synthetic caf\u00e9 value 493827", "<script>globalThis.echo=unescape(\"synthetic%20caf%E9%20value%20493827\");</script>"],
@@ -138,6 +141,9 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       const echo = entry({ url: "http://127.0.0.1:14070/runtime/projects/p1/index.html" }, { content: { size: page.length, mimeType: "text/html; charset=utf-8", text: page } });
       expect(() => maskHar({ log: { entries: [source, echo] } })).toThrow(new HarMaskError("secret_remains"));
     }
+    // A collected value too long for its mixed-spelling pattern fails closed with the typed error, not an engine error.
+    const huge = "q".repeat(400_000);
+    expect(() => maskHar({ log: { entries: [entry({ url: "http://127.0.0.1:14070/api/l", cookies: [{ name: "c", value: huge }] }, {})] } })).toThrow(new HarMaskError("secret_remains"));
     // A base64 body in UTF-16 (either byte order, also shifted by one byte) is only inspected, never rewritten: a secret in it fails closed.
     const html = Buffer.from(`<html><body>${plain}</body></html>`, "utf16le");
     const swapped = Buffer.from(html).swap16();

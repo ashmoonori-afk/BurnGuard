@@ -214,7 +214,11 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const har = JSON.parse(JSON.stringify(input)) as Record<string, Json>;
   const entries = entriesOf(har);
   const secrets = [...collectSecrets(entries)].sort((a, b) => b.length - a.length);
-  const spellings = secrets.map(secretSpelling);
+  // A collected value too long for its mixed-spelling pattern (a very large cookie, for example) cannot be checked in
+  // every spelling, so masking fails closed with a typed error instead of a raw engine error.
+  const spellings = secrets.map(secret => {
+    try { return secretSpelling(secret); } catch (error) { if (error instanceof SyntaxError) throw new HarMaskError("secret_remains"); throw error; }
+  });
   // The bootstrap response is where the capability is minted. A body there that yields no capability means the
   // format is not understood, so masking fails closed instead of trusting that nothing leaked.
   for (const entry of entries.filter(isBootstrap)) {
@@ -284,11 +288,17 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   // and each decoded base64 body is percent-decoded, form-decoded ("+" as a space) and JSON-unescaped (\uXXXX, \" and
   // the like) repeatedly, JSON found along the way is parsed and its strings and keys checked the same way, and every
   // result is probed. A value that still decodes further at the bound, or nests JSON deeper than it, fails closed.
+  // Scope and limits: decodings branch for a bounded number of rounds, then one path per value is followed with every
+  // single decoding probed at each step; this is not an exhaustive search over every order of decodings. The check is
+  // deliberately conservative: ordinary JSON nested more than eight levels inside strings, and an HTML named reference
+  // outside the built-in table next to a secret-length run of text (it is read as any one or two characters), fail
+  // closed with secret_remains even when nothing leaks.
   // A secret carried as base64 or hex of its bytes (a Basic credential echoed, btoa in a page) is probed too: the base64
   // characters fixed by the secret alone at each of the three byte alignments, standard and URL-safe, and both hex cases.
   const derivedForms = (secret: string): string[] => {
-    // The secret's bytes as UTF-8, as Latin-1 (what browser btoa encodes) when every character fits, and as UTF-16LE.
-    const encodings = [Buffer.from(secret, "utf8"), Buffer.from(secret, "utf16le"), ...([...secret].every(char => char.charCodeAt(0) <= 0xff) ? [Buffer.from(secret, "latin1")] : [])];
+    // The secret's bytes as UTF-8, as UTF-16 in both byte orders, and as Latin-1 (what browser btoa encodes) when every
+    // character fits.
+    const encodings = [Buffer.from(secret, "utf8"), Buffer.from(secret, "utf16le"), Buffer.from(secret, "utf16le").swap16(), ...([...secret].every(char => char.charCodeAt(0) <= 0xff) ? [Buffer.from(secret, "latin1")] : [])];
     const forms: string[] = [];
     for (const bytes of encodings) {
       forms.push(bytes.toString("hex"), bytes.toString("hex").toUpperCase());
@@ -316,17 +326,19 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const LATIN1_NAMES = "nbsp iexcl cent pound curren yen brvbar sect uml copy ordf laquo not shy reg macr deg plusmn sup2 sup3 acute micro para middot cedil sup1 ordm raquo frac14 frac12 frac34 iquest Agrave Aacute Acirc Atilde Auml Aring AElig Ccedil Egrave Eacute Ecirc Euml Igrave Iacute Icirc Iuml ETH Ntilde Ograve Oacute Ocirc Otilde Ouml times Oslash Ugrave Uacute Ucirc Uuml Yacute THORN szlig agrave aacute acirc atilde auml aring aelig ccedil egrave eacute ecirc euml igrave iacute icirc iuml eth ntilde ograve oacute ocirc otilde ouml divide oslash ugrave uacute ucirc uuml yacute thorn yuml".split(" ");
   const LEGACY_REFERENCES: Readonly<Record<string, string>> = { ...Object.fromEntries(LATIN1_NAMES.map((name, index) => [name, String.fromCharCode(0xa0 + index)])), amp: "&", lt: "<", gt: ">", quot: "\"", AMP: "&", LT: "<", GT: ">", QUOT: "\"", COPY: "\u00a9", REG: "\u00ae" };
   const LEGACY_BY_LENGTH = Object.keys(LEGACY_REFERENCES).sort((a, b) => b.length - a.length);
-  const htmlDecoded = (text: string): string => text.replace(/&(?:#[xX]0*([0-9a-fA-F]{1,6})|#0*([0-9]{1,7})|([A-Za-z][A-Za-z0-9]{1,31}))(;?)/gu, (match, hex: string | undefined, decimal: string | undefined, name: string | undefined, semicolon: string) => {
+  const htmlDecoded = (text: string, legacyPrefixFirst = false): string => text.replace(/&(?:#[xX]0*([0-9a-fA-F]{1,6})|#0*([0-9]{1,7})|([A-Za-z][A-Za-z0-9]{1,31}))(;?)/gu, (match, hex: string | undefined, decimal: string | undefined, name: string | undefined, semicolon: string) => {
     // Browsers read numeric references 0x80-0x9F as Windows-1252 (&#128; is the euro sign).
     const numeric = hex !== undefined ? Number.parseInt(hex, 16) : decimal !== undefined ? Number.parseInt(decimal, 10) : undefined;
     if (numeric !== undefined) return numeric >= 0x80 && numeric <= 0x9f ? new TextDecoder("windows-1252").decode(Uint8Array.of(numeric)) : codePoint(String(numeric), 10);
     const word = name ?? "";
-    if (semicolon === ";") return LEGACY_REFERENCES[word] ?? NAMED_REFERENCES[word] ?? NAMED_REFERENCES[word.toLowerCase()] ?? "\uffff\uffff";
     const legacy = LEGACY_BY_LENGTH.find(candidate => word.startsWith(candidate));
+    // An unknown name with ";" is either a full-table reference this table lacks (a wildcard) or, as browsers read
+    // "&eacutevalue;", a legacy name followed by plain text; the second reading is a separate decoding.
+    if (semicolon === ";") return LEGACY_REFERENCES[word] ?? NAMED_REFERENCES[word] ?? NAMED_REFERENCES[word.toLowerCase()] ?? (legacyPrefixFirst && legacy !== undefined ? `${LEGACY_REFERENCES[legacy]}${word.slice(legacy.length)};` : "\uffff\uffff");
     return legacy === undefined ? match : `${LEGACY_REFERENCES[legacy]}${word.slice(legacy.length)}`;
   });
   // JavaScript string escapes JSON lacks: \xHH, \u{...}, legacy octal (\0 is NUL), \v, \', \` and line continuations.
-  const scriptDecoded = (text: string): string => text.replace(/\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]{1,6})\}|([0-3][0-7]{0,2}|[4-7][0-7]?)|([v'`])|(\r\n|[\n\r\u2028\u2029]))/gu, (_match, byte: string | undefined, braced: string | undefined, octal: string | undefined, short: string | undefined) => {
+  const scriptDecoded = (text: string): string => text.replace(/\\(?:x([0-9a-fA-F]{2})|u\{0*([0-9a-fA-F]{1,6})\}|([0-3][0-7]{0,2}|[4-7][0-7]?)|([v'`])|(\r\n|[\n\r\u2028\u2029]))/gu, (_match, byte: string | undefined, braced: string | undefined, octal: string | undefined, short: string | undefined) => {
     // Unlike an HTML reference, a script escape may spell NUL (\x00, \u{0}).
     if (byte !== undefined || braced !== undefined) { const value = Number.parseInt(byte ?? braced ?? "", 16); return value <= 0x10ffff ? String.fromCodePoint(value) : "\ufffd"; }
     if (octal !== undefined) return String.fromCharCode(Number.parseInt(octal, 8));
@@ -340,7 +352,7 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   // wraps at 76 characters and atob ignores whitespace), so the base64 probes see the unbroken text.
   const legacyUnescaped = (text: string): string => text.replace(/%u([0-9a-fA-F]{4})|%([0-9a-fA-F]{2})/gu, (_match, unit: string | undefined, byte: string | undefined) => String.fromCharCode(Number.parseInt(unit ?? byte ?? "", 16)));
   const withoutWhitespace = (text: string): string => text.replace(/[\t\n\f\r ]+/gu, "");
-  const DECODERS: readonly ((text: string) => string)[] = [percentDecoded, text => percentDecoded(text.replaceAll("+", " ")), jsonUnescaped, htmlDecoded, scriptDecoded, styleDecoded, legacyUnescaped, text => text.replace(/\r\n?/gu, "\n"), withoutWhitespace];
+  const DECODERS: readonly ((text: string) => string)[] = [percentDecoded, text => percentDecoded(text.replaceAll("+", " ")), jsonUnescaped, htmlDecoded, text => htmlDecoded(text, true), scriptDecoded, styleDecoded, legacyUnescaped, text => text.replace(/\r\n?/gu, "\n"), withoutWhitespace];
   // Removing whitespace only serves the base64 probes; the single path below never builds on it, since it would erase
   // the spaces of a secret that later decodings still have to reveal.
   const PATH_DECODERS = DECODERS.filter(decode => decode !== withoutWhitespace);
