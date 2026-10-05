@@ -124,7 +124,7 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       ["synthetic caf\u00e9value 493827", "<div>synthetic caf&eacutevalue 493827</div>"],
       ["synthetic caf\u00e9value; 493827", "<div>synthetic caf&eacutevalue; 493827</div>"],
       [plain, `<script>globalThis.echo="synthetic \\u{0000006f}rdinary 493827";</script>`],
-      [plain, `<script>globalThis.echo=atob("${Buffer.from(plain, "utf16le").swap16().toString("base64")}");</script>`],
+      ["synthetic \ud55c\uae00 value 493827", `<script>globalThis.echo="${Buffer.from("synthetic \ud55c\uae00 value 493827", "utf16le").swap16().toString("base64")}";</script>`],
       ["synthetic caf\u00e9 value 493827", `<script>globalThis.echo=atob("${Buffer.from("synthetic caf\u00e9 value 493827", "latin1").toString("base64")}");</script>`],
       [`synthetic-provider-${"0123456789abcdef".repeat(3)}`, `<script>globalThis.echo=atob("${Buffer.from(`synthetic-provider-${"0123456789abcdef".repeat(3)}`).toString("base64").replace(/.{76}/u, "$&\n")}");</script>`],
       ["synthetic caf\u00e9 value 493827", "<script>globalThis.echo=unescape(\"synthetic%20caf%E9%20value%20493827\");</script>"],
