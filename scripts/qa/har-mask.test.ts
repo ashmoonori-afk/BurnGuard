@@ -108,6 +108,14 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       const source = entry({ method: "POST", url: "http://127.0.0.1:14070/api/login", postData: { mimeType: "application/json", text: JSON.stringify({ password: secret }) } }, {});
       expect(() => maskHar({ log: { entries: [source, leak] } })).toThrow(new HarMaskError("secret_remains"));
     }
+    // A base64 body in UTF-16 (either byte order, also shifted by one byte) is only inspected, never rewritten: a secret in it fails closed.
+    const html = Buffer.from(`<html><body>${plain}</body></html>`, "utf16le");
+    const swapped = Buffer.from(html).swap16();
+    for (const bytes of [html, swapped, Buffer.concat([Buffer.from([0x20]), html])]) {
+      const source = entry({ method: "POST", url: "http://127.0.0.1:14070/api/login", postData: { mimeType: "application/json", text: JSON.stringify({ password: plain }) } }, {});
+      const echo = entry({ url: "http://127.0.0.1:14070/api/k" }, { content: { size: bytes.length, mimeType: "text/html; charset=utf-16le", encoding: "base64", text: bytes.toString("base64") } });
+      expect(() => maskHar({ log: { entries: [source, echo] } })).toThrow(new HarMaskError("secret_remains"));
+    }
     const binary = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/c", headers: [header("x-burnguard-capability", CAPABILITY)], postData: { mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(`{"c":"${CAPABILITY}"}`).toString("base64") } }, {})] } };
     expect(() => maskHar(binary)).toThrow(new HarMaskError("secret_remains"));
   });

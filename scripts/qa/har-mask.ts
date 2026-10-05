@@ -176,6 +176,15 @@ function collectSecrets(entries: readonly Record<string, Json>[]): Set<string> {
   return secrets;
 }
 
+/**
+ * The texts a reader could decode from body bytes: UTF-8, and UTF-16 in either byte order from either byte offset. Only
+ * UTF-8 bodies are rewritten; a secret readable in another decoding fails closed.
+ */
+function decodings(bytes: Buffer): string[] {
+  const utf16 = (encoding: "utf-16le" | "utf-16be", offset: number) => new TextDecoder(encoding).decode(bytes.subarray(offset));
+  return [bytes.toString("utf8"), utf16("utf-16le", 0), utf16("utf-16le", 1), utf16("utf-16be", 0), utf16("utf-16be", 1)];
+}
+
 /** Returns a masked copy of a parsed HAR and counts what was masked; the report never contains a masked value. */
 export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { readonly har: unknown; readonly report: HarMaskReport } {
   if (!isObject(input)) throw new HarMaskError("invalid_har");
@@ -244,7 +253,7 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const serialized = JSON.stringify(masked);
   const decodedBodies = entriesOf(masked as Record<string, Json>)
     .flatMap(entry => [entry["request"], entry["response"]].flatMap(message => isObject(message) ? [message["postData"], message["content"]] : []))
-    .flatMap(body => isObject(body) && body["encoding"] === "base64" && typeof body["text"] === "string" ? [Buffer.from(body["text"], "base64").toString("utf8")] : []);
+    .flatMap(body => isObject(body) && body["encoding"] === "base64" && typeof body["text"] === "string" ? decodings(Buffer.from(body["text"], "base64")) : []);
   // Compared by escape trace, a secret is found at any JSON nesting depth, including depths masking does not unescape.
   const traces = [serialized.replaceAll("\\", ""), ...decodedBodies.map(escapeTrace)];
   if (secrets.some(secret => [secret, encodeURIComponent(secret), formEncoded(secret)].some(form => traces.some(trace => trace.includes(escapeTrace(form)))))) throw new HarMaskError("secret_remains");
