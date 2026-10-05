@@ -328,6 +328,9 @@ describe("HAR masking of caller-given roots in the forms a HAR carries them", ()
     expect(() => maskHar(colliding, roots)).toThrow(new HarMaskError("invalid_har"));
     const escapedKeys = `{"\\u002fUsers\\u002freview-fixture\\u002fa":"one","\\u002fUsers\\u002fother-fixture\\u002fa":"two"}`;
     expect(() => maskHar({ log: { entries: [entry({ url: API }, { content: { size: 10, mimeType: "application/json", text: escapedKeys } })] } }, roots)).toThrow(new HarMaskError("invalid_har"));
+    for (const text of [JSON.stringify({ "/Users/review-fixture/a": "one", "/Users/other-fixture/a": "two" }), JSON.stringify({ wrapped: JSON.stringify({ "/Users/review-fixture/a": "one", "/Users/other-fixture/a": "two" }) })]) {
+      expect(() => maskHar({ log: { entries: [entry({ url: API }, { content: { size: 10, mimeType: "application/json", text } })] } }, roots)).toThrow(new HarMaskError("invalid_har"));
+    }
     const selfPlaceholder = { log: { entries: [entry({ url: `${API}?dir=%2Ftmp%2Fqa-run-9` }, {})] } };
     expect(() => maskHar(selfPlaceholder, [{ path: "/tmp/qa-run-9", placeholder: "/tmp/qa-run-9" }])).toThrow(new HarMaskError("private_path_remains"));
   });

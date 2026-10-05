@@ -250,10 +250,26 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
     }
     return out;
   };
-  const scrub = (text: string): string => {
+  const scrubText = (text: string): string => {
     let out = text;
     for (const secret of secrets) for (const form of secretForms(secret)) out = out.replaceAll(form, MASKED);
     return encodedJson(scrubPaths(out), scrub);
+  };
+  // Masking JSON text in place can turn two distinct keys into one (two private roots, one placeholder); a reader would
+  // then keep only one value. Count keys, also in JSON nested in strings, and refuse the HAR when masking lost any.
+  const keyCount = (value: unknown, depth: number): number => {
+    if (typeof value === "string") {
+      if (depth >= 8 || !/^\s*[[{]/u.test(value)) return 0;
+      try { return keyCount(JSON.parse(value), depth + 1); } catch (error) { if (error instanceof SyntaxError) return 0; throw error; }
+    }
+    if (Array.isArray(value)) return value.reduce((sum: number, item) => sum + keyCount(item, depth), 0);
+    if (isObject(value)) return Object.entries(value).reduce((sum, [, child]) => sum + 1 + keyCount(child, depth), 0);
+    return 0;
+  };
+  const scrub = (text: string): string => {
+    const out = scrubText(text);
+    if (out !== text && keyCount(out, 0) < keyCount(text, 0)) throw new HarMaskError("invalid_har");
+    return out;
   };
   // Keys are masked like values (a HAR extension object can be keyed by a private path). Two keys that mask to the
   // same text would silently drop one value, so that fails as an unsupported HAR instead.
