@@ -248,7 +248,22 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   // Compared by escape trace, a secret is found at any JSON nesting depth, including depths masking does not unescape.
   const traces = [serialized.replaceAll("\\", ""), ...decodedBodies.map(escapeTrace)];
   if (secrets.some(secret => [secret, encodeURIComponent(secret), formEncoded(secret)].some(form => traces.some(trace => trace.includes(escapeTrace(form)))))) throw new HarMaskError("secret_remains");
-  if (spellings.some(spelling => [serialized, ...decodedBodies].some(text => new RegExp(spelling.source, "u").test(text)))) throw new HarMaskError("secret_remains");
+  // Mixed spellings are checked on semantic values: every string and key as parsed, and JSON nested in a string as
+  // parsed again, so JSON escaping of a quote or backslash inside a mixed spelling cannot hide it.
+  const probes = spellings.map(spelling => new RegExp(spelling.source, "u"));
+  const spelled = (value: unknown, depth: number): boolean => {
+    if (typeof value === "string") {
+      if (probes.some(probe => probe.test(value))) return true;
+      if (depth >= 8 || !/^\s*[[{"]/u.test(value)) return false;
+      let parsed: unknown;
+      try { parsed = JSON.parse(value); } catch (error) { if (error instanceof SyntaxError) return false; throw error; }
+      return spelled(parsed, depth + 1);
+    }
+    if (Array.isArray(value)) return value.some(item => spelled(item, depth));
+    if (isObject(value)) return Object.entries(value).some(([key, child]) => spelled(key, depth) || spelled(child, depth));
+    return false;
+  };
+  if (probes.length > 0 && (spelled(masked, 0) || decodedBodies.some(body => spelled(body, 0)))) throw new HarMaskError("secret_remains");
   // Binary bodies are not rewritten. JSON and the two URL-encoding levels supported for private roots must still fail closed.
   const checkEncoded = (text: string): string => {
     const candidates = [text];

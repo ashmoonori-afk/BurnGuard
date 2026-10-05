@@ -70,6 +70,17 @@ describe("HAR masking for the pre-release UX QA stage", () => {
     expect(() => maskHar(mixedRequest)).toThrow(new HarMaskError("secret_remains"));
     const mixedEcho = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/g", postData: { mimeType: "application/x-www-form-urlencoded", encoding: "base64", text: Buffer.from(form).toString("base64") } }, { content: { size: 30, mimeType: "text/plain", encoding: "base64", text: Buffer.from(`echo=${mixed}&note=ordinary+text`).toString("base64") } })] } };
     expect(() => maskHar(mixedEcho)).toThrow(new HarMaskError("secret_remains"));
+    // A quote or backslash kept literal in a mixed spelling is JSON-escaped in a JSON echo, in base64, and in a URL query.
+    for (const special of ['quoted"password', "back\\slash"]) {
+      const secret = ["synthetic", special, "493827"].join(" ");
+      const literal = encodeURIComponent(secret).replace("%20", "+").replace("%22", '"').replace("%5C", "\\");
+      const login = { method: "POST", url: "http://127.0.0.1:14070/api/h", postData: { mimeType: "application/json", text: JSON.stringify({ password: secret }) } };
+      for (const echo of [
+        entry(login, { content: { size: 30, mimeType: "application/json", text: JSON.stringify({ echo: literal }) } }),
+        entry(login, { content: { size: 30, mimeType: "application/json", encoding: "base64", text: Buffer.from(JSON.stringify({ echo: literal })).toString("base64") } }),
+        entry({ ...login, url: `http://127.0.0.1:14070/api/h?echo=${literal}` }, {}),
+      ]) expect(() => maskHar({ log: { entries: [echo] } })).toThrow(new HarMaskError("secret_remains"));
+    }
     const binary = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/c", headers: [header("x-burnguard-capability", CAPABILITY)], postData: { mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(`{"c":"${CAPABILITY}"}`).toString("base64") } }, {})] } };
     expect(() => maskHar(binary)).toThrow(new HarMaskError("secret_remains"));
   });
