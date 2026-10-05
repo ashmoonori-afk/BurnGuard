@@ -93,6 +93,21 @@ describe("HAR masking for the pre-release UX QA stage", () => {
         entry({ ...login, url: `http://127.0.0.1:14070/api/h?echo=${encodeURIComponent(encodeURIComponent(unicodeJson))}` }, {}),
       ]) expect(() => maskHar({ log: { entries: [leak] } })).toThrow(new HarMaskError("secret_remains"));
     }
+    // An invalid UTF-8 byte next to a percent-encoded escaped secret, and a secret with a literal backslash escape under
+    // eight percent layers, fail closed as well.
+    const plain = ["synthetic", "ordinary", "493827"].join(" ");
+    const escapedPlain = `"${[...plain].map(char => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`).join("")}"`;
+    const bytes = (text: string) => [...Buffer.from(text)].map(byte => `%${byte.toString(16).padStart(2, "0")}`).join("");
+    const backslashed = ["synthetic", "back\\npassword", "493827"].join(" ");
+    let deep = encodeURIComponent(backslashed).replace("%20", "+").replace("%5C", "\\");
+    for (let level = 0; level < 8; level += 1) deep = encodeURIComponent(deep);
+    for (const [secret, leak] of [
+      [plain, entry({ url: `http://127.0.0.1:14070/api/i?echo=${bytes(escapedPlain)}%ff` }, {})],
+      [backslashed, entry({ url: "http://127.0.0.1:14070/api/j" }, { content: { size: 30, mimeType: "text/plain", text: deep } })],
+    ] as const) {
+      const source = entry({ method: "POST", url: "http://127.0.0.1:14070/api/login", postData: { mimeType: "application/json", text: JSON.stringify({ password: secret }) } }, {});
+      expect(() => maskHar({ log: { entries: [source, leak] } })).toThrow(new HarMaskError("secret_remains"));
+    }
     const binary = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/c", headers: [header("x-burnguard-capability", CAPABILITY)], postData: { mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(`{"c":"${CAPABILITY}"}`).toString("base64") } }, {})] } };
     expect(() => maskHar(binary)).toThrow(new HarMaskError("secret_remains"));
   });

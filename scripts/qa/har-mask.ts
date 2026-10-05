@@ -253,7 +253,8 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   // the like) repeatedly, JSON found along the way is parsed and its strings and keys checked the same way, and every
   // result is probed. A value that still decodes further at the bound, or nests JSON deeper than it, fails closed.
   const probes = spellings.map(spelling => new RegExp(spelling.source, "u"));
-  const percentDecoded = (text: string): string => text.replace(/(?:%[0-9a-f]{2})+/giu, sequence => { try { return decodeURIComponent(sequence); } catch { return sequence; } });
+  // Decodes like a forgiving reader (URLSearchParams): invalid UTF-8 becomes U+FFFD instead of hiding the whole run.
+  const percentDecoded = (text: string): string => text.replace(/(?:%[0-9a-f]{2})+/giu, sequence => Buffer.from(sequence.slice(1).split("%").map(hex => Number.parseInt(hex, 16))).toString("utf8"));
   const JSON_ESCAPES: Readonly<Record<string, string>> = { b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
   const jsonUnescaped = (text: string): string => text.replace(/\\(?:u([0-9a-fA-F]{4})|(["\\/bfnrt]))/gu, (_match, hex: string | undefined, char: string | undefined) => hex !== undefined ? String.fromCharCode(Number.parseInt(hex, 16)) : JSON_ESCAPES[char ?? ""] ?? char ?? "");
   const stringsOf = (value: unknown): string[] => typeof value === "string" ? [value] : Array.isArray(value) ? value.flatMap(stringsOf) : isObject(value) ? Object.entries(value).flatMap(([key, child]) => [key, ...stringsOf(child)]) : [];
@@ -278,13 +279,15 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
         }
       }
       if (next.length > 0 && (round >= MAX_DECODE_ROUNDS || seen.size > MAX_DECODINGS)) {
-        // Past the branching bound, follow one decoding path per value to its fixed point (each step shortens the text,
-        // so a long backslash run collapses in a few steps); a value that has not settled by then fails closed.
+        // Past the branching bound only JSON unescaping may still make progress, as in a long backslash run: it is the
+        // one decoding left, so following it to its fixed point inspects every step. Percent encoding still left at
+        // this depth is not inspected further and fails closed.
         return next.some(start => {
           let text = start;
           for (let step = 0; step < 64; step += 1) {
             if (probes.some(probe => probe.test(text))) return true;
-            const decoded = jsonUnescaped(percentDecoded(text));
+            if (percentDecoded(text) !== text) return true;
+            const decoded = jsonUnescaped(text);
             if (decoded === text) return false;
             text = decoded;
           }
