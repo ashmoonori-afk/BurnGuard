@@ -1,12 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Loader2, Check, AlertCircle, Wrench } from "lucide-react";
-import { useT, type MessageKey } from "@/i18n/t";
-
-const TOOL_STATE_MESSAGE_KEYS: Record<"running" | "finished" | "error", MessageKey> = {
-  running: "chat.tool.running",
-  finished: "chat.tool.finished",
-  error: "chat.tool.error",
-};
+import { useT } from "@/i18n/t";
+import { toolBadgeCopy, type ToolBadgeState } from "@/lib/tool-badge-copy";
 
 export default function ToolBadge({
   tool,
@@ -14,28 +9,14 @@ export default function ToolBadge({
   input,
 }: {
   tool: string;
-  state: "running" | "finished" | "error";
+  state: ToolBadgeState;
   input?: unknown;
 }) {
   const t = useT();
   const Icon =
     state === "running" ? Loader2 : state === "finished" ? Check : AlertCircle;
-  const label = t(tool === "generation_design_review" && state === "error" ? "chat.tool.reviewIncomplete" : TOOL_STATE_MESSAGE_KEYS[state]);
-  const names: Record<string, MessageKey> = {
-    generation_resume_stalled: "chat.tool.resumeStalled",
-    generation_resume_incomplete: "chat.tool.resumeIncomplete",
-    generation_tool_failed: "chat.tool.providerFailed",
-    generation_save: "chat.tool.saveArtifact",
-    generation_phase_plan: "chat.tool.phasePlan",
-    generation_design_review: "chat.tool.designReview",
-    generation_phase_content: "chat.tool.phaseContent",
-    generation_deck_review: "chat.tool.deckReview",
-    generation_logo_repair: "chat.tool.logoRepair",
-    project_import_init: "chat.tool.importInit",
-    // Legacy literal names remain in persisted session events.
-    "덱 문안·글꼴·이미지·크기 점검": "chat.tool.deckReview",
-    "프로젝트 자동 초기화": "chat.tool.importInit",
-  };
+  const copy = toolBadgeCopy(tool, state);
+  const label = t(copy.stateKey);
   const progress = input && typeof input === "object" && "from" in input && "to" in input && "total" in input && [input.from, input.to, input.total].every(value => typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 80) ? input : null;
   return (
     <div
@@ -48,7 +29,7 @@ export default function ToolBadge({
       )}
     >
       <Wrench className="h-3 w-3" />
-      <span className="font-medium">{names[tool] ? t(names[tool]) : tool}</span>
+      <span className="font-medium">{t(copy.nameKey)}</span>
       {tool === "generation_phase_content" && progress && <span>{String(progress.from)}–{String(progress.to)} / {String(progress.total)}</span>}
       <span className="text-muted-foreground">·</span>
       <Icon className={cn("h-3 w-3", state === "running" && "animate-spin")} />
