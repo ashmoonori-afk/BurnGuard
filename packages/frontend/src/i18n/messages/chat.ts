@@ -1,6 +1,18 @@
 import { defineMessages } from "../types";
 
 export const chatMessages = defineMessages({
+  "chat.tool.command": { ko: "명령 실행", en: "Run command", "zh-CN": "运行命令" },
+  "chat.tool.fileChange": { ko: "파일 수정", en: "Change files", "zh-CN": "修改文件" },
+  "chat.tool.fileRead": { ko: "파일 읽기", en: "Read file", "zh-CN": "读取文件" },
+  "chat.tool.fileSearch": { ko: "파일 검색", en: "Search files", "zh-CN": "搜索文件" },
+  "chat.tool.webSearch": { ko: "웹 검색", en: "Search web", "zh-CN": "搜索网页" },
+  "chat.tool.webFetch": { ko: "웹 페이지 읽기", en: "Read web page", "zh-CN": "读取网页" },
+  "chat.tool.mcpCall": { ko: "MCP 도구 호출", en: "Call MCP tool", "zh-CN": "调用 MCP 工具" },
+  "chat.tool.customCall": { ko: "사용자 정의 도구 실행", en: "Run custom tool", "zh-CN": "运行自定义工具" },
+  "chat.tool.imageGeneration": { ko: "이미지 생성", en: "Generate image", "zh-CN": "生成图片" },
+  "chat.tool.agent": { ko: "보조 에이전트 작업", en: "Run agent task", "zh-CN": "执行代理任务" },
+  "chat.tool.taskPlan": { ko: "작업 계획 정리", en: "Update task plan", "zh-CN": "更新任务计划" },
+  "chat.tool.activity": { ko: "도구 작업", en: "Tool activity", "zh-CN": "工具操作" },
   "chat.tool.designReview": { ko: "디자인 검사·수정 (최대 2회)", en: "Design checks and repairs (up to 2)", "zh-CN": "设计检查与修复（最多2次）" },
   "chat.tool.reviewIncomplete": { ko: "남은 문제 또는 검사 미완료 · 품질 탭에서 확인", en: "Issues remain or checks incomplete · See Quality", "zh-CN": "仍有问题或检查未完成 · 请查看质量面板" },
   "chat.tool.phasePlan": { ko: "1단계 · 목차와 기본 구조 저장", en: "Phase 1 · Save outline and structure", "zh-CN": "阶段 1 · 保存大纲与基本结构" },
