@@ -93,7 +93,7 @@ export function rootPattern(root: string): RegExp {
 export type HarMaskReport = { readonly secret_values: number; readonly headers: number; readonly cookies: number; readonly params: number; readonly paths: number };
 export type PrivateRoot = { readonly path: string; readonly placeholder: string };
 export class HarMaskError extends Error {
-  constructor(readonly code: "invalid_har" | "secret_remains" | "capability_not_found" | "invalid_arguments" | "output_exists" | "input_unreadable") { super(code); }
+  constructor(readonly code: "invalid_har" | "secret_remains" | "private_path_remains" | "capability_not_found" | "invalid_arguments" | "output_exists" | "input_unreadable") { super(code); }
 }
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -250,10 +250,16 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
     for (const secret of secrets) for (const form of secretForms(secret)) out = out.replaceAll(form, MASKED);
     return encodedJson(scrubPaths(out), scrub);
   };
+  // Keys are masked like values (a HAR extension object can be keyed by a private path). Two keys that mask to the
+  // same text would silently drop one value, so that fails as an unsupported HAR instead.
   const walk = (value: Json): Json => {
     if (typeof value === "string") return scrub(value);
     if (Array.isArray(value)) return value.map(walk);
-    if (isObject(value)) return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, walk(child)]));
+    if (isObject(value)) {
+      const pairs = Object.entries(value).map(([key, child]): [string, Json] => [scrub(key), walk(child)]);
+      if (new Set(pairs.map(([key]) => key)).size !== pairs.length) throw new HarMaskError("invalid_har");
+      return Object.fromEntries(pairs);
+    }
     return value;
   };
   for (const entry of entries) for (const side of ["request", "response"] as const) {
@@ -408,6 +414,9 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
     return text;
   };
   for (const text of [serialized, ...decodedBodies]) checkEncoded(text);
+  // A caller-given root must be gone everywhere, keys included; fail closed if any spelling of it remains.
+  const rootProbes = orderedRoots.map(root => new RegExp(root.pattern.source, root.pattern.flags.replace("g", "")));
+  if (rootProbes.some(probe => [serialized, ...decodedBodies].some(text => probe.test(text)))) throw new HarMaskError("private_path_remains");
   return { har: masked, report: counts };
 }
 
