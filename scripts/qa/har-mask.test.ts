@@ -80,6 +80,10 @@ describe("HAR masking for the pre-release UX QA stage", () => {
         entry(login, { content: { size: 30, mimeType: "application/json", encoding: "base64", text: Buffer.from(JSON.stringify({ echo: literal })).toString("base64") } }),
         entry({ ...login, url: `http://127.0.0.1:14070/api/h?echo=${literal}` }, {}),
       ]) expect(() => maskHar({ log: { entries: [echo] } })).toThrow(new HarMaskError("secret_remains"));
+      // Nested deeper than the parse limit, the echo fails closed instead of passing unchecked.
+      let nested: unknown = { echo: literal };
+      for (let level = 0; level < 10; level += 1) nested = { inner: JSON.stringify(nested) };
+      expect(() => maskHar({ log: { entries: [entry(login, { content: { size: 30, mimeType: "application/json", text: JSON.stringify(nested) } })] } })).toThrow(new HarMaskError("secret_remains"));
     }
     const binary = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/c", headers: [header("x-burnguard-capability", CAPABILITY)], postData: { mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(`{"c":"${CAPABILITY}"}`).toString("base64") } }, {})] } };
     expect(() => maskHar(binary)).toThrow(new HarMaskError("secret_remains"));

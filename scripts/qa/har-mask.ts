@@ -254,10 +254,11 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const spelled = (value: unknown, depth: number): boolean => {
     if (typeof value === "string") {
       if (probes.some(probe => probe.test(value))) return true;
-      if (depth >= 8 || !/^\s*[[{"]/u.test(value)) return false;
+      if (!/^\s*[[{"]/u.test(value)) return false;
       let parsed: unknown;
       try { parsed = JSON.parse(value); } catch (error) { if (error instanceof SyntaxError) return false; throw error; }
-      return spelled(parsed, depth + 1);
+      // JSON nested deeper than this is not inspected, so it fails closed instead of passing unchecked.
+      return depth >= 8 || spelled(parsed, depth + 1);
     }
     if (Array.isArray(value)) return value.some(item => spelled(item, depth));
     if (isObject(value)) return Object.entries(value).some(([key, child]) => spelled(key, depth) || spelled(child, depth));
