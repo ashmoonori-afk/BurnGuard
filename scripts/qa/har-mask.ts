@@ -304,17 +304,33 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   // and CSS hexadecimal escapes: the escapes a browser applies when it renders HTML or runs scripts and styles.
   const codePoint = (hex: string, radix: number): string => { const value = Number.parseInt(hex, radix); return value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : "\ufffd"; };
   const NAMED_REFERENCES: Readonly<Record<string, string>> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0", Tab: "\t", NewLine: "\n", sol: "/", bsol: "\\", percnt: "%", plus: "+", equals: "=", colon: ":", semi: ";", comma: ",", period: ".", excl: "!", quest: "?", num: "#", dollar: "$", lpar: "(", rpar: ")", ast: "*", lowbar: "_", hyphen: "-", grave: "`", lsqb: "[", rsqb: "]", lcub: "{", rcub: "}", verbar: "|", Hat: "^", commat: "@" };
-  // A named reference outside the table above (browsers also accept legacy ones such as &eacute without ";") becomes
-  // two U+FFFF characters, which the probes accept as one or two characters of any value, so an unresolved reference
-  // cannot hide a secret.
-  const htmlDecoded = (text: string): string => text.replace(/&(?:#[xX]0*([0-9a-fA-F]{1,6})|#0*([0-9]{1,7})|([A-Za-z][A-Za-z0-9]{1,31}));?/gu, (_match, hex: string | undefined, decimal: string | undefined, name: string | undefined) => {
-    if (hex !== undefined) return codePoint(hex, 16);
-    if (decimal !== undefined) return codePoint(decimal, 10);
-    return NAMED_REFERENCES[name ?? ""] ?? NAMED_REFERENCES[(name ?? "").toLowerCase()] ?? "\uffff\uffff";
+  // Browsers decode a named reference written with ";" from the full HTML table, which is not embedded here: one this
+  // table cannot resolve becomes two U+FFFF characters, which the probes accept as one or two characters of any value.
+  // Without ";", only the legacy names (Latin-1 letters and symbols, amp, lt, gt, quot and their uppercase forms) are
+  // decoded, as the longest legacy name that prefixes the word ("&eacutevalue" reads "\u00e9value"); anything else stays.
+  const LATIN1_NAMES = "nbsp iexcl cent pound curren yen brvbar sect uml copy ordf laquo not shy reg macr deg plusmn sup2 sup3 acute micro para middot cedil sup1 ordm raquo frac14 frac12 frac34 iquest Agrave Aacute Acirc Atilde Auml Aring AElig Ccedil Egrave Eacute Ecirc Euml Igrave Iacute Icirc Iuml ETH Ntilde Ograve Oacute Ocirc Otilde Ouml times Oslash Ugrave Uacute Ucirc Uuml Yacute THORN szlig agrave aacute acirc atilde auml aring aelig ccedil egrave eacute ecirc euml igrave iacute icirc iuml eth ntilde ograve oacute ocirc otilde ouml divide oslash ugrave uacute ucirc uuml yacute thorn yuml".split(" ");
+  const LEGACY_REFERENCES: Readonly<Record<string, string>> = { ...Object.fromEntries(LATIN1_NAMES.map((name, index) => [name, String.fromCharCode(0xa0 + index)])), amp: "&", lt: "<", gt: ">", quot: "\"", AMP: "&", LT: "<", GT: ">", QUOT: "\"", COPY: "\u00a9", REG: "\u00ae" };
+  const LEGACY_BY_LENGTH = Object.keys(LEGACY_REFERENCES).sort((a, b) => b.length - a.length);
+  const htmlDecoded = (text: string): string => text.replace(/&(?:#[xX]0*([0-9a-fA-F]{1,6})|#0*([0-9]{1,7})|([A-Za-z][A-Za-z0-9]{1,31}))(;?)/gu, (match, hex: string | undefined, decimal: string | undefined, name: string | undefined, semicolon: string) => {
+    // Browsers read numeric references 0x80-0x9F as Windows-1252 (&#128; is the euro sign).
+    const numeric = hex !== undefined ? Number.parseInt(hex, 16) : decimal !== undefined ? Number.parseInt(decimal, 10) : undefined;
+    if (numeric !== undefined) return numeric >= 0x80 && numeric <= 0x9f ? new TextDecoder("windows-1252").decode(Uint8Array.of(numeric)) : codePoint(String(numeric), 10);
+    const word = name ?? "";
+    if (semicolon === ";") return LEGACY_REFERENCES[word] ?? NAMED_REFERENCES[word] ?? NAMED_REFERENCES[word.toLowerCase()] ?? "\uffff\uffff";
+    const legacy = LEGACY_BY_LENGTH.find(candidate => word.startsWith(candidate));
+    return legacy === undefined ? match : `${LEGACY_REFERENCES[legacy]}${word.slice(legacy.length)}`;
   });
-  const scriptDecoded = (text: string): string => text.replace(/\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]{1,6})\})/gu, (_match, byte: string | undefined, braced: string | undefined) => codePoint(byte ?? braced ?? "", 16));
+  // JavaScript string escapes JSON lacks: \xHH, \u{...}, legacy octal (\0 is NUL), \v, \', \` and line continuations.
+  const scriptDecoded = (text: string): string => text.replace(/\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]{1,6})\}|([0-3][0-7]{0,2}|[4-7][0-7]?)|([v'`])|(\r\n|[\n\r\u2028\u2029]))/gu, (_match, byte: string | undefined, braced: string | undefined, octal: string | undefined, short: string | undefined) => {
+    // Unlike an HTML reference, a script escape may spell NUL (\x00, \u{0}).
+    if (byte !== undefined || braced !== undefined) { const value = Number.parseInt(byte ?? braced ?? "", 16); return value <= 0x10ffff ? String.fromCodePoint(value) : "\ufffd"; }
+    if (octal !== undefined) return String.fromCharCode(Number.parseInt(octal, 8));
+    if (short !== undefined) return short === "v" ? "\v" : short;
+    return "";
+  });
   const styleDecoded = (text: string): string => text.replace(/\\([0-9a-fA-F]{1,6})(?:\r\n|[ \t\n\r\f])?/gu, (_match, hex: string) => codePoint(hex, 16));
   const stringsOf = (value: unknown): string[] => typeof value === "string" ? [value] : Array.isArray(value) ? value.flatMap(stringsOf) : isObject(value) ? Object.entries(value).flatMap(([key, child]) => [key, ...stringsOf(child)]) : [];
+  const DECODERS: readonly ((text: string) => string)[] = [percentDecoded, text => percentDecoded(text.replaceAll("+", " ")), jsonUnescaped, htmlDecoded, scriptDecoded, styleDecoded];
   const MAX_DECODE_ROUNDS = 6;
   const MAX_DECODINGS = 64;
   const MAX_JSON_DEPTH = 8;
@@ -331,20 +347,24 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
           if (parsed !== undefined && depth >= MAX_JSON_DEPTH) return true;
           if (parsed !== undefined && stringsOf(parsed).some(child => child !== text && exposes(child, depth + 1))) return true;
         }
-        for (const variant of [percentDecoded(text), percentDecoded(text.replaceAll("+", " ")), jsonUnescaped(text), htmlDecoded(text), scriptDecoded(text), styleDecoded(text)]) {
+        for (const variant of DECODERS.map(decode => decode(text))) {
           if (!seen.has(variant)) { seen.add(variant); next.push(variant); }
         }
       }
       if (next.length > 0 && (round >= MAX_DECODE_ROUNDS || seen.size > MAX_DECODINGS)) {
-        // Past the branching bound only JSON unescaping may still make progress, as in a long backslash run: it is the
-        // one decoding left, so following it to its fixed point inspects every step. Any other encoding still left at
-        // this depth is not inspected further and fails closed.
+        // Past the branching bound, follow one path per value: at each step every single decoding is probed (so an
+        // intermediate a reader could stop at is never skipped), then all decodings are applied in turn, probing after
+        // each. A value that has not settled within the step bound fails closed.
         return next.some(start => {
           let text = start;
           for (let step = 0; step < 64; step += 1) {
             if (probes.some(probe => probe.test(text))) return true;
-            if ([percentDecoded, htmlDecoded, scriptDecoded, styleDecoded].some(decode => decode(text) !== text)) return true;
-            const decoded = jsonUnescaped(text);
+            let decoded = text;
+            for (const decode of DECODERS) {
+              if (probes.some(probe => probe.test(decode(text)))) return true;
+              decoded = decode(decoded);
+              if (probes.some(probe => probe.test(decoded))) return true;
+            }
             if (decoded === text) return false;
             text = decoded;
           }
