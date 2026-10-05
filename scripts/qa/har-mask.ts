@@ -44,12 +44,14 @@ const REGEXP_SYNTAX = /[\\^$.*+?()[\]{}|/]/gu;
 
 /** A value as it appears inside a JSON string: quotes, backslashes and control characters escaped. */
 const jsonEscaped = (value: string): string => JSON.stringify(value).slice(1, -1);
+/** A value as an application/x-www-form-urlencoded body writes it: a space becomes "+", unlike encodeURIComponent's "%20". */
+const formEncoded = (value: string): string => new URLSearchParams([["", value]]).toString().slice(1);
 /**
  * The forms a secret takes in a HAR string: as is, percent-encoded (query and form values) and JSON-escaped once per
  * level of JSON nested inside a JSON string, longest first.
  */
 const secretForms = (secret: string): string[] => {
-  const forms = [secret, encodeURIComponent(secret)];
+  const forms = [secret, encodeURIComponent(secret), formEncoded(secret)];
   for (let level = 0, escaped = secret; level < SECRET_ESCAPE_LEVELS; level += 1) { escaped = jsonEscaped(escaped); forms.push(escaped); }
   return [...new Set(forms)].sort((a, b) => b.length - a.length);
 };
@@ -236,7 +238,7 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
     .flatMap(body => isObject(body) && body["encoding"] === "base64" && typeof body["text"] === "string" ? [Buffer.from(body["text"], "base64").toString("utf8")] : []);
   // Compared by escape trace, a secret is found at any JSON nesting depth, including depths masking does not unescape.
   const traces = [serialized.replaceAll("\\", ""), ...decodedBodies.map(escapeTrace)];
-  if (secrets.some(secret => [secret, encodeURIComponent(secret)].some(form => traces.some(trace => trace.includes(escapeTrace(form)))))) throw new HarMaskError("secret_remains");
+  if (secrets.some(secret => [secret, encodeURIComponent(secret), formEncoded(secret)].some(form => traces.some(trace => trace.includes(escapeTrace(form)))))) throw new HarMaskError("secret_remains");
   // Binary bodies are not rewritten. JSON and the two URL-encoding levels supported for private roots must still fail closed.
   const checkEncoded = (text: string): string => {
     const candidates = [text];

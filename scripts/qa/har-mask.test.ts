@@ -55,6 +55,15 @@ describe("HAR masking for the pre-release UX QA stage", () => {
     expect(entries[1]!.request.postData.text).toBe(`theme=dark&access_token=${MASKED}`);
     expect(JSON.stringify(masked)).not.toContain(password);
     expect(report.secret_values).toBe(2);
+    const spaced = ["spaced", "form", "password", "4938271"].join(" ");
+    const form = new URLSearchParams({ password: spaced, theme: "dark" }).toString();
+    const spacedHar = { log: { entries: [
+      entry({ method: "POST", url: "http://127.0.0.1:14070/api/d", postData: { mimeType: "application/x-www-form-urlencoded; charset=utf-8", text: form } }, {}),
+      entry({ method: "POST", url: "http://127.0.0.1:14070/api/e", postData: { mimeType: "application/x-www-form-urlencoded", encoding: "base64", text: Buffer.from(form).toString("base64") } }, {}),
+    ] } };
+    const spacedEntries = (maskHar(spacedHar).har as { readonly log: { readonly entries: readonly Entry[] } }).log.entries;
+    expect(new URLSearchParams(spacedEntries[0]!.request.postData.text).get("password")).toBe(MASKED);
+    expect(new URLSearchParams(Buffer.from(spacedEntries[1]!.request.postData.text, "base64").toString("utf8")).get("password")).toBe(MASKED);
     const binary = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/c", headers: [header("x-burnguard-capability", CAPABILITY)], postData: { mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(`{"c":"${CAPABILITY}"}`).toString("base64") } }, {})] } };
     expect(() => maskHar(binary)).toThrow(new HarMaskError("secret_remains"));
   });
