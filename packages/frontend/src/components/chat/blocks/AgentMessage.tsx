@@ -2,6 +2,7 @@ import { CheckCircle2, CircleMinus, CircleSlash, Loader2, OctagonX, PauseCircle 
 import type { LucideIcon } from "lucide-react";
 import type { TurnDisposition } from "@/lib/turn-disposition";
 import { useT, type MessageKey } from "@/i18n/t";
+import { providerMessageText } from "@/lib/provider-message";
 
 const DISPOSITION_COPY: Record<TurnDisposition, { readonly key: MessageKey; readonly icon: LucideIcon; readonly tone: string }> = {
   pending: { key: "chat.turn.pending", icon: Loader2, tone: "text-muted-foreground" },
@@ -22,10 +23,12 @@ export default function AgentMessage({
   text,
   turnId,
   disposition,
+  projectDir,
 }: {
   text: string;
   turnId: string;
   disposition: TurnDisposition;
+  projectDir?: string;
 }) {
   const refused = disposition === "not_applied" || disposition === "rejected";
   return (
@@ -36,7 +39,7 @@ export default function AgentMessage({
       className={refused ? "rounded-md border border-destructive/30 bg-destructive/5 p-3" : undefined}
     >
       <div className={`whitespace-pre-wrap break-words text-sm leading-7 ${refused ? "text-muted-foreground" : "text-foreground"}`}>
-        {text}
+        {providerMessageText(text, projectDir)}
       </div>
       <TurnStanding disposition={disposition} />
     </div>
