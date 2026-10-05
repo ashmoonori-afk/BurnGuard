@@ -122,6 +122,9 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       ["synthetic \u000bvalue 493827", "<script>globalThis.echo=\"synthetic \\vvalue 493827\";</script>"],
       ["synthetic \u20ac value 493827", "<div>synthetic &#128; value 493827</div>"],
       ["synthetic caf\u00e9value 493827", "<div>synthetic caf&eacutevalue 493827</div>"],
+      ["synthetic caf\u00e9value; 493827", "<div>synthetic caf&eacutevalue; 493827</div>"],
+      [plain, `<script>globalThis.echo="synthetic \\u{0000006f}rdinary 493827";</script>`],
+      ["synthetic \ud55c\uae00 value 493827", `<script>globalThis.echo="${Buffer.from("synthetic \ud55c\uae00 value 493827", "utf16le").swap16().toString("base64")}";</script>`],
       ["synthetic caf\u00e9 value 493827", `<script>globalThis.echo=atob("${Buffer.from("synthetic caf\u00e9 value 493827", "latin1").toString("base64")}");</script>`],
       [`synthetic-provider-${"0123456789abcdef".repeat(3)}`, `<script>globalThis.echo=atob("${Buffer.from(`synthetic-provider-${"0123456789abcdef".repeat(3)}`).toString("base64").replace(/.{76}/u, "$&\n")}");</script>`],
       ["synthetic caf\u00e9 value 493827", "<script>globalThis.echo=unescape(\"synthetic%20caf%E9%20value%20493827\");</script>"],
@@ -138,6 +141,9 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       const echo = entry({ url: "http://127.0.0.1:14070/runtime/projects/p1/index.html" }, { content: { size: page.length, mimeType: "text/html; charset=utf-8", text: page } });
       expect(() => maskHar({ log: { entries: [source, echo] } })).toThrow(new HarMaskError("secret_remains"));
     }
+    // A collected value too long for its mixed-spelling pattern fails closed with the typed error, not an engine error.
+    const huge = "q".repeat(400_000);
+    expect(() => maskHar({ log: { entries: [entry({ url: "http://127.0.0.1:14070/api/l", cookies: [{ name: "c", value: huge }] }, {})] } })).toThrow(new HarMaskError("secret_remains"));
     // A base64 body in UTF-16 (either byte order, also shifted by one byte) is only inspected, never rewritten: a secret in it fails closed.
     const html = Buffer.from(`<html><body>${plain}</body></html>`, "utf16le");
     const swapped = Buffer.from(html).swap16();
@@ -316,6 +322,26 @@ describe("HAR masking of caller-given roots in the forms a HAR carries them", ()
     expect(unbounded).toBe(0);
     const masked = mask([entry({ url: API }, jsonBody({ data: { run: `${"\\".repeat(2048)}x ${root}` } }))], qaHome(root));
     expect(JSON.parse(masked.entries[0]!.response.content.text).data).toEqual({ run: `${"\\".repeat(2048)}x <qa-home>` });
+  });
+
+  test("Given private roots used as object keys, when masked, then keys become the placeholder too, colliding masked keys fail as an unsupported HAR, and a placeholder that still spells the root fails closed", () => {
+    const roots: PrivateRoot[] = [{ path: "/Users/review-fixture", placeholder: "<home>" }];
+    const keyed = { log: { entries: [] }, _extension: { "/Users/review-fixture/private": "ordinary", "C:\\Users\\carol\\x": "windows" } };
+    const { har } = maskHar(keyed, roots);
+    expect(Object.keys((har as { readonly _extension: Record<string, string> })._extension)).toEqual(["<home>/private", "<home>\\x"]);
+    expect(JSON.stringify(har)).not.toContain("review-fixture");
+    const colliding = { log: { entries: [] }, _extension: { "/Users/review-fixture/a": "one", "/Users/other-fixture/a": "two" } };
+    expect(() => maskHar(colliding, roots)).toThrow(new HarMaskError("invalid_har"));
+    const escapedKeys = `{"\\u002fUsers\\u002freview-fixture\\u002fa":"one","\\u002fUsers\\u002fother-fixture\\u002fa":"two"}`;
+    expect(() => maskHar({ log: { entries: [entry({ url: API }, { content: { size: 10, mimeType: "application/json", text: escapedKeys } })] } }, roots)).toThrow(new HarMaskError("invalid_har"));
+    const colliding2 = JSON.stringify({ "/Users/review-fixture/a": "one", "/Users/other-fixture/a": "two" });
+    let deep = colliding2;
+    for (let level = 0; level < 9; level += 1) deep = JSON.stringify({ wrapped: deep });
+    for (const text of [colliding2, JSON.stringify({ wrapped: colliding2 }), JSON.stringify(colliding2), JSON.stringify({ wrapped: JSON.stringify(colliding2) }), deep]) {
+      expect(() => maskHar({ log: { entries: [entry({ url: API }, { content: { size: 10, mimeType: "application/json", text } })] } }, roots)).toThrow(new HarMaskError("invalid_har"));
+    }
+    const selfPlaceholder = { log: { entries: [entry({ url: `${API}?dir=%2Ftmp%2Fqa-run-9` }, {})] } };
+    expect(() => maskHar(selfPlaceholder, [{ path: "/tmp/qa-run-9", placeholder: "/tmp/qa-run-9" }])).toThrow(new HarMaskError("private_path_remains"));
   });
 
   test("Given a root with spaces passed with --root, when a URL carries the spaces as %20 or as form-encoded plus signs, then both forms become the placeholder", () => {
