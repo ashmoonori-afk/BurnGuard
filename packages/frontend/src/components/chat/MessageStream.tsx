@@ -15,12 +15,14 @@ const STICK_THRESHOLD_PX = 80;
 export default function MessageStream({
   events,
   session,
+  projectDir,
   onOpenFile,
   onRevertTurn,
   revertingTurnId,
 }: {
   events: NormalizedEvent[];
   session: SessionInfo;
+  projectDir?: string;
   onOpenFile?: (relPath: string) => void;
   onRevertTurn?: (turnId: string) => void;
   revertingTurnId?: string | null;
@@ -101,6 +103,7 @@ export default function MessageStream({
                 <AgentMessage
                   key={`msg-${i}`}
                   text={g.text}
+                  projectDir={projectDir}
                   turnId={g.turnId}
                   disposition={turnStates.get(g.turnId)?.disposition ?? "pending"}
                 />

@@ -64,6 +64,7 @@ jobs:
           packages/backend/tests/design-system-visual-diff.test.ts
           packages/backend/tests/design-system-hero-assets.test.ts
           packages/frontend/tests/session-stream.test.ts
+          packages/frontend/tests/provider-message.test.ts
           packages/backend/tests/extraction-website-acquisition.test.ts
           packages/backend/tests/extraction-website-boundaries.test.ts
           packages/backend/tests/export-naming.test.ts

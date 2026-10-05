@@ -1303,6 +1303,7 @@ export default function ProjectView() {
           events={events}
           session={session}
           projectFiles={files}
+          projectDir={project.dir_path}
           comments={comments}
           onRequestCommentEdit={requestCommentEdit}
           commentEditDisabled={composerDisabled}

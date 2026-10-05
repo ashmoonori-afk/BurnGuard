@@ -20,6 +20,7 @@ export default function ChatPane({
   chatFocusKey,
   events,
   session,
+  projectDir,
   composerDisabled,
   composerDisabledReason,
   turnStartedAt,
@@ -46,6 +47,7 @@ export default function ChatPane({
   chatFocusKey?: number;
   events: NormalizedEvent[];
   session: SessionInfo;
+  projectDir: string;
   composerDisabled?: boolean;
   composerDisabledReason?: ComposerDisabledReason;
   turnStartedAt?: number | null;
@@ -132,6 +134,7 @@ export default function ChatPane({
           <MessageStream
             events={events}
             session={session}
+            projectDir={projectDir}
             onOpenFile={onOpenFile}
             onRevertTurn={onRevertTurn}
             revertingTurnId={revertingTurnId}
