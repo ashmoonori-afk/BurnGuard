@@ -259,8 +259,12 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   // then keep only one value. Count keys, also in JSON nested in strings, and refuse the HAR when masking lost any.
   const keyCount = (value: unknown, depth: number): number => {
     if (typeof value === "string") {
-      if (depth >= 8 || !/^\s*[[{]/u.test(value)) return 0;
-      try { return keyCount(JSON.parse(value), depth + 1); } catch (error) { if (error instanceof SyntaxError) return 0; throw error; }
+      if (!/^\s*[[{"]/u.test(value)) return 0;
+      let parsed: unknown;
+      try { parsed = JSON.parse(value); } catch (error) { if (error instanceof SyntaxError) return 0; throw error; }
+      // JSON nested deeper than this is not counted, so a masked value carrying it is refused rather than trusted.
+      if (depth >= 8) throw new HarMaskError("invalid_har");
+      return keyCount(parsed, depth + 1);
     }
     if (Array.isArray(value)) return value.reduce((sum: number, item) => sum + keyCount(item, depth), 0);
     if (isObject(value)) return Object.entries(value).reduce((sum, [, child]) => sum + 1 + keyCount(child, depth), 0);
