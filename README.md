@@ -172,6 +172,19 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 ## Changelog
 
+### 0.5.28
+
+- A new website project built from an extracted design system now starts from class-based page skeletons, keeps the extracted hero image, and uses readable colours for buttons, subtitles and footer text. Pages you have already edited are never replaced by the starter.
+- The quality review compares each section with the reference screenshots and crops the weakest sections, so a repair can fix one section at a time. A block-outline image is stored next to each reference screenshot.
+- Website extraction is more accurate: subheadings, brand names, colour tokens and hero images are measured more reliably, fetched SVG images are cleaned, stylesheet redirects must stay on the same site, and the reason is recorded when layout measurement was not possible.
+- Send is disabled with a reason and a Settings link when no AI tool is installed. A stopped or failed turn now always shows as stopped or failed, and a message sent while another one is running is refused cleanly instead of leaving a half-recorded turn.
+- When BurnGuard restarts in the background, the open window says so and offers Reload. The workspace, canvas tools and Export stay usable at phone width.
+- Reasoning effort defaults to medium where the model offers it, and the Claude, Gemini and preset model lists use the current official model IDs.
+- The canvas loads only the fonts a page uses and shows a rendering state until the page has painted. The Style side editor keeps the values you typed.
+- Exports handle very large or unusual project files much faster and more safely, keep macOS file names with accented characters, and encode download file names correctly.
+- Error messages no longer show private file paths or raw system error text, Settings errors explain how to recover, and Korean and Chinese copy is completed.
+- The macOS app follows the same desktop rules as the Windows app, and update checks order pre-release versions correctly.
+
 ### 0.5.27
 
 - Projects can be exported as portable `.burnguard-project` bundles and restored on another computer. Saved provider and access tokens and the local configuration are left out, and a restore always creates a new project.
