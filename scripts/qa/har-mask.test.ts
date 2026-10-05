@@ -64,6 +64,12 @@ describe("HAR masking for the pre-release UX QA stage", () => {
     const spacedEntries = (maskHar(spacedHar).har as { readonly log: { readonly entries: readonly Entry[] } }).log.entries;
     expect(new URLSearchParams(spacedEntries[0]!.request.postData.text).get("password")).toBe(MASKED);
     expect(new URLSearchParams(Buffer.from(spacedEntries[1]!.request.postData.text, "base64").toString("utf8")).get("password")).toBe(MASKED);
+    // A form encoder may spell each space either way; a mixed spelling in the request or only in a plain-text echo fails closed.
+    const mixed = encodeURIComponent(spaced).replace("%20", "+");
+    const mixedRequest = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/f", postData: { mimeType: "application/x-www-form-urlencoded", text: `password=${mixed}&theme=dark` } }, {})] } };
+    expect(() => maskHar(mixedRequest)).toThrow(new HarMaskError("secret_remains"));
+    const mixedEcho = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/g", postData: { mimeType: "application/x-www-form-urlencoded", encoding: "base64", text: Buffer.from(form).toString("base64") } }, { content: { size: 30, mimeType: "text/plain", encoding: "base64", text: Buffer.from(`echo=${mixed}&note=ordinary+text`).toString("base64") } })] } };
+    expect(() => maskHar(mixedEcho)).toThrow(new HarMaskError("secret_remains"));
     const binary = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/c", headers: [header("x-burnguard-capability", CAPABILITY)], postData: { mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(`{"c":"${CAPABILITY}"}`).toString("base64") } }, {})] } };
     expect(() => maskHar(binary)).toThrow(new HarMaskError("secret_remains"));
   });

@@ -47,6 +47,14 @@ const jsonEscaped = (value: string): string => JSON.stringify(value).slice(1, -1
 /** A value as an application/x-www-form-urlencoded body writes it: a space becomes "+", unlike encodeURIComponent's "%20". */
 const formEncoded = (value: string): string => new URLSearchParams([["", value]]).toString().slice(1);
 /**
+ * A secret in any mix of literal and percent-encoded characters, a space also as "+": form and query encoders may
+ * spell each character either way. Masking rewrites only whole-value spellings; any other spelling fails closed.
+ */
+const secretSpelling = (secret: string): RegExp => new RegExp([...secret].map(char => {
+  const encoded = [...new TextEncoder().encode(char)].map(byte => `%${byte.toString(16).padStart(2, "0")}`).join("").replace(/[a-f]/gu, hex => `[${hex}${hex.toUpperCase()}]`);
+  return `(?:${[char.replace(REGEXP_SYNTAX, "\\$&"), encoded, ...(char === " " ? ["\\+"] : [])].join("|")})`;
+}).join(""), "gu");
+/**
  * The forms a secret takes in a HAR string: as is, percent-encoded (query and form values) and JSON-escaped once per
  * level of JSON nested inside a JSON string, longest first.
  */
@@ -174,6 +182,7 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const har = JSON.parse(JSON.stringify(input)) as Record<string, Json>;
   const entries = entriesOf(har);
   const secrets = [...collectSecrets(entries)].sort((a, b) => b.length - a.length);
+  const spellings = secrets.map(secretSpelling);
   // The bootstrap response is where the capability is minted. A body there that yields no capability means the
   // format is not understood, so masking fails closed instead of trusting that nothing leaked.
   for (const entry of entries.filter(isBootstrap)) {
@@ -239,6 +248,7 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   // Compared by escape trace, a secret is found at any JSON nesting depth, including depths masking does not unescape.
   const traces = [serialized.replaceAll("\\", ""), ...decodedBodies.map(escapeTrace)];
   if (secrets.some(secret => [secret, encodeURIComponent(secret), formEncoded(secret)].some(form => traces.some(trace => trace.includes(escapeTrace(form)))))) throw new HarMaskError("secret_remains");
+  if (spellings.some(spelling => [serialized, ...decodedBodies].some(text => new RegExp(spelling.source, "u").test(text)))) throw new HarMaskError("secret_remains");
   // Binary bodies are not rewritten. JSON and the two URL-encoding levels supported for private roots must still fail closed.
   const checkEncoded = (text: string): string => {
     const candidates = [text];
