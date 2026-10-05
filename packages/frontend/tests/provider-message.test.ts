@@ -104,3 +104,49 @@ test("Given generation and automatic repair deltas When live prefixes and reopen
   events.push({ id: "repair", ts: 1001, type: "chat.delta", turnId: "turn-design-repair-1", text });
   expect(await messageFields(renderToStaticMarkup(createElement(MessageStream, { session: SESSION, events, projectDir: root })))).toEqual(["index.html", "index.html"]);
 });
+
+for (const [flavor, root, target, expected] of [
+  ["POSIX managed", "/profile/project", "/profile/project/.meta/artifact-operations/op-1/stage/index.html:23", "index.html"],
+  ["Windows managed", "C:\\profile\\project", "C:\\profile\\project\\.meta\\artifact-operations\\op-1\\stage\\index.html:23", "index.html"],
+  ["POSIX private", "/profile/project", "/Users/owner/private/secret.txt", "[private-path]"],
+  ["Windows private", "C:\\profile\\project", "C:\\Users\\owner\\private\\secret.txt", "[private-path]"],
+] as const) {
+  test(`Given review punctuation-adjacent ${flavor} paths When the bubble renders Then the complete local reference is classified`, async () => {
+    const prefix = "ref:";
+    const fields = await renderMessage(`${prefix}${target}`, root);
+    expect(fields.map((field) => field.slice(prefix.length))).toEqual([expected]);
+  });
+}
+
+test("Given review Windows relative staging casing When the bubble renders Then no internal directory spelling survives", async () => {
+  const fields = await renderMessage(".META\\artifact-operations\\op-1\\stage\\index.html", "C:\\profile\\project");
+  expect(fields).toEqual(["index.html"]);
+});
+
+for (const scheme of ["https://example.com/docs", "mailto:owner@example.com"]) {
+  test(`Given review angle-wrapped ${scheme.split(":")[0]} links When the bubble renders Then the external representation is preserved`, async () => {
+    const link = `[reference](<${scheme}>)`;
+    const fields = await renderMessage(link, "/profile/project");
+    // HTMLRewriter exposes the encoded text field; preserve its shipped representation.
+    expect(fields).toEqual([link.replaceAll("<", "&lt;").replaceAll(">", "&gt;")]);
+  });
+}
+
+test("Given review slash separators When the bubble renders Then ordinary message fields are unchanged", async () => {
+  const text = "HTML / CSS; width/height; 16/9; 50%";
+  expect(await renderMessage(text, "/profile/project")).toEqual([text]);
+});
+
+for (const [flavor, root, tail, expected] of [
+  ["POSIX staged", "/Users/owner/Café profile/projects/project", "/.meta/artifact-operations/op-1/stage/index.html", "index.html"],
+  ["POSIX committed", "/Users/owner/Café profile/projects/project", "/pages/Café page.html", "pages/Café page.html"],
+  ["Windows staged", "C:\\Users\\owner\\Café profile\\projects\\project", "\\.meta\\artifact-operations\\op-1\\stage\\index.html", "index.html"],
+  ["Windows committed", "C:\\Users\\owner\\Café profile\\projects\\project", "\\pages\\Café page.html", "pages/Café page.html"],
+] as const) {
+  test(`Given review unquoted NFD space paths in ${flavor} When the bubble renders Then the complete project-relative field remains`, async () => {
+    const prefix = "ref ";
+    const suffix = " done.";
+    const fields = await renderMessage(`${prefix}${(root + tail).normalize("NFD")}${suffix}`, root.normalize("NFD"));
+    expect(fields.map((field) => field.slice(prefix.length, -suffix.length))).toEqual([expected]);
+  });
+}
