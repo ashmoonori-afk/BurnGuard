@@ -150,3 +150,54 @@ for (const [flavor, root, tail, expected] of [
     expect(fields.map((field) => field.slice(prefix.length, -suffix.length))).toEqual([expected]);
   });
 }
+
+for (const [flavor, root, target] of [
+  ["Windows dot", "C:\\profile\\project", ".\\.meta\\artifact-operations\\op-1\\stage\\index.html"],
+  ["Windows uppercase dot", "C:\\profile\\project", ".\\.META\\artifact-operations\\op-1\\stage\\index.html"],
+  ["Windows parent", "C:\\profile\\project", "..\\.meta\\artifact-operations\\op-1\\stage\\index.html"],
+  ["Windows parent subtree", "C:\\profile\\project", "..\\x\\.meta\\artifact-operations\\op-1\\stage\\index.html"],
+  ["Windows project subtree", "C:\\profile\\project", "project\\.meta\\artifact-operations\\op-1\\stage\\index.html"],
+  ["Windows sub subtree", "C:\\profile\\project", "sub\\.meta\\artifact-operations\\op-1\\stage\\index.html"],
+  ["POSIX dot", "/profile/project", "./.meta/artifact-operations/op-1/stage/index.html"],
+  ["POSIX uppercase dot", "/profile/project", "./.META/artifact-operations/op-1/stage/index.html"],
+  ["POSIX parent", "/profile/project", "../.meta/artifact-operations/op-1/stage/index.html"],
+  ["POSIX parent subtree", "/profile/project", "../x/.meta/artifact-operations/op-1/stage/index.html"],
+  ["POSIX project subtree", "/profile/project", "project/.meta/artifact-operations/op-1/stage/index.html"],
+  ["POSIX sub subtree", "/profile/project", "sub/.meta/artifact-operations/op-1/stage/index.html"],
+] as const) {
+  test(`Given second review relative ${flavor} stages When prose renders Then the whole private reference is scrubbed`, async () => {
+    const prefix = "Updated ";
+    const suffix = " successfully.";
+    const fields = await renderMessage(`${prefix}${target}${suffix}`, root);
+    expect(fields.map((field) => field.slice(prefix.length, -suffix.length))).toEqual(["[private-path]"]);
+  });
+}
+
+test("Given private segments in any path position When separators casing quoting and Unicode vary Then no private segment or operation directory renders", async () => {
+  for (const separator of ["/", "\\"]) {
+    const root = separator === "/" ? "/profile/project" : "C:\\profile\\project";
+    for (const prefix of [".", `..${separator}x`, `sub${separator}Café folder`, root, `${separator}sub`, `sub${separator === "/" ? "\\" : "/"}Café folder`]) {
+      for (const directory of [".meta", ".META", ".MeTa"]) {
+        for (const form of ["NFC", "NFD"] as const) {
+          const target = [prefix, directory, "artifact-operations", "op-1", "stage", "index.html"].join(separator).normalize(form);
+          for (const quote of ["", "'", '"', "`", "<"]) {
+            const input = quote === "<" ? `<${target}>` : `${quote}${target}${quote}`;
+            const fields = await renderMessage(input, root);
+            expect(fields.join("").toLowerCase()).not.toContain(".meta");
+            expect(fields.join("")).not.toContain("artifact-operations");
+          }
+        }
+      }
+    }
+  }
+});
+
+test("Given a terminal private directory and an external private path When rendered Then each complete path is scrubbed", async () => {
+  expect(await renderMessage("sub/.meta\n.META\n[reference](<https://example.com/sub/.meta/file.html>)", "/profile/project"))
+    .toEqual(["[private-path]\n[private-path]\n[private-path]"]);
+});
+
+test("Given public relative paths with similar directory names When rendered Then their original fields remain intact", async () => {
+  const text = "sub/.metadata/index.html; pages/Café page.html; width/height";
+  expect(await renderMessage(text, "/profile/project")).toEqual([text]);
+});
