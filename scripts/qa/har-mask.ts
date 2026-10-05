@@ -53,8 +53,10 @@ const formEncoded = (value: string): string => new URLSearchParams([["", value]]
  */
 const secretSpelling = (secret: string): RegExp => new RegExp([...secret].map(char => {
   const encoded = [...new TextEncoder().encode(char)].map(byte => `%${byte.toString(16).padStart(2, "0")}`).join("").replace(/[a-f]/gu, hex => `[${hex}${hex.toUpperCase()}]`);
-  // U+FFFF stands for an HTML named reference the residual check cannot resolve, so it may be any character.
-  return `(?:${[char.replace(REGEXP_SYNTAX, "\\$&"), encoded, "\\uffff", ...(char === " " ? ["\\+"] : [])].join("|")})`;
+  // An HTML named reference the residual check cannot resolve is decoded as two U+FFFF characters, since a named
+  // reference stands for one or two characters: each U+FFFF may stand for a secret character, and the optional
+  // U+FFFF before each character absorbs the second one when the reference stood for a single character.
+  return `\\uffff?(?:${[char.replace(REGEXP_SYNTAX, "\\$&"), encoded, "\\uffff", ...(char === " " ? ["\\+"] : [])].join("|")})`;
 }).join(""), "gu");
 /**
  * The forms a secret takes in a HAR string: as is, percent-encoded (query and form values) and JSON-escaped once per
@@ -303,11 +305,12 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   const codePoint = (hex: string, radix: number): string => { const value = Number.parseInt(hex, radix); return value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : "\ufffd"; };
   const NAMED_REFERENCES: Readonly<Record<string, string>> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0", Tab: "\t", NewLine: "\n", sol: "/", bsol: "\\", percnt: "%", plus: "+", equals: "=", colon: ":", semi: ";", comma: ",", period: ".", excl: "!", quest: "?", num: "#", dollar: "$", lpar: "(", rpar: ")", ast: "*", lowbar: "_", hyphen: "-", grave: "`", lsqb: "[", rsqb: "]", lcub: "{", rcub: "}", verbar: "|", Hat: "^", commat: "@" };
   // A named reference outside the table above (browsers also accept legacy ones such as &eacute without ";") becomes
-  // U+FFFF, which the probes accept as any character, so an unresolved reference cannot hide a secret.
+  // two U+FFFF characters, which the probes accept as one or two characters of any value, so an unresolved reference
+  // cannot hide a secret.
   const htmlDecoded = (text: string): string => text.replace(/&(?:#[xX]0*([0-9a-fA-F]{1,6})|#0*([0-9]{1,7})|([A-Za-z][A-Za-z0-9]{1,31}));?/gu, (_match, hex: string | undefined, decimal: string | undefined, name: string | undefined) => {
     if (hex !== undefined) return codePoint(hex, 16);
     if (decimal !== undefined) return codePoint(decimal, 10);
-    return NAMED_REFERENCES[name ?? ""] ?? NAMED_REFERENCES[(name ?? "").toLowerCase()] ?? "\uffff";
+    return NAMED_REFERENCES[name ?? ""] ?? NAMED_REFERENCES[(name ?? "").toLowerCase()] ?? "\uffff\uffff";
   });
   const scriptDecoded = (text: string): string => text.replace(/\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]{1,6})\})/gu, (_match, byte: string | undefined, braced: string | undefined) => codePoint(byte ?? braced ?? "", 16));
   const styleDecoded = (text: string): string => text.replace(/\\([0-9a-fA-F]{1,6})(?:\r\n|[ \t\n\r\f])?/gu, (_match, hex: string) => codePoint(hex, 16));

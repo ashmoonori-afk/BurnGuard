@@ -116,6 +116,7 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       [ampersand, `<div>${ampersand.replace("&", "&amp;")}</div>`],
       [ampersand, `<div>${ampersand.replace("&", "&AMP;")}</div>`],
       ["synthetic caf\u00e9 value 493827", "<div>synthetic caf&eacute; value 493827</div>"],
+      ["synthetic \u2242\u0338 value 493827", "<div>synthetic &nesim; value 493827</div>"],
       [plain, `<div>&#0000000${plain.codePointAt(0)};${plain.slice(1)}</div>`],
       [plain, `<div>&#${plain.codePointAt(0)};${plain.slice(1)}</div>`],
       [plain, `<script>globalThis.echo="${[...plain].map(char => `\\x${hexChar(char).padStart(2, "0")}`).join("")}";</script>`],
