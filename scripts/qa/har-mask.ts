@@ -93,7 +93,7 @@ export function rootPattern(root: string): RegExp {
 export type HarMaskReport = { readonly secret_values: number; readonly headers: number; readonly cookies: number; readonly params: number; readonly paths: number };
 export type PrivateRoot = { readonly path: string; readonly placeholder: string };
 export class HarMaskError extends Error {
-  constructor(readonly code: "invalid_har" | "secret_remains" | "capability_not_found" | "invalid_arguments" | "output_exists" | "input_unreadable") { super(code); }
+  constructor(readonly code: "invalid_har" | "secret_remains" | "private_path_remains" | "capability_not_found" | "invalid_arguments" | "output_exists" | "input_unreadable") { super(code); }
 }
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -112,7 +112,12 @@ function encodedJson(text: string, transform: (value: string) => string): string
   const walk = (value: Json): Json => {
     if (typeof value === "string") return transform(value);
     if (Array.isArray(value)) return value.map(walk);
-    if (isObject(value)) return Object.fromEntries(Object.entries(value).map(([key, child]) => [transform(key), walk(child)]));
+    if (isObject(value)) {
+      const pairs = Object.entries(value).map(([key, child]): [string, Json] => [transform(key), walk(child)]);
+      // Two keys that mask to the same text would silently drop a value: refuse the HAR instead.
+      if (new Set(pairs.map(([key]) => key)).size !== pairs.length) throw new HarMaskError("invalid_har");
+      return Object.fromEntries(pairs);
+    }
     return value;
   };
   const transformed = JSON.stringify(walk(parsed));
@@ -249,15 +254,41 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
     }
     return out;
   };
-  const scrub = (text: string): string => {
+  const scrubText = (text: string): string => {
     let out = text;
     for (const secret of secrets) for (const form of secretForms(secret)) out = out.replaceAll(form, MASKED);
     return encodedJson(scrubPaths(out), scrub);
   };
+  // Masking JSON text in place can turn two distinct keys into one (two private roots, one placeholder); a reader would
+  // then keep only one value. Count keys, also in JSON nested in strings, and refuse the HAR when masking lost any.
+  const keyCount = (value: unknown, depth: number): number => {
+    if (typeof value === "string") {
+      if (!/^\s*[[{"]/u.test(value)) return 0;
+      let parsed: unknown;
+      try { parsed = JSON.parse(value); } catch (error) { if (error instanceof SyntaxError) return 0; throw error; }
+      // JSON nested deeper than this is not counted, so a masked value carrying it is refused rather than trusted.
+      if (depth >= 8) throw new HarMaskError("invalid_har");
+      return keyCount(parsed, depth + 1);
+    }
+    if (Array.isArray(value)) return value.reduce((sum: number, item) => sum + keyCount(item, depth), 0);
+    if (isObject(value)) return Object.entries(value).reduce((sum, [, child]) => sum + 1 + keyCount(child, depth), 0);
+    return 0;
+  };
+  const scrub = (text: string): string => {
+    const out = scrubText(text);
+    if (out !== text && keyCount(out, 0) < keyCount(text, 0)) throw new HarMaskError("invalid_har");
+    return out;
+  };
+  // Keys are masked like values (a HAR extension object can be keyed by a private path). Two keys that mask to the
+  // same text would silently drop one value, so that fails as an unsupported HAR instead.
   const walk = (value: Json): Json => {
     if (typeof value === "string") return scrub(value);
     if (Array.isArray(value)) return value.map(walk);
-    if (isObject(value)) return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, walk(child)]));
+    if (isObject(value)) {
+      const pairs = Object.entries(value).map(([key, child]): [string, Json] => [scrub(key), walk(child)]);
+      if (new Set(pairs.map(([key]) => key)).size !== pairs.length) throw new HarMaskError("invalid_har");
+      return Object.fromEntries(pairs);
+    }
     return value;
   };
   for (const entry of entries) for (const side of ["request", "response"] as const) {
@@ -420,6 +451,9 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
     return text;
   };
   for (const text of [serialized, ...decodedBodies]) checkEncoded(text);
+  // A caller-given root must be gone everywhere, keys included; fail closed if any spelling of it remains.
+  const rootProbes = orderedRoots.map(root => new RegExp(root.pattern.source, root.pattern.flags.replace("g", "")));
+  if (rootProbes.some(probe => [serialized, ...decodedBodies].some(text => probe.test(text)))) throw new HarMaskError("private_path_remains");
   return { har: masked, report: counts };
 }
 

@@ -324,6 +324,26 @@ describe("HAR masking of caller-given roots in the forms a HAR carries them", ()
     expect(JSON.parse(masked.entries[0]!.response.content.text).data).toEqual({ run: `${"\\".repeat(2048)}x <qa-home>` });
   });
 
+  test("Given private roots used as object keys, when masked, then keys become the placeholder too, colliding masked keys fail as an unsupported HAR, and a placeholder that still spells the root fails closed", () => {
+    const roots: PrivateRoot[] = [{ path: "/Users/review-fixture", placeholder: "<home>" }];
+    const keyed = { log: { entries: [] }, _extension: { "/Users/review-fixture/private": "ordinary", "C:\\Users\\carol\\x": "windows" } };
+    const { har } = maskHar(keyed, roots);
+    expect(Object.keys((har as { readonly _extension: Record<string, string> })._extension)).toEqual(["<home>/private", "<home>\\x"]);
+    expect(JSON.stringify(har)).not.toContain("review-fixture");
+    const colliding = { log: { entries: [] }, _extension: { "/Users/review-fixture/a": "one", "/Users/other-fixture/a": "two" } };
+    expect(() => maskHar(colliding, roots)).toThrow(new HarMaskError("invalid_har"));
+    const escapedKeys = `{"\\u002fUsers\\u002freview-fixture\\u002fa":"one","\\u002fUsers\\u002fother-fixture\\u002fa":"two"}`;
+    expect(() => maskHar({ log: { entries: [entry({ url: API }, { content: { size: 10, mimeType: "application/json", text: escapedKeys } })] } }, roots)).toThrow(new HarMaskError("invalid_har"));
+    const colliding2 = JSON.stringify({ "/Users/review-fixture/a": "one", "/Users/other-fixture/a": "two" });
+    let deep = colliding2;
+    for (let level = 0; level < 9; level += 1) deep = JSON.stringify({ wrapped: deep });
+    for (const text of [colliding2, JSON.stringify({ wrapped: colliding2 }), JSON.stringify(colliding2), JSON.stringify({ wrapped: JSON.stringify(colliding2) }), deep]) {
+      expect(() => maskHar({ log: { entries: [entry({ url: API }, { content: { size: 10, mimeType: "application/json", text } })] } }, roots)).toThrow(new HarMaskError("invalid_har"));
+    }
+    const selfPlaceholder = { log: { entries: [entry({ url: `${API}?dir=%2Ftmp%2Fqa-run-9` }, {})] } };
+    expect(() => maskHar(selfPlaceholder, [{ path: "/tmp/qa-run-9", placeholder: "/tmp/qa-run-9" }])).toThrow(new HarMaskError("private_path_remains"));
+  });
+
   test("Given a root with spaces passed with --root, when a URL carries the spaces as %20 or as form-encoded plus signs, then both forms become the placeholder", () => {
     const root = "/Volumes/QA Disk/run 42";
     const masked = mask([entry({ url: `${API}?dir=${encodeURIComponent(root)}&alt=%2FVolumes%2FQA+Disk%2Frun+42` }, jsonBody({ data: { dir_path: `${root}/p1` } }))], qaHome(root));
