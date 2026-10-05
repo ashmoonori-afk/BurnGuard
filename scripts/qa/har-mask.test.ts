@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { gzipSync } from "node:zlib";
 import path from "node:path";
 import { HarMaskError, MASKED, maskHar, rootPattern, type PrivateRoot } from "./har-mask";
 
@@ -39,6 +40,122 @@ describe("HAR masking for the pre-release UX QA stage", () => {
     ] } };
     const text = JSON.stringify(maskHar(har).har);
     for (const secret of [CAPABILITY, token, "quoted-cookie-value-1234", "alice", "/root/"]) expect(text).not.toContain(secret);
+  });
+
+  test("Given secrets in a base64 request body or in a raw form body without params, when masked, then they are collected and masked, and a binary request body carrying a secret fails closed", () => {
+    const password = ["request", "body", "password", "4938271"].join("-");
+    const token = ["raw", "form", "token", "1234567890"].join("-");
+    const har = { log: { entries: [
+      entry({ method: "POST", url: "http://127.0.0.1:14070/api/a", postData: { mimeType: "application/json", encoding: "base64", text: Buffer.from(JSON.stringify({ password })).toString("base64") } }, { content: { size: 10, mimeType: "application/json", text: JSON.stringify({ echo: password }) } }),
+      entry({ method: "POST", url: "http://127.0.0.1:14070/api/b", postData: { mimeType: "application/x-www-form-urlencoded", text: `theme=dark&access_token=${encodeURIComponent(token)}` } }, {}),
+    ] } };
+    const { har: masked, report } = maskHar(har);
+    type Entry = { readonly request: { readonly postData: { readonly text: string } } };
+    const entries = (masked as { readonly log: { readonly entries: readonly Entry[] } }).log.entries;
+    expect(JSON.parse(Buffer.from(entries[0]!.request.postData.text, "base64").toString("utf8"))).toEqual({ password: MASKED });
+    expect(entries[1]!.request.postData.text).toBe(`theme=dark&access_token=${MASKED}`);
+    expect(JSON.stringify(masked)).not.toContain(password);
+    expect(report.secret_values).toBe(2);
+    const spaced = ["spaced", "form", "password", "4938271"].join(" ");
+    const form = new URLSearchParams({ password: spaced, theme: "dark" }).toString();
+    const spacedHar = { log: { entries: [
+      entry({ method: "POST", url: "http://127.0.0.1:14070/api/d", postData: { mimeType: "application/x-www-form-urlencoded; charset=utf-8", text: form } }, {}),
+      entry({ method: "POST", url: "http://127.0.0.1:14070/api/e", postData: { mimeType: "application/x-www-form-urlencoded", encoding: "base64", text: Buffer.from(form).toString("base64") } }, {}),
+    ] } };
+    const spacedEntries = (maskHar(spacedHar).har as { readonly log: { readonly entries: readonly Entry[] } }).log.entries;
+    expect(new URLSearchParams(spacedEntries[0]!.request.postData.text).get("password")).toBe(MASKED);
+    expect(new URLSearchParams(Buffer.from(spacedEntries[1]!.request.postData.text, "base64").toString("utf8")).get("password")).toBe(MASKED);
+    // A form encoder may spell each space either way; a mixed spelling in the request or only in a plain-text echo fails closed.
+    const mixed = encodeURIComponent(spaced).replace("%20", "+");
+    const mixedRequest = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/f", postData: { mimeType: "application/x-www-form-urlencoded", text: `password=${mixed}&theme=dark` } }, {})] } };
+    expect(() => maskHar(mixedRequest)).toThrow(new HarMaskError("secret_remains"));
+    const mixedEcho = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/g", postData: { mimeType: "application/x-www-form-urlencoded", encoding: "base64", text: Buffer.from(form).toString("base64") } }, { content: { size: 30, mimeType: "text/plain", encoding: "base64", text: Buffer.from(`echo=${mixed}&note=ordinary+text`).toString("base64") } })] } };
+    expect(() => maskHar(mixedEcho)).toThrow(new HarMaskError("secret_remains"));
+    // A quote or backslash kept literal in a mixed spelling is JSON-escaped in a JSON echo, in base64, and in a URL query.
+    for (const special of ['quoted"password', "back\\slash"]) {
+      const secret = ["synthetic", special, "493827"].join(" ");
+      const literal = encodeURIComponent(secret).replace("%20", "+").replace("%22", '"').replace("%5C", "\\");
+      const login = { method: "POST", url: "http://127.0.0.1:14070/api/h", postData: { mimeType: "application/json", text: JSON.stringify({ password: secret }) } };
+      for (const echo of [
+        entry(login, { content: { size: 30, mimeType: "application/json", text: JSON.stringify({ echo: literal }) } }),
+        entry(login, { content: { size: 30, mimeType: "application/json", encoding: "base64", text: Buffer.from(JSON.stringify({ echo: literal })).toString("base64") } }),
+        entry({ ...login, url: `http://127.0.0.1:14070/api/h?echo=${literal}` }, {}),
+      ]) expect(() => maskHar({ log: { entries: [echo] } })).toThrow(new HarMaskError("secret_remains"));
+      // Nested deeper than the parse limit, the echo fails closed instead of passing unchecked.
+      let nested: unknown = { echo: literal };
+      for (let level = 0; level < 10; level += 1) nested = { inner: JSON.stringify(nested) };
+      expect(() => maskHar({ log: { entries: [entry(login, { content: { size: 30, mimeType: "application/json", text: JSON.stringify(nested) } })] } })).toThrow(new HarMaskError("secret_remains"));
+      // Re-encoded mixed spellings and Unicode-escaped JSON inside a URL query fail closed too.
+      const unicodeJson = `{"echo":"${[...secret].map(char => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`).join("")}"}`;
+      for (const leak of [
+        entry(login, { content: { size: 30, mimeType: "text/plain", text: encodeURIComponent(literal) } }),
+        entry(login, { content: { size: 30, mimeType: "text/plain", text: literal.replaceAll("%", "%25") } }),
+        entry({ ...login, url: `http://127.0.0.1:14070/api/h?echo=${encodeURIComponent(unicodeJson)}` }, {}),
+        entry({ ...login, url: `http://127.0.0.1:14070/api/h?echo=${encodeURIComponent(encodeURIComponent(unicodeJson))}` }, {}),
+      ]) expect(() => maskHar({ log: { entries: [leak] } })).toThrow(new HarMaskError("secret_remains"));
+    }
+    // An invalid UTF-8 byte next to a percent-encoded escaped secret, and a secret with a literal backslash escape under
+    // eight percent layers, fail closed as well.
+    const plain = ["synthetic", "ordinary", "493827"].join(" ");
+    const escapedPlain = `"${[...plain].map(char => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`).join("")}"`;
+    const bytes = (text: string) => [...Buffer.from(text)].map(byte => `%${byte.toString(16).padStart(2, "0")}`).join("");
+    const backslashed = ["synthetic", "back\\npassword", "493827"].join(" ");
+    let deep = encodeURIComponent(backslashed).replace("%20", "+").replace("%5C", "\\");
+    for (let level = 0; level < 8; level += 1) deep = encodeURIComponent(deep);
+    for (const [secret, leak] of [
+      [plain, entry({ url: `http://127.0.0.1:14070/api/i?echo=${bytes(escapedPlain)}%ff` }, {})],
+      [backslashed, entry({ url: "http://127.0.0.1:14070/api/j" }, { content: { size: 30, mimeType: "text/plain", text: deep } })],
+    ] as const) {
+      const source = entry({ method: "POST", url: "http://127.0.0.1:14070/api/login", postData: { mimeType: "application/json", text: JSON.stringify({ password: secret }) } }, {});
+      expect(() => maskHar({ log: { entries: [source, leak] } })).toThrow(new HarMaskError("secret_remains"));
+    }
+    // HTML character references, JavaScript and CSS hex escapes, and base64 or hex of the secret's bytes fail closed in a page.
+    const ampersand = ["synthetic", "&", "value", "493827"].join(" ");
+    const hexChar = (char: string) => char.codePointAt(0)!.toString(16);
+    for (const [secret, page] of [
+      [ampersand, `<div>${ampersand.replace("&", "&amp;")}</div>`],
+      [ampersand, `<div>${ampersand.replace("&", "&AMP;")}</div>`],
+      ["synthetic caf\u00e9 value 493827", "<div>synthetic caf&eacute; value 493827</div>"],
+      ["synthetic \u2242\u0338 value 493827", "<div>synthetic &nesim; value 493827</div>"],
+      ["synthetic \u0000value 493827", "<script>globalThis.echo=\"synthetic \\0value 493827\";</script>"],
+      ["synthetic \u0000value 493827", "<script>globalThis.echo=\"synthetic \\x00value 493827\";</script>"],
+      ["synthetic \u000bvalue 493827", "<script>globalThis.echo=\"synthetic \\vvalue 493827\";</script>"],
+      ["synthetic \u20ac value 493827", "<div>synthetic &#128; value 493827</div>"],
+      ["synthetic caf\u00e9value 493827", "<div>synthetic caf&eacutevalue 493827</div>"],
+      ["synthetic caf\u00e9 value 493827", `<script>globalThis.echo=atob("${Buffer.from("synthetic caf\u00e9 value 493827", "latin1").toString("base64")}");</script>`],
+      [`synthetic-provider-${"0123456789abcdef".repeat(3)}`, `<script>globalThis.echo=atob("${Buffer.from(`synthetic-provider-${"0123456789abcdef".repeat(3)}`).toString("base64").replace(/.{76}/u, "$&\n")}");</script>`],
+      ["synthetic caf\u00e9 value 493827", "<script>globalThis.echo=unescape(\"synthetic%20caf%E9%20value%20493827\");</script>"],
+      ["synthetic \ud55c\uae00 value 493827", "<script>globalThis.echo=unescape(\"synthetic%20%uD55C%uAE00%20value%20493827\");</script>"],
+      ["synthetic\nvalue 493827", "<div>synthetic\r\nvalue 493827</div>"],
+      [plain, `<div>&#0000000${plain.codePointAt(0)};${plain.slice(1)}</div>`],
+      [plain, `<div>&#${plain.codePointAt(0)};${plain.slice(1)}</div>`],
+      [plain, `<script>globalThis.echo="${[...plain].map(char => `\\x${hexChar(char).padStart(2, "0")}`).join("")}";</script>`],
+      [plain, `<style>.echo::after{content:"${[...plain].map(char => `\\${hexChar(char)} `).join("")}"}</style>`],
+      [plain, `<script>globalThis.echo=atob("${Buffer.from(plain).toString("base64")}");</script>`],
+      [plain, `<script>globalThis.echo="${Buffer.from(plain).toString("hex")}";</script>`],
+    ] as const) {
+      const source = entry({ method: "POST", url: "http://127.0.0.1:14070/api/login", postData: { mimeType: "application/json", text: JSON.stringify({ password: secret }) } }, {});
+      const echo = entry({ url: "http://127.0.0.1:14070/runtime/projects/p1/index.html" }, { content: { size: page.length, mimeType: "text/html; charset=utf-8", text: page } });
+      expect(() => maskHar({ log: { entries: [source, echo] } })).toThrow(new HarMaskError("secret_remains"));
+    }
+    // A base64 body in UTF-16 (either byte order, also shifted by one byte) is only inspected, never rewritten: a secret in it fails closed.
+    const html = Buffer.from(`<html><body>${plain}</body></html>`, "utf16le");
+    const swapped = Buffer.from(html).swap16();
+    const utf32 = Buffer.alloc([...plain].length * 4);
+    for (const [index, char] of [...plain].entries()) utf32.writeUInt32LE(char.codePointAt(0)!, index * 4);
+    for (const [bytes, mimeType] of [
+      [html, "text/html; charset=utf-16le"],
+      [swapped, "text/html; charset=utf-16be"],
+      [Buffer.concat([Buffer.from([0x20]), html]), "text/html; charset=utf-16le"],
+      [utf32, "application/octet-stream"],
+      [gzipSync(Buffer.from(`<p>${plain}</p>`)), "application/octet-stream"],
+    ] as const) {
+      const source = entry({ method: "POST", url: "http://127.0.0.1:14070/api/login", postData: { mimeType: "application/json", text: JSON.stringify({ password: plain }) } }, {});
+      const echo = entry({ url: "http://127.0.0.1:14070/api/k" }, { content: { size: bytes.length, mimeType, encoding: "base64", text: bytes.toString("base64") } });
+      expect(() => maskHar({ log: { entries: [source, echo] } })).toThrow(new HarMaskError("secret_remains"));
+    }
+    const binary = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/c", headers: [header("x-burnguard-capability", CAPABILITY)], postData: { mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(`{"c":"${CAPABILITY}"}`).toString("base64") } }, {})] } };
+    expect(() => maskHar(binary)).toThrow(new HarMaskError("secret_remains"));
   });
 
   test("Given BurnGuard settings requests carrying provider tokens, when masked, then every token field value is masked everywhere", () => {

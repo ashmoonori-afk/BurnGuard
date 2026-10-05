@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { chmod, writeFile } from "node:fs/promises";
+import { brotliDecompressSync, gunzipSync, inflateRawSync, inflateSync } from "node:zlib";
 import path from "node:path";
 
 /**
@@ -44,12 +45,25 @@ const REGEXP_SYNTAX = /[\\^$.*+?()[\]{}|/]/gu;
 
 /** A value as it appears inside a JSON string: quotes, backslashes and control characters escaped. */
 const jsonEscaped = (value: string): string => JSON.stringify(value).slice(1, -1);
+/** A value as an application/x-www-form-urlencoded body writes it: a space becomes "+", unlike encodeURIComponent's "%20". */
+const formEncoded = (value: string): string => new URLSearchParams([["", value]]).toString().slice(1);
+/**
+ * A secret in any mix of literal and percent-encoded characters, a space also as "+": form and query encoders may
+ * spell each character either way. Masking rewrites only whole-value spellings; any other spelling fails closed.
+ */
+const secretSpelling = (secret: string): RegExp => new RegExp([...secret].map(char => {
+  const encoded = [...new TextEncoder().encode(char)].map(byte => `%${byte.toString(16).padStart(2, "0")}`).join("").replace(/[a-f]/gu, hex => `[${hex}${hex.toUpperCase()}]`);
+  // An HTML named reference the residual check cannot resolve is decoded as two U+FFFF characters, since a named
+  // reference stands for one or two characters: each U+FFFF may stand for a secret character, and the optional
+  // U+FFFF before each character absorbs the second one when the reference stood for a single character.
+  return `\\uffff?(?:${[char.replace(REGEXP_SYNTAX, "\\$&"), encoded, "\\uffff", ...(char === " " ? ["\\+"] : [])].join("|")})`;
+}).join(""), "gu");
 /**
  * The forms a secret takes in a HAR string: as is, percent-encoded (query and form values) and JSON-escaped once per
  * level of JSON nested inside a JSON string, longest first.
  */
 const secretForms = (secret: string): string[] => {
-  const forms = [secret, encodeURIComponent(secret)];
+  const forms = [secret, encodeURIComponent(secret), formEncoded(secret)];
   for (let level = 0, escaped = secret; level < SECRET_ESCAPE_LEVELS; level += 1) { escaped = jsonEscaped(escaped); forms.push(escaped); }
   return [...new Set(forms)].sort((a, b) => b.length - a.length);
 };
@@ -150,6 +164,8 @@ function collectSecrets(entries: readonly Record<string, Json>[]): Set<string> {
     for (const found of jsonBodySecrets(bodyText(message))) if (found.value.trim().length >= (found.specific ? MIN_SECRET_LENGTH : MIN_BODY_SECRET_LENGTH)) add(found.value);
     const postData = message["postData"];
     for (const param of isObject(postData) && Array.isArray(postData["params"]) ? postData["params"].filter(isObject) : []) if (SECRET_PARAMS.test(String(param["name"] ?? ""))) add(String(param["value"] ?? ""));
+    // A form body may be recorded as raw text only, without a params array.
+    if (isObject(postData) && /^application\/x-www-form-urlencoded/iu.test(String(postData["mimeType"] ?? ""))) for (const [name, value] of new URLSearchParams(bodyText(message))) if (SECRET_PARAMS.test(name)) add(value);
     for (const header of Array.isArray(message["headers"]) ? message["headers"].filter(isObject) : []) {
       const name = String(header["name"] ?? "").toLowerCase();
       const value = String(header["value"] ?? "");
@@ -164,12 +180,41 @@ function collectSecrets(entries: readonly Record<string, Json>[]): Set<string> {
   return secrets;
 }
 
+/**
+ * The texts a reader could decode from body bytes: UTF-8, UTF-16 and UTF-32 in either byte order from every byte offset,
+ * also after gzip, zlib, raw deflate or brotli decompression. Only UTF-8 text bodies are rewritten; a secret readable in
+ * another decoding fails closed. Known limit: archives and media containers (zip, images, PDF) are not opened, so a HAR
+ * carrying such bodies must stay private unless they are checked by hand.
+ */
+function decodings(bytes: Buffer, depth = 0): string[] {
+  const utf16 = (encoding: "utf-16le" | "utf-16be", offset: number) => new TextDecoder(encoding).decode(bytes.subarray(offset));
+  const utf32 = (littleEndian: boolean, offset: number) => {
+    const view = bytes.subarray(offset);
+    let text = "";
+    for (let index = 0; index + 4 <= view.length; index += 4) {
+      const value = littleEndian ? view.readUInt32LE(index) : view.readUInt32BE(index);
+      text += value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : "\ufffd";
+    }
+    return text;
+  };
+  const texts = [bytes.toString("utf8"), utf16("utf-16le", 0), utf16("utf-16le", 1), utf16("utf-16be", 0), utf16("utf-16be", 1)];
+  for (const offset of [0, 1, 2, 3]) texts.push(utf32(true, offset), utf32(false, offset));
+  // A compressed body (gzip, zlib, raw deflate, brotli) is inspected after decompression, at most two layers deep.
+  if (depth < 2) for (const inflate of [gunzipSync, inflateSync, inflateRawSync, brotliDecompressSync]) {
+    let inflated: Buffer | undefined;
+    try { inflated = inflate(bytes, { maxOutputLength: 64 * 1024 * 1024 }); } catch { inflated = undefined; }
+    if (inflated !== undefined && inflated.length > 0) texts.push(...decodings(inflated, depth + 1));
+  }
+  return texts;
+}
+
 /** Returns a masked copy of a parsed HAR and counts what was masked; the report never contains a masked value. */
 export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { readonly har: unknown; readonly report: HarMaskReport } {
   if (!isObject(input)) throw new HarMaskError("invalid_har");
   const har = JSON.parse(JSON.stringify(input)) as Record<string, Json>;
   const entries = entriesOf(har);
   const secrets = [...collectSecrets(entries)].sort((a, b) => b.length - a.length);
+  const spellings = secrets.map(secretSpelling);
   // The bootstrap response is where the capability is minted. A body there that yields no capability means the
   // format is not understood, so masking fails closed instead of trusting that nothing leaked.
   for (const entry of entries.filter(isBootstrap)) {
@@ -219,18 +264,131 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
     for (const header of Array.isArray(message["headers"]) ? message["headers"].filter(isObject) : []) if (SECRET_HEADERS.has(String(header["name"] ?? "").toLowerCase())) { header["value"] = MASKED; counts.headers += 1; }
     for (const cookie of Array.isArray(message["cookies"]) ? message["cookies"].filter(isObject) : []) { cookie["value"] = MASKED; counts.cookies += 1; }
     for (const param of Array.isArray(message["queryString"]) ? message["queryString"].filter(isObject) : []) if (SECRET_PARAMS.test(String(param["name"] ?? ""))) { param["value"] = MASKED; counts.params += 1; }
-    // Base64 text bodies are decoded, masked and re-encoded; binary bodies cannot carry a text secret legibly and stay as they are.
-    const content = message["content"];
-    if (isObject(content) && content["encoding"] === "base64" && typeof content["text"] === "string" && TEXT_MIME.test(String(content["mimeType"] ?? ""))) {
-      content["text"] = Buffer.from(scrub(Buffer.from(content["text"], "base64").toString("utf8")), "utf8").toString("base64");
+    // Base64 text bodies (request and response) are decoded, masked and re-encoded; binary bodies cannot carry a text
+    // secret legibly and stay as they are, so the residual check below fails closed on them.
+    for (const body of [message["content"], message["postData"]]) {
+      if (isObject(body) && body["encoding"] === "base64" && typeof body["text"] === "string" && TEXT_MIME.test(String(body["mimeType"] ?? ""))) {
+        body["text"] = Buffer.from(scrub(Buffer.from(body["text"], "base64").toString("utf8")), "utf8").toString("base64");
+      }
     }
   }
   const masked = walk(har);
   const serialized = JSON.stringify(masked);
-  const decodedBodies = entriesOf(masked as Record<string, Json>).flatMap(entry => { const content = isObject(entry["response"]) ? entry["response"]["content"] : null; return isObject(content) && content["encoding"] === "base64" && typeof content["text"] === "string" ? [Buffer.from(content["text"], "base64").toString("utf8")] : []; });
+  const decodedBodies = entriesOf(masked as Record<string, Json>)
+    .flatMap(entry => [entry["request"], entry["response"]].flatMap(message => isObject(message) ? [message["postData"], message["content"]] : []))
+    .flatMap(body => isObject(body) && body["encoding"] === "base64" && typeof body["text"] === "string" ? decodings(Buffer.from(body["text"], "base64")) : []);
   // Compared by escape trace, a secret is found at any JSON nesting depth, including depths masking does not unescape.
   const traces = [serialized.replaceAll("\\", ""), ...decodedBodies.map(escapeTrace)];
-  if (secrets.some(secret => [secret, encodeURIComponent(secret)].some(form => traces.some(trace => trace.includes(escapeTrace(form)))))) throw new HarMaskError("secret_remains");
+  if (secrets.some(secret => [secret, encodeURIComponent(secret), formEncoded(secret)].some(form => traces.some(trace => trace.includes(escapeTrace(form)))))) throw new HarMaskError("secret_remains");
+  // Mixed spellings are checked on every decoding a reader could apply to a value: each string and key of the masked HAR
+  // and each decoded base64 body is percent-decoded, form-decoded ("+" as a space) and JSON-unescaped (\uXXXX, \" and
+  // the like) repeatedly, JSON found along the way is parsed and its strings and keys checked the same way, and every
+  // result is probed. A value that still decodes further at the bound, or nests JSON deeper than it, fails closed.
+  // A secret carried as base64 or hex of its bytes (a Basic credential echoed, btoa in a page) is probed too: the base64
+  // characters fixed by the secret alone at each of the three byte alignments, standard and URL-safe, and both hex cases.
+  const derivedForms = (secret: string): string[] => {
+    // The secret's bytes as UTF-8, as Latin-1 (what browser btoa encodes) when every character fits, and as UTF-16LE.
+    const encodings = [Buffer.from(secret, "utf8"), Buffer.from(secret, "utf16le"), ...([...secret].every(char => char.charCodeAt(0) <= 0xff) ? [Buffer.from(secret, "latin1")] : [])];
+    const forms: string[] = [];
+    for (const bytes of encodings) {
+      forms.push(bytes.toString("hex"), bytes.toString("hex").toUpperCase());
+      for (let shift = 0; shift < 3; shift += 1) {
+        const core = Buffer.concat([Buffer.alloc(shift), bytes]).toString("base64").slice(shift === 0 ? 0 : 4, -4);
+        forms.push(core, core.replaceAll("+", "-").replaceAll("/", "_"));
+      }
+    }
+    return [...new Set(forms)].filter(form => form.length >= MIN_SECRET_LENGTH);
+  };
+
+  const probes = [...spellings.map(spelling => new RegExp(spelling.source, "u")), ...secrets.flatMap(derivedForms).map(form => new RegExp(form.replace(REGEXP_SYNTAX, "\\$&"), "u"))];
+  // Decodes like a forgiving reader (URLSearchParams): invalid UTF-8 becomes U+FFFD instead of hiding the whole run.
+  const percentDecoded = (text: string): string => text.replace(/(?:%[0-9a-f]{2})+/giu, sequence => Buffer.from(sequence.slice(1).split("%").map(hex => Number.parseInt(hex, 16))).toString("utf8"));
+  const JSON_ESCAPES: Readonly<Record<string, string>> = { b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
+  const jsonUnescaped = (text: string): string => text.replace(/\\(?:u([0-9a-fA-F]{4})|(["\\/bfnrt]))/gu, (_match, hex: string | undefined, char: string | undefined) => hex !== undefined ? String.fromCharCode(Number.parseInt(hex, 16)) : JSON_ESCAPES[char ?? ""] ?? char ?? "");
+  // HTML character references (numeric with or without ";", and the named ones that can spell text), and JavaScript
+  // and CSS hexadecimal escapes: the escapes a browser applies when it renders HTML or runs scripts and styles.
+  const codePoint = (hex: string, radix: number): string => { const value = Number.parseInt(hex, radix); return value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : "\ufffd"; };
+  const NAMED_REFERENCES: Readonly<Record<string, string>> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0", Tab: "\t", NewLine: "\n", sol: "/", bsol: "\\", percnt: "%", plus: "+", equals: "=", colon: ":", semi: ";", comma: ",", period: ".", excl: "!", quest: "?", num: "#", dollar: "$", lpar: "(", rpar: ")", ast: "*", lowbar: "_", hyphen: "-", grave: "`", lsqb: "[", rsqb: "]", lcub: "{", rcub: "}", verbar: "|", Hat: "^", commat: "@" };
+  // Browsers decode a named reference written with ";" from the full HTML table, which is not embedded here: one this
+  // table cannot resolve becomes two U+FFFF characters, which the probes accept as one or two characters of any value.
+  // Without ";", only the legacy names (Latin-1 letters and symbols, amp, lt, gt, quot and their uppercase forms) are
+  // decoded, as the longest legacy name that prefixes the word ("&eacutevalue" reads "\u00e9value"); anything else stays.
+  const LATIN1_NAMES = "nbsp iexcl cent pound curren yen brvbar sect uml copy ordf laquo not shy reg macr deg plusmn sup2 sup3 acute micro para middot cedil sup1 ordm raquo frac14 frac12 frac34 iquest Agrave Aacute Acirc Atilde Auml Aring AElig Ccedil Egrave Eacute Ecirc Euml Igrave Iacute Icirc Iuml ETH Ntilde Ograve Oacute Ocirc Otilde Ouml times Oslash Ugrave Uacute Ucirc Uuml Yacute THORN szlig agrave aacute acirc atilde auml aring aelig ccedil egrave eacute ecirc euml igrave iacute icirc iuml eth ntilde ograve oacute ocirc otilde ouml divide oslash ugrave uacute ucirc uuml yacute thorn yuml".split(" ");
+  const LEGACY_REFERENCES: Readonly<Record<string, string>> = { ...Object.fromEntries(LATIN1_NAMES.map((name, index) => [name, String.fromCharCode(0xa0 + index)])), amp: "&", lt: "<", gt: ">", quot: "\"", AMP: "&", LT: "<", GT: ">", QUOT: "\"", COPY: "\u00a9", REG: "\u00ae" };
+  const LEGACY_BY_LENGTH = Object.keys(LEGACY_REFERENCES).sort((a, b) => b.length - a.length);
+  const htmlDecoded = (text: string): string => text.replace(/&(?:#[xX]0*([0-9a-fA-F]{1,6})|#0*([0-9]{1,7})|([A-Za-z][A-Za-z0-9]{1,31}))(;?)/gu, (match, hex: string | undefined, decimal: string | undefined, name: string | undefined, semicolon: string) => {
+    // Browsers read numeric references 0x80-0x9F as Windows-1252 (&#128; is the euro sign).
+    const numeric = hex !== undefined ? Number.parseInt(hex, 16) : decimal !== undefined ? Number.parseInt(decimal, 10) : undefined;
+    if (numeric !== undefined) return numeric >= 0x80 && numeric <= 0x9f ? new TextDecoder("windows-1252").decode(Uint8Array.of(numeric)) : codePoint(String(numeric), 10);
+    const word = name ?? "";
+    if (semicolon === ";") return LEGACY_REFERENCES[word] ?? NAMED_REFERENCES[word] ?? NAMED_REFERENCES[word.toLowerCase()] ?? "\uffff\uffff";
+    const legacy = LEGACY_BY_LENGTH.find(candidate => word.startsWith(candidate));
+    return legacy === undefined ? match : `${LEGACY_REFERENCES[legacy]}${word.slice(legacy.length)}`;
+  });
+  // JavaScript string escapes JSON lacks: \xHH, \u{...}, legacy octal (\0 is NUL), \v, \', \` and line continuations.
+  const scriptDecoded = (text: string): string => text.replace(/\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]{1,6})\}|([0-3][0-7]{0,2}|[4-7][0-7]?)|([v'`])|(\r\n|[\n\r\u2028\u2029]))/gu, (_match, byte: string | undefined, braced: string | undefined, octal: string | undefined, short: string | undefined) => {
+    // Unlike an HTML reference, a script escape may spell NUL (\x00, \u{0}).
+    if (byte !== undefined || braced !== undefined) { const value = Number.parseInt(byte ?? braced ?? "", 16); return value <= 0x10ffff ? String.fromCodePoint(value) : "\ufffd"; }
+    if (octal !== undefined) return String.fromCharCode(Number.parseInt(octal, 8));
+    if (short !== undefined) return short === "v" ? "\v" : short;
+    return "";
+  });
+  const styleDecoded = (text: string): string => text.replace(/\\([0-9a-fA-F]{1,6})(?:\r\n|[ \t\n\r\f])?/gu, (_match, hex: string) => codePoint(hex, 16));
+  const stringsOf = (value: unknown): string[] => typeof value === "string" ? [value] : Array.isArray(value) ? value.flatMap(stringsOf) : isObject(value) ? Object.entries(value).flatMap(([key, child]) => [key, ...stringsOf(child)]) : [];
+  // Besides the decodings above: JavaScript's legacy unescape (Latin-1 %XX and %uXXXX), the newline normalization
+  // browsers apply to HTML and template literals (CRLF and CR read as LF), and base64 with its line breaks removed (MIME
+  // wraps at 76 characters and atob ignores whitespace), so the base64 probes see the unbroken text.
+  const legacyUnescaped = (text: string): string => text.replace(/%u([0-9a-fA-F]{4})|%([0-9a-fA-F]{2})/gu, (_match, unit: string | undefined, byte: string | undefined) => String.fromCharCode(Number.parseInt(unit ?? byte ?? "", 16)));
+  const withoutWhitespace = (text: string): string => text.replace(/[\t\n\f\r ]+/gu, "");
+  const DECODERS: readonly ((text: string) => string)[] = [percentDecoded, text => percentDecoded(text.replaceAll("+", " ")), jsonUnescaped, htmlDecoded, scriptDecoded, styleDecoded, legacyUnescaped, text => text.replace(/\r\n?/gu, "\n"), withoutWhitespace];
+  // Removing whitespace only serves the base64 probes; the single path below never builds on it, since it would erase
+  // the spaces of a secret that later decodings still have to reveal.
+  const PATH_DECODERS = DECODERS.filter(decode => decode !== withoutWhitespace);
+  const MAX_DECODE_ROUNDS = 6;
+  const MAX_DECODINGS = 64;
+  const MAX_JSON_DEPTH = 8;
+  const exposes = (value: string, depth: number): boolean => {
+    const seen = new Set([value]);
+    let frontier = [value];
+    for (let round = 0; frontier.length > 0; round += 1) {
+      const next: string[] = [];
+      for (const text of frontier) {
+        if (probes.some(probe => probe.test(text))) return true;
+        if (/^\s*[[{"]/u.test(text)) {
+          let parsed: unknown;
+          try { parsed = JSON.parse(text); } catch (error) { if (!(error instanceof SyntaxError)) throw error; }
+          if (parsed !== undefined && depth >= MAX_JSON_DEPTH) return true;
+          if (parsed !== undefined && stringsOf(parsed).some(child => child !== text && exposes(child, depth + 1))) return true;
+        }
+        for (const variant of DECODERS.map(decode => decode(text))) {
+          if (!seen.has(variant)) { seen.add(variant); next.push(variant); }
+        }
+      }
+      if (next.length > 0 && (round >= MAX_DECODE_ROUNDS || seen.size > MAX_DECODINGS)) {
+        // Past the branching bound, follow one path per value: at each step every single decoding is probed (so an
+        // intermediate a reader could stop at is never skipped), then all decodings are applied in turn, probing after
+        // each. A value that has not settled within the step bound fails closed.
+        return next.some(start => {
+          let text = start;
+          for (let step = 0; step < 64; step += 1) {
+            if (probes.some(probe => probe.test(text))) return true;
+            let decoded = text;
+            if (DECODERS.some(decode => probes.some(probe => probe.test(decode(text))))) return true;
+            for (const decode of PATH_DECODERS) {
+              decoded = decode(decoded);
+              if (probes.some(probe => probe.test(decoded))) return true;
+            }
+            if (decoded === text) return false;
+            text = decoded;
+          }
+          return true;
+        });
+      }
+      frontier = next;
+    }
+    return false;
+  };
+  if (probes.length > 0 && [...stringsOf(masked), ...decodedBodies].some(text => exposes(text, 0))) throw new HarMaskError("secret_remains");
   // Binary bodies are not rewritten. JSON and the two URL-encoding levels supported for private roots must still fail closed.
   const checkEncoded = (text: string): string => {
     const candidates = [text];
