@@ -114,6 +114,9 @@ describe("HAR masking for the pre-release UX QA stage", () => {
     const hexChar = (char: string) => char.codePointAt(0)!.toString(16);
     for (const [secret, page] of [
       [ampersand, `<div>${ampersand.replace("&", "&amp;")}</div>`],
+      [ampersand, `<div>${ampersand.replace("&", "&AMP;")}</div>`],
+      ["synthetic caf\u00e9 value 493827", "<div>synthetic caf&eacute; value 493827</div>"],
+      [plain, `<div>&#0000000${plain.codePointAt(0)};${plain.slice(1)}</div>`],
       [plain, `<div>&#${plain.codePointAt(0)};${plain.slice(1)}</div>`],
       [plain, `<script>globalThis.echo="${[...plain].map(char => `\\x${hexChar(char).padStart(2, "0")}`).join("")}";</script>`],
       [plain, `<style>.echo::after{content:"${[...plain].map(char => `\\${hexChar(char)} `).join("")}"}</style>`],
