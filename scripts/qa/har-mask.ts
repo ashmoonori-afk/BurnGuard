@@ -112,7 +112,12 @@ function encodedJson(text: string, transform: (value: string) => string): string
   const walk = (value: Json): Json => {
     if (typeof value === "string") return transform(value);
     if (Array.isArray(value)) return value.map(walk);
-    if (isObject(value)) return Object.fromEntries(Object.entries(value).map(([key, child]) => [transform(key), walk(child)]));
+    if (isObject(value)) {
+      const pairs = Object.entries(value).map(([key, child]): [string, Json] => [transform(key), walk(child)]);
+      // Two keys that mask to the same text would silently drop a value: refuse the HAR instead.
+      if (new Set(pairs.map(([key]) => key)).size !== pairs.length) throw new HarMaskError("invalid_har");
+      return Object.fromEntries(pairs);
+    }
     return value;
   };
   const transformed = JSON.stringify(walk(parsed));
