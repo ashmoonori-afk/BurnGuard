@@ -169,7 +169,10 @@ jobs:
       # Remove image-size ids when a release after 2.0.2 exists; affected
       # ICNS/JXL/HEIF inputs never reach PPTXGenJS here. Remove the router ids
       # with the planned 7.18+ migration; this client-only app uses neither SSR
-      # hydration nor user-controlled navigation targets.
+      # hydration nor user-controlled navigation targets. Remove the braces id
+      # when a release after 3.0.3 exists; braces is reached only through
+      # tailwindcss at frontend build time, with patterns from our own config,
+      # and is not part of the packaged app.
       - name: Dependency audit
         run: >-
           bun audit
@@ -177,6 +180,7 @@ jobs:
           --ignore=GHSA-5p2g-fcmc-qvqq
           --ignore=GHSA-wrjc-x8rr-h8h6
           --ignore=GHSA-337j-9hxr-rhxg
+          --ignore=GHSA-vfj7-8cjw-p6xm
       - name: Scan for secrets
         uses: gitleaks/gitleaks-action@v2
         env:
