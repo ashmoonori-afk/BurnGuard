@@ -41,6 +41,24 @@ describe("HAR masking for the pre-release UX QA stage", () => {
     for (const secret of [CAPABILITY, token, "quoted-cookie-value-1234", "alice", "/root/"]) expect(text).not.toContain(secret);
   });
 
+  test("Given secrets in a base64 request body or in a raw form body without params, when masked, then they are collected and masked, and a binary request body carrying a secret fails closed", () => {
+    const password = ["request", "body", "password", "4938271"].join("-");
+    const token = ["raw", "form", "token", "1234567890"].join("-");
+    const har = { log: { entries: [
+      entry({ method: "POST", url: "http://127.0.0.1:14070/api/a", postData: { mimeType: "application/json", encoding: "base64", text: Buffer.from(JSON.stringify({ password })).toString("base64") } }, { content: { size: 10, mimeType: "application/json", text: JSON.stringify({ echo: password }) } }),
+      entry({ method: "POST", url: "http://127.0.0.1:14070/api/b", postData: { mimeType: "application/x-www-form-urlencoded", text: `theme=dark&access_token=${encodeURIComponent(token)}` } }, {}),
+    ] } };
+    const { har: masked, report } = maskHar(har);
+    type Entry = { readonly request: { readonly postData: { readonly text: string } } };
+    const entries = (masked as { readonly log: { readonly entries: readonly Entry[] } }).log.entries;
+    expect(JSON.parse(Buffer.from(entries[0]!.request.postData.text, "base64").toString("utf8"))).toEqual({ password: MASKED });
+    expect(entries[1]!.request.postData.text).toBe(`theme=dark&access_token=${MASKED}`);
+    expect(JSON.stringify(masked)).not.toContain(password);
+    expect(report.secret_values).toBe(2);
+    const binary = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/c", headers: [header("x-burnguard-capability", CAPABILITY)], postData: { mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(`{"c":"${CAPABILITY}"}`).toString("base64") } }, {})] } };
+    expect(() => maskHar(binary)).toThrow(new HarMaskError("secret_remains"));
+  });
+
   test("Given BurnGuard settings requests carrying provider tokens, when masked, then every token field value is masked everywhere", () => {
     // Fake values are assembled at runtime so no secret-shaped literal sits in the source.
     const fake = (label: string, length: number) => [label, "q".repeat(length)].join("-");

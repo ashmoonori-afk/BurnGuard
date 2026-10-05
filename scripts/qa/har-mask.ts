@@ -150,6 +150,8 @@ function collectSecrets(entries: readonly Record<string, Json>[]): Set<string> {
     for (const found of jsonBodySecrets(bodyText(message))) if (found.value.trim().length >= (found.specific ? MIN_SECRET_LENGTH : MIN_BODY_SECRET_LENGTH)) add(found.value);
     const postData = message["postData"];
     for (const param of isObject(postData) && Array.isArray(postData["params"]) ? postData["params"].filter(isObject) : []) if (SECRET_PARAMS.test(String(param["name"] ?? ""))) add(String(param["value"] ?? ""));
+    // A form body may be recorded as raw text only, without a params array.
+    if (isObject(postData) && /^application\/x-www-form-urlencoded/iu.test(String(postData["mimeType"] ?? ""))) for (const [name, value] of new URLSearchParams(bodyText(message))) if (SECRET_PARAMS.test(name)) add(value);
     for (const header of Array.isArray(message["headers"]) ? message["headers"].filter(isObject) : []) {
       const name = String(header["name"] ?? "").toLowerCase();
       const value = String(header["value"] ?? "");
@@ -219,15 +221,19 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
     for (const header of Array.isArray(message["headers"]) ? message["headers"].filter(isObject) : []) if (SECRET_HEADERS.has(String(header["name"] ?? "").toLowerCase())) { header["value"] = MASKED; counts.headers += 1; }
     for (const cookie of Array.isArray(message["cookies"]) ? message["cookies"].filter(isObject) : []) { cookie["value"] = MASKED; counts.cookies += 1; }
     for (const param of Array.isArray(message["queryString"]) ? message["queryString"].filter(isObject) : []) if (SECRET_PARAMS.test(String(param["name"] ?? ""))) { param["value"] = MASKED; counts.params += 1; }
-    // Base64 text bodies are decoded, masked and re-encoded; binary bodies cannot carry a text secret legibly and stay as they are.
-    const content = message["content"];
-    if (isObject(content) && content["encoding"] === "base64" && typeof content["text"] === "string" && TEXT_MIME.test(String(content["mimeType"] ?? ""))) {
-      content["text"] = Buffer.from(scrub(Buffer.from(content["text"], "base64").toString("utf8")), "utf8").toString("base64");
+    // Base64 text bodies (request and response) are decoded, masked and re-encoded; binary bodies cannot carry a text
+    // secret legibly and stay as they are, so the residual check below fails closed on them.
+    for (const body of [message["content"], message["postData"]]) {
+      if (isObject(body) && body["encoding"] === "base64" && typeof body["text"] === "string" && TEXT_MIME.test(String(body["mimeType"] ?? ""))) {
+        body["text"] = Buffer.from(scrub(Buffer.from(body["text"], "base64").toString("utf8")), "utf8").toString("base64");
+      }
     }
   }
   const masked = walk(har);
   const serialized = JSON.stringify(masked);
-  const decodedBodies = entriesOf(masked as Record<string, Json>).flatMap(entry => { const content = isObject(entry["response"]) ? entry["response"]["content"] : null; return isObject(content) && content["encoding"] === "base64" && typeof content["text"] === "string" ? [Buffer.from(content["text"], "base64").toString("utf8")] : []; });
+  const decodedBodies = entriesOf(masked as Record<string, Json>)
+    .flatMap(entry => [entry["request"], entry["response"]].flatMap(message => isObject(message) ? [message["postData"], message["content"]] : []))
+    .flatMap(body => isObject(body) && body["encoding"] === "base64" && typeof body["text"] === "string" ? [Buffer.from(body["text"], "base64").toString("utf8")] : []);
   // Compared by escape trace, a secret is found at any JSON nesting depth, including depths masking does not unescape.
   const traces = [serialized.replaceAll("\\", ""), ...decodedBodies.map(escapeTrace)];
   if (secrets.some(secret => [secret, encodeURIComponent(secret)].some(form => traces.some(trace => trace.includes(escapeTrace(form)))))) throw new HarMaskError("secret_remains");
