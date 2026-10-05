@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { gzipSync } from "node:zlib";
 import path from "node:path";
 import { HarMaskError, MASKED, maskHar, rootPattern, type PrivateRoot } from "./har-mask";
 
@@ -108,12 +109,35 @@ describe("HAR masking for the pre-release UX QA stage", () => {
       const source = entry({ method: "POST", url: "http://127.0.0.1:14070/api/login", postData: { mimeType: "application/json", text: JSON.stringify({ password: secret }) } }, {});
       expect(() => maskHar({ log: { entries: [source, leak] } })).toThrow(new HarMaskError("secret_remains"));
     }
+    // HTML character references, JavaScript and CSS hex escapes, and base64 or hex of the secret's bytes fail closed in a page.
+    const ampersand = ["synthetic", "&", "value", "493827"].join(" ");
+    const hexChar = (char: string) => char.codePointAt(0)!.toString(16);
+    for (const [secret, page] of [
+      [ampersand, `<div>${ampersand.replace("&", "&amp;")}</div>`],
+      [plain, `<div>&#${plain.codePointAt(0)};${plain.slice(1)}</div>`],
+      [plain, `<script>globalThis.echo="${[...plain].map(char => `\\x${hexChar(char).padStart(2, "0")}`).join("")}";</script>`],
+      [plain, `<style>.echo::after{content:"${[...plain].map(char => `\\${hexChar(char)} `).join("")}"}</style>`],
+      [plain, `<script>globalThis.echo=atob("${Buffer.from(plain).toString("base64")}");</script>`],
+      [plain, `<script>globalThis.echo="${Buffer.from(plain).toString("hex")}";</script>`],
+    ] as const) {
+      const source = entry({ method: "POST", url: "http://127.0.0.1:14070/api/login", postData: { mimeType: "application/json", text: JSON.stringify({ password: secret }) } }, {});
+      const echo = entry({ url: "http://127.0.0.1:14070/runtime/projects/p1/index.html" }, { content: { size: page.length, mimeType: "text/html; charset=utf-8", text: page } });
+      expect(() => maskHar({ log: { entries: [source, echo] } })).toThrow(new HarMaskError("secret_remains"));
+    }
     // A base64 body in UTF-16 (either byte order, also shifted by one byte) is only inspected, never rewritten: a secret in it fails closed.
     const html = Buffer.from(`<html><body>${plain}</body></html>`, "utf16le");
     const swapped = Buffer.from(html).swap16();
-    for (const bytes of [html, swapped, Buffer.concat([Buffer.from([0x20]), html])]) {
+    const utf32 = Buffer.alloc([...plain].length * 4);
+    for (const [index, char] of [...plain].entries()) utf32.writeUInt32LE(char.codePointAt(0)!, index * 4);
+    for (const [bytes, mimeType] of [
+      [html, "text/html; charset=utf-16le"],
+      [swapped, "text/html; charset=utf-16be"],
+      [Buffer.concat([Buffer.from([0x20]), html]), "text/html; charset=utf-16le"],
+      [utf32, "application/octet-stream"],
+      [gzipSync(Buffer.from(`<p>${plain}</p>`)), "application/octet-stream"],
+    ] as const) {
       const source = entry({ method: "POST", url: "http://127.0.0.1:14070/api/login", postData: { mimeType: "application/json", text: JSON.stringify({ password: plain }) } }, {});
-      const echo = entry({ url: "http://127.0.0.1:14070/api/k" }, { content: { size: bytes.length, mimeType: "text/html; charset=utf-16le", encoding: "base64", text: bytes.toString("base64") } });
+      const echo = entry({ url: "http://127.0.0.1:14070/api/k" }, { content: { size: bytes.length, mimeType, encoding: "base64", text: bytes.toString("base64") } });
       expect(() => maskHar({ log: { entries: [source, echo] } })).toThrow(new HarMaskError("secret_remains"));
     }
     const binary = { log: { entries: [entry({ method: "POST", url: "http://127.0.0.1:14070/api/c", headers: [header("x-burnguard-capability", CAPABILITY)], postData: { mimeType: "application/octet-stream", encoding: "base64", text: Buffer.from(`{"c":"${CAPABILITY}"}`).toString("base64") } }, {})] } };

@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { chmod, writeFile } from "node:fs/promises";
+import { brotliDecompressSync, gunzipSync, inflateRawSync, inflateSync } from "node:zlib";
 import path from "node:path";
 
 /**
@@ -177,12 +178,31 @@ function collectSecrets(entries: readonly Record<string, Json>[]): Set<string> {
 }
 
 /**
- * The texts a reader could decode from body bytes: UTF-8, and UTF-16 in either byte order from either byte offset. Only
- * UTF-8 bodies are rewritten; a secret readable in another decoding fails closed.
+ * The texts a reader could decode from body bytes: UTF-8, UTF-16 and UTF-32 in either byte order from every byte offset,
+ * also after gzip, zlib, raw deflate or brotli decompression. Only UTF-8 text bodies are rewritten; a secret readable in
+ * another decoding fails closed. Known limit: archives and media containers (zip, images, PDF) are not opened, so a HAR
+ * carrying such bodies must stay private unless they are checked by hand.
  */
-function decodings(bytes: Buffer): string[] {
+function decodings(bytes: Buffer, depth = 0): string[] {
   const utf16 = (encoding: "utf-16le" | "utf-16be", offset: number) => new TextDecoder(encoding).decode(bytes.subarray(offset));
-  return [bytes.toString("utf8"), utf16("utf-16le", 0), utf16("utf-16le", 1), utf16("utf-16be", 0), utf16("utf-16be", 1)];
+  const utf32 = (littleEndian: boolean, offset: number) => {
+    const view = bytes.subarray(offset);
+    let text = "";
+    for (let index = 0; index + 4 <= view.length; index += 4) {
+      const value = littleEndian ? view.readUInt32LE(index) : view.readUInt32BE(index);
+      text += value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : "\ufffd";
+    }
+    return text;
+  };
+  const texts = [bytes.toString("utf8"), utf16("utf-16le", 0), utf16("utf-16le", 1), utf16("utf-16be", 0), utf16("utf-16be", 1)];
+  for (const offset of [0, 1, 2, 3]) texts.push(utf32(true, offset), utf32(false, offset));
+  // A compressed body (gzip, zlib, raw deflate, brotli) is inspected after decompression, at most two layers deep.
+  if (depth < 2) for (const inflate of [gunzipSync, inflateSync, inflateRawSync, brotliDecompressSync]) {
+    let inflated: Buffer | undefined;
+    try { inflated = inflate(bytes, { maxOutputLength: 64 * 1024 * 1024 }); } catch { inflated = undefined; }
+    if (inflated !== undefined && inflated.length > 0) texts.push(...decodings(inflated, depth + 1));
+  }
+  return texts;
 }
 
 /** Returns a masked copy of a parsed HAR and counts what was masked; the report never contains a masked value. */
@@ -261,11 +281,29 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   // and each decoded base64 body is percent-decoded, form-decoded ("+" as a space) and JSON-unescaped (\uXXXX, \" and
   // the like) repeatedly, JSON found along the way is parsed and its strings and keys checked the same way, and every
   // result is probed. A value that still decodes further at the bound, or nests JSON deeper than it, fails closed.
-  const probes = spellings.map(spelling => new RegExp(spelling.source, "u"));
+  // A secret carried as base64 or hex of its bytes (a Basic credential echoed, btoa in a page) is probed too: the base64
+  // characters fixed by the secret alone at each of the three byte alignments, standard and URL-safe, and both hex cases.
+  const derivedForms = (secret: string): string[] => {
+    const bytes = Buffer.from(secret, "utf8");
+    const forms = [bytes.toString("hex"), bytes.toString("hex").toUpperCase()];
+    for (let shift = 0; shift < 3; shift += 1) {
+      const core = Buffer.concat([Buffer.alloc(shift), bytes]).toString("base64").slice(shift === 0 ? 0 : 4, -4);
+      forms.push(core, core.replaceAll("+", "-").replaceAll("/", "_"));
+    }
+    return [...new Set(forms)].filter(form => form.length >= MIN_SECRET_LENGTH);
+  };
+  const probes = [...spellings.map(spelling => new RegExp(spelling.source, "u")), ...secrets.flatMap(derivedForms).map(form => new RegExp(form.replace(REGEXP_SYNTAX, "\\$&"), "u"))];
   // Decodes like a forgiving reader (URLSearchParams): invalid UTF-8 becomes U+FFFD instead of hiding the whole run.
   const percentDecoded = (text: string): string => text.replace(/(?:%[0-9a-f]{2})+/giu, sequence => Buffer.from(sequence.slice(1).split("%").map(hex => Number.parseInt(hex, 16))).toString("utf8"));
   const JSON_ESCAPES: Readonly<Record<string, string>> = { b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
   const jsonUnescaped = (text: string): string => text.replace(/\\(?:u([0-9a-fA-F]{4})|(["\\/bfnrt]))/gu, (_match, hex: string | undefined, char: string | undefined) => hex !== undefined ? String.fromCharCode(Number.parseInt(hex, 16)) : JSON_ESCAPES[char ?? ""] ?? char ?? "");
+  // HTML character references (numeric with or without ";", and the named ones that can spell text), and JavaScript
+  // and CSS hexadecimal escapes: the escapes a browser applies when it renders HTML or runs scripts and styles.
+  const codePoint = (hex: string, radix: number): string => { const value = Number.parseInt(hex, radix); return value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : "\ufffd"; };
+  const NAMED_REFERENCES: Readonly<Record<string, string>> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0", Tab: "\t", NewLine: "\n", sol: "/", bsol: "\\", percnt: "%", plus: "+", equals: "=", colon: ":", semi: ";", comma: ",", period: ".", excl: "!", quest: "?", num: "#", dollar: "$", lpar: "(", rpar: ")", ast: "*", lowbar: "_", hyphen: "-", grave: "`", lsqb: "[", rsqb: "]", lcub: "{", rcub: "}", verbar: "|", Hat: "^", commat: "@" };
+  const htmlDecoded = (text: string): string => text.replace(/&(?:#[xX]([0-9a-fA-F]{1,6})|#([0-9]{1,7})|([A-Za-z]{2,8}));?/gu, (match, hex: string | undefined, decimal: string | undefined, name: string | undefined) => hex !== undefined ? codePoint(hex, 16) : decimal !== undefined ? codePoint(decimal, 10) : NAMED_REFERENCES[name ?? ""] ?? match);
+  const scriptDecoded = (text: string): string => text.replace(/\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]{1,6})\})/gu, (_match, byte: string | undefined, braced: string | undefined) => codePoint(byte ?? braced ?? "", 16));
+  const styleDecoded = (text: string): string => text.replace(/\\([0-9a-fA-F]{1,6})(?:\r\n|[ \t\n\r\f])?/gu, (_match, hex: string) => codePoint(hex, 16));
   const stringsOf = (value: unknown): string[] => typeof value === "string" ? [value] : Array.isArray(value) ? value.flatMap(stringsOf) : isObject(value) ? Object.entries(value).flatMap(([key, child]) => [key, ...stringsOf(child)]) : [];
   const MAX_DECODE_ROUNDS = 6;
   const MAX_DECODINGS = 64;
@@ -283,19 +321,19 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
           if (parsed !== undefined && depth >= MAX_JSON_DEPTH) return true;
           if (parsed !== undefined && stringsOf(parsed).some(child => child !== text && exposes(child, depth + 1))) return true;
         }
-        for (const variant of [percentDecoded(text), percentDecoded(text.replaceAll("+", " ")), jsonUnescaped(text)]) {
+        for (const variant of [percentDecoded(text), percentDecoded(text.replaceAll("+", " ")), jsonUnescaped(text), htmlDecoded(text), scriptDecoded(text), styleDecoded(text)]) {
           if (!seen.has(variant)) { seen.add(variant); next.push(variant); }
         }
       }
       if (next.length > 0 && (round >= MAX_DECODE_ROUNDS || seen.size > MAX_DECODINGS)) {
         // Past the branching bound only JSON unescaping may still make progress, as in a long backslash run: it is the
-        // one decoding left, so following it to its fixed point inspects every step. Percent encoding still left at
+        // one decoding left, so following it to its fixed point inspects every step. Any other encoding still left at
         // this depth is not inspected further and fails closed.
         return next.some(start => {
           let text = start;
           for (let step = 0; step < 64; step += 1) {
             if (probes.some(probe => probe.test(text))) return true;
-            if (percentDecoded(text) !== text) return true;
+            if ([percentDecoded, htmlDecoded, scriptDecoded, styleDecoded].some(decode => decode(text) !== text)) return true;
             const decoded = jsonUnescaped(text);
             if (decoded === text) return false;
             text = decoded;
