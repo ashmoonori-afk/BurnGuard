@@ -248,23 +248,54 @@ export function maskHar(input: unknown, roots: readonly PrivateRoot[] = []): { r
   // Compared by escape trace, a secret is found at any JSON nesting depth, including depths masking does not unescape.
   const traces = [serialized.replaceAll("\\", ""), ...decodedBodies.map(escapeTrace)];
   if (secrets.some(secret => [secret, encodeURIComponent(secret), formEncoded(secret)].some(form => traces.some(trace => trace.includes(escapeTrace(form)))))) throw new HarMaskError("secret_remains");
-  // Mixed spellings are checked on semantic values: every string and key as parsed, and JSON nested in a string as
-  // parsed again, so JSON escaping of a quote or backslash inside a mixed spelling cannot hide it.
+  // Mixed spellings are checked on every decoding a reader could apply to a value: each string and key of the masked HAR
+  // and each decoded base64 body is percent-decoded, form-decoded ("+" as a space) and JSON-unescaped (\uXXXX, \" and
+  // the like) repeatedly, JSON found along the way is parsed and its strings and keys checked the same way, and every
+  // result is probed. A value that still decodes further at the bound, or nests JSON deeper than it, fails closed.
   const probes = spellings.map(spelling => new RegExp(spelling.source, "u"));
-  const spelled = (value: unknown, depth: number): boolean => {
-    if (typeof value === "string") {
-      if (probes.some(probe => probe.test(value))) return true;
-      if (!/^\s*[[{"]/u.test(value)) return false;
-      let parsed: unknown;
-      try { parsed = JSON.parse(value); } catch (error) { if (error instanceof SyntaxError) return false; throw error; }
-      // JSON nested deeper than this is not inspected, so it fails closed instead of passing unchecked.
-      return depth >= 8 || spelled(parsed, depth + 1);
+  const percentDecoded = (text: string): string => text.replace(/(?:%[0-9a-f]{2})+/giu, sequence => { try { return decodeURIComponent(sequence); } catch { return sequence; } });
+  const JSON_ESCAPES: Readonly<Record<string, string>> = { b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
+  const jsonUnescaped = (text: string): string => text.replace(/\\(?:u([0-9a-fA-F]{4})|(["\\/bfnrt]))/gu, (_match, hex: string | undefined, char: string | undefined) => hex !== undefined ? String.fromCharCode(Number.parseInt(hex, 16)) : JSON_ESCAPES[char ?? ""] ?? char ?? "");
+  const stringsOf = (value: unknown): string[] => typeof value === "string" ? [value] : Array.isArray(value) ? value.flatMap(stringsOf) : isObject(value) ? Object.entries(value).flatMap(([key, child]) => [key, ...stringsOf(child)]) : [];
+  const MAX_DECODE_ROUNDS = 6;
+  const MAX_DECODINGS = 64;
+  const MAX_JSON_DEPTH = 8;
+  const exposes = (value: string, depth: number): boolean => {
+    const seen = new Set([value]);
+    let frontier = [value];
+    for (let round = 0; frontier.length > 0; round += 1) {
+      const next: string[] = [];
+      for (const text of frontier) {
+        if (probes.some(probe => probe.test(text))) return true;
+        if (/^\s*[[{"]/u.test(text)) {
+          let parsed: unknown;
+          try { parsed = JSON.parse(text); } catch (error) { if (!(error instanceof SyntaxError)) throw error; }
+          if (parsed !== undefined && depth >= MAX_JSON_DEPTH) return true;
+          if (parsed !== undefined && stringsOf(parsed).some(child => child !== text && exposes(child, depth + 1))) return true;
+        }
+        for (const variant of [percentDecoded(text), percentDecoded(text.replaceAll("+", " ")), jsonUnescaped(text)]) {
+          if (!seen.has(variant)) { seen.add(variant); next.push(variant); }
+        }
+      }
+      if (next.length > 0 && (round >= MAX_DECODE_ROUNDS || seen.size > MAX_DECODINGS)) {
+        // Past the branching bound, follow one decoding path per value to its fixed point (each step shortens the text,
+        // so a long backslash run collapses in a few steps); a value that has not settled by then fails closed.
+        return next.some(start => {
+          let text = start;
+          for (let step = 0; step < 64; step += 1) {
+            if (probes.some(probe => probe.test(text))) return true;
+            const decoded = jsonUnescaped(percentDecoded(text));
+            if (decoded === text) return false;
+            text = decoded;
+          }
+          return true;
+        });
+      }
+      frontier = next;
     }
-    if (Array.isArray(value)) return value.some(item => spelled(item, depth));
-    if (isObject(value)) return Object.entries(value).some(([key, child]) => spelled(key, depth) || spelled(child, depth));
     return false;
   };
-  if (probes.length > 0 && (spelled(masked, 0) || decodedBodies.some(body => spelled(body, 0)))) throw new HarMaskError("secret_remains");
+  if (probes.length > 0 && [...stringsOf(masked), ...decodedBodies].some(text => exposes(text, 0))) throw new HarMaskError("secret_remains");
   // Binary bodies are not rewritten. JSON and the two URL-encoding levels supported for private roots must still fail closed.
   const checkEncoded = (text: string): string => {
     const candidates = [text];
