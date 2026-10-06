@@ -175,7 +175,11 @@ jobs:
       # hydration nor user-controlled navigation targets. Remove the braces id
       # when a release after 3.0.3 exists; braces is reached only through
       # tailwindcss at frontend build time, with patterns from our own config,
-      # and is not part of the packaged app.
+      # and is not part of the packaged app. The postcss-selector-parser id
+      # (fixed only in 7.1.6) has the same reach: tailwindcss 3.4.19, the last
+      # 3.x, requires ^6.1.2, and the parser only reads our own stylesheets at
+      # frontend build time. Remove it with the Tailwind 4 migration or when a
+      # fixed 6.x ships; revisit by 2026-11-06.
       - name: Dependency audit
         run: >-
           bun audit
@@ -184,6 +188,7 @@ jobs:
           --ignore=GHSA-wrjc-x8rr-h8h6
           --ignore=GHSA-337j-9hxr-rhxg
           --ignore=GHSA-vfj7-8cjw-p6xm
+          --ignore=GHSA-rj75-hqrm-r3gf
       - name: Scan for secrets
         uses: gitleaks/gitleaks-action@v2
         env:
