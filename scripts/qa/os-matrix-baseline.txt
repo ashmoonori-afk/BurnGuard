@@ -292,7 +292,6 @@ packages/frontend/tests/export-review.test.ts
 packages/frontend/tests/figma-export-preview.test.ts
 packages/frontend/tests/frame-navigation.test.ts
 packages/frontend/tests/generation-controls-effort-note.test.ts
-packages/frontend/tests/generation-controls-guidance.test.ts
 packages/frontend/tests/generation-progress.test.ts
 packages/frontend/tests/graphic-export-options.test.ts
 packages/frontend/tests/graphic-preset-detach.test.ts

@@ -50,6 +50,7 @@ export default function GenerationControls({ backendId, value, onChange, disable
         {efforts.map((effort) => <option key={effort} value={effort}>{t(EFFORT_LABELS[effort])}</option>)}
       </select></label>
     </div>
+    <p data-bg-recommended-models className="text-[11px] font-medium text-foreground">{t("settings.recommendedModels")}</p>
     {/* States that guidance follows the selection. Never surfaces preset ids, block text or prompt JSON. */}
     <p className="text-[11px] text-muted-foreground">{t("settings.taskGuidanceAdapts")}</p>
     {profile.recommended_min_effort !== null && <p data-bg-effort-note={belowRecommendation ? "below" : "met"} className={belowRecommendation ? "rounded-md bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300" : "text-[11px] text-muted-foreground"}>{t("settings.capableModelEffortNote")}</p>}
