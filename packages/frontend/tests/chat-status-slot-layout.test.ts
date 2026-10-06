@@ -47,7 +47,7 @@ test("Given a status panel taller than the chat column When the chat pane lays o
   // A shrink-0 wrapper with no height bound takes the whole column: the message list collapses to zero
   // height and the composer is clipped by the pane's overflow-hidden edge, so the chat looks closed.
   expect(classes).not.toContain("shrink-0");
-  expect(classes.some((name) => name.startsWith("max-h-"))).toBe(true);
+  expect(classes.some((name) => /^max-h-\[\d+%\]$/.test(name))).toBe(true);
   expect(classes).toContain("overflow-y-auto");
   expect(classes).toContain("min-h-0");
 });
