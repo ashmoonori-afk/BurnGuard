@@ -140,7 +140,9 @@ export default function ChatPane({
             revertingTurnId={revertingTurnId}
           />
           {statusSlot !== undefined && statusSlot !== null && (
-            <div className="shrink-0">{statusSlot}</div>
+            // Bounded and scrollable: a tall panel (the four logo candidates) must never take the whole
+            // column, or the conversation collapses to nothing and the composer falls below the fold.
+            <div className="min-h-0 max-h-[35%] overflow-y-auto overscroll-contain">{statusSlot}</div>
           )}
           <Composer
             key={session.id}

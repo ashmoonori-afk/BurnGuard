@@ -118,6 +118,8 @@ jobs:
           packages/frontend/tests/backend-restart-notice.test.ts
           packages/frontend/tests/settings-language-note.test.ts
           packages/frontend/tests/workspace-narrow-layout.test.ts
+          packages/frontend/tests/chat-status-slot-layout.test.ts
+          packages/frontend/tests/generation-controls-guidance.test.ts
       # The first Windows PowerShell start on a runner loads .NET Framework and System.Drawing cold (1-9 s usually, over
       # 25 s on a slow runner), which is the font enumeration's whole limit; it is paid here, outside that limit.
       - name: Warm Windows PowerShell

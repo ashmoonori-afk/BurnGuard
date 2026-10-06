@@ -167,6 +167,7 @@ export const settingsMessages = defineMessages({
   "settings.effort.xhigh": { ko: "매우 높음", en: "Extra high", "zh-CN": "很高" },
   "settings.effort.max": { ko: "최대", en: "Max", "zh-CN": "最大" },
   "settings.effort.ultra": { ko: "울트라", en: "Ultra", "zh-CN": "极高" },
+  "settings.recommendedModels": { ko: "추천 모델: Opus 5.5 · Sonnet 5.5 · GPT-6.1 Sol", en: "Recommended models: Opus 5.5 · Sonnet 5.5 · GPT-6.1 Sol", "zh-CN": "推荐模型：Opus 5.5 · Sonnet 5.5 · GPT-6.1 Sol" },
   "settings.taskGuidanceAdapts": { ko: "작업 안내는 선택한 모델과 추론 강도에 맞춰 자동으로 조정돼요.", en: "Task guidance adapts to the selected model and reasoning effort.", "zh-CN": "任务指引会根据所选模型与推理强度自动调整。" },
   "settings.capableModelEffortNote": { ko: "Opus와 Sonnet은 CSS로 로고를 디자인하고 라이선스가 확인된 실제 웹 에셋을 찾아 넣어요. 추론 강도는 MEDIUM 이상을 권장해요.", en: "Opus and Sonnet design logos in CSS and find real, licensed web assets. Medium effort or higher is recommended.", "zh-CN": "Opus 和 Sonnet 会用 CSS 设计标志，并查找有授权的真实网络素材。建议使用 MEDIUM 或更高的推理强度。" },
   "settings.webAssetSearch": { ko: "Opus와 Sonnet이 Openverse와 Iconify에서 라이선스가 확인된 이미지와 아이콘을 검색하도록 허용", en: "Let Opus and Sonnet search Openverse and Iconify for licensed images and icons", "zh-CN": "允许 Opus 和 Sonnet 在 Openverse 与 Iconify 中搜索有授权的图片和图标" },
