@@ -28,6 +28,7 @@ export * from "./file-patch";
 export * from "./figma-import";
 export * from "./graphic";
 export * from "./logo";
+export * from "./logo-moodboard";
 export * from "./platform-presets";
 export * from "./platform-guides";
 export * from "./harness";

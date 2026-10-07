@@ -12,11 +12,12 @@ import {
 /**
  * Logo-design deliverable contract (doc/23-logo-design-deliverable-2026-09-18.md).
  *
- * A logo project runs in two phases inside ordinary turns. `explore` generates exactly
- * LOGO_CANDIDATE_COUNT raster candidates with the image tool and records them in the manifest;
- * `finalize` vectorises the one candidate the user selected into the master SVG and authors the
- * brand guidelines. The phase is never stored: it is derived from the manifest and the action
- * sentinel carried by the user's message, so a stale project directory cannot lie about it.
+ * A logo project runs in three phases inside ordinary turns. `ideate` authors exactly three
+ * directions; `explore` generates exactly LOGO_CANDIDATE_COUNT raster candidates with the image
+ * tool and records them in the manifest; `finalize` vectorises the one candidate the user selected
+ * into the master SVG and authors the brand guidelines. The phase is never stored: it is derived
+ * from the manifest and the action sentinel carried by the user's message, so a stale project
+ * directory cannot lie about it.
  */
 export const LOGO_TYPES = [
   "auto",
@@ -45,6 +46,40 @@ export const LOGO_FILES = {
 /** Attribute on the root <svg> naming the generated candidate the vector reproduces. */
 export const LOGO_SOURCE_ATTRIBUTE = "data-bg-source-exploration";
 export const LOGO_ACTION_TAG = "burnguard-logo-action-v1";
+
+/** Direction IDs are positional: the parser binds index i to `direction-${i + 1}`. */
+export const LOGO_DIRECTION_IDS = ["direction-1", "direction-2", "direction-3"] as const;
+export type LogoDirectionId = (typeof LOGO_DIRECTION_IDS)[number];
+
+export const LOGO_DIRECTION_PRIMITIVES = [
+  "circle",
+  "square",
+  "triangle",
+  "hexagon",
+  "line",
+  "letterform",
+  "organic",
+  "composite",
+] as const;
+export type LogoDirectionPrimitive = (typeof LOGO_DIRECTION_PRIMITIVES)[number];
+
+/** The four aspects a person can mix when adopting directions. */
+export const LOGO_DIRECTION_PARTS = ["name", "color", "shape", "mood"] as const;
+export type LogoDirectionPart = (typeof LOGO_DIRECTION_PARTS)[number];
+
+/** Rough sketches the ideate stage authors, one per direction; validated as strict SVG elsewhere. */
+export const LOGO_IDEA_FILES = [
+  "ideas/sketch-direction-1.svg",
+  "ideas/sketch-direction-2.svg",
+  "ideas/sketch-direction-3.svg",
+] as const;
+
+export const LOGO_DIRECTION_NAME_MAX = 40;
+export const LOGO_DIRECTION_CONSTRUCTION_MAX = 200;
+export const LOGO_DIRECTION_SUPPORT_MAX = 3;
+export const LOGO_DIRECTION_MOOD_MAX = 5;
+export const LOGO_DIRECTION_MOOD_ITEM_MAX = 24;
+export const LOGO_DIRECTION_RATIONALE_MAX = 500;
 
 export type LogoSetV1 = {
   readonly schema_version: 1;
@@ -75,11 +110,41 @@ export type LogoManifestV1 = {
   readonly selected: { readonly round: number; readonly candidate_id: string } | null;
 };
 
+/** One direction the person chose to keep, and which of its parts to carry into generation. */
+export type LogoAdoptPick = {
+  readonly direction_id: LogoDirectionId;
+  readonly take: readonly LogoDirectionPart[];
+};
+
 export type LogoActionV1 =
   | { readonly action: "regenerate" }
+  | { readonly action: "ideate" }
+  | { readonly action: "adopt"; readonly picks: readonly LogoAdoptPick[] }
   | { readonly action: "select"; readonly round: number; readonly candidate_id: string };
 
-export type LogoPhase = "explore" | "finalize";
+export type LogoPhase = "explore" | "ideate" | "finalize";
+
+/** One of the three idea directions the model authors; its sketch file is positional. */
+export type LogoDirectionV1 = {
+  readonly id: LogoDirectionId;
+  readonly name: string;
+  readonly logo_type: LogoCandidateType;
+  readonly color: {
+    readonly hero: string;
+    readonly support: readonly string[];
+    readonly ground: string;
+  };
+  readonly shape: { readonly primitive: LogoDirectionPrimitive; readonly construction: string };
+  readonly mood: readonly string[];
+  readonly rationale: string;
+  readonly sketch: { readonly file: string; readonly kind: "svg" };
+};
+
+export type LogoDirectionsV1 = {
+  readonly schema_version: 1;
+  readonly brand_name: string;
+  readonly directions: readonly LogoDirectionV1[];
+};
 
 export type LogoDesignSystemPatchV1 = {
   readonly schema_version: 1;
@@ -89,6 +154,7 @@ export type LogoDesignSystemPatchV1 = {
 };
 
 const CANDIDATE_ID = /^candidate-[1-4]$/;
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/;
 const CANDIDATE_FILE = /^explorations\/round-\d{1,2}\/candidate-[1-4]\.png$/;
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
 const TOKEN_NAME = /^[a-z][a-z0-9-]{0,63}$/;
@@ -163,6 +229,64 @@ function parseSelected(value: unknown, rounds: readonly LogoRoundV1[]): LogoMani
 }
 
 /**
+ * Parses the three idea directions the model authors for the ideate stage. IDs and sketch files are
+ * positional, names and shape primitives must differ so the person compares three real options, and
+ * every nested object rejects unknown keys so canonical bytes stay reproducible.
+ */
+export function parseLogoDirectionsV1(input: unknown): LogoDirectionsV1 {
+  const record = decodeContract(input);
+  exact(record, ["schema_version", "brand_name", "directions"]);
+  if (requiredNumber(record, "schema_version") !== 1) invalid("schema_version");
+  const brandName = text(record, "brand_name", "brand_name", 80);
+  const rawDirections = requiredArray(record, "directions");
+  if (rawDirections.length !== LOGO_DIRECTION_IDS.length) invalid("directions");
+  const directions = rawDirections.map(parseDirection);
+  if (new Set(directions.map((direction) => direction.name)).size !== directions.length) invalid("directions.name");
+  if (new Set(directions.map((direction) => direction.shape.primitive)).size !== directions.length) invalid("directions.shape.primitive");
+  return { schema_version: 1, brand_name: brandName, directions };
+}
+
+function parseDirection(value: unknown, index: number): LogoDirectionV1 {
+  const path = `directions.${index}`;
+  if (!isRecord(value)) invalid(path);
+  exact(value, ["id", "name", "logo_type", "color", "shape", "mood", "rationale", "sketch"]);
+  const rawId = requiredString(value, "id");
+  const id = LOGO_DIRECTION_IDS.find((candidate) => candidate === rawId);
+  if (id === undefined || id !== LOGO_DIRECTION_IDS[index]) invalid(`${path}.id`);
+  const directionType = logoType(requiredString(value, "logo_type"), `${path}.logo_type`);
+  if (directionType === "auto") invalid(`${path}.logo_type`);
+  const color = nested(value, "color", `${path}.color`);
+  exact(color, ["hero", "support", "ground"]);
+  const support = requiredArray(color, "support");
+  if (support.length > LOGO_DIRECTION_SUPPORT_MAX) invalid(`${path}.color.support`);
+  const shape = nested(value, "shape", `${path}.shape`);
+  exact(shape, ["primitive", "construction"]);
+  const sketch = nested(value, "sketch", `${path}.sketch`);
+  exact(sketch, ["file", "kind"]);
+  if (requiredString(sketch, "file") !== LOGO_IDEA_FILES[index]) invalid(`${path}.sketch.file`);
+  if (requiredString(sketch, "kind") !== "svg") invalid(`${path}.sketch.kind`);
+  const mood = stringArray(value, "mood").map((entry) => entry.trim());
+  if (mood.length < 1 || mood.length > LOGO_DIRECTION_MOOD_MAX || mood.some((entry) => entry.length === 0 || entry.length > LOGO_DIRECTION_MOOD_ITEM_MAX || CONTROL_CHARACTERS.test(entry))) invalid(`${path}.mood`);
+  return {
+    id,
+    name: text(value, "name", `${path}.name`, LOGO_DIRECTION_NAME_MAX),
+    logo_type: directionType,
+    color: {
+      hero: hexColor(color, "hero", `${path}.color.hero`),
+      support: support.map((entry, position) => (typeof entry === "string" && HEX_COLOR.test(entry) ? entry : invalid(`${path}.color.support.${position}`))),
+      ground: hexColor(color, "ground", `${path}.color.ground`),
+    },
+    shape: {
+      primitive: primitive(requiredString(shape, "primitive"), `${path}.shape.primitive`),
+      construction: text(shape, "construction", `${path}.shape.construction`, LOGO_DIRECTION_CONSTRUCTION_MAX),
+    },
+    mood,
+    rationale: text(value, "rationale", `${path}.rationale`, LOGO_DIRECTION_RATIONALE_MAX),
+    sketch: { file: LOGO_IDEA_FILES[index], kind: "svg" },
+  };
+}
+
+/**
  * Finds the action sentinel in a user message. Malformed sentinels are treated as absent rather
  * than thrown: the message is untrusted text and a broken tag must not fail the turn admission.
  */
@@ -178,6 +302,8 @@ export function parseLogoAction(text: string): LogoActionV1 | null {
   }
   if (!isRecord(parsed)) return null;
   if (parsed.action === "regenerate" && Object.keys(parsed).length === 1) return { action: "regenerate" };
+  if (parsed.action === "ideate" && Object.keys(parsed).length === 1) return { action: "ideate" };
+  if (parsed.action === "adopt") return parseAdoptAction(parsed);
   if (
     parsed.action === "select"
     && Object.keys(parsed).length === 3
@@ -187,8 +313,35 @@ export function parseLogoAction(text: string): LogoActionV1 | null {
   return null;
 }
 
-/** The phase a turn runs in. Only a select action on an existing candidate finalizes. */
+/** A malformed adopt tag is treated as absent, like every other sentinel failure. */
+function parseAdoptAction(parsed: UnknownRecord): Extract<LogoActionV1, { action: "adopt" }> | null {
+  const keys = Object.keys(parsed);
+  if (keys.length !== 2 || !keys.includes("picks")) return null;
+  const rawPicks = parsed.picks;
+  if (!Array.isArray(rawPicks) || rawPicks.length < 1 || rawPicks.length > LOGO_DIRECTION_IDS.length) return null;
+  const picks: LogoAdoptPick[] = [];
+  for (const value of rawPicks) {
+    if (!isRecord(value)) return null;
+    const pickKeys = Object.keys(value);
+    if (pickKeys.length !== 2 || !pickKeys.includes("direction_id") || !pickKeys.includes("take")) return null;
+    const directionId = LOGO_DIRECTION_IDS.find((candidate) => candidate === value.direction_id);
+    if (directionId === undefined || picks.some((pick) => pick.direction_id === directionId)) return null;
+    const rawTake = value.take;
+    if (!Array.isArray(rawTake) || rawTake.length === 0 || rawTake.length > LOGO_DIRECTION_PARTS.length) return null;
+    const take: LogoDirectionPart[] = [];
+    for (const part of rawTake) {
+      const found = LOGO_DIRECTION_PARTS.find((candidate) => candidate === part);
+      if (found === undefined || take.includes(found)) return null;
+      take.push(found);
+    }
+    picks.push({ direction_id: directionId, take });
+  }
+  return { action: "adopt", picks };
+}
+
+/** The phase a turn runs in. Only ideate starts ideation; only a select on an existing candidate finalizes. */
 export function resolveLogoPhase(manifest: LogoManifestV1 | null, action: LogoActionV1 | null): LogoPhase {
+  if (action?.action === "ideate") return "ideate";
   if (action?.action !== "select" || manifest === null) return "explore";
   const exists = manifest.rounds.some((round) => round.round === action.round && round.candidates.some((candidate) => candidate.id === action.candidate_id));
   return exists ? "finalize" : "explore";
@@ -220,9 +373,33 @@ export function parseLogoDesignSystemPatchV1(input: unknown): LogoDesignSystemPa
   return { schema_version: 1, colors, readme_section: readmeSection, logo_asset: LOGO_FILES.logo };
 }
 
-function logoType(value: string): LogoType {
+function logoType(value: string, path = "logo_type"): LogoType {
   const found = LOGO_TYPES.find((type) => type === value);
-  return found ?? invalid("logo_type");
+  return found ?? invalid(path);
+}
+
+/** Trims, bounds, and rejects control characters; ordinary brand text stays accepted. */
+function text(record: UnknownRecord, key: string, path: string, maximum: number): string {
+  const value = requiredString(record, key).trim();
+  if (value.length === 0 || value.length > maximum || CONTROL_CHARACTERS.test(value)) invalid(path);
+  return value;
+}
+
+function hexColor(record: UnknownRecord, key: string, path: string): string {
+  const value = requiredString(record, key);
+  if (!HEX_COLOR.test(value)) invalid(path);
+  return value;
+}
+
+function primitive(value: string, path: string): LogoDirectionPrimitive {
+  const found = LOGO_DIRECTION_PRIMITIVES.find((candidate) => candidate === value);
+  return found ?? invalid(path);
+}
+
+function nested(record: UnknownRecord, key: string, path: string): UnknownRecord {
+  const value = record[key];
+  if (!isRecord(value)) invalid(path);
+  return value;
 }
 
 function boundedString(record: UnknownRecord, key: string, maximum: number): string {

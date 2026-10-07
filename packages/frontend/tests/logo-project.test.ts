@@ -79,6 +79,14 @@ describe("logo manifest parsing", () => {
 });
 
 describe("logo action message", () => {
+  test("Given an idea request or mixed direction choice When sent Then the exact action survives the chat message", () => {
+    const actions = [
+      { action: "ideate" },
+      { action: "adopt", picks: [{ direction_id: "direction-1", take: ["shape"] }, { direction_id: "direction-2", take: ["color", "mood"] }] },
+    ] as const;
+    for (const action of actions) expect(parseLogoAction(logoActionMessage(action))).toEqual(action);
+  });
+
   test("Given a regenerate request When the message is built Then the sentinel and a human line are sent", () => {
     const message = logoActionMessage({ action: "regenerate" });
 

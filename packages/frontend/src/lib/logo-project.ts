@@ -58,15 +58,23 @@ export function latestLogoRound(manifest: LogoManifestV1): LogoRoundV1 | null {
 }
 
 /**
- * Regenerate and select ride the ordinary send path. The sentinel is what the
+ * Logo actions ride the ordinary send path. The sentinel is what the
  * prompt harness reads; the localized line after it is what the person reading the
  * transcript sees, so the turn never looks like a machine talking to itself.
  */
 export function logoActionMessage(action: LogoActionV1): string {
   const sentinel = `<${LOGO_ACTION_TAG}>${JSON.stringify(action)}</${LOGO_ACTION_TAG}>`;
-  const line = action.action === "regenerate"
-    ? t("home.logo.regenerateLine")
-    : t("home.logo.selectLine", { number: candidateNumber(action.candidate_id) });
+  let line: string;
+  switch (action.action) {
+    case "regenerate": line = t("home.logo.regenerateLine"); break;
+    case "select": line = t("home.logo.selectLine", { number: candidateNumber(action.candidate_id) }); break;
+    case "ideate": line = t("directions.generate"); break;
+    case "adopt": line = t("directions.select"); break;
+    default: {
+      const unreachable: never = action;
+      throw new TypeError(`Unknown logo action: ${unreachable}`);
+    }
+  }
   return `${sentinel}\n${line}`;
 }
 
