@@ -22,6 +22,7 @@ Typed three-locale message registry (16 files, 1,936 LOC) behind every user-faci
 - Plural messages use `{ one, other }` and are selected by `Intl.PluralRules`; numeric params are formatted by `Intl.NumberFormat` for the active locale, except identifier params (`revision`), which keep their raw digits.
 - `localStorage` access is wrapped: a `DOMException` (private mode, blocked storage) degrades to the default locale, any other error rethrows.
 - Non-React callers (`@/lib/error-copy`, helpers) use `t`; components use `useT()` so a locale switch re-renders.
+- Large generated catalogs stay out of the eager registry: `prompt-library-copy.ts` exports `PROMPT_LIBRARY_MESSAGES`, a code-split pack under typed `promptLibrary.<id>.title|summary` keys (`PromptLibraryMessageKey`, built with `promptMessageKey`). Components resolve it with `useCatalogT(pack)`, which keeps the every-locale contract and returns `undefined` until the pack loads. Never read `copy.title[locale]` in a component.
 
 ## ANTI-PATTERNS
 
