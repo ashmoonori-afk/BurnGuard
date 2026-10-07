@@ -95,6 +95,22 @@ jobs:
           packages/frontend/tests/i18n-messages.test.ts
           packages/frontend/tests/tool-badge-copy.test.ts
           packages/frontend/tests/prompt-library.test.ts
+          packages/frontend/tests/logo-inspiration.test.ts
+          packages/frontend/tests/logo-moodboard-intake.test.ts
+          packages/frontend/tests/logo-project.test.ts
+          packages/backend/tests/logo-contract.test.ts
+          packages/backend/tests/image-fingerprint.test.ts
+          packages/backend/tests/logo-moodboard.test.ts
+          packages/backend/tests/logo-moodboard-routes.test.ts
+          packages/backend/tests/logo-originality.test.ts
+          packages/backend/tests/logo-pipeline-state.test.ts
+          packages/backend/tests/logo-completion-gate.test.ts
+          packages/backend/tests/logo-deliverables.test.ts
+          packages/backend/tests/prompt-logo-set.test.ts
+          packages/backend/tests/pipeline-repositories.test.ts
+          packages/backend/tests/runtime-diagnostics.test.ts
+          packages/frontend/tests/runtime-diagnostics.test.ts
+          packages/shared/tests/runtime-diagnostics.test.ts
           packages/backend/tests/session-routes.test.ts
           packages/backend/tests/turn-error-sanitizer.test.ts
           scripts/qa/har-mask.test.ts

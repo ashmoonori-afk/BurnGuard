@@ -5,7 +5,7 @@ import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
 import type { DesignAuditResult, NormalizedEvent, TurnNotApplied, TurnRejectionReason, UserEvent } from "@bg/shared";
-import { LOGO_FILES, surfaceForProjectType } from "@bg/shared";
+import { LOGO_FILES, LOGO_IDEA_FILES, surfaceForProjectType } from "@bg/shared";
 import { assignAttachmentsToTurn } from "../db/attachments";
 import {
   persistNormalizedEvent,
@@ -68,6 +68,7 @@ import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
 import { inspectCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { manifestEntry, readManagedFile } from "./artifact-tree-storage";
 import { resolveWithin } from "../security/path-boundary";
+import { logoIdeationOutputComplete, withLogoMoodboardInputs } from "./logo-moodboard-inputs";
 
 export function assertGraphicStarterReplaced(before: string, after: string): void {
   if (before.includes('data-bg-node-id="graphic-copy"') && before.includes("Start with one clear visual message.") && before === after) throw new Error("graphic_starter_unchanged");
@@ -489,6 +490,7 @@ async function runUserTurnInternal(
   try {
     const operation = await coordinator.run({
       projectId: project.id, projectDir, kind: "turn", operationId,
+      ...(project.type === "logo" ? { signal: activeTurn.abortController.signal } : {}),
       expectedRevision: project.current_revision, expectedArtifactDigest: base.tree_digest,
       publicationPolicy: { forbiddenSha256 },
       onPrepared: () => { operationPrepared = true; onPrepared(); },
@@ -524,12 +526,16 @@ async function runUserTurnInternal(
           const stagedHeroAssets = await provisionDesignSystemHeroAssets(stageDir, sessionContext.designSystemPin.context, pinnedSystemDir);
           starterSeeded = await seedStarterEntrypoint(stageDir, sessionContext.designSystemPin.context, project.entrypoint, renderInitialArtifact({ name: project.name, type: project.type }), stagedHeroAssets);
         }
-        stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: payload.active_rel_path ?? project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
+        if (project.type !== "logo") stopPreview = startTurnPreview({ projectId: project.id, id: operationId, stageDir, entrypoint: payload.active_rel_path ?? project.entrypoint, forbiddenSha256 }, (event) => persistAndPublish(sessionId, event));
         const graphicEntrypoint = project.type === "graphic" ? path.join(stageDir, project.entrypoint) : null;
         const graphicBefore = graphicEntrypoint === null ? null : await readFile(graphicEntrypoint, "utf8");
         // The logo gate's expectation is captured before the agent runs, so nothing the model writes
         // during the turn can change which phase is checked or which candidate counts as selected.
-        const logoExpectation = project.type === "logo" ? await captureLogoTurnExpectation(stageDir, payload.text) : null;
+        const logoExpectation = project.type === "logo" ? await captureLogoTurnExpectation(stageDir, payload.text, projectDir).catch((error: unknown) => {
+          rejectionReason = turnRejectionReason(error);
+          throw error;
+        }) : null;
+        const logoIdeate = logoExpectation?.phase === "ideate";
         const logoEvidence = logoExpectation === null ? null : new LogoEvidenceCollector(stageDir, logoExpectation);
         const deckStarter = project.type === "slide_deck" && (await readFile(path.join(stageDir, project.entrypoint), "utf8")).includes("Send your first prompt in chat to expand this deck.");
         const waitsForInterrupt = process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "abort";
@@ -547,7 +553,8 @@ async function runUserTurnInternal(
         const builtAgainstSystem = entrypointBuiltAgainstSystem(await readFile(resolveWithin(stageDir, project.entrypoint), "utf8").catch(() => ""), starterSeeded);
         const immutableSnapshots = await captureImmutableAttachments(selectedAttachments);
         try {
-          await withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: contextPayload.attachments, immutableSnapshots }, async (stageInputs) => {
+          await withLogoMoodboardInputs(stageDir, logoExpectation, activeTurn.abortController.signal, (logoPipeline) =>
+          withPrivateAttachmentInputs({ operationDir: path.dirname(stageDir), projectDir, attachments: sessionContext.attachments, requestedPaths: contextPayload.attachments, immutableSnapshots }, async (stageInputs) => {
             // Observe the guidance that was actually emitted rather than re-deriving it, so the
             // record cannot drift from the envelope the model received.
             let shippedPreset: TaskPresetObservation | null = null;
@@ -557,11 +564,12 @@ async function runUserTurnInternal(
             const webAssetTool = backendId === "claude-code" && modelProfile.asset_strategy === "web_search" && config.webAssets.searchEnabled
               ? { command: webAssetsMcpCommand(stageDir) }
               : undefined;
-            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation, webAssetTools: webAssetTool !== undefined, onTaskGuidance: (value) => { shippedPreset = value; } }) + sourceInstructions;
+            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation, ...(logoPipeline === undefined ? {} : { logoPipeline }), webAssetTools: webAssetTool !== undefined, onTaskGuidance: (value) => { shippedPreset = value; } }) + sourceInstructions;
             await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId, task_preset: shippedPreset });
             const adapterInput: Parameters<typeof runAdapterTurn>[1] = {
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,
               generation,
+              ...(logoIdeate ? { imageGeneration: "forbidden" as const } : {}),
               ...(webAssetTool === undefined ? {} : { webAssetTool }),
               ...(generation.provider === "commandcode" ? { commandcodeApiKey: config.commandcodeApiKey ?? undefined } : {}),
               signal: activeTurn.abortController.signal, userEvent: modelPayload,
@@ -569,7 +577,7 @@ async function runUserTurnInternal(
                 // Cancellation is finalized only after the stopped writer's stage is saved.
                 if (activeTurn.interrupted && event.type === "status.error") return;
                 if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason === "error")) providerReportedFailure = true;
-                if (event.type === "file.changed") return;
+                if (event.type === "file.changed" || (project.type === "logo" && event.type === "artifact.preview")) return;
                 if (logoEvidence !== null) await logoEvidence.observe(event);
                 const scrubbedEvent = config.commandcodeApiKey ? JSON.parse(JSON.stringify(event, (_key, value: unknown) => typeof value === "string" ? value.split(config.commandcodeApiKey!).join("[redacted]") : value)) as NormalizedEvent : event;
                 const safeEvent = redactPrivateAttachmentPaths(scrubbedEvent, stageInputs);
@@ -594,7 +602,9 @@ async function runUserTurnInternal(
             const runAdapter = dependencies.runAdapter ?? runAdapterTurn;
             try {
               const phased = needsGenerationPhases(project.type, payload.text, deckStarter);
-              const result = phased
+              const result = logoIdeate
+                ? await runAdapter(backendId, adapterInput)
+                : phased
                 ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input), project.type, sourcePages, briefPages)
                 : await runWithContinuation(adapterInput, (input) => runAdapter(backendId, input), () => generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages, briefPages));
               if (result.exitCode !== 0 || providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Provider did not complete the turn successfully");
@@ -625,18 +635,25 @@ async function runUserTurnInternal(
                 await persistAndPublish(sessionId, { id: ulid(), ts: Date.now(), type: "tool.finished", turnId, toolCallId, tool: "generation_deck_review", ok: reviewed });
                 if (!reviewed) throw new ArtifactOperationError("turn_failed", "Deck copy review did not complete");
               }
-              if (!await generationOutputComplete(stageDir, project.entrypoint, project.type, undefined, undefined, briefPages)) throw new ArtifactOperationError("turn_failed", "Generated content is incomplete");
+              if (logoIdeate) {
+                if (!await logoIdeationOutputComplete(stageDir)) throw new LogoDeliverableError("directions_invalid:incomplete_output");
+              } else if (!await generationOutputComplete(stageDir, project.entrypoint, project.type, undefined, undefined, briefPages)) throw new ArtifactOperationError("turn_failed", "Generated content is incomplete");
               if (modelProfile.logo_authoring === "css_svg" && project.type !== "logo") {
                 const cssLogos = checkCssLogos(await readFile(resolveWithin(stageDir, project.entrypoint), "utf8").catch(() => ""));
                 if (cssLogos.length > 0) await appendSessionTrace(sessionId, { level: "css_logo_check", turnId, logos: cssLogos });
               }
-              await ensureThreeSceneRuntime(stageDir);
-              await ensureCharts(stageDir);
+              if (!logoIdeate) {
+                await ensureThreeSceneRuntime(stageDir);
+                await ensureCharts(stageDir);
+              }
               if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
               const canvas = designAuditCanvas(project.type, project.options_json);
               const changedPaths = changedTreePaths(beforeAdapter, await inspectCanonicalTree(stageDir));
+              if (logoIdeate && changedPaths.some((changed) => changed !== "ideas/directions.json" && !LOGO_IDEA_FILES.some((file) => file === changed))) {
+                throw new LogoDeliverableError("directions_changed");
+              }
               const pinnedContext = sessionContext.designSystemPin?.context;
-              const designReview = await (dependencies.reviewDesign ?? reviewTurnDesign)({
+              const designReview = logoIdeate ? { result: null, repairs: 0 } : await (dependencies.reviewDesign ?? reviewTurnDesign)({
                 adapter: adapterInput, projectId: project.id, type: project.type, entrypoint: project.entrypoint,
                 revision: project.current_revision + 1, changedPaths, ...(canvas ? { canvas } : {}),
                 ...(sessionContext.designSystemPin ? { tokensCss: sessionContext.designSystemPin.tokens } : {}),
@@ -663,9 +680,11 @@ async function runUserTurnInternal(
                 // it was refused for and nothing else, and a second pass cannot launder a turn
                 // that quietly regenerated an image or rewrote history.
                 const gate = async (): Promise<void> => {
+                  activeTurn.abortController.signal.throwIfAborted();
                   const info = await lstat(path.join(stageDir, project.entrypoint));
                   if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new LogoDeliverableError("guidelines_not_file");
-                  await assertLogoDeliverables(stageDir, logoExpectation, logoEvidence.evidence);
+                  await assertLogoDeliverables(stageDir, logoExpectation, logoEvidence.evidence, activeTurn.abortController.signal);
+                  activeTurn.abortController.signal.throwIfAborted();
                 };
                 try {
                   try { await gate(); }
@@ -681,14 +700,12 @@ async function runUserTurnInternal(
                     // a file left behind beside it, so the repair's own blast radius is measured.
                     const beforeRepair = await inspectCanonicalTree(stageDir);
                     if (!await repairLogoCompletion({ adapter: adapterInput, reason, violation, run: (attempt) => runAdapter(backendId, attempt) })) throw rejected;
+                    // Measure model edits before the gate authors its screening receipt.
+                    const touched = changedTreePaths(beforeRepair, await inspectCanonicalTree(stageDir));
                     // Revalidate the whole deliverable rather than the part that was refused.
                     // Immutable references are re-verified by this operation's own `finally`,
                     // which still runs between here and publication.
                     await gate();
-                    // A valid vector does not buy a repair the right to change anything else: a
-                    // turn that edited outside its one file keeps the refusal that opened the
-                    // repair, and the whole operation rolls back with nothing published.
-                    const touched = changedTreePaths(beforeRepair, await inspectCanonicalTree(stageDir));
                     if (touched.some((changed) => changed !== LOGO_FILES.logo)) throw rejected;
                     if ((await findHtmlEncodingIssues(stageDir, activeTurn.abortController.signal)).length > 0) throw new ArtifactOperationError("publication_failed", "Generated HTML encoding is invalid");
                   }
@@ -701,15 +718,22 @@ async function runUserTurnInternal(
                 finalizedLogoSource = logoExpectation.selected?.file ?? null;
               }
             } catch (error) {
+              rejectionReason ??= turnRejectionReason(error);
+              if (project.type === "logo" && activeTurn.interrupted) throw new ArtifactOperationError("operation_cancelled", "Interrupted logo output remains unpublished");
               if (!activeTurn.interrupted) throw error;
               // The adapter has settled and stopped its owned writers. Keep its partial
               // work; private-input cleanup and immutable/publication checks still run.
             }
+          })).catch((error: unknown) => {
+            rejectionReason ??= turnRejectionReason(error);
+            if (project.type === "logo" && activeTurn.abortController.signal.aborted) throw new ArtifactOperationError("operation_cancelled", "Interrupted logo output remains unpublished");
+            throw error;
           });
         } finally {
           await verifyImmutableAttachments(immutableSnapshots);
         }
         if (activeTurn.interrupted) {
+          if (project.type === "logo") throw new ArtifactOperationError("operation_cancelled", "Interrupted logo output remains unpublished");
           if (sourcePages !== undefined) throw new ArtifactOperationError("operation_cancelled", "Interrupted source-mapped output remains unpublished");
           const partial = await inspectCanonicalTree(stageDir);
           if (!manifestEntry(partial, project.entrypoint)) {
@@ -723,8 +747,10 @@ async function runUserTurnInternal(
           if ((await findHtmlEncodingIssues(stageDir)).length > 0) throw new ArtifactOperationError("publication_failed", "Interrupted HTML encoding is invalid");
           return;
         }
-        await ensureThreeSceneRuntime(stageDir);
-        await ensureCharts(stageDir);
+        if (project.type !== "logo") {
+          await ensureThreeSceneRuntime(stageDir);
+          await ensureCharts(stageDir);
+        }
         if (graphicEntrypoint !== null && graphicBefore !== null) {
           const info = await lstat(graphicEntrypoint);
           if (!info.isFile() || info.nlink !== 1 || info.size > 16 * 1024 * 1024) throw new Error("graphic_starter_unchanged");

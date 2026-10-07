@@ -1,10 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Check, RefreshCw } from "lucide-react";
-import { LOGO_FILES, LOGO_MAX_ROUNDS, type LogoActionV1, type LogoCandidateV1 } from "@bg/shared";
+import { LOGO_FILES, LOGO_MAX_ROUNDS, UpgradeContractError, parseLogoOriginalityReceiptV1, type LogoActionV1, type LogoCandidateV1 } from "@bg/shared";
+import { ApiError } from "@/api/client";
 import { projectFileUrl, readProjectFileText } from "@/api/files";
+import { InfoTip } from "@/components/logo/LogoMoodboardPanel";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n/t";
 import { latestLogoRound, parseProjectLogoManifest } from "@/lib/logo-project";
+import { cn } from "@/lib/utils";
 
 /**
  * The candidate picker of doc/23 D9. The manifest is the agent's own record of a
@@ -31,16 +34,42 @@ export default function LogoCandidatePanel({
 
   const manifest = manifestQuery.data ?? null;
   const round = manifest === null ? null : latestLogoRound(manifest);
+  const receiptPath = manifest?.selected ? "logo-originality.json"
+    : round ? `explorations/round-${round.round}/originality.json` : null;
+  const screening = useQuery({
+    queryKey: ["projects", projectId, "logo-originality", receiptPath],
+    enabled: receiptPath !== null,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      if (receiptPath === null) return null;
+      try {
+        return parseLogoOriginalityReceiptV1(JSON.parse(await readProjectFileText(projectId, receiptPath, signal)));
+      } catch (error) {
+        if ((error instanceof ApiError && error.status === 404) || error instanceof SyntaxError || error instanceof UpgradeContractError) return null;
+        throw error;
+      }
+    },
+  });
   if (manifest === null || round === null) return null;
   // The manifest contract caps history at LOGO_MAX_ROUNDS; past that a regenerate cannot append a round.
   const exhausted = manifest.rounds.length >= LOGO_MAX_ROUNDS;
 
   return (
-    <section aria-label={t("logo.candidates.title")} className="shrink-0 border-t border-border bg-muted/60 px-3 py-2">
+    <section aria-label={t("logo.candidates.title")} className="shrink-0 border-b border-border bg-card px-3 py-3 sm:px-4">
       <div className="flex min-w-0 items-center gap-2">
-        <p className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
-          {t("logo.candidates.title")} · {t("logo.candidates.round", { count: round.round })}
-        </p>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-sm font-semibold text-foreground">
+            {t("logo.candidates.title")} · {t("logo.candidates.round", { count: round.round })}
+          </h2>
+          <p role="status" className="flex min-w-0 flex-wrap gap-x-2 text-xs leading-5 text-muted-foreground">
+            <span>{screening.isPending ? t("logo.pipeline.working") : screening.data
+              ? t("logo.pipeline.checkedReferences", { count: screening.data.reference_count })
+              : t("logo.pipeline.legacyUnchecked")}</span>
+            {screening.data && screening.data.unchecked_link_count > 0 ? (
+              <span>{t("logo.pipeline.uncheckedLinks", { count: screening.data.unchecked_link_count })}</span>
+            ) : null}
+          </p>
+        </div>
         <Button
           type="button"
           variant="outline"
@@ -53,8 +82,9 @@ export default function LogoCandidatePanel({
           <RefreshCw aria-hidden="true" />
           {t("logo.candidates.regenerate")}
         </Button>
+        <InfoTip label={t("logo.pipeline.screeningInfoLabel")}>{t("logo.pipeline.screeningNote")}</InfoTip>
       </div>
-      <ul className="mt-2 grid grid-cols-2 gap-2">
+      <ul className="mt-3 grid grid-cols-2 gap-2 min-[901px]:grid-cols-4">
         {round.candidates.map((candidate) => (
           <li key={candidate.id}>
             <CandidateCard
@@ -91,38 +121,47 @@ function CandidateCard({
   const number = candidate.id.replace("candidate-", "");
 
   return (
-    <div className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-background p-2">
-      <img
-        src={projectFileUrl(projectId, candidate.file)}
-        alt={t("logo.candidates.preview", { number })}
-        loading="lazy"
-        decoding="async"
-        className="aspect-square w-full rounded-md border border-border/60 bg-card object-contain"
-      />
-      <p className="truncate text-[11px] font-medium text-foreground" title={t(`home.logo.type.${candidate.logo_type}`)}>
-        {number}. {t(`home.logo.type.${candidate.logo_type}`)}
-      </p>
-      <p className="line-clamp-2 text-[11px] leading-4 text-muted-foreground" title={candidate.rationale}>
-        {candidate.rationale}
-      </p>
-      {selected ? (
-        <p className="mt-auto flex min-h-9 items-center justify-center gap-1 rounded-md bg-accent-soft text-xs font-medium text-accent">
-          <Check className="h-3.5 w-3.5" aria-hidden="true" />
-          {t("logo.candidates.selected")}
+    <div className={cn("flex h-full flex-col overflow-hidden rounded-xl border bg-card", selected ? "border-foreground/50 shadow-app-2" : "border-border")}>
+      <div className="relative border-b border-border/60">
+        <img
+          src={projectFileUrl(projectId, candidate.file)}
+          alt={t("logo.candidates.preview", { number })}
+          loading="lazy"
+          decoding="async"
+          className="aspect-[4/3] w-full bg-card object-contain"
+        />
+        {selected ? (
+          <span aria-hidden="true" className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-app-2">
+            <Check className="h-3.5 w-3.5" strokeWidth={3} />
+          </span>
+        ) : null}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1 p-2.5">
+        <p className="truncate text-xs font-medium text-foreground" title={t(`home.logo.type.${candidate.logo_type}`)}>
+          {number}. {t(`home.logo.type.${candidate.logo_type}`)}
         </p>
-      ) : (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mt-auto min-h-11 w-full"
-          disabled={disabled}
-          aria-label={t("logo.candidates.selectNamed", { number })}
-          onClick={onSelect}
-        >
-          {t("logo.candidates.select")}
-        </Button>
-      )}
+        <p className="line-clamp-2 text-xs leading-4 text-muted-foreground" title={candidate.rationale}>
+          {candidate.rationale}
+        </p>
+        {selected ? (
+          <p className="mt-auto flex min-h-11 items-center justify-center gap-1 rounded-md bg-accent/10 text-xs font-medium text-accent">
+            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("logo.candidates.selected")}
+          </p>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-auto min-h-11 w-full"
+            disabled={disabled}
+            aria-label={t("logo.candidates.selectNamed", { number })}
+            onClick={onSelect}
+          >
+            {t("logo.candidates.select")}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

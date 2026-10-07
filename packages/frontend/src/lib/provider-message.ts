@@ -57,6 +57,35 @@ export function providerMessageText(text: string, projectDir?: string): string {
   const relative = `((?:${segment}[\\\\/])+(?:${fileTail}|${tokenTail})|(?:${privateDirectories})[\\\\/]*(?=$|[\\s<>()\\[\\]"\`,;!?]))`;
   const boundary = String.raw`(?<![\p{L}\p{N}_/\\])`;
   const references = new RegExp(`((?:https?:\\/\\/|mailto:)[^\\s<>\\[\\]"\`,;]+)|${boundary}(?:${start})(?:${fileTail}|${tokenTail})|${boundary}${relative}`, "giu");
-  return safe.replace(references, (target, external: string | undefined, relativePath: string | undefined) =>
-    (external !== undefined || relativePath !== undefined) && !privateSegment.test(target) ? target : localReference(target));
+  return safe.replace(references, (target, external: string | undefined, relativePath: string | undefined, offset: number) => {
+    // Closing HTML tags are syntax, not absolute paths; breaking them changes Markdown block boundaries.
+    if (/^\/[a-z][a-z0-9-]*$/iu.test(target) && safe[offset - 1] === "<" && safe[offset + target.length] === ">") return target;
+    return (external !== undefined || relativePath !== undefined) && !privateSegment.test(target) ? target : localReference(target);
+  });
+}
+
+/**
+ * The destination a rendered message link may keep, or null to leave its label as inert text.
+ * Only web and mail links qualify, and not one whose decoded form still carries the project root,
+ * the profile owner's home, a drive path or a file URL: following a link must never carry a local
+ * path off the machine. Runs on destinations already masked by `providerMessageText`.
+ */
+export function providerMessageHref(url: string, projectDir?: string): string | null {
+  if (!/^(?:https?:\/\/[^\s/?#]|mailto:\S)/iu.test(url)) return null;
+  let decoded = url;
+  let settled = false;
+  for (let pass = 0; pass < 4; pass++) {
+    let next: string;
+    try { next = decodeURIComponent(decoded); }
+    catch { return null; }
+    if (next === decoded) { settled = true; break; }
+    decoded = next;
+  }
+  if (!settled) return null;
+  const tail = decoded.replaceAll("\\", "/").normalize("NFC").toLowerCase().replace(/^(?:https?:\/\/[^/?#]*|mailto:)/u, "");
+  const root = projectDir?.replaceAll("\\", "/").normalize("NFC").replace(/\/+$/u, "").toLowerCase();
+  const prefixes = root === undefined ? [] : [root, root.split("/").slice(0, 3).join("/")];
+  const local = prefixes.some((prefix) => prefix.split("/").filter(Boolean).length >= 2 && `${tail}/`.includes(`${prefix}/`));
+  const internal = tail.split(/[/?#=&]/u).some((segment) => INTERNAL_DIRECTORIES.has(segment));
+  return local || internal || /(?:^|[^\p{L}\p{N}])[a-z]:\/|file:/u.test(tail) ? null : url;
 }

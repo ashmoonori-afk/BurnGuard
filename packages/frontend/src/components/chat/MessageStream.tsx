@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, MessageSquare } from "lucide-react";
+import { ArrowDown, ChevronRight, Loader2, MessageSquare, Wrench } from "lucide-react";
 import type { NormalizedEvent, SessionInfo } from "@bg/shared";
 import AgentMessage, { TurnStanding } from "./blocks/AgentMessage";
 import ThinkingBlock from "./blocks/ThinkingBlock";
@@ -7,10 +7,27 @@ import ToolBadge from "./blocks/ToolBadge";
 import ErrorCard from "./blocks/ErrorCard";
 import UsageFooter from "./blocks/UsageFooter";
 import UserMessage from "./blocks/UserMessage";
-import { useT } from "@/i18n/t";
+import { useT, type MessageKey } from "@/i18n/t";
+import { toolBadgeCopy, type ToolBadgeState } from "@/lib/tool-badge-copy";
 import { projectTurnStates } from "@/lib/turn-disposition";
+import { cn } from "@/lib/utils";
 
 const STICK_THRESHOLD_PX = 80;
+
+// BurnGuard's own stages say where the turn is and why it waits, so they stay in the conversation.
+// Provider tool calls (commands, reads, searches, edits, and their failed attempts) are routine: a
+// failure that matters ends the turn with a status.error card, so they share one quiet disclosure.
+const PIPELINE_TOOL_KEYS: ReadonlySet<MessageKey> = new Set<MessageKey>([
+  "chat.tool.resumeStalled",
+  "chat.tool.resumeIncomplete",
+  "chat.tool.saveArtifact",
+  "chat.tool.phasePlan",
+  "chat.tool.phaseContent",
+  "chat.tool.designReview",
+  "chat.tool.deckReview",
+  "chat.tool.logoRepair",
+  "chat.tool.importInit",
+]);
 
 export default function MessageStream({
   events,
@@ -127,6 +144,8 @@ export default function MessageStream({
                   }
                 />
               );
+            case "activity":
+              return <ToolActivity key={g.steps[0].started.id} steps={g.steps} />;
             case "error":
               return (
                 <ErrorCard
@@ -163,6 +182,7 @@ type ToolStarted = Extract<NormalizedEvent, { type: "tool.started" }>;
 type ToolFinished = Extract<NormalizedEvent, { type: "tool.finished" }>;
 type ThinkingEv = Extract<NormalizedEvent, { type: "chat.thinking" }>;
 type ErrorEv = Extract<NormalizedEvent, { type: "status.error" }>;
+type ToolStep = { started: ToolStarted; finished: ToolFinished | null };
 
 type Group =
   | { kind: "user"; ev: UserMessageEv }
@@ -170,6 +190,7 @@ type Group =
   | { kind: "stopped"; turnId: string }
   | { kind: "thinking"; ev: ThinkingEv }
   | { kind: "tool"; started: ToolStarted; finished: ToolFinished | null }
+  | { kind: "activity"; steps: ToolStep[] }
   | { kind: "error"; ev: ErrorEv };
 
 function buildGroups(events: NormalizedEvent[]): Group[] {
@@ -223,14 +244,19 @@ function buildGroups(events: NormalizedEvent[]): Group[] {
         flushText();
         groups.push({ kind: "thinking", ev });
         break;
-      case "tool.started":
+      case "tool.started": {
         flushText();
-        groups.push({
-          kind: "tool",
-          started: ev,
-          finished: finishedById.get(ev.toolCallId) ?? null,
-        });
+        const step: ToolStep = { started: ev, finished: finishedById.get(ev.toolCallId) ?? null };
+        if (PIPELINE_TOOL_KEYS.has(toolBadgeCopy(ev.tool, "running").nameKey)) {
+          groups.push({ kind: "tool", ...step });
+          break;
+        }
+        // Consecutive routine steps join one disclosure; any other block closes it.
+        const last = groups[groups.length - 1];
+        if (last?.kind === "activity") last.steps.push(step);
+        else groups.push({ kind: "activity", steps: [step] });
         break;
+      }
       case "status.error":
         flushText();
         groups.push({ kind: "error", ev });
@@ -247,4 +273,31 @@ function buildGroups(events: NormalizedEvent[]): Group[] {
   }
   flushText();
   return groups;
+}
+
+/** Routine provider steps: one closed, keyboard-reachable line; every step stays listed inside. */
+function ToolActivity({ steps }: { steps: readonly ToolStep[] }) {
+  const t = useT();
+  const running = steps.some((step) => step.finished === null);
+  const Icon = running ? Loader2 : Wrench;
+  return (
+    <details data-qa="tool-activity" className="group text-xs text-muted-foreground">
+      <summary className="flex min-h-7 w-fit cursor-pointer list-none items-center gap-1.5 rounded-md hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11 [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="h-3 w-3 shrink-0 transition-transform group-open:rotate-90" aria-hidden="true" />
+        <Icon className={cn("h-3 w-3 shrink-0", running && "motion-safe:animate-spin")} aria-hidden="true" />
+        <span>{t(running ? "chat.polish.activityRunning" : "chat.polish.activity", { count: steps.length })}</span>
+      </summary>
+      <ul className="ml-1.5 mt-1 space-y-0.5 border-l border-border pl-3">
+        {steps.map(({ started, finished }) => {
+          const state: ToolBadgeState = finished === null ? "running" : finished.ok ? "finished" : "error";
+          const copy = toolBadgeCopy(started.tool, state);
+          return (
+            <li key={started.id} data-qa="tool-activity-step" data-tool-state={state} className="leading-5">
+              {t(copy.nameKey)} · {t(copy.stateKey)}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
 }

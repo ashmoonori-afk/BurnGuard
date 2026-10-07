@@ -30,11 +30,13 @@ import type {
   DesignDirectionState,
   FileInfo,
   LogoActionV1,
+  LogoSetV1,
   NormalizedEvent,
   PatchFileRequest,
   ProjectDetail,
+  ProjectType,
 } from "@bg/shared";
-import { parseDesignDirectionState } from "@bg/shared";
+import { LOGO_FILES, UpgradeContractError, decodeContract, parseDesignDirectionState, parseLogoSetV1 } from "@bg/shared";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MessageSquare, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -121,8 +123,9 @@ import {
   preferDirectionState,
 } from "@/lib/design-direction-state";
 import { parseProjectGraphicCanvas } from "@/lib/graphic-project";
-import { logoActionMessage, parseProjectLogoCanvas } from "@/lib/logo-project";
+import { logoActionMessage, logoIdeationMessage, parseProjectLogoCanvas } from "@/lib/logo-project";
 import LogoCandidatePanel from "@/components/logo/LogoCandidatePanel";
+import LogoPipelinePanel, { type LogoPipelineStage } from "@/components/logo/LogoPipelinePanel";
 import {
   designAuditErrorCode,
   designAuditViewState,
@@ -180,6 +183,7 @@ export default function ProjectView() {
   }, []);
   const [activeTabId, setActiveTabId] = useState("design-system");
   const [mobilePane, setMobilePane] = useState<"workspace" | "chat">("workspace");
+  const [logoStage, setLogoStage] = useState<LogoPipelineStage>("inspiration");
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [openFileTabs, setOpenFileTabs] = useState<ArtifactTab[]>([]);
   const [canvasNavigation, setCanvasNavigation] = useState<{ projectId: string; relPath: string; url: string } | null>(null);
@@ -764,6 +768,15 @@ export default function ProjectView() {
           void queryClient.invalidateQueries({
             queryKey: ["projects", id, "logo-manifest"],
           });
+          void queryClient.invalidateQueries({
+            queryKey: ["projects", id, "logo-directions"],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["projects", id, "logo-moodboard"],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["projects", id, "logo-originality"],
+          });
         }
       } else if (refresh.invalidate && id) {
         // The coordinator replaced the tree without a turn publishing it (an external
@@ -788,12 +801,14 @@ export default function ProjectView() {
     }
   }, [sessionQuery.data?.backend_id]);
 
+  const isLogoProject = projectQuery.data?.type === "logo";
   const loadedProjectId = projectQuery.data?.id;
   const loadedEntrypoint = projectQuery.data?.entrypoint;
   useEffect(() => {
     if (!loadedProjectId || !loadedEntrypoint) return;
     openFileAsTab(loadedEntrypoint, setOpenFileTabs, setActiveTabId);
-  }, [loadedProjectId, loadedEntrypoint]);
+    if (isLogoProject) setActiveTabId(loadedEntrypoint);
+  }, [loadedProjectId, loadedEntrypoint, isLogoProject]);
 
   const project = projectQuery.data ?? null;
   const graphicCanvas = useMemo(
@@ -809,6 +824,16 @@ export default function ProjectView() {
     [project?.type],
   );
   const files: FileInfo[] = filesQuery.data ?? [];
+  const logoBrief = useMemo(
+    () => (project === null ? null : parseProjectLogoBrief(project.type, project.options_json)),
+    [project?.type, project?.options_json],
+  );
+  const logoIdeasReady = isLogoProject && files.some((file) => file.rel_path === LOGO_IDEA_DIRECTIONS_FILE);
+  const logoDesignReady = isLogoProject && files.some((file) => file.rel_path === LOGO_FILES.manifest || file.rel_path === LOGO_FILES.logo);
+  const defaultLogoStage: LogoPipelineStage = logoDesignReady ? "design" : logoIdeasReady ? "idea" : "inspiration";
+  useEffect(() => {
+    setLogoStage(defaultLogoStage);
+  }, [id, defaultLogoStage]);
   const artifacts = artifactsQuery.data ?? null;
   const session = stream.state?.session ?? null;
   const latestPreview = useMemo(() => latestArtifactPreview(events), [events]);
@@ -1136,6 +1161,8 @@ export default function ProjectView() {
   }
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
+  const isLogoEntrypoint = isLogoProject && activeTab?.kind === "file" && activeTab.relPath === project.entrypoint;
+  const showLogoPipeline = isLogoEntrypoint && logoBrief !== null;
   const activeRelPath =
     activeTab?.kind === "file" && activeTab.relPath ? activeTab.relPath : null;
   const comments = commentsQuery.data ?? [];
@@ -1153,7 +1180,7 @@ export default function ProjectView() {
             try {
               await sendUserEvent(session.id, {
                 type: "user.message",
-                text,
+                text: project.type === "logo" && !logoDesignReady ? logoIdeationMessage(text) : text,
                 files: attachedFiles,
                 ...(activeRelPath === null ? {} : { active_rel_path: activeRelPath }),
                 generation,
@@ -1222,6 +1249,11 @@ export default function ProjectView() {
     } catch (error) {
       handleWriteError("workspace.project.editRequestFailed", error);
     }
+  };
+
+  const handleLogoAction = (action: LogoActionV1) => {
+    if (action.action === "adopt") setLogoStage("design");
+    void requestLogoAction(action);
   };
 
   /** Platform lint repair reuses the quality-repair send path, never a second workflow. */
@@ -1326,19 +1358,12 @@ export default function ProjectView() {
           activePageLabel={activeRelPath !== null && activeRelPath !== project.entrypoint ? t("workspace.project.viewingPage", { path: activeRelPath }) : null}
           statusSlot={
             <>
-            {project.type === "logo" && (
-              <LogoCandidatePanel
-                projectId={id!}
-                disabled={composerDisabled}
-                onAction={(action) => void requestLogoAction(action)}
-              />
-            )}
-            <DirectionStatusBar
+            {!isLogoProject && <DirectionStatusBar
               state={directionState}
               cancelPending={cancelDirectionsMutation.isPending}
               onOpen={() => { setActiveTabId("directions"); setMobilePane("workspace"); }}
               onCancel={() => cancelDirectionsMutation.mutate()}
-            />
+            />}
             </>
           }
           onSend={sendMessage}
@@ -1354,7 +1379,27 @@ export default function ProjectView() {
           }
         />
         </div>
-        <div id="project-workspace-pane" className={cn("flex min-h-0 min-w-0 flex-1", mobilePane !== "workspace" && "max-[900px]:hidden")}>
+        <div id="project-workspace-pane" className={cn("flex min-h-0 min-w-0 flex-1", isLogoProject && "flex-col", mobilePane !== "workspace" && "max-[900px]:hidden")}>
+        {showLogoPipeline && (
+          <LogoPipelinePanel
+            projectId={id!}
+            brief={logoBrief}
+            disabled={composerDisabled}
+            stage={logoStage}
+            ideaAvailable={logoIdeasReady}
+            designAvailable={logoDesignReady || logoStage === "design"}
+            onStageChange={setLogoStage}
+            onAction={handleLogoAction}
+          />
+        )}
+        {isLogoEntrypoint && (!showLogoPipeline || logoStage === "design") && (
+          <LogoCandidatePanel
+            projectId={id!}
+            disabled={composerDisabled}
+            onAction={handleLogoAction}
+          />
+        )}
+        <div className={cn("flex min-h-0 min-w-0 flex-1", showLogoPipeline && logoStage !== "design" && "hidden")}>
 
         {activeTab?.kind === "design_system" && (
           <div className="flex min-h-0 w-full flex-col overflow-auto"><ProjectDesignSystemVersion projectId={id!} disabled={composerDisabled} /><DesignSystemView
@@ -1678,6 +1723,7 @@ export default function ProjectView() {
             />
           </div>
         )}
+          </div>
         </div>
       </div>
       <PermissionDialog
@@ -1702,6 +1748,19 @@ export default function ProjectView() {
   );
 }
 
+const LOGO_IDEA_DIRECTIONS_FILE = "ideas/directions.json";
+
+function parseProjectLogoBrief(projectType: ProjectType, optionsJson: string | null): LogoSetV1 | null {
+  if (projectType !== "logo") return null;
+  try {
+    const stored = decodeContract(optionsJson)["logo_set"];
+    return stored === undefined || stored === null ? null : parseLogoSetV1(stored);
+  } catch (error) {
+    if (error instanceof UpgradeContractError) return null;
+    throw error;
+  }
+}
+
 function isTransientProjectLoadError(error: Error): boolean {
   if (error instanceof ApiError) return error.status === 0 || error.status === 429 || error.status >= 500;
   return error instanceof TypeError;
@@ -1718,19 +1777,21 @@ function buildTabs(
       kind: "design_system",
       closeable: false,
     },
-    {
+    ...(project?.type === "logo" ? [] : [{
       id: "directions",
       title: globalT("workspace.project.directions"),
-      kind: "directions",
+      kind: "directions" as const,
       closeable: false,
-    },
+    }]),
     {
       id: "design-files",
       title: globalT("workspace.project.designFiles"),
       kind: "design_files",
       closeable: false,
     },
-    ...openFileTabs,
+    ...openFileTabs.map((tab) => project?.type === "logo" && tab.relPath === project.entrypoint
+      ? { ...tab, title: globalT("logo.pipeline.title") }
+      : tab),
   ];
 }
 

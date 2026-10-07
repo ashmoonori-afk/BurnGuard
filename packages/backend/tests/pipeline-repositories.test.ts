@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import type { TurnErrorCode, TurnRejectionReason } from "@bg/shared/events";
+import type { NormalizedEvent, TurnErrorCode, TurnRejectionReason, UserEvent } from "@bg/shared/events";
 import { requiredArray, requiredBoolean, stringArray } from "@bg/shared/contract-parser";
 import { parseLearningContract } from "@bg/shared/learning-contract";
 import { drizzle } from "drizzle-orm/bun-sqlite";
@@ -194,7 +194,7 @@ describe("artifact, export, event, and recovery repositories", () => {
   test("Given every persisted event variant When decoded Then strict readers preserve its discriminant", () => {
     // Given
     const base = { id: "e", ts: 1, turnId: "t" };
-    const normalized = [
+    const normalized: NormalizedEvent[] = [
       { ...base, type: "chat.user_message", text: "x", attachmentCount: 0 }, { ...base, type: "chat.delta", text: "x" },
       { ...base, type: "chat.thinking", text: "x" }, { ...base, type: "chat.message_end" },
       { ...base, type: "tool.started", toolCallId: "c", tool: "x", input: {} }, { ...base, type: "tool.finished", toolCallId: "c", tool: "x", ok: true, output: {} },
@@ -202,7 +202,7 @@ describe("artifact, export, event, and recovery repositories", () => {
       { id: "e", ts: 1, type: "status.running" }, { id: "e", ts: 1, type: "status.idle", stopReason: "end_turn" },
       { id: "e", ts: 1, type: "status.error", message: "x", recoverable: true }, { id: "e", ts: 1, type: "usage.delta", input: 1, output: 2, cached: 3 },
     ];
-    const users = [{ type: "user.message", text: "x", attachments: ["a"] }, { type: "user.interrupt" }, { type: "user.tool_decision", toolCallId: "c", decision: "allow", reason: "ok" }];
+    const users: UserEvent[] = [{ type: "user.message", text: "x", attachments: ["a"] }, { type: "user.interrupt" }, { type: "user.tool_decision", toolCallId: "c", decision: "allow", reason: "ok" }];
 
     // When
     const normalizedTypes = normalized.map((item, index) => parsePersistedNormalizedEvent(JSON.stringify(item), `n${index}`).type);
@@ -237,6 +237,7 @@ describe("artifact, export, event, and recovery repositories", () => {
       graphic_requires_authenticated_codex: "graphic_requires_authenticated_codex", graphic_starter_unchanged: "graphic_starter_unchanged",
       logo_requires_authenticated_codex: "logo_requires_authenticated_codex", logo_deliverables_missing: "logo_deliverables_missing",
       logo_image_provenance_missing: "logo_image_provenance_missing", design_review_failed: "design_review_failed",
+      logo_directions_invalid: "logo_directions_invalid", logo_originality_rejected: "logo_originality_rejected",
       commandcode_unavailable: "commandcode_unavailable", unsupported_generation_model_effort: "unsupported_generation_model_effort",
       backend_unavailable: "backend_unavailable", agent_control_files_present: "agent_control_files_present", path_unavailable: "path_unavailable",
       immutable_reference_mutated: "immutable_reference_mutated", immutable_reference_path_unavailable: "immutable_reference_path_unavailable",
@@ -262,6 +263,9 @@ describe("artifact, export, event, and recovery repositories", () => {
       logo_candidate_invalid: "logo_candidate_invalid", logo_candidate_provenance: "logo_candidate_provenance",
       logo_svg_missing: "logo_svg_missing", logo_svg_invalid: "logo_svg_invalid",
       logo_svg_source_mismatch: "logo_svg_source_mismatch", logo_guidelines_invalid: "logo_guidelines_invalid",
+      logo_directions_invalid: "logo_directions_invalid", logo_adoption_invalid: "logo_adoption_invalid",
+      logo_reference_copied: "logo_reference_copied", logo_reference_similar: "logo_reference_similar",
+      logo_screening_failed: "logo_screening_failed", logo_moodboard_changed: "logo_moodboard_changed",
     } satisfies Record<TurnRejectionReason, TurnRejectionReason>;
     const expected = Object.values(reasons).map((reason, index) => {
       const event = {

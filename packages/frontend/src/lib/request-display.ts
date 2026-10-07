@@ -1,6 +1,8 @@
 import { LOCALES } from "@/i18n/locale";
 import { messages } from "@/i18n/messages";
 import { t, type MessageKey } from "@/i18n/t";
+import { LOGO_ACTION_TAG, parseLogoAction } from "@bg/shared";
+import { logoActionMessage } from "./logo-project";
 
 type RequestKind = "quality" | "platform" | "ux";
 
@@ -27,6 +29,16 @@ function recognizeHeader(line: string): RequestKind | null {
 
 /** Keep the sent request intact in history/provider input; only simplify the chat bubble. */
 export function requestDisplayText(text: string): string {
+  const logoAction = parseLogoAction(text);
+  if (logoAction !== null) {
+    const opening = `<${LOGO_ACTION_TAG}>`;
+    const closing = `</${LOGO_ACTION_TAG}>`;
+    const start = text.indexOf(opening);
+    const end = text.indexOf(closing, start) + closing.length;
+    const prose = `${text.slice(0, start)}${text.slice(end)}`.trim();
+    const fallback = logoActionMessage(logoAction);
+    return prose || fallback.slice(fallback.indexOf("\n") + 1);
+  }
   const newline = text.indexOf("\n");
   if (newline < 0) return text;
   const kind = recognizeHeader(text.slice(0, newline));

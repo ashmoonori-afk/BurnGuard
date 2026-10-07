@@ -3,7 +3,9 @@ import { lstat, readdir, readFile } from "node:fs/promises";
 import { crc32, inflateSync } from "node:zlib";
 import { parse } from "node-html-parser";
 import {
+  LOGO_DIRECTION_IDS,
   LOGO_FILES,
+  LOGO_IDEA_FILES,
   LOGO_MAX_ROUNDS,
   parseLogoAction,
   parseLogoManifestV1,
@@ -11,13 +13,31 @@ import {
   UpgradeContractError,
   type LogoActionV1,
   type LogoCandidateV1,
+  type LogoDirectionsV1,
   type LogoManifestV1,
+  type LogoMoodboardV1,
+  type LogoOriginalityReceiptV1,
   type LogoPhase,
   type LogoRoundV1,
+  type LogoAdoptPick,
   type NormalizedEvent,
 } from "@bg/shared";
 import { LOGO_STARTER_NODE_ID, LOGO_STARTER_SENTENCE } from "../db/templates/logo";
 import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
+import { LogoOriginalityError, screenLogoImages, type LogoOriginalityCandidate } from "./logo-originality";
+import { LogoMoodboardError, readLogoMoodboard } from "./logo-moodboard";
+import {
+  LOGO_IDEA_RECEIPT_FILE,
+  LOGO_IDEA_SKETCH_MAX_BYTES,
+  logoRoundReceiptFile,
+  readLogoAdoptionState,
+  readLogoDirectionsState,
+  removeLogoAdoption,
+  resolveLogoAdoption,
+  scanLogoReceiptHashes,
+  writeLogoAdoption,
+  writeLogoOriginalityReceipt,
+} from "./logo-pipeline-state";
 
 /**
  * Hard completion gate for a logo turn (doc/23-logo-design-deliverable-2026-09-18.md, D6).
@@ -27,14 +47,34 @@ import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
  * staged directory. Provenance failures have a separate public code from incomplete deliverables;
  * the private `detail` names the missing contract without ever naming a filesystem path.
  */
+export type LogoDeliverableCode =
+  | "logo_deliverables_missing"
+  | "logo_image_provenance_missing"
+  | "logo_directions_invalid"
+  | "logo_originality_rejected";
+
+/** Originality outcomes the screening service reports; each names a rule, never a path or payload. */
+const ORIGINALITY_DETAILS: ReadonlySet<string> = new Set([
+  "copied", "similar", "references_missing", "decode_failed", "invalid_images",
+  "moodboard_changed", "moodboard_invalid",
+]);
+/** Details about the ideation directions, their sketches, or the adoption record. */
+const DIRECTIONS_DETAIL_PREFIXES = ["directions_", "sketch_", "adoption_"] as const;
+
+function logoDeliverableCode(detail: string): LogoDeliverableCode {
+  if (detail === "image_generation_missing" || detail.startsWith("candidate_unprovenanced:")) return "logo_image_provenance_missing";
+  if (ORIGINALITY_DETAILS.has(detail)) return "logo_originality_rejected";
+  if (detail === "adoption_changed" || DIRECTIONS_DETAIL_PREFIXES.some((prefix) => detail.startsWith(prefix))) return "logo_directions_invalid";
+  return "logo_deliverables_missing";
+}
+
 export class LogoDeliverableError extends Error {
   readonly name = "LogoDeliverableError";
-  readonly code: "logo_deliverables_missing" | "logo_image_provenance_missing";
+  readonly code: LogoDeliverableCode;
   readonly detail: string;
 
   constructor(detail: string) {
-    const code = detail === "image_generation_missing" || detail.startsWith("candidate_unprovenanced:")
-      ? "logo_image_provenance_missing" : "logo_deliverables_missing";
+    const code = logoDeliverableCode(detail);
     // The coordinator preserves the message when wrapping domain errors; keep it a public code.
     super(code);
     this.code = code;
@@ -88,6 +128,20 @@ export type LogoTurnExpectation = {
   readonly priorGuidelines: string | null;
   readonly nextRound: number;
   readonly selected: LogoSelectedCandidate | null;
+  /** Canonical project directory the moodboard is read from; `dir` when the caller stages in place. */
+  readonly projectDir: string;
+  /** Canonical board pinned before the turn; the gate refuses if the board moves under it. */
+  readonly moodboard: LogoMoodboardV1;
+  readonly priorDirections: LogoDirectionsV1 | null;
+  readonly priorDirectionsSha256: string | null;
+  /** Picks this turn may use, or null when the project holds no adoption. */
+  readonly adoption: readonly LogoAdoptPick[] | null;
+  /** The adoption record as it stood before the turn, so a model rewrite is detectable. */
+  readonly priorAdoption: { readonly bytes: string; readonly sha256: string } | null;
+  /** sha256 of every receipt authored before this turn, keyed by project-relative path. */
+  readonly priorReceipts: ReadonlyMap<string, string>;
+  /** sha256 (or null when absent) of each idea sketch and the idea receipt; only an ideate turn may change them. */
+  readonly priorIdeaFiles: ReadonlyMap<string, string | null>;
 };
 
 export type LogoTurnEvidence = {
@@ -182,7 +236,7 @@ export async function readLogoManifest(dir: string): Promise<LogoManifestV1 | nu
   }
 }
 
-export async function captureLogoTurnExpectation(dir: string, requestText: string): Promise<LogoTurnExpectation> {
+export async function captureLogoTurnExpectation(dir: string, requestText: string, projectDir: string = dir): Promise<LogoTurnExpectation> {
   const action = parseLogoAction(requestText);
   // A manifest that no longer parses is treated as absent, exactly as the prompt treats it, so the
   // turn starts over at round 1 rather than letting the agent "repair" history on its own terms.
@@ -213,19 +267,69 @@ export async function captureLogoTurnExpectation(dir: string, requestText: strin
     if (error instanceof LogoDeliverableError) return null;
     throw error;
   });
-  return { phase, action, priorManifest, priorCandidates, priorGuidelines, nextRound: rounds.length + 1, selected };
+  const moodboard = await readPinnedMoodboard(projectDir);
+  const directionsRead = await readLogoDirectionsState(dir);
+  const priorDirections = directionsRead.kind === "present" ? directionsRead.state.directions : null;
+  const priorDirectionsSha256 = directionsRead.kind === "present" ? directionsRead.state.sha256 : null;
+  const priorReceipts = await scanLogoReceiptHashes(dir);
+  const priorIdeaFiles = new Map<string, string | null>();
+  for (const relative of [...LOGO_IDEA_FILES, LOGO_IDEA_RECEIPT_FILE]) priorIdeaFiles.set(relative, await hashProjectFile(dir, relative));
+  const adoptionRead = await readLogoAdoptionState(dir);
+  const adoption = resolveTurnAdoption(action, phase, adoptionRead, moodboard, directionsRead);
+  if (phase === "explore" && action?.action !== "adopt" && priorDirections !== null && adoption === null) {
+    throw new LogoDeliverableError("selection_missing");
+  }
+  return {
+    phase, action, priorManifest, priorCandidates, priorGuidelines, nextRound: rounds.length + 1, selected,
+    projectDir, moodboard, priorDirections, priorDirectionsSha256, adoption,
+    priorAdoption: adoptionRead.kind === "present" ? { bytes: adoptionRead.state.bytes, sha256: adoptionRead.state.sha256 } : null,
+    priorReceipts,
+    priorIdeaFiles,
+  };
+}
+
+/**
+ * The picks this turn runs with. An explicit adopt is validated against the hopeable directions;
+ * any other explore turn must already hold a live adoption when directions exist, so plain chat
+ * cannot slip past the person's choice; an invalid or stale record is refused rather than reused.
+ */
+function resolveTurnAdoption(
+  action: LogoActionV1 | null,
+  phase: LogoPhase,
+  read: Awaited<ReturnType<typeof readLogoAdoptionState>>,
+  moodboard: LogoMoodboardV1,
+  directionsRead: Awaited<ReturnType<typeof readLogoDirectionsState>>,
+): readonly LogoAdoptPick[] | null {
+  if (action?.action === "adopt") {
+    if (directionsRead.kind === "absent") throw new LogoDeliverableError("adoption_invalid:no_directions");
+    if (directionsRead.kind === "invalid") throw new LogoDeliverableError(`directions_invalid:${directionsRead.detail}`);
+    return action.picks;
+  }
+  const resolved = resolveLogoAdoption(read, moodboard, directionsRead.kind === "present" ? directionsRead.state : null);
+  if (phase !== "explore") return resolved.kind === "valid" ? resolved.state.adoption.picks : null;
+  if (resolved.kind === "invalid") throw new LogoDeliverableError(`adoption_invalid:${resolved.detail}`);
+  if (resolved.kind === "stale") throw new LogoDeliverableError(`adoption_stale:${resolved.detail}`);
+  return resolved.kind === "valid" ? resolved.state.adoption.picks : null;
 }
 
 export async function assertLogoDeliverables(
   dir: string,
   expectation: LogoTurnExpectation,
   evidence: LogoTurnEvidence,
+  signal?: AbortSignal,
 ): Promise<void> {
+  signal?.throwIfAborted();
   const manifest = await readLogoManifest(dir);
-  if (manifest === null) throw new LogoDeliverableError("manifest_missing");
+  if (manifest === null && expectation.phase !== "ideate") throw new LogoDeliverableError("manifest_missing");
   const prior = expectation.priorManifest?.rounds ?? [];
 
+  if (expectation.phase === "ideate") {
+    await assertIdeateDeliverables(dir, expectation, manifest === null ? [] : manifest.rounds, signal);
+    return;
+  }
+
   if (expectation.phase === "explore") {
+    if (manifest === null) throw new LogoDeliverableError("manifest_missing");
     // Exactly one round is appended; history and its files are immutable; every new candidate is a
     // decodable square PNG whose bytes are new to the project; the image tool actually ran.
     if (manifest.rounds.length !== prior.length + 1) throw new LogoDeliverableError("round_count");
@@ -236,21 +340,37 @@ export async function assertLogoDeliverables(
     if (round === undefined) throw new LogoDeliverableError("round_count");
     const priorHashes = new Set([...expectation.priorCandidates.values()].map((entry) => entry.sha256));
     const roundHashes = new Set<string>();
+    const images: LogoOriginalityCandidate[] = [];
     for (const candidate of round.candidates) {
-      const sha256 = await assertCandidatePng(dir, candidate);
+      const { sha256, bytes } = await assertCandidatePng(dir, candidate);
       if (priorHashes.has(sha256)) throw new LogoDeliverableError(`candidate_reused:${candidate.id}`);
       if (roundHashes.has(sha256)) throw new LogoDeliverableError(`candidate_duplicate:${candidate.id}`);
       // Bytes the image tool neither reported nor wrote during a call this turn were made some other way.
       if (!evidence.imageOutputs.has(sha256)) throw new LogoDeliverableError(`candidate_unprovenanced:${candidate.id}`);
       roundHashes.add(sha256);
+      images.push({ id: candidate.id, bytes });
     }
     const html = await readGuidelines(dir);
     if (expectation.priorGuidelines !== null && html === expectation.priorGuidelines) {
       throw new LogoDeliverableError(isStarter(html) ? "starter_unchanged" : "guidelines_unchanged");
     }
+    await assertPriorStateUnchanged(dir, expectation);
+    const receipt = await screenOutput(expectation, images, signal);
+    if (expectation.action?.action === "adopt") {
+      const picks = expectation.adoption;
+      if (picks === null || expectation.priorDirectionsSha256 === null) throw new LogoDeliverableError("adoption_invalid:no_picks");
+      await writeLogoAdoption(dir, {
+        schema_version: 1,
+        directions_sha256: expectation.priorDirectionsSha256,
+        moodboard_digest: expectation.moodboard.digest,
+        picks,
+      });
+    }
+    await writeLogoOriginalityReceipt(dir, logoRoundReceiptFile(round.round), receipt);
     return;
   }
 
+  if (manifest === null) throw new LogoDeliverableError("manifest_missing");
   const selected = expectation.selected;
   if (selected === null || expectation.action?.action !== "select") throw new LogoDeliverableError("selection_missing");
   if (manifest.rounds.length !== prior.length) throw new LogoDeliverableError("rounds_changed");
@@ -264,13 +384,146 @@ export async function assertLogoDeliverables(
     .find((round) => round.round === selected.round)
     ?.candidates.find((entry) => entry.id === selected.candidate_id);
   if (candidate === undefined) throw new LogoDeliverableError("selection_unknown");
-  if (await assertCandidatePng(dir, candidate) !== selected.sha256) throw new LogoDeliverableError("selected_candidate_changed");
+  const current = await assertCandidatePng(dir, candidate);
+  if (current.sha256 !== selected.sha256) throw new LogoDeliverableError("selected_candidate_changed");
   await assertPriorCandidatesUnchanged(dir, expectation);
-  await assertLogoSvgFile(dir, candidate.file);
+  const svgBytes = await assertLogoSvgFile(dir, candidate.file);
   const html = await readGuidelines(dir);
   const pages = parse(html).querySelectorAll("[data-graphic-artboard]").length;
   if (pages < REQUIRED_GUIDELINE_PAGES) throw new LogoDeliverableError("guidelines_pages");
   if (pages > MAX_GUIDELINE_PAGES) throw new LogoDeliverableError("guidelines_pages_over");
+  await assertPriorStateUnchanged(dir, expectation);
+  const receipt = await screenOutput(expectation, [{ id: candidate.id, bytes: current.bytes }, { id: "final-logo", bytes: svgBytes }], signal);
+  await writeLogoOriginalityReceipt(dir, "logo-originality.json", receipt);
+}
+
+/**
+ * Successful ideation authors only the ideas tree: exactly three directions and three safe
+ * sketches, with the manifest, the guidance sheet and every earlier receipt left byte-identical.
+ * New ideas invalidate any earlier adoption, so the record is removed once the ideas pass.
+ */
+async function assertIdeateDeliverables(
+  dir: string,
+  expectation: LogoTurnExpectation,
+  rounds: readonly LogoRoundV1[],
+  signal?: AbortSignal,
+): Promise<void> {
+  const prior = expectation.priorManifest?.rounds ?? [];
+  if (rounds.length !== prior.length) throw new LogoDeliverableError("history_changed");
+  assertRoundsUnchanged(prior, rounds);
+  await assertPriorCandidatesUnchanged(dir, expectation);
+  const html = await readGuidelines(dir);
+  if (html !== expectation.priorGuidelines) throw new LogoDeliverableError(isStarter(html) ? "starter_unchanged" : "guidelines_changed");
+  // Ideation authors the directions on purpose; every other prior file must be untouched.
+  await assertPriorStateUnchanged(dir, expectation, false);
+  const sketches = await requireLogoSketches(dir);
+  const receipt = await screenOutput(expectation, sketches, signal);
+  await writeLogoOriginalityReceipt(dir, LOGO_IDEA_RECEIPT_FILE, receipt);
+  await removeLogoAdoption(dir);
+}
+
+/** The adoption and every earlier receipt must be exactly as the turn found them. */
+async function assertPriorStateUnchanged(dir: string, expectation: LogoTurnExpectation, checkDirections = true): Promise<void> {
+  if (checkDirections) {
+    const directionsRead = await readLogoDirectionsState(dir);
+    const directionsSha = directionsRead.kind === "present" ? directionsRead.state.sha256 : null;
+    if (directionsSha !== expectation.priorDirectionsSha256) throw new LogoDeliverableError("directions_changed");
+    // Sketches are screened only by ideate; any other turn that rewrites, adds or removes one would publish unscreened art.
+    for (const [file, sha256] of expectation.priorIdeaFiles) {
+      if (await hashProjectFile(dir, file) !== sha256) throw new LogoDeliverableError("directions_changed");
+    }
+  }
+  const adoptionRead = await readLogoAdoptionState(dir);
+  const adoptionSha = adoptionRead.kind === "present" ? adoptionRead.state.sha256 : null;
+  if (adoptionSha !== (expectation.priorAdoption?.sha256 ?? null)) throw new LogoDeliverableError("adoption_changed");
+  for (const [file, sha256] of expectation.priorReceipts) {
+    if (await hashProjectFile(dir, file) !== sha256) throw new LogoDeliverableError(`receipt_changed:${file}`);
+  }
+}
+
+/** The canonical board must still be the board the output was screened against. */
+async function assertMoodboardPinned(projectDir: string, digest: string): Promise<void> {
+  let board: LogoMoodboardV1;
+  try {
+    board = await readLogoMoodboard(projectDir);
+  } catch (error) {
+    if (error instanceof LogoMoodboardError) throw new LogoDeliverableError("moodboard_changed");
+    throw error;
+  }
+  if (board.digest !== digest) throw new LogoDeliverableError("moodboard_changed");
+}
+
+async function readPinnedMoodboard(projectDir: string): Promise<LogoMoodboardV1> {
+  try {
+    return await readLogoMoodboard(projectDir);
+  } catch (error) {
+    if (error instanceof LogoMoodboardError) throw new LogoDeliverableError("moodboard_invalid");
+    throw error;
+  }
+}
+
+/** Screens output pixels against the pinned board, then re-reads the board to prove it did not move. */
+async function screenOutput(
+  expectation: LogoTurnExpectation,
+  images: readonly LogoOriginalityCandidate[],
+  signal?: AbortSignal,
+): Promise<LogoOriginalityReceiptV1> {
+  let receipt: LogoOriginalityReceiptV1;
+  try {
+    receipt = await screenLogoImages(images, expectation.moodboard, signal);
+  } catch (error) {
+    if (error instanceof LogoOriginalityError) throw new LogoDeliverableError(error.detail);
+    throw error;
+  }
+  await assertMoodboardPinned(expectation.projectDir, expectation.moodboard.digest);
+  return receipt;
+}
+
+async function requireLogoSketches(dir: string): Promise<readonly LogoOriginalityCandidate[]> {
+  const directionsRead = await readLogoDirectionsState(dir);
+  if (directionsRead.kind === "absent") throw new LogoDeliverableError("directions_missing");
+  if (directionsRead.kind === "invalid") throw new LogoDeliverableError(`directions_invalid:${directionsRead.detail}`);
+  const sketches: LogoOriginalityCandidate[] = [];
+  const hashes = new Set<string>();
+  for (const [index, relative] of LOGO_IDEA_FILES.entries()) {
+    const id = LOGO_DIRECTION_IDS[index]!;
+    const bytes = await readSketch(dir, relative, id);
+    const hash = createHash("sha256").update(bytes).digest("hex");
+    if (hashes.has(hash)) throw new LogoDeliverableError("sketch_duplicate");
+    hashes.add(hash);
+    try {
+      validateLogoSvg(bytes.toString("utf8"));
+    } catch (error) {
+      if (error instanceof LogoDeliverableError) throw new LogoDeliverableError(`sketch_invalid:${id}:${error.detail}`);
+      throw error;
+    }
+    sketches.push({ id, bytes });
+  }
+  return sketches;
+}
+
+async function readSketch(dir: string, relative: string, id: string): Promise<Buffer> {
+  const file = safePath(dir, relative, `sketch_path_unsafe:${id}`);
+  const info = await lstat(file).catch((error: unknown) => {
+    if (isMissing(error)) return null;
+    throw error;
+  });
+  if (info === null) throw new LogoDeliverableError(`sketch_missing:${id}`);
+  if (!info.isFile() || info.nlink !== 1) throw new LogoDeliverableError(`sketch_not_file:${id}`);
+  if (info.size === 0) throw new LogoDeliverableError(`sketch_empty:${id}`);
+  if (info.size > LOGO_IDEA_SKETCH_MAX_BYTES) throw new LogoDeliverableError(`sketch_too_large:${id}`);
+  return await readFile(file);
+}
+
+/** sha256 of one project-relative file, or null when it is absent or not a plain file. */
+async function hashProjectFile(dir: string, relative: string): Promise<string | null> {
+  const file = safePath(dir, relative, "receipt_path_unsafe");
+  const info = await lstat(file).catch((error: unknown) => {
+    if (isMissing(error)) return null;
+    throw error;
+  });
+  if (info === null || !info.isFile() || info.nlink !== 1) return null;
+  return sha256(await readFile(file));
 }
 
 function assertRoundsUnchanged(prior: readonly LogoRoundV1[], current: readonly LogoRoundV1[]): void {
@@ -291,8 +544,8 @@ async function assertPriorCandidatesUnchanged(dir: string, expectation: LogoTurn
 export { logoSvgSource, validateLogoSvg } from "./logo-svg-validation";
 import { logoSvgSource, validateLogoSvg } from "./logo-svg-validation";
 
-/** Verifies a candidate is a complete, decodable, square PNG and returns its sha256. */
-async function assertCandidatePng(dir: string, candidate: LogoCandidateV1): Promise<string> {
+/** Verifies a candidate is a complete, decodable, square PNG and returns its bytes identity. */
+async function assertCandidatePng(dir: string, candidate: LogoCandidateV1): Promise<{ readonly sha256: string; readonly bytes: Buffer }> {
   const file = safePath(dir, candidate.file, `candidate_path_unsafe:${candidate.id}`);
   const info = await lstat(file).catch((error: unknown) => {
     if (isMissing(error)) return null;
@@ -305,7 +558,7 @@ async function assertCandidatePng(dir: string, candidate: LogoCandidateV1): Prom
   const bytes = await readFile(file);
   const png = inspectPng(bytes);
   if (typeof png === "string") throw new LogoDeliverableError(`candidate_${png}:${candidate.id}`);
-  return sha256(bytes);
+  return { sha256: sha256(bytes), bytes };
 }
 
 /** Pre-turn hash of a candidate file; null when it is absent or not a plain file, which is not an error yet. */
@@ -401,7 +654,7 @@ function sha256(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-async function assertLogoSvgFile(dir: string, expectedSource: string): Promise<void> {
+async function assertLogoSvgFile(dir: string, expectedSource: string): Promise<Buffer> {
   const file = safePath(dir, LOGO_FILES.logo, "svg_path_unsafe");
   const info = await lstat(file).catch((error: unknown) => {
     if (isMissing(error)) return null;
@@ -411,11 +664,13 @@ async function assertLogoSvgFile(dir: string, expectedSource: string): Promise<v
   if (!info.isFile() || info.nlink !== 1) throw new LogoDeliverableError("svg_not_file");
   if (info.size === 0) throw new LogoDeliverableError("svg_empty");
   if (info.size > MAX_SVG_BYTES) throw new LogoDeliverableError("svg_too_large");
-  const text = await readFile(file, "utf8");
+  const bytes = await readFile(file);
+  const text = bytes.toString("utf8");
   validateLogoSvg(text);
   const source = logoSvgSource(text);
   if (source === null) throw new LogoDeliverableError("svg_source_missing");
   if (source !== expectedSource) throw new LogoDeliverableError("svg_source_mismatch");
+  return bytes;
 }
 
 async function readGuidelines(dir: string): Promise<string> {

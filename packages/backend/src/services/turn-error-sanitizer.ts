@@ -4,6 +4,8 @@ import { DECK_SOURCE_PAGE_LIMIT } from "./context";
 import { LogoDeliverableError } from "./logo-deliverables";
 
 const COPY: Readonly<Record<TurnErrorCode, string>> = {
+  logo_directions_invalid: "Logo directions or adopted choices are invalid. The previous result was preserved.",
+  logo_originality_rejected: "Logo reference screening did not pass. The previous result was preserved.",
   graphic_requires_authenticated_codex: "그래픽 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요. 모델 선택과 로그인 상태를 확인해 주세요.",
   graphic_starter_unchanged: "그래픽 화면이 아직 초기 상태라 결과를 반영하지 않았어요. 다시 생성을 요청해 주세요.",
   logo_requires_authenticated_codex: "로고 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요. 모델 선택과 로그인 상태를 확인해 주세요.",
@@ -34,6 +36,15 @@ const COPY: Readonly<Record<TurnErrorCode, string>> = {
  * treatment — including repairability — of an existing one.
  */
 const LOGO_REASONS: ReadonlyMap<string, TurnRejectionReason> = new Map([
+  ["copied", "logo_reference_copied"],
+  ["similar", "logo_reference_similar"],
+  ["references_missing", "logo_screening_failed"],
+  ["decode_failed", "logo_screening_failed"],
+  ["invalid_images", "logo_screening_failed"],
+  ["moodboard_changed", "logo_moodboard_changed"],
+  ["moodboard_invalid", "logo_moodboard_changed"],
+  ["history_changed", "logo_history_changed"],
+  ["receipt_changed", "logo_history_changed"],
   ["manifest_missing", "logo_manifest_missing"],
   ["manifest_invalid", "logo_manifest_invalid"],
   ["manifest_path_unsafe", "logo_manifest_invalid"],
@@ -60,6 +71,8 @@ const REJECTION_REASONS: ReadonlySet<string> = new Set<TurnRejectionReason>([
   "logo_manifest_missing", "logo_manifest_invalid", "logo_history_changed", "logo_selection_invalid",
   "logo_candidate_invalid", "logo_candidate_provenance", "logo_svg_missing", "logo_svg_invalid",
   "logo_svg_source_mismatch", "logo_guidelines_invalid",
+  "logo_directions_invalid", "logo_adoption_invalid", "logo_reference_copied",
+  "logo_reference_similar", "logo_screening_failed", "logo_moodboard_changed",
 ]);
 
 /** Identifiers this server mints (ULIDs and fixture ids); never a path and never model-authored. */
@@ -71,6 +84,8 @@ function logoRejectionReason(detail: string): TurnRejectionReason | undefined {
   const head = detail.split(":")[0] ?? "";
   const mapped = LOGO_REASONS.get(head);
   if (mapped !== undefined) return mapped;
+  if (head.startsWith("directions_") || head.startsWith("sketch_")) return "logo_directions_invalid";
+  if (head.startsWith("adoption_")) return "logo_adoption_invalid";
   if (head.startsWith("candidate_")) return "logo_candidate_invalid";
   if (head.startsWith("guidelines_")) return "logo_guidelines_invalid";
   // Everything the allowlist parser refuses about the document itself.
@@ -132,6 +147,8 @@ function knownCode(candidate: string | undefined): TurnErrorCode | undefined {
     case "logo_requires_authenticated_codex":
     case "logo_deliverables_missing":
     case "logo_image_provenance_missing":
+    case "logo_directions_invalid":
+    case "logo_originality_rejected":
     case "design_review_failed":
     case "commandcode_unavailable":
     case "unsupported_generation_model_effort":

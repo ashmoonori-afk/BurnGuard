@@ -27,6 +27,8 @@
     "./export": "./src/export.ts",
     "./export-parity": "./src/export-parity.ts",
     "./figma-import": "./src/figma-import.ts",
+    "./logo": "./src/logo.ts",
+    "./logo-moodboard": "./src/logo-moodboard.ts",
     "./extraction-domain": "./src/extraction-domain.ts",
     "./events": "./src/events.ts",
     "./learning-contract": "./src/learning-contract.ts",

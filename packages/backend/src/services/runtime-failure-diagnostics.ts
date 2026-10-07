@@ -137,6 +137,8 @@ function failureStage(code: RuntimeFailureCode): RuntimeFailureStage {
       return "input";
     case "logo_deliverables_missing":
     case "logo_image_provenance_missing":
+    case "logo_directions_invalid":
+    case "logo_originality_rejected":
     case "design_review_failed":
     case "immutable_reference_mutated":
     case "immutable_reference_escaped":

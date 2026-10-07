@@ -1,10 +1,21 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 import * as zlib from "node:zlib";
-import { LOGO_MAX_ROUNDS, LOGO_PAGE, LOGO_SOURCE_ATTRIBUTE, type LogoManifestV1 } from "@bg/shared";
+import {
+  LOGO_IDEA_FILES,
+  LOGO_MAX_ROUNDS,
+  LOGO_PAGE,
+  LOGO_SOURCE_ATTRIBUTE,
+  parseLogoOriginalityReceiptV1,
+  type LogoManifestV1,
+} from "@bg/shared";
+import { createCanvas } from "../src/services/export-native-modules";
+import { addMoodboardFiles, readLogoMoodboard } from "../src/services/logo-moodboard";
+import { LOGO_ADOPTION_FILE, LOGO_IDEA_DIRECTIONS_FILE, logoRoundReceiptFile } from "../src/services/logo-pipeline-state";
 import {
   assertLogoDeliverables,
   captureLogoTurnExpectation,
@@ -588,6 +599,370 @@ describe("logo svg validator", () => {
   test("Given an SVG above one mebibyte Then it is refused", () => {
     const filler = "0".repeat(1024 * 1024);
     expect(svgDetail(`<svg viewBox="0 0 8 8"><path d="M${filler}"/></svg>`)).toBe("svg_too_large");
+  });
+});
+
+const IDEATE = '<burnguard-logo-action-v1>{"action":"ideate"}</burnguard-logo-action-v1>';
+const ADOPT_1 = '<burnguard-logo-action-v1>{"action":"adopt","picks":[{"direction_id":"direction-1","take":["name","color"]}]}</burnguard-logo-action-v1>';
+const SELECT_3 = '<burnguard-logo-action-v1>{"action":"select","round":1,"candidate_id":"candidate-3"}</burnguard-logo-action-v1>';
+
+function sketch(index = 0): string {
+  const shapes = [
+    '<circle cx="256" cy="256" r="170"/>',
+    '<rect x="86" y="86" width="340" height="340"/>',
+    '<path d="M256 70L442 420H70Z"/>',
+  ];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${shapes[index]}</svg>`;
+}
+
+function directionsOf(): { schema_version: number; brand_name: string; directions: Record<string, unknown>[] } {
+  const primitives = ["circle", "square", "triangle"];
+  return {
+    schema_version: 1,
+    brand_name: "Northstar",
+    directions: [0, 1, 2].map((index) => ({
+      id: `direction-${index + 1}`,
+      name: `Direction ${index + 1}`,
+      logo_type: "combination",
+      color: { hero: "#112233", support: ["#445566"], ground: "#FFFFFF" },
+      shape: { primitive: primitives[index], construction: "one geometric unit" },
+      mood: ["calm"],
+      rationale: "reads cleanly at small sizes",
+      sketch: { file: LOGO_IDEA_FILES[index], kind: "svg" },
+    })),
+  };
+}
+
+async function writeIdeas(
+  dir: string,
+  options: { readonly directions?: unknown; readonly sketches?: Readonly<Record<string, string | null>> } = {},
+): Promise<string> {
+  const directory = path.join(dir, "ideas");
+  await mkdir(directory, { recursive: true });
+  const text = JSON.stringify(options.directions ?? directionsOf());
+  await writeFile(path.join(dir, ...LOGO_IDEA_DIRECTIONS_FILE.split("/")), text);
+  for (const [index, file] of LOGO_IDEA_FILES.entries()) {
+    const id = `direction-${index + 1}`;
+    const body = options.sketches?.[id];
+    if (body === null) continue;
+    await writeFile(path.join(dir, ...file.split("/")), body ?? sketch(index));
+  }
+  return text;
+}
+
+function adoptionOf(directionsText: string, digest: string): Record<string, unknown> {
+  return {
+    schema_version: 1,
+    directions_sha256: createHash("sha256").update(directionsText).digest("hex"),
+    moodboard_digest: digest,
+    picks: [{ direction_id: "direction-1", take: ["name", "color"] }],
+  };
+}
+
+async function writeAdoption(dir: string, record: unknown): Promise<void> {
+  await mkdir(path.join(dir, "ideas"), { recursive: true });
+  await writeFile(path.join(dir, ...LOGO_ADOPTION_FILE.split("/")), typeof record === "string" ? record : JSON.stringify(record));
+}
+
+async function readAdoption(dir: string): Promise<Record<string, unknown>> {
+  return JSON.parse(await readFile(path.join(dir, ...LOGO_ADOPTION_FILE.split("/")), "utf8"));
+}
+
+function markAlpha(size: number): Buffer {
+  const canvas = createCanvas(size, size);
+  const context = canvas.getContext("2d");
+  const scale = size / 256;
+  context.fillStyle = "#111111";
+  context.beginPath();
+  context.arc(96 * scale, 96 * scale, 56 * scale, 0, Math.PI * 2);
+  context.fill();
+  context.fillRect(170 * scale, 150 * scale, 60 * scale, 20 * scale);
+  return canvas.toBuffer("image/png");
+}
+
+function markBeta(size: number): Buffer {
+  const canvas = createCanvas(size, size);
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, size, size);
+  context.fillStyle = "#111111";
+  context.fillRect(size / 2, 0, size / 2, size);
+  return canvas.toBuffer("image/png");
+}
+
+async function boardWith(dir: string, bytes: Buffer): Promise<void> {
+  await addMoodboardFiles(dir, [{ name: "reference.png", mime_type: "image/png", bytes }], (await readLogoMoodboard(dir)).revision);
+}
+
+describe("logo ideate deliverables", () => {
+  test("Given cancelled screening When the gate runs Then it preserves the abort reason and writes no receipt", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, IDEATE);
+    await writeIdeas(dir);
+    const controller = new AbortController();
+    const reason = new DOMException("cancelled", "AbortError");
+    controller.abort(reason);
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir, 0), controller.signal)).rejects.toBe(reason);
+    expect(await Bun.file(path.join(dir, "ideas/originality.json")).exists()).toBe(false);
+  });
+
+  test("Given duplicate sketch bytes behind distinct direction labels When checked Then ideation is refused", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, IDEATE);
+    await writeIdeas(dir, { sketches: { "direction-1": sketch(), "direction-2": sketch(), "direction-3": sketch() } });
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir, 0))).rejects.toMatchObject({ code: "logo_directions_invalid", detail: "sketch_duplicate" });
+  });
+
+  test("Given three valid directions and safe sketches When asserted Then it passes and the receipt is backend-authored", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, IDEATE);
+    expect(expectation).toMatchObject({ phase: "ideate", priorDirections: null, adoption: null });
+    await writeIdeas(dir);
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir, 0))).resolves.toBeUndefined();
+    const receipt = parseLogoOriginalityReceiptV1(JSON.parse(await readFile(path.join(dir, "ideas", "originality.json"), "utf8")));
+    expect(receipt.reference_count).toBe(0);
+    expect(receipt.images.map((image) => image.id)).toEqual(["direction-1", "direction-2", "direction-3"]);
+  });
+
+  test.each([
+    ["a missing sketch", { "direction-2": null }, "sketch_missing:direction-2"],
+    ["an unsafe sketch", { "direction-3": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><script>x</script></svg>' }, "sketch_invalid:direction-3:svg_forbidden_element:script"],
+    ["an oversized sketch", { "direction-1": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><path d="M0 0"/>${"<!-- filler -->".repeat(20_000)}</svg>` }, "sketch_too_large:direction-1"],
+  ])("Given %s When asserted Then ideation is refused", async (_label, sketches, detail) => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, IDEATE);
+    await writeIdeas(dir, { sketches: sketches as Readonly<Record<string, string | null>> });
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir, 0))).rejects.toMatchObject({ code: "logo_directions_invalid", detail });
+  });
+
+  test("Given a directions file the contract refuses When asserted Then it is refused", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, IDEATE);
+    const broken = directionsOf();
+    broken.directions[1]!.name = broken.directions[0]!.name;
+    await writeIdeas(dir, { directions: broken });
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir, 0))).rejects.toMatchObject({ code: "logo_directions_invalid", detail: "directions_invalid:directions.name" });
+  });
+
+  test("Given ideation that rewrote or deleted the exploration history When asserted Then it is refused", async () => {
+    const rewritten = await priorProject(1);
+    const rewriteExpectation = await captureLogoTurnExpectation(rewritten, IDEATE);
+    await writeIdeas(rewritten);
+    const manifest = manifestOf(1);
+    await writeManifest(rewritten, { ...manifest, rounds: [{ ...manifest.rounds[0]!, candidates: manifest.rounds[0]!.candidates.map((candidate) => ({ ...candidate, rationale: "rewritten" })) }] });
+    await expect(assertLogoDeliverables(rewritten, rewriteExpectation, await evidence(rewritten, 0))).rejects.toMatchObject({ detail: "rounds_changed" });
+
+    const deleted = await priorProject(1);
+    const deleteExpectation = await captureLogoTurnExpectation(deleted, IDEATE);
+    await writeIdeas(deleted);
+    await rm(path.join(deleted, "explorations", "manifest.json"));
+    await expect(assertLogoDeliverables(deleted, deleteExpectation, await evidence(deleted, 0))).rejects.toMatchObject({ detail: "history_changed" });
+  });
+
+  test("Given ideation that rewrote the guidance sheet When asserted Then it is refused", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, IDEATE);
+    await writeIdeas(dir);
+    await writeFile(path.join(dir, "index.html"), guidelines(1));
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir, 0))).rejects.toMatchObject({ detail: "guidelines_changed" });
+  });
+
+  test("Given a model edit to an earlier round receipt When asserted Then it is refused", async () => {
+    const dir = await priorProject(2);
+    await mkdir(path.join(dir, "explorations", "round-1"), { recursive: true });
+    await writeFile(path.join(dir, ...logoRoundReceiptFile(1).split("/")), "{}");
+    const expectation = await captureLogoTurnExpectation(dir, REGENERATE);
+    await exploreResult(dir, 3);
+    await writeFile(path.join(dir, ...logoRoundReceiptFile(1).split("/")), '{"tampered":true}');
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ detail: `receipt_changed:${logoRoundReceiptFile(1)}` });
+  });
+
+  test("Given a saved adoption When new ideas pass Then the record is removed as stale", async () => {
+    const dir = await priorProject(1);
+    const text = await writeIdeas(dir);
+    await writeAdoption(dir, adoptionOf(text, (await readLogoMoodboard(dir)).digest));
+    const expectation = await captureLogoTurnExpectation(dir, IDEATE);
+    expect(expectation.adoption).toEqual([{ direction_id: "direction-1", take: ["name", "color"] }]);
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir, 0))).resolves.toBeUndefined();
+    await expect(readFile(path.join(dir, ...LOGO_ADOPTION_FILE.split("/")))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+});
+
+describe("logo direction adoption", () => {
+  test("Given an explicit adopt When asserted Then the backend records the pick", async () => {
+    const dir = await priorProject(0);
+    await writeIdeas(dir);
+    const expectation = await captureLogoTurnExpectation(dir, ADOPT_1);
+    expect(expectation).toMatchObject({ phase: "explore", adoption: [{ direction_id: "direction-1", take: ["name", "color"] }] });
+    await exploreResult(dir, 1);
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).resolves.toBeUndefined();
+    expect(await readAdoption(dir)).toEqual({
+      schema_version: 1,
+      directions_sha256: expectation.priorDirectionsSha256,
+      moodboard_digest: expectation.moodboard.digest,
+      picks: [{ direction_id: "direction-1", take: ["name", "color"] }],
+    });
+  });
+
+  test("Given an adopt action without directions When captured Then it is refused", async () => {
+    await expect(captureLogoTurnExpectation(await priorProject(0), ADOPT_1)).rejects.toMatchObject({ code: "logo_directions_invalid", detail: "adoption_invalid:no_directions" });
+  });
+
+  test("Given directions with no saved adoption When a plain chat explore is captured Then selection_missing", async () => {
+    const dir = await priorProject(0);
+    await writeIdeas(dir);
+    await expect(captureLogoTurnExpectation(dir, "\uB85C\uACE0 \uB9CC\uB4E4\uC5B4\uC90C")).rejects.toMatchObject({ detail: "selection_missing" });
+  });
+
+  test.each([
+    ["a malformed record", "{ not json", "adoption_invalid:json"],
+    ["an unknown direction id", JSON.stringify({ schema_version: 1, directions_sha256: "a".repeat(64), moodboard_digest: "b".repeat(64), picks: [{ direction_id: "direction-9", take: ["name"] }] }), "adoption_invalid:picks.0.direction_id"],
+    ["a stale directions digest", JSON.stringify({ schema_version: 1, directions_sha256: "0".repeat(64), moodboard_digest: "b".repeat(64), picks: [{ direction_id: "direction-1", take: ["name"] }] }), "adoption_stale:directions_sha256"],
+  ])("Given %s When a regenerate is captured Then it is refused", async (_label, record, detail) => {
+    const dir = await priorProject(1);
+    await writeIdeas(dir);
+    await writeAdoption(dir, record);
+    await expect(captureLogoTurnExpectation(dir, REGENERATE)).rejects.toMatchObject({ detail });
+  });
+
+  test("Given a live saved adoption When a regenerate runs Then the picks are pinned and the round passes", async () => {
+    const dir = await priorProject(1);
+    const text = await writeIdeas(dir);
+    await writeAdoption(dir, adoptionOf(text, (await readLogoMoodboard(dir)).digest));
+    const expectation = await captureLogoTurnExpectation(dir, REGENERATE);
+    expect(expectation.adoption).toEqual([{ direction_id: "direction-1", take: ["name", "color"] }]);
+    await exploreResult(dir, 2);
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).resolves.toBeUndefined();
+  });
+
+  test("Given the model rewrote the adoption record during the turn When asserted Then it is refused", async () => {
+    const dir = await priorProject(1);
+    const text = await writeIdeas(dir);
+    await writeAdoption(dir, adoptionOf(text, (await readLogoMoodboard(dir)).digest));
+    const expectation = await captureLogoTurnExpectation(dir, REGENERATE);
+    await exploreResult(dir, 2);
+    await writeAdoption(dir, adoptionOf(text, "c".repeat(64)));
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ detail: "adoption_changed" });
+  });
+});
+
+describe("logo originality gate", () => {
+  test("Given an original selected raster but a final SVG copied from a reference When finalized Then publication is refused", async () => {
+    const dir = await priorProject(1);
+    const reference = createCanvas(256, 256);
+    reference.getContext("2d").fillRect(0, 0, 256, 256);
+    const selected = createCanvas(256, 256);
+    const context = selected.getContext("2d");
+    for (let column = 0; column < 16; column++) {
+      context.fillStyle = column % 2 === 0 ? "#ffffff" : "#000000";
+      context.fillRect(column * 16, 0, 16, 256);
+    }
+    await writeFile(path.join(dir, "explorations/round-1/candidate-2.png"), selected.toBuffer("image/png"));
+    await boardWith(dir, reference.toBuffer("image/png"));
+    const expectation = await captureLogoTurnExpectation(dir, SELECT_2);
+    await finalizeResult(dir);
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir, 0))).rejects.toMatchObject({ code: "logo_originality_rejected" });
+  });
+
+  test("Given a candidate that copies a reference When asserted Then it is refused before publication", async () => {
+    const dir = await priorProject(0);
+    const reference = markAlpha(256);
+    await boardWith(dir, reference);
+    const expectation = await captureLogoTurnExpectation(dir, "\uB85C\uACE0 \uB9CC\uB4E4\uC5B4\uC90C");
+    expect(expectation.moodboard.items).toHaveLength(1);
+    await writeManifest(dir, manifestOf(1));
+    await writeCandidates(dir, 1, { "candidate-1": reference });
+    await writeFile(path.join(dir, "index.html"), guidelines(1));
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ code: "logo_originality_rejected", detail: "copied" });
+  });
+
+  test("Given a re-encoded near copy of a reference When asserted Then it is refused as similar", async () => {
+    const dir = await priorProject(0);
+    const reference = markAlpha(256);
+    await boardWith(dir, reference);
+    const expectation = await captureLogoTurnExpectation(dir, "\uB85C\uACE0 \uB9CC\uB4E4\uC5B4\uC90C");
+    await writeManifest(dir, manifestOf(1));
+    await writeCandidates(dir, 1, { "candidate-1": markAlpha(512) });
+    await writeFile(path.join(dir, "index.html"), guidelines(1));
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ code: "logo_originality_rejected", detail: "similar" });
+  });
+
+  test("Given a distinct round against an unchanged board When asserted Then it passes and the receipt is backend-authored", async () => {
+    const dir = await priorProject(0);
+    await boardWith(dir, markBeta(256));
+    const expectation = await captureLogoTurnExpectation(dir, "\uB85C\uACE0 \uB9CC\uB4E4\uC5B4\uC90C");
+    await exploreResult(dir, 1);
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).resolves.toBeUndefined();
+    const receipt = parseLogoOriginalityReceiptV1(JSON.parse(await readFile(path.join(dir, ...logoRoundReceiptFile(1).split("/")), "utf8")));
+    expect(receipt.moodboard_digest).toBe(expectation.moodboard.digest);
+    expect(receipt.reference_count).toBe(1);
+  });
+
+  test("Given a model-written round receipt When asserted Then the computed receipt replaces it", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "\uB85C\uACE0 \uB9CC\uB4E4\uC5B4\uC90C");
+    await exploreResult(dir, 1);
+    await writeFile(path.join(dir, ...logoRoundReceiptFile(1).split("/")), '{"model":"claim"}');
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).resolves.toBeUndefined();
+    const receipt = parseLogoOriginalityReceiptV1(JSON.parse(await readFile(path.join(dir, ...logoRoundReceiptFile(1).split("/")), "utf8")));
+    expect(receipt).toMatchObject({ reference_count: 0, moodboard_digest: expectation.moodboard.digest });
+  });
+
+  test("Given the board moved while the turn ran When asserted Then it is refused", async () => {
+    const dir = await priorProject(0);
+    await boardWith(dir, markBeta(256));
+    const expectation = await captureLogoTurnExpectation(dir, "\uB85C\uACE0 \uB9CC\uB4E4\uC5B4\uC90C");
+    await exploreResult(dir, 1);
+    await boardWith(dir, markAlpha(256));
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ detail: "moodboard_changed" });
+  });
+
+  test("Given directions present and rewritten during an explore turn When asserted Then it is refused", async () => {
+    const dir = await priorProject(0);
+    const text = await writeIdeas(dir);
+    await writeAdoption(dir, adoptionOf(text, (await readLogoMoodboard(dir)).digest));
+    const expectation = await captureLogoTurnExpectation(dir, "\uB85C\uACE0 \uB9CC\uB4E4\uC5B4\uC90C");
+    await exploreResult(dir, 1);
+    await writeIdeas(dir, { directions: { ...directionsOf(), brand_name: "Otherstar" } });
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ detail: "directions_changed" });
+  });
+
+  test("Given an adopted sketch rewritten during an explore turn When asserted Then the unscreened sketch is refused", async () => {
+    const dir = await priorProject(0);
+    const text = await writeIdeas(dir);
+    await writeAdoption(dir, adoptionOf(text, (await readLogoMoodboard(dir)).digest));
+    const expectation = await captureLogoTurnExpectation(dir, "\uB85C\uACE0 \uB9CC\uB4E4\uC5B4\uC90C");
+    await exploreResult(dir, 1);
+    await writeFile(path.join(dir, ...LOGO_IDEA_FILES[1].split("/")), sketch(5));
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ detail: "directions_changed" });
+  });
+
+  test("Given an idea sketch rewritten during a finalize turn When asserted Then it is refused", async () => {
+    const dir = await priorProject(1);
+    const text = await writeIdeas(dir);
+    await writeAdoption(dir, adoptionOf(text, (await readLogoMoodboard(dir)).digest));
+    const expectation = await captureLogoTurnExpectation(dir, SELECT_2);
+    await finalizeResult(dir);
+    await writeFile(path.join(dir, ...LOGO_IDEA_FILES[0].split("/")), sketch(4));
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ detail: "directions_changed" });
+  });
+
+  test("Given an explore turn that plants an idea receipt When asserted Then it is refused", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "\uB85C\uACE0 \uB9CC\uB4E4\uC5B4\uC90C");
+    await exploreResult(dir, 1);
+    await mkdir(path.join(dir, "ideas"), { recursive: true });
+    await writeFile(path.join(dir, "ideas", "originality.json"), "{}");
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ detail: "directions_changed" });
+  });
+
+  test("Given a finalize whose selected candidate copies a reference When asserted Then it is refused", async () => {
+    const dir = await priorProject(1);
+    await boardWith(dir, candidateBytes(1, 3));
+    const expectation = await captureLogoTurnExpectation(dir, SELECT_3);
+    expect(expectation.selected).toMatchObject({ round: 1, candidate_id: "candidate-3" });
+    await finalizeResult(dir, { selected: { round: 1, candidate_id: "candidate-3" }, svg: logoSvg("explorations/round-1/candidate-3.png") });
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir, 0))).rejects.toMatchObject({ code: "logo_originality_rejected", detail: "copied" });
   });
 });
 
