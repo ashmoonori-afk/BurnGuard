@@ -155,6 +155,15 @@ jobs:
           packages/backend/tests/image-fingerprint.test.ts
           packages/backend/tests/logo-moodboard.test.ts
           packages/backend/tests/logo-moodboard-routes.test.ts
+          packages/backend/tests/logo-originality.test.ts
+          packages/backend/tests/logo-pipeline-state.test.ts
+          packages/backend/tests/logo-completion-gate.test.ts
+          packages/backend/tests/logo-deliverables.test.ts
+          packages/backend/tests/prompt-logo-set.test.ts
+          packages/backend/tests/pipeline-repositories.test.ts
+          packages/backend/tests/runtime-diagnostics.test.ts
+          packages/frontend/tests/runtime-diagnostics.test.ts
+          packages/shared/tests/runtime-diagnostics.test.ts
           scripts/qa/har-mask.test.ts
           scripts/qa/task-8-gates.test.ts
           packages/backend/tests/project-bundle-routes.test.ts

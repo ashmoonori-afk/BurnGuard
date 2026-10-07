@@ -76,7 +76,7 @@ const DELIVERABLES: Readonly<Record<Deliverable, TextBlock>> = {
   },
   logo: {
     id: "deliverable-logo-v1",
-    text: "Work in the phase burnguard-logo-output-v1 declares. Explore: four image-generated candidates, the manifest and the candidate sheet, nothing else. Finalize: vectorise only the selected candidate, then every required guideline page in order at the declared page size. Associate each unit with the image-generation, source-attribute, page-count and small-size checks.",
+    text: "Work in the phase burnguard-logo-output-v1 declares. Ideate: three directions with different visual theses (a drawn letterform, a figure-ground idea or a rule-built form, never a stock icon or a typed initial) in the directions file plus three transparent mark-only SVG sketches, and no image generation. Explore: four image-generated candidates, deliberate variants of an adopted direction when one exists, plus the manifest and the candidate sheet, nothing else. Finalize: vectorise only the selected candidate on its own construction, then every required guideline page in order at the declared page size. Associate each unit with the image-generation, source-attribute, page-count, silhouette and small-size checks.",
   },
   diagram: {
     id: "deliverable-diagram-v1",

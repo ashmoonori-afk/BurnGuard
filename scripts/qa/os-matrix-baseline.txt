@@ -119,8 +119,6 @@ packages/backend/tests/learning-route-id.test.ts
 packages/backend/tests/learning-selection.test.ts
 packages/backend/tests/learning.test.ts
 packages/backend/tests/llm-connections.test.ts
-packages/backend/tests/logo-completion-gate.test.ts
-packages/backend/tests/logo-deliverables.test.ts
 packages/backend/tests/logo-design-system-sync.test.ts
 packages/backend/tests/logo-error-stages.test.ts
 packages/backend/tests/logo-export.test.ts
@@ -140,7 +138,6 @@ packages/backend/tests/package-node-runtime.test.ts
 packages/backend/tests/package-permissions.test.ts
 packages/backend/tests/package-resources.test.ts
 packages/backend/tests/pinterest-mood.test.ts
-packages/backend/tests/pipeline-repositories.test.ts
 packages/backend/tests/platform-findings.test.ts
 packages/backend/tests/platform-lint.test.ts
 packages/backend/tests/platform-package-export.test.ts
@@ -163,7 +160,6 @@ packages/backend/tests/project-palette.test.ts
 packages/backend/tests/project-thumbnails.test.ts
 packages/backend/tests/prompt-graphic-set.test.ts
 packages/backend/tests/prompt-guidance-consistency.test.ts
-packages/backend/tests/prompt-logo-set.test.ts
 packages/backend/tests/prompt-sample-lookup.test.ts
 packages/backend/tests/prototype-spatial-layout.test.ts
 packages/backend/tests/provider-adapters.test.ts
@@ -189,7 +185,6 @@ packages/backend/tests/review-artifact-concurrency.test.ts
 packages/backend/tests/review-artifact-safety.test.ts
 packages/backend/tests/review-session-consistency.test.ts
 packages/backend/tests/review-turn-execution.test.ts
-packages/backend/tests/runtime-diagnostics.test.ts
 packages/backend/tests/sample-design-system-fonts.test.ts
 packages/backend/tests/seeded-project-html.test.ts
 packages/backend/tests/serve-path-boundary.test.ts
@@ -316,7 +311,6 @@ packages/frontend/tests/project-thumbnail.test.ts
 packages/frontend/tests/quality-fix-request.test.ts
 packages/frontend/tests/quick-comment.test.ts
 packages/frontend/tests/request-display.test.ts
-packages/frontend/tests/runtime-diagnostics.test.ts
 packages/frontend/tests/selection-bridge.test.ts
 packages/frontend/tests/session-multipart.test.ts
 packages/frontend/tests/session-review.test.ts
@@ -340,6 +334,5 @@ packages/frontend/tests/ux-review.test.ts
 packages/frontend/tests/visual-alternative-compare.test.ts
 packages/frontend/tests/visual-source-selection.test.ts
 packages/frontend/tests/visual-token-contract.test.ts
-packages/shared/tests/runtime-diagnostics.test.ts
 scripts/qa/clipboard-paste-fixtures.test.js
 scripts/qa/release-draft-state.test.js

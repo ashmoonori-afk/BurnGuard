@@ -7,6 +7,8 @@ export type TurnErrorCode =
   | "logo_requires_authenticated_codex"
   | "logo_deliverables_missing"
   | "logo_image_provenance_missing"
+  | "logo_directions_invalid"
+  | "logo_originality_rejected"
   | "design_review_failed"
   | "commandcode_unavailable"
   | "unsupported_generation_model_effort"
@@ -42,7 +44,13 @@ export type TurnRejectionReason =
   | "logo_svg_missing"
   | "logo_svg_invalid"
   | "logo_svg_source_mismatch"
-  | "logo_guidelines_invalid";
+  | "logo_guidelines_invalid"
+  | "logo_directions_invalid"
+  | "logo_adoption_invalid"
+  | "logo_reference_copied"
+  | "logo_reference_similar"
+  | "logo_screening_failed"
+  | "logo_moodboard_changed";
 
 /**
  * A turn that finished and was then refused. Nothing it produced reached the project, so a client

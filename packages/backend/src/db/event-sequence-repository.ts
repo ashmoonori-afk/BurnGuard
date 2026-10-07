@@ -179,6 +179,7 @@ function turnErrorCode(item: Readonly<Record<string, unknown>>, id: string): Tur
     case "graphic_requires_authenticated_codex": case "graphic_starter_unchanged":
     case "logo_requires_authenticated_codex": case "logo_deliverables_missing":
     case "logo_image_provenance_missing": case "design_review_failed":
+    case "logo_directions_invalid": case "logo_originality_rejected":
     case "commandcode_unavailable": case "unsupported_generation_model_effort": case "agent_control_files_present":
     case "backend_unavailable": case "path_unavailable": case "immutable_reference_mutated": case "immutable_reference_path_unavailable": case "immutable_reference_escaped": case "private_input_unavailable": case "publication_failed": case "operation_conflict": case "operation_cancelled": case "turn_failed":
     case "deck_source_page_limit": return value;
@@ -192,7 +193,9 @@ function rejectionReason(item: Readonly<Record<string, unknown>>, id: string): T
     case "logo_manifest_missing": case "logo_manifest_invalid": case "logo_history_changed":
     case "logo_selection_invalid": case "logo_candidate_invalid": case "logo_candidate_provenance":
     case "logo_svg_missing": case "logo_svg_invalid": case "logo_svg_source_mismatch":
-    case "logo_guidelines_invalid": return value;
+    case "logo_guidelines_invalid": case "logo_directions_invalid": case "logo_adoption_invalid":
+    case "logo_reference_copied": case "logo_reference_similar":
+    case "logo_screening_failed": case "logo_moodboard_changed": return value;
     default: throw new PipelineRepositoryError("corrupt_json", id);
   }
 }

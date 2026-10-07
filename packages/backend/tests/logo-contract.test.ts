@@ -231,8 +231,22 @@ describe("logo idea directions contract", () => {
     expect(invalidPath(() => parseLogoDirectionsV1(base))).toBe("directions.name");
   });
 
-  test("Given two directions sharing a shape primitive, When parsed, Then the primitive is rejected", () => {
+  test("Given two directions whose names differ only in case, When parsed, Then directions.name is rejected", () => {
+    const base = directions() as { directions: Record<string, unknown>[] };
+    base.directions[1]!.name = String(base.directions[0]!.name).toUpperCase();
+    expect(invalidPath(() => parseLogoDirectionsV1(base))).toBe("directions.name");
+  });
+
+  test("Given two letter-led directions of different logo types, When parsed, Then the shared primitive is accepted", () => {
     const base = directions() as { directions: { shape: Record<string, unknown> }[] };
+    base.directions[0]!.shape.primitive = "letterform";
+    base.directions[2]!.shape.primitive = "letterform";
+    expect(parseLogoDirectionsV1(base).directions.map((direction) => direction.shape.primitive)).toEqual(["letterform", "square", "letterform"]);
+  });
+
+  test("Given two directions sharing both logo type and shape primitive, When parsed, Then the primitive is rejected", () => {
+    const base = directions() as { directions: { logo_type: unknown; shape: Record<string, unknown> }[] };
+    base.directions[2]!.logo_type = base.directions[0]!.logo_type;
     base.directions[2]!.shape.primitive = base.directions[0]!.shape.primitive;
     expect(invalidPath(() => parseLogoDirectionsV1(base))).toBe("directions.shape.primitive");
   });

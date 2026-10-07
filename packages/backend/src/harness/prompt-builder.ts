@@ -27,7 +27,7 @@ import {
 import { appendDesignBriefContext } from "./prompt-design-brief";
 import { appendDesignSystemContext, appendDesignSystemStarter, compactPinnedDesignSystemContext } from "./prompt-design-system";
 import { appendGraphicOutputContext } from "./prompt-graphic-set";
-import { appendLogoOutputContext, readLogoManifestForPrompt } from "./prompt-logo-set";
+import { appendLogoOutputContext, readLogoManifestForPrompt, type LogoPromptPipelineState } from "./prompt-logo-set";
 import { LOGO_SKILL_MD } from "./skills/logo-skill";
 import { DESIGN_CRAFT_RULES } from "./design-craft";
 import { CHART_AUTHORING_RULES } from "./chart-authoring";
@@ -69,6 +69,8 @@ export interface PromptBuildOptions {
   readonly onTaskGuidance?: (observation: TaskPresetObservation | null) => void;
   /** QA-only comparison arm; production leaves this unset. */
   readonly taskGuidance?: TaskGuidanceCondition;
+  /** Ideate/adopt pipeline state staged by the turn for a real logo request; absent keeps the legacy prompt. */
+  readonly logoPipeline?: LogoPromptPipelineState;
   /** The web asset MCP tools are registered for this run. */
   readonly webAssetTools?: boolean;
 }
@@ -147,7 +149,12 @@ export async function buildPrompt(
   if (project.project_type === "logo" && projectOptions.logo_set !== null) {
     appendLogoOutputContext(
       lines,
-      { logoSet: projectOptions.logo_set, manifest: await readLogoManifestForPrompt(project.project_dir), action: null },
+      {
+        logoSet: projectOptions.logo_set,
+        manifest: await readLogoManifestForPrompt(project.project_dir),
+        action: null,
+        ...(options.logoPipeline === undefined ? {} : { pipeline: options.logoPipeline }),
+      },
       userEvent.text,
     );
   }

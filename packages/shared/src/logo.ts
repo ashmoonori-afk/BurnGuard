@@ -230,8 +230,10 @@ function parseSelected(value: unknown, rounds: readonly LogoRoundV1[]): LogoMani
 
 /**
  * Parses the three idea directions the model authors for the ideate stage. IDs and sketch files are
- * positional, names and shape primitives must differ so the person compares three real options, and
- * every nested object rejects unknown keys so canonical bytes stay reproducible.
+ * positional, names must differ (ignoring case), and no two directions may share both a logo type and
+ * a shape primitive, so the person compares three real options without the contract forcing one
+ * circle, one square and one line. Every nested object rejects unknown keys so canonical bytes stay
+ * reproducible.
  */
 export function parseLogoDirectionsV1(input: unknown): LogoDirectionsV1 {
   const record = decodeContract(input);
@@ -241,8 +243,10 @@ export function parseLogoDirectionsV1(input: unknown): LogoDirectionsV1 {
   const rawDirections = requiredArray(record, "directions");
   if (rawDirections.length !== LOGO_DIRECTION_IDS.length) invalid("directions");
   const directions = rawDirections.map(parseDirection);
-  if (new Set(directions.map((direction) => direction.name)).size !== directions.length) invalid("directions.name");
-  if (new Set(directions.map((direction) => direction.shape.primitive)).size !== directions.length) invalid("directions.shape.primitive");
+  if (new Set(directions.map((direction) => direction.name.toLowerCase())).size !== directions.length) invalid("directions.name");
+  // Two directions of one type must stand on different structures; across types a primitive may
+  // repeat, so a lettermark and a wordmark can both be letter-led instead of forced into stock shapes.
+  if (new Set(directions.map((direction) => `${direction.logo_type}/${direction.shape.primitive}`)).size !== directions.length) invalid("directions.shape.primitive");
   return { schema_version: 1, brand_name: brandName, directions };
 }
 

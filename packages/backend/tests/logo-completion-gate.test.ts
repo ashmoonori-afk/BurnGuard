@@ -1,10 +1,12 @@
 import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 import type { DesignAuditResult, NormalizedEvent, TurnErrorCode, TurnRejectionReason } from "@bg/shared";
-import { LOGO_ACTION_TAG, LOGO_SOURCE_ATTRIBUTE } from "@bg/shared";
+import { LOGO_ACTION_TAG, LOGO_IDEA_FILES, LOGO_SOURCE_ATTRIBUTE, parseLogoOriginalityReceiptV1 } from "@bg/shared";
+import { renderInitialArtifact } from "../src/db/templates";
 import { runMigrations } from "../src/db/migrate-local";
 import { listSequencedSessionEvents } from "../src/db/event-sequence-repository";
 import { getSqlite } from "../src/db/sqlite-client";
@@ -14,6 +16,10 @@ import { broker } from "../src/services/broker";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { repairLogoCompletion } from "../src/services/logo-completion-repair";
 import { logoSvgContract } from "../src/services/logo-svg-validation";
+import { addMoodboardFiles, addMoodboardLink, readLogoMoodboard } from "../src/services/logo-moodboard";
+import { readLogoAdoptionState, writeLogoAdoption } from "../src/services/logo-pipeline-state";
+import { captureLogoTurnExpectation } from "../src/services/logo-deliverables";
+import { withLogoMoodboardInputs } from "../src/services/logo-moodboard-inputs";
 import { interruptUserTurn, startUserTurn } from "../src/services/turns";
 
 /**
@@ -223,7 +229,7 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
     expect(JSON.stringify(errors)).not.toContain("svg_forbidden_attribute");
     expect(JSON.stringify(errors)).not.toContain("data-variant");
 
-    const committed = expected.stopReason !== "error";
+    const committed = expected.stopReason === "end_turn";
     expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: committed ? "committed" : "failed" });
 
     // The selection is authoritative and immutable: a repair cannot change which bytes were chosen.
@@ -234,7 +240,7 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
         .toBe(createHash("sha256").update(expectedBytes).digest("hex"));
     }
 
-    if (expected.stopReason === "error") {
+    if (!committed) {
       expect(await inspectCanonicalTree(projectDir)).toEqual(before);
       expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(INITIAL);
     }
@@ -349,6 +355,160 @@ test("Given a nonrepairable provenance failure in an explore turn Then no repair
   } finally {
     unsubscribe();
     interruptUserTurn(sessionId);
+  }
+});
+
+const PIPELINE_BRAND = "Northstar";
+const PIPELINE_DIRECTIONS = {
+  schema_version: 1,
+  brand_name: PIPELINE_BRAND,
+  directions: ["circle", "square", "triangle"].map((primitive, index) => ({
+    id: `direction-${index + 1}`, name: `Study ${index + 1}`, logo_type: "abstract",
+    color: { hero: "#123456", support: [], ground: "#FFFFFF" },
+    shape: { primitive, construction: `Construction ${index + 1}` },
+    mood: ["precise"], rationale: `Distinct study ${index + 1}`,
+    sketch: { file: LOGO_IDEA_FILES[index], kind: "svg" },
+  })),
+};
+const PIPELINE_SKETCHES = [
+  '<circle cx="128" cy="128" r="80"/>',
+  '<rect x="48" y="48" width="160" height="160"/>',
+  '<path d="M128 40L220 210H36Z"/>',
+].map((shape) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">${shape}</svg>`);
+const PIPELINE_PICKS = [{ direction_id: "direction-2", take: ["color", "shape"] }] as const;
+
+test.each(["ideate", "adopt", "regenerate", "copied", "board-changed", "interrupted", "input-mutated", "ideate-entrypoint-mutated"] as const)(
+  "Given %s pipeline work When an ordinary logo turn settles Then only screened output is published",
+  async (scenario) => {
+    // Given: a real canonical project, with no generated candidates yet.
+    await rm(path.join(projectDir, "explorations"), { recursive: true, force: true });
+    const options = {
+      logo_set: { schema_version: 1 as const, brand_name: PIPELINE_BRAND, niche: "Cycling studio", character: ["precise"], logo_type: "auto" as const },
+    };
+    const starter = renderInitialArtifact({ name: PIPELINE_BRAND, type: "logo", options });
+    await writeFile(path.join(projectDir, "index.html"), starter);
+    getSqlite().prepare("UPDATE projects SET options_json=? WHERE id=?").run(JSON.stringify(options), projectId);
+    const ideate = scenario === "ideate" || scenario === "input-mutated" || scenario === "ideate-entrypoint-mutated";
+    const reference = png(91);
+    if (ideate || scenario === "copied") await addMoodboardFiles(projectDir, [{ name: "reference.png", mime_type: "image/png", bytes: reference }], 0);
+    const board = await readLogoMoodboard(projectDir);
+    if (!ideate) {
+      await mkdir(path.join(projectDir, "ideas"), { recursive: true });
+      await writeFile(path.join(projectDir, "ideas/directions.json"), JSON.stringify(PIPELINE_DIRECTIONS));
+      for (const [index, relative] of LOGO_IDEA_FILES.entries()) await writeFile(path.join(projectDir, relative), PIPELINE_SKETCHES[index] ?? "");
+    }
+    if (scenario === "regenerate") await writeLogoAdoption(projectDir, {
+      schema_version: 1, moodboard_digest: board.digest,
+      directions_sha256: createHash("sha256").update(JSON.stringify(PIPELINE_DIRECTIONS)).digest("hex"),
+      picks: PIPELINE_PICKS,
+    });
+    const before = await new ArtifactCoordinator(getSqlite()).initialize(projectId, projectDir);
+    const events: NormalizedEvent[] = [];
+    const unsubscribe = broker.subscribe(sessionId, (event) => { events.push(event); });
+    let calls = 0, reviews = 0;
+    let stagedInput: string | undefined;
+    const action = ideate ? { action: "ideate" } : scenario === "regenerate" ? { action: "regenerate" } : { action: "adopt", picks: PIPELINE_PICKS };
+    try {
+      // When: the ordinary turn uses its real coordinator and gate, injecting only the provider.
+      const turn = startUserTurn(sessionId, { type: "user.message", text: `Create the next stage.\n<${LOGO_ACTION_TAG}>${JSON.stringify(action)}</${LOGO_ACTION_TAG}>` }, undefined, {
+        detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "unused", version: "fixture", authenticated: true, image_generation: true }] }),
+        runAdapter: async (_backend, input) => {
+          calls++;
+          const tagged = /<burnguard-logo-pipeline-v1>\n([\s\S]*?)\n<\/burnguard-logo-pipeline-v1>/.exec(input.prompt)?.[1];
+          if (tagged === undefined) throw new Error("pipeline context missing");
+          const context = JSON.parse(tagged);
+          expect(context.moodboard.digest).toBe(board.digest);
+          expect(context.moodboard.links).toEqual([]);
+          expect(context.moodboard.files).toHaveLength(ideate ? 1 : 0);
+          expect(input.imageGeneration).toBe(ideate ? "forbidden" : undefined);
+          if (ideate) {
+            const relative = context.moodboard.files[0].path;
+            expect(relative).toBe(`.burnguard-inputs/moodboard/${board.items[0]?.id}.png`);
+            stagedInput = path.join(input.projectDir, relative);
+            expect((await readFile(stagedInput)).equals(reference)).toBe(true);
+            await mkdir(path.join(input.projectDir, "ideas"), { recursive: true });
+            await writeFile(path.join(input.projectDir, "ideas/directions.json"), JSON.stringify(PIPELINE_DIRECTIONS));
+            for (const [index, file] of LOGO_IDEA_FILES.entries()) await writeFile(path.join(input.projectDir, file), PIPELINE_SKETCHES[index] ?? "");
+            if (scenario === "input-mutated") await writeFile(stagedInput, png(92));
+            if (scenario === "ideate-entrypoint-mutated") await writeFile(path.join(input.projectDir, "index.html"), GUIDELINES);
+          } else {
+            expect(context.adopted_directions).toEqual([{
+              direction_id: "direction-2", take: ["color", "shape"],
+              color: PIPELINE_DIRECTIONS.directions[1]?.color, shape: PIPELINE_DIRECTIONS.directions[1]?.shape,
+            }]);
+            const toolCallId = crypto.randomUUID();
+            await input.onEvent({ id: crypto.randomUUID(), ts: 2, type: "tool.started", turnId: input.turnId, toolCallId, tool: "image_generation", input: {} });
+            await mkdir(path.join(input.projectDir, "explorations/round-1"), { recursive: true });
+            for (let index = 0; index < 4; index++) await writeFile(path.join(input.projectDir, `explorations/round-1/candidate-${index + 1}.png`), png(91 + index));
+            await input.onEvent({ id: crypto.randomUUID(), ts: 3, type: "tool.finished", turnId: input.turnId, toolCallId, tool: "image_generation", ok: true });
+            await writeFile(path.join(input.projectDir, "explorations/manifest.json"), manifestJson(null));
+            await writeFile(path.join(input.projectDir, "index.html"), GUIDELINES);
+          }
+          // Even an adapter-originated preview cannot expose this unscreened stage.
+          await input.onEvent({ id: crypto.randomUUID(), ts: 3, type: "artifact.preview", projectId, previewId: "unchecked", path: "index.html", version: 1, active: true });
+          expect(await inspectCanonicalTree(projectDir)).toEqual(before);
+          expect(events.filter((event) => event.type === "artifact.preview")).toHaveLength(0);
+          if (scenario === "board-changed") await addMoodboardLink(projectDir, "https://example.com/reference", board.revision);
+          if (scenario === "interrupted") interruptUserTurn(sessionId);
+          await input.onEvent({ id: crypto.randomUUID(), ts: 4, type: "chat.message_end", turnId: input.turnId });
+          await input.onEvent({ id: crypto.randomUUID(), ts: 5, type: "status.idle", stopReason: "end_turn" });
+          return { exitCode: 0 };
+        },
+        reviewDesign: async () => { reviews++; return { status: "checked", repairs: 0, result: null }; },
+      });
+      if (turn === null) throw new Error("turn reservation unavailable");
+      await Promise.all([turn.prepared, turn.promise]);
+      // Then: no continuation, starter repair, speculative preview or post-commit receipt.
+      const success = scenario === "ideate" || scenario === "adopt" || scenario === "regenerate";
+      expect(calls).toBe(1);
+      expect(reviews).toBe(ideate || scenario === "interrupted" ? 0 : 1);
+      expect(events.filter((event) => event.type === "artifact.preview")).toHaveLength(0);
+      expect(events.filter((event) => event.type === "chat.message_end")).toHaveLength(success ? 1 : 0);
+      expect(events.filter((event) => event.type === "status.idle").map((event) => event.stopReason)).toEqual([success ? "end_turn" : scenario === "interrupted" ? "interrupted" : "error"]);
+      expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: success ? "committed" : "failed" });
+      if (stagedInput !== undefined) expect(await Bun.file(stagedInput).exists()).toBe(false);
+      if (!success) {
+        expect(await inspectCanonicalTree(projectDir)).toEqual(before);
+        const reasons = events.filter((event) => event.type === "status.error").map((event) => event.reason);
+        expect(reasons).toEqual(scenario === "interrupted" ? [] : [scenario === "copied" ? "logo_reference_copied" : scenario === "ideate-entrypoint-mutated" ? "logo_directions_invalid" : "logo_moodboard_changed"]);
+        const errors = events.filter((event) => event.type === "status.error");
+        expect(errors.map((event) => event.code)).toEqual(scenario === "interrupted" ? [] : [scenario === "ideate-entrypoint-mutated" ? "logo_directions_invalid" : "logo_originality_rejected"]);
+        expect(listSequencedSessionEvents(getSqlite(), sessionId, 0).map((item) => item.event).filter((event) => event.type === "status.error")).toEqual(errors);
+        expect(JSON.stringify(errors)).not.toContain(projectDir);
+      } else {
+        const receipt = parseLogoOriginalityReceiptV1(JSON.parse(await readFile(path.join(projectDir, ideate ? "ideas/originality.json" : "explorations/round-1/originality.json"), "utf8")));
+        expect(receipt.moodboard_digest).toBe(board.digest);
+        expect(receipt.images).toHaveLength(ideate ? 3 : 4);
+        expect(receipt.reference_count).toBe(ideate ? 1 : 0);
+        if (ideate) expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe(starter);
+        else {
+          const adoption = await readLogoAdoptionState(projectDir);
+          expect(adoption.kind).toBe("present");
+          if (adoption.kind === "present") expect(adoption.state.adoption.picks).toEqual(PIPELINE_PICKS);
+          expect(JSON.parse(await readFile(path.join(projectDir, "explorations/manifest.json"), "utf8")).rounds[0].candidates).toHaveLength(4);
+        }
+      }
+    } finally { unsubscribe(); interruptUserTurn(sessionId); }
+  },
+);
+
+test("Given redirected moodboard inputs When staging cleanup runs Then files outside the stage are preserved", async () => {
+  const stage = await mkdtemp(path.join(tmpdir(), "bg-logo-input-stage-"));
+  const outside = await mkdtemp(path.join(tmpdir(), "bg-logo-input-outside-"));
+  const marker = path.join(outside, "moodboard", "keep.txt");
+  try {
+    await mkdir(path.dirname(marker));
+    await writeFile(marker, "preserve");
+    const expectation = await captureLogoTurnExpectation(projectDir, `<${LOGO_ACTION_TAG}>{"action":"ideate"}</${LOGO_ACTION_TAG}>`);
+    await expect(withLogoMoodboardInputs(stage, expectation, new AbortController().signal, async () => {
+      const inputs = path.join(stage, ".burnguard-inputs");
+      await rm(inputs, { recursive: true, force: true });
+      await symlink(outside, inputs, process.platform === "win32" ? "junction" : "dir");
+    })).rejects.toBeInstanceOf(Error);
+    await expect(readFile(marker, "utf8")).resolves.toBe("preserve");
+  } finally {
+    await rm(stage, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
   }
 });
 
