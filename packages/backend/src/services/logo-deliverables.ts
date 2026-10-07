@@ -140,6 +140,8 @@ export type LogoTurnExpectation = {
   readonly priorAdoption: { readonly bytes: string; readonly sha256: string } | null;
   /** sha256 of every receipt authored before this turn, keyed by project-relative path. */
   readonly priorReceipts: ReadonlyMap<string, string>;
+  /** sha256 (or null when absent) of each idea sketch and the idea receipt; only an ideate turn may change them. */
+  readonly priorIdeaFiles: ReadonlyMap<string, string | null>;
 };
 
 export type LogoTurnEvidence = {
@@ -270,6 +272,8 @@ export async function captureLogoTurnExpectation(dir: string, requestText: strin
   const priorDirections = directionsRead.kind === "present" ? directionsRead.state.directions : null;
   const priorDirectionsSha256 = directionsRead.kind === "present" ? directionsRead.state.sha256 : null;
   const priorReceipts = await scanLogoReceiptHashes(dir);
+  const priorIdeaFiles = new Map<string, string | null>();
+  for (const relative of [...LOGO_IDEA_FILES, LOGO_IDEA_RECEIPT_FILE]) priorIdeaFiles.set(relative, await hashProjectFile(dir, relative));
   const adoptionRead = await readLogoAdoptionState(dir);
   const adoption = resolveTurnAdoption(action, phase, adoptionRead, moodboard, directionsRead);
   if (phase === "explore" && action?.action !== "adopt" && priorDirections !== null && adoption === null) {
@@ -280,6 +284,7 @@ export async function captureLogoTurnExpectation(dir: string, requestText: strin
     projectDir, moodboard, priorDirections, priorDirectionsSha256, adoption,
     priorAdoption: adoptionRead.kind === "present" ? { bytes: adoptionRead.state.bytes, sha256: adoptionRead.state.sha256 } : null,
     priorReceipts,
+    priorIdeaFiles,
   };
 }
 
@@ -423,6 +428,10 @@ async function assertPriorStateUnchanged(dir: string, expectation: LogoTurnExpec
     const directionsRead = await readLogoDirectionsState(dir);
     const directionsSha = directionsRead.kind === "present" ? directionsRead.state.sha256 : null;
     if (directionsSha !== expectation.priorDirectionsSha256) throw new LogoDeliverableError("directions_changed");
+    // Sketches are screened only by ideate; any other turn that rewrites, adds or removes one would publish unscreened art.
+    for (const [file, sha256] of expectation.priorIdeaFiles) {
+      if (await hashProjectFile(dir, file) !== sha256) throw new LogoDeliverableError("directions_changed");
+    }
   }
   const adoptionRead = await readLogoAdoptionState(dir);
   const adoptionSha = adoptionRead.kind === "present" ? adoptionRead.state.sha256 : null;

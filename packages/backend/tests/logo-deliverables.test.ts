@@ -927,6 +927,35 @@ describe("logo originality gate", () => {
     await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ detail: "directions_changed" });
   });
 
+  test("Given an adopted sketch rewritten during an explore turn When asserted Then the unscreened sketch is refused", async () => {
+    const dir = await priorProject(0);
+    const text = await writeIdeas(dir);
+    await writeAdoption(dir, adoptionOf(text, (await readLogoMoodboard(dir)).digest));
+    const expectation = await captureLogoTurnExpectation(dir, "\uB85C\uACE0 \uB9CC\uB4E4\uC5B4\uC90C");
+    await exploreResult(dir, 1);
+    await writeFile(path.join(dir, ...LOGO_IDEA_FILES[1].split("/")), sketch(5));
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ detail: "directions_changed" });
+  });
+
+  test("Given an idea sketch rewritten during a finalize turn When asserted Then it is refused", async () => {
+    const dir = await priorProject(1);
+    const text = await writeIdeas(dir);
+    await writeAdoption(dir, adoptionOf(text, (await readLogoMoodboard(dir)).digest));
+    const expectation = await captureLogoTurnExpectation(dir, SELECT_2);
+    await finalizeResult(dir);
+    await writeFile(path.join(dir, ...LOGO_IDEA_FILES[0].split("/")), sketch(4));
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ detail: "directions_changed" });
+  });
+
+  test("Given an explore turn that plants an idea receipt When asserted Then it is refused", async () => {
+    const dir = await priorProject(0);
+    const expectation = await captureLogoTurnExpectation(dir, "\uB85C\uACE0 \uB9CC\uB4E4\uC5B4\uC90C");
+    await exploreResult(dir, 1);
+    await mkdir(path.join(dir, "ideas"), { recursive: true });
+    await writeFile(path.join(dir, "ideas", "originality.json"), "{}");
+    await expect(assertLogoDeliverables(dir, expectation, await evidence(dir))).rejects.toMatchObject({ detail: "directions_changed" });
+  });
+
   test("Given a finalize whose selected candidate copies a reference When asserted Then it is refused", async () => {
     const dir = await priorProject(1);
     await boardWith(dir, candidateBytes(1, 3));
