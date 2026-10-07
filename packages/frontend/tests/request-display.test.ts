@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { DesignAuditFinding, DesignAuditResult, UxReviewReport } from "@bg/shared";
+import { LOGO_ACTION_TAG, parseLogoAction, type DesignAuditFinding, type DesignAuditResult, type UxReviewReport } from "@bg/shared";
 import UserMessage from "../src/components/chat/blocks/UserMessage";
 import { uxReviewRequest } from "../src/components/modes/UxReviewPanel";
 import { useLocaleStore } from "../src/i18n/locale";
@@ -58,4 +58,13 @@ test("Given a rendered user message holding a quality fix request When rendered 
   expect(html).toContain(t("workspace.quality.fixDisplay", { count: 2 }));
   expect(html).not.toContain(digest);
   expect(html).not.toContain("&quot;node&quot;");
+});
+
+test("Given a logo action with user prose When rendered Then the transport stays parseable but the bubble shows only the prose", () => {
+  const text = `<${LOGO_ACTION_TAG}>{"action":"ideate"}</${LOGO_ACTION_TAG}>\nExplore a calm cycling brand.`;
+  expect(parseLogoAction(text)).toEqual({ action: "ideate" });
+  expect(requestDisplayText(text)).toBe("Explore a calm cycling brand.");
+  const html = renderToStaticMarkup(createElement(UserMessage, { text }));
+  expect(html).not.toContain(LOGO_ACTION_TAG);
+  expect(html).toContain("Explore a calm cycling brand.");
 });

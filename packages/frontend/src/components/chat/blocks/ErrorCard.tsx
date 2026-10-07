@@ -21,6 +21,12 @@ const TURN_REASON_MESSAGE_KEYS: Record<TurnRejectionReason, MessageKey> = {
   logo_svg_invalid: "chat.reason.logo_svg_invalid",
   logo_svg_source_mismatch: "chat.reason.logo_svg_source_mismatch",
   logo_guidelines_invalid: "chat.reason.logo_guidelines_invalid",
+  logo_directions_invalid: "logo.pipeline.ideaInvalid",
+  logo_adoption_invalid: "logo.pipeline.selectionRequired",
+  logo_reference_copied: "logo.pipeline.originalityRejected",
+  logo_reference_similar: "logo.pipeline.originalityRejected",
+  logo_screening_failed: "logo.pipeline.screeningFailed",
+  logo_moodboard_changed: "logo.pipeline.conflict",
 };
 
 const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {
@@ -29,6 +35,8 @@ const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {
   logo_requires_authenticated_codex: "chat.error.logoRequiresAuthenticatedCodex",
   logo_deliverables_missing: "chat.error.logoDeliverablesMissing",
   logo_image_provenance_missing: "chat.error.logoImageProvenanceMissing",
+  logo_directions_invalid: "logo.pipeline.ideaInvalid",
+  logo_originality_rejected: "logo.pipeline.screeningFailed",
   design_review_failed: "chat.error.designReviewFailed",
   commandcode_unavailable: "chat.error.commandCodeUnavailable",
   unsupported_generation_model_effort: "chat.error.unsupportedModelEffort",

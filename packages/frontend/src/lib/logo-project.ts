@@ -10,6 +10,7 @@ import {
   LOGO_TYPES,
   UpgradeContractError,
   parseLogoManifestV1,
+  parseLogoAction,
   type GraphicCanvasV1,
   type LogoActionV1,
   type LogoManifestV1,
@@ -68,14 +69,19 @@ export function logoActionMessage(action: LogoActionV1): string {
   switch (action.action) {
     case "regenerate": line = t("home.logo.regenerateLine"); break;
     case "select": line = t("home.logo.selectLine", { number: candidateNumber(action.candidate_id) }); break;
-    case "ideate": line = t("directions.generate"); break;
-    case "adopt": line = t("directions.select"); break;
+    case "ideate": line = t("logo.pipeline.ideateLine"); break;
+    case "adopt": line = t("logo.pipeline.adoptLine"); break;
     default: {
       const unreachable: never = action;
       throw new TypeError(`Unknown logo action: ${unreachable}`);
     }
   }
   return `${sentinel}\n${line}`;
+}
+
+export function logoIdeationMessage(text: string): string {
+  if (parseLogoAction(text) !== null) return text;
+  return `<${LOGO_ACTION_TAG}>{"action":"ideate"}</${LOGO_ACTION_TAG}>\n${text}`;
 }
 
 function candidateNumber(candidateId: string): string {

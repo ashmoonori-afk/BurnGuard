@@ -11,6 +11,7 @@ import {
   LOGO_TYPE_CHOICES,
   latestLogoRound,
   logoActionMessage,
+  logoIdeationMessage,
   parseProjectLogoCanvas,
   parseProjectLogoManifest,
 } from "../src/lib/logo-project";
@@ -79,6 +80,19 @@ describe("logo manifest parsing", () => {
 });
 
 describe("logo action message", () => {
+  test("Given an ordinary initial logo prompt When prepared for chat Then it enters ideation and preserves the original prompt", () => {
+    const prompt = "Use warm colors and a restrained cycling symbol.";
+    const prepared = logoIdeationMessage(prompt);
+    expect(parseLogoAction(prepared)).toEqual({ action: "ideate" });
+    expect(prepared.endsWith(prompt)).toBe(true);
+  });
+
+  test("Given an explicit direction selection When prepared for chat Then the action is not replaced by ideation", () => {
+    const request = logoActionMessage({ action: "adopt", picks: [{ direction_id: "direction-2", take: ["shape", "color"] }] });
+    expect(logoIdeationMessage(request)).toBe(request);
+    expect(parseLogoAction(request)?.action).toBe("adopt");
+  });
+
   test("Given an idea request or mixed direction choice When sent Then the exact action survives the chat message", () => {
     const actions = [
       { action: "ideate" },
