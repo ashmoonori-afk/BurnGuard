@@ -149,9 +149,12 @@ jobs:
           packages/frontend/tests/tool-badge-copy.test.ts
           packages/frontend/tests/prompt-library.test.ts
           packages/frontend/tests/logo-inspiration.test.ts
+          packages/frontend/tests/logo-moodboard-intake.test.ts
           packages/frontend/tests/logo-project.test.ts
           packages/backend/tests/logo-contract.test.ts
           packages/backend/tests/image-fingerprint.test.ts
+          packages/backend/tests/logo-moodboard.test.ts
+          packages/backend/tests/logo-moodboard-routes.test.ts
           scripts/qa/har-mask.test.ts
           scripts/qa/task-8-gates.test.ts
           packages/backend/tests/project-bundle-routes.test.ts

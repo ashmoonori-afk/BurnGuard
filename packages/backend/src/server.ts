@@ -152,7 +152,7 @@ export function createApp(authority?: RequestAuthorityOptions): Hono {
   return app;
 }
 
-export type ApiRouteDomain = "three-scene" | "health" | "research" | "catalog" | "learning" | "system" | "managed-files" | "artifact-operations" | "artifacts" | "comments" | "session" | "runtime" | "settings" | "home" | "project" | "not-found";
+export type ApiRouteDomain = "three-scene" | "health" | "research" | "catalog" | "learning" | "system" | "managed-files" | "artifact-operations" | "artifacts" | "comments" | "session" | "runtime" | "settings" | "home" | "logo-moodboard" | "project" | "not-found";
 
 export function classifyApiRoute(pathname: string, method: string): ApiRouteDomain {
   if (pathname === "/api/health") return "health";
@@ -178,6 +178,7 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
   if (method === "GET" && /^\/api\/projects\/[^/]+\/thumbnail$/.test(pathname)) return "home";
   if (/^\/api\/projects\/[^/]+\/three-scene$/.test(pathname)) return "three-scene";
   if (pathname.startsWith("/api/projects")) {
+    if (/^\/api\/projects\/[^/]+\/logo\/moodboard(?:\/|$)/.test(pathname)) return "logo-moodboard";
     if (/^\/api\/projects\/[^/]+\/preview\/[^/]+\/(fs\/|report$)/.test(pathname)) return "managed-files";
     if (/\/checkpoints(?:\/|$)/.test(pathname)) return "session";
     if (/\/draws(?:\/|$)/.test(pathname) && (method === "GET" || method === "PUT")) return "managed-files";
@@ -205,6 +206,7 @@ async function apiRoutes(domain: ApiRouteDomain): Promise<Hono> {
     case "runtime": return (await import("./routes/runtime")).runtimeRoutes;
     case "settings": return (await import("./routes/settings")).settingsRoutes;
     case "home": return (await import("./routes/home")).homeRoutes;
+    case "logo-moodboard": return (await import("./routes/logo-moodboard")).logoMoodboardRoutes;
     case "project": return (await import("./routes/project")).projectRoutes;
     case "not-found": return new Hono();
   }

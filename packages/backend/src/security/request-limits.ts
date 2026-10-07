@@ -19,6 +19,7 @@ const MULTIPART_ROUTES = [
   /^\/api\/design-systems\/upload$/,
   /^\/api\/design-systems\/[^/]+\/fonts$/,
   /^\/api\/sessions\/[^/]+\/(?:events|documents)$/,
+  /^\/api\/projects\/[^/]+\/logo\/moodboard\/files$/,
 ];
 
 export function requestBodyLimitFor(pathname: string, method: string): number {
