@@ -59,6 +59,35 @@ test("Given a mark resized, recompressed and a genuinely different mark When fin
   expect(hammingDistance(reference, distinct)).toBeGreaterThan(LOGO_ORIGINALITY_MAX_DISTANCE);
 });
 
+function flatBoard(size: number): Buffer {
+  const c = createCanvas(size, size);
+  const context = c.getContext("2d");
+  const scale = size / 256;
+  context.fillStyle = "#edf4f4";
+  context.fillRect(0, 0, size, size);
+  context.fillStyle = "#267d7b";
+  context.fillRect(24 * scale, 30 * scale, 56 * scale, 170 * scale);
+  context.fillStyle = "#cc844c";
+  context.fillRect(105 * scale, 90 * scale, 120 * scale, 40 * scale);
+  context.fillStyle = "#183747";
+  context.beginPath();
+  context.arc(173 * scale, 190 * scale, 30 * scale, 0, Math.PI * 2);
+  context.fill();
+  return c.toBuffer("image/png");
+}
+
+const FLAT_DISTINCT_SKETCH = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">' +
+  '<path fill="#98542D" fill-rule="evenodd" d="M36 24H144V72H192Q204 72 204 84V108H144V168H192Q204 168 204 180V204H108V156H48Q36 156 36 144V120H108V60H48Q36 60 36 48Z"/></svg>',
+);
+
+test("Given a flat-colour reference When small re-encoded copies and an unrelated flat sketch are fingerprinted Then copies stay within the bound and the unrelated sketch falls outside it", async () => {
+  const reference = await isolatedImageFingerprint(flatBoard(512));
+  const copies = [await downscaledJpeg(flatBoard(512), 96, 80), await downscaledJpeg(flatBoard(512), 48, 70)];
+  for (const copy of copies) expect(hammingDistance(reference, await isolatedImageFingerprint(copy))).toBeLessThanOrEqual(LOGO_ORIGINALITY_MAX_DISTANCE);
+  expect(hammingDistance(reference, await isolatedImageFingerprint(FLAT_DISTINCT_SKETCH))).toBeGreaterThan(LOGO_ORIGINALITY_MAX_DISTANCE);
+});
+
 test("Given the same image bytes When fingerprinted twice Then the isolated decoder returns the identical 64-bit hex dHash", async () => {
   const bytes = markAlpha(192);
   const first = await isolatedImageFingerprint(bytes);

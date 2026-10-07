@@ -5,6 +5,10 @@ import { assertSafeSvgSketch, isSvgSketch } from "./image-fingerprint-process";
 
 const HASH_WIDTH = 9;
 const HASH_HEIGHT = 8;
+/** Each hash cell averages a BLOCK x BLOCK area, so flat graphics hash stably across resizes. */
+const BLOCK = 32;
+/** Neighbouring cells must differ by more than this luma step, so encoder noise on flat fills sets no bit. */
+const EDGE_EPSILON = 1;
 const MAX_PIXELS = 20_000_000;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
@@ -40,8 +44,10 @@ function luma(red: number, green: number, blue: number): number {
 
 /**
  * 9x8 grayscale horizontal dHash as 16 lowercase hex characters (64 bits, MSB first). The mark is
- * composited on white so transparent inputs hash deterministically; each bit is set when a sample
- * pixel is brighter than the next one to its right.
+ * composited on white so transparent inputs hash deterministically. Each cell is the mean luma of a
+ * 32x32 block of a 288x256 render (area averaging, not point sampling: point samples of flat logo
+ * art jump between fills when an image is resized), and a bit is set when a cell is brighter than
+ * the next one to its right by more than `EDGE_EPSILON`.
  */
 export async function imageFingerprint(bytes: Buffer): Promise<string> {
   assertDecodableImageContainer(bytes);
@@ -53,20 +59,26 @@ export async function imageFingerprint(bytes: Buffer): Promise<string> {
   }
   const image = await loadImage(svg ? bytes : rasterForDecoding(bytes));
   if (image.width * image.height > MAX_PIXELS) throw new Error("unsupported_image_dimensions");
-  const canvas = createCanvas(HASH_WIDTH, HASH_HEIGHT);
+  const width = HASH_WIDTH * BLOCK;
+  const height = HASH_HEIGHT * BLOCK;
+  const canvas = createCanvas(width, height);
   const context = canvas.getContext("2d");
   context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, HASH_WIDTH, HASH_HEIGHT);
-  context.drawImage(image, 0, 0, HASH_WIDTH, HASH_HEIGHT);
-  const data = context.getImageData(0, 0, HASH_WIDTH, HASH_HEIGHT).data;
-  const gray = new Array<number>(HASH_WIDTH * HASH_HEIGHT);
-  for (let index = 0; index < gray.length; index++) {
-    gray[index] = luma(data[index * 4]!, data[index * 4 + 1]!, data[index * 4 + 2]!);
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+  const data = context.getImageData(0, 0, width, height).data;
+  const gray = new Array<number>(HASH_WIDTH * HASH_HEIGHT).fill(0);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const offset = (y * width + x) * 4;
+      gray[Math.floor(y / BLOCK) * HASH_WIDTH + Math.floor(x / BLOCK)]! += luma(data[offset]!, data[offset + 1]!, data[offset + 2]!);
+    }
   }
+  for (let index = 0; index < gray.length; index++) gray[index] = gray[index]! / (BLOCK * BLOCK);
   let hash = 0n;
   for (let row = 0; row < HASH_HEIGHT; row++) {
     for (let column = 0; column < HASH_WIDTH - 1; column++) {
-      hash = (hash << 1n) | (gray[row * HASH_WIDTH + column]! > gray[row * HASH_WIDTH + column + 1]! ? 1n : 0n);
+      hash = (hash << 1n) | (gray[row * HASH_WIDTH + column]! > gray[row * HASH_WIDTH + column + 1]! + EDGE_EPSILON ? 1n : 0n);
     }
   }
   return hash.toString(16).padStart(16, "0");
