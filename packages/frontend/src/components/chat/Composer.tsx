@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { detectBackends, getSettings } from "@/api/home";
 import type { BackendDetectionResult } from "@bg/shared";
 import GenerationControls from "@/components/settings/GenerationControls";
-import { Paperclip, Send, Settings2, StopCircle } from "lucide-react";
+import { LibraryBig, Paperclip, Send, Settings2, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,10 @@ import { useComposerPlaceholder, type ComposerDisabledReason } from "./useCompos
 import { useComposerVisualSources } from "./useComposerVisualSources";
 import { useComposerDraft } from "./useComposerDraft";
 import { useComposerDocuments } from "./useComposerDocuments";
+import { usePromptLibrary } from "./usePromptLibrary";
+import PromptSuggestions from "./PromptSuggestions";
+import PromptLibraryDialog from "./PromptLibraryDialog";
+import type { PromptLibraryEntry } from "@/lib/prompt-library";
 
 type ComposerSendState = { readonly kind: "idle" } | { readonly kind: "processing" } | SendOutcome;
 
@@ -134,7 +138,11 @@ export default function Composer({
     if (sendState.kind !== "processing") setSendState({ kind: "idle" });
   }, draft.items, draft.setItems);
   const [dragOver, setDragOver] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const promptLibrary = usePromptLibrary();
   const fileInput = useRef<HTMLInputElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const focusComposerOnLibraryClose = useRef(false);
   const sendAbort = useRef<AbortController | null>(null);
   const placeholder = useComposerPlaceholder(disabled ? disabledReason ?? "busy" : null);
 
@@ -154,6 +162,25 @@ export default function Composer({
     if (dropped.length > 0) {
       visualSources.add(dropped);
     }
+  }
+
+  function insertPrompt(entry: PromptLibraryEntry) {
+    setText(mergeComposerPrefill(textRef.current, entry.prompt));
+    if (sendState.kind !== "processing") setSendState({ kind: "idle" });
+    if (libraryOpen) {
+      // The dialog's focus trap is still active here; move focus once it has closed.
+      focusComposerOnLibraryClose.current = true;
+      setLibraryOpen(false);
+    } else {
+      textarea.current?.focus();
+    }
+  }
+
+  function restoreFocusAfterLibrary(event: Event) {
+    event.preventDefault();
+    const target = focusComposerOnLibraryClose.current ? textarea.current : document.getElementById(`prompt-library-open-${sessionId}`);
+    focusComposerOnLibraryClose.current = false;
+    target?.focus();
   }
 
   async function send() {
@@ -219,6 +246,7 @@ export default function Composer({
       )}
 
       <textarea
+        ref={textarea}
         id={`composer-${sessionId}`}
         value={text}
         onChange={(e) => {
@@ -247,6 +275,7 @@ export default function Composer({
         }}
         className="block min-h-[88px] w-full resize-none rounded-xl border border-input bg-muted/25 p-3 text-sm leading-relaxed placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
       />
+      <PromptSuggestions library={promptLibrary.data} draft={text} disabled={disabled || sending || !draft.ready} onInsert={insertPrompt} />
 
       {noAiTool && <p id={`composer-send-blocked-${sessionId}`} data-bg-send-blocked="no-ai-tool" className="mt-2 rounded-md bg-amber-500/10 px-2.5 py-2 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
         {translate("workspace.composer.noAiTool")}{" "}
@@ -289,6 +318,19 @@ export default function Composer({
         >
           <Paperclip className="h-3.5 w-3.5" /> {translate("workspace.composer.attach")}
         </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          id={`prompt-library-open-${sessionId}`}
+          data-qa="prompt-library-open"
+          className="h-9 w-9 shrink-0 max-[900px]:h-11 max-[900px]:w-11"
+          title={translate("prompts.library.openTitle")}
+          aria-label={translate("prompts.library.open")}
+          disabled={disabled || sending || !draft.ready}
+          onClick={() => setLibraryOpen(true)}
+        >
+          <LibraryBig className="h-3.5 w-3.5" aria-hidden="true" />
+        </Button>
         <div className="flex-1" />
         {sending ? (
           <Button
@@ -320,6 +362,7 @@ export default function Composer({
         )}
       </div>
       <VisualSourceCandidates files={projectFiles} />
+      <PromptLibraryDialog open={libraryOpen} onOpenChange={setLibraryOpen} library={promptLibrary.data} status={promptLibrary.status} onInsert={insertPrompt} onCloseAutoFocus={restoreFocusAfterLibrary} />
     </div>
   );
 }

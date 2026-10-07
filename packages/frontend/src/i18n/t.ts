@@ -1,6 +1,6 @@
 import { localeTag, useLocaleStore, type Locale } from "./locale";
 import { messages, type MessageKey } from "./messages";
-import type { Message, MessageParams } from "./types";
+import type { Message, MessageDefinition, MessageParams } from "./types";
 
 export type { MessageKey } from "./messages";
 
@@ -27,4 +27,17 @@ export function t(key: MessageKey, params?: MessageParams): string {
 export function useT(): typeof t {
   const locale = useLocaleStore((state) => state.locale);
   return (key, params) => formatMessage(messages[key][locale], locale, params);
+}
+
+/**
+ * `useT` for a large catalog pack that is code-split instead of compiled into the eager registry.
+ * The pack keeps the registry's typed-key and every-locale contract; it is undefined until loaded,
+ * and so is an unknown key, so callers choose what to show meanwhile.
+ */
+export function useCatalogT<K extends string>(pack: Readonly<Record<K, MessageDefinition>> | undefined): (key: K, params?: MessageParams) => string | undefined {
+  const locale = useLocaleStore((state) => state.locale);
+  return (key, params) => {
+    const definition = pack?.[key];
+    return definition === undefined ? undefined : formatMessage(definition[locale], locale, params);
+  };
 }

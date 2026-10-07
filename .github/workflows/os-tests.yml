@@ -94,6 +94,7 @@ jobs:
           packages/frontend/tests/error-copy.test.ts
           packages/frontend/tests/i18n-messages.test.ts
           packages/frontend/tests/tool-badge-copy.test.ts
+          packages/frontend/tests/prompt-library.test.ts
           packages/backend/tests/session-routes.test.ts
           packages/backend/tests/turn-error-sanitizer.test.ts
           scripts/qa/har-mask.test.ts

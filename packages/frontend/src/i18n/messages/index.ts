@@ -11,7 +11,8 @@ import { modesMessages } from "./modes";
 import { chatMessages } from "./chat";
 import { workspaceMessages } from "./workspace";
 import { logoMessages } from "./logo";
+import { promptsMessages } from "./prompts";
 
-export const messagePacks = [settingsMessages, shellMessages, errorsMessages, homeMessages, systemMessages, filesMessages, exportMessages, directionsMessages, canvasMessages, modesMessages, chatMessages, workspaceMessages, logoMessages] as const;
-export const messages = { ...settingsMessages, ...shellMessages, ...errorsMessages, ...homeMessages, ...systemMessages, ...filesMessages, ...exportMessages, ...directionsMessages, ...canvasMessages, ...modesMessages, ...chatMessages, ...workspaceMessages, ...logoMessages };
+export const messagePacks = [settingsMessages, shellMessages, errorsMessages, homeMessages, systemMessages, filesMessages, exportMessages, directionsMessages, canvasMessages, modesMessages, chatMessages, workspaceMessages, logoMessages, promptsMessages] as const;
+export const messages = { ...settingsMessages, ...shellMessages, ...errorsMessages, ...homeMessages, ...systemMessages, ...filesMessages, ...exportMessages, ...directionsMessages, ...canvasMessages, ...modesMessages, ...chatMessages, ...workspaceMessages, ...logoMessages, ...promptsMessages };
 export type MessageKey = keyof typeof messages;
