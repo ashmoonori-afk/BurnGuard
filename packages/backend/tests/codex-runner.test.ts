@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { once } from "node:events";
-import { mkdir, symlink } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildCodexCommand } from "../src/adapters/codex";
+import type { NormalizedEvent } from "@bg/shared";
+import { buildCodexCommand, codexSpawnOptions, runCodexTurn } from "../src/adapters/codex";
+import { CODEX_PROGRESS_HEADER, codexProgressHandler, countStreamEvents } from "../src/adapters/codex/progress-metrics";
+import { codexProgressMetricsEffective, detectUserCodexOtel, resolveCodexProgressMetrics } from "../src/adapters/codex/user-otel";
 import { codexFixture, PNG_SHA } from "./codex-runner-fixture";
 
 // Every case runs on every OS: on Windows the fixture is a .cmd wrapper launched through BG_WINDOWS_PROCESS_HOST.
@@ -33,6 +37,181 @@ describe("buildCodexCommand", () => {
       "-c", "suppress_unstable_features_warning=true",
       "-c", "features.image_generation=true", "-",
     ]);
+  });
+
+  test("Given a progress receiver Then Codex exports its metrics there with a space-free, double-quote-free override and the run token", () => {
+    const command = buildCodexCommand("codex", undefined, "win32", "allowed", { endpoint: "http://127.0.0.1:4100/v1/metrics", token: "abc123" });
+    const override = command.find((arg) => arg.startsWith("otel.metrics_exporter="));
+    expect(command[command.indexOf(override ?? "") - 1]).toBe("-c");
+    expect(override).toBe(`otel.metrics_exporter={otlp-http={endpoint='http://127.0.0.1:4100/v1/metrics',protocol='json',headers={${CODEX_PROGRESS_HEADER}='abc123'}}}`);
+    expect(override).not.toContain('"');
+    expect(command.at(-1)).toBe("-");
+  });
+});
+
+/** OTLP/JSON delta sum as Codex exports it for its per-stream-event counters. */
+function metricsExport(name: string, points: readonly { readonly success: string; readonly value: number | string }[]) {
+  return { resourceMetrics: [{ scopeMetrics: [{ metrics: [{ name, sum: { aggregationTemporality: 1, isMonotonic: true, dataPoints: points.map((point) => ({
+    attributes: [{ key: "kind", value: { stringValue: "response.custom_tool_call_input.delta" } }, { key: "success", value: { stringValue: point.success } }],
+    asInt: point.value,
+  })) } }] }] }] };
+}
+
+function exportRequest(body: unknown, token: string, url = "http://127.0.0.1/v1/metrics") {
+  return new Request(url, { method: "POST", headers: { "content-type": "application/json", [CODEX_PROGRESS_HEADER]: token }, body: typeof body === "string" ? body : JSON.stringify(body) });
+}
+
+describe("Codex stream progress metrics", () => {
+  test("Given websocket or SSE stream event counters Then only successful events are counted", () => {
+    expect(countStreamEvents(metricsExport("codex.websocket.event", [{ success: "true", value: "3" }, { success: "false", value: "9" }]))).toBe(3);
+    expect(countStreamEvents(metricsExport("codex.sse_event", [{ success: "true", value: 2 }]))).toBe(2);
+    expect(countStreamEvents(metricsExport("codex.api_request", [{ success: "true", value: 5 }]))).toBe(0);
+    expect(countStreamEvents(metricsExport("codex.sse_event", [{ success: "true", value: 0 }]))).toBe(0);
+    expect(countStreamEvents({ resourceMetrics: "not-a-list" })).toBe(0);
+  });
+
+  test("Given an authenticated export with stream events When it arrives Then it is progress and Codex gets an empty OTLP reply", async () => {
+    let beats = 0;
+    const handle = codexProgressHandler("token", () => { beats++; });
+    const response = await handle(exportRequest(metricsExport("codex.websocket.event", [{ success: "true", value: "1" }]), "token"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({});
+    expect(beats).toBe(1);
+  });
+
+  test("Given exports that prove nothing When they arrive Then none of them is progress", async () => {
+    let beats = 0;
+    const handle = codexProgressHandler("token", () => { beats++; });
+    const events = metricsExport("codex.sse_event", [{ success: "true", value: 4 }]);
+    expect((await handle(exportRequest(events, "tokem"))).status).toBe(404);
+    expect((await handle(exportRequest(events, "token", "http://127.0.0.1/v1/logs"))).status).toBe(404);
+    expect((await handle(exportRequest("{", "token"))).status).toBe(400);
+    expect((await handle(exportRequest(metricsExport("codex.sse_event", [{ success: "false", value: 4 }]), "token"))).status).toBe(200);
+    expect((await handle(exportRequest(metricsExport("codex.api_request", [{ success: "true", value: 1 }]), "token"))).status).toBe(200);
+    expect(beats).toBe(0);
+  });
+
+  /**
+   * Runs a Codex stand-in that tries to export one stream event wherever its argv points, then
+   * reports what it saw: the export status, the OTel interval, every OTel argument and OTEL_* name, and
+   * whether the endpoint and token survived argv (on Windows it passes through a .cmd wrapper).
+   */
+  async function runMetricsFixture(codexProgressMetrics: boolean | undefined) {
+    const root = await mkdtemp(path.join(tmpdir(), "burnguard-codex-progress-"));
+    const previousHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = path.join(root, "codex-home");
+    const script = path.join(root, process.platform === "win32" ? "codex-fixture.mjs" : "codex-fixture");
+    await writeFile(script, [
+      "#!/usr/bin/env bun",
+      'const override = process.argv.find((arg) => arg.startsWith("otel.metrics_exporter=")) ?? "";',
+      "const endpoint = /endpoint='([^']+)'/.exec(override)?.[1];",
+      `const token = /${CODEX_PROGRESS_HEADER}='([^']+)'/.exec(override)?.[1];`,
+      `const body = ${JSON.stringify(JSON.stringify(metricsExport("codex.websocket.event", [{ success: "true", value: "2" }])))};`,
+      `const status = endpoint && token ? (await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json", "${CODEX_PROGRESS_HEADER}": token }, body })).status : 0;`,
+      'const otelArgs = process.argv.filter((arg) => arg.includes("otel"));',
+      'const otelEnv = Object.keys(process.env).filter((name) => name.startsWith("OTEL_")).sort();',
+      'console.log(JSON.stringify({ type: "text", text: JSON.stringify({ status, interval: process.env.OTEL_METRIC_EXPORT_INTERVAL ?? null, otelArgs: otelArgs.length, otelEnv, parsed: { endpoint: Boolean(endpoint), token: Boolean(token) } }) }));',
+      'console.log(JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } }));',
+      "",
+    ].join("\n"));
+    let binary = script;
+    if (process.platform === "win32") {
+      binary = path.join(root, "codex-fixture.cmd");
+      await writeFile(binary, `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`);
+    } else await chmod(script, 0o700);
+    const order: string[] = [];
+    const events: NormalizedEvent[] = [];
+    try {
+      const result = await runCodexTurn({
+        sessionId: "s", turnId: "t", projectDir: root, binaryPath: binary, prompt: "test", userEvent: { type: "user.message", text: "test" },
+        ...(codexProgressMetrics === undefined ? {} : { codexProgressMetrics }),
+        onEvent: async (event) => { events.push(event); order.push(event.type); },
+        onProgress: () => { order.push("progress"); },
+      });
+      const report = events.find((event) => event.type === "chat.delta");
+      return { result, order, events, report: report?.type === "chat.delta" ? JSON.parse(report.text) : undefined };
+    } finally {
+      if (previousHome === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previousHome;
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
+  }
+
+  const parentOtelEnv = () => Object.keys(process.env).filter((name) => name.startsWith("OTEL_")).sort();
+
+  test("Given the setting off When the spawn is prepared Then argv and options are exactly the plain launch with no env override", () => {
+    const input = { sessionId: "s", turnId: "t", projectDir: "/project", binaryPath: "codex", prompt: "p", userEvent: { type: "user.message", text: "p" } as const, generation: { model: "gpt-5", effort: "medium", vanilla: true } as const, onEvent: async () => {} };
+    const options = codexSpawnOptions(input, undefined);
+    expect(Object.keys(options).sort()).toEqual(["cmd", "cwd", "stderr", "stdin", "stdout"]);
+    expect(options.cmd).toEqual(buildCodexCommand("codex", input.generation, process.platform, "allowed"));
+    expect(options.cmd.some((arg) => arg.includes("otel"))).toBe(false);
+    expect(options).toMatchObject({ cwd: "/project", stdout: "pipe", stderr: "pipe" });
+    const on = codexSpawnOptions(input, { endpoint: "http://127.0.0.1:4100/v1/metrics", token: "abc" });
+    expect(on.cmd.filter((arg) => arg.includes("otel"))).toHaveLength(1);
+    expect("env" in on && on.env?.OTEL_METRIC_EXPORT_INTERVAL).toBe("10000");
+  });
+
+  runnerTest("Given the setting off (absent or false) and a progress sink When the turn runs Then Codex gets no OTel override or env and no receiver is reachable", async () => {
+    for (const setting of [undefined, false]) {
+      const { result, order, report } = await runMetricsFixture(setting);
+      expect(result).toEqual({ exitCode: 0 });
+      expect(report).toEqual({ status: 0, interval: process.env.OTEL_METRIC_EXPORT_INTERVAL ?? null, otelArgs: 0, otelEnv: parentOtelEnv(), parsed: { endpoint: false, token: false } });
+      expect(order).not.toContain("progress");
+    }
+  });
+
+  runnerTest("Given the setting on and a Codex child that exports a stream event When the turn runs Then progress arrives through the run's loopback receiver and nothing about it is published", async () => {
+    const { result, order, events, report } = await runMetricsFixture(true);
+    expect(result).toEqual({ exitCode: 0 });
+    expect(report).toMatchObject({ status: 200, interval: "10000", otelArgs: 1, parsed: { endpoint: true, token: true } });
+    expect(order).toEqual(["progress", "chat.delta", "usage.delta", "chat.message_end", "status.idle"]);
+    expect(JSON.stringify(events)).not.toContain("/v1/metrics");
+  });
+});
+
+describe("user Codex OpenTelemetry destination detection", () => {
+  async function detectWith(config: string | null, env: NodeJS.ProcessEnv = {}) {
+    const home = await mkdtemp(path.join(tmpdir(), "burnguard-codex-otel-"));
+    try {
+      if (config !== null) await writeFile(path.join(home, "config.toml"), config);
+      return await detectUserCodexOtel({ ...env, CODEX_HOME: home });
+    } finally { await rm(home, { recursive: true, force: true }); }
+  }
+
+  test("Given no config file or exporters that name no destination Then no user destination is detected", async () => {
+    expect(await detectWith(null)).toBe(false);
+    expect(await detectWith('model = "gpt-5"\n[otel]\nexporter = "none"\nmetrics_exporter = "statsig"\nenvironment = "dev"\n')).toBe(false);
+    expect(await detectWith(null, { OTEL_EXPORTER_OTLP_ENDPOINT: "  ", OTEL_METRIC_EXPORT_INTERVAL: "5000" })).toBe(false);
+  });
+
+  test("Given an OTLP exporter in the Codex config or OTEL_EXPORTER_OTLP_* in the environment Then a user destination is detected", async () => {
+    expect(await detectWith('[otel]\nmetrics_exporter = { otlp-http = { endpoint = "https://collector.example/v1/metrics", protocol = "binary" } }\n')).toBe(true);
+    expect(await detectWith('[otel.exporter.otlp-grpc]\nendpoint = "https://collector.example:4317"\n')).toBe(true);
+    expect(await detectWith('otel.trace_exporter = { otlp-http = { endpoint = "https://collector.example", protocol = "json" } }\n')).toBe(true);
+    expect(await detectWith(null, { OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "https://collector.example" })).toBe(true);
+  });
+
+  test("Given a config that exists but cannot be parsed or read as a file Then detection is conservative and stays silent", async () => {
+    const logged: unknown[] = [];
+    const original = { log: console.log, warn: console.warn, error: console.error };
+    console.log = console.warn = console.error = (...args: unknown[]) => { logged.push(args); };
+    try {
+      expect(await detectWith("[otel\nexporter = ")).toBe(true);
+      const home = await mkdtemp(path.join(tmpdir(), "burnguard-codex-otel-"));
+      try {
+        await mkdir(path.join(home, "config.toml"));
+        expect(await detectUserCodexOtel({ CODEX_HOME: home })).toBe(true);
+      } finally { await rm(home, { recursive: true, force: true }); }
+    } finally { Object.assign(console, original); }
+    expect(logged).toEqual([]);
+  });
+
+  test("Given the stored choice When the effective value is derived Then unset follows detection and an explicit choice wins", async () => {
+    expect(codexProgressMetricsEffective(null, false)).toBe(true);
+    expect(codexProgressMetricsEffective(null, true)).toBe(false);
+    expect(codexProgressMetricsEffective(true, true)).toBe(true);
+    expect(codexProgressMetricsEffective(false, false)).toBe(false);
+    expect(await resolveCodexProgressMetrics(null, { OTEL_EXPORTER_OTLP_ENDPOINT: "https://collector.example", CODEX_HOME: tmpdir() })).toBe(false);
+    expect(await resolveCodexProgressMetrics(true, { OTEL_EXPORTER_OTLP_ENDPOINT: "https://collector.example" })).toBe(true);
   });
 });
 

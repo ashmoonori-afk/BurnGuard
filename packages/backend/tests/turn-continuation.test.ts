@@ -6,6 +6,7 @@ import type { AdapterRunInput } from "../src/adapters/types";
 import type { NormalizedEvent } from "@bg/shared";
 import { type ContinuationTimer, resolveContinuationLimits, runWithContinuation } from "../src/services/turn-continuation";
 import { type CodexParserContext, parseCodexLine } from "../src/adapters/codex/parser";
+import { CODEX_PROGRESS_HEADER, codexProgressHandler } from "../src/adapters/codex/progress-metrics";
 
 const STALL_LIMITS = { idleMs: 1_000, toolMs: 5_000, attemptMs: 60_000, attempts: 3 };
 
@@ -305,5 +306,28 @@ test("Given a progress-only signal that never stops, then attemptMs still ends t
     }, async () => calls === 2, limits, schedule);
     expect(beats).toBe(3);
     expect(events).toContainEqual(expect.objectContaining({ type: "tool.started", tool: "generation_resume_stalled", input: { attempt: 2, maximum: limits.attempts, reason: "attempt_deadline" } }));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Given Codex metric exports, then streaming keeps a silent patch alive and a stalled stream still stops at idleMs", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-codex-metrics-"));
+  const { schedule, advance } = manualTimers();
+  const events: NormalizedEvent[] = [];
+  const exportOf = (value: string) => new Request("http://127.0.0.1/v1/metrics", { method: "POST", headers: { [CODEX_PROGRESS_HEADER]: "token" }, body: JSON.stringify({ resourceMetrics: [{ scopeMetrics: [{ metrics: [{ name: "codex.websocket.event", sum: { dataPoints: [{ attributes: [{ key: "success", value: { stringValue: "true" } }], asInt: value }] } }] }] }] }) });
+  let calls = 0;
+  try {
+    await runWithContinuation({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "task", userEvent: { type: "user.message", text: "task" }, onEvent: async e => { events.push(e); } }, async attempt => {
+      calls++;
+      if (calls > 1) { await attempt.onEvent({ id: "end", ts: 1, type: "status.idle", stopReason: "end_turn" }); return { exitCode: 0 }; }
+      const handle = codexProgressHandler("token", attempt.onProgress!);
+      for (let beat = 0; beat < 3; beat++) { await handle(exportOf("4")); advance(STALL_LIMITS.idleMs - 1); }
+      expect(attempt.signal!.aborted).toBe(false);
+      // A periodic export with no new stream events proves nothing: the stalled stream ends at idleMs.
+      await handle(exportOf("0"));
+      advance(1);
+      expect(attempt.signal!.aborted).toBe(true);
+      return { exitCode: 1 };
+    }, async () => calls === 2, STALL_LIMITS, schedule);
+    expect(events).toContainEqual(expect.objectContaining({ type: "tool.started", tool: "generation_resume_stalled", input: { attempt: 2, maximum: STALL_LIMITS.attempts, reason: "inactivity" } }));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

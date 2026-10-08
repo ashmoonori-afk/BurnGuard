@@ -141,6 +141,7 @@ jobs:
           packages/backend/tests/codex-model-catalog.test.ts
           packages/backend/tests/model-lists.test.ts
           packages/frontend/tests/backend-restart-notice.test.ts
+          packages/frontend/tests/settings-codex-progress.test.ts
           packages/frontend/tests/settings-language-note.test.ts
           packages/frontend/tests/workspace-narrow-layout.test.ts
           packages/frontend/tests/chat-status-slot-layout.test.ts

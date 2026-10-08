@@ -109,6 +109,7 @@ Explore **SONNEL**, **FOLIOVER**, **ODDWARD**, **VELUNE** and **HALIDE**. Each o
    - **On Windows:** SmartScreen may show "Windows protected your PC" for the unsigned Setup.exe or portable .exe. Click **More info**, then **Run anyway**.
 2. **Explore an example.** Open a bundled project and try the canvas before connecting an AI provider.
 3. **Connect your CLI.** Install and authenticate Claude Code or Codex CLI, then choose the connection and model in Settings. **Medium effort and vanilla mode are the defaults.** Vanilla mode excludes personal plugins and instructions while keeping BurnGuard's project context.
+   - **Codex progress signal (on by default):** Codex usage metrics go to BurnGuard on this computer so a long silent Codex step, such as writing a large page, is not stopped as stalled. You can turn off **Detect that Codex is still working** in Settings. If you already send Codex telemetry to your own OpenTelemetry destination, it stays off until you turn it on, because your destination does not receive Codex metrics while it is on.
 4. **Create a project.** Pick a format and design system, add your brief and reference material, then generate and refine.
 5. **Export or share.** Download the project files, or use **Share → Prepare current output → Publish publicly** for a website on your Vercel account.
 
