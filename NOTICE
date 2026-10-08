@@ -156,3 +156,72 @@ Copyright (c) The Rust Project Contributors.
 Rust is dual-licensed under the Apache License, Version 2.0 and the MIT
 License. This adaptation is used under the Apache License, Version 2.0; the
 full license text is included in the root LICENSE file.
+--------------------------------------------------------------------------------
+
+BurnGuard bundles the following third-party packages in the frontend bundle,
+the Vite-built SPA that ships inside every desktop package. Package versions
+below match bun.lock at the time of writing. The license and copyright text
+for each package was taken from the files installed under node_modules.
+
+The MIT License text applying to the MIT-licensed packages below is the same
+text reproduced above in the fontkit section. The Apache License, Version 2.0
+applying to class-variance-authority is included in full in the root LICENSE
+file.
+
+react 18.3.1 - MIT License
+Copyright (c) Facebook, Inc. and its affiliates.
+
+react-dom 18.3.1 - MIT License
+Copyright (c) Facebook, Inc. and its affiliates.
+
+react-router-dom 6.30.6 - MIT License
+Copyright (c) React Training LLC 2015-2019
+Copyright (c) Remix Software Inc. 2020-2021
+Copyright (c) Shopify Inc. 2022-2023
+
+@tanstack/react-query 5.99.2 - MIT License
+Copyright (c) 2021-present Tanner Linsley
+
+@radix-ui/react-dialog 1.1.15 - MIT License
+@radix-ui/react-dropdown-menu 2.1.16 - MIT License
+@radix-ui/react-slot 1.2.4 - MIT License
+@radix-ui/react-switch 1.2.6 - MIT License
+@radix-ui/react-tabs 1.1.13 - MIT License
+Copyright (c) 2022 WorkOS
+
+three 0.186.0 - MIT License
+Copyright © 2010-2026 three.js authors
+
+react-markdown 10.1.0 - MIT License
+Copyright (c) Espen Hovlandsdal
+
+zustand 5.0.12 - MIT License
+Copyright (c) 2019 Paul Henschel
+
+tailwind-merge 2.6.1 - MIT License
+Copyright (c) 2021 Dany Castillo
+
+clsx 2.1.1 - MIT License
+Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)
+
+class-variance-authority 0.7.1 - Apache License, Version 2.0
+Copyright 2022 Joe Bell
+
+lucide-react 0.468.0 - ISC License
+Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as
+part of Feather (MIT). All other copyright (c) for Lucide are held by Lucide
+Contributors 2022.
+
+The ISC License text applying to lucide-react:
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
