@@ -192,8 +192,10 @@ describe("parseCodexLine — structured path", () => {
     ["Your access token could not be refreshed. Please log out and sign in again. Not logged in", "provider_auth_required"],
     ["You've hit your usage limit. Try again later.", "provider_usage_limited"],
     ["exceeded retry limit, last status: 429 Too Many Requests", "provider_usage_limited"],
+    ["Request failed with status code 429", "provider_usage_limited"],
     ["You exceeded your current quota, please check your plan", "provider_quota_exhausted"],
     ["insufficient_quota", "provider_quota_exhausted"],
+    ["Quota exceeded. Check your plan and billing details.", "provider_quota_exhausted"],
     ["The model `gpt-old` does not exist or you do not have access to it", "provider_model_unavailable"],
   ] as const)("Given a Codex turn.failed classified as %#, When parsed, Then it carries the expected code and is not recoverable", (text, code) => {
     const events = parseCodexLine(JSON.stringify({ type: "turn.failed", error: { message: `${text} /home/u/.codex/auth.json` } }), ctx());
