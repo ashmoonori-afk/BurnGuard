@@ -55,16 +55,24 @@ export async function ensureProjectWatcher(projectId: string, observe: ObservePr
   watchers.set(projectId, watcher);
 }
 
-export async function ensureAllProjectWatchers(projectIds?: readonly string[]): Promise<void> {
-  await startProjectWatchers({ projectIds }).settled;
-}
-
 export type ProjectWatcherStartup = {
   /** Every project was observed (or reported unavailable), or startup was stopped. */
   readonly settled: Promise<void>;
-  /** Stop starting queued projects, let in-flight observations finish, then close every watcher. */
+  /** Synchronously stop dequeuing and reject queued projects' waiters; in-flight observations keep running. */
+  halt(): void;
+  /** `halt()`, then wait for in-flight observations to finish and close every watcher. */
   stop(): Promise<void>;
 };
+
+/**
+ * Shutdown order: halt startup, run `interruptWork` (turns, export browsers) without waiting behind in-flight
+ * startup hashing, then wait for that hashing and close every watcher.
+ */
+export async function shutdownProjectWatchers(startup: ProjectWatcherStartup | null, interruptWork: () => Promise<void>): Promise<void> {
+  startup?.halt();
+  await interruptWork();
+  await startup?.stop();
+}
 
 type QueuedProject = { readonly projectId: string; readonly resolve: () => void; readonly reject: (error: unknown) => void };
 
@@ -90,7 +98,11 @@ export function startProjectWatchers(options: { readonly projectIds?: readonly s
       queue.push({ projectId, resolve: ready.resolve, reject: ready.reject });
     }
   })();
-  setProjectReadinessRegistration(registration);
+  // A mutation that waits on a still-queued project moves it to the front of the queue.
+  setProjectReadinessRegistration(registration, (projectId) => {
+    const index = queue.findIndex((queued) => queued.projectId === projectId);
+    if (index > 0) queue.unshift(...queue.splice(index, 1));
+  });
   const worker = async (): Promise<void> => {
     while (!stopped) {
       const next = queue.shift();
@@ -103,13 +115,17 @@ export function startProjectWatchers(options: { readonly projectIds?: readonly s
     }
   };
   const settled = registration.then(async () => {
-    await Promise.all(Array.from({ length: Math.min(options.concurrency ?? STARTUP_WATCHER_CONCURRENCY, queue.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(Math.max(1, options.concurrency ?? STARTUP_WATCHER_CONCURRENCY), queue.length) }, worker));
   });
+  const halt = (): void => {
+    stopped = true;
+    for (const queued of queue.splice(0)) queued.reject(new ArtifactOperationError("recovery_unavailable", "The app is shutting down"));
+  };
   return {
     settled,
+    halt,
     async stop() {
-      stopped = true;
-      for (const queued of queue.splice(0)) queued.reject(new ArtifactOperationError("recovery_unavailable", "The app is shutting down"));
+      halt();
       await settled;
       for (const projectId of [...watchers.keys()]) closeProjectWatcher(projectId);
     },

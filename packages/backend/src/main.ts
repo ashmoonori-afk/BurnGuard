@@ -11,7 +11,7 @@ import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
 import { configureAppUpdater, startAppUpdateScheduler } from "./services/mac-updates";
 import { interruptAllUserTurns } from "./services/turns";
-import { startProjectWatchers, type ProjectWatcherStartup } from "./services/watchers";
+import { shutdownProjectWatchers, startProjectWatchers, type ProjectWatcherStartup } from "./services/watchers";
 
 const isDesktop = process.env.BG_DESKTOP === "1";
 const ownedPort = isDesktop ? desktopPort(process.env.BG_PORT) : undefined;
@@ -92,8 +92,11 @@ const shutdown = async (): Promise<void> => {
   if (isDesktop) console.log('[burnguard-desktop] {"protocol":1,"event":"shutdown"}');
   // Turns first: an in-flight CLI subprocess owns the project directory and
   // would keep writing into it after the server is gone.
-  // Watcher startup may still be observing projects: stop queued ones and close every watcher.
-  server.stop(false); await projectWatcherStartup?.stop(); await interruptAllUserTurns(); await closeActiveExportBrowsers(); server.stop(true); profileOwner?.close(); process.exit(0);
+  // Watcher startup may still be observing projects: halt queued ones first, but never wait on in-flight hashing
+  // before turns are interrupted (desktop hosts kill the backend after 10-15 s).
+  server.stop(false);
+  await shutdownProjectWatchers(projectWatcherStartup, async () => { await interruptAllUserTurns(); await closeActiveExportBrowsers(); });
+  server.stop(true); profileOwner?.close(); process.exit(0);
 };
 // macOS self-update: the staged package is applied by the bundled updater once this process has shut down.
 startAppUpdateScheduler(configureAppUpdater({ shutdown }));

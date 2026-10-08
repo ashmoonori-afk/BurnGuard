@@ -33,7 +33,7 @@ src/
 | Add an API domain | `server.ts`, `routes/` | Update classifier and lazy dispatch together |
 | Change localhost trust | `security/request-authority.ts` | Health is public; other API access is capability-bound (see `security/AGENTS.md`) |
 | Change managed paths | `lib/paths.ts`, `security/path-boundary.ts` | Existing symlink/junction prefixes are resolved |
-| Change shutdown | `main.ts` | Stop intake, stop watcher startup and close watchers, interrupt turns, close browsers, then force stop |
+| Change shutdown | `main.ts` | Stop intake, halt queued watcher startup, interrupt turns, close browsers, then wait for in-flight observations and close watchers, then force stop |
 | Own the profile | `profile-ownership.ts`, `desktop-lifecycle.ts` | One process per `BG_APP_ROOT`; desktop shell handshake |
 
 ## CONVENTIONS

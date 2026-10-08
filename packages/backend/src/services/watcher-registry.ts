@@ -18,9 +18,11 @@ export function closeProjectWatcher(projectId: string): void {
 // Startup observation runs after the listener; artifact mutations wait for their project's first observation.
 const projectReadiness = new Map<string, Promise<void>>();
 let readinessRegistration: Promise<void> | null = null;
+let prioritizeProject: ((projectId: string) => void) | null = null;
 
-export function setProjectReadinessRegistration(registration: Promise<void>): void {
+export function setProjectReadinessRegistration(registration: Promise<void>, prioritize: (projectId: string) => void): void {
   readinessRegistration = registration;
+  prioritizeProject = prioritize;
 }
 
 /** A failed observation rejects only the waiters it already had; the entry is then cleared so the project never wedges. */
@@ -31,5 +33,8 @@ export function setProjectReadiness(projectId: string, ready: Promise<void>): vo
 
 export async function waitForProjectReady(projectId: string): Promise<void> {
   if (readinessRegistration !== null) await readinessRegistration;
-  await projectReadiness.get(projectId);
+  const ready = projectReadiness.get(projectId);
+  if (ready === undefined) return;
+  prioritizeProject?.(projectId);
+  await ready;
 }

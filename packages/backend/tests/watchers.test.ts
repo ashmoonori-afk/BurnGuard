@@ -7,7 +7,7 @@ import { runMigrations } from "../src/db/migrate-local";
 import { ArtifactCoordinator, ArtifactOperationError } from "../src/services/artifact-coordinator";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { isTransientFilePath } from "../src/services/files";
-import { ensureAllProjectWatchers, ensureProjectWatcher, processProjectFilesystemSignal, scheduleProjectSignal, shouldSkipPath, startProjectWatchers } from "../src/services/watchers";
+import { ensureProjectWatcher, processProjectFilesystemSignal, scheduleProjectSignal, shouldSkipPath, shutdownProjectWatchers, startProjectWatchers } from "../src/services/watchers";
 import { listProjectIds } from "../src/db/project-read-repository";
 import { closeProjectWatcher, projectWatchers } from "../src/services/watcher-registry";
 import { setArtifactRecoveryHold } from "../src/services/artifact-recovery-hold";
@@ -67,7 +67,7 @@ describe("project watcher path filtering", () => {
 
   test("Given persisted projects When watchers start Then registry ownership is idempotent and closeable", async () => {
     const item = await fixture();
-    await ensureProjectWatcher(item.id); await ensureProjectWatcher(item.id); await ensureAllProjectWatchers([item.id]);
+    await ensureProjectWatcher(item.id); await ensureProjectWatcher(item.id); await startProjectWatchers({ projectIds: [item.id] }).settled;
     expect(await listProjectIds()).toContain(item.id);
     expect(projectWatchers.has(item.id)).toBe(true);
     closeProjectWatcher(item.id);
@@ -236,18 +236,71 @@ describe("project watcher startup after the listener", () => {
     expect(items.some((item) => projectWatchers.has(item.id))).toBe(false);
   });
 
-  test("Given backend startup When its order is inspected Then the listener and readiness line precede watcher startup and shutdown stops watchers before turns", async () => {
+  test("Given a startup observation is pending When shutdown runs Then turns are interrupted before that observation finishes and queued projects are rejected first", async () => {
+    const items = await fixtures(2);
+    const held = heldObserver();
+    const startup = startProjectWatchers({ projectIds: items.map((item) => item.id), concurrency: 1, observe: held.observe });
+    await held.startedAtLeast(1);
+    const order: string[] = [];
+    const queuedOperation = writeIndex(items[1]!, "during shutdown").catch((error: unknown) => { order.push("queued rejected"); return error; });
+    const interrupted = Promise.withResolvers<void>();
+
+    const stopping = shutdownProjectWatchers(startup, async () => { await queuedOperation; order.push("turns interrupted"); interrupted.resolve(); });
+    await interrupted.promise;
+    order.push("observation released");
+    held.started[0]?.release();
+    await stopping;
+
+    expect(order).toEqual(["queued rejected", "turns interrupted", "observation released"]);
+    expect(held.started.map((entry) => entry.projectId)).toEqual([items[0]!.id]);
+    expect(items.some((item) => projectWatchers.has(item.id))).toBe(false);
+  });
+
+  test("Given a project still queued for startup observation When its mutation arrives Then that project is observed next", async () => {
+    const items = await fixtures(3);
+    const held = heldObserver();
+    const startup = startProjectWatchers({ projectIds: items.map((item) => item.id), concurrency: 1, observe: held.observe });
+    await held.startedAtLeast(1);
+
+    const waiting = writeIndex(items[2]!, "prioritized");
+    held.started[0]?.release();
+    await held.startedAtLeast(2);
+
+    expect(held.started.map((entry) => entry.projectId)).toEqual([items[0]!.id, items[2]!.id]);
+    held.started[1]?.release();
+    expect((await waiting).status).toBe("committed");
+    await held.startedAtLeast(3);
+    held.started[2]?.release();
+    await startup.settled;
+  });
+
+  test("Given a non-positive concurrency When watcher startup runs Then it still observes every project instead of leaving waiters pending", async () => {
+    const item = await fixture();
+
+    await startProjectWatchers({ projectIds: [item.id], concurrency: 0 }).settled;
+
+    expect(projectWatchers.has(item.id)).toBe(true);
+    expect((await writeIndex(item, "after startup")).status).toBe("committed");
+  });
+
+  test("Given backend startup When its order is inspected Then the listener and readiness line precede watcher startup and shutdown interrupts turns before waiting on watchers", async () => {
     const main = await readFile(new URL("../src/main.ts", import.meta.url), "utf8");
     const bootstrap = await readFile(new URL("../src/bootstrap.ts", import.meta.url), "utf8");
     const serve = main.indexOf("Bun.serve(");
     const ready = main.indexOf("[burnguard-desktop] ${JSON.stringify({ protocol: 1, url");
     const watchersStart = main.indexOf("startProjectWatchers(");
 
-    expect(bootstrap.includes("ensureAllProjectWatchers")).toBe(false);
+    expect(bootstrap.includes("services/watchers")).toBe(false);
     expect(main.indexOf("await bootstrapLocalAppData()")).toBeLessThan(serve);
     expect(serve).toBeGreaterThan(0);
     expect(ready).toBeGreaterThan(serve);
     expect(watchersStart).toBeGreaterThan(ready);
-    expect(main.indexOf("await projectWatcherStartup?.stop()")).toBeLessThan(main.indexOf("await interruptAllUserTurns()"));
+    const shutdownStart = main.indexOf("const shutdown = async");
+    const intakeStop = main.indexOf("server.stop(false)", shutdownStart);
+    const watcherShutdown = main.indexOf("await shutdownProjectWatchers(projectWatcherStartup, async () => { await interruptAllUserTurns(); await closeActiveExportBrowsers(); })", shutdownStart);
+    expect(intakeStop).toBeGreaterThan(shutdownStart);
+    expect(watcherShutdown).toBeGreaterThan(intakeStop);
+    expect(main.indexOf("server.stop(true)", shutdownStart)).toBeGreaterThan(watcherShutdown);
+    expect(main.includes("projectWatcherStartup?.stop()")).toBe(false);
   });
 });
