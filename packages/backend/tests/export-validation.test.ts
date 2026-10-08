@@ -4,6 +4,7 @@ import "./export-pdf-producer-closure-cases";
 import "./export-pdf-raster-cases";
 import "./export-html-closure-cases";
 import "./export-receipt-boundary-cases";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -13,7 +14,7 @@ import { parseExportOptions } from "../../shared/src/export";
 import { parseExportAttempt } from "../../shared/src/export-attempt";
 import { inspectCanonicalTree, parseCanonicalTreeManifest, validateCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { ExportClosureError, resolveStaticClosure } from "../src/services/export-closure";
-import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, validateHtmlArchive } from "../src/services/export-html-validation";
+import { buildHtmlArchiveManifest, HTML_EXPORT_MANIFEST, HtmlExportValidationError, validateHtmlArchive } from "../src/services/export-html-validation";
 import { buildContentDisposition, buildDownloadFilename, formatExtension, formatFilenameTag, formatMime, slugifyProjectName } from "../src/services/export-naming";
 import { analyzePixels, parsePng, validateDecodedPng } from "../src/services/export-png-validation";
 import { canonicalJson, type ExportReceipt, parseExportReceipt, receiptDigest, requireReceiptIdentity, sha256 } from "../src/services/export-receipt";
@@ -196,6 +197,28 @@ describe("export validation contracts", () => {
     expect((await validateHtmlArchive(bytes, expected)).entries).toHaveLength(2);
     const missing = new JSZip(); missing.file("index.html", html); missing.file(HTML_EXPORT_MANIFEST, canonicalJson(manifest));
     await expect(validateHtmlArchive(await missing.generateAsync({ type: "uint8array" }), expected)).rejects.toThrow("manifest_mismatch");
+  });
+
+  test("Given traversal and absolute archive entry names When validated Then nothing is written outside the stage and unsafe names are rejected", async () => {
+    const html = new TextEncoder().encode("<html><body></body></html>");
+    const expected = { schema_version: 1 as const, entrypoint: "index.html", project_revision: 7, project_digest: digest, input_closure_digest: "b".repeat(64) };
+
+    // JSZip's loader resolves a `..` component before the validator sees the name, so this pins the combined
+    // guarantee: a hand-built `../` entry is neutralised to a basename and still lands inside the temporary stage.
+    const traversalStem = `bg-export-escape-probe-${process.pid}.html`;
+    const traversalManifest = buildHtmlArchiveManifest(expected, [{ path: traversalStem, size: html.length, sha256: sha256(html) }, { path: "index.html", size: html.length, sha256: sha256(html) }]);
+    const traversalZip = new JSZip(); traversalZip.file(`../${traversalStem}`, html); traversalZip.file("index.html", html); traversalZip.file(HTML_EXPORT_MANIFEST, canonicalJson(traversalManifest));
+    const traversalBytes = await traversalZip.generateAsync({ type: "uint8array" });
+    await expect(validateHtmlArchive(traversalBytes, expected)).resolves.toMatchObject({ entrypoint: "index.html" });
+    expect(existsSync(path.join(tmpdir(), traversalStem))).toBe(false);
+
+    // An absolute name survives the loader and reaches safeArchivePath, which rejects it with the typed error.
+    const absoluteStem = `bg-export-absolute-probe-${process.pid}.html`;
+    const absoluteZip = new JSZip(); absoluteZip.file(`/${absoluteStem}`, html); absoluteZip.file(HTML_EXPORT_MANIFEST, canonicalJson(traversalManifest));
+    const absoluteBytes = await absoluteZip.generateAsync({ type: "uint8array" });
+    await expect(validateHtmlArchive(absoluteBytes, expected)).rejects.toBeInstanceOf(HtmlExportValidationError);
+    await expect(validateHtmlArchive(absoluteBytes, expected)).rejects.toMatchObject({ code: "unsafe_entry" });
+    expect(existsSync(path.join(tmpdir(), absoluteStem))).toBe(false);
   });
 
   test("Given a receipt When identity or digest changes Then strict verification blocks it", () => {
