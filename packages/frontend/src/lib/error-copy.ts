@@ -20,12 +20,17 @@ const ERROR_COPY: Record<string, MessageKey> = {
   output_missing: "errors.output_missing",
   receipt_corrupt: "errors.receipt_corrupt",
   retention_expired: "errors.retention_expired",
+  capture_expired: "errors.capture_expired",
+  reapply_unavailable: "errors.reapply_unavailable",
+  reapply_conflict: "errors.reapply_conflict",
   render_failed: "errors.render_failed",
   validation_failed: "errors.validation_failed",
   invalid_export_options: "errors.invalid_export_options",
   pdf_resource_limit: "errors.pdf_resource_limit",
   source_changed: "errors.source_changed",
   project_in_use: "errors.project_in_use",
+  project_restore_conflict: "errors.project_restore_conflict",
+  project_restore_unavailable: "errors.project_restore_unavailable",
   backend_unavailable: "errors.backend_unavailable",
   install_start_failed: "errors.install_start_failed",
   install_in_progress: "errors.install_in_progress",
@@ -116,6 +121,7 @@ const ERROR_COPY: Record<string, MessageKey> = {
   acquisition_aborted: "errors.acquisition_aborted",
   invalid_upload: "errors.invalid_upload",
   invalid_font_upload: "errors.invalid_font_upload",
+  token_file_unreadable: "errors.token_file_unreadable",
   system_id_conflict: "errors.system_id_conflict",
   catalog_operation_failed: "errors.catalog_operation_failed",
   design_system_not_found: "errors.design_system_not_found",
@@ -125,6 +131,7 @@ const ERROR_COPY: Record<string, MessageKey> = {
   pinterest_unavailable: "errors.pinterest_unavailable",
   invalid_pinterest_request: "errors.invalid_pinterest_request",
   message_too_long: "errors.message_too_long",
+  payload_too_large: "errors.payload_too_large",
   turn_capacity_exhausted: "errors.turn_capacity_exhausted",
   capacity_exhausted: "errors.turn_capacity_exhausted",
   alternatives_recovery_pending: "errors.alternatives_recovery_pending",
@@ -155,6 +162,11 @@ const ERROR_COPY: Record<string, MessageKey> = {
 export function apiErrorCopy(error: unknown): string {
   const code = errorCode(error);
   if (code === "message_too_long") return t(ERROR_COPY[code], { limit: errorLimit(error) ?? MAX_USER_MESSAGE_CHARS });
+  if (code === "payload_too_large") {
+    const bytes = errorLimit(error);
+    // The server reports bytes; show whole-or-tenth megabytes so a 1 MiB cap reads "1", not "1,048,576".
+    return bytes === null ? t("errors.payload_too_large_unknown") : t(ERROR_COPY[code], { limit: Math.max(0.1, Math.round((bytes / 1048576) * 10) / 10) });
+  }
   return t(code !== null && Object.hasOwn(ERROR_COPY, code) ? ERROR_COPY[code] : "errors.fallback");
 }
 

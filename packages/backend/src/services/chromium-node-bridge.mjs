@@ -59,6 +59,16 @@ async function probe() {
   process.exit(verdict === "inconclusive" ? PROBE_INCONCLUSIVE_EXIT_CODE : 1);
 }
 
+/**
+ * The browser runs headless and never draws to a display, yet a GPU process that inherits DISPLAY connects to that
+ * X server during start-up. A busy or restarting server (WSLg's listens with a backlog of 1) blocks it there, and
+ * the page then gets no frames: requestAnimationFrame, actionability checks and render readiness wait forever.
+ */
+function headlessEnv(env) {
+  const { DISPLAY: _display, WAYLAND_DISPLAY: _wayland, ...rest } = env;
+  return rest;
+}
+
 async function serve() {
   let server;
   let closing = false;
@@ -73,7 +83,7 @@ async function serve() {
   process.once("SIGINT", () => { void close(); });
   try {
     const options = JSON.parse(process.argv[2] ?? "{}");
-    const outcome = await launchWithin((launchOptions) => chromium.launchServer(launchOptions), { headless: true, host: "127.0.0.1", ...(typeof options.channel === "string" ? { channel: options.channel } : {}) }, LAUNCH_TIMEOUT_MS);
+    const outcome = await launchWithin((launchOptions) => chromium.launchServer(launchOptions), { headless: true, host: "127.0.0.1", env: headlessEnv(process.env), ...(typeof options.channel === "string" ? { channel: options.channel } : {}) }, LAUNCH_TIMEOUT_MS);
     if (outcome.kind !== "launched") throw new Error("Chromium bridge launch failed");
     server = outcome.server;
     if (closing) { await server.close(); process.exit(0); }

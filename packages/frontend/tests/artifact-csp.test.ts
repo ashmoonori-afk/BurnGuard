@@ -3,6 +3,7 @@ import { buildSandboxedArtifactSrcDoc } from "../src/components/canvas/frame-bri
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { Script } from "node:vm";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 
 const BASE_HREF = "http://127.0.0.1:14070/api/projects/p/fs/index.html";
@@ -18,6 +19,13 @@ test("both shipped Canvas frames omit native popup capability", async () => {
   const policies = [...source.matchAll(/sandbox="([^"]+)"/g)].map(match => (match[1] ?? "").split(/\s+/));
   expect(policies).toHaveLength(2);
   for (const policy of policies) expect(policy).toEqual(["allow-scripts"]);
+});
+
+test("Given the Canvas browser fixture When bundled as a classic IIFE script Then it parses without module-only syntax", async () => {
+  const compiler = Bun.spawn([process.execPath, "build", `${import.meta.dir}/fixtures/canvas-css-browser.ts`, "--target=browser", "--format=iife"], { stdout: "pipe", stderr: "pipe" });
+  const [exit, script, errors] = await Promise.all([compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text()]);
+  if (exit !== 0) throw new Error(errors);
+  expect(() => new Script(script)).not.toThrow();
 });
 
 for (const action of ["popup", "navigation"] as const) test.skipIf(!systemChromeAvailable)(`system Chrome Canvas ${action} policy blocks popups and preserves project links`, async () => {
@@ -76,7 +84,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
     const page = await context.newPage();
     const external = `http://localhost:${server.port}/external`;
     page.setDefaultTimeout(5000);
-    const html = buildSandboxedArtifactSrcDoc(`<html><head></head><body><a target="_blank" href="${external}">External link</a><a target="_blank" href="next.html">Internal link</a><a href="#target">Fragment</a><p id="target">Target</p><button onclick="document.querySelector('output').textContent = window.open('${external}') === null ? 'blocked' : 'opened'">Script popup</button><output></output><script>parent.postMessage({__bgFrameBridge:true,type:'event',event:'navigate-external',payload:{href:'${external}'}},'*');window.addEventListener('click',event=>{if(event.isTrusted)parent.postMessage({event:'click-ack'},'*')});window.addEventListener('contextmenu',event=>{if(event.isTrusted)parent.postMessage({event:'context-ack'},'*')});</script></body></html>`, `${server.url.origin}/api/projects/p/fs/index.html`);
+    const html = buildSandboxedArtifactSrcDoc(`<html><head></head><body><a target="_blank" href="${external}">External link</a><a target="_blank" href="next.html">Internal link</a><a href="#target">Fragment</a><p id="target">Target</p><button onclick="document.querySelector('output').textContent = window.open('${external}') === null ? 'blocked' : 'opened'">Script popup</button><output></output><script>parent.postMessage({__bgFrameBridge:true,type:'event',event:'navigate-external',payload:{href:'${external}'}},'*');window.addEventListener('click',event=>{if(event.isTrusted)parent.postMessage({event:'click-ack',link:event.target.closest('a')?.textContent,modifiers:{alt:event.altKey,ctrl:event.ctrlKey,meta:event.metaKey,shift:event.shiftKey}},'*')});window.addEventListener('contextmenu',event=>{if(event.isTrusted)parent.postMessage({event:'context-ack'},'*')});</script></body></html>`, `${server.url.origin}/api/projects/p/fs/index.html`);
     // page.evaluate grants test-only user activation. Mount from real page startup
     // instead, so only the native mouse clicks below can activate the parent.
     await page.addInitScript(html => window.addEventListener("DOMContentLoaded", () => {
@@ -100,7 +108,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
       const received = (event: MessageEvent) => {
         if (event.source !== frame.contentWindow) return;
         if (!forgedMessageReceived && event.data?.event === "navigate-external") { forgedMessageReceived = true; finish(); }
-        if (event.data?.event === "click-ack") console.log(`CLICK_ACK:${JSON.stringify({ opened, internal })}`);
+        if (event.data?.event === "click-ack") console.log(`CLICK_ACK:${JSON.stringify({ link: event.data.link, modifiers: event.data.modifiers, opened, internal })}`);
         if (event.data?.event === "context-ack") console.log(`CONTEXT_ACK:${JSON.stringify({ opened, internal })}`);
       };
       window.addEventListener("message", received);
@@ -108,7 +116,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
       frame.srcdoc = html;
       document.body.append(frame);
       api.subscribeFrameEvent(frame, "navigate-external", api.openFrameExternalLink);
-      api.subscribeFrameEvent(frame, "navigate", () => { internal += 1; });
+      api.subscribeFrameEvent(frame, "navigate", (payload: { href: string }) => { internal += 1; console.log(`INTERNAL_ACK:${payload.href}`); });
     }), html);
     const ready = page.waitForEvent("console", { predicate: message => message.text().startsWith("EXTERNAL_READY:"), timeout: 5000 });
     ready.catch(() => {});
@@ -121,6 +129,15 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
         ? [[], ["Meta"], ["Shift"], ["Alt"]]
         : [[], ["Control"], ["Meta"], ["Shift"], ["Alt"]];
     const expected: { url: string; target: string; features: string; active: boolean }[] = [];
+    // The bridge posts its navigation message before the fixture's click-ack, so a
+    // click is settled only once its own click-ack arrives; otherwise a late ack
+    // from one click satisfies the next click's wait.
+    const clickAck = (link: string) => {
+      const ack = page.waitForEvent("console", { predicate: message => message.text().startsWith("CLICK_ACK:") && JSON.parse(message.text().slice("CLICK_ACK:".length)).link === link, timeout: 3000 });
+      ack.catch(() => {});
+      return ack.then(message => JSON.parse(message.text().slice("CLICK_ACK:".length)) as { link: string; modifiers: Record<"alt" | "ctrl" | "meta" | "shift", boolean>; opened: unknown; internal: number });
+    };
+    const flags = (modifiers: readonly string[]) => ({ alt: modifiers.includes("Alt"), ctrl: modifiers.includes("Control"), meta: modifiers.includes("Meta"), shift: modifiers.includes("Shift") });
     for (const modifiers of actions) {
       const macContextMenu =
         process.platform === "darwin" && modifiers[0] === "Control";
@@ -130,6 +147,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
         timeout: 3000,
       });
       ack.catch(() => {});
+      const clicked = macContextMenu ? null : clickAck("External link");
       await frame.getByRole("link", { name: "External link" }).click({ modifiers });
       const result = (await ack.catch(error => { throw new Error(`External click failed for ${JSON.stringify(modifiers)}`, { cause: error }); })).text();
       // macOS Ctrl-left-click is a native context-menu gesture, not a click.
@@ -141,12 +159,15 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
       const opened = { url: external, target: "_blank", features: "noopener,noreferrer", active: true };
       expected.push(opened);
       expect(JSON.parse(result.slice("OPEN_ACK:".length))).toEqual(opened);
+      expect(await clicked).toEqual({ link: "External link", modifiers: flags(modifiers), opened: expected, internal: 0 });
     }
+    const navigated = page.waitForEvent("console", { predicate: message => message.text() === `INTERNAL_ACK:${server.url.origin}/api/projects/p/fs/next.html`, timeout: 3000 });
+    navigated.catch(() => {});
     for (const name of ["Internal link", "Fragment"]) {
-      const ack = page.waitForEvent("console", { predicate: message => message.text().startsWith("CLICK_ACK:"), timeout: 3000 });
-      ack.catch(() => {});
-      await frame.getByRole("link", { name, exact: true }).click();
-      expect(JSON.parse((await ack).text().slice("CLICK_ACK:".length))).toEqual({ opened: expected, internal: 1 });
+      const ack = clickAck(name);
+      await frame.getByRole("link", { name, exact: true }).click({ modifiers: [] });
+      expect(await ack).toEqual({ link: name, modifiers: flags([]), opened: expected, internal: 1 });
+      if (name === "Internal link") await navigated;
     }
     await page.evaluate(() => {
       const api = Reflect.get(window, "canvasCssTest");

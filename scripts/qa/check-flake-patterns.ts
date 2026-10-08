@@ -12,7 +12,12 @@
  *   launch_server_without_deadline     launchServer called outside launchWithin or probeChannels, the bridge's own
  *                                      enforced deadline
  *
- * It also reads packages/*\/tests for one rule (AGENTS.md: never skip a test on one OS):
+ * It also reads packages/*\/tests for two rules (AGENTS.md: never skip a test on one OS, never sleep in a test):
+ *
+ *   fixed_sleep_in_test                setTimeout(resolve, N) / setTimeout(() => resolve(), N) with N > 0, or Bun.sleep:
+ *                                      a wall-clock wait that passes only if N ms were long enough; await the event
+ *                                      (a deferred) under a bounded deadline instead. A timer that resolves or rejects
+ *                                      with a value is a simulated slow dependency or a deadline and is not matched
  *
  *   platform_early_return_in_test      a test body that returns early on `process.platform`, so the runner reports a
  *                                      pass for a case that never ran; use test.skipIf(...) with a reason, or the
@@ -33,9 +38,12 @@ const PLAYWRIGHT_MODULE = /(?:^|\/)playwright(?:-core|-runtime)?$/;
 
 export const TEST_ROOTS_GLOB = "packages/*/tests";
 
-export type FlakeProblemCode = "raw_timeout_signal_in_launch_call" | "launch_module_signal_not_armed" | "playwright_timeout_option" | "launch_server_without_deadline" | "platform_early_return_in_test";
+export type FlakeProblemCode = "raw_timeout_signal_in_launch_call" | "launch_module_signal_not_armed" | "playwright_timeout_option" | "launch_server_without_deadline" | "platform_early_return_in_test" | "fixed_sleep_in_test";
 export type FlakeProblem = { readonly code: FlakeProblemCode; readonly path: string; readonly line: number };
 export type SourceText = { readonly path: string; readonly text: string };
+
+/** Existing sleeps that predate the rule (a real cooldown window, a render-queue settle); shrink this list, never grow it. */
+export const KNOWN_TEST_SLEEPS: ReadonlySet<string> = new Set(["packages/backend/tests/project-thumbnails.test.ts"]);
 
 const repoPath = (spelling: string): string => spelling.replaceAll("\\", "/").replace(/^(?:\.\/)+/, "");
 
@@ -183,7 +191,26 @@ function isTestCallback(fn: ts.Node): boolean {
   return ts.isIdentifier(callee) && (callee.text === "test" || callee.text === "it");
 }
 
-/** An `if (process.platform ...) return;` directly in a test callback: the case reports a pass on the OS it skipped. */
+/** `setTimeout(resolve, N)` or `setTimeout(() => resolve(), N)` with N != 0: the callback delivers no value, so the wait is the point. */
+function isBareSleep(call: ts.CallExpression): boolean {
+  if (!ts.isIdentifier(call.expression) || call.expression.text !== "setTimeout") return false;
+  const [callback, delay] = call.arguments;
+  if (callback === undefined || (delay !== undefined && ts.isNumericLiteral(delay) && Number(delay.text) === 0)) return false;
+  if (ts.isIdentifier(callback)) return true;
+  if (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) return false;
+  let body: ts.Node = callback.body;
+  if (ts.isBlock(body)) {
+    const [only] = body.statements;
+    if (body.statements.length !== 1 || only === undefined || !ts.isExpressionStatement(only)) return false;
+    body = only.expression;
+  }
+  return ts.isCallExpression(body) && ts.isIdentifier(body.expression) && body.arguments.length === 0;
+}
+
+const isBunSleep = (call: ts.CallExpression): boolean =>
+  ts.isPropertyAccessExpression(call.expression) && ts.isIdentifier(call.expression.expression) && call.expression.expression.text === "Bun" && /^sleep(?:Sync)?$/.test(call.expression.name.text);
+
+/** Per-file rules for tests: an `if (process.platform ...) return;` directly in a test callback reports a pass on the OS it skipped; a bare sleep is a wall-clock wait. */
 export function checkTestFile(source: SourceText): FlakeProblem[] {
   const file = parse(source);
   const problems: FlakeProblem[] = [];
@@ -191,6 +218,9 @@ export function checkTestFile(source: SourceText): FlakeProblem[] {
     if (ts.isIfStatement(node) && node.elseStatement === undefined && isBareReturn(node.thenStatement) && /\bprocess\.platform\b/.test(node.expression.getText(file))
       && enclosing !== null && isTestCallback(enclosing)) {
       problems.push({ code: "platform_early_return_in_test", path: repoPath(source.path), line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1 });
+    }
+    if (ts.isCallExpression(node) && (isBareSleep(node) || isBunSleep(node)) && !KNOWN_TEST_SLEEPS.has(repoPath(source.path))) {
+      problems.push({ code: "fixed_sleep_in_test", path: repoPath(source.path), line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1 });
     }
     const next = isFunctionLike(node) || ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) ? node : enclosing;
     ts.forEachChild(node, (child) => { visit(child, next); });
@@ -227,6 +257,7 @@ const HELP: Record<FlakeProblemCode, string> = {
   launch_module_signal_not_armed: "this module loads Playwright and removes an abort listener: call keepAbortSignalArmed on the caller's signal first",
   playwright_timeout_option: "do not rely on Playwright's timeout option: race the call against an owned deadline (launchWithin, settleLaunch)",
   launch_server_without_deadline: "launchServer has no working deadline of its own: call it through launchWithin or probeChannels",
+  fixed_sleep_in_test: "do not sleep in a test: resolve a deferred from the event you wait for and await it under a bounded deadline",
   platform_early_return_in_test: "an early return on process.platform reports a pass without running: use test.skipIf(...) with a reason, or the form that OS supports",
 };
 
