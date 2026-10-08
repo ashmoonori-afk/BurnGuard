@@ -173,6 +173,12 @@ systemRoutes.get("/api/design-systems/:id", async (c) => {
   return c.json(ok(system satisfies DesignSystemDetail));
 });
 
+/** An unreadable token file is a server-side fault (permissions, I/O), not a bad request, so it is a 500 with a fixed message. */
+function designSystemEditStatus(err: DesignSystemAssetEditError): 404 | 400 | 500 {
+  if (err.code === "design_system_not_found") return 404;
+  return err.code === "token_file_unreadable" ? 500 : 400;
+}
+
 systemRoutes.get("/api/design-systems/:id/tokens", async (c) => {
   const id = c.req.param("id");
   try {
@@ -200,7 +206,7 @@ systemRoutes.patch("/api/design-systems/:id/colors", async (c) => {
     return c.json(ok(tokens satisfies DesignSystemTokensResponse));
   } catch (err) {
     if (err instanceof DesignSystemAssetEditError) {
-      return c.json(fail(err.code, err.message), err.code === "design_system_not_found" ? 404 : 400);
+      return c.json(fail(err.code, err.message), designSystemEditStatus(err));
     }
     return c.json(unexpectedFailure("design_system_color_update_failed", "Design system color could not be saved", err), 500);
   }
@@ -243,7 +249,7 @@ systemRoutes.post("/api/design-systems/:id/fonts", async (c) => {
     return c.json(ok(uploaded satisfies DesignSystemFontUploadResponse), 201);
   } catch (err) {
     if (err instanceof DesignSystemAssetEditError) {
-      return c.json(fail(err.code, err.message), err.code === "design_system_not_found" ? 404 : 400);
+      return c.json(fail(err.code, err.message), designSystemEditStatus(err));
     }
     return c.json(unexpectedFailure("design_system_font_upload_failed", "Design system font could not be uploaded", err), 500);
   }

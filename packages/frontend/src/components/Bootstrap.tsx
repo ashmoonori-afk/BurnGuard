@@ -4,6 +4,7 @@ import { getSettings, patchSettings } from "@/api/home";
 import { synchronizePortableLocale } from "@/i18n/locale";
 import { t as translate, useT } from "@/i18n/t";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { reloadWithoutLeaveGuard } from "@/lib/leave-guard";
 import { useUIStore } from "@/state/uiStore";
 
 /**
@@ -23,7 +24,7 @@ export async function runBootstrap(signal: AbortSignal, onSettingsSyncFailed: (e
  * A stale launch capability after a backend restart: one persistent notice with a Reload action.
  * Automatic re-bootstrap is deliberately not done here until it has had a security review.
  */
-export function announceBackendRestart(reload: () => void = () => window.location.reload()): void {
+export function announceBackendRestart(reload: () => void = () => reloadWithoutLeaveGuard()): void {
   const store = useUIStore.getState();
   const title = translate("errors.forbidden");
   if (store.toasts.some((toast) => toast.title === title)) return;

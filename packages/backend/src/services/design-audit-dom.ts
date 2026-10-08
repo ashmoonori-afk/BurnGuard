@@ -25,7 +25,34 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
       if (image.complete) done();
     })));
   });
-  const observation = await page.evaluate((fixedCanvas) => {
+  // A page marks intentional edge motion (a marquee band, copy sliding in from an edge) with data-bg-motion. Such a
+  // region is measured at rest, not at the sampled moment: prefers-reduced-motion is emulated, and any animation still
+  // running inside the region loses its effect until the inspection ends. The marker is ignored, and reported, where it
+  // would cover the page's main content: on html, body or main, around main, or over more than half the page.
+  const motionRegions = await page.evaluate(() => {
+    const regions: HTMLElement[] = []; const ignored: { element: HTMLElement; evidence: string }[] = [];
+    const pageArea = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) * Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    for (const region of document.querySelectorAll<HTMLElement>("[data-bg-motion]")) {
+      const rect = region.getBoundingClientRect(); const share = pageArea > 0 ? rect.width * rect.height / pageArea : 1;
+      const reason = region.matches("html,body,main,[data-bg-content]") || region.querySelector("main,[data-bg-content]") !== null ? "wraps the page's main content" : share > 0.5 ? `covers ${Math.round(share * 100)}% of the page; a motion region may cover at most 50%` : null;
+      if (reason === null) regions.push(region); else ignored.push({ element: region, evidence: `data-bg-motion is ignored on <${region.tagName.toLowerCase()}>: it ${reason}` });
+    }
+    Reflect.set(window, "__bgMotion", { regions, ignored, effects: [] });
+    return regions.length;
+  });
+  let observation: DomAuditObservation;
+  try {
+    if (motionRegions > 0) {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.evaluate(() => {
+        const motion = Reflect.get(window, "__bgMotion") as { regions: HTMLElement[]; effects: [Animation, AnimationEffect | null][] };
+        for (const animation of document.getAnimations()) {
+          const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
+          if (target !== null && motion.regions.some((region) => region.contains(target))) { motion.effects.push([animation, animation.effect]); animation.effect = null; }
+        }
+      });
+    }
+    observation = await page.evaluate((fixedCanvas) => {
     type Code = "text_overflow" | "element_overlap" | "minimum_text_size" | "contrast" | "narrow_width" | "duplicate_node_id" | "missing_image" | "token_usage" | "site_nav_mismatch" | "site_missing_aria_current" | "site_dangling_link" | "site_missing_shared_block" | "site_root_absolute_asset" | "font_consistency" | "copy_review" | "em_dash_copy" | "eyebrow_density" | "duplicate_cta_intent" | "cta_label_wrap" | "placeholder_copy" | "accent_color_count" | "radius_scale_count" | "repeated_section_structure" | "remote_resources" | "journey_dead_link" | "journey_mobile_nav" | "journey_focus_visible" | "journey_layout_shift";
     type Severity = "must_fix" | "recommended";
     type Action = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path" | "align_font_roles" | "revise_copy" | "keep_cta_label_single_line" | "consolidate_visual_language" | "vary_section_layout" | "bundle_remote_resource" | "add_visible_focus" | "reserve_layout_space";
@@ -42,6 +69,10 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
     const loadBearing = (element: HTMLElement): boolean => textBearing(element) || element instanceof HTMLImageElement || element.matches("button,a,input,select,textarea,[role=button]");
     const id = (element: Element): string | null => element.getAttribute("data-bg-node-id");
     const push = (element: Element | null, finding: Omit<Finding, "nodeId">): void => { findings.push({ ...finding, nodeId: element === null ? null : id(element), evidence: finding.evidence.slice(0, 500) }); };
+    // Accepted motion regions are already at rest; inside one, an aria-hidden copy (a seamless marquee's second set) is decorative.
+    const motion = Reflect.get(window, "__bgMotion") as { regions: HTMLElement[]; ignored: { element: HTMLElement; evidence: string }[] } | undefined;
+    for (const { element, evidence } of motion?.ignored ?? []) push(element, { code: "text_overflow", severity: "must_fix", evidence, action: "expand_or_reflow_text" });
+    const decorative = (element: Element): boolean => { const hidden = element.closest('[aria-hidden="true"]'); return hidden !== null && (motion?.regions ?? []).some((region) => region.contains(hidden)); };
 
     const textElements = elements.filter(textBearing);
     measurable.font_consistency = textElements.length > 0;
@@ -173,7 +204,7 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
         const parentStyle = getComputedStyle(parent); const parentRect = parent.getBoundingClientRect();
         clipped = (clips(parentStyle.overflowX) && (textRect.left < parentRect.left - 1 || textRect.right > parentRect.right + 1)) || (clips(parentStyle.overflowY) && (textRect.top < parentRect.top - 1 || textRect.bottom > parentRect.bottom + 1));
       }
-      if (clipped || Math.min(rect.left, textRect.left) < bounds.left - 1 || Math.max(rect.right, textRect.right) > bounds.right + 1 || Math.min(rect.top, textRect.top) < bounds.top - 1 || Math.max(rect.bottom, textRect.bottom) > bounds.bottom + 1) push(element, { code: "text_overflow", severity: "must_fix", evidence: "Text geometry exceeds clipping or page bounds", action: "expand_or_reflow_text" });
+      if (!decorative(element) && (clipped || Math.min(rect.left, textRect.left) < bounds.left - 1 || Math.max(rect.right, textRect.right) > bounds.right + 1 || Math.min(rect.top, textRect.top) < bounds.top - 1 || Math.max(rect.bottom, textRect.bottom) > bounds.bottom + 1)) push(element, { code: "text_overflow", severity: "must_fix", evidence: "Text geometry exceeds clipping or page bounds", action: "expand_or_reflow_text" });
       const size = Number.parseFloat(getComputedStyle(element).fontSize);
       const slide = element.closest("[data-slide]") !== null; const artboard = element.closest<HTMLElement>("[data-graphic-artboard]");
       const minimum = slide ? 24 : artboard === null ? 12 : artboardFloor(artboard);
@@ -241,7 +272,7 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
     if (!fixedCanvas) {
       const viewport = document.documentElement.clientWidth; const overflow = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - viewport;
       if (viewport <= 375 && overflow > 1) push(null, { code: "narrow_width", severity: "must_fix", evidence: `Document exceeds narrow viewport by ${Math.round(overflow)}px`, action: "repair_narrow_layout", measured: Math.round(overflow), threshold: 0 });
-      if (viewport <= 375) for (const element of elements.filter((candidate) => visible(candidate) && loadBearing(candidate))) { const rect = element.getBoundingClientRect(); if (rect.left < -1 || rect.right > viewport + 1) push(element, { code: "narrow_width", severity: "must_fix", evidence: `Element escapes 375px viewport at ${Math.round(rect.left)}..${Math.round(rect.right)}`, action: "repair_narrow_layout" }); }
+      if (viewport <= 375) for (const element of elements.filter((candidate) => visible(candidate) && loadBearing(candidate) && !decorative(candidate))) { const rect = element.getBoundingClientRect(); if (rect.left < -1 || rect.right > viewport + 1) push(element, { code: "narrow_width", severity: "must_fix", evidence: `Element escapes 375px viewport at ${Math.round(rect.left)}..${Math.round(rect.right)}`, action: "repair_narrow_layout" }); }
 
       // Journey: a visible link must lead somewhere - a page, a URL or an element on this page.
       const anchors = elements.filter((element): element is HTMLAnchorElement => element instanceof HTMLAnchorElement && visible(element));
@@ -304,6 +335,14 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
     }
     return { findings, measurable, unknownReasons };
   }, fixedCanvas);
+  } finally {
+    await page.evaluate(() => {
+      const motion = Reflect.get(window, "__bgMotion") as { effects: [Animation, AnimationEffect | null][] } | undefined;
+      for (const [animation, effect] of motion?.effects ?? []) animation.effect = effect;
+      Reflect.deleteProperty(window, "__bgMotion");
+    });
+    if (motionRegions > 0) await page.emulateMedia({ reducedMotion: null });
+  }
   return fixedCanvas || journey === "none" ? observation : await inspectJourney(page, observation);
 }
 

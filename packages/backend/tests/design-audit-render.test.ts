@@ -12,6 +12,22 @@ const allPassFixture = `<!doctype html><html><head><style>/* @bg-shared-css */:r
 const narrowFixture = `<!doctype html><html><head><style>:root{--ink:#111}html,body{margin:0;overflow:hidden;background:#fff;color:#111}.nclip{width:200px;height:30px}.one,.two{position:absolute;top:100px;width:80px;height:30px}.one{left:10px}.two{left:120px}@media(max-width:375px){.nclip{width:40px;height:18px;overflow:hidden;white-space:nowrap}.one,.two{left:10px}}</style></head><body><div class="nclip" data-bg-node-id="nclip">narrow clipping text</div><div class="one" data-bg-node-id="one">One</div><div class="two" data-bg-node-id="two">Two</div></body></html>`;
 const geometryFixture = `<!doctype html><html><head><style>:root{--ink:#111}body{margin:0;background:#fff;color:#111}.slide{position:relative;margin:100px 0 0 200px;width:300px;height:200px}.centered{position:absolute;left:20px;top:20px}.escaped{position:absolute;left:-20px;top:80px}</style></head><body><section class="slide" data-slide><div class="centered" data-bg-node-id="centered">Centered</div><div class="escaped" data-bg-node-id="escaped">Escaped</div></section></body></html>`;
 const translucentFixture = `<!doctype html><html><head><style>:root{--ink:#111}body{margin:0;background:#fff;color:#111}.layer{background:rgba(0,0,0,.2)}</style></head><body><div class="layer"><p data-bg-node-id="text">Opaque ancestor is not direct</p></div></body></html>`;
+const motionStyle = ":root{--ink:#111}html,body{margin:0;background:#fff;color:#111;font:16px Arial}main{padding:0 16px}p{margin:16px 0}.band{overflow:hidden}.track{display:flex;gap:24px;width:max-content;white-space:nowrap;animation:scroll 20s linear infinite}@keyframes scroll{to{transform:translateX(-50%)}}.reveal{overflow:hidden}.slide{margin:0;font:32px Arial;animation:enter 60s steps(1,end) both}@keyframes enter{from{transform:translateX(110%)}}";
+const marqueeItems = (rest: string): string => `<main><h1 data-bg-node-id="title">Partners</h1><div class="band" data-bg-motion data-bg-node-id="band"><div class="track">${["Northvale Capital Partners", "Harbor Freight Logistics", "Juniper Health Systems", "Atlas Civic Engineering"].map((label, index) => `<span data-bg-node-id="item-${index}">${label}</span>`).join("")}${["Northvale Capital Partners", "Harbor Freight Logistics", "Juniper Health Systems", "Atlas Civic Engineering"].map((label) => `<span aria-hidden="true">${label}</span>`).join("")}</div></div><p data-bg-node-id="copy">Trusted by teams across the region.</p></main>${rest}`;
+/** A seamless DOM marquee whose reduced-motion rest state stops, wraps and hides the aria-hidden second copy. */
+const marqueeFixture = `<!doctype html><html><head><style>${motionStyle}@media (prefers-reduced-motion: reduce){.track{animation:none;width:auto;flex-wrap:wrap;white-space:normal}.track [aria-hidden="true"]{display:none}}</style></head><body>${marqueeItems("")}</body></html>`;
+/** The same marquee without a rest state: stopped, its single nowrap row is still clipped by the band. */
+const brokenRestFixture = `<!doctype html><html><head><style>${motionStyle}</style></head><body>${marqueeItems("")}</body></html>`;
+/** A headline that holds outside its frame while it slides in; its resting place, without the animation, is inside. */
+const slideInFixture = `<!doctype html><html><head><style>${motionStyle}</style></head><body><main><section><div class="reveal" data-bg-motion data-bg-node-id="reveal"><h1 class="slide" data-bg-node-id="headline">Launch week starts now</h1></div><p data-bg-node-id="copy">Everything ships on Monday.</p></section></main></body></html>`;
+const mustFix = (result: { readonly checks: readonly { readonly findings: readonly { readonly severity: string; readonly check_code: string; readonly source: { readonly node_bg_id: string | null } }[] }[] }) => result.checks.flatMap((check) => check.findings).filter((finding) => finding.severity === "must_fix").map((finding) => [finding.check_code, finding.source.node_bg_id]);
+const auditFixture = async (html: string) => {
+  const root = await mkdtemp(path.join(tmpdir(), "bg-audit-motion-"));
+  try {
+    await writeFile(path.join(root, "index.html"), html); const manifest = await inspectCanonicalTree(root);
+    return await auditRenderedTree({ projectId: "motion", projectDir: root, entrypoint: "index.html", revision: 0, digest: manifest.tree_digest, signal: new AbortController().signal });
+  } finally { await rm(root, { recursive: true, force: true }); }
+};
 const fixture = `<!doctype html><html><head><style>:root{--brand:#123456}body{margin:0;background:#fff;color:#777}.clip{width:40px;height:10px;overflow:hidden}.a,.b{position:absolute;left:20px;top:80px;width:100px;height:40px}.wide{width:500px}</style></head><body><div class="clip" data-bg-node-id="clip">clipped text</div><div class="a" data-bg-node-id="a">alpha</div><div class="b" data-bg-node-id="b">beta</div><p data-bg-node-id="tiny" style="font-size:9px;color:#777">tiny</p><div class="wide" data-bg-node-id="wide">wide</div><div data-bg-node-id="dup">one</div><div data-bg-node-id="dup">two</div><img data-bg-node-id="image" src="missing.png"><div data-bg-node-id="literal" style="color:#ff0000">literal</div><div data-bg-node-id="gradient" style="background:linear-gradient(red,blue);color:white">gradient</div></body></html>`;
 
 describe("rendered design auditor", () => {
@@ -84,6 +100,37 @@ describe("rendered design auditor", () => {
       expect(result.overall_status).toBe("ready"); expect(result.checks.every((check) => check.status === "pass")).toBeTrue();
     } finally { await rm(root, { recursive: true, force: true }); }
   }, 60_000);
+  test("Given a seamless DOM marquee in a data-bg-motion band When audited Then its moving edge is not a must-fix", async () => {
+    expect(mustFix(await auditFixture(marqueeFixture))).toEqual([]);
+  }, 60_000);
+
+  test("Given a headline sliding in from the frame edge inside a data-bg-motion region When audited Then it is measured at rest and passes", async () => {
+    expect(mustFix(await auditFixture(slideInFixture))).toEqual([]);
+  }, 60_000);
+
+  test("Given a motion region whose resting state still clips its copy When audited Then the clipped items fail and the aria-hidden duplicates do not", async () => {
+    const failing = mustFix(await auditFixture(brokenRestFixture));
+    expect(failing).toContainEqual(["narrow_width", "item-3"]);
+    expect(failing.some(([, nodeId]) => nodeId === null)).toBeFalse();
+  }, 60_000);
+
+  test("Given data-bg-motion on the body over clipped copy When audited Then the marker is ignored and reported and the clipping still fails", async () => {
+    const failing = mustFix(await auditFixture('<!doctype html><html><head><style>:root{--ink:#111}html,body{margin:0;background:#fff;color:#111}.clip{width:40px;overflow:hidden;white-space:nowrap}</style></head><body data-bg-motion data-bg-node-id="page"><main><p class="clip" data-bg-node-id="clip">clipped body copy</p></main></body></html>'));
+    expect(failing).toContainEqual(["text_overflow", "page"]);
+    expect(failing).toContainEqual(["text_overflow", "clip"]);
+  }, 60_000);
+
+  test("Given an oversized motion region and clipped copy outside a valid one When inspected Then only the valid region is exempt", async () => {
+    const browser = await launchChromium(AbortSignal.timeout(60_000));
+    try {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+      await page.setContent(`<!doctype html><style>${motionStyle}.clip{width:40px;overflow:hidden;white-space:nowrap}.huge{height:3000px}</style><div class="reveal" data-bg-motion data-bg-node-id="reveal"><h1 class="slide" data-bg-node-id="moving">Sliding in</h1></div><p class="clip" data-bg-node-id="outside">clipped outside copy</p><div class="huge band" data-bg-motion data-bg-node-id="huge"><div class="track"><span data-bg-node-id="hidden">${"Copy that should stay audited ".repeat(12)}</span></div></div>`);
+      const overflow = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "text_overflow").map((finding) => finding.nodeId);
+      expect(overflow).not.toContain("moving"); expect(overflow).not.toContain("reveal");
+      expect(overflow).toContain("outside"); expect(overflow).toContain("huge"); expect(overflow).toContain("hidden");
+    } finally { await browser.close(); }
+  }, 60_000);
+
   test("Given visible tight text and clipped or off-canvas text When inspected Then only lost text fails", async () => {
   const browser = await launchChromium(AbortSignal.timeout(60_000));
   try {
