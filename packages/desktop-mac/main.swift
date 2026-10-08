@@ -4,6 +4,30 @@ import WebKit
 
 private let smokeTestArguments = ["--smoke-test", "--smoke-report"]
 
+// Shell dialog strings live in i18n/<language>.json (bundled by scripts/build-mac.ts); the language
+// follows the SPA's first-run rule: Korean -> ko, Simplified Chinese -> zh, anything else -> en.
+private let shellLanguage: String = {
+    let parts = (Locale.preferredLanguages.first ?? "").lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).map(String.init)
+    if parts.first == "ko" { return "ko" }
+    guard parts.first == "zh" else { return "en" }
+    if parts.contains("hans") { return "zh" }
+    return parts.contains(where: { ["hant", "tw", "hk", "mo"].contains($0) }) ? "en" : "zh"
+}()
+
+private func shellTable(_ language: String) -> [String: String] {
+    guard let url = Bundle.main.url(forResource: language, withExtension: "json", subdirectory: "i18n"),
+          let data = try? Data(contentsOf: url),
+          let table = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return [:] }
+    return table
+}
+
+private let shellStrings = shellTable(shellLanguage)
+private let fallbackShellStrings = shellTable("en")
+
+private func shellText(_ key: String) -> String {
+    shellStrings[key] ?? fallbackShellStrings[key] ?? key
+}
+
 final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
     private var window: NSWindow!
     private var webView: WKWebView!
@@ -23,6 +47,9 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var smokeStarted = false
     private var smokeFinishing = false
     private var closing = false
+    private var closeConfirmed = false
+    private var closeDecisionWaiters: [(Bool) -> Void] = []
+    private var closeQuery = 0
     private var terminationReplyPending = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -47,12 +74,62 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         guard service?.isRunning == true else { return .terminateNow }
         if terminationReplyPending { return .terminateCancel }
         terminationReplyPending = true
-        shutdown()
+        confirmCloseIfGenerating { [weak self] proceed in
+            guard let self else { return }
+            if proceed { self.shutdown(); return }
+            self.terminationReplyPending = false
+            NSApp.reply(toApplicationShouldTerminate: false)
+        }
         return .terminateLater
+    }
+
+    // windowWillClose cannot cancel; the close is held here until the backend reports no running generation or the user confirms.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if closeConfirmed || closing { return true }
+        confirmCloseIfGenerating { [weak self] proceed in
+            guard let self, proceed else { return }
+            self.closeConfirmed = true
+            self.window.close()
+        }
+        return false
     }
 
     func windowWillClose(_ notification: Notification) {
         shutdown()
+    }
+
+    // Asks the backend over the private stdin pipe; no answer in two seconds counts as idle, so a hung backend never blocks closing.
+    private func confirmCloseIfGenerating(_ decided: @escaping (Bool) -> Void) {
+        guard smokeReportPath == nil, !closing, origin != nil, service?.isRunning == true else { decided(true); return }
+        closeDecisionWaiters.append(decided)
+        guard closeDecisionWaiters.count == 1 else { return }
+        closeQuery += 1
+        let query = closeQuery
+        serviceInput?.fileHandleForWriting.write(Data("active-turns\n".utf8))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self, self.closeQuery == query else { return }
+            self.decideClose(activeTurns: 0)
+        }
+    }
+
+    private func decideClose(activeTurns: Int) {
+        guard !closeDecisionWaiters.isEmpty else { return }
+        let waiters = closeDecisionWaiters
+        closeDecisionWaiters = []
+        closeQuery += 1
+        let proceed = activeTurns == 0 || confirmCloseDuringTurn()
+        waiters.forEach { $0(proceed) }
+    }
+
+    // Keep working is the default button, so Return keeps the generation running.
+    private func confirmCloseDuringTurn() -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "BurnGuard"
+        alert.informativeText = shellText("closeRunning.message")
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: shellText("closeRunning.keep"))
+        alert.addButton(withTitle: shellText("closeRunning.close"))
+        return alert.runModal() == .alertSecondButtonReturn
     }
 
     func webView(
@@ -479,6 +556,12 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                   protocolVersion == 1 else {
                 fail("BurnGuard 시작 응답을 확인할 수 없습니다.")
                 return
+            }
+            if message["event"] as? String == "active-turns" {
+                let count = message["count"] as? Int ?? 0
+                // The confirmation is modal; run it outside this read loop.
+                DispatchQueue.main.async { [weak self] in self?.decideClose(activeTurns: count) }
+                continue
             }
             if message["event"] as? String == "shutdown" {
                 closing = true

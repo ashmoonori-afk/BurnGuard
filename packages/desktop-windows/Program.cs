@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -106,6 +107,8 @@ namespace BurnGuard.Desktop
         private IntPtr job;
         private Uri origin;
         private bool closing;
+        private bool confirmingClose;
+        private TaskCompletionSource<int> activeTurnsReply;
         private bool stopped;
         private bool smokeStarted;
         private int smokeStage;
@@ -315,6 +318,11 @@ namespace BurnGuard.Desktop
                 try
                 {
                     var data = Program.Json.Deserialize<Dictionary<string, object>>(args.Data.Substring(prefix.Length));
+                    if (Convert.ToInt32(data["protocol"]) == 1 && data.TryGetValue("event", out var kind) && (kind as string) == "active-turns")
+                    {
+                        activeTurnsReply?.TrySetResult(Convert.ToInt32(data["count"]));
+                        return;
+                    }
                     var expected = "http://127.0.0.1:" + port;
                     if (Convert.ToInt32(data["protocol"]) != 1 || Convert.ToInt32(data["pid"]) != service.Id || (string)data["url"] != expected)
                         throw new InvalidOperationException("Invalid desktop readiness message.");
@@ -543,11 +551,48 @@ namespace BurnGuard.Desktop
             Close();
         }
 
+        // The backend answers "active-turns" on the readiness channel; no answer in two seconds counts as idle, so a hung backend never blocks closing.
+        private async Task<int> ActiveTurnCountAsync()
+        {
+            if (origin == null || service == null || service.HasExited) return 0;
+            var reply = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            activeTurnsReply = reply;
+            try { await service.StandardInput.WriteLineAsync("active-turns"); await service.StandardInput.FlushAsync(); }
+            catch (IOException) { return 0; }
+            catch (InvalidOperationException) { return 0; }
+            return await Task.WhenAny(reply.Task, Task.Delay(2000)) == reply.Task ? reply.Task.Result : 0;
+        }
+
+        // Keep working is the default and the answer to Esc or the title-bar close.
+        private bool ConfirmCloseDuringTurn()
+        {
+            using (var dialog = new Form { Text = "BurnGuard", FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, ShowInTaskbar = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(16), Font = new Font("Segoe UI", 10) })
+            {
+                var layout = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, Dock = DockStyle.Fill };
+                var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 16, 0, 0) };
+                var keep = new Button { Text = ShellText.Get("closeRunning.keep"), DialogResult = DialogResult.Cancel, AutoSize = true };
+                var close = new Button { Text = ShellText.Get("closeRunning.close"), DialogResult = DialogResult.OK, AutoSize = true };
+                buttons.Controls.Add(keep); buttons.Controls.Add(close);
+                layout.Controls.Add(new Label { Text = ShellText.Get("closeRunning.message"), AutoSize = true, MaximumSize = new Size(420, 0) });
+                layout.Controls.Add(buttons);
+                dialog.Controls.Add(layout);
+                dialog.AcceptButton = keep; dialog.CancelButton = keep;
+                return dialog.ShowDialog(this) == DialogResult.OK;
+            }
+        }
+
         private async void OnClosing(object sender, FormClosingEventArgs args)
         {
             if (stopped) return;
             args.Cancel = true;
-            if (closing) return;
+            if (closing || confirmingClose) return;
+            // Ask before interrupting a generation; smoke runs, failures and Windows logoff close without a prompt.
+            if (report == null && Program.ExitCode == 0 && args.CloseReason == CloseReason.UserClosing)
+            {
+                confirmingClose = true;
+                try { if (await ActiveTurnCountAsync() > 0 && !ConfirmCloseDuringTurn()) { restartForUpdate = false; return; } }
+                finally { confirmingClose = false; activeTurnsReply = null; }
+            }
             closing = true; Enabled = false;
             updateTimer.Stop(); updateCancellation.Cancel();
             status.Text = "작업을 중단하고 BurnGuard를 종료하고 있습니다…"; status.Show(); status.BringToFront();
@@ -571,6 +616,34 @@ namespace BurnGuard.Desktop
                     catch { MessageBox.Show(this, "업데이트 재시작을 예약하지 못했습니다. BurnGuard를 다시 실행해 주세요.", "BurnGuard"); }
                 }
                 stopped = true; Close();
+            }
+        }
+    }
+
+    // Shell dialog strings live in i18n/<language>.json (embedded); the language follows the SPA's first-run rule.
+    internal static class ShellText
+    {
+        private static readonly Dictionary<string, string> Fallback = Load("en");
+        private static readonly Dictionary<string, string> Active = Load(Language(CultureInfo.CurrentUICulture));
+
+        // Korean -> ko, Simplified Chinese -> zh, anything else (including Traditional Chinese) -> en.
+        internal static string Language(CultureInfo culture)
+        {
+            if (culture.TwoLetterISOLanguageName == "ko") return "ko";
+            if (culture.TwoLetterISOLanguageName != "zh") return "en";
+            var name = culture.Name.ToLowerInvariant();
+            if (name.Contains("hans")) return "zh";
+            return name.Contains("hant") || name.EndsWith("-tw") || name.EndsWith("-hk") || name.EndsWith("-mo") ? "en" : "zh";
+        }
+
+        internal static string Get(string key) => Active.TryGetValue(key, out var value) || Fallback.TryGetValue(key, out value) ? value : key;
+
+        private static Dictionary<string, string> Load(string language)
+        {
+            using (var stream = typeof(ShellText).Assembly.GetManifestResourceStream("BurnGuard.Desktop.i18n." + language + ".json"))
+            {
+                if (stream == null) return new Dictionary<string, string>();
+                using (var reader = new StreamReader(stream, Encoding.UTF8)) return Program.Json.Deserialize<Dictionary<string, string>>(reader.ReadToEnd());
             }
         }
     }
