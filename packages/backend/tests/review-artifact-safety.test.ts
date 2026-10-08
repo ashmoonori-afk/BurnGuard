@@ -183,8 +183,12 @@ test("Given a signal during an active scan When the scan ends Then one final sca
   const barrier = new Promise<void>((resolve) => { release = resolve; });
   let calls = 0;
   const processSignal = async () => { calls += 1; if (calls === 1) await barrier; return null; };
-  const first = scheduleProjectSignal("queued-signal-review", projectDir, processSignal);
-  const second = scheduleProjectSignal("queued-signal-review", projectDir, processSignal);
+  const timers: Array<() => void> = [];
+  const scheduler = { now: () => 0, setTimer: (callback: () => void) => timers.push(callback), clearTimer: () => {} };
+  const first = scheduleProjectSignal("queued-signal-review", projectDir, processSignal, scheduler);
+  timers[0]?.();
+  while (calls === 0) await Promise.resolve();
+  const second = scheduleProjectSignal("queued-signal-review", projectDir, processSignal, scheduler);
   release();
   await Promise.all([first, second]);
   expect(calls).toBe(2);

@@ -63,19 +63,52 @@ export async function processProjectFilesystemSignal(projectId: string, projectD
   return new ArtifactCoordinator(getSqlite()).observeExternal(projectId, projectDir);
 }
 
-export function scheduleProjectSignal(projectId: string, projectDir: string, processSignal = processProjectFilesystemSignal): Promise<void> {
+export interface SignalScheduler {
+  readonly now: () => number;
+  readonly setTimer: (callback: () => void, delayMs: number) => unknown;
+  readonly clearTimer: (handle: unknown) => void;
+}
+
+export const SIGNAL_QUIET_MS = 300;
+export const SIGNAL_MAX_WAIT_MS = 2000;
+
+const realScheduler: SignalScheduler = {
+  now: () => Date.now(),
+  setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
+  clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
+const debouncedSignals = new Map<string, () => void>();
+
+/**
+ * Debounces a burst of filesystem events: the scan starts after SIGNAL_QUIET_MS without a new event,
+ * or SIGNAL_MAX_WAIT_MS after the first one. Events during a running scan still queue exactly one more pass.
+ */
+export function scheduleProjectSignal(projectId: string, projectDir: string, processSignal = processProjectFilesystemSignal, scheduler: SignalScheduler = realScheduler): Promise<void> {
   dirtySignals.add(projectId);
   const pending = pendingSignals.get(projectId);
-  if (pending !== undefined) return pending;
-  const task = (async () => {
-    do {
-      dirtySignals.delete(projectId);
-      try { await processSignal(projectId, projectDir); }
-      catch (error) { await recordWatcherFailure(projectId, error instanceof Error ? error : new Error("Watcher persistence failed")); }
-    } while (dirtySignals.has(projectId));
-  })().finally(() => { pendingSignals.delete(projectId); });
+  if (pending !== undefined) { debouncedSignals.get(projectId)?.(); return pending; }
+  const task = new Promise<void>((resolve) => {
+    const firstAt = scheduler.now();
+    let timer: unknown;
+    const arm = () => {
+      if (timer !== undefined) scheduler.clearTimer(timer);
+      const remaining = SIGNAL_MAX_WAIT_MS - (scheduler.now() - firstAt);
+      timer = scheduler.setTimer(start, Math.max(0, Math.min(SIGNAL_QUIET_MS, remaining)));
+    };
+    const start = () => { debouncedSignals.delete(projectId); resolve(runSignalLoop(projectId, projectDir, processSignal)); };
+    debouncedSignals.set(projectId, arm);
+    arm();
+  }).finally(() => { pendingSignals.delete(projectId); });
   pendingSignals.set(projectId, task);
   return task;
+}
+
+async function runSignalLoop(projectId: string, projectDir: string, processSignal: typeof processProjectFilesystemSignal): Promise<void> {
+  do {
+    dirtySignals.delete(projectId);
+    try { await processSignal(projectId, projectDir); }
+    catch (error) { await recordWatcherFailure(projectId, error instanceof Error ? error : new Error("Watcher persistence failed")); }
+  } while (dirtySignals.has(projectId));
 }
 
 async function recordWatcherFailure(projectId: string, error: Error): Promise<void> {

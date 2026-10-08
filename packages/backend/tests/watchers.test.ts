@@ -7,7 +7,7 @@ import { runMigrations } from "../src/db/migrate-local";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { isTransientFilePath } from "../src/services/files";
-import { ensureAllProjectWatchers, ensureProjectWatcher, processProjectFilesystemSignal, scheduleProjectSignal, shouldSkipPath } from "../src/services/watchers";
+import { SIGNAL_MAX_WAIT_MS, SIGNAL_QUIET_MS, ensureAllProjectWatchers, ensureProjectWatcher, processProjectFilesystemSignal, scheduleProjectSignal, shouldSkipPath } from "../src/services/watchers";
 import { listProjectIds } from "../src/db/project-read-repository";
 import { closeProjectWatcher, projectWatchers } from "../src/services/watcher-registry";
 import { logsDir } from "../src/lib/app-paths";
@@ -98,5 +98,71 @@ describe("project watcher path filtering", () => {
     await processProjectFilesystemSignal(item.id, item.root);
     expect(await readFile(path.join(item.root, "index.html"), "utf8")).toBe("base");
     expect(getSqlite().query("SELECT status FROM artifact_operations WHERE project_id=? AND json_extract(replay_json,'$.kind')!='initialize' ORDER BY id").all(item.id)).toEqual([{ status: "conflicted" }, { status: "conflicted" }]);
+  });
+
+  test("Given an unchanged tree When an external signal is observed Then the live tree is inspected exactly once", async () => {
+    const item = await fixture();
+    let inspections = 0;
+    const result = await new ArtifactCoordinator(getSqlite(), { afterLiveTreeInspect: () => { inspections += 1; } }).observeExternal(item.id, item.root);
+    expect(result).toBeNull();
+    expect(inspections).toBe(1);
+  });
+
+  test("Given a changed tree When an external signal is observed Then it commits and re-verifies the live tree", async () => {
+    const item = await fixture();
+    await writeFile(path.join(item.root, "index.html"), "changed");
+    let inspections = 0;
+    const result = await new ArtifactCoordinator(getSqlite(), { afterLiveTreeInspect: () => { inspections += 1; } }).observeExternal(item.id, item.root);
+    expect(result?.status).toBe("committed");
+    expect(inspections).toBeGreaterThan(1);
+  });
+});
+
+function fakeScheduler() {
+  let time = 0;
+  let nextHandle = 0;
+  const timers = new Map<number, { readonly at: number; readonly callback: () => void }>();
+  return {
+    scheduler: {
+      now: () => time,
+      setTimer: (callback: () => void, delayMs: number) => { nextHandle += 1; timers.set(nextHandle, { at: time + delayMs, callback }); return nextHandle; },
+      clearTimer: (handle: unknown) => { timers.delete(handle as number); },
+    },
+    advance(ms: number) {
+      time += ms;
+      for (const [handle, timer] of [...timers]) if (timer.at <= time) { timers.delete(handle); timer.callback(); }
+    },
+    armed: () => timers.size,
+  };
+}
+
+describe("project signal debounce", () => {
+  test("Given a burst of events When the quiet window passes Then one scan runs", async () => {
+    const clock = fakeScheduler();
+    let calls = 0;
+    const processSignal = async () => { calls += 1; return null; };
+    const runs = [1, 2, 3].map(() => scheduleProjectSignal("debounce-burst", "/unused", processSignal, clock.scheduler));
+    clock.advance(SIGNAL_QUIET_MS - 1);
+    expect(calls).toBe(0);
+    clock.advance(1);
+    await Promise.all(runs);
+    expect(calls).toBe(1);
+    expect(clock.armed()).toBe(0);
+  });
+
+  test("Given events that keep arriving When the cap is reached Then the scan starts anyway", async () => {
+    const clock = fakeScheduler();
+    let calls = 0;
+    const processSignal = async () => { calls += 1; return null; };
+    const step = SIGNAL_QUIET_MS - 1;
+    const runs = [scheduleProjectSignal("debounce-cap", "/unused", processSignal, clock.scheduler)];
+    for (let elapsed = 0; elapsed + step < SIGNAL_MAX_WAIT_MS; elapsed += step) {
+      clock.advance(step);
+      runs.push(scheduleProjectSignal("debounce-cap", "/unused", processSignal, clock.scheduler));
+    }
+    expect(calls).toBe(0);
+    clock.advance(SIGNAL_MAX_WAIT_MS);
+    await Promise.all(runs);
+    expect(calls).toBe(1);
   });
 });
