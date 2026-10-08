@@ -1,4 +1,4 @@
-import { type OwnedProcess, OwnedProcessHostError, settleOwnedProcess, terminateOwnedProcess } from "../adapters/owned-process";
+import { closeOwnedProcess, type OwnedProcess, OwnedProcessHostError, settleOwnedProcess, terminateOwnedProcess } from "../adapters/owned-process";
 import { OwnedProcessTreeCleanupError } from "../adapters/owned-process-tree";
 
 const TERM_GRACE_MS = 250;
@@ -180,6 +180,22 @@ export async function awaitChildWithAbort(
     throw error;
   } finally {
     signal.removeEventListener("abort", onAbort);
+  }
+}
+
+/**
+ * Awaits a reply read from a child's stdout under the same signal as its exit. A descendant that inherited
+ * the pipe keeps it open after the child itself has exited, so without this the read never ends; on abort
+ * the owned tree is closed (which releases the pipe) before the abort error is thrown.
+ */
+export async function awaitChildReply<T>(child: OwnedProcess<Bun.Subprocess>, reply: Promise<T>, signal: AbortSignal): Promise<T> {
+  let closing: Promise<void> | undefined;
+  try {
+    return await abortable(reply, signal, () => {
+      closing = closeOwnedProcess(child, { timeoutMs: TERM_GRACE_MS + KILL_GRACE_MS }).catch(() => undefined);
+    });
+  } finally {
+    await closing;
   }
 }
 
