@@ -60,6 +60,7 @@ jobs:
           bun test --timeout 30000
           packages/backend/tests/os-portability.test.ts
           packages/backend/tests/decomposed-file-names.test.ts
+          packages/backend/tests/artifact-tree-durability.test.ts
           packages/backend/tests/design-system-wireframe.test.ts
           packages/backend/tests/design-system-visual-diff.test.ts
           packages/backend/tests/design-system-hero-assets.test.ts
@@ -83,6 +84,8 @@ jobs:
           packages/backend/tests/vercel-publish.test.ts
           packages/backend/tests/path-boundary.test.ts
           packages/desktop-mac/main.test.ts
+          packages/desktop-windows/close-guard.test.ts
+          packages/frontend/tests/leave-guard.test.ts
           packages/backend/tests/config-storage.test.ts
           packages/backend/tests/native-binding.test.ts
           packages/backend/tests/python-runtime.test.ts
@@ -132,11 +135,13 @@ jobs:
           packages/backend/tests/chromium-launch-hardening.test.ts
           scripts/qa/check-os-matrix-coverage.test.ts
           scripts/qa/check-flake-patterns.test.ts
+          scripts/whitespace-base.test.ts
           packages/backend/tests/mac-updates-version-order.test.ts
           packages/backend/tests/task-preset-comparison.test.ts
           packages/backend/tests/codex-model-catalog.test.ts
           packages/backend/tests/model-lists.test.ts
           packages/frontend/tests/backend-restart-notice.test.ts
+          packages/frontend/tests/settings-codex-progress.test.ts
           packages/frontend/tests/settings-language-note.test.ts
           packages/frontend/tests/workspace-narrow-layout.test.ts
           packages/frontend/tests/chat-status-slot-layout.test.ts

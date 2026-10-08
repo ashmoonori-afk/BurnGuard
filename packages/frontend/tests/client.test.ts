@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, jest, mock, test } from "bun:test";
 import type { UpdateDesignSystemRequest } from "@bg/shared";
 import {
   apiFetch,
@@ -6,7 +6,7 @@ import {
   bootstrapApiAuthority,
 } from "../src/api/client";
 import { catalogDetailRows, getDesignSystem, updateDesignSystemWithConflictReload } from "../src/api/design-system-metadata";
-import { deleteProject, listDesignSystems } from "../src/api/home";
+import { deleteProject, listDesignSystems, restoreDeletedProject } from "../src/api/home";
 
 const originalFetch = globalThis.fetch;
 
@@ -123,6 +123,35 @@ describe("API authority client", () => {
     );
   });
 
+  test("Given a bootstrap request that never answers When the timeout elapses Then it rejects and the next call starts a fresh request", async () => {
+    jest.useFakeTimers();
+    try {
+      let bootstrapCalls = 0;
+      globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) !== "/api/bootstrap") throw new Error("unexpected request");
+        bootstrapCalls += 1;
+        if (bootstrapCalls > 1) return Promise.resolve(Response.json({ ok: true, data: { capability: "launch-token" } }));
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        });
+      }) as typeof fetch;
+
+      const stuck = bootstrapApiAuthority();
+      const alsoStuck = bootstrapApiAuthority();
+      const settled = Promise.allSettled([stuck, alsoStuck]);
+      expect(bootstrapCalls).toBe(1);
+
+      jest.advanceTimersByTime(60_000);
+      const results = await settled;
+      expect(results.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+
+      await bootstrapApiAuthority();
+      expect(bootstrapCalls).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test("rejects a catalog detail response that omits runtime detail fields", async () => {
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {
       if (String(input) === "/api/bootstrap") return Response.json({ ok: true, data: { capability: "launch-token" } });
@@ -204,6 +233,22 @@ describe("API authority client", () => {
 
     expect(calls[1]?.input).toBe("/api/projects/project-1");
     expect(calls[1]?.init?.method).toBe("DELETE");
+    expect(new Headers(calls[1]?.init?.headers).get("x-burnguard-capability")).toBe("launch-token");
+  });
+
+  test("Given a recently deleted project When restoring Then it posts to the encoded restore route with the capability", async () => {
+    const calls: Array<{ input: string; init?: RequestInit }> = [];
+    globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ input: String(input), init });
+      if (String(input) === "/api/bootstrap") return Response.json({ ok: true, data: { capability: "launch-token" } });
+      return Response.json({ data: { id: "a/b" } });
+    }) as typeof fetch;
+
+    await bootstrapApiAuthority();
+    await expect(restoreDeletedProject("a/b")).resolves.toEqual({ id: "a/b" });
+
+    expect(calls[1]?.input).toBe("/api/home/recently-deleted/a%2Fb/restore");
+    expect(calls[1]?.init?.method).toBe("POST");
     expect(new Headers(calls[1]?.init?.headers).get("x-burnguard-capability")).toBe("launch-token");
   });
 

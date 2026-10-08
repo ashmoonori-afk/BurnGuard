@@ -1,6 +1,6 @@
 import { bootstrapLocalAppData } from "./bootstrap";
 import { loadConfig } from "./config";
-import { desktopPort, watchDesktopParent } from "./desktop-lifecycle";
+import { activeTurnsMessage, desktopPort, watchDesktopParent } from "./desktop-lifecycle";
 import { openBrowser } from "./lib/browser";
 import { pickPort } from "./lib/port";
 import { appRootDir } from "./lib/app-paths";
@@ -10,7 +10,9 @@ import { MAX_REQUEST_BODY_BYTES } from "./security/request-limits";
 import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
 import { configureAppUpdater, startAppUpdateScheduler } from "./services/mac-updates";
-import { interruptAllUserTurns } from "./services/turns";
+import { startProjectDeletionPurgeScheduler } from "./services/project-deletion";
+import { getSqlite } from "./db/sqlite-client";
+import { activeUserTurnCount, interruptAllUserTurns } from "./services/turns";
 import { shutdownProjectWatchers, startProjectWatchers, type ProjectWatcherStartup } from "./services/watchers";
 
 const isDesktop = process.env.BG_DESKTOP === "1";
@@ -20,6 +22,7 @@ const ownedPort = isDesktop ? desktopPort(process.env.BG_PORT) : undefined;
 if (ownedPort !== undefined) await pickPort(ownedPort, ownedPort);
 const profileOwner = process.platform === "win32" ? await acquireWindowsProfile(appRootDir) : await acquirePosixProfile(appRootDir);
 await bootstrapLocalAppData();
+startProjectDeletionPurgeScheduler(getSqlite());
 const config = await loadConfig();
 // Dev + binary both prefer the canonical port 14070 (Vite proxy target).
 // `pickPort` remains as a fallback only when a BG_SCAN_PORT env var is set —
@@ -42,10 +45,13 @@ delete process.env.BG_BOOTSTRAP_SECRET;
 if (launcherBootstrapSecret !== undefined && !/^[A-Za-z0-9_-]{16,}$/.test(launcherBootstrapSecret)) {
   throw new Error("BG_BOOTSTRAP_SECRET must be at least 16 base64url characters.");
 }
+// Outlives any realistic backend run; the per-launch capability, not this age, is what ends access on restart.
+const BROWSER_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 const bootstrapSecret = launcherBootstrapSecret ?? generateLaunchCapability();
 const app = createApp({
   capability: generateLaunchCapability(),
   bootstrapSecret,
+  persistentCookieMaxAgeSeconds: isDesktop ? undefined : BROWSER_COOKIE_MAX_AGE_SECONDS,
   appAuthority: `${host}:${port}`,
   devAuthority: isDev ? "127.0.0.1:5173" : undefined,
 });
@@ -107,7 +113,8 @@ process.on("SIGHUP", () => { void shutdown(); });
 // Announce only once the handlers exist: a signal that arrives earlier takes the default action and skips the ordered shutdown.
 console.log(`[burnguard] listening on ${url}`);
 if (isDesktop) {
-  watchDesktopParent(process.stdin, () => { void shutdown(); });
+  // The shell asks before closing so it can confirm over a running generation.
+  watchDesktopParent(process.stdin, () => { void shutdown(); }, () => console.log(activeTurnsMessage(activeUserTurnCount())));
   console.log(`[burnguard-desktop] ${JSON.stringify({ protocol: 1, url, pid: process.pid, bootstrap: bootstrapSecret })}`);
 }
 // Reconciliation already converged in bootstrap; observing every project tree must not delay the window.
