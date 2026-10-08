@@ -37,14 +37,36 @@ describe("macOS service pipes", () => {
 });
 
 describe("macOS service environment", () => {
-  test("Given a launchd PATH When the backend environment is built Then missing user tool directories are added once ahead of the inherited entries", () => {
+  test("Given a launchd PATH When the backend environment is built Then login-shell, fixed and manager directories are merged once ahead of the inherited entries", () => {
     const service = body("private func startService()");
     const assigned = service.indexOf('environment["PATH"] = ');
     expect(assigned).toBeGreaterThan(service.indexOf("var environment = ProcessInfo.processInfo.environment"));
     expect(assigned).toBeLessThan(service.indexOf("process.environment = environment"));
     for (const directory of ['NSHomeDirectory() + "/.local/bin"', '"/opt/homebrew/bin"', '"/usr/local/bin"', 'NSHomeDirectory() + "/.bun/bin"']) expect(service).toContain(directory);
-    expect(service).toMatch(/\.filter \{ !searchPath\.contains\(\$0\) \}/);
-    expect(service).toContain('environment["PATH"] = (userPaths + searchPath).joined(separator: ":")');
+    expect(service).toContain("loginShellPathEntries() + fixedPaths + searchPath + managerPathEntries()");
+    expect(service).toMatch(/where !merged\.contains\(entry\)/);
+    expect(service).toContain('environment["PATH"] = merged.joined(separator: ":")');
+  });
+
+  test("Given a Finder launch When the login shell is probed Then it runs once with -l, a 3 s bound, no stdin or stderr, and the value is never logged", () => {
+    const probe = body("private func loginShellPathEntries()");
+    expect(probe).toContain('["-l", "-c", "printf %s \\"$PATH\\""]');
+    expect(probe).toContain('environment["SHELL"]');
+    expect(probe).toContain("getpwuid(getuid())");
+    expect(probe).toContain('"/bin/zsh"');
+    expect(probe).toContain("finished.wait(timeout: .now() + 3)");
+    expect(probe).toContain("probe.terminate()");
+    expect(probe).toContain("probe.standardInput = FileHandle.nullDevice");
+    expect(probe).toContain("probe.standardError = FileHandle.nullDevice");
+    expect(probe).not.toMatch(/print\(|NSLog|NSAlert/);
+    expect(body("private func startService()").match(/loginShellPathEntries\(\)/g)?.length).toBe(1);
+  });
+
+  test("Given Node version managers When the manager directories are collected Then only existing known directories and the newest nvm version are added", () => {
+    const managers = body("private func managerPathEntries()");
+    for (const directory of ['"/.volta/bin"', '"/.npm-global/bin"', '"/.local/share/fnm/aliases/default/bin"', '"/Library/Application Support/fnm/aliases/default/bin"', '"/.nvm/versions/node"']) expect(managers).toContain(directory);
+    expect(managers).toContain("options: .numeric");
+    expect(managers).toContain("candidates.filter { fileManager.fileExists(atPath: $0) }");
   });
 });
 

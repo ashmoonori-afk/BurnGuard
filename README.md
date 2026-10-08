@@ -226,7 +226,7 @@ The interface captures were selected from the repository's local `.omo/evidence`
 - Cafe24 and Imweb packages accept ordinary links, include every page and the assets only subpages use, keep footer scripts working, ship font licenses, and no longer need Chromium.
 - Exports include only the bundled fonts the document uses, ZIP files carry local timestamps, and deleted projects no longer leave cached exports behind.
 - Chat reports whether a turn's work actually reached the project, including failed deck reviews and repairs; attached source pages map one-to-one to slides when requested.
-- macOS app: finds CLIs and Python installed with Homebrew or in `~/.local/bin`, opens external links in the browser, supports standard ⌘C/⌘V/⌘Q shortcuts, replaces an existing download, and waits for the local server to stop before quitting.
+- macOS app: finds CLIs and Python installed with Homebrew, in `~/.local/bin`, or through npm under nvm, Volta, fnm or a custom npm prefix (it reads your login-shell PATH), opens external links in the browser, supports standard ⌘C/⌘V/⌘Q shortcuts, replaces an existing download, and waits for the local server to stop before quitting.
 - Windows app: stays open on recoverable WebView2 process failures and lists installed fonts. Linux source runs list installed fonts, and one backend now owns each profile on macOS and Linux.
 - Settings are split into a shared profile and device-local credentials and policy.
 

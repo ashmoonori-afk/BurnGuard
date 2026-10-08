@@ -407,6 +407,55 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// PATH entries of the user's login shell, resolved once per start; any failure or timeout yields no entries and the value is never logged.
+    private func loginShellPathEntries() -> [String] {
+        var shell = "/bin/zsh"
+        if let value = ProcessInfo.processInfo.environment["SHELL"], !value.isEmpty {
+            shell = value
+        } else if let entry = getpwuid(getuid()), let value = entry.pointee.pw_shell {
+            shell = String(cString: value)
+        }
+        if !FileManager.default.isExecutableFile(atPath: shell) { shell = "/bin/zsh" }
+
+        let probe = Process()
+        let pipe = Pipe()
+        let finished = DispatchSemaphore(value: 0)
+        probe.executableURL = URL(fileURLWithPath: shell)
+        probe.arguments = ["-l", "-c", "printf %s \"$PATH\""]
+        probe.standardInput = FileHandle.nullDevice
+        probe.standardOutput = pipe
+        probe.standardError = FileHandle.nullDevice
+        probe.terminationHandler = { _ in finished.signal() }
+        do { try probe.run() } catch { return [] }
+        try? pipe.fileHandleForWriting.close()
+        if finished.wait(timeout: .now() + 3) == .timedOut {
+            probe.terminate()
+            return []
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        // Startup files may print noise first; the PATH is the last line and only absolute entries are kept.
+        guard let text = String(data: data, encoding: .utf8), let line = text.split(whereSeparator: { $0 == "\n" }).last else { return [] }
+        return line.split(separator: ":").map(String.init).filter { $0.hasPrefix("/") }
+    }
+
+    /// Well-known Node manager directories that exist on disk; the newest nvm version wins.
+    private func managerPathEntries() -> [String] {
+        let home = NSHomeDirectory()
+        let fileManager = FileManager.default
+        var candidates = [
+            home + "/.volta/bin",
+            home + "/.npm-global/bin",
+            home + "/.local/share/fnm/aliases/default/bin",
+            home + "/Library/Application Support/fnm/aliases/default/bin"
+        ]
+        let nvmRoot = home + "/.nvm/versions/node"
+        if let versions = try? fileManager.contentsOfDirectory(atPath: nvmRoot),
+           let newest = versions.sorted(by: { $0.compare($1, options: .numeric) == .orderedAscending }).last {
+            candidates.append(nvmRoot + "/" + newest + "/bin")
+        }
+        return candidates.filter { fileManager.fileExists(atPath: $0) }
+    }
+
     private func startService() throws {
         let serviceURL = Bundle.main.bundleURL
             .appendingPathComponent("Contents/MacOS/burnguard-design")
@@ -419,10 +468,14 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         let errorOutput = Pipe()
         let process = Process()
         var environment = ProcessInfo.processInfo.environment
-        // Finder and Dock launches inherit launchd's minimal PATH; put the usual user tool directories first so CLIs resolve.
+        // Finder and Dock launches inherit launchd's minimal PATH: lead with the login shell's PATH (nvm, Volta, fnm, custom npm prefixes), keep the usual user tool directories as fallback, then add known manager directories.
         let searchPath = (environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin").split(separator: ":").map(String.init)
-        let userPaths = [NSHomeDirectory() + "/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.bun/bin"].filter { !searchPath.contains($0) }
-        environment["PATH"] = (userPaths + searchPath).joined(separator: ":")
+        let fixedPaths = [NSHomeDirectory() + "/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.bun/bin"]
+        var merged: [String] = []
+        for entry in loginShellPathEntries() + fixedPaths + searchPath + managerPathEntries() where !merged.contains(entry) {
+            merged.append(entry)
+        }
+        environment["PATH"] = merged.joined(separator: ":")
         environment["BG_DESKTOP"] = "1"
         environment["BG_NO_OPEN"] = "1"
         environment["BG_DEV"] = "0"
