@@ -13,6 +13,8 @@ BurnGuard exposes one effective `AppConfig`, but persists portable preferences s
 | `chat.abortThresholdMs` | Legacy user-facing behavior retained for compatibility |
 | `chat.contextMode` | User context preference |
 | `user.displayName` | User profile preference |
+| `publish.madeWithBadge` | User publication preference |
+| `webAssets.searchEnabled` | User web-asset search preference |
 
 ## OS-local (`config.local.<process.platform>.json`, schemaVersion 1 + exact `platform`)
 
@@ -21,6 +23,7 @@ BurnGuard exposes one effective `AppConfig`, but persists portable preferences s
 | `commandcodeApiKey` | Secret credential |
 | `llmApiKeys.{gemini,deepseek,xai}` | Secret credentials |
 | `figmaPersonalAccessToken` | Secret credential |
+| `vercelToken` | Secret Vercel publish credential; stored OS-local and never shared between operating systems |
 | `port` | Host networking policy |
 | `autoOpenBrowser` | Host launch policy |
 | `codexProgressMetrics` | Per-machine tri-state (`null` = unset, `true`, `false`): routes this computer's Codex OTel metrics to a per-run loopback BurnGuard receiver as a progress signal, which displaces a user-configured Codex OTel metrics exporter while on. Unset means the automatic default: on, unless a user Codex OTel destination is detected (`[otel]` exporter in `$CODEX_HOME/config.toml`, or `OTEL_EXPORTER_OTLP_*` in the backend environment). The detection is computed on read and never stored; an explicit choice wins. Off leaves the Codex launch untouched |

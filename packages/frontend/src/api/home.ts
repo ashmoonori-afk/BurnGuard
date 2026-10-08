@@ -4,6 +4,7 @@ import type {
   CreateProjectResponse,
   DesignSystemSummary,
   ProjectSummary,
+  RecentlyDeletedProject,
   SettingsPatch,
   SettingsSummary,
 } from "@bg/shared";
@@ -59,6 +60,14 @@ export async function deleteProject(id: string): Promise<void> {
   // Must go through apiFetch: DELETE is capability-gated (403 without the
   // launch capability header). A 204 comes back as undefined.
   await apiFetch<void>(`/api/projects/${id}`, { method: "DELETE" });
+}
+
+export async function listRecentlyDeletedProjects(): Promise<RecentlyDeletedProject[]> {
+  return apiFetch<RecentlyDeletedProject[]>("/api/home/recently-deleted");
+}
+
+export async function restoreDeletedProject(id: string): Promise<{ id: string }> {
+  return apiFetch<{ id: string }>(`/api/home/recently-deleted/${encodeURIComponent(id)}/restore`, { method: "POST" });
 }
 
 export async function restoreSamples(): Promise<{ restored: boolean }> {

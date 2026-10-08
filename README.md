@@ -84,7 +84,7 @@ PPTX exports contain a high-resolution image of each slide and its text in speak
 ## Refine the result where you see it
 
 - **Edit on canvas.** Select elements, adjust size and rotation, change typography and spacing, or work with colors. Saved revisions and undo help you return to an earlier result.
-- **Leave a targeted comment.** Pin feedback to content and send an AI edit request. Pins stay attached while you scroll; click a saved pin to reopen its comment. Hover over the canvas and press **Ctrl+Space** on Windows/Linux or **Control+Option+Space** on macOS for a quick comment.
+- **Leave a targeted comment.** Pin feedback to content and send an AI edit request. Pins stay attached while you scroll; click a saved pin to reopen its comment. Hover over the canvas and press **Alt+C** on Windows/Linux or **Option+C** on macOS for a quick comment.
 - **Add source material.** Attach supported PDFs, slide decks, documents, images or text, or import an exported HTML project ZIP. Original attachments are retained separately from published website assets.
 - **Review before sharing.** Quality and UX panels identify issues and offer repair actions. Their findings are advisory; review the rendered result before exporting or publishing.
 
@@ -232,7 +232,7 @@ The interface captures were selected from the repository's local `.omo/evidence`
 - Cafe24 and Imweb packages accept ordinary links, include every page and the assets only subpages use, keep footer scripts working, ship font licenses, and no longer need Chromium.
 - Exports include only the bundled fonts the document uses, ZIP files carry local timestamps, and deleted projects no longer leave cached exports behind.
 - Chat reports whether a turn's work actually reached the project, including failed deck reviews and repairs; attached source pages map one-to-one to slides when requested.
-- macOS app: finds CLIs and Python installed with Homebrew or in `~/.local/bin`, opens external links in the browser, supports standard ⌘C/⌘V/⌘Q shortcuts, replaces an existing download, and waits for the local server to stop before quitting.
+- macOS app: finds CLIs and Python installed with Homebrew, in `~/.local/bin`, or through npm under nvm, Volta, fnm or a custom npm prefix (it reads your login-shell PATH), opens external links in the browser, supports standard ⌘C/⌘V/⌘Q shortcuts, replaces an existing download, and waits for the local server to stop before quitting.
 - Windows app: stays open on recoverable WebView2 process failures and lists installed fonts. Linux source runs list installed fonts, and one backend now owns each profile on macOS and Linux.
 - Settings are split into a shared profile and device-local credentials and policy.
 

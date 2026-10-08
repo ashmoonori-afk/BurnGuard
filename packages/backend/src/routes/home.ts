@@ -10,6 +10,7 @@ import type {
   LlmApiKeysPatch,
   LlmConnectionId,
   ProjectBundleImportResponse,
+  RecentlyDeletedProject,
   SettingsSummary,
 } from "@bg/shared";
 import { APP_VERSION, LLM_CONNECTIONS, parseGenerationOptions } from "@bg/shared";
@@ -28,6 +29,8 @@ import {
   ProjectInputError,
 } from "./home-project-input";
 import { serveProjectThumbnail } from "./project-thumbnail-handler";
+import { listRecentlyDeletedProjects, ProjectDeletionError, restoreDeletedProject } from "../services/project-deletion";
+import { getSqlite } from "../db/sqlite-client";
 import { importProject, ProjectImportError } from "../services/project-import";
 import {
   importProjectBundleFile,
@@ -231,6 +234,24 @@ homeRoutes.get("/api/backends/detect", async (c) => {
 homeRoutes.post("/api/home/restore-samples", async (c) => {
   await seedTutorialsOnce();
   return c.json(ok({ restored: true }));
+});
+
+homeRoutes.get("/api/home/recently-deleted", async (c) => {
+  return c.json(ok(await listRecentlyDeletedProjects(getSqlite()) satisfies RecentlyDeletedProject[]));
+});
+
+homeRoutes.post("/api/home/recently-deleted/:id/restore", async (c) => {
+  const id = c.req.param("id");
+  try {
+    await restoreDeletedProject(getSqlite(), id);
+  } catch (error) {
+    if (error instanceof ProjectDeletionError) {
+      const status = error.code === "project_restore_unavailable" ? 404 : 409;
+      return c.json(fail(error.code, error.code === "project_restore_conflict" ? "A project with the same identity already exists" : "Deleted project could not be restored"), status);
+    }
+    throw error;
+  }
+  return c.json(ok({ id }));
 });
 
 // One-click "Try this prompt" entrypoint for prompt-sample artifacts.

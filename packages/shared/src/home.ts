@@ -19,6 +19,13 @@ export interface ProjectSummary {
   archived_at: number | null;
 }
 
+/** A deleted project still restorable from "Recently deleted"; never carries a filesystem path. */
+export interface RecentlyDeletedProject {
+  id: string;
+  name: string;
+  deleted_at: number;
+}
+
 export interface DesignSystemSummary {
   id: string;
   name: string;
