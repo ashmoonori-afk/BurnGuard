@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test, spyOn } from "bun:test";
 import { Database } from "bun:sqlite";
 import { existsSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
@@ -268,6 +268,20 @@ test("Given expired terminal operations When retention runs Then current recover
   expect(existsSync(path.join(projectDir, ".meta", "artifact-operations", current.id, "stage"))).toBe(true);
   await expect(coordinator.undo({ projectId: "p", projectDir, operationId: first.id, expectedRevision: current.resultRevision, expectedArtifactDigest: current.resultDigest })).rejects.toMatchObject({ code: "undo_pruned" });
   expect((await inspectCanonicalTree(projectDir)).tree_digest).toBe(current.resultDigest);
+});
+
+test("Given several unrecognized deletion entries When startup reconciles Then exactly one aggregate warning with the count is logged", async () => {
+  for (const name of ["a", "b"]) {
+    await mkdir(path.join(root, ".deletions", name), { recursive: true });
+    await writeFile(path.join(root, ".deletions", name, "receipt.json"), "{ not json");
+  }
+  await writeFile(path.join(root, ".deletions", ".DS_Store"), "junk");
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  let calls: unknown[][] = [];
+  try { await reconcileProjectDeletions(db, root); calls = [...warn.mock.calls]; }
+  finally { warn.mockRestore(); }
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.[1]).toBe(3);
 });
 
 async function treeBytes(dir: string): Promise<Record<string, string>> {

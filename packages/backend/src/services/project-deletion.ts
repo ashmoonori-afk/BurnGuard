@@ -175,11 +175,12 @@ async function restoreTombstone(plan: DeletionPlan): Promise<boolean> {
 export async function reconcileProjectDeletions(db: Database, root = projectsDir): Promise<void> {
   const trash = resolveWithin(root, ".deletions");
   if (!existsSync(trash)) return;
+  let quarantined = 0;
   for (const entry of await readdir(trash, { withFileTypes: true })) {
     // Stray files (.DS_Store) and unrecognized tombstones are left untouched; one must never lock out every project.
-    if (!entry.isDirectory() || entry.isSymbolicLink()) { console.warn("[project] skipped unexpected deletion entry"); continue; }
+    if (!entry.isDirectory() || entry.isSymbolicLink()) { quarantined += 1; continue; }
     const plan = readDeletionPlan(root, trash, entry.name);
-    if (plan === null) { console.warn("[project] quarantined unreadable deletion receipt"); continue; }
+    if (plan === null) { quarantined += 1; continue; }
     const { id, tombstone, original } = plan;
     const project = db.query<{ dir_path: string }, [string]>("SELECT dir_path FROM projects WHERE id=?").get(id);
     if (project === null) {
@@ -188,10 +189,12 @@ export async function reconcileProjectDeletions(db: Database, root = projectsDir
     } else {
       let expected: string | null = null;
       try { expected = resolveManagedPath(root, project.dir_path); } catch { /* handled below */ }
-      if (expected !== original) { console.warn("[project] quarantined deletion receipt that does not match its project", id); continue; }
-      if (!await restoreTombstone(plan)) { console.warn("[project] quarantined deletion receipt without recoverable files", id); continue; }
+      if (expected !== original) { quarantined += 1; continue; }
+      if (!await restoreTombstone(plan)) { quarantined += 1; continue; }
     }
   }
+  // One aggregate line per startup; kept entries accumulate and must not flood the log.
+  if (quarantined > 0) console.warn("[project] kept unrecognized deletion entries", quarantined);
 }
 
 /** Returns null when the tombstone or its receipt is unreadable or malformed; the tombstone is then left in place. */
