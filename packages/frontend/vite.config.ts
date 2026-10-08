@@ -2,8 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
+  define: {
+    __BG_DEV__: JSON.stringify(command === "serve"),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -36,4 +39,4 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
   },
-});
+}));

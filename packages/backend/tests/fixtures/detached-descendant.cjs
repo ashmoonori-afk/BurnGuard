@@ -4,7 +4,9 @@ const { writeFileSync } = require("node:fs");
 const path = require("node:path");
 
 // All processes execute this copied fixture inside the test's private directory.
-if (process.argv[2] === "child") {
+if (process.argv[2] === "--help") {
+  console.log("  --include-partial-messages");
+} else if (process.argv[2] === "child") {
   process.on("message", () => {});
   process.send({ ready: true });
 } else if (process.argv[2] === "control") {

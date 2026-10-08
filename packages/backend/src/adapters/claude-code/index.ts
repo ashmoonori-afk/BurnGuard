@@ -11,6 +11,7 @@ export async function runClaudeCodeTurn(
     projectDir: input.projectDir,
     toolNames: new Map(),
     toolInputs: new Map(),
+    onProgress: () => input.onProgress?.(),
   };
 
   let sawIdle = false;
