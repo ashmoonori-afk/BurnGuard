@@ -20,17 +20,17 @@ where bun >nul 2>nul
 if errorlevel 1 (
     echo.
     echo [BurnGuard] Bun is not installed or not on PATH.
-    echo            Install it from https://bun.sh and try again.
+    echo            Download a release build from https://github.com/ashmoonori-afk/BurnGuard/releases/latest
     echo.
     pause
     exit /b 1
 )
 
-where dotnet >nul 2>nul
+dotnet --list-sdks | findstr /b /c:"8." >nul 2>nul
 if errorlevel 1 (
     echo.
-    echo [BurnGuard] The .NET 8 SDK is required to build the native app.
-    echo            Install it from https://dotnet.microsoft.com/download/dotnet/8.0
+    echo [BurnGuard] The .NET 8 SDK is required to build from source.
+    echo            Download a release build from https://github.com/ashmoonori-afk/BurnGuard/releases/latest
     echo.
     pause
     exit /b 1
