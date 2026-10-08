@@ -112,9 +112,39 @@ describe("managed tree durability", () => {
       syncOpenMode: syncOpenModeFor("win32"),
       rename: defaultManagedTreeIo.rename,
       syncDirectory: async () => {},
-      syncFile: async (handle) => { modes.push("sync"); await handle.write(new Uint8Array(0)); },
+      syncFile: async () => {},
+      openForSync: async (target, mode) => { modes.push(mode); return open(target, "r"); },
     };
     await syncManagedTree(stage, io);
-    expect(modes).toEqual(["sync"]);
+    expect(modes).toEqual(["r+"]);
+  });
+
+  test("Given a Windows file that cannot be opened for writing, When the stage is synced, Then it is skipped and the others are flushed", async () => {
+    const stage = await tree({ "a.html": "a", "locked.html": "b", "c.html": "c" });
+    const flushed: string[] = [];
+    const io: ManagedTreeIo = {
+      syncOpenMode: syncOpenModeFor("win32"),
+      rename: defaultManagedTreeIo.rename,
+      syncDirectory: async () => {},
+      syncFile: async () => { flushed.push("sync"); },
+      openForSync: async (target) => {
+        if (path.basename(target) === "locked.html") throw Object.assign(new Error("denied"), { code: "EPERM" });
+        return open(target, "r");
+      },
+    };
+    await syncManagedTree(stage, io);
+    expect(flushed).toHaveLength(2);
+  });
+
+  test("Given a POSIX io, When a file cannot be opened, Then the error is not swallowed", async () => {
+    const stage = await tree({ "a.html": "a" });
+    const io: ManagedTreeIo = {
+      syncOpenMode: "r",
+      rename: defaultManagedTreeIo.rename,
+      syncDirectory: async () => {},
+      syncFile: async () => {},
+      openForSync: async () => { throw Object.assign(new Error("denied"), { code: "EACCES" }); },
+    };
+    await expect(syncManagedTree(stage, io)).rejects.toThrow();
   });
 });

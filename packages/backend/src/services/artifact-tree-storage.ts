@@ -36,6 +36,8 @@ export type ManagedTreeIo = {
   readonly syncDirectory: (directory: string) => Promise<void>;
   /** Mode used to open an existing file for flushing. */
   readonly syncOpenMode: "r" | "r+";
+  /** Opens a file for flushing; tests inject it to observe the mode or fail it. Defaults to `fs.open`. */
+  readonly openForSync?: (target: string, mode: "r" | "r+") => Promise<FileHandle>;
 };
 
 /** POSIX fsync works on a read-only descriptor; Windows FlushFileBuffers needs write access. */
@@ -86,14 +88,30 @@ export async function materializeManagedTree(source: string, destination: string
   return validateCanonicalTree(destination, manifest);
 }
 
+/**
+ * A read-write open fails with EPERM/EACCES on a Windows file that has the read-only attribute. The flush is best-effort
+ * durability, so that file is skipped rather than failing the turn. POSIX opens read-only, so any error there is real.
+ */
+async function openForSync(target: string, io: ManagedTreeIo): Promise<FileHandle | null> {
+  try {
+    return await (io.openForSync ?? open)(target, io.syncOpenMode);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (io.syncOpenMode === "r+" && (code === "EPERM" || code === "EACCES")) return null;
+    throw error;
+  }
+}
+
 /** Flushes files written into a tree by something else (the agent in a stage), then their directories. */
 export async function syncManagedTree(root: string, io: ManagedTreeIo = defaultManagedTreeIo): Promise<void> {
   const tree = await inspectCanonicalTreeOnDisk(root);
   const directories = new Set<string>([root]);
   for (const file of tree.manifest.files) {
     const target = diskPathOf(root, tree, file.path);
-    const handle = await open(target, io.syncOpenMode);
-    try { await io.syncFile(handle); } finally { await handle.close(); }
+    const handle = await openForSync(target, io);
+    if (handle !== null) {
+      try { await io.syncFile(handle); } finally { await handle.close(); }
+    }
     for (let directory = path.dirname(target); directory !== root; directory = path.dirname(directory)) directories.add(directory);
   }
   for (const directory of directories) await io.syncDirectory(directory);
