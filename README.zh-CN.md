@@ -109,6 +109,7 @@ PPTX 导出包含每页幻灯片的高分辨率图片，文字放在演讲者备
    - **Windows**：对于未签名的 Setup.exe 或便携版 .exe，SmartScreen 可能显示“Windows 已保护你的电脑”。点击**更多信息**，然后点击**仍要运行**。
 2. **体验示例**。在连接 AI 服务提供商之前，先打开内置项目试试画布。
 3. **连接你的 CLI**。安装并登录 Claude Code 或 Codex CLI，然后在设置中选择连接和模型。**默认推理强度为 medium（中等），默认使用 vanilla 模式**。Vanilla 模式会排除个人插件和指令，同时保留 BurnGuard 的项目上下文。
+   - **Codex 进度信号（默认开启）：** Codex 使用指标会发送到这台电脑上的 BurnGuard，这样长时间无输出的 Codex 步骤（例如编写大型页面）不会被当作卡住而中止。你可以在设置中关闭 **检测 Codex 是否仍在工作**。如果你已为 Codex 配置了自己的 OpenTelemetry 目标，此项会保持关闭，直到你手动开启，因为开启期间你的目标收不到 Codex 指标。
 4. **创建项目**。选择格式和设计系统，添加需求说明和参考素材，然后生成并打磨。
 5. **导出或分享**。下载项目文件，或使用**分享 → 准备当前产出 → 公开发布**，把网站发布到你的 Vercel 账号。
 
@@ -151,7 +152,7 @@ bun run previews
 
 ```sh
 bun run typecheck
-bun run lint
+bun run check:whitespace
 bun run build:frontend
 bun test
 ```

@@ -44,6 +44,7 @@ const ADDED_CODES: readonly (readonly [string, MessageKey])[] = [
   ["acquisition_aborted", "errors.acquisition_aborted"],
   ["invalid_upload", "errors.invalid_upload"],
   ["invalid_font_upload", "errors.invalid_font_upload"],
+  ["token_file_unreadable", "errors.token_file_unreadable"],
   ["system_id_conflict", "errors.system_id_conflict"],
   ["catalog_operation_failed", "errors.catalog_operation_failed"],
   ["design_system_not_found", "errors.design_system_not_found"],
@@ -164,5 +165,19 @@ describe("apiErrorCopy", () => {
     expect(copy).toContain("200,000");
     expect(copy).not.toContain("{limit}");
     expect(apiErrorCopy(new FakeApiError("message_too_long", "raw"))).toContain("200,000");
+  });
+
+  test("Given payload_too_large with a byte limit When mapped Then the copy carries the limit in megabytes", () => {
+    const copy = apiErrorCopy(new FakeApiError("payload_too_large", "Request body exceeds 1048576 bytes.", { limit: 1048576 }));
+    expect(copy).toBe(t("errors.payload_too_large", { limit: 1 }));
+    expect(copy).not.toContain("{limit}");
+    expect(copy).not.toContain("1048576");
+    expect(apiErrorCopy(new FakeApiError("payload_too_large", "raw", { limit: 50331648 }))).toBe(t("errors.payload_too_large", { limit: 48 }));
+  });
+
+  test("Given payload_too_large without a limit When mapped Then it resolves to the size-less copy, not the generic fallback", () => {
+    const copy = apiErrorCopy(new FakeApiError("payload_too_large", "raw"));
+    expect(copy).toBe(t("errors.payload_too_large_unknown"));
+    expect(copy).not.toBe(t("errors.fallback"));
   });
 });

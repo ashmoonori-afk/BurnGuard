@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, expect, test, spyOn } from "bun:test";
 import { Database } from "bun:sqlite";
+import * as nodeFs from "node:fs";
 import { existsSync, writeFileSync } from "node:fs";
+import * as fsPromises from "node:fs/promises";
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -12,6 +14,7 @@ import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { scheduleProjectSignal } from "../src/services/watchers";
 import { releaseUserTurnReservation, reserveUserTurn } from "../src/services/turns";
 import { pruneExpiredArtifactOperations } from "../src/services/artifact-retention";
+import { setArtifactRecoveryHold } from "../src/services/artifact-recovery-hold";
 
 let db: Database;
 let root: string;
@@ -270,7 +273,7 @@ test("Given expired terminal operations When retention runs Then current recover
   expect((await inspectCanonicalTree(projectDir)).tree_digest).toBe(current.resultDigest);
 });
 
-test("Given several unrecognized deletion entries When startup reconciles Then exactly one aggregate warning with the count is logged", async () => {
+test("Given several unrecognized deletion entries When startup reconciles Then exactly one aggregate warning carries the machine counts", async () => {
   for (const name of ["a", "b"]) {
     await mkdir(path.join(root, ".deletions", name), { recursive: true });
     await writeFile(path.join(root, ".deletions", name, "receipt.json"), "{ not json");
@@ -278,10 +281,112 @@ test("Given several unrecognized deletion entries When startup reconciles Then e
   await writeFile(path.join(root, ".deletions", ".DS_Store"), "junk");
   const warn = spyOn(console, "warn").mockImplementation(() => {});
   let calls: unknown[][] = [];
-  try { await reconcileProjectDeletions(db, root); calls = [...warn.mock.calls]; }
+  let result;
+  try { result = await reconcileProjectDeletions(db, root); calls = [...warn.mock.calls]; }
   finally { warn.mockRestore(); }
+  expect(result).toEqual({ unrecognized: 3, unrestorable: 0, storageErrors: 0 });
   expect(calls).toHaveLength(1);
-  expect(calls[0]?.[1]).toBe(3);
+  expect(calls[0]?.[1]).toEqual(result);
+});
+
+test("Given a recognized receipt whose row points elsewhere When startup reconciles Then it counts as unrestorable, not unrecognized", async () => {
+  const tombstone = path.join(root, ".deletions", "p");
+  await mkdir(path.join(tombstone, "files"), { recursive: true });
+  await writeFile(path.join(tombstone, "receipt.json"), JSON.stringify({ schema_version: 1, project_id: "p", source_relative_path: "elsewhere" }));
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  try { expect(await reconcileProjectDeletions(db, root)).toEqual({ unrecognized: 0, unrestorable: 1, storageErrors: 0 }); }
+  finally { warn.mockRestore(); }
+  expect(existsSync(path.join(tombstone, "files"))).toBe(true);
+});
+
+function rawFsError(code: string): Error { return Object.assign(new Error(`${code}: injected`), { code }); }
+
+test("Given a raw EPERM while listing the deletions folder When startup reconciles and purges Then neither throws", async () => {
+  await mkdir(path.join(root, ".deletions"), { recursive: true });
+  const realReaddir = fsPromises.readdir;
+  const injected = spyOn(fsPromises, "readdir").mockImplementation(((target: Parameters<typeof realReaddir>[0], ...rest: unknown[]) => {
+    if (String(target) === path.join(root, ".deletions")) return Promise.reject(rawFsError("EPERM"));
+    return (realReaddir as (...args: unknown[]) => Promise<unknown>)(target, ...rest);
+  }) as typeof realReaddir);
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    expect(await reconcileProjectDeletions(db, root)).toEqual({ unrecognized: 0, unrestorable: 0, storageErrors: 1 });
+    expect(await purgeExpiredProjectDeletions(db, { projectsRoot: root })).toBe(0);
+  } finally { injected.mockRestore(); warn.mockRestore(); }
+});
+
+test("Given a raw EBUSY removing one legacy tombstone When startup reconciles Then it is counted and the other tombstone is still collected", async () => {
+  for (const name of ["a", "b"]) {
+    await mkdir(path.join(root, ".deletions", name, "files"), { recursive: true });
+    await writeFile(path.join(root, ".deletions", name, "receipt.json"), JSON.stringify({ schema_version: 1, project_id: name, source_relative_path: name }));
+  }
+  const realRm = fsPromises.rm;
+  const injected = spyOn(fsPromises, "rm").mockImplementation(((target: Parameters<typeof realRm>[0], ...rest: unknown[]) => {
+    if (String(target) === path.join(root, ".deletions", "a")) return Promise.reject(rawFsError("EBUSY"));
+    return (realRm as (...args: unknown[]) => Promise<unknown>)(target, ...rest);
+  }) as typeof realRm);
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  try { expect(await reconcileProjectDeletions(db, root)).toEqual({ unrecognized: 0, unrestorable: 0, storageErrors: 1 }); }
+  finally { injected.mockRestore(); warn.mockRestore(); }
+  expect(existsSync(path.join(root, ".deletions", "a"))).toBe(true);
+  expect(existsSync(path.join(root, ".deletions", "b"))).toBe(false);
+});
+
+test("Given a raw EPERM moving one tombstone back When startup reconciles Then that entry is counted and kept", async () => {
+  const tombstone = path.join(root, ".deletions", "p");
+  await mkdir(tombstone, { recursive: true });
+  await rename(projectDir, path.join(tombstone, "files"));
+  await writeFile(path.join(tombstone, "receipt.json"), JSON.stringify({ schema_version: 1, project_id: "p", source_relative_path: "p" }));
+  const realRename = nodeFs.renameSync;
+  const injected = spyOn(nodeFs, "renameSync").mockImplementation(((from: string, to: string) => {
+    if (to === projectDir) throw rawFsError("EPERM");
+    return realRename(from, to);
+  }) as typeof realRename);
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  try { expect(await reconcileProjectDeletions(db, root)).toEqual({ unrecognized: 0, unrestorable: 0, storageErrors: 1 }); }
+  finally { injected.mockRestore(); warn.mockRestore(); }
+  expect(existsSync(path.join(tombstone, "files", "index.html"))).toBe(true);
+});
+
+async function expiredOperations(): Promise<{ firstId: string; currentId: string }> {
+  const coordinator = new ArtifactCoordinator(db);
+  const base = await coordinator.initialize("p", projectDir);
+  const first = await coordinator.run({ projectId: "p", projectDir, kind: "turn", expectedRevision: 0, expectedArtifactDigest: base.tree_digest, mutate: async (stage) => { await writeFile(path.join(stage, "index.html"), "first"); } });
+  const current = await coordinator.run({ projectId: "p", projectDir, kind: "turn", expectedRevision: 1, expectedArtifactDigest: first.resultDigest, mutate: async (stage) => { await writeFile(path.join(stage, "index.html"), "current"); } });
+  db.exec("UPDATE artifact_operations SET retention_json=json_set(retention_json,'$.retained_until',1)");
+  return { firstId: first.id, currentId: current.id };
+}
+
+test("Given a project held by startup recovery When expired operations are pruned Then its operation copies stay untouched", async () => {
+  const { firstId } = await expiredOperations();
+  setArtifactRecoveryHold(db, ["p"]);
+  expect(await pruneExpiredArtifactOperations(db, { projectsRoot: root })).toBe(0);
+  expect(existsSync(path.join(projectDir, ".meta", "artifact-operations", firstId))).toBe(true);
+  setArtifactRecoveryHold(db, []);
+  expect(await pruneExpiredArtifactOperations(db, { projectsRoot: root })).toBe(2);
+});
+
+test("Given a raw EPERM removing one project's expired copy When retention runs Then it does not throw and the other project is still pruned", async () => {
+  const { firstId } = await expiredOperations();
+  const other = path.join(root, "q");
+  await mkdir(other);
+  await writeFile(path.join(other, "index.html"), "q");
+  db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES ('q','Q','prototype',?,'index.html','codex',1,1)").run(other);
+  const coordinator = new ArtifactCoordinator(db);
+  const base = await coordinator.initialize("q", other);
+  const a = await coordinator.run({ projectId: "q", projectDir: other, kind: "turn", expectedRevision: 0, expectedArtifactDigest: base.tree_digest, mutate: async (stage) => { await writeFile(path.join(stage, "index.html"), "a"); } });
+  await coordinator.run({ projectId: "q", projectDir: other, kind: "turn", expectedRevision: 1, expectedArtifactDigest: a.resultDigest, mutate: async (stage) => { await writeFile(path.join(stage, "index.html"), "b"); } });
+  db.exec("UPDATE artifact_operations SET retention_json=json_set(retention_json,'$.retained_until',1)");
+  const realRm = fsPromises.rm;
+  const injected = spyOn(fsPromises, "rm").mockImplementation(((target: Parameters<typeof realRm>[0], ...rest: unknown[]) => {
+    if (String(target).startsWith(projectDir)) return Promise.reject(rawFsError("EPERM"));
+    return (realRm as (...args: unknown[]) => Promise<unknown>)(target, ...rest);
+  }) as typeof realRm);
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  try { expect(await pruneExpiredArtifactOperations(db, { projectsRoot: root })).toBeGreaterThan(0); }
+  finally { injected.mockRestore(); warn.mockRestore(); }
+  expect(existsSync(path.join(projectDir, ".meta", "artifact-operations", firstId))).toBe(true);
+  expect(existsSync(path.join(other, ".meta", "artifact-operations", a.id))).toBe(false);
 });
 
 async function treeBytes(dir: string): Promise<Record<string, string>> {

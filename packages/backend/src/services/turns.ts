@@ -31,6 +31,7 @@ import { DECK_REVIEW_PROMPT } from "../harness/skills/deck-skill";
 import { IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../harness/design-craft";
 import { summarizeDeckHtml } from "../harness/structure-extractor";
 import { runAdapterTurn } from "../adapters/registry";
+import { resolveCodexProgressMetrics } from "../adapters/codex/user-otel";
 import { loadConfig } from "../config";
 import { hasAgentControlFiles } from "../security/agent-control-files";
 import { isDirectionOperationActive } from "./direction-operation-registry";
@@ -389,6 +390,7 @@ async function runUserTurnInternal(
 
   const binaryPath = backend.binary_path;
   const config = await loadConfig();
+  const codexProgressMetrics = backendId === "codex" && await resolveCodexProgressMetrics(config.codexProgressMetrics);
   const project = await getProjectDetail(session.project_id);
   if (project === null) throw new Error("project_not_found");
   if (await hasAgentControlFiles(project.dir_path)) {
@@ -575,6 +577,7 @@ async function runUserTurnInternal(
               generation,
               ...(logoIdeate ? { imageGeneration: "forbidden" as const } : {}),
               ...(webAssetTool === undefined ? {} : { webAssetTool }),
+              ...(codexProgressMetrics ? { codexProgressMetrics: true } : {}),
               ...(generation.provider === "commandcode" ? { commandcodeApiKey: config.commandcodeApiKey ?? undefined } : {}),
               signal: activeTurn.abortController.signal, userEvent: modelPayload,
               onEvent: async (event) => {

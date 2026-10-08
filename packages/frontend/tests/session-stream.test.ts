@@ -1,6 +1,7 @@
 import { afterEach, expect, mock, test } from "bun:test";
 import type { SequencedEventEnvelope, SessionInfo, SessionSnapshot } from "@bg/shared";
 import { bootstrapApiAuthority } from "../src/api/client";
+import type { SessionStreamReport } from "../src/api/session";
 import { openSessionStream, retrySessionStream, type SessionStreamHandlers } from "../src/hooks/useSessionEvents";
 
 const SESSION: SessionInfo = {
@@ -37,6 +38,7 @@ test("Given an open stream whose resync snapshot fails When the stream opens The
   const handlers: SessionStreamHandlers = {
     setState: () => {},
     setError: (value) => { flags.push(`error:${value}`); },
+    setReconnecting: () => {},
     setStale: (value) => { flags.push(`stale:${value}`); if (value) staleSet.resolve(); },
     onLive: () => {},
   };
@@ -96,6 +98,7 @@ test("Given a launch capability the backend no longer accepts When the stream is
   const handlers: SessionStreamHandlers = {
     setState: (state) => { if (state !== null) stateSet.resolve(); },
     setError: (value) => { flags.push(`error:${value}`); if (value) errorSet.resolve(); },
+    setReconnecting: () => {},
     setStale: () => {},
     onLive: () => {},
   };
@@ -119,7 +122,7 @@ test("Given a launch capability the backend no longer accepts When the stream is
 
 test("Given an open, healthy session stream When one payload fails envelope validation Then the workspace is not marked disconnected and the snapshot is resynced", async () => {
   let snapshots = 0;
-  let reportError: (err: { kind: "parse" | "connection"; message: string }) => void = () => {};
+  let reportError: (err: SessionStreamReport) => void = () => {};
   const subscribed = deferred();
   const flagged = deferred();
   const resynced = deferred();
@@ -127,6 +130,7 @@ test("Given an open, healthy session stream When one payload fails envelope vali
   const handlers: SessionStreamHandlers = {
     setState: () => {},
     setError: (value) => { flags.push(`error:${value}`); if (value) flagged.resolve(); },
+    setReconnecting: () => {},
     setStale: (value) => { flags.push(`stale:${value}`); if (value) flagged.resolve(); },
     onLive: () => {},
   };
@@ -150,13 +154,14 @@ test("Given an open, healthy session stream When one payload fails envelope vali
   }
 });
 
-test("Given an open session stream When the connection itself drops Then the workspace is marked disconnected", async () => {
-  let reportError: (err: { kind: "parse" | "connection"; message: string }) => void = () => {};
+test("Given an open session stream When the connection is closed for good Then the workspace is marked disconnected", async () => {
+  let reportError: (err: SessionStreamReport) => void = () => {};
   const subscribed = deferred();
   const flags: string[] = [];
   const handlers: SessionStreamHandlers = {
     setState: () => {},
     setError: (value) => { flags.push(`error:${value}`); },
+    setReconnecting: () => {},
     setStale: () => {},
     onLive: () => {},
   };
@@ -168,9 +173,45 @@ test("Given an open session stream When the connection itself drops Then the wor
   try {
     await subscribed.promise;
 
-    reportError({ kind: "connection", message: "stream_error" });
+    reportError({ kind: "connection", state: "closed", message: "stream_error" });
 
     expect(flags.at(-1)).toBe("error:true");
+  } finally {
+    stop();
+  }
+});
+
+test("Given an open session stream When the browser is retrying on its own Then the workspace is only reconnecting and recovers on the next open", async () => {
+  let reportError: (err: SessionStreamReport) => void = () => {};
+  let open: () => void = () => {};
+  const subscribed = deferred();
+  const flags: string[] = [];
+  const handlers: SessionStreamHandlers = {
+    setState: () => {},
+    setError: (value) => { flags.push(`error:${value}`); },
+    setReconnecting: (value) => { flags.push(`reconnecting:${value}`); },
+    setStale: () => {},
+    onLive: () => {},
+  };
+  const stop = openSessionStream("s1", { current: null }, handlers, {
+    getSessionSnapshot: async () => snapshot(0),
+    listSessionEvents: async () => [],
+    subscribeSessionStream: (_id, _onEvent, onError, options) => {
+      reportError = (err) => onError?.(err);
+      open = () => options?.onOpen?.();
+      subscribed.resolve();
+      return () => {};
+    },
+  });
+  try {
+    await subscribed.promise;
+
+    reportError({ kind: "connection", state: "connecting", message: "stream_error" });
+    expect(flags.at(-1)).toBe("reconnecting:true");
+    expect(flags).not.toContain("error:true");
+
+    open();
+    expect(flags.at(-1)).toBe("reconnecting:false");
   } finally {
     stop();
   }
