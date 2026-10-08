@@ -85,7 +85,6 @@ test("Given a claude-code run in a private project directory When the runner log
 
 // Skipped on Windows: needs POSIX shebang executables and signals; Windows ownership is covered by owned-process-windows.test.ts and codex-runner.test.ts.
 test.skipIf(process.platform === "win32")("Given an adapter run that is aborted mid-stream When the run settles Then the owned process tree is gone", async () => {
-
   const root = await mkdtemp(path.join(tmpdir(), "burnguard-adapter-abort-"));
   const binary = path.join(root, "abort-fixture");
   const childScript = "await new Promise(() => {})";
