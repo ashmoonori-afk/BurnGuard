@@ -109,7 +109,7 @@ export function startProjectWatchers(options: { readonly projectIds?: readonly s
       if (next === undefined) return;
       try { await ensureProjectWatcher(next.projectId, observe); next.resolve(); }
       catch (error) {
-        console.warn("[watcher] project watcher unavailable", next.projectId, error instanceof ArtifactOperationError ? error.code : "observation_failed");
+        console.warn("[watcher] project watcher unavailable", next.projectId, error instanceof ArtifactOperationError ? error.code : errorCode(error));
         next.reject(error);
       }
     }
@@ -130,6 +130,10 @@ export function startProjectWatchers(options: { readonly projectIds?: readonly s
       for (const projectId of [...watchers.keys()]) closeProjectWatcher(projectId);
     },
   };
+}
+
+function errorCode(error: unknown): string {
+  return error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : "unknown";
 }
 
 export function shouldSkipPath(relPath: string): boolean {
