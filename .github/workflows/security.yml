@@ -147,6 +147,7 @@ jobs:
           packages/backend/tests/chromium-launch-hardening.test.ts
           scripts/qa/check-os-matrix-coverage.test.ts
           scripts/qa/check-flake-patterns.test.ts
+          scripts/whitespace-base.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts
           packages/frontend/tests/canvas-source.test.ts
