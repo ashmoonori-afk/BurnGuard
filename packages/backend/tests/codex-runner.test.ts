@@ -6,6 +6,7 @@ import path from "node:path";
 import type { NormalizedEvent } from "@bg/shared";
 import { buildCodexCommand, codexSpawnOptions, runCodexTurn } from "../src/adapters/codex";
 import { CODEX_PROGRESS_HEADER, codexProgressHandler, countStreamEvents } from "../src/adapters/codex/progress-metrics";
+import { codexProgressMetricsEffective, detectUserCodexOtel, resolveCodexProgressMetrics } from "../src/adapters/codex/user-otel";
 import { codexFixture, PNG_SHA } from "./codex-runner-fixture";
 
 // Every case runs on every OS: on Windows the fixture is a .cmd wrapper launched through BG_WINDOWS_PROCESS_HOST.
@@ -162,6 +163,53 @@ describe("Codex stream progress metrics", () => {
     expect(report).toMatchObject({ status: 200, interval: "10000", otelArgs: 1 });
     expect(order).toEqual(["progress", "chat.delta", "usage.delta", "chat.message_end", "status.idle"]);
     expect(JSON.stringify(events)).not.toContain("/v1/metrics");
+  });
+});
+
+describe("user Codex OpenTelemetry destination detection", () => {
+  async function detectWith(config: string | null, env: NodeJS.ProcessEnv = {}) {
+    const home = await mkdtemp(path.join(tmpdir(), "burnguard-codex-otel-"));
+    try {
+      if (config !== null) await writeFile(path.join(home, "config.toml"), config);
+      return await detectUserCodexOtel({ ...env, CODEX_HOME: home });
+    } finally { await rm(home, { recursive: true, force: true }); }
+  }
+
+  test("Given no config file or exporters that name no destination Then no user destination is detected", async () => {
+    expect(await detectWith(null)).toBe(false);
+    expect(await detectWith('model = "gpt-5"\n[otel]\nexporter = "none"\nmetrics_exporter = "statsig"\nenvironment = "dev"\n')).toBe(false);
+    expect(await detectWith(null, { OTEL_EXPORTER_OTLP_ENDPOINT: "  ", OTEL_METRIC_EXPORT_INTERVAL: "5000" })).toBe(false);
+  });
+
+  test("Given an OTLP exporter in the Codex config or OTEL_EXPORTER_OTLP_* in the environment Then a user destination is detected", async () => {
+    expect(await detectWith('[otel]\nmetrics_exporter = { otlp-http = { endpoint = "https://collector.example/v1/metrics", protocol = "binary" } }\n')).toBe(true);
+    expect(await detectWith('[otel.exporter.otlp-grpc]\nendpoint = "https://collector.example:4317"\n')).toBe(true);
+    expect(await detectWith('otel.trace_exporter = { otlp-http = { endpoint = "https://collector.example", protocol = "json" } }\n')).toBe(true);
+    expect(await detectWith(null, { OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "https://collector.example" })).toBe(true);
+  });
+
+  test("Given a config that exists but cannot be parsed or read as a file Then detection is conservative and stays silent", async () => {
+    const logged: unknown[] = [];
+    const original = { log: console.log, warn: console.warn, error: console.error };
+    console.log = console.warn = console.error = (...args: unknown[]) => { logged.push(args); };
+    try {
+      expect(await detectWith("[otel\nexporter = ")).toBe(true);
+      const home = await mkdtemp(path.join(tmpdir(), "burnguard-codex-otel-"));
+      try {
+        await mkdir(path.join(home, "config.toml"));
+        expect(await detectUserCodexOtel({ CODEX_HOME: home })).toBe(true);
+      } finally { await rm(home, { recursive: true, force: true }); }
+    } finally { Object.assign(console, original); }
+    expect(logged).toEqual([]);
+  });
+
+  test("Given the stored choice When the effective value is derived Then unset follows detection and an explicit choice wins", async () => {
+    expect(codexProgressMetricsEffective(null, false)).toBe(true);
+    expect(codexProgressMetricsEffective(null, true)).toBe(false);
+    expect(codexProgressMetricsEffective(true, true)).toBe(true);
+    expect(codexProgressMetricsEffective(false, false)).toBe(false);
+    expect(await resolveCodexProgressMetrics(null, { OTEL_EXPORTER_OTLP_ENDPOINT: "https://collector.example", CODEX_HOME: tmpdir() })).toBe(false);
+    expect(await resolveCodexProgressMetrics(true, { OTEL_EXPORTER_OTLP_ENDPOINT: "https://collector.example" })).toBe(true);
   });
 });
 

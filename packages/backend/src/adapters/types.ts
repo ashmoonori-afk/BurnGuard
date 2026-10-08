@@ -37,9 +37,9 @@ export interface AdapterRunInput {
    */
   webAssetTool?: { readonly command: readonly string[] };
   /**
-   * Opt-in Codex progress signal (Settings, OS-local, default off): route Codex's OTel metrics to a
-   * per-run loopback receiver so stream events count as `onProgress`. Absent or false means the
-   * plain Codex launch with the user's own telemetry configuration untouched.
+   * Effective Codex progress signal (Settings, OS-local; on by default unless the user has their own
+   * Codex OTel destination): route Codex's OTel metrics to a per-run loopback receiver so stream
+   * events count as `onProgress`. Absent or false means the plain Codex launch, telemetry untouched.
    */
   codexProgressMetrics?: boolean;
   onEvent: (event: NormalizedEvent) => Promise<void>;

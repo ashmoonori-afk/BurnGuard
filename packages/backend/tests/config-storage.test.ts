@@ -3,6 +3,7 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DEFAULT_DISPLAY_NAME } from "@bg/shared";
 import { defaultConfig, ensureConfig, loadConfig, loadConfigForPlatform, saveConfig, saveConfigForPlatform } from "../src/config";
+import { codexSpawnOptions } from "../src/adapters/codex";
 import type { AdapterRunInput } from "../src/adapters/types";
 import { getSqlite } from "../src/db/sqlite-client";
 import { configFilePath, localConfigFilePath } from "../src/lib/app-paths";
@@ -180,30 +181,63 @@ describe("settings storage", () => {
 
 describe("Codex progress metrics setting", () => {
   const patch = (body: unknown) => homeRoutes.request("http://local/api/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const summary = async () => (await (await homeRoutes.request("http://local/api/settings")).json()).data;
+  const codexConfig = () => path.join(process.env.CODEX_HOME ?? "", "config.toml");
+  const USER_OTEL_TOML = '[otel]\nmetrics_exporter = { otlp-http = { endpoint = "https://collector.example/v1/metrics", protocol = "json" } }\n';
+  const inheritedOtel = Object.entries(process.env).filter(([name]) => name.startsWith("OTEL_EXPORTER_OTLP_"));
 
-  test("Given no stored choice When settings load Then the Codex progress signal is off, and a toggle persists OS-local only", async () => {
-    expect(defaultConfig.codexProgressMetrics).toBe(false);
-    expect((await loadConfig()).codexProgressMetrics).toBe(false);
-    expect((await (await homeRoutes.request("http://local/api/settings")).json()).data.codex_progress_metrics).toBe(false);
+  beforeEach(async () => {
+    for (const [name] of inheritedOtel) delete process.env[name];
+    delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    await rm(codexConfig(), { force: true });
+  });
+  afterAll(async () => {
+    delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    for (const [name, value] of inheritedOtel) process.env[name] = value;
+    await rm(codexConfig(), { force: true });
+  });
+
+  test("Given no stored choice and no user OTel destination When settings load Then the signal is on by default and the choice stays unset", async () => {
+    expect(defaultConfig.codexProgressMetrics).toBeNull();
+    expect((await loadConfig()).codexProgressMetrics).toBeNull();
+    expect(await summary()).toMatchObject({ codex_progress_metrics: true, codex_user_otel_configured: false });
+    expect(JSON.parse(await readFile(localConfigFilePath(), "utf8")).codexProgressMetrics).toBeNull();
+  });
+
+  test("Given a user OTel destination in the Codex config or the environment When settings load Then the signal is off and the flag is set, without storing the detection", async () => {
+    await writeFile(codexConfig(), USER_OTEL_TOML);
+    expect(await summary()).toMatchObject({ codex_progress_metrics: false, codex_user_otel_configured: true });
+    await rm(codexConfig());
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://collector.example";
+    expect(await summary()).toMatchObject({ codex_progress_metrics: false, codex_user_otel_configured: true });
+    expect((await loadConfig()).codexProgressMetrics).toBeNull();
+    expect(await readFile(localConfigFilePath(), "utf8")).not.toContain("collector.example");
+  });
+
+  test("Given a user OTel destination When the user turns the signal on or off Then the explicit choice wins and persists OS-local only", async () => {
+    await writeFile(codexConfig(), USER_OTEL_TOML);
     const on = await patch({ codex_progress_metrics: true });
     expect(on.status).toBe(200);
-    expect((await on.json()).data.codex_progress_metrics).toBe(true);
+    expect((await on.json()).data).toMatchObject({ codex_progress_metrics: true, codex_user_otel_configured: true });
     expect(JSON.parse(await readFile(localConfigFilePath(), "utf8")).codexProgressMetrics).toBe(true);
     expect(JSON.parse(await readFile(configFilePath, "utf8"))).not.toHaveProperty("codexProgressMetrics");
     const other = process.platform === "win32" ? "darwin" : "win32";
-    expect((await loadConfigForPlatform(other)).codexProgressMetrics).toBe(false);
+    expect((await loadConfigForPlatform(other)).codexProgressMetrics).toBeNull();
+    await rm(codexConfig());
+    expect((await (await patch({ codex_progress_metrics: false })).json()).data).toMatchObject({ codex_progress_metrics: false, codex_user_otel_configured: false });
+    expect((await loadConfig()).codexProgressMetrics).toBe(false);
     const invalid = await patch({ codex_progress_metrics: "yes" });
     expect(invalid.status).toBe(400);
     expect((await invalid.json()).error.code).toBe("invalid_codex_progress_metrics");
-    expect((await loadConfig()).codexProgressMetrics).toBe(true);
-  });
-
-  test("Given a non-boolean stored value When loaded Then the signal stays off", async () => {
-    await writeFile(localConfigFilePath(), JSON.stringify({ ...JSON.parse(await readFile(localConfigFilePath(), "utf8")), codexProgressMetrics: "true" }));
     expect((await loadConfig()).codexProgressMetrics).toBe(false);
   });
 
-  test("Given the setting off or on When a Codex turn runs Then the adapter is asked for the progress signal only when on", async () => {
+  test("Given a non-boolean stored value When loaded Then the choice reads as unset", async () => {
+    await writeFile(localConfigFilePath(), JSON.stringify({ ...JSON.parse(await readFile(localConfigFilePath(), "utf8")), codexProgressMetrics: "true" }));
+    expect((await loadConfig()).codexProgressMetrics).toBeNull();
+  });
+
+  test("Given each default, detection and explicit state When a Codex turn runs Then the adapter is asked for the progress signal only while it is effectively on", async () => {
     const projectId = `codex-progress-${crypto.randomUUID()}`;
     const sessionId = `${projectId}-session`;
     const projectDir = path.join(projectsDir, projectId);
@@ -212,12 +246,15 @@ describe("Codex progress metrics setting", () => {
     getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, projectId, projectDir);
     getSqlite().prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(sessionId, projectId);
     const seen: (boolean | undefined)[] = [];
+    const plainSpawnKeys: string[] = [];
     const runTurn = async () => {
       const turn = startUserTurn(sessionId, { type: "user.message", text: "Edit the heading" }, undefined, {
         reviewDesign: async () => ({ status: "unavailable", repairs: 0, result: null }),
         detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "unused", version: "fixture", authenticated: true, image_generation: true }] }),
         runAdapter: async (_backend, input: AdapterRunInput) => {
           seen.push(input.codexProgressMetrics);
+          // Without the flag the Codex adapter takes the plain launch (codex-runner pins it to main's spawn).
+          if (input.codexProgressMetrics !== true) plainSpawnKeys.push(Object.keys(codexSpawnOptions(input, undefined)).sort().join());
           await input.onEvent({ id: crypto.randomUUID(), ts: 5, type: "chat.message_end", turnId: input.turnId });
           await input.onEvent({ id: crypto.randomUUID(), ts: 6, type: "status.idle", stopReason: "end_turn" });
           return { exitCode: 0 };
@@ -227,10 +264,19 @@ describe("Codex progress metrics setting", () => {
       await turn.promise.catch(() => undefined);
     };
     try {
-      await runTurn();
+      await runTurn(); // default, no user destination: on
+      await writeFile(codexConfig(), USER_OTEL_TOML);
+      await runTurn(); // user destination in the Codex config: off
+      await rm(codexConfig());
+      process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://collector.example";
+      await runTurn(); // user destination in the environment: off
       expect((await patch({ codex_progress_metrics: true })).status).toBe(200);
-      await runTurn();
-      expect(seen).toEqual([undefined, true]);
+      await runTurn(); // explicitly on despite the user destination: on
+      delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+      expect((await patch({ codex_progress_metrics: false })).status).toBe(200);
+      await runTurn(); // explicitly off: off
+      expect(seen).toEqual([true, undefined, undefined, true, undefined]);
+      expect(plainSpawnKeys).toEqual(Array(3).fill("cmd,cwd,stderr,stdin,stdout"));
     } finally {
       getSqlite().prepare("DELETE FROM sessions WHERE id=?").run(sessionId);
       getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId);

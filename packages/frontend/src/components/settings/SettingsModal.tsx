@@ -38,7 +38,7 @@ import { INTERRUPT_GRACE_MS } from "@/lib/session-event-state";
 
 import { t, useT, type MessageKey } from "@/i18n/t";
 import { LOCALES, useLocaleStore, type Locale } from "@/i18n/locale";
-import CodexProgressMetricsToggle from "./CodexProgressMetricsToggle";
+import CodexProgressMetricsToggle, { codexProgressMetricsPatch } from "./CodexProgressMetricsToggle";
 import ProviderConnections from "./ProviderConnections";
 import RuntimeDiagnosticsSection from "./RuntimeDiagnostics";
 
@@ -203,7 +203,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
         user: settings.user,
         publish_made_with_badge: settings.publish_made_with_badge,
         web_asset_search: settings.web_asset_search,
-        codex_progress_metrics: settings.codex_progress_metrics,
+        ...codexProgressMetricsPatch(settingsQuery.data, settings.codex_progress_metrics),
       });
       queryClient.setQueryData(["settings"], next);
       pushToast({ title: t("settings.saved"), tone: "success" });
@@ -327,7 +327,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               </label>
               <p className="text-xs text-muted-foreground">{t("settings.webAssetSearchHint")}</p>
             </div>
-            <CodexProgressMetricsToggle checked={settings.codex_progress_metrics} onChange={(checked) => setSettings((draft) => draft ? { ...draft, codex_progress_metrics: checked } : draft)} />
+            <CodexProgressMetricsToggle checked={settings.codex_progress_metrics} userOtelConfigured={settings.codex_user_otel_configured} onChange={(checked) => setSettings((draft) => draft ? { ...draft, codex_progress_metrics: checked } : draft)} />
             <div className="space-y-2 rounded-xl border border-border p-3">
               <label htmlFor="commandcode-api-key" className="text-sm font-medium">{t("settings.commandcodeKey")}</label>
               <p className="text-xs text-muted-foreground">{t("settings.commandcodeHint")} {t(settings.commandcode_api_key_set ? "settings.keySet" : "settings.keyUnset")}</p>

@@ -21,6 +21,7 @@ import {
 } from "../db/seed";
 import { getPromptSampleBySlug, promptSampleDesignSystemId, seedTutorialsOnce } from "../db/seed-tutorials";
 import { CodexAuthenticationProbeError, detectBackends } from "../services/backends";
+import { codexProgressMetricsEffective, detectUserCodexOtel } from "../adapters/codex/user-otel";
 import { ensureProjectWatcher } from "../services/watchers";
 import {
   parseProjectInput,
@@ -82,7 +83,7 @@ function isChatContextMode(
   return value === "compact" || value === "full";
 }
 
-function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): SettingsSummary {
+function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>, codexUserOtelConfigured: boolean): SettingsSummary {
   return {
     generation_defaults: config.generationDefaults,
     commandcode_api_key_set: Boolean(config.commandcodeApiKey),
@@ -107,7 +108,8 @@ function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): Sett
     vercel_token_set: config.vercelToken !== null,
     publish_made_with_badge: config.publish.madeWithBadge,
     web_asset_search: config.webAssets.searchEnabled,
-    codex_progress_metrics: config.codexProgressMetrics,
+    codex_progress_metrics: codexProgressMetricsEffective(config.codexProgressMetrics, codexUserOtelConfigured),
+    codex_user_otel_configured: codexUserOtelConfigured,
   };
 }
 
@@ -263,7 +265,7 @@ homeRoutes.post("/api/home/use-sample/:slug", async (c) => {
 
 homeRoutes.get("/api/settings", async (c) => {
   const config = await loadConfig();
-  return c.json(ok(toSettingsSummary(config)));
+  return c.json(ok(toSettingsSummary(config, await detectUserCodexOtel())));
 });
 
 homeRoutes.patch("/api/settings", async (c) => {
@@ -417,5 +419,5 @@ homeRoutes.patch("/api/settings", async (c) => {
     chat: { ...current.chat, ...changes.chat },
     user: { ...current.user, ...changes.user },
   }));
-  return c.json(ok(toSettingsSummary(config)));
+  return c.json(ok(toSettingsSummary(config, await detectUserCodexOtel())));
 });

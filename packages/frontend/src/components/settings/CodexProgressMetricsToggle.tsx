@@ -1,7 +1,16 @@
+import type { SettingsPatch, SettingsSummary } from "@bg/shared";
 import { useT } from "@/i18n/t";
 
-/** Opt-in Codex progress signal; the note while on says where Codex metrics go instead. */
-export default function CodexProgressMetricsToggle({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+/**
+ * Only a value the user changed becomes an explicit choice; an untouched toggle keeps the automatic
+ * default, which follows whether the user has their own Codex OpenTelemetry destination.
+ */
+export function codexProgressMetricsPatch(loaded: SettingsSummary | undefined, checked: boolean): Pick<SettingsPatch, "codex_progress_metrics"> {
+  return loaded?.codex_progress_metrics === checked ? {} : { codex_progress_metrics: checked };
+}
+
+/** Codex progress signal, on by default; the note appears when the user has their own Codex OTel destination. */
+export default function CodexProgressMetricsToggle({ checked, userOtelConfigured, onChange }: { checked: boolean; userOtelConfigured: boolean; onChange: (checked: boolean) => void }) {
   const t = useT();
   return (
     <div className="space-y-1">
@@ -19,7 +28,7 @@ export default function CodexProgressMetricsToggle({ checked, onChange }: { chec
         {t("settings.codexProgressMetrics")}
       </label>
       <p id="codex-progress-metrics-hint" className="text-xs text-muted-foreground">{t("settings.codexProgressMetricsHint")}</p>
-      {checked ? <p role="note" data-bg-codex-progress-note="on" className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs">{t("settings.codexProgressMetricsOn")}</p> : null}
+      {userOtelConfigured ? <p role="note" data-bg-codex-progress-note="user-otel" className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs">{t("settings.codexProgressMetricsUserOtel")}</p> : null}
     </div>
   );
 }

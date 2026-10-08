@@ -81,7 +81,7 @@ export async function runCodexTurn(
     );
   });
 
-  // Opt-in (Settings): off, Codex starts exactly as before, with no receiver and no OTel override.
+  // Settings (on by default): off, Codex starts exactly as before, with no receiver and no OTel override.
   const progress = input.codexProgressMetrics && input.onProgress ? startCodexProgressReceiver(input.onProgress) : undefined;
   let owned: ReturnType<typeof spawnCodex>;
   try {
