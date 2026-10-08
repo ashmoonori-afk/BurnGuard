@@ -42,6 +42,9 @@ jobs:
         run: |
           bun scripts/build-windows-process-host.ts
           "BG_WINDOWS_PROCESS_HOST=$env:GITHUB_WORKSPACE\dist\windows-process-host\burnguard-windows-process-host.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Verify the Windows source launcher SDK gates
+        if: runner.os == 'Windows'
+        run: bun scripts/qa/windows-launcher-sdk.ts
       # The native launch/terminate receipt contract the backend relies on; also run by windows-release.yml.
       - name: Verify the native Windows process host
         if: runner.os == 'Windows'
