@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-SQLite/Drizzle authority and lifecycle repositories; earned this guide at score 14 for 39 modules (~4.8k LOC) plus 20 forward migrations (`0001`-`0018`, `0020`, `0021`; `0019` is intentionally absent) and 4 project templates, dense domain exports, and central transactional invariants.
+SQLite/Drizzle authority and lifecycle repositories, forward migrations in `migrations/`, and project templates. Inspect that directory for the current migration inventory; filename order is authoritative and historical gaps do not reserve future ids.
 
 ## WHERE TO LOOK
 
@@ -10,7 +10,7 @@ SQLite/Drizzle authority and lifecycle repositories; earned this guide at score 
 |------|----------|-------|
 | Open database | `client.ts`, `sqlite-client.ts` | Singleton uses WAL, foreign keys, and busy timeout |
 | Change schema exports | `schema.ts`, `*-schema.ts` | Root barrel exposes tables consumed by Drizzle |
-| Add migration | `migrations/`, `migrate.ts` | Lexical `NNNN_name.sql` order is persisted in `schema_migrations` |
+| Add migration | `migrations/`, `migrate.ts` | Lexical `NNNN_name.sql` order is persisted in `schema_migrations`; take the next number after the highest existing filename, never fill an older gap |
 | Migrate a test/local profile | `migrate-local.ts` | Entry called by `scripts/test-preload.ts` before any test runs |
 | Seeded tutorials/samples | `seed-tutorials.ts`, `seeded-project-html.ts` | Largest files here (985/590 LOC); bytes must stay stable |
 | Project/session CRUD | `seed.ts`, `events.ts` | Seed module also owns core reads and updates |
