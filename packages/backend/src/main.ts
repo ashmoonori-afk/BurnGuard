@@ -10,6 +10,8 @@ import { MAX_REQUEST_BODY_BYTES } from "./security/request-limits";
 import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
 import { configureAppUpdater, startAppUpdateScheduler } from "./services/mac-updates";
+import { startProjectDeletionPurgeScheduler } from "./services/project-deletion";
+import { getSqlite } from "./db/sqlite-client";
 import { interruptAllUserTurns } from "./services/turns";
 import { shutdownProjectWatchers, startProjectWatchers, type ProjectWatcherStartup } from "./services/watchers";
 
@@ -20,6 +22,7 @@ const ownedPort = isDesktop ? desktopPort(process.env.BG_PORT) : undefined;
 if (ownedPort !== undefined) await pickPort(ownedPort, ownedPort);
 const profileOwner = process.platform === "win32" ? await acquireWindowsProfile(appRootDir) : await acquirePosixProfile(appRootDir);
 await bootstrapLocalAppData();
+startProjectDeletionPurgeScheduler(getSqlite());
 const config = await loadConfig();
 // Dev + binary both prefer the canonical port 14070 (Vite proxy target).
 // `pickPort` remains as a fallback only when a BG_SCAN_PORT env var is set —
