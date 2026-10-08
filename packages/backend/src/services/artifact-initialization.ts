@@ -4,7 +4,7 @@ import { ulid } from "ulid";
 import { rm } from "node:fs/promises";
 import { replaceArtifactFileIndexInTransaction } from "../db/artifact-file-index";
 import { validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
-import { materializeManagedTree } from "./artifact-tree-storage";
+import { defaultManagedTreeIo, materializeManagedTree } from "./artifact-tree-storage";
 import { RETENTION_MS } from "./artifact-retention";
 
 export async function adoptExistingArtifact(db: Database, projectId: string, projectDir: string, revision: number, actual: CanonicalTreeManifest, previousDigest: string | null = null): Promise<string> {
@@ -14,7 +14,7 @@ export async function adoptExistingArtifact(db: Database, projectId: string, pro
   const snapshotPath = path.join(ownedRoot, "snapshot"); const stagePath = path.join(ownedRoot, "stage");
   let committed = false;
   try {
-  await materializeManagedTree(projectDir, snapshotPath); await validateCanonicalTree(snapshotPath, actual);
+  await materializeManagedTree(projectDir, snapshotPath, defaultManagedTreeIo); await validateCanonicalTree(snapshotPath, actual);
   await materializeManagedTree(projectDir, stagePath); await validateCanonicalTree(stagePath, actual);
   await validateCanonicalTree(projectDir, actual);
   const snapshot = { schema_version: 1, snapshot_path: snapshotPath, stage_path: stagePath, base_manifest: actual };
