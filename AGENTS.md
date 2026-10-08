@@ -3,6 +3,7 @@
 **Generated:** 2026-09-14T00:12:24.061Z
 **Commit:** 74cd86c
 **Branch:** main
+**Counts refreshed:** 2026-10-08 (commit `ce5ccc1a`; file counts only, not a full regeneration)
 
 ## OVERVIEW
 
@@ -18,12 +19,12 @@ BurnGuard/
 │   ├── shared/            # @bg/shared, source-only ESM: 41-module barrel + 21 subpath exports
 │   ├── desktop-windows/   # WinForms + WebView2 + Velopack shell; Program.cs is security-dense
 │   └── desktop-mac/       # single Swift main.swift, same stdout readiness protocol
-├── scripts/               # 8 root Bun scripts: dev launcher, binary/native builds, test preload
-│   └── qa/                # 65-file evidence harness: receipts, static gate, Playwright fixtures
+├── scripts/               # 16 root Bun scripts: dev launcher, binary/native builds, test preload
+│   └── qa/                # 84-file evidence harness: receipts, static gate, Playwright fixtures
 ├── doc/                   # 13 tracked English-only design docs; numbered records 04-23 are local-only (doc/README.md)
 ├── docs/                  # separate 2-file tree: dated QA + security reports
-├── samples/               # seeded corpus, 4 brands x 3 formats, staged by package-runtime.ts
-├── design system themes/  # 10 bundled themes -> systems/builtin-theme-<slug>  (path has spaces)
+├── samples/               # seeded corpus, 5 brands x 3 formats, staged by package-runtime.ts
+├── design system themes/  # 41 bundled themes -> systems/builtin-theme-<slug>  (path has spaces)
 ├── design system sample/  # Northvale Capital reference system (uploads/ never committed)
 ├── .github/workflows/     # security (Ubuntu + guards), os-tests (macOS arm64, Windows x64), windows-release, macos-release
 └── bunfig.toml            # preloads scripts/test-preload.ts for EVERY bun test
@@ -35,27 +36,27 @@ BurnGuard/
 |------|----------|-------|
 | Backend startup, shutdown, port policy | `packages/backend/src/AGENTS.md` | 11 domain subdirs; ordering and authority map |
 | Artifact, extraction, export, research flows | `packages/backend/src/services/AGENTS.md` | 152 TS modules + `chromium-node-bridge.mjs`, ~17.7k LOC, no barrel |
-| Schema, migration, recovery state | `packages/backend/src/db/AGENTS.md` | 39 modules + 14 forward migrations (`0001`-`0014`) + 4 templates |
-| HTTP or SSE behavior | `packages/backend/src/routes/AGENTS.md` | 17 Hono modules + 3 `*-input.ts` parsers + thumbnail handler |
+| Schema, migration, recovery state | `packages/backend/src/db/AGENTS.md` | 42 modules + 20 forward migrations (`0001`-`0021`; `0019` absent) + 4 templates; a new migration takes the next number after the highest existing (currently `0022`) |
+| HTTP or SSE behavior | `packages/backend/src/routes/AGENTS.md` | 20 Hono modules + 3 `*-input.ts` parsers + `figma-import-form.ts` + thumbnail handler |
 | Capability, path containment, body caps | `packages/backend/src/security/AGENTS.md` | Request authority, raw-file headers, agent-control detection |
 | Prompt or context assembly | `packages/backend/src/harness/AGENTS.md` | Bounded summaries, 6 shipped skills, `assets/lucide/` |
 | Claude Code/Codex execution | `packages/backend/src/adapters/AGENTS.md` | Subprocess + stream normalization; argv in `codex/index.ts` |
-| Backend test isolation, smoke gates | `packages/backend/tests/AGENTS.md` | 229 Bun suites, ~34.3k LOC, platform skips |
+| Backend test isolation, smoke gates | `packages/backend/tests/AGENTS.md` | 283 Bun suites, ~46.3k LOC, platform skips |
 | Frontend package, providers, dev proxy | `packages/frontend/AGENTS.md` | Provider order, counts, i18n wiring |
 | Feature UI or canvas bridge | `packages/frontend/src/components/AGENTS.md` | 107 files / 14 feature folders; canvas sandbox |
 | Route compositions | `packages/frontend/src/views/AGENTS.md` | 5 views, 3,435 LOC; `ProjectView` invariants |
 | Browser API calls | `packages/frontend/src/api/AGENTS.md` | `client.ts` authority + envelope rules |
 | Pure frontend helpers | `packages/frontend/src/lib/AGENTS.md` | 20 modules; per-module "never" rules |
 | Copy, locales, message keys | `packages/frontend/src/i18n/AGENTS.md` | ko/en/zh-CN typed registry; `useT` in ~75 modules |
-| Frontend test setup | `packages/frontend/tests/AGENTS.md` | 46 `bun:test` suites + browser fixtures |
+| Frontend test setup | `packages/frontend/tests/AGENTS.md` | 127 `bun:test` suites + browser fixtures |
 | Shared DTO or parser changes | `packages/shared/src/AGENTS.md` | 42 contract modules; 41-module barrel + subpaths |
 | Windows shell, updates, readiness | `packages/desktop-windows/AGENTS.md` | WinForms/WebView2, Velopack, kill-on-close job |
 | macOS shell | `packages/desktop-mac/AGENTS.md` | Swift WKWebView mirror of the Windows contract |
 | Build, packaging, launch scripts | `scripts/AGENTS.md` | Root scripts only; runtime staging list |
 | QA evidence automation | `scripts/qa/AGENTS.md` | Sanitized digests, static gate, isolated `QA_HOME` |
 | Design records, ADRs | `doc/AGENTS.md` | English-only; dated records supersede; append-only ADRs |
-| Seeded sample corpus | `samples/AGENTS.md` | 4 brands x 3 formats; path contract |
-| Bundled themes | `design system themes/AGENTS.md` | 10 themes; slug registry + token/provenance contract |
+| Seeded sample corpus | `samples/AGENTS.md` | 5 brands x 3 formats; path contract |
+| Bundled themes | `design system themes/AGENTS.md` | 41 themes; slug registry + token/provenance contract |
 | Reference design system | `design system sample/AGENTS.md` | Northvale Capital; `uploads/` privacy guard |
 
 ## CODE MAP
@@ -111,7 +112,8 @@ BurnGuard/
 ## COMMANDS
 
 ```bash
-bun run dev                    # launcher: backend health (127.0.0.1:14070) gates Vite (5173)
+bun run dev                    # bun run --filter '*' dev: backend + Vite dev servers in parallel (no health gate)
+bun scripts/dev-launcher.ts    # full dev-stack launcher (Start-BurnGuard.command): backend health (127.0.0.1:14070) gates Vite (5173)
 bun run dev:backend            # BG_DEV=1 bun run --watch src/index.ts
 bun run typecheck              # tsc --build across the workspace
 bun test                       # root only; preload isolates BG_APP_ROOT (timeout 30000)
