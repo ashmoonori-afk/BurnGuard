@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -57,6 +57,9 @@ async function bundle(
 }
 
 describe("project bundle hostile input", () => {
+  // The import boundary resolves the projects root, which only exists once something has created it.
+  beforeAll(async () => { await mkdir(projectsDir, { recursive: true }); });
+
   test("Given a payload whose bytes do not match the manifest When imported Then digest validation rejects it", async () => {
     // Given
     const file = await bundle(new TextEncoder().encode("<h1>safe</h1>"), (zip) => {
