@@ -44,3 +44,66 @@ test("Given three saves When undoing repeatedly, reopening and choosing a point 
     expect(classifyApiRoute("/api/projects/p/history", "GET")).toBe("artifact-operations");
   } finally { db.close(); await rm(root, { recursive: true, force: true }); }
 });
+
+test("Given an external save reverted while a turn ran When history lists it and the user re-applies it Then the live tree equals the capture, a committed operation exists and undo works", async () => {
+  const { getSqlite } = await import("../src/db/sqlite-client");
+  const { artifactOperationRoutes } = await import("../src/routes/artifact-operations");
+  const { getArtifactOperation } = await import("../src/db/artifact-operation-query");
+  const { inspectCanonicalTree } = await import("../src/services/canonical-tree-manifest");
+  const db = getSqlite(), projectId = `reapply-external-${process.pid}`;
+  const root = await mkdtemp(path.join(tmpdir(), "burnguard-reapply-"));
+  const json = async (response: Response) => ({ status: response.status, body: await response.json() as { data?: any; error?: { code: string } } });
+  const history = async () => json(await artifactOperationRoutes.request(`http://local/api/projects/${projectId}/history`));
+  const post = async (url: string, identity: { revision: number; digest: string }) => json(await artifactOperationRoutes.request(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ expected_revision: identity.revision, expected_artifact_digest: identity.digest }) }));
+  const gatedTurn = async (identity: { revision: number; digest: string }) => {
+    let release!: () => void, prepared!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; }), ready = new Promise<void>(resolve => { prepared = resolve; });
+    const run = new ArtifactCoordinator(db).run({ projectId, projectDir: root, kind: "turn", expectedRevision: identity.revision, expectedArtifactDigest: identity.digest, onPrepared: prepared, mutate: async stage => { await gate; await writeFile(path.join(stage, "index.html"), "generated"); } });
+    await ready;
+    return { run, release };
+  };
+  try {
+    await writeFile(path.join(root, "index.html"), "base");
+    db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, projectId, root);
+    const base = await new ArtifactCoordinator(db).initialize(projectId, root);
+    const turn = await gatedTurn({ revision: 0, digest: base.tree_digest });
+    await writeFile(path.join(root, "index.html"), "my external save");
+    await writeFile(path.join(root, "notes.html"), "new file");
+    const capture = await new ArtifactCoordinator(db).observeExternal(projectId, root);
+    expect(capture).toMatchObject({ status: "conflicted" });
+    turn.release();
+    await expect(turn.run).rejects.toThrow();
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("base");
+
+    const listed = await history();
+    expect(listed.status).toBe(200);
+    expect(listed.body.data.external_captures).toEqual([{ operation_id: capture!.id, captured_at: expect.any(Number), file_count: 2 }]);
+    expect(JSON.stringify(listed.body)).not.toContain(root);
+
+    const busy = await gatedTurn({ revision: 0, digest: base.tree_digest });
+    expect(await post(`http://local/api/projects/${projectId}/operations/${capture!.id}/reapply`, { revision: 0, digest: base.tree_digest })).toMatchObject({ status: 409, body: { error: { code: "operation_conflict" } } });
+    busy.release();
+    const generated = await busy.run;
+    await new ArtifactCoordinator(db).undo({ projectId, projectDir: root, operationId: generated.id, expectedRevision: generated.resultRevision, expectedArtifactDigest: generated.resultDigest });
+    const identity = { revision: generated.resultRevision + 1, digest: base.tree_digest };
+
+    const reapplied = await post(`http://local/api/projects/${projectId}/operations/${capture!.id}/reapply`, identity);
+    expect(reapplied.status).toBe(200);
+    const captured = await inspectCanonicalTree(path.join(root, ".meta", "artifact-operations", capture!.id, "stage"));
+    expect((await inspectCanonicalTree(root)).tree_digest).toBe(captured.tree_digest);
+    expect(reapplied.body.data.result_digest).toBe(captured.tree_digest);
+    expect(getArtifactOperation(db, projectId, reapplied.body.data.operation_id)).toMatchObject({ status: "committed", replay: { kind: "reapply_external", parent_operation_id: capture!.id } });
+    const after = await history();
+    expect(after.body.data.external_captures).toEqual([]);
+    expect(after.body.data.undo_operation_id).toBe(reapplied.body.data.operation_id);
+
+    const undone = await post(`http://local/api/projects/${projectId}/operations/${reapplied.body.data.operation_id}/undo`, { revision: reapplied.body.data.result_revision, digest: reapplied.body.data.result_digest });
+    expect(undone.status).toBe(200);
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("base");
+    expect(await Bun.file(path.join(root, "notes.html")).exists()).toBe(false);
+
+    db.prepare("UPDATE artifact_operations SET retention_json=json_set(retention_json,'$.retained_until',?) WHERE id=?").run(Date.now() - 1, capture!.id);
+    expect(await post(`http://local/api/projects/${projectId}/operations/${capture!.id}/reapply`, { revision: undone.body.data.result_revision, digest: undone.body.data.result_digest })).toMatchObject({ status: 410, body: { error: { code: "capture_expired" } } });
+    expect(classifyApiRoute(`/api/projects/${projectId}/operations/${capture!.id}/reapply`, "POST")).toBe("artifact-operations");
+  } finally { db.prepare("DELETE FROM projects WHERE id=?").run(projectId); await rm(root, { recursive: true, force: true }); }
+});

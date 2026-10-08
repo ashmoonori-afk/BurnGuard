@@ -20,6 +20,8 @@ const ERROR_COPY: Record<string, MessageKey> = {
   output_missing: "errors.output_missing",
   receipt_corrupt: "errors.receipt_corrupt",
   retention_expired: "errors.retention_expired",
+  capture_expired: "errors.capture_expired",
+  reapply_conflict: "errors.reapply_conflict",
   render_failed: "errors.render_failed",
   validation_failed: "errors.validation_failed",
   invalid_export_options: "errors.invalid_export_options",
