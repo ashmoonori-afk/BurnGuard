@@ -193,6 +193,7 @@ describe("parseCodexLine — structured path", () => {
     ["You've hit your usage limit. Try again later.", "provider_usage_limited"],
     ["exceeded retry limit, last status: 429 Too Many Requests", "provider_usage_limited"],
     ["You exceeded your current quota, please check your plan", "provider_quota_exhausted"],
+    ["insufficient_quota", "provider_quota_exhausted"],
     ["The model `gpt-old` does not exist or you do not have access to it", "provider_model_unavailable"],
   ] as const)("Given a Codex turn.failed classified as %#, When parsed, Then it carries the expected code and is not recoverable", (text, code) => {
     const events = parseCodexLine(JSON.stringify({ type: "turn.failed", error: { message: `${text} /home/u/.codex/auth.json` } }), ctx());
@@ -202,6 +203,15 @@ describe("parseCodexLine — structured path", () => {
 
   test("Given a Codex turn.failed with unrecognised text, When parsed, Then it stays a recoverable turn_failed", () => {
     expect(parseCodexLine(JSON.stringify({ type: "turn.failed", error: { message: "stream disconnected" } }), ctx())[1])
+      .toMatchObject({ code: "turn_failed", recoverable: true });
+  });
+
+  test.each([
+    "Cannot read src/login/session.ts",
+    "Assertion failed at line 429",
+    "write failed: disk quota exceeded",
+  ])("Given a Codex turn.failed with unrelated text %#, When parsed, Then it stays a recoverable turn_failed", (text) => {
+    expect(parseCodexLine(JSON.stringify({ type: "turn.failed", error: { message: text } }), ctx())[1])
       .toMatchObject({ code: "turn_failed", recoverable: true });
   });
 
