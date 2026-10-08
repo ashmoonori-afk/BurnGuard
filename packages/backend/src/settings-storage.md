@@ -13,6 +13,8 @@ BurnGuard exposes one effective `AppConfig`, but persists portable preferences s
 | `chat.abortThresholdMs` | Legacy user-facing behavior retained for compatibility |
 | `chat.contextMode` | User context preference |
 | `user.displayName` | User profile preference |
+| `publish.madeWithBadge` | User publication preference |
+| `webAssets.searchEnabled` | User web-asset search preference |
 
 ## OS-local (`config.local.<process.platform>.json`, schemaVersion 1 + exact `platform`)
 
@@ -21,6 +23,7 @@ BurnGuard exposes one effective `AppConfig`, but persists portable preferences s
 | `commandcodeApiKey` | Secret credential |
 | `llmApiKeys.{gemini,deepseek,xai}` | Secret credentials |
 | `figmaPersonalAccessToken` | Secret credential |
+| `vercelToken` | Secret Vercel publish credential; stored OS-local and never shared between operating systems |
 | `port` | Host networking policy |
 | `autoOpenBrowser` | Host launch policy |
 | `playwright.installed`, `playwright.installPath` | Legacy host installation state/path |

@@ -3,6 +3,7 @@ import { buildSandboxedArtifactSrcDoc } from "../src/components/canvas/frame-bri
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { Script } from "node:vm";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 
 const BASE_HREF = "http://127.0.0.1:14070/api/projects/p/fs/index.html";
@@ -18,6 +19,13 @@ test("both shipped Canvas frames omit native popup capability", async () => {
   const policies = [...source.matchAll(/sandbox="([^"]+)"/g)].map(match => (match[1] ?? "").split(/\s+/));
   expect(policies).toHaveLength(2);
   for (const policy of policies) expect(policy).toEqual(["allow-scripts"]);
+});
+
+test("Given the Canvas browser fixture When bundled as a classic IIFE script Then it parses without module-only syntax", async () => {
+  const compiler = Bun.spawn([process.execPath, "build", `${import.meta.dir}/fixtures/canvas-css-browser.ts`, "--target=browser", "--format=iife"], { stdout: "pipe", stderr: "pipe" });
+  const [exit, script, errors] = await Promise.all([compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text()]);
+  if (exit !== 0) throw new Error(errors);
+  expect(() => new Script(script)).not.toThrow();
 });
 
 for (const action of ["popup", "navigation"] as const) test.skipIf(!systemChromeAvailable)(`system Chrome Canvas ${action} policy blocks popups and preserves project links`, async () => {

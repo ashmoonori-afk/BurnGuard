@@ -32,7 +32,7 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
   const app = new Hono();
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: request => app.fetch(request) });
   const base = server.url.origin;
-  app.use("/api/*", createRequestAuthority({ capability: "deck-private-test", appAuthority: server.url.host }));
+  app.use("/api/*", createRequestAuthority({ capability: "deck-private-test", bootstrapSecret: "deck-bootstrap-secret", appAuthority: server.url.host }));
   app.get("/", c => {
     if (!allowFullscreen) c.header("Permissions-Policy", "fullscreen=()");
     return c.html("<!doctype html><html><body></body></html>");
@@ -63,7 +63,7 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     page.setDefaultTimeout(5000);
     const browserErrors: string[] = [];
     page.on("pageerror", error => browserErrors.push(String(error)));
-    await page.goto(base);
+    await page.goto(`${base}/#bg-bootstrap:deck-bootstrap-secret`);
     await page.addScriptTag({ content: script });
     await page.evaluate(() => globalThis.deckTest.bootstrapApiAuthority());
     await page.evaluate(() => {

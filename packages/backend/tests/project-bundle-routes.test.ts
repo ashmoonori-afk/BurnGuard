@@ -89,3 +89,40 @@ test("Given no launch authority When bundle routes are requested Then the shared
   expect(exported.status).toBe(403);
   expect(imported.status).toBe(403);
 });
+
+test("Given launch authority When a project is deleted and restored through the API Then the listing carries no paths and the files come back", async () => {
+  // Given
+  const source = await createProjectRecord({
+    name: "Route trash",
+    type: "prototype",
+    designSystemId: null,
+    backendId: "codex",
+    optionsJson: null,
+    entrypoint: "index.html",
+    thumbnailPath: null,
+    initializeArtifact: async (stage) => {
+      await writeFile(`${stage}/index.html`, "<h1>route trash</h1>");
+    },
+  });
+  created.push(source.id);
+  const app = createApp({ capability, appAuthority: authority });
+  const headers = { host: authority, origin: `http://${authority}`, "x-burnguard-capability": capability };
+
+  // When
+  const deleted = await app.request(new Request(`http://${authority}/api/projects/${source.id}`, { method: "DELETE", headers }));
+  const listed = await app.request(new Request(`http://${authority}/api/home/recently-deleted`, { headers }));
+  const listedBody = await listed.json() as { data: Array<Record<string, unknown>> };
+  const restored = await app.request(new Request(`http://${authority}/api/home/recently-deleted/${source.id}/restore`, { method: "POST", headers }));
+  const again = await app.request(new Request(`http://${authority}/api/home/recently-deleted/${source.id}/restore`, { method: "POST", headers }));
+
+  // Then
+  expect(deleted.status).toBe(204);
+  const entry = listedBody.data.find((item) => item.id === source.id);
+  expect(entry === undefined ? null : Object.keys(entry).sort()).toEqual(["deleted_at", "id", "name"]);
+  expect(entry?.name).toBe("Route trash");
+  expect(restored.status).toBe(200);
+  const project = await getProjectDetail(source.id);
+  expect(project ? await readFile(project.dir_path + "/index.html", "utf8") : null).toBe("<h1>route trash</h1>");
+  expect(again.status).toBe(404);
+  expect((await again.json() as { error: { code: string } }).error.code).toBe("project_restore_unavailable");
+});

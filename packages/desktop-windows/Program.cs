@@ -106,6 +106,7 @@ namespace BurnGuard.Desktop
         private Process service;
         private IntPtr job;
         private Uri origin;
+        private string bootstrapSecret;
         private bool closing;
         private bool confirmingClose;
         private TaskCompletionSource<int> activeTurnsReply;
@@ -237,12 +238,20 @@ namespace BurnGuard.Desktop
                     if (report != null && !smokeStarted) { smokeStarted = true; await SmokeAsync(); }
                 };
                 if (report != null) ConfigureDiagnosticDownloads();
-                web.CoreWebView2.Navigate(origin.AbsoluteUri + (report == null ? "" : "projects/" + Uri.EscapeDataString(smokeProject)));
+                // The one-time secret lets only this WebView mint the launch capability; the SPA strips the fragment.
+                web.CoreWebView2.Navigate(origin.AbsoluteUri + (report == null ? "" : "projects/" + Uri.EscapeDataString(smokeProject)) + "#bg-bootstrap:" + bootstrapSecret);
             }
             catch (Exception exception) { if (!closing) Fail(exception.Message); }
         }
 
         private bool IsAppUrl(string value) => IsAppUrl(value, origin);
+
+        private static bool IsBootstrapSecret(string value)
+        {
+            if (value == null || value.Length < 16) return false;
+            foreach (var c in value) if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_')) return false;
+            return true;
+        }
 
         private static bool IsAppUrl(string value, Uri expectedOrigin) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && expectedOrigin != null && uri.Scheme == expectedOrigin.Scheme && uri.Host == expectedOrigin.Host && uri.Port == expectedOrigin.Port && string.IsNullOrEmpty(uri.UserInfo);
 
@@ -324,8 +333,10 @@ namespace BurnGuard.Desktop
                         return;
                     }
                     var expected = "http://127.0.0.1:" + port;
-                    if (Convert.ToInt32(data["protocol"]) != 1 || Convert.ToInt32(data["pid"]) != service.Id || (string)data["url"] != expected)
+                    var bootstrap = data.ContainsKey("bootstrap") ? data["bootstrap"] as string : null;
+                    if (Convert.ToInt32(data["protocol"]) != 1 || Convert.ToInt32(data["pid"]) != service.Id || (string)data["url"] != expected || !IsBootstrapSecret(bootstrap))
                         throw new InvalidOperationException("Invalid desktop readiness message.");
+                    bootstrapSecret = bootstrap;
                     ready.TrySetResult(expected + "/");
                 }
                 catch { ready.TrySetException(new InvalidOperationException("BurnGuard 시작 응답을 확인할 수 없습니다.")); }
