@@ -20,8 +20,9 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run lint
-      # A test file that os-tests.yml does not name runs on Linux only. Each one must be in an os-tests.yml list or in
-      # the baseline of suites not yet covered, which may only shrink; see doc/os-matrix.md.
+      # A test file that os-tests.yml does not name never runs on macOS or Windows. Each one must be in an os-tests.yml
+      # list or in the baseline of suites not yet covered, which may only shrink; see doc/os-matrix.md. The baseline
+      # suites run on Ubuntu only, in the "Baseline suites" step below.
       - name: OS-matrix coverage guard
         run: bun scripts/qa/check-os-matrix-coverage.ts --base-ref origin/main
       # Code shapes behind the 2026-09-30 launch failures; see doc/os-matrix.md, "Hardening log".
@@ -179,6 +180,11 @@ jobs:
           packages/backend/tests/model-lists.test.ts
           packages/frontend/tests/backend-restart-notice.test.ts
           packages/frontend/tests/settings-language-note.test.ts
+      # Every baseline suite (scripts/qa/os-matrix-baseline.txt) that an explicit list above does not already run, one
+      # `bun test` process per file. The suites that need a real Chromium are excluded with reasons in
+      # scripts/qa/baseline-suites.ts; the coverage guard fails on a baseline entry that is neither run nor excluded.
+      - name: Baseline suites (Ubuntu only)
+        run: bun scripts/qa/run-baseline-suites.ts
       - name: Install the fixture browser
         run: node packages/backend/node_modules/playwright-core/cli.js install --with-deps chromium
       - name: Authored sandbox and contrast browser boundaries

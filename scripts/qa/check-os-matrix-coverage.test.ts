@@ -12,11 +12,13 @@ import {
   normalizeTestPath,
   OS_WORKFLOW,
   parseBaseline,
+  runsBaselineSuites,
   UBUNTU_WORKFLOW,
   writeBaseline,
   type CoverageInput,
   type GitRunner,
 } from "./check-os-matrix-coverage";
+import { BASELINE_EXCLUSIONS, planBaselineSuites } from "./baseline-suites";
 
 const LISTED = "packages/backend/tests/listed.test.ts";
 const BASELINED = "packages/frontend/tests/baselined.test.ts";
@@ -139,6 +141,48 @@ describe("coverage check", () => {
   });
 });
 
+describe("baseline suites on Ubuntu", () => {
+  const CHROMIUM_ONLY = "packages/backend/tests/chromium-only.test.ts";
+  const withBaseline = (overrides: Partial<CoverageInput> = {}): CoverageInput => input({
+    testFiles: [LISTED, BASELINED, CHROMIUM_ONLY], baseline: [CHROMIUM_ONLY, BASELINED].sort(), exclusions: { [CHROMIUM_ONLY]: "needs Chromium" }, ubuntuRunsBaseline: true, ...overrides,
+  });
+
+  test("Given a runner step and an excluded suite with a reason When checked Then there is no problem", () => {
+    expect(checkCoverage(withBaseline())).toEqual([]);
+  });
+
+  test("Given a workflow without the runner step When checked Then every baseline suite that is not excluded or listed is reported", () => {
+    expect(codes(checkCoverage(withBaseline({ ubuntuRunsBaseline: false })))).toEqual([`baseline_not_run ${BASELINED}`]);
+    expect(checkCoverage(withBaseline({ ubuntuRunsBaseline: false, ubuntuListed: [LISTED, BASELINED] }))).toEqual([]);
+  });
+
+  test("Given an exclusion that is not in the baseline or has no reason When checked Then each is reported", () => {
+    const stale = "packages/backend/tests/stale.test.ts";
+
+    expect(codes(checkCoverage(withBaseline({ exclusions: { [CHROMIUM_ONLY]: " ", [stale]: "needs Chromium" } }))).sort()).toEqual([`exclusion_not_in_baseline ${stale}`, `exclusion_without_reason ${CHROMIUM_ONLY}`]);
+  });
+
+  test("Given a baseline, a listed suite and an exclusion When planned Then each suite lands in exactly one bucket", () => {
+    const plan = planBaselineSuites([BASELINED, CHROMIUM_ONLY, LISTED], [LISTED], { [CHROMIUM_ONLY]: "needs Chromium" });
+
+    expect(plan).toEqual({ run: [BASELINED], listed: [LISTED], excluded: [CHROMIUM_ONLY] });
+  });
+
+  test("Given the real exclusions When read Then every one carries a reason and names a test file", () => {
+    for (const [file, reason] of Object.entries(BASELINE_EXCLUSIONS)) {
+      expect(file).toMatch(/^(packages|scripts)\/.+\.test\.[cm]?[jt]sx?$/);
+      expect(reason.trim()).not.toBe("");
+    }
+  });
+
+  test("Given workflows When scanned Then only a step that runs the runner script counts", () => {
+    const withRunner = workflow([LISTED]).replace("scripts/qa/inline.test.js", "scripts/qa/inline.test.js\n      - run: bun scripts/qa/run-baseline-suites.ts");
+
+    expect(runsBaselineSuites(withRunner)).toBe(true);
+    expect(runsBaselineSuites(workflow([LISTED]))).toBe(false);
+  });
+});
+
 describe("baseline at the merge base", () => {
   const FORK_POINT = "1111111111111111111111111111111111111111";
   function fakeGit(baselineAtForkPoint: string | null, asked: string[] = []): GitRunner {
@@ -194,9 +238,9 @@ describe("repository check on disk", () => {
   test("Given a repository with one uncovered suite When the baseline is written Then it holds exactly that suite and the check passes", async () => {
     const root = await repository([LISTED, BASELINED], [LISTED]);
 
-    const before = await checkRepository(root);
+    const before = await checkRepository(root, null, null);
     const written = await writeBaseline(root);
-    const after = await checkRepository(root);
+    const after = await checkRepository(root, null, null);
 
     expect(before.problems.map((problem) => `${problem.code} ${problem.path}`)).toEqual([`not_in_os_matrix ${BASELINED}`]);
     expect(written).toBe(1);
@@ -210,7 +254,7 @@ describe("repository check on disk", () => {
     await writeFile(path.join(root, ...NEW.split("/")), "");
     await rm(path.join(root, ...LISTED.split("/")));
 
-    const report = await checkRepository(root);
+    const report = await checkRepository(root, null, null);
 
     expect(report.problems.map((problem) => `${problem.code} ${problem.path} ${problem.source}`).sort()).toEqual([
       `listed_file_missing ${LISTED} ${OS_WORKFLOW}`,
