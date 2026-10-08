@@ -7,6 +7,9 @@ export function getArtifactHistory(projectId: string): Promise<ArtifactHistoryV1
 export function restoreArtifactHistory(projectId: string, operationId: string, history: ArtifactHistoryV1): Promise<{ operation_id: string; result_revision: number }> {
   return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/operations/${encodeURIComponent(operationId)}/undo`, { method: "POST", body: JSON.stringify({ expected_revision: history.current_revision, expected_artifact_digest: history.current_digest }) });
 }
+export function reapplyExternalCapture(projectId: string, operationId: string, history: ArtifactHistoryV1): Promise<{ operation_id: string; result_revision: number }> {
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/operations/${encodeURIComponent(operationId)}/reapply`, { method: "POST", body: JSON.stringify({ expected_revision: history.current_revision, expected_artifact_digest: history.current_digest }) });
+}
 
 export interface FileUndoInfo {
   can_undo: boolean;

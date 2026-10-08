@@ -261,3 +261,19 @@ artifactOperationRoutes.post("/api/projects/:id/operations/:operationId/undo", a
     throw error;
   }
 });
+
+artifactOperationRoutes.post("/api/projects/:id/operations/:operationId/reapply", async (c) => {
+  const projectId = c.req.param("id");
+  const project = await getProjectDetail(projectId);
+  if (project === null) return c.json(fail("project_not_found", "Project not found", { projectId }), 404);
+  const body = await c.req.json<unknown>().catch(() => null);
+  if (typeof body !== "object" || body === null || Array.isArray(body) || Object.keys(body).some(key => !["expected_revision", "expected_artifact_digest"].includes(key)) || !("expected_revision" in body) || !("expected_artifact_digest" in body) || typeof body.expected_revision !== "number" || !Number.isSafeInteger(body.expected_revision) || body.expected_revision < 0 || typeof body.expected_artifact_digest !== "string" || !/^[a-f0-9]{64}$/.test(body.expected_artifact_digest)) return c.json(fail("invalid_artifact_identity", "Expected artifact identity is required"), 400);
+  try {
+    const result = await new ArtifactCoordinator(getSqlite()).reapplyExternal({ projectId, projectDir: project.dir_path, operationId: c.req.param("operationId"), expectedRevision: body.expected_revision, expectedArtifactDigest: body.expected_artifact_digest });
+    return c.json(ok({ operation_id: result.id, status: result.status, base_revision: result.baseRevision, base_digest: result.baseDigest, result_revision: result.resultRevision, result_digest: result.resultDigest, diff: result.diff }));
+  } catch (error) {
+    if (error instanceof ArtifactOperationError) return c.json(fail(error.code, "Your external edit could not be restored"), error.code === "capture_expired" ? 410 : error.code === "reapply_unavailable" ? 404 : 409);
+    if (error instanceof PersistedArtifactOperationError) return c.json(fail(error.code, "Your external edit could not be restored"), 409);
+    throw error;
+  }
+});

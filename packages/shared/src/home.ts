@@ -19,6 +19,13 @@ export interface ProjectSummary {
   archived_at: number | null;
 }
 
+/** A deleted project still restorable from "Recently deleted"; never carries a filesystem path. */
+export interface RecentlyDeletedProject {
+  id: string;
+  name: string;
+  deleted_at: number;
+}
+
 export interface DesignSystemSummary {
   id: string;
   name: string;
@@ -106,6 +113,18 @@ export interface SettingsSummary {
    * licensed assets. Off means no search query leaves the machine.
    */
   web_asset_search: boolean;
+  /**
+   * Effective OS-local Codex progress signal: Codex usage metrics go to BurnGuard on this computer so
+   * a turn that is still streaming is not mistaken for a stall. On by default; without an explicit
+   * choice it is off while `codex_user_otel_configured` is true. PATCH stores an explicit choice.
+   */
+  codex_progress_metrics: boolean;
+  /**
+   * Detected on read, never stored: the user already has their own Codex OpenTelemetry destination
+   * (an `[otel]` exporter in the Codex config, or `OTEL_EXPORTER_OTLP_*` in the backend environment).
+   * While the signal is on, that destination does not receive Codex metrics.
+   */
+  codex_user_otel_configured: boolean;
 }
 
 export type SettingsPatch = Partial<
@@ -119,6 +138,7 @@ export type SettingsPatch = Partial<
     | "generation_defaults"
     | "publish_made_with_badge"
     | "web_asset_search"
+    | "codex_progress_metrics"
   > & {
     user: Partial<SettingsSummary["user"]>;
     /**
