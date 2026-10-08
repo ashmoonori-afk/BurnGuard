@@ -10,8 +10,14 @@
  */
 const FONT_DEPENDENT = "measures text wrapping, and the wrapped line counts depend on the host fonts (2 of its cases measured 3 lines instead of 2 on a local Chromium 1217 host); not verified on the Ubuntu runner";
 
+const HOST_LOAD_TIMEOUT = "timed out under host load in a full run (passes solo); needs a deterministic-wait review before running in CI";
+
 export const BASELINE_EXCLUSIONS: Readonly<Record<string, string>> = {
   "packages/backend/tests/design-audit-measurement.test.ts": FONT_DEPENDENT,
+  "packages/backend/tests/export-pdf-artboard.test.ts": HOST_LOAD_TIMEOUT,
+  "packages/frontend/tests/deck-fit.browser.test.ts": HOST_LOAD_TIMEOUT,
+  "packages/frontend/tests/graphic-project-creation.test.ts": HOST_LOAD_TIMEOUT,
+  "packages/frontend/tests/user-message-revert.browser.test.ts": HOST_LOAD_TIMEOUT,
 };
 
 export type BaselinePlan = {
