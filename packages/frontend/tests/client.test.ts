@@ -337,7 +337,7 @@ describe("API authority client", () => {
       const stored = new Map<string, string>();
       const globals = ["location", "history", "sessionStorage"] as const;
       const descriptors = globals.map((name) => Object.getOwnPropertyDescriptor(globalThis, name));
-      const previousDev = process.env.DEV;
+      const previousDev = Object.getOwnPropertyDescriptor(globalThis, "__BG_DEV__");
       const launch = new URL("http://127.0.0.1:5173/#bg-bootstrap:dev-launcher-secret");
       Object.defineProperty(globalThis, "location", { configurable: true, value: launch });
       Object.defineProperty(globalThis, "history", {
@@ -348,8 +348,8 @@ describe("API authority client", () => {
         configurable: true,
         value: { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => { stored.set(key, value); } },
       });
-      if (devBuild) process.env.DEV = "true";
-      else delete process.env.DEV;
+      if (devBuild) Object.defineProperty(globalThis, "__BG_DEV__", { configurable: true, value: true });
+      else Reflect.deleteProperty(globalThis, "__BG_DEV__");
       let restarted = false;
       let restartedSecretSpent = false;
       globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -374,8 +374,8 @@ describe("API authority client", () => {
           expect(stored.size).toBe(0);
         }
       } finally {
-        if (previousDev === undefined) delete process.env.DEV;
-        else process.env.DEV = previousDev;
+        if (previousDev === undefined) Reflect.deleteProperty(globalThis, "__BG_DEV__");
+        else Object.defineProperty(globalThis, "__BG_DEV__", previousDev);
         globals.forEach((name, i) => {
           const descriptor = descriptors[i];
           if (descriptor === undefined) Reflect.deleteProperty(globalThis, name);

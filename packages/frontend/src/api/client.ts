@@ -14,7 +14,8 @@ let pendingBootstrapSecret: string | null = null;
 const DEV_BOOTSTRAP_SECRET_KEY = "burnguard.dev-bootstrap-secret";
 
 function devSessionStorage(): Storage | null {
-  return import.meta.env.DEV && typeof sessionStorage !== "undefined" ? sessionStorage : null;
+  const devBuild = typeof __BG_DEV__ !== "undefined" && __BG_DEV__ === true;
+  return devBuild && typeof sessionStorage !== "undefined" ? sessionStorage : null;
 }
 
 /** Moves the launch secret out of the address bar; it is kept in memory until a bootstrap succeeds. */
