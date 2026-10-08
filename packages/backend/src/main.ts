@@ -1,6 +1,6 @@
 import { bootstrapLocalAppData } from "./bootstrap";
 import { loadConfig } from "./config";
-import { desktopPort, desktopStartupStep, watchDesktopParent } from "./desktop-lifecycle";
+import { activeTurnsMessage, desktopPort, desktopStartupStep, watchDesktopParent } from "./desktop-lifecycle";
 import { openBrowser } from "./lib/browser";
 import { pickPort } from "./lib/port";
 import { appRootDir } from "./lib/app-paths";
@@ -10,7 +10,7 @@ import { MAX_REQUEST_BODY_BYTES } from "./security/request-limits";
 import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
 import { configureAppUpdater, startAppUpdateScheduler } from "./services/mac-updates";
-import { interruptAllUserTurns } from "./services/turns";
+import { activeUserTurnCount, interruptAllUserTurns } from "./services/turns";
 
 const isDesktop = process.env.BG_DESKTOP === "1";
 const ownedPort = isDesktop ? await desktopStartupStep("invalid_port", () => desktopPort(process.env.BG_PORT)) : undefined;
@@ -85,6 +85,7 @@ process.on("SIGHUP", () => { void shutdown(); });
 // Announce only once the handlers exist: a signal that arrives earlier takes the default action and skips the ordered shutdown.
 console.log(`[burnguard] listening on ${url}`);
 if (isDesktop) {
-  watchDesktopParent(process.stdin, () => { void shutdown(); });
+  // The shell asks before closing so it can confirm over a running generation.
+  watchDesktopParent(process.stdin, () => { void shutdown(); }, () => console.log(activeTurnsMessage(activeUserTurnCount())));
   console.log(`[burnguard-desktop] ${JSON.stringify({ protocol: 1, url, pid: process.pid })}`);
 }

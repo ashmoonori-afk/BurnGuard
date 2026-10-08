@@ -21,7 +21,7 @@ Single-file Swift `WKWebView` shell (`main.swift`, 287 LOC) that launches and ow
 
 - Built and bundled only by `scripts/build-mac.ts` / `package-mac-release.ts` (`bun run build:mac`, `build:mac:dmg`, `build:mac:release`); macOS host required, and `build:frontend` must run first.
 - The `[burnguard-desktop] ` line protocol, the `BG_DESKTOP`/`BG_NO_OPEN` env contract, and the smoke-report shape are shared with `packages/desktop-windows/Program.cs` - change both shells together.
-- Backend `startup_failed` lines (`port_busy`, `profile_owned`, `invalid_port`) are mapped to Korean text from `packages/desktop-shared/i18n/ko.json` (bundled as `Resources/shell-ko.json`; the Windows shell reads `i18n/ko.json`); new Korean shell text goes there, not into `main.swift`/`Program.cs`.
+- Backend `startup_failed` lines (`port_busy`, `profile_owned`, `invalid_port`) are mapped through `shellText("startup_failed.<code>")` from `i18n/{en,ko,zh}.json`; the Windows shell has identical tables and a test keeps them equal.
 - Everything is one file on purpose: the shell holds no product logic, only window, process, navigation, and smoke concerns.
 - Native verification runs through `scripts/qa/native-mac-smoke.ts`; `macos-release.yml` additionally runs the backend update tests.
 

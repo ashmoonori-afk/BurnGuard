@@ -1,0 +1,8 @@
+{
+  "closeRunning.message": "A generation is running. Close anyway?",
+  "closeRunning.close": "Close",
+  "closeRunning.keep": "Keep working",
+  "startup_failed.port_busy": "Port {port} is in use by another program. Close that program or any running BurnGuard, then start BurnGuard again.",
+  "startup_failed.profile_owned": "Another BurnGuard is already using the same profile. Close every running BurnGuard, then start it again.",
+  "startup_failed.invalid_port": "BG_PORT is not valid. Set it to an integer from 1024 to 65535, or unset BG_PORT, then start BurnGuard again."
+}

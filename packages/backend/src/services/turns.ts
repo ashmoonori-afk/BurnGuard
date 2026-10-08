@@ -305,12 +305,16 @@ function reserveUserTurnInternal(sessionId: string, requestedOperationId: string
   return reservation;
 }
 
-/** Whether another CLI turn may start anywhere in the process; `harness.maxConcurrentSessions` is the ceiling. */
-export function hasTurnCapacity(maxConcurrentTurns: number): boolean {
-  // A visual-alternative batch holds its slot between item turns too.
+/** Sessions that hold a CLI turn slot; a visual-alternative batch holds its slot between item turns too. */
+export function activeUserTurnCount(): number {
   let occupied = activeTurns.size;
   for (const sessionId of activeVisualAlternativeSessions()) if (!activeTurns.has(sessionId)) occupied += 1;
-  return occupied < maxConcurrentTurns;
+  return occupied;
+}
+
+/** Whether another CLI turn may start anywhere in the process; `harness.maxConcurrentSessions` is the ceiling. */
+export function hasTurnCapacity(maxConcurrentTurns: number): boolean {
+  return activeUserTurnCount() < maxConcurrentTurns;
 }
 
 /** Admits a whole visual-alternative batch as one session operation, without yielding between checks. */

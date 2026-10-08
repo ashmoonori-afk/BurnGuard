@@ -5,7 +5,8 @@ import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { acquirePosixProfile, acquireWindowsProfile } from "../src/profile-ownership";
-import { desktopPort, watchDesktopParent } from "../src/desktop-lifecycle";
+import { activeTurnsMessage, desktopPort, watchDesktopParent } from "../src/desktop-lifecycle";
+import { activeUserTurnCount, releaseUserTurnReservation, reserveUserTurn } from "../src/services/turns";
 
 test.skipIf(process.platform !== "win32")("Given one Windows profile owner When another server claims the same canonical profile Then it is rejected until release", async () => {
   const profile = await mkdtemp(path.join(tmpdir(), "burnguard-owner-"));
@@ -172,4 +173,32 @@ test("Given a profile already owned by another process When the desktop backend 
     else owner.close();
     await rm(profile, { recursive: true, force: true });
   }
+});
+
+test("Given the parent pipe When it asks for active turns Then each well-formed query is answered and none arrive after shutdown", () => {
+  const pipe = new PassThrough();
+  let queries = 0;
+  let stops = 0;
+  watchDesktopParent(pipe, () => { stops += 1; }, () => { queries += 1; });
+  pipe.write("active-turns\nactive-turns\r\n active-turns\nactive-turns extra\nactive-");
+  expect(queries).toBe(2);
+  pipe.write("turns\nshutdown\nactive-turns\n");
+  expect(queries).toBe(3);
+  expect(stops).toBe(1);
+});
+
+test("Given a running-turn count When the reply is formatted Then it is one prefixed protocol 1 line the shells parse", () => {
+  const line = activeTurnsMessage(2);
+  expect(line.startsWith("[burnguard-desktop] ")).toBe(true);
+  expect(line).not.toContain("\n");
+  expect(JSON.parse(line.slice("[burnguard-desktop] ".length))).toEqual({ protocol: 1, event: "active-turns", count: 2 });
+});
+
+test("Given a reserved user turn When the active-turn count is read Then it counts the turn until the reservation is released", () => {
+  const before = activeUserTurnCount();
+  const reservation = reserveUserTurn(`desktop-close-guard-${crypto.randomUUID()}`);
+  if (reservation === null) throw new TypeError("expected a turn reservation");
+  try { expect(activeUserTurnCount()).toBe(before + 1); }
+  finally { releaseUserTurnReservation(reservation); }
+  expect(activeUserTurnCount()).toBe(before);
 });
