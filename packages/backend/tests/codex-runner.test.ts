@@ -4,7 +4,7 @@ import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { NormalizedEvent } from "@bg/shared";
-import { buildCodexCommand, runCodexTurn } from "../src/adapters/codex";
+import { buildCodexCommand, codexSpawnOptions, runCodexTurn } from "../src/adapters/codex";
 import { CODEX_PROGRESS_HEADER, codexProgressHandler, countStreamEvents } from "../src/adapters/codex/progress-metrics";
 import { codexFixture, PNG_SHA } from "./codex-runner-fixture";
 
@@ -89,7 +89,11 @@ describe("Codex stream progress metrics", () => {
     expect(beats).toBe(0);
   });
 
-  runnerTest("Given a Codex child that exports a stream event When the turn runs with a progress sink Then progress arrives through the run's loopback receiver and nothing about it is published", async () => {
+  /**
+   * Runs a Codex stand-in that tries to export one stream event wherever its argv points, then
+   * reports what it saw: the export status, the OTel interval, every OTel argument and OTEL_* name.
+   */
+  async function runMetricsFixture(codexProgressMetrics: boolean | undefined) {
     const root = await mkdtemp(path.join(tmpdir(), "burnguard-codex-progress-"));
     const previousHome = process.env.CODEX_HOME;
     process.env.CODEX_HOME = path.join(root, "codex-home");
@@ -101,7 +105,9 @@ describe("Codex stream progress metrics", () => {
       `const token = /${CODEX_PROGRESS_HEADER}="([^"]+)"/.exec(override)?.[1];`,
       `const body = ${JSON.stringify(JSON.stringify(metricsExport("codex.websocket.event", [{ success: "true", value: "2" }])))};`,
       `const status = endpoint && token ? (await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json", "${CODEX_PROGRESS_HEADER}": token }, body })).status : 0;`,
-      'console.log(JSON.stringify({ type: "text", text: JSON.stringify({ status, interval: process.env.OTEL_METRIC_EXPORT_INTERVAL ?? null }) }));',
+      'const otelArgs = process.argv.filter((arg) => arg.includes("otel"));',
+      'const otelEnv = Object.keys(process.env).filter((name) => name.startsWith("OTEL_")).sort();',
+      'console.log(JSON.stringify({ type: "text", text: JSON.stringify({ status, interval: process.env.OTEL_METRIC_EXPORT_INTERVAL ?? null, otelArgs: otelArgs.length, otelEnv }) }));',
       'console.log(JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } }));',
       "",
     ].join("\n"));
@@ -115,18 +121,47 @@ describe("Codex stream progress metrics", () => {
     try {
       const result = await runCodexTurn({
         sessionId: "s", turnId: "t", projectDir: root, binaryPath: binary, prompt: "test", userEvent: { type: "user.message", text: "test" },
+        ...(codexProgressMetrics === undefined ? {} : { codexProgressMetrics }),
         onEvent: async (event) => { events.push(event); order.push(event.type); },
         onProgress: () => { order.push("progress"); },
       });
-      expect(result).toEqual({ exitCode: 0 });
       const report = events.find((event) => event.type === "chat.delta");
-      expect(report?.type === "chat.delta" ? JSON.parse(report.text) : undefined).toEqual({ status: 200, interval: "10000" });
-      expect(order).toEqual(["progress", "chat.delta", "usage.delta", "chat.message_end", "status.idle"]);
-      expect(JSON.stringify(events)).not.toContain("/v1/metrics");
+      return { result, order, events, report: report?.type === "chat.delta" ? JSON.parse(report.text) : undefined };
     } finally {
       if (previousHome === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previousHome;
       await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
+  }
+
+  const parentOtelEnv = () => Object.keys(process.env).filter((name) => name.startsWith("OTEL_")).sort();
+
+  test("Given the setting off When the spawn is prepared Then argv and options are exactly the plain launch with no env override", () => {
+    const input = { sessionId: "s", turnId: "t", projectDir: "/project", binaryPath: "codex", prompt: "p", userEvent: { type: "user.message", text: "p" } as const, generation: { model: "gpt-5", effort: "medium", vanilla: true } as const, onEvent: async () => {} };
+    const options = codexSpawnOptions(input, undefined);
+    expect(Object.keys(options).sort()).toEqual(["cmd", "cwd", "stderr", "stdin", "stdout"]);
+    expect(options.cmd).toEqual(buildCodexCommand("codex", input.generation, process.platform, "allowed"));
+    expect(options.cmd.some((arg) => arg.includes("otel"))).toBe(false);
+    expect(options).toMatchObject({ cwd: "/project", stdout: "pipe", stderr: "pipe" });
+    const on = codexSpawnOptions(input, { endpoint: "http://127.0.0.1:4100/v1/metrics", token: "abc" });
+    expect(on.cmd.filter((arg) => arg.includes("otel"))).toHaveLength(1);
+    expect("env" in on && on.env?.OTEL_METRIC_EXPORT_INTERVAL).toBe("10000");
+  });
+
+  runnerTest("Given the setting off (absent or false) and a progress sink When the turn runs Then Codex gets no OTel override or env and no receiver is reachable", async () => {
+    for (const setting of [undefined, false]) {
+      const { result, order, report } = await runMetricsFixture(setting);
+      expect(result).toEqual({ exitCode: 0 });
+      expect(report).toEqual({ status: 0, interval: process.env.OTEL_METRIC_EXPORT_INTERVAL ?? null, otelArgs: 0, otelEnv: parentOtelEnv() });
+      expect(order).not.toContain("progress");
+    }
+  });
+
+  runnerTest("Given the setting on and a Codex child that exports a stream event When the turn runs Then progress arrives through the run's loopback receiver and nothing about it is published", async () => {
+    const { result, order, events, report } = await runMetricsFixture(true);
+    expect(result).toEqual({ exitCode: 0 });
+    expect(report).toMatchObject({ status: 200, interval: "10000", otelArgs: 1 });
+    expect(order).toEqual(["progress", "chat.delta", "usage.delta", "chat.message_end", "status.idle"]);
+    expect(JSON.stringify(events)).not.toContain("/v1/metrics");
   });
 });
 

@@ -1,8 +1,13 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { DEFAULT_DISPLAY_NAME } from "@bg/shared";
 import { defaultConfig, ensureConfig, loadConfig, loadConfigForPlatform, saveConfig, saveConfigForPlatform } from "../src/config";
+import type { AdapterRunInput } from "../src/adapters/types";
+import { getSqlite } from "../src/db/sqlite-client";
 import { configFilePath, localConfigFilePath } from "../src/lib/app-paths";
+import { projectsDir } from "../src/lib/paths";
+import { startUserTurn } from "../src/services/turns";
 import { homeRoutes } from "../src/routes/home";
 
 const platforms: NodeJS.Platform[] = ["darwin", "win32", "linux"];
@@ -32,7 +37,7 @@ describe("settings storage", () => {
       webAssets: { searchEnabled: true },
     });
     expect(JSON.stringify(shared)).not.toContain("private");
-    expect(Object.keys(local).sort()).toEqual(["autoOpenBrowser", "commandcodeApiKey", "figmaPersonalAccessToken", "harness", "llmApiKeys", "logs", "platform", "playwright", "port", "schemaVersion", "vercelToken"].sort());
+    expect(Object.keys(local).sort()).toEqual(["autoOpenBrowser", "codexProgressMetrics", "commandcodeApiKey", "figmaPersonalAccessToken", "harness", "llmApiKeys", "logs", "platform", "playwright", "port", "schemaVersion", "vercelToken"].sort());
     expect(local.platform).toBe(process.platform);
     expect((await loadConfig()).port).toBe(15432);
   });
@@ -170,5 +175,66 @@ describe("settings storage", () => {
     const foreignPath = localConfigFilePath(foreignPlatform); const foreign = '{"foreign":"bytes"}'; await writeFile(foreignPath, foreign);
     await expect(loadConfig()).rejects.toThrow("config_read_failed");
     expect(await readFile(localPath, "utf8")).toBe(mismatch); expect(await readFile(foreignPath, "utf8")).toBe(foreign);
+  });
+});
+
+describe("Codex progress metrics setting", () => {
+  const patch = (body: unknown) => homeRoutes.request("http://local/api/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  test("Given no stored choice When settings load Then the Codex progress signal is off, and a toggle persists OS-local only", async () => {
+    expect(defaultConfig.codexProgressMetrics).toBe(false);
+    expect((await loadConfig()).codexProgressMetrics).toBe(false);
+    expect((await (await homeRoutes.request("http://local/api/settings")).json()).data.codex_progress_metrics).toBe(false);
+    const on = await patch({ codex_progress_metrics: true });
+    expect(on.status).toBe(200);
+    expect((await on.json()).data.codex_progress_metrics).toBe(true);
+    expect(JSON.parse(await readFile(localConfigFilePath(), "utf8")).codexProgressMetrics).toBe(true);
+    expect(JSON.parse(await readFile(configFilePath, "utf8"))).not.toHaveProperty("codexProgressMetrics");
+    const other = process.platform === "win32" ? "darwin" : "win32";
+    expect((await loadConfigForPlatform(other)).codexProgressMetrics).toBe(false);
+    const invalid = await patch({ codex_progress_metrics: "yes" });
+    expect(invalid.status).toBe(400);
+    expect((await invalid.json()).error.code).toBe("invalid_codex_progress_metrics");
+    expect((await loadConfig()).codexProgressMetrics).toBe(true);
+  });
+
+  test("Given a non-boolean stored value When loaded Then the signal stays off", async () => {
+    await writeFile(localConfigFilePath(), JSON.stringify({ ...JSON.parse(await readFile(localConfigFilePath(), "utf8")), codexProgressMetrics: "true" }));
+    expect((await loadConfig()).codexProgressMetrics).toBe(false);
+  });
+
+  test("Given the setting off or on When a Codex turn runs Then the adapter is asked for the progress signal only when on", async () => {
+    const projectId = `codex-progress-${crypto.randomUUID()}`;
+    const sessionId = `${projectId}-session`;
+    const projectDir = path.join(projectsDir, projectId);
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(path.join(projectDir, "index.html"), "<main>Base</main>");
+    getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, projectId, projectDir);
+    getSqlite().prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(sessionId, projectId);
+    const seen: (boolean | undefined)[] = [];
+    const runTurn = async () => {
+      const turn = startUserTurn(sessionId, { type: "user.message", text: "Edit the heading" }, undefined, {
+        reviewDesign: async () => ({ status: "unavailable", repairs: 0, result: null }),
+        detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "unused", version: "fixture", authenticated: true, image_generation: true }] }),
+        runAdapter: async (_backend, input: AdapterRunInput) => {
+          seen.push(input.codexProgressMetrics);
+          await input.onEvent({ id: crypto.randomUUID(), ts: 5, type: "chat.message_end", turnId: input.turnId });
+          await input.onEvent({ id: crypto.randomUUID(), ts: 6, type: "status.idle", stopReason: "end_turn" });
+          return { exitCode: 0 };
+        },
+      });
+      if (turn === null) throw new Error("turn_reservation_missing");
+      await turn.promise.catch(() => undefined);
+    };
+    try {
+      await runTurn();
+      expect((await patch({ codex_progress_metrics: true })).status).toBe(200);
+      await runTurn();
+      expect(seen).toEqual([undefined, true]);
+    } finally {
+      getSqlite().prepare("DELETE FROM sessions WHERE id=?").run(sessionId);
+      getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId);
+      await rm(projectDir, { recursive: true, force: true });
+    }
   });
 });

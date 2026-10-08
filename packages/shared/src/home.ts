@@ -106,6 +106,12 @@ export interface SettingsSummary {
    * licensed assets. Off means no search query leaves the machine.
    */
   web_asset_search: boolean;
+  /**
+   * OS-local opt-in, default off: Codex usage metrics go to BurnGuard on this computer so a turn that
+   * is still streaming is not mistaken for a stall. While on, a user-configured OpenTelemetry
+   * destination does not receive Codex metrics.
+   */
+  codex_progress_metrics: boolean;
 }
 
 export type SettingsPatch = Partial<
@@ -119,6 +125,7 @@ export type SettingsPatch = Partial<
     | "generation_defaults"
     | "publish_made_with_badge"
     | "web_asset_search"
+    | "codex_progress_metrics"
   > & {
     user: Partial<SettingsSummary["user"]>;
     /**

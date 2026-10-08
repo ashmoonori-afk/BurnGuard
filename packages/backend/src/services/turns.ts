@@ -571,6 +571,7 @@ async function runUserTurnInternal(
               generation,
               ...(logoIdeate ? { imageGeneration: "forbidden" as const } : {}),
               ...(webAssetTool === undefined ? {} : { webAssetTool }),
+              ...(backendId === "codex" && config.codexProgressMetrics ? { codexProgressMetrics: true } : {}),
               ...(generation.provider === "commandcode" ? { commandcodeApiKey: config.commandcodeApiKey ?? undefined } : {}),
               signal: activeTurn.abortController.signal, userEvent: modelPayload,
               onEvent: async (event) => {

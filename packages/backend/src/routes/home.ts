@@ -107,6 +107,7 @@ function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): Sett
     vercel_token_set: config.vercelToken !== null,
     publish_made_with_badge: config.publish.madeWithBadge,
     web_asset_search: config.webAssets.searchEnabled,
+    codex_progress_metrics: config.codexProgressMetrics,
   };
 }
 
@@ -271,7 +272,7 @@ homeRoutes.patch("/api/settings", async (c) => {
     return c.json(fail("invalid_body", "Expected a JSON object request body"), 400);
   }
 
-  const changes: Pick<Partial<AppConfig>, "theme" | "locale" | "defaultBackend" | "figmaPersonalAccessToken" | "vercelToken" | "publish" | "webAssets" | "commandcodeApiKey" | "generationDefaults"> & {
+  const changes: Pick<Partial<AppConfig>, "theme" | "locale" | "defaultBackend" | "figmaPersonalAccessToken" | "vercelToken" | "publish" | "webAssets" | "commandcodeApiKey" | "generationDefaults" | "codexProgressMetrics"> & {
     llmApiKeys?: LlmApiKeysPatch;
     chat?: Partial<AppConfig["chat"]>;
     user?: Partial<AppConfig["user"]>;
@@ -400,6 +401,12 @@ homeRoutes.patch("/api/settings", async (c) => {
       return c.json(fail("invalid_web_asset_search", "web_asset_search must be a boolean"), 400);
     }
     changes.webAssets = { searchEnabled: patch.web_asset_search };
+  }
+  if ("codex_progress_metrics" in patch) {
+    if (typeof patch.codex_progress_metrics !== "boolean") {
+      return c.json(fail("invalid_codex_progress_metrics", "codex_progress_metrics must be a boolean"), 400);
+    }
+    changes.codexProgressMetrics = patch.codex_progress_metrics;
   }
 
   const config = await updateConfig((current) => ({

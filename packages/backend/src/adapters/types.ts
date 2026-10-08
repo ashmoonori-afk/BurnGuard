@@ -36,6 +36,12 @@ export interface AdapterRunInput {
    * that sources assets from the web while web asset search is enabled; adapters without MCP support ignore it.
    */
   webAssetTool?: { readonly command: readonly string[] };
+  /**
+   * Opt-in Codex progress signal (Settings, OS-local, default off): route Codex's OTel metrics to a
+   * per-run loopback receiver so stream events count as `onProgress`. Absent or false means the
+   * plain Codex launch with the user's own telemetry configuration untouched.
+   */
+  codexProgressMetrics?: boolean;
   onEvent: (event: NormalizedEvent) => Promise<void>;
   /** Proof of life that is not an event: it resets the inactivity watchdog and is never persisted or published. */
   onProgress?: () => void;

@@ -23,6 +23,7 @@ BurnGuard exposes one effective `AppConfig`, but persists portable preferences s
 | `figmaPersonalAccessToken` | Secret credential |
 | `port` | Host networking policy |
 | `autoOpenBrowser` | Host launch policy |
+| `codexProgressMetrics` | Per-machine opt-in (default `false`): routes this computer's Codex OTel metrics to a per-run loopback BurnGuard receiver as a progress signal, which displaces a user-configured Codex OTel metrics exporter while on. Off leaves the Codex launch untouched |
 | `playwright.installed`, `playwright.installPath` | Legacy host installation state/path |
 | `harness.maxConcurrentSessions`, `checkpointEveryTurns`, `toolAutoAllow` | Host capacity/security policy |
 | `logs.level` | Host diagnostics policy |

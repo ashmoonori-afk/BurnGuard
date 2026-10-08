@@ -81,7 +81,8 @@ export async function runCodexTurn(
     );
   });
 
-  const progress = input.onProgress ? startCodexProgressReceiver(input.onProgress) : undefined;
+  // Opt-in (Settings): off, Codex starts exactly as before, with no receiver and no OTel override.
+  const progress = input.codexProgressMetrics && input.onProgress ? startCodexProgressReceiver(input.onProgress) : undefined;
   let owned: ReturnType<typeof spawnCodex>;
   try {
     owned = spawnCodex(input, progress);
@@ -90,7 +91,6 @@ export async function runCodexTurn(
     throw error;
   }
   const proc = owned.proc;
-
 
   // The built-in image tool is silent on the stream for the whole generation (35-60 s each), so a
   // run that draws several images in a row looks stalled to the turn's idle detector. Watching the
@@ -228,14 +228,19 @@ export async function runCodexTurn(
 }
 
 function spawnCodex(input: AdapterRunInput, progress: CodexProgressExporter | undefined) {
-  return spawnOwnedProcess({
+  return spawnOwnedProcess(codexSpawnOptions(input, progress));
+}
+
+/** Spawn options for one Codex run; without a progress exporter they are the plain launch. */
+export function codexSpawnOptions(input: AdapterRunInput, progress: CodexProgressExporter | undefined) {
+  return {
     cmd: buildCodexCommand(input.binaryPath, input.generation, process.platform, input.imageGeneration ?? "allowed", progress),
     cwd: input.projectDir,
     ...(progress ? { env: { ...process.env, OTEL_METRIC_EXPORT_INTERVAL: String(CODEX_METRIC_EXPORT_INTERVAL_MS) } } : {}),
     stdin: new Blob([input.prompt]),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+    stdout: "pipe" as const,
+    stderr: "pipe" as const,
+  };
 }
 
 async function readLines(
