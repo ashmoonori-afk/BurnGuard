@@ -3,6 +3,7 @@ import type { Comment } from "@bg/shared";
 import { cn } from "@/lib/utils";
 import { useT, type MessageKey } from "@/i18n/t";
 import { localeTag, useLocaleStore } from "@/i18n/locale";
+import { readCommentDraft, restoredCommentDraft, writeCommentDraft } from "@/lib/comment-draft";
 
 /** The list follows the active file and slide; resolved comments stay archived unless the panel asks for them. */
 export function visibleComments(comments: readonly Comment[], activeRelPath: string | null, activeSlideIdx: number | null, showResolved: boolean): Comment[] {
@@ -119,28 +120,47 @@ export function CommentItem({
 }) {
   const t = useT();
   const locale = useLocaleStore((state) => state.locale);
-  const [draft, setDraft] = useState(comment.body);
+  // An edit left unsaved by a closed tab or window comes back on the next mount.
+  const [restored] = useState(() => restoredCommentDraft(readCommentDraft(comment.id), comment.body));
+  const [draft, setDraft] = useState(restored.body);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     if (autoFocus) textareaRef.current?.focus();
   }, [autoFocus]);
-  const pendingDraft = useRef({ body: comment.body, dirty: false });
+  const pendingDraft = useRef(restored);
   const updateBodyRef = useRef(onUpdateBody);
   updateBodyRef.current = onUpdateBody;
   useEffect(() => () => {
     // A quick popup can unmount on refresh/file changes without a native blur.
     if (autoFocus && pendingDraft.current.dirty) updateBodyRef.current(pendingDraft.current.body);
   }, [autoFocus]);
+  useEffect(() => {
+    // Effect cleanups and blur do not run when the page goes away; hiding it is the last reliable moment.
+    const commitPending = () => {
+      if (!pendingDraft.current.dirty) return;
+      pendingDraft.current = { ...pendingDraft.current, dirty: false };
+      updateBodyRef.current(pendingDraft.current.body);
+    };
+    const commitWhenHidden = () => { if (document.visibilityState === "hidden") commitPending(); };
+    document.addEventListener("visibilitychange", commitWhenHidden);
+    window.addEventListener("pagehide", commitPending);
+    return () => {
+      document.removeEventListener("visibilitychange", commitWhenHidden);
+      window.removeEventListener("pagehide", commitPending);
+    };
+  }, []);
   const editingRef = useRef(false);
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<MessageKey | null>(null);
   const resolved = comment.resolved_at !== null;
 
   useEffect(() => {
+    // A restored draft not yet saved is a local edit too, so the server body does not replace it.
     setDraft((current) =>
-      nextCommentDraft(current, comment.body, editingRef.current),
+      nextCommentDraft(current, comment.body, editingRef.current || pendingDraft.current.dirty),
     );
-  }, [comment.body]);
+    if (readCommentDraft(comment.id) === comment.body) writeCommentDraft(comment.id, comment.body, comment.body);
+  }, [comment.id, comment.body]);
 
   const commitIfDirty = () => {
     if (draft !== comment.body) onUpdateBody(draft);
@@ -186,6 +206,7 @@ export function CommentItem({
           value={draft}
           onChange={(e) => {
             pendingDraft.current = { body: e.target.value, dirty: true };
+            writeCommentDraft(comment.id, e.target.value, comment.body);
             setDraft(e.target.value);
           }}
           onFocus={() => {

@@ -10,6 +10,7 @@ import { parseCodexLine, type CodexParserContext } from "./parser";
 import { CODEX_METRIC_EXPORT_INTERVAL_MS, CODEX_PROGRESS_HEADER, type CodexProgressExporter, startCodexProgressReceiver } from "./progress-metrics";
 import { spawnOwnedProcess } from "../owned-process";
 import { settleProcessStreams } from "../process-streams";
+import { readLines } from "../bounded-lines";
 
 export function buildCodexCommand(
   binaryPath: string,
@@ -242,38 +243,4 @@ export function codexSpawnOptions(input: AdapterRunInput, progress: CodexProgres
     stdout: "pipe" as const,
     stderr: "pipe" as const,
   };
-}
-
-async function readLines(
-  stream: ReadableStream<Uint8Array>,
-  onLine: (line: string) => Promise<void> | void,
-): Promise<void> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let idx = buffer.indexOf("\n");
-      while (idx >= 0) {
-        const line = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 1);
-        if (line.length > 0) {
-          await onLine(line);
-        }
-        idx = buffer.indexOf("\n");
-      }
-    }
-    if (buffer.length > 0) {
-      await onLine(buffer);
-    }
-  } finally {
-    try {
-      reader.releaseLock();
-    } catch {
-      // already released
-    }
-  }
 }

@@ -74,6 +74,8 @@ jobs:
           packages/frontend/tests/chat-status-slot-layout.test.ts
           packages/frontend/tests/turn-disposition.test.ts
           packages/desktop-mac/main.test.ts
+          packages/desktop-windows/close-guard.test.ts
+          packages/frontend/tests/leave-guard.test.ts
           packages/frontend/tests/export-menu.test.ts
           packages/frontend/tests/design-system-layout-panel.test.ts
           packages/backend/tests/package-resources.test.ts
@@ -117,6 +119,7 @@ jobs:
           packages/backend/tests/native-binding.test.ts
           packages/backend/tests/os-portability.test.ts
           packages/backend/tests/decomposed-file-names.test.ts
+          packages/backend/tests/artifact-tree-durability.test.ts
           packages/backend/tests/charts.test.ts
           packages/backend/tests/image-prompt-recipes.test.ts
           packages/backend/tests/design-direction-contract.test.ts

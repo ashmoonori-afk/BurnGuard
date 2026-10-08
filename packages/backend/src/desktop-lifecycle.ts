@@ -9,8 +9,13 @@ export function desktopPort(value: string | undefined): number {
   return port;
 }
 
-/** Only the owning desktop parent's private stdin pipe controls shutdown. */
-export function watchDesktopParent(input: Readable, shutdown: () => void): void {
+/** The reply a shell reads before it confirms closing over a running generation. */
+export function activeTurnsMessage(count: number): string {
+  return `[burnguard-desktop] ${JSON.stringify({ protocol: 1, event: "active-turns", count })}`;
+}
+
+/** Only the owning desktop parent's private stdin pipe controls shutdown or asks for the running-turn count. */
+export function watchDesktopParent(input: Readable, shutdown: () => void, reportActiveTurns: () => void = () => {}): void {
   let line = "";
   let discarded = false;
   let stopped = false;
@@ -23,7 +28,9 @@ export function watchDesktopParent(input: Readable, shutdown: () => void): void 
   input.on("data", (chunk: string) => {
     for (const character of chunk) {
       if (character === "\n") {
-        if (!discarded && (line === "shutdown" || line === "shutdown\r")) stop();
+        const command = line.endsWith("\r") ? line.slice(0, -1) : line;
+        if (!discarded && command === "shutdown") stop();
+        else if (!discarded && command === "active-turns" && !stopped) reportActiveTurns();
         line = "";
         discarded = false;
       } else if (!discarded) {
