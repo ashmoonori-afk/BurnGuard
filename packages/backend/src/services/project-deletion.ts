@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { ulid } from "ulid";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
 import { assertSafeName, PathBoundaryError, resolveWithin } from "../security/path-boundary";
 import { closeProjectWatcher, projectWatchers } from "./watcher-registry";
@@ -41,7 +42,8 @@ export async function deleteProject(db: Database, projectId: string, options: { 
         const trash = resolveWithin(root, ".deletions");
         mkdirSync(trash, { recursive: true });
         tombstone = resolveWithin(trash, assertSafeName(projectId));
-        if (existsSync(tombstone)) throw new ProjectDeletionError("project_delete_failed");
+        // A tombstone left by startup quarantine belongs to unverified bytes: set it aside, never delete it.
+        if (existsSync(tombstone)) renameSync(tombstone, resolveWithin(trash, `${projectId}.quarantined-${ulid()}`));
         mkdirSync(tombstone);
         ownsTombstone = true;
         writeFileSync(path.join(tombstone, "receipt.json"), JSON.stringify({ schema_version: 1, project_id: projectId, source_relative_path: path.relative(root, original).split(path.sep).join("/") }), { encoding: "utf8", flag: "wx" });
@@ -76,7 +78,7 @@ export async function reconcileProjectDeletions(db: Database, root = projectsDir
     // Stray files (.DS_Store) and unrecognized tombstones are left untouched; one must never lock out every project.
     if (!entry.isDirectory() || entry.isSymbolicLink()) { console.warn("[project] skipped unexpected deletion entry"); continue; }
     const plan = readDeletionPlan(root, trash, entry.name);
-    if (plan === null) { console.warn("[project] quarantined unreadable deletion receipt", entry.name); continue; }
+    if (plan === null) { console.warn("[project] quarantined unreadable deletion receipt"); continue; }
     const { id, tombstone, original, files } = plan;
     const project = db.query<{ dir_path: string }, [string]>("SELECT dir_path FROM projects WHERE id=?").get(id);
     if (project === null) await rm(tombstone, { recursive: true, force: true });

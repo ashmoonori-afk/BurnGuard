@@ -115,6 +115,20 @@ test("Given a tombstone with a corrupt receipt When startup reconciles Then its 
   expect(existsSync(path.join(corrupt, "receipt.json"))).toBe(true);
 });
 
+test("Given a quarantined tombstone for an existing project When the project is deleted later Then deletion succeeds and the quarantined bytes are kept aside", async () => {
+  const stale = path.join(root, ".deletions", "p");
+  await mkdir(path.join(stale, "files"), { recursive: true });
+  await writeFile(path.join(stale, "files", "a.txt"), "keep");
+  await writeFile(path.join(stale, "receipt.json"), "{ not json");
+  await reconcileProjectDeletions(db, root);
+  await deleteProject(db, "p", { projectsRoot: root });
+  expect(db.query("SELECT 1 FROM projects WHERE id='p'").get()).toBeNull();
+  expect(existsSync(projectDir)).toBe(false);
+  const kept = (await readdir(path.join(root, ".deletions"))).filter((name) => name.startsWith("p.quarantined-"));
+  expect(kept).toHaveLength(1);
+  expect(await readFile(path.join(root, ".deletions", kept[0]!, "files", "a.txt"), "utf8")).toBe("keep");
+});
+
 test("Given a valid receipt whose restore would overwrite a directory When startup reconciles Then it still fails closed", async () => {
   const tombstone = path.join(root, ".deletions", "p");
   await mkdir(path.join(tombstone, "files"), { recursive: true });

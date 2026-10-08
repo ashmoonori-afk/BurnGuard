@@ -8,6 +8,7 @@ import { CanonicalTreeManifestError, inspectCanonicalTree, isCanonicalTreeRootMi
 import { parsePersistedArtifactOperation, PersistedArtifactOperationError, type PersistedArtifactOperationRow } from "./artifact-operation-record";
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
 import { migrateDocumentOnlyRevision } from "./artifact-document-migration";
+import { setArtifactRecoveryHold } from "./artifact-recovery-hold";
 
 type ProjectRow = { readonly id: string; readonly dir_path: string; readonly current_digest: string | null };
 type RecoveryRow = PersistedArtifactOperationRow & { readonly dir_path: string };
@@ -46,12 +47,13 @@ export async function reconcileArtifactState(db: Database): Promise<{ readonly o
     try { await reconcileProjectIdentity(db, coordinator, project); }
     catch (error) { failedProjects.set(project.id, recoveryFailureCode(error)); }
   }
+  setArtifactRecoveryHold(db, failedProjects.keys());
   const sessions = recoverPersistedSessions(db);
   const unavailableProjects: UnavailableProject[] = [
     ...[...missingProjectIds].map((projectId) => ({ projectId, code: "project_directory_missing" })),
     ...[...failedProjects].map(([projectId, code]) => ({ projectId, code })),
   ];
-  return { operations: recoveredOperations, projects: projects.length - unavailableProjects.length, sessions, unavailableProjects };
+  return { operations: recoveredOperations, projects: projects.filter((p) => !missingProjectIds.has(p.id) && !failedProjects.has(p.id)).length, sessions, unavailableProjects };
 }
 
 function recoveryFailureCode(error: unknown): string {

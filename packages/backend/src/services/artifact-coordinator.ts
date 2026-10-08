@@ -21,6 +21,7 @@ import {
   loadFigmaReferencePolicy,
   type FigmaReferencePolicy,
 } from "./figma-reference-policy";
+import { isArtifactRecoveryHeld } from "./artifact-recovery-hold";
 import { FigmaImportError } from "./figma-import-errors";
 import {
   AcquisitionLimitError,
@@ -92,7 +93,12 @@ export class ArtifactOperationError extends Error {
 export class ArtifactCoordinator {
   constructor(private readonly db: Database, private readonly faults: CoordinatorFaults = {}) {}
 
+  private assertNotHeld(projectId: string): void {
+    if (isArtifactRecoveryHeld(this.db, projectId)) throw new ArtifactOperationError("recovery_unavailable", "Project recovery is held until the next restart");
+  }
+
   async initialize(projectId: string, projectDir: string): Promise<CanonicalTreeManifest> {
+    this.assertNotHeld(projectId);
     const release = await acquireArtifactProjectLock(this.db, projectId);
     try { return await this.initializeOnce(projectId, projectDir); }
     finally { release(); }
@@ -136,6 +142,7 @@ export class ArtifactCoordinator {
   }
 
   async run(input: RunOperation): Promise<CommittedArtifactOperation> {
+    this.assertNotHeld(input.projectId);
     const id = input.operationId ?? ulid();
     const ownedRoot = this.operationPath(input.projectDir, id);
     const snapshotPath = path.join(ownedRoot, "snapshot");
@@ -276,6 +283,7 @@ export class ArtifactCoordinator {
   }
 
   async observeExternal(projectId: string, projectDir: string): Promise<CommittedArtifactOperation | null> {
+    this.assertNotHeld(projectId);
     const release = await acquireArtifactProjectLock(this.db, projectId);
     try { return await this.observeExternalUntilStable(projectId, projectDir); }
     finally { release(); }
@@ -287,6 +295,7 @@ export class ArtifactCoordinator {
    * any active artifact operation refuses the adoption instead of taking the conflict path.
    */
   async adoptExternal(projectId: string, projectDir: string, admit: () => void): Promise<CommittedArtifactOperation | null> {
+    this.assertNotHeld(projectId);
     const release = await acquireArtifactProjectLock(this.db, projectId);
     try {
       admit();
