@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import JSZip from "jszip";
 import { defaultConfig, saveConfig } from "../src/config";
 import { injectMadeWithBadge, MADE_WITH_BADGE_MARKER } from "../src/services/publish-badge";
-import { deploymentFiles, isPublicAsset, requestVercel, uploadDeploymentFiles } from "../src/services/vercel-publish";
+import { deploymentFiles, isPublicAsset, publishExport, requestVercel, uploadDeploymentFiles } from "../src/services/vercel-publish";
 import { createApp } from "../src/server";
 import { sha256 } from "../src/services/export-receipt";
 
@@ -149,4 +152,69 @@ describe("publish badge", () => {
 test("Given a ready production alias When checking deployment Then the shared URL uses that alias", async () => {
   const fetcher = (async () => Response.json({ id: "dpl_test", url: "preview.vercel.app", readyState: "READY", alias: ["https://invalid.example", "public-site.vercel.app"] })) as typeof fetch;
   expect((await requestVercel("/v13/deployments/dpl_test", "test-token", undefined, new AbortController().signal, undefined, fetcher)).url).toBe("https://public-site.vercel.app");
+});
+
+describe("publishExport digest re-verification", () => {
+  const page = "<html><body><h1>Site</h1></body></html>";
+  type Job = NonNullable<Awaited<ReturnType<typeof import("../src/db/exports").getExportJob>>>;
+  type Project = NonNullable<Awaited<ReturnType<typeof import("../src/db/project-read-repository").getProjectDetail>>>;
+
+  async function fixture(format: "html_zip" | "pdf" = "html_zip") {
+    const { bytes, expected } = await archive({ "index.html": page }, "index.html");
+    const dir = await mkdtemp(join(tmpdir(), "bg-publish-export-"));
+    const path = join(dir, "artifact.zip");
+    await writeFile(path, bytes);
+    const job = { latest_attempt: { project_revision: expected.project_revision, project_digest: expected.project_digest, digests: { output: sha256(bytes), input_closure: expected.input_closure_digest } } } as unknown as Job;
+    const project = { type: "website", entrypoint: "index.html" } as unknown as Project;
+    const requests: { url: string; body: unknown }[] = [];
+    const fetcher = (async (url: unknown, init?: RequestInit) => {
+      requests.push({ url: String(url), body: init?.body });
+      return String(url).includes("/v2/files") ? new Response(null, { status: 200 }) : Response.json({ id: "dpl_abc", url: "example.vercel.app", readyState: "READY" });
+    }) as typeof fetch;
+    const deps = {
+      verifyExportDownload: async () => ({ path, format, projectId: "project-1", revision: expected.project_revision }),
+      getExportJob: async () => job, getProjectDetail: async () => project, fetcher,
+    };
+    return { bytes, path, deps, requests, cleanup: () => rm(dir, { recursive: true, force: true }) };
+  }
+  const publish = (deps: Awaited<ReturnType<typeof fixture>>["deps"] & { maxBytes?: number }) => publishExport("job-1", "fixture-token", undefined, new AbortController().signal, false, deps);
+
+  test("Given a validated html_zip export When published Then the validated bytes are uploaded and the deployment is created", async () => {
+    const f = await fixture();
+    try {
+      const result = await publish(f.deps);
+      expect(result).toEqual({ schema_version: 1, id: "dpl_abc", url: "https://example.vercel.app", ready: true });
+      expect(f.requests.map((r) => r.url)).toEqual(["https://api.vercel.com/v2/files", "https://api.vercel.com/v13/deployments"]);
+      expect((f.requests[0]!.body as Buffer).toString()).toBe(page);
+      const deployment = JSON.parse(String(f.requests[1]!.body));
+      expect(deployment.files).toEqual([{ file: "index.html", sha: createHash("sha1").update(page).digest("hex"), size: Buffer.byteLength(page) }]);
+    } finally { await f.cleanup(); }
+  });
+
+  test("Given the stored zip is modified after validation When published Then it fails with publish_export_changed and nothing is sent", async () => {
+    const f = await fixture();
+    try {
+      const tampered = await archive({ "index.html": `${page}<script>steal()</script>` }, "index.html");
+      await writeFile(f.path, tampered.bytes);
+      await expect(publish(f.deps)).rejects.toMatchObject({ code: "publish_export_changed" });
+      expect(f.requests).toEqual([]);
+    } finally { await f.cleanup(); }
+  });
+
+  test("Given a non-zip export format When published Then it fails with publish_export_required and nothing is sent", async () => {
+    const f = await fixture("pdf");
+    try {
+      await expect(publish(f.deps)).rejects.toMatchObject({ code: "publish_export_required" });
+      expect(f.requests).toEqual([]);
+    } finally { await f.cleanup(); }
+  });
+
+  test("Given public content one byte over the size limit When published Then it fails with publish_size_limit, and at the limit it publishes", async () => {
+    const f = await fixture();
+    try {
+      await expect(publish({ ...f.deps, maxBytes: Buffer.byteLength(page) - 1 })).rejects.toMatchObject({ code: "publish_size_limit" });
+      expect(f.requests).toEqual([]);
+      expect((await publish({ ...f.deps, maxBytes: Buffer.byteLength(page) })).id).toBe("dpl_abc");
+    } finally { await f.cleanup(); }
+  });
 });
