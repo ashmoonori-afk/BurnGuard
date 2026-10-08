@@ -15,6 +15,7 @@ import { PersistedArtifactOperationError } from "../src/services/artifact-operat
 import { isArtifactPublicationActive } from "../src/services/artifact-publication-registry";
 import { runMigrationsFrom } from "../src/db/migrate";
 import { ExtractionAcquisitionError } from "../src/services/extraction-acquisition";
+import { pruneExpiredArtifactOperations } from "../src/services/artifact-retention";
 
 const roots: string[] = [];
 let db: Database;
@@ -410,6 +411,22 @@ describe("artifact coordinator", () => {
     expect((await inspectCanonicalTree(root)).tree_digest).toBe(base.tree_digest);
     expect(db.query<{ readonly id: string; readonly status: string }, []>("SELECT id,status FROM artifact_operations WHERE id=?").get(operation?.id ?? "")).toEqual({ id: operation?.id, status: "conflicted" });
     expect(db.query("SELECT status,result_revision,result_digest FROM artifact_operations WHERE id='active'").get()).toEqual({ status: "conflicted", result_revision: null, result_digest: null });
+  });
+
+  test("Given an external write was captured as conflicted When later operations and retention sweeps run Then the captured bytes stay retained", async () => {
+    const coordinator = new ArtifactCoordinator(db);
+    const base = await coordinator.initialize("p", root);
+    db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES ('active','p','working',0,?,0,'','','[]','{}','{}','{}',1,1)").run(base.tree_digest);
+    await writeFile(path.join(root, "index.html"), "external save");
+    const operation = await coordinator.observeExternal("p", root);
+    expect(operation).toMatchObject({ status: "conflicted" });
+    const captured = getArtifactOperation(db, "p", operation?.id ?? "");
+    expect(captured).toMatchObject({ status: "conflicted", retention: { replayable: true, pruned_at: null, prune_reason: null } });
+    expect(captured?.retention.retained_until).toBeGreaterThan(Date.now() + 29 * 24 * 60 * 60 * 1000);
+    await coordinator.run({ projectId: "p", projectDir: root, kind: "turn", expectedRevision: 0, expectedArtifactDigest: base.tree_digest, mutate: async (stage) => { await writeFile(path.join(stage, "index.html"), "later turn"); } });
+    expect(await pruneExpiredArtifactOperations(db, { projectId: "p", projectsRoot: path.dirname(root), now: Date.now() + 24 * 60 * 60 * 1000 })).toBe(0);
+    expect(await readFile(path.join(root, ".meta", "artifact-operations", operation?.id ?? "", "stage", "index.html"), "utf8")).toBe("external save");
+    expect(getArtifactOperation(db, "p", operation?.id ?? "")?.retention).toMatchObject({ replayable: true, pruned_at: null });
   });
 
   test("Given mandatory snapshot creation fails When operation starts Then mutator never runs and identity is unchanged", async () => {

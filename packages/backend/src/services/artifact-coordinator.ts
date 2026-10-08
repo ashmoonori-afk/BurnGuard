@@ -83,6 +83,8 @@ export type CommittedArtifactOperation = {
   readonly resultDigest: string;
   readonly diff: readonly ArtifactFileDiff[];
 };
+/** Operation copies, including captured external edits, stay restorable for 30 days. */
+const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 type ProjectIdentity = { readonly revision: number; readonly digest: string | null };
 
 export class ArtifactOperationError extends Error {
@@ -392,7 +394,7 @@ export class ArtifactCoordinator {
     this.db.transaction(() => {
       this.db.prepare("UPDATE artifact_operations SET status='conflicted',result_revision=NULL,result_digest=NULL,diff_json='[]',replay_json=json_set(replay_json,'$.publication','base'),updated_at=? WHERE id=? AND status IN ('pending','working','recovering')").run(Date.now(), activeId);
       const now = Date.now();
-      this.db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,?,'conflicted',?,?,NULL,NULL,?,'','',?,?,?,?,?,?)").run(id, projectId, identity.revision, identity.digest, identity.revision, JSON.stringify(diff), JSON.stringify({ schema_version: 1, snapshot_path: snapshotPath, stage_path: stagePath, base_manifest: base }), JSON.stringify({ schema_version: 1, replayable: false, retained_until: now, pruned_at: now, prune_reason: "external_conflict" }), JSON.stringify({ schema_version: 1, kind: "external", parent_operation_id: activeId, publication: "base" }), now, now);
+      this.db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,?,'conflicted',?,?,NULL,NULL,?,'','',?,?,?,?,?,?)").run(id, projectId, identity.revision, identity.digest, identity.revision, JSON.stringify(diff), JSON.stringify({ schema_version: 1, snapshot_path: snapshotPath, stage_path: stagePath, base_manifest: base }), JSON.stringify({ schema_version: 1, replayable: true, retained_until: now + RETENTION_MS, pruned_at: null, prune_reason: null }), JSON.stringify({ schema_version: 1, kind: "external", parent_operation_id: activeId, publication: "base" }), now, now);
     })();
     publishArtifactOperationEvent(this.db, { projectId, operationId: id, revision: identity.revision, digest: identity.digest, outcome: "conflicted", diff });
     return { id, kind: "external", status: "conflicted", baseRevision: identity.revision, baseDigest: identity.digest, resultRevision: identity.revision, resultDigest: identity.digest, diff };
@@ -416,7 +418,7 @@ export class ArtifactCoordinator {
   private insertWorking(id: string, input: Pick<RunOperation, "projectId" | "kind" | "expectedRevision" | "expectedFileHash" | "nodeFingerprint" | "parentOperationId">, base: CanonicalTreeManifest, snapshotPath: string, stagePath: string): void {
     const now = Date.now();
     const snapshot = { schema_version: 1, snapshot_path: snapshotPath, stage_path: stagePath, base_manifest: base };
-    const retention = { schema_version: 1, replayable: true, retained_until: now + 30 * 24 * 60 * 60 * 1000, pruned_at: null, prune_reason: null };
+    const retention = { schema_version: 1, replayable: true, retained_until: now + RETENTION_MS, pruned_at: null, prune_reason: null };
     const replay = { schema_version: 1, kind: input.kind, parent_operation_id: input.parentOperationId ?? null, publication: "base" };
     try { this.db.transaction(() => {
       const identity = this.projectIdentity(input.projectId);
