@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runMigrationsFrom } from "../src/db/migrate";
@@ -106,4 +106,50 @@ test("Given an external save reverted while a turn ran When history lists it and
     expect(await post(`http://local/api/projects/${projectId}/operations/${capture!.id}/reapply`, { revision: undone.body.data.result_revision, digest: undone.body.data.result_digest })).toMatchObject({ status: 410, body: { error: { code: "capture_expired" } } });
     expect(classifyApiRoute(`/api/projects/${projectId}/operations/${capture!.id}/reapply`, "POST")).toBe("artifact-operations");
   } finally { db.prepare("DELETE FROM projects WHERE id=?").run(projectId); await rm(root, { recursive: true, force: true }); }
+});
+
+/** Captures an external save that a gated turn then reverts; returns the identity of the restored base tree. */
+async function revertedExternalCapture(projectId: string, root: string) {
+  const { getSqlite } = await import("../src/db/sqlite-client");
+  const db = getSqlite();
+  await writeFile(path.join(root, "index.html"), "base");
+  db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, projectId, root);
+  const base = await new ArtifactCoordinator(db).initialize(projectId, root);
+  let release!: () => void, prepared!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; }), ready = new Promise<void>(resolve => { prepared = resolve; });
+  const turn = new ArtifactCoordinator(db).run({ projectId, projectDir: root, kind: "turn", expectedRevision: 0, expectedArtifactDigest: base.tree_digest, onPrepared: prepared, mutate: async stage => { await gate; await writeFile(path.join(stage, "index.html"), "generated"); } });
+  await ready;
+  await writeFile(path.join(root, "index.html"), "my external save");
+  const capture = await new ArtifactCoordinator(db).observeExternal(projectId, root);
+  release();
+  await expect(turn).rejects.toThrow();
+  return { db, capture: capture!, identity: { revision: 0, digest: base.tree_digest } };
+}
+
+test("Given a retained external edit and a later generation that rewrote the same file When re-applying Then it is refused with reapply_conflict and nothing is written", async () => {
+  const { getSqlite } = await import("../src/db/sqlite-client");
+  const { artifactOperationRoutes } = await import("../src/routes/artifact-operations");
+  const projectId = `reapply-conflict-${process.pid}`, root = await mkdtemp(path.join(tmpdir(), "burnguard-reapply-conflict-"));
+  try {
+    const { db, capture, identity } = await revertedExternalCapture(projectId, root);
+    const later = await new ArtifactCoordinator(db).run({ projectId, projectDir: root, kind: "turn", expectedRevision: identity.revision, expectedArtifactDigest: identity.digest, mutate: async stage => { await writeFile(path.join(stage, "index.html"), "later generation"); } });
+    const response = await artifactOperationRoutes.request(`http://local/api/projects/${projectId}/operations/${capture.id}/reapply`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ expected_revision: later.resultRevision, expected_artifact_digest: later.resultDigest }) });
+    expect(response.status).toBe(409);
+    expect((await response.json() as { error: { code: string } }).error.code).toBe("reapply_conflict");
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("later generation");
+    expect(await Bun.file(path.join(root, "notes.html")).exists()).toBe(false);
+    expect(getSqlite().query("SELECT COUNT(*) AS n FROM artifact_operations WHERE project_id=? AND status='committed' AND json_extract(replay_json,'$.kind')='reapply_external'").get(projectId)).toEqual({ n: 0 });
+  } finally { (await import("../src/db/sqlite-client")).getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId); await rm(root, { recursive: true, force: true }); }
+});
+
+test("Given a retained external edit captured through a symlinked or junctioned parent directory When re-applying through the real path Then the stored storage path still matches and the edit is restored", async () => {
+  const projectId = `reapply-link-${process.pid}`, parent = await mkdtemp(path.join(tmpdir(), "burnguard-reapply-link-")), link = `${parent}-link`, root = path.join(parent, "project");
+  try {
+    await mkdir(root);
+    await symlink(parent, link, process.platform === "win32" ? "junction" : "dir");
+    const { db, capture, identity } = await revertedExternalCapture(projectId, path.join(link, "project"));
+    const operation = await new ArtifactCoordinator(db).reapplyExternal({ projectId, projectDir: root, operationId: capture.id, expectedRevision: identity.revision, expectedArtifactDigest: identity.digest });
+    expect(operation.status).toBe("committed");
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("my external save");
+  } finally { (await import("../src/db/sqlite-client")).getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId); await rm(link, { recursive: true, force: true }); await rm(parent, { recursive: true, force: true }); }
 });

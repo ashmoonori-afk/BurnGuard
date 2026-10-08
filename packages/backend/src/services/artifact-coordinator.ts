@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { realpathSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
@@ -296,7 +297,7 @@ export class ArtifactCoordinator {
     if (!capture.retention.replayable || capture.retention.retained_until <= Date.now()) throw new ArtifactOperationError("capture_expired", "Captured external edit is no longer retained");
     if (this.db.query("SELECT 1 FROM artifact_operations WHERE project_id=? AND status IN ('pending','working','recovering') LIMIT 1").get(input.projectId) !== null) throw new ArtifactOperationError("operation_conflict", "An artifact operation is active");
     const captured = resolveWithin(input.projectDir, ".meta", "artifact-operations", assertSafeName(capture.id), "stage");
-    if (path.resolve(capture.snapshot.stage_path) !== captured) throw new ArtifactOperationError("reapply_unavailable", "Captured external edit is outside operation storage");
+    if (!sameStoragePath(capture.snapshot.stage_path, captured)) throw new ArtifactOperationError("reapply_unavailable", "Captured external edit is outside operation storage");
     return this.run({ projectId: input.projectId, projectDir: input.projectDir, kind: "reapply_external", expectedRevision: input.expectedRevision, expectedArtifactDigest: input.expectedArtifactDigest, parentOperationId: capture.id, mutate: async (stage) => {
       const current = await inspectCanonicalTree(stage);
       for (const file of capture.diff) {
@@ -508,4 +509,12 @@ function mergeImmutableReferencePaths(
     }
   }
   return output;
+}
+
+/** Compares a stored storage path with a resolveWithin result by real path, so symlinked, junctioned or 8.3-short project roots still match. */
+function sameStoragePath(stored: string, resolved: string): boolean {
+  try {
+    const normalize = (value: string) => process.platform === "win32" ? realpathSync(value).toLowerCase() : realpathSync(value);
+    return normalize(stored) === normalize(resolved);
+  } catch { return false; }
 }

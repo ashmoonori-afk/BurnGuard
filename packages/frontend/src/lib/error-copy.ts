@@ -21,6 +21,7 @@ const ERROR_COPY: Record<string, MessageKey> = {
   receipt_corrupt: "errors.receipt_corrupt",
   retention_expired: "errors.retention_expired",
   capture_expired: "errors.capture_expired",
+  reapply_unavailable: "errors.reapply_unavailable",
   reapply_conflict: "errors.reapply_conflict",
   render_failed: "errors.render_failed",
   validation_failed: "errors.validation_failed",

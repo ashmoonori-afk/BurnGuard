@@ -25,6 +25,7 @@ export const errorsMessages = defineMessages({
   "errors.receipt_corrupt": { ko: "내보낸 파일을 확인할 수 없어요. 다시 시도를 눌러 새 파일을 만들어 주세요.", en: "Could not validate the exported file. Select Try again to create a new file.", "zh-CN": "无法验证导出的文件。请点击重试以创建新文件。" },
   "errors.retention_expired": { ko: "파일 보관 기간이 끝났어요. 다시 내보내 주세요.", en: "The file retention period has ended. Export again.", "zh-CN": "文件保留期限已过。请重新导出。" },
   "errors.reapply_conflict": { ko: "편집이 대체된 뒤 같은 파일이 다시 바뀌어서 자동으로 복원할 수 없어요.", en: "These files changed again after your edit was replaced, so it can't be restored automatically.", "zh-CN": "您的编辑被替换后这些文件又发生了更改，因此无法自动恢复。" },
+  "errors.reapply_unavailable": { ko: "대체된 편집을 더 이상 복원할 수 없어요. 이미 복원했거나 목록에서 사라졌을 수 있어요.", en: "This replaced edit can no longer be restored. It may already have been restored or removed.", "zh-CN": "无法再恢复这个被替换的编辑。它可能已被恢复或已移除。" },
   "errors.capture_expired": { ko: "대체된 편집의 보관 기간이 끝났어요.", en: "The replaced edit is no longer retained.", "zh-CN": "被替换的编辑已超过保留期限。" },
   "errors.render_failed": { ko: "내보내기 파일을 만들지 못했어요. 설정과 원본을 확인한 뒤 다시 시도해 주세요.", en: "Could not create the export. Check the settings and source, then try again.", "zh-CN": "无法创建导出文件。请检查设置和源文件后重试。" },
   "errors.validation_failed": { ko: "내보내기 품질 점검을 통과하지 못했어요. 품질 점검에서 문제를 확인해 주세요.", en: "The export failed quality checks. Review the issues in the quality check.", "zh-CN": "导出未通过质量检查。请在质量检查中查看问题。" },
