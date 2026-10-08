@@ -2,6 +2,7 @@ import path from "node:path";
 import { ulid } from "ulid";
 import type { NormalizedEvent } from "@bg/shared";
 import { resolveWithin } from "../../security/path-boundary";
+import { classifyProviderFailure } from "../provider-failure";
 import type { CodexParserContext } from "./parser";
 import { collectGeneratedImageHashes, collectImageOutputHashes } from "./image-outputs";
 
@@ -34,7 +35,8 @@ export function mapCodexEnvelope(
     // failure always also emits turn.failed and exits nonzero, and those stay authoritative.
     case "error":
       return [];
-    case "turn.failed":
+    case "turn.failed": {
+      const failure = classifyProviderFailure(isRecord(obj.error) ? obj.error.message : obj.error);
       return [
         {
           id: ulid(),
@@ -46,9 +48,9 @@ export function mapCodexEnvelope(
           id: ulid(),
           ts: Date.now(),
           type: "status.error",
-          code: "turn_failed",
-          message: "turn_failed",
-          recoverable: true,
+          code: failure ?? "turn_failed",
+          message: failure ?? "turn_failed",
+          recoverable: failure === undefined,
         },
         {
           id: ulid(),
@@ -57,6 +59,7 @@ export function mapCodexEnvelope(
           stopReason: "error",
         },
       ];
+    }
     default:
       return null;
   }

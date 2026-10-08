@@ -402,7 +402,7 @@ describe("parseStreamLine — result line", () => {
         subtype: "success",
         is_error: true,
         result:
-          "Invalid API key sk-private at /Users/local/.claude/config.json",
+          "Unexpected failure sk-private at /Users/local/.claude/config.json",
       }),
       ctx,
     );
@@ -419,6 +419,32 @@ describe("parseStreamLine — result line", () => {
       recoverable: true,
     });
     expect(events[2]).toMatchObject({ stopReason: "error" });
+  });
+
+  test.each([
+    ["Invalid API key · Please run /login", "provider_auth_required"],
+    ["Not logged in", "provider_auth_required"],
+    ["Claude AI usage limit reached|1760000000", "provider_usage_limited"],
+    ["API Error: 429 rate limit exceeded", "provider_usage_limited"],
+    ["Credit balance is too low", "provider_quota_exhausted"],
+    ["You exceeded your current quota", "provider_quota_exhausted"],
+    ["There's an issue with the selected model (x). It may not exist or you may not have access to it.", "provider_model_unavailable"],
+    ["model claude-old does not exist", "provider_model_unavailable"],
+  ] as const)("Given an is_error result classified as %#, When parsed, Then it carries the expected code and is not recoverable", (text, code) => {
+    const events = parseStreamLine(JSON.stringify({ type: "result", subtype: "success", is_error: true, result: `${text} at /Users/local/secret sk-private` }), freshCtx());
+    expect(events[1]).toMatchObject({ type: "status.error", code, message: code, recoverable: false });
+    expect(JSON.stringify(events)).not.toContain("sk-private");
+    expect(JSON.stringify(events)).not.toContain("/Users/local");
+  });
+
+  test("Given an is_error result with unrecognised text, When parsed, Then it stays a recoverable turn_failed", () => {
+    const events = parseStreamLine(JSON.stringify({ type: "result", is_error: true, result: "something unexpected" }), freshCtx());
+    expect(events[1]).toMatchObject({ type: "status.error", code: "turn_failed", recoverable: true });
+  });
+
+  test("Given a successful result that mentions a rate limit, When parsed, Then no status.error is produced", () => {
+    const events = parseStreamLine(JSON.stringify({ type: "result", subtype: "success", result: "Explained the 429 rate limit page" }), freshCtx());
+    expect(events.some((event) => event.type === "status.error")).toBe(false);
   });
 
   test("an error result without a result field remains a bounded status error", () => {

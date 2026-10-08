@@ -356,6 +356,26 @@ export const chatMessages = defineMessages({
     en: "The AI task could not be completed. Check your request and send it again.",
     "zh-CN": "AI 任务未能完成。请检查请求内容后重新发送。",
   },
+  "chat.error.providerAuthRequired": {
+    ko: "연결된 AI 계정에 다시 로그인해야 해요. 설정에서 연결 상태를 확인한 뒤 다시 시도해 주세요.",
+    en: "Your AI account needs to sign in again. Check the connection in Settings, then try again.",
+    "zh-CN": "需要重新登录所连接的 AI 账户。请在设置中检查连接状态后重试。",
+  },
+  "chat.error.providerUsageLimited": {
+    ko: "AI 서비스의 사용 한도에 도달했어요. 한도가 초기화된 뒤 다시 시도해 주세요.",
+    en: "The AI service usage limit was reached. Try again after the limit resets.",
+    "zh-CN": "已达到 AI 服务的使用上限。请在额度重置后重试。",
+  },
+  "chat.error.providerQuotaExhausted": {
+    ko: "AI 계정의 크레딧이나 할당량이 부족해요. 계정의 요금제와 잔액을 확인해 주세요.",
+    en: "The AI account is out of credit or quota. Check the account plan and balance.",
+    "zh-CN": "AI 账户的额度或配额已用完。请检查账户的套餐和余额。",
+  },
+  "chat.error.providerModelUnavailable": {
+    ko: "선택한 모델을 이 계정에서 사용할 수 없어요. 다른 모델을 선택해 주세요.",
+    en: "The selected model is not available for this account. Choose another model.",
+    "zh-CN": "此账户无法使用所选模型。请选择其他模型。",
+  },
   "chat.file.created": { ko: "생성된 파일 {name} 열기", en: "Open created file {name}", "zh-CN": "打开已创建的文件 {name}" },
   "chat.file.edited": { ko: "수정된 파일 {name} 열기", en: "Open edited file {name}", "zh-CN": "打开已编辑的文件 {name}" },
   "chat.file.deleted": { ko: "삭제된 파일 {name} 보기", en: "View deleted file {name}", "zh-CN": "查看已删除的文件 {name}" },

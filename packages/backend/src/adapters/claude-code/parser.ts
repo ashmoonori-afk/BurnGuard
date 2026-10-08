@@ -1,3 +1,4 @@
+import { classifyProviderFailure } from "../provider-failure";
 import path from "node:path";
 import { ulid } from "ulid";
 import type { NormalizedEvent } from "@bg/shared";
@@ -157,6 +158,8 @@ export function parseStreamLine(
         obj.is_error === true ||
         obj.subtype === "error_max_turns" ||
         obj.subtype === "error";
+      // The CLI's own text decides only a class; the text itself is dropped here.
+      const failure = isError ? classifyProviderFailure(obj.result) ?? classifyProviderFailure(obj.error) : undefined;
       out.push({
         id: ulid(),
         ts,
@@ -168,9 +171,9 @@ export function parseStreamLine(
           id: ulid(),
           ts,
           type: "status.error",
-          code: "turn_failed",
-          message: "turn_failed",
-          recoverable: true,
+          code: failure ?? "turn_failed",
+          message: failure ?? "turn_failed",
+          recoverable: failure === undefined,
         });
       }
       out.push({

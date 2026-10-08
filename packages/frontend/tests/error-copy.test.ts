@@ -73,6 +73,10 @@ const ADDED_CODES: readonly (readonly [string, MessageKey])[] = [
   ["format_requires_deck", "errors.format_requires_project_type"],
   ["format_requires_logo", "errors.format_requires_project_type"],
   ["invalid_export_format", "errors.invalid_export_format"],
+  ["provider_auth_required", "chat.error.providerAuthRequired"],
+  ["provider_usage_limited", "chat.error.providerUsageLimited"],
+  ["provider_quota_exhausted", "chat.error.providerQuotaExhausted"],
+  ["provider_model_unavailable", "chat.error.providerModelUnavailable"],
 ];
 
 /** Codes the Settings routes and the settings PATCH emit; Settings renders exactly apiErrorCopy(error) for them. */

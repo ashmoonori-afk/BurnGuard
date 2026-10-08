@@ -111,6 +111,26 @@ test("Given repeated incomplete results, then retries are bounded and end in a v
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test.each([
+  "provider_auth_required", "provider_usage_limited", "provider_quota_exhausted", "provider_model_unavailable",
+] as const)("Given a provider failure classified as %s, then the turn is not relaunched", async (code) => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-provider-failure-"));
+  const events: NormalizedEvent[] = [];
+  let calls = 0;
+  try {
+    const result = await runWithContinuation({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "task", userEvent: { type: "user.message", text: "task" }, onEvent: async e => { events.push(e); } }, async (attempt) => {
+      calls++;
+      await attempt.onEvent({ id: "e1", ts: 1, type: "status.error", code, message: code, recoverable: false });
+      await attempt.onEvent({ id: "e2", ts: 1, type: "status.idle", stopReason: "error" });
+      return { exitCode: 1 };
+    }, async () => false);
+    expect(calls).toBe(1);
+    expect(result.exitCode).toBe(1);
+    expect(events.find((event) => event.type === "status.error")).toMatchObject({ code, recoverable: false });
+    expect(events.some((event) => event.type === "tool.started")).toBe(false);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("Given an adapter throwing on an owned timeout, then it resumes but unexpected exceptions remain failures", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "bg-abort-throw-"));
   let calls = 0;
