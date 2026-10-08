@@ -20,6 +20,32 @@ const systemChromeAvailable = process.platform === "darwin"
     ? [process.env.PROGRAMFILES, process.env["PROGRAMFILES(X86)"], process.env.LOCALAPPDATA].some(root => root && existsSync(path.join(root, "Google/Chrome/Application/chrome.exe")))
     : existsSync("/opt/google/chrome/chrome");
 
+test.skipIf(!systemChromeAvailable)("Given an owned browser When close resolves Then its native WebSocket has delivered close", async () => {
+  const NativeWebSocket = globalThis.WebSocket;
+  const sockets: WebSocket[] = [];
+  const closed = new Set<WebSocket>();
+  class ObservedWebSocket extends NativeWebSocket {
+    constructor(...args: ConstructorParameters<typeof NativeWebSocket>) {
+      super(...args);
+      sockets.push(this);
+      this.addEventListener("close", () => closed.add(this), { once: true });
+    }
+  }
+  const lifetime = new AbortController();
+  let browser: Awaited<ReturnType<typeof launchChromiumViaNode>> | undefined;
+  globalThis.WebSocket = ObservedWebSocket;
+  try {
+    browser = await launchChromiumViaNode({ channel: "chrome" }, lifetime.signal);
+    await browser.close();
+    expect(sockets.length).toBeGreaterThan(0);
+    expect(closed.size).toBe(sockets.length);
+    expect(sockets.every(socket => socket.readyState === NativeWebSocket.CLOSED)).toBe(true);
+  } finally {
+    try { await browser?.close(); }
+    finally { lifetime.abort(); globalThis.WebSocket = NativeWebSocket; }
+  }
+});
+
 test.skipIf(!systemChromeAvailable)("system Chrome confines popup requests and closes extra pages while retaining staged files and the deck runtime", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "bg-popup-policy-"));
   const stagedDir = path.join(root, "artifact");
