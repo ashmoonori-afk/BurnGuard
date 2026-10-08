@@ -1,11 +1,12 @@
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { lstat, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import type { CheckpointRef } from "@bg/shared/harness";
 import { getProjectDetail } from "../db/project-read-repository";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import { listIndexedProjectFiles } from "./files";
-import { inspectCanonicalTree } from "./canonical-tree-manifest";
+import { parseCanonicalTreeManifest, validateCanonicalTree } from "./canonical-tree-manifest";
 import { getSqlite } from "../db/sqlite-client";
-import { ArtifactCoordinator } from "./artifact-coordinator";
+import { ArtifactCoordinator, RETENTION_MS } from "./artifact-coordinator";
 import { materializeManagedTree } from "./artifact-tree-storage";
 
 function snapshotDir(projectDir: string, turnId: string): string {
@@ -16,6 +17,44 @@ function snapshotDir(projectDir: string, turnId: string): string {
     "snapshots",
     assertSafeName(turnId),
   );
+}
+
+/** The manifest sits beside the snapshot so a torn copy cannot vouch for itself. */
+function snapshotManifestPath(projectDir: string, turnId: string): string {
+  return resolveWithin(projectDir, ".meta", "checkpoints", "snapshots", `${assertSafeName(turnId)}.manifest.json`);
+}
+
+async function writeFileAtomic(target: string, content: string): Promise<void> {
+  const temporary = `${target}.tmp-${randomUUID()}`;
+  try {
+    await writeFile(temporary, content, "utf8");
+    await rename(temporary, target);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
+}
+
+/** Snapshots, their manifests, and crash leftovers expire with the shared artifact retention window. */
+async function pruneExpiredSnapshots(projectDir: string, keepTurnId: string, now: number): Promise<void> {
+  const checkpointDir = resolveWithin(projectDir, ".meta", "checkpoints");
+  const snapshotRoot = resolveWithin(checkpointDir, "snapshots");
+  const candidates: string[] = [];
+  for (const name of await readdir(snapshotRoot)) {
+    if (name !== keepTurnId && name !== `${keepTurnId}.manifest.json`) candidates.push(resolveWithin(snapshotRoot, name));
+  }
+  for (const name of await readdir(checkpointDir).catch(() => [])) {
+    if (name.includes(".json.tmp-")) candidates.push(resolveWithin(checkpointDir, name));
+  }
+  for (const candidate of candidates) {
+    try {
+      if ((await lstat(candidate)).mtimeMs > now - RETENTION_MS) continue;
+      await rm(candidate, { recursive: true, force: true });
+    } catch {
+      // A held handle keeps this entry until the next snapshot sweep.
+      console.warn("[checkpoints] expired snapshot cleanup deferred");
+    }
+  }
 }
 
 /**
@@ -31,9 +70,22 @@ export async function writePreTurnSnapshot(
   if (!project) return null;
 
   const dest = snapshotDir(project.dir_path, turnId);
-  await materializeManagedTree(project.dir_path, dest);
+  const manifestPath = snapshotManifestPath(project.dir_path, turnId);
+  // Copy into a sibling and rename, so a crash never leaves a partial tree at `dest`.
+  const staging = `${dest}.tmp-${randomUUID()}`;
+  try {
+    const manifest = await materializeManagedTree(project.dir_path, staging);
+    await rm(dest, { recursive: true, force: true });
+    await writeFileAtomic(manifestPath, JSON.stringify(manifest));
+    await rename(staging, dest);
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true });
+    throw error;
+  }
 
   const createdAt = Date.now();
+  try { await pruneExpiredSnapshots(project.dir_path, turnId, createdAt); }
+  catch { console.warn("[checkpoints] expired snapshot cleanup deferred"); }
   return {
     turnId,
     path: dest,
@@ -46,7 +98,11 @@ export async function getVerifiedSnapshotPath(projectId: string, turnId: string)
   const project = await getProjectDetail(projectId);
   if (project === null) return null;
   const destination = snapshotDir(project.dir_path, turnId);
-  try { await inspectCanonicalTree(destination); return destination; }
+  try {
+    const expected = parseCanonicalTreeManifest(JSON.parse(await readFile(snapshotManifestPath(project.dir_path, turnId), "utf8")));
+    await validateCanonicalTree(destination, expected);
+    return destination;
+  }
   catch (error) {
     if (error instanceof Error) return null;
     throw error;
@@ -123,7 +179,7 @@ export async function writeTurnCheckpoint(
   const createdAt = Date.now();
 
   await mkdir(checkpointDir, { recursive: true });
-  await writeFile(
+  await writeFileAtomic(
     checkpointPath,
     JSON.stringify(
       {
@@ -137,7 +193,6 @@ export async function writeTurnCheckpoint(
       null,
       2,
     ),
-    "utf8",
   );
 
   return {

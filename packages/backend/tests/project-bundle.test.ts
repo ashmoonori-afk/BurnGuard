@@ -372,3 +372,22 @@ test.skipIf(!canCreateSymlink())(`Given a receipt whose project directory is a l
   await rm(path.join(projectsDir, linked), { force: true });
   await rm(path.join(sourceProjectDir, ".meta", "bundle-import-owner.json"), { force: true });
 });
+
+test("Given a torn checkpoint receipt When the project is bundled Then export succeeds and lists only the readable checkpoints", async () => {
+  // Given
+  const torn = path.join(sourceProjectDir, ".meta", "checkpoints", "turn-torn.json");
+  await writeFile(torn, '{"turn_id":"turn-torn","created_');
+  try {
+    // When
+    const exported = await exportProjectBundle(sourceProjectId);
+    const zip = await JSZip.loadAsync(exported.bytes);
+    const manifestEntry = zip.file(PROJECT_BUNDLE_MANIFEST_PATH);
+    if (!manifestEntry) throw new Error("missing manifest");
+    const manifest = parseProjectBundleManifest(JSON.parse(await manifestEntry.async("text")));
+
+    // Then
+    expect(manifest.checkpoints.map((checkpoint) => checkpoint.turn_id)).toEqual(["turn-1"]);
+  } finally {
+    await rm(torn, { force: true });
+  }
+});

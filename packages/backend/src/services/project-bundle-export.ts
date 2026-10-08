@@ -177,7 +177,10 @@ function checkpointRecords(entries: readonly BundleEntry[]): readonly ProjectBun
         "created_at" in value && typeof value.created_at === "number" && Number.isSafeInteger(value.created_at)) {
         records.push({ path: entry.file.path, turn_id: value.turn_id, created_at: value.created_at });
       }
-    } catch { throw new ProjectBundleError("project_bundle_unavailable"); }
+    } catch {
+      // A torn checkpoint receipt must not block the user's backup path; its bytes still travel in the bundle.
+      console.warn("[project-bundle] skipped malformed checkpoint", entry.file.path);
+    }
   }
   return records;
 }

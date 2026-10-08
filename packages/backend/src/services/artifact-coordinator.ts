@@ -85,7 +85,7 @@ export type CommittedArtifactOperation = {
   readonly diff: readonly ArtifactFileDiff[];
 };
 /** Operation copies, including captured external edits, stay restorable for 30 days. */
-const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+export const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 type ProjectIdentity = { readonly revision: number; readonly digest: string | null };
 
 export class ArtifactOperationError extends Error {

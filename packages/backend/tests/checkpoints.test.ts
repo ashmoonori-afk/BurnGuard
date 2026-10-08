@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { hasSnapshot, restoreFromSnapshot, writePreTurnSnapshot, writeTurnCheckpoint } from "../src/services/checkpoints";
+import { getVerifiedSnapshotPath, hasSnapshot, restoreFromSnapshot, writePreTurnSnapshot, writeTurnCheckpoint } from "../src/services/checkpoints";
 import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { indexProjectFiles, isTransientFilePath, resolveDrawFile, resolveProjectFile } from "../src/services/managed-project-files";
@@ -210,5 +210,95 @@ describe("checkpoint snapshot / restore round-trip", () => {
     expect((await resolveDrawFile(projectId, "notes/layer"))?.relPath).toBe("notes/layer");
     expect(isTransientFilePath(".index.1.2.tmp")).toBe(true);
     expect(getManagedExportJob("missing-export")).toBeNull();
+  });
+
+  async function createProductionProject(): Promise<string> {
+    projectSequence += 1;
+    const projectId = `checkpoint-production-${process.pid}-${projectSequence}`;
+    projectIds.push(projectId);
+    getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, projectId, projectDir);
+    await indexProjectFiles(projectId);
+    return projectId;
+  }
+
+  test("Given a written snapshot When a file inside it is lost Then it no longer verifies against its manifest", async () => {
+    // Given
+    const projectId = await createProductionProject();
+    await writePreTurnSnapshot(projectId, "turn-torn");
+    expect(await getVerifiedSnapshotPath(projectId, "turn-torn")).toBe(snapshotDir(projectDir, "turn-torn"));
+
+    // When
+    rmSync(path.join(snapshotDir(projectDir, "turn-torn"), "assets", "hero.svg"));
+
+    // Then
+    expect(await getVerifiedSnapshotPath(projectId, "turn-torn")).toBeNull();
+    expect(await restoreFromSnapshot(projectId, "turn-torn")).toBeNull();
+  });
+
+  test("Given a well-formed snapshot tree without a manifest When verified Then it is rejected as unverifiable", async () => {
+    // Given
+    const projectId = await createProductionProject();
+    await writePreTurnSnapshot(projectId, "turn-unmanifested");
+
+    // When
+    rmSync(path.join(snapshotRoot(projectDir), "turn-unmanifested.manifest.json"));
+
+    // Then
+    expect(await getVerifiedSnapshotPath(projectId, "turn-unmanifested")).toBeNull();
+  });
+
+  test("Given a crash leftover staging tree When a snapshot is written Then the leftover is never served as the snapshot and the renamed tree verifies", async () => {
+    // Given
+    const projectId = await createProductionProject();
+    mkdirSync(path.join(snapshotRoot(projectDir), "turn-atomic.tmp-leftover"), { recursive: true });
+    writeFileSync(path.join(snapshotRoot(projectDir), "turn-atomic.tmp-leftover", "index.html"), "partial", "utf8");
+
+    // When
+    await writePreTurnSnapshot(projectId, "turn-atomic");
+    await writePreTurnSnapshot(projectId, "turn-atomic");
+
+    // Then
+    expect(readdirSync(snapshotRoot(projectDir)).sort()).toEqual(["turn-atomic", "turn-atomic.manifest.json", "turn-atomic.tmp-leftover"]);
+    expect(readFileSync(path.join(snapshotDir(projectDir, "turn-atomic"), "index.html"), "utf8")).toBe("<h1>v1</h1>");
+    expect(await getVerifiedSnapshotPath(projectId, "turn-atomic")).toBe(snapshotDir(projectDir, "turn-atomic"));
+  });
+
+  test("Given an existing checkpoint receipt When it is rewritten Then the receipt is complete JSON and no temporary file remains", async () => {
+    // Given
+    const projectId = await createProductionProject();
+    const checkpointDir = path.join(projectDir, ".meta", "checkpoints");
+    mkdirSync(checkpointDir, { recursive: true });
+    writeFileSync(path.join(checkpointDir, "turn-receipt.json"), '{"turn_id":', "utf8");
+
+    // When
+    const checkpoint = await writeTurnCheckpoint(projectId, "turn-receipt");
+
+    // Then
+    expect(checkpoint?.path).toBe(path.join(checkpointDir, "turn-receipt.json"));
+    const receipt: unknown = JSON.parse(readFileSync(path.join(checkpointDir, "turn-receipt.json"), "utf8"));
+    expect(receipt).toMatchObject({ turn_id: "turn-receipt", project_id: projectId, file_count: 4 });
+    expect(readdirSync(checkpointDir).filter((name) => name.includes(".tmp-"))).toEqual([]);
+  });
+
+  test("Given snapshots older than the retention window When a new snapshot is written Then expired entries are pruned and recent ones kept", async () => {
+    // Given
+    const projectId = await createProductionProject();
+    await writePreTurnSnapshot(projectId, "turn-old");
+    await writePreTurnSnapshot(projectId, "turn-recent");
+    const checkpointDir = path.join(projectDir, ".meta", "checkpoints");
+    writeFileSync(path.join(checkpointDir, "turn-old.json.tmp-leftover"), "{", "utf8");
+    const expired = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    const recent = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    for (const name of ["turn-old", "turn-old.manifest.json"]) utimesSync(path.join(snapshotRoot(projectDir), name), expired, expired);
+    utimesSync(path.join(checkpointDir, "turn-old.json.tmp-leftover"), expired, expired);
+    for (const name of ["turn-recent", "turn-recent.manifest.json"]) utimesSync(path.join(snapshotRoot(projectDir), name), recent, recent);
+
+    // When
+    await writePreTurnSnapshot(projectId, "turn-new");
+
+    // Then
+    expect(readdirSync(snapshotRoot(projectDir)).sort()).toEqual(["turn-new", "turn-new.manifest.json", "turn-recent", "turn-recent.manifest.json"]);
+    expect(existsSync(path.join(checkpointDir, "turn-old.json.tmp-leftover"))).toBe(false);
+    expect(await getVerifiedSnapshotPath(projectId, "turn-recent")).toBe(snapshotDir(projectDir, "turn-recent"));
   });
 });
