@@ -26,10 +26,8 @@ export function mapCodexEnvelope(
     case "turn.started":
       return [{ id: ulid(), ts: Date.now(), type: "status.running" }];
     case "item.started":
-      trackGeneration(obj.item, ctx, false);
       return mapItem(obj.item, ctx, false);
     case "item.completed":
-      trackGeneration(obj.item, ctx, true);
       return mapItem(obj.item, ctx, true);
     case "turn.completed":
       return mapTurnCompleted(obj.usage, ctx);
@@ -65,23 +63,6 @@ export function mapCodexEnvelope(
     default:
       return null;
   }
-}
-
-/**
- * The exec stream is silent while the model writes a reasoning summary, a message or a patch, and
- * these items are announced only by `item.started`. A started item that has not completed is the
- * one signal that the model, not a hung process, is the reason for the silence. Tool items are
- * excluded: they become `tool.started` and already have a pending-tool budget.
- */
-function trackGeneration(value: unknown, ctx: CodexParserContext, completed: boolean): void {
-  if (!ctx.onProgress || !isRecord(value)) return;
-  const itemType = asString(value.type);
-  if (itemType !== "reasoning" && itemType !== "agent_message" && itemType !== "file_change") return;
-  const open = (ctx.openGenerationItems ??= new Set());
-  const itemId = asString(value.id) ?? itemType;
-  if (completed) open.delete(itemId);
-  else open.add(itemId);
-  ctx.onProgress(open.size > 0);
 }
 
 function mapItem(

@@ -13,10 +13,6 @@ export interface CodexParserContext {
   threadId?: string;
   /** sha256 of every generated image already surfaced as an `image_generation` call this run. */
   reportedImageHashes?: Set<string>;
-  /** Reports whether a reasoning, message or patch item has started and not yet completed. */
-  onProgress?: (generating: boolean) => void;
-  /** Ids of those open generation items. */
-  openGenerationItems?: Set<string>;
 }
 
 /**
