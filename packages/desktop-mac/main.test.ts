@@ -229,7 +229,10 @@ describe("macOS shell keeps the Windows shell's desktop contract", () => {
 describe("macOS shutdown ordering", () => {
   test("Given a running backend When quit is requested Then termination waits for the backend's exit and a repeated quit is cancelled", () => {
     const terminate = body("func applicationShouldTerminate(");
-    expect(terminate).toMatch(/guard service\?\.isRunning == true else \{ return \.terminateNow \}\s*if terminationReplyPending \{ return \.terminateCancel \}\s*terminationReplyPending = true\s*shutdown\(\)\s*return \.terminateLater/);
+    expect(terminate).toMatch(/guard service\?\.isRunning == true else \{ return \.terminateNow \}\s*if terminationReplyPending \{ return \.terminateCancel \}\s*terminationReplyPending = true\s*confirmCloseIfGenerating \{/);
+    expect(terminate).toContain("if proceed { self.shutdown(); return }");
+    expect(terminate).toMatch(/self\.terminationReplyPending = false\s*NSApp\.reply\(toApplicationShouldTerminate: false\)/);
+    expect(terminate).toMatch(/return \.terminateLater\s*\}$/);
     const service = body("private func launchService(serviceURL: URL, loginEntries: [String]) throws");
     expect(service.slice(service.indexOf("process.terminationHandler"))).toContain("if self.closing { self.finishTermination(); return }");
     expect(body("private func finishTermination()")).toContain("if terminationReplyPending { NSApp.reply(toApplicationShouldTerminate: true) } else { NSApp.terminate(nil) }");
@@ -252,5 +255,44 @@ describe("macOS shutdown ordering", () => {
     const drainMs = Number(/const SHUTDOWN_DRAIN_MS = ([\d_]+);/.exec(turns)?.[1]?.replaceAll("_", ""));
     expect(Number(/asyncAfter\(deadline: \.now\(\) \+ (\d+)\)/.exec(wait)?.[1]) * 1000).toBeGreaterThan(drainMs);
     expect(source).not.toMatch(/service\??\.terminate\(\)/);
+  });
+});
+
+describe("macOS close guard while a generation runs (B3-5)", () => {
+  test("Given a window close When a generation may be running Then windowShouldClose holds it and closes only after the decision", () => {
+    const should = body("func windowShouldClose(_ sender: NSWindow) -> Bool");
+    expect(should).toContain("if closeConfirmed || closing { return true }");
+    expect(should).toContain("confirmCloseIfGenerating {");
+    expect(should).toMatch(/guard let self, proceed else \{ return \}\s*self\.closeConfirmed = true\s*self\.window\.close\(\)/);
+    expect(should).toMatch(/return false\s*\}$/);
+    // windowWillClose cannot cancel, so it only shuts the backend down.
+    expect(body("func windowWillClose(")).toMatch(/^\{\s*shutdown\(\)\s*\}$/);
+  });
+
+  test("Given the close decision When the backend is asked Then the query uses the private stdin pipe and a missing answer counts as idle", () => {
+    const confirm = body("private func confirmCloseIfGenerating(");
+    expect(confirm).toContain("guard smokeReportPath == nil, !closing, origin != nil, service?.isRunning == true else { decided(true); return }");
+    expect(confirm).toContain('serviceInput?.fileHandleForWriting.write(Data("active-turns\\n".utf8))');
+    expect(confirm).toMatch(/asyncAfter\(deadline: \.now\(\) \+ 2\)/);
+    expect(confirm).toContain("self.decideClose(activeTurns: 0)");
+    const event = body('if message["event"] as? String == "active-turns"');
+    expect(event).toContain("DispatchQueue.main.async { [weak self] in self?.decideClose(activeTurns: count) }");
+    const consume = body("private func consumeServiceOutput(");
+    expect(consume.indexOf('"active-turns"')).toBeLessThan(consume.indexOf('let urlString = message["url"]'));
+  });
+
+  test("Given a running generation When the user is asked Then the dialog is localized and Keep working is the default button", () => {
+    const decide = body("private func decideClose(activeTurns: Int)");
+    expect(decide).toContain("let proceed = activeTurns == 0 || confirmCloseDuringTurn()");
+    const dialog = body("private func confirmCloseDuringTurn() -> Bool");
+    const keep = dialog.indexOf('addButton(withTitle: shellText("closeRunning.keep"))');
+    expect(keep).toBeGreaterThan(-1);
+    expect(keep).toBeLessThan(dialog.indexOf('addButton(withTitle: shellText("closeRunning.close"))'));
+    expect(dialog).toContain('shellText("closeRunning.message")');
+    expect(dialog).toContain("== .alertSecondButtonReturn");
+    expect(source).toContain('Bundle.main.url(forResource: language, withExtension: "json", subdirectory: "i18n")');
+    expect(buildMacSource).toContain('const MAC_I18N = path.join(ROOT, "packages/desktop-mac/i18n");');
+    expect(buildMacSource).toContain('cpSync(MAC_I18N, path.join(APP_RESOURCES, "i18n"), { recursive: true });');
+    expect(buildMacSource.indexOf("cpSync(MAC_I18N")).toBeLessThan(buildMacSource.indexOf("codesign --force"));
   });
 });

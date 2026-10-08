@@ -84,6 +84,7 @@ import Canvas from "@/components/canvas/Canvas";
 import ColorPalette from "@/components/canvas/ColorPalette";
 import ArtifactHistory from "@/components/canvas/ArtifactHistory";
 import { qualityFixRequest } from "@/lib/quality-fix-request";
+import { installLeaveGuard } from "@/lib/leave-guard";
 import { createPagePrompt } from "@/lib/create-page-prompt";
 import { nextActiveTabAfterClose } from "@/lib/artifact-tabs";
 import { artifactOperationRefresh } from "@/lib/artifact-operation-refresh";
@@ -941,6 +942,8 @@ export default function ProjectView() {
       }
     }
   }, [chatComposerDisabled]);
+  // Closing or reloading the tab mid-turn interrupts the generation; the browser asks first.
+  useEffect(() => (chatComposerDisabled ? installLeaveGuard() : undefined), [chatComposerDisabled]);
 
   const interruptMutation = useMutation({
     mutationFn: () => {
