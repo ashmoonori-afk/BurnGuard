@@ -135,11 +135,13 @@ jobs:
           packages/backend/tests/chromium-launch-hardening.test.ts
           scripts/qa/check-os-matrix-coverage.test.ts
           scripts/qa/check-flake-patterns.test.ts
+          scripts/whitespace-base.test.ts
           packages/backend/tests/mac-updates-version-order.test.ts
           packages/backend/tests/task-preset-comparison.test.ts
           packages/backend/tests/codex-model-catalog.test.ts
           packages/backend/tests/model-lists.test.ts
           packages/frontend/tests/backend-restart-notice.test.ts
+          packages/frontend/tests/settings-codex-progress.test.ts
           packages/frontend/tests/settings-language-note.test.ts
           packages/frontend/tests/workspace-narrow-layout.test.ts
           packages/frontend/tests/chat-status-slot-layout.test.ts

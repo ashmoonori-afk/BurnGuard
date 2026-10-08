@@ -7,7 +7,8 @@ export class DesignSystemAssetEditError extends Error {
       | "invalid_color_token"
       | "invalid_color_value"
       | "invalid_font_upload"
-      | "unsafe_managed_path",
+      | "unsafe_managed_path"
+      | "token_file_unreadable",
     message: string,
   ) {
     super(message);

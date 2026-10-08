@@ -15,6 +15,11 @@ export interface AppConfig {
   locale: AppLocale | null;
   port: number | null;
   autoOpenBrowser: boolean;
+  /**
+   * OS-local Codex progress signal choice: `null` (unset) follows the automatic default, which is on
+   * unless the user has their own Codex OpenTelemetry destination; `true`/`false` is an explicit choice.
+   */
+  codexProgressMetrics: boolean | null;
   playwright: { installed: boolean; installPath: string | null };
   harness: { maxConcurrentSessions: number; checkpointEveryTurns: number; toolAutoAllow: boolean };
   chat: { abortThresholdMs: number; contextMode: "compact" | "full" };
@@ -40,6 +45,7 @@ export const defaultConfig: AppConfig = {
   locale: null,
   port: null,
   autoOpenBrowser: true,
+  codexProgressMetrics: null,
   playwright: { installed: false, installPath: null },
   harness: { maxConcurrentSessions: 3, checkpointEveryTurns: 5, toolAutoAllow: true },
   chat: { abortThresholdMs: 300_000, contextMode: "compact" },
@@ -71,6 +77,7 @@ interface LocalConfigV1 {
   llmApiKeys: AppConfig["llmApiKeys"];
   port: number | null;
   autoOpenBrowser: boolean;
+  codexProgressMetrics: boolean | null;
   playwright: AppConfig["playwright"];
   harness: AppConfig["harness"];
   logs: AppConfig["logs"];
@@ -143,6 +150,7 @@ function localFrom(input: unknown, platform: NodeJS.Platform): LocalConfigV1 {
     llmApiKeys,
     port: typeof source.port === "number" && Number.isInteger(source.port) && source.port >= 1024 && source.port <= 65535 ? source.port : null,
     autoOpenBrowser: typeof source.autoOpenBrowser === "boolean" ? source.autoOpenBrowser : defaultConfig.autoOpenBrowser,
+    codexProgressMetrics: typeof source.codexProgressMetrics === "boolean" ? source.codexProgressMetrics : null,
     playwright: { installed: playwright.installed === true, installPath: typeof playwright.installPath === "string" ? playwright.installPath : null },
     harness: {
       maxConcurrentSessions: boundedInteger(harness.maxConcurrentSessions, 1, 100, defaultConfig.harness.maxConcurrentSessions),
@@ -184,6 +192,7 @@ function effective(shared: SharedConfigV1, local: LocalConfigV1): AppConfig {
     llmApiKeys: local.llmApiKeys,
     port: local.port,
     autoOpenBrowser: local.autoOpenBrowser,
+    codexProgressMetrics: local.codexProgressMetrics,
     playwright: local.playwright,
     harness: local.harness,
     logs: local.logs,

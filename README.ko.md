@@ -109,6 +109,7 @@ PPTX 내보내기에는 슬라이드마다 고해상도 이미지가 들어가�
    - **Windows:** 서명되지 않은 Setup.exe나 포터블 .exe를 실행하면 SmartScreen이 "Windows의 PC 보호" 창을 띄울 수 있어요. **추가 정보**를 누른 뒤 **실행**을 누르세요.
 2. **예제를 둘러봐요.** AI 제공업체를 연결하기 전에 번들 프로젝트를 열고 캔버스를 먼저 써 보세요.
 3. **CLI를 연결해요.** Claude Code 또는 Codex CLI를 설치하고 로그인한 뒤, 설정에서 연결과 모델을 고르세요. **추론 강도 보통(medium)과 바닐라 모드가 기본값이에요.** 바닐라 모드는 개인 플러그인과 지시문은 제외하고 BurnGuard의 프로젝트 맥락은 유지해요.
+   - **Codex 작업 진행 감지 (기본값 켜짐):** 큰 페이지를 쓰는 것처럼 오래 조용한 Codex 단계가 멈춘 것으로 중단되지 않도록 Codex 사용량 지표를 이 컴퓨터의 BurnGuard로 보내요. 설정에서 **Codex 작업 진행 감지**를 끌 수 있어요. Codex에 직접 설정한 OpenTelemetry 대상이 이미 있다면, 켜져 있는 동안 그 대상이 Codex 지표를 받지 못하기 때문에 직접 켜기 전까지는 꺼져 있어요.
 4. **프로젝트를 만들어요.** 형식과 디자인 시스템을 고르고 브리프와 참고 자료를 더한 뒤, 생성하고 다듬어요.
 5. **내보내거나 공유해요.** 프로젝트 파일을 내려받거나, 웹사이트는 **공유 → 현재 결과물 준비 → 공개 게시**로 내 Vercel 계정에 게시하세요.
 
@@ -151,7 +152,7 @@ bun run previews
 
 ```sh
 bun run typecheck
-bun run lint
+bun run check:whitespace
 bun run build:frontend
 bun test
 ```
