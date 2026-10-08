@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { CLAUDE_MODELS, COMMANDCODE_MODELS, GENERATION_EFFORTS, defaultEffortFor, defaultGenerationOptions, parseGenerationOptions, type BackendDetection, type GenerationOptions } from "@bg/shared";
 import { defaultConfig } from "../src/config";
 import { buildCodexCommand } from "../src/adapters/codex";
-import { buildClaudeCommand, buildClaudeEnvironment } from "../src/adapters/claude-code/runner";
+import { buildClaudeCommand, buildClaudeEnvironment, resetPartialMessagesSupportCache, supportsPartialMessages } from "../src/adapters/claude-code/runner";
 import { resolveGenerationOptions } from "../src/services/generation-options";
 import { assertGraphicStarterReplaced } from "../src/services/turns";
 
@@ -202,6 +202,37 @@ test("Given a model without medium or no model metadata When the default is buil
   expect(resolveGenerationOptions("gemini", defaultGenerationOptions("gemini"), defaultConfig, unknown).effort).toBe("low");
 });
 
-test("Given the Claude command When built Then partial messages are requested so a long single tool input keeps streaming", () => {
-  expect(buildClaudeCommand({ binaryPath: "claude", generation: undefined })).toContain("--include-partial-messages");
+test("Given partial messages are supported When the Claude command is built Then the flag is requested so a long single tool input keeps streaming", () => {
+  expect(buildClaudeCommand({ binaryPath: "claude", generation: undefined, partialMessages: true })).toContain("--include-partial-messages");
+});
+
+test("Given partial messages are not supported or unknown When the Claude command is built Then the flag is left off", () => {
+  expect(buildClaudeCommand({ binaryPath: "claude", generation: undefined })).not.toContain("--include-partial-messages");
+  expect(buildClaudeCommand({ binaryPath: "claude", generation: undefined, partialMessages: false })).not.toContain("--include-partial-messages");
+});
+
+test("Given help output listing the flag When probed twice Then support is true and the binary is probed once", async () => {
+  resetPartialMessagesSupportCache();
+  let probes = 0;
+  const probe = async () => { probes += 1; return "Options:\n  --include-partial-messages  Include partial chunks\n"; };
+  expect(await supportsPartialMessages("/fixture/claude-new", probe)).toBe(true);
+  expect(await supportsPartialMessages("/fixture/claude-new", probe)).toBe(true);
+  expect(probes).toBe(1);
+});
+
+test("Given help output without the flag When probed Then support is false and cached per binary path", async () => {
+  resetPartialMessagesSupportCache();
+  let probes = 0;
+  const old = async () => { probes += 1; return "Options:\n  --verbose\n"; };
+  const current = async () => "  --include-partial-messages\n";
+  expect(await supportsPartialMessages("/fixture/claude-old", old)).toBe(false);
+  expect(await supportsPartialMessages("/fixture/claude-old", old)).toBe(false);
+  expect(probes).toBe(1);
+  expect(await supportsPartialMessages("/fixture/claude-other", current)).toBe(true);
+});
+
+test("Given a failed probe When support is checked Then the flag stays off and the failure is not cached", async () => {
+  resetPartialMessagesSupportCache();
+  expect(await supportsPartialMessages("/fixture/claude-flaky", async () => undefined)).toBe(false);
+  expect(await supportsPartialMessages("/fixture/claude-flaky", async () => "--include-partial-messages")).toBe(true);
 });
