@@ -20,17 +20,21 @@ where bun >nul 2>nul
 if errorlevel 1 (
     echo.
     echo [BurnGuard] Bun is not installed or not on PATH.
-    echo            Download a release build from https://github.com/ashmoonori-afk/BurnGuard/releases/latest
+    echo            Install it from https://bun.sh and try again,
+    echo            or download a ready-built app from https://github.com/ashmoonori-afk/BurnGuard/releases/latest
     echo.
     pause
     exit /b 1
 )
 
-dotnet --list-sdks | findstr /b /c:"8." >nul 2>nul
+rem 'where dotnet' also passes with only the .NET runtime, which cannot build the app,
+rem so probe the installed SDKs instead. 2>nul keeps cmd's "not recognized" error off the console.
+dotnet --list-sdks 2>nul | findstr /b /c:"8." >nul
 if errorlevel 1 (
     echo.
     echo [BurnGuard] The .NET 8 SDK is required to build from source.
-    echo            Download a release build from https://github.com/ashmoonori-afk/BurnGuard/releases/latest
+    echo            Install the SDK from https://dotnet.microsoft.com/download/dotnet/8.0
+    echo            or download a ready-built app from https://github.com/ashmoonori-afk/BurnGuard/releases/latest
     echo.
     pause
     exit /b 1
