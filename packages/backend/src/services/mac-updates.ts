@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, rename, rm, stat } from "node:fs/promises";
+import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { APP_VERSION } from "@bg/shared/app";
 import type { AppUpdateStatus, AppUpdateUnsupportedReason } from "@bg/shared/updates";
@@ -256,6 +256,8 @@ async function downloadPackage(deps: AppUpdaterDependencies, asset: VelopackFeed
   await mkdir(directory, { recursive: true });
   const target = path.join(directory, asset.FileName);
   const partial = `${target}.partial`;
+  // A crash can leave a partial from an earlier run; never depend on the sink truncating it.
+  await rm(partial, { force: true });
   let response: Response;
   try { response = await deps.source.openPackage(asset.FileName); }
   catch { throw new AppUpdateError("package_download_failed"); }
@@ -283,11 +285,34 @@ async function downloadPackage(deps: AppUpdaterDependencies, asset: VelopackFeed
     await close();
     if (received !== asset.Size || hash.digest("hex").toUpperCase() !== asset.SHA256) throw new AppUpdateError("package_digest_mismatch");
     await rename(partial, target);
+    await pruneUpdateCache(directory, { keep: asset.FileName });
     return target;
   } catch (error) {
     await close();
     await rm(partial, { force: true });
     throw error;
+  }
+}
+
+const PACKAGE_VERSION = /^[A-Za-z0-9_.]+-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)-[A-Za-z0-9_]+-(?:full|delta)\.nupkg$/;
+
+/**
+ * Removes staged updater files that can no longer be applied: every `*.partial`
+ * (no download is in flight when this runs) and every `*.nupkg` other than `keep`,
+ * or, without `keep`, every package at or below `currentVersion`. Best effort.
+ */
+export async function pruneUpdateCache(directory: string, options: { readonly keep?: string; readonly currentVersion?: string }): Promise<void> {
+  let names: string[];
+  try { names = await readdir(directory); }
+  catch { return; }
+  for (const name of names) {
+    if (name === options.keep) continue;
+    let stale = name.endsWith(".nupkg.partial");
+    if (!stale && name.endsWith(".nupkg")) {
+      const version = PACKAGE_VERSION.exec(name)?.[1];
+      stale = options.keep !== undefined || (options.currentVersion !== undefined && version !== undefined && compareVersions(version, options.currentVersion) <= 0);
+    }
+    if (stale) await rm(path.join(directory, name), { force: true }).catch(() => {});
   }
 }
 
@@ -362,9 +387,13 @@ let timer: ReturnType<typeof setInterval> | null = null;
 export function configureAppUpdater(overrides: Partial<AppUpdaterDependencies> & { readonly shutdown: () => Promise<void> }): AppUpdater {
   const execPath = process.execPath;
   const support = overrides.support ?? detectUpdateSupport({ platform: process.platform, execPath, desktopShell: process.env.BG_DESKTOP === "1" });
+  const currentVersion = overrides.currentVersion ?? APP_VERSION;
+  const cacheDir = overrides.cacheDir ?? appCacheDir;
+  // Packages for this or an older version were already applied (or can never be); drop them at startup.
+  if (support.supported) void pruneUpdateCache(path.join(cacheDir, "updates"), { currentVersion });
   instance = createAppUpdater({
-    currentVersion: overrides.currentVersion ?? APP_VERSION,
-    cacheDir: overrides.cacheDir ?? appCacheDir,
+    currentVersion,
+    cacheDir,
     source: overrides.source ?? resolveUpdateSource(),
     support,
     updaterPath: overrides.updaterPath ?? updaterBinaryPath(execPath),
