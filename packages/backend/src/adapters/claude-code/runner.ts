@@ -1,6 +1,7 @@
 import { WEB_ASSET_MCP_SERVER, WEB_ASSET_TOOL_NAMES } from "@bg/shared";
 import { spawnOwnedProcess } from "../owned-process";
 import { settleProcessStreams } from "../process-streams";
+import { readLines } from "../bounded-lines";
 
 /**
  * Runs `claude -p --output-format stream-json --verbose` against a project dir,
@@ -100,38 +101,4 @@ export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResul
   // eslint-disable-next-line no-console
   console.log(`[claude-code] exit=${exitCode}`);
   return { exitCode };
-}
-
-async function readLines(
-  stream: ReadableStream<Uint8Array>,
-  onLine: (line: string) => Promise<void> | void,
-): Promise<void> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let idx = buffer.indexOf("\n");
-      while (idx >= 0) {
-        const line = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 1);
-        if (line.length > 0) {
-          await onLine(line);
-        }
-        idx = buffer.indexOf("\n");
-      }
-    }
-    if (buffer.length > 0) {
-      await onLine(buffer);
-    }
-  } finally {
-    try {
-      reader.releaseLock();
-    } catch {
-      // already released
-    }
-  }
 }
