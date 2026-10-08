@@ -489,13 +489,22 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                   let pid = message["pid"] as? Int32,
                   let service, pid == service.processIdentifier,
                   urlString == expectedOrigin,
-                  let url = URL(string: urlString) else {
+                  let bootstrap = message["bootstrap"] as? String,
+                  isBootstrapSecret(bootstrap),
+                  let url = URL(string: urlString),
+                  // The one-time secret lets only this web view mint the launch capability; the SPA strips the fragment.
+                  let launch = URL(string: (smokeProjectId.map { url.appendingPathComponent("projects").appendingPathComponent($0) } ?? url).absoluteString + "#bg-bootstrap:" + bootstrap) else {
                 fail("BurnGuard 시작 응답을 확인할 수 없습니다.")
                 return
             }
             origin = url
-            let target = smokeProjectId.map { url.appendingPathComponent("projects").appendingPathComponent($0) } ?? url
-            webView.load(URLRequest(url: target))
+            webView.load(URLRequest(url: launch))
+        }
+    }
+
+    private func isBootstrapSecret(_ value: String) -> Bool {
+        value.utf8.count >= 16 && value.utf8.allSatisfy { byte in
+            (byte >= 48 && byte <= 57) || (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122) || byte == 45 || byte == 95
         }
     }
 
