@@ -330,4 +330,58 @@ describe("API authority client", () => {
       }
     }
   });
+
+  for (const devBuild of [true, false]) {
+    test(`Given a ${devBuild ? "dev" : "release"} tab launched with the bootstrap secret When a restarted backend rejects the launch cookie Then the secret is ${devBuild ? "resent once from the session" : "never resent or persisted"}`, async () => {
+      const sent: (string | null)[] = [];
+      const stored = new Map<string, string>();
+      const globals = ["location", "history", "sessionStorage"] as const;
+      const descriptors = globals.map((name) => Object.getOwnPropertyDescriptor(globalThis, name));
+      const previousDev = process.env.DEV;
+      const launch = new URL("http://127.0.0.1:5173/#bg-bootstrap:dev-launcher-secret");
+      Object.defineProperty(globalThis, "location", { configurable: true, value: launch });
+      Object.defineProperty(globalThis, "history", {
+        configurable: true,
+        value: { state: null, replaceState: () => { launch.hash = ""; } },
+      });
+      Object.defineProperty(globalThis, "sessionStorage", {
+        configurable: true,
+        value: { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => { stored.set(key, value); } },
+      });
+      if (devBuild) process.env.DEV = "true";
+      else delete process.env.DEV;
+      let restarted = false;
+      let restartedSecretSpent = false;
+      globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const secret = new Headers(init?.headers).get("x-burnguard-bootstrap");
+        sent.push(secret);
+        if (restarted && (secret !== "dev-launcher-secret" || restartedSecretSpent)) {
+          return Response.json({ ok: false, error: { code: "forbidden", message: "forbidden" } }, { status: 403 });
+        }
+        if (restarted) restartedSecretSpent = true;
+        return Response.json({ ok: true, data: { capability: restarted ? "restarted-token" : "launch-token" } });
+      }) as typeof fetch;
+
+      try {
+        await bootstrapApiAuthority();
+        restarted = true;
+        if (devBuild) {
+          await bootstrapApiAuthority();
+          expect(sent).toEqual(["dev-launcher-secret", null, "dev-launcher-secret"]);
+        } else {
+          await expect(bootstrapApiAuthority()).rejects.toThrow();
+          expect(sent).toEqual(["dev-launcher-secret", null]);
+          expect(stored.size).toBe(0);
+        }
+      } finally {
+        if (previousDev === undefined) delete process.env.DEV;
+        else process.env.DEV = previousDev;
+        globals.forEach((name, i) => {
+          const descriptor = descriptors[i];
+          if (descriptor === undefined) Reflect.deleteProperty(globalThis, name);
+          else Object.defineProperty(globalThis, name, descriptor);
+        });
+      }
+    });
+  }
 });

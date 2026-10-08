@@ -72,7 +72,9 @@ if (handsOffLaunchUrl) {
   openBrowser(`${url}/${launchFragment}`);
 }
 // Nobody else opens the page: show the one-time launch URL to an interactive terminal only, never to a captured log.
-const showLaunchUrl = !handsOffLaunchUrl && !isDesktop && launcherBootstrapSecret === undefined && process.stdout.isTTY === true;
+// Dev output is a local terminal even when `bun run --filter` pipes it, so dev always shows the URL.
+const showLaunchUrl = !handsOffLaunchUrl && !isDesktop && launcherBootstrapSecret === undefined &&
+  (isDev || process.stdout.isTTY === true);
 if (isDev) {
   console.log(
     `[burnguard] dev mode — open the Vite frontend at http://127.0.0.1:5173/${showLaunchUrl ? launchFragment : ""}`,

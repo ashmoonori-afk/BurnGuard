@@ -6,13 +6,32 @@ const BURNGUARD_BOOTSTRAP_HEADER = "x-burnguard-bootstrap";
 const BOOTSTRAP_FRAGMENT_PREFIX = "#bg-bootstrap:";
 let launchCapability: string | null = null;
 let pendingBootstrapSecret: string | null = null;
+/**
+ * Dev only: `bun --watch` restarts the backend on every save with a fresh capability but the launcher's unchanged
+ * secret, so the tab keeps that secret for this session to re-bootstrap once the old cookie is rejected.
+ * Release builds compile this out and keep the secret in memory only.
+ */
+const DEV_BOOTSTRAP_SECRET_KEY = "burnguard.dev-bootstrap-secret";
+
+function devSessionStorage(): Storage | null {
+  return import.meta.env.DEV && typeof sessionStorage !== "undefined" ? sessionStorage : null;
+}
 
 /** Moves the launch secret out of the address bar; it is kept in memory until a bootstrap succeeds. */
 function takeLaunchBootstrapSecret(): void {
   if (typeof location === "undefined" || !location.hash.startsWith(BOOTSTRAP_FRAGMENT_PREFIX)) return;
   const secret = location.hash.slice(BOOTSTRAP_FRAGMENT_PREFIX.length);
-  if (/^[A-Za-z0-9_-]+$/.test(secret)) pendingBootstrapSecret = secret;
+  if (/^[A-Za-z0-9_-]+$/.test(secret)) {
+    pendingBootstrapSecret = secret;
+    devSessionStorage()?.setItem(DEV_BOOTSTRAP_SECRET_KEY, secret);
+  }
   if (typeof history !== "undefined") history.replaceState(history.state, "", location.pathname + location.search);
+}
+
+function fetchBootstrap(secret: string | null): Promise<Response> {
+  const headers = new Headers({ accept: "application/json" });
+  if (secret !== null) headers.set(BURNGUARD_BOOTSTRAP_HEADER, secret);
+  return fetch("/api/bootstrap", { credentials: "same-origin", headers });
 }
 
 export class ApiError extends Error {
@@ -57,13 +76,10 @@ export function bootstrapApiAuthority(signal?: AbortSignal): Promise<void> {
 async function requestBootstrap(): Promise<void> {
   launchCapability = null;
   takeLaunchBootstrapSecret();
-  const headers = new Headers({ accept: "application/json" });
   // Reloads and new tabs carry no secret; the backend accepts the launch cookie for them.
-  if (pendingBootstrapSecret !== null) headers.set(BURNGUARD_BOOTSTRAP_HEADER, pendingBootstrapSecret);
-  const res = await fetch("/api/bootstrap", {
-    credentials: "same-origin",
-    headers,
-  });
+  let res = await fetchBootstrap(pendingBootstrapSecret);
+  const devSecret = pendingBootstrapSecret === null ? devSessionStorage()?.getItem(DEV_BOOTSTRAP_SECRET_KEY) : null;
+  if (res.status === 403 && devSecret) res = await fetchBootstrap(devSecret);
   const body = (await res.json().catch(() => null)) as
     | ApiSuccess<{ capability: string }>
     | ApiErrorBody
