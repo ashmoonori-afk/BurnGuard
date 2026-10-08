@@ -11,6 +11,7 @@ import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
 import { configureAppUpdater, startAppUpdateScheduler } from "./services/mac-updates";
 import { interruptAllUserTurns } from "./services/turns";
+import { startProjectWatchers, type ProjectWatcherStartup } from "./services/watchers";
 
 const isDesktop = process.env.BG_DESKTOP === "1";
 const ownedPort = isDesktop ? desktopPort(process.env.BG_PORT) : undefined;
@@ -68,12 +69,14 @@ if (isDev) {
 
 // Keep the process alive and close renderer-owned Chromium before shutdown.
 let shuttingDown = false;
+let projectWatcherStartup: ProjectWatcherStartup | null = null;
 const shutdown = async (): Promise<void> => {
   if (shuttingDown) return; shuttingDown = true; console.log("\n[burnguard] shutting down");
   if (isDesktop) console.log('[burnguard-desktop] {"protocol":1,"event":"shutdown"}');
   // Turns first: an in-flight CLI subprocess owns the project directory and
   // would keep writing into it after the server is gone.
-  server.stop(false); await interruptAllUserTurns(); await closeActiveExportBrowsers(); server.stop(true); profileOwner?.close(); process.exit(0);
+  // Watcher startup may still be observing projects: stop queued ones and close every watcher.
+  server.stop(false); await projectWatcherStartup?.stop(); await interruptAllUserTurns(); await closeActiveExportBrowsers(); server.stop(true); profileOwner?.close(); process.exit(0);
 };
 // macOS self-update: the staged package is applied by the bundled updater once this process has shut down.
 startAppUpdateScheduler(configureAppUpdater({ shutdown }));
@@ -87,3 +90,6 @@ if (isDesktop) {
   watchDesktopParent(process.stdin, () => { void shutdown(); });
   console.log(`[burnguard-desktop] ${JSON.stringify({ protocol: 1, url, pid: process.pid })}`);
 }
+// Reconciliation already converged in bootstrap; observing every project tree must not delay the window.
+// Artifact mutations wait for their own project's first observation (`waitForProjectReady`).
+projectWatcherStartup = startProjectWatchers();

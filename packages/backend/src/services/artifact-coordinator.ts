@@ -12,6 +12,7 @@ import { adoptExistingArtifact, establishEmptyArtifactAuthority } from "./artifa
 import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
 import { pruneExpiredArtifactOperations } from "./artifact-retention";
 import { acquireArtifactProjectLock } from "./artifact-project-lock";
+import { waitForProjectReady } from "./watcher-registry";
 import { isArtifactMutationBlockedByAlternatives } from "./visual-alternative-operation-registry";
 import {
   allowedFigmaReferencePaths,
@@ -91,6 +92,15 @@ export class ArtifactOperationError extends Error {
   constructor(readonly code: string, message: string) { super(message); }
 }
 
+/** Mutations validate against the stable identity, so they wait until startup has adopted external edits. */
+async function waitForStartupObservation(projectId: string): Promise<void> {
+  try { await waitForProjectReady(projectId); }
+  catch (error) {
+    if (error instanceof ArtifactOperationError) throw error;
+    throw new ArtifactOperationError("recovery_unavailable", "Project files could not be verified at startup; no files were changed");
+  }
+}
+
 export class ArtifactCoordinator {
   constructor(private readonly db: Database, private readonly faults: CoordinatorFaults = {}) {}
 
@@ -122,6 +132,7 @@ export class ArtifactCoordinator {
   }
 
   async patch(input: PatchOperation): Promise<CommittedArtifactOperation> {
+    await waitForStartupObservation(input.projectId);
     const actual = await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
     const file = manifestEntry(actual, input.relPath);
     if (file?.sha256 !== input.expectedFileHash) throw new ArtifactOperationError("stale_file_hash", "Expected file hash is stale");
@@ -138,6 +149,7 @@ export class ArtifactCoordinator {
   }
 
   async run(input: RunOperation): Promise<CommittedArtifactOperation> {
+    await waitForStartupObservation(input.projectId);
     const id = input.operationId ?? ulid();
     const ownedRoot = this.operationPath(input.projectDir, id);
     const snapshotPath = path.join(ownedRoot, "snapshot");
@@ -260,6 +272,7 @@ export class ArtifactCoordinator {
   }
 
   async undo(input: UndoOperation): Promise<CommittedArtifactOperation> {
+    await waitForStartupObservation(input.projectId);
     await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
     const raw = this.db.query<PersistedArtifactOperationRow, [string, string]>("SELECT id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at FROM artifact_operations WHERE id=? AND project_id=?").get(input.operationId, input.projectId);
     if (raw === null) throw new ArtifactOperationError("undo_unavailable", "Committed operation is unavailable");
@@ -289,6 +302,7 @@ export class ArtifactCoordinator {
    * any active artifact operation refuses the adoption instead of taking the conflict path.
    */
   async adoptExternal(projectId: string, projectDir: string, admit: () => void): Promise<CommittedArtifactOperation | null> {
+    await waitForStartupObservation(projectId);
     const release = await acquireArtifactProjectLock(this.db, projectId);
     try {
       admit();

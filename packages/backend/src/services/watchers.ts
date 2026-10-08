@@ -1,7 +1,7 @@
 import { watch, type FSWatcher } from "node:fs";
 import { getSqlite } from "../db/sqlite-client";
 import { getLatestProjectSession, getProjectDetail, listProjectIds } from "../db/project-read-repository";
-import { ArtifactCoordinator } from "./artifact-coordinator";
+import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
 import { waitForArtifactPublication } from "./artifact-publication-registry";
 import { appendSessionTrace } from "./trace";
 import { isTransientFilePath } from "./files";
@@ -9,13 +9,20 @@ import { isProjectDocumentPath } from "./project-document-paths";
 import { isAgentControlPath } from "../security/agent-control-files";
 import {
   RESERVED_PROJECT_WATCHER,
+  closeProjectWatcher,
   projectSessionIds as sessionIdCache,
   projectWatchers as watchers,
+  setProjectReadiness,
+  setProjectReadinessRegistration,
 } from "./watcher-registry";
 
 const IGNORED_TOP_LEVEL = new Set([".meta", ".attachments", ".burnguard-inputs", ".git", ".omc", ".claude", ".codex"]);
 const pendingSignals = new Map<string, Promise<void>>();
 const dirtySignals = new Set<string>();
+const STARTUP_WATCHER_CONCURRENCY = 3;
+
+type ObserveProject = (projectId: string, projectDir: string) => Promise<unknown>;
+const observeProject: ObserveProject = (projectId, projectDir) => new ArtifactCoordinator(getSqlite()).observeExternal(projectId, projectDir);
 
 export function isProjectSignalPending(projectId: string): boolean { return pendingSignals.has(projectId); }
 
@@ -23,15 +30,16 @@ type ErrorAwareWatcher = FSWatcher & {
   on(event: "error", listener: (error: Error) => void): ErrorAwareWatcher;
 };
 
-export async function ensureProjectWatcher(projectId: string): Promise<void> {
+export async function ensureProjectWatcher(projectId: string, observe: ObserveProject = observeProject): Promise<void> {
   if (watchers.has(projectId)) return;
   const project = await getProjectDetail(projectId);
   if (project === null) return;
   watchers.set(projectId, RESERVED_PROJECT_WATCHER);
   let watcher: ErrorAwareWatcher;
   try {
-    const coordinator = new ArtifactCoordinator(getSqlite());
-    await coordinator.observeExternal(projectId, project.dir_path);
+    await observe(projectId, project.dir_path);
+    // Deletion or shutdown released the reservation while the project was being observed.
+    if (watchers.get(projectId) !== RESERVED_PROJECT_WATCHER) return;
     watcher = watch(project.dir_path, { recursive: true }, (_eventType, filename) => {
       if (filename === null) return;
       const relPath = String(filename).replaceAll("\\", "/");
@@ -39,7 +47,7 @@ export async function ensureProjectWatcher(projectId: string): Promise<void> {
       void scheduleProjectSignal(projectId, project.dir_path);
     }) as ErrorAwareWatcher;
   } catch (error) {
-    watchers.delete(projectId);
+    if (watchers.get(projectId) === RESERVED_PROJECT_WATCHER) watchers.delete(projectId);
     throw error;
   }
   watcher.on("error", (error) => { void recordWatcherFailure(projectId, error); });
@@ -47,10 +55,61 @@ export async function ensureProjectWatcher(projectId: string): Promise<void> {
 }
 
 export async function ensureAllProjectWatchers(projectIds?: readonly string[]): Promise<void> {
-  for (const projectId of projectIds ?? await listProjectIds()) {
-    try { await ensureProjectWatcher(projectId); }
-    catch (error) { console.warn("[watcher] project watcher unavailable", projectId, error); }
-  }
+  await startProjectWatchers({ projectIds }).settled;
+}
+
+export type ProjectWatcherStartup = {
+  /** Every project was observed (or reported unavailable), or startup was stopped. */
+  readonly settled: Promise<void>;
+  /** Stop starting queued projects, let in-flight observations finish, then close every watcher. */
+  stop(): Promise<void>;
+};
+
+type QueuedProject = { readonly projectId: string; readonly resolve: () => void; readonly reject: (error: unknown) => void };
+
+/**
+ * Observe persisted projects and attach their watchers in the background, a few projects at a time.
+ * Each project's artifact mutations wait for its own first observation (`waitForProjectReady`).
+ */
+export function startProjectWatchers(options: { readonly projectIds?: readonly string[]; readonly concurrency?: number; readonly observe?: ObserveProject } = {}): ProjectWatcherStartup {
+  const observe = options.observe ?? observeProject;
+  const queue: QueuedProject[] = [];
+  let stopped = false;
+  const registration = (async () => {
+    let projectIds: readonly string[] = [];
+    try { projectIds = options.projectIds ?? await listProjectIds(); }
+    catch { console.warn("[watcher] project list unavailable at startup"); }
+    if (stopped) return;
+    for (const projectId of projectIds) {
+      const ready = Promise.withResolvers<void>();
+      setProjectReadiness(projectId, ready.promise);
+      queue.push({ projectId, resolve: ready.resolve, reject: ready.reject });
+    }
+  })();
+  setProjectReadinessRegistration(registration);
+  const worker = async (): Promise<void> => {
+    while (!stopped) {
+      const next = queue.shift();
+      if (next === undefined) return;
+      try { await ensureProjectWatcher(next.projectId, observe); next.resolve(); }
+      catch (error) {
+        console.warn("[watcher] project watcher unavailable", next.projectId, error instanceof ArtifactOperationError ? error.code : "observation_failed");
+        next.reject(error);
+      }
+    }
+  };
+  const settled = registration.then(async () => {
+    await Promise.all(Array.from({ length: Math.min(options.concurrency ?? STARTUP_WATCHER_CONCURRENCY, queue.length) }, worker));
+  });
+  return {
+    settled,
+    async stop() {
+      stopped = true;
+      for (const queued of queue.splice(0)) queued.reject(new ArtifactOperationError("recovery_unavailable", "The app is shutting down"));
+      await settled;
+      for (const projectId of [...watchers.keys()]) closeProjectWatcher(projectId);
+    },
+  };
 }
 
 export function shouldSkipPath(relPath: string): boolean {
