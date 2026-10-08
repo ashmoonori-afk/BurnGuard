@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { once } from "node:events";
-import { mkdir, symlink } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildCodexCommand } from "../src/adapters/codex";
+import type { NormalizedEvent } from "@bg/shared";
+import { buildCodexCommand, runCodexTurn } from "../src/adapters/codex";
+import { CODEX_PROGRESS_HEADER, codexProgressHandler, countStreamEvents } from "../src/adapters/codex/progress-metrics";
 import { codexFixture, PNG_SHA } from "./codex-runner-fixture";
 
 // Every case runs on every OS: on Windows the fixture is a .cmd wrapper launched through BG_WINDOWS_PROCESS_HOST.
@@ -33,6 +36,97 @@ describe("buildCodexCommand", () => {
       "-c", "suppress_unstable_features_warning=true",
       "-c", "features.image_generation=true", "-",
     ]);
+  });
+
+  test("Given a progress receiver Then Codex exports its metrics there with a space-free override and the run token", () => {
+    const command = buildCodexCommand("codex", undefined, "win32", "allowed", { endpoint: "http://127.0.0.1:4100/v1/metrics", token: "abc123" });
+    const override = command.find((arg) => arg.startsWith("otel.metrics_exporter="));
+    expect(command[command.indexOf(override ?? "") - 1]).toBe("-c");
+    expect(override).toBe(`otel.metrics_exporter={otlp-http={endpoint="http://127.0.0.1:4100/v1/metrics",protocol="json",headers={${CODEX_PROGRESS_HEADER}="abc123"}}}`);
+    expect(command.at(-1)).toBe("-");
+  });
+});
+
+/** OTLP/JSON delta sum as Codex exports it for its per-stream-event counters. */
+function metricsExport(name: string, points: readonly { readonly success: string; readonly value: number | string }[]) {
+  return { resourceMetrics: [{ scopeMetrics: [{ metrics: [{ name, sum: { aggregationTemporality: 1, isMonotonic: true, dataPoints: points.map((point) => ({
+    attributes: [{ key: "kind", value: { stringValue: "response.custom_tool_call_input.delta" } }, { key: "success", value: { stringValue: point.success } }],
+    asInt: point.value,
+  })) } }] }] }] };
+}
+
+function exportRequest(body: unknown, token: string, url = "http://127.0.0.1/v1/metrics") {
+  return new Request(url, { method: "POST", headers: { "content-type": "application/json", [CODEX_PROGRESS_HEADER]: token }, body: typeof body === "string" ? body : JSON.stringify(body) });
+}
+
+describe("Codex stream progress metrics", () => {
+  test("Given websocket or SSE stream event counters Then only successful events are counted", () => {
+    expect(countStreamEvents(metricsExport("codex.websocket.event", [{ success: "true", value: "3" }, { success: "false", value: "9" }]))).toBe(3);
+    expect(countStreamEvents(metricsExport("codex.sse_event", [{ success: "true", value: 2 }]))).toBe(2);
+    expect(countStreamEvents(metricsExport("codex.api_request", [{ success: "true", value: 5 }]))).toBe(0);
+    expect(countStreamEvents(metricsExport("codex.sse_event", [{ success: "true", value: 0 }]))).toBe(0);
+    expect(countStreamEvents({ resourceMetrics: "not-a-list" })).toBe(0);
+  });
+
+  test("Given an authenticated export with stream events When it arrives Then it is progress and Codex gets an empty OTLP reply", async () => {
+    let beats = 0;
+    const handle = codexProgressHandler("token", () => { beats++; });
+    const response = await handle(exportRequest(metricsExport("codex.websocket.event", [{ success: "true", value: "1" }]), "token"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({});
+    expect(beats).toBe(1);
+  });
+
+  test("Given exports that prove nothing When they arrive Then none of them is progress", async () => {
+    let beats = 0;
+    const handle = codexProgressHandler("token", () => { beats++; });
+    const events = metricsExport("codex.sse_event", [{ success: "true", value: 4 }]);
+    expect((await handle(exportRequest(events, "tokem"))).status).toBe(404);
+    expect((await handle(exportRequest(events, "token", "http://127.0.0.1/v1/logs"))).status).toBe(404);
+    expect((await handle(exportRequest("{", "token"))).status).toBe(400);
+    expect((await handle(exportRequest(metricsExport("codex.sse_event", [{ success: "false", value: 4 }]), "token"))).status).toBe(200);
+    expect((await handle(exportRequest(metricsExport("codex.api_request", [{ success: "true", value: 1 }]), "token"))).status).toBe(200);
+    expect(beats).toBe(0);
+  });
+
+  runnerTest("Given a Codex child that exports a stream event When the turn runs with a progress sink Then progress arrives through the run's loopback receiver and nothing about it is published", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "burnguard-codex-progress-"));
+    const previousHome = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = path.join(root, "codex-home");
+    const script = path.join(root, process.platform === "win32" ? "codex-fixture.mjs" : "codex-fixture");
+    await writeFile(script, [
+      "#!/usr/bin/env bun",
+      'const override = process.argv.find((arg) => arg.startsWith("otel.metrics_exporter=")) ?? "";',
+      'const endpoint = /endpoint="([^"]+)"/.exec(override)?.[1];',
+      `const token = /${CODEX_PROGRESS_HEADER}="([^"]+)"/.exec(override)?.[1];`,
+      `const body = ${JSON.stringify(JSON.stringify(metricsExport("codex.websocket.event", [{ success: "true", value: "2" }])))};`,
+      `const status = endpoint && token ? (await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json", "${CODEX_PROGRESS_HEADER}": token }, body })).status : 0;`,
+      'console.log(JSON.stringify({ type: "text", text: JSON.stringify({ status, interval: process.env.OTEL_METRIC_EXPORT_INTERVAL ?? null }) }));',
+      'console.log(JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } }));',
+      "",
+    ].join("\n"));
+    let binary = script;
+    if (process.platform === "win32") {
+      binary = path.join(root, "codex-fixture.cmd");
+      await writeFile(binary, `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`);
+    } else await chmod(script, 0o700);
+    const order: string[] = [];
+    const events: NormalizedEvent[] = [];
+    try {
+      const result = await runCodexTurn({
+        sessionId: "s", turnId: "t", projectDir: root, binaryPath: binary, prompt: "test", userEvent: { type: "user.message", text: "test" },
+        onEvent: async (event) => { events.push(event); order.push(event.type); },
+        onProgress: () => { order.push("progress"); },
+      });
+      expect(result).toEqual({ exitCode: 0 });
+      const report = events.find((event) => event.type === "chat.delta");
+      expect(report?.type === "chat.delta" ? JSON.parse(report.text) : undefined).toEqual({ status: 200, interval: "10000" });
+      expect(order).toEqual(["progress", "chat.delta", "usage.delta", "chat.message_end", "status.idle"]);
+      expect(JSON.stringify(events)).not.toContain("/v1/metrics");
+    } finally {
+      if (previousHome === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previousHome;
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
   });
 });
 
