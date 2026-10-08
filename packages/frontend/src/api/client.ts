@@ -29,10 +29,10 @@ function takeLaunchBootstrapSecret(): void {
   if (typeof history !== "undefined") history.replaceState(history.state, "", location.pathname + location.search);
 }
 
-function fetchBootstrap(secret: string | null): Promise<Response> {
+function fetchBootstrap(secret: string | null, signal: AbortSignal): Promise<Response> {
   const headers = new Headers({ accept: "application/json" });
   if (secret !== null) headers.set(BURNGUARD_BOOTSTRAP_HEADER, secret);
-  return fetch("/api/bootstrap", { credentials: "same-origin", headers });
+  return fetch("/api/bootstrap", { credentials: "same-origin", headers, signal });
 }
 
 export class ApiError extends Error {
@@ -53,6 +53,9 @@ export class ApiError extends Error {
     this.details = details;
   }
 }
+
+/** A backend that accepts the connection but never answers must not wedge every later Reconnect on one request. */
+const BOOTSTRAP_TIMEOUT_MS = 15_000;
 
 let inflightBootstrap: Promise<void> | null = null;
 
@@ -75,12 +78,25 @@ export function bootstrapApiAuthority(signal?: AbortSignal): Promise<void> {
 }
 
 async function requestBootstrap(): Promise<void> {
+  const timeout = new AbortController();
+  const timer = setTimeout(
+    () => timeout.abort(new Error("BurnGuard API authority bootstrap timed out.")),
+    BOOTSTRAP_TIMEOUT_MS,
+  );
+  try {
+    await runBootstrap(timeout.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runBootstrap(signal: AbortSignal): Promise<void> {
   launchCapability = null;
   takeLaunchBootstrapSecret();
   // Reloads and new tabs carry no secret; the backend accepts the launch cookie for them.
-  let res = await fetchBootstrap(pendingBootstrapSecret);
+  let res = await fetchBootstrap(pendingBootstrapSecret, signal);
   const devSecret = pendingBootstrapSecret === null ? devSessionStorage()?.getItem(DEV_BOOTSTRAP_SECRET_KEY) : null;
-  if (res.status === 403 && devSecret) res = await fetchBootstrap(devSecret);
+  if (res.status === 403 && devSecret) res = await fetchBootstrap(devSecret, signal);
   const body = (await res.json().catch(() => null)) as
     | ApiSuccess<{ capability: string }>
     | ApiErrorBody

@@ -75,7 +75,7 @@ BurnGuard/
 
 ## CONVENTIONS
 
-- Startup order is contractual: migrate, seed/bootstrap, lifecycle reconciliation, then watchers. Shutdown stops intake, interrupts owned turns, closes registered Chromium instances, then forces server stop.
+- Startup order is contractual: migrate, seed/bootstrap, lifecycle reconciliation, then the HTTP listener and readiness line, then watchers (in the background, a few projects at a time; artifact mutations wait for their project's first observation). Shutdown stops intake, halts queued watcher startup, interrupts owned turns, closes registered Chromium instances, then waits for in-flight startup observations, closes watchers and forces server stop.
 - Backend binds `127.0.0.1`, canonical port `14070`; port scanning is opt-in via `BG_SCAN_PORT=1`; one process per profile (`profile-ownership.ts`: Windows named pipe, POSIX exclusive SQLite lock on `<profile>/.profile.lock`).
 - `@bg/shared` (snake_case fields) is the only transport authority; backend routes and frontend api/types never redeclare DTO shapes. Typecheck `packages/shared` before its consumers.
 - Envelopes: success `{ data, meta? }`, failure `{ error: { code, message, details? } }`. `/api/health` is public; `/api/bootstrap` GET same-origin mints the per-launch capability only with the one-time launch secret (`x-burnguard-bootstrap`, handed to the page as `#bg-bootstrap:<secret>` by the desktop readiness line, `openBrowser` or `BG_BOOTSTRAP_SECRET`) or a valid launch cookie (32 random bytes, `HttpOnly SameSite=Strict` cookie + `x-burnguard-capability`, `timingSafeEqual`); unknown `Host` -> 421, else 403. Body caps 1 MiB JSON / 4 MiB draws / 64 MiB listed multipart -> 413.
@@ -85,7 +85,7 @@ BurnGuard/
 - `APP_VERSION` in `@bg/shared/app`, `BurnGuard.Desktop.csproj` `<Version>`, and the Velopack package move together.
 - Run `bun test` from the repo root: `bunfig.toml` preload mints a throwaway `BG_APP_ROOT` (must be absolute), migrates it, deletes it at exit (timeout 30000, coverage 0.8). Tests use Given/When/Then descriptions and injected seams.
 - `packages/backend/tsconfig.json` includes `src` only; backend tests are typechecked only by root `tsc --build`.
-- `doc/` is English-only (`CONTRIBUTING.md:171`); dated `doc/NN-...-YYYY-MM-DD.md` records supersede numbered specs.
+- `doc/` is English-only (`CONTRIBUTING.md` §6.1); dated `doc/NN-...-YYYY-MM-DD.md` records supersede numbered specs.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
@@ -119,7 +119,7 @@ bun test packages/backend/tests/<file>.test.ts
 bun run build                  # frontend + scripts/build-binary.ts; the backend step needs a Windows x64 host
 bun run build:windows:release  # Windows host, .NET 8, vpk 1.2.0
 bun run build:mac:dmg          # macOS host only
-bun run lint                   # git diff --check
+bun run check:whitespace         # git diff --check over the branch diff + LF-only .sh/.command (alias: lint)
 bun scripts/qa/preflight.ts --json
 node scripts/qa/e2e-smoke.mjs [--only core]
 bash scripts/qa/task-8-gates.sh
@@ -138,7 +138,7 @@ bun scripts/qa/check-flake-patterns.ts       # launch-path flake patterns in pac
 - Largest backend files: `services/design-system-extract.ts` (2,165), `db/seed-tutorials.ts` (985), `tests/design-system-extract.test.ts` (634), `routes/session.ts` (606).
 - Vite uses strict port `5173`, proxies `/api` and `/runtime`, and sends `frame-ancestors 'none'` + `X-Frame-Options: DENY`. Windows is the primary local target; macOS packaging and shell QA are also present.
 - Consult the nearest nested `AGENTS.md` before changing a delegated domain; this root records only cross-package constraints.
-- Doc drift to ignore: `CONTRIBUTING.md` cites a `test:e2e` script and `tests/e2e/` that do not exist (QA lives in `scripts/qa/`); `doc/README.md` advertises `ref/` and `devplan/` (gitignored, absent in a checkout) and still allows Korean. `uploads/`, `ref/`, `devplan/`, `/.omo/` are gitignored. A stray empty `NUL` file sits at the repo root (Windows artifact).
+- Doc drift to ignore: `uploads/`, `ref/`, `devplan/`, `/.omo/` are gitignored. A stray empty `NUL` file sits at the repo root (Windows artifact).
 
 ## CI FAILURES AND OS COVERAGE
 

@@ -29,9 +29,8 @@ import {
 import { pruneOldExports } from "./services/export-gc";
 import { reconcileExtractionState } from "./services/extraction-recovery";
 import { reconcileCatalogState } from "./services/catalog-lifecycle";
-import { ensureAllProjectWatchers } from "./services/watchers";
 import { reconcileArtifactState } from "./services/artifact-recovery";
-import { reconcileProjectDeletions } from "./services/project-deletion";
+import { purgeExpiredProjectDeletions, reconcileProjectDeletions } from "./services/project-deletion";
 import { reconcileProjectBundleImports } from "./services/project-bundle-import-receipt";
 import { pruneExpiredArtifactOperations } from "./services/artifact-retention";
 import { reconcileExportState } from "./services/export-recovery";
@@ -140,6 +139,7 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   await seedSampleDesignSystems();
   await runMigrations();
   await reconcileProjectDeletions(getSqlite());
+  await purgeExpiredProjectDeletions(getSqlite());
   await reconcileProjectBundleImports(getSqlite());
   await reconcileResearchOnStartup(getSqlite(), researchRecovery);
   await seedCoreData();
@@ -157,5 +157,5 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   await pruneExpiredArtifactOperations(getSqlite());
   await reconcileExportState(getSqlite());
   await pruneOldExports();
-  await ensureAllProjectWatchers();
+  // Project watchers start in `main.ts` once the listener is up (`startProjectWatchers`).
 }
