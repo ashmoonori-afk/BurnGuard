@@ -62,6 +62,7 @@ describe("macOS service environment", () => {
     expect(probe).toContain("readabilityHandler");
     expect(probe).not.toContain("readDataToEndOfFile");
     expect(probe).toContain("probe.terminate()");
+    expect(probe).toContain("kill(probe.processIdentifier, SIGKILL)");
     expect(probe).toContain("probe.standardInput = FileHandle.nullDevice");
     expect(probe).toContain("probe.standardError = FileHandle.nullDevice");
     expect(probe).not.toMatch(/print\(|NSLog|NSAlert/);
@@ -71,7 +72,7 @@ describe("macOS service environment", () => {
     expect(start).toContain("launchService(serviceURL: serviceURL, loginEntries: loginEntries)");
   });
 
-  test("Given Node version managers When the manager directories are collected Then only existing known directories and the newest nvm version are added", () => {
+  test("Given Node version managers When the manager directories are collected Then only existing known directories and the nvm default alias (newest version as fallback) are added", () => {
     const managers = body("private func managerPathEntries()");
     for (const directory of ['"/.volta/bin"', '"/.npm-global/bin"', '"/.local/share/fnm/aliases/default/bin"', '"/Library/Application Support/fnm/aliases/default/bin"', '"/.nvm/versions/node"']) expect(managers).toContain(directory);
     expect(managers).toContain("nvmVersionDirectory(home: home, versions: versions)");

@@ -446,7 +446,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         let deadline = DispatchTime.now() + 3
         guard exited.wait(timeout: deadline) == .success, drained.wait(timeout: deadline) == .success else {
             pipe.fileHandleForReading.readabilityHandler = nil
-            if probe.isRunning { probe.terminate() }
+            if probe.isRunning {
+                probe.terminate()
+                // An interactive zsh can ignore SIGTERM, so follow with SIGKILL.
+                kill(probe.processIdentifier, SIGKILL)
+            }
             return []
         }
         lock.lock(); let data = collected; lock.unlock()
