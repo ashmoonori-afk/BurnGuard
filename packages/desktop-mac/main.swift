@@ -37,6 +37,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var serviceInput: Pipe?
     private var serviceOutput: Pipe?
     private var outputBuffer = Data()
+    private var startupFailure: String?
     private var origin: URL?
     private var expectedOrigin: String?
     private var smokeReportPath: String?
@@ -613,6 +614,8 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         environment["BG_UPDATE_WAIT_PID"] = String(ProcessInfo.processInfo.processIdentifier)
         // The readiness line must name exactly this port, so the backend may not scan for another one.
         let port = environment["BG_PORT"] ?? "14070"
+        guard let portNumber = UInt16(port), portNumber >= 1024 else { throw startupError("invalid_port", port: port) }
+        guard portIsFree(portNumber) else { throw startupError("port_busy", port: port) }
         environment["BG_PORT"] = port
         environment.removeValue(forKey: "BG_SCAN_PORT")
         expectedOrigin = "http://127.0.0.1:\(port)"
@@ -625,7 +628,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         serviceInput = input
         serviceOutput = output
 
+        // Hold through enqueue so a chunk already read by a callback precedes the final EOF drain.
+        let outputLock = NSLock()
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            outputLock.lock()
+            defer { outputLock.unlock() }
             let data = handle.availableData
             // At EOF the handler keeps firing with empty data until it is cleared.
             if data.isEmpty { handle.readabilityHandler = nil; return }
@@ -635,9 +642,16 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             if handle.availableData.isEmpty { handle.readabilityHandler = nil }
         }
         process.terminationHandler = { [weak self] process in
+            outputLock.lock()
+            defer { outputLock.unlock() }
+            // The backend may print startup_failed just before exiting; read what is left before choosing the message.
+            output.fileHandleForReading.readabilityHandler = nil
+            let remaining = try? output.fileHandleForReading.readToEnd()
             DispatchQueue.main.async {
                 guard let self else { return }
                 if self.closing { self.finishTermination(); return }
+                if let remaining, !remaining.isEmpty { self.consumeServiceOutput(remaining); if self.closing { return } }
+                if let message = self.startupFailure { self.fail(message); return }
                 self.fail(shellText("serverExitedCode", String(process.terminationStatus)))
             }
         }
@@ -647,6 +661,34 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             guard let self, !self.closing, self.origin == nil else { return }
             self.fail(shellText("startTimeout"))
         }
+    }
+
+    // Known backend startup_failed codes map to the shell table; unknown codes keep the generic exit message.
+    private func startupMessage(_ code: String?, port: String) -> String? {
+        guard let code, ["port_busy", "profile_owned", "invalid_port"].contains(code) else { return nil }
+        return shellText("startup_failed.\(code)").replacingOccurrences(of: "{0}", with: port)
+    }
+
+    private func startupError(_ code: String, port: String) -> NSError {
+        NSError(domain: "BurnGuard", code: 2, userInfo: [NSLocalizedDescriptionKey: startupMessage(code, port: port) ?? code])
+    }
+
+    /// Mirrors the Windows shell's TcpListener probe: a bind on the loopback port fails while another process is listening.
+    private func portIsFree(_ port: UInt16) -> Bool {
+        let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+        guard descriptor >= 0 else { return true }
+        defer { Darwin.close(descriptor) }
+        var reuse: Int32 = 1
+        setsockopt(descriptor, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = port.bigEndian
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let result = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        return result == 0
     }
 
     private func consumeServiceOutput(_ data: Data) {
@@ -662,6 +704,10 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                   let protocolVersion = message["protocol"] as? Int,
                   protocolVersion == 1 else {
                 fail(shellText("startupResponseInvalid"))
+                return
+            }
+            if message["event"] as? String == "startup_failed" {
+                startupFailure = startupMessage(message["code"] as? String, port: expectedOrigin.flatMap { URL(string: $0)?.port.map(String.init) } ?? "14070")
                 return
             }
             if message["event"] as? String == "active-turns" {
