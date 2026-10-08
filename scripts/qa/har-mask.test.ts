@@ -33,7 +33,7 @@ describe("HAR masking for the pre-release UX QA stage", () => {
   });
 
   test("Given the one-time bootstrap secret in the bootstrap request header and the launch page URL fragment, when masked, then it is masked everywhere", () => {
-    const secret = "b00tstr4p-s3cr3t_0123456789abcdef";
+    const secret = "launch-fixture-value";
     const har = { log: { pages: [{ id: "page_1", title: `http://127.0.0.1:14070/#bg-bootstrap:${secret}` }], entries: [
       entry({ url: "http://127.0.0.1:14070/api/bootstrap", headers: [header("x-burnguard-bootstrap", secret), header("Referer", `http://127.0.0.1:14070/#bg-bootstrap:${secret}`)] }, { content: { size: 60, mimeType: "application/json", text: JSON.stringify({ ok: true, data: { capability: CAPABILITY } }) } }),
     ] } };
