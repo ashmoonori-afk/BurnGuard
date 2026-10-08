@@ -119,13 +119,13 @@ describe("production API route registration", () => {
   });
 
   test("Given production request authority When bootstrap read and mutation requests arrive Then host origin cookie and capability gates dispatch correctly", async () => {
-    const authorized = createApp({ capability: "catalog-test-capability", appAuthority: "catalog.test" });
+    const authorized = createApp({ capability: "catalog-test-capability", bootstrapSecret: "catalog-bootstrap-secret", appAuthority: "catalog.test" });
 
     const misdirected = await authorized.request("http://wrong.test/api/health");
     const optionsDenied = await authorized.request("http://catalog.test/api/design-systems", { method: "OPTIONS", headers: { Host: "catalog.test", Origin: "http://wrong.test" } });
     const optionsAllowed = await authorized.request("http://catalog.test/api/design-systems", { method: "OPTIONS", headers: { Host: "catalog.test", Origin: "http://catalog.test" } });
-    const fetchBootstrap = await authorized.request("http://catalog.test/api/bootstrap", { headers: { Host: "catalog.test", "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors" } });
-    const bootstrap = await authorized.request("http://catalog.test/api/bootstrap", { headers: { Host: "catalog.test", Origin: "http://catalog.test" } });
+    const fetchBootstrap = await authorized.request("http://catalog.test/api/bootstrap", { headers: { Host: "catalog.test", "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "x-burnguard-bootstrap": "catalog-bootstrap-secret" } });
+    const bootstrap = await authorized.request("http://catalog.test/api/bootstrap", { headers: { Host: "catalog.test", Origin: "http://catalog.test", Cookie: (fetchBootstrap.headers.get("set-cookie") ?? "").split(";")[0] ?? "" } });
     const cookie = bootstrap.headers.get("set-cookie") ?? "";
     const read = await authorized.request("http://catalog.test/api/design-systems?limit=1", { headers: { Host: "catalog.test", Cookie: cookie } });
     const forbidden = await authorized.request("http://catalog.test/api/design-systems/missing/trash", { method: "POST", headers: { Host: "catalog.test", "content-type": "application/json" }, body: "{}" });

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { extractAttachmentUpload } from "../src/services/attachment-extraction";
@@ -165,11 +165,27 @@ test("Given each malformed WebP layout When decoded or attached Then it is refus
 
 test("Given a decoder child that crashes, answers garbage or floods its reply When a palette is requested Then a typed error is returned and this process keeps working", async () => {
   const { still } = containers().valid;
-  for (const script of ["process.kill(process.pid, 'SIGSEGV')", "process.stdout.write('not json')", "process.stdout.write('x'.repeat(1 << 20)); setInterval(() => {}, 1000)"]) {
+  // SIGKILL ends the child by signal exactly like a native crash but without a core dump: a real SIGSEGV
+  // makes the host crash handler stream the multi-GB Bun address space before the child is reaped.
+  for (const script of ["process.kill(process.pid, 'SIGKILL')", "process.stdout.write('not json')", "process.stdout.write('x'.repeat(1 << 20)); setInterval(() => {}, 1000)"]) {
     await expect(isolatedImagePalette(still, { command: [process.execPath, "-e", script] })).rejects.toMatchObject({ code: "image_decode_failed" });
   }
   expect(await isolatedImagePalette(still)).toEqual(["#ff0000"]);
 });
+
+test("Given a decoder child that exits while a descendant still holds its reply pipe When a palette is requested Then the deadline returns a typed error and the descendant is stopped", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "bg-palette-descendant-"));
+  try {
+    const pidFile = path.join(root, "descendant.pid");
+    const script = `const held = Bun.spawn([process.execPath, "-e", "setInterval(() => {}, 1000)"], { stdin: "ignore", stdout: "inherit", stderr: "ignore" }); require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(held.pid)); process.exit(0)`;
+    await expect(isolatedImagePalette(containers().valid.still, { command: [process.execPath, "-e", script], timeoutMs: 2_000 })).rejects.toMatchObject({ code: "image_decode_failed" });
+    expect(isProcessAlive(Number(await readFile(pidFile, "utf8")))).toBe(false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+function isProcessAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
 
 test("Given a secret in the backend environment When the decoder child runs Then the child does not receive it", async () => {
   process.env.BG_TEST_DECODER_SENTINEL = "sentinel-secret";

@@ -15,8 +15,10 @@ type StateRef = { current: SessionEventState | null };
 
 export type SessionStreamHandlers = {
   readonly setState: (state: SessionEventState | null) => void;
-  /** The live connection itself is down; the workspace fails closed until it is back. */
+  /** The live connection is closed for good; the workspace fails closed until a retry reopens it. */
   readonly setError: (error: boolean) => void;
+  /** The browser is retrying the connection on its own; the workspace stays usable. */
+  readonly setReconnecting: (reconnecting: boolean) => void;
   /** The connection is open but the resync after (re)opening failed; pending permissions and usage may lag until the next event. */
   readonly setStale: (stale: boolean) => void;
   readonly onLive: (event: NormalizedEvent) => void;
@@ -45,6 +47,7 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
   stateRef.current = null;
   handlers.setState(null);
   handlers.setError(false);
+  handlers.setReconnecting(false);
   handlers.setStale(false);
   void (async () => {
     try {
@@ -60,11 +63,15 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
         stateRef.current = mergeSessionEvents(stateRef.current, [item]);
         handlers.setState(stateRef.current);
         handlers.setError(false);
+        handlers.setReconnecting(false);
         handlers.setStale(false);
         if (!seen && item.sequence > snapshot.sequence) handlers.onLive(item.event);
       }, (report) => {
         if (!active) return;
-        if (report.kind === "connection") { handlers.setError(true); return; }
+        if (report.kind === "connection") {
+          if (report.state === "closed") { handlers.setReconnecting(false); handlers.setError(true); } else handlers.setReconnecting(true);
+          return;
+        }
         // A bad payload leaves the EventSource healthy: flag the view stale and resync instead of failing closed.
         handlers.setStale(true);
         refreshSessionSnapshot(sessionId, stateRef, handlers.setState, api)
@@ -75,6 +82,7 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
         onOpen: () => {
           if (!active) return;
           handlers.setError(false);
+          handlers.setReconnecting(false);
           refreshSessionSnapshot(sessionId, stateRef, handlers.setState, api)
             .then(() => { if (active) handlers.setStale(false); })
             .catch(() => { if (active) handlers.setStale(true); });
@@ -88,6 +96,7 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
 export function useSessionEvents(sessionId: string | undefined, onLiveEvent: (event: NormalizedEvent) => void) {
   const [state, setState] = useState<SessionEventState | null>(null);
   const [error, setError] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [stale, setStale] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const stateRef = useRef<SessionEventState | null>(null);
@@ -101,11 +110,12 @@ export function useSessionEvents(sessionId: string | undefined, onLiveEvent: (ev
   }, [sessionId]);
 
   useEffect(() => {
-    if (sessionId) return openSessionStream(sessionId, stateRef, { setState, setError, setStale, onLive: (event) => onLiveRef.current(event) });
+    if (sessionId) return openSessionStream(sessionId, stateRef, { setState, setError, setReconnecting, setStale, onLive: (event) => onLiveRef.current(event) });
     stateRef.current = null;
     setState(null);
     setError(false);
+    setReconnecting(false);
     setStale(false);
   }, [sessionId, attempt]);
-  return { state: state?.snapshot.session.id === sessionId ? state : null, error, stale, retry, refreshSnapshot };
+  return { state: state?.snapshot.session.id === sessionId ? state : null, error, reconnecting, stale, retry, refreshSnapshot };
 }

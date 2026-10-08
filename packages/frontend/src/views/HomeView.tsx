@@ -29,13 +29,14 @@ import {
 import ProjectCardSection from "@/components/home/ProjectCardSection";
 import ProjectCard from "@/components/home/ProjectCard";
 import ProjectImportDialog from "@/components/home/ProjectImportDialog";
+import RecentlyDeletedSection from "@/components/home/RecentlyDeletedSection";
 import NewProjectPanel from "@/components/home/NewProjectPanel";
 import PinterestImportDialog from "@/components/home/PinterestImportDialog";
 import DeleteDesignSystemDialog from "@/components/home/DeleteDesignSystemDialog";
 import DeleteProjectDialog from "@/components/home/DeleteProjectDialog";
 import CliMissingModal from "@/components/errors/CliMissingModal";
 import { apiErrorCopy } from "@/lib/error-copy";
-import { graphicGateCopy, hasGraphicBackend } from "@/lib/backend-display";
+import { graphicGateCopy, hasGraphicBackend, needsCliGuidance } from "@/lib/backend-display";
 import { creationEscapeAction } from "@/lib/creation-dialog";
 import { requiresImageBackend } from "@/lib/project-creation";
 import { Button } from "@/components/ui/button";
@@ -328,7 +329,7 @@ export default function HomeView() {
           </div>
           <div className="flex gap-2"><Button ref={projectImportTriggerRef} variant="outline" className="h-11" onClick={() => setProjectImportOpen(true)} aria-haspopup="dialog">{t("home.importProject")}</Button><Button ref={createTriggerRef} variant="cta" className="h-11 gap-2 rounded-xl px-4" onClick={() => startProject()} aria-haspopup="dialog"><Plus className="h-4 w-4" aria-hidden="true" />{t("home.newProject")}</Button></div>
         </div>
-        {detectionQuery.data?.backends.every((backend) => !backend.found) ? <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-sm text-muted-foreground">{t("home.aiNotice")}</p><Button variant="outline" size="sm" onClick={() => setCliMissingOpen(true)}>{t("home.aiGuide")}</Button></div> : null}
+        {detectionQuery.data !== undefined && needsCliGuidance(detectionQuery.data.backends) ? <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-sm text-muted-foreground">{t("home.aiNotice")}</p><Button variant="outline" size="sm" onClick={() => setCliMissingOpen(true)}>{t("home.aiGuide")}</Button></div> : null}
         {detectionQuery.isError ? <div role="alert" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3"><p className="text-sm text-foreground">{t("home.detectionFailed")}</p><Button variant="outline" size="sm" disabled={detectionQuery.isFetching} onClick={() => void detectionQuery.refetch()}>{t("home.retry")}</Button></div> : null}
         {activeTab === "recent" || activeTab === "mine" ? <section aria-label={t("home.quickStart")} className="mb-10 grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 xl:grid-cols-4">
           {PROJECT_TYPES.map(({ id, label, description, icon: Icon, color }) => {
@@ -414,6 +415,7 @@ export default function HomeView() {
                 onStartProject={() => startProject()}
                 onDelete={onProjectDelete}
               />
+              <RecentlyDeletedSection />
             </TabsContent>
 
             <TabsContent value="examples">

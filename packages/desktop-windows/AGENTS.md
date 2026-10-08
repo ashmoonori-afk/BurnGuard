@@ -10,6 +10,7 @@ WinForms + WebView2 host (`Program.cs`, 431 LOC) that owns the packaged backend 
 packages/desktop-windows/
 ├── Program.cs                  # Main + DesktopWindow + Native interop
 ├── BurnGuard.Desktop.csproj    # WinExe, net48, x64, <Version> must match APP_VERSION
+├── i18n/{ko,en,zh}.json        # user-facing shell strings, embedded resources
 ├── app.manifest                # asInvoker, PerMonitorV2 DPI
 └── qa/UpdateChecks.csproj      # separate update-check project; excluded from the app compile
 ```
@@ -21,7 +22,7 @@ packages/desktop-windows/
 | Startup order | `Program.Main` | Velopack (`SetAutoApplyOnStartup(false)`) → profile resolve → single-instance mutex → pending update → window |
 | Single instance | `Program.Main` | Mutex `Local\BurnGuard.<identity>`; identity = 24 hex chars of SHA-256 over the uppercased absolute profile path; second launch posts the registered activate message and exits 0 |
 | Backend ownership | `DesktopWindow.StartService` | Spawns `service/burnguard-design.exe` with `BG_DESKTOP=1`, `BG_NO_OPEN=1`, `BG_DEV=0`, `BG_PORT`; `BG_SCAN_PORT` removed; kill-on-close job object |
-| Readiness protocol | `StartService` stdout handler | Only `[burnguard-desktop] ` JSON lines with `protocol == 1`, matching `pid`, and `url == http://127.0.0.1:<port>` are accepted |
+| Readiness protocol | `StartService` stdout handler | Only `[burnguard-desktop] ` JSON lines with `protocol == 1`, matching `pid`, `url == http://127.0.0.1:<port>` and a base64url `bootstrap` secret are accepted; the app is loaded at `<url>#bg-bootstrap:<secret>` |
 | WebView hardening | `DesktopWindow` init | DevTools, accelerator keys, status bar, web messages, host objects, autofill all disabled; `PermissionRequested` always denied |
 | Navigation policy | `IsTopLevelAppRoute`, `NewWindowRequested`, `OpenExternal` | Top-level navigation stays on the app origin; external links require absolute `http(s)` with empty `UserInfo` and open in the default browser |
 | Smoke mode | `Program.Main`, `DesktopWindow` | Exactly `--smoke-test --smoke-report <absolute path>` plus an isolated `BG_APP_ROOT`; writes `{ ok, startupElapsedMs, servicePid, webViewVersion, screenshot, dom }` |
@@ -32,7 +33,7 @@ packages/desktop-windows/
 - Build through the Bun scripts, not the IDE: `bun run build:windows` (needs a Windows host with the .NET 8 SDK) and `bun run build:windows:release` (Velopack `vpk pack`).
 - `<Version>` in the csproj is stamped from `APP_VERSION` in `@bg/shared`; changing one without the other ships a mismatched installer.
 - `qa/**/*.cs` is excluded from the app compile - the QA project is built separately.
-- User-facing dialog text is Korean; diagnostics go into the smoke report, never into a dialog.
+- Every user-facing string (dialogs, toolbar, status, startup errors) goes through `ShellText.Get` (`i18n/{ko,en,zh}.json`, shared key set with `packages/desktop-mac/i18n`, embedded resources). No Hangul in `Program.cs`; Korean lives only in `ko.json`. Diagnostics go into the smoke report, never into a dialog.
 - `packages/desktop-mac/main.swift` mirrors this shell's readiness protocol and smoke contract; change both together.
 
 ## ANTI-PATTERNS

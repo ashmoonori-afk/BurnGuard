@@ -1,10 +1,11 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
+import * as fsp from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { getSqlite } from "../src/db/sqlite-client";
 import { systemsDir } from "../src/lib/paths";
-import { persistCanonicalExtraction, uploadDesignSystemFont } from "../src/services/design-system-extract";
+import { persistCanonicalExtraction, uploadDesignSystemFont, upsertDesignSystemColorToken } from "../src/services/design-system-extract";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 
 const id = `font-upload-${process.pid}`;
@@ -65,4 +66,34 @@ test("R2-3: Given a literal stack whose quoted first family matches the upload W
   const line = tokens.split("\n").find((entry) => entry.includes("--font-sans:")) ?? "";
   expect(line).toMatch(/--font-sans:\s*Inter, "Pretendard", sans-serif;/);
   expect(line.match(/Inter/g)?.length).toBe(1);
+});
+
+test("F-DATA-4: Given a token file that cannot be read When a color is saved or a font is uploaded Then a typed error is thrown and no file is written", async () => {
+  await writeFile(fontsCssPath, "/* before */\n", "utf8");
+  const fontsDir = path.dirname(fontsCssPath);
+  const before = { tokens: await readFile(tokenPath, "utf8"), fontsCss: await readFile(fontsCssPath, "utf8"), files: (await readdir(fontsDir)).sort() };
+  const original = fsp.readFile;
+  const read = spyOn(fsp, "readFile").mockImplementation((async (...args: Parameters<typeof fsp.readFile>) => {
+    if (args[0] !== tokenPath) return original(...args);
+    throw Object.assign(new Error("permission denied"), { code: "EACCES" });
+  }) as typeof fsp.readFile);
+  try {
+    await expect(upsertDesignSystemColorToken(id, { name: "accent", value: "#123456" })).rejects.toMatchObject({ code: "token_file_unreadable" });
+    await expect(uploadDesignSystemFont({ systemId: id, file: new File([figtree], "unreadable.woff2"), family: "Unreadable", role: "sans" })).rejects.toMatchObject({ code: "token_file_unreadable" });
+  } finally { read.mockRestore(); }
+  expect(await readFile(tokenPath, "utf8")).toBe(before.tokens);
+  expect(await readFile(fontsCssPath, "utf8")).toBe(before.fontsCss);
+  expect((await readdir(fontsDir)).sort()).toEqual(before.files);
+});
+
+test("F-DATA-4: Given a color edit and a font upload When both rewrite CSS files Then the results are complete and no temp files remain", async () => {
+  await writeFile(tokenPath, ":root {\n  --primary-blue: #0057B8;\n}\n", "utf8");
+  await upsertDesignSystemColorToken(id, { name: "accent", value: "#123456" });
+  await uploadDesignSystemFont({ systemId: id, file: new File([figtree], "atomic.woff2"), family: "Atomic", role: "sans" });
+  const tokens = await readFile(tokenPath, "utf8");
+  expect(tokens).toContain("--primary-blue: #0057B8;");
+  expect(tokens).toContain("--accent: #123456;");
+  expect(await readFile(fontsCssPath, "utf8")).toContain("url('./atomic.woff2')");
+  const leftovers = [...(await readdir(root)), ...(await readdir(path.dirname(fontsCssPath)))].filter((name) => name.endsWith(".tmp"));
+  expect(leftovers).toEqual([]);
 });

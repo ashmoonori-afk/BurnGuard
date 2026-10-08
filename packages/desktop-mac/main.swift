@@ -4,6 +4,32 @@ import WebKit
 
 private let smokeTestArguments = ["--smoke-test", "--smoke-report"]
 
+// Shell dialog strings live in i18n/<language>.json (bundled by scripts/build-mac.ts); the language
+// follows the SPA's first-run rule: Korean -> ko, Simplified Chinese -> zh, anything else -> en.
+private let shellLanguage: String = {
+    let parts = (Locale.preferredLanguages.first ?? "").lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).map(String.init)
+    if parts.first == "ko" { return "ko" }
+    guard parts.first == "zh" else { return "en" }
+    if parts.contains("hans") { return "zh" }
+    return parts.contains(where: { ["hant", "tw", "hk", "mo"].contains($0) }) ? "en" : "zh"
+}()
+
+private func shellTable(_ language: String) -> [String: String] {
+    guard let url = Bundle.main.url(forResource: language, withExtension: "json", subdirectory: "i18n"),
+          let data = try? Data(contentsOf: url),
+          let table = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return [:] }
+    return table
+}
+
+private let shellStrings = shellTable(shellLanguage)
+private let fallbackShellStrings = shellTable("en")
+
+private func shellText(_ key: String, _ values: String...) -> String {
+    var text = shellStrings[key] ?? fallbackShellStrings[key] ?? key
+    for (index, value) in values.enumerated() { text = text.replacingOccurrences(of: "{\(index)}", with: value) }
+    return text
+}
+
 final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
     private var window: NSWindow!
     private var webView: WKWebView!
@@ -11,6 +37,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var serviceInput: Pipe?
     private var serviceOutput: Pipe?
     private var outputBuffer = Data()
+    private var startupFailure: String?
     private var origin: URL?
     private var expectedOrigin: String?
     private var smokeReportPath: String?
@@ -23,6 +50,9 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var smokeStarted = false
     private var smokeFinishing = false
     private var closing = false
+    private var closeConfirmed = false
+    private var closeDecisionWaiters: [(Bool) -> Void] = []
+    private var closeQuery = 0
     private var terminationReplyPending = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -47,12 +77,62 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         guard service?.isRunning == true else { return .terminateNow }
         if terminationReplyPending { return .terminateCancel }
         terminationReplyPending = true
-        shutdown()
+        confirmCloseIfGenerating { [weak self] proceed in
+            guard let self else { return }
+            if proceed { self.shutdown(); return }
+            self.terminationReplyPending = false
+            NSApp.reply(toApplicationShouldTerminate: false)
+        }
         return .terminateLater
+    }
+
+    // windowWillClose cannot cancel; the close is held here until the backend reports no running generation or the user confirms.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if closeConfirmed || closing { return true }
+        confirmCloseIfGenerating { [weak self] proceed in
+            guard let self, proceed else { return }
+            self.closeConfirmed = true
+            self.window.close()
+        }
+        return false
     }
 
     func windowWillClose(_ notification: Notification) {
         shutdown()
+    }
+
+    // Asks the backend over the private stdin pipe; no answer in two seconds counts as idle, so a hung backend never blocks closing.
+    private func confirmCloseIfGenerating(_ decided: @escaping (Bool) -> Void) {
+        guard smokeReportPath == nil, !closing, origin != nil, service?.isRunning == true else { decided(true); return }
+        closeDecisionWaiters.append(decided)
+        guard closeDecisionWaiters.count == 1 else { return }
+        closeQuery += 1
+        let query = closeQuery
+        serviceInput?.fileHandleForWriting.write(Data("active-turns\n".utf8))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self, self.closeQuery == query else { return }
+            self.decideClose(activeTurns: 0)
+        }
+    }
+
+    private func decideClose(activeTurns: Int) {
+        guard !closeDecisionWaiters.isEmpty else { return }
+        let waiters = closeDecisionWaiters
+        closeDecisionWaiters = []
+        closeQuery += 1
+        let proceed = activeTurns == 0 || confirmCloseDuringTurn()
+        waiters.forEach { $0(proceed) }
+    }
+
+    // Keep working is the default button, so Return keeps the generation running.
+    private func confirmCloseDuringTurn() -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "BurnGuard"
+        alert.informativeText = shellText("closeRunning.message")
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: shellText("closeRunning.keep"))
+        alert.addButton(withTitle: shellText("closeRunning.close"))
+        return alert.runModal() == .alertSecondButtonReturn
     }
 
     func webView(
@@ -180,7 +260,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private func alertDownloadFailed() {
         let alert = NSAlert()
         alert.messageText = "BurnGuard"
-        alert.informativeText = "파일을 다운로드하지 못했습니다. 다시 시도해 주세요."
+        alert.informativeText = shellText("downloadFailed")
         alert.beginSheetModal(for: window)
     }
 
@@ -349,7 +429,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         didFail navigation: WKNavigation!,
         withError error: Error
     ) {
-        fail("BurnGuard 화면을 불러오지 못했습니다: \(error.localizedDescription)")
+        fail(shellText("viewLoadFailedDetail", error.localizedDescription))
     }
 
     private func parseArguments() throws -> (reportPath: String?, projectId: String?) {
@@ -367,17 +447,17 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     // AppKit delivers Cmd-key editing, quit and close only through main-menu key equivalents; nil targets reach the web view.
     private func installMainMenu() {
         let appMenu = NSMenu(title: "BurnGuard")
-        appMenu.addItem(withTitle: "BurnGuard 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        let editMenu = NSMenu(title: "편집")
-        editMenu.addItem(withTitle: "실행 취소", action: Selector(("undo:")), keyEquivalent: "z")
-        editMenu.addItem(withTitle: "실행 복귀", action: Selector(("redo:")), keyEquivalent: "Z")
-        editMenu.addItem(withTitle: "오려두기", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "복사하기", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "붙이기", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        editMenu.addItem(withTitle: "모두 선택", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
-        let windowMenu = NSMenu(title: "윈도우")
-        windowMenu.addItem(withTitle: "최소화", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
-        windowMenu.addItem(withTitle: "닫기", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        appMenu.addItem(withTitle: shellText("menu.quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let editMenu = NSMenu(title: shellText("menu.edit"))
+        editMenu.addItem(withTitle: shellText("menu.undo"), action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: shellText("menu.redo"), action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(withTitle: shellText("menu.cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: shellText("menu.copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: shellText("menu.paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: shellText("menu.selectAll"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let windowMenu = NSMenu(title: shellText("menu.window"))
+        windowMenu.addItem(withTitle: shellText("menu.minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: shellText("menu.close"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         let mainMenu = NSMenu()
         for menu in [appMenu, editMenu, windowMenu] { mainMenu.addItem(withTitle: menu.title, action: nil, keyEquivalent: "").submenu = menu }
         NSApp.mainMenu = mainMenu
@@ -407,28 +487,135 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// PATH entries of the user's login shell; any failure or timeout yields no entries and the value is never logged.
+    /// Runs on a background queue; the 3 s deadline covers both the shell exit and the end of its output.
+    private func loginShellPathEntries() -> [String] {
+        var shell = "/bin/zsh"
+        if let value = ProcessInfo.processInfo.environment["SHELL"], !value.isEmpty {
+            shell = value
+        } else if let entry = getpwuid(getuid()), let value = entry.pointee.pw_shell {
+            shell = String(cString: value)
+        }
+        if !FileManager.default.isExecutableFile(atPath: shell) { shell = "/bin/zsh" }
+
+        let probe = Process()
+        let pipe = Pipe()
+        let exited = DispatchSemaphore(value: 0)
+        let drained = DispatchSemaphore(value: 0)
+        let lock = NSLock()
+        var collected = Data()
+        probe.executableURL = URL(fileURLWithPath: shell)
+        // zsh keeps nvm/fnm setup in ~/.zshrc, which only interactive shells read.
+        let flags = URL(fileURLWithPath: shell).lastPathComponent == "zsh" ? ["-i", "-l", "-c"] : ["-l", "-c"]
+        probe.arguments = flags + ["printf '__BG_PATH__%s__BG_PATH__' \"$PATH\""]
+        probe.standardInput = FileHandle.nullDevice
+        probe.standardOutput = pipe
+        probe.standardError = FileHandle.nullDevice
+        probe.terminationHandler = { _ in exited.signal() }
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            // At EOF the handler keeps firing with empty data until it is cleared.
+            if data.isEmpty { handle.readabilityHandler = nil; drained.signal(); return }
+            lock.lock(); collected.append(data); lock.unlock()
+        }
+        do { try probe.run() } catch {
+            pipe.fileHandleForReading.readabilityHandler = nil
+            return []
+        }
+        try? pipe.fileHandleForWriting.close()
+        let deadline = DispatchTime.now() + 3
+        guard exited.wait(timeout: deadline) == .success, drained.wait(timeout: deadline) == .success else {
+            pipe.fileHandleForReading.readabilityHandler = nil
+            if probe.isRunning {
+                probe.terminate()
+                // An interactive zsh can ignore SIGTERM, so follow with SIGKILL.
+                kill(probe.processIdentifier, SIGKILL)
+            }
+            return []
+        }
+        lock.lock(); let data = collected; lock.unlock()
+        // Startup files may print noise around the value; only the text between the markers counts and only absolute entries are kept.
+        guard let text = String(data: data, encoding: .utf8),
+              let end = text.range(of: "__BG_PATH__", options: .backwards),
+              let start = text[..<end.lowerBound].range(of: "__BG_PATH__", options: .backwards) else { return [] }
+        return text[start.upperBound..<end.lowerBound].split(separator: ":").map(String.init).filter { $0.hasPrefix("/") }
+    }
+
+    /// Installed nvm version directory for the `default` alias, else the newest installed version.
+    private func nvmVersionDirectory(home: String, versions: [String]) -> String? {
+        let numeric: (String, String) -> Bool = { $0.compare($1, options: .numeric) == .orderedAscending }
+        let newest = versions.sorted(by: numeric).last
+        var alias = (try? String(contentsOfFile: home + "/.nvm/alias/default", encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Aliases may point at other aliases (default -> lts/* -> lts/iron -> v20.x).
+        for _ in 0..<4 {
+            guard let value = alias, !value.isEmpty else { break }
+            let bare = value.hasPrefix("v") ? String(value.dropFirst()) : value
+            if let first = bare.first, first.isNumber {
+                let matches = versions.filter { $0 == "v" + bare || $0.hasPrefix("v" + bare + ".") }
+                if let match = matches.sorted(by: numeric).last { return match }
+                break
+            }
+            alias = (try? String(contentsOfFile: home + "/.nvm/alias/" + value, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return newest
+    }
+
+    /// Well-known Node manager directories that exist on disk; the nvm default alias wins over the newest nvm version.
+    private func managerPathEntries() -> [String] {
+        let home = NSHomeDirectory()
+        let fileManager = FileManager.default
+        var candidates = [
+            home + "/.volta/bin",
+            home + "/.npm-global/bin",
+            home + "/.local/share/fnm/aliases/default/bin",
+            home + "/Library/Application Support/fnm/aliases/default/bin"
+        ]
+        let nvmRoot = home + "/.nvm/versions/node"
+        if let versions = try? fileManager.contentsOfDirectory(atPath: nvmRoot),
+           let version = nvmVersionDirectory(home: home, versions: versions) {
+            candidates.append(nvmRoot + "/" + version + "/bin")
+        }
+        return candidates.filter { fileManager.fileExists(atPath: $0) }
+    }
+
     private func startService() throws {
         let serviceURL = Bundle.main.bundleURL
             .appendingPathComponent("Contents/MacOS/burnguard-design")
         guard FileManager.default.isExecutableFile(atPath: serviceURL.path) else {
             throw NSError(domain: "BurnGuard", code: 1, userInfo: [NSLocalizedDescriptionKey: "Contents/MacOS/burnguard-design is missing or not executable."])
         }
+        // The login-shell probe may take a few seconds; keep the main thread free and launch the backend once it answers.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let loginEntries = self?.loginShellPathEntries() ?? []
+            DispatchQueue.main.async {
+                guard let self, !self.closing else { return }
+                do { try self.launchService(serviceURL: serviceURL, loginEntries: loginEntries) } catch { self.fail(error.localizedDescription) }
+            }
+        }
+    }
 
+    private func launchService(serviceURL: URL, loginEntries: [String]) throws {
         let input = Pipe()
         let output = Pipe()
         let errorOutput = Pipe()
         let process = Process()
         var environment = ProcessInfo.processInfo.environment
-        // Finder and Dock launches inherit launchd's minimal PATH; put the usual user tool directories first so CLIs resolve.
+        // Finder and Dock launches inherit launchd's minimal PATH: lead with the login shell's PATH (nvm, Volta, fnm, custom npm prefixes), keep the usual user tool directories as fallback, then add known manager directories.
         let searchPath = (environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin").split(separator: ":").map(String.init)
-        let userPaths = [NSHomeDirectory() + "/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.bun/bin"].filter { !searchPath.contains($0) }
-        environment["PATH"] = (userPaths + searchPath).joined(separator: ":")
+        let fixedPaths = [NSHomeDirectory() + "/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.bun/bin"]
+        var merged: [String] = []
+        for entry in loginEntries + fixedPaths + searchPath + managerPathEntries() where !merged.contains(entry) {
+            merged.append(entry)
+        }
+        environment["PATH"] = merged.joined(separator: ":")
         environment["BG_DESKTOP"] = "1"
         environment["BG_NO_OPEN"] = "1"
         environment["BG_DEV"] = "0"
         environment["BG_UPDATE_WAIT_PID"] = String(ProcessInfo.processInfo.processIdentifier)
         // The readiness line must name exactly this port, so the backend may not scan for another one.
         let port = environment["BG_PORT"] ?? "14070"
+        guard let portNumber = UInt16(port), portNumber >= 1024 else { throw startupError("invalid_port", port: port) }
+        guard portIsFree(portNumber) else { throw startupError("port_busy", port: port) }
         environment["BG_PORT"] = port
         environment.removeValue(forKey: "BG_SCAN_PORT")
         expectedOrigin = "http://127.0.0.1:\(port)"
@@ -441,7 +628,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         serviceInput = input
         serviceOutput = output
 
+        // Hold through enqueue so a chunk already read by a callback precedes the final EOF drain.
+        let outputLock = NSLock()
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            outputLock.lock()
+            defer { outputLock.unlock() }
             let data = handle.availableData
             // At EOF the handler keeps firing with empty data until it is cleared.
             if data.isEmpty { handle.readabilityHandler = nil; return }
@@ -451,18 +642,53 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             if handle.availableData.isEmpty { handle.readabilityHandler = nil }
         }
         process.terminationHandler = { [weak self] process in
+            outputLock.lock()
+            defer { outputLock.unlock() }
+            // The backend may print startup_failed just before exiting; read what is left before choosing the message.
+            output.fileHandleForReading.readabilityHandler = nil
+            let remaining = try? output.fileHandleForReading.readToEnd()
             DispatchQueue.main.async {
                 guard let self else { return }
                 if self.closing { self.finishTermination(); return }
-                self.fail("BurnGuard 서버가 종료되었습니다 (code \(process.terminationStatus)).")
+                if let remaining, !remaining.isEmpty { self.consumeServiceOutput(remaining); if self.closing { return } }
+                if let message = self.startupFailure { self.fail(message); return }
+                self.fail(shellText("serverExitedCode", String(process.terminationStatus)))
             }
         }
         try process.run()
         // Cold profiles seed and validate every bundled sample before readiness.
         DispatchQueue.main.asyncAfter(deadline: .now() + 300) { [weak self] in
             guard let self, !self.closing, self.origin == nil else { return }
-            self.fail("BurnGuard 서버가 300초 안에 시작되지 않았습니다.")
+            self.fail(shellText("startTimeout"))
         }
+    }
+
+    // Known backend startup_failed codes map to the shell table; unknown codes keep the generic exit message.
+    private func startupMessage(_ code: String?, port: String) -> String? {
+        guard let code, ["port_busy", "profile_owned", "invalid_port"].contains(code) else { return nil }
+        return shellText("startup_failed.\(code)").replacingOccurrences(of: "{0}", with: port)
+    }
+
+    private func startupError(_ code: String, port: String) -> NSError {
+        NSError(domain: "BurnGuard", code: 2, userInfo: [NSLocalizedDescriptionKey: startupMessage(code, port: port) ?? code])
+    }
+
+    /// Mirrors the Windows shell's TcpListener probe: a bind on the loopback port fails while another process is listening.
+    private func portIsFree(_ port: UInt16) -> Bool {
+        let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+        guard descriptor >= 0 else { return true }
+        defer { Darwin.close(descriptor) }
+        var reuse: Int32 = 1
+        setsockopt(descriptor, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = port.bigEndian
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let result = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        return result == 0
     }
 
     private func consumeServiceOutput(_ data: Data) {
@@ -477,8 +703,18 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                   let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let protocolVersion = message["protocol"] as? Int,
                   protocolVersion == 1 else {
-                fail("BurnGuard 시작 응답을 확인할 수 없습니다.")
+                fail(shellText("startupResponseInvalid"))
                 return
+            }
+            if message["event"] as? String == "startup_failed" {
+                startupFailure = startupMessage(message["code"] as? String, port: expectedOrigin.flatMap { URL(string: $0)?.port.map(String.init) } ?? "14070")
+                return
+            }
+            if message["event"] as? String == "active-turns" {
+                let count = message["count"] as? Int ?? 0
+                // The confirmation is modal; run it outside this read loop.
+                DispatchQueue.main.async { [weak self] in self?.decideClose(activeTurns: count) }
+                continue
             }
             if message["event"] as? String == "shutdown" {
                 closing = true
@@ -489,13 +725,22 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                   let pid = message["pid"] as? Int32,
                   let service, pid == service.processIdentifier,
                   urlString == expectedOrigin,
-                  let url = URL(string: urlString) else {
-                fail("BurnGuard 시작 응답을 확인할 수 없습니다.")
+                  let bootstrap = message["bootstrap"] as? String,
+                  isBootstrapSecret(bootstrap),
+                  let url = URL(string: urlString),
+                  // The one-time secret lets only this web view mint the launch capability; the SPA strips the fragment.
+                  let launch = URL(string: (smokeProjectId.map { url.appendingPathComponent("projects").appendingPathComponent($0) } ?? url).absoluteString + "#bg-bootstrap:" + bootstrap) else {
+                fail(shellText("startupResponseInvalid"))
                 return
             }
             origin = url
-            let target = smokeProjectId.map { url.appendingPathComponent("projects").appendingPathComponent($0) } ?? url
-            webView.load(URLRequest(url: target))
+            webView.load(URLRequest(url: launch))
+        }
+    }
+
+    private func isBootstrapSecret(_ value: String) -> Bool {
+        value.utf8.count >= 16 && value.utf8.allSatisfy { byte in
+            (byte >= 48 && byte <= 57) || (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122) || byte == 45 || byte == 95
         }
     }
 
@@ -527,13 +772,13 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
 
     private func writeReport(_ report: [String: Any], to path: String) {
         guard let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted]) else {
-            fail("네이티브 smoke 결과를 직렬화할 수 없습니다.")
+            fail(shellText("smokeSerializeFailed"))
             return
         }
         do {
             try data.write(to: URL(fileURLWithPath: path), options: .atomic)
         } catch {
-            fail("네이티브 smoke 결과를 기록할 수 없습니다: \(error.localizedDescription)")
+            fail(shellText("smokeWriteFailed", error.localizedDescription))
         }
     }
 

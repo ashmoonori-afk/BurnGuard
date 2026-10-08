@@ -10,3 +10,7 @@ export function setArtifactRecoveryHold(db: Database, projectIds: Iterable<strin
 export function isArtifactRecoveryHeld(db: Database, projectId: string): boolean {
   return held.get(db)?.has(projectId) === true;
 }
+
+export function artifactRecoveryHeldIds(db: Database): readonly string[] {
+  return [...(held.get(db) ?? [])];
+}

@@ -14,11 +14,11 @@
  *   - SIGINT / window-close brings down both child processes together.
  */
 import { spawn, type Subprocess } from "bun";
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { APP_NAME } from "../packages/shared/src/app";
 import { isPortFree } from "./qa/port";
-import { bootstrapAuthority } from "./qa/runtime";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const BACKEND_HEALTH_URL = "http://127.0.0.1:14070/api/health";
@@ -146,9 +146,14 @@ async function main(): Promise<void> {
 
   // 2. Start backend.
   console.log("[launcher] starting backend...");
+  // The page this launcher opens is the only one that may mint the launch capability; nothing else learns the secret.
+  // Without auto-open the backend shows its own one-time URL to the terminal instead.
+  const bootstrapSecret = randomBytes(32).toString("base64url");
+  const launcherOpens = process.env.BG_LAUNCHER_NO_OPEN !== "1";
   backend = spawn({
     cmd: [process.execPath, "run", "--cwd", "packages/backend", "dev"],
     cwd: REPO_ROOT,
+    env: launcherOpens ? { ...process.env, BG_BOOTSTRAP_SECRET: bootstrapSecret } : process.env,
     stdout: "inherit",
     stderr: "inherit",
     stdin: "ignore",
@@ -176,9 +181,6 @@ async function main(): Promise<void> {
     `[launcher] backend ready (${((Date.now() - backendStart) / 1000).toFixed(1)}s)`,
   );
 
-  const authority = await bootstrapAuthority(new URL(BACKEND_HEALTH_URL).origin);
-  if (!Object.values(authority).every(Boolean)) stop("backend bootstrap failed", 1);
-
   // 4. Start frontend.
   console.log("[launcher] starting frontend...");
   frontend = spawn({
@@ -199,7 +201,7 @@ async function main(): Promise<void> {
   const frontendUp = await waitForUrl(FRONTEND_URL, FRONTEND_TIMEOUT_MS);
   if (frontendUp) {
     console.log(`[launcher] frontend ready — opening ${FRONTEND_URL}`);
-    openBrowser(FRONTEND_URL);
+    openBrowser(`${FRONTEND_URL}#bg-bootstrap:${bootstrapSecret}`);
   } else {
     console.warn(
       `[launcher] frontend did not answer within ${FRONTEND_TIMEOUT_MS / 1000}s — open ${FRONTEND_URL} manually`,

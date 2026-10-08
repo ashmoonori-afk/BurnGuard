@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import {
+  BURNGUARD_BOOTSTRAP_HEADER,
   BURNGUARD_CAPABILITY_HEADER,
   createRequestAuthority,
 } from "../src/security/request-authority";
@@ -9,16 +10,19 @@ import { getSqlite } from "../src/db/sqlite-client";
 
 const capability = "current-launch-capability";
 const previousCapability = "previous-launch-capability";
+const bootstrapSecret = "one-time-bootstrap-secret";
 
-function createTestApp(options?: { dev?: boolean }) {
+function createTestApp(options?: { dev?: boolean; persistentCookieMaxAgeSeconds?: number }) {
   let mutations = 0;
   const app = new Hono();
   app.use(
     "/api/*",
     createRequestAuthority({
       capability,
+      bootstrapSecret,
       appAuthority: "127.0.0.1:14070",
       devAuthority: options?.dev ? "127.0.0.1:5173" : undefined,
+      persistentCookieMaxAgeSeconds: options?.persistentCookieMaxAgeSeconds,
     }),
   );
   app.get("/api/health", (c) => c.json({ ok: true }));
@@ -115,28 +119,29 @@ describe("request authority", () => {
     expect(response.status).toBe(200);
   });
 
-  test("bootstraps only the packaged app or explicit Vite authority", async () => {
-    const { app } = createTestApp({ dev: true });
-    const packaged = await app.request(
+  test("Given the one-time secret When the packaged app or explicit Vite authority bootstraps Then the capability is minted", async () => {
+    const packagedApp = createTestApp().app;
+    const viteApp = createTestApp({ dev: true }).app;
+    const packaged = await packagedApp.request(
       request("/api/bootstrap", {
-        headers: { origin: "http://127.0.0.1:14070" },
+        headers: {
+          origin: "http://127.0.0.1:14070",
+          [BURNGUARD_BOOTSTRAP_HEADER]: bootstrapSecret,
+        },
       }),
     );
-    const vite = await app.request(
+    const vite = await viteApp.request(
       request("/api/bootstrap", {
         host: "127.0.0.1:5173",
-        headers: { origin: "http://127.0.0.1:5173" },
-      }),
-    );
-    const hostile = await app.request(
-      request("/api/bootstrap", {
-        headers: { origin: "http://evil.test" },
+        headers: {
+          origin: "http://127.0.0.1:5173",
+          [BURNGUARD_BOOTSTRAP_HEADER]: bootstrapSecret,
+        },
       }),
     );
 
     expect(packaged.status).toBe(200);
     expect(vite.status).toBe(200);
-    expect(hostile.status).toBe(403);
     expect(packaged.headers.get("set-cookie")).toContain("HttpOnly");
     expect(await packaged.json()).toEqual({
       ok: true,
@@ -144,18 +149,114 @@ describe("request authority", () => {
     });
   });
 
-  test("accepts a browser same-origin bootstrap without an Origin header", async () => {
+  test("Given the one-time secret from a hostile origin When bootstrap is requested Then it is rejected and the secret stays unspent", async () => {
     const { app } = createTestApp();
-    const response = await app.request(
+    const hostile = await app.request(
       request("/api/bootstrap", {
         headers: {
+          origin: "http://evil.test",
+          [BURNGUARD_BOOTSTRAP_HEADER]: bootstrapSecret,
+        },
+      }),
+    );
+    const trusted = await app.request(
+      request("/api/bootstrap", {
+        headers: {
+          origin: "http://127.0.0.1:14070",
+          [BURNGUARD_BOOTSTRAP_HEADER]: bootstrapSecret,
+        },
+      }),
+    );
+
+    expect(hostile.status).toBe(403);
+    expect(trusted.status).toBe(200);
+  });
+
+  test("Given a local client forging the app Origin without the secret When it requests bootstrap Then it gets 403 and no capability", async () => {
+    const { app } = createTestApp();
+    for (const supplied of [undefined, "wrong-secret", capability]) {
+      const headers = new Headers({ origin: "http://127.0.0.1:14070" });
+      if (supplied) headers.set(BURNGUARD_BOOTSTRAP_HEADER, supplied);
+      const response = await app.request(request("/api/bootstrap", { headers }));
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get("set-cookie")).toBeNull();
+      expect(JSON.stringify(await response.json())).not.toContain(capability);
+    }
+  });
+
+  test("Given the secret was already spent When it is replayed Then bootstrap is rejected", async () => {
+    const { app } = createTestApp();
+    const bootstrap = () =>
+      app.request(
+        request("/api/bootstrap", {
+          headers: {
+            origin: "http://127.0.0.1:14070",
+            [BURNGUARD_BOOTSTRAP_HEADER]: bootstrapSecret,
+          },
+        }),
+      );
+
+    expect((await bootstrap()).status).toBe(200);
+    expect((await bootstrap()).status).toBe(403);
+  });
+
+  test("Given no bootstrap secret was configured When a forged Origin requests bootstrap Then it is rejected", async () => {
+    const app = new Hono();
+    app.use(
+      "/api/*",
+      createRequestAuthority({ capability, appAuthority: "127.0.0.1:14070" }),
+    );
+    const response = await app.request(
+      request("/api/bootstrap", {
+        headers: { origin: "http://127.0.0.1:14070" },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  test("Given the launch cookie from the first bootstrap When the page reloads without the secret Then bootstrap succeeds again", async () => {
+    const { app } = createTestApp();
+    const first = await app.request(
+      request("/api/bootstrap", {
+        headers: {
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "same-origin",
+          [BURNGUARD_BOOTSTRAP_HEADER]: bootstrapSecret,
+        },
+      }),
+    );
+    const cookie = (first.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+    const reload = await app.request(
+      request("/api/bootstrap", {
+        headers: {
+          cookie,
           "sec-fetch-mode": "cors",
           "sec-fetch-site": "same-origin",
         },
       }),
     );
+    const staleCookie = await app.request(
+      request("/api/bootstrap", {
+        headers: {
+          cookie: `burnguard_capability=${previousCapability}`,
+          origin: "http://127.0.0.1:14070",
+        },
+      }),
+    );
+    const crossSite = await app.request(
+      request("/api/bootstrap", {
+        headers: { cookie, origin: "http://evil.test" },
+      }),
+    );
 
-    expect(response.status).toBe(200);
+    expect(first.status).toBe(200);
+    expect(cookie).toBe(`burnguard_capability=${capability}`);
+    expect(reload.status).toBe(200);
+    expect(await reload.json()).toEqual({ ok: true, data: { capability } });
+    expect(staleCookie.status).toBe(403);
+    expect(crossSite.status).toBe(403);
   });
 
   test("answers only trusted preflights", async () => {
@@ -256,5 +357,38 @@ describe("request authority", () => {
       db.prepare("DELETE FROM sessions WHERE id='header-session'").run();
       db.prepare("DELETE FROM projects WHERE id='header-project'").run();
     }
+  });
+
+  test("Given browser mode When bootstrap mints the cookie Then it is persistent, HttpOnly, SameSite=Strict and scoped to /api", async () => {
+    const { app } = createTestApp({ persistentCookieMaxAgeSeconds: 3600 });
+
+    const response = await app.request(
+      request("/api/bootstrap", {
+        headers: { origin: "http://127.0.0.1:14070", [BURNGUARD_BOOTSTRAP_HEADER]: bootstrapSecret },
+      }),
+    );
+
+    const attributes = (response.headers.get("set-cookie") ?? "").split(";").map((part) => part.trim());
+    expect(attributes[0]).toBe(`burnguard_capability=${capability}`);
+    expect(attributes).toContain("Max-Age=3600");
+    expect(attributes).toContain("HttpOnly");
+    expect(attributes).toContain("SameSite=Strict");
+    expect(attributes).toContain("Path=/api");
+  });
+
+  test("Given desktop mode When bootstrap mints the cookie Then it stays a session cookie", async () => {
+    const { app } = createTestApp();
+
+    const response = await app.request(
+      request("/api/bootstrap", {
+        headers: { origin: "http://127.0.0.1:14070", [BURNGUARD_BOOTSTRAP_HEADER]: bootstrapSecret },
+      }),
+    );
+
+    const attributes = (response.headers.get("set-cookie") ?? "").split(";").map((part) => part.trim());
+    expect(attributes.some((attribute) => attribute.toLowerCase().startsWith("max-age"))).toBe(false);
+    expect(attributes).toContain("HttpOnly");
+    expect(attributes).toContain("SameSite=Strict");
+    expect(attributes).toContain("Path=/api");
   });
 });
