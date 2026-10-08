@@ -194,7 +194,8 @@ describe("runCodexTurn image-tool lifecycle (real subprocess fixtures)", () => {
     parentWatch(fixture).emit("change", "rename", "generated_images");
     await fixture.command("complete");
     expect(await run).toEqual({ exitCode: 0 });
-    expect(fixture.watches.every((entry) => entry.path === fixture.home)).toBe(true);
+    // Name the offending paths on failure: a watch anywhere but the Codex home means the junction was followed.
+    expect(fixture.watches.map((entry) => entry.path).filter((watched) => watched !== fixture.home)).toEqual([]);
     expect(fixture.events.some((event) => event.type === "tool.started")).toBe(false);
   });
 
