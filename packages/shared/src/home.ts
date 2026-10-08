@@ -60,6 +60,8 @@ export interface BackendDetection {
   id: BackendId;
   found: boolean;
   version?: string;
+  /** The binary is on PATH but `--version` failed, timed out or printed no version: installed, not known to run. */
+  probe_failed?: boolean;
   binary_path?: string;
   install_hint?: string;
 }

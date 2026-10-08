@@ -8,6 +8,7 @@ export const errorsMessages = defineMessages({
   "errors.healthy": { ko: "정상", en: "ready", "zh-CN": "正常" },
   "errors.notFound": { ko: "찾을 수 없음", en: "Not found", "zh-CN": "未找到" },
   "errors.installGuide": { ko: "설치 안내", en: "Installation guide", "zh-CN": "安装指南" },
+  "errors.probeFailed": { ko: "설치는 확인했지만 실행에 실패했어요. 터미널에서 {command}를 실행해 보세요.", en: "Installed, but it failed to run. Try running {command} in a terminal.", "zh-CN": "已确认安装，但运行失败。请在终端中运行 {command}。" },
   "errors.confirm": { ko: "확인", en: "OK", "zh-CN": "确定" },
   "errors.fallback": { ko: "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.", en: "Could not process the request. Please try again shortly.", "zh-CN": "无法处理请求。请稍后重试。" },
   "errors.session_not_found": { ko: "작업 세션을 찾을 수 없어요. 프로젝트를 다시 열어 주세요.", en: "Work session not found. Reopen the project.", "zh-CN": "未找到工作会话。请重新打开项目。" },

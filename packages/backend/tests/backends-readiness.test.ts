@@ -41,6 +41,8 @@ if (process.argv[2] === "--version") {
   if (readFileSync(root + "/mode", "utf8") === "version-timeout") {
     writeFileSync(root + "/version-pid", String(process.pid));
     setInterval(() => {}, 60_000);
+  } else if (readFileSync(root + "/mode", "utf8") === "version-fail") {
+    process.exit(3);
   } else if (readFileSync(root + "/mode", "utf8") === "version-output-limit") {
     console.log("x".repeat(9_000) + " 9.9.9");
     process.exit(0);
@@ -245,3 +247,19 @@ test("readiness and graphic creation expose uncached 503 on probe failure, retai
   expect((await logoRefused.json()).error.code).toBe("logo_requires_authenticated_codex");
   expect(getSqlite().query("SELECT COUNT(*) AS count FROM projects").get()).toEqual(projectsBefore);
 }, 20_000);
+
+test("Given a found CLI whose version probe exits non-zero When detecting Then it is flagged probe_failed with no version and no free-text hint", async () => {
+  await mode("version-fail");
+  const backend = codex(await detectBackends({ force: true, requireCodexAuthentication: false, skipCodexAuthentication: true }));
+  expect(backend.found).toBe(true);
+  expect(backend.probe_failed).toBe(true);
+  expect(backend.version).toBeUndefined();
+  expect(backend.install_hint).toBeUndefined();
+});
+
+test("Given a found CLI that prints a version When detecting Then probe_failed is absent", async () => {
+  await mode("login");
+  const backend = codex(await detectBackends({ force: true }));
+  expect(backend.version).toBe("1.2.3");
+  expect(backend.probe_failed).toBeUndefined();
+});

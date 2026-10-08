@@ -1,6 +1,6 @@
 import { Check, XCircle, ExternalLink } from "lucide-react";
 import type { BackendDetectionResult, BackendId } from "@bg/shared";
-import { backendLabel } from "@/lib/backend-display";
+import { BACKEND_INSTALL_URLS, BACKEND_PROBE_COMMANDS, backendLabel, backendProbeState } from "@/lib/backend-display";
 import { cn } from "@/lib/utils";
 import { useT } from "@/i18n/t";
 
@@ -22,9 +22,11 @@ export default function BackendSelector({
       <div role="group" aria-labelledby="backend-selector-label" className="space-y-2">
         {detection.backends.map((b) => {
           const active = value === b.id;
+          const state = backendProbeState(b);
           return (
             <button
               key={b.id}
+              data-probe-state={state}
               type="button"
               aria-pressed={active}
               onClick={() => b.found && onChange(b.id)}
@@ -38,7 +40,7 @@ export default function BackendSelector({
               )}
             >
               <div className="flex items-center gap-2">
-                {b.found ? (
+                {state === "ready" ? (
                   <Check className="h-4 w-4 text-accent shrink-0" />
                 ) : (
                   <XCircle className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -46,23 +48,29 @@ export default function BackendSelector({
                 <span className="text-sm font-medium capitalize">
                   {backendLabel(b.id)}
                 </span>
-                {b.found && b.version && (
+                {state === "ready" && b.version && (
                   <span className="text-xs text-muted-foreground font-mono ml-auto">
                     {b.version}
                   </span>
                 )}
               </div>
-              {b.found ? (
+              {state === "probe_failed" ? (
+                <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                  <div>{t("settings.backendProbeFailed", { command: BACKEND_PROBE_COMMANDS[b.id] })}</div>
+                  <a href={BACKEND_INSTALL_URLS[b.id]} target="_blank" rel="noreferrer" className="text-accent inline-flex items-center gap-1">
+                    <ExternalLink className="h-3 w-3" />
+                    {t("settings.installBackend", { name: backendLabel(b.id) })}
+                  </a>
+                </div>
+              ) : state === "ready" ? (
                 <div className="text-xs text-muted-foreground mt-2">
                   {t(b.id === "codex" ? b.authenticated === true ? "settings.codexAuthenticated" : "settings.codexInstalled" : b.id === "claude-code" ? "settings.claudeInstalled" : "settings.backendInstalled")}
                 </div>
               ) : (
-                b.install_hint && (
-                  <div className="text-xs text-muted-foreground mt-2 inline-flex items-center gap-1">
-                    <ExternalLink className="h-3 w-3" />
-                    {t("settings.installBackend", { name: backendLabel(b.id) })}{" "}{b.install_hint.match(/https?:\/\/\S+/)?.[0]}
-                  </div>
-                )
+                <a href={BACKEND_INSTALL_URLS[b.id]} target="_blank" rel="noreferrer" className="text-xs text-muted-foreground mt-2 inline-flex items-center gap-1">
+                  <ExternalLink className="h-3 w-3" />
+                  {t("settings.installBackend", { name: backendLabel(b.id) })}
+                </a>
               )}
             </button>
           );

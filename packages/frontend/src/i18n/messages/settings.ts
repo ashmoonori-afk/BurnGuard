@@ -63,6 +63,7 @@ export const settingsMessages = defineMessages({
   "settings.codexAuthenticated": { ko: "Codex 로그인을 확인했어요.", en: "Codex sign-in confirmed.", "zh-CN": "已确认 Codex 登录状态。" },
   "settings.codexInstalled": { ko: "설치는 확인했어요. 그래픽 생성에는 Codex 로그인이 필요해요.", en: "Installation confirmed. Graphic generation requires Codex sign-in.", "zh-CN": "已确认安装。生成图形需要登录 Codex。" },
   "settings.claudeInstalled": { ko: "설치를 확인했어요. 로그인 또는 CommandCode API 키로 생성할 수 있어요.", en: "Installation confirmed. Generate using sign-in or a CommandCode API key.", "zh-CN": "已确认安装。登录或使用 CommandCode API 密钥即可生成。" },
+  "settings.backendProbeFailed": { ko: "설치는 확인했지만 실행에 실패했어요. 터미널에서 {command}를 실행해 보세요.", en: "Installed, but it failed to run. Try running {command} in a terminal.", "zh-CN": "已确认安装，但运行失败。请在终端中运行 {command}。" },
   "settings.installBackend": { ko: "{name} 설치 안내", en: "Install {name}", "zh-CN": "{name} 安装指南" },
   "settings.commandcodeKey": { ko: "CommandCode API 키", en: "CommandCode API key", "zh-CN": "CommandCode API 密钥" },
   "settings.commandcodeHint": { ko: "Claude Code 설치가 필요해요. CommandCode의 Claude 모델로 생성하며 API 사용량이 발생해요.", en: "Requires Claude Code. Generation uses CommandCode's Claude models and incurs API usage.", "zh-CN": "需要安装 Claude Code。通过 CommandCode 的 Claude 模型生成，会产生 API 用量。" },

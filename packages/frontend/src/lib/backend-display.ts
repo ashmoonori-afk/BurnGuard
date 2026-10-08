@@ -12,6 +12,28 @@ export const BACKEND_LABELS: Readonly<Record<BackendId, string>> = {
   copilot: "GitHub Copilot",
 };
 
+/** Install page per backend, so the UI never parses it out of the backend's free-text `install_hint`. */
+export const BACKEND_INSTALL_URLS: Readonly<Record<BackendId, string>> = {
+  "claude-code": "https://claude.com/code",
+  codex: "https://github.com/openai/codex",
+  gemini: "https://github.com/google-gemini/gemini-cli",
+  copilot: "https://github.com/github/copilot-cli",
+};
+
+/** Executable a person can run in a terminal to see why a found CLI fails its version probe. */
+export const BACKEND_PROBE_COMMANDS: Readonly<Record<BackendId, string>> = {
+  "claude-code": "claude --version",
+  codex: "codex --version",
+  gemini: "gemini --version",
+  copilot: "copilot --version",
+};
+
+/** `ready` is a verified version, `probe_failed` is on PATH but did not run, `missing` is not installed. */
+export function backendProbeState(backend: Pick<BackendDetection, "found" | "probe_failed">): "ready" | "probe_failed" | "missing" {
+  if (!backend.found) return "missing";
+  return backend.probe_failed === true ? "probe_failed" : "ready";
+}
+
 export function backendLabel(id: BackendId): string {
   return BACKEND_LABELS[id];
 }

@@ -88,7 +88,7 @@ export async function readCodexModelCatalog(): Promise<CodexModelCatalog> {
  * reading them in sequence deadlocks whenever a CLI fills the stderr pipe
  * buffer while we are still blocked on stdout. A CLI that never answers is
  * abandoned after `VERSION_PROBE_TIMEOUT_MS`; the binary is on PATH either
- * way, so the caller keeps `found: true` and just loses the version string.
+ * way, so the caller keeps `found: true` and flags `probe_failed`.
  */
 async function probeVersion(binaryPath: string): Promise<string | undefined> {
   const controller = new AbortController();
@@ -129,21 +129,16 @@ async function detectOne(id: BackendId, binaryNames: string[], installHint: stri
     const binaryPath = Bun.which(name);
     if (!binaryPath) continue;
 
+    let version: string | undefined;
     try {
-      return {
-        id,
-        found: true,
-        version: await probeVersion(binaryPath),
-        binary_path: binaryPath,
-      } as const;
+      version = await probeVersion(binaryPath);
     } catch {
-      return {
-        id,
-        found: true,
-        binary_path: binaryPath,
-        install_hint: `${id} found but version probe failed`,
-      } as const;
+      version = undefined;
     }
+    // `probeVersion` answers undefined for a non-zero exit, a timeout or unparseable output.
+    return version === undefined
+      ? { id, found: true, probe_failed: true, binary_path: binaryPath } as const
+      : { id, found: true, version, binary_path: binaryPath } as const;
   }
 
   return {
@@ -222,7 +217,7 @@ async function readBoundedProbeText(stream: ReadableStream<Uint8Array>): Promise
  * backend takes its static catalogue entry.
  */
 function withCatalogue(
-  backend: { readonly id: BackendId; readonly found: boolean; readonly version?: string; readonly binary_path?: string; readonly install_hint?: string },
+  backend: { readonly id: BackendId; readonly found: boolean; readonly version?: string; readonly probe_failed?: boolean; readonly binary_path?: string; readonly install_hint?: string },
   authenticated: boolean | undefined,
   codexModels: readonly GenerationModel[],
 ) {

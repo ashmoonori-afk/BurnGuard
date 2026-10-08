@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { backendLabel } from "@/lib/backend-display";
+import { BACKEND_INSTALL_URLS, BACKEND_PROBE_COMMANDS, backendLabel, backendProbeState } from "@/lib/backend-display";
 import { useT } from "@/i18n/t";
 
 /** One row per detected CLI, named by its product display name rather than its id. */
@@ -18,18 +18,19 @@ export function DetectionList({ detection }: { detection: BackendDetectionResult
   return (
     <ul className="space-y-2 py-2">
       {detection.backends.map((b) => {
-        const url = b.install_hint?.match(/https?:\/\/\S+/)?.[0];
+        const state = backendProbeState(b);
+        const url = BACKEND_INSTALL_URLS[b.id];
         return (
-          <li key={b.id} className="rounded-md border border-border p-3">
+          <li key={b.id} data-probe-state={state} className="rounded-md border border-border p-3">
             <div className="flex items-center gap-2 text-sm">
               <span className="font-medium">
                 {backendLabel(b.id)}
               </span>
               <span className="text-xs text-muted-foreground">
-                {b.found ? t("errors.installed", { version: b.version ?? t("errors.healthy") }) : t("errors.notFound")}
+                {state === "missing" ? t("errors.notFound") : state === "probe_failed" ? t("errors.probeFailed", { command: BACKEND_PROBE_COMMANDS[b.id] }) : t("errors.installed", { version: b.version ?? t("errors.healthy") })}
               </span>
             </div>
-            {!b.found && url && (
+            {state !== "ready" && (
               <a
                 href={url}
                 target="_blank"
