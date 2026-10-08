@@ -41,6 +41,8 @@ function webAssetToolArgs(tool: RunnerOptions["webAssetTool"]): string[] {
 
 export function buildClaudeCommand(options: Pick<RunnerOptions, "binaryPath" | "generation" | "webAssetTool">): string[] {
   return [options.binaryPath, "-p", "--output-format", "stream-json", "--verbose",
+    // Without partial messages a single large tool input (a first full scaffold write) is silent until it completes.
+    "--include-partial-messages",
     "--permission-mode", "acceptEdits",
     ...webAssetToolArgs(options.webAssetTool),
     "--effort", options.generation?.effort ?? "low",

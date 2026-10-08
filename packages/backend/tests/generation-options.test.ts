@@ -201,3 +201,7 @@ test("Given a model without medium or no model metadata When the default is buil
   const unknown: BackendDetection = { id: "gemini", found: true };
   expect(resolveGenerationOptions("gemini", defaultGenerationOptions("gemini"), defaultConfig, unknown).effort).toBe("low");
 });
+
+test("Given the Claude command When built Then partial messages are requested so a long single tool input keeps streaming", () => {
+  expect(buildClaudeCommand({ binaryPath: "claude", generation: undefined })).toContain("--include-partial-messages");
+});

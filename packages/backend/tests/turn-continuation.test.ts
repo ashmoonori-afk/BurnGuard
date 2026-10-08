@@ -266,3 +266,94 @@ test("Given a Codex save error, then it is visible without leaking diagnostics o
     expect(JSON.stringify(events)).not.toContain("private");
   }
 });
+
+test("Given a progress-only signal arriving inside every idle window, then a silent large tool input stays alive past idleMs", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-partial-progress-"));
+  const { schedule, advance } = manualTimers();
+  const events: NormalizedEvent[] = [];
+  let calls = 0;
+  try {
+    const result = await runWithContinuation({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "task", userEvent: { type: "user.message", text: "task" }, onEvent: async e => { events.push(e); } }, async attempt => {
+      calls++;
+      for (let beat = 0; beat < 5; beat++) {
+        attempt.onProgress!();
+        advance(STALL_LIMITS.idleMs - 1);
+      }
+      expect(attempt.signal!.aborted).toBe(false);
+      await attempt.onEvent({ id: "end", ts: 1, type: "status.idle", stopReason: "end_turn" });
+      return { exitCode: 0 };
+    }, async () => true, STALL_LIMITS, schedule);
+    expect(result.exitCode).toBe(0);
+    expect(calls).toBe(1);
+    expect(events.map(e => e.type)).toEqual(["status.idle"]);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Given a progress-only signal that never stops, then attemptMs still ends the attempt", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-partial-deadline-"));
+  const { schedule, advance } = manualTimers();
+  const limits = { idleMs: 1_000, toolMs: 5_000, attemptMs: 2_500, attempts: 3 };
+  const events: NormalizedEvent[] = [];
+  let calls = 0;
+  let beats = 0;
+  try {
+    await runWithContinuation({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "task", userEvent: { type: "user.message", text: "task" }, onEvent: async e => { events.push(e); } }, async attempt => {
+      calls++;
+      if (calls > 1) { await attempt.onEvent({ id: "end", ts: 1, type: "status.idle", stopReason: "end_turn" }); return { exitCode: 0 }; }
+      while (!attempt.signal!.aborted && beats < 10) { attempt.onProgress!(); beats++; advance(limits.idleMs - 1); }
+      return { exitCode: 1 };
+    }, async () => calls === 2, limits, schedule);
+    expect(beats).toBe(3);
+    expect(events).toContainEqual(expect.objectContaining({ type: "tool.started", tool: "generation_resume_stalled", input: { attempt: 2, maximum: limits.attempts, reason: "attempt_deadline" } }));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Given a model mid-generation with no pending tool, then the tool budget applies instead of idleMs, until the item completes", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-generating-"));
+  const { schedule, advance } = manualTimers();
+  const events: NormalizedEvent[] = [];
+  let calls = 0;
+  try {
+    await runWithContinuation({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "task", userEvent: { type: "user.message", text: "task" }, onEvent: async e => { events.push(e); } }, async attempt => {
+      calls++;
+      if (calls > 1) { await attempt.onEvent({ id: "end", ts: 1, type: "status.idle", stopReason: "end_turn" }); return { exitCode: 0 }; }
+      attempt.onProgress!(true);
+      advance(STALL_LIMITS.idleMs * 3);
+      expect(attempt.signal!.aborted).toBe(false);
+      attempt.onProgress!(false);
+      advance(STALL_LIMITS.idleMs);
+      expect(attempt.signal!.aborted).toBe(true);
+      return { exitCode: 1 };
+    }, async () => calls === 2, STALL_LIMITS, schedule);
+    expect(events).toContainEqual(expect.objectContaining({ type: "tool.started", tool: "generation_resume_stalled", input: { attempt: 2, maximum: STALL_LIMITS.attempts, reason: "inactivity" } }));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Given a generation item still open past toolMs, then the attempt stops for inactivity", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "bg-generating-stall-"));
+  const { schedule, advance } = manualTimers();
+  let calls = 0;
+  try {
+    await runWithContinuation({ sessionId: "s", turnId: "t", projectDir: dir, binaryPath: "fixture", prompt: "task", userEvent: { type: "user.message", text: "task" }, onEvent: async () => {} }, async attempt => {
+      calls++;
+      if (calls > 1) return { exitCode: 0 };
+      attempt.onProgress!(true);
+      advance(STALL_LIMITS.toolMs);
+      expect(attempt.signal!.aborted).toBe(true);
+      return { exitCode: 1 };
+    }, async () => calls === 2, STALL_LIMITS, schedule);
+    expect(calls).toBe(2);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Given Codex item lines on the real stream, then a started reasoning or message item reports generation until it completes and tool items do not", () => {
+  const states: boolean[] = [];
+  const ctx: CodexParserContext = { turnId: "t", projectDir: process.cwd(), toolNames: new Map(), onProgress: (generating) => { states.push(generating); } };
+  const line = (type: string, item: Record<string, unknown>) => parseCodexLine(JSON.stringify({ type, item }), ctx);
+  line("item.started", { id: "r1", type: "reasoning", text: "" });
+  line("item.started", { id: "c1", type: "command_execution", command: "ls" });
+  line("item.completed", { id: "c1", type: "command_execution", status: "completed" });
+  expect(states).toEqual([true]);
+  line("item.completed", { id: "r1", type: "reasoning", text: "done thinking" });
+  expect(states).toEqual([true, false]);
+});

@@ -59,6 +59,7 @@ export async function runCodexTurn(
     turnId: input.turnId,
     projectDir: input.projectDir,
     toolNames: new Map(),
+    onProgress: (generating) => input.onProgress?.(generating),
     codexHome: process.env.CODEX_HOME ?? path.join(homedir(), ".codex"),
   };
 
