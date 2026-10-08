@@ -9,6 +9,7 @@ import { parsePersistedArtifactOperation, PersistedArtifactOperationError, type 
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
 import { migrateDocumentOnlyRevision } from "./artifact-document-migration";
 import { setArtifactRecoveryHold } from "./artifact-recovery-hold";
+import { isProjectStorageError } from "./project-storage-error";
 
 type ProjectRow = { readonly id: string; readonly dir_path: string; readonly current_digest: string | null };
 type RecoveryRow = PersistedArtifactOperationRow & { readonly dir_path: string };
@@ -61,15 +62,8 @@ function recoveryFailureCode(error: unknown): string {
   if (error instanceof ArtifactOperationError) return error.code;
   if (error instanceof CanonicalTreeManifestError) return error.code;
   if (error instanceof PersistedArtifactOperationError) return "corrupt_receipt";
-  // Antivirus, cloud sync or a racing rename can fail one project's storage; that must not lock out the profile.
-  if (isTransientStorageError(error)) return "project_storage_unavailable";
+  if (isProjectStorageError(error)) return "project_storage_unavailable";
   throw error;
-}
-
-const PROJECT_STORAGE_ERRNO = new Set(["EPERM", "EBUSY", "EACCES", "ENOENT", "ENOTDIR", "EISDIR", "EIO", "EAGAIN", "EMFILE", "ENFILE", "ETXTBSY", "ENOTEMPTY", "EEXIST", "ELOOP", "EROFS", "ENOSPC"]);
-
-function isTransientStorageError(error: unknown): boolean {
-  return error instanceof Error && "code" in error && typeof error.code === "string" && PROJECT_STORAGE_ERRNO.has(error.code);
 }
 
 async function reconcileProjectIdentity(db: Database, coordinator: ArtifactCoordinator, project: ProjectRow): Promise<void> {
