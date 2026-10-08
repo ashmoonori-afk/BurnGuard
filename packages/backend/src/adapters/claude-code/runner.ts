@@ -64,17 +64,19 @@ async function readHelpText(stream: ReadableStream<Uint8Array>): Promise<string>
   }
 }
 
-async function probeHelp(binaryPath: string): Promise<string | undefined> {
+async function probeHelp(binaryPath: string, turnSignal?: AbortSignal): Promise<string | undefined> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HELP_PROBE_TIMEOUT_MS);
+  // A cancelled turn stops the probe at once instead of waiting for its own timeout.
+  const signal = turnSignal ? AbortSignal.any([controller.signal, turnSignal]) : controller.signal;
   try {
     const owned = spawnOwnedProcess({ cmd: [binaryPath, "--help"], stdin: "ignore", stdout: "pipe", stderr: "pipe" });
     let stdout = "";
     const code = await settleProcessStreams(owned, [
       readHelpText(owned.proc.stdout).then((text) => { stdout = text; }),
       readHelpText(owned.proc.stderr).then(() => {}),
-    ], controller.signal);
-    return !controller.signal.aborted && code === 0 ? stdout : undefined;
+    ], signal);
+    return !signal.aborted && code === 0 ? stdout : undefined;
   } catch {
     return undefined;
   } finally {
@@ -84,12 +86,12 @@ async function probeHelp(binaryPath: string): Promise<string | undefined> {
 
 /**
  * Whether this binary knows `--include-partial-messages`; an older CLI rejects unknown flags and would fail every turn.
- * Cached per binary path. A probe that fails or times out is not cached and the flag is left off for that turn.
+ * Cached per binary path. A probe that fails, times out or is cancelled by `signal` is not cached and the flag is left off for that turn.
  */
-export async function supportsPartialMessages(binaryPath: string, probe: (binaryPath: string) => Promise<string | undefined> = probeHelp): Promise<boolean> {
+export async function supportsPartialMessages(binaryPath: string, probe: (binaryPath: string, signal?: AbortSignal) => Promise<string | undefined> = probeHelp, signal?: AbortSignal): Promise<boolean> {
   const cached = partialMessagesSupport.get(binaryPath);
   if (cached !== undefined) return cached;
-  const help = await probe(binaryPath);
+  const help = await probe(binaryPath, signal);
   if (help === undefined) return false;
   const supported = help.includes(PARTIAL_MESSAGES_FLAG);
   partialMessagesSupport.set(binaryPath, supported);
@@ -135,7 +137,7 @@ export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResul
   // process inside sees `process.cwd()` equal to projectDir. This path was
   // previously verified with real Claude output; wrapping in `cmd.exe /c`
   // broke stdin piping on Windows and caused the CLI to hang.
-  const cmd = buildClaudeCommand({ ...options, partialMessages: await supportsPartialMessages(options.binaryPath) });
+  const cmd = buildClaudeCommand({ ...options, partialMessages: await supportsPartialMessages(options.binaryPath, undefined, options.signal) });
 
   // eslint-disable-next-line no-console
   console.log(

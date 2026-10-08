@@ -54,7 +54,7 @@ test("Given an adapter exits with a surviving child When its result resolves The
   const root = await mkdtemp(path.join(tmpdir(), "burnguard-adapter-tree-"));
   const binary = path.join(root, "adapter-fixture");
   const childScript = "await new Promise(() => {})";
-  await writeFile(binary, `#!/usr/bin/env bun\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\n`);
+  await writeFile(binary, `#!/usr/bin/env bun\nif(process.argv[2]==="--help"){console.log("  --include-partial-messages");process.exit(0);}\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\n`);
   await chmod(binary, 0o700);
   let childPid = 0;
   try {
@@ -74,7 +74,7 @@ test("Given an adapter run that is aborted mid-stream When the run settles Then 
   const childScript = "await new Promise(() => {})";
   // The fixture root never exits on its own — only the abort teardown can
   // end this run, which is exactly the path the interrupt handler owns.
-  await writeFile(binary, `#!/usr/bin/env bun\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\nawait new Promise(() => {});\n`);
+  await writeFile(binary, `#!/usr/bin/env bun\nif(process.argv[2]==="--help"){console.log("  --include-partial-messages");process.exit(0);}\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\nawait new Promise(() => {});\n`);
   await chmod(binary, 0o700);
   const controller = new AbortController();
   let childPid = 0;
@@ -82,6 +82,23 @@ test("Given an adapter run that is aborted mid-stream When the run settles Then 
     await runClaudeCode({ binaryPath: binary, projectDir: root, prompt: "test", signal: controller.signal, onStdoutLine: (line) => { childPid = Number(line); controller.abort(); } });
     expect(Number.isSafeInteger(childPid) && childPid > 0).toBe(true);
     expect(() => process.kill(childPid, 0)).toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Given a turn cancelled while the capability probe hangs When the run starts Then it settles without waiting for the probe timeout", async () => {
+  if (process.platform === "win32") return;
+  const root = await mkdtemp(path.join(tmpdir(), "burnguard-probe-abort-"));
+  const binary = path.join(root, "hung-help-fixture");
+  // Every invocation, including --help, never exits on its own.
+  await writeFile(binary, `#!/usr/bin/env bun\nawait new Promise(() => {});\n`);
+  await chmod(binary, 0o700);
+  const controller = new AbortController();
+  controller.abort();
+  try {
+    const result = await runClaudeCode({ binaryPath: binary, projectDir: root, prompt: "test", signal: controller.signal, onStdoutLine: () => {} });
+    expect(typeof result.exitCode).toBe("number");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

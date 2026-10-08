@@ -236,3 +236,15 @@ test("Given a failed probe When support is checked Then the flag stays off and t
   expect(await supportsPartialMessages("/fixture/claude-flaky", async () => undefined)).toBe(false);
   expect(await supportsPartialMessages("/fixture/claude-flaky", async () => "--include-partial-messages")).toBe(true);
 });
+
+test("Given a turn aborted during the probe When support is checked Then the probe sees the signal and the result is not cached", async () => {
+  resetPartialMessagesSupportCache();
+  const controller = new AbortController();
+  const hung = (_binaryPath: string, signal?: AbortSignal) => new Promise<string | undefined>((resolve) => {
+    signal?.addEventListener("abort", () => resolve(undefined), { once: true });
+  });
+  const pending = supportsPartialMessages("/fixture/claude-cancel", hung, controller.signal);
+  controller.abort();
+  expect(await pending).toBe(false);
+  expect(await supportsPartialMessages("/fixture/claude-cancel", async () => "--include-partial-messages")).toBe(true);
+});
