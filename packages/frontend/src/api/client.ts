@@ -1,7 +1,19 @@
 import type { ApiErrorBody, ApiSuccess } from "@bg/shared";
 
 const BURNGUARD_CAPABILITY_HEADER = "x-burnguard-capability";
+const BURNGUARD_BOOTSTRAP_HEADER = "x-burnguard-bootstrap";
+/** The launcher opens the app at `#bg-bootstrap:<secret>`; the backend accepts that secret for one bootstrap. */
+const BOOTSTRAP_FRAGMENT_PREFIX = "#bg-bootstrap:";
 let launchCapability: string | null = null;
+let pendingBootstrapSecret: string | null = null;
+
+/** Moves the launch secret out of the address bar; it is kept in memory until a bootstrap succeeds. */
+function takeLaunchBootstrapSecret(): void {
+  if (typeof location === "undefined" || !location.hash.startsWith(BOOTSTRAP_FRAGMENT_PREFIX)) return;
+  const secret = location.hash.slice(BOOTSTRAP_FRAGMENT_PREFIX.length);
+  if (/^[A-Za-z0-9_-]+$/.test(secret)) pendingBootstrapSecret = secret;
+  if (typeof history !== "undefined") history.replaceState(history.state, "", location.pathname + location.search);
+}
 
 export class ApiError extends Error {
   readonly code: string;
@@ -24,10 +36,14 @@ export class ApiError extends Error {
 
 export async function bootstrapApiAuthority(signal?: AbortSignal): Promise<void> {
   launchCapability = null;
+  takeLaunchBootstrapSecret();
+  const headers = new Headers({ accept: "application/json" });
+  // Reloads and new tabs carry no secret; the backend accepts the launch cookie for them.
+  if (pendingBootstrapSecret !== null) headers.set(BURNGUARD_BOOTSTRAP_HEADER, pendingBootstrapSecret);
   const res = await fetch("/api/bootstrap", {
     credentials: "same-origin",
     signal,
-    headers: { accept: "application/json" },
+    headers,
   });
   const body = (await res.json().catch(() => null)) as
     | ApiSuccess<{ capability: string }>
@@ -44,6 +60,7 @@ export async function bootstrapApiAuthority(signal?: AbortSignal): Promise<void>
     throw new Error("BurnGuard API authority bootstrap failed.");
   }
   launchCapability = body.data.capability;
+  pendingBootstrapSecret = null;
 }
 
 /**

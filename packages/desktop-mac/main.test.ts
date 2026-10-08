@@ -131,6 +131,20 @@ describe("macOS shell keeps the Windows shell's desktop contract", () => {
     }
   });
 
+  test("Given a readiness line When either shell consumes it Then a base64url bootstrap secret is required before trust and the app loads with it as the one-time fragment", () => {
+    expect(windowsSource).toContain('!IsBootstrapSecret(bootstrap)');
+    expect(windowsSource).toContain('bootstrapSecret = bootstrap;');
+    expect(windowsSource).toMatch(/web\.CoreWebView2\.Navigate\(origin\.AbsoluteUri \+ .*\+ "#bg-bootstrap:" \+ bootstrapSecret\);/);
+    const consume = body("private func consumeServiceOutput(");
+    const trusted = consume.indexOf("origin = url");
+    for (const check of ['let bootstrap = message["bootstrap"] as? String', "isBootstrapSecret(bootstrap)", '"#bg-bootstrap:" + bootstrap']) {
+      expect(consume.indexOf(check)).toBeGreaterThan(-1);
+      expect(consume.indexOf(check)).toBeLessThan(trusted);
+    }
+    expect(consume).toContain("webView.load(URLRequest(url: launch))");
+    expect(body("private func isBootstrapSecret(")).toContain("value.utf8.count >= 16");
+  });
+
   test("Given an inherited environment When the macOS shell builds the backend environment Then BG_DEV is forced to 0 and the desktop overrides match the Windows shell", () => {
     const windows = assignments(windowsSource, "start\\.EnvironmentVariables");
     const mac = assignments(body("private func startService()"), "environment");

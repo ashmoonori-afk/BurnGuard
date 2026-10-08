@@ -34,8 +34,17 @@ const port =
   (process.env.BG_SCAN_PORT === "1" ? await pickPort() : 14070);
 const host = "127.0.0.1";
 const isDev = process.env.BG_DEV === "1";
+// A launcher that opens the page itself (dev launcher, packaged smoke) may choose the one-time bootstrap secret;
+// it is removed from the environment so provider CLIs spawned later never inherit it.
+const launcherBootstrapSecret = process.env.BG_BOOTSTRAP_SECRET;
+delete process.env.BG_BOOTSTRAP_SECRET;
+if (launcherBootstrapSecret !== undefined && !/^[A-Za-z0-9_-]{16,}$/.test(launcherBootstrapSecret)) {
+  throw new Error("BG_BOOTSTRAP_SECRET must be at least 16 base64url characters.");
+}
+const bootstrapSecret = launcherBootstrapSecret ?? generateLaunchCapability();
 const app = createApp({
   capability: generateLaunchCapability(),
+  bootstrapSecret,
   appAuthority: `${host}:${port}`,
   devAuthority: isDev ? "127.0.0.1:5173" : undefined,
 });
@@ -53,17 +62,23 @@ const server = Bun.serve({
 });
 
 const url = `http://${host}:${server.port}`;
+const launchFragment = `#bg-bootstrap:${bootstrapSecret}`;
 
 // In dev (package.json sets BG_DEV=1), the React SPA is served by Vite on a
 // separate port (5173-ish) and this backend only serves /api/*. Auto-opening
 // 14070 would show the Phase 0 hello page instead of the app — skip it.
-if (config.autoOpenBrowser && !isDev && !isDesktop) {
-  openBrowser(url);
+const handsOffLaunchUrl = config.autoOpenBrowser && !isDev && !isDesktop && process.env.BG_NO_OPEN !== "1";
+if (handsOffLaunchUrl) {
+  openBrowser(`${url}/${launchFragment}`);
 }
+// Nobody else opens the page: show the one-time launch URL to an interactive terminal only, never to a captured log.
+const showLaunchUrl = !handsOffLaunchUrl && !isDesktop && launcherBootstrapSecret === undefined && process.stdout.isTTY === true;
 if (isDev) {
   console.log(
-    "[burnguard] dev mode — open the Vite frontend at http://127.0.0.1:5173/",
+    `[burnguard] dev mode — open the Vite frontend at http://127.0.0.1:5173/${showLaunchUrl ? launchFragment : ""}`,
   );
+} else if (showLaunchUrl) {
+  console.log(`[burnguard] open ${url}/${launchFragment}`);
 }
 
 // Keep the process alive and close renderer-owned Chromium before shutdown.
@@ -85,5 +100,5 @@ process.on("SIGHUP", () => { void shutdown(); });
 console.log(`[burnguard] listening on ${url}`);
 if (isDesktop) {
   watchDesktopParent(process.stdin, () => { void shutdown(); });
-  console.log(`[burnguard-desktop] ${JSON.stringify({ protocol: 1, url, pid: process.pid })}`);
+  console.log(`[burnguard-desktop] ${JSON.stringify({ protocol: 1, url, pid: process.pid, bootstrap: bootstrapSecret })}`);
 }

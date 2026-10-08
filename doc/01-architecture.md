@@ -229,7 +229,11 @@ Current enforcement (updated 2026-09-09 after the security assessment):
 
 - server binds to `127.0.0.1`
 - each backend launch generates a new 256-bit API capability; the frontend
-  obtains it from the same-origin `/api/bootstrap` route and keeps it in memory
+  obtains it from the same-origin `/api/bootstrap` route and keeps it in memory;
+  that route also requires a one-time launch secret (handed to the page as the
+  URL fragment `#bg-bootstrap:<secret>` by the desktop shell readiness line,
+  `openBrowser`, the dev launcher, or `BG_BOOTSTRAP_SECRET`) or the existing
+  launch cookie, so a local process that forges `Origin` cannot mint it
 - API middleware rejects unknown `Host` authorities, requires an exact
   same-origin `Origin` plus the capability header for mutations, and uses an
   HttpOnly, `SameSite=Strict` launch cookie for GET and SSE requests; only
@@ -283,12 +287,13 @@ Current enforcement (updated 2026-09-09 after the security assessment):
 
 Accepted risks and trust assumptions:
 
-- **Local processes are trusted.** The launch capability, Host/Origin and
-  Fetch Metadata checks defend the browser boundary (CSRF, DNS rebinding,
-  hostile pages). They do not authenticate other processes or OS users on the
-  same host: anything that can open the loopback port and set those headers can
-  call `/api/bootstrap` and receive the capability. Do not run BurnGuard on a
-  shared host or a remote-development machine that untrusted users can reach.
+- **Same-user local processes are trusted.** The launch capability, Host/Origin
+  and Fetch Metadata checks defend the browser boundary (CSRF, DNS rebinding,
+  hostile pages), and the one-time launch secret keeps other OS users and
+  processes that only reach the loopback port from minting the capability. A
+  process running as the same user can still read the profile or the browser
+  state directly. Do not run BurnGuard on a shared host or a remote-development
+  machine that untrusted users can reach.
 - **The update trust root is the GitHub account, not a code-signing key.**
   Packages are not Authenticode-signed, so anyone who can publish a release in
   the repository can ship code to every installed copy. Keep the release

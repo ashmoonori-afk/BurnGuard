@@ -264,4 +264,38 @@ describe("API authority client", () => {
       }
     }
   });
+
+  test("Given a launch URL carrying the one-time bootstrap secret When the app bootstraps and later re-bootstraps Then the secret is sent once and removed from the address bar", async () => {
+    const replaced: string[] = [];
+    const sent: (string | null)[] = [];
+    const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, "location");
+    const historyDescriptor = Object.getOwnPropertyDescriptor(globalThis, "history");
+    const launch = new URL("http://127.0.0.1:14070/projects/example?tab=a#bg-bootstrap:one-time-secret_42");
+    Object.defineProperty(globalThis, "location", { configurable: true, value: launch });
+    Object.defineProperty(globalThis, "history", {
+      configurable: true,
+      value: { state: { idx: 0 }, replaceState: (_state: unknown, _unused: string, url: string) => { replaced.push(url); launch.hash = ""; } },
+    });
+    let offline = true;
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push(new Headers(init?.headers).get("x-burnguard-bootstrap"));
+      if (offline) throw new TypeError("backend offline");
+      return Response.json({ ok: true, data: { capability: "launch-token" } });
+    }) as typeof fetch;
+
+    try {
+      await expect(bootstrapApiAuthority()).rejects.toThrow();
+      offline = false;
+      await bootstrapApiAuthority();
+      await bootstrapApiAuthority();
+
+      expect(sent).toEqual(["one-time-secret_42", "one-time-secret_42", null]);
+      expect(replaced).toEqual(["/projects/example?tab=a"]);
+    } finally {
+      for (const [name, descriptor] of [["location", locationDescriptor], ["history", historyDescriptor]] as const) {
+        if (descriptor === undefined) Reflect.deleteProperty(globalThis, name);
+        else Object.defineProperty(globalThis, name, descriptor);
+      }
+    }
+  });
 });
