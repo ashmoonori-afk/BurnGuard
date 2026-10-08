@@ -12,6 +12,12 @@
  *   launch_server_without_deadline     launchServer called outside launchWithin or probeChannels, the bridge's own
  *                                      enforced deadline
  *
+ * It also reads packages/*\/tests for one rule (AGENTS.md: never skip a test on one OS):
+ *
+ *   platform_early_return_in_test      a test body that returns early on `process.platform`, so the runner reports a
+ *                                      pass for a case that never ran; use test.skipIf(...) with a reason, or the
+ *                                      form that OS supports
+ *
  *   bun scripts/qa/check-flake-patterns.ts        exit 1 on any problem
  */
 import { readFile } from "node:fs/promises";
@@ -25,7 +31,9 @@ const PLAYWRIGHT_LAUNCH_METHODS = new Set(["launch", "launchServer", "launchPers
 const PLAYWRIGHT_RECEIVER = /\b(?:chromium|firefox|webkit|playwright|browserType)\b/i;
 const PLAYWRIGHT_MODULE = /(?:^|\/)playwright(?:-core|-runtime)?$/;
 
-export type FlakeProblemCode = "raw_timeout_signal_in_launch_call" | "launch_module_signal_not_armed" | "playwright_timeout_option" | "launch_server_without_deadline";
+export const TEST_ROOTS_GLOB = "packages/*/tests";
+
+export type FlakeProblemCode = "raw_timeout_signal_in_launch_call" | "launch_module_signal_not_armed" | "playwright_timeout_option" | "launch_server_without_deadline" | "platform_early_return_in_test";
 export type FlakeProblem = { readonly code: FlakeProblemCode; readonly path: string; readonly line: number };
 export type SourceText = { readonly path: string; readonly text: string };
 
@@ -161,6 +169,49 @@ export function checkSources(sources: readonly SourceText[]): FlakeProblem[] {
     .sort((left, right) => left.path === right.path ? left.line - right.line : left.path < right.path ? -1 : 1);
 }
 
+const isFunctionLike = (node: ts.Node): node is ts.ArrowFunction | ts.FunctionExpression => ts.isArrowFunction(node) || ts.isFunctionExpression(node);
+const isBareReturn = (statement: ts.Statement): boolean =>
+  (ts.isReturnStatement(statement) && statement.expression === undefined)
+  || (ts.isBlock(statement) && statement.statements.length === 1 && statement.statements[0] !== undefined && isBareReturn(statement.statements[0]));
+
+/** `test(...)`, `it(...)`, `test.skipIf(...)(...)`, `test.each(...)(...)`: the callee is rooted at test or it. */
+function isTestCallback(fn: ts.Node): boolean {
+  const call = fn.parent;
+  if (!ts.isCallExpression(call) || !call.arguments.includes(fn as ts.Expression)) return false;
+  let callee: ts.Expression = call.expression;
+  while (ts.isCallExpression(callee) || ts.isPropertyAccessExpression(callee)) callee = callee.expression;
+  return ts.isIdentifier(callee) && (callee.text === "test" || callee.text === "it");
+}
+
+/** An `if (process.platform ...) return;` directly in a test callback: the case reports a pass on the OS it skipped. */
+export function checkTestFile(source: SourceText): FlakeProblem[] {
+  const file = parse(source);
+  const problems: FlakeProblem[] = [];
+  const visit = (node: ts.Node, enclosing: ts.Node | null): void => {
+    if (ts.isIfStatement(node) && node.elseStatement === undefined && isBareReturn(node.thenStatement) && /\bprocess\.platform\b/.test(node.expression.getText(file))
+      && enclosing !== null && isTestCallback(enclosing)) {
+      problems.push({ code: "platform_early_return_in_test", path: repoPath(source.path), line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1 });
+    }
+    const next = isFunctionLike(node) || ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) ? node : enclosing;
+    ts.forEachChild(node, (child) => { visit(child, next); });
+  };
+  visit(file, null);
+  return problems;
+}
+
+export function checkTestSources(sources: readonly SourceText[]): FlakeProblem[] {
+  return sources.flatMap(checkTestFile).sort((left, right) => left.path === right.path ? left.line - right.line : left.path < right.path ? -1 : 1);
+}
+
+export async function readTestSources(root: string): Promise<SourceText[]> {
+  const sources: SourceText[] = [];
+  for await (const file of new Bun.Glob(`${TEST_ROOTS_GLOB}/**/*.{ts,mts,cts,js,mjs,cjs}`).scan({ cwd: root, onlyFiles: true })) {
+    if (/\.d\.[cm]?ts$/.test(file) || file.includes("/node_modules/")) continue;
+    sources.push({ path: repoPath(file), text: await readFile(path.join(root, file), "utf8") });
+  }
+  return sources.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
+}
+
 export async function readSources(root: string): Promise<SourceText[]> {
   const base = path.join(root, ...SOURCE_ROOT.split("/"));
   const sources: SourceText[] = [];
@@ -176,13 +227,15 @@ const HELP: Record<FlakeProblemCode, string> = {
   launch_module_signal_not_armed: "this module loads Playwright and removes an abort listener: call keepAbortSignalArmed on the caller's signal first",
   playwright_timeout_option: "do not rely on Playwright's timeout option: race the call against an owned deadline (launchWithin, settleLaunch)",
   launch_server_without_deadline: "launchServer has no working deadline of its own: call it through launchWithin or probeChannels",
+  platform_early_return_in_test: "an early return on process.platform reports a pass without running: use test.skipIf(...) with a reason, or the form that OS supports",
 };
 
 if (import.meta.main) {
   const root = path.resolve(import.meta.dir, "..", "..");
   const sources = await readSources(root);
-  const problems = checkSources(sources);
+  const tests = await readTestSources(root);
+  const problems = [...checkSources(sources), ...checkTestSources(tests)];
   for (const problem of problems) console.error(`${problem.code}\t${problem.path}:${problem.line}\t${HELP[problem.code]}`);
-  console.log(`flake patterns: ${sources.length} source files under ${SOURCE_ROOT}, ${launchEntryPoints(sources).size} launch entry points, ${problems.length} problems`);
+  console.log(`flake patterns: ${sources.length} source files under ${SOURCE_ROOT}, ${launchEntryPoints(sources).size} launch entry points, ${tests.length} test files under ${TEST_ROOTS_GLOB}, ${problems.length} problems`);
   process.exit(problems.length === 0 ? 0 : 1);
 }
