@@ -51,9 +51,16 @@ jobs:
           xattr -p com.apple.quarantine "$app" >/dev/null
           # Expected state while releases are unsigned and not notarized: Gatekeeper rejects the quarantined copy.
           # When Developer ID signing and notarization exist, flip this to require acceptance (spctl exit 0).
-          if spctl --assess --type execute --verbose=4 "$app"; then
-            echo "spctl accepted the unsigned quarantined copy; if the release is now Developer ID signed and notarized, update this step to expect acceptance." >&2
-            exit 1
+          # With assessments disabled on the runner spctl accepts anything, so only assert when they are enabled.
+          gatekeeper_status="$(spctl --status 2>&1 || true)"
+          echo "spctl --status: $gatekeeper_status"
+          if [[ "$gatekeeper_status" == *"assessments enabled"* ]]; then
+            if spctl --assess --type execute --verbose=4 "$app"; then
+              echo "spctl accepted the unsigned quarantined copy (spctl --status: $gatekeeper_status); if the release is now Developer ID signed and notarized, update this step to expect acceptance." >&2
+              exit 1
+            fi
+          else
+            echo "::warning::Gatekeeper rejection of the quarantined copy was not checked because spctl reports: $gatekeeper_status"
           fi
           # README workaround: removing the quarantine attribute makes the copy launchable again.
           xattr -dr com.apple.quarantine "$app"
