@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, jest, mock, test } from "bun:test";
 import type { UpdateDesignSystemRequest } from "@bg/shared";
 import {
   apiFetch,
@@ -121,6 +121,35 @@ describe("API authority client", () => {
     await expect(apiFetch("/api/private")).rejects.toThrow(
       "BurnGuard API authority is not initialized.",
     );
+  });
+
+  test("Given a bootstrap request that never answers When the timeout elapses Then it rejects and the next call starts a fresh request", async () => {
+    jest.useFakeTimers();
+    try {
+      let bootstrapCalls = 0;
+      globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) !== "/api/bootstrap") throw new Error("unexpected request");
+        bootstrapCalls += 1;
+        if (bootstrapCalls > 1) return Promise.resolve(Response.json({ ok: true, data: { capability: "launch-token" } }));
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        });
+      }) as typeof fetch;
+
+      const stuck = bootstrapApiAuthority();
+      const alsoStuck = bootstrapApiAuthority();
+      const settled = Promise.allSettled([stuck, alsoStuck]);
+      expect(bootstrapCalls).toBe(1);
+
+      jest.advanceTimersByTime(60_000);
+      const results = await settled;
+      expect(results.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+
+      await bootstrapApiAuthority();
+      expect(bootstrapCalls).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("rejects a catalog detail response that omits runtime detail fields", async () => {
