@@ -80,6 +80,7 @@ jobs:
           packages/backend/tests/css-logo-check.test.ts
           packages/backend/tests/structure-extractor.test.ts
           packages/backend/tests/export-validation.test.ts
+          packages/backend/tests/vercel-publish.test.ts
           packages/backend/tests/path-boundary.test.ts
           packages/desktop-mac/main.test.ts
           packages/backend/tests/config-storage.test.ts

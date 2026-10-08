@@ -212,7 +212,6 @@ packages/backend/tests/upgrade-contracts.test.ts
 packages/backend/tests/upload-component-detect.test.ts
 packages/backend/tests/upload-extract-smoke.test.ts
 packages/backend/tests/ux-review.test.ts
-packages/backend/tests/vercel-publish.test.ts
 packages/backend/tests/visual-alternative-contract.test.ts
 packages/backend/tests/visual-alternative-recovery.test.ts
 packages/backend/tests/visual-alternative-repository.test.ts

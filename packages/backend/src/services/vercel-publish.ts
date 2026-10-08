@@ -33,11 +33,13 @@ function withBadge(data: Uint8Array): Uint8Array {
   return new TextEncoder().encode(injectMadeWithBadge(html));
 }
 
-export async function deploymentFiles(bytes: Uint8Array, expected: Omit<HtmlArchiveManifest, "entries">, options: { readonly badge?: boolean } = {}) {
+const MAX_PUBLISH_BYTES = 100_000_000;
+
+export async function deploymentFiles(bytes: Uint8Array, expected: Omit<HtmlArchiveManifest, "entries">, options: { readonly badge?: boolean; readonly maxBytes?: number } = {}) {
   const manifest = await validateHtmlArchive(bytes, expected);
   if (!isPublicAsset(manifest.entrypoint)) throw new VercelPublishError("publish_unsafe_asset");
   const publicEntries = manifest.entries.filter((file) => isPublicAsset(file.path));
-  if (publicEntries.reduce((n, file) => n + file.size, 0) > 100_000_000) throw new VercelPublishError("publish_size_limit");
+  if (publicEntries.reduce((n, file) => n + file.size, 0) > (options.maxBytes ?? MAX_PUBLISH_BYTES)) throw new VercelPublishError("publish_size_limit");
   const zip = await JSZip.loadAsync(bytes, { checkCRC32: true });
   const badge = options.badge === true && /\.html?$/i.test(manifest.entrypoint);
   // The badge exists only in the uploaded copy of the entrypoint; the export archive and its receipt stay untouched.
@@ -54,21 +56,30 @@ export async function deploymentFiles(bytes: Uint8Array, expected: Omit<HtmlArch
   return files;
 }
 
-export async function publishExport(jobId: string, token: string, teamId: string | undefined, signal: AbortSignal, badge = false): Promise<VercelDeployment> {
-  const verified = await verifyExportDownload(jobId);
-  const job = await getExportJob(jobId);
-  const project = await getProjectDetail(verified.projectId);
+// Test seam: production callers omit `deps` and get the real repositories, global fetch and the 100 MB cap.
+export type PublishDeps = {
+  readonly verifyExportDownload?: typeof verifyExportDownload;
+  readonly getExportJob?: typeof getExportJob;
+  readonly getProjectDetail?: typeof getProjectDetail;
+  readonly fetcher?: typeof fetch;
+  readonly maxBytes?: number;
+};
+
+export async function publishExport(jobId: string, token: string, teamId: string | undefined, signal: AbortSignal, badge = false, deps: PublishDeps = {}): Promise<VercelDeployment> {
+  const verified = await (deps.verifyExportDownload ?? verifyExportDownload)(jobId);
+  const job = await (deps.getExportJob ?? getExportJob)(jobId);
+  const project = await (deps.getProjectDetail ?? getProjectDetail)(verified.projectId);
   const attempt = job?.latest_attempt;
   if (verified.format !== "html_zip" || !project || !attempt || !attempt.digests.input_closure) throw new VercelPublishError("publish_export_required");
   const bytes = new Uint8Array(await readFile(verified.path));
   if (sha256(bytes) !== attempt.digests.output) throw new VercelPublishError("publish_export_changed");
-  const files = await deploymentFiles(bytes, { schema_version: 1, entrypoint: project.entrypoint, project_revision: attempt.project_revision, project_digest: attempt.project_digest, input_closure_digest: attempt.digests.input_closure }, { badge: badge && isWebProjectType(project.type) });
+  const files = await deploymentFiles(bytes, { schema_version: 1, entrypoint: project.entrypoint, project_revision: attempt.project_revision, project_digest: attempt.project_digest, input_closure_digest: attempt.digests.input_closure }, { badge: badge && isWebProjectType(project.type), ...(deps.maxBytes === undefined ? {} : { maxBytes: deps.maxBytes }) });
   signal.throwIfAborted();
   return requestVercel("/v13/deployments", token, teamId, signal, {
     name: `burnguard-${jobId.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40)}`,
-    target: "production", files: await uploadDeploymentFiles(files, token, teamId, signal),
+    target: "production", files: await uploadDeploymentFiles(files, token, teamId, signal, deps.fetcher),
     projectSettings: { framework: null, buildCommand: "", installCommand: "", outputDirectory: null },
-  });
+  }, deps.fetcher);
 }
 
 export async function uploadDeploymentFiles(files: readonly { file: string; data: Uint8Array }[], token: string, teamId: string | undefined, signal: AbortSignal, fetcher: typeof fetch = fetch) {
