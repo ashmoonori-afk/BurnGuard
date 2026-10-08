@@ -10,6 +10,8 @@ import { MAX_REQUEST_BODY_BYTES } from "./security/request-limits";
 import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
 import { configureAppUpdater, startAppUpdateScheduler } from "./services/mac-updates";
+import { startProjectDeletionPurgeScheduler } from "./services/project-deletion";
+import { getSqlite } from "./db/sqlite-client";
 import { activeUserTurnCount, interruptAllUserTurns } from "./services/turns";
 import { shutdownProjectWatchers, startProjectWatchers, type ProjectWatcherStartup } from "./services/watchers";
 
@@ -21,6 +23,7 @@ if (ownedPort !== undefined) await desktopStartupStep("port_busy", () => pickPor
 const acquireProfile = () => (process.platform === "win32" ? acquireWindowsProfile(appRootDir) : acquirePosixProfile(appRootDir));
 const profileOwner = isDesktop ? await desktopStartupStep("profile_owned", acquireProfile) : await acquireProfile();
 await bootstrapLocalAppData();
+startProjectDeletionPurgeScheduler(getSqlite());
 const config = await loadConfig();
 // Dev + binary both prefer the canonical port 14070 (Vite proxy target).
 // `pickPort` remains as a fallback only when a BG_SCAN_PORT env var is set —
@@ -43,10 +46,13 @@ delete process.env.BG_BOOTSTRAP_SECRET;
 if (launcherBootstrapSecret !== undefined && !/^[A-Za-z0-9_-]{16,}$/.test(launcherBootstrapSecret)) {
   throw new Error("BG_BOOTSTRAP_SECRET must be at least 16 base64url characters.");
 }
+// Outlives any realistic backend run; the per-launch capability, not this age, is what ends access on restart.
+const BROWSER_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 const bootstrapSecret = launcherBootstrapSecret ?? generateLaunchCapability();
 const app = createApp({
   capability: generateLaunchCapability(),
   bootstrapSecret,
+  persistentCookieMaxAgeSeconds: isDesktop ? undefined : BROWSER_COOKIE_MAX_AGE_SECONDS,
   appAuthority: `${host}:${port}`,
   devAuthority: isDev ? "127.0.0.1:5173" : undefined,
 });

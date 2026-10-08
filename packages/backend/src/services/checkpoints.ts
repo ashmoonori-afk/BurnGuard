@@ -6,7 +6,7 @@ import { listIndexedProjectFiles } from "./files";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { getSqlite } from "../db/sqlite-client";
 import { ArtifactCoordinator } from "./artifact-coordinator";
-import { materializeManagedTree } from "./artifact-tree-storage";
+import { defaultManagedTreeIo, materializeManagedTree } from "./artifact-tree-storage";
 
 function snapshotDir(projectDir: string, turnId: string): string {
   return resolveWithin(
@@ -31,7 +31,7 @@ export async function writePreTurnSnapshot(
   if (!project) return null;
 
   const dest = snapshotDir(project.dir_path, turnId);
-  await materializeManagedTree(project.dir_path, dest);
+  await materializeManagedTree(project.dir_path, dest, defaultManagedTreeIo);
 
   const createdAt = Date.now();
   return {

@@ -44,6 +44,7 @@ const ADDED_CODES: readonly (readonly [string, MessageKey])[] = [
   ["acquisition_aborted", "errors.acquisition_aborted"],
   ["invalid_upload", "errors.invalid_upload"],
   ["invalid_font_upload", "errors.invalid_font_upload"],
+  ["token_file_unreadable", "errors.token_file_unreadable"],
   ["system_id_conflict", "errors.system_id_conflict"],
   ["catalog_operation_failed", "errors.catalog_operation_failed"],
   ["design_system_not_found", "errors.design_system_not_found"],

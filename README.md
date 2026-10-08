@@ -84,7 +84,7 @@ PPTX exports contain a high-resolution image of each slide and its text in speak
 ## Refine the result where you see it
 
 - **Edit on canvas.** Select elements, adjust size and rotation, change typography and spacing, or work with colors. Saved revisions and undo help you return to an earlier result.
-- **Leave a targeted comment.** Pin feedback to content and send an AI edit request. Pins stay attached while you scroll; click a saved pin to reopen its comment. Hover over the canvas and press **Ctrl+Space** on Windows/Linux or **Control+Option+Space** on macOS for a quick comment.
+- **Leave a targeted comment.** Pin feedback to content and send an AI edit request. Pins stay attached while you scroll; click a saved pin to reopen its comment. Hover over the canvas and press **Alt+C** on Windows/Linux or **Option+C** on macOS for a quick comment.
 - **Add source material.** Attach supported PDFs, slide decks, documents, images or text, or import an exported HTML project ZIP. Original attachments are retained separately from published website assets.
 - **Review before sharing.** Quality and UX panels identify issues and offer repair actions. Their findings are advisory; review the rendered result before exporting or publishing.
 
@@ -109,6 +109,7 @@ Explore **SONNEL**, **FOLIOVER**, **ODDWARD**, **VELUNE** and **HALIDE**. Each o
    - **On Windows:** SmartScreen may show "Windows protected your PC" for the unsigned Setup.exe or portable .exe. Click **More info**, then **Run anyway**.
 2. **Explore an example.** Open a bundled project and try the canvas before connecting an AI provider.
 3. **Connect your CLI.** Install and authenticate Claude Code or Codex CLI, then choose the connection and model in Settings. **Medium effort and vanilla mode are the defaults.** Vanilla mode excludes personal plugins and instructions while keeping BurnGuard's project context.
+   - **Codex progress signal (on by default):** Codex usage metrics go to BurnGuard on this computer so a long silent Codex step, such as writing a large page, is not stopped as stalled. You can turn off **Detect that Codex is still working** in Settings. If you already send Codex telemetry to your own OpenTelemetry destination, it stays off until you turn it on, because your destination does not receive Codex metrics while it is on.
 4. **Create a project.** Pick a format and design system, add your brief and reference material, then generate and refine.
 5. **Export or share.** Download the project files, or use **Share → Prepare current output → Publish publicly** for a website on your Vercel account.
 
@@ -151,7 +152,7 @@ bun run previews
 
 ```sh
 bun run typecheck
-bun run lint
+bun run check:whitespace
 bun run build:frontend
 bun test
 ```

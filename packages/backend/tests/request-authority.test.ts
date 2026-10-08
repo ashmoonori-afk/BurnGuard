@@ -12,7 +12,7 @@ const capability = "current-launch-capability";
 const previousCapability = "previous-launch-capability";
 const bootstrapSecret = "one-time-bootstrap-secret";
 
-function createTestApp(options?: { dev?: boolean }) {
+function createTestApp(options?: { dev?: boolean; persistentCookieMaxAgeSeconds?: number }) {
   let mutations = 0;
   const app = new Hono();
   app.use(
@@ -22,6 +22,7 @@ function createTestApp(options?: { dev?: boolean }) {
       bootstrapSecret,
       appAuthority: "127.0.0.1:14070",
       devAuthority: options?.dev ? "127.0.0.1:5173" : undefined,
+      persistentCookieMaxAgeSeconds: options?.persistentCookieMaxAgeSeconds,
     }),
   );
   app.get("/api/health", (c) => c.json({ ok: true }));
@@ -356,5 +357,38 @@ describe("request authority", () => {
       db.prepare("DELETE FROM sessions WHERE id='header-session'").run();
       db.prepare("DELETE FROM projects WHERE id='header-project'").run();
     }
+  });
+
+  test("Given browser mode When bootstrap mints the cookie Then it is persistent, HttpOnly, SameSite=Strict and scoped to /api", async () => {
+    const { app } = createTestApp({ persistentCookieMaxAgeSeconds: 3600 });
+
+    const response = await app.request(
+      request("/api/bootstrap", {
+        headers: { origin: "http://127.0.0.1:14070", [BURNGUARD_BOOTSTRAP_HEADER]: bootstrapSecret },
+      }),
+    );
+
+    const attributes = (response.headers.get("set-cookie") ?? "").split(";").map((part) => part.trim());
+    expect(attributes[0]).toBe(`burnguard_capability=${capability}`);
+    expect(attributes).toContain("Max-Age=3600");
+    expect(attributes).toContain("HttpOnly");
+    expect(attributes).toContain("SameSite=Strict");
+    expect(attributes).toContain("Path=/api");
+  });
+
+  test("Given desktop mode When bootstrap mints the cookie Then it stays a session cookie", async () => {
+    const { app } = createTestApp();
+
+    const response = await app.request(
+      request("/api/bootstrap", {
+        headers: { origin: "http://127.0.0.1:14070", [BURNGUARD_BOOTSTRAP_HEADER]: bootstrapSecret },
+      }),
+    );
+
+    const attributes = (response.headers.get("set-cookie") ?? "").split(";").map((part) => part.trim());
+    expect(attributes.some((attribute) => attribute.toLowerCase().startsWith("max-age"))).toBe(false);
+    expect(attributes).toContain("HttpOnly");
+    expect(attributes).toContain("SameSite=Strict");
+    expect(attributes).toContain("Path=/api");
   });
 });

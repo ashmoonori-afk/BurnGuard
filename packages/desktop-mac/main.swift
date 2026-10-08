@@ -24,8 +24,10 @@ private func shellTable(_ language: String) -> [String: String] {
 private let shellStrings = shellTable(shellLanguage)
 private let fallbackShellStrings = shellTable("en")
 
-private func shellText(_ key: String) -> String {
-    shellStrings[key] ?? fallbackShellStrings[key] ?? key
+private func shellText(_ key: String, _ values: String...) -> String {
+    var text = shellStrings[key] ?? fallbackShellStrings[key] ?? key
+    for (index, value) in values.enumerated() { text = text.replacingOccurrences(of: "{\(index)}", with: value) }
+    return text
 }
 
 final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
@@ -258,7 +260,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private func alertDownloadFailed() {
         let alert = NSAlert()
         alert.messageText = "BurnGuard"
-        alert.informativeText = "파일을 다운로드하지 못했습니다. 다시 시도해 주세요."
+        alert.informativeText = shellText("downloadFailed")
         alert.beginSheetModal(for: window)
     }
 
@@ -427,7 +429,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         didFail navigation: WKNavigation!,
         withError error: Error
     ) {
-        fail("BurnGuard 화면을 불러오지 못했습니다: \(error.localizedDescription)")
+        fail(shellText("viewLoadFailedDetail", error.localizedDescription))
     }
 
     private func parseArguments() throws -> (reportPath: String?, projectId: String?) {
@@ -445,17 +447,17 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     // AppKit delivers Cmd-key editing, quit and close only through main-menu key equivalents; nil targets reach the web view.
     private func installMainMenu() {
         let appMenu = NSMenu(title: "BurnGuard")
-        appMenu.addItem(withTitle: "BurnGuard 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        let editMenu = NSMenu(title: "편집")
-        editMenu.addItem(withTitle: "실행 취소", action: Selector(("undo:")), keyEquivalent: "z")
-        editMenu.addItem(withTitle: "실행 복귀", action: Selector(("redo:")), keyEquivalent: "Z")
-        editMenu.addItem(withTitle: "오려두기", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "복사하기", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "붙이기", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        editMenu.addItem(withTitle: "모두 선택", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
-        let windowMenu = NSMenu(title: "윈도우")
-        windowMenu.addItem(withTitle: "최소화", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
-        windowMenu.addItem(withTitle: "닫기", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        appMenu.addItem(withTitle: shellText("menu.quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let editMenu = NSMenu(title: shellText("menu.edit"))
+        editMenu.addItem(withTitle: shellText("menu.undo"), action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: shellText("menu.redo"), action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(withTitle: shellText("menu.cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: shellText("menu.copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: shellText("menu.paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: shellText("menu.selectAll"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let windowMenu = NSMenu(title: shellText("menu.window"))
+        windowMenu.addItem(withTitle: shellText("menu.minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: shellText("menu.close"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         let mainMenu = NSMenu()
         for menu in [appMenu, editMenu, windowMenu] { mainMenu.addItem(withTitle: menu.title, action: nil, keyEquivalent: "").submenu = menu }
         NSApp.mainMenu = mainMenu
@@ -644,21 +646,21 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                 if self.closing { self.finishTermination(); return }
                 if let remaining, !remaining.isEmpty { self.consumeServiceOutput(remaining); if self.closing { return } }
                 if let message = self.startupFailure { self.fail(message); return }
-                self.fail("BurnGuard 서버가 종료되었습니다 (code \(process.terminationStatus)).")
+                self.fail(shellText("serverExitedCode", String(process.terminationStatus)))
             }
         }
         try process.run()
         // Cold profiles seed and validate every bundled sample before readiness.
         DispatchQueue.main.asyncAfter(deadline: .now() + 300) { [weak self] in
             guard let self, !self.closing, self.origin == nil else { return }
-            self.fail("BurnGuard 서버가 300초 안에 시작되지 않았습니다.")
+            self.fail(shellText("startTimeout"))
         }
     }
 
     // Known backend startup_failed codes map to the shell table; unknown codes keep the generic exit message.
     private func startupMessage(_ code: String?, port: String) -> String? {
         guard let code, ["port_busy", "profile_owned", "invalid_port"].contains(code) else { return nil }
-        return shellText("startup_failed.\(code)").replacingOccurrences(of: "{port}", with: port)
+        return shellText("startup_failed.\(code)").replacingOccurrences(of: "{0}", with: port)
     }
 
     private func startupError(_ code: String, port: String) -> NSError {
@@ -695,10 +697,10 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                   let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let protocolVersion = message["protocol"] as? Int,
                   protocolVersion == 1 else {
-                fail("BurnGuard 시작 응답을 확인할 수 없습니다.")
+                fail(shellText("startupResponseInvalid"))
                 return
             }
-            if message["event"] as? String == "startup_failed" {
+            if message["event" as? String == "startup_failed" {
                 startupFailure = startupMessage(message["code"] as? String, port: expectedOrigin.flatMap { URL(string: $0)?.port.map(String.init) } ?? "14070")
                 return
             }
@@ -722,7 +724,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                   let url = URL(string: urlString),
                   // The one-time secret lets only this web view mint the launch capability; the SPA strips the fragment.
                   let launch = URL(string: (smokeProjectId.map { url.appendingPathComponent("projects").appendingPathComponent($0) } ?? url).absoluteString + "#bg-bootstrap:" + bootstrap) else {
-                fail("BurnGuard 시작 응답을 확인할 수 없습니다.")
+                fail(shellText("startupResponseInvalid"))
                 return
             }
             origin = url
@@ -764,13 +766,13 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
 
     private func writeReport(_ report: [String: Any], to path: String) {
         guard let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted]) else {
-            fail("네이티브 smoke 결과를 직렬화할 수 없습니다.")
+            fail(shellText("smokeSerializeFailed"))
             return
         }
         do {
             try data.write(to: URL(fileURLWithPath: path), options: .atomic)
         } catch {
-            fail("네이티브 smoke 결과를 기록할 수 없습니다: \(error.localizedDescription)")
+            fail(shellText("smokeWriteFailed", error.localizedDescription))
         }
     }
 

@@ -265,7 +265,7 @@ describe("macOS startup failure messages", () => {
     for (const language of ["en", "ko", "zh"]) {
       const table = JSON.parse(await readFile(path.join(import.meta.dir, `i18n/${language}.json`), "utf8")) as Record<string, string>;
       for (const code of codes) expect(table[`startup_failed.${code}`]).toBeTruthy();
-      expect(table["startup_failed.port_busy"]).toContain("{port}");
+      expect(table["startup_failed.port_busy"]).toContain("{0}");
     }
     for (const code of codes) {
       expect(source).toContain(`"${code}"`);
