@@ -1,0 +1,7 @@
+{
+  "shutdown": "Stopping active work and closing BurnGuard…",
+  "updateRestartFailed": "Could not schedule the update restart. Please start BurnGuard again.",
+  "portBusy": "Port {0} is in use by another program. Close the existing BurnGuard server and try again.",
+  "serverExitedDuringStartup": "The BurnGuard server exited during startup.",
+  "serverExited": "The BurnGuard server has exited. Please start the app again."
+}

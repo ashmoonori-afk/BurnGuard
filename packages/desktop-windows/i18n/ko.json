@@ -1,0 +1,7 @@
+{
+  "shutdown": "작업을 중단하고 BurnGuard를 종료하고 있습니다…",
+  "updateRestartFailed": "업데이트 재시작을 예약하지 못했습니다. BurnGuard를 다시 실행해 주세요.",
+  "portBusy": "포트 {0}를 다른 프로그램이 사용 중입니다. 기존 BurnGuard 서버를 종료한 뒤 다시 실행해 주세요.",
+  "serverExitedDuringStartup": "BurnGuard 서버가 시작 중 종료되었습니다.",
+  "serverExited": "BurnGuard 서버가 종료되었습니다. 앱을 다시 실행해 주세요."
+}

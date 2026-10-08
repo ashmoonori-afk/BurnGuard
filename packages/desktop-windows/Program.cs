@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Net;
+using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -19,6 +20,31 @@ using Velopack.Sources;
 
 namespace BurnGuard.Desktop
 {
+    // Localized user-facing text; Korean lives only in i18n/ko.json (embedded as BurnGuard.i18n.<lang>.json).
+    internal static class Strings
+    {
+        private static Dictionary<string, object> table;
+
+        internal static string Get(string key)
+        {
+            if (table == null) table = Load();
+            object value;
+            return table.TryGetValue(key, out value) && value is string text ? text : key;
+        }
+
+        private static Dictionary<string, object> Load()
+        {
+            var language = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+            var name = language == "ko" ? "ko" : language == "zh" ? "zh" : "en";
+            using (var stream = typeof(Strings).Assembly.GetManifestResourceStream("BurnGuard.i18n." + name + ".json"))
+            {
+                if (stream == null) return new Dictionary<string, object>();
+                using (var reader = new StreamReader(stream, Encoding.UTF8))
+                    return Program.Json.Deserialize<Dictionary<string, object>>(reader.ReadToEnd());
+            }
+        }
+    }
+
     internal static class Program
     {
         internal static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
@@ -174,7 +200,7 @@ namespace BurnGuard.Desktop
                     throw new InvalidOperationException("BG_PORT must be an integer between 1024 and 65535.");
                 var listener = new TcpListener(IPAddress.Loopback, port);
                 try { listener.Start(); }
-                catch (SocketException) { throw new InvalidOperationException($"포트 {port}를 다른 프로그램이 사용 중입니다. 기존 BurnGuard 서버를 종료한 뒤 다시 실행해 주세요."); }
+                catch (SocketException) { throw new InvalidOperationException(string.Format(Strings.Get("portBusy"), port)); }
                 finally { listener.Stop(); }
                 status.Text = "BurnGuard를 준비하고 있어요. 처음 실행할 때는 샘플과 글꼴 준비에 시간이 걸릴 수 있어요.";
                 var startup = Stopwatch.StartNew();
@@ -326,8 +352,8 @@ namespace BurnGuard.Desktop
             service.ErrorDataReceived += (_, __) => { };
             service.Exited += (_, __) =>
             {
-                ready.TrySetException(new InvalidOperationException("BurnGuard 서버가 시작 중 종료되었습니다."));
-                try { if (!closing && IsHandleCreated) BeginInvoke(new Action(() => { if (!closing) Fail("BurnGuard 서버가 종료되었습니다. 앱을 다시 실행해 주세요."); })); }
+                ready.TrySetException(new InvalidOperationException(Strings.Get("serverExitedDuringStartup")));
+                try { if (!closing && IsHandleCreated) BeginInvoke(new Action(() => { if (!closing) Fail(Strings.Get("serverExited")); })); }
                 catch (InvalidOperationException) { }
             };
             if (!service.Start()) throw new InvalidOperationException("BurnGuard 서버를 시작할 수 없습니다.");
@@ -550,7 +576,7 @@ namespace BurnGuard.Desktop
             if (closing) return;
             closing = true; Enabled = false;
             updateTimer.Stop(); updateCancellation.Cancel();
-            status.Text = "작업을 중단하고 BurnGuard를 종료하고 있습니다…"; status.Show(); status.BringToFront();
+            status.Text = Strings.Get("shutdown"); status.Show(); status.BringToFront();
             try
             {
                 if (service != null && !service.HasExited)
@@ -568,7 +594,7 @@ namespace BurnGuard.Desktop
                 if (restartForUpdate && pendingUpdate != null)
                 {
                     try { updates.WaitExitThenApplyUpdates(pendingUpdate, silent: false, restart: true); }
-                    catch { MessageBox.Show(this, "업데이트 재시작을 예약하지 못했습니다. BurnGuard를 다시 실행해 주세요.", "BurnGuard"); }
+                    catch { MessageBox.Show(this, Strings.Get("updateRestartFailed"), "BurnGuard"); }
                 }
                 stopped = true; Close();
             }

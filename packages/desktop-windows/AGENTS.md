@@ -10,6 +10,7 @@ WinForms + WebView2 host (`Program.cs`, 431 LOC) that owns the packaged backend 
 packages/desktop-windows/
 ├── Program.cs                  # Main + DesktopWindow + Native interop
 ├── BurnGuard.Desktop.csproj    # WinExe, net48, x64, <Version> must match APP_VERSION
+├── i18n/{ko,en,zh}.json        # user-facing shell strings, embedded resources
 ├── app.manifest                # asInvoker, PerMonitorV2 DPI
 └── qa/UpdateChecks.csproj      # separate update-check project; excluded from the app compile
 ```
@@ -32,7 +33,7 @@ packages/desktop-windows/
 - Build through the Bun scripts, not the IDE: `bun run build:windows` (needs a Windows host with the .NET 8 SDK) and `bun run build:windows:release` (Velopack `vpk pack`).
 - `<Version>` in the csproj is stamped from `APP_VERSION` in `@bg/shared`; changing one without the other ships a mismatched installer.
 - `qa/**/*.cs` is excluded from the app compile - the QA project is built separately.
-- User-facing dialog text is Korean; diagnostics go into the smoke report, never into a dialog.
+- User-facing dialog text is localized through `Strings.Get` (`i18n/ko.json`, `en.json`, `zh.json`, embedded resources chosen by `CurrentUICulture`; default en). Korean text lives only in `i18n/ko.json`; diagnostics go into the smoke report, never into a dialog.
 - `packages/desktop-mac/main.swift` mirrors this shell's readiness protocol and smoke contract; change both together.
 
 ## ANTI-PATTERNS

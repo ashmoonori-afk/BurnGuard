@@ -1,0 +1,7 @@
+{
+  "shutdown": "正在中止任务并关闭 BurnGuard…",
+  "updateRestartFailed": "无法安排更新重启。请重新启动 BurnGuard。",
+  "portBusy": "端口 {0} 已被其他程序占用。请关闭现有的 BurnGuard 服务器后重试。",
+  "serverExitedDuringStartup": "BurnGuard 服务器在启动过程中退出。",
+  "serverExited": "BurnGuard 服务器已退出。请重新启动应用。"
+}
