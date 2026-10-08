@@ -29,6 +29,7 @@ import {
 import ProjectCardSection from "@/components/home/ProjectCardSection";
 import ProjectCard from "@/components/home/ProjectCard";
 import ProjectImportDialog from "@/components/home/ProjectImportDialog";
+import RecentlyDeletedSection from "@/components/home/RecentlyDeletedSection";
 import NewProjectPanel from "@/components/home/NewProjectPanel";
 import PinterestImportDialog from "@/components/home/PinterestImportDialog";
 import DeleteDesignSystemDialog from "@/components/home/DeleteDesignSystemDialog";
@@ -414,6 +415,7 @@ export default function HomeView() {
                 onStartProject={() => startProject()}
                 onDelete={onProjectDelete}
               />
+              <RecentlyDeletedSection />
             </TabsContent>
 
             <TabsContent value="examples">

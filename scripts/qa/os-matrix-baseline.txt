@@ -8,7 +8,6 @@ packages/backend/tests/app-shell-headers.test.ts
 packages/backend/tests/app-update-routes.test.ts
 packages/backend/tests/artifact-anchor-routes.test.ts
 packages/backend/tests/artifact-document-migration.test.ts
-packages/backend/tests/artifact-history.test.ts
 packages/backend/tests/artifact-operations-styles.test.ts
 packages/backend/tests/artifact-operations.test.ts
 packages/backend/tests/artifact-routes.test.ts

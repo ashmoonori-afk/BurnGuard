@@ -6,7 +6,7 @@ import {
   bootstrapApiAuthority,
 } from "../src/api/client";
 import { catalogDetailRows, getDesignSystem, updateDesignSystemWithConflictReload } from "../src/api/design-system-metadata";
-import { deleteProject, listDesignSystems } from "../src/api/home";
+import { deleteProject, listDesignSystems, restoreDeletedProject } from "../src/api/home";
 
 const originalFetch = globalThis.fetch;
 
@@ -233,6 +233,22 @@ describe("API authority client", () => {
 
     expect(calls[1]?.input).toBe("/api/projects/project-1");
     expect(calls[1]?.init?.method).toBe("DELETE");
+    expect(new Headers(calls[1]?.init?.headers).get("x-burnguard-capability")).toBe("launch-token");
+  });
+
+  test("Given a recently deleted project When restoring Then it posts to the encoded restore route with the capability", async () => {
+    const calls: Array<{ input: string; init?: RequestInit }> = [];
+    globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ input: String(input), init });
+      if (String(input) === "/api/bootstrap") return Response.json({ ok: true, data: { capability: "launch-token" } });
+      return Response.json({ data: { id: "a/b" } });
+    }) as typeof fetch;
+
+    await bootstrapApiAuthority();
+    await expect(restoreDeletedProject("a/b")).resolves.toEqual({ id: "a/b" });
+
+    expect(calls[1]?.input).toBe("/api/home/recently-deleted/a%2Fb/restore");
+    expect(calls[1]?.init?.method).toBe("POST");
     expect(new Headers(calls[1]?.init?.headers).get("x-burnguard-capability")).toBe("launch-token");
   });
 

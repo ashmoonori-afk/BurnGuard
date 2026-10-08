@@ -10,6 +10,7 @@ import type {
   LlmApiKeysPatch,
   LlmConnectionId,
   ProjectBundleImportResponse,
+  RecentlyDeletedProject,
   SettingsSummary,
 } from "@bg/shared";
 import { APP_VERSION, LLM_CONNECTIONS, parseGenerationOptions } from "@bg/shared";
@@ -21,12 +22,15 @@ import {
 } from "../db/seed";
 import { getPromptSampleBySlug, promptSampleDesignSystemId, seedTutorialsOnce } from "../db/seed-tutorials";
 import { CodexAuthenticationProbeError, detectBackends } from "../services/backends";
+import { codexProgressMetricsEffective, detectUserCodexOtel } from "../adapters/codex/user-otel";
 import { ensureProjectWatcher } from "../services/watchers";
 import {
   parseProjectInput,
   ProjectInputError,
 } from "./home-project-input";
 import { serveProjectThumbnail } from "./project-thumbnail-handler";
+import { listRecentlyDeletedProjects, ProjectDeletionError, restoreDeletedProject } from "../services/project-deletion";
+import { getSqlite } from "../db/sqlite-client";
 import { importProject, ProjectImportError } from "../services/project-import";
 import {
   importProjectBundleFile,
@@ -82,7 +86,7 @@ function isChatContextMode(
   return value === "compact" || value === "full";
 }
 
-function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): SettingsSummary {
+function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>, codexUserOtelConfigured: boolean): SettingsSummary {
   return {
     generation_defaults: config.generationDefaults,
     commandcode_api_key_set: Boolean(config.commandcodeApiKey),
@@ -107,6 +111,8 @@ function toSettingsSummary(config: Awaited<ReturnType<typeof loadConfig>>): Sett
     vercel_token_set: config.vercelToken !== null,
     publish_made_with_badge: config.publish.madeWithBadge,
     web_asset_search: config.webAssets.searchEnabled,
+    codex_progress_metrics: codexProgressMetricsEffective(config.codexProgressMetrics, codexUserOtelConfigured),
+    codex_user_otel_configured: codexUserOtelConfigured,
   };
 }
 
@@ -230,6 +236,24 @@ homeRoutes.post("/api/home/restore-samples", async (c) => {
   return c.json(ok({ restored: true }));
 });
 
+homeRoutes.get("/api/home/recently-deleted", async (c) => {
+  return c.json(ok(await listRecentlyDeletedProjects(getSqlite()) satisfies RecentlyDeletedProject[]));
+});
+
+homeRoutes.post("/api/home/recently-deleted/:id/restore", async (c) => {
+  const id = c.req.param("id");
+  try {
+    await restoreDeletedProject(getSqlite(), id);
+  } catch (error) {
+    if (error instanceof ProjectDeletionError) {
+      const status = error.code === "project_restore_unavailable" ? 404 : 409;
+      return c.json(fail(error.code, error.code === "project_restore_conflict" ? "A project with the same identity already exists" : "Deleted project could not be restored"), status);
+    }
+    throw error;
+  }
+  return c.json(ok({ id }));
+});
+
 // One-click "Try this prompt" entrypoint for prompt-sample artifacts.
 // The form button on each rendered sample posts here with target=_top;
 // the route creates a fresh prototype project and 302-redirects to it
@@ -262,7 +286,7 @@ homeRoutes.post("/api/home/use-sample/:slug", async (c) => {
 
 homeRoutes.get("/api/settings", async (c) => {
   const config = await loadConfig();
-  return c.json(ok(toSettingsSummary(config)));
+  return c.json(ok(toSettingsSummary(config, await detectUserCodexOtel())));
 });
 
 homeRoutes.patch("/api/settings", async (c) => {
@@ -271,7 +295,7 @@ homeRoutes.patch("/api/settings", async (c) => {
     return c.json(fail("invalid_body", "Expected a JSON object request body"), 400);
   }
 
-  const changes: Pick<Partial<AppConfig>, "theme" | "locale" | "defaultBackend" | "figmaPersonalAccessToken" | "vercelToken" | "publish" | "webAssets" | "commandcodeApiKey" | "generationDefaults"> & {
+  const changes: Pick<Partial<AppConfig>, "theme" | "locale" | "defaultBackend" | "figmaPersonalAccessToken" | "vercelToken" | "publish" | "webAssets" | "commandcodeApiKey" | "generationDefaults" | "codexProgressMetrics"> & {
     llmApiKeys?: LlmApiKeysPatch;
     chat?: Partial<AppConfig["chat"]>;
     user?: Partial<AppConfig["user"]>;
@@ -401,6 +425,12 @@ homeRoutes.patch("/api/settings", async (c) => {
     }
     changes.webAssets = { searchEnabled: patch.web_asset_search };
   }
+  if ("codex_progress_metrics" in patch) {
+    if (typeof patch.codex_progress_metrics !== "boolean") {
+      return c.json(fail("invalid_codex_progress_metrics", "codex_progress_metrics must be a boolean"), 400);
+    }
+    changes.codexProgressMetrics = patch.codex_progress_metrics;
+  }
 
   const config = await updateConfig((current) => ({
     ...current,
@@ -410,5 +440,5 @@ homeRoutes.patch("/api/settings", async (c) => {
     chat: { ...current.chat, ...changes.chat },
     user: { ...current.user, ...changes.user },
   }));
-  return c.json(ok(toSettingsSummary(config)));
+  return c.json(ok(toSettingsSummary(config, await detectUserCodexOtel())));
 });
