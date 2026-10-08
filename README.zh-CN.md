@@ -123,7 +123,7 @@ Windows 上可用 `Start-BurnGuard.bat` 打开原生应用，首次启动时会�
 
 ```powershell
 bun run typecheck
-bun run lint
+bun run check:whitespace
 bun run build:frontend
 bun test
 # 聚焦的图表校验与独立的浏览器检查：

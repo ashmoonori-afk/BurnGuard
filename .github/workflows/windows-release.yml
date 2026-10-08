@@ -14,6 +14,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
@@ -30,7 +32,7 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag and app version differ' }
       - run: bun run typecheck
-      - run: bun run lint
+      - run: bun run check:whitespace
       - run: bun test scripts/qa/release-draft-state.test.js
       - run: bun test packages/backend/tests/original-samples.test.ts packages/backend/tests/desktop-lifecycle.test.ts packages/backend/tests/artifact-document-migration.test.ts --timeout 30000
       - name: Build Windows process host

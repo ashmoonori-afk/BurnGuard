@@ -114,7 +114,7 @@ React/Vite 프런트엔드, Bun/Hono·SQLite 백엔드, 공유 계약 패키지,
 
 ```powershell
 bun run typecheck
-bun run lint
+bun run check:whitespace
 bun run build:frontend
 bun test
 bun test packages/backend/tests/charts.test.ts

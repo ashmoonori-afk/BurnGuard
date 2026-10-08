@@ -119,7 +119,7 @@ bun test packages/backend/tests/<file>.test.ts
 bun run build                  # frontend + scripts/build-binary.ts; the backend step needs a Windows x64 host
 bun run build:windows:release  # Windows host, .NET 8, vpk 1.2.0
 bun run build:mac:dmg          # macOS host only
-bun run lint                   # git diff --check
+bun run check:whitespace         # git diff --check over the branch diff + LF-only .sh/.command (alias: lint)
 bun scripts/qa/preflight.ts --json
 node scripts/qa/e2e-smoke.mjs [--only core]
 bash scripts/qa/task-8-gates.sh
