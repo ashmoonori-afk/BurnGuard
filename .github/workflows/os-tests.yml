@@ -137,6 +137,7 @@ jobs:
           scripts/qa/check-flake-patterns.test.ts
           scripts/whitespace-base.test.ts
           packages/backend/tests/mac-updates-version-order.test.ts
+          packages/backend/tests/mac-updates.test.ts
           packages/backend/tests/task-preset-comparison.test.ts
           packages/backend/tests/codex-model-catalog.test.ts
           packages/backend/tests/model-lists.test.ts
