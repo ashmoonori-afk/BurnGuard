@@ -37,10 +37,13 @@ describe("Codex progress metrics toggle", () => {
   });
 
   test("Given the Settings dialog When saved Then the toggle sits beside the provider settings and only a changed value becomes an explicit choice", () => {
-    expect(source.indexOf("<CodexProgressMetricsToggle")).toBeGreaterThan(source.indexOf('t("settings.webAssetSearchHint")'));
-    expect(source.indexOf("<CodexProgressMetricsToggle")).toBeLessThan(source.indexOf('id="commandcode-api-key"'));
-    expect(source).toContain("userOtelConfigured={settings.codex_user_otel_configured}");
-    expect(source).toContain("...codexProgressMetricsPatch(settingsQuery.data, settings.codex_progress_metrics),");
+    const element = /<CodexProgressMetricsToggle\b([\s\S]*?)\/>/.exec(source);
+    const props = Object.fromEntries([...(element?.[1] ?? "").matchAll(/(\w+)=\{\s*([\w.]+)/g)].map(([, name, value]) => [name, value]));
+    expect(props).toMatchObject({ checked: "settings.codex_progress_metrics", userOtelConfigured: "settings.codex_user_otel_configured" });
+    const at = element?.index ?? -1;
+    expect(at).toBeGreaterThan(source.indexOf("settings.webAssetSearchHint"));
+    expect(at).toBeLessThan(source.indexOf("commandcode-api-key"));
+    expect(source).toMatch(/\.\.\.\s*codexProgressMetricsPatch\(\s*settingsQuery\.data\s*,\s*settings\.codex_progress_metrics\s*\)/);
     const loaded = { ...mockSettings, codex_progress_metrics: true };
     expect(codexProgressMetricsPatch(loaded, true)).toEqual({});
     expect(codexProgressMetricsPatch(loaded, false)).toEqual({ codex_progress_metrics: false });

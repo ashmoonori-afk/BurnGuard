@@ -39,11 +39,12 @@ describe("buildCodexCommand", () => {
     ]);
   });
 
-  test("Given a progress receiver Then Codex exports its metrics there with a space-free override and the run token", () => {
+  test("Given a progress receiver Then Codex exports its metrics there with a space-free, double-quote-free override and the run token", () => {
     const command = buildCodexCommand("codex", undefined, "win32", "allowed", { endpoint: "http://127.0.0.1:4100/v1/metrics", token: "abc123" });
     const override = command.find((arg) => arg.startsWith("otel.metrics_exporter="));
     expect(command[command.indexOf(override ?? "") - 1]).toBe("-c");
-    expect(override).toBe(`otel.metrics_exporter={otlp-http={endpoint="http://127.0.0.1:4100/v1/metrics",protocol="json",headers={${CODEX_PROGRESS_HEADER}="abc123"}}}`);
+    expect(override).toBe(`otel.metrics_exporter={otlp-http={endpoint='http://127.0.0.1:4100/v1/metrics',protocol='json',headers={${CODEX_PROGRESS_HEADER}='abc123'}}}`);
+    expect(override).not.toContain('"');
     expect(command.at(-1)).toBe("-");
   });
 });
@@ -92,7 +93,8 @@ describe("Codex stream progress metrics", () => {
 
   /**
    * Runs a Codex stand-in that tries to export one stream event wherever its argv points, then
-   * reports what it saw: the export status, the OTel interval, every OTel argument and OTEL_* name.
+   * reports what it saw: the export status, the OTel interval, every OTel argument and OTEL_* name, and
+   * whether the endpoint and token survived argv (on Windows it passes through a .cmd wrapper).
    */
   async function runMetricsFixture(codexProgressMetrics: boolean | undefined) {
     const root = await mkdtemp(path.join(tmpdir(), "burnguard-codex-progress-"));
@@ -102,13 +104,13 @@ describe("Codex stream progress metrics", () => {
     await writeFile(script, [
       "#!/usr/bin/env bun",
       'const override = process.argv.find((arg) => arg.startsWith("otel.metrics_exporter=")) ?? "";',
-      'const endpoint = /endpoint="([^"]+)"/.exec(override)?.[1];',
-      `const token = /${CODEX_PROGRESS_HEADER}="([^"]+)"/.exec(override)?.[1];`,
+      "const endpoint = /endpoint='([^']+)'/.exec(override)?.[1];",
+      `const token = /${CODEX_PROGRESS_HEADER}='([^']+)'/.exec(override)?.[1];`,
       `const body = ${JSON.stringify(JSON.stringify(metricsExport("codex.websocket.event", [{ success: "true", value: "2" }])))};`,
       `const status = endpoint && token ? (await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json", "${CODEX_PROGRESS_HEADER}": token }, body })).status : 0;`,
       'const otelArgs = process.argv.filter((arg) => arg.includes("otel"));',
       'const otelEnv = Object.keys(process.env).filter((name) => name.startsWith("OTEL_")).sort();',
-      'console.log(JSON.stringify({ type: "text", text: JSON.stringify({ status, interval: process.env.OTEL_METRIC_EXPORT_INTERVAL ?? null, otelArgs: otelArgs.length, otelEnv }) }));',
+      'console.log(JSON.stringify({ type: "text", text: JSON.stringify({ status, interval: process.env.OTEL_METRIC_EXPORT_INTERVAL ?? null, otelArgs: otelArgs.length, otelEnv, parsed: { endpoint: Boolean(endpoint), token: Boolean(token) } }) }));',
       'console.log(JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } }));',
       "",
     ].join("\n"));
@@ -152,7 +154,7 @@ describe("Codex stream progress metrics", () => {
     for (const setting of [undefined, false]) {
       const { result, order, report } = await runMetricsFixture(setting);
       expect(result).toEqual({ exitCode: 0 });
-      expect(report).toEqual({ status: 0, interval: process.env.OTEL_METRIC_EXPORT_INTERVAL ?? null, otelArgs: 0, otelEnv: parentOtelEnv() });
+      expect(report).toEqual({ status: 0, interval: process.env.OTEL_METRIC_EXPORT_INTERVAL ?? null, otelArgs: 0, otelEnv: parentOtelEnv(), parsed: { endpoint: false, token: false } });
       expect(order).not.toContain("progress");
     }
   });
@@ -160,7 +162,7 @@ describe("Codex stream progress metrics", () => {
   runnerTest("Given the setting on and a Codex child that exports a stream event When the turn runs Then progress arrives through the run's loopback receiver and nothing about it is published", async () => {
     const { result, order, events, report } = await runMetricsFixture(true);
     expect(result).toEqual({ exitCode: 0 });
-    expect(report).toMatchObject({ status: 200, interval: "10000", otelArgs: 1 });
+    expect(report).toMatchObject({ status: 200, interval: "10000", otelArgs: 1, parsed: { endpoint: true, token: true } });
     expect(order).toEqual(["progress", "chat.delta", "usage.delta", "chat.message_end", "status.idle"]);
     expect(JSON.stringify(events)).not.toContain("/v1/metrics");
   });

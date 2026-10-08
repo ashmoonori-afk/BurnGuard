@@ -37,9 +37,10 @@ export function buildCodexCommand(
     // than merely discouraged in the prompt.
     "-c", `features.image_generation=${imageGeneration === "forbidden" ? "false" : "true"}`,
     // Codex streams one item without any stdout line, so its stream event counters are the only
-    // proof of life while it writes a large patch; see progress-metrics.ts. No spaces: Windows
-    // forwards argv through a .cmd wrapper.
-    ...(progress ? ["-c", `otel.metrics_exporter={otlp-http={endpoint="${progress.endpoint}",protocol="json",headers={${CODEX_PROGRESS_HEADER}="${progress.token}"}}}`] : []),
+    // proof of life while it writes a large patch; see progress-metrics.ts. No spaces and no double
+    // quotes (TOML literal strings instead): on Windows argv goes through a .cmd wrapper, where an
+    // inner `"` is doubled and each runtime's command-line parser reads `""` back differently.
+    ...(progress ? ["-c", `otel.metrics_exporter={otlp-http={endpoint='${progress.endpoint}',protocol='json',headers={${CODEX_PROGRESS_HEADER}='${progress.token}'}}}`] : []),
     ...(generation?.model ? ["--model", generation.model] : []),
     ...(generation?.vanilla ? ["--ignore-user-config", "-c", "features.plugins=false", "-c", "features.skip_host_skill_discovery=true", "-c", "project_doc_max_bytes=0"] : []),
     // Ignoring user config also drops Windows sandbox selection and makes exec read-only.
