@@ -54,7 +54,7 @@ test.skipIf(process.platform === "win32")("Given an adapter exits with a survivi
   const root = await mkdtemp(path.join(tmpdir(), "burnguard-adapter-tree-"));
   const binary = path.join(root, "adapter-fixture");
   const childScript = "await new Promise(() => {})";
-  await writeFile(binary, `#!/usr/bin/env bun\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\n`);
+  await writeFile(binary, `#!/usr/bin/env bun\nif(process.argv[2]==="--help"){console.log("  --include-partial-messages");process.exit(0);}\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\n`);
   await chmod(binary, 0o700);
   let childPid = 0;
   try {
@@ -67,6 +67,22 @@ test.skipIf(process.platform === "win32")("Given an adapter exits with a survivi
   }
 });
 
+test("Given a claude-code run in a private project directory When the runner logs its launch Then the log omits the absolute project path", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "burnguard-adapter-log-"));
+  const logged: string[] = [];
+  const spy = spyOn(console, "log").mockImplementation((...args: unknown[]) => { logged.push(args.map(String).join(" ")); });
+  try {
+    // `process.execPath` stands in for the CLI: the runner logs its spawn line
+    // before touching the child, so the process only needs to exist and exit.
+    await runClaudeCode({ binaryPath: process.execPath, projectDir: root, prompt: "test", onStdoutLine: () => {} }).catch(() => undefined);
+  } finally {
+    spy.mockRestore();
+    await rm(root, { recursive: true, force: true });
+  }
+  expect(logged.some((line) => line.startsWith("[claude-code] spawn"))).toBe(true);
+  expect(logged.some((line) => line.includes(root))).toBe(false);
+});
+
 // Skipped on Windows: needs POSIX shebang executables and signals; Windows ownership is covered by owned-process-windows.test.ts and codex-runner.test.ts.
 test.skipIf(process.platform === "win32")("Given an adapter run that is aborted mid-stream When the run settles Then the owned process tree is gone", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "burnguard-adapter-abort-"));
@@ -74,7 +90,7 @@ test.skipIf(process.platform === "win32")("Given an adapter run that is aborted 
   const childScript = "await new Promise(() => {})";
   // The fixture root never exits on its own — only the abort teardown can
   // end this run, which is exactly the path the interrupt handler owns.
-  await writeFile(binary, `#!/usr/bin/env bun\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\nawait new Promise(() => {});\n`);
+  await writeFile(binary, `#!/usr/bin/env bun\nif(process.argv[2]==="--help"){console.log("  --include-partial-messages");process.exit(0);}\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\nawait new Promise(() => {});\n`);
   await chmod(binary, 0o700);
   const controller = new AbortController();
   let childPid = 0;
@@ -82,6 +98,23 @@ test.skipIf(process.platform === "win32")("Given an adapter run that is aborted 
     await runClaudeCode({ binaryPath: binary, projectDir: root, prompt: "test", signal: controller.signal, onStdoutLine: (line) => { childPid = Number(line); controller.abort(); } });
     expect(Number.isSafeInteger(childPid) && childPid > 0).toBe(true);
     expect(() => process.kill(childPid, 0)).toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// POSIX-only: the hung fixture is an executable shell script; Windows covers abort through the injected-probe unit test.
+test.skipIf(process.platform === "win32")("Given a turn cancelled while the capability probe hangs When the run starts Then it settles without waiting for the probe timeout", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "burnguard-probe-abort-"));
+  const binary = path.join(root, "hung-help-fixture");
+  // Every invocation, including --help, never exits on its own.
+  await writeFile(binary, `#!/usr/bin/env bun\nawait new Promise(() => {});\n`);
+  await chmod(binary, 0o700);
+  const controller = new AbortController();
+  controller.abort();
+  try {
+    const result = await runClaudeCode({ binaryPath: binary, projectDir: root, prompt: "test", signal: controller.signal, onStdoutLine: () => {} });
+    expect(typeof result.exitCode).toBe("number");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

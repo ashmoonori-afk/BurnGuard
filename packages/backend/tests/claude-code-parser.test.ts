@@ -426,7 +426,10 @@ describe("parseStreamLine — result line", () => {
     ["Not logged in", "provider_auth_required"],
     ["Claude AI usage limit reached|1760000000", "provider_usage_limited"],
     ["API Error: 429 rate limit exceeded", "provider_usage_limited"],
+    ["Request failed with HTTP 429", "provider_usage_limited"],
+    ["rate_limit_error", "provider_usage_limited"],
     ["Credit balance is too low", "provider_quota_exhausted"],
+    ["insufficient_quota", "provider_quota_exhausted"],
     ["You exceeded your current quota", "provider_quota_exhausted"],
     ["There's an issue with the selected model (x). It may not exist or you may not have access to it.", "provider_model_unavailable"],
     ["model claude-old does not exist", "provider_model_unavailable"],
@@ -439,6 +442,15 @@ describe("parseStreamLine — result line", () => {
 
   test("Given an is_error result with unrecognised text, When parsed, Then it stays a recoverable turn_failed", () => {
     const events = parseStreamLine(JSON.stringify({ type: "result", is_error: true, result: "something unexpected" }), freshCtx());
+    expect(events[1]).toMatchObject({ type: "status.error", code: "turn_failed", recoverable: true });
+  });
+
+  test.each([
+    "Cannot read src/login/session.ts",
+    "Assertion failed at line 429",
+    "write failed: disk quota exceeded",
+  ])("Given an is_error result with unrelated text %#, When parsed, Then it stays a recoverable turn_failed", (text) => {
+    const events = parseStreamLine(JSON.stringify({ type: "result", is_error: true, result: text }), freshCtx());
     expect(events[1]).toMatchObject({ type: "status.error", code: "turn_failed", recoverable: true });
   });
 
@@ -491,5 +503,35 @@ describe("parseStreamLine — result line", () => {
       ctx,
     );
     expect(events[0]).toMatchObject({ input: 0, output: 0, cached: 0 });
+  });
+});
+
+describe("parseStreamLine — partial-message progress", () => {
+  const partialLines = [
+    { type: "stream_event", event: { type: "message_start", message: { id: "m1" } } },
+    { type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "t1", name: "Write", input: {} } } },
+    { type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: "{\"content\":\"<html>" } } },
+    { type: "stream_event", event: { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "Hello" } } },
+  ];
+
+  test("Given partial-message lines When parsed Then each signals progress and none produces an event or touches the transcript state", () => {
+    let progress = 0;
+    const ctx = freshCtx({ onProgress: () => { progress++; } });
+    for (const line of partialLines) expect(parseStreamLine(JSON.stringify(line), ctx)).toEqual([]);
+    expect(progress).toBe(partialLines.length);
+    expect(ctx.toolNames.size).toBe(0);
+    expect(ctx.toolInputs.size).toBe(0);
+  });
+
+  test("Given a complete assistant line When parsed Then it is not mistaken for progress-only output", () => {
+    let progress = 0;
+    const ctx = freshCtx({ onProgress: () => { progress++; } });
+    const events = parseStreamLine(JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "done" }] } }), ctx);
+    expect(events.map((event) => event.type)).toEqual(["chat.delta"]);
+    expect(progress).toBe(0);
+  });
+
+  test("Given partial-message lines and no progress listener When parsed Then they are still silently ignored", () => {
+    expect(parseStreamLine(JSON.stringify(partialLines[2]), freshCtx())).toEqual([]);
   });
 });
