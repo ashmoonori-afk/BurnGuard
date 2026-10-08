@@ -11,6 +11,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var serviceInput: Pipe?
     private var serviceOutput: Pipe?
     private var outputBuffer = Data()
+    private var startupFailure: String?
     private var origin: URL?
     private var expectedOrigin: String?
     private var smokeReportPath: String?
@@ -429,6 +430,8 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         environment["BG_UPDATE_WAIT_PID"] = String(ProcessInfo.processInfo.processIdentifier)
         // The readiness line must name exactly this port, so the backend may not scan for another one.
         let port = environment["BG_PORT"] ?? "14070"
+        guard let portNumber = UInt16(port), portNumber >= 1024 else { throw startupError("invalid_port", port: port) }
+        guard portIsFree(portNumber) else { throw startupError("port_busy", port: port) }
         environment["BG_PORT"] = port
         environment.removeValue(forKey: "BG_SCAN_PORT")
         expectedOrigin = "http://127.0.0.1:\(port)"
@@ -451,9 +454,14 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             if handle.availableData.isEmpty { handle.readabilityHandler = nil }
         }
         process.terminationHandler = { [weak self] process in
+            // The backend may print startup_failed just before exiting; read what is left before choosing the message.
+            output.fileHandleForReading.readabilityHandler = nil
+            let remaining = try? output.fileHandleForReading.readToEnd()
             DispatchQueue.main.async {
                 guard let self else { return }
                 if self.closing { self.finishTermination(); return }
+                if let remaining, !remaining.isEmpty { self.consumeServiceOutput(remaining); if self.closing { return } }
+                if let message = self.startupFailure { self.fail(message); return }
                 self.fail("BurnGuard 서버가 종료되었습니다 (code \(process.terminationStatus)).")
             }
         }
@@ -463,6 +471,39 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             guard let self, !self.closing, self.origin == nil else { return }
             self.fail("BurnGuard 서버가 300초 안에 시작되지 않았습니다.")
         }
+    }
+
+    // Known backend startup_failed codes map to localized text from the bundled shell-ko.json; unknown codes keep the generic exit message.
+    private func startupMessage(_ code: String?, port: String) -> String? {
+        guard let code, ["port_busy", "profile_owned", "invalid_port"].contains(code) else { return nil }
+        let fallback = "BurnGuard could not start (\(code)). Close other BurnGuard instances and programs using port \(port), then retry."
+        guard let url = Bundle.main.url(forResource: "shell-ko", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let table = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+              let text = table["startup_failed.\(code)"] else { return fallback }
+        return text.replacingOccurrences(of: "{port}", with: port)
+    }
+
+    private func startupError(_ code: String, port: String) -> NSError {
+        NSError(domain: "BurnGuard", code: 2, userInfo: [NSLocalizedDescriptionKey: startupMessage(code, port: port) ?? code])
+    }
+
+    /// Mirrors the Windows shell's TcpListener probe: a bind on the loopback port fails while another process is listening.
+    private func portIsFree(_ port: UInt16) -> Bool {
+        let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+        guard descriptor >= 0 else { return true }
+        defer { Darwin.close(descriptor) }
+        var reuse: Int32 = 1
+        setsockopt(descriptor, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = port.bigEndian
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let result = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        return result == 0
     }
 
     private func consumeServiceOutput(_ data: Data) {
@@ -478,6 +519,10 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                   let protocolVersion = message["protocol"] as? Int,
                   protocolVersion == 1 else {
                 fail("BurnGuard 시작 응답을 확인할 수 없습니다.")
+                return
+            }
+            if message["event"] as? String == "startup_failed" {
+                startupFailure = startupMessage(message["code"] as? String, port: expectedOrigin.flatMap { URL(string: $0)?.port.map(String.init) } ?? "14070")
                 return
             }
             if message["event"] as? String == "shutdown" {

@@ -18,6 +18,7 @@
     <PackageReference Include="Velopack" Version="1.2.0" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
     <Reference Include="System.Web.Extensions" />
+    <Content Include="..\desktop-shared\i18n\ko.json" Link="i18n\ko.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="BurnGuard.ico" Condition="Exists('BurnGuard.ico')" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

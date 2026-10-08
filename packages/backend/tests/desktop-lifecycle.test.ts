@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { createServer, type Server } from "node:net";
 import { PassThrough } from "node:stream";
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -108,4 +109,67 @@ test("Given the parent pipe When fragmented shutdown or EOF arrives Then shutdow
   disconnected.end("malformed");
   await new Promise<void>((resolve) => disconnected.once("end", resolve));
   expect(stops).toBe(2);
+});
+
+const mainEntry = path.join(import.meta.dir, "../src/main.ts");
+
+/** Runs the real entrypoint as the desktop shell would and returns its protocol lines and exit code. */
+async function startDesktopBackend(env: Record<string, string>, profile: string): Promise<{ readonly protocol: Array<Record<string, unknown>>; readonly exitCode: number }> {
+  const child = Bun.spawn([process.execPath, mainEntry], {
+    env: { ...process.env, BG_DESKTOP: "1", BG_NO_OPEN: "1", BG_DEV: "0", BG_APP_ROOT: profile, ...env },
+    stdin: "pipe", stdout: "pipe", stderr: "ignore", timeout: 30_000,
+  });
+  const text = await new Response(child.stdout).text();
+  const exitCode = await child.exited;
+  const prefix = "[burnguard-desktop] ";
+  const protocol = text.split("\n").filter((line) => line.startsWith(prefix)).map((line) => JSON.parse(line.slice(prefix.length)) as Record<string, unknown>);
+  return { protocol, exitCode };
+}
+
+async function freePort(): Promise<number> {
+  const probe = createServer();
+  await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", resolve));
+  const { port } = probe.address() as { port: number };
+  await new Promise<void>((resolve) => probe.close(() => resolve()));
+  return port;
+}
+
+test("Given a desktop BG_PORT that is not a valid port When the backend starts Then it reports invalid_port and exits non-zero", async () => {
+  const profile = await mkdtemp(path.join(tmpdir(), "burnguard-startup-"));
+  try {
+    const result = await startDesktopBackend({ BG_PORT: "80" }, profile);
+    expect(result.protocol).toEqual([{ protocol: 1, event: "startup_failed", code: "invalid_port" }]);
+    expect(result.exitCode).not.toBe(0);
+  } finally {
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("Given another program already listening on the desktop port When the backend starts Then it reports port_busy and exits non-zero", async () => {
+  const profile = await mkdtemp(path.join(tmpdir(), "burnguard-startup-"));
+  const port = await freePort();
+  const squatter = createServer();
+  await new Promise<void>((resolve) => squatter.listen(port, "127.0.0.1", resolve));
+  try {
+    const result = await startDesktopBackend({ BG_PORT: String(port) }, profile);
+    expect(result.protocol).toEqual([{ protocol: 1, event: "startup_failed", code: "port_busy" }]);
+    expect(result.exitCode).not.toBe(0);
+  } finally {
+    await new Promise<void>((resolve) => squatter.close(() => resolve()));
+    await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test("Given a profile already owned by another process When the desktop backend starts on a free port Then it reports profile_owned and exits non-zero", async () => {
+  const profile = await mkdtemp(path.join(tmpdir(), "burnguard-startup-"));
+  const owner = process.platform === "win32" ? await acquireWindowsProfile(profile) : await acquirePosixProfile(profile);
+  try {
+    const result = await startDesktopBackend({ BG_PORT: String(await freePort()) }, profile);
+    expect(result.protocol).toEqual([{ protocol: 1, event: "startup_failed", code: "profile_owned" }]);
+    expect(result.exitCode).not.toBe(0);
+  } finally {
+    if (process.platform === "win32") await new Promise<void>((resolve) => (owner as Server).close(() => resolve()));
+    else owner.close();
+    await rm(profile, { recursive: true, force: true });
+  }
 });

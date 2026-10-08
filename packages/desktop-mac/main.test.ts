@@ -205,3 +205,25 @@ describe("macOS shutdown ordering", () => {
     expect(source).not.toMatch(/service\??\.terminate\(\)/);
   });
 });
+
+describe("macOS startup failure messages", () => {
+  test("Given the backend startup_failed codes When the shell handles them Then each code has a localized table entry and the shell never shows only an exit code for it", async () => {
+    const table = JSON.parse(await readFile(path.join(import.meta.dir, "../desktop-shared/i18n/ko.json"), "utf8")) as Record<string, string>;
+    const csharp = await readFile(path.join(import.meta.dir, "../desktop-windows/Program.cs"), "utf8");
+    for (const code of ["port_busy", "profile_owned", "invalid_port"]) {
+      expect(table[`startup_failed.${code}`]).toBeTruthy();
+      expect(source).toContain(`"${code}"`);
+      expect(csharp).toContain(`"${code}"`);
+    }
+    expect(Object.keys(table).sort()).toEqual(["invalid_port", "port_busy", "profile_owned"].map((code) => `startup_failed.${code}`));
+    expect(body("private func consumeServiceOutput")).toContain('"startup_failed"');
+    expect(body("process.terminationHandler")).toMatch(/startupFailure[\s\S]*self\.fail\(message\)/);
+  });
+
+  test("Given a busy or invalid desktop port When startService runs Then it pre-checks the loopback port before spawning the backend", () => {
+    const service = body("private func startService()");
+    expect(service.indexOf("portIsFree(")).toBeGreaterThan(-1);
+    expect(service.indexOf("portIsFree(")).toBeLessThan(service.indexOf("try process.run()"));
+    expect(body("private func portIsFree")).toMatch(/Darwin\.bind\(/);
+  });
+});

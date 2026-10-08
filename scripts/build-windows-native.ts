@@ -37,6 +37,7 @@ for await (const name of new Bun.Glob("*.dll").scan(shell)) {
   if (name !== "Microsoft.Web.WebView2.Wpf.dll") await copyFile(path.join(shell, name), path.join(output, name));
 }
 await copyFile(path.join(shell, "runtimes/win-x64/native/WebView2Loader.dll"), path.join(output, "WebView2Loader.dll"));
+await cp(path.join(shell, "i18n"), path.join(output, "i18n"), { recursive: true });
 await cp(path.join(root, "dist/windows"), path.join(output, "service"), { recursive: true });
 // Source maps are useful during development but not required by the shipped UI.
 for await (const relative of new Bun.Glob("**/*.map").scan(path.join(output, "service/resources/packages/frontend/dist"))) {

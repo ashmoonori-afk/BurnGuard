@@ -139,6 +139,8 @@ async function main() {
 
   writeFileSync(path.join(APP_CONTENTS, "Info.plist"), INFO_PLIST, "utf8");
 
+  cpSync(path.join(ROOT, "packages/desktop-shared/i18n/ko.json"), path.join(APP_RESOURCES, "shell-ko.json"));
+
   if (existsSync(ICON_SRC)) {
     cpSync(ICON_SRC, path.join(APP_RESOURCES, "icon.icns"));
     console.log(`[build-mac] icon:    embedded ${path.basename(ICON_SRC)}`);

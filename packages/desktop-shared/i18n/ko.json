@@ -1,0 +1,5 @@
+{
+  "startup_failed.port_busy": "포트 {port}를 다른 프로그램이 사용 중입니다. 해당 프로그램이나 이미 실행 중인 BurnGuard를 종료한 뒤 다시 실행해 주세요.",
+  "startup_failed.profile_owned": "다른 BurnGuard가 이미 같은 프로필을 사용 중입니다. 실행 중인 BurnGuard를 모두 종료한 뒤 다시 실행해 주세요.",
+  "startup_failed.invalid_port": "BG_PORT 값이 올바르지 않습니다. 1024에서 65535 사이의 정수로 설정하거나 BG_PORT를 지운 뒤 다시 실행해 주세요."
+}

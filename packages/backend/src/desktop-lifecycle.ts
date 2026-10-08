@@ -36,3 +36,15 @@ export function watchDesktopParent(input: Readable, shutdown: () => void): void 
   input.once("error", stop);
   input.resume();
 }
+
+export type DesktopStartupFailure = "port_busy" | "profile_owned" | "invalid_port";
+
+/** Runs one startup step; on failure tells the native shell which known cause it was, then exits non-zero without a stack trace. */
+export async function desktopStartupStep<T>(code: DesktopStartupFailure, step: () => T | Promise<T>): Promise<T> {
+  try {
+    return await step();
+  } catch {
+    console.log(`[burnguard-desktop] ${JSON.stringify({ protocol: 1, event: "startup_failed", code })}`);
+    process.exit(1);
+  }
+}

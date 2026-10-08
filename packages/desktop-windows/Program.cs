@@ -295,6 +295,22 @@ namespace BurnGuard.Desktop
             catch { MessageBox.Show(this, "기본 브라우저를 열 수 없습니다.", "BurnGuard"); }
         }
 
+        private string startupFailure;
+
+        // Known backend startup_failed codes map to localized text from i18n/ko.json beside the executable; unknown codes keep the generic exit message.
+        private string StartupFailureMessage(string code)
+        {
+            if (code != "port_busy" && code != "profile_owned" && code != "invalid_port") return null;
+            var fallback = "BurnGuard could not start (" + code + "). Close other BurnGuard instances and programs using port " + port + ", then retry.";
+            try
+            {
+                var table = Program.Json.Deserialize<Dictionary<string, string>>(File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "i18n", "ko.json"), Encoding.UTF8));
+                string text;
+                return table.TryGetValue("startup_failed." + code, out text) ? text.Replace("{port}", port.ToString()) : fallback;
+            }
+            catch { return fallback; }
+        }
+
         private void StartService()
         {
             var directory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "service");
@@ -315,6 +331,12 @@ namespace BurnGuard.Desktop
                 try
                 {
                     var data = Program.Json.Deserialize<Dictionary<string, object>>(args.Data.Substring(prefix.Length));
+                    if (data.ContainsKey("event") && (string)data["event"] == "startup_failed")
+                    {
+                        startupFailure = StartupFailureMessage(data.ContainsKey("code") ? data["code"] as string : null);
+                        if (startupFailure != null) ready.TrySetException(new InvalidOperationException(startupFailure));
+                        return;
+                    }
                     var expected = "http://127.0.0.1:" + port;
                     if (Convert.ToInt32(data["protocol"]) != 1 || Convert.ToInt32(data["pid"]) != service.Id || (string)data["url"] != expected)
                         throw new InvalidOperationException("Invalid desktop readiness message.");
@@ -326,6 +348,9 @@ namespace BurnGuard.Desktop
             service.ErrorDataReceived += (_, __) => { };
             service.Exited += (_, __) =>
             {
+                // Let the redirected stdout finish so a startup_failed line is seen before the generic exit message.
+                try { service.WaitForExit(); } catch (InvalidOperationException) { }
+                if (startupFailure != null) { ready.TrySetException(new InvalidOperationException(startupFailure)); return; }
                 ready.TrySetException(new InvalidOperationException("BurnGuard 서버가 시작 중 종료되었습니다."));
                 try { if (!closing && IsHandleCreated) BeginInvoke(new Action(() => { if (!closing) Fail("BurnGuard 서버가 종료되었습니다. 앱을 다시 실행해 주세요."); })); }
                 catch (InvalidOperationException) { }
