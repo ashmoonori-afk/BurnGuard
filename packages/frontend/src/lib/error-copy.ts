@@ -26,6 +26,8 @@ const ERROR_COPY: Record<string, MessageKey> = {
   pdf_resource_limit: "errors.pdf_resource_limit",
   source_changed: "errors.source_changed",
   project_in_use: "errors.project_in_use",
+  project_restore_conflict: "errors.project_restore_conflict",
+  project_restore_unavailable: "errors.project_restore_unavailable",
   backend_unavailable: "errors.backend_unavailable",
   install_start_failed: "errors.install_start_failed",
   install_in_progress: "errors.install_in_progress",
