@@ -493,3 +493,33 @@ describe("parseStreamLine — result line", () => {
     expect(events[0]).toMatchObject({ input: 0, output: 0, cached: 0 });
   });
 });
+
+describe("parseStreamLine — partial-message progress", () => {
+  const partialLines = [
+    { type: "stream_event", event: { type: "message_start", message: { id: "m1" } } },
+    { type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "t1", name: "Write", input: {} } } },
+    { type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: "{\"content\":\"<html>" } } },
+    { type: "stream_event", event: { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "Hello" } } },
+  ];
+
+  test("Given partial-message lines When parsed Then each signals progress and none produces an event or touches the transcript state", () => {
+    let progress = 0;
+    const ctx = freshCtx({ onProgress: () => { progress++; } });
+    for (const line of partialLines) expect(parseStreamLine(JSON.stringify(line), ctx)).toEqual([]);
+    expect(progress).toBe(partialLines.length);
+    expect(ctx.toolNames.size).toBe(0);
+    expect(ctx.toolInputs.size).toBe(0);
+  });
+
+  test("Given a complete assistant line When parsed Then it is not mistaken for progress-only output", () => {
+    let progress = 0;
+    const ctx = freshCtx({ onProgress: () => { progress++; } });
+    const events = parseStreamLine(JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "done" }] } }), ctx);
+    expect(events.map((event) => event.type)).toEqual(["chat.delta"]);
+    expect(progress).toBe(0);
+  });
+
+  test("Given partial-message lines and no progress listener When parsed Then they are still silently ignored", () => {
+    expect(parseStreamLine(JSON.stringify(partialLines[2]), freshCtx())).toEqual([]);
+  });
+});
