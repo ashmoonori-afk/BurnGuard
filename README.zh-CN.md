@@ -60,7 +60,7 @@
 
 这些示例展示内置主题的默认设计。已有的系统预览文件优先;缺失时,BurnGuard 会显示内置参考,且不会覆盖已编辑的系统文件或发布记录。在应用中,示例使用共享的本地字体库。
 
-内置 **72 个字体家族**,并附带许可证声明,即 71 个 Google Fonts 家族加上 Pretendard;Pretendard 并非 Google Fonts 家族,而是取自 `orioncactus/pretendard`。Cafe24、MaruBuri、NanumSquare 等字体遵循各自的官方来源和许可证文件,详见字体目录。内置字体使用同一个共享的本地字体库,画布加载的字体在应用窗口内跨项目复用。新项目引用该字体库;独立导出会包含所需的字体文件。[字体目录](assets/fonts/README.md) · [设计系统格式](<design system sample/README.md>)
+内置 **72 个字体家族**,并附带许可证声明。内置字体使用同一个共享的本地字体库,画布加载的字体在应用窗口内跨项目复用。新项目引用该字体库;独立导出会包含所需的字体文件。[字体目录](assets/fonts/README.md) · [设计系统格式](<design system sample/README.md>)
 
 ## 一个工作区,多种产出
 
