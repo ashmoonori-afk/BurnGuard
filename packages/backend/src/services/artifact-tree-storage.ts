@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir, open, readFile, readdir, rename, rm, unlink, writeFile, type FileHandle } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, rename, rm, unlink, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import type { CanonicalTreeEntry, CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { DEFAULT_CANONICAL_TREE_LIMITS, diskPathOf, inspectCanonicalTree, inspectCanonicalTreeOnDisk, validateCanonicalTree } from "./canonical-tree-manifest";
@@ -29,17 +29,66 @@ export class ArtifactPublicationPolicyError extends Error {
   constructor() { super("immutable_reference_escaped"); }
 }
 
-export async function materializeManagedTree(source: string, destination: string): Promise<CanonicalTreeManifest> {
+/** Durability seam: tests inject it to observe that file data is flushed before it becomes visible. */
+export type ManagedTreeIo = {
+  readonly syncFile: (handle: FileHandle) => Promise<void>;
+  readonly rename: (from: string, to: string) => Promise<void>;
+  readonly syncDirectory: (directory: string) => Promise<void>;
+};
+
+export const defaultManagedTreeIo: ManagedTreeIo = {
+  syncFile: (handle) => handle.sync(),
+  rename,
+  // Windows cannot open a directory for fsync; NTFS journals the rename itself (same rule as `config.ts`).
+  syncDirectory: async (directory) => {
+    if (process.platform === "win32") return;
+    const handle = await open(directory, "r");
+    try { await handle.sync(); } finally { await handle.close(); }
+  },
+};
+
+/** Throwaway copies (export and render roots, stage seeds) skip every flush; only the rename stays. */
+export const unsyncedManagedTreeIo: ManagedTreeIo = {
+  syncFile: async () => {},
+  rename,
+  syncDirectory: async () => {},
+};
+
+async function writeFileDurably(target: string, bytes: Uint8Array, io: ManagedTreeIo): Promise<void> {
+  const handle = await open(target, "wx");
+  try { await handle.writeFile(bytes); await io.syncFile(handle); }
+  finally { await handle.close(); }
+}
+
+/** Copies are unsynced unless the caller passes `defaultManagedTreeIo` because the copy becomes durable authority. */
+export async function materializeManagedTree(source: string, destination: string, io: ManagedTreeIo = unsyncedManagedTreeIo): Promise<CanonicalTreeManifest> {
   const tree = await inspectCanonicalTreeOnDisk(source);
   const manifest = tree.manifest;
   await rm(destination, { recursive: true, force: true });
   await mkdir(destination, { recursive: true });
+  const directories = new Set<string>([destination]);
   for (const file of manifest.files) {
     const target = path.join(destination, file.path);
     await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, await readFile(diskPathOf(source, tree, file.path)));
+    await writeFileDurably(target, await readFile(diskPathOf(source, tree, file.path)), io);
+    for (let directory = path.dirname(target); directory !== destination; directory = path.dirname(directory)) directories.add(directory);
   }
+  for (const directory of directories) await io.syncDirectory(directory);
   return validateCanonicalTree(destination, manifest);
+}
+
+/** Flushes files written into a tree by something else (the agent in a stage), then their directories. */
+export async function syncManagedTree(root: string, io: ManagedTreeIo = defaultManagedTreeIo): Promise<void> {
+  const tree = await inspectCanonicalTreeOnDisk(root);
+  const directories = new Set<string>([root]);
+  for (const file of tree.manifest.files) {
+    const target = diskPathOf(root, tree, file.path);
+    // Windows refuses FlushFileBuffers on a read-only handle.
+    const handle = await open(target, "r+");
+    try { await io.syncFile(handle); } finally { await handle.close(); }
+    for (let directory = path.dirname(target); directory !== root; directory = path.dirname(directory)) directories.add(directory);
+  }
+  for (const directory of directories) await io.syncDirectory(directory);
 }
 
 export function diffManagedTrees(before: CanonicalTreeManifest, after: CanonicalTreeManifest): readonly ArtifactFileDiff[] {
@@ -61,6 +110,7 @@ export async function publishManagedTree(
   destination: string,
   afterWrite?: (relativePath: string) => void,
   policy: PublicationPolicy = {},
+  io: ManagedTreeIo = defaultManagedTreeIo,
 ): Promise<CanonicalTreeManifest> {
   const sourceTree = await inspectCanonicalTreeOnDisk(source);
   const sourceManifest = sourceTree.manifest;
@@ -78,18 +128,21 @@ export async function publishManagedTree(
     // A decomposed directory kept alive by a skipped file (an agent file) takes its NFC name, so the files written
     // below land beside that file instead of in a second spelling of the same directory.
     await renameDecomposedDirectories(destination);
+    const writtenDirectories = new Set<string>();
     for (const candidate of opened) {
       const target = path.join(destination, candidate.file.path);
       await mkdir(path.dirname(target), { recursive: true });
       const temporary = path.join(path.dirname(target), `.${path.basename(target)}.${crypto.randomUUID()}.tmp`);
       try {
-        await writeFile(temporary, candidate.bytes);
-        await rename(temporary, target);
+        await writeFileDurably(temporary, candidate.bytes, io);
+        await io.rename(temporary, target);
       } finally {
         await rm(temporary, { force: true });
       }
+      writtenDirectories.add(path.dirname(target));
       afterWrite?.(candidate.file.path);
     }
+    for (const directory of writtenDirectories) await io.syncDirectory(directory);
   } finally {
     await Promise.all(opened.map((candidate) => candidate.handle.close()));
   }
