@@ -119,10 +119,15 @@ export async function submitToolDecision(
   );
 }
 
+export type SessionStreamReport =
+  | { kind: "parse"; message: string }
+  /** `connecting`: the browser is retrying on its own; `closed`: it gave up and only a new subscription recovers. */
+  | { kind: "connection"; state: "connecting" | "closed"; message: string };
+
 export function subscribeSessionStream(
   id: string,
   onEvent: (event: SequencedEventEnvelope) => void,
-  onError?: (err: { kind: "parse" | "connection"; message: string }) => void,
+  onError?: (err: SessionStreamReport) => void,
   options?: { afterSequence?: number; onOpen?: () => void },
 ): () => void {
   const source = new EventSource(`/api/sessions/${id}/stream?after_sequence=${options?.afterSequence ?? 0}`);
@@ -164,12 +169,11 @@ export function subscribeSessionStream(
   const errorListener = () => {
     if (source.readyState === lastErrorReadyState) return;
     lastErrorReadyState = source.readyState;
+    const closed = source.readyState === EventSource.CLOSED;
     onError?.({
       kind: "connection",
-      message:
-        source.readyState === EventSource.CLOSED
-          ? "Stream closed."
-          : "Stream reconnecting…",
+      state: closed ? "closed" : "connecting",
+      message: closed ? "Stream closed." : "Stream reconnecting…",
     });
   };
   source.addEventListener("message", listener as EventListener);
