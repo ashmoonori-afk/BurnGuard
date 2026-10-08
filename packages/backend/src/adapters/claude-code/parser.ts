@@ -8,6 +8,8 @@ export interface ParserContext {
   projectDir: string;
   toolNames: Map<string, string>;
   toolInputs: Map<string, unknown>;
+  /** Called for `--include-partial-messages` stream lines, which prove the provider is alive but carry no event. */
+  onProgress?: () => void;
 }
 
 /**
@@ -35,6 +37,13 @@ export function parseStreamLine(
   const obj = raw as Record<string, unknown>;
 
   switch (obj.type) {
+    case "stream_event": {
+      // Partial message chunks (message_start, content_block_delta incl. input_json_delta, ...). The
+      // complete `assistant` line still carries the content, so nothing is emitted or persisted here.
+      ctx.onProgress?.();
+      break;
+    }
+
     case "system": {
       // system init — status.running is emitted by the orchestrator already.
       break;
