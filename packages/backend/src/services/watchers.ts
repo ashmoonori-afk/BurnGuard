@@ -1,21 +1,29 @@
 import { watch, type FSWatcher } from "node:fs";
 import { getSqlite } from "../db/sqlite-client";
 import { getLatestProjectSession, getProjectDetail, listProjectIds } from "../db/project-read-repository";
-import { ArtifactCoordinator } from "./artifact-coordinator";
+import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
 import { waitForArtifactPublication } from "./artifact-publication-registry";
+import { isArtifactRecoveryHeld } from "./artifact-recovery-hold";
 import { appendSessionTrace } from "./trace";
 import { isTransientFilePath } from "./files";
 import { isProjectDocumentPath } from "./project-document-paths";
 import { isAgentControlPath } from "../security/agent-control-files";
 import {
   RESERVED_PROJECT_WATCHER,
+  closeProjectWatcher,
   projectSessionIds as sessionIdCache,
   projectWatchers as watchers,
+  setProjectReadiness,
+  setProjectReadinessRegistration,
 } from "./watcher-registry";
 
 const IGNORED_TOP_LEVEL = new Set([".meta", ".attachments", ".burnguard-inputs", ".git", ".omc", ".claude", ".codex"]);
 const pendingSignals = new Map<string, Promise<void>>();
 const dirtySignals = new Set<string>();
+const STARTUP_WATCHER_CONCURRENCY = 3;
+
+type ObserveProject = (projectId: string, projectDir: string) => Promise<unknown>;
+const observeProject: ObserveProject = (projectId, projectDir) => new ArtifactCoordinator(getSqlite()).observeExternal(projectId, projectDir);
 
 export function isProjectSignalPending(projectId: string): boolean { return pendingSignals.has(projectId); }
 
@@ -23,15 +31,16 @@ type ErrorAwareWatcher = FSWatcher & {
   on(event: "error", listener: (error: Error) => void): ErrorAwareWatcher;
 };
 
-export async function ensureProjectWatcher(projectId: string): Promise<void> {
+export async function ensureProjectWatcher(projectId: string, observe: ObserveProject = observeProject): Promise<void> {
   if (watchers.has(projectId)) return;
   const project = await getProjectDetail(projectId);
   if (project === null) return;
   watchers.set(projectId, RESERVED_PROJECT_WATCHER);
   let watcher: ErrorAwareWatcher;
   try {
-    const coordinator = new ArtifactCoordinator(getSqlite());
-    await coordinator.observeExternal(projectId, project.dir_path);
+    await observe(projectId, project.dir_path);
+    // Deletion or shutdown released the reservation while the project was being observed.
+    if (watchers.get(projectId) !== RESERVED_PROJECT_WATCHER) return;
     watcher = watch(project.dir_path, { recursive: true }, (_eventType, filename) => {
       if (filename === null) return;
       const relPath = String(filename).replaceAll("\\", "/");
@@ -39,18 +48,88 @@ export async function ensureProjectWatcher(projectId: string): Promise<void> {
       void scheduleProjectSignal(projectId, project.dir_path);
     }) as ErrorAwareWatcher;
   } catch (error) {
-    watchers.delete(projectId);
+    if (watchers.get(projectId) === RESERVED_PROJECT_WATCHER) watchers.delete(projectId);
     throw error;
   }
   watcher.on("error", (error) => { void recordWatcherFailure(projectId, error); });
   watchers.set(projectId, watcher);
 }
 
-export async function ensureAllProjectWatchers(projectIds?: readonly string[]): Promise<void> {
-  for (const projectId of projectIds ?? await listProjectIds()) {
-    try { await ensureProjectWatcher(projectId); }
-    catch (error) { console.warn("[watcher] project watcher unavailable", projectId, errorCode(error)); }
-  }
+export type ProjectWatcherStartup = {
+  /** Every project was observed (or reported unavailable), or startup was stopped. */
+  readonly settled: Promise<void>;
+  /** Synchronously stop dequeuing and reject queued projects' waiters; in-flight observations keep running. */
+  halt(): void;
+  /** `halt()`, then wait for in-flight observations to finish and close every watcher. */
+  stop(): Promise<void>;
+};
+
+/**
+ * Shutdown order: halt startup, run `interruptWork` (turns, export browsers) without waiting behind in-flight
+ * startup hashing, then wait for that hashing and close every watcher.
+ */
+export async function shutdownProjectWatchers(startup: ProjectWatcherStartup | null, interruptWork: () => Promise<void>): Promise<void> {
+  startup?.halt();
+  await interruptWork();
+  await startup?.stop();
+}
+
+type QueuedProject = { readonly projectId: string; readonly resolve: () => void; readonly reject: (error: unknown) => void };
+
+/**
+ * Observe persisted projects and attach their watchers in the background, a few projects at a time.
+ * Each project's artifact mutations wait for its own first observation (`waitForProjectReady`).
+ */
+export function startProjectWatchers(options: { readonly projectIds?: readonly string[]; readonly concurrency?: number; readonly observe?: ObserveProject } = {}): ProjectWatcherStartup {
+  const observe = options.observe ?? observeProject;
+  const queue: QueuedProject[] = [];
+  let stopped = false;
+  const registration = (async () => {
+    let projectIds: readonly string[] = [];
+    try { projectIds = options.projectIds ?? await listProjectIds(); }
+    catch { console.warn("[watcher] project list unavailable at startup"); }
+    if (stopped) return;
+    for (const projectId of projectIds) {
+      // Startup recovery failed for this project: it stays untouched (no observation, no watcher) until the next
+      // restart, and its mutations refuse with recovery_unavailable before waiting on readiness.
+      if (isArtifactRecoveryHeld(getSqlite(), projectId)) continue;
+      const ready = Promise.withResolvers<void>();
+      setProjectReadiness(projectId, ready.promise);
+      queue.push({ projectId, resolve: ready.resolve, reject: ready.reject });
+    }
+  })();
+  // A mutation that waits on a still-queued project moves it to the front of the queue.
+  setProjectReadinessRegistration(registration, (projectId) => {
+    const index = queue.findIndex((queued) => queued.projectId === projectId);
+    if (index > 0) queue.unshift(...queue.splice(index, 1));
+  });
+  const worker = async (): Promise<void> => {
+    while (!stopped) {
+      const next = queue.shift();
+      if (next === undefined) return;
+      try { await ensureProjectWatcher(next.projectId, observe); next.resolve(); }
+      catch (error) {
+        console.warn("[watcher] project watcher unavailable", next.projectId, error instanceof ArtifactOperationError ? error.code : errorCode(error));
+        next.reject(error);
+      }
+    }
+  };
+  const settled = registration.then(async () => {
+    await Promise.all(Array.from({ length: Math.min(Math.max(1, options.concurrency ?? STARTUP_WATCHER_CONCURRENCY), queue.length) }, worker));
+  });
+  const halt = (): void => {
+    stopped = true;
+    for (const queued of queue.splice(0)) queued.reject(new ArtifactOperationError("recovery_unavailable", "The app is shutting down"));
+  };
+  return {
+    settled,
+    halt,
+    async stop() {
+      halt();
+      await settled;
+      for (const projectId of [...watchers.keys()]) closeProjectWatcher(projectId);
+    },
+  };
 }
 
 function errorCode(error: unknown): string {
