@@ -700,7 +700,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                 fail(shellText("startupResponseInvalid"))
                 return
             }
-            if message["event" as? String == "startup_failed" {
+            if message["event"] as? String == "startup_failed" {
                 startupFailure = startupMessage(message["code"] as? String, port: expectedOrigin.flatMap { URL(string: $0)?.port.map(String.init) } ?? "14070")
                 return
             }
