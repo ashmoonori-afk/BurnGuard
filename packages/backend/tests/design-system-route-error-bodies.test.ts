@@ -47,10 +47,11 @@ afterAll(async () => {
 
 /** Makes the token write fail the way the OS would, with the given errno text, and records what the route logs. */
 async function saveColorWhileWriteFails(code: string, reason: string, privatePath: string) {
-  const original = fsp.writeFile;
-  const write = spyOn(fsp, "writeFile").mockImplementation(async (...args: Parameters<typeof fsp.writeFile>) => {
-    if (args[0] !== lockedTokenPath) return original(...args);
-    throw Object.assign(new Error(`${code}: ${reason}, open '${privatePath}'`), { code, errno: -1, syscall: "open", path: privatePath });
+  const original = fsp.rename;
+  // Token files are replaced by renaming a same-directory temp file over them, so that is where the OS fails.
+  const write = spyOn(fsp, "rename").mockImplementation(async (...args: Parameters<typeof fsp.rename>) => {
+    if (args[1] !== lockedTokenPath) return original(...args);
+    throw Object.assign(new Error(`${code}: ${reason}, rename '${privatePath}'`), { code, errno: -1, syscall: "rename", path: privatePath });
   });
   const logged: unknown[][] = [];
   const warn = spyOn(console, "warn").mockImplementation((...args: unknown[]) => { logged.push(args); });

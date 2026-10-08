@@ -32,6 +32,17 @@ describe("HAR masking for the pre-release UX QA stage", () => {
     expect(report.secret_values).toBe(2);
   });
 
+  test("Given the one-time bootstrap secret in the bootstrap request header and the launch page URL fragment, when masked, then it is masked everywhere", () => {
+    const secret = "launch-fixture-value";
+    const har = { log: { pages: [{ id: "page_1", title: `http://127.0.0.1:14070/#bg-bootstrap:${secret}` }], entries: [
+      entry({ url: "http://127.0.0.1:14070/api/bootstrap", headers: [header("x-burnguard-bootstrap", secret), header("Referer", `http://127.0.0.1:14070/#bg-bootstrap:${secret}`)] }, { content: { size: 60, mimeType: "application/json", text: JSON.stringify({ ok: true, data: { capability: CAPABILITY } }) } }),
+    ] } };
+    const { har: masked } = maskHar(har, []);
+    const text = JSON.stringify(masked);
+    for (const value of [secret, CAPABILITY]) expect(text).not.toContain(value);
+    expect(text).toContain(`#bg-bootstrap:${MASKED}`);
+  });
+
   test("Given secrets that appear only in bodies, form params or quoted cookies, when masked, then they are collected and masked too", () => {
     const token = "provider-token-9876543210";
     const har = { log: { entries: [

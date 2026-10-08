@@ -3,12 +3,13 @@ import { ulid } from "ulid";
 import path from "node:path";
 import type { NormalizedEvent } from "@bg/shared/events";
 import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
-import { materializeManagedTree, publishManagedTree } from "./artifact-tree-storage";
+import { defaultManagedTreeIo, materializeManagedTree, publishManagedTree } from "./artifact-tree-storage";
 import { CanonicalTreeManifestError, inspectCanonicalTree, isCanonicalTreeRootMissing, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { parsePersistedArtifactOperation, PersistedArtifactOperationError, type PersistedArtifactOperationRow } from "./artifact-operation-record";
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
 import { migrateDocumentOnlyRevision } from "./artifact-document-migration";
 import { setArtifactRecoveryHold } from "./artifact-recovery-hold";
+import { isProjectStorageError } from "./project-storage-error";
 
 type ProjectRow = { readonly id: string; readonly dir_path: string; readonly current_digest: string | null };
 type RecoveryRow = PersistedArtifactOperationRow & { readonly dir_path: string };
@@ -22,7 +23,8 @@ export async function reconcileArtifactState(db: Database): Promise<{ readonly o
   // Per-project recovery failures: the project is reported unavailable, every other project still loads.
   const failedProjects = new Map<string, string>();
   for (const project of projectRoots) {
-    if (await isCanonicalTreeRootMissing(project.dir_path)) missingProjectIds.add(project.id);
+    try { if (await isCanonicalTreeRootMissing(project.dir_path)) missingProjectIds.add(project.id); }
+    catch (error) { failedProjects.set(project.id, recoveryFailureCode(error)); }
   }
   const operations = db.query<RecoveryRow, []>(`SELECT o.id,o.project_id,p.dir_path,o.status,o.base_revision,o.base_digest,o.result_revision,o.result_digest,o.expected_revision,o.expected_file_hash,o.node_fingerprint,o.diff_json,o.snapshot_json,o.retention_json,o.replay_json,o.created_at,o.updated_at
     FROM artifact_operations o JOIN projects p ON p.id=o.project_id WHERE o.status IN ('pending','working','recovering') ORDER BY o.created_at,o.id`).all();
@@ -60,6 +62,8 @@ function recoveryFailureCode(error: unknown): string {
   if (error instanceof ArtifactOperationError) return error.code;
   if (error instanceof CanonicalTreeManifestError) return error.code;
   if (error instanceof PersistedArtifactOperationError) return "corrupt_receipt";
+  // Antivirus, cloud sync or a racing rename can fail one project's storage; that must not lock out the profile.
+  if (isProjectStorageError(error)) return "project_storage_unavailable";
   throw error;
 }
 
@@ -82,7 +86,7 @@ async function recoverCommittedBaseline(db: Database, project: ProjectRow): Prom
   const receipt = parseSnapshotReceipt(project.dir_path, operation.id, operation.snapshot);
   const stage = path.join(path.dirname(receipt.snapshotPath), "stage");
   if ((await inspectCanonicalTree(stage)).tree_digest !== project.current_digest) throw new ArtifactOperationError("corrupt_receipt", "Committed stage differs from current identity");
-  await materializeManagedTree(stage, baseline);
+  await materializeManagedTree(stage, baseline, defaultManagedTreeIo);
 }
 
 async function reconcileOperation(db: Database, dirPath: string, operation: ReturnType<typeof parsePersistedArtifactOperation>): Promise<void> {
@@ -113,7 +117,7 @@ async function reconcileOperation(db: Database, dirPath: string, operation: Retu
   }
   db.prepare("UPDATE artifact_operations SET status='recovered',result_revision=NULL,result_digest=NULL,diff_json='[]',replay_json=json_set(replay_json,'$.publication','base'),updated_at=? WHERE id=? AND status='recovering'").run(Date.now(), operation.id);
   publishArtifactOperationEvent(db, { projectId: operation.project_id, operationId: operation.id, revision: operation.base_revision, digest: operation.base_digest, outcome: "recovered", diff: operation.diff });
-  await materializeManagedTree(dirPath, path.join(dirPath, ".meta", "artifact-baseline", "current"));
+  await materializeManagedTree(dirPath, path.join(dirPath, ".meta", "artifact-baseline", "current"), defaultManagedTreeIo);
 }
 
 function parseSnapshotReceipt(dirPath: string, operationId: string, parsed: ReturnType<typeof parsePersistedArtifactOperation>["snapshot"]): SnapshotReceipt {

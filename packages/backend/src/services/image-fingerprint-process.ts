@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { spawnOwnedProcess } from "../adapters/owned-process";
-import { awaitChildWithAbort } from "./extraction-acquisition";
+import { awaitChildReply, awaitChildWithAbort } from "./extraction-acquisition";
 import { assertDecodableImageContainer, ImageContainerError } from "./image-container";
 import { LogoDeliverableError } from "./logo-deliverables";
 import { validateLogoSvg } from "./logo-svg-validation";
@@ -179,7 +179,7 @@ export async function isolatedImageFingerprint(
     });
     const reply = readBounded(owned.proc.stdout, MAX_REPLY_BYTES, () => overflow.abort()).catch(() => null);
     const { exitCode } = await awaitChildWithAbort(owned, combined);
-    const text = await reply;
+    const text = await awaitChildReply(owned, reply, combined);
     if (exitCode !== 0 || text === null) throw new ImageFingerprintError();
     return parseFingerprintReply(text.toString("utf8"));
   } catch (error) {

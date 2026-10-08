@@ -20,7 +20,7 @@ Typed browser client for backend resources; earned this guide at score 9 for 17 
 
 ## CONVENTIONS
 
-- Call `bootstrapApiAuthority()` before rendering consumers; later requests use the in-memory launch capability.
+- Call `bootstrapApiAuthority()` before rendering consumers; it forwards a `#bg-bootstrap:<secret>` launch fragment once as `x-burnguard-bootstrap` and strips it from the address bar; later requests use the in-memory launch capability.
 - Prefer `apiFetch<T>` for JSON envelopes and `authorizedFetch` only when headers or non-JSON bodies matter.
 - Let `apiFetch` set JSON content type; leave it unset for `FormData` so the browser supplies the boundary.
 - Throw `ApiError` with backend `code`, `status`, and `details`; views map codes to user-facing Korean copy.
