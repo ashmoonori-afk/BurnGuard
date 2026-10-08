@@ -95,7 +95,7 @@ namespace BurnGuard.Desktop
     internal sealed class DesktopWindow : Form
     {
         private readonly WebView2 web = new WebView2 { Dock = DockStyle.Fill };
-        private readonly Label status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Text = "BurnGuard를 시작하고 있습니다…", Font = new Font("Segoe UI", 13) };
+        private readonly Label status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Text = ShellText.Get("starting"), Font = new Font("Segoe UI", 13) };
         private readonly string identity;
         private readonly string report;
         private readonly string smokeProject;
@@ -118,9 +118,9 @@ namespace BurnGuard.Desktop
         private long startupElapsedMs;
         private int port;
         private readonly ToolStrip updateStrip = new ToolStrip { Dock = DockStyle.Bottom, GripStyle = ToolStripGripStyle.Hidden };
-        private readonly ToolStripButton checkUpdate = new ToolStripButton("업데이트 확인");
-        private readonly ToolStripLabel updateStatus = new ToolStripLabel("업데이트 대기 중");
-        private readonly ToolStripButton restartUpdate = new ToolStripButton("다시 시작해 적용") { Visible = false };
+        private readonly ToolStripButton checkUpdate = new ToolStripButton(ShellText.Get("updateCheck"));
+        private readonly ToolStripLabel updateStatus = new ToolStripLabel(ShellText.Get("updateWaiting"));
+        private readonly ToolStripButton restartUpdate = new ToolStripButton(ShellText.Get("updateRestart")) { Visible = false };
         private readonly System.Windows.Forms.Timer updateTimer = new System.Windows.Forms.Timer { Interval = 6 * 60 * 60 * 1000 };
         private readonly CancellationTokenSource updateCancellation = new CancellationTokenSource();
         private UpdateManager updates;
@@ -170,7 +170,7 @@ namespace BurnGuard.Desktop
                 try { CoreWebView2Environment.GetAvailableBrowserVersionString(); }
                 catch (WebView2RuntimeNotFoundException)
                 {
-                    throw new InvalidOperationException("Microsoft Edge WebView2 Runtime이 필요합니다. https://developer.microsoft.com/microsoft-edge/webview2/ 에서 Evergreen Runtime을 설치한 뒤 BurnGuard를 다시 실행해 주세요.");
+                    throw new InvalidOperationException(ShellText.Get("webview2Missing"));
                 }
                 port = 14070;
                 var configuredPort = Environment.GetEnvironmentVariable("BG_PORT");
@@ -178,16 +178,16 @@ namespace BurnGuard.Desktop
                     throw new InvalidOperationException("BG_PORT must be an integer between 1024 and 65535.");
                 var listener = new TcpListener(IPAddress.Loopback, port);
                 try { listener.Start(); }
-                catch (SocketException) { throw new InvalidOperationException($"포트 {port}를 다른 프로그램이 사용 중입니다. 기존 BurnGuard 서버를 종료한 뒤 다시 실행해 주세요."); }
+                catch (SocketException) { throw new InvalidOperationException(string.Format(ShellText.Get("portBusy"), port)); }
                 finally { listener.Stop(); }
-                status.Text = "BurnGuard를 준비하고 있어요. 처음 실행할 때는 샘플과 글꼴 준비에 시간이 걸릴 수 있어요.";
+                status.Text = ShellText.Get("preparing");
                 var startup = Stopwatch.StartNew();
                 StartService();
                 // Cold profiles seed and validate every bundled sample before readiness.
                 var completed = await Task.WhenAny(ready.Task, Task.Delay(TimeSpan.FromSeconds(300)));
                 startupElapsedMs = startup.ElapsedMilliseconds;
                 if (closing) return;
-                if (completed != ready.Task) throw new TimeoutException("BurnGuard 서버가 300초 안에 시작되지 않았습니다.");
+                if (completed != ready.Task) throw new TimeoutException(ShellText.Get("startTimeout"));
                 origin = new Uri(await ready.Task);
                 string userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BurnGuard", "WebView2", identity);
                 if (report != null) userData = Path.Combine(Environment.GetEnvironmentVariable("BG_APP_ROOT"), "cache", "webview2");
@@ -223,11 +223,11 @@ namespace BurnGuard.Desktop
                     args.State = DiagnosticPermissionState(report != null, args.Uri, origin, args.PermissionKind);
                     if (args.State == CoreWebView2PermissionState.Allow) args.SavesInProfile = false;
                 };
-                web.CoreWebView2.ProcessFailed += (_, args) => { if (IsFatalProcessFailure(args.ProcessFailedKind)) Fail("화면 프로세스가 종료되었습니다. BurnGuard를 다시 실행해 주세요."); };
+                web.CoreWebView2.ProcessFailed += (_, args) => { if (IsFatalProcessFailure(args.ProcessFailedKind)) Fail(ShellText.Get("viewProcessExited")); };
                 web.CoreWebView2.NavigationCompleted += async (_, args) =>
                 {
                     if (closing) return;
-                    if (!args.IsSuccess) { Fail("BurnGuard 화면을 불러오지 못했습니다."); return; }
+                    if (!args.IsSuccess) { Fail(ShellText.Get("viewLoadFailed")); return; }
                     status.Hide();
                     if (report == null && !updateStarted)
                     {
@@ -274,29 +274,29 @@ namespace BurnGuard.Desktop
                 updates = updates ?? Program.CreateUpdateManager();
                 if (!updates.IsInstalled)
                 {
-                    updateStatus.Text = "자동 업데이트는 설치 패키지에서 사용할 수 있습니다";
+                    updateStatus.Text = ShellText.Get("updateUnavailable");
                     updateTimer.Stop();
                     return;
                 }
                 pendingUpdate = updates.UpdatePendingRestart;
                 if (pendingUpdate == null)
                 {
-                    updateStatus.Text = "업데이트 확인 중…";
+                    updateStatus.Text = ShellText.Get("updateChecking");
                     var available = await updates.CheckForUpdatesAsync();
                     if (closing) return;
-                    if (available == null) { updateStatus.Text = "최신 버전입니다 (" + updates.CurrentVersion + ")"; return; }
-                    updateStatus.Text = "업데이트 다운로드 중…";
-                    var progress = new Progress<int>(value => { if (!closing) updateStatus.Text = "업데이트 다운로드 중… " + value + "%"; });
+                    if (available == null) { updateStatus.Text = string.Format(ShellText.Get("updateUpToDate"), updates.CurrentVersion); return; }
+                    updateStatus.Text = ShellText.Get("updateDownloading");
+                    var progress = new Progress<int>(value => { if (!closing) updateStatus.Text = string.Format(ShellText.Get("updateDownloadingPercent"), value); });
                     await updates.DownloadUpdatesAsync(available, value => ((IProgress<int>)progress).Report(value), updateCancellation.Token);
                     if (closing) return;
                     pendingUpdate = updates.UpdatePendingRestart;
                     if (pendingUpdate == null) throw new InvalidOperationException("Downloaded update was not staged.");
                 }
-                updateStatus.Text = "새 버전 " + pendingUpdate.Version + " 준비 완료 · 다음 실행 시 적용 (재시작하면 진행 중인 작업이 중단됩니다)";
+                updateStatus.Text = string.Format(ShellText.Get("updateReady"), pendingUpdate.Version);
                 restartUpdate.Visible = true;
             }
             catch (OperationCanceledException) { }
-            catch { if (!closing) updateStatus.Text = "업데이트를 확인하지 못했습니다 · 인터넷 연결 또는 배포 상태를 확인해 주세요"; }
+            catch { if (!closing) updateStatus.Text = ShellText.Get("updateCheckFailed"); }
             finally { checkingUpdate = false; if (!closing) checkUpdate.Enabled = true; }
         }
 
@@ -304,14 +304,14 @@ namespace BurnGuard.Desktop
         {
             if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || (uri.Scheme != "https" && uri.Scheme != "http") || !string.IsNullOrEmpty(uri.UserInfo)) return;
             try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
-            catch { MessageBox.Show(this, "기본 브라우저를 열 수 없습니다.", "BurnGuard"); }
+            catch { MessageBox.Show(this, ShellText.Get("browserOpenFailed"), "BurnGuard"); }
         }
 
         private void StartService()
         {
             var directory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "service");
             var executable = Path.Combine(directory, "burnguard-design.exe");
-            if (!File.Exists(executable)) throw new InvalidOperationException("service/burnguard-design.exe가 없습니다. 배포 ZIP 전체를 압축 해제한 뒤 실행해 주세요.");
+            if (!File.Exists(executable)) throw new InvalidOperationException(ShellText.Get("serviceMissing"));
             job = Native.CreateKillOnCloseJob();
             var start = new ProcessStartInfo(executable) { WorkingDirectory = directory, UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
             start.EnvironmentVariables["BG_DESKTOP"] = "1";
@@ -339,21 +339,21 @@ namespace BurnGuard.Desktop
                     bootstrapSecret = bootstrap;
                     ready.TrySetResult(expected + "/");
                 }
-                catch { ready.TrySetException(new InvalidOperationException("BurnGuard 시작 응답을 확인할 수 없습니다.")); }
+                catch { ready.TrySetException(new InvalidOperationException(ShellText.Get("startupResponseInvalid"))); }
             };
             // Drain both pipes; never expose raw backend output (which can contain private paths) in dialogs.
             service.ErrorDataReceived += (_, __) => { };
             service.Exited += (_, __) =>
             {
-                ready.TrySetException(new InvalidOperationException("BurnGuard 서버가 시작 중 종료되었습니다."));
-                try { if (!closing && IsHandleCreated) BeginInvoke(new Action(() => { if (!closing) Fail("BurnGuard 서버가 종료되었습니다. 앱을 다시 실행해 주세요."); })); }
+                ready.TrySetException(new InvalidOperationException(ShellText.Get("serverExitedDuringStartup")));
+                try { if (!closing && IsHandleCreated) BeginInvoke(new Action(() => { if (!closing) Fail(ShellText.Get("serverExited")); })); }
                 catch (InvalidOperationException) { }
             };
-            if (!service.Start()) throw new InvalidOperationException("BurnGuard 서버를 시작할 수 없습니다.");
+            if (!service.Start()) throw new InvalidOperationException(ShellText.Get("serviceStartFailed"));
             if (!Native.AssignProcessToJobObject(job, service.Handle))
             {
                 service.Kill();
-                throw new InvalidOperationException("BurnGuard 프로세스 종료 보호를 설정할 수 없습니다.");
+                throw new InvalidOperationException(ShellText.Get("processProtectionFailed"));
             }
             service.BeginOutputReadLine(); service.BeginErrorReadLine();
         }
@@ -606,7 +606,7 @@ namespace BurnGuard.Desktop
             }
             closing = true; Enabled = false;
             updateTimer.Stop(); updateCancellation.Cancel();
-            status.Text = "작업을 중단하고 BurnGuard를 종료하고 있습니다…"; status.Show(); status.BringToFront();
+            status.Text = ShellText.Get("shutdown"); status.Show(); status.BringToFront();
             try
             {
                 if (service != null && !service.HasExited)
@@ -624,7 +624,7 @@ namespace BurnGuard.Desktop
                 if (restartForUpdate && pendingUpdate != null)
                 {
                     try { updates.WaitExitThenApplyUpdates(pendingUpdate, silent: false, restart: true); }
-                    catch { MessageBox.Show(this, "업데이트 재시작을 예약하지 못했습니다. BurnGuard를 다시 실행해 주세요.", "BurnGuard"); }
+                    catch { MessageBox.Show(this, ShellText.Get("updateRestartFailed"), "BurnGuard"); }
                 }
                 stopped = true; Close();
             }
@@ -678,7 +678,7 @@ namespace BurnGuard.Desktop
             if (job == IntPtr.Zero || !SetInformationJobObject(job, 9, ref limits, (uint)Marshal.SizeOf(typeof(JobLimits))))
             {
                 if (job != IntPtr.Zero) CloseHandle(job);
-                throw new InvalidOperationException("Windows 프로세스 종료 보호를 설정할 수 없습니다.");
+                throw new InvalidOperationException(ShellText.Get("processProtectionFailed"));
             }
             return job;
         }
