@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import { WEB_ASSET_MCP_SERVER, WEB_ASSET_TOOL_NAMES } from "@bg/shared";
 import { spawnOwnedProcess } from "../owned-process";
 import { settleProcessStreams } from "../process-streams";
@@ -74,10 +75,10 @@ export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResul
   // broke stdin piping on Windows and caused the CLI to hang.
   const cmd = buildClaudeCommand(options);
 
+  // Log only non-private facts: the absolute project dir and the resolved
+  // binary path are private, so the line carries the binary basename only.
   // eslint-disable-next-line no-console
-  console.log(
-    `[claude-code] spawn cwd=${options.projectDir} binary=${options.binaryPath}`,
-  );
+  console.log(`[claude-code] spawn binary=${basename(options.binaryPath)}`);
 
   const owned = spawnOwnedProcess({
     cmd,
