@@ -23,7 +23,7 @@ export function DetectionList({ detection }: { detection: BackendDetectionResult
         return (
           <li key={b.id} data-probe-state={state} className="rounded-md border border-border p-3">
             <div className="flex items-center gap-2 text-sm">
-              <span className="font-medium">
+              <span className="shrink-0 whitespace-nowrap font-medium">
                 {backendLabel(b.id)}
               </span>
               <span className="text-xs text-muted-foreground">
