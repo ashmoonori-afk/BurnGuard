@@ -25,7 +25,9 @@ const channels = ${JSON.stringify(CHANNELS)};
 export const chromium = {
   launchServer(options) {
     const behaviour = behaviours[channels.indexOf(options.channel ?? "bundled")];
-    if (behaviour === "launches") return Promise.resolve({ close: async () => undefined, wsEndpoint: () => "ws://127.0.0.1:9/fake" });
+    // The endpoint names which of these variables reached the browser; Playwright's default env is process.env.
+    const seen = ["DISPLAY", "WAYLAND_DISPLAY", "BG_TEST_SENTINEL"].filter((name) => (options.env ?? process.env)[name] !== undefined);
+    if (behaviour === "launches") return Promise.resolve({ close: async () => undefined, wsEndpoint: () => "ws://127.0.0.1:9/fake?env=" + seen.join(",") });
     if (behaviour === "missing") return Promise.reject(new Error("Executable doesn't exist"));
     setInterval(() => undefined, 1_000);
     return new Promise(() => undefined);
@@ -47,16 +49,22 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function runBridgeProbe(behaviours: readonly [ChannelBehaviour, ChannelBehaviour, ChannelBehaviour], channelTimeoutMs: number, killAfterMs: number): Promise<{ readonly exit: number | "killed"; readonly stdout: string }> {
+/** A copy of the real bridge that imports FAKE_PLAYWRIGHT. */
+async function fakeBridge(prefix: string): Promise<{ readonly node: string; readonly script: string; readonly root: string }> {
   const node = chromiumNodeCommand()?.node;
   if (node === undefined) throw new Error("Node runtime unavailable");
-  const root = await tempRoot("bg-bridge-deadline-");
+  const root = await tempRoot(prefix);
   const fake = path.join(root, "node_modules", "playwright-core");
   await mkdir(fake, { recursive: true });
   await writeFile(path.join(fake, "package.json"), JSON.stringify({ name: "playwright-core", version: "1.59.1", type: "module", exports: "./index.mjs" }));
   await writeFile(path.join(fake, "index.mjs"), FAKE_PLAYWRIGHT);
   const script = path.join(root, "chromium-node-bridge.mjs");
   await copyFile(BRIDGE, script);
+  return { node, script, root };
+}
+
+async function runBridgeProbe(behaviours: readonly [ChannelBehaviour, ChannelBehaviour, ChannelBehaviour], channelTimeoutMs: number, killAfterMs: number): Promise<{ readonly exit: number | "killed"; readonly stdout: string }> {
+  const { node, script, root } = await fakeBridge("bg-bridge-deadline-");
   const child = Bun.spawn({
     cmd: [node, script, "--probe"],
     cwd: root,
@@ -102,6 +110,35 @@ describe("bridge launch deadline in the real probe child", () => {
 
     expect(result).toEqual({ exit: 2, stdout: "" });
   }, 25_000);
+});
+
+describe("headless browser environment", () => {
+  test("Given a host display server When the bridge launches Chromium Then the browser inherits no display variable and keeps the rest", async () => {
+    // A headless GPU process that inherits DISPLAY connects to that X server first; a busy or restarting server
+    // (WSLg's has a listen backlog of 1) blocks it, so no frame and no requestAnimationFrame ever arrives.
+    const { node, script, root } = await fakeBridge("bg-bridge-display-");
+    const child = Bun.spawn({
+      cmd: [node, script, "{}"],
+      cwd: root,
+      env: { ...process.env, BG_TEST_BROWSER_CHANNELS: "launches,missing,missing", DISPLAY: ":0", WAYLAND_DISPLAY: "wayland-0", BG_TEST_SENTINEL: "1" },
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+
+    const reader = child.stdout.getReader();
+    let line = "";
+    while (!line.includes("\n")) {
+      const next = await reader.read();
+      if (next.done) break;
+      line += new TextDecoder().decode(next.value);
+    }
+    reader.releaseLock();
+    child.stdin.end();
+
+    expect(await child.exited).toBe(0);
+    expect(new URL((JSON.parse(line) as { readonly endpoint: string }).endpoint).searchParams.get("env")).toBe("BG_TEST_SENTINEL");
+  });
 });
 
 describe("probe stopped at its deadline", () => {
