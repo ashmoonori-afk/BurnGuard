@@ -34,9 +34,17 @@ export type ManagedTreeIo = {
   readonly syncFile: (handle: FileHandle) => Promise<void>;
   readonly rename: (from: string, to: string) => Promise<void>;
   readonly syncDirectory: (directory: string) => Promise<void>;
+  /** Mode used to open an existing file for flushing. */
+  readonly syncOpenMode: "r" | "r+";
 };
 
+/** POSIX fsync works on a read-only descriptor; Windows FlushFileBuffers needs write access. */
+export function syncOpenModeFor(platform: NodeJS.Platform): "r" | "r+" {
+  return platform === "win32" ? "r+" : "r";
+}
+
 export const defaultManagedTreeIo: ManagedTreeIo = {
+  syncOpenMode: syncOpenModeFor(process.platform),
   syncFile: (handle) => handle.sync(),
   rename,
   // Windows cannot open a directory for fsync; NTFS journals the rename itself (same rule as `config.ts`).
@@ -49,6 +57,7 @@ export const defaultManagedTreeIo: ManagedTreeIo = {
 
 /** Throwaway copies (export and render roots, stage seeds) skip every flush; only the rename stays. */
 export const unsyncedManagedTreeIo: ManagedTreeIo = {
+  syncOpenMode: "r",
   syncFile: async () => {},
   rename,
   syncDirectory: async () => {},
@@ -83,8 +92,7 @@ export async function syncManagedTree(root: string, io: ManagedTreeIo = defaultM
   const directories = new Set<string>([root]);
   for (const file of tree.manifest.files) {
     const target = diskPathOf(root, tree, file.path);
-    // Windows refuses FlushFileBuffers on a read-only handle.
-    const handle = await open(target, "r+");
+    const handle = await open(target, io.syncOpenMode);
     try { await io.syncFile(handle); } finally { await handle.close(); }
     for (let directory = path.dirname(target); directory !== root; directory = path.dirname(directory)) directories.add(directory);
   }

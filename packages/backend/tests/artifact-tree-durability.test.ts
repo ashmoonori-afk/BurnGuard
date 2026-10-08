@@ -1,11 +1,11 @@
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { runMigrationsFrom } from "../src/db/migrate";
-import { defaultManagedTreeIo, materializeManagedTree, publishManagedTree, type ManagedTreeIo } from "../src/services/artifact-tree-storage";
+import { defaultManagedTreeIo, materializeManagedTree, publishManagedTree, syncManagedTree, syncOpenModeFor, type ManagedTreeIo } from "../src/services/artifact-tree-storage";
 
 const roots: string[] = [];
 
@@ -21,6 +21,7 @@ async function tree(files: Readonly<Record<string, string>>): Promise<string> {
 
 function recordingIo(events: string[]): ManagedTreeIo {
   return {
+    syncOpenMode: defaultManagedTreeIo.syncOpenMode,
     syncFile: async (handle) => { events.push("sync-file"); await defaultManagedTreeIo.syncFile(handle); },
     rename: async (from, to) => { events.push(`rename:${path.basename(to)}`); await defaultManagedTreeIo.rename(from, to); },
     syncDirectory: async (directory) => { events.push("sync-dir"); await defaultManagedTreeIo.syncDirectory(directory); },
@@ -88,5 +89,32 @@ describe("managed tree durability", () => {
     expect(events.slice(lastRename + 1, commit)).toContain("sync-file");
     expect(events.slice(lastRename + 1, commit).at(-1)).toBe("sync-dir");
     db.close();
+  });
+
+  test.skipIf(process.platform === "win32")("Given a read-only file left in the stage, When the stage is synced, Then the flush succeeds without write access", async () => {
+    const stage = await tree({ "index.html": "<p>a</p>" });
+    await chmod(path.join(stage, "index.html"), 0o444);
+    const events: string[] = [];
+    await syncManagedTree(stage, recordingIo(events));
+    expect(events.filter((event) => event === "sync-file")).toHaveLength(1);
+  });
+
+  test("Given the platform, When the flush open mode is chosen, Then Windows asks for write access and POSIX stays read-only", () => {
+    expect(syncOpenModeFor("win32")).toBe("r+");
+    expect(syncOpenModeFor("linux")).toBe("r");
+    expect(syncOpenModeFor("darwin")).toBe("r");
+  });
+
+  test("Given a Windows io, When the stage is synced, Then files are opened read-write", async () => {
+    const stage = await tree({ "index.html": "<p>a</p>" });
+    const modes: string[] = [];
+    const io: ManagedTreeIo = {
+      syncOpenMode: syncOpenModeFor("win32"),
+      rename: defaultManagedTreeIo.rename,
+      syncDirectory: async () => {},
+      syncFile: async (handle) => { modes.push("sync"); await handle.write(new Uint8Array(0)); },
+    };
+    await syncManagedTree(stage, io);
+    expect(modes).toEqual(["sync"]);
   });
 });
