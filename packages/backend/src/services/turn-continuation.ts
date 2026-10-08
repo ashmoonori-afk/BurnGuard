@@ -81,6 +81,7 @@ export async function runWithContinuation(
       touch();
       try {
         result = await run({ ...input, signal,
+          onProgress: () => { touch(); input.onProgress?.(); },
           prompt: attempt === 0 ? input.prompt : `${input.prompt}\n\n<resume_incomplete_work>\nThe previous attempt did not finish. Continue the same requested deliverable in this directory. Inspect and reuse existing assets; do not regenerate completed images. Restore a missing entrypoint. Write a small valid file first, then extend it in small patches. Never delete and add the same path in one patch, and never delete the entrypoint before preparing its replacement. For completed generated units, remove data-bg-placeholder and set data-bg-complete="true" on every data-bg-unit container. Verify the saved result before reporting completion.\n</resume_incomplete_work>`,
           onEvent: async (event) => {
             if (event.type === "tool.started") pending.add(event.toolCallId);

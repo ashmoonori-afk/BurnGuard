@@ -20,7 +20,7 @@ src/
 ├── fixtures/       # static JSON payloads read by `data/home.ts`
 ├── research-data/  # JSON research sources, rules, purpose references
 ├── config.ts       # atomic 0600 config read/write queue
-├── bootstrap.ts    # migrate, seed, reconcile, start watchers
+├── bootstrap.ts    # migrate, seed, reconcile (watchers start in main.ts after listen)
 ├── server.ts       # API classification and static frontend serving
 └── index.ts        # process startup and ordered shutdown
 ```
@@ -29,11 +29,11 @@ src/
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Change startup order | `bootstrap.ts`, `index.ts` | Migrations precede all reconciliation and watchers |
+| Change startup order | `bootstrap.ts`, `main.ts` | Migrate, seed, reconcile in bootstrap; then `Bun.serve` and the readiness line; then `startProjectWatchers` |
 | Add an API domain | `server.ts`, `routes/` | Update classifier and lazy dispatch together |
 | Change localhost trust | `security/request-authority.ts` | Health is public; other API access is capability-bound (see `security/AGENTS.md`) |
 | Change managed paths | `lib/paths.ts`, `security/path-boundary.ts` | Existing symlink/junction prefixes are resolved |
-| Change shutdown | `index.ts` | Stop intake, interrupt turns, close browsers, then force stop |
+| Change shutdown | `main.ts` | Stop intake, halt queued watcher startup, interrupt turns, close browsers, then wait for in-flight observations and close watchers, then force stop |
 | Own the profile | `profile-ownership.ts`, `desktop-lifecycle.ts` | One process per `BG_APP_ROOT`; desktop shell handshake |
 
 ## CONVENTIONS
@@ -49,6 +49,7 @@ src/
 ## ANTI-PATTERNS
 
 - Do not reorder recovery ahead of migrations or start watchers before reconciliation converges.
+- Do not move project watcher startup back in front of the listener: it observes (hashes) every project tree. It runs after the readiness line with bounded concurrency; `ArtifactCoordinator` mutations (`run`, `patch`, `undo`, `adoptExternal`) await `waitForProjectReady` for their project, reads do not. A failed first observation rejects only its current waiters with a stable code and never blocks the project afterwards.
 - Do not widen host/origin/capability checks for convenience; browser bootstrap is the authority handoff.
 - Do not serve user-selected absolute paths; derive locations beneath managed roots.
 - Do not expose provider diagnostics, private attachment paths, tokens, or raw trace content through API errors.
