@@ -1,0 +1,5 @@
+{
+  "closeRunning.message": "생성 작업이 진행 중이에요. 그래도 닫을까요?",
+  "closeRunning.close": "닫기",
+  "closeRunning.keep": "계속 작업하기"
+}

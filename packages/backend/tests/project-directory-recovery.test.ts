@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
+import * as fsPromises from "node:fs/promises";
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -119,4 +120,40 @@ test("Given an absent folder with a cached file index When files artifacts or re
     target.prepare("DELETE FROM projects WHERE id=?").run(id);
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("Given a raw EPERM on one project's .meta at startup When startup reconciles Then that project is unavailable and held while the others load", async () => {
+  const flaky = path.join(root, "flaky");
+  await mkdir(flaky);
+  await writeFile(path.join(flaky, "index.html"), "flaky bytes");
+  addProject(db, "flaky", flaky);
+  const realMkdir = fsPromises.mkdir;
+  const injected = spyOn(fsPromises, "mkdir").mockImplementation(((target: Parameters<typeof realMkdir>[0], ...rest: unknown[]) => {
+    if (String(target).startsWith(path.join(flaky, ".meta"))) return Promise.reject(Object.assign(new Error(`EPERM: operation not permitted, mkdir '${String(target)}'`), { code: "EPERM" }));
+    return (realMkdir as (...args: unknown[]) => Promise<unknown>)(target, ...rest);
+  }) as typeof realMkdir);
+  try {
+    const result = await reconcileArtifactState(db);
+    expect(result.unavailableProjects).toEqual([{ projectId: "flaky", code: "project_storage_unavailable" }]);
+    expect(result.projects).toBe(1);
+    expect(db.query("SELECT current_digest FROM projects WHERE id='healthy'").get()).toMatchObject({ current_digest: expect.any(String) });
+    expect(await readFile(path.join(flaky, "index.html"), "utf8")).toBe("flaky bytes");
+    await expect(new ArtifactCoordinator(db).observeExternal("flaky", flaky)).rejects.toMatchObject({ code: "recovery_unavailable" });
+  } finally { injected.mockRestore(); }
+});
+
+test("Given a raw EPERM while probing one project's root When startup reconciles Then that project is unavailable and the others still load", async () => {
+  const flaky = path.join(root, "flaky");
+  await mkdir(flaky);
+  addProject(db, "flaky", flaky);
+  const realLstat = fsPromises.lstat;
+  const injected = spyOn(fsPromises, "lstat").mockImplementation(((target: Parameters<typeof realLstat>[0], ...rest: unknown[]) => {
+    if (String(target) === flaky) return Promise.reject(Object.assign(new Error("EBUSY: resource busy or locked"), { code: "EBUSY" }));
+    return (realLstat as (...args: unknown[]) => Promise<unknown>)(target, ...rest);
+  }) as typeof realLstat);
+  try {
+    const result = await reconcileArtifactState(db);
+    expect(result.unavailableProjects).toEqual([{ projectId: "flaky", code: "project_storage_unavailable" }]);
+    expect(result.projects).toBe(1);
+  } finally { injected.mockRestore(); }
 });
