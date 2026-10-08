@@ -52,6 +52,19 @@ describe("undoChordDirection", () => {
     expect(chord({ key: "\u315b", code: "KeyY", ctrlKey: true })).toBe("redo");
   });
 
+  test("Given a punctuation key that shares the physical Z or Y position on a Latin layout When classifying Then the code path is not taken", () => {
+    expect(chord({ key: ";", code: "KeyZ", ctrlKey: true })).toBeNull();
+    expect(chord({ key: ":", code: "KeyZ", ctrlKey: true, shiftKey: true })).toBeNull();
+    expect(chord({ key: "[", code: "KeyY", ctrlKey: true })).toBeNull();
+    expect(chord({ key: "1", code: "KeyY", ctrlKey: true })).toBeNull();
+  });
+
+  test("Given a Cyrillic layout When the physical Z or Y key is pressed Then the code still matches", () => {
+    expect(chord({ key: "\u044f", code: "KeyZ", ctrlKey: true })).toBe("undo");
+    expect(chord({ key: "\u043d", code: "KeyY", ctrlKey: true })).toBe("redo");
+    expect(chord({ key: "\u042f", code: "KeyZ", ctrlKey: true, shiftKey: true })).toBe("redo");
+  });
+
   test("Given a Latin letter key on a non-QWERTY layout When classifying Then the key wins over the physical code", () => {
     expect(chord({ key: "y", code: "KeyZ", ctrlKey: true })).toBe("redo");
     expect(chord({ key: "f", code: "KeyY", ctrlKey: true })).toBeNull();
