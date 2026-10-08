@@ -133,4 +133,6 @@ export const mockSettings: SettingsSummary = {
   vercel_token_set: false,
   publish_made_with_badge: true,
   web_asset_search: true,
+  codex_progress_metrics: true,
+  codex_user_otel_configured: false,
 };
