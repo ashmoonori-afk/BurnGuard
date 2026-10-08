@@ -165,8 +165,16 @@ export function createAppUpdater(deps: AppUpdaterDependencies): AppUpdater {
   // Internal transition: keep the existing public ready/restart status contract.
   let applying = false;
   const patch = (next: Partial<AppUpdateStatus>): void => { state = { ...state, ...next }; };
+  // The startup cleanup is admitted through the same single-flight queue as downloads:
+  // it runs once, before the first download, so it can never delete a partial an active
+  // download is writing or the package that download has already staged.
+  let startedUp = false;
 
   async function run(): Promise<void> {
+    if (!startedUp) {
+      startedUp = true;
+      await pruneUpdateCache(path.join(deps.cacheDir, "updates"), { currentVersion: deps.currentVersion });
+    }
     patch({ state: "checking", error: null, progress: null });
     let asset: VelopackFeedAsset | null;
     try {
@@ -298,8 +306,11 @@ const PACKAGE_VERSION = /^[A-Za-z0-9_.]+-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)-[A-Z
 
 /**
  * Removes staged updater files that can no longer be applied: every `*.partial`
- * (no download is in flight when this runs) and every `*.nupkg` other than `keep`,
- * or, without `keep`, every package at or below `currentVersion`. Best effort.
+ * and every `*.nupkg` other than `keep`, or, without `keep`, every package at or
+ * below `currentVersion`. Best effort.
+ *
+ * Callers must run it on the updater's admission path (inside `run`) so no download
+ * is in flight; run anywhere else it deletes a partial an active download is writing.
  */
 export async function pruneUpdateCache(directory: string, options: { readonly keep?: string; readonly currentVersion?: string }): Promise<void> {
   let names: string[];
@@ -389,8 +400,9 @@ export function configureAppUpdater(overrides: Partial<AppUpdaterDependencies> &
   const support = overrides.support ?? detectUpdateSupport({ platform: process.platform, execPath, desktopShell: process.env.BG_DESKTOP === "1" });
   const currentVersion = overrides.currentVersion ?? APP_VERSION;
   const cacheDir = overrides.cacheDir ?? appCacheDir;
-  // Packages for this or an older version were already applied (or can never be); drop them at startup.
-  if (support.supported) void pruneUpdateCache(path.join(cacheDir, "updates"), { currentVersion });
+  // Packages for this or an older version were already applied (or can never be); the
+  // updater drops them on its admission path (see createAppUpdater) rather than here, so
+  // the cleanup never races a download that starts right after startup.
   instance = createAppUpdater({
     currentVersion,
     cacheDir,

@@ -290,6 +290,38 @@ describe("update cache pruning", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
+  test("Given stale packages and partials When the startup cleanup is admitted Then it completes before the download opens the package and never removes the staged bytes", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-updater-startup-race-"));
+    try {
+      const dir = path.join(root, "updates");
+      // Only the download path may remove the target partial; the startup cleanup
+      // owns the older package and the foreign partial.
+      await Bun.write(path.join(dir, "BurnGuard-0.5.0-osx-full.nupkg"), "superseded");
+      await Bun.write(path.join(dir, "BurnGuard-0.5.0-osx-full.nupkg.partial"), "leftover");
+      await Bun.write(path.join(dir, "notes.txt"), "unrelated");
+      const good = new TextEncoder().encode("pkg");
+      const sha = createHash("sha256").update(good).digest("hex").toUpperCase();
+      let listingAtOpen: string[] = [];
+      const source: AppUpdateSource = {
+        async fetchFeed() { return { Assets: [asset({ SHA256: sha, Size: good.byteLength })] }; },
+        async openPackage() {
+          // The download opens the package after its own admission; the startup
+          // cleanup must already be done here, or it would race this download.
+          listingAtOpen = await readdir(dir);
+          return new Response(good);
+        },
+      };
+      const updater = createAppUpdater({ currentVersion: "0.5.1", cacheDir: root, source, support: { supported: true, reason: null }, updaterPath: "/unused", spawn: () => {}, shutdown: async () => {} });
+      await updater.check();
+      expect(updater.status().state).toBe("ready");
+      expect(listingAtOpen).not.toContain("BurnGuard-0.5.0-osx-full.nupkg");
+      expect(listingAtOpen).not.toContain("BurnGuard-0.5.0-osx-full.nupkg.partial");
+      expect(listingAtOpen).toContain("notes.txt");
+      expect((await readdir(dir)).sort()).toEqual(["BurnGuard-0.5.2-osx-full.nupkg", "notes.txt"]);
+      expect(await readFile(path.join(dir, "BurnGuard-0.5.2-osx-full.nupkg"))).toEqual(Buffer.from(good));
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test("Given a leftover partial for the same file When downloaded again Then the staged bytes are exactly the new package", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "bg-updater-partial-"));
     try {
