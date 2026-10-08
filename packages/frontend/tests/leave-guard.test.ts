@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { installLeaveGuard, reloadWithoutLeaveGuard } from "../src/lib/leave-guard";
+
+const toPosix = (file: string) => file.replaceAll("\\", "/");
 
 const unload = (target: EventTarget) => {
   const event = new Event("beforeunload", { cancelable: true });
@@ -34,19 +38,29 @@ describe("leave guard while a turn runs (B3-5)", () => {
 
     reloadWithoutLeaveGuard(target as unknown as Window, location);
 
-    expect(promptedDuringReload === false).toBe(true);
+    expect(promptedDuringReload).toBe(false);
+  });
+
+  test("Given a scan result with Windows separators When normalised Then it compares equal to the posix spelling", () => {
+    expect(toPosix("lib\\leave-guard.ts")).toBe("lib/leave-guard.ts");
+    expect(toPosix("components\\settings\\SettingsModal.tsx")).toBe("components/settings/SettingsModal.tsx");
+    expect(toPosix("lib/leave-guard.ts")).toBe("lib/leave-guard.ts");
   });
 
   test("Given the frontend source When scanned Then app-initiated reloads go through the helper and nothing else calls location.reload", async () => {
-    const root = new URL("../src/", import.meta.url).pathname;
+    const root = fileURLToPath(new URL("../src/", import.meta.url));
     const offenders: string[] = [];
-    for await (const file of new Bun.Glob("**/*.{ts,tsx}").scan(root)) {
+    const scanned = new Set<string>();
+    for await (const entry of new Bun.Glob("**/*.{ts,tsx}").scan({ cwd: root })) {
+      const file = toPosix(entry);
+      scanned.add(file);
       if (file === "lib/leave-guard.ts") continue;
-      if ((await Bun.file(root + file).text()).includes("location.reload")) offenders.push(file);
+      if ((await Bun.file(join(root, file)).text()).includes("location.reload")) offenders.push(file);
     }
+    expect(scanned.has("lib/leave-guard.ts")).toBe(true);
     expect(offenders).toEqual([]);
     for (const file of ["components/Bootstrap.tsx", "components/settings/SettingsModal.tsx"]) {
-      expect(await Bun.file(root + file).text()).toContain("reloadWithoutLeaveGuard()");
+      expect(await Bun.file(join(root, file)).text()).toContain("reloadWithoutLeaveGuard()");
     }
   });
 });

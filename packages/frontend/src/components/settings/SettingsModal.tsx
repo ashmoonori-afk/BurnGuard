@@ -34,6 +34,7 @@ import {
 import { useUIStore } from "@/state/uiStore";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { appUpdateView } from "@/lib/app-update-state";
+import { reloadWithoutLeaveGuard } from "@/lib/leave-guard";
 import { INTERRUPT_GRACE_MS } from "@/lib/session-event-state";
 
 import { t, useT, type MessageKey } from "@/i18n/t";
@@ -41,7 +42,6 @@ import { LOCALES, useLocaleStore, type Locale } from "@/i18n/locale";
 import CodexProgressMetricsToggle, { codexProgressMetricsPatch } from "./CodexProgressMetricsToggle";
 import ProviderConnections from "./ProviderConnections";
 import RuntimeDiagnosticsSection from "./RuntimeDiagnostics";
-import { reloadWithoutLeaveGuard } from "@/lib/leave-guard";
 
 const CHAT_CONTEXT_MODE_LABELS = { compact: "settings.compact", full: "settings.full" } as const;
 const THEME_LABELS = { light: "settings.light", dark: "settings.dark", auto: "settings.auto" } as const;
