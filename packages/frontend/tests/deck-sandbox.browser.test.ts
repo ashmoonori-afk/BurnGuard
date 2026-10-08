@@ -1,5 +1,5 @@
-import { expect, test } from "bun:test";
-import type { Browser, Page } from "../../backend/node_modules/playwright-core";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
+import type { Browser, BrowserContext, Page } from "../../backend/node_modules/playwright-core";
 import { Hono } from "../../backend/node_modules/hono";
 import { createRequestAuthority } from "../../backend/src/security/request-authority";
 import { DECK_STAGE_JS } from "../../backend/src/runtime/deck-stage";
@@ -27,12 +27,32 @@ URL.revokeObjectURL=u=>{revoked.push(u);revoke(u)};</script>
 <script>order.push('body');window.addEventListener('keydown',e=>{if(e.key==='Escape' && window.cancelEscape)e.preventDefault()});</script>
 </body></html>`;
 
-async function withBrowser(action: (page: Page, base: string, requests: { path: string; capability: string | null; status: number }[]) => Promise<void>, allowFullscreen = true) {
+let suiteBrowser: Browser | undefined;
+let fixtureScript: string;
+const lifetime = new AbortController();
+
+beforeAll(async () => {
+  const compiler = Bun.spawn([process.execPath, "build", `${import.meta.dir}/fixtures/deck-browser.tsx`, "--target=browser", "--format=iife", "--minify"], { stdout: "pipe", stderr: "pipe" });
+  const [code, script, errors] = await Promise.all([compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text()]);
+  if (code !== 0) throw new Error(errors);
+  fixtureScript = script;
+  // The launch has its own deadline; the shared browser lives until suite teardown.
+  suiteBrowser = await launchChromiumViaNode({}, lifetime.signal);
+});
+
+afterAll(async () => {
+  try { await suiteBrowser?.close(); }
+  finally { lifetime.abort(); }
+});
+
+async function withBrowser(action: (page: Page, base: string, requests: { path: string; capability: string | null; status: number }[], server: { stop(closeActiveConnections?: boolean): void | Promise<void> }) => Promise<void>, allowFullscreen = true) {
+  const browser = suiteBrowser;
+  if (!browser) throw new Error("browser_fixture_not_ready");
   const requests: { path: string; capability: string | null; status: number }[] = [];
   const app = new Hono();
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: request => app.fetch(request) });
   const base = server.url.origin;
-  app.use("/api/*", createRequestAuthority({ capability: "deck-private-test", appAuthority: server.url.host }));
+  app.use("/api/*", createRequestAuthority({ capability: "deck-private-test", bootstrapSecret: "deck-bootstrap-secret", appAuthority: server.url.host }));
   app.get("/", c => {
     if (!allowFullscreen) c.header("Permissions-Policy", "fullscreen=()");
     return c.html("<!doctype html><html><body></body></html>");
@@ -52,19 +72,16 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     return body === undefined ? c.notFound() : new Response(body, { headers: { "content-type": name.endsWith(".txt") ? "text/plain" : "application/javascript" } });
   });
   server.reload({ fetch: async request => { const response = await app.fetch(request); if (new URL(request.url).pathname !== "/api/bootstrap") requests.push({ path: new URL(request.url).pathname, capability: request.headers.get("x-burnguard-capability"), status: response.status }); return response; } });
-  let browser: Browser | undefined;
+  let context: BrowserContext | undefined;
   try {
-    const compiler = Bun.spawn([process.execPath, "build", `${import.meta.dir}/fixtures/deck-browser.tsx`, "--target=browser", "--format=iife", "--minify"], { stdout: "pipe", stderr: "pipe" });
-    const [code, script, errors] = await Promise.all([compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text()]);
-    if (code !== 0) throw new Error(errors);
     // Use the shipped Node browser path for iframe/fullscreen lifecycle coverage.
-    browser = await launchChromiumViaNode({}, AbortSignal.timeout(20_000));
-    const page = await browser.newPage();
+    context = await browser.newContext();
+    const page = await context.newPage();
     page.setDefaultTimeout(5000);
     const browserErrors: string[] = [];
     page.on("pageerror", error => browserErrors.push(String(error)));
-    await page.goto(base);
-    await page.addScriptTag({ content: script });
+    await page.goto(`${base}/#bg-bootstrap:deck-bootstrap-secret`);
+    await page.addScriptTag({ content: fixtureScript });
     await page.evaluate(() => globalThis.deckTest.bootstrapApiAuthority());
     await page.evaluate(() => {
       const launch = document.createElement("button");
@@ -73,11 +90,11 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
       launch.addEventListener("click", () => { globalThis.presentationLoad = globalThis.deckTest.present("/api/projects/deck-test/fs/deck.html"); });
       document.body.appendChild(launch);
     });
-    await action(page, base, requests);
+    await action(page, base, requests, server);
     expect(browserErrors).toEqual([]);
   } finally {
-    await browser?.close();
-    await server.stop(true);
+    try { await context?.close(); }
+    finally { await server.stop(true); }
   }
 }
 
@@ -94,6 +111,23 @@ function fullscreenState(page: Page, active: boolean): Promise<void> {
   settled.catch(() => {});
   return settled;
 }
+
+test("Given context cleanup rejects When the fixture closes Then its real server is still stopped", async () => {
+  const failure = new Error("context_cleanup_failure");
+  let cleanup: (() => Promise<void>) | undefined;
+  let assertStopped: () => void = () => { throw new Error("server_not_observed"); };
+  try {
+    await expect(withBrowser(async (page, _base, _requests, server) => {
+      const stopped = spyOn(server, "stop");
+      cleanup = async () => { stopped.mockRestore(); await server.stop(true); };
+      assertStopped = () => { expect(stopped).toHaveBeenCalledWith(true); };
+      const context = page.context();
+      const close = context.close.bind(context);
+      context.close = async () => { await close(); throw failure; };
+    })).rejects.toBe(failure);
+    assertStopped();
+  } finally { await cleanup?.(); }
+});
 
 test("local authored scripts run in the opaque sandbox in parser/defer order, without authority leakage", async () => {
   await withBrowser(async (page, base, requests) => {

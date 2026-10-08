@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BACKEND_IDS, GEMINI_MODELS, canGenerateGraphics, type BackendDetection } from "@bg/shared";
-import { BACKEND_LABELS, backendLabel, backendOptionLabel, backendSelectState, graphicBackendId, graphicGateCopy, hasGraphicBackend } from "@/lib/backend-display";
+import { BACKEND_LABELS, backendLabel, backendOptionLabel, backendSelectState, graphicBackendId, graphicGateCopy, hasGraphicBackend, needsCliGuidance } from "@/lib/backend-display";
 import { useLocaleStore } from "@/i18n/locale";
 import { t } from "@/i18n/t";
 
@@ -78,6 +78,20 @@ describe("Home graphic readiness (UX-06)", () => {
     expect(hasGraphicBackend([codex])).toBe(canGenerateGraphics(codex, ""));
     expect(hasGraphicBackend([])).toBe(false);
     expect(hasGraphicBackend([found("claude-code")])).toBe(false);
+  });
+});
+
+describe("Home CLI guidance entry (F-UX-2)", () => {
+  const missingCodex = { id: "codex", found: false } as BackendDetection;
+
+  test("Given no ready backend When guidance is derived Then the CLI entry is offered", () => {
+    // A CLI on PATH whose version probe failed is detected but not usable, so it must not hide the entry.
+    expect(needsCliGuidance([found("claude-code", { probe_failed: true }), missingCodex])).toBe(true);
+    expect(needsCliGuidance([{ id: "gemini", found: false } as BackendDetection])).toBe(true);
+  });
+
+  test("Given a ready backend When guidance is derived Then the CLI entry stays hidden", () => {
+    expect(needsCliGuidance([found("claude-code"), missingCodex])).toBe(false);
   });
 });
 

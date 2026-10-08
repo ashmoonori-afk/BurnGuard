@@ -7,14 +7,17 @@ import { PathBoundaryError, resolveWithin } from "../../security/path-boundary";
 import type { AdapterRunInput, AdapterRunResult } from "../types";
 import { mapGeneratedImages } from "./event-mapping";
 import { parseCodexLine, type CodexParserContext } from "./parser";
+import { CODEX_METRIC_EXPORT_INTERVAL_MS, CODEX_PROGRESS_HEADER, type CodexProgressExporter, startCodexProgressReceiver } from "./progress-metrics";
 import { spawnOwnedProcess } from "../owned-process";
 import { settleProcessStreams } from "../process-streams";
+import { readLines } from "../bounded-lines";
 
 export function buildCodexCommand(
   binaryPath: string,
   generation?: AdapterRunInput["generation"],
   platform = process.platform,
   imageGeneration: NonNullable<AdapterRunInput["imageGeneration"]> = "allowed",
+  progress?: CodexProgressExporter,
 ): string[] {
   return [
     binaryPath,
@@ -34,6 +37,11 @@ export function buildCodexCommand(
     // A repair edits an artifact that is already finished; the capability is switched off rather
     // than merely discouraged in the prompt.
     "-c", `features.image_generation=${imageGeneration === "forbidden" ? "false" : "true"}`,
+    // Codex streams one item without any stdout line, so its stream event counters are the only
+    // proof of life while it writes a large patch; see progress-metrics.ts. No spaces and no double
+    // quotes (TOML literal strings instead): on Windows argv goes through a .cmd wrapper, where an
+    // inner `"` is doubled and each runtime's command-line parser reads `""` back differently.
+    ...(progress ? ["-c", `otel.metrics_exporter={otlp-http={endpoint='${progress.endpoint}',protocol='json',headers={${CODEX_PROGRESS_HEADER}='${progress.token}'}}}`] : []),
     ...(generation?.model ? ["--model", generation.model] : []),
     ...(generation?.vanilla ? ["--ignore-user-config", "-c", "features.plugins=false", "-c", "features.skip_host_skill_discovery=true", "-c", "project_doc_max_bytes=0"] : []),
     // Ignoring user config also drops Windows sandbox selection and makes exec read-only.
@@ -75,13 +83,15 @@ export async function runCodexTurn(
     );
   });
 
-  const owned = spawnOwnedProcess({
-    cmd: buildCodexCommand(input.binaryPath, input.generation, process.platform, input.imageGeneration ?? "allowed"),
-    cwd: input.projectDir,
-    stdin: new Blob([input.prompt]),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  // Settings (on by default): off, Codex starts exactly as before, with no receiver and no OTel override.
+  const progress = input.codexProgressMetrics && input.onProgress ? startCodexProgressReceiver(input.onProgress) : undefined;
+  let owned: ReturnType<typeof spawnCodex>;
+  try {
+    owned = spawnCodex(input, progress);
+  } catch (error) {
+    progress?.stop();
+    throw error;
+  }
   const proc = owned.proc;
 
   // The built-in image tool is silent on the stream for the whole generation (35-60 s each), so a
@@ -183,6 +193,7 @@ export async function runCodexTurn(
   } finally {
     closeIntake();
     await queue;
+    progress?.stop();
     // Always release the decision sink — see the matching comment in
     // the Claude Code adapter. A throw between subscribe and here
     // would otherwise leak the listener into the broker.
@@ -218,36 +229,18 @@ export async function runCodexTurn(
   return { exitCode };
 }
 
-async function readLines(
-  stream: ReadableStream<Uint8Array>,
-  onLine: (line: string) => Promise<void> | void,
-): Promise<void> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let idx = buffer.indexOf("\n");
-      while (idx >= 0) {
-        const line = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 1);
-        if (line.length > 0) {
-          await onLine(line);
-        }
-        idx = buffer.indexOf("\n");
-      }
-    }
-    if (buffer.length > 0) {
-      await onLine(buffer);
-    }
-  } finally {
-    try {
-      reader.releaseLock();
-    } catch {
-      // already released
-    }
-  }
+function spawnCodex(input: AdapterRunInput, progress: CodexProgressExporter | undefined) {
+  return spawnOwnedProcess(codexSpawnOptions(input, progress));
+}
+
+/** Spawn options for one Codex run; without a progress exporter they are the plain launch. */
+export function codexSpawnOptions(input: AdapterRunInput, progress: CodexProgressExporter | undefined) {
+  return {
+    cmd: buildCodexCommand(input.binaryPath, input.generation, process.platform, input.imageGeneration ?? "allowed", progress),
+    cwd: input.projectDir,
+    ...(progress ? { env: { ...process.env, OTEL_METRIC_EXPORT_INTERVAL: String(CODEX_METRIC_EXPORT_INTERVAL_MS) } } : {}),
+    stdin: new Blob([input.prompt]),
+    stdout: "pipe" as const,
+    stderr: "pipe" as const,
+  };
 }

@@ -2,6 +2,7 @@
 // Run after bun run build. This exercises a relocated portable build with no Node/Bun on PATH.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { cp, mkdtemp, mkdir, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -15,6 +16,7 @@ const fixture = await mkdtemp(path.join(parent, "burnguard-package-"));
 const app = path.join(fixture, "한글 portable app");
 const profile = path.join(fixture, "profile");
 const base = "http://127.0.0.1:14174";
+const bootstrapSecret = randomBytes(32).toString("base64url");
 let backend;
 let probe;
 let log = "";
@@ -22,7 +24,7 @@ const checks = [];
 try {
   await cp(path.join(repo, "dist/windows"), app, { recursive: true });
   await mkdir(profile);
-  const env = { ...process.env, PATH: path.join(process.env.SystemRoot ?? "C:\\Windows", "System32"), BG_APP_ROOT: profile, BG_PORT: "14174", BG_NO_OPEN: "1" };
+  const env = { ...process.env, PATH: path.join(process.env.SystemRoot ?? "C:\\Windows", "System32"), BG_APP_ROOT: profile, BG_PORT: "14174", BG_NO_OPEN: "1", BG_BOOTSTRAP_SECRET: bootstrapSecret };
   backend = spawn(path.join(app, "burnguard-design.exe"), [], { cwd: fixture, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   await bounded(new Promise((resolve, reject) => {
     backend.once("error", reject);
@@ -36,7 +38,9 @@ try {
   assert.equal((await health.json()).name, "BurnGuard Design");
   checks.push("relocated-executable-health");
   assert.equal((await request("/api/projects")).status, 403);
-  const bootstrap = await request("/api/bootstrap", { headers: { Origin: base } });
+  assert.equal((await request("/api/bootstrap", { headers: { Origin: base } })).status, 403);
+  checks.push("forged-origin-bootstrap-rejected");
+  const bootstrap = await request("/api/bootstrap", { headers: { Origin: base, "X-Burnguard-Bootstrap": bootstrapSecret } });
   assert.equal(bootstrap.status, 200);
   const { data: authority } = await bootstrap.json();
   const headers = { Origin: base, "X-Burnguard-Capability": authority.capability };

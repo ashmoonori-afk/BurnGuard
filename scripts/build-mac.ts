@@ -38,6 +38,7 @@ const ENTRY = path.join(ROOT, "packages/backend/src/index.ts");
 const NATIVE_ENTRY = path.join(ROOT, "packages/desktop-mac/main.swift");
 const FRONTEND_DIST = path.join(ROOT, "packages/frontend/dist");
 const ICON_SRC = path.join(ROOT, "assets/icon.icns");
+const MAC_I18N = path.join(ROOT, "packages/desktop-mac/i18n");
 const DMG_OUT = path.join(
   DIST_ROOT,
   `${APP_NAME.toLowerCase().replaceAll(" ", "-")}-${APP_VERSION}.dmg`,
@@ -147,6 +148,9 @@ async function main() {
       `[build-mac] icon:    assets/icon.icns not found — using the macOS default app icon (follow-up slice will add a real icon)`,
     );
   }
+
+  // Shell dialog strings, read by main.swift from Contents/Resources/i18n/<language>.json.
+  cpSync(MAC_I18N, path.join(APP_RESOURCES, "i18n"), { recursive: true });
 
   await stageRuntimeAssets(ROOT, APP_MACOS, true);
   const swiftc = Bun.which("swiftc");

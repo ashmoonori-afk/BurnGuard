@@ -41,6 +41,10 @@ if (process.argv[2] === "--version") {
   if (readFileSync(root + "/mode", "utf8") === "version-timeout") {
     writeFileSync(root + "/version-pid", String(process.pid));
     setInterval(() => {}, 60_000);
+  } else if (readFileSync(root + "/mode", "utf8") === "version-two-part") {
+    console.log("fixture-cli 2.1"); process.exit(0);
+  } else if (readFileSync(root + "/mode", "utf8") === "version-fail") {
+    process.exit(3);
   } else if (readFileSync(root + "/mode", "utf8") === "version-output-limit") {
     console.log("x".repeat(9_000) + " 9.9.9");
     process.exit(0);
@@ -212,7 +216,7 @@ test("turn start forces a fresh check and an indeterminate probe never invokes t
   }
 });
 
-test("readiness and graphic creation expose uncached 503 on probe failure, retain 409 for logout, and recover on the next request", async () => {
+test("Given a failing Codex login probe When a graphic project is created Then it exposes uncached 503 while readiness still returns the list and both recover on the next request", async () => {
   await mode("login");
   expect(codex(await detectBackends({ force: true })).authenticated).toBe(true);
   const projectsBefore = getSqlite().query("SELECT COUNT(*) AS count FROM projects").get();
@@ -224,9 +228,11 @@ test("readiness and graphic creation expose uncached 503 on probe failure, retai
   expect(creation.headers.get("Cache-Control")).toBe("no-store");
   expect((await creation.json()).error).toMatchObject({ code: "codex_authentication_probe_failed", details: { reason: "execution_failed", exit_code: 2 } });
   expect(await calls()).toBe(before + 1);
+  // The UI read is tolerant: an unconfirmed login is not a confirmed logout, so the detected list is
+  // retained with an indeterminate Codex verdict instead of replacing the whole response with a 503.
   const readiness = await homeRoutes.request("/api/backends/detect");
-  expect(readiness.status).toBe(503);
-  expect(readiness.headers.get("Cache-Control")).toBe("no-store");
+  expect(readiness.status).toBe(200);
+  expect(codex((await readiness.json()).data).authenticated).toBeUndefined();
   expect(await calls()).toBe(before + 2);
   expect(getSqlite().query("SELECT COUNT(*) AS count FROM projects").get()).toEqual(projectsBefore);
   await mode("login");
@@ -245,3 +251,47 @@ test("readiness and graphic creation expose uncached 503 on probe failure, retai
   expect((await logoRefused.json()).error.code).toBe("logo_requires_authenticated_codex");
   expect(getSqlite().query("SELECT COUNT(*) AS count FROM projects").get()).toEqual(projectsBefore);
 }, 20_000);
+
+test("Given both the Codex version and login probes fail When readiness is read Then the probe-failed list is retained with indeterminate auth and creation stays strict", async () => {
+  await mode("version-fail");
+  // A strict probe (a turn start or a graphic creation) invalidates the warm cache without caching a
+  // verdict, which is exactly the state a user reaches before the UI polls again.
+  await expect(detectBackends({ force: true })).rejects.toMatchObject({ code: "codex_authentication_probe_failed" });
+  const readiness = await homeRoutes.request("/api/backends/detect");
+  expect(readiness.status).toBe(200);
+  const detected = codex((await readiness.json()).data);
+  expect(detected.found).toBe(true);
+  expect(detected.probe_failed).toBe(true);
+  expect(detected.version).toBeUndefined();
+  expect(detected.authenticated).toBeUndefined();
+  const creation = await homeRoutes.request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Both probes failed", type: "graphic", backend_id: "codex", design_system_id: null, options: { graphic_canvas: { schema_version: 1, width: 1080, height: 1080 } } }),
+  });
+  expect(creation.status).toBe(503);
+  expect((await creation.json()).error.code).toBe("codex_authentication_probe_failed");
+}, 20_000);
+
+test("Given a found CLI whose version probe exits non-zero When detecting Then it is flagged probe_failed with no version and no free-text hint", async () => {
+  await mode("version-fail");
+  const backend = codex(await detectBackends({ force: true, requireCodexAuthentication: false, skipCodexAuthentication: true }));
+  expect(backend.found).toBe(true);
+  expect(backend.probe_failed).toBe(true);
+  expect(backend.version).toBeUndefined();
+  expect(backend.install_hint).toBeUndefined();
+});
+
+test("Given a found CLI that prints a version When detecting Then probe_failed is absent", async () => {
+  await mode("login");
+  const backend = codex(await detectBackends({ force: true }));
+  expect(backend.version).toBe("1.2.3");
+  expect(backend.probe_failed).toBeUndefined();
+});
+
+test("Given a working CLI that prints a two-part version When detecting Then it is ready, not probe_failed", async () => {
+  await mode("version-two-part");
+  const backend = codex(await detectBackends({ force: true, requireCodexAuthentication: false, skipCodexAuthentication: true }));
+  expect(backend.version).toBe("2.1");
+  expect(backend.probe_failed).toBeUndefined();
+});

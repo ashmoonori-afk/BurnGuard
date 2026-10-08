@@ -36,14 +36,14 @@ beforeAll(async () => {
     return app.fetch(request);
   } });
   origin = `http://127.0.0.1:${server.port}`;
-  app = createApp({ capability: "canonical-preview-test", appAuthority: new URL(origin).host });
+  app = createApp({ capability: "canonical-preview-test", bootstrapSecret: "canonical-bootstrap-secret", appAuthority: new URL(origin).host });
   browser = await launchChromium(AbortSignal.timeout(60_000));
   page = await browser.newPage();
   page.on("requestfailed", request => failures.push(`${request.url()}: ${request.failure()?.errorText}`));
   page.on("console", message => { if (message.type() === "error") failures.push(message.text()); });
   page.on("response", response => responses.set(new URL(response.url()).pathname, { status: response.status(), type: response.headers()["content-type"] ?? "" }));
   await page.goto(`${origin}/preview-test`, { waitUntil: "load" });
-  expect(await page.evaluate(async () => (await fetch("/api/bootstrap")).status)).toBe(200);
+  expect(await page.evaluate(async () => (await fetch("/api/bootstrap", { headers: { "x-burnguard-bootstrap": "canonical-bootstrap-secret" } })).status)).toBe(200);
 }, 60_000);
 
 afterAll(async () => {

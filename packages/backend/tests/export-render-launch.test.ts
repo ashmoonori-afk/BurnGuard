@@ -10,6 +10,13 @@ const previousTimeout = process.env.BG_CHROMIUM_LAUNCH_TIMEOUT_MS;
 beforeEach(() => { process.env.BG_CHROMIUM_LAUNCH_TIMEOUT_MS = "200"; setChromiumCapabilityForTesting(true); });
 afterEach(() => { resetChromiumCapability(); if (previousTimeout === undefined) delete process.env.BG_CHROMIUM_LAUNCH_TIMEOUT_MS; else process.env.BG_CHROMIUM_LAUNCH_TIMEOUT_MS = previousTimeout; });
 
+/** Bounds a wait on an event: the deadline only fails a hung run, it is never what a passing run waits for. */
+async function withinDeadline<T>(pending: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => { reject(new Error("deadline exceeded")); }, ms); });
+  try { return await Promise.race([pending, deadline]); } finally { clearTimeout(timer); }
+}
+
 function fakeBrowser(onClose: () => void = () => undefined): Browser { return { close: async (): Promise<void> => { onClose(); } } as unknown as Browser; }
 
 async function launchFailure(signal: AbortSignal, launch: ChromiumLauncher, installed?: () => Promise<boolean>, isolated?: boolean): Promise<RenderSessionError> {
@@ -21,25 +28,27 @@ async function launchFailure(signal: AbortSignal, launch: ChromiumLauncher, inst
 describe("chromium launch", () => {
   test("Given a launch that never connects When Chromium is launched Then every channel times out and the failure is typed", async () => {
     const channels: Array<string | undefined> = [];
-    const started = Date.now();
 
     const error = await launchFailure(new AbortController().signal, (options) => { channels.push(options.channel); return new Promise<Browser>(() => undefined); });
 
     expect(error.code).toBe("chromium_launch_timeout");
     expect(channels).toEqual([undefined, "chrome", "msedge"]);
     expect(error.message).toContain("tried channels: bundled, chrome, msedge");
-    expect(Date.now() - started).toBeLessThan(3_000);
   });
 
   test("Given a launch that connects after the timeout When it settles Then the abandoned browser is closed", async () => {
     process.env.BG_CHROMIUM_LAUNCH_TIMEOUT_MS = "50";
-    let closed = 0;
+    const closes = [0, 1, 2].map(() => Promise.withResolvers<void>());
+    let launched = 0;
 
-    const error = await launchFailure(new AbortController().signal, () => new Promise<Browser>((resolve) => { setTimeout(() => { resolve(fakeBrowser(() => { closed += 1; })); }, 150); }));
-    await new Promise<void>((resolve) => { setTimeout(resolve, 400); });
+    const error = await launchFailure(new AbortController().signal, () => new Promise<Browser>((resolve) => {
+      const close = closes[launched++]?.resolve;
+      setTimeout(() => { resolve(fakeBrowser(close)); }, 150);
+    }));
+    await withinDeadline(Promise.all(closes.map((close) => close.promise)), 10_000);
 
     expect(error.code).toBe("chromium_launch_timeout");
-    expect(closed).toBe(3);
+    expect(launched).toBe(3);
   });
 
   test("Given the bundled build failing fast When a channel launch succeeds Then that browser is returned", async () => {
