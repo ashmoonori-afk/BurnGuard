@@ -22,6 +22,7 @@ import {
 import { restoreVisualAlternativeBase } from "./visual-alternative-generation";
 import { visualAlternativeStage } from "./visual-alternative-storage";
 import { holdSessionsForRecovery } from "./turns";
+import { isArtifactRecoveryHeld } from "./artifact-recovery-hold";
 
 type GenerationRecoveryRow = {
   readonly id: unknown;
@@ -68,6 +69,11 @@ export async function recoverVisualAlternatives(
   ).all();
   const held: string[] = [];
   for (const generation of generations) {
+    // A project whose artifact recovery is held keeps its exact bytes and rows.
+    if (typeof generation.project_id === "string" && isArtifactRecoveryHeld(db, generation.project_id)) {
+      held.push(text(generation.id));
+      continue;
+    }
     const converged = await recoverGeneration(db, generation, {
       root,
       restoreBase: dependencies.restoreBase ?? restoreVisualAlternativeBase,
@@ -279,6 +285,7 @@ async function removeUnownedGenerationTrees(db: Database, root: string): Promise
       if (error instanceof PathBoundaryError) continue;
       throw error;
     }
+    if (isArtifactRecoveryHeld(db, project.id)) continue;
     await removeUnownedGenerationEntries(projectDir, owned);
   }
 }

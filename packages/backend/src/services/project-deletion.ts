@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { RecentlyDeletedProject } from "@bg/shared";
+import type { Dirent } from "node:fs";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
@@ -12,6 +13,7 @@ import { isSessionHeldForRecovery, isUserTurnRunning } from "./turns";
 import { isDirectionOperationActive } from "./direction-operation-registry";
 import { isVisualAlternativeOperationActive } from "./visual-alternative-operation-registry";
 import { isArtifactProjectBusy } from "./artifact-project-lock";
+import { isProjectStorageError } from "./project-storage-error";
 import { captureProjectRows, parseProjectRowSnapshot, restoreProjectRows } from "./project-row-snapshot";
 
 export class ProjectDeletionError extends Error {
@@ -125,7 +127,14 @@ export async function purgeExpiredProjectDeletions(db: Database, options: { read
   const root = options.projectsRoot ?? projectsDir;
   const now = options.now ?? Date.now();
   let purged = 0;
-  for (const plan of await readDeletionPlans(root)) {
+  let plans: DeletionPlan[];
+  try { plans = await readDeletionPlans(root); }
+  catch (error) {
+    if (!isProjectStorageError(error)) throw error;
+    console.warn("[project] deferred deleted project cleanup");
+    return 0;
+  }
+  for (const plan of plans) {
     if (plan.deletedAt === null || plan.deletedAt + PROJECT_DELETION_RETENTION_MS > now || db.query("SELECT 1 FROM projects WHERE id=?").get(plan.id) !== null) continue;
     try { await rm(plan.tombstone, { recursive: true, force: true }); purged += 1; }
     catch { console.warn("[project] deferred deleted project cleanup", plan.id); }
@@ -171,30 +180,54 @@ async function restoreTombstone(plan: DeletionPlan): Promise<boolean> {
   return true;
 }
 
+export type DeletionReconcileResult = {
+  /** Stray files, unreadable receipts and non-directories: left untouched. */
+  readonly unrecognized: number;
+  /** Recognized entries whose project row exists but whose files could not be put back: left untouched. */
+  readonly unrestorable: number;
+  /** Entries (or the trash listing) skipped because of a raw filesystem error. */
+  readonly storageErrors: number;
+};
+
 /** Crash between rename and DB commit: row exists => restore; absent => keep as recently deleted (legacy receipts are collected). */
-export async function reconcileProjectDeletions(db: Database, root = projectsDir): Promise<void> {
+export async function reconcileProjectDeletions(db: Database, root = projectsDir): Promise<DeletionReconcileResult> {
   const trash = resolveWithin(root, ".deletions");
-  if (!existsSync(trash)) return;
-  let quarantined = 0;
-  for (const entry of await readdir(trash, { withFileTypes: true })) {
+  let unrecognized = 0;
+  let unrestorable = 0;
+  let storageErrors = 0;
+  let entries: Dirent[];
+  try { entries = existsSync(trash) ? await readdir(trash, { withFileTypes: true }) : []; }
+  catch (error) {
+    if (!isProjectStorageError(error)) throw error;
+    entries = [];
+    storageErrors += 1;
+  }
+  for (const entry of entries) {
     // Stray files (.DS_Store) and unrecognized tombstones are left untouched; one must never lock out every project.
-    if (!entry.isDirectory() || entry.isSymbolicLink()) { quarantined += 1; continue; }
+    if (!entry.isDirectory() || entry.isSymbolicLink()) { unrecognized += 1; continue; }
     const plan = readDeletionPlan(root, trash, entry.name);
-    if (plan === null) { quarantined += 1; continue; }
-    const { id, tombstone, original } = plan;
-    const project = db.query<{ dir_path: string }, [string]>("SELECT dir_path FROM projects WHERE id=?").get(id);
-    if (project === null) {
-      // A committed deletion stays restorable until purgeExpiredProjectDeletions; a legacy receipt has no row snapshot to restore from.
-      if (plan.deletedAt === null) await rm(tombstone, { recursive: true, force: true });
-    } else {
-      let expected: string | null = null;
-      try { expected = resolveManagedPath(root, project.dir_path); } catch { /* handled below */ }
-      if (expected !== original) { quarantined += 1; continue; }
-      if (!await restoreTombstone(plan)) { quarantined += 1; continue; }
+    if (plan === null) { unrecognized += 1; continue; }
+    try {
+      const { id, tombstone, original } = plan;
+      const project = db.query<{ dir_path: string }, [string]>("SELECT dir_path FROM projects WHERE id=?").get(id);
+      if (project === null) {
+        // A committed deletion stays restorable until purgeExpiredProjectDeletions; a legacy receipt has no row snapshot to restore from.
+        if (plan.deletedAt === null) await rm(tombstone, { recursive: true, force: true });
+      } else {
+        let expected: string | null = null;
+        try { expected = resolveManagedPath(root, project.dir_path); } catch { /* handled below */ }
+        if (expected !== original) { unrestorable += 1; continue; }
+        if (!await restoreTombstone(plan)) { unrestorable += 1; continue; }
+      }
+    } catch (error) {
+      // One entry's raw filesystem error is skipped and counted; the entry stays for the next startup. A restore conflict still fails closed.
+      if (!isProjectStorageError(error)) throw error;
+      storageErrors += 1;
     }
   }
   // One aggregate line per startup; kept entries accumulate and must not flood the log.
-  if (quarantined > 0) console.warn("[project] kept unrecognized deletion entries", quarantined);
+  if (unrecognized + unrestorable + storageErrors > 0) console.warn("[project] kept deletion entries", { unrecognized, unrestorable, storageErrors });
+  return { unrecognized, unrestorable, storageErrors };
 }
 
 /** Returns null when the tombstone or its receipt is unreadable or malformed; the tombstone is then left in place. */
