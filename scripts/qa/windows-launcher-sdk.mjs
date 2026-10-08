@@ -25,16 +25,13 @@ try {
     if (sdks !== null) {
       await writeFile(path.join(bin, "dotnet.cmd"), `@echo off\r\n${sdks === "" ? "" : `echo ${sdks}\r\n`}exit /b 0\r\n`);
     }
-    // Windows environment names are case-insensitive; do not pass both inherited
-    // Path and fixture PATH, or cmd can select the real installed tools.
-    const environment = { ...process.env };
-    for (const key of Object.keys(environment)) {
-      if (key.toUpperCase() === "PATH") delete environment[key];
-    }
-    environment.PATH = `${bin};${system32}`;
-    const child = spawn(path.join(system32, "cmd.exe"), ["/d", "/c", "Start-BurnGuard.bat", "--build"], {
+    // Let cmd set its case-insensitive PATH, and use its own command quoting
+    // rather than the C-runtime argument quoting used by spawn by default.
+    const launcher = path.join(directory, "Start-BurnGuard.bat");
+    const command = `"set "PATH=${bin};${system32}" && call "${launcher}" --build"`;
+    const child = spawn(path.join(system32, "cmd.exe"), ["/d", "/s", "/c", command], {
       cwd: directory,
-      env: environment,
+      windowsVerbatimArguments: true,
       stdio: ["pipe", "pipe", "pipe"],
       timeout: 10_000,
     });
