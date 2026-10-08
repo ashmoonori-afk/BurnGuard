@@ -87,8 +87,8 @@ test.skipIf(process.platform === "win32")("Given an adapter run that is aborted 
   }
 });
 
-test("Given a turn cancelled while the capability probe hangs When the run starts Then it settles without waiting for the probe timeout", async () => {
-  if (process.platform === "win32") return;
+// POSIX-only: the hung fixture is an executable shell script; Windows covers abort through the injected-probe unit test.
+test.skipIf(process.platform === "win32")("Given a turn cancelled while the capability probe hangs When the run starts Then it settles without waiting for the probe timeout", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "burnguard-probe-abort-"));
   const binary = path.join(root, "hung-help-fixture");
   // Every invocation, including --help, never exits on its own.
