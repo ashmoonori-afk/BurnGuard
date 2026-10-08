@@ -32,3 +32,34 @@ export function resolveUndoAction(input: {
   }
   return projectOperationId === undefined ? { kind: "none" } : { kind: "project", operationId: projectOperationId };
 }
+
+export interface UndoChordEvent {
+  readonly key: string;
+  readonly code: string;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+}
+
+/**
+ * Cmd/Ctrl+Z undoes, Cmd/Ctrl+Shift+Z redoes, and Ctrl+Y (the Windows/Linux convention) redoes.
+ * A Latin `key` decides alone (`code` names a US-layout position, wrong on QWERTZ/AZERTY/Dvorak);
+ * `code` is consulted only when `key` is a letter outside ASCII (for example Korean or Cyrillic
+ * layouts), never for punctuation or digits that merely share the physical Z or Y position.
+ */
+export function undoChordDirection(event: UndoChordEvent): "undo" | "redo" | null {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return null;
+  const letter = /^[a-z]$/i.test(event.key)
+    ? event.key.toLowerCase()
+    : /^\p{L}$/u.test(event.key)
+      ? event.code === "KeyZ"
+        ? "z"
+        : event.code === "KeyY"
+          ? "y"
+          : ""
+      : "";
+  if (letter === "z") return event.shiftKey ? "redo" : "undo";
+  if (letter === "y" && event.ctrlKey && !event.metaKey && !event.shiftKey) return "redo";
+  return null;
+}

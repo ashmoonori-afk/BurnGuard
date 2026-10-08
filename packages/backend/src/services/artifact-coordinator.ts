@@ -1,18 +1,20 @@
 import type { Database } from "bun:sqlite";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
 import { applyHtmlNodePatch, fingerprintHtmlNode, type PatchHtmlNodeInput } from "./file-patch";
 import { inspectCanonicalTree, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
-import { ArtifactPublicationPolicyError, diffManagedTrees, manifestEntry, materializeManagedTree, publishManagedTree, type ArtifactFileDiff, type PublicationPolicy } from "./artifact-tree-storage";
+import { ArtifactPublicationPolicyError, diffManagedTrees, manifestEntry, materializeManagedTree, publishManagedTree, syncManagedTree, defaultManagedTreeIo, type ManagedTreeIo, type ArtifactFileDiff, type PublicationPolicy } from "./artifact-tree-storage";
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
 import { beginArtifactPublication, endArtifactPublication } from "./artifact-publication-registry";
 import { replaceArtifactFileIndex, replaceArtifactFileIndexInTransaction } from "../db/artifact-file-index";
-import { ARTIFACT_RETENTION_MS } from "./artifact-retention-window";
 import { adoptExistingArtifact, establishEmptyArtifactAuthority } from "./artifact-initialization";
 import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
-import { pruneExpiredArtifactOperations } from "./artifact-retention";
+import { pruneExpiredArtifactOperations, RETENTION_MS } from "./artifact-retention";
+import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import { acquireArtifactProjectLock } from "./artifact-project-lock";
+import { waitForProjectReady } from "./watcher-registry";
 import { isArtifactMutationBlockedByAlternatives } from "./visual-alternative-operation-registry";
 import {
   allowedFigmaReferencePaths,
@@ -30,13 +32,15 @@ import {
   throwIfAcquisitionAborted,
 } from "./extraction-acquisition";
 
-type OperationKind = "patch" | "palette" | "turn" | "restore" | "undo" | "external" | "initialize" | "figma_import";
+type OperationKind = "patch" | "palette" | "turn" | "restore" | "undo" | "external" | "initialize" | "figma_import" | "reapply_external";
 type CoordinatorFaults = {
   readonly beforeSnapshot?: () => void;
   readonly beforePublishRead?: (relativePath: string) => void | Promise<void>;
   readonly beforePublishSourceRead?: (relativePath: string) => void | Promise<void>;
   readonly afterPublishWrite?: (relativePath: string) => void;
   readonly beforeDatabaseCommit?: () => void;
+  /** Durability seam; tests observe the flush order. */
+  readonly treeIo?: ManagedTreeIo;
   readonly beforeFileIndex?: () => void;
   readonly beforeBaselineFinalize?: () => void;
   readonly beforeRollback?: () => void;
@@ -85,16 +89,25 @@ export type CommittedArtifactOperation = {
   readonly resultDigest: string;
   readonly diff: readonly ArtifactFileDiff[];
 };
-/** Operation copies, including captured external edits, stay restorable for the shared retention window. */
-const RETENTION_MS = ARTIFACT_RETENTION_MS;
 type ProjectIdentity = { readonly revision: number; readonly digest: string | null };
 
 export class ArtifactOperationError extends Error {
   constructor(readonly code: string, message: string) { super(message); }
 }
 
+/** Mutations validate against the stable identity, so they wait until startup has adopted external edits. */
+async function waitForStartupObservation(projectId: string): Promise<void> {
+  try { await waitForProjectReady(projectId); }
+  catch (error) {
+    if (error instanceof ArtifactOperationError) throw error;
+    throw new ArtifactOperationError("recovery_unavailable", "Project files could not be verified at startup; no files were changed");
+  }
+}
+
 export class ArtifactCoordinator {
   constructor(private readonly db: Database, private readonly faults: CoordinatorFaults = {}) {}
+
+  private get treeIo(): ManagedTreeIo { return this.faults.treeIo ?? defaultManagedTreeIo; }
 
   private assertNotHeld(projectId: string): void {
     if (isArtifactRecoveryHeld(this.db, projectId)) throw new ArtifactOperationError("recovery_unavailable", "Project recovery is held until the next restart");
@@ -113,7 +126,7 @@ export class ArtifactCoordinator {
     let baselineSource = projectDir;
     if (identity.digest === null) baselineSource = await adoptExistingArtifact(this.db, projectId, projectDir, identity.revision, actual);
     else if (identity.digest !== actual.tree_digest) throw new ArtifactOperationError("artifact_identity_mismatch", "Live artifact bytes differ from the stable identity");
-    await materializeManagedTree(baselineSource, this.baselinePath(projectDir));
+    await materializeManagedTree(baselineSource, this.baselinePath(projectDir), this.treeIo);
     replaceArtifactFileIndex(this.db, projectId, actual);
     return actual;
   }
@@ -124,11 +137,12 @@ export class ArtifactCoordinator {
     const empty = await inspectCanonicalTree(projectDir);
     if (empty.files.length !== 0) throw new ArtifactOperationError("artifact_identity_mismatch", "New project storage is not empty");
     establishEmptyArtifactAuthority(this.db, projectId, empty);
-    await materializeManagedTree(projectDir, this.baselinePath(projectDir));
+    await materializeManagedTree(projectDir, this.baselinePath(projectDir), this.treeIo);
     return this.run({ projectId, projectDir, kind: "initialize", expectedRevision: 0, expectedArtifactDigest: empty.tree_digest, mutate });
   }
 
   async patch(input: PatchOperation): Promise<CommittedArtifactOperation> {
+    await waitForStartupObservation(input.projectId);
     const actual = await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
     const file = manifestEntry(actual, input.relPath);
     if (file?.sha256 !== input.expectedFileHash) throw new ArtifactOperationError("stale_file_hash", "Expected file hash is stale");
@@ -146,6 +160,7 @@ export class ArtifactCoordinator {
 
   async run(input: RunOperation): Promise<CommittedArtifactOperation> {
     this.assertNotHeld(input.projectId);
+    await waitForStartupObservation(input.projectId);
     const id = input.operationId ?? ulid();
     const ownedRoot = this.operationPath(input.projectDir, id);
     const snapshotPath = path.join(ownedRoot, "snapshot");
@@ -165,7 +180,7 @@ export class ArtifactCoordinator {
       figmaReferences = await loadFigmaReferencePolicy(input.projectDir, base, input.signal);
       this.faults.beforeSnapshot?.();
       try {
-        await materializeManagedTree(input.projectDir, snapshotPath);
+        await materializeManagedTree(input.projectDir, snapshotPath, this.treeIo);
         await validateCanonicalTree(snapshotPath, base);
         await materializeManagedTree(input.projectDir, stagePath);
         await validateCanonicalTree(stagePath, base);
@@ -231,8 +246,10 @@ export class ArtifactCoordinator {
           throwIfAcquisitionAborted(input.signal);
           await this.faults.beforePublishSourceRead?.(relativePath);
         },
-      });
+      }, this.treeIo);
       await validateCanonicalTree(input.projectDir, result);
+      // The agent wrote the stage; recovery adopts it as the baseline after a crash, so flush it before the commit.
+      await syncManagedTree(stagePath, this.treeIo);
       this.faults.beforeDatabaseCommit?.();
       this.commit(id, input.projectId, input.expectedRevision, base.tree_digest, resultRevision, result);
     } catch (error) {
@@ -260,7 +277,7 @@ export class ArtifactCoordinator {
       if (error instanceof AcquisitionLimitError || error instanceof FigmaImportError) throw error;
       throw new ArtifactOperationError("operation_failed", error instanceof Error ? error.message : "Artifact operation failed");
     }
-    try { this.faults.beforeBaselineFinalize?.(); await materializeManagedTree(stagePath, this.baselinePath(input.projectDir)); }
+    try { this.faults.beforeBaselineFinalize?.(); await materializeManagedTree(stagePath, this.baselinePath(input.projectDir), this.treeIo); }
     catch (error) { console.warn("[artifact] committed operation requires baseline reconciliation", id, error); }
     finally { endArtifactPublication(input.projectId); releasePublication?.(); }
     publishArtifactOperationEvent(this.db, { projectId: input.projectId, operationId: id, revision: resultRevision, digest: result.tree_digest, outcome: "committed", diff });
@@ -268,6 +285,7 @@ export class ArtifactCoordinator {
   }
 
   async undo(input: UndoOperation): Promise<CommittedArtifactOperation> {
+    await waitForStartupObservation(input.projectId);
     await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
     const raw = this.db.query<PersistedArtifactOperationRow, [string, string]>("SELECT id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at FROM artifact_operations WHERE id=? AND project_id=?").get(input.operationId, input.projectId);
     if (raw === null) throw new ArtifactOperationError("undo_unavailable", "Committed operation is unavailable");
@@ -285,6 +303,34 @@ export class ArtifactCoordinator {
     return operation;
   }
 
+  /**
+   * Re-apply an external save that was reverted because an operation was running. Only the captured
+   * file changes are replayed, and only onto files still matching what the capture replaced.
+   */
+  async reapplyExternal(input: UndoOperation): Promise<CommittedArtifactOperation> {
+    await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
+    const raw = this.db.query<PersistedArtifactOperationRow, [string, string]>("SELECT id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at FROM artifact_operations WHERE id=? AND project_id=?").get(input.operationId, input.projectId);
+    if (raw === null) throw new ArtifactOperationError("reapply_unavailable", "Captured external edit is unavailable");
+    const capture = parsePersistedArtifactOperation(raw);
+    if (capture.status !== "conflicted" || capture.replay.kind !== "external") throw new ArtifactOperationError("reapply_unavailable", "Captured external edit is unavailable");
+    if (!capture.retention.replayable || capture.retention.retained_until <= Date.now()) throw new ArtifactOperationError("capture_expired", "Captured external edit is no longer retained");
+    if (this.db.query("SELECT 1 FROM artifact_operations WHERE project_id=? AND status IN ('pending','working','recovering') LIMIT 1").get(input.projectId) !== null) throw new ArtifactOperationError("operation_conflict", "An artifact operation is active");
+    const captured = resolveWithin(input.projectDir, ".meta", "artifact-operations", assertSafeName(capture.id), "stage");
+    if (!sameStoragePath(capture.snapshot.stage_path, captured)) throw new ArtifactOperationError("reapply_unavailable", "Captured external edit is outside operation storage");
+    return this.run({ projectId: input.projectId, projectDir: input.projectDir, kind: "reapply_external", expectedRevision: input.expectedRevision, expectedArtifactDigest: input.expectedArtifactDigest, parentOperationId: capture.id, mutate: async (stage) => {
+      const current = await inspectCanonicalTree(stage);
+      for (const file of capture.diff) {
+        if ((manifestEntry(current, file.path)?.sha256 ?? null) !== file.before_hash) throw new ArtifactOperationError("reapply_conflict", "Files changed after the external edit was captured");
+        const target = resolveWithin(stage, ...file.path.split("/"));
+        if (file.after_hash === null) { await rm(target, { force: true }); continue; }
+        await mkdir(path.dirname(target), { recursive: true });
+        await writeFile(target, await readFile(resolveWithin(captured, ...file.path.split("/"))));
+      }
+      const result = await inspectCanonicalTree(stage);
+      if (capture.diff.some(file => (manifestEntry(result, file.path)?.sha256 ?? null) !== file.after_hash)) throw new ArtifactOperationError("reapply_unavailable", "Captured external edit bytes are corrupt");
+    } });
+  }
+
   async observeExternal(projectId: string, projectDir: string): Promise<CommittedArtifactOperation | null> {
     this.assertNotHeld(projectId);
     const release = await acquireArtifactProjectLock(this.db, projectId);
@@ -299,6 +345,7 @@ export class ArtifactCoordinator {
    */
   async adoptExternal(projectId: string, projectDir: string, admit: () => void): Promise<CommittedArtifactOperation | null> {
     this.assertNotHeld(projectId);
+    await waitForStartupObservation(projectId);
     const release = await acquireArtifactProjectLock(this.db, projectId);
     try {
       admit();
@@ -343,8 +390,8 @@ export class ArtifactCoordinator {
     const stagePath = path.join(ownedRoot, "stage");
     let registered = false;
     try {
-    await materializeManagedTree(baselinePath, snapshotPath);
-    const captured = await materializeManagedTree(projectDir, stagePath);
+    await materializeManagedTree(baselinePath, snapshotPath, this.treeIo);
+    const captured = await materializeManagedTree(projectDir, stagePath, this.treeIo);
     this.faults.afterExternalCapture?.();
     const current = await inspectCanonicalTree(projectDir);
     if (captured.tree_digest !== current.tree_digest) return null;
@@ -381,7 +428,7 @@ export class ArtifactCoordinator {
     this.prepareResult(id, identity.revision + 1, captured, diff);
     this.commit(id, projectId, identity.revision, identity.digest, identity.revision + 1, captured);
     // Use the exact committed stage, never a later version of the live files.
-    await materializeManagedTree(stagePath, baselinePath);
+    await materializeManagedTree(stagePath, baselinePath, this.treeIo);
     publishArtifactOperationEvent(this.db, { projectId, operationId: id, revision: identity.revision + 1, digest: captured.tree_digest, outcome: "committed", diff });
     return { id, kind: "external", status: "committed", baseRevision: identity.revision, baseDigest: identity.digest, resultRevision: identity.revision + 1, resultDigest: captured.tree_digest, diff };
     } catch (error) {
@@ -397,8 +444,8 @@ export class ArtifactCoordinator {
     const ownedRoot = this.operationPath(projectDir, id);
     const snapshotPath = path.join(ownedRoot, "snapshot");
     const stagePath = path.join(ownedRoot, "stage");
-    await materializeManagedTree(this.baselinePath(projectDir), snapshotPath);
-    await materializeManagedTree(projectDir, stagePath);
+    await materializeManagedTree(this.baselinePath(projectDir), snapshotPath, this.treeIo);
+    await materializeManagedTree(projectDir, stagePath, this.treeIo);
     const diff = diffManagedTrees(base, actual);
     await publishManagedTree(snapshotPath, projectDir);
     this.db.transaction(() => {
@@ -482,4 +529,12 @@ function mergeImmutableReferencePaths(
     }
   }
   return output;
+}
+
+/** Compares a stored storage path with a resolveWithin result by real path, so symlinked, junctioned or 8.3-short project roots still match. */
+function sameStoragePath(stored: string, resolved: string): boolean {
+  try {
+    const normalize = (value: string) => process.platform === "win32" ? realpathSync(value).toLowerCase() : realpathSync(value);
+    return normalize(stored) === normalize(resolved);
+  } catch { return false; }
 }

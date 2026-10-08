@@ -4,8 +4,8 @@ import { ulid } from "ulid";
 import { rm } from "node:fs/promises";
 import { replaceArtifactFileIndexInTransaction } from "../db/artifact-file-index";
 import { validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
-import { ARTIFACT_RETENTION_MS } from "./artifact-retention-window";
-import { materializeManagedTree } from "./artifact-tree-storage";
+import { defaultManagedTreeIo, materializeManagedTree } from "./artifact-tree-storage";
+import { RETENTION_MS } from "./artifact-retention";
 
 export async function adoptExistingArtifact(db: Database, projectId: string, projectDir: string, revision: number, actual: CanonicalTreeManifest, previousDigest: string | null = null): Promise<string> {
   // A verified legacy identity migration advances revision; first adoption does not.
@@ -14,11 +14,11 @@ export async function adoptExistingArtifact(db: Database, projectId: string, pro
   const snapshotPath = path.join(ownedRoot, "snapshot"); const stagePath = path.join(ownedRoot, "stage");
   let committed = false;
   try {
-  await materializeManagedTree(projectDir, snapshotPath); await validateCanonicalTree(snapshotPath, actual);
+  await materializeManagedTree(projectDir, snapshotPath, defaultManagedTreeIo); await validateCanonicalTree(snapshotPath, actual);
   await materializeManagedTree(projectDir, stagePath); await validateCanonicalTree(stagePath, actual);
   await validateCanonicalTree(projectDir, actual);
   const snapshot = { schema_version: 1, snapshot_path: snapshotPath, stage_path: stagePath, base_manifest: actual };
-  const retention = { schema_version: 1, replayable: true, retained_until: now + ARTIFACT_RETENTION_MS, pruned_at: null, prune_reason: null };
+  const retention = { schema_version: 1, replayable: true, retained_until: now + RETENTION_MS, pruned_at: null, prune_reason: null };
   const replay = { schema_version: 1, kind: "initialize", parent_operation_id: null, publication: "base" };
   db.transaction(() => {
     const changed = db.prepare("UPDATE projects SET current_digest=?,current_revision=? WHERE id=? AND current_revision=? AND current_digest IS ?").run(actual.tree_digest, resultRevision, projectId, revision, previousDigest);

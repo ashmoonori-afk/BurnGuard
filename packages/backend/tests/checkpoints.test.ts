@@ -294,7 +294,7 @@ describe("checkpoint snapshot / restore round-trip", () => {
     expect(checkpoint?.path).toBe(path.join(checkpointDir, "turn-receipt.json"));
     const receipt: unknown = JSON.parse(readFileSync(path.join(checkpointDir, "turn-receipt.json"), "utf8"));
     expect(receipt).toMatchObject({ turn_id: "turn-receipt", project_id: projectId, file_count: 4 });
-    expect(readdirSync(checkpointDir).filter((name) => name.includes(".tmp-"))).toEqual([]);
+    expect(readdirSync(checkpointDir).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 
   test("Given snapshots older than the retention window When a new snapshot is written Then expired entries are pruned and recent ones kept", async () => {
@@ -303,11 +303,12 @@ describe("checkpoint snapshot / restore round-trip", () => {
     await writePreTurnSnapshot(projectId, "turn-old");
     await writePreTurnSnapshot(projectId, "turn-recent");
     const checkpointDir = path.join(projectDir, ".meta", "checkpoints");
-    writeFileSync(path.join(checkpointDir, "turn-old.json.tmp-leftover"), "{", "utf8");
+    const leftover = "turn-old.json.00000000-0000-0000-0000-000000000000.tmp";
+    writeFileSync(path.join(checkpointDir, leftover), "{", "utf8");
     const expired = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
     const recent = new Date(Date.now() - 24 * 60 * 60 * 1000);
     for (const name of ["turn-old", "turn-old.manifest.json"]) utimesSync(path.join(snapshotRoot(projectDir), name), expired, expired);
-    utimesSync(path.join(checkpointDir, "turn-old.json.tmp-leftover"), expired, expired);
+    utimesSync(path.join(checkpointDir, leftover), expired, expired);
     for (const name of ["turn-recent", "turn-recent.manifest.json"]) utimesSync(path.join(snapshotRoot(projectDir), name), recent, recent);
 
     // When
@@ -315,7 +316,7 @@ describe("checkpoint snapshot / restore round-trip", () => {
 
     // Then
     expect(readdirSync(snapshotRoot(projectDir)).sort()).toEqual(["turn-new", "turn-new.manifest.json", "turn-recent", "turn-recent.manifest.json"]);
-    expect(existsSync(path.join(checkpointDir, "turn-old.json.tmp-leftover"))).toBe(false);
+    expect(existsSync(path.join(checkpointDir, leftover))).toBe(false);
     expect(await getVerifiedSnapshotPath(projectId, "turn-recent")).toBe(snapshotDir(projectDir, "turn-recent"));
   });
 

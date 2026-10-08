@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { ARTIFACT_RETENTION_MS } from "../services/artifact-retention-window";
+import { RETENTION_MS } from "../services/artifact-retention";
 import type {
   VisualAlternativeList,
   VisualAlternativeListStatus,
@@ -27,7 +27,7 @@ export class VisualAlternativeRepositoryError extends Error {
 }
 
 const RETAINED_UNTIL = 253402300799999;
-const RELEASED_RETENTION_MS = ARTIFACT_RETENTION_MS;
+const RELEASED_RETENTION_MS = RETENTION_MS;
 
 export function createVisualAlternativeGeneration(
   db: Database,

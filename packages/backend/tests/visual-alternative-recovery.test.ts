@@ -10,6 +10,7 @@ import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { materializeManagedTree } from "../src/services/artifact-tree-storage";
 import { recoverVisualAlternatives } from "../src/services/visual-alternative-recovery";
 import { restoreVisualAlternativeBase } from "../src/services/visual-alternative-generation";
+import { setArtifactRecoveryHold } from "../src/services/artifact-recovery-hold";
 import { isSessionHeldForRecovery } from "../src/services/turns";
 import { recoverProjectVisualAlternatives } from "../src/services/visual-alternative-recovery";
 import { deleteVisualAlternative } from "../src/db/visual-alternative-repository";
@@ -370,4 +371,18 @@ describe("visual alternative recovery", () => {
     expect(existsSync(orphan)).toBe(false);
     expect(retainedUntil("stale-pin")).toBe(1000 + 30 * 24 * 60 * 60 * 1000);
   });
+});
+
+test("Given a project held by startup recovery When visual alternatives recover Then its generation and orphan trees stay untouched", async () => {
+  await interruptedGeneration("held-gen");
+  const orphan = path.join(projectDir, ".meta", "visual-alternatives", "orphan-tree");
+  await mkdir(orphan, { recursive: true });
+  setArtifactRecoveryHold(db, ["p"]);
+  const result = await recoverVisualAlternatives(db, { root });
+  expect(result.held).toEqual(["held-gen"]);
+  expect(db.query<{ status: string }, []>("SELECT status FROM visual_alternative_generations WHERE id='held-gen'").get()?.status).toBe("generating");
+  expect(existsSync(orphan)).toBe(true);
+  setArtifactRecoveryHold(db, []);
+  expect((await recoverVisualAlternatives(db, { root })).held).toEqual([]);
+  expect(db.query<{ status: string }, []>("SELECT status FROM visual_alternative_generations WHERE id='held-gen'").get()?.status).not.toBe("generating");
 });

@@ -17,16 +17,21 @@ if ! command -v bun >/dev/null 2>&1; then
     # Finder launches inherit a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin)
     # so anything installed via Bun's official installer, Homebrew (Apple
     # Silicon or Intel), or a user-local npm prefix needs explicit fallback.
+    path_prefix=""
     for candidate in \
         "$HOME/.bun/bin" \
         "/opt/homebrew/bin" \
         "/usr/local/bin" \
         "$HOME/.local/bin"; do
-        if [ -x "$candidate/bun" ]; then
-            export PATH="$candidate:$PATH"
-            break
-        fi
+        [ -d "$candidate" ] || continue
+        case ":$PATH:" in
+            *":$candidate:"*) continue ;;
+        esac
+        path_prefix="$path_prefix:$candidate"
     done
+    if [ -n "$path_prefix" ]; then
+        export PATH="${path_prefix#:}:$PATH"
+    fi
 fi
 
 if ! command -v bun >/dev/null 2>&1; then

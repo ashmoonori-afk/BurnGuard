@@ -51,6 +51,18 @@ describe("detection failure on Home (UX-05)", () => {
   });
 });
 
+describe("CLI guidance entry (F-UX-2)", () => {
+  test("Given a detected CLI whose probe failed and no ready backend When Home renders Then the guidance entry opens the detection dialog", () => {
+    const html = renderHome("/", { backends: [{ id: "claude-code", found: true, probe_failed: true }, { id: "codex", found: false }] });
+    expect(html).toContain(t("home.aiNotice"));
+    expect(html).toContain(`>${t("home.aiGuide")}</button>`);
+  });
+
+  test("Given a ready backend When Home renders Then the guidance entry stays hidden", () => {
+    expect(renderHome("/", codexSignedOut)).not.toContain(t("home.aiNotice"));
+  });
+});
+
 describe("gated quick-start tiles (UX-24)", () => {
   test("Given Codex signed out When the tiles render Then the graphic tile stays focusable, is marked aria-disabled and points at the visible reason", () => {
     const html = renderHome("/", codexSignedOut);

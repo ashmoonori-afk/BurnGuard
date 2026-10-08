@@ -67,6 +67,22 @@ test.skipIf(process.platform === "win32")("Given an adapter exits with a survivi
   }
 });
 
+test("Given a claude-code run in a private project directory When the runner logs its launch Then the log omits the absolute project path", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "burnguard-adapter-log-"));
+  const logged: string[] = [];
+  const spy = spyOn(console, "log").mockImplementation((...args: unknown[]) => { logged.push(args.map(String).join(" ")); });
+  try {
+    // `process.execPath` stands in for the CLI: the runner logs its spawn line
+    // before touching the child, so the process only needs to exist and exit.
+    await runClaudeCode({ binaryPath: process.execPath, projectDir: root, prompt: "test", onStdoutLine: () => {} }).catch(() => undefined);
+  } finally {
+    spy.mockRestore();
+    await rm(root, { recursive: true, force: true });
+  }
+  expect(logged.some((line) => line.startsWith("[claude-code] spawn"))).toBe(true);
+  expect(logged.some((line) => line.includes(root))).toBe(false);
+});
+
 // Skipped on Windows: needs POSIX shebang executables and signals; Windows ownership is covered by owned-process-windows.test.ts and codex-runner.test.ts.
 test.skipIf(process.platform === "win32")("Given an adapter run that is aborted mid-stream When the run settles Then the owned process tree is gone", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "burnguard-adapter-abort-"));

@@ -8,7 +8,6 @@ packages/backend/tests/app-shell-headers.test.ts
 packages/backend/tests/app-update-routes.test.ts
 packages/backend/tests/artifact-anchor-routes.test.ts
 packages/backend/tests/artifact-document-migration.test.ts
-packages/backend/tests/artifact-history.test.ts
 packages/backend/tests/artifact-operations-styles.test.ts
 packages/backend/tests/artifact-operations.test.ts
 packages/backend/tests/artifact-routes.test.ts
@@ -236,7 +235,6 @@ packages/frontend/tests/bootstrap-shell.test.ts
 packages/frontend/tests/bridge-inline-style.test.ts
 packages/frontend/tests/brief-choices.test.ts
 packages/frontend/tests/canvas-ai-request.test.ts
-packages/frontend/tests/canvas-css-imports.browser.test.ts
 packages/frontend/tests/canvas-images.test.ts
 packages/frontend/tests/canvas-interaction.test.ts
 packages/frontend/tests/canvas-load-error.test.ts
