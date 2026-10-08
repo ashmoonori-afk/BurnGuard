@@ -24,6 +24,7 @@ import { projectsDir, systemsDir } from "../lib/paths";
 import { DECK_STAGE_JS } from "../runtime/deck-stage";
 import { getDb } from "./client";
 import { getSqlite } from "./sqlite-client";
+import { compareVersions } from "../services/mac-updates";
 import { ArtifactCoordinator } from "../services/artifact-coordinator";
 import {
   designSystemsTable,
@@ -54,13 +55,19 @@ export async function seedCoreData() {
     })
     .onConflictDoNothing();
 
-  await db
-    .insert(metaSchemaTable)
-    .values({ key: "app_version", value: APP_VERSION })
-    .onConflictDoUpdate({
-      target: metaSchemaTable.key,
-      set: { value: APP_VERSION },
-    });
+  // Never stamp an older version over what a newer build recorded.
+  const storedVersion = (
+    await db.select({ value: metaSchemaTable.value }).from(metaSchemaTable).where(eq(metaSchemaTable.key, "app_version")).limit(1)
+  )[0]?.value;
+  if (storedVersion === undefined || compareVersions(APP_VERSION, storedVersion) >= 0) {
+    await db
+      .insert(metaSchemaTable)
+      .values({ key: "app_version", value: APP_VERSION })
+      .onConflictDoUpdate({
+        target: metaSchemaTable.key,
+        set: { value: APP_VERSION },
+      });
+  }
 
   const bundledThemeFixtures = bundledDesignSystems.map(({ slug, name }) => ({
     id: bundledDesignSystemId(slug),

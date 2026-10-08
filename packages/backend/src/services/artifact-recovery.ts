@@ -62,6 +62,7 @@ function recoveryFailureCode(error: unknown): string {
   if (error instanceof ArtifactOperationError) return error.code;
   if (error instanceof CanonicalTreeManifestError) return error.code;
   if (error instanceof PersistedArtifactOperationError) return "corrupt_receipt";
+  // Antivirus, cloud sync or a racing rename can fail one project's storage; that must not lock out the profile.
   if (isProjectStorageError(error)) return "project_storage_unavailable";
   throw error;
 }

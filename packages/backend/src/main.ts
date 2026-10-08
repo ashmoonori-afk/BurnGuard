@@ -1,6 +1,6 @@
 import { bootstrapLocalAppData } from "./bootstrap";
 import { loadConfig } from "./config";
-import { desktopPort, watchDesktopParent } from "./desktop-lifecycle";
+import { activeTurnsMessage, desktopPort, watchDesktopParent } from "./desktop-lifecycle";
 import { openBrowser } from "./lib/browser";
 import { pickPort } from "./lib/port";
 import { appRootDir } from "./lib/app-paths";
@@ -12,7 +12,7 @@ import { closeActiveExportBrowsers } from "./services/export-browser-registry";
 import { configureAppUpdater, startAppUpdateScheduler } from "./services/mac-updates";
 import { startProjectDeletionPurgeScheduler } from "./services/project-deletion";
 import { getSqlite } from "./db/sqlite-client";
-import { interruptAllUserTurns } from "./services/turns";
+import { activeUserTurnCount, interruptAllUserTurns } from "./services/turns";
 import { shutdownProjectWatchers, startProjectWatchers, type ProjectWatcherStartup } from "./services/watchers";
 
 const isDesktop = process.env.BG_DESKTOP === "1";
@@ -110,7 +110,8 @@ process.on("SIGHUP", () => { void shutdown(); });
 // Announce only once the handlers exist: a signal that arrives earlier takes the default action and skips the ordered shutdown.
 console.log(`[burnguard] listening on ${url}`);
 if (isDesktop) {
-  watchDesktopParent(process.stdin, () => { void shutdown(); });
+  // The shell asks before closing so it can confirm over a running generation.
+  watchDesktopParent(process.stdin, () => { void shutdown(); }, () => console.log(activeTurnsMessage(activeUserTurnCount())));
   console.log(`[burnguard-desktop] ${JSON.stringify({ protocol: 1, url, pid: process.pid, bootstrap: bootstrapSecret })}`);
 }
 // Reconciliation already converged in bootstrap; observing every project tree must not delay the window.

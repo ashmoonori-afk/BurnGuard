@@ -9,10 +9,14 @@ export function isCommentEditable(target: { closest?: (selector: string) => unkn
   return Boolean(target?.isContentEditable || target?.closest?.("input,textarea,select,[contenteditable]:not([contenteditable=false]),[role=textbox]"));
 }
 
-export function isQuickCommentShortcut(event: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "repeat" | "isComposing" | "defaultPrevented">, editable: boolean, platform = navigator.platform): boolean {
-  // macOS reserves Control+Space (and Control+Shift+Space) for input sources.
-  return event.ctrlKey && !event.metaKey && event.altKey === /^Mac/.test(platform) && !event.shiftKey &&
-    (event.code === "Space" || event.key === " ") && !event.repeat && !event.isComposing && !event.defaultPrevented && !editable;
+export function isQuickCommentShortcut(event: Pick<KeyboardEvent, "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "repeat" | "isComposing" | "defaultPrevented">, editable: boolean): boolean {
+  // Alt/Option+C; match the physical key because Option+C types "ç" on macOS. Ctrl+Alt is AltGr on Windows layouts.
+  return event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === "KeyC" &&
+    !event.repeat && !event.isComposing && !event.defaultPrevented && !editable;
+}
+
+export function quickCommentShortcutLabel(platform = navigator.platform): string {
+  return /^Mac/.test(platform) ? "Option+C" : "Alt+C";
 }
 
 export function commentPointInFrame(frame: HTMLIFrameElement, point: CommentPoint): CommentPoint | null {
