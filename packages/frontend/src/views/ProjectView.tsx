@@ -51,7 +51,7 @@ import { ApiError } from "@/api/client";
 import { isStaleIdentityError, readFileIdentity } from "@/lib/artifact-identity";
 import { getProjectDesignAudit, retryProjectDesignAudit } from "@/api/design-audit";
 import { restoreCheckpoint } from "@/api/checkpoints";
-import { getArtifactHistory, restoreArtifactHistory, patchProjectFile } from "@/api/files";
+import { getArtifactHistory, reapplyExternalCapture, restoreArtifactHistory, patchProjectFile } from "@/api/files";
 import {
   createProjectComment,
   listProjectComments,
@@ -1054,13 +1054,13 @@ export default function ProjectView() {
   });
   const artifactRedo = useRef<{ revision: number; operations: string[] }>({ revision: -1, operations: [] });
   const undoMutation = useMutation({
-    mutationFn: (input: { operationId?: string; redo?: boolean; fromHistory?: boolean }) => {
+    mutationFn: (input: { operationId?: string; redo?: boolean; fromHistory?: boolean; reapplyExternal?: boolean }) => {
       const history = undoInfoQuery.data;
       const operationId = input.operationId ?? history?.undo_operation_id;
       if (!id || !undoActiveRelPath || !history || !operationId) {
         throw new Error("no_active_file");
       }
-      return restoreArtifactHistory(id, operationId, history);
+      return input.reapplyExternal ? reapplyExternalCapture(id, operationId, history) : restoreArtifactHistory(id, operationId, history);
     },
     onSuccess: async (result, input) => {
       if (input.fromHistory || artifactRedo.current.revision !== undoInfoQuery.data?.current_revision) artifactRedo.current.operations = [];
@@ -1518,7 +1518,7 @@ export default function ProjectView() {
                   onDelete={async alternativeId => { await deleteAlternativeMutation.mutateAsync(alternativeId); }}
                   onCancel={async () => { await cancelAlternativesMutation.mutateAsync(); }}
                 />
-                <ArtifactHistory history={undoInfoQuery.data} disabled={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} />
+                <ArtifactHistory history={undoInfoQuery.data} disabled={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} onReapply={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true, reapplyExternal: true }); }} />
               </div>}
               canUndo={Boolean(undoInfoQuery.data?.undo_operation_id)}
               undoPending={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending}

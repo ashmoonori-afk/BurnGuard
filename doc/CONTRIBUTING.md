@@ -38,8 +38,10 @@ bun run build:backend           # bun build --compile → dist/burnguard-design.
 
 ```bash
 bun test                        # unit + integration
-bun run test:e2e                # Playwright E2E (requires installed Playwright)
+node scripts/qa/e2e-smoke.mjs [--only core]   # browser E2E over the core loop
 ```
+
+Browser E2E runs on Node with playwright-core against an installed Chrome/Edge channel: by default it uses system Google Chrome. To use Edge instead, pass `--channel msedge`. To use bundled Chromium, first install it with `node packages/backend/node_modules/playwright-core/cli.js install chromium`, then pass `--channel bundled`.
 
 ## 2. Workspace Layout
 
@@ -121,7 +123,7 @@ Per `~/.claude/rules/common/testing.md`, enforce:
 
 - Colocate unit tests: `foo.ts` and `foo.test.ts` side by side
 - Integration tests: `packages/backend/tests/integration/*.test.ts`
-- E2E: `tests/e2e/*.spec.ts`
+- E2E: `scripts/qa/*-fixtures.mjs` browser suites, composed by `node scripts/qa/e2e-smoke.mjs`
 - Fixtures: `tests/fixtures/{adapter_id}/*.jsonl`
 
 ### Fixture-driven parser tests
