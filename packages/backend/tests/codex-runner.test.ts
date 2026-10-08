@@ -4,7 +4,8 @@ import { mkdir, symlink } from "node:fs/promises";
 import { buildCodexCommand } from "../src/adapters/codex";
 import { codexFixture, PNG_SHA } from "./codex-runner-fixture";
 
-const posixTest = (name: string, run: () => Promise<void>) => test.skipIf(process.platform === "win32")(name, run, 15_000);
+// Every case runs on every OS: on Windows the fixture is a .cmd wrapper launched through BG_WINDOWS_PROCESS_HOST.
+const runnerTest = (name: string, run: () => Promise<void>) => test(name, run, 30_000);
 
 function imageWatch(fixture: Awaited<ReturnType<typeof codexFixture>>) {
   const entry = [...fixture.watches].reverse().find((entry) => entry.path === fixture.imageRoot);
@@ -34,9 +35,9 @@ describe("buildCodexCommand", () => {
   });
 });
 
-describe("runCodexTurn image-tool lifecycle (POSIX subprocess fixtures)", () => {
+describe("runCodexTurn image-tool lifecycle (real subprocess fixtures)", () => {
   for (const missingRoot of [false, true]) {
-    posixTest(`Given generated_images is ${missingRoot ? "missing" : "present"} When a PNG lands after watcher attachment Then its hash is delivered live exactly once`, async () => {
+    runnerTest(`Given generated_images is ${missingRoot ? "missing" : "present"} When a PNG lands after watcher attachment Then its hash is delivered live exactly once`, async () => {
       await using fixture = await codexFixture({ missingRoot });
       const imageFinished = Promise.withResolvers<void>();
       const run = fixture.start({ onEvent: async (event) => {
@@ -63,7 +64,7 @@ describe("runCodexTurn image-tool lifecycle (POSIX subprocess fixtures)", () => 
     });
   }
 
-  posixTest("Given a silent owned child When a live callback rejects Then intake closes and settlement rejects with the same error without an external abort", async () => {
+  runnerTest("Given a silent owned child When a live callback rejects Then intake closes and settlement rejects with the same error without an external abort", async () => {
     await using fixture = await codexFixture();
     const failure = new Error("persistence_unavailable");
     const run = fixture.start({ onEvent: async (event) => {
@@ -77,7 +78,7 @@ describe("runCodexTurn image-tool lifecycle (POSIX subprocess fixtures)", () => 
     expectGone(fixture.pids);
   });
 
-  posixTest("Given a blocked stdout callback When a watcher scan and turn completion arrive Then parsing and callbacks preserve global delivery order", async () => {
+  runnerTest("Given a blocked stdout callback When a watcher scan and turn completion arrive Then parsing and callbacks preserve global delivery order", async () => {
     await using fixture = await codexFixture({ controlledWatch: true });
     const release = Promise.withResolvers<void>();
     const order: string[] = [];
@@ -99,7 +100,7 @@ describe("runCodexTurn image-tool lifecycle (POSIX subprocess fixtures)", () => 
     } finally { release.resolve(); }
   });
 
-  posixTest("Given an in-flight image callback When stderr rejects Then owned cleanup closes intake and drains that callback before rejecting", async () => {
+  runnerTest("Given an in-flight image callback When stderr rejects Then owned cleanup closes intake and drains that callback before rejecting", async () => {
     await using fixture = await codexFixture();
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
@@ -125,7 +126,7 @@ describe("runCodexTurn image-tool lifecycle (POSIX subprocess fixtures)", () => 
     } finally { release.resolve(); }
   });
 
-  posixTest("Given a missing root When its parent reports a null filename Then attachment and the immediate hash sweep recover", async () => {
+  runnerTest("Given a missing root When its parent reports a null filename Then attachment and the immediate hash sweep recover", async () => {
     await using fixture = await codexFixture({ missingRoot: true, controlledWatch: true });
     const finished = Promise.withResolvers<void>();
     const run = fixture.start({ onEvent: async (event) => { if (event.type === "tool.finished") finished.resolve(); } });
@@ -139,7 +140,7 @@ describe("runCodexTurn image-tool lifecycle (POSIX subprocess fixtures)", () => 
     expect(fixture.events[2]).toMatchObject({ output: { image_sha256: [PNG_SHA] } });
   });
 
-  posixTest("Given an attached image watcher When it reports an error Then a replacement delivers the next null-name notification live", async () => {
+  runnerTest("Given an attached image watcher When it reports an error Then a replacement delivers the next null-name notification live", async () => {
     await using fixture = await codexFixture({ controlledWatch: true });
     const finished = Promise.withResolvers<void>();
     const run = fixture.start({ onEvent: async (event) => { if (event.type === "tool.finished") finished.resolve(); } });
@@ -156,7 +157,7 @@ describe("runCodexTurn image-tool lifecycle (POSIX subprocess fixtures)", () => 
     expect(fixture.events.filter((event) => event.type === "tool.finished")).toHaveLength(1);
   });
 
-  posixTest("Given a missing image root When the parent watcher errors Then its replacement attaches the newly created root", async () => {
+  runnerTest("Given a missing image root When the parent watcher errors Then its replacement attaches the newly created root", async () => {
     await using fixture = await codexFixture({ missingRoot: true, controlledWatch: true });
     const finished = Promise.withResolvers<void>();
     const run = fixture.start({ onEvent: async (event) => { if (event.type === "tool.finished") finished.resolve(); } });
@@ -173,7 +174,7 @@ describe("runCodexTurn image-tool lifecycle (POSIX subprocess fixtures)", () => 
     expect(fixture.events[2]).toMatchObject({ output: { image_sha256: [PNG_SHA] } });
   });
 
-  posixTest("Given a stdout event When its callback rejects Then the same error settles the owned process without synthetic completion", async () => {
+  runnerTest("Given a stdout event When its callback rejects Then the same error settles the owned process without synthetic completion", async () => {
     await using fixture = await codexFixture();
     const failure = new Error("stdout_persistence_unavailable");
     const run = fixture.start({ onEvent: async () => { throw failure; } });
@@ -184,11 +185,12 @@ describe("runCodexTurn image-tool lifecycle (POSIX subprocess fixtures)", () => 
     expectGone(fixture.pids);
   });
 
-  posixTest("Given a generated_images symlink escaping Codex home When the parent reports its creation Then neither observation nor hashing escapes the boundary", async () => {
+  runnerTest("Given a generated_images symlink escaping Codex home When the parent reports its creation Then neither observation nor hashing escapes the boundary", async () => {
     await using fixture = await codexFixture({ missingRoot: true, controlledWatch: true });
     const run = fixture.start();
     await fixture.ready;
-    await symlink(fixture.root, fixture.imageRoot);
+    // A junction needs no privilege on Windows; the type argument is ignored elsewhere.
+    await symlink(fixture.root, fixture.imageRoot, "junction");
     parentWatch(fixture).emit("change", "rename", "generated_images");
     await fixture.command("complete");
     expect(await run).toEqual({ exitCode: 0 });
@@ -196,7 +198,7 @@ describe("runCodexTurn image-tool lifecycle (POSIX subprocess fixtures)", () => 
     expect(fixture.events.some((event) => event.type === "tool.started")).toBe(false);
   });
 
-  posixTest("Given an owned child and descendant When the turn is aborted Then both are gone before interrupted settlement", async () => {
+  runnerTest("Given an owned child and descendant When the turn is aborted Then both are gone before interrupted settlement", async () => {
     await using fixture = await codexFixture();
     const run = fixture.start();
     await fixture.ready;

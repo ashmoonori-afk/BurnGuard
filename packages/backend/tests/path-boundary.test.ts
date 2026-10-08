@@ -47,8 +47,8 @@ describe("resolveWithin", () => {
     expect(resolveWithin(root, "child")).toBe(child);
   });
 
-  test("keeps a root spelled under macOS /private when resolving below it", () => {
-    if (process.platform !== "darwin") return;
+  // The /private spelling exists only on macOS.
+  test.skipIf(process.platform !== "darwin")("keeps a root spelled under macOS /private when resolving below it", () => {
     // Given: the canonical spelling of a temporary root, as realpath() returns it.
     const root = realpathSync(makeTempDir("bg-path-root-"));
     expect(root.startsWith("/private/")).toBe(true);
@@ -72,8 +72,8 @@ describe("resolveWithin", () => {
     expect(() => resolveWithin(root, outside)).toThrow(PathBoundaryError);
   });
 
-  test("rejects backslash traversal on Windows", () => {
-    if (process.platform !== "win32") return;
+  // A backslash is a separator only on Windows; POSIX treats it as a filename character.
+  test.skipIf(process.platform !== "win32")("rejects backslash traversal on Windows", () => {
     const root = makeTempDir("bg-path-root-");
     expect(() => resolveWithin(root, "..\\victim.txt")).toThrow(
       PathBoundaryError,

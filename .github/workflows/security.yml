@@ -78,6 +78,8 @@ jobs:
           packages/backend/tests/package-resources.test.ts
           packages/backend/tests/original-samples.test.ts
           packages/backend/tests/owned-process-tree.test.ts
+          packages/backend/tests/codex-runner.test.ts
+          packages/backend/tests/detached-descendant.test.ts
           packages/backend/tests/research-source-loader.test.ts
           packages/backend/tests/session-recovery.test.ts
           packages/backend/tests/session-routes.test.ts

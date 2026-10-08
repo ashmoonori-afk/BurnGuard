@@ -35,7 +35,6 @@ packages/backend/tests/checkpoints.test.ts
 packages/backend/tests/claude-code-parser.test.ts
 packages/backend/tests/codex-image-outputs.test.ts
 packages/backend/tests/codex-parser.test.ts
-packages/backend/tests/codex-runner.test.ts
 packages/backend/tests/content-type-ladder.test.ts
 packages/backend/tests/craft-block-authority.test.ts
 packages/backend/tests/creation-sections.test.ts
@@ -66,7 +65,6 @@ packages/backend/tests/design-system-provenance.test.ts
 packages/backend/tests/design-system-publication.test.ts
 packages/backend/tests/design-system-surfaces.test.ts
 packages/backend/tests/design-system-tokens-excerpt.test.ts
-packages/backend/tests/detached-descendant.test.ts
 packages/backend/tests/diagram-skill.test.ts
 packages/backend/tests/examples-tab-filter.test.ts
 packages/backend/tests/export-gc.test.ts

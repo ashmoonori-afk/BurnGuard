@@ -18,9 +18,9 @@ export async function codexFixture(options: { readonly missingRoot?: boolean; re
   const home = path.join(root, "codex-home");
   const imageRoot = path.join(home, "generated_images");
   const threadDir = path.join(imageRoot, THREAD_ID);
-  const binary = path.join(root, "codex-fixture");
+  const script = path.join(root, process.platform === "win32" ? "codex-fixture.mjs" : "codex-fixture");
   await mkdir(options.missingRoot ? home : imageRoot, { recursive: true });
-  await writeFile(binary, [
+  await writeFile(script, [
     "#!/usr/bin/env bun",
     'import { existsSync, watch } from "node:fs";',
     `const root = ${JSON.stringify(root)};`,
@@ -41,7 +41,13 @@ export async function codexFixture(options: { readonly missingRoot?: boolean; re
     'child.stdin.end(); await child.exited;',
     "",
   ].join("\n"));
-  await chmod(binary, 0o700);
+  // Windows cannot execute an extensionless shebang script: launch it through a .cmd wrapper, the shape
+  // production resolves for codex there. The wrapper is also an extra ancestor the job object must reap.
+  let binary = script;
+  if (process.platform === "win32") {
+    binary = path.join(root, "codex-fixture.cmd");
+    await writeFile(binary, `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`);
+  } else await chmod(script, 0o700);
   const previousHome = process.env.CODEX_HOME;
   process.env.CODEX_HOME = home;
   const watches: { readonly path: string; readonly watcher: fs.FSWatcher }[] = [];
@@ -62,7 +68,7 @@ export async function codexFixture(options: { readonly missingRoot?: boolean; re
     return watcher;
   });
   const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(), 5_000);
+  const deadline = setTimeout(() => controller.abort(), 20_000);
   const ready = Promise.withResolvers<void>();
   const events: NormalizedEvent[] = [];
   let pids: number[] = [];
@@ -109,7 +115,7 @@ export async function codexFixture(options: { readonly missingRoot?: boolean; re
       for (const { watcher } of watches) watcher.close();
       watchSpy.mockRestore();
       if (previousHome === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previousHome;
-      await rm(root, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     },
   };
 }

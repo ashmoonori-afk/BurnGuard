@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import { checkSources, launchEntryPoints, readSources, SOURCE_ROOT, type SourceText } from "./check-flake-patterns";
+import { checkSources, checkTestSources, launchEntryPoints, readSources, readTestSources, SOURCE_ROOT, type SourceText } from "./check-flake-patterns";
 
 const LAUNCH_MODULE: SourceText = {
   path: "packages/backend/src/services/launch-path.ts",
@@ -96,6 +96,39 @@ describe("Playwright launch calls", () => {
   ] as const)("Given %s When checked Then it is accepted", (_name, body) => {
     expect(codes([bridge(body)])).toEqual([]);
   });
+});
+
+describe("platform early returns in tests", () => {
+  const spec = (body: string): SourceText => ({ path: "packages\\backend\\tests\\sample.test.ts", text: body });
+  const lines = (body: string): number[] => checkTestSources([spec(body)]).map((problem) => problem.line);
+
+  test.each([
+    ["a win32 bail-out", 'test("a", async () => {\n  if (process.platform === "win32") return;\n  await run();\n});'],
+    ["a braced darwin bail-out in a describe", 'describe("d", () => {\n  test("a", () => {\n    if (process.platform !== "darwin") { return; }\n  });\n});'],
+    ["a bail-out in a skipIf test", 'test.skipIf(ok)("a", async () => {\n  if (process.platform === "win32") return; // POSIX only\n});'],
+    ["a bail-out in a test.each case", 'test.each([1])("a", (n) => {\n  if (process.platform === "win32") return;\n});'],
+  ] as const)("Given %s When checked Then it is rejected with a path using forward slashes", (_name, body) => {
+    const [problem] = checkTestSources([spec(body)]);
+    expect(problem).toMatchObject({ code: "platform_early_return_in_test", path: "packages/backend/tests/sample.test.ts" });
+  });
+
+  test.each([
+    ["a skipIf declaration", 'test.skipIf(process.platform === "win32")("a", async () => { await run(); });'],
+    ["a platform branch that still asserts", 'test("a", () => {\n  if (process.platform !== "win32") expect(ps()).toBe(1);\n});'],
+    ["a helper that returns on the platform", 'function helper() {\n  if (process.platform === "win32") return;\n}'],
+    ["a nested helper inside a test", 'test("a", () => {\n  const probe = () => {\n    if (process.platform === "win32") return;\n  };\n});'],
+    ["a return unrelated to the platform", 'test("a", () => {\n  if (flag) return;\n});'],
+  ] as const)("Given %s When checked Then it is accepted", (_name, body) => {
+    expect(lines(body)).toEqual([]);
+  });
+
+  test("Given the package tests on this host When checked Then no test returns early on the platform", async () => {
+    const tests = await readTestSources(path.resolve(import.meta.dir, "..", ".."));
+
+    expect(tests.length).toBeGreaterThan(100);
+    expect(tests.every((source) => !source.path.includes("\\"))).toBe(true);
+    expect(checkTestSources(tests)).toEqual([]);
+  }, 120_000);
 });
 
 describe("this repository", () => {
