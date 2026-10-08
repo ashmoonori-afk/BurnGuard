@@ -15,7 +15,6 @@ import { diffManagedTrees, materializeManagedTree } from "../src/services/artifa
 import { CanonicalTreeManifestError, inspectCanonicalTree, parseCanonicalTreeManifest } from "../src/services/canonical-tree-manifest";
 import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { EventBroker, SequencedEventBroker } from "../src/services/broker";
-import { PersistedArtifactOperationError } from "../src/services/artifact-operation-record";
 import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 import { hasAgentControlFiles } from "../src/security/agent-control-files";
 
@@ -296,7 +295,7 @@ describe("sequence replay", () => {
     expect(db.query("SELECT status FROM artifact_operations WHERE id=?").get(operationId)).toEqual({ status: "recovered" });
   });
 
-  test("Given a corrupt nonterminal operation When startup reconciles Then it fails typed before touching live bytes", async () => {
+  test("Given a corrupt nonterminal operation When startup reconciles Then the project is unavailable and live bytes are untouched", async () => {
     const coordinator = new ArtifactCoordinator(db);
     const base = await coordinator.initialize("p", root);
     const operationId = "corrupt-op"; const now = Date.now();
@@ -306,7 +305,7 @@ describe("sequence replay", () => {
     const corruptSnapshot = JSON.stringify({ schema_version: 1, snapshot_path: snapshotPath, stage_path: stagePath, base_manifest: base, unknown: true });
     db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,'p','working',0,?,0,'','','[]',?,?,?,?,?)").run(operationId, base.tree_digest, corruptSnapshot, operationRetention(now), operationReplay("base"), now, now);
     const before = await inspectCanonicalTree(root);
-    await expect(reconcileArtifactState(db)).rejects.toBeInstanceOf(PersistedArtifactOperationError);
+    expect((await reconcileArtifactState(db)).unavailableProjects).toEqual([{ projectId: "p", code: "corrupt_receipt" }]);
     expect((await inspectCanonicalTree(root)).tree_digest).toBe(before.tree_digest);
     expect(db.query("SELECT status FROM artifact_operations WHERE id=?").get(operationId)).toEqual({ status: "working" });
   });

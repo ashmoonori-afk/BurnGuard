@@ -51,7 +51,7 @@ test("Given a legacy attachment-only external revision When restarting twice The
 test("Given altered authored bytes When a legacy document revision is reconciled Then corruption is not adopted", async () => {
   await writeFile(path.join(root, "index.html"), "unverified change");
   const before = db.query("SELECT * FROM projects WHERE id='p'").get();
-  await expect(reconcileArtifactState(db)).rejects.toMatchObject({ code: "corrupt_receipt" });
+  expect((await reconcileArtifactState(db)).unavailableProjects).toEqual([{ projectId: "p", code: "corrupt_receipt" }]);
   expect(db.query("SELECT * FROM projects WHERE id='p'").get()).toEqual(before);
   expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("unverified change");
 });
@@ -59,14 +59,14 @@ test("Given altered authored bytes When a legacy document revision is reconciled
 test("Given a tampered legacy result hash When restarting Then normalization cannot bypass the recorded identity", async () => {
   db.prepare("UPDATE artifact_operations SET result_digest=? WHERE id=?").run("a".repeat(64), operationId);
   db.prepare("UPDATE projects SET current_digest=? WHERE id='p'").run("a".repeat(64));
-  await expect(reconcileArtifactState(db)).rejects.toMatchObject({ code: "corrupt_receipt" });
+  expect((await reconcileArtifactState(db)).unavailableProjects).toEqual([{ projectId: "p", code: "corrupt_receipt" }]);
   expect(db.query("SELECT COUNT(*) AS count FROM artifact_operations").get()).toEqual({ count: 1 });
 });
 
 test("Given a changed retained stage When restarting Then migration cannot adopt an unverified recovery tree", async () => {
   await writeFile(path.join(stage, "index.html"), "unverified retained change");
   const before = db.query("SELECT current_revision,current_digest FROM projects WHERE id='p'").get();
-  await expect(reconcileArtifactState(db)).rejects.toMatchObject({ code: "tree_mismatch" });
+  expect((await reconcileArtifactState(db)).unavailableProjects).toEqual([{ projectId: "p", code: "tree_mismatch" }]);
   expect(db.query("SELECT current_revision,current_digest FROM projects WHERE id='p'").get()).toEqual(before);
   expect(db.query("SELECT COUNT(*) AS count FROM artifact_operations").get()).toEqual({ count: 1 });
 });

@@ -10,6 +10,7 @@ import { isTransientFilePath } from "../src/services/files";
 import { ensureAllProjectWatchers, ensureProjectWatcher, processProjectFilesystemSignal, scheduleProjectSignal, shouldSkipPath, startProjectWatchers } from "../src/services/watchers";
 import { listProjectIds } from "../src/db/project-read-repository";
 import { closeProjectWatcher, projectWatchers } from "../src/services/watcher-registry";
+import { setArtifactRecoveryHold } from "../src/services/artifact-recovery-hold";
 import { logsDir } from "../src/lib/app-paths";
 import { indexProjectFiles } from "../src/services/managed-project-files";
 
@@ -192,6 +193,30 @@ describe("project watcher startup after the listener", () => {
     expect((failure as ArtifactOperationError).message).not.toContain("/private");
     expect(projectWatchers.has(item.id)).toBe(false);
     expect((await writeIndex(item, "later")).status).toBe("committed");
+  });
+
+  test("Given a project held by startup recovery When watcher startup runs Then it is never observed or watched and its operations refuse without waiting", async () => {
+    const heldProject = await fixture();
+    const other = await fixture();
+    const held = heldObserver();
+    setArtifactRecoveryHold(getSqlite(), [heldProject.id]);
+    try {
+      const startup = startProjectWatchers({ projectIds: [heldProject.id, other.id], concurrency: 1, observe: held.observe });
+      await held.startedAtLeast(1);
+
+      const failure = await writeIndex(heldProject, "never").catch((error: unknown) => error);
+
+      expect(held.started.map((entry) => entry.projectId)).toEqual([other.id]);
+      expect(failure).toBeInstanceOf(ArtifactOperationError);
+      expect((failure as ArtifactOperationError).code).toBe("recovery_unavailable");
+      held.started[0]?.release();
+      await startup.settled;
+      expect(projectWatchers.has(heldProject.id)).toBe(false);
+      expect(projectWatchers.has(other.id)).toBe(true);
+      expect(await readFile(path.join(heldProject.root, "index.html"), "utf8")).toBe("base");
+    } finally {
+      setArtifactRecoveryHold(getSqlite(), []);
+    }
   });
 
   test("Given watcher startup is in progress When shutdown stops it Then queued projects are never observed and every watcher is closed", async () => {

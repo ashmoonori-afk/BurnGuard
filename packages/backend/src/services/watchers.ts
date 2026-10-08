@@ -3,6 +3,7 @@ import { getSqlite } from "../db/sqlite-client";
 import { getLatestProjectSession, getProjectDetail, listProjectIds } from "../db/project-read-repository";
 import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
 import { waitForArtifactPublication } from "./artifact-publication-registry";
+import { isArtifactRecoveryHeld } from "./artifact-recovery-hold";
 import { appendSessionTrace } from "./trace";
 import { isTransientFilePath } from "./files";
 import { isProjectDocumentPath } from "./project-document-paths";
@@ -81,6 +82,9 @@ export function startProjectWatchers(options: { readonly projectIds?: readonly s
     catch { console.warn("[watcher] project list unavailable at startup"); }
     if (stopped) return;
     for (const projectId of projectIds) {
+      // Startup recovery failed for this project: it stays untouched (no observation, no watcher) until the next
+      // restart, and its mutations refuse with recovery_unavailable before waiting on readiness.
+      if (isArtifactRecoveryHeld(getSqlite(), projectId)) continue;
       const ready = Promise.withResolvers<void>();
       setProjectReadiness(projectId, ready.promise);
       queue.push({ projectId, resolve: ready.resolve, reject: ready.reject });
