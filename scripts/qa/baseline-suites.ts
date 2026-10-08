@@ -25,7 +25,6 @@ export const BASELINE_EXCLUSIONS: Readonly<Record<string, string>> = {
   "packages/backend/tests/graphic-export.test.ts": NEEDS_CHROMIUM,
   "packages/backend/tests/png-zip-chromium.test.ts": NEEDS_CHROMIUM,
   "packages/backend/tests/three-scene.test.ts": REAL_FAILURE,
-  "packages/frontend/tests/canvas-css-imports.browser.test.ts": NEEDS_CHROMIUM,
   "packages/frontend/tests/deck-fit.browser.test.ts": NEEDS_CHROMIUM,
   "packages/frontend/tests/graphic-project-creation.test.ts": NEEDS_CHROMIUM,
   "packages/frontend/tests/user-message-revert.browser.test.ts": NEEDS_CHROMIUM,
