@@ -84,7 +84,7 @@ PPTX exports contain a high-resolution image of each slide and its text in speak
 ## Refine the result where you see it
 
 - **Edit on canvas.** Select elements, adjust size and rotation, change typography and spacing, or work with colors. Saved revisions and undo help you return to an earlier result.
-- **Leave a targeted comment.** Pin feedback to content and send an AI edit request. Pins stay attached while you scroll; click a saved pin to reopen its comment. Hover over the canvas and press **Ctrl+Space** on Windows/Linux or **Control+Option+Space** on macOS for a quick comment.
+- **Leave a targeted comment.** Pin feedback to content and send an AI edit request. Pins stay attached while you scroll; click a saved pin to reopen its comment. Hover over the canvas and press **Alt+C** on Windows/Linux or **Option+C** on macOS for a quick comment.
 - **Add source material.** Attach supported PDFs, slide decks, documents, images or text, or import an exported HTML project ZIP. Original attachments are retained separately from published website assets.
 - **Review before sharing.** Quality and UX panels identify issues and offer repair actions. Their findings are advisory; review the rendered result before exporting or publishing.
 

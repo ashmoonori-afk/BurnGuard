@@ -9,6 +9,7 @@ export const canvasMessages = defineMessages({
   "canvas.toolbar.styleHint": {"ko":"요소를 선택하고 색상·간격·글꼴을 조정해요.","en":"Select an element to adjust colors, spacing, and fonts.","zh-CN":"选择元素以调整颜色、间距和字体。"},
   "canvas.toolbar.comment": {"ko":"코멘트","en":"Comment","zh-CN":"评论"},
   "canvas.toolbar.commentHint": {"ko":"의견을 남길 위치를 누른 뒤 내용을 적어 주세요.","en":"Click where you want to leave feedback, then write your comment.","zh-CN":"点击要留下意见的位置，然后输入内容。"},
+  "canvas.toolbar.commentHintShortcut": {"ko":"의견을 남길 위치를 누른 뒤 내용을 적어 주세요. 캔버스 위에서 {shortcut}을(를) 누르면 빠른 코멘트를 열어요.","en":"Click where you want to leave feedback, then write your comment. Press {shortcut} over the canvas for a quick comment.","zh-CN":"点击要留下意见的位置，然后输入内容。在画布上按 {shortcut} 可快速添加评论。"},
   "canvas.toolbar.draw": {"ko":"그리기","en":"Draw","zh-CN":"绘图"},
   "canvas.toolbar.drawHint": {"ko":"결과물 위에 자유롭게 표시해요. 그린 내용은 자동 저장돼요.","en":"Draw freely over the artifact. Drawings are saved automatically.","zh-CN":"在作品上自由绘图，内容会自动保存。"},
   "canvas.toolbar.quality": {"ko":"품질 점검","en":"Quality review","zh-CN":"质量检查"},
