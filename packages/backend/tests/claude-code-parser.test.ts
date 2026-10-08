@@ -426,7 +426,10 @@ describe("parseStreamLine — result line", () => {
     ["Not logged in", "provider_auth_required"],
     ["Claude AI usage limit reached|1760000000", "provider_usage_limited"],
     ["API Error: 429 rate limit exceeded", "provider_usage_limited"],
+    ["Request failed with HTTP 429", "provider_usage_limited"],
+    ["rate_limit_error", "provider_usage_limited"],
     ["Credit balance is too low", "provider_quota_exhausted"],
+    ["insufficient_quota", "provider_quota_exhausted"],
     ["You exceeded your current quota", "provider_quota_exhausted"],
     ["There's an issue with the selected model (x). It may not exist or you may not have access to it.", "provider_model_unavailable"],
     ["model claude-old does not exist", "provider_model_unavailable"],
@@ -439,6 +442,15 @@ describe("parseStreamLine — result line", () => {
 
   test("Given an is_error result with unrecognised text, When parsed, Then it stays a recoverable turn_failed", () => {
     const events = parseStreamLine(JSON.stringify({ type: "result", is_error: true, result: "something unexpected" }), freshCtx());
+    expect(events[1]).toMatchObject({ type: "status.error", code: "turn_failed", recoverable: true });
+  });
+
+  test.each([
+    "Cannot read src/login/session.ts",
+    "Assertion failed at line 429",
+    "write failed: disk quota exceeded",
+  ])("Given an is_error result with unrelated text %#, When parsed, Then it stays a recoverable turn_failed", (text) => {
+    const events = parseStreamLine(JSON.stringify({ type: "result", is_error: true, result: text }), freshCtx());
     expect(events[1]).toMatchObject({ type: "status.error", code: "turn_failed", recoverable: true });
   });
 
