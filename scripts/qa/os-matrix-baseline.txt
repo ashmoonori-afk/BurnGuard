@@ -181,7 +181,6 @@ packages/backend/tests/research-routes.test.ts
 packages/backend/tests/research-selection.test.ts
 packages/backend/tests/research-source-loader.test.ts
 packages/backend/tests/review-artifact-concurrency.test.ts
-packages/backend/tests/review-artifact-safety.test.ts
 packages/backend/tests/review-session-consistency.test.ts
 packages/backend/tests/review-turn-execution.test.ts
 packages/backend/tests/sample-design-system-fonts.test.ts
@@ -221,7 +220,6 @@ packages/backend/tests/visual-craft-skill.test.ts
 packages/backend/tests/visual-source-migration.test.ts
 packages/backend/tests/visual-source-policy.test.ts
 packages/backend/tests/visual-source-security.test.ts
-packages/backend/tests/watchers.test.ts
 packages/backend/tests/web-assets.test.ts
 packages/backend/tests/zip.test.ts
 packages/frontend/tests/abort-signal.test.ts
