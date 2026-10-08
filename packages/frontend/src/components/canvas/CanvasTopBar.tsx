@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import type { CanvasMode } from "@/components/modes/types";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
+import { quickCommentShortcutLabel } from "./quick-comment";
 
 export const MODES: Array<{ id: CanvasMode; label: MessageKey; icon: LucideIcon; hint: MessageKey }> = [
   { id: "edit", label: "canvas.toolbar.edit", icon: Pencil, hint: "canvas.toolbar.editHint" },
@@ -57,7 +58,7 @@ export default function CanvasTopBar({
               aria-pressed={active}
               aria-label={t(m.label)}
               disabled={readOnly}
-              title={active ? t("canvas.toolbar.disableMode") : t(m.hint)}
+              title={active ? t("canvas.toolbar.disableMode") : m.id === "comment" ? t("canvas.toolbar.commentHintShortcut", { shortcut: quickCommentShortcutLabel() }) : t(m.hint)}
               className={cn(
                 "flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11",
                 active
