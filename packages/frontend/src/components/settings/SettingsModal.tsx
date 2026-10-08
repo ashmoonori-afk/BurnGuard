@@ -40,6 +40,7 @@ import { t, useT, type MessageKey } from "@/i18n/t";
 import { LOCALES, useLocaleStore, type Locale } from "@/i18n/locale";
 import ProviderConnections from "./ProviderConnections";
 import RuntimeDiagnosticsSection from "./RuntimeDiagnostics";
+import { reloadWithoutLeaveGuard } from "@/lib/leave-guard";
 
 const CHAT_CONTEXT_MODE_LABELS = { compact: "settings.compact", full: "settings.full" } as const;
 const THEME_LABELS = { light: "settings.light", dark: "settings.dark", auto: "settings.auto" } as const;
@@ -146,7 +147,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
     }
     try {
       await waitForAppRestart();
-      window.location.reload();
+      reloadWithoutLeaveGuard();
     } catch {
       setUpdateError("settings.updateDisconnected");
       setUpdateApplying(false);
