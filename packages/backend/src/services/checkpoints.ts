@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import type { CheckpointRef } from "@bg/shared/harness";
-import { getProjectDetail } from "../db/project-read-repository";
+import { getProjectDetail, listProjectIds } from "../db/project-read-repository";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import { listIndexedProjectFiles } from "./files";
-import { parseCanonicalTreeManifest, validateCanonicalTree } from "./canonical-tree-manifest";
+import { inspectCanonicalTree, parseCanonicalTreeManifest, validateCanonicalTree } from "./canonical-tree-manifest";
 import { getSqlite } from "../db/sqlite-client";
-import { ArtifactCoordinator, RETENTION_MS } from "./artifact-coordinator";
+import { ArtifactCoordinator } from "./artifact-coordinator";
+import { ARTIFACT_RETENTION_MS } from "./artifact-retention-window";
 import { materializeManagedTree } from "./artifact-tree-storage";
 
 function snapshotDir(projectDir: string, turnId: string): string {
@@ -36,11 +37,11 @@ async function writeFileAtomic(target: string, content: string): Promise<void> {
 }
 
 /** Snapshots, their manifests, and crash leftovers expire with the shared artifact retention window. */
-async function pruneExpiredSnapshots(projectDir: string, keepTurnId: string, now: number): Promise<void> {
+async function pruneExpiredSnapshots(projectDir: string, keepTurnId: string | null, now: number): Promise<void> {
   const checkpointDir = resolveWithin(projectDir, ".meta", "checkpoints");
   const snapshotRoot = resolveWithin(checkpointDir, "snapshots");
   const candidates: string[] = [];
-  for (const name of await readdir(snapshotRoot)) {
+  for (const name of await readdir(snapshotRoot).catch(() => [])) {
     if (name !== keepTurnId && name !== `${keepTurnId}.manifest.json`) candidates.push(resolveWithin(snapshotRoot, name));
   }
   for (const name of await readdir(checkpointDir).catch(() => [])) {
@@ -48,13 +49,28 @@ async function pruneExpiredSnapshots(projectDir: string, keepTurnId: string, now
   }
   for (const candidate of candidates) {
     try {
-      if ((await lstat(candidate)).mtimeMs > now - RETENTION_MS) continue;
+      if ((await lstat(candidate)).mtimeMs > now - ARTIFACT_RETENTION_MS) continue;
       await rm(candidate, { recursive: true, force: true });
     } catch {
       // A held handle keeps this entry until the next snapshot sweep.
       console.warn("[checkpoints] expired snapshot cleanup deferred");
     }
   }
+}
+
+const STARTUP_SWEEP_PROJECT_LIMIT = 500;
+
+/** Best-effort startup sweep so projects that never run another turn still release expired snapshots. */
+export async function pruneExpiredSnapshotsAtStartup(now: number = Date.now()): Promise<void> {
+  try {
+    const ids = (await listProjectIds()).slice(0, STARTUP_SWEEP_PROJECT_LIMIT);
+    for (const id of ids) {
+      try {
+        const project = await getProjectDetail(id);
+        if (project !== null) await pruneExpiredSnapshots(project.dir_path, null, now);
+      } catch { console.warn("[checkpoints] expired snapshot cleanup deferred"); }
+    }
+  } catch { console.warn("[checkpoints] expired snapshot cleanup deferred"); }
 }
 
 /**
@@ -99,8 +115,13 @@ export async function getVerifiedSnapshotPath(projectId: string, turnId: string)
   if (project === null) return null;
   const destination = snapshotDir(project.dir_path, turnId);
   try {
-    const expected = parseCanonicalTreeManifest(JSON.parse(await readFile(snapshotManifestPath(project.dir_path, turnId), "utf8")));
-    await validateCanonicalTree(destination, expected);
+    const manifestText = await readFile(snapshotManifestPath(project.dir_path, turnId), "utf8").catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    });
+    // Snapshots written before manifests existed keep the structural check; a manifest that exists must match.
+    if (manifestText === null) await inspectCanonicalTree(destination);
+    else await validateCanonicalTree(destination, parseCanonicalTreeManifest(JSON.parse(manifestText)));
     return destination;
   }
   catch (error) {

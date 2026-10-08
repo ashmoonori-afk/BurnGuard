@@ -8,6 +8,7 @@ import { ArtifactPublicationPolicyError, diffManagedTrees, manifestEntry, materi
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
 import { beginArtifactPublication, endArtifactPublication } from "./artifact-publication-registry";
 import { replaceArtifactFileIndex, replaceArtifactFileIndexInTransaction } from "../db/artifact-file-index";
+import { ARTIFACT_RETENTION_MS } from "./artifact-retention-window";
 import { adoptExistingArtifact, establishEmptyArtifactAuthority } from "./artifact-initialization";
 import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
 import { pruneExpiredArtifactOperations } from "./artifact-retention";
@@ -84,8 +85,8 @@ export type CommittedArtifactOperation = {
   readonly resultDigest: string;
   readonly diff: readonly ArtifactFileDiff[];
 };
-/** Operation copies, including captured external edits, stay restorable for 30 days. */
-export const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+/** Operation copies, including captured external edits, stay restorable for the shared retention window. */
+const RETENTION_MS = ARTIFACT_RETENTION_MS;
 type ProjectIdentity = { readonly revision: number; readonly digest: string | null };
 
 export class ArtifactOperationError extends Error {

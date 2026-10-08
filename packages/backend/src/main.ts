@@ -10,6 +10,7 @@ import { MAX_REQUEST_BODY_BYTES } from "./security/request-limits";
 import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
 import { configureAppUpdater, startAppUpdateScheduler } from "./services/mac-updates";
+import { pruneExpiredSnapshotsAtStartup } from "./services/checkpoints";
 import { interruptAllUserTurns } from "./services/turns";
 
 const isDesktop = process.env.BG_DESKTOP === "1";
@@ -83,6 +84,7 @@ process.on("SIGTERM", () => { void shutdown(); });
 process.on("SIGHUP", () => { void shutdown(); });
 // Announce only once the handlers exist: a signal that arrives earlier takes the default action and skips the ordered shutdown.
 console.log(`[burnguard] listening on ${url}`);
+void pruneExpiredSnapshotsAtStartup();
 if (isDesktop) {
   watchDesktopParent(process.stdin, () => { void shutdown(); });
   console.log(`[burnguard-desktop] ${JSON.stringify({ protocol: 1, url, pid: process.pid })}`);

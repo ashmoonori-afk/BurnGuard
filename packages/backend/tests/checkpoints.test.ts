@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:te
 import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { getVerifiedSnapshotPath, hasSnapshot, restoreFromSnapshot, writePreTurnSnapshot, writeTurnCheckpoint } from "../src/services/checkpoints";
+import { getVerifiedSnapshotPath, hasSnapshot, pruneExpiredSnapshotsAtStartup, restoreFromSnapshot, writePreTurnSnapshot, writeTurnCheckpoint } from "../src/services/checkpoints";
 import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { indexProjectFiles, isTransientFilePath, resolveDrawFile, resolveProjectFile } from "../src/services/managed-project-files";
@@ -235,16 +235,31 @@ describe("checkpoint snapshot / restore round-trip", () => {
     expect(await restoreFromSnapshot(projectId, "turn-torn")).toBeNull();
   });
 
-  test("Given a well-formed snapshot tree without a manifest When verified Then it is rejected as unverifiable", async () => {
+  test("Given a legacy snapshot without a manifest When restored Then it falls back to the structural check and restores", async () => {
     // Given
     const projectId = await createProductionProject();
-    await writePreTurnSnapshot(projectId, "turn-unmanifested");
+    await writePreTurnSnapshot(projectId, "turn-legacy");
+    rmSync(path.join(snapshotRoot(projectDir), "turn-legacy.manifest.json"));
 
     // When
-    rmSync(path.join(snapshotRoot(projectDir), "turn-unmanifested.manifest.json"));
+    const verified = await getVerifiedSnapshotPath(projectId, "turn-legacy");
+    const restored = await restoreFromSnapshot(projectId, "turn-legacy");
 
     // Then
-    expect(await getVerifiedSnapshotPath(projectId, "turn-unmanifested")).toBeNull();
+    expect(verified).toBe(snapshotDir(projectDir, "turn-legacy"));
+    expect(restored).not.toBeNull();
+  });
+
+  test("Given a snapshot whose manifest exists but is corrupt When verified Then it is refused", async () => {
+    // Given
+    const projectId = await createProductionProject();
+    await writePreTurnSnapshot(projectId, "turn-bad-manifest");
+
+    // When
+    writeFileSync(path.join(snapshotRoot(projectDir), "turn-bad-manifest.manifest.json"), "{", "utf8");
+
+    // Then
+    expect(await getVerifiedSnapshotPath(projectId, "turn-bad-manifest")).toBeNull();
   });
 
   test("Given a crash leftover staging tree When a snapshot is written Then the leftover is never served as the snapshot and the renamed tree verifies", async () => {
@@ -300,5 +315,20 @@ describe("checkpoint snapshot / restore round-trip", () => {
     expect(readdirSync(snapshotRoot(projectDir)).sort()).toEqual(["turn-new", "turn-new.manifest.json", "turn-recent", "turn-recent.manifest.json"]);
     expect(existsSync(path.join(checkpointDir, "turn-old.json.tmp-leftover"))).toBe(false);
     expect(await getVerifiedSnapshotPath(projectId, "turn-recent")).toBe(snapshotDir(projectDir, "turn-recent"));
+  });
+
+  test("Given an expired snapshot and no new turn When the startup sweep runs Then the expired snapshot is pruned and the recent one kept", async () => {
+    // Given
+    const projectId = await createProductionProject();
+    await writePreTurnSnapshot(projectId, "turn-stale");
+    await writePreTurnSnapshot(projectId, "turn-fresh");
+    const expired = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    for (const name of ["turn-stale", "turn-stale.manifest.json"]) utimesSync(path.join(snapshotRoot(projectDir), name), expired, expired);
+
+    // When
+    await pruneExpiredSnapshotsAtStartup();
+
+    // Then
+    expect(readdirSync(snapshotRoot(projectDir)).sort()).toEqual(["turn-fresh", "turn-fresh.manifest.json"]);
   });
 });
