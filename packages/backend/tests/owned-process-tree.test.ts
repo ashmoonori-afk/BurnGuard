@@ -49,12 +49,12 @@ test.skipIf(process.platform === "win32")("strict POSIX acquisition process clea
   finally { kill.mockRestore(); }
 });
 
-test("Given an adapter exits with a surviving child When its result resolves Then the owned process tree is absent before publication", async () => {
-  if (process.platform === "win32") return;
+// Skipped on Windows: needs POSIX shebang executables and signals; Windows ownership is covered by owned-process-windows.test.ts and codex-runner.test.ts.
+test.skipIf(process.platform === "win32")("Given an adapter exits with a surviving child When its result resolves Then the owned process tree is absent before publication", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "burnguard-adapter-tree-"));
   const binary = path.join(root, "adapter-fixture");
   const childScript = "await new Promise(() => {})";
-  await writeFile(binary, `#!/usr/bin/env bun\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\n`);
+  await writeFile(binary, `#!/usr/bin/env bun\nif(process.argv[2]==="--help"){console.log("  --include-partial-messages");process.exit(0);}\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\n`);
   await chmod(binary, 0o700);
   let childPid = 0;
   try {
@@ -83,14 +83,15 @@ test("Given a claude-code run in a private project directory When the runner log
   expect(logged.some((line) => line.includes(root))).toBe(false);
 });
 
-test("Given an adapter run that is aborted mid-stream When the run settles Then the owned process tree is gone", async () => {
-  if (process.platform === "win32") return;
+// Skipped on Windows: needs POSIX shebang executables and signals; Windows ownership is covered by owned-process-windows.test.ts and codex-runner.test.ts.
+test.skipIf(process.platform === "win32")("Given an adapter run that is aborted mid-stream When the run settles Then the owned process tree is gone", async () => {
+
   const root = await mkdtemp(path.join(tmpdir(), "burnguard-adapter-abort-"));
   const binary = path.join(root, "abort-fixture");
   const childScript = "await new Promise(() => {})";
   // The fixture root never exits on its own — only the abort teardown can
   // end this run, which is exactly the path the interrupt handler owns.
-  await writeFile(binary, `#!/usr/bin/env bun\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\nawait new Promise(() => {});\n`);
+  await writeFile(binary, `#!/usr/bin/env bun\nif(process.argv[2]==="--help"){console.log("  --include-partial-messages");process.exit(0);}\nconst child=Bun.spawn([process.execPath,"-e",${JSON.stringify(childScript)}],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});child.unref();console.log(child.pid);\nawait new Promise(() => {});\n`);
   await chmod(binary, 0o700);
   const controller = new AbortController();
   let childPid = 0;
@@ -98,6 +99,23 @@ test("Given an adapter run that is aborted mid-stream When the run settles Then 
     await runClaudeCode({ binaryPath: binary, projectDir: root, prompt: "test", signal: controller.signal, onStdoutLine: (line) => { childPid = Number(line); controller.abort(); } });
     expect(Number.isSafeInteger(childPid) && childPid > 0).toBe(true);
     expect(() => process.kill(childPid, 0)).toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Given a turn cancelled while the capability probe hangs When the run starts Then it settles without waiting for the probe timeout", async () => {
+  if (process.platform === "win32") return;
+  const root = await mkdtemp(path.join(tmpdir(), "burnguard-probe-abort-"));
+  const binary = path.join(root, "hung-help-fixture");
+  // Every invocation, including --help, never exits on its own.
+  await writeFile(binary, `#!/usr/bin/env bun\nawait new Promise(() => {});\n`);
+  await chmod(binary, 0o700);
+  const controller = new AbortController();
+  controller.abort();
+  try {
+    const result = await runClaudeCode({ binaryPath: binary, projectDir: root, prompt: "test", signal: controller.signal, onStdoutLine: () => {} });
+    expect(typeof result.exitCode).toBe("number");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -141,8 +159,8 @@ test.skipIf(process.platform !== "win32")("Given only a bare Windows PID When cl
   await expect(closeOwnedProcessTree(1_000_000_000)).rejects.toBeInstanceOf(OwnedProcessTreeCleanupError);
 });
 
-test("POSIX cleanup reports a permission boundary without rejecting an asynchronous abort handler", async () => {
-  if (process.platform === "win32") return;
+// Skipped on Windows: needs POSIX shebang executables and signals; Windows ownership is covered by owned-process-windows.test.ts and codex-runner.test.ts.
+test.skipIf(process.platform === "win32")("POSIX cleanup reports a permission boundary without rejecting an asynchronous abort handler", async () => {
   const kill = spyOn(process, "kill").mockImplementation((_pid, signal) => {
     throw Object.assign(new Error("signal failure"), { code: signal === "SIGKILL" ? "EPERM" : "ESRCH" });
   });

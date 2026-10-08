@@ -37,6 +37,8 @@ export interface AdapterRunInput {
    */
   webAssetTool?: { readonly command: readonly string[] };
   onEvent: (event: NormalizedEvent) => Promise<void>;
+  /** Proof of life that is not an event: it resets the inactivity watchdog and is never persisted or published. */
+  onProgress?: () => void;
   onStderr?: (line: string) => Promise<void>;
   /**
    * Register a handler that will be invoked whenever the session's
