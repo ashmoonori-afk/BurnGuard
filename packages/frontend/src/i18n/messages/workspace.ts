@@ -153,6 +153,7 @@ export const workspaceMessages = defineMessages({
   "workspace.project.refreshError": { ko: "최신 작업 정보를 불러오지 못했어요. 작성 중인 내용은 유지돼요.", en: "The latest task information couldn't be loaded. Your draft is preserved.", "zh-CN": "无法加载最新任务信息。草稿内容会保留。" },
   "workspace.project.refreshData": { ko: "작업 정보 다시 불러오기", en: "Reload task information", "zh-CN": "重新加载任务信息" },
   "workspace.project.streamDisconnected": { ko: "실시간 연결이 끊겼어요. 다시 연결하는 중이에요.", en: "The live connection was lost. Reconnecting now.", "zh-CN": "实时连接已断开，正在重新连接。" },
+  "workspace.project.streamReconnecting": { ko: "실시간 연결을 다시 맺는 중이에요.", en: "Restoring the live connection.", "zh-CN": "正在恢复实时连接。" },
   "workspace.project.reconnect": { ko: "다시 연결", en: "Reconnect", "zh-CN": "重新连接" },
   "workspace.project.paneSwitch": { ko: "작업 영역 전환", en: "Switch workspace pane", "zh-CN": "切换工作区域" },
   "workspace.project.workspacePane": { ko: "작업 화면", en: "Workspace", "zh-CN": "工作区" },
