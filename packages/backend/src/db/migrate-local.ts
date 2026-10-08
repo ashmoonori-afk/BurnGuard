@@ -1,8 +1,12 @@
 import path from "node:path";
-import { resolveRepoRoot } from "../lib/paths";
+import { APP_VERSION } from "@bg/shared";
+import { appRootDir, resolveRepoRoot } from "../lib/paths";
 import { runMigrationsFrom } from "./migrate";
 
 export async function runMigrations(): Promise<void> {
   const { getSqlite } = await import("./sqlite-client");
-  await runMigrationsFrom(getSqlite(), path.join(resolveRepoRoot(), "packages/backend/src/db/migrations"));
+  await runMigrationsFrom(getSqlite(), path.join(resolveRepoRoot(), "packages/backend/src/db/migrations"), {
+    directory: path.join(appRootDir, "backups"),
+    appVersion: APP_VERSION,
+  });
 }

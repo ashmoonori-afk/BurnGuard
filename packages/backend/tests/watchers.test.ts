@@ -4,12 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { getSqlite } from "../src/db/sqlite-client";
 import { runMigrations } from "../src/db/migrate-local";
-import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
+import { ArtifactCoordinator, ArtifactOperationError } from "../src/services/artifact-coordinator";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { isTransientFilePath } from "../src/services/files";
-import { ensureAllProjectWatchers, ensureProjectWatcher, processProjectFilesystemSignal, scheduleProjectSignal, shouldSkipPath } from "../src/services/watchers";
+import { ensureProjectWatcher, processProjectFilesystemSignal, scheduleProjectSignal, shouldSkipPath, shutdownProjectWatchers, startProjectWatchers } from "../src/services/watchers";
 import { listProjectIds } from "../src/db/project-read-repository";
 import { closeProjectWatcher, projectWatchers } from "../src/services/watcher-registry";
+import { setArtifactRecoveryHold } from "../src/services/artifact-recovery-hold";
 import { logsDir } from "../src/lib/app-paths";
 import { indexProjectFiles } from "../src/services/managed-project-files";
 
@@ -66,7 +67,7 @@ describe("project watcher path filtering", () => {
 
   test("Given persisted projects When watchers start Then registry ownership is idempotent and closeable", async () => {
     const item = await fixture();
-    await ensureProjectWatcher(item.id); await ensureProjectWatcher(item.id); await ensureAllProjectWatchers([item.id]);
+    await ensureProjectWatcher(item.id); await ensureProjectWatcher(item.id); await startProjectWatchers({ projectIds: [item.id] }).settled;
     expect(await listProjectIds()).toContain(item.id);
     expect(projectWatchers.has(item.id)).toBe(true);
     closeProjectWatcher(item.id);
@@ -98,5 +99,208 @@ describe("project watcher path filtering", () => {
     await processProjectFilesystemSignal(item.id, item.root);
     expect(await readFile(path.join(item.root, "index.html"), "utf8")).toBe("base");
     expect(getSqlite().query("SELECT status FROM artifact_operations WHERE project_id=? AND json_extract(replay_json,'$.kind')!='initialize' ORDER BY id").all(item.id)).toEqual([{ status: "conflicted" }, { status: "conflicted" }]);
+  });
+});
+
+async function fixtures(count: number) {
+  const items: Awaited<ReturnType<typeof fixture>>[] = [];
+  for (let index = 0; index < count; index += 1) items.push(await fixture());
+  return items;
+}
+
+type HeldObservation = { readonly projectId: string; readonly release: () => void; readonly fail: (error: Error) => void };
+
+function heldObserver() {
+  const started: HeldObservation[] = [];
+  const waiters: { readonly count: number; readonly resolve: () => void }[] = [];
+  let active = 0;
+  let maxActive = 0;
+  const observe = (projectId: string): Promise<void> => {
+    const held = Promise.withResolvers<void>();
+    active += 1; maxActive = Math.max(maxActive, active);
+    started.push({ projectId, release: () => held.resolve(), fail: (error) => held.reject(error) });
+    for (const waiter of waiters.filter((entry) => started.length >= entry.count)) waiter.resolve();
+    return held.promise.finally(() => { active -= 1; });
+  };
+  const startedAtLeast = (count: number): Promise<void> => {
+    if (started.length >= count) return Promise.resolve();
+    const reached = Promise.withResolvers<void>();
+    waiters.push({ count, resolve: reached.resolve });
+    return reached.promise;
+  };
+  return { observe, started, startedAtLeast, maxActive: () => maxActive };
+}
+
+function writeIndex(item: { readonly id: string; readonly root: string; readonly digest: string }, bytes: string, onAdmitted: () => void = () => undefined) {
+  return new ArtifactCoordinator(getSqlite()).run({ projectId: item.id, projectDir: item.root, kind: "patch", expectedRevision: 0, expectedArtifactDigest: item.digest, mutate: async (stage) => { onAdmitted(); await writeFile(path.join(stage, "index.html"), bytes); } });
+}
+
+describe("project watcher startup after the listener", () => {
+  test("Given several persisted projects When watcher startup begins Then it returns before any observation settles and observes at most three projects at once", async () => {
+    const items = await fixtures(5);
+    const held = heldObserver();
+
+    const startup = startProjectWatchers({ projectIds: items.map((item) => item.id), concurrency: 3, observe: held.observe });
+    await held.startedAtLeast(3);
+
+    expect(held.started.map((entry) => entry.projectId)).toEqual(items.slice(0, 3).map((item) => item.id));
+    held.started[0]?.release();
+    await held.startedAtLeast(4);
+    expect(held.maxActive()).toBe(3);
+    held.started[1]?.release(); held.started[2]?.release();
+    await held.startedAtLeast(5);
+    for (const entry of held.started.slice(3)) entry.release();
+    await startup.settled;
+
+    expect(held.maxActive()).toBe(3);
+    expect(items.every((item) => projectWatchers.has(item.id))).toBe(true);
+  });
+
+  test("Given a project whose startup observation is pending When an artifact operation runs Then only that project's operation waits and reads are not blocked", async () => {
+    const pending = await fixture();
+    const other = await fixture();
+    const held = heldObserver();
+    const startup = startProjectWatchers({ projectIds: [pending.id], observe: held.observe });
+    await held.startedAtLeast(1);
+    let admitted = false;
+
+    const waiting = writeIndex(pending, "after startup", () => { admitted = true; });
+    const otherResult = await writeIndex(other, "independent");
+    const files = await indexProjectFiles(pending.id);
+
+    expect(otherResult.status).toBe("committed");
+    expect(files?.map((file) => file.rel_path)).toContain("index.html");
+    expect(admitted).toBe(false);
+    held.started[0]?.release();
+    expect((await waiting).status).toBe("committed");
+    await startup.settled;
+    expect(await readFile(path.join(pending.root, "index.html"), "utf8")).toBe("after startup");
+  });
+
+  test("Given a project's startup observation fails When an operation was waiting Then it gets a stable code without private detail and later operations are not blocked", async () => {
+    const item = await fixture();
+    const held = heldObserver();
+    const startup = startProjectWatchers({ projectIds: [item.id], observe: held.observe });
+    await held.startedAtLeast(1);
+
+    const waiting = writeIndex(item, "never").catch((error: unknown) => error);
+    held.started[0]?.fail(new Error("EIO: /private/user/project/index.html"));
+    const failure = await waiting;
+    await startup.settled;
+
+    expect(failure).toBeInstanceOf(ArtifactOperationError);
+    expect((failure as ArtifactOperationError).code).toBe("recovery_unavailable");
+    expect((failure as ArtifactOperationError).message).not.toContain("/private");
+    expect(projectWatchers.has(item.id)).toBe(false);
+    expect((await writeIndex(item, "later")).status).toBe("committed");
+  });
+
+  test("Given a project held by startup recovery When watcher startup runs Then it is never observed or watched and its operations refuse without waiting", async () => {
+    const heldProject = await fixture();
+    const other = await fixture();
+    const held = heldObserver();
+    setArtifactRecoveryHold(getSqlite(), [heldProject.id]);
+    try {
+      const startup = startProjectWatchers({ projectIds: [heldProject.id, other.id], concurrency: 1, observe: held.observe });
+      await held.startedAtLeast(1);
+
+      const failure = await writeIndex(heldProject, "never").catch((error: unknown) => error);
+
+      expect(held.started.map((entry) => entry.projectId)).toEqual([other.id]);
+      expect(failure).toBeInstanceOf(ArtifactOperationError);
+      expect((failure as ArtifactOperationError).code).toBe("recovery_unavailable");
+      held.started[0]?.release();
+      await startup.settled;
+      expect(projectWatchers.has(heldProject.id)).toBe(false);
+      expect(projectWatchers.has(other.id)).toBe(true);
+      expect(await readFile(path.join(heldProject.root, "index.html"), "utf8")).toBe("base");
+    } finally {
+      setArtifactRecoveryHold(getSqlite(), []);
+    }
+  });
+
+  test("Given watcher startup is in progress When shutdown stops it Then queued projects are never observed and every watcher is closed", async () => {
+    const items = await fixtures(3);
+    const held = heldObserver();
+    const startup = startProjectWatchers({ projectIds: items.map((item) => item.id), concurrency: 1, observe: held.observe });
+    await held.startedAtLeast(1);
+    const queuedOperation = writeIndex(items[2]!, "during shutdown").catch((error: unknown) => error);
+
+    const stopping = startup.stop();
+    const queuedFailure = await queuedOperation;
+    held.started[0]?.release();
+    await stopping;
+
+    expect(held.started.map((entry) => entry.projectId)).toEqual([items[0]!.id]);
+    expect(queuedFailure).toBeInstanceOf(ArtifactOperationError);
+    expect(items.some((item) => projectWatchers.has(item.id))).toBe(false);
+  });
+
+  test("Given a startup observation is pending When shutdown runs Then turns are interrupted before that observation finishes and queued projects are rejected first", async () => {
+    const items = await fixtures(2);
+    const held = heldObserver();
+    const startup = startProjectWatchers({ projectIds: items.map((item) => item.id), concurrency: 1, observe: held.observe });
+    await held.startedAtLeast(1);
+    const order: string[] = [];
+    const queuedOperation = writeIndex(items[1]!, "during shutdown").catch((error: unknown) => { order.push("queued rejected"); return error; });
+    const interrupted = Promise.withResolvers<void>();
+
+    const stopping = shutdownProjectWatchers(startup, async () => { await queuedOperation; order.push("turns interrupted"); interrupted.resolve(); });
+    await interrupted.promise;
+    order.push("observation released");
+    held.started[0]?.release();
+    await stopping;
+
+    expect(order).toEqual(["queued rejected", "turns interrupted", "observation released"]);
+    expect(held.started.map((entry) => entry.projectId)).toEqual([items[0]!.id]);
+    expect(items.some((item) => projectWatchers.has(item.id))).toBe(false);
+  });
+
+  test("Given a project still queued for startup observation When its mutation arrives Then that project is observed next", async () => {
+    const items = await fixtures(3);
+    const held = heldObserver();
+    const startup = startProjectWatchers({ projectIds: items.map((item) => item.id), concurrency: 1, observe: held.observe });
+    await held.startedAtLeast(1);
+
+    const waiting = writeIndex(items[2]!, "prioritized");
+    held.started[0]?.release();
+    await held.startedAtLeast(2);
+
+    expect(held.started.map((entry) => entry.projectId)).toEqual([items[0]!.id, items[2]!.id]);
+    held.started[1]?.release();
+    expect((await waiting).status).toBe("committed");
+    await held.startedAtLeast(3);
+    held.started[2]?.release();
+    await startup.settled;
+  });
+
+  test("Given a non-positive concurrency When watcher startup runs Then it still observes every project instead of leaving waiters pending", async () => {
+    const item = await fixture();
+
+    await startProjectWatchers({ projectIds: [item.id], concurrency: 0 }).settled;
+
+    expect(projectWatchers.has(item.id)).toBe(true);
+    expect((await writeIndex(item, "after startup")).status).toBe("committed");
+  });
+
+  test("Given backend startup When its order is inspected Then the listener and readiness line precede watcher startup and shutdown interrupts turns before waiting on watchers", async () => {
+    const main = await readFile(new URL("../src/main.ts", import.meta.url), "utf8");
+    const bootstrap = await readFile(new URL("../src/bootstrap.ts", import.meta.url), "utf8");
+    const serve = main.indexOf("Bun.serve(");
+    const ready = main.indexOf("[burnguard-desktop] ${JSON.stringify({ protocol: 1, url");
+    const watchersStart = main.indexOf("startProjectWatchers(");
+
+    expect(bootstrap.includes("services/watchers")).toBe(false);
+    expect(main.indexOf("await bootstrapLocalAppData()")).toBeLessThan(serve);
+    expect(serve).toBeGreaterThan(0);
+    expect(ready).toBeGreaterThan(serve);
+    expect(watchersStart).toBeGreaterThan(ready);
+    const shutdownStart = main.indexOf("const shutdown = async");
+    const intakeStop = main.indexOf("server.stop(false)", shutdownStart);
+    const watcherShutdown = main.indexOf("await shutdownProjectWatchers(projectWatcherStartup, async () => { await interruptAllUserTurns(); await closeActiveExportBrowsers(); })", shutdownStart);
+    expect(intakeStop).toBeGreaterThan(shutdownStart);
+    expect(watcherShutdown).toBeGreaterThan(intakeStop);
+    expect(main.indexOf("server.stop(true)", shutdownStart)).toBeGreaterThan(watcherShutdown);
+    expect(main.includes("projectWatcherStartup?.stop()")).toBe(false);
   });
 });

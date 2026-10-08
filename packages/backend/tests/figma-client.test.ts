@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import {
   extractFigmaTokens,
+  fetchFigmaFileMeta,
   FigmaApiError,
   parseFigmaUrl,
   pickFirstFillHex,
@@ -89,6 +90,56 @@ describe("pickFirstFillHex", () => {
   test("returns null on missing or empty fills", () => {
     expect(pickFirstFillHex(undefined)).toBeNull();
     expect(pickFirstFillHex([])).toBeNull();
+  });
+});
+
+describe("figma REST transport", () => {
+  test("Given the Figma REST client When it fetches file metadata Then the outbound request forbids redirect following", async () => {
+    // Given
+    const calls: RequestInit[] = [];
+    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (_input: unknown, init?: RequestInit) => {
+      calls.push(init ?? {});
+      return Response.json({ name: "Tokens", lastModified: "2026-01-01T00:00:00Z", version: "1" });
+    }) as typeof fetch);
+    try {
+      // When
+      await fetchFigmaFileMeta("abc123XYZ", "figd_secret");
+
+      // Then
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.redirect).toBe("error");
+      expect(new Headers(calls[0]?.headers).get("X-Figma-Token")).toBe("figd_secret");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test("Given a blocked redirect When the fetch layer fails Then the typed error rejects without echoing runtime details", async () => {
+    // Given
+    const token = "figd_secret";
+    const redirectTarget = "https://evil.example/steal";
+    const redirectError = Object.assign(
+      new TypeError(`UnexpectedRedirect fetching "https://api.figma.com/v1/files/abc123XYZ?depth=1" -> "${redirectTarget}"`),
+      { code: "UnexpectedRedirect" },
+    );
+    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async () => {
+      throw redirectError;
+    }) as unknown as typeof fetch);
+    try {
+      // When
+      const failure = fetchFigmaFileMeta("abc123XYZ", token).catch((error: unknown) => error);
+
+      // Then
+      const error = await failure;
+      expect(error).toBeInstanceOf(FigmaApiError);
+      if (!(error instanceof FigmaApiError)) throw error;
+      expect(error.code).toBe("fetch_failed");
+      expect(error.message).not.toContain(token);
+      expect(error.message).not.toContain(redirectTarget);
+      expect(error.message).not.toContain("UnexpectedRedirect");
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
 

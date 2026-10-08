@@ -9,6 +9,7 @@ import { mapGeneratedImages } from "./event-mapping";
 import { parseCodexLine, type CodexParserContext } from "./parser";
 import { spawnOwnedProcess } from "../owned-process";
 import { settleProcessStreams } from "../process-streams";
+import { readLines } from "../bounded-lines";
 
 export function buildCodexCommand(
   binaryPath: string,
@@ -216,38 +217,4 @@ export async function runCodexTurn(
   }
 
   return { exitCode };
-}
-
-async function readLines(
-  stream: ReadableStream<Uint8Array>,
-  onLine: (line: string) => Promise<void> | void,
-): Promise<void> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let idx = buffer.indexOf("\n");
-      while (idx >= 0) {
-        const line = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 1);
-        if (line.length > 0) {
-          await onLine(line);
-        }
-        idx = buffer.indexOf("\n");
-      }
-    }
-    if (buffer.length > 0) {
-      await onLine(buffer);
-    }
-  } finally {
-    try {
-      reader.releaseLock();
-    } catch {
-      // already released
-    }
-  }
 }
