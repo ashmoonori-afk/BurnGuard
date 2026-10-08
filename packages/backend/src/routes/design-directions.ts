@@ -5,6 +5,7 @@ import { parseGenerationStyle, UpgradeContractError, type GenerationStyle, type 
 import { getLatestProjectSession, getProjectDetail } from "../db/project-read-repository";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
 import { PathBoundaryError, assertSafeName } from "../security/path-boundary";
+import { rawFileHeaders } from "../security/raw-file-response";
 import { isUserTurnRunning } from "../services/turns";
 import { getLatestDirectionState } from "../services/design-direction-state";
 import { DesignDirectionWorkflow, DesignDirectionWorkflowError, directionPreviewPath } from "../services/design-direction-workflow";
@@ -149,7 +150,7 @@ designDirectionRoutes.get("/api/projects/:projectId/design-directions/:generatio
     if (slot === undefined) return c.json(fail("preview_not_found", "Preview is not available for the current state"), 404);
     const bytes = await readFile(directionPreviewPath(value.projectDir, generationId, directionId));
     const etag = `"${createHash("sha256").update(bytes).digest("hex")}"`;
-    const headers = { "Content-Type": "image/svg+xml", "Cache-Control": "private, no-cache", ETag: etag };
+    const headers = { ...rawFileHeaders(c.req.raw, { contentType: "image/svg+xml", filename: `${directionId}.svg` }), "Content-Type": "image/svg+xml", "Cache-Control": "private, no-cache", ETag: etag };
     if (c.req.header("if-none-match") === etag) return c.body(null, 304, headers);
     return c.body(bytes, 200, headers);
   } catch (error) {

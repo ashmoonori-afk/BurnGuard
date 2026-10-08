@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createCanvas, loadImage } from "../src/services/export-native-modules";
@@ -143,11 +143,29 @@ test("Given corrupt, truncated and over-large inputs When fingerprinted Then the
 
 test("Given a decoder child that crashes or answers garbage When a fingerprint is requested Then a typed error is returned and this process keeps working", async () => {
   const bytes = markAlpha(128);
-  for (const script of ["process.kill(process.pid, 'SIGSEGV')", "process.stdout.write('not a hash')"]) {
+  // SIGKILL ends the child by signal exactly like a native crash but without a core dump: a real SIGSEGV
+  // makes the host crash handler stream the multi-GB Bun address space before the child is reaped.
+  for (const script of ["process.kill(process.pid, 'SIGKILL')", "process.stdout.write('not a hash')"]) {
     await expect(isolatedImageFingerprint(bytes, undefined, { command: [process.execPath, "-e", script] })).rejects.toMatchObject({ code: "image_fingerprint_failed" });
   }
   expect(await isolatedImageFingerprint(bytes)).toMatch(/^[0-9a-f]{16}$/);
 });
+
+test("Given a decoder child that exits while a descendant still holds its reply pipe When a fingerprint is requested Then the deadline returns a typed error and the descendant is stopped", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "bg-fingerprint-descendant-"));
+  try {
+    const pidFile = path.join(root, "descendant.pid");
+    const script = `const held = Bun.spawn([process.execPath, "-e", "setInterval(() => {}, 1000)"], { stdin: "ignore", stdout: "inherit", stderr: "ignore" }); require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(held.pid)); process.exit(0)`;
+    await expect(isolatedImageFingerprint(markAlpha(128), undefined, { command: [process.execPath, "-e", script], timeoutMs: 2_000 })).rejects.toMatchObject({ code: "image_fingerprint_failed" });
+    expect(isProcessAlive(Number(await readFile(pidFile, "utf8")))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+function isProcessAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
 
 test("Given a secret in the backend environment When the decoder child runs Then the child does not receive it", async () => {
   process.env.BG_TEST_FINGERPRINT_SENTINEL = "sentinel-secret";

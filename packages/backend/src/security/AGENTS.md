@@ -18,7 +18,7 @@ Five modules (464 LOC) that own every trust decision the rest of the backend dep
 
 ## CONVENTIONS
 
-- `/api/health` is the only public path; `/api/bootstrap` is `GET`-only and requires same-origin (`Origin`, or `Sec-Fetch-Site`+`Sec-Fetch-Mode` when `Origin` is absent), then sets the `HttpOnly; SameSite=Strict; Path=/api` capability cookie.
+- `/api/health` is the only public path; `/api/bootstrap` is `GET`-only and requires same-origin (`Origin`, or `Sec-Fetch-Site`+`Sec-Fetch-Mode` when `Origin` is absent) plus proof that the caller is the launched page: the unspent one-time `bootstrapSecret` in `x-burnguard-bootstrap`, or a valid launch cookie (reloads, new tabs). `Origin` is forgeable outside a browser, so never mint on same-origin alone. It then sets the `HttpOnly; SameSite=Strict; Path=/api` capability cookie.
 - Mutations (`POST/PUT/PATCH/DELETE`) require both a matching `Origin` and the `x-burnguard-capability` header; reads may fall back to the cookie.
 - Compare secrets only with `timingSafeEqual` on equal-length buffers - never `===`.
 - Enforce body ceilings before any handler parses: a declared `Content-Length` is checked up front, and a chunked body is buffered only up to the ceiling and re-wrapped as a fixed-length `Request`.
@@ -31,6 +31,6 @@ Five modules (464 LOC) that own every trust decision the rest of the backend dep
 - Do not add a route to `PUBLIC_API_PATHS` or widen `authorities`; the desktop/dev authority set is fixed at startup.
 - Do not add a multipart route without adding its pattern to `MULTIPART_ROUTES`; it silently inherits the 1 MiB JSON cap.
 - Do not serve project bytes without `rawFileHeaders`; an HTML artifact rendered as a same-origin top-level document defeats the sandbox.
-- Do not log or echo the capability value, resolved absolute paths, or `PathBoundaryError` messages into API responses.
+- Do not log or echo the capability or bootstrap secret value (the only exceptions are the desktop readiness line read by the shell and the launch URL shown to an interactive terminal), resolved absolute paths, or `PathBoundaryError` messages into API responses.
 - Do not make `assertSafeName` platform-conditional; the Windows rules run everywhere so a name accepted on macOS stays creatable on Windows.
 - Do not bypass `resolveManagedPath` for DB-stored absolute paths (`../lib/paths.ts`); it also rejects the storage root itself as a record path.
