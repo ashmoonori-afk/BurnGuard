@@ -4,19 +4,23 @@ import path from "node:path";
 import type { NormalizedEvent } from "@bg/shared/events";
 import { ArtifactCoordinator, ArtifactOperationError } from "./artifact-coordinator";
 import { materializeManagedTree, publishManagedTree } from "./artifact-tree-storage";
-import { inspectCanonicalTree, isCanonicalTreeRootMissing, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
-import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
+import { CanonicalTreeManifestError, inspectCanonicalTree, isCanonicalTreeRootMissing, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
+import { parsePersistedArtifactOperation, PersistedArtifactOperationError, type PersistedArtifactOperationRow } from "./artifact-operation-record";
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
 import { migrateDocumentOnlyRevision } from "./artifact-document-migration";
+import { setArtifactRecoveryHold } from "./artifact-recovery-hold";
 
 type ProjectRow = { readonly id: string; readonly dir_path: string; readonly current_digest: string | null };
 type RecoveryRow = PersistedArtifactOperationRow & { readonly dir_path: string };
 
+type UnavailableProject = { readonly projectId: string; readonly code: string };
 type SnapshotReceipt = { readonly snapshotPath: string; readonly baseManifest: CanonicalTreeManifest };
 
-export async function reconcileArtifactState(db: Database): Promise<{ readonly operations: number; readonly projects: number; readonly sessions: number; readonly unavailableProjects: readonly { readonly projectId: string; readonly code: "project_directory_missing" }[] }> {
+export async function reconcileArtifactState(db: Database): Promise<{ readonly operations: number; readonly projects: number; readonly sessions: number; readonly unavailableProjects: readonly UnavailableProject[] }> {
   const projectRoots = db.query<ProjectRow, []>("SELECT id,dir_path,current_digest FROM projects ORDER BY id").all();
   const missingProjectIds = new Set<string>();
+  // Per-project recovery failures: the project is reported unavailable, every other project still loads.
+  const failedProjects = new Map<string, string>();
   for (const project of projectRoots) {
     if (await isCanonicalTreeRootMissing(project.dir_path)) missingProjectIds.add(project.id);
   }
@@ -25,32 +29,47 @@ export async function reconcileArtifactState(db: Database): Promise<{ readonly o
   let recoveredOperations = 0;
   for (const operation of operations) {
     // A temporarily absent project must keep its exact receipt for a later restart.
-    if (typeof operation.project_id === "string" && missingProjectIds.has(operation.project_id)) continue;
-    const parsed = parsePersistedArtifactOperation(operation);
-    db.prepare("UPDATE artifact_operations SET status='recovering',updated_at=? WHERE id=?").run(Date.now(), parsed.id);
-    await reconcileOperation(db, operation.dir_path, parsed);
-    recoveredOperations += 1;
+    if (typeof operation.project_id === "string" && (missingProjectIds.has(operation.project_id) || failedProjects.has(operation.project_id))) continue;
+    try {
+      const parsed = parsePersistedArtifactOperation(operation);
+      db.prepare("UPDATE artifact_operations SET status='recovering',updated_at=? WHERE id=?").run(Date.now(), parsed.id);
+      await reconcileOperation(db, operation.dir_path, parsed);
+      recoveredOperations += 1;
+    } catch (error) {
+      if (typeof operation.project_id !== "string") throw error;
+      failedProjects.set(operation.project_id, recoveryFailureCode(error));
+    }
   }
   const projects = db.query<ProjectRow, []>("SELECT id,dir_path,current_digest FROM projects ORDER BY id").all();
   const coordinator = new ArtifactCoordinator(db);
   for (const project of projects) {
-    if (missingProjectIds.has(project.id)) continue;
-    if (project.current_digest === null) await coordinator.initialize(project.id, project.dir_path);
-    else {
-      const actual = await inspectCanonicalTree(project.dir_path);
-      if (actual.tree_digest !== project.current_digest) {
-        if (await migrateDocumentOnlyRevision(db, project, actual)) {
-          await coordinator.initialize(project.id, project.dir_path);
-          continue;
-        }
-        await recoverCommittedBaseline(db, project);
-        await coordinator.observeExternal(project.id, project.dir_path);
-      }
-      else await coordinator.initialize(project.id, project.dir_path);
-    }
+    if (missingProjectIds.has(project.id) || failedProjects.has(project.id)) continue;
+    try { await reconcileProjectIdentity(db, coordinator, project); }
+    catch (error) { failedProjects.set(project.id, recoveryFailureCode(error)); }
   }
+  setArtifactRecoveryHold(db, failedProjects.keys());
   const sessions = recoverPersistedSessions(db);
-  return { operations: recoveredOperations, projects: projects.length - missingProjectIds.size, sessions, unavailableProjects: [...missingProjectIds].map((projectId) => ({ projectId, code: "project_directory_missing" })) };
+  const unavailableProjects: UnavailableProject[] = [
+    ...[...missingProjectIds].map((projectId) => ({ projectId, code: "project_directory_missing" })),
+    ...[...failedProjects].map(([projectId, code]) => ({ projectId, code })),
+  ];
+  return { operations: recoveredOperations, projects: projects.filter((p) => !missingProjectIds.has(p.id) && !failedProjects.has(p.id)).length, sessions, unavailableProjects };
+}
+
+function recoveryFailureCode(error: unknown): string {
+  if (error instanceof ArtifactOperationError) return error.code;
+  if (error instanceof CanonicalTreeManifestError) return error.code;
+  if (error instanceof PersistedArtifactOperationError) return "corrupt_receipt";
+  throw error;
+}
+
+async function reconcileProjectIdentity(db: Database, coordinator: ArtifactCoordinator, project: ProjectRow): Promise<void> {
+  if (project.current_digest === null) { await coordinator.initialize(project.id, project.dir_path); return; }
+  const actual = await inspectCanonicalTree(project.dir_path);
+  if (actual.tree_digest === project.current_digest) { await coordinator.initialize(project.id, project.dir_path); return; }
+  if (await migrateDocumentOnlyRevision(db, project, actual)) { await coordinator.initialize(project.id, project.dir_path); return; }
+  await recoverCommittedBaseline(db, project);
+  await coordinator.observeExternal(project.id, project.dir_path);
 }
 
 async function recoverCommittedBaseline(db: Database, project: ProjectRow): Promise<void> {

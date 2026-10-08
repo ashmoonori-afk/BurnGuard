@@ -67,15 +67,29 @@ test("Given a moved project with a working receipt When startup runs and its fol
   expect(await readFile(path.join(missing, "index.html"), "utf8")).toBe("preserved bytes");
 });
 
-test("Given an existing root with missing recovery bytes When startup reconciles Then receipt errors remain fatal instead of being classified as an absent project", async () => {
+test("Given an existing root with missing recovery bytes When startup reconciles Then the project is unavailable with its receipt code instead of being classified as an absent project", async () => {
   await new ArtifactCoordinator(db).initialize("healthy", healthy);
   const operation = db.query<{ id: string; snapshot_json: string }, []>("SELECT id,snapshot_json FROM artifact_operations WHERE project_id='healthy'").get()!;
   db.prepare("UPDATE artifact_operations SET status='working',result_revision=NULL,result_digest=NULL WHERE id=?").run(operation.id);
   const snapshot = JSON.parse(operation.snapshot_json) as { snapshot_path: string };
   await rename(snapshot.snapshot_path, path.join(root, "retained-snapshot"));
-  await expect(reconcileArtifactState(db)).rejects.toMatchObject({ code: "tree_missing" });
+  expect((await reconcileArtifactState(db)).unavailableProjects).toEqual([{ projectId: "healthy", code: "tree_missing" }]);
   expect(await readFile(path.join(healthy, "index.html"), "utf8")).toBe("healthy bytes");
   expect(db.query("SELECT status FROM artifact_operations WHERE id=?").get(operation.id)).toEqual({ status: "recovering" });
+});
+
+test("Given a project held unavailable by startup recovery and a drifted live tree When the watcher or a route observes it Then the live bytes and the operation row stay untouched", async () => {
+  await new ArtifactCoordinator(db).initialize("healthy", healthy);
+  const operation = db.query<{ id: string; snapshot_json: string }, []>("SELECT id,snapshot_json FROM artifact_operations WHERE project_id='healthy'").get()!;
+  db.prepare("UPDATE artifact_operations SET status='working',result_revision=NULL,result_digest=NULL WHERE id=?").run(operation.id);
+  await rename((JSON.parse(operation.snapshot_json) as { snapshot_path: string }).snapshot_path, path.join(root, "retained-snapshot"));
+  await writeFile(path.join(healthy, "index.html"), "live bytes written by the interrupted turn");
+  expect((await reconcileArtifactState(db)).unavailableProjects).toEqual([{ projectId: "healthy", code: "tree_missing" }]);
+  const before = db.query("SELECT * FROM artifact_operations ORDER BY id").all();
+  await expect(new ArtifactCoordinator(db).observeExternal("healthy", healthy)).rejects.toMatchObject({ code: "recovery_unavailable" });
+  await expect(new ArtifactCoordinator(db).adoptExternal("healthy", healthy, () => {})).rejects.toMatchObject({ code: "recovery_unavailable" });
+  expect(await readFile(path.join(healthy, "index.html"), "utf8")).toBe("live bytes written by the interrupted turn");
+  expect(db.query("SELECT * FROM artifact_operations ORDER BY id").all()).toEqual(before);
 });
 
 test("Given an absent folder with a cached file index When files artifacts or refresh is requested Then a private-path-free error remains until the folder returns", async () => {
