@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
 import { applyHtmlNodePatch, fingerprintHtmlNode, type PatchHtmlNodeInput } from "./file-patch";
@@ -10,7 +11,8 @@ import { beginArtifactPublication, endArtifactPublication } from "./artifact-pub
 import { replaceArtifactFileIndex, replaceArtifactFileIndexInTransaction } from "../db/artifact-file-index";
 import { adoptExistingArtifact, establishEmptyArtifactAuthority } from "./artifact-initialization";
 import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
-import { pruneExpiredArtifactOperations } from "./artifact-retention";
+import { pruneExpiredArtifactOperations, RETENTION_MS } from "./artifact-retention";
+import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import { acquireArtifactProjectLock } from "./artifact-project-lock";
 import { isArtifactMutationBlockedByAlternatives } from "./visual-alternative-operation-registry";
 import {
@@ -29,7 +31,7 @@ import {
   throwIfAcquisitionAborted,
 } from "./extraction-acquisition";
 
-type OperationKind = "patch" | "palette" | "turn" | "restore" | "undo" | "external" | "initialize" | "figma_import";
+type OperationKind = "patch" | "palette" | "turn" | "restore" | "undo" | "external" | "initialize" | "figma_import" | "reapply_external";
 type CoordinatorFaults = {
   readonly beforeSnapshot?: () => void;
   readonly beforePublishRead?: (relativePath: string) => void | Promise<void>;
@@ -84,8 +86,6 @@ export type CommittedArtifactOperation = {
   readonly resultDigest: string;
   readonly diff: readonly ArtifactFileDiff[];
 };
-/** Operation copies, including captured external edits, stay restorable for 30 days. */
-const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 type ProjectIdentity = { readonly revision: number; readonly digest: string | null };
 
 export class ArtifactOperationError extends Error {
@@ -282,6 +282,34 @@ export class ArtifactCoordinator {
     const operation = await this.run({ projectId: input.projectId, projectDir: input.projectDir, kind: "undo", expectedRevision: input.expectedRevision, expectedArtifactDigest: input.expectedArtifactDigest, parentOperationId: input.operationId, mutate: async (stage) => { await materializeManagedTree(snapshot.snapshot_path, stage); } });
     if (operation.resultDigest !== row.base_digest) throw new ArtifactOperationError("undo_digest_mismatch", "Undo did not restore the historical digest");
     return operation;
+  }
+
+  /**
+   * Re-apply an external save that was reverted because an operation was running. Only the captured
+   * file changes are replayed, and only onto files still matching what the capture replaced.
+   */
+  async reapplyExternal(input: UndoOperation): Promise<CommittedArtifactOperation> {
+    await this.validateBase(input.projectId, input.projectDir, input.expectedRevision, input.expectedArtifactDigest);
+    const raw = this.db.query<PersistedArtifactOperationRow, [string, string]>("SELECT id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at FROM artifact_operations WHERE id=? AND project_id=?").get(input.operationId, input.projectId);
+    if (raw === null) throw new ArtifactOperationError("reapply_unavailable", "Captured external edit is unavailable");
+    const capture = parsePersistedArtifactOperation(raw);
+    if (capture.status !== "conflicted" || capture.replay.kind !== "external") throw new ArtifactOperationError("reapply_unavailable", "Captured external edit is unavailable");
+    if (!capture.retention.replayable || capture.retention.retained_until <= Date.now()) throw new ArtifactOperationError("capture_expired", "Captured external edit is no longer retained");
+    if (this.db.query("SELECT 1 FROM artifact_operations WHERE project_id=? AND status IN ('pending','working','recovering') LIMIT 1").get(input.projectId) !== null) throw new ArtifactOperationError("operation_conflict", "An artifact operation is active");
+    const captured = resolveWithin(input.projectDir, ".meta", "artifact-operations", assertSafeName(capture.id), "stage");
+    if (!sameStoragePath(capture.snapshot.stage_path, captured)) throw new ArtifactOperationError("reapply_unavailable", "Captured external edit is outside operation storage");
+    return this.run({ projectId: input.projectId, projectDir: input.projectDir, kind: "reapply_external", expectedRevision: input.expectedRevision, expectedArtifactDigest: input.expectedArtifactDigest, parentOperationId: capture.id, mutate: async (stage) => {
+      const current = await inspectCanonicalTree(stage);
+      for (const file of capture.diff) {
+        if ((manifestEntry(current, file.path)?.sha256 ?? null) !== file.before_hash) throw new ArtifactOperationError("reapply_conflict", "Files changed after the external edit was captured");
+        const target = resolveWithin(stage, ...file.path.split("/"));
+        if (file.after_hash === null) { await rm(target, { force: true }); continue; }
+        await mkdir(path.dirname(target), { recursive: true });
+        await writeFile(target, await readFile(resolveWithin(captured, ...file.path.split("/"))));
+      }
+      const result = await inspectCanonicalTree(stage);
+      if (capture.diff.some(file => (manifestEntry(result, file.path)?.sha256 ?? null) !== file.after_hash)) throw new ArtifactOperationError("reapply_unavailable", "Captured external edit bytes are corrupt");
+    } });
   }
 
   async observeExternal(projectId: string, projectDir: string): Promise<CommittedArtifactOperation | null> {
@@ -481,4 +509,12 @@ function mergeImmutableReferencePaths(
     }
   }
   return output;
+}
+
+/** Compares a stored storage path with a resolveWithin result by real path, so symlinked, junctioned or 8.3-short project roots still match. */
+function sameStoragePath(stored: string, resolved: string): boolean {
+  try {
+    const normalize = (value: string) => process.platform === "win32" ? realpathSync(value).toLowerCase() : realpathSync(value);
+    return normalize(stored) === normalize(resolved);
+  } catch { return false; }
 }
