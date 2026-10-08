@@ -49,8 +49,12 @@ export async function ensureProjectWatcher(projectId: string): Promise<void> {
 export async function ensureAllProjectWatchers(projectIds?: readonly string[]): Promise<void> {
   for (const projectId of projectIds ?? await listProjectIds()) {
     try { await ensureProjectWatcher(projectId); }
-    catch (error) { console.warn("[watcher] project watcher unavailable", projectId, error); }
+    catch (error) { console.warn("[watcher] project watcher unavailable", projectId, errorCode(error)); }
   }
+}
+
+function errorCode(error: unknown): string {
+  return error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : "unknown";
 }
 
 export function shouldSkipPath(relPath: string): boolean {
