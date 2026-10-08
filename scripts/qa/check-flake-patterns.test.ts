@@ -122,6 +122,32 @@ describe("platform early returns in tests", () => {
     expect(lines(body)).toEqual([]);
   });
 
+  test.each([
+    ["a promise sleep on the resolver", 'await new Promise<void>((resolve) => { setTimeout(resolve, 400); });'],
+    ["a promise sleep through an arrow", 'await new Promise((r) => setTimeout(() => r(), 50));'],
+    ["a braced arrow sleep", 'await new Promise((r) => { setTimeout(() => { r(); }, 50); });'],
+    ["Bun.sleep", 'await Bun.sleep(100);'],
+  ] as const)("Given %s When checked Then it is rejected as a fixed sleep", (_name, body) => {
+    const [problem] = checkTestSources([spec(`test("a", async () => {\n  ${body}\n});`)]);
+    expect(problem).toMatchObject({ code: "fixed_sleep_in_test", line: 2 });
+  });
+
+  test.each([
+    ["a macrotask yield", 'await new Promise((r) => setTimeout(r, 0));'],
+    ["a timer that delivers a value", 'const t = setTimeout(() => { resolve(false); }, 5_000);'],
+    ["a simulated slow launch", 'setTimeout(() => { resolve(fakeBrowser()); }, 150);'],
+    ["a deadline that rejects", 'setTimeout(() => { reject(new Error("deadline")); }, 10_000);'],
+  ] as const)("Given %s When checked Then it is not a sleep", (_name, body) => {
+    expect(lines(`test("a", async () => {\n  ${body}\n});`)).toEqual([]);
+  });
+
+  test("Given a sleep in a file that predates the rule When checked Then it is tolerated only there", () => {
+    const body = 'test("a", async () => { await Bun.sleep(5); });';
+
+    expect(checkTestSources([{ path: "packages/backend/tests/project-thumbnails.test.ts", text: body }])).toEqual([]);
+    expect(checkTestSources([{ path: "packages/backend/tests/other.test.ts", text: body }]).map((problem) => problem.code)).toEqual(["fixed_sleep_in_test"]);
+  });
+
   test("Given the package tests on this host When checked Then no test returns early on the platform", async () => {
     const tests = await readTestSources(path.resolve(import.meta.dir, "..", ".."));
 
