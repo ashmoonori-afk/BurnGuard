@@ -89,7 +89,7 @@ import { createPagePrompt } from "@/lib/create-page-prompt";
 import { nextActiveTabAfterClose } from "@/lib/artifact-tabs";
 import { artifactOperationRefresh } from "@/lib/artifact-operation-refresh";
 import { panelGenerationFor } from "@/lib/panel-generation";
-import { resolveUndoAction, type TweaksUndoFrame } from "@/lib/tweaks-history";
+import { resolveUndoAction, undoChordDirection, type TweaksUndoFrame } from "@/lib/tweaks-history";
 import { canvasWriteInvalidations } from "@/lib/canvas-write-queries";
 import { deriveAutoFixRunning } from "@/lib/auto-fix-pending";
 import {
@@ -694,10 +694,10 @@ export default function ProjectView() {
         const tag = t.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || t.isContentEditable) return;
       }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod || e.key.toLowerCase() !== "z") return;
+      const chord = undoChordDirection(e);
+      if (chord === null) return;
       e.preventDefault();
-      if (e.shiftKey) drawLayerRef.current?.redo();
+      if (chord === "redo") drawLayerRef.current?.redo();
       else drawLayerRef.current?.undo();
     };
     window.addEventListener("keydown", onKey);
@@ -1101,8 +1101,9 @@ export default function ProjectView() {
     if (!undoActiveRelPath || mode === "draw" || composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending) return;
     const onKey = (event: KeyboardEvent) => {
       const target = event.target;
-      if (!event.isTrusted || event.defaultPrevented || event.repeat || !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z" || (target instanceof HTMLElement && (target.closest("input,textarea,select,[contenteditable],[role=dialog]") || target.isContentEditable))) return;
-      const direction = event.shiftKey ? "redo" : "undo";
+      if (!event.isTrusted || event.defaultPrevented || event.repeat || (target instanceof HTMLElement && (target.closest("input,textarea,select,[contenteditable],[role=dialog]") || target.isContentEditable))) return;
+      const direction = undoChordDirection(event);
+      if (direction === null) return;
       const projectOperationId = direction === "redo"
         ? (artifactRedo.current.revision === undoInfoQuery.data?.current_revision ? artifactRedo.current.operations.at(-1) : undefined)
         : undoInfoQuery.data?.undo_operation_id ?? undefined;
