@@ -104,6 +104,7 @@ export const errorsMessages = defineMessages({
   "errors.acquisition_aborted": { ko: "가져오기가 중단됐어요. 파일을 확인한 뒤 다시 시도해 주세요.", en: "The import was interrupted. Check the files and try again.", "zh-CN": "导入已中断。请检查文件后重试。" },
   "errors.invalid_upload": { ko: "업로드한 파일을 사용할 수 없어요. 지원하는 형식인지 확인한 뒤 다시 시도해 주세요.", en: "The uploaded file cannot be used. Check that it is a supported format and try again.", "zh-CN": "无法使用上传的文件。请确认文件格式受支持后重试。" },
   "errors.invalid_font_upload": { ko: "글꼴 파일을 사용할 수 없어요. 지원하는 글꼴 형식인지 확인한 뒤 다시 올려 주세요.", en: "The font file cannot be used. Check that it is a supported font format and upload it again.", "zh-CN": "无法使用该字体文件。请确认字体格式受支持后重新上传。" },
+  "errors.token_file_unreadable": { ko: "디자인 시스템의 토큰 파일을 읽지 못했어요. 파일 권한을 확인한 뒤 다시 시도해 주세요.", en: "The design system's token file could not be read. Check its permissions and try again.", "zh-CN": "无法读取设计系统的令牌文件。请检查文件权限后重试。" },
   "errors.system_id_conflict": { ko: "디자인 시스템에 고유한 ID를 배정하지 못했어요. 잠시 후 다시 시도해 주세요.", en: "Could not assign a unique ID to the design system. Try again shortly.", "zh-CN": "无法为设计系统分配唯一 ID。请稍后重试。" },
   "errors.catalog_operation_failed": { ko: "디자인 시스템 작업을 완료하지 못했어요. 목록을 새로고침한 뒤 다시 시도해 주세요.", en: "The design system operation could not be completed. Refresh the list and try again.", "zh-CN": "无法完成设计系统操作。请刷新列表后重试。" },
   "errors.design_system_not_found": { ko: "디자인 시스템을 찾을 수 없어요. 목록을 새로고침한 뒤 다시 확인해 주세요.", en: "Design system not found. Refresh the list and check again.", "zh-CN": "未找到设计系统。请刷新列表后重新检查。" },

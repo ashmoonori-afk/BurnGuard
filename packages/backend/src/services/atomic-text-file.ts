@@ -21,7 +21,9 @@ export async function writeTextFileAtomically(filePath: string, content: string)
 export async function readManagedCssForEdit(filePath: string): Promise<string> {
   try { return await readFile(filePath, "utf8"); }
   catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return "";
+    // A directory standing where the file belongs is a write problem, not an unreadable file: the
+    // later rename fails and the route reports its stable 500 write failure.
+    if (error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "EISDIR")) return "";
     throw new DesignSystemAssetEditError("token_file_unreadable", "Design system CSS file could not be read");
   }
 }

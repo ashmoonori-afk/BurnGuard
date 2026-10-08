@@ -636,12 +636,17 @@ export async function uploadDesignSystemFont(input: {
   const family = normalizeFontFamily(input.family) || humanizeSlug(path.basename(fileName, ext));
   const role = input.role ?? null;
 
+  // Read every CSS file this upload will rewrite first, so an unreadable one fails before anything is installed.
+  const tokenPath = role && detail.tokens_css_path
+    ? resolveDesignSystemRecordPath(input.systemId, detail.dir_path, detail.tokens_css_path)
+    : null;
+  const existingCss = tokenPath ? await readManagedCssForEdit(tokenPath) : "";
+  await readManagedCssForEdit(path.join(fontsDir, "fonts.css"));
+
   await writeFile(fontPath, fontBytes);
   await appendFontFaceRule(path.join(fontsDir, "fonts.css"), family, fileName);
 
-  if (role && detail.tokens_css_path) {
-    const tokenPath = resolveDesignSystemRecordPath(input.systemId, detail.dir_path, detail.tokens_css_path);
-    const existingCss = await readManagedCssForEdit(tokenPath);
+  if (role && tokenPath) {
     const fontsCss = await readManagedCssForEdit(path.join(fontsDir, "fonts.css"));
     const tokens = await extractCssCustomProperties(existingCss);
     const fallbackDefined = tokens.has(`font-${role}-fallback`) || (await extractCssCustomProperties(fontsCss)).has(`font-${role}-fallback`);
