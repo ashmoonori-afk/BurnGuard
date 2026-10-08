@@ -34,7 +34,27 @@ export class ApiError extends Error {
   }
 }
 
-export async function bootstrapApiAuthority(signal?: AbortSignal): Promise<void> {
+let inflightBootstrap: Promise<void> | null = null;
+
+/**
+ * Concurrent callers (React StrictMode runs the bootstrap effect twice in dev) share one request, so the
+ * single-use secret is sent once. The request is not tied to any caller's signal; each caller only stops waiting.
+ */
+export function bootstrapApiAuthority(signal?: AbortSignal): Promise<void> {
+  inflightBootstrap ??= requestBootstrap().finally(() => {
+    inflightBootstrap = null;
+  });
+  const shared = inflightBootstrap;
+  if (!signal) return shared;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    shared.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
+
+async function requestBootstrap(): Promise<void> {
   launchCapability = null;
   takeLaunchBootstrapSecret();
   const headers = new Headers({ accept: "application/json" });
@@ -42,7 +62,6 @@ export async function bootstrapApiAuthority(signal?: AbortSignal): Promise<void>
   if (pendingBootstrapSecret !== null) headers.set(BURNGUARD_BOOTSTRAP_HEADER, pendingBootstrapSecret);
   const res = await fetch("/api/bootstrap", {
     credentials: "same-origin",
-    signal,
     headers,
   });
   const body = (await res.json().catch(() => null)) as

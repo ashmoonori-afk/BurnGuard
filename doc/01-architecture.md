@@ -294,6 +294,11 @@ Accepted risks and trust assumptions:
   process running as the same user can still read the profile or the browser
   state directly. Do not run BurnGuard on a shared host or a remote-development
   machine that untrusted users can reach.
+- **The browser-mode launch URL is briefly visible to other local users.** While
+  `xdg-open`/`open` runs, the launch URL (including the one-time secret in its
+  fragment) appears in the process list (`ps`). The secret is single-use and is
+  consumed by the first bootstrap, so the window is small, but another local
+  user who wins that race can mint the capability. Same shared-host caveat as above.
 - **The update trust root is the GitHub account, not a code-signing key.**
   Packages are not Authenticode-signed, so anyone who can publish a release in
   the repository can ship code to every installed copy. Keep the release

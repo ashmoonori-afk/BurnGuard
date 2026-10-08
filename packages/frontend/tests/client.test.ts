@@ -298,4 +298,36 @@ describe("API authority client", () => {
       }
     }
   });
+
+  test("Given two concurrent bootstrap calls with a pending launch secret When one caller aborts Then the secret is sent once and the other caller still succeeds", async () => {
+    const sent: (string | null)[] = [];
+    const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, "location");
+    const historyDescriptor = Object.getOwnPropertyDescriptor(globalThis, "history");
+    const launch = new URL("http://127.0.0.1:14070/#bg-bootstrap:strict-mode-secret");
+    Object.defineProperty(globalThis, "location", { configurable: true, value: launch });
+    Object.defineProperty(globalThis, "history", {
+      configurable: true,
+      value: { state: null, replaceState: () => { launch.hash = ""; } },
+    });
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push(new Headers(init?.headers).get("x-burnguard-bootstrap"));
+      return Response.json({ ok: true, data: { capability: "launch-token" } });
+    }) as typeof fetch;
+
+    try {
+      const first = new AbortController();
+      const aborted = bootstrapApiAuthority(first.signal);
+      const second = bootstrapApiAuthority(new AbortController().signal);
+      first.abort();
+
+      await expect(aborted).rejects.toBeDefined();
+      await second;
+      expect(sent).toEqual(["strict-mode-secret"]);
+    } finally {
+      for (const [name, descriptor] of [["location", locationDescriptor], ["history", historyDescriptor]] as const) {
+        if (descriptor === undefined) Reflect.deleteProperty(globalThis, name);
+        else Object.defineProperty(globalThis, name, descriptor);
+      }
+    }
+  });
 });
