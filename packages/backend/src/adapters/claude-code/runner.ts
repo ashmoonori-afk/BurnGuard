@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import { WEB_ASSET_MCP_SERVER, WEB_ASSET_TOOL_NAMES } from "@bg/shared";
 import { spawnOwnedProcess } from "../owned-process";
 import { settleProcessStreams } from "../process-streams";
@@ -40,8 +41,73 @@ function webAssetToolArgs(tool: RunnerOptions["webAssetTool"]): string[] {
   return ["--mcp-config", JSON.stringify(config), "--allowedTools", allowed.join(",")];
 }
 
-export function buildClaudeCommand(options: Pick<RunnerOptions, "binaryPath" | "generation" | "webAssetTool">): string[] {
+const PARTIAL_MESSAGES_FLAG = "--include-partial-messages";
+const HELP_PROBE_TIMEOUT_MS = 5_000;
+const HELP_PROBE_OUTPUT_BYTES = 256 * 1024;
+const partialMessagesSupport = new Map<string, boolean>();
+
+async function readHelpText(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let remaining = HELP_PROBE_OUTPUT_BYTES;
+  let output = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (remaining === 0) continue;
+      const accepted = value.subarray(0, remaining);
+      output += decoder.decode(accepted, { stream: true });
+      remaining -= accepted.length;
+    }
+    return output + decoder.decode();
+  } finally {
+    try { reader.releaseLock(); } catch { /* already released */ }
+  }
+}
+
+async function probeHelp(binaryPath: string, turnSignal?: AbortSignal): Promise<string | undefined> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HELP_PROBE_TIMEOUT_MS);
+  // A cancelled turn stops the probe at once instead of waiting for its own timeout.
+  const signal = turnSignal ? AbortSignal.any([controller.signal, turnSignal]) : controller.signal;
+  try {
+    const owned = spawnOwnedProcess({ cmd: [binaryPath, "--help"], stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+    let stdout = "";
+    const code = await settleProcessStreams(owned, [
+      readHelpText(owned.proc.stdout).then((text) => { stdout = text; }),
+      readHelpText(owned.proc.stderr).then(() => {}),
+    ], signal);
+    return !signal.aborted && code === 0 ? stdout : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Whether this binary knows `--include-partial-messages`; an older CLI rejects unknown flags and would fail every turn.
+ * Cached per binary path. A probe that fails, times out or is cancelled by `signal` is not cached and the flag is left off for that turn.
+ */
+export async function supportsPartialMessages(binaryPath: string, probe: (binaryPath: string, signal?: AbortSignal) => Promise<string | undefined> = probeHelp, signal?: AbortSignal): Promise<boolean> {
+  const cached = partialMessagesSupport.get(binaryPath);
+  if (cached !== undefined) return cached;
+  const help = await probe(binaryPath, signal);
+  if (help === undefined) return false;
+  const supported = help.includes(PARTIAL_MESSAGES_FLAG);
+  partialMessagesSupport.set(binaryPath, supported);
+  return supported;
+}
+
+export function resetPartialMessagesSupportCache(): void {
+  partialMessagesSupport.clear();
+}
+
+export function buildClaudeCommand(options: Pick<RunnerOptions, "binaryPath" | "generation" | "webAssetTool"> & { partialMessages?: boolean }): string[] {
   return [options.binaryPath, "-p", "--output-format", "stream-json", "--verbose",
+    // Without partial messages a single large tool input (a first full scaffold write) is silent until it completes.
+    ...(options.partialMessages ? [PARTIAL_MESSAGES_FLAG] : []),
     "--permission-mode", "acceptEdits",
     ...webAssetToolArgs(options.webAssetTool),
     "--effort", options.generation?.effort ?? "low",
@@ -73,12 +139,12 @@ export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResul
   // process inside sees `process.cwd()` equal to projectDir. This path was
   // previously verified with real Claude output; wrapping in `cmd.exe /c`
   // broke stdin piping on Windows and caused the CLI to hang.
-  const cmd = buildClaudeCommand(options);
+  const cmd = buildClaudeCommand({ ...options, partialMessages: await supportsPartialMessages(options.binaryPath, undefined, options.signal) });
 
+  // Log only non-private facts: the absolute project dir and the resolved
+  // binary path are private, so the line carries the binary basename only.
   // eslint-disable-next-line no-console
-  console.log(
-    `[claude-code] spawn cwd=${options.projectDir} binary=${options.binaryPath}`,
-  );
+  console.log(`[claude-code] spawn binary=${basename(options.binaryPath)}`);
 
   const owned = spawnOwnedProcess({
     cmd,

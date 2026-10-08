@@ -2,7 +2,7 @@ import { parseCanonicalTreeManifest, type CanonicalTreeManifest } from "./canoni
 import type { ArtifactFileDiff } from "./artifact-tree-storage";
 
 const HASH = /^[0-9a-f]{64}$/;
-const KINDS = ["patch", "palette", "turn", "restore", "undo", "external", "initialize", "figma_import"] as const;
+const KINDS = ["patch", "palette", "turn", "restore", "undo", "external", "initialize", "figma_import", "reapply_external"] as const;
 export type ArtifactOperationKind = (typeof KINDS)[number];
 export type ArtifactReplay = {
   readonly kind: ArtifactOperationKind;
@@ -58,7 +58,7 @@ export function parseArtifactReplay(value: string): ArtifactReplay {
   const parent = item["parent_operation_id"];
   const publication = item["publication"];
   if (item["schema_version"] !== 1 || !KINDS.includes(kind as ArtifactOperationKind) || (parent !== null && !nonempty(parent)) || (publication !== "base" && publication !== "result")) fail("Replay receipt is invalid");
-  if (kind === "undo" ? parent === null : kind !== "external" && parent !== null) fail("Replay parent is invalid");
+  if (kind === "undo" || kind === "reapply_external" ? parent === null : kind !== "external" && parent !== null) fail("Replay parent is invalid");
   return { kind: kind as ArtifactOperationKind, parent_operation_id: parent, publication };
 }
 
