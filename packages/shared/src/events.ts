@@ -23,6 +23,10 @@ export type TurnErrorCode =
   | "operation_conflict"
   | "operation_cancelled"
   | "turn_failed"
+  | "provider_auth_required"
+  | "provider_usage_limited"
+  | "provider_quota_exhausted"
+  | "provider_model_unavailable"
   | "deck_source_page_limit";
 
 /**

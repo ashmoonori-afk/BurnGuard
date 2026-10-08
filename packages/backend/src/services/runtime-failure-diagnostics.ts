@@ -149,6 +149,10 @@ function failureStage(code: RuntimeFailureCode): RuntimeFailureStage {
       return "publication";
     case "graphic_starter_unchanged":
     case "turn_failed":
+    case "provider_auth_required":
+    case "provider_usage_limited":
+    case "provider_quota_exhausted":
+    case "provider_model_unavailable":
       return "generation";
     default: {
       const exhaustive: never = code;

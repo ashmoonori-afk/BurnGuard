@@ -51,6 +51,10 @@ const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {
   operation_conflict: "chat.error.operationConflict",
   operation_cancelled: "chat.error.operationCancelled",
   turn_failed: "chat.error.turnFailed",
+  provider_auth_required: "chat.error.providerAuthRequired",
+  provider_usage_limited: "chat.error.providerUsageLimited",
+  provider_quota_exhausted: "chat.error.providerQuotaExhausted",
+  provider_model_unavailable: "chat.error.providerModelUnavailable",
   deck_source_page_limit: "chat.error.deckSourcePageLimit",
 };
 

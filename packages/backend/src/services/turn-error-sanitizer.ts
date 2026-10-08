@@ -25,6 +25,10 @@ const COPY: Readonly<Record<TurnErrorCode, string>> = {
   operation_conflict: "다른 작업이 진행 중이에요. 잠시 후 다시 시도해 주세요.",
   operation_cancelled: "작업이 취소되었어요.",
   turn_failed: "요청을 처리하지 못했어요. 다시 시도해 주세요.",
+  provider_auth_required: "The provider needs you to sign in again. Check the connection in Settings.",
+  provider_usage_limited: "The provider usage limit or rate limit was reached. Try again later.",
+  provider_quota_exhausted: "The provider account has no credit or quota left. Check the account plan.",
+  provider_model_unavailable: "The selected model is not available for this account. Choose another model.",
   deck_source_page_limit: `내용 자료의 페이지가 슬라이드 한도(${DECK_SOURCE_PAGE_LIMIT}장)를 넘어 1:1로 옮길 수 없어요. 페이지 수 유지를 끄거나 자료를 나눠 주세요.`,
 };
 
@@ -161,6 +165,10 @@ function knownCode(candidate: string | undefined): TurnErrorCode | undefined {
     case "operation_cancelled":
     case "publication_failed":
     case "turn_failed":
+    case "provider_auth_required":
+    case "provider_usage_limited":
+    case "provider_quota_exhausted":
+    case "provider_model_unavailable":
     case "deck_source_page_limit":
       return candidate;
     case "stage_attachment_input_invalid":

@@ -5,6 +5,7 @@ import path from "node:path";
 import { logsDir } from "../src/lib/paths";
 import { getSqlite } from "../src/db/sqlite-client";
 import { runMigrations } from "../src/db/migrate-local";
+import { parsePersistedNormalizedEvent } from "../src/db/event-sequence-repository";
 import { broker, sequencedBroker } from "../src/services/broker";
 import { persistAndPublish } from "../src/services/turns";
 import { LogoDeliverableError } from "../src/services/logo-deliverables";
@@ -245,6 +246,22 @@ describe("turn error event boundary", () => {
     const sanitized = sanitizeTurnEvent({ id: "r", ts: 1, type: "status.error", message: "x", recoverable: true, ...claim } as never);
     expect(sanitized).not.toHaveProperty("reason");
     expect(sanitized).not.toHaveProperty("notApplied");
+  });
+
+  test.each([
+    "provider_auth_required", "provider_usage_limited", "provider_quota_exhausted", "provider_model_unavailable",
+  ] as const)("Given the classified provider failure %s Then the code and recoverable flag survive and the message is not raw text", (code) => {
+    const sanitized = sanitizeTurnEvent({ id: "r", ts: 1, type: "status.error", code, message: code, recoverable: false });
+    expect(sanitized).toMatchObject({ type: "status.error", code, recoverable: false });
+    expect((sanitized as { message: string }).message).not.toBe(code);
+  });
+
+  test.each([
+    "provider_auth_required", "provider_usage_limited", "provider_quota_exhausted", "provider_model_unavailable",
+  ] as const)("Given the classified provider failure %s When persisted Then it reads back with its code", async (code) => {
+    await persistAndPublish("turn-error-session", { id: `provider-${code}`, ts: 6, type: "status.error", code, message: code, recoverable: false });
+    const payload = getSqlite().query<{ readonly payload_json: string }, [string]>("SELECT payload_json FROM events WHERE id=?").get(`provider-${code}`)?.payload_json ?? "";
+    expect(parsePersistedNormalizedEvent(payload, `provider-${code}`)).toMatchObject({ code, recoverable: false });
   });
 
   test("Given a well-formed not-applied notice Then it is preserved", () => {
