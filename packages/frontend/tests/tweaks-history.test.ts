@@ -52,6 +52,12 @@ describe("undoChordDirection", () => {
     expect(chord({ key: "\u315b", code: "KeyY", ctrlKey: true })).toBe("redo");
   });
 
+  test("Given a Latin letter key on a non-QWERTY layout When classifying Then the key wins over the physical code", () => {
+    expect(chord({ key: "y", code: "KeyZ", ctrlKey: true })).toBe("redo");
+    expect(chord({ key: "f", code: "KeyY", ctrlKey: true })).toBeNull();
+    expect(chord({ key: "w", code: "KeyZ", ctrlKey: true })).toBeNull();
+  });
+
   test("Given no modifier, Alt, or another key When classifying Then nothing matches", () => {
     expect(chord({ key: "z", code: "KeyZ" })).toBeNull();
     expect(chord({ key: "z", code: "KeyZ", ctrlKey: true, altKey: true })).toBeNull();

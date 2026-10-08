@@ -44,11 +44,13 @@ export interface UndoChordEvent {
 
 /**
  * Cmd/Ctrl+Z undoes, Cmd/Ctrl+Shift+Z redoes, and Ctrl+Y (the Windows/Linux convention) redoes.
- * `code` is matched alongside `key` so non-Latin layouts (for example Korean) still trigger.
+ * A Latin `key` decides alone (`code` names a US-layout position, wrong on QWERTZ/AZERTY/Dvorak);
+ * `code` is consulted only when `key` is not an ASCII letter (for example Korean or Cyrillic layouts).
  */
 export function undoChordDirection(event: UndoChordEvent): "undo" | "redo" | null {
   if (!(event.ctrlKey || event.metaKey) || event.altKey) return null;
-  if (event.key.toLowerCase() === "z" || event.code === "KeyZ") return event.shiftKey ? "redo" : "undo";
-  if ((event.key.toLowerCase() === "y" || event.code === "KeyY") && event.ctrlKey && !event.metaKey && !event.shiftKey) return "redo";
+  const letter = /^[a-z]$/i.test(event.key) ? event.key.toLowerCase() : event.code === "KeyZ" ? "z" : event.code === "KeyY" ? "y" : "";
+  if (letter === "z") return event.shiftKey ? "redo" : "undo";
+  if (letter === "y" && event.ctrlKey && !event.metaKey && !event.shiftKey) return "redo";
   return null;
 }
