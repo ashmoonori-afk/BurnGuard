@@ -12,3 +12,12 @@ export function installLeaveGuard(target: UnloadTarget = window): () => void {
   target.addEventListener("beforeunload", confirmLeave);
   return () => target.removeEventListener("beforeunload", confirmLeave);
 }
+
+/** For reloads the app starts itself (after an update or a backend restart): the leave prompt must not fire. */
+export function reloadWithoutLeaveGuard(
+  target: UnloadTarget = window,
+  location: Pick<Location, "reload"> = window.location,
+): void {
+  target.removeEventListener("beforeunload", confirmLeave);
+  location.reload();
+}

@@ -34,6 +34,7 @@ import {
 import { useUIStore } from "@/state/uiStore";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { appUpdateView } from "@/lib/app-update-state";
+import { reloadWithoutLeaveGuard } from "@/lib/leave-guard";
 import { INTERRUPT_GRACE_MS } from "@/lib/session-event-state";
 
 import { t, useT, type MessageKey } from "@/i18n/t";
@@ -147,7 +148,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
     }
     try {
       await waitForAppRestart();
-      window.location.reload();
+      reloadWithoutLeaveGuard();
     } catch {
       setUpdateError("settings.updateDisconnected");
       setUpdateApplying(false);
