@@ -24,7 +24,7 @@ Make websites, slides and graphics with AI, refine them on canvas and keep the f
 | Where files live | On your computer (`~/.burnguard`) | Claude's hosted workspace; export or save as a folder | Local-first desktop app; Docker self-hosting |
 | Design-system rules | 41 bundled themes, each with navigation, hero and footer layout rules; add your own from files, websites, repositories or Figma | Built from your codebase and design files; admins can lock one approved system | `DESIGN.md` design systems, skills and plugins |
 | Canvas edit | Select, resize, rotate, typography, spacing and colors on the canvas; pinned comments | Inline comments, direct text edits, generated sliders; drag, resize and align | Iterate with the agent beside a sandboxed preview; comment-mode edits partially shipped (its roadmap) |
-| Export formats | HTML ZIP, PDF, PPTX, PNG, PNG bundle, SVG, handoff package, Cafe24 and Imweb packages | PDF, PPTX, standalone HTML, folder; Canva and other connectors; Claude Code handoff | HTML, PDF, PPTX, ZIP, Markdown, MP4 |
+| Export formats | HTML ZIP, PDF, PPTX, PNG, PNG bundle, SVG (logos), handoff package, Cafe24 and Imweb packages | PDF, PPTX, standalone HTML, folder; Canva and other connectors; Claude Code handoff | HTML, PDF, PPTX, ZIP, Markdown, MP4 |
 | Publish | Publish to your own Vercel account with your token (one click once the token is saved in Settings and the export is verified) | Organization-scoped links; connectors including Vercel | Not documented in its README |
 | OS | Windows 10/11 x64; macOS 14+ on Apple silicon | Web and Claude apps, Claude Code | macOS (Apple silicon and Intel), Windows x64; Linux from source |
 
@@ -69,11 +69,11 @@ These examples illustrate the bundled themes' default designs. Existing system p
 | Websites | Linked pages, shared styles, images and reusable components | HTML/CSS/JS/assets ZIP, or publish to your Vercel account |
 | Slide decks | Slide previews, typography, presentation mode and comments | HTML, PDF or PPTX |
 | Graphics | Custom artboard sizes, posters and multi-frame compositions | PNG, PNG bundle or PDF |
-| Logos | Design explorations across multiple rounds, select one as the master | SVG master, brand-guidelines PDF or HTML archive, design tokens¹ |
+| Logos | Design explorations across multiple rounds, select one as the master | SVG master¹, brand-guidelines PDF or HTML archive |
 | Product detail pages | Long pages with section imagery | Section-aware PNG/JPEG slices |
 | Platform pages | Cafe24 Smart Design or Imweb code-widget output | Packages with manual installation guides |
 
-¹ SVG export is available for logo projects only.
+¹ SVG master export is available for logo projects only.
 
 ![BurnGuard slide editor showing the SONNEL deck with presentation and export controls](doc/images/readme-slide-workspace.png)
 
@@ -105,7 +105,7 @@ Explore **SONNEL**, **FOLIOVER**, **ODDWARD**, **VELUNE** and **HALIDE**. Each o
 ## Get started
 
 1. **Install.** Download a Windows or macOS package from [GitHub Releases](https://github.com/ashmoonori-afk/BurnGuard/releases/latest). On Windows, use the installer or extract the complete portable ZIP and open `BurnGuard.exe`. On macOS, use the installer or move the portable app into Applications. Packages are currently unsigned.
-   - **On macOS:** The first launch is blocked by Gatekeeper. Try opening the app once, then go to **System Settings > Privacy & Security > Open Anyway**. Alternatively, in Terminal run: `xattr -dr com.apple.quarantine "/Applications/BurnGuard Design.app"` (replace with your exact .app bundle name). Note: On macOS 15+, Control-click to open no longer bypasses this; use the System Settings path instead.
+   - **On macOS:** The first launch is blocked by Gatekeeper. Try opening the app once, then go to **System Settings > Privacy & Security > Open Anyway**. Alternatively, in Terminal run: `xattr -dr com.apple.quarantine "/Applications/BurnGuard.app"`. Note: On macOS 15+, Control-click to open no longer bypasses this; use the System Settings path instead.
    - **On Windows:** SmartScreen may show "Windows protected your PC" for the unsigned Setup.exe or portable .exe. Click **More info**, then **Run anyway**.
 2. **Explore an example.** Open a bundled project and try the canvas before connecting an AI provider.
 3. **Connect your CLI.** Install and authenticate Claude Code or Codex CLI, then choose the connection and model in Settings. **Medium effort and vanilla mode are the defaults.** Vanilla mode excludes personal plugins and instructions while keeping BurnGuard's project context.
