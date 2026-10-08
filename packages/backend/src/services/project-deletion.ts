@@ -73,25 +73,37 @@ export async function reconcileProjectDeletions(db: Database, root = projectsDir
   const trash = resolveWithin(root, ".deletions");
   if (!existsSync(trash)) return;
   for (const entry of await readdir(trash, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.isSymbolicLink()) throw new ProjectDeletionError("project_delete_failed");
-    const id = assertSafeName(entry.name);
+    // Stray files (.DS_Store) and unrecognized tombstones are left untouched; one must never lock out every project.
+    if (!entry.isDirectory() || entry.isSymbolicLink()) { console.warn("[project] skipped unexpected deletion entry"); continue; }
+    const plan = readDeletionPlan(root, trash, entry.name);
+    if (plan === null) { console.warn("[project] quarantined unreadable deletion receipt", entry.name); continue; }
+    const { id, tombstone, original, files } = plan;
+    const project = db.query<{ dir_path: string }, [string]>("SELECT dir_path FROM projects WHERE id=?").get(id);
+    if (project === null) await rm(tombstone, { recursive: true, force: true });
+    else {
+      let expected: string | null = null;
+      try { expected = resolveManagedPath(root, project.dir_path); } catch { /* handled below */ }
+      if (expected !== original) { console.warn("[project] quarantined deletion receipt that does not match its project", id); continue; }
+      if (existsSync(files)) {
+        if (existsSync(original)) throw new ProjectDeletionError("project_delete_failed");
+        renameSync(files, original);
+      } else if (!existsSync(original)) { console.warn("[project] quarantined deletion receipt without recoverable files", id); continue; }
+      await rm(tombstone, { recursive: true, force: true });
+    }
+  }
+}
+
+/** Returns null when the tombstone or its receipt is unreadable or malformed; the tombstone is then left in place. */
+function readDeletionPlan(root: string, trash: string, name: string): { readonly id: string; readonly tombstone: string; readonly original: string; readonly files: string } | null {
+  try {
+    const id = assertSafeName(name);
     const tombstone = resolveWithin(trash, id);
     const receipt: unknown = JSON.parse(readFileSync(resolveWithin(tombstone, "receipt.json"), "utf8"));
     if (typeof receipt !== "object" || receipt === null || Array.isArray(receipt) || Object.keys(receipt).sort().join(",") !== "project_id,schema_version,source_relative_path"
       || !("schema_version" in receipt) || receipt.schema_version !== 1 || !("project_id" in receipt) || receipt.project_id !== id
-      || !("source_relative_path" in receipt) || typeof receipt.source_relative_path !== "string" || receipt.source_relative_path.length === 0) throw new ProjectDeletionError("project_delete_failed");
+      || !("source_relative_path" in receipt) || typeof receipt.source_relative_path !== "string" || receipt.source_relative_path.length === 0) return null;
     const original = resolveWithin(root, receipt.source_relative_path);
-    if (original === path.resolve(root) || path.relative(trash, original).split(path.sep)[0] !== "..") throw new ProjectDeletionError("project_delete_failed");
-    const files = resolveWithin(tombstone, "files");
-    const project = db.query<{ dir_path: string }, [string]>("SELECT dir_path FROM projects WHERE id=?").get(id);
-    if (project === null) await rm(tombstone, { recursive: true, force: true });
-    else {
-      if (resolveManagedPath(root, project.dir_path) !== original) throw new ProjectDeletionError("project_delete_failed");
-      if (existsSync(files)) {
-        if (existsSync(original)) throw new ProjectDeletionError("project_delete_failed");
-        renameSync(files, original);
-      } else if (!existsSync(original)) throw new ProjectDeletionError("project_delete_failed");
-      await rm(tombstone, { recursive: true, force: true });
-    }
-  }
+    if (original === path.resolve(root) || path.relative(trash, original).split(path.sep)[0] !== "..") return null;
+    return { id, tombstone, original, files: resolveWithin(tombstone, "files") };
+  } catch { return null; }
 }

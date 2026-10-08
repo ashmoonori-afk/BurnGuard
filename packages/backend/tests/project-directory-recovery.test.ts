@@ -67,13 +67,13 @@ test("Given a moved project with a working receipt When startup runs and its fol
   expect(await readFile(path.join(missing, "index.html"), "utf8")).toBe("preserved bytes");
 });
 
-test("Given an existing root with missing recovery bytes When startup reconciles Then receipt errors remain fatal instead of being classified as an absent project", async () => {
+test("Given an existing root with missing recovery bytes When startup reconciles Then the project is unavailable with its receipt code instead of being classified as an absent project", async () => {
   await new ArtifactCoordinator(db).initialize("healthy", healthy);
   const operation = db.query<{ id: string; snapshot_json: string }, []>("SELECT id,snapshot_json FROM artifact_operations WHERE project_id='healthy'").get()!;
   db.prepare("UPDATE artifact_operations SET status='working',result_revision=NULL,result_digest=NULL WHERE id=?").run(operation.id);
   const snapshot = JSON.parse(operation.snapshot_json) as { snapshot_path: string };
   await rename(snapshot.snapshot_path, path.join(root, "retained-snapshot"));
-  await expect(reconcileArtifactState(db)).rejects.toMatchObject({ code: "tree_missing" });
+  expect((await reconcileArtifactState(db)).unavailableProjects).toEqual([{ projectId: "healthy", code: "tree_missing" }]);
   expect(await readFile(path.join(healthy, "index.html"), "utf8")).toBe("healthy bytes");
   expect(db.query("SELECT status FROM artifact_operations WHERE id=?").get(operation.id)).toEqual({ status: "recovering" });
 });

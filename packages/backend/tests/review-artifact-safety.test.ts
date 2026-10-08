@@ -90,8 +90,54 @@ test("Given an unrecognized deletion directory When startup reconciles Then unre
   const unknown = path.join(root, ".deletions", "unknown");
   await mkdir(unknown, { recursive: true });
   await writeFile(path.join(unknown, "keep.txt"), "keep");
-  await expect(reconcileProjectDeletions(db, root)).rejects.toThrow();
+  await reconcileProjectDeletions(db, root);
   expect(await readFile(path.join(unknown, "keep.txt"), "utf8")).toBe("keep");
+});
+
+test("Given a stray file in the deletions folder When startup reconciles Then it is skipped and a real tombstone is still processed", async () => {
+  const tombstone = path.join(root, ".deletions", "p");
+  await mkdir(tombstone, { recursive: true });
+  await writeFile(path.join(tombstone, "receipt.json"), JSON.stringify({ schema_version: 1, project_id: "p", source_relative_path: "p" }));
+  await rename(projectDir, path.join(tombstone, "files"));
+  await writeFile(path.join(root, ".deletions", ".DS_Store"), "junk");
+  await reconcileProjectDeletions(db, root);
+  expect(await readFile(path.join(root, ".deletions", ".DS_Store"), "utf8")).toBe("junk");
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("base");
+});
+
+test("Given a tombstone with a corrupt receipt When startup reconciles Then its bytes are kept and startup continues", async () => {
+  const corrupt = path.join(root, ".deletions", "corrupt");
+  await mkdir(path.join(corrupt, "files"), { recursive: true });
+  await writeFile(path.join(corrupt, "files", "a.txt"), "keep");
+  await writeFile(path.join(corrupt, "receipt.json"), "{ not json");
+  await reconcileProjectDeletions(db, root);
+  expect(await readFile(path.join(corrupt, "files", "a.txt"), "utf8")).toBe("keep");
+  expect(existsSync(path.join(corrupt, "receipt.json"))).toBe(true);
+});
+
+test("Given a valid receipt whose restore would overwrite a directory When startup reconciles Then it still fails closed", async () => {
+  const tombstone = path.join(root, ".deletions", "p");
+  await mkdir(path.join(tombstone, "files"), { recursive: true });
+  await writeFile(path.join(tombstone, "receipt.json"), JSON.stringify({ schema_version: 1, project_id: "p", source_relative_path: "p" }));
+  await expect(reconcileProjectDeletions(db, root)).rejects.toMatchObject({ code: "project_delete_failed" });
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("base");
+});
+
+test("Given one project with a damaged meta folder next to a healthy project When startup reconciles Then only the damaged one is unavailable", async () => {
+  const coordinator = new ArtifactCoordinator(db);
+  await coordinator.initialize("p", projectDir);
+  const healthyDir = path.join(root, "healthy");
+  await mkdir(healthyDir);
+  await writeFile(path.join(healthyDir, "index.html"), "ok");
+  db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES ('h','H','prototype',?,'index.html','codex',1,1)").run(healthyDir);
+  await coordinator.initialize("h", healthyDir);
+  await rm(path.join(projectDir, ".meta"), { recursive: true, force: true });
+  await writeFile(path.join(projectDir, "index.html"), "drifted");
+  const result = await reconcileArtifactState(db);
+  expect(result.unavailableProjects).toEqual([{ projectId: "p", code: "recovery_unavailable" }]);
+  expect(result.projects).toBe(1);
+  await writeFile(path.join(healthyDir, "index.html"), "edited");
+  expect(await coordinator.observeExternal("h", healthyDir)).not.toBeNull();
 });
 
 test("Given a legacy path outside managed storage When deleting Then external bytes remain", async () => {
