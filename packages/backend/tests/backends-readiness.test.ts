@@ -41,6 +41,8 @@ if (process.argv[2] === "--version") {
   if (readFileSync(root + "/mode", "utf8") === "version-timeout") {
     writeFileSync(root + "/version-pid", String(process.pid));
     setInterval(() => {}, 60_000);
+  } else if (readFileSync(root + "/mode", "utf8") === "version-two-part") {
+    console.log("fixture-cli 2.1"); process.exit(0);
   } else if (readFileSync(root + "/mode", "utf8") === "version-fail") {
     process.exit(3);
   } else if (readFileSync(root + "/mode", "utf8") === "version-output-limit") {
@@ -261,5 +263,12 @@ test("Given a found CLI that prints a version When detecting Then probe_failed i
   await mode("login");
   const backend = codex(await detectBackends({ force: true }));
   expect(backend.version).toBe("1.2.3");
+  expect(backend.probe_failed).toBeUndefined();
+});
+
+test("Given a working CLI that prints a two-part version When detecting Then it is ready, not probe_failed", async () => {
+  await mode("version-two-part");
+  const backend = codex(await detectBackends({ force: true, requireCodexAuthentication: false, skipCodexAuthentication: true }));
+  expect(backend.version).toBe("2.1");
   expect(backend.probe_failed).toBeUndefined();
 });

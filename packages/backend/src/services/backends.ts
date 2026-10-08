@@ -107,7 +107,9 @@ async function probeVersion(binaryPath: string): Promise<string | undefined> {
       readBoundedProbeText(proc.stdout).then(text => { stdout = text; }),
       readBoundedProbeText(proc.stderr).then(text => { stderr = text; }),
     ], controller.signal);
-    return !controller.signal.aborted && code === 0 ? /\b\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?\b/.exec(stdout || stderr)?.[0] : undefined;
+    return !controller.signal.aborted && code === 0 ? /\b\d+(?:\.\d+){0,2}(?:[-+][a-zA-Z0-9.-]+)?\b/.exec(stdout || stderr)?.[0] : undefined;
+  } catch {
+    return undefined; // spawn failure: the binary is on PATH but cannot run
   } finally {
     clearTimeout(timer);
   }
@@ -129,12 +131,7 @@ async function detectOne(id: BackendId, binaryNames: string[], installHint: stri
     const binaryPath = Bun.which(name);
     if (!binaryPath) continue;
 
-    let version: string | undefined;
-    try {
-      version = await probeVersion(binaryPath);
-    } catch {
-      version = undefined;
-    }
+    const version = await probeVersion(binaryPath);
     // `probeVersion` answers undefined for a non-zero exit, a timeout or unparseable output.
     return version === undefined
       ? { id, found: true, probe_failed: true, binary_path: binaryPath } as const

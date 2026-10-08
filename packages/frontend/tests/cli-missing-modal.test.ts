@@ -54,8 +54,20 @@ test("Given a probe-failed CLI When the backend selector renders Then it is the 
 
   expect(html).toContain('data-probe-state="probe_failed"');
   expect(html).toContain('data-probe-state="missing"');
-  expect(html).toContain(t("settings.backendProbeFailed", { command: BACKEND_PROBE_COMMANDS.gemini }));
+  expect(html).toContain(t("errors.probeFailed", { command: BACKEND_PROBE_COMMANDS.gemini }));
   expect(html).toContain(BACKEND_INSTALL_URLS.gemini);
   expect(html).toContain(BACKEND_INSTALL_URLS.copilot);
   expect(html).not.toContain(t("settings.backendInstalled"));
+});
+
+test("Given any backend state When the backend selector renders Then no link is nested inside a button", () => {
+  const detection: BackendDetectionResult = { backends: [{ id: "gemini", found: true, probe_failed: true }, { id: "copilot", found: false, install_hint: "x" }, { id: "codex", found: true, version: "1.2.3" }] };
+
+  const html = renderToStaticMarkup(createElement(BackendSelector, { value: "codex", onChange: () => {}, detection }));
+
+  const buttons = html.match(/<button[\s\S]*?<\/button>/g) ?? [];
+  expect(buttons.length).toBe(3);
+  for (const button of buttons) expect(button).not.toContain("<a ");
+  expect(html).toContain(BACKEND_INSTALL_URLS.gemini);
+  expect(html).toContain(BACKEND_INSTALL_URLS.copilot);
 });

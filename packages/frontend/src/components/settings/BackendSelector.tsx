@@ -24,55 +24,58 @@ export default function BackendSelector({
           const active = value === b.id;
           const state = backendProbeState(b);
           return (
-            <button
+            <div
               key={b.id}
               data-probe-state={state}
-              type="button"
-              aria-pressed={active}
-              onClick={() => b.found && onChange(b.id)}
-              disabled={!b.found}
               className={cn(
-                "w-full rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                active
-                  ? "border-accent bg-accent/5"
-                  : "border-border hover:bg-muted/50",
-                !b.found && "opacity-60 cursor-not-allowed",
+                "rounded-xl border transition-colors",
+                active ? "border-accent bg-accent/5" : "border-border",
+                !b.found && "opacity-60",
               )}
             >
-              <div className="flex items-center gap-2">
-                {state === "ready" ? (
-                  <Check className="h-4 w-4 text-accent shrink-0" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+              <button
+                type="button"
+                aria-pressed={active}
+                onClick={() => b.found && onChange(b.id)}
+                disabled={!b.found}
+                className={cn(
+                  "w-full rounded-xl p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  b.found ? "hover:bg-muted/50" : "cursor-not-allowed",
                 )}
-                <span className="text-sm font-medium capitalize">
-                  {backendLabel(b.id)}
-                </span>
-                {state === "ready" && b.version && (
-                  <span className="text-xs text-muted-foreground font-mono ml-auto">
-                    {b.version}
+              >
+                <div className="flex items-center gap-2">
+                  {state === "ready" ? (
+                    <Check className="h-4 w-4 text-accent shrink-0" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <span className="text-sm font-medium capitalize">
+                    {backendLabel(b.id)}
                   </span>
+                  {state === "ready" && b.version && (
+                    <span className="text-xs text-muted-foreground font-mono ml-auto">
+                      {b.version}
+                    </span>
+                  )}
+                </div>
+                {state === "ready" && (
+                  <div className="text-xs text-muted-foreground mt-2">
+                    {t(b.id === "codex" ? b.authenticated === true ? "settings.codexAuthenticated" : "settings.codexInstalled" : b.id === "claude-code" ? "settings.claudeInstalled" : "settings.backendInstalled")}
+                  </div>
                 )}
-              </div>
-              {state === "probe_failed" ? (
-                <div className="text-xs text-muted-foreground mt-2 space-y-1">
-                  <div>{t("settings.backendProbeFailed", { command: BACKEND_PROBE_COMMANDS[b.id] })}</div>
-                  <a href={BACKEND_INSTALL_URLS[b.id]} target="_blank" rel="noreferrer" className="text-accent inline-flex items-center gap-1">
-                    <ExternalLink className="h-3 w-3" />
-                    {t("settings.installBackend", { name: backendLabel(b.id) })}
-                  </a>
-                </div>
-              ) : state === "ready" ? (
-                <div className="text-xs text-muted-foreground mt-2">
-                  {t(b.id === "codex" ? b.authenticated === true ? "settings.codexAuthenticated" : "settings.codexInstalled" : b.id === "claude-code" ? "settings.claudeInstalled" : "settings.backendInstalled")}
-                </div>
-              ) : (
-                <a href={BACKEND_INSTALL_URLS[b.id]} target="_blank" rel="noreferrer" className="text-xs text-muted-foreground mt-2 inline-flex items-center gap-1">
+                {state === "probe_failed" && (
+                  <div className="text-xs text-muted-foreground mt-2">
+                    {t("errors.probeFailed", { command: BACKEND_PROBE_COMMANDS[b.id] })}
+                  </div>
+                )}
+              </button>
+              {state !== "ready" && (
+                <a href={BACKEND_INSTALL_URLS[b.id]} target="_blank" rel="noreferrer" className="text-xs text-accent px-4 pb-4 -mt-2 inline-flex items-center gap-1">
                   <ExternalLink className="h-3 w-3" />
                   {t("settings.installBackend", { name: backendLabel(b.id) })}
                 </a>
               )}
-            </button>
+            </div>
           );
         })}
       </div>
