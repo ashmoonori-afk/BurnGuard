@@ -407,7 +407,8 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// PATH entries of the user's login shell, resolved once per start; any failure or timeout yields no entries and the value is never logged.
+    /// PATH entries of the user's login shell; any failure or timeout yields no entries and the value is never logged.
+    /// Runs on a background queue; the 3 s deadline covers both the shell exit and the end of its output.
     private func loginShellPathEntries() -> [String] {
         var shell = "/bin/zsh"
         if let value = ProcessInfo.processInfo.environment["SHELL"], !value.isEmpty {
@@ -419,26 +420,63 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
 
         let probe = Process()
         let pipe = Pipe()
-        let finished = DispatchSemaphore(value: 0)
+        let exited = DispatchSemaphore(value: 0)
+        let drained = DispatchSemaphore(value: 0)
+        let lock = NSLock()
+        var collected = Data()
         probe.executableURL = URL(fileURLWithPath: shell)
-        probe.arguments = ["-l", "-c", "printf %s \"$PATH\""]
+        // zsh keeps nvm/fnm setup in ~/.zshrc, which only interactive shells read.
+        let flags = URL(fileURLWithPath: shell).lastPathComponent == "zsh" ? ["-i", "-l", "-c"] : ["-l", "-c"]
+        probe.arguments = flags + ["printf '__BG_PATH__%s__BG_PATH__' \"$PATH\""]
         probe.standardInput = FileHandle.nullDevice
         probe.standardOutput = pipe
         probe.standardError = FileHandle.nullDevice
-        probe.terminationHandler = { _ in finished.signal() }
-        do { try probe.run() } catch { return [] }
-        try? pipe.fileHandleForWriting.close()
-        if finished.wait(timeout: .now() + 3) == .timedOut {
-            probe.terminate()
+        probe.terminationHandler = { _ in exited.signal() }
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            // At EOF the handler keeps firing with empty data until it is cleared.
+            if data.isEmpty { handle.readabilityHandler = nil; drained.signal(); return }
+            lock.lock(); collected.append(data); lock.unlock()
+        }
+        do { try probe.run() } catch {
+            pipe.fileHandleForReading.readabilityHandler = nil
             return []
         }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        // Startup files may print noise first; the PATH is the last line and only absolute entries are kept.
-        guard let text = String(data: data, encoding: .utf8), let line = text.split(whereSeparator: { $0 == "\n" }).last else { return [] }
-        return line.split(separator: ":").map(String.init).filter { $0.hasPrefix("/") }
+        try? pipe.fileHandleForWriting.close()
+        let deadline = DispatchTime.now() + 3
+        guard exited.wait(timeout: deadline) == .success, drained.wait(timeout: deadline) == .success else {
+            pipe.fileHandleForReading.readabilityHandler = nil
+            if probe.isRunning { probe.terminate() }
+            return []
+        }
+        lock.lock(); let data = collected; lock.unlock()
+        // Startup files may print noise around the value; only the text between the markers counts and only absolute entries are kept.
+        guard let text = String(data: data, encoding: .utf8),
+              let end = text.range(of: "__BG_PATH__", options: .backwards),
+              let start = text[..<end.lowerBound].range(of: "__BG_PATH__", options: .backwards) else { return [] }
+        return text[start.upperBound..<end.lowerBound].split(separator: ":").map(String.init).filter { $0.hasPrefix("/") }
     }
 
-    /// Well-known Node manager directories that exist on disk; the newest nvm version wins.
+    /// Installed nvm version directory for the `default` alias, else the newest installed version.
+    private func nvmVersionDirectory(home: String, versions: [String]) -> String? {
+        let numeric: (String, String) -> Bool = { $0.compare($1, options: .numeric) == .orderedAscending }
+        let newest = versions.sorted(by: numeric).last
+        var alias = (try? String(contentsOfFile: home + "/.nvm/alias/default", encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Aliases may point at other aliases (default -> lts/* -> lts/iron -> v20.x).
+        for _ in 0..<4 {
+            guard let value = alias, !value.isEmpty else { break }
+            let bare = value.hasPrefix("v") ? String(value.dropFirst()) : value
+            if let first = bare.first, first.isNumber {
+                let matches = versions.filter { $0 == "v" + bare || $0.hasPrefix("v" + bare + ".") }
+                if let match = matches.sorted(by: numeric).last { return match }
+                break
+            }
+            alias = (try? String(contentsOfFile: home + "/.nvm/alias/" + value, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return newest
+    }
+
+    /// Well-known Node manager directories that exist on disk; the nvm default alias wins over the newest nvm version.
     private func managerPathEntries() -> [String] {
         let home = NSHomeDirectory()
         let fileManager = FileManager.default
@@ -450,8 +488,8 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         ]
         let nvmRoot = home + "/.nvm/versions/node"
         if let versions = try? fileManager.contentsOfDirectory(atPath: nvmRoot),
-           let newest = versions.sorted(by: { $0.compare($1, options: .numeric) == .orderedAscending }).last {
-            candidates.append(nvmRoot + "/" + newest + "/bin")
+           let version = nvmVersionDirectory(home: home, versions: versions) {
+            candidates.append(nvmRoot + "/" + version + "/bin")
         }
         return candidates.filter { fileManager.fileExists(atPath: $0) }
     }
@@ -462,7 +500,17 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         guard FileManager.default.isExecutableFile(atPath: serviceURL.path) else {
             throw NSError(domain: "BurnGuard", code: 1, userInfo: [NSLocalizedDescriptionKey: "Contents/MacOS/burnguard-design is missing or not executable."])
         }
+        // The login-shell probe may take a few seconds; keep the main thread free and launch the backend once it answers.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let loginEntries = self?.loginShellPathEntries() ?? []
+            DispatchQueue.main.async {
+                guard let self, !self.closing else { return }
+                do { try self.launchService(serviceURL: serviceURL, loginEntries: loginEntries) } catch { self.fail(error.localizedDescription) }
+            }
+        }
+    }
 
+    private func launchService(serviceURL: URL, loginEntries: [String]) throws {
         let input = Pipe()
         let output = Pipe()
         let errorOutput = Pipe()
@@ -472,7 +520,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         let searchPath = (environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin").split(separator: ":").map(String.init)
         let fixedPaths = [NSHomeDirectory() + "/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.bun/bin"]
         var merged: [String] = []
-        for entry in loginShellPathEntries() + fixedPaths + searchPath + managerPathEntries() where !merged.contains(entry) {
+        for entry in loginEntries + fixedPaths + searchPath + managerPathEntries() where !merged.contains(entry) {
             merged.append(entry)
         }
         environment["PATH"] = merged.joined(separator: ":")
