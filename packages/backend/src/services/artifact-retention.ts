@@ -5,6 +5,9 @@ import { projectsDir, resolveManagedPath } from "../lib/paths";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
 import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } from "./artifact-operation-record";
 
+/** Operation copies, including captured external edits, stay restorable for 30 days. */
+export const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 /** Terminal operation copies expire after their recorded 30-day retention period. */
 export async function pruneExpiredArtifactOperations(db: Database, options: { readonly now?: number; readonly projectId?: string; readonly preserveOperationId?: string; readonly projectsRoot?: string } = {}): Promise<number> {
   const now = options.now ?? Date.now();

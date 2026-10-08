@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { chmod, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import type { NormalizedEvent } from "@bg/shared";
 import { runCliTurn } from "../src/adapters/cli-turn";
+import { runClaudeCode } from "../src/adapters/claude-code/runner";
+import { runCodexTurn } from "../src/adapters/codex";
 import { parseGeminiLine } from "../src/adapters/gemini/parser";
 import { parseCopilotLine } from "../src/adapters/copilot/parser";
 
@@ -117,3 +119,24 @@ test("Given spawn failure, then the decision subscription and private task are r
     expect(await readdir(path.join(root, ".burnguard-inputs"))).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+for (const adapter of ["claude-code", "codex"] as const) {
+  test(`Given a ${adapter} CLI that writes an unterminated line over 2 MiB When the runner reads it Then provider_stream_limit is thrown`, async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-runner-limit-"));
+    const script = path.join(root, "provider-fixture.cjs");
+    await writeFile(script, `${process.platform === "win32" ? "" : `#!${process.execPath}\n`}process.stdout.write("x".repeat(${2 * 1024 * 1024 + 1}));\n`);
+    // Windows cannot execute a shebang script: launch it through a .cmd wrapper like the production resolver does.
+    let binaryPath = script;
+    if (process.platform === "win32") {
+      binaryPath = path.join(root, "provider-fixture.cmd");
+      await writeFile(binaryPath, `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`);
+    } else await chmod(script, 0o700);
+    try {
+      const run = adapter === "claude-code"
+        ? runClaudeCode({ binaryPath, projectDir: root, prompt: "task", onStdoutLine: () => {} })
+        : runCodexTurn({ binaryPath, projectDir: root, prompt: "task", sessionId: "safety", turnId: ctx.turnId,
+          userEvent: { type: "user.message", text: "task" }, onEvent: async () => {} });
+      await expect(run).rejects.toThrow("provider_stream_limit");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }, 20_000);
+}

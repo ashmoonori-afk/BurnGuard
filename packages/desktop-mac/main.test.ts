@@ -29,7 +29,7 @@ function body(signature: string): string {
 
 describe("macOS service pipes", () => {
   test("Given both service pipe handlers When availableData is empty Then each handler clears its readabilityHandler", () => {
-    const service = body("private func startService()");
+    const service = body("private func launchService(serviceURL: URL, loginEntries: [String]) throws");
     const stdout = service.slice(service.indexOf("\n        output.fileHandleForReading.readabilityHandler"), service.indexOf("errorOutput.fileHandleForReading.readabilityHandler"));
     const stderr = service.slice(service.indexOf("errorOutput.fileHandleForReading.readabilityHandler"), service.indexOf("process.terminationHandler"));
     for (const handler of [stdout, stderr]) expect(handler).toMatch(/\.isEmpty \{ handle\.readabilityHandler = nil/);
@@ -37,14 +37,49 @@ describe("macOS service pipes", () => {
 });
 
 describe("macOS service environment", () => {
-  test("Given a launchd PATH When the backend environment is built Then missing user tool directories are added once ahead of the inherited entries", () => {
-    const service = body("private func startService()");
+  test("Given a launchd PATH When the backend environment is built Then login-shell, fixed and manager directories are merged once ahead of the inherited entries", () => {
+    const service = body("private func launchService(serviceURL: URL, loginEntries: [String]) throws");
     const assigned = service.indexOf('environment["PATH"] = ');
     expect(assigned).toBeGreaterThan(service.indexOf("var environment = ProcessInfo.processInfo.environment"));
     expect(assigned).toBeLessThan(service.indexOf("process.environment = environment"));
     for (const directory of ['NSHomeDirectory() + "/.local/bin"', '"/opt/homebrew/bin"', '"/usr/local/bin"', 'NSHomeDirectory() + "/.bun/bin"']) expect(service).toContain(directory);
-    expect(service).toMatch(/\.filter \{ !searchPath\.contains\(\$0\) \}/);
-    expect(service).toContain('environment["PATH"] = (userPaths + searchPath).joined(separator: ":")');
+    expect(service).toContain("loginEntries + fixedPaths + searchPath + managerPathEntries()");
+    expect(service).toMatch(/where !merged\.contains\(entry\)/);
+    expect(service).toContain('environment["PATH"] = merged.joined(separator: ":")');
+  });
+
+  test("Given a Finder launch When the login shell is probed Then it runs once off the main thread with a 3 s bound on exit and output, and the value is never logged", () => {
+    const probe = body("private func loginShellPathEntries()");
+    expect(probe).toContain('"-i", "-l", "-c"');
+    expect(probe).toContain('["-l", "-c"]');
+    expect(probe).toContain("__BG_PATH__%s__BG_PATH__");
+    expect(probe).toContain('environment["SHELL"]');
+    expect(probe).toContain("getpwuid(getuid())");
+    expect(probe).toContain('"/bin/zsh"');
+    expect(probe).toContain("exited.wait(timeout: deadline)");
+    expect(probe).toContain("drained.wait(timeout: deadline)");
+    expect(probe).toContain("DispatchTime.now() + 3");
+    expect(probe).toContain("readabilityHandler");
+    expect(probe).not.toContain("readDataToEndOfFile");
+    expect(probe).toContain("probe.terminate()");
+    expect(probe).toContain("kill(probe.processIdentifier, SIGKILL)");
+    expect(probe).toContain("probe.standardInput = FileHandle.nullDevice");
+    expect(probe).toContain("probe.standardError = FileHandle.nullDevice");
+    expect(probe).not.toMatch(/print\(|NSLog|NSAlert/);
+    const start = body("private func startService()");
+    expect(start).toContain("DispatchQueue.global(");
+    expect(start.match(/loginShellPathEntries\(\)/g)?.length).toBe(1);
+    expect(start).toContain("launchService(serviceURL: serviceURL, loginEntries: loginEntries)");
+  });
+
+  test("Given Node version managers When the manager directories are collected Then only existing known directories and the nvm default alias (newest version as fallback) are added", () => {
+    const managers = body("private func managerPathEntries()");
+    for (const directory of ['"/.volta/bin"', '"/.npm-global/bin"', '"/.local/share/fnm/aliases/default/bin"', '"/Library/Application Support/fnm/aliases/default/bin"', '"/.nvm/versions/node"']) expect(managers).toContain(directory);
+    expect(managers).toContain("nvmVersionDirectory(home: home, versions: versions)");
+    const nvm = body("private func nvmVersionDirectory(");
+    expect(nvm).toContain('"/.nvm/alias/default"');
+    expect(nvm).toContain("options: .numeric");
+    expect(managers).toContain("candidates.filter { fileManager.fileExists(atPath: $0) }");
   });
 });
 
@@ -121,7 +156,7 @@ describe("macOS shell keeps the Windows shell's desktop contract", () => {
     const windowsOrigin = /var expected = "([^"]+)" \+ port;/.exec(windowsSource)?.[1];
     expect(windowsOrigin).toBe("http://127.0.0.1:");
     expect(windowsSource).toContain('Convert.ToInt32(data["pid"]) != service.Id');
-    const service = body("private func startService()");
+    const service = body("private func launchService(serviceURL: URL, loginEntries: [String]) throws");
     expect(/expectedOrigin = "([^"\\]+)\\\(port\)"/.exec(service)?.[1]).toBe(windowsOrigin);
     const consume = body("private func consumeServiceOutput(");
     const trusted = consume.indexOf("origin = url");
@@ -131,13 +166,27 @@ describe("macOS shell keeps the Windows shell's desktop contract", () => {
     }
   });
 
+  test("Given a readiness line When either shell consumes it Then a base64url bootstrap secret is required before trust and the app loads with it as the one-time fragment", () => {
+    expect(windowsSource).toContain('!IsBootstrapSecret(bootstrap)');
+    expect(windowsSource).toContain('bootstrapSecret = bootstrap;');
+    expect(windowsSource).toMatch(/web\.CoreWebView2\.Navigate\(origin\.AbsoluteUri \+ .*\+ "#bg-bootstrap:" \+ bootstrapSecret\);/);
+    const consume = body("private func consumeServiceOutput(");
+    const trusted = consume.indexOf("origin = url");
+    for (const check of ['let bootstrap = message["bootstrap"] as? String', "isBootstrapSecret(bootstrap)", '"#bg-bootstrap:" + bootstrap']) {
+      expect(consume.indexOf(check)).toBeGreaterThan(-1);
+      expect(consume.indexOf(check)).toBeLessThan(trusted);
+    }
+    expect(consume).toContain("webView.load(URLRequest(url: launch))");
+    expect(body("private func isBootstrapSecret(")).toContain("value.utf8.count >= 16");
+  });
+
   test("Given an inherited environment When the macOS shell builds the backend environment Then BG_DEV is forced to 0 and the desktop overrides match the Windows shell", () => {
     const windows = assignments(windowsSource, "start\\.EnvironmentVariables");
-    const mac = assignments(body("private func startService()"), "environment");
+    const mac = assignments(body("private func launchService(serviceURL: URL, loginEntries: [String]) throws"), "environment");
     expect(windows.BG_DEV).toBe("0");
     for (const key of ["BG_DESKTOP", "BG_NO_OPEN", "BG_DEV"]) expect(mac[key]).toBe(windows[key]);
     expect(windowsSource).toContain('start.EnvironmentVariables.Remove("BG_SCAN_PORT")');
-    expect(body("private func startService()")).toContain('environment.removeValue(forKey: "BG_SCAN_PORT")');
+    expect(body("private func launchService(serviceURL: URL, loginEntries: [String]) throws")).toContain('environment.removeValue(forKey: "BG_SCAN_PORT")');
   });
 
   test("Given the backend binary is missing When the macOS shell reports it Then the message names the path that was actually checked", () => {
@@ -184,7 +233,7 @@ describe("macOS shutdown ordering", () => {
     expect(terminate).toContain("if proceed { self.shutdown(); return }");
     expect(terminate).toMatch(/self\.terminationReplyPending = false\s*NSApp\.reply\(toApplicationShouldTerminate: false\)/);
     expect(terminate).toMatch(/return \.terminateLater\s*\}$/);
-    const service = body("private func startService()");
+    const service = body("private func launchService(serviceURL: URL, loginEntries: [String]) throws");
     expect(service.slice(service.indexOf("process.terminationHandler"))).toContain("if self.closing { self.finishTermination(); return }");
     expect(body("private func finishTermination()")).toContain("if terminationReplyPending { NSApp.reply(toApplicationShouldTerminate: true) } else { NSApp.terminate(nil) }");
   });
