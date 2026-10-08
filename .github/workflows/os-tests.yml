@@ -83,7 +83,8 @@ jobs:
           packages/backend/tests/vercel-publish.test.ts
           packages/backend/tests/path-boundary.test.ts
           packages/desktop-mac/main.test.ts
-          packages/desktop-windows/i18n.test.ts
+          packages/desktop-windows/close-guard.test.ts
+          packages/frontend/tests/leave-guard.test.ts
           packages/backend/tests/config-storage.test.ts
           packages/backend/tests/native-binding.test.ts
           packages/backend/tests/python-runtime.test.ts
