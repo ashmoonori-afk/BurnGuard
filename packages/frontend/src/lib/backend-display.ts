@@ -69,6 +69,14 @@ function canDraw(backend: BackendDetection): boolean {
     || (backend.models ?? []).some((model) => model.image_generation === true && canGenerateGraphics(backend, model.id));
 }
 
+/**
+ * Whether Home should offer the CLI guidance entry. A detected CLI whose version probe failed is on
+ * PATH but not usable, so only a `ready` backend hides the entry; ready states keep it out of the way.
+ */
+export function needsCliGuidance(backends: readonly BackendDetection[]): boolean {
+  return backends.every((backend) => backendProbeState(backend) !== "ready");
+}
+
 /** Home gates graphic and logo tiles on the same rule the creation panel and the send path use. */
 export function hasGraphicBackend(backends: readonly BackendDetection[]): boolean {
   return backends.some(canDraw);
