@@ -83,6 +83,8 @@ jobs:
           packages/backend/tests/vercel-publish.test.ts
           packages/backend/tests/path-boundary.test.ts
           packages/desktop-mac/main.test.ts
+          packages/desktop-windows/close-guard.test.ts
+          packages/frontend/tests/leave-guard.test.ts
           packages/backend/tests/config-storage.test.ts
           packages/backend/tests/native-binding.test.ts
           packages/backend/tests/python-runtime.test.ts
@@ -95,6 +97,7 @@ jobs:
           packages/frontend/tests/canvas-source.test.ts
           packages/frontend/tests/side-input.test.ts
           packages/frontend/tests/error-copy.test.ts
+          packages/backend/tests/artifact-history.test.ts
           packages/frontend/tests/i18n-messages.test.ts
           packages/frontend/tests/tool-badge-copy.test.ts
           packages/frontend/tests/prompt-library.test.ts

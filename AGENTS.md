@@ -3,7 +3,7 @@
 **Generated:** 2026-09-14T00:12:24.061Z
 **Commit:** 74cd86c
 **Branch:** main
-**Counts refreshed:** 2026-10-08 (commit `ce5ccc1a`; file counts only, not a full regeneration)
+**Counts refreshed:** 2026-10-08 (commit `edee22d2`; file counts only, not a full regeneration)
 
 ## OVERVIEW
 
@@ -48,7 +48,7 @@ BurnGuard/
 | Browser API calls | `packages/frontend/src/api/AGENTS.md` | `client.ts` authority + envelope rules |
 | Pure frontend helpers | `packages/frontend/src/lib/AGENTS.md` | 20 modules; per-module "never" rules |
 | Copy, locales, message keys | `packages/frontend/src/i18n/AGENTS.md` | ko/en/zh-CN typed registry; `useT` in ~75 modules |
-| Frontend test setup | `packages/frontend/tests/AGENTS.md` | 127 `bun:test` suites + browser fixtures |
+| Frontend test setup | `packages/frontend/tests/AGENTS.md` | 128 `bun:test` suites + browser fixtures |
 | Shared DTO or parser changes | `packages/shared/src/AGENTS.md` | 42 contract modules; 41-module barrel + subpaths |
 | Windows shell, updates, readiness | `packages/desktop-windows/AGENTS.md` | WinForms/WebView2, Velopack, kill-on-close job |
 | macOS shell | `packages/desktop-mac/AGENTS.md` | Swift WKWebView mirror of the Windows contract |
@@ -76,17 +76,17 @@ BurnGuard/
 
 ## CONVENTIONS
 
-- Startup order is contractual: migrate, seed/bootstrap, lifecycle reconciliation, then watchers. Shutdown stops intake, interrupts owned turns, closes registered Chromium instances, then forces server stop.
+- Startup order is contractual: migrate, seed/bootstrap, lifecycle reconciliation, then the HTTP listener and readiness line, then watchers (in the background, a few projects at a time; artifact mutations wait for their project's first observation). Shutdown stops intake, halts queued watcher startup, interrupts owned turns, closes registered Chromium instances, then waits for in-flight startup observations, closes watchers and forces server stop.
 - Backend binds `127.0.0.1`, canonical port `14070`; port scanning is opt-in via `BG_SCAN_PORT=1`; one process per profile (`profile-ownership.ts`: Windows named pipe, POSIX exclusive SQLite lock on `<profile>/.profile.lock`).
 - `@bg/shared` (snake_case fields) is the only transport authority; backend routes and frontend api/types never redeclare DTO shapes. Typecheck `packages/shared` before its consumers.
-- Envelopes: success `{ data, meta? }`, failure `{ error: { code, message, details? } }`. `/api/health` is public; `/api/bootstrap` GET same-origin mints the per-launch capability (32 random bytes, `HttpOnly SameSite=Strict` cookie + `x-burnguard-capability`, `timingSafeEqual`); unknown `Host` -> 421, else 403. Body caps 1 MiB JSON / 4 MiB draws / 64 MiB listed multipart -> 413.
+- Envelopes: success `{ data, meta? }`, failure `{ error: { code, message, details? } }`. `/api/health` is public; `/api/bootstrap` GET same-origin mints the per-launch capability only with the one-time launch secret (`x-burnguard-bootstrap`, handed to the page as `#bg-bootstrap:<secret>` by the desktop readiness line, `openBrowser` or `BG_BOOTSTRAP_SECRET`) or a valid launch cookie (32 random bytes, `HttpOnly SameSite=Strict` cookie + `x-burnguard-capability`, `timingSafeEqual`); unknown `Host` -> 421, else 403. Body caps 1 MiB JSON / 4 MiB draws / 64 MiB listed multipart -> 413.
 - SQLite rows + canonical filesystem receipts (canonical JSON, SHA-256 digest, revision, owner) are durable authority; in-memory locks, watcher suppression, and browser registries are not. Mutations run prepare/stage/validate/publish/commit with rollback or startup recovery.
 - Every `MessageKey` needs `ko` + `en` + `zh-CN`. First run follows the OS language (Korean -> `ko`, Simplified Chinese -> `zh-CN`, otherwise `en`); an explicit Settings choice wins and persists. `@/lib/error-copy` maps backend error codes to keys.
 - Desktop readiness: backend prints `[burnguard-desktop] {protocol:1,pid,url}`; shells validate protocol/pid/url before showing a window and run it with `BG_DESKTOP=1 BG_NO_OPEN=1`.
 - `APP_VERSION` in `@bg/shared/app`, `BurnGuard.Desktop.csproj` `<Version>`, and the Velopack package move together.
 - Run `bun test` from the repo root: `bunfig.toml` preload mints a throwaway `BG_APP_ROOT` (must be absolute), migrates it, deletes it at exit (timeout 30000, coverage 0.8). Tests use Given/When/Then descriptions and injected seams.
 - `packages/backend/tsconfig.json` includes `src` only; backend tests are typechecked only by root `tsc --build`.
-- `doc/` is English-only (`CONTRIBUTING.md:171`); dated `doc/NN-...-YYYY-MM-DD.md` records supersede numbered specs.
+- `doc/` is English-only (`CONTRIBUTING.md` §6.1); dated `doc/NN-...-YYYY-MM-DD.md` records supersede numbered specs.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
@@ -140,7 +140,7 @@ bun scripts/qa/check-flake-patterns.ts       # launch-path flake patterns in pac
 - Largest backend files: `services/design-system-extract.ts` (2,165), `db/seed-tutorials.ts` (985), `tests/design-system-extract.test.ts` (634), `routes/session.ts` (606).
 - Vite uses strict port `5173`, proxies `/api` and `/runtime`, and sends `frame-ancestors 'none'` + `X-Frame-Options: DENY`. Windows is the primary local target; macOS packaging and shell QA are also present.
 - Consult the nearest nested `AGENTS.md` before changing a delegated domain; this root records only cross-package constraints.
-- Doc drift to ignore: `CONTRIBUTING.md` cites a `test:e2e` script and `tests/e2e/` that do not exist (QA lives in `scripts/qa/`); `doc/README.md` advertises `ref/` and `devplan/` (gitignored, absent in a checkout) and still allows Korean. `uploads/`, `ref/`, `devplan/`, `/.omo/` are gitignored. A stray empty `NUL` file sits at the repo root (Windows artifact).
+- Doc drift to ignore: `uploads/`, `ref/`, `devplan/`, `/.omo/` are gitignored. A stray empty `NUL` file sits at the repo root (Windows artifact).
 
 ## CI FAILURES AND OS COVERAGE
 
@@ -160,7 +160,7 @@ bun scripts/qa/check-flake-patterns.ts       # launch-path flake patterns in pac
 ## RELEASE UX QA STAGE
 
 - Before the release security gate, run the pre-release app UX QA in `scripts/qa/prerelease-ux-qa.md` against the release candidate: a real browser on an isolated `BG_APP_ROOT`, journeys J01-J07 (extract, create, generate, review/repair, pin update, export, recover a failed turn), HAR plus screenshots, and a P0-P3 report.
-- Mask every HAR with `bun scripts/qa/har-mask.ts <raw.har> <shared.har> --root <qa-home>=<qa-home>` before it leaves the run directory, then scan the masked file for provider diagnostics and user content the tool cannot recognise. It masks the capability (header, cookie, bootstrap body and every other place its value appears), authorization headers, cookies, secret-named params and body fields, and common home paths plus the given roots. It refuses to write output that still contains a collected secret, or when a bootstrap body carries no recognisable capability.
+- Mask every HAR with `bun scripts/qa/har-mask.ts <raw.har> <shared.har> --root <qa-home>=<qa-home>` before it leaves the run directory, then scan the masked file for provider diagnostics and user content the tool cannot recognise. It masks the capability (header, cookie, bootstrap body and every other place its value appears), the one-time `x-burnguard-bootstrap` secret, authorization headers, cookies, secret-named params and body fields, and common home paths plus the given roots. It refuses to write output that still contains a collected secret, or when a bootstrap body carries no recognisable capability.
 - Store the report and masked evidence under `.omo/evidence/release-<version>/ux-qa/`. An open P0 or P1 finding keeps the release unpublished unless the owner explicitly accepts it.
 
 ## RELEASE SECURITY GATE

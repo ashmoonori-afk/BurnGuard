@@ -53,6 +53,16 @@ test("Given the shell tagline When read for every locale Then ko is translated r
   expect(entry.ko).not.toBe(entry.en);
 });
 
+test("Given every home preset label When the ko value is read Then it is Korean rather than the English copy (F-UX-4)", () => {
+  const presetKeys = Object.keys(messages).filter((key) => key.startsWith("home.preset."));
+  expect(presetKeys.length).toBeGreaterThan(0);
+  for (const key of presetKeys) {
+    const entry = messages[key as keyof typeof messages];
+    expect(entry.ko, `${key}/ko`).toMatch(/\p{Script=Hangul}/u);
+    expect(entry.ko, `${key}/ko`).not.toBe(entry.en);
+  }
+});
+
 test("Given a numeric artifact revision above 999 When interpolated in every locale Then it keeps its raw digits (I18N-3)", () => {
   for (const locale of LOCALES) {
     const source = formatMessage(messages["modes.ux.source"][locale], locale, { path: "index.html", revision: 1234 });

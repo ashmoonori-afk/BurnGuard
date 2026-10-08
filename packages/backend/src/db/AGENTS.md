@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-SQLite/Drizzle authority and lifecycle repositories; earned this guide at score 14 for 42 modules (~5.4k LOC) plus 20 forward migrations (`0001`-`0021`; `0019` absent) and 4 project templates, dense domain exports, and central transactional invariants.
+SQLite/Drizzle authority and lifecycle repositories; earned this guide at score 14 for 42 modules (~5.5k LOC) plus 20 forward migrations (`0001`-`0018`, `0020`, `0021`; `0019` is intentionally absent) and 4 project templates, dense domain exports, and central transactional invariants.
 
 ## WHERE TO LOOK
 
@@ -38,3 +38,4 @@ SQLite/Drizzle authority and lifecycle repositories; earned this guide at score 
 - Do not silently repair corrupt receipts during ordinary reads; classify or quarantine them through recovery.
 - Do not generate fixture content dynamically when tests or seeded tutorials depend on stable bytes.
 - Do not leave foreign keys disabled after migration failure.
+- Do not start when `schema_migrations` holds ids this binary does not ship (`schema_newer_than_app`); pending migrations are preceded by a `VACUUM INTO` snapshot in `<appRoot>/backups` (last 3 kept) and followed by `PRAGMA foreign_key_check`.

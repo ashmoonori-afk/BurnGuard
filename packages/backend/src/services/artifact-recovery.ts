@@ -22,7 +22,8 @@ export async function reconcileArtifactState(db: Database): Promise<{ readonly o
   // Per-project recovery failures: the project is reported unavailable, every other project still loads.
   const failedProjects = new Map<string, string>();
   for (const project of projectRoots) {
-    if (await isCanonicalTreeRootMissing(project.dir_path)) missingProjectIds.add(project.id);
+    try { if (await isCanonicalTreeRootMissing(project.dir_path)) missingProjectIds.add(project.id); }
+    catch (error) { failedProjects.set(project.id, recoveryFailureCode(error)); }
   }
   const operations = db.query<RecoveryRow, []>(`SELECT o.id,o.project_id,p.dir_path,o.status,o.base_revision,o.base_digest,o.result_revision,o.result_digest,o.expected_revision,o.expected_file_hash,o.node_fingerprint,o.diff_json,o.snapshot_json,o.retention_json,o.replay_json,o.created_at,o.updated_at
     FROM artifact_operations o JOIN projects p ON p.id=o.project_id WHERE o.status IN ('pending','working','recovering') ORDER BY o.created_at,o.id`).all();
@@ -60,7 +61,15 @@ function recoveryFailureCode(error: unknown): string {
   if (error instanceof ArtifactOperationError) return error.code;
   if (error instanceof CanonicalTreeManifestError) return error.code;
   if (error instanceof PersistedArtifactOperationError) return "corrupt_receipt";
+  // Antivirus, cloud sync or a racing rename can fail one project's storage; that must not lock out the profile.
+  if (isTransientStorageError(error)) return "project_storage_unavailable";
   throw error;
+}
+
+const PROJECT_STORAGE_ERRNO = new Set(["EPERM", "EBUSY", "EACCES", "ENOENT", "ENOTDIR", "EISDIR", "EIO", "EAGAIN", "EMFILE", "ENFILE", "ETXTBSY", "ENOTEMPTY", "EEXIST", "ELOOP", "EROFS", "ENOSPC"]);
+
+function isTransientStorageError(error: unknown): boolean {
+  return error instanceof Error && "code" in error && typeof error.code === "string" && PROJECT_STORAGE_ERRNO.has(error.code);
 }
 
 async function reconcileProjectIdentity(db: Database, coordinator: ArtifactCoordinator, project: ProjectRow): Promise<void> {
