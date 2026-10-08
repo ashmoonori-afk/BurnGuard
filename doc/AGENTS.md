@@ -8,7 +8,7 @@
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Entry point | `README.md` | Index, Start Here, numbered read order, topic table; states which specs are historical |
+| Entry point | `README.md` | Index, Start Here, numbered read order; states which specs are historical |
 | Contributing rules | `CONTRIBUTING.md` | Stack conventions, naming, import order, security rules, PR checklist |
 | Foundational specs | `00-overview` … `03-backend-adapters` | Overview, architecture, data model, adapters; `04`–`07` (UI spec, design-system format, milestones, ADRs) are local-only |
 | Current behavior | `08`–`23` dated records (local-only) | Dated files supersede the numbered specs where they disagree; `14-…-2026-09-09` is the deliverables/publishing authority for maintainers holding the local copies |
@@ -19,8 +19,8 @@
 
 ## CONVENTIONS
 
-- All documentation in `doc/` is English (`CONTRIBUTING.md:171`); `README.md:73` still says English or Korean - CONTRIBUTING wins, and the Korean product README lives at the repo root.
-- New implementation records are dated files, `NN-topic-YYYY-MM-DD.md`, added to the `README.md` Start Here list and topic table in the same change.
+- All documentation in `doc/` is English (`CONTRIBUTING.md` §6.1); the Korean product README lives at the repo root.
+- New implementation records are dated files, `NN-topic-YYYY-MM-DD.md`, added to the `README.md` Start Here list in the same change.
 - ADRs are append-only: supersede with a new entry, mark the old one, never rewrite or delete it.
 - Diagrams are ASCII; no Mermaid, PlantUML, or external renderer.
 - Status language is date-qualified. A document describing past state stays as written, even when the code has moved on.
@@ -30,6 +30,5 @@
 
 - Do not edit a dated record to reflect new behavior; write the next dated record instead.
 - Do not treat `04-ui-spec.md` or `06-milestones.md` as a current checklist; `README.md` marks them historical.
-- Do not copy `CONTRIBUTING.md`'s `bun run test:e2e` / `tests/e2e/*.spec.ts` references - `17-project-review-and-roadmap-2026-09-11.md:120` records that neither exists; QA lives in `scripts/qa/`.
 - Do not rely on the Out-of-Band References table's `ref/` and `devplan/` paths; both are gitignored and absent from a fresh checkout.
 - Do not restate source-level API detail here; link the module and let its `AGENTS.md` carry it.

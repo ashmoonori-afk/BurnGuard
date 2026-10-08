@@ -264,4 +264,124 @@ describe("API authority client", () => {
       }
     }
   });
+
+  test("Given a launch URL carrying the one-time bootstrap secret When the app bootstraps and later re-bootstraps Then the secret is sent once and removed from the address bar", async () => {
+    const replaced: string[] = [];
+    const sent: (string | null)[] = [];
+    const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, "location");
+    const historyDescriptor = Object.getOwnPropertyDescriptor(globalThis, "history");
+    const launch = new URL("http://127.0.0.1:14070/projects/example?tab=a#bg-bootstrap:one-time-secret_42");
+    Object.defineProperty(globalThis, "location", { configurable: true, value: launch });
+    Object.defineProperty(globalThis, "history", {
+      configurable: true,
+      value: { state: { idx: 0 }, replaceState: (_state: unknown, _unused: string, url: string) => { replaced.push(url); launch.hash = ""; } },
+    });
+    let offline = true;
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push(new Headers(init?.headers).get("x-burnguard-bootstrap"));
+      if (offline) throw new TypeError("backend offline");
+      return Response.json({ ok: true, data: { capability: "launch-token" } });
+    }) as typeof fetch;
+
+    try {
+      await expect(bootstrapApiAuthority()).rejects.toThrow();
+      offline = false;
+      await bootstrapApiAuthority();
+      await bootstrapApiAuthority();
+
+      expect(sent).toEqual(["one-time-secret_42", "one-time-secret_42", null]);
+      expect(replaced).toEqual(["/projects/example?tab=a"]);
+    } finally {
+      for (const [name, descriptor] of [["location", locationDescriptor], ["history", historyDescriptor]] as const) {
+        if (descriptor === undefined) Reflect.deleteProperty(globalThis, name);
+        else Object.defineProperty(globalThis, name, descriptor);
+      }
+    }
+  });
+
+  test("Given two concurrent bootstrap calls with a pending launch secret When one caller aborts Then the secret is sent once and the other caller still succeeds", async () => {
+    const sent: (string | null)[] = [];
+    const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, "location");
+    const historyDescriptor = Object.getOwnPropertyDescriptor(globalThis, "history");
+    const launch = new URL("http://127.0.0.1:14070/#bg-bootstrap:strict-mode-secret");
+    Object.defineProperty(globalThis, "location", { configurable: true, value: launch });
+    Object.defineProperty(globalThis, "history", {
+      configurable: true,
+      value: { state: null, replaceState: () => { launch.hash = ""; } },
+    });
+    globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push(new Headers(init?.headers).get("x-burnguard-bootstrap"));
+      return Response.json({ ok: true, data: { capability: "launch-token" } });
+    }) as typeof fetch;
+
+    try {
+      const first = new AbortController();
+      const aborted = bootstrapApiAuthority(first.signal);
+      const second = bootstrapApiAuthority(new AbortController().signal);
+      first.abort();
+
+      await expect(aborted).rejects.toBeDefined();
+      await second;
+      expect(sent).toEqual(["strict-mode-secret"]);
+    } finally {
+      for (const [name, descriptor] of [["location", locationDescriptor], ["history", historyDescriptor]] as const) {
+        if (descriptor === undefined) Reflect.deleteProperty(globalThis, name);
+        else Object.defineProperty(globalThis, name, descriptor);
+      }
+    }
+  });
+
+  for (const devBuild of [true, false]) {
+    test(`Given a ${devBuild ? "dev" : "release"} tab launched with the bootstrap secret When a restarted backend rejects the launch cookie Then the secret is ${devBuild ? "resent once from the session" : "never resent or persisted"}`, async () => {
+      const sent: (string | null)[] = [];
+      const stored = new Map<string, string>();
+      const globals = ["location", "history", "sessionStorage"] as const;
+      const descriptors = globals.map((name) => Object.getOwnPropertyDescriptor(globalThis, name));
+      const previousDev = Object.getOwnPropertyDescriptor(globalThis, "__BG_DEV__");
+      const launch = new URL("http://127.0.0.1:5173/#bg-bootstrap:dev-launcher-secret");
+      Object.defineProperty(globalThis, "location", { configurable: true, value: launch });
+      Object.defineProperty(globalThis, "history", {
+        configurable: true,
+        value: { state: null, replaceState: () => { launch.hash = ""; } },
+      });
+      Object.defineProperty(globalThis, "sessionStorage", {
+        configurable: true,
+        value: { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => { stored.set(key, value); } },
+      });
+      if (devBuild) Object.defineProperty(globalThis, "__BG_DEV__", { configurable: true, value: true });
+      else Reflect.deleteProperty(globalThis, "__BG_DEV__");
+      let restarted = false;
+      let restartedSecretSpent = false;
+      globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const secret = new Headers(init?.headers).get("x-burnguard-bootstrap");
+        sent.push(secret);
+        if (restarted && (secret !== "dev-launcher-secret" || restartedSecretSpent)) {
+          return Response.json({ ok: false, error: { code: "forbidden", message: "forbidden" } }, { status: 403 });
+        }
+        if (restarted) restartedSecretSpent = true;
+        return Response.json({ ok: true, data: { capability: restarted ? "restarted-token" : "launch-token" } });
+      }) as typeof fetch;
+
+      try {
+        await bootstrapApiAuthority();
+        restarted = true;
+        if (devBuild) {
+          await bootstrapApiAuthority();
+          expect(sent).toEqual(["dev-launcher-secret", null, "dev-launcher-secret"]);
+        } else {
+          await expect(bootstrapApiAuthority()).rejects.toThrow();
+          expect(sent).toEqual(["dev-launcher-secret", null]);
+          expect(stored.size).toBe(0);
+        }
+      } finally {
+        if (previousDev === undefined) Reflect.deleteProperty(globalThis, "__BG_DEV__");
+        else Object.defineProperty(globalThis, "__BG_DEV__", previousDev);
+        globals.forEach((name, i) => {
+          const descriptor = descriptors[i];
+          if (descriptor === undefined) Reflect.deleteProperty(globalThis, name);
+          else Object.defineProperty(globalThis, name, descriptor);
+        });
+      }
+    });
+  }
 });
