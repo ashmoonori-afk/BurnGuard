@@ -20,6 +20,7 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isValidFontData } from "./font-validation";
+import { readManagedCssForEdit, writeTextFileAtomically } from "./atomic-text-file";
 import { parse } from "node-html-parser";
 import {
   APP_VERSION,
@@ -579,11 +580,9 @@ export async function upsertDesignSystemColorToken(
   }
 
   const tokenPath = resolveDesignSystemRecordPath(systemId, detail.dir_path, detail.tokens_css_path);
-  const existingCss = await readFile(tokenPath, "utf8").catch(
-    () => "",
-  );
+  const existingCss = await readManagedCssForEdit(tokenPath);
   const nextCss = upsertCssCustomProperty(existingCss, tokenName, colorValue);
-  await writeFile(tokenPath, nextCss, "utf8");
+  await writeTextFileAtomically(tokenPath, nextCss);
   return await readDesignSystemTokens(systemId);
 }
 
@@ -642,10 +641,8 @@ export async function uploadDesignSystemFont(input: {
 
   if (role && detail.tokens_css_path) {
     const tokenPath = resolveDesignSystemRecordPath(input.systemId, detail.dir_path, detail.tokens_css_path);
-    const existingCss = await readFile(tokenPath, "utf8").catch(
-      () => "",
-    );
-    const fontsCss = await readFile(path.join(fontsDir, "fonts.css"), "utf8").catch(() => "");
+    const existingCss = await readManagedCssForEdit(tokenPath);
+    const fontsCss = await readManagedCssForEdit(path.join(fontsDir, "fonts.css"));
     const tokens = await extractCssCustomProperties(existingCss);
     const fallbackDefined = tokens.has(`font-${role}-fallback`) || (await extractCssCustomProperties(fontsCss)).has(`font-${role}-fallback`);
     // `var(--font-<role>-fallback)` only resolves when a token or fonts.css defines it (extracted
@@ -663,7 +660,7 @@ export async function uploadDesignSystemFont(input: {
       `font-${role}`,
       `${cssString(family)}, ${fallback}`,
     );
-    await writeFile(tokenPath, nextCss, "utf8");
+    await writeTextFileAtomically(tokenPath, nextCss);
   }
 
   return {
@@ -2651,7 +2648,7 @@ async function appendFontFaceRule(
   family: string,
   fileName: string,
 ) {
-  const existing = await readFile(fontsCssPath, "utf8").catch(() => "");
+  const existing = await readManagedCssForEdit(fontsCssPath);
   const safeFamily = family.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   const safeUrl = fileName.replace(/\\/g, "/").replace(/'/g, "%27");
   // A single static face declares one weight; a 100 900 range would make the browser reuse these
@@ -2669,7 +2666,7 @@ async function appendFontFaceRule(
       ? existing
       : `${existing.trimEnd()}\n\n${rule}`.trimStart();
   await mkdir(path.dirname(fontsCssPath), { recursive: true });
-  await writeFile(fontsCssPath, next.endsWith("\n") ? next : `${next}\n`, "utf8");
+  await writeTextFileAtomically(fontsCssPath, next.endsWith("\n") ? next : `${next}\n`);
 }
 
 function fontFormatForFile(fileName: string): string {
