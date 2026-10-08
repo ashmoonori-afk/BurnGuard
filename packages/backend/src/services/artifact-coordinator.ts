@@ -5,7 +5,7 @@ import path from "node:path";
 import { ulid } from "ulid";
 import { applyHtmlNodePatch, fingerprintHtmlNode, type PatchHtmlNodeInput } from "./file-patch";
 import { inspectCanonicalTree, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
-import { ArtifactPublicationPolicyError, diffManagedTrees, manifestEntry, materializeManagedTree, publishManagedTree, type ArtifactFileDiff, type PublicationPolicy } from "./artifact-tree-storage";
+import { ArtifactPublicationPolicyError, diffManagedTrees, manifestEntry, materializeManagedTree, publishManagedTree, syncManagedTree, defaultManagedTreeIo, type ManagedTreeIo, type ArtifactFileDiff, type PublicationPolicy } from "./artifact-tree-storage";
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
 import { beginArtifactPublication, endArtifactPublication } from "./artifact-publication-registry";
 import { replaceArtifactFileIndex, replaceArtifactFileIndexInTransaction } from "../db/artifact-file-index";
@@ -39,6 +39,8 @@ type CoordinatorFaults = {
   readonly beforePublishSourceRead?: (relativePath: string) => void | Promise<void>;
   readonly afterPublishWrite?: (relativePath: string) => void;
   readonly beforeDatabaseCommit?: () => void;
+  /** Durability seam; tests observe the flush order. */
+  readonly treeIo?: ManagedTreeIo;
   readonly beforeFileIndex?: () => void;
   readonly beforeBaselineFinalize?: () => void;
   readonly beforeRollback?: () => void;
@@ -105,6 +107,8 @@ async function waitForStartupObservation(projectId: string): Promise<void> {
 export class ArtifactCoordinator {
   constructor(private readonly db: Database, private readonly faults: CoordinatorFaults = {}) {}
 
+  private get treeIo(): ManagedTreeIo { return this.faults.treeIo ?? defaultManagedTreeIo; }
+
   private assertNotHeld(projectId: string): void {
     if (isArtifactRecoveryHeld(this.db, projectId)) throw new ArtifactOperationError("recovery_unavailable", "Project recovery is held until the next restart");
   }
@@ -122,7 +126,7 @@ export class ArtifactCoordinator {
     let baselineSource = projectDir;
     if (identity.digest === null) baselineSource = await adoptExistingArtifact(this.db, projectId, projectDir, identity.revision, actual);
     else if (identity.digest !== actual.tree_digest) throw new ArtifactOperationError("artifact_identity_mismatch", "Live artifact bytes differ from the stable identity");
-    await materializeManagedTree(baselineSource, this.baselinePath(projectDir));
+    await materializeManagedTree(baselineSource, this.baselinePath(projectDir), this.treeIo);
     replaceArtifactFileIndex(this.db, projectId, actual);
     return actual;
   }
@@ -133,7 +137,7 @@ export class ArtifactCoordinator {
     const empty = await inspectCanonicalTree(projectDir);
     if (empty.files.length !== 0) throw new ArtifactOperationError("artifact_identity_mismatch", "New project storage is not empty");
     establishEmptyArtifactAuthority(this.db, projectId, empty);
-    await materializeManagedTree(projectDir, this.baselinePath(projectDir));
+    await materializeManagedTree(projectDir, this.baselinePath(projectDir), this.treeIo);
     return this.run({ projectId, projectDir, kind: "initialize", expectedRevision: 0, expectedArtifactDigest: empty.tree_digest, mutate });
   }
 
@@ -176,7 +180,7 @@ export class ArtifactCoordinator {
       figmaReferences = await loadFigmaReferencePolicy(input.projectDir, base, input.signal);
       this.faults.beforeSnapshot?.();
       try {
-        await materializeManagedTree(input.projectDir, snapshotPath);
+        await materializeManagedTree(input.projectDir, snapshotPath, this.treeIo);
         await validateCanonicalTree(snapshotPath, base);
         await materializeManagedTree(input.projectDir, stagePath);
         await validateCanonicalTree(stagePath, base);
@@ -242,8 +246,10 @@ export class ArtifactCoordinator {
           throwIfAcquisitionAborted(input.signal);
           await this.faults.beforePublishSourceRead?.(relativePath);
         },
-      });
+      }, this.treeIo);
       await validateCanonicalTree(input.projectDir, result);
+      // The agent wrote the stage; recovery adopts it as the baseline after a crash, so flush it before the commit.
+      await syncManagedTree(stagePath, this.treeIo);
       this.faults.beforeDatabaseCommit?.();
       this.commit(id, input.projectId, input.expectedRevision, base.tree_digest, resultRevision, result);
     } catch (error) {
@@ -271,7 +277,7 @@ export class ArtifactCoordinator {
       if (error instanceof AcquisitionLimitError || error instanceof FigmaImportError) throw error;
       throw new ArtifactOperationError("operation_failed", error instanceof Error ? error.message : "Artifact operation failed");
     }
-    try { this.faults.beforeBaselineFinalize?.(); await materializeManagedTree(stagePath, this.baselinePath(input.projectDir)); }
+    try { this.faults.beforeBaselineFinalize?.(); await materializeManagedTree(stagePath, this.baselinePath(input.projectDir), this.treeIo); }
     catch (error) { console.warn("[artifact] committed operation requires baseline reconciliation", id, error); }
     finally { endArtifactPublication(input.projectId); releasePublication?.(); }
     publishArtifactOperationEvent(this.db, { projectId: input.projectId, operationId: id, revision: resultRevision, digest: result.tree_digest, outcome: "committed", diff });
@@ -384,8 +390,8 @@ export class ArtifactCoordinator {
     const stagePath = path.join(ownedRoot, "stage");
     let registered = false;
     try {
-    await materializeManagedTree(baselinePath, snapshotPath);
-    const captured = await materializeManagedTree(projectDir, stagePath);
+    await materializeManagedTree(baselinePath, snapshotPath, this.treeIo);
+    const captured = await materializeManagedTree(projectDir, stagePath, this.treeIo);
     this.faults.afterExternalCapture?.();
     const current = await inspectCanonicalTree(projectDir);
     if (captured.tree_digest !== current.tree_digest) return null;
@@ -422,7 +428,7 @@ export class ArtifactCoordinator {
     this.prepareResult(id, identity.revision + 1, captured, diff);
     this.commit(id, projectId, identity.revision, identity.digest, identity.revision + 1, captured);
     // Use the exact committed stage, never a later version of the live files.
-    await materializeManagedTree(stagePath, baselinePath);
+    await materializeManagedTree(stagePath, baselinePath, this.treeIo);
     publishArtifactOperationEvent(this.db, { projectId, operationId: id, revision: identity.revision + 1, digest: captured.tree_digest, outcome: "committed", diff });
     return { id, kind: "external", status: "committed", baseRevision: identity.revision, baseDigest: identity.digest, resultRevision: identity.revision + 1, resultDigest: captured.tree_digest, diff };
     } catch (error) {
@@ -438,8 +444,8 @@ export class ArtifactCoordinator {
     const ownedRoot = this.operationPath(projectDir, id);
     const snapshotPath = path.join(ownedRoot, "snapshot");
     const stagePath = path.join(ownedRoot, "stage");
-    await materializeManagedTree(this.baselinePath(projectDir), snapshotPath);
-    await materializeManagedTree(projectDir, stagePath);
+    await materializeManagedTree(this.baselinePath(projectDir), snapshotPath, this.treeIo);
+    await materializeManagedTree(projectDir, stagePath, this.treeIo);
     const diff = diffManagedTrees(base, actual);
     await publishManagedTree(snapshotPath, projectDir);
     this.db.transaction(() => {
