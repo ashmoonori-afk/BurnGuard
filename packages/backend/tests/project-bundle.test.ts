@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import JSZip from "jszip";
 import { PROJECT_BUNDLE_MANIFEST_PATH, parseProjectBundleManifest, type ProjectBundleManifest } from "@bg/shared";
 import { runMigrations } from "../src/db/migrate-local";
@@ -377,6 +377,8 @@ test("Given a torn checkpoint receipt When the project is bundled Then export su
   // Given
   const torn = path.join(sourceProjectDir, ".meta", "checkpoints", "turn-torn.json");
   await writeFile(torn, '{"turn_id":"turn-torn","created_');
+  const warnings: string[] = [];
+  const warn = spyOn(console, "warn").mockImplementation((...args: unknown[]) => { warnings.push(args.map(String).join(" ")); });
   try {
     // When
     const exported = await exportProjectBundle(sourceProjectId);
@@ -387,7 +389,10 @@ test("Given a torn checkpoint receipt When the project is bundled Then export su
 
     // Then
     expect(manifest.checkpoints.map((checkpoint) => checkpoint.turn_id)).toEqual(["turn-1"]);
+    // The warning is path-free: a receipt name is user-derived and must not reach logs.
+    expect(warnings.some((line) => line.includes("turn-torn"))).toBe(false);
   } finally {
+    warn.mockRestore();
     await rm(torn, { force: true });
   }
 });

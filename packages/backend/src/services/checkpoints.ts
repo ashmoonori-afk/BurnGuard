@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile, rm, stat } from "node:fs/promises";
+import path from "node:path";
 import type { CheckpointRef } from "@bg/shared/harness";
 import { getProjectDetail, listProjectIds } from "../db/project-read-repository";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
@@ -8,7 +9,7 @@ import { inspectCanonicalTree, parseCanonicalTreeManifest, validateCanonicalTree
 import { getSqlite } from "../db/sqlite-client";
 import { ArtifactCoordinator } from "./artifact-coordinator";
 import { ARTIFACT_RETENTION_MS } from "./artifact-retention-window";
-import { materializeManagedTree } from "./artifact-tree-storage";
+import { defaultManagedTreeIo, materializeManagedTree, type ManagedTreeIo } from "./artifact-tree-storage";
 
 function snapshotDir(projectDir: string, turnId: string): string {
   return resolveWithin(
@@ -25,15 +26,55 @@ function snapshotManifestPath(projectDir: string, turnId: string): string {
   return resolveWithin(projectDir, ".meta", "checkpoints", "snapshots", `${assertSafeName(turnId)}.manifest.json`);
 }
 
-async function writeFileAtomic(target: string, content: string): Promise<void> {
+/**
+ * Writes text through the shared managed-tree IO seam: the bytes are flushed before the rename makes
+ * them visible and the directory entry is flushed too, so no torn file can become authority.
+ */
+async function writeTextDurably(target: string, content: string, io: ManagedTreeIo): Promise<void> {
   const temporary = `${target}.tmp-${randomUUID()}`;
   try {
-    await writeFile(temporary, content, "utf8");
-    await rename(temporary, target);
+    const handle = await open(temporary, "wx");
+    try { await handle.writeFile(content, "utf8"); await io.syncFile(handle); }
+    finally { await handle.close(); }
+    await io.rename(temporary, target);
+    await io.syncDirectory(path.dirname(target));
   } catch (error) {
     await rm(temporary, { force: true });
     throw error;
   }
+}
+
+/** Parks a live snapshot path so the publication can restore it if a later step fails. */
+async function parkSnapshotPath(live: string, io: ManagedTreeIo): Promise<{ readonly parked: string; readonly moved: boolean }> {
+  const parked = `${live}.old-${randomUUID()}`;
+  try { await io.rename(live, parked); return { parked, moved: true }; }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { parked, moved: false };
+    throw error;
+  }
+}
+
+/**
+ * Publishes the staged snapshot and manifest together: the previous pair is parked first and restored
+ * when either rename fails, so a failure never leaves the turn without a verified, restorable snapshot.
+ */
+async function publishSnapshot(staging: string, dest: string, stagedManifest: string, manifestPath: string, io: ManagedTreeIo): Promise<void> {
+  const previousTree = await parkSnapshotPath(dest, io);
+  const previousManifest = await parkSnapshotPath(manifestPath, io);
+  try {
+    await io.rename(staging, dest);
+    await io.rename(stagedManifest, manifestPath);
+    await io.syncDirectory(path.dirname(dest));
+  } catch (error) {
+    // Drop whatever new pieces landed, then restore both parked originals as one consistent pair.
+    await rm(dest, { recursive: true, force: true }).catch(() => {});
+    await rm(manifestPath, { force: true }).catch(() => {});
+    if (previousTree.moved) await io.rename(previousTree.parked, dest).catch(() => {});
+    if (previousManifest.moved) await io.rename(previousManifest.parked, manifestPath).catch(() => {});
+    throw error;
+  }
+  if (previousTree.moved) await rm(previousTree.parked, { recursive: true, force: true }).catch(() => {});
+  if (previousManifest.moved) await rm(previousManifest.parked, { force: true }).catch(() => {});
 }
 
 /** Snapshots, their manifests, and crash leftovers expire with the shared artifact retention window. */
@@ -58,13 +99,14 @@ async function pruneExpiredSnapshots(projectDir: string, keepTurnId: string | nu
   }
 }
 
-const STARTUP_SWEEP_PROJECT_LIMIT = 500;
-
-/** Best-effort startup sweep so projects that never run another turn still release expired snapshots. */
+/**
+ * Best-effort startup sweep so projects that never run another turn still release expired snapshots.
+ * The profile lock makes this process the only writer and the mtime guard keeps every fresh entry, so the
+ * sweep cannot race an in-progress snapshot; it walks every project rather than an arbitrary prefix.
+ */
 export async function pruneExpiredSnapshotsAtStartup(now: number = Date.now()): Promise<void> {
   try {
-    const ids = (await listProjectIds()).slice(0, STARTUP_SWEEP_PROJECT_LIMIT);
-    for (const id of ids) {
+    for (const id of await listProjectIds()) {
       try {
         const project = await getProjectDetail(id);
         if (project !== null) await pruneExpiredSnapshots(project.dir_path, null, now);
@@ -80,6 +122,7 @@ export async function pruneExpiredSnapshotsAtStartup(now: number = Date.now()): 
 export async function writePreTurnSnapshot(
   projectId: string,
   turnId: string,
+  io: ManagedTreeIo = defaultManagedTreeIo,
 ): Promise<CheckpointRef | null> {
   assertSafeName(turnId);
   const project = await getProjectDetail(projectId);
@@ -87,15 +130,17 @@ export async function writePreTurnSnapshot(
 
   const dest = snapshotDir(project.dir_path, turnId);
   const manifestPath = snapshotManifestPath(project.dir_path, turnId);
-  // Copy into a sibling and rename, so a crash never leaves a partial tree at `dest`.
+  // Stage the copy and its manifest as siblings, then swap them in: a crash leaves only a sibling that
+  // is never read as the snapshot, and the previous pair is parked until the new pair is fully in place.
   const staging = `${dest}.tmp-${randomUUID()}`;
+  const stagedManifest = `${manifestPath}.tmp-${randomUUID()}`;
   try {
-    const manifest = await materializeManagedTree(project.dir_path, staging);
-    await rm(dest, { recursive: true, force: true });
-    await writeFileAtomic(manifestPath, JSON.stringify(manifest));
-    await rename(staging, dest);
+    const manifest = await materializeManagedTree(project.dir_path, staging, io);
+    await writeTextDurably(stagedManifest, JSON.stringify(manifest), io);
+    await publishSnapshot(staging, dest, stagedManifest, manifestPath, io);
   } catch (error) {
-    await rm(staging, { recursive: true, force: true });
+    await rm(staging, { recursive: true, force: true }).catch(() => {});
+    await rm(stagedManifest, { force: true }).catch(() => {});
     throw error;
   }
 
@@ -182,6 +227,7 @@ export async function restoreFromSnapshot(
 export async function writeTurnCheckpoint(
   projectId: string,
   turnId: string,
+  io: ManagedTreeIo = defaultManagedTreeIo,
 ): Promise<CheckpointRef | null> {
   const safeTurnId = assertSafeName(turnId);
   const project = await getProjectDetail(projectId);
@@ -200,7 +246,7 @@ export async function writeTurnCheckpoint(
   const createdAt = Date.now();
 
   await mkdir(checkpointDir, { recursive: true });
-  await writeFileAtomic(
+  await writeTextDurably(
     checkpointPath,
     JSON.stringify(
       {
@@ -214,6 +260,7 @@ export async function writeTurnCheckpoint(
       null,
       2,
     ),
+    io,
   );
 
   return {

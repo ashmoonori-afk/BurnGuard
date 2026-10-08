@@ -1,8 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import type { FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { getVerifiedSnapshotPath, hasSnapshot, pruneExpiredSnapshotsAtStartup, restoreFromSnapshot, writePreTurnSnapshot, writeTurnCheckpoint } from "../src/services/checkpoints";
+import { defaultManagedTreeIo, type ManagedTreeIo } from "../src/services/artifact-tree-storage";
 import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { indexProjectFiles, isTransientFilePath, resolveDrawFile, resolveProjectFile } from "../src/services/managed-project-files";
@@ -330,5 +332,49 @@ describe("checkpoint snapshot / restore round-trip", () => {
 
     // Then
     expect(readdirSync(snapshotRoot(projectDir)).sort()).toEqual(["turn-fresh", "turn-fresh.manifest.json"]);
+  });
+
+  test("Given an existing verified snapshot When republishing fails mid-swap Then the previous snapshot is still restorable", async () => {
+    // Given
+    const projectId = await createProductionProject();
+    const dest = snapshotDir(projectDir, "turn-swap");
+    await writePreTurnSnapshot(projectId, "turn-swap");
+    expect(await getVerifiedSnapshotPath(projectId, "turn-swap")).toBe(dest);
+    // Fail only the staging tree becoming visible; the rollback rename of the parked tree must still run.
+    const failing: ManagedTreeIo = {
+      ...defaultManagedTreeIo,
+      rename: async (from: string, to: string) => {
+        if (to === dest && from.includes(".tmp-")) throw new Error("swap failed");
+        await defaultManagedTreeIo.rename(from, to);
+      },
+    };
+    writeFileSync(path.join(projectDir, "index.html"), "<h1>v2</h1>", "utf8");
+
+    // When / Then
+    await expect(writePreTurnSnapshot(projectId, "turn-swap", failing)).rejects.toThrow("swap failed");
+    expect(await getVerifiedSnapshotPath(projectId, "turn-swap")).toBe(dest);
+    expect(readFileSync(path.join(dest, "index.html"), "utf8")).toBe("<h1>v1</h1>");
+    expect(readdirSync(snapshotRoot(projectDir)).filter((name) => name.includes(".old-") || name.includes(".tmp-"))).toEqual([]);
+  });
+
+  test("Given a snapshot write When it publishes Then the tree becomes visible only after its bytes are flushed", async () => {
+    // Given
+    const projectId = await createProductionProject();
+    const events: string[] = [];
+    const recording: ManagedTreeIo = {
+      ...defaultManagedTreeIo,
+      syncFile: async (handle: FileHandle) => { events.push("sync"); await defaultManagedTreeIo.syncFile(handle); },
+      rename: async (from: string, to: string) => { events.push(`rename:${path.basename(to)}`); await defaultManagedTreeIo.rename(from, to); },
+    };
+
+    // When
+    await writePreTurnSnapshot(projectId, "turn-sealed", recording);
+
+    // Then
+    const visible = events.indexOf("rename:turn-sealed");
+    expect(visible).toBeGreaterThan(-1);
+    expect(events.lastIndexOf("sync")).toBeGreaterThan(-1);
+    expect(visible).toBeGreaterThan(events.lastIndexOf("sync"));
+    expect(events.filter((event) => event === "sync").length).toBeGreaterThan(1);
   });
 });

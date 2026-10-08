@@ -179,7 +179,8 @@ function checkpointRecords(entries: readonly BundleEntry[]): readonly ProjectBun
       }
     } catch {
       // A torn checkpoint receipt must not block the user's backup path; its bytes still travel in the bundle.
-      console.warn("[project-bundle] skipped malformed checkpoint", entry.file.path);
+      // The message stays path-free: a receipt name is user-derived and must not reach logs or diagnostics.
+      console.warn("[project-bundle] skipped a malformed checkpoint receipt");
     }
   }
   return records;
