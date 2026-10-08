@@ -5,7 +5,7 @@ import path from "node:path";
 
 /**
  * Masks a HAR recorded against a running BurnGuard before it is shared: the per-launch capability (header, cookie,
- * bootstrap body and every other place its value appears), authorization headers, cookies, secret-named query, form
+ * bootstrap body and every other place its value appears), the one-time bootstrap secret header, authorization headers, cookies, secret-named query, form
  * and JSON body fields, and home paths plus caller-given roots everywhere in the file. Secrets and roots are matched
  * in the forms a HAR carries them: as is, percent-encoded and JSON-escaped (also as JSON nested in JSON strings); roots
  * also double-percent-encoded, with \u escapes, with either path separator, in
@@ -15,7 +15,7 @@ import path from "node:path";
  */
 
 export const MASKED = "[masked]";
-const SECRET_HEADERS = new Set(["x-burnguard-capability", "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key"]);
+const SECRET_HEADERS = new Set(["x-burnguard-capability", "x-burnguard-bootstrap", "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key"]);
 const SECRET_PARAMS = /^(?:capability|token|access_token|refresh_token|id_token|api_key|apikey|key|secret|client_secret|password)$|(?:_token|_api_key|_apikey|_secret|_password|_access_key)$/iu;
 /** Values shorter than this are not treated as secrets, so masking never rewrites ordinary short words. */
 const MIN_SECRET_LENGTH = 8;

@@ -96,6 +96,7 @@ jobs:
           packages/frontend/tests/canvas-source.test.ts
           packages/frontend/tests/side-input.test.ts
           packages/frontend/tests/error-copy.test.ts
+          packages/backend/tests/artifact-history.test.ts
           packages/frontend/tests/i18n-messages.test.ts
           packages/frontend/tests/tool-badge-copy.test.ts
           packages/frontend/tests/prompt-library.test.ts

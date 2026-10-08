@@ -6,7 +6,9 @@ import path from "node:path";
 import { getTableName, SQL, sql } from "drizzle-orm";
 import { getTableConfig, SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
-import { runMigrationsFrom } from "../src/db/migrate";
+import { MigrationError, runMigrationsFrom } from "../src/db/migrate";
+import { getSqlite } from "../src/db/sqlite-client";
+import { seedCoreData } from "../src/db/seed";
 import { designSystemsTable, eventsTable, exportsTable, projectsTable, sessionsTable } from "../src/db/pipeline-authorities";
 import { artifactOperationsTable, designSystemReceiptsTable, designSystemTagsTable, exportAttemptsTable, learningCheckpointsTable, learningItemsTable, learningProgressTable } from "../src/db/pipeline-schema";
 import { attachmentsTable, commentsTable, filesTable, tweaksTable } from "../src/db/schema";
@@ -290,5 +292,107 @@ function namedIndexes(db: Database, tableName: string) {
     expect(db.query("SELECT id FROM schema_migrations WHERE id='0005_pipeline_durability.sql'").get()).toEqual({ id: "0005_pipeline_durability.sql" });
     expect(db.query("SELECT id FROM schema_migrations WHERE id='0006_broken.sql'").get()).toBeNull();
     expect(db.query("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
+  });
+
+  test("Given an applied migration id this binary does not ship When migrating Then it refuses with schema_newer_than_app and changes nothing", async () => {
+    // Given
+    const db = database();
+    const directory = await migrationDirectory("0005");
+    await runMigrationsFrom(db, directory);
+    db.query("INSERT INTO schema_migrations (id, applied_at) VALUES ('0099_from_the_future.sql', 1)").run();
+    await Bun.write(path.join(directory, "0006_more.sql"), "CREATE TABLE should_not_exist(id TEXT);");
+
+    // When
+    const failure = runMigrationsFrom(db, directory);
+
+    // Then
+    await expect(failure).rejects.toMatchObject({ name: "MigrationError", code: "schema_newer_than_app" });
+    await expect(failure).rejects.toBeInstanceOf(MigrationError);
+    expect(db.query("SELECT name FROM sqlite_master WHERE name='should_not_exist'").get()).toBeNull();
+  });
+
+  test("Given pending migrations on a file database When migrating Then a VACUUM INTO snapshot named with the app version is kept and only the last three survive", async () => {
+    // Given
+    const root = await mkdtemp(path.join(tmpdir(), "burnguard-backup-"));
+    directories.push(root);
+    const backups = path.join(root, "backups");
+    const db = new Database(path.join(root, "app.sqlite"));
+    databases.push(db);
+    const directory = await migrationDirectory("0005");
+    await Bun.write(path.join(directory, "0006_a.sql"), "CREATE TABLE marker_a(id TEXT);");
+
+    // When
+    await runMigrationsFrom(db, directory, { directory: backups, appVersion: "1.2.3" });
+    for (const index of [7, 8, 9, 10]) {
+      await Bun.write(path.join(directory, `00${String(index).padStart(2, "0")}_m.sql`), `CREATE TABLE marker_${index}(id TEXT);`);
+      await runMigrationsFrom(db, directory, { directory: backups, appVersion: "1.2.3" });
+    }
+
+    // Then
+    const kept = (await readdir(backups)).sort();
+    expect(kept).toHaveLength(3);
+    for (const name of kept) expect(name).toMatch(/-1\.2\.3\.sqlite$/);
+    const newest = new Database(path.join(backups, kept[kept.length - 1] ?? ""), { readonly: true });
+    try {
+      // The snapshot holds the state from before the last pending migration ran.
+      expect(newest.query("SELECT name FROM sqlite_master WHERE name='marker_9'").get()).toEqual({ name: "marker_9" });
+      expect(newest.query("SELECT name FROM sqlite_master WHERE name='marker_10'").get()).toBeNull();
+    } finally {
+      newest.close();
+    }
+  });
+
+  test("Given a fully migrated database When migrating again Then no snapshot is taken", async () => {
+    // Given
+    const root = await mkdtemp(path.join(tmpdir(), "burnguard-backup-"));
+    directories.push(root);
+    const db = new Database(path.join(root, "app.sqlite"));
+    databases.push(db);
+    const directory = await migrationDirectory("0005");
+    await runMigrationsFrom(db, directory);
+
+    // When
+    await runMigrationsFrom(db, directory, { directory: path.join(root, "backups"), appVersion: "1.2.3" });
+
+    // Then
+    expect(await readdir(root)).not.toContain("backups");
+  });
+
+  test("Given a migration that leaves an orphaned child row When migrating Then foreign_key_check aborts it, rolls back, and restores foreign keys", async () => {
+    // Given
+    const db = database();
+    const directory = await migrationDirectory("0005");
+    await runMigrationsFrom(db, directory);
+    await Bun.write(
+      path.join(directory, "0006_orphan.sql"),
+      "CREATE TABLE fk_parent(id TEXT PRIMARY KEY); CREATE TABLE fk_child(parent_id TEXT REFERENCES fk_parent(id)); INSERT INTO fk_child VALUES ('missing');",
+    );
+
+    // When
+    const failure = runMigrationsFrom(db, directory);
+
+    // Then
+    await expect(failure).rejects.toMatchObject({ code: "migration_foreign_key_violation" });
+    expect(db.query("SELECT name FROM sqlite_master WHERE name='fk_child'").get()).toBeNull();
+    expect(db.query("SELECT id FROM schema_migrations WHERE id='0006_orphan.sql'").get()).toBeNull();
+    expect(db.query("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
+  });
+
+  test("Given a newer stored app_version When seeding core data Then the stored version is not overwritten", async () => {
+    // Given
+    const sqlite = getSqlite();
+    const original = sqlite.query<{ value: string }, []>("SELECT value FROM meta_schema WHERE key='app_version'").get()?.value;
+    sqlite.query("INSERT INTO meta_schema (key, value) VALUES ('app_version', '999.0.0') ON CONFLICT(key) DO UPDATE SET value=excluded.value").run();
+
+    try {
+      // When
+      await seedCoreData();
+
+      // Then
+      expect(sqlite.query("SELECT value FROM meta_schema WHERE key='app_version'").get()).toEqual({ value: "999.0.0" });
+    } finally {
+      if (original === undefined) sqlite.query("DELETE FROM meta_schema WHERE key='app_version'").run();
+      else sqlite.query("UPDATE meta_schema SET value=? WHERE key='app_version'").run(original);
+    }
   });
 });

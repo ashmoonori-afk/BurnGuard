@@ -145,13 +145,15 @@ async function figmaFetch(
     res = await fetch(`${FIGMA_API_ROOT}${pathAndQuery}`, {
       headers: { "X-Figma-Token": token },
       signal,
+      // The personal access token must never be replayed onto a redirect target;
+      // `redirect: "error"` matches the other authenticated outbound calls.
+      redirect: "error",
     });
-  } catch (err) {
+  } catch {
     if (signal?.reason instanceof ExtractionAcquisitionError) throw signal.reason;
-    throw new FigmaApiError(
-      "fetch_failed",
-      `Figma API request failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    // Deliberately no raw runtime message: a blocked redirect surfaces an
+    // internal error carrying the request URL, which must not reach callers.
+    throw new FigmaApiError("fetch_failed", "Figma API request failed.");
   }
   if (res.status === 401 || res.status === 403) {
     throw new FigmaApiError(

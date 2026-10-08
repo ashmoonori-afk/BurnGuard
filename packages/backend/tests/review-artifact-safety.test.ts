@@ -7,7 +7,7 @@ import path from "node:path";
 import { runMigrationsFrom } from "../src/db/migrate";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
-import { deleteProject, reconcileProjectDeletions } from "../src/services/project-deletion";
+import { deleteProject, listRecentlyDeletedProjects, PROJECT_DELETION_RETENTION_MS, purgeExpiredProjectDeletions, reconcileProjectDeletions, restoreDeletedProject } from "../src/services/project-deletion";
 import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { scheduleProjectSignal } from "../src/services/watchers";
 import { releaseUserTurnReservation, reserveUserTurn } from "../src/services/turns";
@@ -268,4 +268,100 @@ test("Given expired terminal operations When retention runs Then current recover
   expect(existsSync(path.join(projectDir, ".meta", "artifact-operations", current.id, "stage"))).toBe(true);
   await expect(coordinator.undo({ projectId: "p", projectDir, operationId: first.id, expectedRevision: current.resultRevision, expectedArtifactDigest: current.resultDigest })).rejects.toMatchObject({ code: "undo_pruned" });
   expect((await inspectCanonicalTree(projectDir)).tree_digest).toBe(current.resultDigest);
+});
+
+async function treeBytes(dir: string): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const entry of await readdir(dir, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const file = path.join(entry.parentPath, entry.name);
+    out[path.relative(dir, file).split(path.sep).join("/")] = (await readFile(file)).toString("base64");
+  }
+  return out;
+}
+
+const projectRows = () => ({
+  project: db.query("SELECT * FROM projects WHERE id='p'").get(),
+  sessions: db.query("SELECT * FROM sessions WHERE project_id='p' ORDER BY id").all(),
+  events: db.query("SELECT * FROM events WHERE session_id='review-s' ORDER BY id").all(),
+  operations: db.query("SELECT * FROM artifact_operations WHERE project_id='p' ORDER BY id").all(),
+  learning: db.query("SELECT id,project_id FROM learning_items ORDER BY id").all(),
+});
+
+test("Given a deleted project When it is restored from recently deleted Then its rows and files come back identical and it can be deleted again", async () => {
+  await new ArtifactCoordinator(db).initialize("p", projectDir);
+  await mkdir(path.join(projectDir, "assets"));
+  await writeFile(path.join(projectDir, "assets", "logo.svg"), "<svg/>");
+  db.exec(`INSERT INTO events(id,session_id,direction,type,payload_json,processed_at,created_at,sequence) VALUES ('e1','review-s','up','message','{}',1,1,1);
+    INSERT INTO learning_items(id,kind,title,content_json,project_id,created_at,updated_at) VALUES ('li','lesson','L','{}','p',1,1);`);
+  const rowsBefore = projectRows();
+  const filesBefore = await treeBytes(projectDir);
+
+  await deleteProject(db, "p", { projectsRoot: root });
+  expect(existsSync(projectDir)).toBe(false);
+  expect(db.query("SELECT 1 FROM sessions WHERE project_id='p'").get()).toBeNull();
+  await reconcileProjectDeletions(db, root);
+  const listed = await listRecentlyDeletedProjects(db, { projectsRoot: root });
+  expect(listed).toEqual([{ id: "p", name: "P", deleted_at: expect.any(Number) }]);
+  expect(Object.keys(listed[0]!).sort()).toEqual(["deleted_at", "id", "name"]);
+
+  await restoreDeletedProject(db, "p", { projectsRoot: root });
+  expect(projectRows()).toEqual(rowsBefore);
+  expect(await treeBytes(projectDir)).toEqual(filesBefore);
+  expect(await listRecentlyDeletedProjects(db, { projectsRoot: root })).toEqual([]);
+  expect(existsSync(path.join(root, ".deletions", "p"))).toBe(false);
+  await writeFile(path.join(projectDir, "index.html"), "edited after restore");
+  expect(await new ArtifactCoordinator(db).observeExternal("p", projectDir)).not.toBeNull();
+  await deleteProject(db, "p", { projectsRoot: root });
+  expect(db.query("SELECT 1 FROM projects WHERE id='p'").get()).toBeNull();
+}, 30_000);
+
+test("Given a deleted project When the retention window passes Then the purge removes it and earlier purges keep it", async () => {
+  await deleteProject(db, "p", { projectsRoot: root });
+  const [entry] = await listRecentlyDeletedProjects(db, { projectsRoot: root });
+  if (entry === undefined) throw new Error("deleted project not listed");
+  const expiry = entry.deleted_at + PROJECT_DELETION_RETENTION_MS;
+  expect(await purgeExpiredProjectDeletions(db, { projectsRoot: root, now: expiry - 1 })).toBe(0);
+  expect(existsSync(path.join(root, ".deletions", "p", "files", "index.html"))).toBe(true);
+  expect(await listRecentlyDeletedProjects(db, { projectsRoot: root, now: expiry })).toEqual([]);
+  await expect(restoreDeletedProject(db, "p", { projectsRoot: root, now: expiry })).rejects.toMatchObject({ code: "project_restore_unavailable" });
+  expect(await purgeExpiredProjectDeletions(db, { projectsRoot: root, now: expiry })).toBe(1);
+  expect(existsSync(path.join(root, ".deletions", "p"))).toBe(false);
+});
+
+test("Given a deleted project When a project with the same id or folder exists Then restore is refused and the tombstone is kept", async () => {
+  await deleteProject(db, "p", { projectsRoot: root });
+  await mkdir(projectDir);
+  await writeFile(path.join(projectDir, "index.html"), "someone else");
+  await expect(restoreDeletedProject(db, "p", { projectsRoot: root })).rejects.toMatchObject({ code: "project_restore_conflict" });
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("someone else");
+  await rm(projectDir, { recursive: true });
+  db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES ('p','Other','prototype',?,'index.html','codex',2,2)").run(path.join(root, "other"));
+  await expect(restoreDeletedProject(db, "p", { projectsRoot: root })).rejects.toMatchObject({ code: "project_restore_conflict" });
+  expect(db.query("SELECT name FROM projects WHERE id='p'").get()).toEqual({ name: "Other" });
+  expect(await readFile(path.join(root, ".deletions", "p", "files", "index.html"), "utf8")).toBe("base");
+});
+
+test("Given a restore interrupted after its rows committed When startup reconciles Then the files are moved back", async () => {
+  await deleteProject(db, "p", { projectsRoot: root });
+  db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES ('p','P','prototype',?,'index.html','codex',1,1)").run(projectDir);
+  await reconcileProjectDeletions(db, root);
+  expect(await readFile(path.join(projectDir, "index.html"), "utf8")).toBe("base");
+  expect(existsSync(path.join(root, ".deletions", "p"))).toBe(false);
+});
+
+test("Given quarantined and legacy tombstones When listing and purging Then neither is listed and only the legacy one is collected at startup", async () => {
+  const quarantined = path.join(root, ".deletions", "q.quarantined-01J0000000000000000000000");
+  await mkdir(path.join(quarantined, "files"), { recursive: true });
+  await writeFile(path.join(quarantined, "receipt.json"), JSON.stringify({ schema_version: 2, project_id: "q", source_relative_path: "q", name: "Q", deleted_at: 0 }));
+  await writeFile(path.join(quarantined, "rows.json"), "{}");
+  const legacy = path.join(root, ".deletions", "old");
+  await mkdir(path.join(legacy, "files"), { recursive: true });
+  await writeFile(path.join(legacy, "receipt.json"), JSON.stringify({ schema_version: 1, project_id: "old", source_relative_path: "old" }));
+  expect(await listRecentlyDeletedProjects(db, { projectsRoot: root })).toEqual([]);
+  expect(await purgeExpiredProjectDeletions(db, { projectsRoot: root, now: Number.MAX_SAFE_INTEGER })).toBe(0);
+  await expect(restoreDeletedProject(db, "q.quarantined-01J0000000000000000000000", { projectsRoot: root })).rejects.toMatchObject({ code: "project_restore_unavailable" });
+  await reconcileProjectDeletions(db, root);
+  expect(existsSync(path.join(quarantined, "receipt.json"))).toBe(true);
+  expect(existsSync(legacy)).toBe(false);
 });
