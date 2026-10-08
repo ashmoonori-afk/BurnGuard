@@ -41,7 +41,7 @@ bun test                        # unit + integration
 node scripts/qa/e2e-smoke.mjs [--only core]   # browser E2E over the core loop
 ```
 
-Browser E2E runs on Node with playwright-core against an installed Chrome/Edge channel: install the fixture browser once with `node packages/backend/node_modules/playwright-core/cli.js install chromium`, then confirm the gate prerequisites (repository identity, tools, provider auth, browser, free port) with `bun scripts/qa/preflight.ts --json`.
+Browser E2E runs on Node with playwright-core against an installed Chrome/Edge channel: by default it uses system Google Chrome. To use Edge instead, pass `--channel msedge`. To use bundled Chromium, first install it with `node packages/backend/node_modules/playwright-core/cli.js install chromium`, then pass `--channel bundled`.
 
 ## 2. Workspace Layout
 

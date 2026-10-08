@@ -30,6 +30,5 @@
 
 - Do not edit a dated record to reflect new behavior; write the next dated record instead.
 - Do not treat `04-ui-spec.md` or `06-milestones.md` as a current checklist; `README.md` marks them historical.
-- Do not copy `CONTRIBUTING.md`'s `bun run test:e2e` / `tests/e2e/*.spec.ts` references - `17-project-review-and-roadmap-2026-09-11.md:120` records that neither exists; QA lives in `scripts/qa/`.
 - Do not rely on the Out-of-Band References table's `ref/` and `devplan/` paths; both are gitignored and absent from a fresh checkout.
 - Do not restate source-level API detail here; link the module and let its `AGENTS.md` carry it.
