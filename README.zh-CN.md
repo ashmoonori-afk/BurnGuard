@@ -151,7 +151,7 @@ bun run previews
 
 ```sh
 bun run typecheck
-bun run lint
+bun run check:whitespace
 bun run build:frontend
 bun test
 ```

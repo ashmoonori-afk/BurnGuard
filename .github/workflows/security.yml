@@ -19,7 +19,7 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
-      - run: bun run lint
+      - run: bun run check:whitespace
       # A test file that os-tests.yml does not name never runs on macOS or Windows. Each one must be in an os-tests.yml
       # list or in the baseline of suites not yet covered, which may only shrink; see doc/os-matrix.md. The baseline
       # suites run on Ubuntu only, in the "Baseline suites" step below.
@@ -148,6 +148,7 @@ jobs:
           packages/backend/tests/chromium-launch-hardening.test.ts
           scripts/qa/check-os-matrix-coverage.test.ts
           scripts/qa/check-flake-patterns.test.ts
+          scripts/whitespace-base.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts
           packages/frontend/tests/canvas-source.test.ts
