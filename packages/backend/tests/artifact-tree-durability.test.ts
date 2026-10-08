@@ -1,7 +1,10 @@
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import { Database } from "bun:sqlite";
+import { mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
+import { runMigrationsFrom } from "../src/db/migrate";
 import { defaultManagedTreeIo, materializeManagedTree, publishManagedTree, type ManagedTreeIo } from "../src/services/artifact-tree-storage";
 
 const roots: string[] = [];
@@ -52,5 +55,38 @@ describe("managed tree durability", () => {
     expect(events.filter((event) => event === "sync-dir").length).toBeGreaterThanOrEqual(2);
     expect(events.lastIndexOf("sync-file")).toBeLessThan(events.indexOf("sync-dir"));
     expect(await readFile(path.join(destination, "index.html"), "utf8")).toBe("<p>a</p>");
+  });
+
+  test("Given a throwaway copy, When it is materialized with the default io, Then no file or directory is flushed", async () => {
+    const source = await tree({ "index.html": "<p>a</p>", "css/site.css": "p{}" });
+    const destination = path.join(await tree({}), "render");
+    const probe = await open(path.join(source, "index.html"), "r");
+    const sync = spyOn(Object.getPrototypeOf(probe) as { sync: () => Promise<void> }, "sync");
+    await probe.close();
+    try {
+      await materializeManagedTree(source, destination);
+      expect(sync).not.toHaveBeenCalled();
+    } finally { sync.mockRestore(); }
+    expect(await readFile(path.join(destination, "css/site.css"), "utf8")).toBe("p{}");
+  });
+
+  test("Given an agent-written stage, When an operation commits, Then the stage is flushed after publication and before the database commit", async () => {
+    const db = new Database(":memory:");
+    await runMigrationsFrom(db, path.join(import.meta.dir, "../src/db/migrations"));
+    const project = await tree({ "index.html": "old" });
+    db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES ('p','P','prototype',?,'index.html','codex',1,1)").run(project);
+    db.exec("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES ('s','p','codex','idle',1,1,1)");
+    const events: string[] = [];
+    const coordinator = new ArtifactCoordinator(db, { treeIo: recordingIo(events), beforeDatabaseCommit: () => { events.push("commit"); } });
+    const base = await coordinator.initialize("p", project);
+    events.length = 0;
+    await coordinator.run({ projectId: "p", projectDir: project, kind: "turn", expectedRevision: 0, expectedArtifactDigest: base.tree_digest, mutate: async (stage) => { await writeFile(path.join(stage, "index.html"), "agent bytes"); } });
+    const commit = events.indexOf("commit");
+    const lastRename = events.lastIndexOf("rename:index.html");
+    expect(lastRename).toBeGreaterThan(-1);
+    expect(commit).toBeGreaterThan(lastRename);
+    expect(events.slice(lastRename + 1, commit)).toContain("sync-file");
+    expect(events.slice(lastRename + 1, commit).at(-1)).toBe("sync-dir");
+    db.close();
   });
 });

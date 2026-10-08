@@ -47,13 +47,21 @@ export const defaultManagedTreeIo: ManagedTreeIo = {
   },
 };
 
+/** Throwaway copies (export and render roots, stage seeds) skip every flush; only the rename stays. */
+export const unsyncedManagedTreeIo: ManagedTreeIo = {
+  syncFile: async () => {},
+  rename,
+  syncDirectory: async () => {},
+};
+
 async function writeFileDurably(target: string, bytes: Uint8Array, io: ManagedTreeIo): Promise<void> {
   const handle = await open(target, "wx");
   try { await handle.writeFile(bytes); await io.syncFile(handle); }
   finally { await handle.close(); }
 }
 
-export async function materializeManagedTree(source: string, destination: string, io: ManagedTreeIo = defaultManagedTreeIo): Promise<CanonicalTreeManifest> {
+/** Copies are unsynced unless the caller passes `defaultManagedTreeIo` because the copy becomes durable authority. */
+export async function materializeManagedTree(source: string, destination: string, io: ManagedTreeIo = unsyncedManagedTreeIo): Promise<CanonicalTreeManifest> {
   const tree = await inspectCanonicalTreeOnDisk(source);
   const manifest = tree.manifest;
   await rm(destination, { recursive: true, force: true });
@@ -67,6 +75,20 @@ export async function materializeManagedTree(source: string, destination: string
   }
   for (const directory of directories) await io.syncDirectory(directory);
   return validateCanonicalTree(destination, manifest);
+}
+
+/** Flushes files written into a tree by something else (the agent in a stage), then their directories. */
+export async function syncManagedTree(root: string, io: ManagedTreeIo = defaultManagedTreeIo): Promise<void> {
+  const tree = await inspectCanonicalTreeOnDisk(root);
+  const directories = new Set<string>([root]);
+  for (const file of tree.manifest.files) {
+    const target = diskPathOf(root, tree, file.path);
+    // Windows refuses FlushFileBuffers on a read-only handle.
+    const handle = await open(target, "r+");
+    try { await io.syncFile(handle); } finally { await handle.close(); }
+    for (let directory = path.dirname(target); directory !== root; directory = path.dirname(directory)) directories.add(directory);
+  }
+  for (const directory of directories) await io.syncDirectory(directory);
 }
 
 export function diffManagedTrees(before: CanonicalTreeManifest, after: CanonicalTreeManifest): readonly ArtifactFileDiff[] {
