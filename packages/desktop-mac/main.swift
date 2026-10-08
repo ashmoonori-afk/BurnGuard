@@ -628,7 +628,11 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         serviceInput = input
         serviceOutput = output
 
+        // Hold through enqueue so a chunk already read by a callback precedes the final EOF drain.
+        let outputLock = NSLock()
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            outputLock.lock()
+            defer { outputLock.unlock() }
             let data = handle.availableData
             // At EOF the handler keeps firing with empty data until it is cleared.
             if data.isEmpty { handle.readabilityHandler = nil; return }
@@ -638,6 +642,8 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             if handle.availableData.isEmpty { handle.readabilityHandler = nil }
         }
         process.terminationHandler = { [weak self] process in
+            outputLock.lock()
+            defer { outputLock.unlock() }
             // The backend may print startup_failed just before exiting; read what is left before choosing the message.
             output.fileHandleForReading.readabilityHandler = nil
             let remaining = try? output.fileHandleForReading.readToEnd()
