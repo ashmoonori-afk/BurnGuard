@@ -38,12 +38,38 @@ jobs:
         run: test -x "dist/mac/BurnGuard Design.app/Contents/MacOS/resources/node/node"
       - name: Verify packaged native canvas, persistence, and exports
         run: bun scripts/qa/native-mac-smoke.ts "dist/mac/BurnGuard Design.app" "$RUNNER_TEMP/native-mac-smoke-evidence"
+      - name: Verify the downloaded (quarantined) copy under Gatekeeper
+        run: |
+          set -euo pipefail
+          # A browser download carries com.apple.quarantine; the build output does not, so the smoke above never saw Gatekeeper.
+          copy_root="$RUNNER_TEMP/quarantined-copy"
+          rm -rf "$copy_root"
+          mkdir -p "$copy_root"
+          ditto "dist/mac/BurnGuard Design.app" "$copy_root/BurnGuard Design.app"
+          app="$copy_root/BurnGuard Design.app"
+          xattr -w com.apple.quarantine "0081;$(printf '%x' "$(date +%s)");Safari;" "$app"
+          xattr -p com.apple.quarantine "$app" >/dev/null
+          # Expected state while releases are unsigned and not notarized: Gatekeeper rejects the quarantined copy.
+          # When Developer ID signing and notarization exist, flip this to require acceptance (spctl exit 0).
+          if spctl --assess --type execute --verbose=4 "$app"; then
+            echo "spctl accepted the unsigned quarantined copy; if the release is now Developer ID signed and notarized, update this step to expect acceptance." >&2
+            exit 1
+          fi
+          # README workaround: removing the quarantine attribute makes the copy launchable again.
+          xattr -dr com.apple.quarantine "$app"
+          if xattr -p com.apple.quarantine "$app" >/dev/null 2>&1; then
+            echo "com.apple.quarantine is still present after xattr -dr" >&2
+            exit 1
+          fi
+          bun scripts/qa/native-mac-smoke.ts "$app" "$RUNNER_TEMP/native-mac-smoke-dequarantined-evidence"
       - name: Upload native acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: BurnGuard-macOS-Native-QA
-          path: ${{ runner.temp }}/native-mac-smoke-evidence/*
+          path: |
+            ${{ runner.temp }}/native-mac-smoke-evidence/*
+            ${{ runner.temp }}/native-mac-smoke-dequarantined-evidence/*
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
