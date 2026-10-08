@@ -8,7 +8,7 @@
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Entry point | `README.md` | Index, Start Here, numbered read order, topic table; states which specs are historical |
+| Entry point | `README.md` | Index, Start Here, numbered read order; states which specs are historical |
 | Contributing rules | `CONTRIBUTING.md` | Stack conventions, naming, import order, security rules, PR checklist |
 | Foundational specs | `00-overview` … `03-backend-adapters` | Overview, architecture, data model, adapters; `04`–`07` (UI spec, design-system format, milestones, ADRs) are local-only |
 | Current behavior | `08`–`23` dated records (local-only) | Dated files supersede the numbered specs where they disagree; `14-…-2026-09-09` is the deliverables/publishing authority for maintainers holding the local copies |
@@ -19,8 +19,8 @@
 
 ## CONVENTIONS
 
-- All documentation in `doc/` is English (`CONTRIBUTING.md:171`); `README.md:73` still says English or Korean - CONTRIBUTING wins, and the Korean product README lives at the repo root.
-- New implementation records are dated files, `NN-topic-YYYY-MM-DD.md`, added to the `README.md` Start Here list and topic table in the same change.
+- All documentation in `doc/` is English (`CONTRIBUTING.md` §6.1); the Korean product README lives at the repo root.
+- New implementation records are dated files, `NN-topic-YYYY-MM-DD.md`, added to the `README.md` Start Here list in the same change.
 - ADRs are append-only: supersede with a new entry, mark the old one, never rewrite or delete it.
 - Diagrams are ASCII; no Mermaid, PlantUML, or external renderer.
 - Status language is date-qualified. A document describing past state stays as written, even when the code has moved on.

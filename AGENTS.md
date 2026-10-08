@@ -85,7 +85,7 @@ BurnGuard/
 - `APP_VERSION` in `@bg/shared/app`, `BurnGuard.Desktop.csproj` `<Version>`, and the Velopack package move together.
 - Run `bun test` from the repo root: `bunfig.toml` preload mints a throwaway `BG_APP_ROOT` (must be absolute), migrates it, deletes it at exit (timeout 30000, coverage 0.8). Tests use Given/When/Then descriptions and injected seams.
 - `packages/backend/tsconfig.json` includes `src` only; backend tests are typechecked only by root `tsc --build`.
-- `doc/` is English-only (`CONTRIBUTING.md:171`); dated `doc/NN-...-YYYY-MM-DD.md` records supersede numbered specs.
+- `doc/` is English-only (`CONTRIBUTING.md` §6.1); dated `doc/NN-...-YYYY-MM-DD.md` records supersede numbered specs.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
@@ -138,7 +138,7 @@ bun scripts/qa/check-flake-patterns.ts       # launch-path flake patterns in pac
 - Largest backend files: `services/design-system-extract.ts` (2,165), `db/seed-tutorials.ts` (985), `tests/design-system-extract.test.ts` (634), `routes/session.ts` (606).
 - Vite uses strict port `5173`, proxies `/api` and `/runtime`, and sends `frame-ancestors 'none'` + `X-Frame-Options: DENY`. Windows is the primary local target; macOS packaging and shell QA are also present.
 - Consult the nearest nested `AGENTS.md` before changing a delegated domain; this root records only cross-package constraints.
-- Doc drift to ignore: `CONTRIBUTING.md` cites a `test:e2e` script and `tests/e2e/` that do not exist (QA lives in `scripts/qa/`); `doc/README.md` advertises `ref/` and `devplan/` (gitignored, absent in a checkout) and still allows Korean. `uploads/`, `ref/`, `devplan/`, `/.omo/` are gitignored. A stray empty `NUL` file sits at the repo root (Windows artifact).
+- Doc drift to ignore: `uploads/`, `ref/`, `devplan/`, `/.omo/` are gitignored. A stray empty `NUL` file sits at the repo root (Windows artifact).
 
 ## CI FAILURES AND OS COVERAGE
 
