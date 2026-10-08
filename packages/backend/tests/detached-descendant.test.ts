@@ -57,6 +57,7 @@ for (const adapter of ["codex", "claude-code"] as const) {
     const controlExit = control.exited;
     const controlReader = control.stdout.getReader();
     let run: Promise<unknown> | undefined;
+    let completed = false;
     try {
       expect(await bounded(firstLine(controlReader))).toBe(String(control.pid));
       const onLine = (line: string) => {
@@ -82,15 +83,18 @@ for (const adapter of ["codex", "claude-code"] as const) {
       if (adapter === "codex") expect(events.at(-1)).toMatchObject({ type: "status.idle", stopReason: "interrupted" });
       console.log("detached-settlement-receipt", JSON.stringify({ adapter, ...ids, control: control.pid,
         parentAbsent: !present(ids.parent), childAbsent: !present(ids.child), unrelatedPresent: present(control.pid) }));
+      completed = true;
     } finally {
       controller.abort();
       // Read the exact receipt even if an assertion in the ready callback failed.
       const receiptPath = path.join(root, "owned-pids.json");
       if (existsSync(receiptPath)) ids = JSON.parse(await readFile(receiptPath, "utf8"));
       if (process.platform === "win32") {
-        // A bare PID has no ownership on Windows; the adapter's job already ended the owned pair, so only the
-        // unrelated control process (and any survivor of a failed assertion) is stopped here.
-        for (const pid of [ids?.parent, ids?.child, control.pid]) if (pid !== undefined && present(pid)) try { process.kill(pid); } catch { /* already exited */ }
+        // A bare PID has no ownership on Windows and PIDs are reused quickly. The control process is killed through
+        // its spawn handle; the owned pair (already ended by the adapter's job) is signalled by PID only when the
+        // test failed before completing, never after a pass where the PIDs may belong to someone else.
+        control.kill();
+        if (!completed) for (const pid of [ids?.parent, ids?.child]) if (pid !== undefined && present(pid)) try { process.kill(pid); } catch { /* already exited */ }
       } else {
         if (ids) {
           await closeOwnedProcessTree(ids.parent);

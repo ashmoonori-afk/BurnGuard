@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { once } from "node:events";
 import { mkdir, symlink } from "node:fs/promises";
+import path from "node:path";
 import { buildCodexCommand } from "../src/adapters/codex";
 import { codexFixture, PNG_SHA } from "./codex-runner-fixture";
 
@@ -194,8 +195,10 @@ describe("runCodexTurn image-tool lifecycle (real subprocess fixtures)", () => {
     parentWatch(fixture).emit("change", "rename", "generated_images");
     await fixture.command("complete");
     expect(await run).toEqual({ exitCode: 0 });
-    // Name the offending paths on failure: a watch anywhere but the Codex home means the junction was followed.
-    expect(fixture.watches.map((entry) => entry.path).filter((watched) => watched !== fixture.home)).toEqual([]);
+    // Watches outside the fixture tree are ignored: on Windows the owned-process receipt directory is watched too.
+    const inFixture = fixture.watches.map((entry) => entry.path).filter((watched) => !path.relative(fixture.root, watched).startsWith(".."));
+    // Listing the paths keeps the failure message naming the offender: only the Codex home may be watched.
+    expect(inFixture.filter((watched) => watched !== fixture.home)).toEqual([]);
     expect(fixture.events.some((event) => event.type === "tool.started")).toBe(false);
   });
 
