@@ -86,14 +86,13 @@ describe("desktop shell string tables", () => {
     }
   });
 });
-
 describe("desktop shell sources use only table text", () => {
   test("Given both shell sources When scanned Then no Hangul remains and every referenced key exists in all three tables", async () => {
     const swift = await readFile(path.join(import.meta.dir, "..", "desktop-mac", "main.swift"), "utf8");
     expect(HANGUL.test(source)).toBe(false);
     expect(HANGUL.test(swift)).toBe(false);
-    const windowsKeys = [...source.matchAll(/ShellText\.Get\("([A-Za-z.]+)"\)/g)].map((match) => match[1] ?? "");
-    const macKeys = [...swift.matchAll(/shellText\("([A-Za-z.]+)"/g)].map((match) => match[1] ?? "");
+    const windowsKeys = [...source.matchAll(/ShellText\.Get\("([A-Za-z0-9.]+)"\)/g)].map((match) => match[1] ?? "");
+    const macKeys = [...swift.matchAll(/shellText\("([A-Za-z0-9.]+)"/g)].map((match) => match[1] ?? "");
     expect(windowsKeys.length).toBeGreaterThan(0);
     expect(macKeys.length).toBeGreaterThan(0);
     const tables = await shellTables("desktop-windows");
@@ -111,4 +110,3 @@ describe("desktop shell sources use only table text", () => {
     }
   });
 });
-
