@@ -24,9 +24,16 @@ try {
     if (sdks !== null) {
       await writeFile(path.join(bin, "dotnet.cmd"), `@echo off\r\n${sdks === "" ? "" : `echo ${sdks}\r\n`}exit /b 0\r\n`);
     }
+    // Windows environment names are case-insensitive; do not pass both inherited
+    // Path and fixture PATH, or cmd can select the real installed tools.
+    const environment = { ...process.env };
+    for (const key of Object.keys(environment)) {
+      if (key.toUpperCase() === "PATH") delete environment[key];
+    }
+    environment.PATH = `${bin};${system32}`;
     const child = Bun.spawn([path.join(system32, "cmd.exe"), "/d", "/c", "Start-BurnGuard.bat", "--build"], {
       cwd: directory,
-      env: { ...process.env, PATH: `${bin};${system32}` },
+      env: environment,
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
