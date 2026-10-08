@@ -170,9 +170,18 @@ describe("design direction routes", () => {
     expect(preview.status).toBe(200);
     expect(preview.headers.get("content-type")).toBe("image/svg+xml");
     expect(preview.headers.get("cache-control")).toBe("private, no-cache");
+    expect(preview.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(preview.headers.get("content-security-policy")).toContain("default-src http://local data: blob:");
+    expect(preview.headers.get("content-security-policy")).toContain("frame-ancestors http://local");
+    expect(preview.headers.get("content-disposition")).toBeNull();
     const etag = preview.headers.get("etag");
     expect(etag).not.toBeNull();
     expect((await request(previewPath, "GET", undefined, { "if-none-match": etag ?? "" })).status).toBe(304);
+    const download = await request(previewPath, "GET", undefined, { "sec-fetch-dest": "document" });
+    expect(download.status).toBe(200);
+    expect(download.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(download.headers.get("content-disposition")).toBe(`attachment; filename="editorial.svg"; filename*=UTF-8''editorial.svg`);
+    expect(download.headers.get("content-security-policy")).toBeNull();
     expect((await request(`/api/projects/${projectId}/design-directions/${ready.generation_id}/unknown/preview`)).status).toBe(404);
     expect((await request(`/api/projects/${projectId}/design-directions/${ready.generation_id}/%5Cescape/preview`)).status).toBe(400);
   });

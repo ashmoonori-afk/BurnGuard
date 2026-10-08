@@ -21,7 +21,7 @@ packages/desktop-windows/
 | Startup order | `Program.Main` | Velopack (`SetAutoApplyOnStartup(false)`) → profile resolve → single-instance mutex → pending update → window |
 | Single instance | `Program.Main` | Mutex `Local\BurnGuard.<identity>`; identity = 24 hex chars of SHA-256 over the uppercased absolute profile path; second launch posts the registered activate message and exits 0 |
 | Backend ownership | `DesktopWindow.StartService` | Spawns `service/burnguard-design.exe` with `BG_DESKTOP=1`, `BG_NO_OPEN=1`, `BG_DEV=0`, `BG_PORT`; `BG_SCAN_PORT` removed; kill-on-close job object |
-| Readiness protocol | `StartService` stdout handler | Only `[burnguard-desktop] ` JSON lines with `protocol == 1`, matching `pid`, and `url == http://127.0.0.1:<port>` are accepted |
+| Readiness protocol | `StartService` stdout handler | Only `[burnguard-desktop] ` JSON lines with `protocol == 1`, matching `pid`, `url == http://127.0.0.1:<port>` and a base64url `bootstrap` secret are accepted; the app is loaded at `<url>#bg-bootstrap:<secret>` |
 | WebView hardening | `DesktopWindow` init | DevTools, accelerator keys, status bar, web messages, host objects, autofill all disabled; `PermissionRequested` always denied |
 | Navigation policy | `IsTopLevelAppRoute`, `NewWindowRequested`, `OpenExternal` | Top-level navigation stays on the app origin; external links require absolute `http(s)` with empty `UserInfo` and open in the default browser |
 | Smoke mode | `Program.Main`, `DesktopWindow` | Exactly `--smoke-test --smoke-report <absolute path>` plus an isolated `BG_APP_ROOT`; writes `{ ok, startupElapsedMs, servicePid, webViewVersion, screenshot, dom }` |

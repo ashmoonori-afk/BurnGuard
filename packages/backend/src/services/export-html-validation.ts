@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
+import { resolveWithin } from "../security/path-boundary";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { resolveStaticClosure } from "./export-closure";
 
@@ -50,7 +51,7 @@ export async function validateHtmlArchive(bytes: Uint8Array, expected: Omit<Html
   // Canonical spelling: the tree manifest relativises realpath targets, so an 8.3, junction or linked temp root would miss every entry.
   const stage = await realpath(await mkdtemp(path.join(tmpdir(), "bg-html-validate-")));
   try {
-    for (const entry of entries.filter((item) => item.path !== HTML_EXPORT_MANIFEST)) { const target = path.join(stage, entry.path); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, entry.bytes); }
+    for (const entry of entries.filter((item) => item.path !== HTML_EXPORT_MANIFEST)) { const target = resolveWithin(stage, ...entry.path.split("/")); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, entry.bytes); }
     await resolveStaticClosure(stage, manifest.entrypoint, await inspectCanonicalTree(stage));
   } finally { await rm(stage, { recursive: true, force: true }); }
   return manifest;
