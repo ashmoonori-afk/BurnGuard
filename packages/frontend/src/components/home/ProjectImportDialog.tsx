@@ -20,7 +20,7 @@ export type ProjectImportSource = "bundle" | "zip" | "folder";
 /** Import-specific codes keep their own advice; other backend codes use the shared recovery copy, and a raw fetch failure is a connection problem, never a ZIP problem. */
 export function projectImportErrorCopy(error: unknown): string {
   if (!(error instanceof ApiError)) return t("errors.network_error");
-  if (error.code === "project_import_limit" || error.code === "project_bundle_limit" || error.code === "payload_too_large") return t("home.projectImport.limitError");
+  if (error.code === "project_import_limit" || error.code === "project_bundle_limit") return t("home.projectImport.limitError");
   if (error.code === "project_import_entrypoint") return t("home.projectImport.entryError");
   if (error.code.startsWith("project_bundle_") || error.code === "invalid_project_bundle") return t("home.projectImport.bundleError");
   if (error.code === "invalid_project_import") return t("home.projectImport.error");

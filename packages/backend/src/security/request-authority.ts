@@ -15,6 +15,12 @@ export interface RequestAuthorityOptions {
    * The first trusted bootstrap must present it; later bootstraps need the launch cookie. Absent: cookie only.
    */
   bootstrapSecret?: string;
+  /**
+   * Plain browser mode: give the launch cookie a Max-Age so it survives closing the browser while the backend keeps
+   * running (the secret is single-use, so a session cookie would lock the user out). The capability is per launch, so
+   * a restarted backend still rejects the old cookie. Absent (desktop): session cookie.
+   */
+  persistentCookieMaxAgeSeconds?: number;
   appAuthority: string;
   devAuthority?: string;
 }
@@ -80,9 +86,13 @@ export function createRequestAuthority(
         }
         pendingBootstrapSecret = undefined;
       }
+      const lifetime =
+        options.persistentCookieMaxAgeSeconds === undefined
+          ? ""
+          : `; Max-Age=${options.persistentCookieMaxAgeSeconds}`;
       c.header(
         "Set-Cookie",
-        `${BURNGUARD_CAPABILITY_COOKIE}=${options.capability}; HttpOnly; SameSite=Strict; Path=/api`,
+        `${BURNGUARD_CAPABILITY_COOKIE}=${options.capability}${lifetime}; HttpOnly; SameSite=Strict; Path=/api`,
       );
       c.header("Cache-Control", "no-store");
       return c.json({

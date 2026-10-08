@@ -6,6 +6,7 @@ import { busyDialogProps } from "../src/components/ui/dialog";
 import { ProjectImportForm, projectBundleWarningKey, projectImportErrorCopy } from "../src/components/home/ProjectImportDialog";
 import { PINTEREST_PIN_LIMIT, PinterestImportForm, pinterestErrorCopy, pinterestSubmitState } from "../src/components/home/PinterestImportDialog";
 import { t } from "../src/i18n/t";
+import { apiErrorCopy } from "../src/lib/error-copy";
 
 const importForm = (props: Partial<Parameters<typeof ProjectImportForm>[0]> = {}) => renderToStaticMarkup(createElement(ProjectImportForm, {
   name: "", source: "zip", files: [], pending: false, error: null, onNameChange() {}, onSourceChange() {}, onFilesChange() {}, onSubmit() {}, ...props,
@@ -31,9 +32,16 @@ describe("project import error copy (UX-11)", () => {
 
   test("Given the import-specific codes When mapped Then their own copy is kept", () => {
     expect(projectImportErrorCopy(new ApiError("project_import_limit", "private", 413))).toBe(t("home.projectImport.limitError"));
-    expect(projectImportErrorCopy(new ApiError("payload_too_large", "private", 413))).toBe(t("home.projectImport.limitError"));
     expect(projectImportErrorCopy(new ApiError("project_import_entrypoint", "private", 400))).toBe(t("home.projectImport.entryError"));
     expect(projectImportErrorCopy(new ApiError("project_bundle_digest", "private", 400))).toBe(t("home.projectImport.bundleError"));
+  });
+
+  test("Given a global body limit When import fails Then the shared size recovery copy reaches the form", () => {
+    const error = new ApiError("payload_too_large", "private", 413, { limit: 48 * 1024 * 1024 });
+    expect(projectImportErrorCopy(error)).toBe(apiErrorCopy(error));
+    expect(alert(importForm({ files: [new File(["x"], "backup.bgarchive")], name: "n", error }))).toBe(apiErrorCopy(error));
+    const unknownLimit = new ApiError("payload_too_large", "private", 413);
+    expect(projectImportErrorCopy(unknownLimit)).toBe(apiErrorCopy(unknownLimit));
   });
 
   test("Given a failed import When the form renders Then the alert carries the mapped copy", () => {

@@ -199,8 +199,8 @@ test("imported project styles render nested CSS inside the real opaque canvas sa
     expect(requests.filter(request => request.path !== sharedFont).every(request => request.capability === "css-import-test")).toBe(true);
     expect(external).toEqual([]);
   } finally {
-    await browser?.close();
-    await server.stop(true);
+    try { await browser?.close(); }
+    finally { await server.stop(true); }
   }
 }, 30_000);
 
@@ -227,8 +227,8 @@ async function withCanvasPage<T>(serve: (pathname: string) => Response | undefin
     await page.evaluate(() => globalThis.canvasCssTest.bootstrapApiAuthority());
     return await action(page, server.url.origin);
   } finally {
-    await browser?.close();
-    await server.stop(true);
+    try { await browser?.close(); }
+    finally { await server.stop(true); }
   }
 }
 

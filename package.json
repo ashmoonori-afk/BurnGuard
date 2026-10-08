@@ -23,7 +23,8 @@
     "typecheck": "tsc --build",
     "test": "bun test --timeout 30000",
     "test:coverage": "bun test --coverage --timeout 30000",
-    "lint": "git diff --check",
+    "check:whitespace": "bun scripts/check-whitespace.ts",
+    "lint": "bun run check:whitespace",
     "clean": "rm -rf packages/*/dist dist"
   },
   "overrides": {

@@ -258,6 +258,32 @@ describe("macOS shutdown ordering", () => {
   });
 });
 
+describe("macOS startup failure messages", () => {
+  test("Given the backend startup_failed codes When the shell handles them Then each code has a localized table entry and the shell never shows only an exit code for it", async () => {
+    const codes = ["port_busy", "profile_owned", "invalid_port"];
+    const csharp = await readFile(path.join(import.meta.dir, "../desktop-windows/Program.cs"), "utf8");
+    for (const language of ["en", "ko", "zh"]) {
+      const table = JSON.parse(await readFile(path.join(import.meta.dir, `i18n/${language}.json`), "utf8")) as Record<string, string>;
+      for (const code of codes) expect(table[`startup_failed.${code}`]).toBeTruthy();
+      expect(table["startup_failed.port_busy"]).toContain("{0}");
+    }
+    for (const code of codes) {
+      expect(source).toContain(`"${code}"`);
+      expect(csharp).toContain(`"${code}"`);
+    }
+    expect(body("private func startupMessage")).toContain('shellText("startup_failed.\\(code)")');
+    expect(body("private func consumeServiceOutput")).toContain('"startup_failed"');
+    expect(body("process.terminationHandler")).toMatch(/startupFailure[\s\S]*self\.fail\(message\)/);
+  });
+
+  test("Given a busy or invalid desktop port When launchService runs Then it pre-checks the loopback port before spawning the backend", () => {
+    const service = body("private func launchService(serviceURL: URL, loginEntries: [String]) throws");
+    expect(service.indexOf("portIsFree(")).toBeGreaterThan(-1);
+    expect(service.indexOf("portIsFree(")).toBeLessThan(service.indexOf("try process.run()"));
+    expect(body("private func portIsFree")).toMatch(/Darwin\.bind\(/);
+  });
+});
+
 describe("macOS close guard while a generation runs (B3-5)", () => {
   test("Given a window close When a generation may be running Then windowShouldClose holds it and closes only after the decision", () => {
     const should = body("func windowShouldClose(_ sender: NSWindow) -> Bool");

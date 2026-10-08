@@ -1,6 +1,6 @@
 import { bootstrapLocalAppData } from "./bootstrap";
 import { loadConfig } from "./config";
-import { activeTurnsMessage, desktopPort, watchDesktopParent } from "./desktop-lifecycle";
+import { activeTurnsMessage, desktopPort, desktopStartupStep, watchDesktopParent } from "./desktop-lifecycle";
 import { openBrowser } from "./lib/browser";
 import { pickPort } from "./lib/port";
 import { appRootDir } from "./lib/app-paths";
@@ -16,11 +16,12 @@ import { activeUserTurnCount, interruptAllUserTurns } from "./services/turns";
 import { shutdownProjectWatchers, startProjectWatchers, type ProjectWatcherStartup } from "./services/watchers";
 
 const isDesktop = process.env.BG_DESKTOP === "1";
-const ownedPort = isDesktop ? desktopPort(process.env.BG_PORT) : undefined;
+const ownedPort = isDesktop ? await desktopStartupStep("invalid_port", () => desktopPort(process.env.BG_PORT)) : undefined;
 // Refuse an existing owner before any migration/recovery writes to its profile.
 // The native host also holds a profile mutex throughout this child's lifetime.
-if (ownedPort !== undefined) await pickPort(ownedPort, ownedPort);
-const profileOwner = process.platform === "win32" ? await acquireWindowsProfile(appRootDir) : await acquirePosixProfile(appRootDir);
+if (ownedPort !== undefined) await desktopStartupStep("port_busy", () => pickPort(ownedPort, ownedPort));
+const acquireProfile = () => (process.platform === "win32" ? acquireWindowsProfile(appRootDir) : acquirePosixProfile(appRootDir));
+const profileOwner = isDesktop ? await desktopStartupStep("profile_owned", acquireProfile) : await acquireProfile();
 await bootstrapLocalAppData();
 startProjectDeletionPurgeScheduler(getSqlite());
 const config = await loadConfig();
@@ -45,10 +46,13 @@ delete process.env.BG_BOOTSTRAP_SECRET;
 if (launcherBootstrapSecret !== undefined && !/^[A-Za-z0-9_-]{16,}$/.test(launcherBootstrapSecret)) {
   throw new Error("BG_BOOTSTRAP_SECRET must be at least 16 base64url characters.");
 }
+// Outlives any realistic backend run; the per-launch capability, not this age, is what ends access on restart.
+const BROWSER_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 const bootstrapSecret = launcherBootstrapSecret ?? generateLaunchCapability();
 const app = createApp({
   capability: generateLaunchCapability(),
   bootstrapSecret,
+  persistentCookieMaxAgeSeconds: isDesktop ? undefined : BROWSER_COOKIE_MAX_AGE_SECONDS,
   appAuthority: `${host}:${port}`,
   devAuthority: isDev ? "127.0.0.1:5173" : undefined,
 });
