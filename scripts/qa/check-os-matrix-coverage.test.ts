@@ -92,6 +92,10 @@ describe("coverage check", () => {
     expect(checkCoverage(input())).toEqual([]);
   });
 
+  test("Given an OS matrix suite missing from Ubuntu When checked Then the gap is reported", () => {
+    expect(codes(checkCoverage(input({ ubuntuListed: [] })))).toEqual([`not_in_ubuntu ${LISTED}`]);
+  });
+
   test("Given a new test file in neither an OS list nor the baseline When checked Then it is reported", () => {
     expect(codes(checkCoverage(input({ testFiles: [LISTED, BASELINED, NEW] })))).toEqual([`not_in_os_matrix ${NEW}`]);
   });
@@ -107,7 +111,7 @@ describe("coverage check", () => {
   });
 
   test("Given a baseline entry that an OS list now runs When checked Then the stale entry is reported", () => {
-    expect(codes(checkCoverage(input({ osListed: [LISTED, BASELINED] })))).toEqual([`baseline_entry_covered ${BASELINED}`]);
+    expect(codes(checkCoverage(input({ osListed: [LISTED, BASELINED], ubuntuListed: [LISTED, BASELINED] })))).toEqual([`baseline_entry_covered ${BASELINED}`]);
   });
 
   test("Given a workflow naming a file that does not exist When checked Then each workflow's entry is reported", () => {

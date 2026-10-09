@@ -197,6 +197,18 @@ jobs:
           packages/frontend/tests/settings-language-note.test.ts
       - name: Install the fixture browser
         run: node packages/backend/node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Remaining OS matrix suites on Ubuntu
+        run: >-
+          bun test --timeout 60000
+          packages/backend/tests/design-system-layout-reference.test.ts
+          packages/backend/tests/design-system-conformance.test.ts
+          packages/backend/tests/design-workflow.test.ts
+          packages/backend/tests/python-runtime.test.ts
+          packages/backend/tests/owned-process-windows.test.ts
+          packages/backend/tests/desktop-lifecycle.test.ts
+          packages/backend/tests/local-fonts.test.ts
+          packages/frontend/tests/canvas-css-imports.browser.test.ts
+          packages/backend/tests/exports.test.ts
       # Every baseline suite (scripts/qa/os-matrix-baseline.txt) that an explicit list above does not already run, one
       # `bun test` process per file, after the browser install because most of them drive a real Chromium. The
       # suites left out, with reasons, are in scripts/qa/baseline-suites.ts; the coverage guard fails on a baseline
