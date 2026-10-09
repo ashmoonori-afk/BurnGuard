@@ -168,11 +168,8 @@ describe("baseline suites on Ubuntu", () => {
     expect(plan).toEqual({ run: [BASELINED], listed: [LISTED], excluded: [CHROMIUM_ONLY] });
   });
 
-  test("Given the real exclusions When read Then every one carries a reason and names a test file", () => {
-    for (const [file, reason] of Object.entries(BASELINE_EXCLUSIONS)) {
-      expect(file).toMatch(/^(packages|scripts)\/.+\.test\.[cm]?[jt]sx?$/);
-      expect(reason.trim()).not.toBe("");
-    }
+  test("Given the shipped baseline exclusions When read Then no suite is excluded", () => {
+    expect(BASELINE_EXCLUSIONS).toEqual({});
   });
 
   test("Given workflows When scanned Then only a step that runs the runner script counts", () => {
