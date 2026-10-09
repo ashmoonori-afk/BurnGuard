@@ -37,6 +37,7 @@ import { reconcileExportState } from "./services/export-recovery";
 import { createProductionResearchRecoveryDependencies } from "./routes/research";
 import { reconcileResearchState, type ResearchRecoveryDependencies } from "./services/research-recovery";
 import { recoverVisualAlternatives } from "./services/visual-alternative-recovery";
+import { reapPersistedSessionProcesses } from "./services/session-process-recovery";
 
 async function exists(target: string): Promise<boolean> {
   try {
@@ -138,6 +139,7 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   await ensureConfig();
   await seedSampleDesignSystems();
   await runMigrations();
+  await reapPersistedSessionProcesses(getSqlite());
   await reconcileProjectDeletions(getSqlite());
   await purgeExpiredProjectDeletions(getSqlite());
   await reconcileProjectBundleImports(getSqlite());

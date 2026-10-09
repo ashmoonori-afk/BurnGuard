@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -28,7 +29,11 @@ internal static class ProcessHostChecks
         ArgumentContract(helper);
         RootExitReapsChild(helper);
         LauncherDeathDuringTerminate(qaHelper);
+        RecoveryFailuresAndAbsence(helper);
+        RecoverOwnedTree(helper, false);
+        RecoverOwnedTree(helper, true);
         Console.WriteLine("PASS: root-exit cleanup and launcher-death termination preserve unrelated sentinels");
+        Console.WriteLine("PASS: recovery proves absence or zero active members without launcher authority and preserves unrelated sentinels");
         return 0;
     }
 
@@ -179,6 +184,166 @@ internal static class ProcessHostChecks
         }
     }
 
+    private static void RecoveryFailuresAndAbsence(string helper)
+    {
+        using (var fixture = new Fixture())
+        {
+            var token = Guid.NewGuid().ToString("N");
+            var receipt = Path.Combine(fixture.Root, "recovery.json");
+            var command = RecoveryArguments(token, receipt);
+            ControlExit(helper, command, 0);
+            var absent = Receipt(receipt);
+            Equal(absent.Count, 4, "absent receipt field count");
+            Equal(Convert.ToInt32(absent["schema_version"]), 1, "recovery schema");
+            Equal((string)absent["operation"], "recovery", "recovery operation");
+            Equal((string)absent["state"], "absent", "recovery state");
+            Equal((string)absent["job_token"], token, "recovery token");
+            File.Delete(receipt);
+
+            // Generic terminate failure remains failure, not recovery's positive proof of absence.
+            File.WriteAllText(Path.Combine(fixture.Root, "launch.json"),
+                "{\"schema_version\":1,\"operation\":\"launch\",\"state\":\"running\",\"job_token\":\"" + token + "\",\"host_pid\":" + Process.GetCurrentProcess().Id + "}");
+            ControlExit(helper, command.Replace("recover ", "terminate "), 201);
+            NoReceipt(receipt);
+            File.Delete(Path.Combine(fixture.Root, "launch.json"));
+
+            foreach (var malformed in new[] {
+                RecoveryArguments("not-a-token", receipt),
+                RecoveryArguments(token + "\n", receipt),
+                "recover --job " + token + " --receipt " + Quote(receipt),
+                command.Replace("2000", "0"),
+                command.Replace("2000", "30001"),
+                command + " -- child",
+                command + " --job " + token,
+                RecoveryArguments(token, "relative.json"),
+                RecoveryArguments(token, Path.GetPathRoot(receipt).Substring(0, 2) + "relative.json"),
+                RecoveryArguments(token, receipt.Substring(2)),
+            })
+            {
+                ControlExit(helper, malformed, 200);
+                NoReceipt(receipt);
+            }
+
+            // An object-type mismatch is ERROR_INVALID_HANDLE, not ERROR_FILE_NOT_FOUND.
+            using (var wrongObject = new EventWaitHandle(false, EventResetMode.ManualReset, JobName(token)))
+            {
+                JobOpenFailure(token, 6);
+                ControlExit(helper, command, 201);
+                NoReceipt(receipt);
+            }
+
+            var job = Native.CreateJobObject(IntPtr.Zero, JobName(token));
+            if (job == IntPtr.Zero) throw new Exception("could not create permission fixture job");
+            try
+            {
+                // Deny terminate access even to this user; retain the creator's handle to keep the named job extant.
+                var descriptor = new RawSecurityDescriptor("D:(D;;0x00000008;;;WD)(A;;GA;;;WD)");
+                var bytes = new byte[descriptor.BinaryLength];
+                descriptor.GetBinaryForm(bytes, 0);
+                if (!Native.SetKernelObjectSecurity(job, 4, bytes)) throw new Exception("could not restrict fixture job");
+                JobOpenFailure(token, 5);
+                ControlExit(helper, command, 201);
+                NoReceipt(receipt);
+            }
+            finally { if (!Native.CloseHandle(job)) throw new Exception("permission fixture close failed"); }
+
+            // An existing empty job uses the terminate schema, never the absent schema.
+            job = Native.CreateJobObject(IntPtr.Zero, JobName(token));
+            if (job == IntPtr.Zero) throw new Exception("could not create empty fixture job");
+            try
+            {
+                ControlExit(helper, command, 0);
+                ExactTerminate(Receipt(receipt), token);
+                File.Delete(receipt);
+                Directory.CreateDirectory(receipt);
+                ControlExit(helper, command, 206);
+                NoReceipt(receipt);
+                Directory.Delete(receipt);
+            }
+            finally { if (!Native.CloseHandle(job)) throw new Exception("empty fixture close failed"); }
+
+            Directory.CreateDirectory(receipt);
+            ControlExit(helper, command, 206);
+            if (File.Exists(receipt)) throw new Exception("failed receipt write produced a receipt");
+        }
+    }
+
+    private static void RecoverOwnedTree(string helper, bool killLauncher)
+    {
+        using (var fixture = new Fixture())
+        using (var sentinel = Start(Self, "child " + Quote(fixture.SentinelEventName), true))
+        {
+            var sentinelPid = PositivePid(ReadLine(sentinel, 5_000));
+            var token = Guid.NewGuid().ToString("N");
+            var launch = Path.Combine(fixture.Root, "launch.json");
+            var recovery = Path.Combine(fixture.Root, "recovery.json");
+            using (var receiptSignal = WatchFile(fixture.Root, "launch.json"))
+            using (var host = Start(helper, LaunchArguments(token, launch, "tree-live", fixture.ChildEventName), true))
+            {
+                var childPid = ChildPid(ReadLine(host, 5_000));
+                receiptSignal.Wait(5_000);
+                var running = Receipt(launch);
+                Equal((string)running["state"], "running", "recovery requires a running tree");
+                using (var targetHandle = OpenRetainedProcess(Convert.ToUInt32(running["target_pid"])))
+                using (var childHandle = OpenRetainedProcess((uint)childPid))
+                {
+                    var retainedJob = Native.OpenJobObject(0x0004 | 0x0008, false, JobName(token));
+                    if (retainedJob == IntPtr.Zero) throw new Exception("could not retain recovery fixture job");
+                    try
+                    {
+                        // Keep the job alive after launcher death; kill-on-close does not fire while a handle remains.
+                        if (killLauncher)
+                        {
+                            host.Kill();
+                            if (!host.WaitForExit(2_000)) throw new Exception("recovery launcher death deadline");
+                            Present((int)Convert.ToUInt32(running["target_pid"]), "retained job target exited before recovery");
+                            Present(childPid, "retained job child exited before recovery");
+                        }
+                        File.Delete(launch);
+                        NoReceipt(launch);
+                        ControlExit(helper, RecoveryArguments(token, recovery), 0);
+                        ExactTerminate(Receipt(recovery), token);
+                        Signaled(targetHandle, 5_000, "target survived recovery receipt");
+                        Signaled(childHandle, 5_000, "child survived recovery receipt");
+                        Present(sentinelPid, "recovery terminated unrelated sentinel");
+                        if (!killLauncher)
+                        {
+                            if (!host.WaitForExit(5_000)) throw new Exception("recovered launcher exit deadline");
+                            Equal(host.ExitCode, 143, "recovery target exit code");
+                            ExactLaunch(Receipt(ExitedReceipt(launch)), token, host.Id, 143);
+                        }
+                    }
+                    finally { if (!Native.CloseHandle(retainedJob)) throw new Exception("recovery fixture close failed"); }
+                }
+            }
+            fixture.ReleaseSentinel();
+            if (!sentinel.WaitForExit(5_000)) throw new Exception("recovery sentinel exit deadline");
+        }
+    }
+
+    private static string RecoveryArguments(string token, string receipt) =>
+        "recover --job " + Quote(token) + " --receipt " + Quote(receipt) + " --timeout-ms 2000";
+    private static void JobOpenFailure(string token, int expected)
+    {
+        var job = Native.OpenJobObject(0x0004 | 0x0008, false, JobName(token));
+        var error = Marshal.GetLastWin32Error();
+        if (job != IntPtr.Zero)
+        {
+            Native.CloseHandle(job);
+            throw new Exception("fixture job unexpectedly granted recovery access");
+        }
+        Equal(error, expected, "native job failure fixture error");
+    }
+    private static void ControlExit(string helper, string arguments, int expected)
+    {
+        using (var control = Start(helper, arguments, false))
+        {
+            if (!control.WaitForExit(5_000)) throw new Exception("recovery helper deadline");
+            Equal(control.ExitCode, expected, "unexpected recovery helper exit: " + control.StandardError.ReadToEnd());
+        }
+    }
+    private static void NoReceipt(string path) { if (File.Exists(path)) throw new Exception("failure produced a successful receipt"); }
+
     private static string LaunchArguments(string token, string receipt, string mode, string eventName) =>
         "launch --job " + token + " --receipt " + Quote(receipt) + " -- " + Quote(Self) + " " + mode + " " + Quote(eventName);
 
@@ -292,6 +457,9 @@ internal static class ProcessHostChecks
     private static class Native
     {
         [DllImport("kernel32.dll", SetLastError = true)] internal static extern IntPtr OpenProcess(uint access, bool inherit, uint processId);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] internal static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] internal static extern IntPtr OpenJobObject(uint access, bool inherit, string name);
+        [DllImport("advapi32.dll", SetLastError = true)] internal static extern bool SetKernelObjectSecurity(IntPtr handle, uint securityInformation, byte[] descriptor);
         [DllImport("kernel32.dll", SetLastError = true)] internal static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
         [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool CloseHandle(IntPtr handle);
     }

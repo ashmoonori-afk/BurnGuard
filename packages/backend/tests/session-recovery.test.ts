@@ -17,6 +17,8 @@ import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { EventBroker, SequencedEventBroker } from "../src/services/broker";
 import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 import { hasAgentControlFiles } from "../src/security/agent-control-files";
+import { clearSessionProcess, recordSessionProcess } from "../src/db/session-process";
+import { parseOwnedProcessRecord, type OwnedProcessRecord, type RecordedProcessReaper } from "../src/adapters/owned-process-record";
 
 let db: Database;
 let root: string;
@@ -147,6 +149,84 @@ function insert(item: NormalizedEvent): SequencedEventEnvelope {
 }
 
 describe("sequence replay", () => {
+  test("Given a running session When recording ownership Then a competing record and stale cleanup cannot replace it", () => {
+    db.exec("UPDATE sessions SET status='running' WHERE id='s'");
+    const json = recordSessionProcess(db, "s", { kind: "posix-process", pid: 12345, start: "birth-1" });
+    expect(() => recordSessionProcess(db, "s", { kind: "posix-process", pid: 54321, start: "birth-2" })).toThrow();
+    expect(() => clearSessionProcess(db, "s", "{}")).toThrow();
+    expect(db.query("SELECT pid,process_owner_json FROM sessions WHERE id='s'").get()).toEqual({ pid: 12345, process_owner_json: json });
+    clearSessionProcess(db, "s", json);
+    expect(db.query("SELECT pid,process_owner_json FROM sessions WHERE id='s'").get()).toEqual({ pid: null, process_owner_json: null });
+  });
+
+  test("Given cleanup refusal When startup reconciles Then ownership and project bytes remain before any artifact mutation", async () => {
+    const json = JSON.stringify({ kind: "posix-process", pid: 12345, start: "birth-1" });
+    db.prepare("UPDATE sessions SET status='running',pid=12345,process_owner_json=? WHERE id='s'").run(json);
+    const reaper: RecordedProcessReaper = {
+      platform: "linux", tempRoot: tmpdir(), startToken: () => "birth-1",
+      closeProcessTree: async () => { throw Object.assign(new Error("fixture permission refusal"), { code: "EPERM" }); },
+      recoverWindowsJob: async () => { throw new Error("Unexpected Windows reaper"); },
+    };
+    await expect(reconcileArtifactState(db, reaper)).rejects.toMatchObject({ code: "EPERM" });
+    expect(db.query("SELECT status,pid,process_owner_json FROM sessions WHERE id='s'").get()).toEqual({ status: "running", pid: 12345, process_owner_json: json });
+    expect(db.query("SELECT current_revision,current_digest FROM projects WHERE id='p'").get()).toEqual({ current_revision: 0, current_digest: null });
+    expect(listSequencedSessionEvents(db, "s", 0)).toEqual([]);
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("base");
+  });
+
+  test("Given a reused PID When startup reconciles Then the unrelated process is not signalled and the stale session recovers", async () => {
+    const json = JSON.stringify({ kind: "posix-process", pid: 12345, start: "old-birth" });
+    db.prepare("UPDATE sessions SET status='running',pid=12345,process_owner_json=? WHERE id='s'").run(json);
+    let signals = 0;
+    const reaper: RecordedProcessReaper = {
+      platform: "darwin", tempRoot: tmpdir(), startToken: () => "new-birth",
+      closeProcessTree: async () => { signals += 1; },
+      recoverWindowsJob: async () => { throw new Error("Unexpected Windows reaper"); },
+    };
+    expect((await reconcileArtifactState(db, reaper)).sessions).toBe(1);
+    expect(signals).toBe(0);
+    expect(db.query("SELECT status,pid,process_owner_json FROM sessions WHERE id='s'").get()).toEqual({ status: "idle", pid: null, process_owner_json: null });
+  });
+
+  test("Given unreadable live identity When startup reconciles Then it cannot be treated as a missing process", async () => {
+    const json = JSON.stringify({ kind: "posix-process", pid: 12345, start: "birth-1" });
+    db.prepare("UPDATE sessions SET status='idle',pid=12345,process_owner_json=? WHERE id='s'").run(json);
+    const reaper: RecordedProcessReaper = {
+      platform: "linux", tempRoot: tmpdir(), startToken: () => { throw new Error("identity unreadable"); },
+      closeProcessTree: async () => { throw new Error("Unexpected signal"); },
+      recoverWindowsJob: async () => { throw new Error("Unexpected Windows reaper"); },
+    };
+    await expect(reconcileArtifactState(db, reaper)).rejects.toThrow("identity unreadable");
+    expect(db.query("SELECT process_owner_json FROM sessions WHERE id='s'").get()).toEqual({ process_owner_json: json });
+    expect(db.query("SELECT current_digest FROM projects WHERE id='p'").get()).toEqual({ current_digest: null });
+  });
+
+  test("Given corrupt ownership When startup reconciles Then the receipt remains and no artifact recovery starts", async () => {
+    db.exec("UPDATE sessions SET status='running',pid=12345,process_owner_json='{}' WHERE id='s'");
+    await expect(reconcileArtifactState(db)).rejects.toMatchObject({ code: "owned_process_recovery_failed" });
+    expect(db.query("SELECT status,pid,process_owner_json FROM sessions WHERE id='s'").get()).toEqual({ status: "running", pid: 12345, process_owner_json: "{}" });
+    expect(db.query("SELECT current_digest FROM projects WHERE id='p'").get()).toEqual({ current_digest: null });
+  });
+
+  test("Given a persisted Windows Job When its opaque authority proves cleanup Then startup clears ownership before recovering the session", async () => {
+    const record = { kind: "windows-job", pid: 12345, token: "a".repeat(32), receipt_root: "C:\\Temp\\burnguard-owned-process-Ab123" } satisfies OwnedProcessRecord;
+    db.prepare("UPDATE sessions SET status='running',pid=12345,process_owner_json=? WHERE id='s'").run(JSON.stringify(record));
+    let recovered = false;
+    const reaper: RecordedProcessReaper = {
+      platform: "win32", tempRoot: "C:\\Temp",
+      startToken: () => { throw new Error("Windows must not use a reused PID"); },
+      closeProcessTree: async () => { throw new Error("Windows must not signal a PID tree"); },
+      recoverWindowsJob: async (owned) => {
+        expect(owned).toEqual(record);
+        expect(db.query("SELECT current_digest FROM projects WHERE id='p'").get()).toEqual({ current_digest: null });
+        recovered = true;
+      },
+    };
+    expect((await reconcileArtifactState(db, reaper)).sessions).toBe(1);
+    expect(recovered).toBe(true);
+    expect(db.query("SELECT status,pid,process_owner_json FROM sessions WHERE id='s'").get()).toEqual({ status: "idle", pid: null, process_owner_json: null });
+  });
+
   test("Given broker subscriptions When publishing Then unsubscribe stops both event channels", () => {
     const eventBroker = new EventBroker();
     const sequenced = new SequencedEventBroker();
@@ -257,6 +337,74 @@ describe("sequence replay", () => {
     expect(db.query("SELECT status,pid FROM sessions WHERE id='s'").get()).toEqual({ status: "idle", pid: null });
     expect(listSequencedSessionEvents(db, "s", 0).map((item) => item.event.type)).toEqual(["status.error", "status.idle"]);
   });
+
+  test("Given abrupt backend death with an owned writer When startup recovers Then the writer stops before partial artifact restoration", async () => {
+    const coordinator = new ArtifactCoordinator(db);
+    const base = await coordinator.initialize("p", root);
+    const operationId = "orphan-recovery-op";
+    const snapshotPath = path.join(root, ".meta", "artifact-operations", operationId, "snapshot");
+    const stagePath = path.join(root, ".meta", "artifact-operations", operationId, "stage");
+    await materializeManagedTree(root, snapshotPath);
+    await materializeManagedTree(root, stagePath);
+    const now = Date.now();
+    db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,'p','working',0,?,0,'','','[]',?,?,?,?,?)").run(operationId, base.tree_digest, JSON.stringify({ schema_version: 1, snapshot_path: snapshotPath, stage_path: stagePath, base_manifest: base }), operationRetention(now), operationReplay("base"), now, now);
+    const childSource = `const server=Bun.serve({hostname:'127.0.0.1',port:0,async fetch(){await Bun.write('index.html','orphan partial');return new Response('written');}});console.log(JSON.stringify({pid:process.pid,port:server.port}));`;
+    const parentSource = `
+      import {spawnOwnedProcess} from ${JSON.stringify(path.resolve(import.meta.dir, "../src/adapters/owned-process.ts"))};
+      import {describeOwnedProcess} from ${JSON.stringify(path.resolve(import.meta.dir, "../src/adapters/owned-process-record.ts"))};
+      const owned=spawnOwnedProcess({cmd:[process.execPath,'-e',${JSON.stringify(childSource)}],cwd:${JSON.stringify(root)},stdin:'ignore',stdout:'pipe',stderr:'ignore'});
+      const reader=owned.proc.stdout.getReader();let text='';
+      while(!text.includes('\\n')){const part=await reader.read();if(part.done)throw new Error('Writer readiness missing');text+=new TextDecoder().decode(part.value);}
+      const ready=JSON.parse(text.split('\\n')[0]);
+      console.log(JSON.stringify({...ready,record:describeOwnedProcess(owned)}));
+      Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response('parent')});
+    `;
+    const parent = Bun.spawn([process.execPath, "-e", parentSource], { cwd: root, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+    const reader = parent.stdout.getReader();
+    const stderr = new Response(parent.stderr).text();
+    let childPid = 0;
+    let record: OwnedProcessRecord | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const readiness = (async () => {
+        let text = "";
+        while (!text.includes("\n")) {
+          const part = await reader.read();
+          if (part.done) throw new Error(`Parent exited before readiness: ${await stderr}`);
+          text += new TextDecoder().decode(part.value);
+        }
+        const report: unknown = JSON.parse(text.split("\n")[0]!);
+        if (typeof report !== "object" || report === null || !("pid" in report) || typeof report.pid !== "number" || !("port" in report) || typeof report.port !== "number" || !("record" in report)) throw new Error("Invalid writer readiness");
+        return { pid: report.pid, port: report.port, record: parseOwnedProcessRecord(JSON.stringify(report.record)) };
+      })();
+      const ready = await Promise.race([readiness, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Writer readiness deadline")), 10_000); })]);
+      childPid = ready.pid;
+      record = ready.record;
+      db.exec("UPDATE sessions SET status='running' WHERE id='s'");
+      recordSessionProcess(db, "s", record);
+      parent.kill("SIGKILL");
+      await parent.exited;
+      // A real surviving writer, not a mocked reaper, produces the bytes that recovery restores.
+      expect((await fetch(`http://127.0.0.1:${ready.port}`, { signal: AbortSignal.timeout(5_000) })).status).toBe(200);
+      expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("orphan partial");
+      await reconcileArtifactState(db);
+      expect(() => process.kill(childPid, 0)).toThrow();
+      expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("base");
+      expect(db.query("SELECT status,process_owner_json FROM sessions WHERE id='s'").get()).toEqual({ status: "idle", process_owner_json: null });
+      expect(db.query("SELECT status FROM artifact_operations WHERE id=?").get(operationId)).toEqual({ status: "recovered" });
+    } finally {
+      clearTimeout(timer);
+      parent.kill("SIGKILL");
+      await parent.exited;
+      reader.releaseLock();
+      if (record !== undefined) {
+        // Killing the fixture launcher closes its kill-on-close Windows Job.
+        try { process.kill(record.pid, "SIGKILL"); } catch { /* already gone */ }
+      }
+      if (childPid > 0) { try { process.kill(childPid, "SIGKILL"); } catch { /* already gone */ } }
+      await stderr;
+    }
+  }, 30_000);
 
   test("Given a fully published prepared result When startup reconciles Then commit rolls forward exactly once", async () => {
     const coordinator = new ArtifactCoordinator(db);

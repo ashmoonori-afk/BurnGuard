@@ -10,6 +10,8 @@ import { publishArtifactOperationEvent } from "./artifact-operation-events";
 import { migrateDocumentOnlyRevision } from "./artifact-document-migration";
 import { setArtifactRecoveryHold } from "./artifact-recovery-hold";
 import { isProjectStorageError } from "./project-storage-error";
+import { reapPersistedSessionProcesses } from "./session-process-recovery";
+import type { RecordedProcessReaper } from "../adapters/owned-process-record";
 
 type ProjectRow = { readonly id: string; readonly dir_path: string; readonly current_digest: string | null };
 type RecoveryRow = PersistedArtifactOperationRow & { readonly dir_path: string };
@@ -17,7 +19,8 @@ type RecoveryRow = PersistedArtifactOperationRow & { readonly dir_path: string }
 type UnavailableProject = { readonly projectId: string; readonly code: string };
 type SnapshotReceipt = { readonly snapshotPath: string; readonly baseManifest: CanonicalTreeManifest };
 
-export async function reconcileArtifactState(db: Database): Promise<{ readonly operations: number; readonly projects: number; readonly sessions: number; readonly unavailableProjects: readonly UnavailableProject[] }> {
+export async function reconcileArtifactState(db: Database, processReaper?: RecordedProcessReaper): Promise<{ readonly operations: number; readonly projects: number; readonly sessions: number; readonly unavailableProjects: readonly UnavailableProject[] }> {
+  await reapPersistedSessionProcesses(db, processReaper);
   const projectRoots = db.query<ProjectRow, []>("SELECT id,dir_path,current_digest FROM projects ORDER BY id").all();
   const missingProjectIds = new Set<string>();
   // Per-project recovery failures: the project is reported unavailable, every other project still loads.

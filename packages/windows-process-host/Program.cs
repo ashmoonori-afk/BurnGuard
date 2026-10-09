@@ -48,7 +48,8 @@ namespace BurnGuard.ProcessHost
             try
             {
                 var parsed = Parse(args);
-                return parsed.Mode == "launch" ? Launch(parsed) : Terminate(parsed);
+                if (parsed.Mode == "launch") return Launch(parsed);
+                return parsed.Mode == "recover" ? Recover(parsed) : Terminate(parsed);
             }
             catch (HostFailure failure)
             {
@@ -154,6 +155,88 @@ namespace BurnGuard.ProcessHost
                 foreach (var member in members) Close(member);
                 Close(launcher); Close(job); Close(zero);
             }
+        }
+
+        private static int Recover(Arguments args)
+        {
+            var job = Native.OpenJobObject(JobObjectQuery | JobObjectTerminate, false, JobName(args.Job));
+            if (job == IntPtr.Zero)
+            {
+                // Only ERROR_FILE_NOT_FOUND proves absence. Access denial and every other native error remain failures.
+                if (Marshal.GetLastWin32Error() != 2) Fail(HostExit.NativeFailure, "open_recovery_job_failed");
+                WriteReceipt(args.Receipt, "{\"schema_version\":1,\"operation\":\"recovery\",\"state\":\"absent\",\"job_token\":\"" + args.Job + "\"}");
+                return 0;
+            }
+            try
+            {
+                var watch = Stopwatch.StartNew();
+                if (!Native.TerminateJobObject(job, ControlledTerminationCode)) Fail(HostExit.NativeFailure, "terminate_job_failed");
+                // Recovery has no launcher, zero event, or completion port authority. Retain and await only verified job
+                // members, then re-read accounting. A process can exit between enumeration and opening its handle.
+                while (ActiveProcesses(job) != 0)
+                {
+                    if (watch.ElapsedMilliseconds >= args.TimeoutMs) Fail(HostExit.CleanupTimeout, "job_zero_timeout");
+                    var members = new List<IntPtr>();
+                    try
+                    {
+                        OpenRecoveryProcesses(job, members);
+                        foreach (var member in members)
+                        {
+                            var remaining = args.TimeoutMs - (int)watch.ElapsedMilliseconds;
+                            if (remaining <= 0) Fail(HostExit.CleanupTimeout, "job_process_timeout");
+                            var wait = Native.WaitForSingleObject(member, (uint)remaining);
+                            if (wait == 0x00000102) Fail(HostExit.CleanupTimeout, "job_process_timeout");
+                            if (wait != WaitObject0) Fail(HostExit.NativeFailure, "job_process_wait_failed");
+                        }
+                    }
+                    finally { CloseRecoveryHandles(members); }
+                }
+            }
+            finally { CloseRecoveryHandles(new[] { job }); }
+            // Reuse the terminate schema only after accounting positively reports zero and handles are closed.
+            WriteReceipt(args.Receipt, "{\"schema_version\":1,\"operation\":\"terminate\",\"state\":\"terminated\",\"job_token\":\"" + args.Job + "\",\"active_processes\":0}");
+            return 0;
+        }
+
+        private static void OpenRecoveryProcesses(IntPtr job, List<IntPtr> members)
+        {
+            const int maximum = 4096;
+            var size = 8 + maximum * IntPtr.Size;
+            var buffer = Marshal.AllocHGlobal(size);
+            try
+            {
+                uint returned;
+                if (!Native.QueryInformationJobObject(job, 3, buffer, (uint)size, out returned)) Fail(HostExit.NativeFailure, "query_job_processes_failed");
+                var listed = Marshal.ReadInt32(buffer, 4);
+                if (listed < 0 || listed > maximum) Fail(HostExit.NativeFailure, "job_process_limit_exceeded");
+                for (var index = 0; index < listed; index++)
+                {
+                    var pid = unchecked((uint)Marshal.ReadInt64(buffer, 8 + index * IntPtr.Size));
+                    var member = Native.OpenProcess(Synchronize | 0x1000, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION
+                    if (member == IntPtr.Zero)
+                    {
+                        if (Marshal.GetLastWin32Error() == 87) continue; // Process exited before OpenProcess.
+                        Fail(HostExit.NativeFailure, "open_job_process_failed");
+                    }
+                    members.Add(member);
+                    bool owned;
+                    if (!Native.IsProcessInJob(member, job, out owned)) Fail(HostExit.NativeFailure, "query_process_job_failed");
+                    if (!owned)
+                    {
+                        // A recycled member PID is not authority, even for a wait.
+                        members.RemoveAt(members.Count - 1);
+                        CloseRecoveryHandles(new[] { member });
+                    }
+                }
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
+        }
+
+        private static void CloseRecoveryHandles(IEnumerable<IntPtr> handles)
+        {
+            var failed = false;
+            foreach (var handle in handles) if (!Native.CloseHandle(handle)) failed = true;
+            if (failed) Fail(HostExit.NativeFailure, "recovery_close_failed");
         }
 
         private static LaunchAuthority ReadLaunchAuthority(Arguments args)
@@ -278,7 +361,7 @@ namespace BurnGuard.ProcessHost
 
         private static Arguments Parse(string[] args)
         {
-            if (args.Length < 5 || (args[0] != "launch" && args[0] != "terminate")) Fail(HostExit.InvalidArguments, "invalid_arguments");
+            if (args.Length < 5 || (args[0] != "launch" && args[0] != "terminate" && args[0] != "recover")) Fail(HostExit.InvalidArguments, "invalid_arguments");
             var parsed = new Arguments { Mode = args[0], TimeoutMs = 2_000 };
             var separator = -1;
             for (var index = 1; index < args.Length; index++)
@@ -288,12 +371,14 @@ namespace BurnGuard.ProcessHost
                 var value = args[++index];
                 if (args[index - 1] == "--job" && parsed.Job == null) parsed.Job = value;
                 else if (args[index - 1] == "--receipt" && parsed.Receipt == null) parsed.Receipt = value;
-                else if (args[index - 1] == "--timeout-ms" && parsed.Mode == "terminate" && !parsed.TimeoutSet && int.TryParse(value, out var timeout) && timeout > 0 && timeout <= 30_000) { parsed.TimeoutMs = timeout; parsed.TimeoutSet = true; }
+                else if (args[index - 1] == "--timeout-ms" && parsed.Mode != "launch" && !parsed.TimeoutSet && int.TryParse(value, out var timeout) && timeout > 0 && timeout <= 30_000) { parsed.TimeoutMs = timeout; parsed.TimeoutSet = true; }
                 else Fail(HostExit.InvalidArguments, "invalid_arguments");
             }
             if (parsed.Job == null || !TokenPattern.IsMatch(parsed.Job) || parsed.Receipt == null || !Path.IsPathRooted(parsed.Receipt) || !Directory.Exists(Path.GetDirectoryName(parsed.Receipt)))
                 Fail(HostExit.InvalidArguments, "invalid_arguments");
-            if (parsed.Mode == "terminate")
+            if (parsed.Mode == "recover" && (parsed.Job.Length != 32 || Path.GetPathRoot(parsed.Receipt).Length < 3 || Path.GetPathRoot(parsed.Receipt).EndsWith(":", StringComparison.Ordinal)))
+                Fail(HostExit.InvalidArguments, "invalid_arguments");
+            if (parsed.Mode != "launch")
             {
                 if (separator != -1 || !parsed.TimeoutSet) Fail(HostExit.InvalidArguments, "invalid_arguments");
                 parsed.Target = new string[0];
@@ -410,6 +495,7 @@ namespace BurnGuard.ProcessHost
             [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool SetInformationJobObject(IntPtr job, int informationClass, IntPtr information, uint length);
             [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool QueryInformationJobObject(IntPtr job, int informationClass, IntPtr information, uint length, out uint returnedLength);
             [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+            [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);
             [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool TerminateJobObject(IntPtr job, uint exitCode);
             [DllImport("kernel32.dll", SetLastError = true)] internal static extern IntPtr CreateIoCompletionPort(IntPtr file, IntPtr existingPort, UIntPtr completionKey, uint threads);
             [DllImport("kernel32.dll", SetLastError = true)] internal static extern bool GetQueuedCompletionStatus(IntPtr port, out uint bytes, out UIntPtr completionKey, out IntPtr overlapped, uint milliseconds);
