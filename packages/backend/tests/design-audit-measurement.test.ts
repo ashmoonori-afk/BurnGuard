@@ -82,7 +82,7 @@ describe("design audit applicability and folding", () => {
   }, 60_000);
 
   test("Given a primary CTA that wraps only at the narrow viewport When audited Then its advisory finding survives viewport folding", async () => {
-    const report = await auditTree('<!doctype html><html><head><style>:root{--ink:#111}body{margin:0;background:#fff;color:#111}.primary-cta{display:inline-block;background:#111;color:#fff;padding:8px}@media(max-width:375px){.primary-cta{width:72px}}</style></head><body><main><a class="primary-cta" data-bg-node-id="narrow-cta" href="/start">Start your project</a></main></body></html>');
+    const report = await auditTree('<!doctype html><html><head><style>:root{--ink:#111}body{margin:0;background:#fff;color:#111;font:16px monospace}.primary-cta{display:inline-block;background:#111;color:#fff;padding:8px}@media(max-width:375px){.primary-cta{width:120px}}</style></head><body><main><a class="primary-cta" data-bg-node-id="narrow-cta" href="/start">Start your project</a></main></body></html>');
     const wrap = report.checks.find((check) => check.code === "cta_label_wrap");
     expect(wrap?.findings.map((finding) => [finding.source.node_bg_id, finding.severity, finding.measured, finding.threshold])).toEqual([["narrow-cta", "recommended", 2, 1]]);
   }, 60_000);
@@ -215,7 +215,7 @@ describe("rendered page measurements", () => {
   test("Given a primary call to action whose label renders on two lines When inspected Then the wrapped label is recommended", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     try {
-      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111}.primary-cta{display:inline-block;width:72px;background:#111;color:#fff;padding:8px}</style><main><a class="primary-cta" data-bg-node-id="wrapped" href="/start">Start your project</a><a class="primary-cta" data-bg-node-id="single" href="/contact" style="width:160px">Contact</a></main>');
+      await page.setContent('<!doctype html><style>body{margin:0;background:#fff;color:#111;font:16px monospace}.primary-cta{display:inline-block;width:120px;background:#111;color:#fff;padding:8px}</style><main><a class="primary-cta" data-bg-node-id="wrapped" href="/start">Start your project</a><a class="primary-cta" data-bg-node-id="single" href="/contact" style="width:160px">Contact</a></main>');
       const findings = (await inspectRenderedPage(page)).findings.filter((finding) => finding.code === "cta_label_wrap");
       expect(findings.map((finding) => [finding.nodeId, finding.measured, finding.threshold, finding.severity, finding.action])).toEqual([["wrapped", 2, 1, "recommended", "keep_cta_label_single_line"]]);
     } finally { await page.close(); }

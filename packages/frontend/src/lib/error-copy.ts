@@ -131,6 +131,7 @@ const ERROR_COPY: Record<string, MessageKey> = {
   pinterest_unavailable: "errors.pinterest_unavailable",
   invalid_pinterest_request: "errors.invalid_pinterest_request",
   message_too_long: "errors.message_too_long",
+  payload_too_large: "errors.payload_too_large",
   turn_capacity_exhausted: "errors.turn_capacity_exhausted",
   capacity_exhausted: "errors.turn_capacity_exhausted",
   alternatives_recovery_pending: "errors.alternatives_recovery_pending",
@@ -161,6 +162,11 @@ const ERROR_COPY: Record<string, MessageKey> = {
 export function apiErrorCopy(error: unknown): string {
   const code = errorCode(error);
   if (code === "message_too_long") return t(ERROR_COPY[code], { limit: errorLimit(error) ?? MAX_USER_MESSAGE_CHARS });
+  if (code === "payload_too_large") {
+    const bytes = errorLimit(error);
+    // The server reports bytes; show whole-or-tenth megabytes so a 1 MiB cap reads "1", not "1,048,576".
+    return bytes === null ? t("errors.payload_too_large_unknown") : t(ERROR_COPY[code], { limit: Math.max(0.1, Math.round((bytes / 1048576) * 10) / 10) });
+  }
   return t(code !== null && Object.hasOwn(ERROR_COPY, code) ? ERROR_COPY[code] : "errors.fallback");
 }
 

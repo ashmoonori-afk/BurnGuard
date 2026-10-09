@@ -43,5 +43,8 @@
   "menu.selectAll": "Select All",
   "menu.window": "Window",
   "menu.minimize": "Minimize",
-  "menu.close": "Close"
+  "menu.close": "Close",
+  "startup_failed.port_busy": "Port {0} is in use by another program. Close that program or any running BurnGuard, then start BurnGuard again.",
+  "startup_failed.profile_owned": "Another BurnGuard is already using the same profile. Close every running BurnGuard, then start it again.",
+  "startup_failed.invalid_port": "BG_PORT is not valid. Set it to an integer from 1024 to 65535, or unset BG_PORT, then start BurnGuard again."
 }

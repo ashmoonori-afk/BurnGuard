@@ -91,6 +91,9 @@ async function connectNativeWebSocket(endpoint: string, signal: AbortSignal): Pr
   const connection = new parent.constructor(parent._platform);
   connection.markAsRemote();
   const socket = new WebSocket(endpoint);
+  const socketClosed = new Promise<void>(resolve => {
+    socket.addEventListener("close", () => resolve(), { once: true });
+  });
   let browser: NativeBrowser | undefined;
   const abort = () => { connection.close("Chromium connection aborted"); socket.close(); };
   const closed = () => { signal.removeEventListener("abort", abort); connection.close("Chromium connection closed"); };
@@ -127,6 +130,11 @@ async function connectNativeWebSocket(endpoint: string, signal: AbortSignal): Pr
     browser._connectToBrowserType(chromium, {}, undefined);
     browser._shouldCloseConnectionOnClose = true;
     signal.throwIfAborted();
+    const browserClose = browser.close.bind(browser);
+    browser.close = async options => {
+      try { await browserClose(options); }
+      finally { connection.close("Chromium browser closed"); socket.close(); await socketClosed; }
+    };
     return browser;
   } catch (error) { abort(); throw error; }
 }

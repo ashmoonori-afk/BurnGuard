@@ -43,5 +43,8 @@
   "menu.selectAll": "全选",
   "menu.window": "窗口",
   "menu.minimize": "最小化",
-  "menu.close": "关闭"
+  "menu.close": "关闭",
+  "startup_failed.port_busy": "端口 {0} 已被其他程序占用。请关闭该程序或已运行的 BurnGuard，然后重新启动 BurnGuard。",
+  "startup_failed.profile_owned": "另一个 BurnGuard 已在使用同一个配置文件。请关闭所有正在运行的 BurnGuard，然后重新启动。",
+  "startup_failed.invalid_port": "BG_PORT 的值无效。请将其设置为 1024 到 65535 之间的整数，或清除 BG_PORT，然后重新启动 BurnGuard。"
 }

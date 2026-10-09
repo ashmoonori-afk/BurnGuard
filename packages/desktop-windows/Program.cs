@@ -307,6 +307,15 @@ namespace BurnGuard.Desktop
             catch { MessageBox.Show(this, ShellText.Get("browserOpenFailed"), "BurnGuard"); }
         }
 
+        private string startupFailure;
+
+        // Known backend startup_failed codes map to the shell table; unknown codes keep the generic exit message.
+        private string StartupFailureMessage(string code)
+        {
+            if (code != "port_busy" && code != "profile_owned" && code != "invalid_port") return null;
+            return ShellText.Get("startup_failed." + code).Replace("{0}", port.ToString());
+        }
+
         private void StartService()
         {
             var directory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "service");
@@ -327,6 +336,12 @@ namespace BurnGuard.Desktop
                 try
                 {
                     var data = Program.Json.Deserialize<Dictionary<string, object>>(args.Data.Substring(prefix.Length));
+                    if (data.ContainsKey("event") && (string)data["event"] == "startup_failed")
+                    {
+                        startupFailure = StartupFailureMessage(data.ContainsKey("code") ? data["code"] as string : null);
+                        if (startupFailure != null) ready.TrySetException(new InvalidOperationException(startupFailure));
+                        return;
+                    }
                     if (Convert.ToInt32(data["protocol"]) == 1 && data.TryGetValue("event", out var kind) && (kind as string) == "active-turns")
                     {
                         activeTurnsReply?.TrySetResult(Convert.ToInt32(data["count"]));
@@ -345,6 +360,9 @@ namespace BurnGuard.Desktop
             service.ErrorDataReceived += (_, __) => { };
             service.Exited += (_, __) =>
             {
+                // Let the redirected stdout finish so a startup_failed line is seen before the generic exit message.
+                try { service.WaitForExit(); } catch (InvalidOperationException) { }
+                if (startupFailure != null) { ready.TrySetException(new InvalidOperationException(startupFailure)); return; }
                 ready.TrySetException(new InvalidOperationException(ShellText.Get("serverExitedDuringStartup")));
                 try { if (!closing && IsHandleCreated) BeginInvoke(new Action(() => { if (!closing) Fail(ShellText.Get("serverExited")); })); }
                 catch (InvalidOperationException) { }

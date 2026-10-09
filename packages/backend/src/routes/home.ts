@@ -217,15 +217,12 @@ homeRoutes.post("/api/projects", async (c) => {
 });
 
 homeRoutes.get("/api/backends/detect", async (c) => {
-  try {
-    const detection = await detectBackends();
-    c.header("Cache-Control", "private, max-age=30");
-    return c.json(ok(detection));
-  } catch (error) {
-    if (!(error instanceof CodexAuthenticationProbeError)) throw error;
-    c.header("Cache-Control", "no-store");
-    return c.json(fail(error.code, error.message, error.diagnostics), 503);
-  }
+  // This read feeds the UI, which must still show a CLI that is on PATH but failed its version probe
+  // and must not treat an unconfirmed Codex login as a logout. Project creation and Codex turns keep
+  // the strict check (`requireCodexAuthentication` on by default there), so the list is returned here.
+  const detection = await detectBackends({ requireCodexAuthentication: false });
+  c.header("Cache-Control", "private, max-age=30");
+  return c.json(ok(detection));
 });
 
 // Re-runs the tutorial / prompt-sample seed. Idempotent — only the

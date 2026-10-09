@@ -176,8 +176,8 @@ jobs:
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/design-system-starter.test.ts
           packages/frontend/tests/deck-sandbox.browser.test.ts
+          packages/frontend/tests/canvas-css-imports.browser.test.ts
       - name: Chromium popup and deck runtime
-        if: runner.os == 'Windows'
         env:
           BG_BROWSER_SMOKE: "1"
         run: bun test --timeout 60000 packages/backend/tests/chromium-node-launch.test.ts
