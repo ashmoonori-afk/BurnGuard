@@ -3,6 +3,13 @@ import type { FSWatcher } from "node:fs";
 export const RESERVED_PROJECT_WATCHER = Symbol("bg-reserved-watcher");
 export const projectWatchers = new Map<string, FSWatcher | typeof RESERVED_PROJECT_WATCHER>();
 export const projectSessionIds = new Map<string, string>();
+
+type ProjectWatcherCloseListener = (projectId: string) => void;
+const closeListeners = new Set<ProjectWatcherCloseListener>();
+
+/** Registers a listener invoked when a project's watcher is closed, before its registry caches are cleared. */
+export function onProjectWatcherClosed(listener: ProjectWatcherCloseListener): void { closeListeners.add(listener); }
+
 export function closeProjectWatcher(projectId: string): void {
   const watcher = projectWatchers.get(projectId);
   if (watcher && watcher !== RESERVED_PROJECT_WATCHER) {
@@ -11,6 +18,7 @@ export function closeProjectWatcher(projectId: string): void {
       if (!(error instanceof Error)) throw error;
     }
   }
+  for (const listener of closeListeners) listener(projectId);
   projectWatchers.delete(projectId);
   projectSessionIds.delete(projectId);
 }

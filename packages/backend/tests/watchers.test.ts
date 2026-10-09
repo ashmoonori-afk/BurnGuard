@@ -7,7 +7,7 @@ import { runMigrations } from "../src/db/migrate-local";
 import { ArtifactCoordinator, ArtifactOperationError } from "../src/services/artifact-coordinator";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { isTransientFilePath } from "../src/services/files";
-import { SIGNAL_MAX_WAIT_MS, SIGNAL_QUIET_MS, ensureProjectWatcher, processProjectFilesystemSignal, scheduleProjectSignal, shouldSkipPath, shutdownProjectWatchers, startProjectWatchers } from "../src/services/watchers";
+import { SIGNAL_MAX_WAIT_MS, SIGNAL_QUIET_MS, ensureProjectWatcher, isProjectSignalPending, processProjectFilesystemSignal, scheduleProjectSignal, shouldSkipPath, shutdownProjectWatchers, startProjectWatchers } from "../src/services/watchers";
 import { listProjectIds } from "../src/db/project-read-repository";
 import { closeProjectWatcher, projectWatchers } from "../src/services/watcher-registry";
 import { setArtifactRecoveryHold } from "../src/services/artifact-recovery-hold";
@@ -126,8 +126,12 @@ function fakeScheduler() {
   return {
     scheduler: {
       now: () => time,
-      setTimer: (callback: () => void, delayMs: number) => { nextHandle += 1; timers.set(nextHandle, { at: time + delayMs, callback }); return nextHandle; },
-      clearTimer: (handle: unknown) => { timers.delete(handle as number); },
+      setTimer: (callback: () => void, delayMs: number) => {
+        nextHandle += 1;
+        const handle = nextHandle;
+        timers.set(handle, { at: time + delayMs, callback });
+        return () => { timers.delete(handle); };
+      },
     },
     advance(ms: number) {
       time += ms;
@@ -138,32 +142,100 @@ function fakeScheduler() {
 }
 
 describe("project signal debounce", () => {
-  test("Given a burst of events When the quiet window passes Then one scan runs", async () => {
+  test("Given staggered events When each resets the quiet window Then no scan runs at the first deadline and one runs at the last", async () => {
     const clock = fakeScheduler();
     let calls = 0;
     const processSignal = async () => { calls += 1; return null; };
-    const runs = [1, 2, 3].map(() => scheduleProjectSignal("debounce-burst", "/unused", processSignal, clock.scheduler));
-    clock.advance(SIGNAL_QUIET_MS - 1);
+    const runs = [scheduleProjectSignal("debounce-burst", "/unused", processSignal, clock.scheduler)];
+    clock.advance(100);
+    runs.push(scheduleProjectSignal("debounce-burst", "/unused", processSignal, clock.scheduler));
+    clock.advance(100);
+    runs.push(scheduleProjectSignal("debounce-burst", "/unused", processSignal, clock.scheduler));
+    // Events land at 0/100/200 ms: the first event's deadline (300 ms) must not scan; the last event's quiet deadline (500 ms) must.
+    clock.advance(100); // t=300, the first event's original deadline
+    expect(calls).toBe(0);
+    clock.advance(199); // t=499, one ms before the last event's quiet deadline
+    expect(calls).toBe(0);
+    clock.advance(1); // t=500, the last event's quiet deadline
+    await Promise.all(runs);
+    expect(calls).toBe(1);
+    expect(clock.armed()).toBe(0);
+  });
+
+  test("Given events that keep arriving inside the quiet interval When the cap is reached Then the scan starts at exactly the cap", async () => {
+    const clock = fakeScheduler();
+    let calls = 0;
+    const processSignal = async () => { calls += 1; return null; };
+    const runs = [scheduleProjectSignal("debounce-cap", "/unused", processSignal, clock.scheduler)];
+    for (let elapsed = 100; elapsed < SIGNAL_MAX_WAIT_MS - 1; elapsed += 100) {
+      clock.advance(100);
+      runs.push(scheduleProjectSignal("debounce-cap", "/unused", processSignal, clock.scheduler));
+    }
+    clock.advance(SIGNAL_MAX_WAIT_MS - 1 - 1900);
+    runs.push(scheduleProjectSignal("debounce-cap", "/unused", processSignal, clock.scheduler));
+    // Events keep resetting the quiet window through 1999 ms; only the 2000 ms cap can start the scan.
     expect(calls).toBe(0);
     clock.advance(1);
     await Promise.all(runs);
     expect(calls).toBe(1);
     expect(clock.armed()).toBe(0);
   });
+});
 
-  test("Given events that keep arriving When the cap is reached Then the scan starts anyway", async () => {
+describe("project signal lifecycle", () => {
+  test("Given a queued debounce When the project closes Then the timer is cancelled and the signal settles without a scan", async () => {
     const clock = fakeScheduler();
     let calls = 0;
     const processSignal = async () => { calls += 1; return null; };
-    const step = SIGNAL_QUIET_MS - 1;
-    const runs = [scheduleProjectSignal("debounce-cap", "/unused", processSignal, clock.scheduler)];
-    for (let elapsed = 0; elapsed + step < SIGNAL_MAX_WAIT_MS; elapsed += step) {
-      clock.advance(step);
-      runs.push(scheduleProjectSignal("debounce-cap", "/unused", processSignal, clock.scheduler));
-    }
+    const run = scheduleProjectSignal("queued-close", "/unused", processSignal, clock.scheduler);
+    clock.advance(SIGNAL_QUIET_MS - 1);
     expect(calls).toBe(0);
+    expect(clock.armed()).toBe(1);
+
+    closeProjectWatcher("queued-close");
+    await run;
+
+    expect(calls).toBe(0);
+    expect(clock.armed()).toBe(0);
     clock.advance(SIGNAL_MAX_WAIT_MS);
-    await Promise.all(runs);
+    expect(calls).toBe(0);
+    expect(isProjectSignalPending("queued-close")).toBe(false);
+  });
+
+  test("Given a queued debounce When watcher startup stops Then the timer is cancelled, the signal settles, and a later clock fire does not scan", async () => {
+    const clock = fakeScheduler();
+    let calls = 0;
+    const processSignal = async () => { calls += 1; return null; };
+    const startup = startProjectWatchers({ projectIds: [] });
+    await startup.settled;
+    const run = scheduleProjectSignal("queued-shutdown", "/unused", processSignal, clock.scheduler);
+    clock.advance(SIGNAL_QUIET_MS - 1);
+    expect(isProjectSignalPending("queued-shutdown")).toBe(true);
+
+    await startup.stop();
+    await run;
+
+    expect(isProjectSignalPending("queued-shutdown")).toBe(false);
+    expect(clock.armed()).toBe(0);
+    clock.advance(SIGNAL_MAX_WAIT_MS);
+    expect(calls).toBe(0);
+  });
+
+  test("Given a held scan When the project closes Then no further pass runs and the pending signal settles", async () => {
+    const clock = fakeScheduler();
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let calls = 0;
+    const processSignal = async () => { calls += 1; if (calls === 1) { started.resolve(); await release.promise; } return null; };
+    const first = scheduleProjectSignal("held-scan-close", "/unused", processSignal, clock.scheduler);
+    clock.advance(SIGNAL_QUIET_MS);
+    await started.promise;
+    const coalesced = scheduleProjectSignal("held-scan-close", "/unused", processSignal, clock.scheduler);
+
+    closeProjectWatcher("held-scan-close");
+    release.resolve();
+    await Promise.all([first, coalesced]);
+
     expect(calls).toBe(1);
   });
 });
