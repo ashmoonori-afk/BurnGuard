@@ -99,6 +99,8 @@ jobs:
           packages/frontend/tests/side-input.test.ts
           packages/frontend/tests/error-copy.test.ts
           packages/backend/tests/artifact-history.test.ts
+          packages/backend/tests/review-artifact-safety.test.ts
+          packages/backend/tests/watchers.test.ts
           packages/frontend/tests/i18n-messages.test.ts
           packages/frontend/tests/tool-badge-copy.test.ts
           packages/frontend/tests/prompt-library.test.ts

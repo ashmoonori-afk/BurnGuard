@@ -7,7 +7,7 @@ import { runMigrations } from "../src/db/migrate-local";
 import { ArtifactCoordinator, ArtifactOperationError } from "../src/services/artifact-coordinator";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { isTransientFilePath } from "../src/services/files";
-import { ensureProjectWatcher, processProjectFilesystemSignal, scheduleProjectSignal, shouldSkipPath, shutdownProjectWatchers, startProjectWatchers } from "../src/services/watchers";
+import { SIGNAL_MAX_WAIT_MS, SIGNAL_QUIET_MS, ensureProjectWatcher, isProjectSignalPending, processProjectFilesystemSignal, scheduleProjectSignal, shouldSkipPath, shutdownProjectWatchers, startProjectWatchers } from "../src/services/watchers";
 import { listProjectIds } from "../src/db/project-read-repository";
 import { closeProjectWatcher, projectWatchers } from "../src/services/watcher-registry";
 import { setArtifactRecoveryHold } from "../src/services/artifact-recovery-hold";
@@ -99,6 +99,196 @@ describe("project watcher path filtering", () => {
     await processProjectFilesystemSignal(item.id, item.root);
     expect(await readFile(path.join(item.root, "index.html"), "utf8")).toBe("base");
     expect(getSqlite().query("SELECT status FROM artifact_operations WHERE project_id=? AND json_extract(replay_json,'$.kind')!='initialize' ORDER BY id").all(item.id)).toEqual([{ status: "conflicted" }, { status: "conflicted" }]);
+  });
+
+  test("Given an unchanged tree When an external signal is observed Then the live tree is inspected exactly once", async () => {
+    const item = await fixture();
+    let inspections = 0;
+    const result = await new ArtifactCoordinator(getSqlite(), { afterLiveTreeInspect: () => { inspections += 1; } }).observeExternal(item.id, item.root);
+    expect(result).toBeNull();
+    expect(inspections).toBe(1);
+  });
+
+  test("Given a changed tree When an external signal is observed Then it commits and re-verifies the live tree", async () => {
+    const item = await fixture();
+    await writeFile(path.join(item.root, "index.html"), "changed");
+    let inspections = 0;
+    const result = await new ArtifactCoordinator(getSqlite(), { afterLiveTreeInspect: () => { inspections += 1; } }).observeExternal(item.id, item.root);
+    expect(result?.status).toBe("committed");
+    expect(inspections).toBeGreaterThan(1);
+  });
+});
+
+function fakeScheduler() {
+  let time = 0;
+  let nextHandle = 0;
+  const timers = new Map<number, { readonly at: number; readonly callback: () => void }>();
+  return {
+    scheduler: {
+      now: () => time,
+      setTimer: (callback: () => void, delayMs: number) => {
+        nextHandle += 1;
+        const handle = nextHandle;
+        timers.set(handle, { at: time + delayMs, callback });
+        return () => { timers.delete(handle); };
+      },
+    },
+    advance(ms: number) {
+      time += ms;
+      for (const [handle, timer] of [...timers]) if (timer.at <= time) { timers.delete(handle); timer.callback(); }
+    },
+    armed: () => timers.size,
+  };
+}
+
+describe("project signal debounce", () => {
+  test("Given staggered events When each resets the quiet window Then no scan runs at the first deadline and one runs at the last", async () => {
+    const clock = fakeScheduler();
+    let calls = 0;
+    const processSignal = async () => { calls += 1; return null; };
+    const runs = [scheduleProjectSignal("debounce-burst", "/unused", processSignal, clock.scheduler)];
+    clock.advance(100);
+    runs.push(scheduleProjectSignal("debounce-burst", "/unused", processSignal, clock.scheduler));
+    clock.advance(100);
+    runs.push(scheduleProjectSignal("debounce-burst", "/unused", processSignal, clock.scheduler));
+    // Events land at 0/100/200 ms: the first event's deadline (300 ms) must not scan; the last event's quiet deadline (500 ms) must.
+    clock.advance(100); // t=300, the first event's original deadline
+    expect(calls).toBe(0);
+    clock.advance(199); // t=499, one ms before the last event's quiet deadline
+    expect(calls).toBe(0);
+    clock.advance(1); // t=500, the last event's quiet deadline
+    await Promise.all(runs);
+    expect(calls).toBe(1);
+    expect(clock.armed()).toBe(0);
+  });
+
+  test("Given events that keep arriving inside the quiet interval When the cap is reached Then the scan starts at exactly the cap", async () => {
+    const clock = fakeScheduler();
+    let calls = 0;
+    const processSignal = async () => { calls += 1; return null; };
+    const runs = [scheduleProjectSignal("debounce-cap", "/unused", processSignal, clock.scheduler)];
+    for (let elapsed = 100; elapsed < SIGNAL_MAX_WAIT_MS - 1; elapsed += 100) {
+      clock.advance(100);
+      runs.push(scheduleProjectSignal("debounce-cap", "/unused", processSignal, clock.scheduler));
+    }
+    clock.advance(SIGNAL_MAX_WAIT_MS - 1 - 1900);
+    runs.push(scheduleProjectSignal("debounce-cap", "/unused", processSignal, clock.scheduler));
+    // Events keep resetting the quiet window through 1999 ms; only the 2000 ms cap can start the scan.
+    expect(calls).toBe(0);
+    clock.advance(1);
+    expect(calls).toBe(1);
+    await Promise.all(runs);
+    expect(clock.armed()).toBe(0);
+  });
+});
+
+describe("project signal lifecycle", () => {
+  test("Given a queued debounce When the project closes Then the timer is cancelled and the signal settles without a scan", async () => {
+    const clock = fakeScheduler();
+    let calls = 0;
+    const processSignal = async () => { calls += 1; return null; };
+    const run = scheduleProjectSignal("queued-close", "/unused", processSignal, clock.scheduler);
+    clock.advance(SIGNAL_QUIET_MS - 1);
+    expect(calls).toBe(0);
+    expect(clock.armed()).toBe(1);
+
+    closeProjectWatcher("queued-close");
+    await run;
+
+    expect(calls).toBe(0);
+    expect(clock.armed()).toBe(0);
+    clock.advance(SIGNAL_MAX_WAIT_MS);
+    expect(calls).toBe(0);
+    expect(isProjectSignalPending("queued-close")).toBe(false);
+  });
+
+  test("Given a queued debounce When watcher startup stops Then the timer is cancelled, the signal settles, and a later clock fire does not scan", async () => {
+    const clock = fakeScheduler();
+    let calls = 0;
+    const processSignal = async () => { calls += 1; return null; };
+    const startup = startProjectWatchers({ projectIds: [] });
+    await startup.settled;
+    const run = scheduleProjectSignal("queued-shutdown", "/unused", processSignal, clock.scheduler);
+    clock.advance(SIGNAL_QUIET_MS - 1);
+    expect(isProjectSignalPending("queued-shutdown")).toBe(true);
+
+    await startup.stop();
+    await run;
+
+    expect(isProjectSignalPending("queued-shutdown")).toBe(false);
+    expect(clock.armed()).toBe(0);
+    clock.advance(SIGNAL_MAX_WAIT_MS);
+    expect(calls).toBe(0);
+  });
+
+  test("Given a held scan When the project closes Then no further pass runs and the pending signal settles", async () => {
+    const clock = fakeScheduler();
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let calls = 0;
+    const processSignal = async () => { calls += 1; if (calls === 1) { started.resolve(); await release.promise; } return null; };
+    const first = scheduleProjectSignal("held-scan-close", "/unused", processSignal, clock.scheduler);
+    clock.advance(SIGNAL_QUIET_MS);
+    await started.promise;
+    const coalesced = scheduleProjectSignal("held-scan-close", "/unused", processSignal, clock.scheduler);
+
+    closeProjectWatcher("held-scan-close");
+    release.resolve();
+    await Promise.all([first, coalesced]);
+
+    expect(calls).toBe(1);
+  });
+
+  test("Given a held scan When shutdown stops Then an event racing the drain starts no scan and leaves nothing pending", async () => {
+    const clock = fakeScheduler();
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let heldCalls = 0;
+    let lateCalls = 0;
+    const startup = startProjectWatchers({ projectIds: [] });
+    await startup.settled;
+    const held = scheduleProjectSignal("stop-held", "/unused", async () => { heldCalls += 1; started.resolve(); await release.promise; return null; }, clock.scheduler);
+    clock.advance(SIGNAL_QUIET_MS);
+    await started.promise;
+
+    const stopping = startup.stop();
+    // A queued callback from a still-open watcher races the drain: admission is fenced synchronously inside stop().
+    const late = scheduleProjectSignal("stop-late", "/unused", async () => { lateCalls += 1; return null; }, clock.scheduler);
+    clock.advance(SIGNAL_MAX_WAIT_MS);
+
+    expect(lateCalls).toBe(0);
+    expect(isProjectSignalPending("stop-late")).toBe(false);
+
+    release.resolve();
+    await stopping;
+    await Promise.all([held, late]);
+
+    expect(heldCalls).toBe(1);
+    expect(lateCalls).toBe(0);
+    expect(isProjectSignalPending("stop-late")).toBe(false);
+    expect(clock.armed()).toBe(0);
+  });
+
+  test("Given a startup observation still in flight When shutdown stops Then no watcher attaches and a racing signal never scans", async () => {
+    const item = await fixture();
+    const held = heldObserver();
+    const clock = fakeScheduler();
+    let calls = 0;
+    const startup = startProjectWatchers({ projectIds: [item.id], observe: held.observe });
+    await held.startedAtLeast(1);
+
+    const stopping = startup.stop();
+    // The watcher would attach once the observation resolves; signal intake is already fenced at the stop boundary.
+    const racing = scheduleProjectSignal(item.id, item.root, async () => { calls += 1; return null; }, clock.scheduler);
+    clock.advance(SIGNAL_MAX_WAIT_MS);
+    held.started[0]?.release();
+    await stopping;
+    await racing;
+
+    expect(calls).toBe(0);
+    expect(isProjectSignalPending(item.id)).toBe(false);
+    expect(projectWatchers.has(item.id)).toBe(false);
+    expect(clock.armed()).toBe(0);
   });
 });
 

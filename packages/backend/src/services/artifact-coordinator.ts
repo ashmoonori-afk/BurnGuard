@@ -45,6 +45,7 @@ type CoordinatorFaults = {
   readonly beforeBaselineFinalize?: () => void;
   readonly beforeRollback?: () => void;
   readonly afterExternalCapture?: () => void;
+  readonly afterLiveTreeInspect?: () => void;
 };
 type RunOperation = {
   readonly projectId: string;
@@ -361,20 +362,25 @@ export class ArtifactCoordinator {
     }
     let latest: CommittedArtifactOperation | null = null;
     for (let pass = 0; pass < 8; pass += 1) {
-      latest = await this.observeExternalOnce(projectId, projectDir, onActive) ?? latest;
+      const observed = await this.observeExternalOnce(projectId, projectDir, onActive);
+      // The pass just compared the live tree against the committed digest; do not hash it again.
+      if (observed === "unchanged") return latest;
+      latest = observed ?? latest;
       const live = await inspectCanonicalTree(projectDir);
+      this.faults.afterLiveTreeInspect?.();
       if (live.tree_digest === this.projectIdentity(projectId).digest) return latest;
     }
     // The committed baseline remains valid even if an external editor never settles.
     throw new ArtifactOperationError("external_changes_pending", "External files are still changing; retry after saving finishes");
   }
 
-  private async observeExternalOnce(projectId: string, projectDir: string, onActive: "reject" | "refuse"): Promise<CommittedArtifactOperation | null> {
+  private async observeExternalOnce(projectId: string, projectDir: string, onActive: "reject" | "refuse"): Promise<CommittedArtifactOperation | "unchanged" | null> {
     const identity = this.projectIdentity(projectId);
     if (identity.digest === null) { await this.initializeOnce(projectId, projectDir); return null; }
     const stableIdentity = { revision: identity.revision, digest: identity.digest };
     const actual = await inspectCanonicalTree(projectDir);
-    if (actual.tree_digest === stableIdentity.digest) return null;
+    this.faults.afterLiveTreeInspect?.();
+    if (actual.tree_digest === stableIdentity.digest) return "unchanged";
     const baselinePath = this.baselinePath(projectDir);
     const base = await inspectCanonicalTree(baselinePath);
     if (base.tree_digest !== stableIdentity.digest) throw new ArtifactOperationError("recovery_unavailable", "Stable baseline does not match the database");

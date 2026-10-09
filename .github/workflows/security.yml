@@ -98,6 +98,7 @@ jobs:
           packages/frontend/tests/deck-preview.test.ts
           packages/frontend/tests/generation-progress.test.ts
           packages/backend/tests/trace-security.test.ts
+          packages/backend/tests/review-artifact-safety.test.ts
           packages/backend/tests/watchers.test.ts
           packages/backend/tests/python-health.test.ts
           packages/backend/tests/turn-error-sanitizer.test.ts

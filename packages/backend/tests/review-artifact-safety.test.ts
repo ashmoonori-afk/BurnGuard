@@ -182,13 +182,18 @@ test("Given two external saves during commit When observing Then live database a
 });
 
 test("Given a signal during an active scan When the scan ends Then one final scan runs", async () => {
-  let release: () => void = () => {};
-  const barrier = new Promise<void>((resolve) => { release = resolve; });
+  const firstStarted = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
   let calls = 0;
-  const processSignal = async () => { calls += 1; if (calls === 1) await barrier; return null; };
-  const first = scheduleProjectSignal("queued-signal-review", projectDir, processSignal);
-  const second = scheduleProjectSignal("queued-signal-review", projectDir, processSignal);
-  release();
+  const processSignal = async () => { calls += 1; if (calls === 1) { firstStarted.resolve(); await release.promise; } return null; };
+  const timers = new Map<number, () => void>();
+  let nextHandle = 0;
+  const scheduler = { now: () => 0, setTimer: (callback: () => void) => { nextHandle += 1; const handle = nextHandle; timers.set(handle, callback); return () => { timers.delete(handle); }; } };
+  const first = scheduleProjectSignal("queued-signal-review", projectDir, processSignal, scheduler);
+  timers.get(1)?.();
+  await firstStarted.promise;
+  const second = scheduleProjectSignal("queued-signal-review", projectDir, processSignal, scheduler);
+  release.resolve();
   await Promise.all([first, second]);
   expect(calls).toBe(2);
 });

@@ -11,6 +11,7 @@ import { isAgentControlPath } from "../security/agent-control-files";
 import {
   RESERVED_PROJECT_WATCHER,
   closeProjectWatcher,
+  onProjectWatcherClosed,
   projectSessionIds as sessionIdCache,
   projectWatchers as watchers,
   setProjectReadiness,
@@ -21,6 +22,15 @@ const IGNORED_TOP_LEVEL = new Set([".meta", ".attachments", ".burnguard-inputs",
 const pendingSignals = new Map<string, Promise<void>>();
 const dirtySignals = new Set<string>();
 const STARTUP_WATCHER_CONCURRENCY = 3;
+
+/**
+ * Shutdown fence for signal admission. `stop()` closes this synchronously before any await so a queued watcher
+ * callback racing the drain cannot admit a fresh scan, and reopens it once the drain completes; it starts open so
+ * normal observation (and a later restart) admits signals.
+ */
+let signalAdmissionOpen = true;
+function closeSignalAdmission(): void { signalAdmissionOpen = false; }
+function openSignalAdmission(): void { signalAdmissionOpen = true; }
 
 type ObserveProject = (projectId: string, projectDir: string) => Promise<unknown>;
 const observeProject: ObserveProject = (projectId, projectDir) => new ArtifactCoordinator(getSqlite()).observeExternal(projectId, projectDir);
@@ -126,8 +136,19 @@ export function startProjectWatchers(options: { readonly projectIds?: readonly s
     halt,
     async stop() {
       halt();
-      await settled;
+      // Close signal admission and live watcher intake synchronously, before any shutdown await, so no new scan can
+      // be admitted while `settled`/the drain runs. In-flight observations find their reservation released and
+      // attach no watcher; any still-attached watcher is closed here (settling its queued signal via the close listener).
+      closeSignalAdmission();
       for (const projectId of [...watchers.keys()]) closeProjectWatcher(projectId);
+      try {
+        await settled;
+        await drainProjectSignals();
+      } finally {
+        // A sweep in case an in-flight observation attached a watcher before the synchronous close ran.
+        for (const projectId of [...watchers.keys()]) closeProjectWatcher(projectId);
+        openSignalAdmission();
+      }
     },
   };
 }
@@ -146,19 +167,102 @@ export async function processProjectFilesystemSignal(projectId: string, projectD
   return new ArtifactCoordinator(getSqlite()).observeExternal(projectId, projectDir);
 }
 
-export function scheduleProjectSignal(projectId: string, projectDir: string, processSignal = processProjectFilesystemSignal): Promise<void> {
-  dirtySignals.add(projectId);
+export interface SignalScheduler {
+  readonly now: () => number;
+  /** Schedules `callback` after `delayMs` and returns a closure that cancels the armed timer. */
+  readonly setTimer: (callback: () => void, delayMs: number) => () => void;
+}
+
+export const SIGNAL_QUIET_MS = 300;
+export const SIGNAL_MAX_WAIT_MS = 2000;
+
+const realScheduler: SignalScheduler = {
+  now: () => Date.now(),
+  setTimer: (callback, delayMs) => {
+    const handle = setTimeout(callback, delayMs);
+    return () => clearTimeout(handle);
+  },
+};
+
+type SignalState = {
+  /** Re-arms the quiet window for a coalesced event that arrives while the scan is still queued. */
+  readonly rearm: () => void;
+  /** Cancels a queued debounce (settling its promise) or stops an in-flight scan from running another pass. */
+  readonly settle: () => void;
+};
+const signalStates = new Map<string, SignalState>();
+
+/** A project that closes must not run its queued debounce or any further scan; settle it at close. */
+onProjectWatcherClosed((projectId) => { signalStates.get(projectId)?.settle(); });
+
+/**
+ * Debounces a burst of filesystem events: the scan starts after SIGNAL_QUIET_MS without a new event,
+ * or SIGNAL_MAX_WAIT_MS after the first one. Events during a running scan still queue exactly one more pass.
+ * A project close cancels a queued debounce and stops an in-flight scan from starting another pass.
+ */
+export function scheduleProjectSignal(projectId: string, projectDir: string, processSignal = processProjectFilesystemSignal, scheduler: SignalScheduler = realScheduler): Promise<void> {
   const pending = pendingSignals.get(projectId);
-  if (pending !== undefined) return pending;
-  const task = (async () => {
-    do {
-      dirtySignals.delete(projectId);
-      try { await processSignal(projectId, projectDir); }
-      catch (error) { await recordWatcherFailure(projectId, error instanceof Error ? error : new Error("Watcher persistence failed")); }
-    } while (dirtySignals.has(projectId));
-  })().finally(() => { pendingSignals.delete(projectId); });
+  if (pending !== undefined) {
+    if (signalAdmissionOpen) { dirtySignals.add(projectId); signalStates.get(projectId)?.rearm(); }
+    return pending;
+  }
+  if (!signalAdmissionOpen) return Promise.resolve();
+  dirtySignals.add(projectId);
+  let phase: "queued" | "running" = "queued";
+  let closed = false;
+  let cancelTimer: (() => void) | undefined;
+  const disarm = (): void => { if (cancelTimer !== undefined) { cancelTimer(); cancelTimer = undefined; } };
+  const settled = Promise.withResolvers<void>();
+  const start = (): void => {
+    cancelTimer = undefined;
+    phase = "running";
+    void runSignalLoop(projectId, projectDir, processSignal, () => closed)
+      .then(() => { settled.resolve(); }, (error: unknown) => { settled.reject(error); })
+      .finally(() => { signalStates.delete(projectId); });
+  };
+  const firstAt = scheduler.now();
+  const arm = (): void => {
+    if (phase !== "queued" || closed) return;
+    disarm();
+    const remaining = SIGNAL_MAX_WAIT_MS - (scheduler.now() - firstAt);
+    cancelTimer = scheduler.setTimer(start, Math.max(0, Math.min(SIGNAL_QUIET_MS, remaining)));
+  };
+  const settle = (): void => {
+    closed = true;
+    disarm();
+    if (phase === "queued") { signalStates.delete(projectId); dirtySignals.delete(projectId); settled.resolve(); }
+  };
+  signalStates.set(projectId, { rearm: arm, settle });
+  arm();
+  const task = settled.promise.finally(() => { pendingSignals.delete(projectId); });
   pendingSignals.set(projectId, task);
   return task;
+}
+
+async function runSignalLoop(projectId: string, projectDir: string, processSignal: typeof processProjectFilesystemSignal, isClosed: () => boolean): Promise<void> {
+  do {
+    dirtySignals.delete(projectId);
+    try { await processSignal(projectId, projectDir); }
+    catch (error) { await recordWatcherFailure(projectId, error instanceof Error ? error : new Error("Watcher persistence failed")); }
+  } while (!isClosed() && dirtySignals.has(projectId));
+}
+
+/**
+ * Cancels every queued debounce and waits for in-flight scans, so shutdown neither abandons nor extends them.
+ * Runs with signal admission fenced, so no new scan can appear mid-drain; the loop re-settles until the maps drain
+ * in case a completing scan re-registers, and stops as soon as no awaited work remains.
+ */
+async function drainProjectSignals(): Promise<void> {
+  while (signalStates.size > 0 || pendingSignals.size > 0) {
+    const inFlight: Promise<void>[] = [];
+    for (const projectId of [...signalStates.keys()]) {
+      signalStates.get(projectId)?.settle();
+      const pending = pendingSignals.get(projectId);
+      if (pending !== undefined) inFlight.push(pending.catch(() => undefined));
+    }
+    if (inFlight.length === 0) return;
+    await Promise.all(inFlight);
+  }
 }
 
 async function recordWatcherFailure(projectId: string, error: Error): Promise<void> {
