@@ -29,6 +29,9 @@ jobs:
       # Code shapes behind the 2026-09-30 launch failures; see doc/os-matrix.md, "Hardening log".
       - name: Flake-pattern guard
         run: bun scripts/qa/check-flake-patterns.ts
+      # Applied migrations are append-only: a new one must sort after every migration at the merge base.
+      - name: Migration-order guard
+        run: bun scripts/qa/check-migration-order.ts --base-ref origin/main
       - run: bun run build:frontend
       - name: Task guidance and reviewed example gate
         run: >-
@@ -137,6 +140,8 @@ jobs:
           packages/frontend/tests/error-copy.test.ts
           packages/backend/tests/project-import.test.ts
           packages/backend/tests/artifact-history.test.ts
+          packages/backend/tests/checkpoints.test.ts
+          packages/backend/tests/project-bundle.test.ts
           packages/backend/tests/export-pptx.test.ts
           packages/backend/tests/export-validation.test.ts
           packages/backend/tests/vercel-publish.test.ts
@@ -149,6 +154,7 @@ jobs:
           packages/backend/tests/chromium-launch-hardening.test.ts
           scripts/qa/check-os-matrix-coverage.test.ts
           scripts/qa/check-flake-patterns.test.ts
+          scripts/qa/check-migration-order.test.ts
           scripts/whitespace-base.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts
