@@ -12,7 +12,7 @@ import { getDesignSystemDetail } from "../src/db/seed";
 import { getContentReceipt } from "../src/db/catalog-repository";
 import { validateCatalogReceiptTree } from "../src/services/catalog-files";
 import { projectBundleImportReceiptsDir, projectBundlePayloadStage, reconcileProjectBundleImports, writeBundleImportOwnerMarker, writeProjectBundleImportReceipt } from "../src/services/project-bundle-import-receipt";
-import { symlink } from "node:fs/promises";
+import { rmdir, symlink, unlink } from "node:fs/promises";
 import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 import { readdir } from "node:fs/promises";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
@@ -22,6 +22,9 @@ import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { listSessionAttachments } from "../src/db/attachments";
 import { selectContextAttachments } from "../src/services/context";
+
+// Bun's `rm` fails with EFAULT on a Windows directory link; remove the link itself (never the target) per platform.
+const removeDirectoryLink = (link: string): Promise<void> => (process.platform === "win32" ? rmdir(link) : unlink(link));
 
 const suffix = `${process.pid}-${crypto.randomUUID()}`;
 const sourceProjectId = `bundle-source-${suffix}`;
@@ -369,7 +372,7 @@ test.skipIf(!canCreateSymlink())(`Given a receipt whose project directory is a l
   await reconcileProjectBundleImports(getSqlite());
 
   expect(await readFile(path.join(sourceProjectDir, "index.html"), "utf8")).toContain("portable");
-  await rm(path.join(projectsDir, linked), { force: true });
+  await removeDirectoryLink(path.join(projectsDir, linked));
   await rm(path.join(sourceProjectDir, ".meta", "bundle-import-owner.json"), { force: true });
 });
 
