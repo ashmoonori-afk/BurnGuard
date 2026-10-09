@@ -244,6 +244,27 @@ describe("runCodexTurn image-tool lifecycle (real subprocess fixtures)", () => {
     });
   }
 
+  runnerTest("Given a basename notification When a PNG exists in the current thread Then its hash is delivered before completion", async () => {
+    await using fixture = await codexFixture({ controlledWatch: true });
+    const imageFinished = Promise.withResolvers<void>();
+    const run = fixture.start({ onEvent: async (event) => {
+      if (event.type === "tool.finished") imageFinished.resolve();
+    } });
+    await fixture.ready;
+    await fixture.imageAttached;
+    const observed = Promise.race([imageFinished.promise, run.then(() => { throw new Error("image not delivered live"); })]);
+    await fixture.image();
+    imageWatch(fixture).emit("change", "rename", "exec-1.png");
+    await observed;
+    await fixture.command("complete");
+    expect(await run).toEqual({ exitCode: 0 });
+    expect(fixture.controller.signal.aborted).toBe(false);
+    expect(fixture.events.filter((event) => event.type === "tool.finished")).toEqual([
+      expect.objectContaining({ ok: true, output: { image_sha256: [PNG_SHA] } }),
+    ]);
+    expectGone(fixture.pids);
+  });
+
   runnerTest("Given a silent owned child When a live callback rejects Then intake closes and settlement rejects with the same error without an external abort", async () => {
     await using fixture = await codexFixture();
     const failure = new Error("persistence_unavailable");
