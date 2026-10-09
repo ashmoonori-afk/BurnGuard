@@ -10,6 +10,7 @@ permissions:
 jobs:
   security:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -194,13 +195,29 @@ jobs:
           packages/frontend/tests/backend-restart-notice.test.ts
           packages/frontend/tests/settings-codex-progress.test.ts
           packages/frontend/tests/settings-language-note.test.ts
-      # Every baseline suite (scripts/qa/os-matrix-baseline.txt) that an explicit list above does not already run, one
-      # `bun test` process per file. The suites that need a real Chromium are excluded with reasons in
-      # scripts/qa/baseline-suites.ts; the coverage guard fails on a baseline entry that is neither run nor excluded.
-      - name: Baseline suites (Ubuntu only)
-        run: bun scripts/qa/run-baseline-suites.ts
       - name: Install the fixture browser
         run: node packages/backend/node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Remaining OS matrix suites on Ubuntu
+        env:
+          BG_BROWSER_SMOKE: "1"
+          BG_EXPORT_SMOKE: "1"
+        run: >-
+          bun test --timeout 60000
+          packages/backend/tests/design-system-layout-reference.test.ts
+          packages/backend/tests/design-system-conformance.test.ts
+          packages/backend/tests/design-workflow.test.ts
+          packages/backend/tests/python-runtime.test.ts
+          packages/backend/tests/owned-process-windows.test.ts
+          packages/backend/tests/desktop-lifecycle.test.ts
+          packages/backend/tests/local-fonts.test.ts
+          packages/frontend/tests/canvas-css-imports.browser.test.ts
+          packages/backend/tests/exports.test.ts
+      # Every baseline suite (scripts/qa/os-matrix-baseline.txt) that an explicit list above does not already run, one
+      # `bun test` process per file, after the browser install because most of them drive a real Chromium. The
+      # suites left out, with reasons, are in scripts/qa/baseline-suites.ts; the coverage guard fails on a baseline
+      # entry that is neither run nor excluded.
+      - name: Baseline suites (Ubuntu only)
+        run: bun scripts/qa/run-baseline-suites.ts
       - name: Authored sandbox and contrast browser boundaries
         env:
           BG_BROWSER_SMOKE: "1"

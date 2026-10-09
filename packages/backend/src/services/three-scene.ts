@@ -15,10 +15,14 @@ export function getThreeRuntime() {
     const root = resolveRepoRoot();
     try { return { javascript: await readFile(path.join(root, THREE_RUNTIME_PATH), "utf8"), license: await readFile(path.join(root, ".burnguard-three/LICENSE"), "utf8") }; }
     catch {
-      const build = await Bun.build({ entrypoints: [path.join(root, "packages/frontend/src/components/canvas/three-scene-runtime.ts")], target: "browser", format: "iife", minify: true });
-      if (!build.success || !build.outputs[0]) throw new Error("three_runtime_unavailable");
+      // The CLI, not Bun.build: under Bun 1.3.14 an in-process Bun.build started from the backend ignores the frontend
+      // tsconfig, so the "@/*" alias and the frontend's packages stay unresolved. The CLI takes the tsconfig explicitly.
+      const entry = path.join(root, "packages/frontend/src/components/canvas/three-scene-runtime.ts");
+      const build = Bun.spawn({ cmd: [process.execPath, "build", entry, "--target", "browser", "--format", "iife", "--minify", "--tsconfig-override", path.join(root, "packages/frontend/tsconfig.json")], cwd: root, stdout: "pipe", stderr: "ignore" });
+      const javascript = await new Response(build.stdout).text();
+      if ((await build.exited) !== 0 || javascript.length === 0) throw new Error("three_runtime_unavailable");
       const licensePath = path.join(path.dirname(Bun.resolveSync("three", path.join(root, "packages/frontend"))), "../LICENSE");
-      return { javascript: await build.outputs[0].text(), license: await readFile(licensePath, "utf8") };
+      return { javascript, license: await readFile(licensePath, "utf8") };
     }
   })().catch(() => { runtime = null; throw new Error("three_runtime_unavailable"); });
   return runtime;

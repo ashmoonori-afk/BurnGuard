@@ -92,6 +92,10 @@ describe("coverage check", () => {
     expect(checkCoverage(input())).toEqual([]);
   });
 
+  test("Given an OS matrix suite missing from Ubuntu When checked Then the gap is reported", () => {
+    expect(codes(checkCoverage(input({ ubuntuListed: [] })))).toEqual([`not_in_ubuntu ${LISTED}`]);
+  });
+
   test("Given a new test file in neither an OS list nor the baseline When checked Then it is reported", () => {
     expect(codes(checkCoverage(input({ testFiles: [LISTED, BASELINED, NEW] })))).toEqual([`not_in_os_matrix ${NEW}`]);
   });
@@ -107,7 +111,7 @@ describe("coverage check", () => {
   });
 
   test("Given a baseline entry that an OS list now runs When checked Then the stale entry is reported", () => {
-    expect(codes(checkCoverage(input({ osListed: [LISTED, BASELINED] })))).toEqual([`baseline_entry_covered ${BASELINED}`]);
+    expect(codes(checkCoverage(input({ osListed: [LISTED, BASELINED], ubuntuListed: [LISTED, BASELINED] })))).toEqual([`baseline_entry_covered ${BASELINED}`]);
   });
 
   test("Given a workflow naming a file that does not exist When checked Then each workflow's entry is reported", () => {
@@ -168,11 +172,8 @@ describe("baseline suites on Ubuntu", () => {
     expect(plan).toEqual({ run: [BASELINED], listed: [LISTED], excluded: [CHROMIUM_ONLY] });
   });
 
-  test("Given the real exclusions When read Then every one carries a reason and names a test file", () => {
-    for (const [file, reason] of Object.entries(BASELINE_EXCLUSIONS)) {
-      expect(file).toMatch(/^(packages|scripts)\/.+\.test\.[cm]?[jt]sx?$/);
-      expect(reason.trim()).not.toBe("");
-    }
+  test("Given the shipped baseline exclusions When read Then no suite is excluded", () => {
+    expect(BASELINE_EXCLUSIONS).toEqual({});
   });
 
   test("Given workflows When scanned Then only a step that runs the runner script counts", () => {

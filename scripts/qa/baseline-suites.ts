@@ -8,27 +8,7 @@
  * a real failure; a slow suite is not a reason. Every entry must also be in the baseline (the guard rejects stale
  * ones), so the gap stays visible and shrinks together with the baseline.
  */
-const NEEDS_CHROMIUM = "needs a real Chromium, which the Ubuntu step does not install";
-const NEEDS_CHROMIUM_AUDIT = "runs a real design audit, which needs a real Chromium that the Ubuntu step does not install";
-
-const REAL_FAILURE = "real failure, see PR body";
-
-export const BASELINE_EXCLUSIONS: Readonly<Record<string, string>> = {
-  "packages/backend/tests/canonical-preview-render.test.ts": NEEDS_CHROMIUM,
-  "packages/backend/tests/cancelled-audit-process.test.ts": NEEDS_CHROMIUM_AUDIT,
-  "packages/backend/tests/design-audit-artboards.test.ts": NEEDS_CHROMIUM,
-  "packages/backend/tests/design-audit-measurement.test.ts": NEEDS_CHROMIUM,
-  "packages/backend/tests/design-audit-render.test.ts": NEEDS_CHROMIUM,
-  "packages/backend/tests/design-audit-routes.test.ts": NEEDS_CHROMIUM_AUDIT,
-  "packages/backend/tests/export-pdf-artboard.test.ts": NEEDS_CHROMIUM,
-  "packages/backend/tests/export-pdf-inline-pages.test.ts": NEEDS_CHROMIUM,
-  "packages/backend/tests/graphic-export.test.ts": NEEDS_CHROMIUM,
-  "packages/backend/tests/png-zip-chromium.test.ts": NEEDS_CHROMIUM,
-  "packages/backend/tests/three-scene.test.ts": REAL_FAILURE,
-  "packages/frontend/tests/deck-fit.browser.test.ts": NEEDS_CHROMIUM,
-  "packages/frontend/tests/graphic-project-creation.test.ts": NEEDS_CHROMIUM,
-  "packages/frontend/tests/user-message-revert.browser.test.ts": NEEDS_CHROMIUM,
-};
+export const BASELINE_EXCLUSIONS: Readonly<Record<string, string>> = {};
 
 export type BaselinePlan = {
   /** Run by the baseline step, one `bun test` process per file. */

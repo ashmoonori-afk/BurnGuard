@@ -13,6 +13,9 @@ import path from "node:path";
 import { BASELINE_PATH, listedTestPaths, parseBaseline, UBUNTU_WORKFLOW } from "./check-os-matrix-coverage";
 import { BASELINE_EXCLUSIONS, planBaselineSuites } from "./baseline-suites";
 
+/** A hung suite fails after this long instead of holding the job until its timeout-minutes. The slowest suite takes about 30 s. */
+const FILE_TIMEOUT_MS = 5 * 60 * 1000;
+
 const root = path.resolve(import.meta.dir, "..", "..");
 const baseline = parseBaseline(await readFile(path.join(root, BASELINE_PATH), "utf8"));
 const ubuntuListed = listedTestPaths(await readFile(path.join(root, UBUNTU_WORKFLOW), "utf8"));
@@ -28,8 +31,9 @@ if (process.argv.includes("--list")) {
 const failed: string[] = [];
 for (const file of plan.run) {
   const started = performance.now();
-  const child = Bun.spawn({ cmd: [process.execPath, "test", "--timeout", "30000", file], cwd: root, stdout: "inherit", stderr: "inherit" });
+  const child = Bun.spawn({ cmd: [process.execPath, "test", "--timeout", "30000", file], cwd: root, stdout: "inherit", stderr: "inherit", timeout: FILE_TIMEOUT_MS, killSignal: "SIGKILL" });
   const code = await child.exited;
+  if (child.signalCode === "SIGKILL") console.error(`baseline suite ${file} exceeded ${FILE_TIMEOUT_MS / 1000} s and was killed`);
   console.log(`baseline suite ${code === 0 ? "ok" : "FAILED"} ${file} (${Math.round(performance.now() - started)} ms)`);
   if (code !== 0) failed.push(file);
 }
