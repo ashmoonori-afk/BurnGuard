@@ -198,6 +198,9 @@ jobs:
       - name: Install the fixture browser
         run: node packages/backend/node_modules/playwright-core/cli.js install --with-deps chromium
       - name: Remaining OS matrix suites on Ubuntu
+        env:
+          BG_BROWSER_SMOKE: "1"
+          BG_EXPORT_SMOKE: "1"
         run: >-
           bun test --timeout 60000
           packages/backend/tests/design-system-layout-reference.test.ts
