@@ -134,7 +134,6 @@ export async function runCodexTurn(
   const scanImages = () => enqueue(() => mapGeneratedImages(ctx));
   const watchGeneratedImages = () => {
     if (!accepting || ctx.codexHome === undefined || ctx.threadId === undefined) return;
-    const threadId = ctx.threadId;
     try {
       // Subscribe to the parent BEFORE attempting attachment, closing the create-before-watch gap.
       if (rootWatcher === undefined) {
@@ -150,8 +149,9 @@ export async function runCodexTurn(
       }
       if (imageWatcher !== undefined) return;
       // Do not observe a generated_images symlink that escapes the scanner's boundary.
-      const watcher = watch(resolveWithin(ctx.codexHome, "generated_images"), { recursive: true }, (_type, name) => {
-        if (name === null || (typeof name === "string" && name.includes(threadId))) void scanImages();
+      const watcher = watch(resolveWithin(ctx.codexHome, "generated_images"), { recursive: true }, () => {
+        // Notification names are advisory; the scanner selects the current thread's files.
+        void scanImages();
       });
       imageWatcher = watcher;
       watcher.on("error", () => {
