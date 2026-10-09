@@ -8,11 +8,11 @@
  *   bun scripts/qa/check-migration-order.ts [--base-ref <git ref>]   check; with a base ref the migrations at the
  *                                                                    merge base of HEAD and that ref are the baseline
  *
- * The merge base, not the ref's tip: a branch behind a main that already added migrations can still add its own above
- * the fork point's highest number. Without a base ref only the name shape is checked.
+ * A branch uses the merge base, not the ref's tip. If the ref points to HEAD, main-push CI uses the first parent
+ * when available. Without a base ref only the name shape is checked.
  */
 import { existsSync } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 
 export const MIGRATIONS_DIR = "packages/backend/src/db/migrations";
@@ -22,6 +22,7 @@ const NAMED_MIGRATION = /^(\d{4})_([a-z0-9_]+)\.sql$/;
 export type MigrationOrderProblemCode = "malformed_name" | "duplicate_number" | "new_not_after_base" | "existing_rewritten" | "existing_deleted";
 export type MigrationOrderProblem = { readonly code: MigrationOrderProblemCode; readonly path: string; readonly source: string };
 export type GitRunner = (args: readonly string[]) => { readonly exitCode: number; readonly stdout: string };
+/** Inventory content is a Git-normalized blob identity, not checkout newline bytes. */
 export interface MigrationFile { readonly path: string; readonly name: string; readonly content: string }
 export interface MigrationOrderInput { readonly head: readonly MigrationFile[]; readonly base: readonly MigrationFile[] | null }
 
@@ -86,33 +87,44 @@ export function checkMigrationOrder(input: MigrationOrderInput): MigrationOrderP
 }
 
 /** The migrations checked into the working tree, in directory order. */
-export async function headMigrations(root: string): Promise<MigrationFile[]> {
+export async function headMigrations(root: string, git: GitRunner): Promise<MigrationFile[]> {
   const dir = path.join(root, ...MIGRATIONS_DIR.split("/"));
   if (!existsSync(dir)) return [];
   const files: MigrationFile[] = [];
   for (const name of (await readdir(dir)).filter((entry) => SQL_FILE.test(entry)).sort(byCodeUnit)) {
-    files.push({ path: `${MIGRATIONS_DIR}/${name}`, name, content: await readFile(path.join(dir, name), "utf8") });
+    const spelled = `${MIGRATIONS_DIR}/${name}`;
+    const blob = git(["hash-object", "--path", spelled, "--", spelled]);
+    if (blob.exitCode !== 0) throw new TypeError(`cannot hash ${spelled} in the working tree`);
+    files.push({ path: spelled, name, content: blob.stdout.trim() });
   }
   return files;
 }
 
 /**
- * The migrations at the merge base of HEAD and `ref`, normalized to POSIX paths. An empty list means the merge base
- * predates the directory (every migration in the tree is new); a ref without a merge base is refused.
+ * The fork inventory, or HEAD's first parent when the ref points to HEAD, normalized to POSIX paths.
+ * An empty list means the baseline predates the directory; a ref without a merge base is refused.
  */
 export async function baseMigrations(ref: string, git: GitRunner): Promise<MigrationFile[]> {
   const mergeBase = git(["merge-base", "HEAD", ref]);
-  const base = mergeBase.stdout.trim();
+  let base = mergeBase.stdout.trim();
   if (mergeBase.exitCode !== 0 || base === "") throw new TypeError("base ref has no merge base with HEAD in this checkout");
+  const head = git(["rev-parse", "HEAD"]);
+  if (head.exitCode !== 0 || head.stdout.trim() === "") throw new TypeError("cannot resolve HEAD in this checkout");
+  if (base === head.stdout.trim()) {
+    // Main-push CI must check the new commit, not compare it with itself.
+    // Without a parent, keep the first commit for working-tree checks.
+    const parent = git(["rev-parse", "--verify", "HEAD^"]);
+    if (parent.exitCode === 0) base = parent.stdout.trim();
+  }
   const listing = git(["ls-tree", "-r", "--name-only", base, "--", MIGRATIONS_DIR]);
   if (listing.exitCode !== 0) throw new TypeError("cannot read the migrations tree at the merge base");
   const files: MigrationFile[] = [];
   for (const spelled of listing.stdout.split(/\r?\n/).map(normalizeMigrationPath).filter((line) => line !== "")) {
     const name = migrationNameOf(spelled);
     if (!SQL_FILE.test(name)) continue;
-    const blob = git(["cat-file", "blob", `${base}:${spelled}`]);
+    const blob = git(["rev-parse", `${base}:${spelled}`]);
     if (blob.exitCode !== 0) throw new TypeError(`cannot read ${spelled} at the merge base`);
-    files.push({ path: spelled, name, content: blob.stdout });
+    files.push({ path: spelled, name, content: blob.stdout.trim() });
   }
   return files;
 }
@@ -126,7 +138,7 @@ export async function checkRepository(root: string, ref: string | null): Promise
     return { exitCode: result.exitCode, stdout: new TextDecoder().decode(result.stdout) };
   };
   const base = ref === null ? null : await baseMigrations(ref, git);
-  const head = await headMigrations(root);
+  const head = await headMigrations(root, git);
   return { head, base, problems: checkMigrationOrder({ head, base }) };
 }
 

@@ -108,29 +108,25 @@ describe("migration order", () => {
 
 describe("base migrations from git", () => {
   const FORK_POINT = "1111111111111111111111111111111111111111";
-  const HELLO = "packages/backend/src/db/migrations/0021_visual_alternatives.sql";
-  const HELLO_BLOB = "-- migration\n";
+  const HELLO_BLOB = "2222222222222222222222222222222222222222";
+  const INITIAL_BLOB = "3333333333333333333333333333333333333333";
 
-  function fakeGit(listing: string, asked: string[] = []): GitRunner {
+  function fakeGit(listing: string): GitRunner {
     return (args) => {
-      asked.push(args.join(" "));
       if (args[0] === "merge-base") return args[2] === "origin/main" ? { exitCode: 0, stdout: `${FORK_POINT}\n` } : { exitCode: 1, stdout: "" };
       if (args[0] === "ls-tree") return { exitCode: 0, stdout: listing };
-      if (args[0] === "cat-file") return { exitCode: 0, stdout: args[2]?.includes("0021_visual_alternatives.sql") ? HELLO_BLOB : "-- other\n" };
+      if (args[0] === "rev-parse") return { exitCode: 0, stdout: args[1]?.includes("0021_visual_alternatives.sql") ? HELLO_BLOB : INITIAL_BLOB };
       return { exitCode: 0, stdout: "" };
     };
   }
 
   test("Given a merge base When read Then the migrations are the fork point's, normalized from the listed spelling", async () => {
-    const asked: string[] = [];
-
-    const base = await baseMigrations("origin/main", fakeGit("packages\\backend\\src\\db\\migrations\\0001_initial.sql\npackages/backend/src/db/migrations/0021_visual_alternatives.sql\n", asked));
+    const base = await baseMigrations("origin/main", fakeGit("packages\\backend\\src\\db\\migrations\\0001_initial.sql\npackages/backend/src/db/migrations/0021_visual_alternatives.sql\n"));
 
     expect(base.map((file) => `${file.path} ${file.content.trim()}`)).toEqual([
-      `${MIGRATIONS_DIR}/0001_initial.sql -- other`,
-      `${MIGRATIONS_DIR}/0021_visual_alternatives.sql -- migration`,
+      `${MIGRATIONS_DIR}/0001_initial.sql ${INITIAL_BLOB}`,
+      `${MIGRATIONS_DIR}/0021_visual_alternatives.sql ${HELLO_BLOB}`,
     ]);
-    expect(asked).toEqual(["merge-base HEAD origin/main", `ls-tree -r --name-only ${FORK_POINT} -- ${MIGRATIONS_DIR}`, `cat-file blob ${FORK_POINT}:packages/backend/src/db/migrations/0001_initial.sql`, `cat-file blob ${FORK_POINT}:${HELLO}`]);
   });
 
   test("Given a base commit with no migrations directory When read Then the inventory is empty, not a failure", async () => {
@@ -183,6 +179,39 @@ describe("repository check against a real git repository", () => {
 
     expect(report.problems).toEqual([]);
     expect(report.head.length).toBe(3);
+  });
+
+  test("Given a clean autocrlf checkout When checked Then only a real SQL rewrite is rejected", async () => {
+    const repo = await repository();
+    run(repo, "config", "core.autocrlf", "true");
+    await writeMigration(repo, "0001_initial.sql", "-- migration\r\n");
+    expect(run(repo, "diff", "--name-only").trim()).toBe("");
+    expect((await checkRepository(repo, "main")).problems).toEqual([]);
+
+    await writeMigration(repo, "0001_initial.sql", "-- changed migration\r\n");
+    expect(codes((await checkRepository(repo, "main")).problems)).toEqual(["existing_rewritten 0001_initial.sql"]);
+  });
+
+  test("Given main advances after a branch forks When checked Then the fork inventory remains the baseline", async () => {
+    const repo = await repository();
+    await writeMigration(repo, "0022_feature.sql");
+    commit(repo, "feature migration");
+    run(repo, "checkout", "-q", "main");
+    await writeMigration(repo, "0030_main.sql");
+    commit(repo, "later main migration");
+    run(repo, "checkout", "-q", "feature");
+
+    const report = await checkRepository(repo, "main");
+    expect(report.base?.map(file => file.name)).toEqual(["0001_initial.sql", "0021_visual_alternatives.sql"]);
+    expect(report.problems).toEqual([]);
+  });
+
+  test("Given the base ref points to HEAD When an older-numbered migration was committed Then the parent is the baseline", async () => {
+    const repo = await repository();
+    await writeMigration(repo, "0019_fill_gap.sql");
+    commit(repo, "earlier numbered migration");
+
+    expect(codes((await checkRepository(repo, "feature")).problems)).toEqual(["new_not_after_base 0019_fill_gap.sql"]);
   });
 
   test("Given a branch that fills an earlier gap When checked Then the new migration is rejected", async () => {
