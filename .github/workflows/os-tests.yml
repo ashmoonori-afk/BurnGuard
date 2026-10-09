@@ -126,6 +126,8 @@ jobs:
           scripts/qa/task-8-gates.test.ts
           packages/backend/tests/design-system-extract.test.ts
           packages/backend/tests/project-bundle-routes.test.ts
+          packages/backend/tests/project-bundle.test.ts
+          packages/backend/tests/checkpoints.test.ts
           packages/backend/tests/design-system-route-error-bodies.test.ts
           packages/backend/tests/export-failure-message.test.ts
           packages/backend/tests/route-unexpected-error-bodies.test.ts
@@ -137,8 +139,10 @@ jobs:
           packages/backend/tests/chromium-launch-hardening.test.ts
           scripts/qa/check-os-matrix-coverage.test.ts
           scripts/qa/check-flake-patterns.test.ts
+          scripts/qa/check-migration-order.test.ts
           scripts/whitespace-base.test.ts
           packages/backend/tests/mac-updates-version-order.test.ts
+          packages/backend/tests/mac-updates.test.ts
           packages/backend/tests/task-preset-comparison.test.ts
           packages/backend/tests/codex-model-catalog.test.ts
           packages/backend/tests/model-lists.test.ts

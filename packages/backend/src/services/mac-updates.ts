@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, rename, rm, stat } from "node:fs/promises";
+import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { APP_VERSION } from "@bg/shared/app";
 import type { AppUpdateStatus, AppUpdateUnsupportedReason } from "@bg/shared/updates";
@@ -165,8 +165,16 @@ export function createAppUpdater(deps: AppUpdaterDependencies): AppUpdater {
   // Internal transition: keep the existing public ready/restart status contract.
   let applying = false;
   const patch = (next: Partial<AppUpdateStatus>): void => { state = { ...state, ...next }; };
+  // The startup cleanup is admitted through the same single-flight queue as downloads:
+  // it runs once, before the first download, so it can never delete a partial an active
+  // download is writing or the package that download has already staged.
+  let startedUp = false;
 
   async function run(): Promise<void> {
+    if (!startedUp) {
+      startedUp = true;
+      await pruneUpdateCache(path.join(deps.cacheDir, "updates"), { currentVersion: deps.currentVersion });
+    }
     patch({ state: "checking", error: null, progress: null });
     let asset: VelopackFeedAsset | null;
     try {
@@ -256,6 +264,8 @@ async function downloadPackage(deps: AppUpdaterDependencies, asset: VelopackFeed
   await mkdir(directory, { recursive: true });
   const target = path.join(directory, asset.FileName);
   const partial = `${target}.partial`;
+  // A crash can leave a partial from an earlier run; never depend on the sink truncating it.
+  await rm(partial, { force: true });
   let response: Response;
   try { response = await deps.source.openPackage(asset.FileName); }
   catch { throw new AppUpdateError("package_download_failed"); }
@@ -283,11 +293,37 @@ async function downloadPackage(deps: AppUpdaterDependencies, asset: VelopackFeed
     await close();
     if (received !== asset.Size || hash.digest("hex").toUpperCase() !== asset.SHA256) throw new AppUpdateError("package_digest_mismatch");
     await rename(partial, target);
+    await pruneUpdateCache(directory, { keep: asset.FileName });
     return target;
   } catch (error) {
     await close();
     await rm(partial, { force: true });
     throw error;
+  }
+}
+
+const PACKAGE_VERSION = /^[A-Za-z0-9_.]+-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)-[A-Za-z0-9_]+-(?:full|delta)\.nupkg$/;
+
+/**
+ * Removes staged updater files that can no longer be applied: every `*.partial`
+ * and every `*.nupkg` other than `keep`, or, without `keep`, every package at or
+ * below `currentVersion`. Best effort.
+ *
+ * Callers must run it on the updater's admission path (inside `run`) so no download
+ * is in flight; run anywhere else it deletes a partial an active download is writing.
+ */
+export async function pruneUpdateCache(directory: string, options: { readonly keep?: string; readonly currentVersion?: string }): Promise<void> {
+  let names: string[];
+  try { names = await readdir(directory); }
+  catch { return; }
+  for (const name of names) {
+    if (name === options.keep) continue;
+    let stale = name.endsWith(".nupkg.partial");
+    if (!stale && name.endsWith(".nupkg")) {
+      const version = PACKAGE_VERSION.exec(name)?.[1];
+      stale = options.keep !== undefined || (options.currentVersion !== undefined && version !== undefined && compareVersions(version, options.currentVersion) <= 0);
+    }
+    if (stale) await rm(path.join(directory, name), { force: true }).catch(() => {});
   }
 }
 
@@ -362,9 +398,14 @@ let timer: ReturnType<typeof setInterval> | null = null;
 export function configureAppUpdater(overrides: Partial<AppUpdaterDependencies> & { readonly shutdown: () => Promise<void> }): AppUpdater {
   const execPath = process.execPath;
   const support = overrides.support ?? detectUpdateSupport({ platform: process.platform, execPath, desktopShell: process.env.BG_DESKTOP === "1" });
+  const currentVersion = overrides.currentVersion ?? APP_VERSION;
+  const cacheDir = overrides.cacheDir ?? appCacheDir;
+  // Packages for this or an older version were already applied (or can never be); the
+  // updater drops them on its admission path (see createAppUpdater) rather than here, so
+  // the cleanup never races a download that starts right after startup.
   instance = createAppUpdater({
-    currentVersion: overrides.currentVersion ?? APP_VERSION,
-    cacheDir: overrides.cacheDir ?? appCacheDir,
+    currentVersion,
+    cacheDir,
     source: overrides.source ?? resolveUpdateSource(),
     support,
     updaterPath: overrides.updaterPath ?? updaterBinaryPath(execPath),

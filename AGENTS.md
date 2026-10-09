@@ -3,6 +3,7 @@
 **Generated:** 2026-09-14T00:12:24.061Z
 **Commit:** 74cd86c
 **Branch:** main
+**Guidance refreshed:** 2026-10-08. Directory references below are authoritative; generation metadata above is historical.
 
 ## OVERVIEW
 
@@ -15,15 +16,15 @@ BurnGuard/
 ├── packages/
 │   ├── backend/           # Hono server, SQLite/Drizzle, harness, adapters, security, services (+ tests/)
 │   ├── frontend/          # Vite + React 18 SPA; api/components/views/lib/i18n (+ tests/)
-│   ├── shared/            # @bg/shared, source-only ESM: 41-module barrel + 21 subpath exports
+│   ├── shared/            # @bg/shared, source-only ESM; exports in package.json
 │   ├── desktop-windows/   # WinForms + WebView2 + Velopack shell; Program.cs is security-dense
 │   └── desktop-mac/       # single Swift main.swift, same stdout readiness protocol
-├── scripts/               # 8 root Bun scripts: dev launcher, binary/native builds, test preload
-│   └── qa/                # 65-file evidence harness: receipts, static gate, Playwright fixtures
-├── doc/                   # 13 tracked English-only design docs; numbered records 04-23 are local-only (doc/README.md)
-├── docs/                  # separate 2-file tree: dated QA + security reports
-├── samples/               # seeded corpus, 4 brands x 3 formats, staged by package-runtime.ts
-├── design system themes/  # 10 bundled themes -> systems/builtin-theme-<slug>  (path has spaces)
+├── scripts/               # dev launcher, binary/native builds, test preload
+│   └── qa/                # evidence harness: receipts, static gate, Playwright fixtures
+├── doc/                   # English-only design docs; tracked/local policy in doc/README.md
+├── docs/                  # separate dated QA + security reports
+├── samples/               # seeded corpus; registry in backend/src/data/original-samples.ts
+├── design system themes/  # bundled themes -> systems/builtin-theme-<slug>  (path has spaces)
 ├── design system sample/  # Northvale Capital reference system (uploads/ never committed)
 ├── .github/workflows/     # security (Ubuntu + guards), os-tests (macOS arm64, Windows x64), windows-release, macos-release
 └── bunfig.toml            # preloads scripts/test-preload.ts for EVERY bun test
@@ -33,29 +34,29 @@ BurnGuard/
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Backend startup, shutdown, port policy | `packages/backend/src/AGENTS.md` | 11 domain subdirs; ordering and authority map |
-| Artifact, extraction, export, research flows | `packages/backend/src/services/AGENTS.md` | 152 TS modules + `chromium-node-bridge.mjs`, ~17.7k LOC, no barrel |
-| Schema, migration, recovery state | `packages/backend/src/db/AGENTS.md` | 39 modules + 14 forward migrations (`0001`-`0014`) + 4 templates |
-| HTTP or SSE behavior | `packages/backend/src/routes/AGENTS.md` | 17 Hono modules + 3 `*-input.ts` parsers + thumbnail handler |
+| Backend startup, shutdown, port policy | `packages/backend/src/AGENTS.md` | Ordering and authority map |
+| Artifact, extraction, export, research flows | `packages/backend/src/services/AGENTS.md` | Flat service modules + `chromium-node-bridge.mjs`, no barrel |
+| Schema, migration, recovery state | `packages/backend/src/db/AGENTS.md` | Schema modules, `db/migrations/`, project templates; new migrations sort after the highest existing id |
+| HTTP or SSE behavior | `packages/backend/src/routes/AGENTS.md` | Hono modules, input parsers and thumbnail handler |
 | Capability, path containment, body caps | `packages/backend/src/security/AGENTS.md` | Request authority, raw-file headers, agent-control detection |
-| Prompt or context assembly | `packages/backend/src/harness/AGENTS.md` | Bounded summaries, 6 shipped skills, `assets/lucide/` |
+| Prompt or context assembly | `packages/backend/src/harness/AGENTS.md` | Bounded summaries, shipped skills, `assets/lucide/` |
 | Claude Code/Codex execution | `packages/backend/src/adapters/AGENTS.md` | Subprocess + stream normalization; argv in `codex/index.ts` |
-| Backend test isolation, smoke gates | `packages/backend/tests/AGENTS.md` | 229 Bun suites, ~34.3k LOC, platform skips |
+| Backend test isolation, smoke gates | `packages/backend/tests/AGENTS.md` | Bun suites, platform fixtures and smoke gates |
 | Frontend package, providers, dev proxy | `packages/frontend/AGENTS.md` | Provider order, counts, i18n wiring |
-| Feature UI or canvas bridge | `packages/frontend/src/components/AGENTS.md` | 107 files / 14 feature folders; canvas sandbox |
-| Route compositions | `packages/frontend/src/views/AGENTS.md` | 5 views, 3,435 LOC; `ProjectView` invariants |
+| Feature UI or canvas bridge | `packages/frontend/src/components/AGENTS.md` | Feature folders and canvas sandbox |
+| Route compositions | `packages/frontend/src/views/AGENTS.md` | Route views and `ProjectView` invariants |
 | Browser API calls | `packages/frontend/src/api/AGENTS.md` | `client.ts` authority + envelope rules |
-| Pure frontend helpers | `packages/frontend/src/lib/AGENTS.md` | 20 modules; per-module "never" rules |
-| Copy, locales, message keys | `packages/frontend/src/i18n/AGENTS.md` | ko/en/zh-CN typed registry; `useT` in ~75 modules |
-| Frontend test setup | `packages/frontend/tests/AGENTS.md` | 46 `bun:test` suites + browser fixtures |
-| Shared DTO or parser changes | `packages/shared/src/AGENTS.md` | 42 contract modules; 41-module barrel + subpaths |
+| Pure frontend helpers | `packages/frontend/src/lib/AGENTS.md` | Per-module "never" rules |
+| Copy, locales, message keys | `packages/frontend/src/i18n/AGENTS.md` | ko/en/zh-CN typed registry and `useT` |
+| Frontend test setup | `packages/frontend/tests/AGENTS.md` | `bun:test` suites + browser fixtures |
+| Shared DTO or parser changes | `packages/shared/src/AGENTS.md` | Contract barrel and package subpaths |
 | Windows shell, updates, readiness | `packages/desktop-windows/AGENTS.md` | WinForms/WebView2, Velopack, kill-on-close job |
 | macOS shell | `packages/desktop-mac/AGENTS.md` | Swift WKWebView mirror of the Windows contract |
 | Build, packaging, launch scripts | `scripts/AGENTS.md` | Root scripts only; runtime staging list |
 | QA evidence automation | `scripts/qa/AGENTS.md` | Sanitized digests, static gate, isolated `QA_HOME` |
 | Design records, ADRs | `doc/AGENTS.md` | English-only; dated records supersede; append-only ADRs |
-| Seeded sample corpus | `samples/AGENTS.md` | 4 brands x 3 formats; path contract |
-| Bundled themes | `design system themes/AGENTS.md` | 10 themes; slug registry + token/provenance contract |
+| Seeded sample corpus | `samples/AGENTS.md` | Sample registry and path contract |
+| Bundled themes | `design system themes/AGENTS.md` | Slug registry + token/provenance contract |
 | Reference design system | `design system sample/AGENTS.md` | Northvale Capital; `uploads/` privacy guard |
 
 ## CODE MAP
@@ -63,7 +64,7 @@ BurnGuard/
 | Symbol/domain | Type | Location | Consumers | Role |
 |---------------|------|----------|-----------|------|
 | Backend entry chain | Lifecycle | `backend/src/index.ts` -> `bootstrap.ts` -> `server.ts` | Local server | Startup/ordered shutdown; migrate, seed, reconcile, watch; `createApp` + `classifyApiRoute` lazy dispatch + SPA serving |
-| Shared contract barrel | Contract boundary | `shared/src/index.ts` | Backend + frontend | 41 modules, 21 subpaths; only DTO authority |
+| Shared contract barrel | Contract boundary | `shared/src/index.ts` | Backend + frontend | Only DTO authority; exports declared in package.json |
 | Durable repositories | Persistence boundary | `backend/src/db/` | Backend workflows | Conditional transitions and recovery authority |
 | Route/event layer | HTTP/SSE boundary | `backend/src/routes/` | Frontend client | Validation, envelopes, status, event publication |
 | Security seam | Authority | `backend/src/security/` | All non-health routes | Capability check, `resolveWithin`, body caps |
@@ -111,7 +112,8 @@ BurnGuard/
 ## COMMANDS
 
 ```bash
-bun run dev                    # launcher: backend health (127.0.0.1:14070) gates Vite (5173)
+bun run dev                    # bun run --filter '*' dev: backend + Vite dev servers in parallel (no health gate)
+bun scripts/dev-launcher.ts    # full dev-stack launcher (Start-BurnGuard.command): backend health (127.0.0.1:14070) gates Vite (5173)
 bun run dev:backend            # BG_DEV=1 bun run --watch src/index.ts
 bun run typecheck              # tsc --build across the workspace
 bun test                       # root only; preload isolates BG_APP_ROOT (timeout 30000)
@@ -135,7 +137,7 @@ bun scripts/qa/check-flake-patterns.ts       # launch-path flake patterns in pac
 - Pinned deps constrain exports: `playwright-core` 1.59.1, `pdfjs-dist` 5.4.149, `@napi-rs/canvas` 0.1.100, `pdf-lib` 1.17.1. CI pins Bun 1.3.14 with frozen installs.
 - Native packaging is host-gated: Windows needs .NET 8 + `.config/dotnet-tools.json` Velopack pin; macOS DMG needs macOS.
 - `upload-extractor-py.ts` embeds a Python extractor in `String.raw` — no backticks, no `${`.
-- Largest backend files: `services/design-system-extract.ts` (2,165), `db/seed-tutorials.ts` (985), `tests/design-system-extract.test.ts` (634), `routes/session.ts` (606).
+- Large backend entry points: `services/design-system-extract.ts`, `db/seed-tutorials.ts`, `tests/design-system-extract.test.ts`, `routes/session.ts`.
 - Vite uses strict port `5173`, proxies `/api` and `/runtime`, and sends `frame-ancestors 'none'` + `X-Frame-Options: DENY`. Windows is the primary local target; macOS packaging and shell QA are also present.
 - Consult the nearest nested `AGENTS.md` before changing a delegated domain; this root records only cross-package constraints.
 - Doc drift to ignore: `uploads/`, `ref/`, `devplan/`, `/.omo/` are gitignored. A stray empty `NUL` file sits at the repo root (Windows artifact).
