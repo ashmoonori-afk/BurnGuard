@@ -176,8 +176,8 @@ describe("project signal debounce", () => {
     // Events keep resetting the quiet window through 1999 ms; only the 2000 ms cap can start the scan.
     expect(calls).toBe(0);
     clock.advance(1);
-    await Promise.all(runs);
     expect(calls).toBe(1);
+    await Promise.all(runs);
     expect(clock.armed()).toBe(0);
   });
 });
