@@ -238,6 +238,58 @@ describe("project signal lifecycle", () => {
 
     expect(calls).toBe(1);
   });
+
+  test("Given a held scan When shutdown stops Then an event racing the drain starts no scan and leaves nothing pending", async () => {
+    const clock = fakeScheduler();
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let heldCalls = 0;
+    let lateCalls = 0;
+    const startup = startProjectWatchers({ projectIds: [] });
+    await startup.settled;
+    const held = scheduleProjectSignal("stop-held", "/unused", async () => { heldCalls += 1; started.resolve(); await release.promise; return null; }, clock.scheduler);
+    clock.advance(SIGNAL_QUIET_MS);
+    await started.promise;
+
+    const stopping = startup.stop();
+    // A queued callback from a still-open watcher races the drain: admission is fenced synchronously inside stop().
+    const late = scheduleProjectSignal("stop-late", "/unused", async () => { lateCalls += 1; return null; }, clock.scheduler);
+    clock.advance(SIGNAL_MAX_WAIT_MS);
+
+    expect(lateCalls).toBe(0);
+    expect(isProjectSignalPending("stop-late")).toBe(false);
+
+    release.resolve();
+    await stopping;
+    await Promise.all([held, late]);
+
+    expect(heldCalls).toBe(1);
+    expect(lateCalls).toBe(0);
+    expect(isProjectSignalPending("stop-late")).toBe(false);
+    expect(clock.armed()).toBe(0);
+  });
+
+  test("Given a startup observation still in flight When shutdown stops Then no watcher attaches and a racing signal never scans", async () => {
+    const item = await fixture();
+    const held = heldObserver();
+    const clock = fakeScheduler();
+    let calls = 0;
+    const startup = startProjectWatchers({ projectIds: [item.id], observe: held.observe });
+    await held.startedAtLeast(1);
+
+    const stopping = startup.stop();
+    // The watcher would attach once the observation resolves; signal intake is already fenced at the stop boundary.
+    const racing = scheduleProjectSignal(item.id, item.root, async () => { calls += 1; return null; }, clock.scheduler);
+    clock.advance(SIGNAL_MAX_WAIT_MS);
+    held.started[0]?.release();
+    await stopping;
+    await racing;
+
+    expect(calls).toBe(0);
+    expect(isProjectSignalPending(item.id)).toBe(false);
+    expect(projectWatchers.has(item.id)).toBe(false);
+    expect(clock.armed()).toBe(0);
+  });
 });
 
 async function fixtures(count: number) {
