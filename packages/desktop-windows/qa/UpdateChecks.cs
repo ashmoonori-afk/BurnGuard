@@ -20,6 +20,8 @@ internal static class UpdateChecks
     [STAThread]
     private static void Main()
     {
+        // These existing UI assertions use Korean copy, independent of the runner's OS language.
+        Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("ko-KR");
         VelopackApp.Build().Run();
         CheckDownloadRouting();
         CheckDownloadObservation();
