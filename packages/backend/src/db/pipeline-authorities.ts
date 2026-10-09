@@ -73,6 +73,7 @@ export const sessionsTable = sqliteTable(
     backendSessionState: text("backend_session_state"),
     status: text("status", { enum: ["idle", "running", "awaiting_tool", "error", "terminated"] }).notNull().default("idle"),
     pid: integer("pid"),
+    processOwnerJson: text("process_owner_json"),
     lastTurnId: text("last_turn_id"),
     usageInputTokens: integer("usage_input_tokens").notNull().default(0),
     usageOutputTokens: integer("usage_output_tokens").notNull().default(0),

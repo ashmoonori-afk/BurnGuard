@@ -82,7 +82,7 @@ export async function runCliTurn(
         await input.onStderr?.(line);
       }),
     ];
-    exitCode = await settleProcessStreams(owned, readers, input.signal);
+    exitCode = await settleProcessStreams(owned, readers, input.signal, input.onProcessStarted);
   } finally {
     unsubscribeDecision?.();
     if (promptDirectory) await rm(resolveWithin(input.projectDir, path.relative(input.projectDir, promptDirectory)), { recursive: true, force: true });

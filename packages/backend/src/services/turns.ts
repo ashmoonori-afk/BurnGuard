@@ -31,6 +31,8 @@ import { DECK_REVIEW_PROMPT } from "../harness/skills/deck-skill";
 import { IMAGE_ARTBOARD_COMPLETION_CHECKS } from "../harness/design-craft";
 import { summarizeDeckHtml } from "../harness/structure-extractor";
 import { runAdapterTurn } from "../adapters/registry";
+import { describeOwnedProcess, RecordedProcessRecoveryError } from "../adapters/owned-process-record";
+import { clearSessionProcess, recordSessionProcess } from "../db/session-process";
 import { resolveCodexProgressMetrics } from "../adapters/codex/user-otel";
 import { loadConfig } from "../config";
 import { hasAgentControlFiles } from "../security/agent-control-files";
@@ -574,6 +576,12 @@ async function runUserTurnInternal(
             await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId, task_preset: shippedPreset });
             const adapterInput: Parameters<typeof runAdapterTurn>[1] = {
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,
+              onProcessStarted: (owned) => {
+                const record = describeOwnedProcess(owned);
+                if (record === null) throw new RecordedProcessRecoveryError("Provider exited before ownership could be recorded");
+                const json = recordSessionProcess(getSqlite(), sessionId, record);
+                return () => clearSessionProcess(getSqlite(), sessionId, json);
+              },
               generation,
               ...(logoIdeate ? { imageGeneration: "forbidden" as const } : {}),
               ...(webAssetTool === undefined ? {} : { webAssetTool }),

@@ -16,6 +16,7 @@ import { readLines } from "../bounded-lines";
  */
 
 export interface RunnerOptions {
+  onProcessStarted?: import("../types").AdapterRunInput["onProcessStarted"];
   generation?: import("@bg/shared").GenerationOptions;
   webAssetTool?: { readonly command: readonly string[] };
   commandcodeApiKey?: string;
@@ -163,7 +164,7 @@ export async function runClaudeCode(options: RunnerOptions): Promise<RunnerResul
       : readLines(proc.stderr, () => {}),
   ];
 
-  const exitCode = await settleProcessStreams(owned, readers, options.signal);
+  const exitCode = await settleProcessStreams(owned, readers, options.signal, options.onProcessStarted);
   // eslint-disable-next-line no-console
   console.log(`[claude-code] exit=${exitCode}`);
   return { exitCode };

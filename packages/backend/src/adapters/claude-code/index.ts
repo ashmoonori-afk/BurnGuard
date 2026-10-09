@@ -40,6 +40,7 @@ export async function runClaudeCodeTurn(
       prompt: input.prompt,
       signal: input.signal,
       sessionId: input.sessionId,
+      onProcessStarted: input.onProcessStarted,
       onStdoutLine: async (line) => {
         // Parser exceptions used to bubble up through readLines and
         // abort the read loop entirely, leaving the CLI subprocess

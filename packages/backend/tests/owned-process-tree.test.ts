@@ -3,7 +3,9 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runClaudeCode } from "../src/adapters/claude-code/runner";
-import { spawnOwnedProcess } from "../src/adapters/owned-process";
+import { closeOwnedProcess, spawnOwnedProcess } from "../src/adapters/owned-process";
+import { settleProcessStreams } from "../src/adapters/process-streams";
+import { describeOwnedProcess, reapRecordedProcess } from "../src/adapters/owned-process-record";
 import { closeOwnedProcessTree, OwnedProcessTreeCleanupError, ownedProcessSpawnOptions, terminateOwnedProcessTree } from "../src/adapters/owned-process-tree";
 import { awaitChildWithAbort, ExtractionAcquisitionError } from "../src/services/extraction-acquisition";
 
@@ -157,6 +159,98 @@ test.skipIf(process.platform === "win32")("Given a PATH without ps When an owned
 test.skipIf(process.platform !== "win32")("Given only a bare Windows PID When cleanup is requested Then opaque ownership is required", async () => {
   await expect(closeOwnedProcessTree(1_000_000_000)).rejects.toBeInstanceOf(OwnedProcessTreeCleanupError);
 });
+
+test("Given recovery requires termination proof When signalling is refused Then cleanup rejects rather than reporting success", async () => {
+  if (process.platform === "win32") {
+    await expect(closeOwnedProcessTree(1_000_000_000, { requireTermination: true })).rejects.toBeInstanceOf(OwnedProcessTreeCleanupError);
+  } else {
+    const kill = spyOn(process, "kill").mockImplementation(() => {
+      throw Object.assign(new Error("fixture permission boundary"), { code: "EPERM" });
+    });
+    try {
+      await expect(closeOwnedProcessTree(1_000_000_000, { requireTermination: true })).rejects.toMatchObject({ code: "EPERM" });
+    } finally {
+      kill.mockRestore();
+    }
+  }
+});
+
+test("Given ownership changed during the process snapshot When cleanup rechecks Then no captured PID receives a signal", async () => {
+  if (process.platform === "win32") {
+    await expect(closeOwnedProcessTree(1_000_000_000, { requireTermination: true, verifyOwnership: () => false })).rejects.toBeInstanceOf(OwnedProcessTreeCleanupError);
+  } else {
+    const kill = spyOn(process, "kill").mockImplementation(() => { throw new Error("Unrelated PID must not be signalled"); });
+    let verified = false;
+    try {
+      await closeOwnedProcessTree(1_000_000_000, { requireTermination: true, verifyOwnership: () => { verified = true; return false; } });
+      expect(verified).toBe(true);
+      expect(kill.mock.calls).toEqual([]);
+    } finally {
+      kill.mockRestore();
+    }
+  }
+});
+
+test("Given a real owned child When recording ownership fails Then settlement terminates the child before rejecting", async () => {
+  const owned = spawnOwnedProcess({ cmd: [process.execPath, "-e", "Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response('fixture')})"], stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  const readers = [new Response(owned.proc.stdout).text().then(() => {}), new Response(owned.proc.stderr).text().then(() => {})];
+  try {
+    await expect(settleProcessStreams(owned, readers, undefined, () => { throw new Error("ownership write refused"); })).rejects.toThrow("ownership write refused");
+    expect(() => process.kill(owned.proc.pid, 0)).toThrow();
+  } finally {
+    owned.proc.kill();
+    await Promise.allSettled([owned.proc.exited, ...readers]);
+  }
+});
+
+test("Given persisted ownership When a real child finishes Then cleanup acknowledgement follows child exit", async () => {
+  const owned = spawnOwnedProcess({ cmd: [process.execPath, "-e", "console.log('fixture')"], stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  const readers = [new Response(owned.proc.stdout).text().then(() => {}), new Response(owned.proc.stderr).text().then(() => {})];
+  const acknowledged: number[] = [];
+  try {
+    expect(await settleProcessStreams(owned, readers, undefined, (started) => {
+      expect(started.proc.pid).toBe(owned.proc.pid);
+      return () => {
+        expect(() => process.kill(owned.proc.pid, 0)).toThrow();
+        acknowledged.push(owned.proc.pid);
+      };
+    })).toBe(0);
+    expect(acknowledged).toEqual([owned.proc.pid]);
+  } finally {
+    owned.proc.kill();
+    await Promise.allSettled([owned.proc.exited, ...readers]);
+  }
+});
+
+test("Given an owned root that exited with a quiet descendant When recovering its receipt Then root absence does not leave the writer alive", async () => {
+  const childSource = "Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response('writer')});console.log(process.pid);";
+  const source = `const child=Bun.spawn([process.execPath,'-e',${JSON.stringify(childSource)}],{stdin:'ignore',stdout:'pipe',stderr:'ignore'});const reader=child.stdout.getReader();let text='';while(!text.includes('\\n')){const part=await reader.read();if(part.done)throw new Error('Child readiness missing');text+=new TextDecoder().decode(part.value);}console.log(text.trim());process.exit(0);`;
+  const owned = spawnOwnedProcess({ cmd: [process.execPath, "-e", source], stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  const record = describeOwnedProcess(owned);
+  const output = new Response(owned.proc.stdout).text();
+  const stderr = new Response(owned.proc.stderr).text();
+  const sentinel = Bun.spawn([process.execPath, "-e", "Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response('sentinel')})"], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let childPid = 0;
+  try {
+    const text = await Promise.race([output, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Root exit deadline")), 10_000); })]);
+    childPid = Number(text.trim());
+    expect(Number.isSafeInteger(childPid) && childPid > 0).toBe(true);
+    expect(await owned.proc.exited).toBe(0);
+    if (record === null) throw new Error("Fixture ownership missing");
+    if (process.platform !== "win32") expect(() => process.kill(childPid, 0)).not.toThrow();
+    await reapRecordedProcess(record);
+    expect(() => process.kill(childPid, 0)).toThrow();
+    expect(() => process.kill(sentinel.pid, 0)).not.toThrow();
+  } finally {
+    clearTimeout(timer);
+    await closeOwnedProcess(owned, { timeoutMs: 3_000 });
+    owned.proc.kill();
+    sentinel.kill();
+    if (childPid > 0) { try { process.kill(childPid, "SIGKILL"); } catch { /* already gone */ } }
+    await Promise.allSettled([owned.proc.exited, sentinel.exited, output, stderr]);
+  }
+}, 20_000);
 
 // Skipped on Windows: needs POSIX shebang executables and signals; Windows ownership is covered by owned-process-windows.test.ts and codex-runner.test.ts.
 test.skipIf(process.platform === "win32")("POSIX cleanup reports a permission boundary without rejecting an asynchronous abort handler", async () => {

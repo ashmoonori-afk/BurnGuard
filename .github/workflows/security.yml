@@ -209,6 +209,7 @@ jobs:
           packages/backend/tests/design-workflow.test.ts
           packages/backend/tests/python-runtime.test.ts
           packages/backend/tests/owned-process-windows.test.ts
+          packages/backend/tests/process-start-token.test.ts
           packages/backend/tests/desktop-lifecycle.test.ts
           packages/backend/tests/local-fonts.test.ts
           packages/frontend/tests/canvas-css-imports.browser.test.ts
