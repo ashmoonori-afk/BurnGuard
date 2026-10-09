@@ -10,6 +10,7 @@ import { MAX_REQUEST_BODY_BYTES } from "./security/request-limits";
 import { createApp } from "./server";
 import { closeActiveExportBrowsers } from "./services/export-browser-registry";
 import { configureAppUpdater, startAppUpdateScheduler } from "./services/mac-updates";
+import { pruneExpiredSnapshotsAtStartup } from "./services/checkpoints";
 import { startProjectDeletionPurgeScheduler } from "./services/project-deletion";
 import { getSqlite } from "./db/sqlite-client";
 import { activeUserTurnCount, interruptAllUserTurns } from "./services/turns";
@@ -23,6 +24,7 @@ if (ownedPort !== undefined) await desktopStartupStep("port_busy", () => pickPor
 const acquireProfile = () => (process.platform === "win32" ? acquireWindowsProfile(appRootDir) : acquirePosixProfile(appRootDir));
 const profileOwner = isDesktop ? await desktopStartupStep("profile_owned", acquireProfile) : await acquireProfile();
 await bootstrapLocalAppData();
+await pruneExpiredSnapshotsAtStartup();
 startProjectDeletionPurgeScheduler(getSqlite());
 const config = await loadConfig();
 // Dev + binary both prefer the canonical port 14070 (Vite proxy target).

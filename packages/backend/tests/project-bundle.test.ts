@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import JSZip from "jszip";
 import { PROJECT_BUNDLE_MANIFEST_PATH, parseProjectBundleManifest, type ProjectBundleManifest } from "@bg/shared";
 import { runMigrations } from "../src/db/migrate-local";
@@ -12,7 +12,7 @@ import { getDesignSystemDetail } from "../src/db/seed";
 import { getContentReceipt } from "../src/db/catalog-repository";
 import { validateCatalogReceiptTree } from "../src/services/catalog-files";
 import { projectBundleImportReceiptsDir, projectBundlePayloadStage, reconcileProjectBundleImports, writeBundleImportOwnerMarker, writeProjectBundleImportReceipt } from "../src/services/project-bundle-import-receipt";
-import { symlink } from "node:fs/promises";
+import { rmdir, symlink, unlink } from "node:fs/promises";
 import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 import { readdir } from "node:fs/promises";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
@@ -22,6 +22,9 @@ import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { listSessionAttachments } from "../src/db/attachments";
 import { selectContextAttachments } from "../src/services/context";
+
+// Bun's `rm` fails with EFAULT on a Windows directory link; remove the link itself (never the target) per platform.
+const removeDirectoryLink = (link: string): Promise<void> => (process.platform === "win32" ? rmdir(link) : unlink(link));
 
 const suffix = `${process.pid}-${crypto.randomUUID()}`;
 const sourceProjectId = `bundle-source-${suffix}`;
@@ -369,6 +372,30 @@ test.skipIf(!canCreateSymlink())(`Given a receipt whose project directory is a l
   await reconcileProjectBundleImports(getSqlite());
 
   expect(await readFile(path.join(sourceProjectDir, "index.html"), "utf8")).toContain("portable");
-  await rm(path.join(projectsDir, linked), { force: true });
+  await removeDirectoryLink(path.join(projectsDir, linked));
   await rm(path.join(sourceProjectDir, ".meta", "bundle-import-owner.json"), { force: true });
+});
+
+test("Given a torn checkpoint receipt When the project is bundled Then export succeeds and lists only the readable checkpoints", async () => {
+  // Given
+  const torn = path.join(sourceProjectDir, ".meta", "checkpoints", "turn-torn.json");
+  await writeFile(torn, '{"turn_id":"turn-torn","created_');
+  const warnings: string[] = [];
+  const warn = spyOn(console, "warn").mockImplementation((...args: unknown[]) => { warnings.push(args.map(String).join(" ")); });
+  try {
+    // When
+    const exported = await exportProjectBundle(sourceProjectId);
+    const zip = await JSZip.loadAsync(exported.bytes);
+    const manifestEntry = zip.file(PROJECT_BUNDLE_MANIFEST_PATH);
+    if (!manifestEntry) throw new Error("missing manifest");
+    const manifest = parseProjectBundleManifest(JSON.parse(await manifestEntry.async("text")));
+
+    // Then
+    expect(manifest.checkpoints.map((checkpoint) => checkpoint.turn_id)).toEqual(["turn-1"]);
+    // The warning is path-free: a receipt name is user-derived and must not reach logs.
+    expect(warnings.some((line) => line.includes("turn-torn"))).toBe(false);
+  } finally {
+    warn.mockRestore();
+    await rm(torn, { force: true });
+  }
 });

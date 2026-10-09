@@ -32,7 +32,6 @@ packages/backend/tests/catalog-preview-review.test.ts
 packages/backend/tests/catalog.test.ts
 packages/backend/tests/chart-render-text-floor.test.ts
 packages/backend/tests/charts.test.ts
-packages/backend/tests/checkpoints.test.ts
 packages/backend/tests/claude-code-parser.test.ts
 packages/backend/tests/codex-image-outputs.test.ts
 packages/backend/tests/codex-parser.test.ts
@@ -148,7 +147,6 @@ packages/backend/tests/png-zip.test.ts
 packages/backend/tests/preset-observation.test.ts
 packages/backend/tests/project-bundle-contract.test.ts
 packages/backend/tests/project-bundle-security.test.ts
-packages/backend/tests/project-bundle.test.ts
 packages/backend/tests/project-directory-recovery.test.ts
 packages/backend/tests/project-document-boundaries.test.ts
 packages/backend/tests/project-documents.test.ts
