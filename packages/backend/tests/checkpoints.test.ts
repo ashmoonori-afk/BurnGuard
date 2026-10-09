@@ -1,6 +1,7 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { afterEach, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync, mkdirSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
+import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { getVerifiedSnapshotPath, hasSnapshot, pruneExpiredSnapshotsAtStartup, restoreFromSnapshot, writePreTurnSnapshot, writeTurnCheckpoint } from "../src/services/checkpoints";
@@ -12,6 +13,7 @@ import { buildArtifactSummary, listIndexedProjectFiles } from "../src/services/f
 import { getLatestProjectSession, listProjectIds } from "../src/db/project-read-repository";
 import { getProjectFile, replaceProjectFiles } from "../src/db/files";
 import { getManagedExportJob } from "../src/db/managed-file-repository";
+import { projectsDir } from "../src/lib/paths";
 
 /**
  * Checkpoint / restore round-trip test. The production helpers live in
@@ -35,12 +37,12 @@ function listTopLevel(dir: string): string[] {
   return require("node:fs").readdirSync(dir);
 }
 
-function snapshotRoot(projectDir: string): string {
-  return path.join(projectDir, ".meta", "checkpoints", "snapshots");
+function snapshotRoot(projectDir: string, folder: "snapshots" | "snapshots-v2" = "snapshots"): string {
+  return path.join(projectDir, ".meta", "checkpoints", folder);
 }
 
-function snapshotDir(projectDir: string, turnId: string): string {
-  return path.join(snapshotRoot(projectDir), turnId);
+function snapshotDir(projectDir: string, turnId: string, folder: "snapshots" | "snapshots-v2" = "snapshots"): string {
+  return path.join(snapshotRoot(projectDir, folder), turnId);
 }
 
 function copyRecursive(src: string, dest: string) {
@@ -96,7 +98,8 @@ describe("checkpoint snapshot / restore round-trip", () => {
   let projectDir: string;
 
   beforeEach(() => {
-    projectDir = mkdtempSync(path.join(tmpdir(), "bg-ckpt-test-"));
+    mkdirSync(projectsDir, { recursive: true });
+    projectDir = mkdtempSync(path.join(projectsDir, "bg-ckpt-test-"));
     mkdirSync(path.join(projectDir, ".meta"), { recursive: true });
     mkdirSync(path.join(projectDir, ".attachments"), { recursive: true });
     mkdirSync(path.join(projectDir, ".burnguard-inputs"), { recursive: true });
@@ -214,23 +217,149 @@ describe("checkpoint snapshot / restore round-trip", () => {
     expect(getManagedExportJob("missing-export")).toBeNull();
   });
 
-  async function createProductionProject(): Promise<string> {
+  async function createProductionProject(directory: string = projectDir): Promise<string> {
     projectSequence += 1;
     const projectId = `checkpoint-production-${process.pid}-${projectSequence}`;
     projectIds.push(projectId);
-    getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, projectId, projectDir);
+    getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, projectId, directory);
     await indexProjectFiles(projectId);
     return projectId;
   }
+
+  test("Given redirected private checkpoint storage When startup sweeps Then authored snapshots are untouched", async () => {
+    await createProductionProject();
+    const authored = path.join(projectDir, "snapshots");
+    mkdirSync(authored);
+    const note = path.join(authored, "notes.txt");
+    writeFileSync(note, "authored", "utf8");
+    const expired = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    utimesSync(note, expired, expired);
+    symlinkSync(projectDir, path.join(projectDir, ".meta", "checkpoints"), process.platform === "win32" ? "junction" : "dir");
+
+    await pruneExpiredSnapshotsAtStartup();
+    expect(existsSync(note)).toBe(true);
+    expect(readFileSync(note, "utf8")).toBe("authored");
+  });
+
+  test("Given a database path outside managed projects When startup sweeps Then its private-looking files are untouched", async () => {
+    const outside = mkdtempSync(path.join(tmpdir(), "bg-ckpt-outside-"));
+    try {
+      writeFileSync(path.join(outside, "index.html"), "<h1>outside</h1>", "utf8");
+      const snapshots = path.join(outside, ".meta", "checkpoints", "snapshots");
+      mkdirSync(snapshots, { recursive: true });
+      const note = path.join(snapshots, "notes.txt");
+      writeFileSync(note, "outside", "utf8");
+      const expired = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+      utimesSync(note, expired, expired);
+      await createProductionProject(outside);
+
+      await pruneExpiredSnapshotsAtStartup();
+      expect(existsSync(note)).toBe(true);
+      expect(readFileSync(note, "utf8")).toBe("outside");
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  test("Given a snapshot entry linked to authored bytes When its manifest expires Then pruning removes only the private link", async () => {
+    await createProductionProject();
+    const authored = path.join(projectDir, "authored");
+    mkdirSync(authored);
+    const note = path.join(authored, "notes.txt");
+    writeFileSync(note, "authored", "utf8");
+    const root = snapshotRoot(projectDir, "snapshots-v2");
+    mkdirSync(root, { recursive: true });
+    symlinkSync(authored, path.join(root, "turn-link"), process.platform === "win32" ? "junction" : "dir");
+    const receipt = path.join(root, "turn-link.manifest.json");
+    writeFileSync(receipt, "{}", "utf8");
+    const expired = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    utimesSync(receipt, expired, expired);
+
+    await pruneExpiredSnapshotsAtStartup();
+    expect(readFileSync(note, "utf8")).toBe("authored");
+  });
+
+  test.each([
+    { name: "tree_parked", manifestParked: false, incomingVisible: false, treeRestored: false },
+    { name: "pair_parked", manifestParked: true, incomingVisible: false, treeRestored: false },
+    { name: "incoming_visible", manifestParked: true, incomingVisible: true, treeRestored: false },
+    { name: "rollback_interrupted", manifestParked: true, incomingVisible: false, treeRestored: true },
+  ])("Given interrupted replacement at $name When startup recovers Then the previous verified pair is available", async ({ manifestParked, incomingVisible, treeRestored }) => {
+    // Given: actual filesystem states at each rename boundary, as left by process termination.
+    const projectId = await createProductionProject();
+    const snapshot = await writePreTurnSnapshot(projectId, "turn-restart");
+    if (snapshot === null) throw new Error("fixture_snapshot_missing");
+    const manifest = path.join(path.dirname(snapshot.path), "turn-restart.manifest.json");
+    const publicationId = crypto.randomUUID();
+    const parked = `${snapshot.path}.old-${publicationId}`;
+    await fsPromises.rename(snapshot.path, parked);
+    if (manifestParked) await fsPromises.rename(manifest, `${manifest}.old-${publicationId}`);
+    if (incomingVisible) {
+      mkdirSync(snapshot.path);
+      writeFileSync(path.join(snapshot.path, "index.html"), "incomplete", "utf8");
+    }
+    if (treeRestored) await fsPromises.rename(parked, snapshot.path);
+
+    // When
+    await pruneExpiredSnapshotsAtStartup();
+
+    // Then
+    expect(await getVerifiedSnapshotPath(projectId, "turn-restart")).toBe(snapshot.path);
+    expect(readFileSync(path.join(snapshot.path, "index.html"), "utf8")).toBe("<h1>v1</h1>");
+    expect(readFileSync(path.join(snapshot.path, "style.css"), "utf8")).toBe("body { color: red; }");
+  });
+
+  test("Given a verified snapshot When the second parking step fails Then its prior tree and manifest remain usable", async () => {
+    const projectId = await createProductionProject();
+    const prior = await writePreTurnSnapshot(projectId, "turn-park");
+    if (prior === null) throw new Error("fixture_snapshot_missing");
+    writeFileSync(path.join(projectDir, "index.html"), "<h1>changed</h1>", "utf8");
+    const failure = new Error("injected_manifest_park_failure");
+    const io: ManagedTreeIo = {
+      ...defaultManagedTreeIo,
+      rename: async (from, to) => {
+        if (from.endsWith("turn-park.manifest.json") && to.includes(".old-")) throw failure;
+        await defaultManagedTreeIo.rename(from, to);
+      },
+    };
+
+    await expect(writePreTurnSnapshot(projectId, "turn-park", io)).rejects.toBe(failure);
+    const verified = await getVerifiedSnapshotPath(projectId, "turn-park");
+    expect(verified).toBe(prior.path);
+    expect(readFileSync(path.join(prior.path, "index.html"), "utf8")).toBe("<h1>v1</h1>");
+  });
+
+  test("Given a newly written snapshot When its manifest disappears Then it never becomes an unsealed legacy snapshot", async () => {
+    const projectId = await createProductionProject();
+    const snapshot = await writePreTurnSnapshot(projectId, "turn-unsealed");
+    if (snapshot === null) throw new Error("fixture_snapshot_missing");
+    rmSync(path.join(path.dirname(snapshot.path), "turn-unsealed.manifest.json"));
+
+    expect(await getVerifiedSnapshotPath(projectId, "turn-unsealed")).toBeNull();
+  });
+
+  test("Given a damaged snapshot with an expired manifest When startup prunes Then corruption is not accepted as legacy", async () => {
+    const projectId = await createProductionProject();
+    const snapshot = await writePreTurnSnapshot(projectId, "turn-expired-manifest");
+    if (snapshot === null) throw new Error("fixture_snapshot_missing");
+    rmSync(path.join(snapshot.path, "style.css"));
+    const manifest = path.join(path.dirname(snapshot.path), "turn-expired-manifest.manifest.json");
+    const expired = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    utimesSync(manifest, expired, expired);
+    expect(await getVerifiedSnapshotPath(projectId, "turn-expired-manifest")).toBeNull();
+
+    await pruneExpiredSnapshotsAtStartup();
+    expect(await getVerifiedSnapshotPath(projectId, "turn-expired-manifest")).toBeNull();
+  });
 
   test("Given a written snapshot When a file inside it is lost Then it no longer verifies against its manifest", async () => {
     // Given
     const projectId = await createProductionProject();
     await writePreTurnSnapshot(projectId, "turn-torn");
-    expect(await getVerifiedSnapshotPath(projectId, "turn-torn")).toBe(snapshotDir(projectDir, "turn-torn"));
+    expect(await getVerifiedSnapshotPath(projectId, "turn-torn")).toBe(snapshotDir(projectDir, "turn-torn", "snapshots-v2"));
 
     // When
-    rmSync(path.join(snapshotDir(projectDir, "turn-torn"), "assets", "hero.svg"));
+    rmSync(path.join(snapshotDir(projectDir, "turn-torn", "snapshots-v2"), "assets", "hero.svg"));
 
     // Then
     expect(await getVerifiedSnapshotPath(projectId, "turn-torn")).toBeNull();
@@ -240,8 +369,7 @@ describe("checkpoint snapshot / restore round-trip", () => {
   test("Given a legacy snapshot without a manifest When restored Then it falls back to the structural check and restores", async () => {
     // Given
     const projectId = await createProductionProject();
-    await writePreTurnSnapshot(projectId, "turn-legacy");
-    rmSync(path.join(snapshotRoot(projectDir), "turn-legacy.manifest.json"));
+    takeSnapshot(projectDir, "turn-legacy");
 
     // When
     const verified = await getVerifiedSnapshotPath(projectId, "turn-legacy");
@@ -258,7 +386,7 @@ describe("checkpoint snapshot / restore round-trip", () => {
     await writePreTurnSnapshot(projectId, "turn-bad-manifest");
 
     // When
-    writeFileSync(path.join(snapshotRoot(projectDir), "turn-bad-manifest.manifest.json"), "{", "utf8");
+    writeFileSync(path.join(snapshotRoot(projectDir, "snapshots-v2"), "turn-bad-manifest.manifest.json"), "{", "utf8");
 
     // Then
     expect(await getVerifiedSnapshotPath(projectId, "turn-bad-manifest")).toBeNull();
@@ -275,9 +403,10 @@ describe("checkpoint snapshot / restore round-trip", () => {
     await writePreTurnSnapshot(projectId, "turn-atomic");
 
     // Then
-    expect(readdirSync(snapshotRoot(projectDir)).sort()).toEqual(["turn-atomic", "turn-atomic.manifest.json", "turn-atomic.tmp-leftover"]);
-    expect(readFileSync(path.join(snapshotDir(projectDir, "turn-atomic"), "index.html"), "utf8")).toBe("<h1>v1</h1>");
-    expect(await getVerifiedSnapshotPath(projectId, "turn-atomic")).toBe(snapshotDir(projectDir, "turn-atomic"));
+    expect(readdirSync(snapshotRoot(projectDir)).sort()).toEqual(["turn-atomic.tmp-leftover"]);
+    expect(readdirSync(snapshotRoot(projectDir, "snapshots-v2")).sort()).toEqual(["turn-atomic", "turn-atomic.manifest.json"]);
+    expect(readFileSync(path.join(snapshotDir(projectDir, "turn-atomic", "snapshots-v2"), "index.html"), "utf8")).toBe("<h1>v1</h1>");
+    expect(await getVerifiedSnapshotPath(projectId, "turn-atomic")).toBe(snapshotDir(projectDir, "turn-atomic", "snapshots-v2"));
   });
 
   test("Given an existing checkpoint receipt When it is rewritten Then the receipt is complete JSON and no temporary file remains", async () => {
@@ -297,6 +426,35 @@ describe("checkpoint snapshot / restore round-trip", () => {
     expect(readdirSync(checkpointDir).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 
+  test("Given a valid checkpoint receipt When its replacement write fails after partial bytes Then the original receipt survives", async () => {
+    // Given
+    const projectId = await createProductionProject();
+    const checkpoint = await writeTurnCheckpoint(projectId, "turn-receipt-fault");
+    if (checkpoint === null) throw new Error("fixture_checkpoint_missing");
+    const original = readFileSync(checkpoint.path, "utf8");
+    const failure = new Error("injected_receipt_write_failure");
+    const open = fsPromises.open;
+    const fault = spyOn(fsPromises, "open").mockImplementation(async (target, flags, mode) => {
+      const handle = await open(target, flags, mode);
+      if (String(target).startsWith(`${checkpoint.path}.`) && String(target).endsWith(".tmp")) {
+        const write = handle.writeFile.bind(handle);
+        handle.writeFile = async () => { await write("{", "utf8"); throw failure; };
+      }
+      return handle;
+    });
+
+    // When
+    try {
+      await expect(writeTurnCheckpoint(projectId, "turn-receipt-fault")).rejects.toBe(failure);
+    } finally {
+      fault.mockRestore();
+    }
+
+    // Then
+    expect(readFileSync(checkpoint.path, "utf8")).toBe(original);
+    expect(readdirSync(path.dirname(checkpoint.path)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+  });
+
   test("Given snapshots older than the retention window When a new snapshot is written Then expired entries are pruned and recent ones kept", async () => {
     // Given
     const projectId = await createProductionProject();
@@ -307,17 +465,17 @@ describe("checkpoint snapshot / restore round-trip", () => {
     writeFileSync(path.join(checkpointDir, leftover), "{", "utf8");
     const expired = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
     const recent = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    for (const name of ["turn-old", "turn-old.manifest.json"]) utimesSync(path.join(snapshotRoot(projectDir), name), expired, expired);
+    for (const name of ["turn-old", "turn-old.manifest.json"]) utimesSync(path.join(snapshotRoot(projectDir, "snapshots-v2"), name), expired, expired);
     utimesSync(path.join(checkpointDir, leftover), expired, expired);
-    for (const name of ["turn-recent", "turn-recent.manifest.json"]) utimesSync(path.join(snapshotRoot(projectDir), name), recent, recent);
+    for (const name of ["turn-recent", "turn-recent.manifest.json"]) utimesSync(path.join(snapshotRoot(projectDir, "snapshots-v2"), name), recent, recent);
 
     // When
     await writePreTurnSnapshot(projectId, "turn-new");
 
     // Then
-    expect(readdirSync(snapshotRoot(projectDir)).sort()).toEqual(["turn-new", "turn-new.manifest.json", "turn-recent", "turn-recent.manifest.json"]);
+    expect(readdirSync(snapshotRoot(projectDir, "snapshots-v2")).sort()).toEqual(["turn-new", "turn-new.manifest.json", "turn-recent", "turn-recent.manifest.json"]);
     expect(existsSync(path.join(checkpointDir, leftover))).toBe(false);
-    expect(await getVerifiedSnapshotPath(projectId, "turn-recent")).toBe(snapshotDir(projectDir, "turn-recent"));
+    expect(await getVerifiedSnapshotPath(projectId, "turn-recent")).toBe(snapshotDir(projectDir, "turn-recent", "snapshots-v2"));
   });
 
   test("Given an expired snapshot and no new turn When the startup sweep runs Then the expired snapshot is pruned and the recent one kept", async () => {
@@ -326,19 +484,19 @@ describe("checkpoint snapshot / restore round-trip", () => {
     await writePreTurnSnapshot(projectId, "turn-stale");
     await writePreTurnSnapshot(projectId, "turn-fresh");
     const expired = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
-    for (const name of ["turn-stale", "turn-stale.manifest.json"]) utimesSync(path.join(snapshotRoot(projectDir), name), expired, expired);
+    for (const name of ["turn-stale", "turn-stale.manifest.json"]) utimesSync(path.join(snapshotRoot(projectDir, "snapshots-v2"), name), expired, expired);
 
     // When
     await pruneExpiredSnapshotsAtStartup();
 
     // Then
-    expect(readdirSync(snapshotRoot(projectDir)).sort()).toEqual(["turn-fresh", "turn-fresh.manifest.json"]);
+    expect(readdirSync(snapshotRoot(projectDir, "snapshots-v2")).sort()).toEqual(["turn-fresh", "turn-fresh.manifest.json"]);
   });
 
   test("Given an existing verified snapshot When republishing fails mid-swap Then the previous snapshot is still restorable", async () => {
     // Given
     const projectId = await createProductionProject();
-    const dest = snapshotDir(projectDir, "turn-swap");
+    const dest = snapshotDir(projectDir, "turn-swap", "snapshots-v2");
     await writePreTurnSnapshot(projectId, "turn-swap");
     expect(await getVerifiedSnapshotPath(projectId, "turn-swap")).toBe(dest);
     // Fail only the staging tree becoming visible; the rollback rename of the parked tree must still run.
@@ -355,7 +513,7 @@ describe("checkpoint snapshot / restore round-trip", () => {
     await expect(writePreTurnSnapshot(projectId, "turn-swap", failing)).rejects.toThrow("swap failed");
     expect(await getVerifiedSnapshotPath(projectId, "turn-swap")).toBe(dest);
     expect(readFileSync(path.join(dest, "index.html"), "utf8")).toBe("<h1>v1</h1>");
-    expect(readdirSync(snapshotRoot(projectDir)).filter((name) => name.includes(".old-") || name.includes(".tmp-"))).toEqual([]);
+    expect(readdirSync(snapshotRoot(projectDir, "snapshots-v2")).filter((name) => name.includes(".old-") || name.includes(".tmp-"))).toEqual([]);
   });
 
   test("Given a snapshot write When it publishes Then the tree becomes visible only after its bytes are flushed", async () => {

@@ -24,6 +24,7 @@ if (ownedPort !== undefined) await desktopStartupStep("port_busy", () => pickPor
 const acquireProfile = () => (process.platform === "win32" ? acquireWindowsProfile(appRootDir) : acquirePosixProfile(appRootDir));
 const profileOwner = isDesktop ? await desktopStartupStep("profile_owned", acquireProfile) : await acquireProfile();
 await bootstrapLocalAppData();
+await pruneExpiredSnapshotsAtStartup();
 startProjectDeletionPurgeScheduler(getSqlite());
 const config = await loadConfig();
 // Dev + binary both prefer the canonical port 14070 (Vite proxy target).
@@ -114,7 +115,6 @@ process.on("SIGTERM", () => { void shutdown(); });
 process.on("SIGHUP", () => { void shutdown(); });
 // Announce only once the handlers exist: a signal that arrives earlier takes the default action and skips the ordered shutdown.
 console.log(`[burnguard] listening on ${url}`);
-void pruneExpiredSnapshotsAtStartup();
 if (isDesktop) {
   // The shell asks before closing so it can confirm over a running generation.
   watchDesktopParent(process.stdin, () => { void shutdown(); }, () => console.log(activeTurnsMessage(activeUserTurnCount())));
