@@ -14,9 +14,8 @@ import { defaultManagedTreeIo, materializeManagedTree, type ManagedTreeIo } from
 import { writeTextFileAtomically } from "./atomic-text-file";
 
 async function checkpointStorageRoot(projectDir: string): Promise<string> {
-  const managed = resolveManagedPath(projectsDir, projectDir);
   // Inspect the lexical ancestors: resolveWithin returns the real target and would hide an internal alias.
-  const metadata = path.join(managed, ".meta");
+  const metadata = path.join(projectDir, ".meta");
   const checkpoints = path.join(metadata, "checkpoints");
   for (const directory of [projectDir, metadata, checkpoints, path.join(checkpoints, "snapshots"), path.join(checkpoints, "snapshots-v2")]) {
     const info = await lstat(directory).catch((error: unknown) => {
@@ -27,7 +26,7 @@ async function checkpointStorageRoot(projectDir: string): Promise<string> {
       throw new CanonicalTreeManifestError("unsafe_tree_entry", "Checkpoint storage must use owned directories");
     }
   }
-  return resolveWithin(managed, ".meta", "checkpoints");
+  return resolveWithin(projectDir, ".meta", "checkpoints");
 }
 
 function snapshotDir(projectDir: string, turnId: string, folder: "snapshots" | "snapshots-v2" = "snapshots-v2"): string {
@@ -191,8 +190,11 @@ export async function pruneExpiredSnapshotsAtStartup(now: number = Date.now()): 
       try {
         const project = await getProjectDetail(id);
         if (project !== null) {
-          await recoverInterruptedSnapshots(project.dir_path);
-          await pruneExpiredSnapshots(project.dir_path, null, now);
+          // Global destructive maintenance requires managed ownership; targeted snapshot callers keep
+          // their existing project-root contract (including isolated roots used by route integrations).
+          const managed = resolveManagedPath(projectsDir, project.dir_path);
+          await recoverInterruptedSnapshots(managed);
+          await pruneExpiredSnapshots(managed, null, now);
         }
       } catch { console.warn("[checkpoints] expired snapshot cleanup deferred"); }
     }
