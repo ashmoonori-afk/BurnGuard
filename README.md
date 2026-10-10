@@ -178,6 +178,19 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 ## Changelog
 
+### 0.5.29
+
+- Checkpoint snapshots publish with integrity manifests and durable writes; an interrupted replacement recovers the previous verified pair, and an incomplete new snapshot is rejected rather than treated as legacy data.
+- Artifact publication and rollback flush durable state before committing, and design-token and font CSS updates use atomic replacement. Deleted projects can be restored from Recently Deleted during their retention period.
+- Database migrations back up existing databases, reject unknown newer schemas and check foreign-key integrity; CI rejects migration files that would reorder already published migrations.
+- Export publishing rechecks the validated archive digest and size limit; a damaged checkpoint receipt no longer blocks a project bundle export.
+- Provider stdout parsing is bounded, and cancellation tests cover owned children and detached descendants on Windows as well as POSIX. Codex image notifications no longer depend on a thread-ID filename hint, while the scanner still validates and selects the current thread's files.
+- Project watchers coalesce bursts and drain cleanly on shutdown, and browser launch and cleanup settle transports and bound resource lifetimes.
+- macOS finds provider CLIs from login-shell and Node-manager paths, and macOS update-cache pruning is serialized with download admission. Native shutdown and update dialogs are localized, closing during a running generation asks for confirmation, and comment drafts survive reopening.
+- Quick Comment uses Alt/Option+C, Ctrl+Y works in both history handlers, and CLI probe failures get a distinct explanation and recovery guidance. Oversized imports show the supported limit where available and retain entered values.
+- Local bootstrap requires launcher-held authority; an Origin header alone cannot obtain a capability. Token-bearing Figma requests refuse redirects, SVG direction previews receive protective raw-file headers, and archive extraction uses the containment resolver.
+- Provider logs and completion messages avoid private staging paths. Ubuntu CI runs every discovered test file without baseline exclusions, including Chromium conformance and PDF/PNG/PPTX smoke checks; watcher and image regressions also run on macOS and Windows.
+
 ### 0.5.28
 
 - A new website project built from an extracted design system now starts from class-based page skeletons, keeps the extracted hero image, and uses readable colours for buttons, subtitles and footer text. Pages you have already edited are never replaced by the starter.
