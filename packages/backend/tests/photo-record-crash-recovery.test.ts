@@ -1,15 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { PhotoRecordPublication, prepareStagedPhotoRecord } from "../src/services/photo-placement-publication";
 import { readPhotoPlacements } from "../src/services/photo-placements";
 
 const REFERENCE = ".meta/references/lamp.png";
 const WORKER = path.join(import.meta.dir, "fixtures", "photo-crash-worker.ts");
+const RUNNER = path.join(import.meta.dir, "fixtures", "photo-recovery-runner.ts");
 const CRASH_EXIT = 77;
 const temps: string[] = [];
 let temp: string;
@@ -25,11 +24,22 @@ afterEach(async () => {
   await Promise.all(temps.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-/** Runs the worker to its fault point and waits for the process to be gone, so nothing it held is still open. */
-async function crashAt(point: "afterPublishWrite" | "beforeDatabaseCommit"): Promise<void> {
-  const child = Bun.spawn(["bun", WORKER, temp, point], { env: { ...process.env, BG_APP_ROOT: path.join(temp, "profile") }, stdout: "pipe", stderr: "pipe" });
-  const [exitCode, stderr] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()]);
-  if (exitCode !== CRASH_EXIT) throw new Error(`worker exited ${exitCode}: ${stderr}`);
+/**
+ * Runs a fixture in its own process and waits for it to be gone with its pipes drained. The SQLite file is only ever
+ * opened by these child processes, so no handle on it can outlive them and block the cleanup on Windows.
+ */
+async function runFixture(script: string, args: readonly string[], expectedExit: number): Promise<string> {
+  const child = Bun.spawn(["bun", script, temp, ...args], { env: { ...process.env, BG_APP_ROOT: path.join(temp, "profile") }, stdout: "pipe", stderr: "pipe" });
+  const [exitCode, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+  if (exitCode !== expectedExit) throw new Error(`${path.basename(script)} exited ${exitCode}: ${stderr}`);
+  return stdout;
+}
+
+const crashAt = async (point: "afterPublishWrite" | "beforeDatabaseCommit"): Promise<void> => { await runFixture(WORKER, [point], CRASH_EXIT); };
+
+/** A fresh start: real startup reconciliation in a new process, reported as `{ recovery, revision }`. */
+async function restart(): Promise<{ recovery: { operations: number; unavailableProjects: readonly unknown[] }; revision: number | null }> {
+  return JSON.parse(await runFixture(RUNNER, [], 0));
 }
 
 async function purpose(): Promise<string | null> {
@@ -41,42 +51,36 @@ describe("photo record durable recovery", () => {
   test("Given a crash after the canonical files were published and before the photo record was installed, When startup recovery commits the operation, Then the new record and reference are installed with it", async () => {
     await crashAt("afterPublishWrite");
     expect(await purpose()).toBe("Old placement");
-    const db = new Database(path.join(temp, "state.sqlite"));
-    try {
-      const recovery = await reconcileArtifactState(db);
 
-      expect(recovery).toMatchObject({ operations: 1, unavailableProjects: [] });
-      expect(db.query("SELECT current_revision FROM projects WHERE id='p'").get()).toEqual({ current_revision: 2 });
-      expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("<p>Second</p>");
-      expect(await purpose()).toBe("New placement");
-      expect((await readFile(path.join(root, REFERENCE))).toString()).toBe("new reference bytes");
-    } finally { db.close(true); }
+    const started = await restart();
+
+    expect(started.recovery).toMatchObject({ operations: 1, unavailableProjects: [] });
+    expect(started.revision).toBe(2);
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("<p>Second</p>");
+    expect(await purpose()).toBe("New placement");
+    expect((await readFile(path.join(root, REFERENCE))).toString()).toBe("new reference bytes");
   }, 120_000);
 
   test("Given a recovered commit, When startup recovery runs again, Then the new record is unchanged", async () => {
     await crashAt("afterPublishWrite");
-    const db = new Database(path.join(temp, "state.sqlite"));
-    try {
-      await reconcileArtifactState(db);
-      await reconcileArtifactState(db);
 
-      expect(await purpose()).toBe("New placement");
-      expect((await readFile(path.join(root, REFERENCE))).toString()).toBe("new reference bytes");
-    } finally { db.close(true); }
+    await restart();
+    await restart();
+
+    expect(await purpose()).toBe("New placement");
+    expect((await readFile(path.join(root, REFERENCE))).toString()).toBe("new reference bytes");
   }, 120_000);
 
   test("Given a crash after the photo record was installed and before the commit, When the live files changed so the operation is rolled back, Then the previous record and reference are restored", async () => {
     await crashAt("beforeDatabaseCommit");
     expect(await purpose()).toBe("New placement");
     await writeFile(path.join(root, "index.html"), "<p>Edited elsewhere</p>");
-    const db = new Database(path.join(temp, "state.sqlite"));
-    try {
-      await reconcileArtifactState(db);
 
-      expect(db.query("SELECT current_revision FROM projects WHERE id='p'").get()).toEqual({ current_revision: 1 });
-      expect(await purpose()).toBe("Old placement");
-      expect((await readFile(path.join(root, REFERENCE))).toString()).toBe("old reference bytes");
-    } finally { db.close(true); }
+    const started = await restart();
+
+    expect(started.revision).toBe(1);
+    expect(await purpose()).toBe("Old placement");
+    expect((await readFile(path.join(root, REFERENCE))).toString()).toBe("old reference bytes");
   }, 120_000);
 
   test("Given an installation repeated after a crash, When it is installed twice and rolled back twice, Then the original record and reference are back", async () => {
