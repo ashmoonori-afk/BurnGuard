@@ -178,6 +178,15 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 ## Changelog
 
+### 0.5.30
+
+- A generation refused by its design review can be opened as a separate unverified draft; the original project, revision and audit stay unchanged, and the draft stays unverified until an audit of its current content passes every check the failed review left incomplete. Expired, damaged or disallowed output is refused with a reason.
+- Edits can be limited to text only or images only, optionally for chosen pages, artboards or elements. BurnGuard compares the result with the previous revision before publishing (text, image references, asset bytes including images shared with CSS backgrounds, styles, scripts, structure and whitespace that changes what is shown) and does not publish an out-of-scope change. History lists the changed pages, kinds of change and text before and after; it is a source comparison, not a pixel comparison.
+- The export menu has a print check: page sizes, missing or remote fonts, browser readiness and each placed image's effective resolution after cropping (warning below 300 ppi, strong warning below 150 ppi; measured from the original pixels of `<img>` elements only). Each export step has its own time limit, and a hung or failed step is named with a recovery action.
+- The design review no longer reports a skip link revealed by keyboard focus as text overflow, and findings on elements without an element ID show a selector and position.
+- Photographs of real-world subjects can carry a placement record (sourced references, scale, whether references reached the generator as reported by the agent, compared candidates, crop-only placement) and are shown as reference-verified only when it is complete. Stretched photographs and reference photos copied into published files are must-fix findings.
+- Browser-based checks on Windows no longer fail partway through after a slow cold start.
+
 ### 0.5.29
 
 - Checkpoint snapshots publish with integrity manifests and durable writes; an interrupted replacement recovers the previous verified pair, and an incomplete new snapshot is rejected rather than treated as legacy data.
