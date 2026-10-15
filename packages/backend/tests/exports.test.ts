@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { launchChromium } from "../src/services/export-render-session";
+import { launchTestChromium } from "./helpers/chromium";
 import { DECK_STAGE_JS } from "../src/runtime/deck-stage";
 import { prepareSlideDeckExport } from "../src/services/export-stage";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
@@ -97,7 +97,7 @@ const SMOKE_OPT_IN = process.env.BG_EXPORT_SMOKE === "1";
 
 beforeAll(async () => {
   if (!SMOKE_OPT_IN) return;
-  const browser = await launchChromium(AbortSignal.timeout(30000));
+  const browser = await launchTestChromium(30000);
   await browser.close();
   chromiumAvailable = true;
 }, 35_000);

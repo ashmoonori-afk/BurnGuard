@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Browser, Page } from "playwright-core";
 import { inspectRenderedPage, type DomAuditFinding } from "../src/services/design-audit-dom";
-import { launchChromium } from "../src/services/export-render-session";
+import { launchTestChromium } from "./helpers/chromium";
 
 const WIDTHS = [1440, 375] as const;
 const SKIP_BASE = "position:absolute;left:16px;top:-100px;padding:8px 12px;background:#000;color:#fff;font:16px Arial;transition:top .2s;";
@@ -12,7 +12,7 @@ const brokenSkip = page(`#skip{${SKIP_BASE}}`, '<a id="skip" href="#content">Ski
 const clippedCopy = page(".clip{width:120px;height:24px;overflow:hidden;white-space:nowrap}", '<div class="clip"><p class="note">This sentence is far wider than its clipping box allows</p></div>');
 
 let browser: Browser;
-beforeAll(async () => { browser = await launchChromium(AbortSignal.timeout(45_000)); }, 60_000);
+beforeAll(async () => { browser = await launchTestChromium(45_000); }, 60_000);
 afterAll(async () => { await browser.close(); });
 
 async function inspect(html: string, width: number, prepare?: (open: Page) => Promise<void>): Promise<{ readonly findings: readonly DomAuditFinding[]; readonly open: Page }> {
