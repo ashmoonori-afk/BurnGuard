@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import { PRINT_PPI_STRONG_WARN } from "@bg/shared/print-preflight";
-import { extractFontFaceRefs, resolveFonts, summarizeImages, summarizePages, type ImageMeasurement, type PageMeasurement } from "../src/services/print-preflight";
+import { extractFontFaceRefs, resolveFonts, summarizeImages, summarizePages, usedFontFaceRefs, type ImageMeasurement, type PageMeasurement } from "../src/services/print-preflight";
 
 // Synthetic A4 multi-artboard fixture: A4 is 210 x 297 mm, 793.7 x 1122.5 CSS px at 96 dpi.
 const A4_WIDTH_PX = 793.7;
@@ -100,5 +100,28 @@ describe("print preflight", () => {
       { family: "Up", status: "missing", path: "Up.woff2", license_present: false },
       { family: "Cdn", status: "remote", path: null, license_present: false },
     ]);
+  });
+});
+
+describe("print preflight font usage and bundled fonts", () => {
+  const BUNDLED = "/runtime/fonts/" + "a".repeat(64) + "/Inter.woff2";
+  const refs = [
+    { family: "Inter", urls: [BUNDLED], baseDir: "" },
+    { family: "Unused Serif", urls: ["fonts/UnusedSerif.woff2"], baseDir: "" },
+  ];
+
+  test("Given used family names in any case, When faces are filtered, Then only used faces remain and an unknown usage keeps all", () => {
+    expect(usedFontFaceRefs(refs, ["inter", "sans-serif"]).map((ref) => ref.family)).toEqual(["Inter"]);
+    expect(usedFontFaceRefs(refs, null)).toHaveLength(2);
+  });
+
+  test("Given a face served by the bundled font endpoint, When the export pipeline can resolve it, Then it is available with its licence", async () => {
+    const fonts = await resolveFonts({ projectRoot: "/work/project", refs: [refs[0]!], flavor: path.posix, exists: async () => false, listDir: async () => [], bundled: async (url) => url === BUNDLED });
+    expect(fonts).toEqual([{ family: "Inter", status: "resolved", path: null, license_present: true }]);
+  });
+
+  test("Given a bundled-looking url the export pipeline cannot resolve, When fonts are resolved, Then it is still listed missing", async () => {
+    const fonts = await resolveFonts({ projectRoot: "/work/project", refs: [refs[0]!], flavor: path.posix, exists: async () => false, listDir: async () => [], bundled: async () => false });
+    expect(fonts).toEqual([{ family: "Inter", status: "missing", path: "Inter.woff2", license_present: false }]);
   });
 });
