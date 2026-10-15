@@ -343,10 +343,10 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
     }
 
     for (const image of document.images) if (!image.complete || image.naturalWidth === 0 || image.currentSrc.length === 0) { const raw = image.getAttribute("src") ?? "missing src"; let safe = raw; try { const url = new URL(raw, location.href); safe = url.protocol === "file:" ? raw : `${url.protocol}//${url.host}${url.pathname}`; } catch { safe = "invalid image reference"; } push(image, { code: "missing_image", severity: "must_fix", evidence: `Image reference failed: ${safe}`, action: "restore_image_reference" }); }
-    // Photo stretch: a raster image whose rendered box has a different aspect than its pixels and whose object-fit is the default fill is distorted; cover, contain, none and scale-down keep the pixels' proportions.
+    // Photo stretch (images under 64px in either dimension are icons or spacers and are not judged): a raster image whose rendered box has a different aspect than its pixels and whose object-fit is the default fill is distorted; cover, contain, none and scale-down keep the pixels' proportions.
     for (const image of document.images) {
       if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0 || !visible(image) || /^data:image\/svg|\.svg(?:$|[?#])/iu.test(image.currentSrc) || getComputedStyle(image).objectFit !== "fill") continue;
-      const box = image.getBoundingClientRect(); const drift = Math.abs(box.width / box.height / (image.naturalWidth / image.naturalHeight) - 1);
+      const box = image.getBoundingClientRect(); if (box.width < 64 || box.height < 64) continue; const drift = Math.abs(box.width / box.height / (image.naturalWidth / image.naturalHeight) - 1);
       if (drift > 0.05) push(image, { code: "stretched_image", severity: "must_fix", evidence: `Image renders at ${Math.round(box.width)}x${Math.round(box.height)} but its pixels are ${image.naturalWidth}x${image.naturalHeight}; crop it with object-fit: cover instead of stretching`, action: "restore_image_crop", measured: Math.round(drift * 100) / 100, threshold: 0.05 });
     }
     measurable.token_usage = [...rootStyle].some((name) => name.startsWith("--")); if (measurable.token_usage) delete unknownReasons.token_usage;

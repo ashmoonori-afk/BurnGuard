@@ -15,8 +15,8 @@ import { parseStoredProjectOptions } from "./project-options";
 import { buildSiteMap, type SiteMap } from "./site-map";
 import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
 
-/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v9: a verified focus-revealed skip link is not text overflow; anonymous findings carry a locator). */
-export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v9";
+/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v9: a verified focus-revealed skip link is not text overflow; anonymous findings carry a locator; v10: stretched_image and reference_photo_leak checks). */
+export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v10";
 
 /**
  * The fixed page a project renders into, or undefined for a responsive website audit. A logo
