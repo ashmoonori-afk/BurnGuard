@@ -26,6 +26,7 @@ interface Inventory {
 }
 const WHITESPACE_PRESERVING_TAGS = new Set(["PRE", "TEXTAREA", "LISTING", "PLAINTEXT"]);
 const WHITESPACE_PRESERVING_STYLE = /(?:^|;)\s*white-space\s*:\s*(?:pre|pre-wrap|pre-line|break-spaces)\b/iu;
+const WHITESPACE_PRESERVING_DECLARATION = /white-space\s*:\s*(?:pre|pre-wrap|pre-line|break-spaces)\b/iu;
 const IMAGE_FILE = /\.(?:png|jpe?g|webp|gif|avif|svg|ico|bmp)$/iu;
 const IMAGE_ATTRIBUTES: Readonly<Record<string, readonly string[]>> = { IMG: ["src", "srcset"], SOURCE: ["src", "srcset"], VIDEO: ["poster"], IMAGE: ["href", "xlink:href"], INPUT: ["src"] };
 
@@ -98,8 +99,14 @@ async function inventory(root: string, strictEncoding: boolean): Promise<Invento
   const assetUses: Inventory["assetUses"] = new Map();
   const cssFiles = new Map(tree.manifest.files.filter(file => path.posix.extname(file.path).toLowerCase() === ".css").map(file => [file.path, file]));
   const cssReferencesByPath = new Map<string, readonly string[]>();
+  // Selector matching is not modelled: when any stylesheet can make whitespace significant, every page's text is compared exactly.
+  let sheetsPreserveWhitespace = false;
+  for (const file of cssFiles.values()) {
+    if (WHITESPACE_PRESERVING_DECLARATION.test(new TextDecoder("utf-8").decode(await readManagedFile(root, file, {}, tree.diskPaths)))) { sheetsPreserveWhitespace = true; break; }
+  }
   for (const file of tree.manifest.files.filter(file => /\.html?$/iu.test(file.path))) {
     const source = new TextDecoder("utf-8", { fatal: strictEncoding }).decode(await readManagedFile(root, file, {}, tree.diskPaths));
+    const pagePreservesWhitespace = sheetsPreserveWhitespace || [...source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/giu)].some(match => WHITESPACE_PRESERVING_DECLARATION.test(match[1] ?? ""));
     const document = parse(source, { comment: false });
     const stylesheets: { relPath: string; page: PageInventory; location: LocatedValue; visited: Set<string> }[] = [];
     let artboardIndex = 0;
@@ -184,7 +191,7 @@ async function inventory(root: string, strictEncoding: boolean): Promise<Invento
         walk(child, `${locator}/${suffix}`, page, ids, invisible, keepWhitespace);
       }
     };
-    walk(document, "root", pageFor(null), [], false);
+    walk(document, "root", pageFor(null), [], false, pagePreservesWhitespace);
     for (const sheet of stylesheets) {
       if (sheet.visited.has(sheet.relPath)) continue;
       sheet.visited.add(sheet.relPath);
@@ -219,6 +226,6 @@ export function resolveRevisionReference(relativePage: string, reference: string
 }
 
 /** Rendered whitespace: runs collapse to one space but are not trimmed, so adding or removing a separating space ("A <b>" vs "A<b>") is a change while reindentation is not. */
-function normalizeText(text: string): string { return text.normalize("NFC").replace(/\s+/gu, " "); }
+function normalizeText(text: string): string { return text.normalize("NFC").replace(/[\t\n\f\r ]+/gu, " "); }
 function digest(value: string): string { return createHash("sha256").update(value).digest("hex"); }
 function order(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
