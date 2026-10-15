@@ -10,6 +10,7 @@ import { publishArtifactOperationEvent } from "./artifact-operation-events";
 import { migrateDocumentOnlyRevision } from "./artifact-document-migration";
 import { setArtifactRecoveryHold } from "./artifact-recovery-hold";
 import { isProjectStorageError } from "./project-storage-error";
+import { PhotoRecordPublication, prepareStagedPhotoRecord } from "./photo-placement-publication";
 
 type ProjectRow = { readonly id: string; readonly dir_path: string; readonly current_digest: string | null };
 type RecoveryRow = PersistedArtifactOperationRow & { readonly dir_path: string };
@@ -102,7 +103,14 @@ async function reconcileOperation(db: Database, dirPath: string, operation: Retu
     publishArtifactOperationEvent(db, { projectId: operation.project_id, operationId: operation.id, revision: current.current_revision, digest: current.current_digest, outcome: "conflicted", diff: [] });
     return;
   }
+  const ownedRoot = path.dirname(receipt.snapshotPath);
+  const photoBackup = path.join(ownedRoot, "photo-backup");
   if (operation.result_revision !== null && operation.result_digest !== null && live.tree_digest === operation.result_digest) {
+    // The photo record is part of the revision: finish its installation from the retained stage (or undo a begun one the
+    // stage can no longer support) before the operation is marked committed. Repeating after another crash is safe.
+    const staged = await prepareStagedPhotoRecord(path.join(ownedRoot, "stage"));
+    if (staged.kind === "ready") await new PhotoRecordPublication(staged, dirPath, photoBackup).install();
+    else await new PhotoRecordPublication(null, dirPath, photoBackup).rollback();
     db.transaction(() => {
       const project = db.prepare("UPDATE projects SET current_revision=?,current_digest=?,updated_at=? WHERE id=? AND current_revision=? AND current_digest=?").run(operation.result_revision, operation.result_digest, Date.now(), operation.project_id, operation.base_revision, operation.base_digest);
       if (project.changes !== 1) throw new ArtifactOperationError("operation_conflict", "Recovery project identity changed");
@@ -115,6 +123,7 @@ async function reconcileOperation(db: Database, dirPath: string, operation: Retu
     await publishManagedTree(receipt.snapshotPath, dirPath);
     await validateCanonicalTree(dirPath, receipt.baseManifest);
   }
+  await new PhotoRecordPublication(null, dirPath, photoBackup).rollback();
   db.prepare("UPDATE artifact_operations SET status='recovered',result_revision=NULL,result_digest=NULL,diff_json='[]',replay_json=json_set(replay_json,'$.publication','base'),updated_at=? WHERE id=? AND status='recovering'").run(Date.now(), operation.id);
   publishArtifactOperationEvent(db, { projectId: operation.project_id, operationId: operation.id, revision: operation.base_revision, digest: operation.base_digest, outcome: "recovered", diff: operation.diff });
   await materializeManagedTree(dirPath, path.join(dirPath, ".meta", "artifact-baseline", "current"), defaultManagedTreeIo);

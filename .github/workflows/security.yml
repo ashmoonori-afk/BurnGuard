@@ -181,6 +181,7 @@ jobs:
           packages/backend/tests/logo-moodboard-routes.test.ts
           packages/backend/tests/photo-placements.test.ts
           packages/backend/tests/photo-record-publication.test.ts
+          packages/backend/tests/photo-record-crash-recovery.test.ts
           packages/backend/tests/review-failed-photo-record.test.ts
           packages/backend/tests/photo-stretch.browser.test.ts
           packages/backend/tests/logo-originality.test.ts
