@@ -49,6 +49,15 @@ projectRoutes.get("/api/projects/:id/bundle", async (c) => {
   }
 });
 
+projectRoutes.get("/api/projects/:id/print-preflight", async (c) => {
+  const { buildPrintPreflight, PrintPreflightError } = await import("../services/print-preflight-service");
+  try { return c.json(ok(await buildPrintPreflight(c.req.param("id"), c.req.raw.signal))); }
+  catch (error) {
+    if (error instanceof PrintPreflightError) return c.json(fail(error.code, "Project not found"), 404);
+    throw error;
+  }
+});
+
 projectRoutes.get("/api/projects/:id/design-system-pin", async (c) => {
   try { return c.json(ok(await inspectProjectDesignSystemPin(c.req.param("id")))); }
   catch (error) {

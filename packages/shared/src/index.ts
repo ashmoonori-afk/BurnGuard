@@ -19,6 +19,7 @@ export * from "./design-direction";
 export * from "./design-audit";
 export * from "./events";
 export * from "./export";
+export * from "./print-preflight";
 export * from "./export-attempt";
 export * from "./export-parity";
 export * from "./pdf-raster-budget";

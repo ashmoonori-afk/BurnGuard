@@ -25,6 +25,7 @@
     "./visual-alternative": "./src/visual-alternative.ts",
     "./contract-parser": "./src/contract-parser.ts",
     "./export": "./src/export.ts",
+    "./print-preflight": "./src/print-preflight.ts",
     "./export-parity": "./src/export-parity.ts",
     "./figma-import": "./src/figma-import.ts",
     "./logo": "./src/logo.ts",

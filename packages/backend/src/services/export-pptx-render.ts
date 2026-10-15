@@ -13,9 +13,10 @@ export async function renderDeckToPptx(input: {
 }): Promise<void> {
   const signal = input.signal ?? new AbortController().signal;
   const { openRenderSession, RenderSessionError } = await import("./export-render-session");
+  const { isRenderPhaseCode } = await import("./export-render-phase");
   let session;
   try { session = await openRenderSession({ stagedDir: input.stagedDir, entrypoint: input.entrypoint, viewport: { width: 1280, height: 720, dpr: 2 }, deck: true, signal }); }
-  catch (error) { if (error instanceof RenderSessionError) throw new PptxExportError(error.code === "deck_not_ready" ? "deck_not_ready" : error.code === "chromium_not_installed" ? "chromium_not_installed" : error.code === "chromium_launch_timeout" ? "chromium_launch_timeout" : "render_failed", error.message); throw error; }
+  catch (error) { if (error instanceof RenderSessionError) throw new PptxExportError(error.code === "deck_not_ready" ? "deck_not_ready" : error.code === "chromium_not_installed" ? "chromium_not_installed" : error.code === "chromium_launch_timeout" ? "chromium_launch_timeout" : isRenderPhaseCode(error.code) ? error.code : "render_failed", error.message); throw error; }
   try {
     const page = session.page; await page.addStyleTag({ content: CAPTURE_SLIDES_CSS });
     const slides = page.locator("[data-slide]"), count = await slides.count(), captured: CapturedSlide[] = [];
