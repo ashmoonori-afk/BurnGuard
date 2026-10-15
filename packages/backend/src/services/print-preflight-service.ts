@@ -1,6 +1,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "node-html-parser";
+import type { Page } from "playwright-core";
 import type { PrintBrowserReadiness, PrintPreflightV1 } from "@bg/shared/print-preflight";
 import { getProjectDetail } from "../db/project-read-repository";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
@@ -25,7 +26,7 @@ const isFile = async (absolute: string): Promise<boolean> => { try { return (awa
 const listDir = async (absolute: string): Promise<readonly string[]> => { try { return await readdir(absolute); } catch { return []; } };
 
 /** Local stylesheets and inline style blocks of the entrypoint, each with the project-relative directory its urls resolve from. */
-async function fontFaceRefs(projectRoot: string, entrypoint: string): Promise<readonly FontFaceRef[]> {
+export async function fontFaceRefs(projectRoot: string, entrypoint: string): Promise<readonly FontFaceRef[]> {
   const html = await readFile(resolveWithin(projectRoot, entrypoint), "utf8");
   const root = parse(html);
   const entryDir = path.posix.dirname(entrypoint.replaceAll("\\", "/"));
@@ -45,10 +46,9 @@ async function fontFaceRefs(projectRoot: string, entrypoint: string): Promise<re
   return refs;
 }
 
-async function measureInBrowser(stagedDir: string, entrypoint: string, signal: AbortSignal): Promise<PageMeasurements> {
-  const session = await openRenderSession({ stagedDir, entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: false, signal, strict: false });
-  try {
-    return await runRenderPhase("layout", () => session.page.evaluate(() => {
+/** Lays the page out in the browser and reads every artboard and its raster placements. */
+export function measurePrintPage(page: Page, signal: AbortSignal): Promise<PageMeasurements> {
+  return runRenderPhase("layout", () => page.evaluate(() => {
       const artboards = [...document.querySelectorAll<HTMLElement>("[data-graphic-artboard]")];
       const pageElements = artboards.length > 0 ? artboards : [...document.querySelectorAll<HTMLElement>("[data-slide]")];
       const pages: { name: string; width: number; height: number }[] = [];
@@ -71,7 +71,17 @@ async function measureInBrowser(stagedDir: string, entrypoint: string, signal: A
       });
       return { pages, images };
     }), { signal });
-  } finally { await session.close(); }
+}
+
+async function measureInBrowser(stagedDir: string, entrypoint: string, signal: AbortSignal): Promise<PageMeasurements> {
+  const session = await openRenderSession({ stagedDir, entrypoint, viewport: { width: 1280, height: 720, dpr: 1 }, deck: false, signal, strict: false });
+  try { return await measurePrintPage(session.page, signal); } finally { await session.close(); }
+}
+
+/** Joins a browser measurement with the fonts the project references on disk. */
+export async function assemblePrintPreflight(projectRoot: string, entrypoint: string, measured: PageMeasurements, browser: PrintBrowserReadiness): Promise<PrintPreflightV1> {
+  const fonts = await resolveFonts({ projectRoot, refs: await fontFaceRefs(projectRoot, entrypoint), flavor: path, exists: isFile, listDir });
+  return { schema_version: 1, pages: summarizePages(measured.pages), fonts, images: summarizeImages(measured.pages, measured.images), browser };
 }
 
 /** Print readiness of a live project: page geometry, referenced fonts, effective image resolution and browser readiness. */
@@ -80,8 +90,7 @@ export async function buildPrintPreflight(projectId: string, signal: AbortSignal
   if (project === null) throw new PrintPreflightError("project_not_found");
   const projectRoot = resolveManagedPath(projectsDir, project.dir_path);
   const readiness = await (seams.readiness ?? ((s) => chromiumLaunchCapability(undefined, { signal: s })))(signal);
-  const fonts = await resolveFonts({ projectRoot, refs: await fontFaceRefs(projectRoot, project.entrypoint), flavor: path, exists: isFile, listDir });
   // Measuring needs the browser; without a usable one the page and image sections stay empty rather than guessed.
   const measured = readiness === "unusable" ? { pages: [], images: [] } : await (seams.measure ?? measureInBrowser)(projectRoot, project.entrypoint, signal);
-  return { schema_version: 1, pages: summarizePages(measured.pages), fonts, images: summarizeImages(measured.pages, measured.images), browser: readiness };
+  return assemblePrintPreflight(projectRoot, project.entrypoint, measured, readiness);
 }

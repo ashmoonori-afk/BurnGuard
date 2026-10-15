@@ -13,11 +13,15 @@ export const RENDER_PHASE_DEADLINE_MS: Readonly<Record<Exclude<RenderFailurePhas
   write: 15_000,
 };
 
+const RENDER_FAILURE_PHASES: readonly RenderFailurePhase[] = ["launch", "load", "fonts", "layout", "raster", "write"];
+export const isRenderPhaseCode = (code: string): code is RenderPhaseCode => RENDER_FAILURE_PHASES.some((phase) => code === `render_timeout_${phase}` || code === `render_failed_${phase}`);
+
+/** The message is fixed copy; the underlying browser error stays on `cause` and never reaches a user or an API body. */
 export class RenderPhaseError extends Error {
   readonly name = "RenderPhaseError";
   readonly code: RenderPhaseCode;
-  constructor(readonly phase: RenderFailurePhase, readonly kind: "timeout" | "failed", message: string) {
-    super(message);
+  constructor(readonly phase: RenderFailurePhase, readonly kind: "timeout" | "failed", cause?: unknown) {
+    super(kind === "timeout" ? `Render timed out at phase ${phase}` : `Render failed at phase ${phase}`, cause === undefined ? undefined : { cause });
     this.code = `render_${kind}_${phase}`;
   }
 }
@@ -47,7 +51,7 @@ export async function runRenderPhase<T>(
   const expired = new Promise<never>((_resolve, reject) => {
     cancelTimer = clock.schedule(options.deadlineMs ?? RENDER_PHASE_DEADLINE_MS[phase], () => {
       own.abort();
-      reject(new RenderPhaseError(phase, "timeout", `Render timed out at phase ${phase}`));
+      reject(new RenderPhaseError(phase, "timeout"));
     });
   });
   try {
@@ -55,7 +59,7 @@ export async function runRenderPhase<T>(
   } catch (error) {
     if (error instanceof RenderPhaseError || options.signal.aborted) throw error;
     if (error instanceof Error && typeof Reflect.get(error, "code") === "string") throw error;
-    throw new RenderPhaseError(phase, "failed", error instanceof Error ? error.message : String(error));
+    throw new RenderPhaseError(phase, "failed", error);
   } finally {
     cancelTimer();
   }

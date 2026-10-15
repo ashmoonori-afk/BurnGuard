@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createCanvas, loadImage } from "./export-native-modules";
 import { openRenderSession, type RenderPhase } from "./export-render-session";
+import type { PhaseClock } from "./export-render-phase";
 import { analyzePixels, validatePngStatistics, type PngValidation } from "./export-png-validation";
 
 export async function renderToPng(input: {
@@ -13,9 +14,10 @@ export async function renderToPng(input: {
   readonly deck: boolean;
   readonly signal: AbortSignal;
   readonly onPhase?: (phase: RenderPhase) => void;
+  readonly phaseClock?: PhaseClock;
   readonly onParityPage?: (png: Uint8Array) => Promise<void> | void;
 }): Promise<PngValidation> {
-  const session = await openRenderSession({ stagedDir: input.stagedDir, entrypoint: input.entrypoint, viewport: { width: input.width, height: input.height, dpr: input.dpr }, deck: input.deck, signal: input.signal, ...(input.onPhase === undefined ? {} : { onPhase: input.onPhase }) });
+  const session = await openRenderSession({ stagedDir: input.stagedDir, entrypoint: input.entrypoint, viewport: { width: input.width, height: input.height, dpr: input.dpr }, deck: input.deck, signal: input.signal, ...(input.phaseClock === undefined ? {} : { phaseClock: input.phaseClock }), ...(input.onPhase === undefined ? {} : { onPhase: input.onPhase }) });
   try {
     const captured = new Uint8Array(await session.page.screenshot({ path: input.outputPath, type: "png", fullPage: false, animations: "disabled" }));
     await input.onParityPage?.(captured);

@@ -11,7 +11,7 @@ import { chromiumNodeCommand, launchChromiumViaNode } from "./chromium-node-laun
 import { DECK_STAGE_JS } from "../runtime/deck-stage";
 import { readBundledFontUrl } from "../data/bundled-fonts";
 import { keepAbortSignalArmed } from "../lib/abort-signal";
-import { RenderPhaseError, runRenderPhase } from "./export-render-phase";
+import { RenderPhaseError, runRenderPhase, type PhaseClock, type RenderPhaseCode } from "./export-render-phase";
 
 export type RenderViewport = { readonly width: number; readonly height: number; readonly dpr: 1 | 2 };
 export type RenderFinding = { readonly code: "console_error" | "page_error" | "request_failed" | "remote_request" | "font_error"; readonly path: string | null };
@@ -20,10 +20,10 @@ export type RenderPhase = "browser_ready" | "navigated" | "content_ready";
 
 export class RenderSessionError extends Error {
   readonly name = "RenderSessionError";
-  constructor(readonly code: "chromium_not_installed" | "chromium_launch_timeout" | "render_failed" | "deck_not_ready" | "render_aborted", message: string, readonly findings: readonly RenderFinding[] = []) { super(message); }
+  constructor(readonly code: "chromium_not_installed" | "chromium_launch_timeout" | "render_failed" | "deck_not_ready" | "render_aborted" | RenderPhaseCode, message: string, readonly findings: readonly RenderFinding[] = []) { super(message); }
 }
 
-export async function openRenderSession(input: { readonly stagedDir: string; readonly entrypoint: string; readonly viewport: RenderViewport; readonly deck: boolean; readonly signal: AbortSignal; readonly strict?: boolean; readonly browser?: Browser; readonly onPhase?: (phase: RenderPhase) => void }): Promise<RenderSession> {
+export async function openRenderSession(input: { readonly stagedDir: string; readonly entrypoint: string; readonly viewport: RenderViewport; readonly deck: boolean; readonly signal: AbortSignal; readonly strict?: boolean; readonly browser?: Browser; readonly onPhase?: (phase: RenderPhase) => void; readonly phaseClock?: PhaseClock }): Promise<RenderSession> {
   if (input.signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled");
   keepAbortSignalArmed(input.signal);
   const browser = input.browser ?? await launchChromium(input.signal);
@@ -82,8 +82,8 @@ export async function openRenderSession(input: { readonly stagedDir: string; rea
       void extraPage.close().catch(() => { findings.push({ code: "page_error", path: "popup_close_failed" }); });
     });
     abort = (): void => { void owner.close(); }; input.signal.addEventListener("abort", abort, { once: true }); input.onPhase?.("browser_ready");
-    const htmlPath = resolveWithin(input.stagedDir, input.entrypoint); await runRenderPhase("load", () => page.goto(`${pathToFileURL(htmlPath)}${input.deck ? "?print=1" : ""}`, { waitUntil: "load", timeout: 30_000 }), { signal: input.signal }); input.onPhase?.("navigated");
-    await runRenderPhase("fonts", () => page.evaluate(async () => { if (document.readyState !== "complete") await new Promise<void>((resolve) => addEventListener("load", () => resolve(), { once: true })); await document.fonts.ready; }), { signal: input.signal });
+    const htmlPath = resolveWithin(input.stagedDir, input.entrypoint); await runRenderPhase("load", () => page.goto(`${pathToFileURL(htmlPath)}${input.deck ? "?print=1" : ""}`, { waitUntil: "load", timeout: 30_000 }), { signal: input.signal, ...(input.phaseClock === undefined ? {} : { clock: input.phaseClock }) }); input.onPhase?.("navigated");
+    await runRenderPhase("fonts", () => page.evaluate(async () => { if (document.readyState !== "complete") await new Promise<void>((resolve) => addEventListener("load", () => resolve(), { once: true })); await document.fonts.ready; }), { signal: input.signal, ...(input.phaseClock === undefined ? {} : { clock: input.phaseClock }) });
     const state = await page.evaluate(() => {
       const fonts = [...document.fonts].filter((font) => font.status === "error").map((font) => font.family); const slides = [...document.querySelectorAll<HTMLElement>("[data-slide]")]; const sentinel = Reflect.get(globalThis, "__BURNGUARD_DECK_RUNTIME__"); const owned = typeof sentinel === "object" && sentinel !== null && Reflect.get(sentinel, "version") === 1 && Reflect.get(sentinel, "slideCount") === slides.length;
       const geometry = slides.every((slide) => { const previous = slide.style.cssText; slide.style.setProperty("display", "block", "important"); const rect = slide.getBoundingClientRect(); slide.style.cssText = previous; return Number.isFinite(rect.width) && Number.isFinite(rect.height) && rect.width > 0 && rect.height > 0; }); return { fonts, slideCount: slides.length, owned, geometry };
@@ -94,7 +94,7 @@ export async function openRenderSession(input: { readonly stagedDir: string; rea
     return { browser, context, page, findings, close: async () => { if (closed) return; closed = true; if (abort !== null) input.signal.removeEventListener("abort", abort); await owner.close(); } };
   } catch (error) {
     if (abort !== null) input.signal.removeEventListener("abort", abort); try { await owner.close(); } catch (closeError) { throw new AggregateError([error, closeError], "Render failed and Chromium cleanup failed"); }
-    if (input.signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled", findings); if (error instanceof RenderSessionError || error instanceof RenderPhaseError) throw error; throw new RenderSessionError("render_failed", error instanceof Error ? error.message : String(error), findings);
+    if (input.signal.aborted) throw new RenderSessionError("render_aborted", "Render was cancelled", findings); if (error instanceof RenderSessionError) throw error; if (error instanceof RenderPhaseError) throw new RenderSessionError(error.code, error.message, findings); throw new RenderSessionError("render_failed", error instanceof Error ? error.message : String(error), findings);
   }
 }
 

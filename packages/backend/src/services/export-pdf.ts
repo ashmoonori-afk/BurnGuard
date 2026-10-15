@@ -4,7 +4,7 @@ import type { PdfPaper } from "@bg/shared";
 import { PDF_PRINT_CSS, pdfDimensionsForPaper, pdfPointsForPaper, pdfRasterBudgetFitsPages, revealExportPages } from "./export-pdf-contract";
 import { capturePageFromSession } from "./export-frame-capture";
 import { openRenderSession, RenderSessionError, type RenderPhase, type RenderSession } from "./export-render-session";
-import { RenderPhaseError, runRenderPhase } from "./export-render-phase";
+import { RenderPhaseError, runRenderPhase, type RenderPhaseCode } from "./export-render-phase";
 import { validatePdf, type PdfValidation } from "./export-pdf-validation";
 
 /** Stacked artboards carry layout spacing and page minimums that would print as blank pages. */
@@ -16,7 +16,7 @@ const ARTBOARD_SIZE_TOLERANCE = 1;
 
 export class PdfExportError extends Error {
   readonly name = "PdfExportError";
-  constructor(readonly code: "chromium_not_installed" | "chromium_launch_timeout" | "deck_not_ready" | "render_failed" | "resource_limit" | "mixed_page_sizes", message: string) { super(message); }
+  constructor(readonly code: "chromium_not_installed" | "chromium_launch_timeout" | "deck_not_ready" | "render_failed" | "resource_limit" | "mixed_page_sizes" | RenderPhaseCode, message: string) { super(message); }
 }
 
 /** Artboard paper prints one page per artboard, so a set with more than one size has no single page geometry. */
