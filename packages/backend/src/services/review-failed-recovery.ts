@@ -147,5 +147,8 @@ export async function readUnverifiedDraft(projectDir: string, project: { readonl
   if (state.schema_version !== 1 || state.reason !== "design_review_failed") return null;
   if (project.current_digest === null) return state;
   const audit = await readCachedProjectAudit(projectDir, project.id, project.current_revision, project.current_digest);
-  return audit !== null && audit.overall_status !== "must_fix" ? null : state;
+  if (audit === null || audit.overall_status === "must_fix") return state;
+  // Unmeasurable or skipped is not verification: every check the failed review left incomplete must now pass.
+  const settled = (code: string): boolean => audit.checks.some((check) => check.code === code && (check.status === "pass" || check.status === "not_applicable"));
+  return state.incomplete_checks.every(settled) ? null : state;
 }

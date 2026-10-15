@@ -107,6 +107,9 @@ test("Given a review-failed operation When recovered after a reopen Then a separ
   const audit = (blocked: boolean): DesignAuditResult => ({ ...mustFix(), project_id: draft.project_id, artifact_revision: edited.resultRevision, artifact_digest: edited.resultDigest, overall_status: blocked ? "must_fix" : "ready", checks: DESIGN_AUDIT_CHECK_CODES.map(code => blocked && code === "text_overflow" ? mustFix().checks[0]! : { code, status: "pass" as const, reason: null, findings: [] }) });
   await writeProjectAuditCache(draftDir, audit(true));
   expect(await readUnverifiedDraft(draftDir, editedIdentity)).toMatchObject({ reason: "design_review_failed" });
+  // An audit that could measure nothing is "recommended", not a pass: the flag stays.
+  await writeProjectAuditCache(draftDir, { ...audit(false), overall_status: "recommended", checks: DESIGN_AUDIT_CHECK_CODES.map(code => ({ code, status: "unmeasurable" as const, reason: "unresolvable_rendering" as const, findings: [] })) });
+  expect(await readUnverifiedDraft(draftDir, editedIdentity)).toMatchObject({ reason: "design_review_failed" });
   await writeProjectAuditCache(draftDir, audit(false));
   expect(await readUnverifiedDraft(draftDir, editedIdentity)).toBeNull();
 });
