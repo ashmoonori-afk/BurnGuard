@@ -72,7 +72,7 @@ export function measurePrintPage(page: Page, signal: AbortSignal): Promise<PageM
         });
       });
       const used = new Set<string>();
-      for (const element of document.body.querySelectorAll<HTMLElement>("*")) {
+      for (const element of [document.body, ...document.body.querySelectorAll<HTMLElement>("*")]) {
         if (["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE"].includes(element.tagName)) continue;
         if (![...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "")) continue;
         const style = getComputedStyle(element);

@@ -77,6 +77,16 @@ describe("print preflight fonts", () => {
     expect(report.fonts).toContainEqual({ family: "Missing Face", status: "missing", path: "fonts/Missing.woff2", license_present: false });
   }, 60_000);
 
+  test("Given text set directly under body in a missing family, When measured, Then it is listed missing", async () => {
+    const report = await preflight(page(MISSING_FACE + 'body{font-family:"Missing Face",serif}', "Plain body text"), {}, false);
+    expect(report.fonts).toContainEqual({ family: "Missing Face", status: "missing", path: "fonts/Missing.woff2", license_present: false });
+  }, 60_000);
+
+  test("Given the same body-level family with text wrapped in a paragraph, When measured, Then it is listed missing", async () => {
+    const report = await preflight(page(MISSING_FACE + 'body{font-family:"Missing Face",serif}', "<p>Wrapped text</p>"), {}, false);
+    expect(report.fonts).toContainEqual({ family: "Missing Face", status: "missing", path: "fonts/Missing.woff2", license_present: false });
+  }, 60_000);
+
   test("Given a declared family that no text uses, When measured, Then it is not listed", async () => {
     const report = await preflight(page(MISSING_FACE, "<p>Plain text</p>"), {}, false);
     expect(report.fonts).toEqual([]);
