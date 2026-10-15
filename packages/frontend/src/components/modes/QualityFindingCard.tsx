@@ -37,8 +37,8 @@ export default function QualityFindingCard({ finding, actionContext, revealResul
         <span className="block max-h-12 overflow-hidden break-words">{finding.evidence}</span>
         {(finding.measured !== undefined || finding.threshold !== undefined) && <span className="mt-1 block">{t("modes.quality.measurement", { measured: finding.measured ?? "-", threshold: finding.threshold ?? "-" })}</span>}
       </div>
-      <div className="mt-2 min-w-0 truncate font-mono text-[10px] text-muted-foreground" title={`${finding.source.rel_path}${finding.source.node_bg_id ? ` · ${finding.source.node_bg_id}` : ""}`}>
-        {finding.source.rel_path}{finding.source.node_bg_id ? ` · ${finding.source.node_bg_id}` : t("modes.quality.noLocation")}
+      <div className="mt-2 min-w-0 truncate font-mono text-[10px] text-muted-foreground" title={`${finding.source.rel_path}${finding.source.node_bg_id ? ` · ${finding.source.node_bg_id}` : finding.locator ? ` · ${finding.locator.selector}` : ""}`}>
+        {finding.source.rel_path}{finding.source.node_bg_id ? ` · ${finding.source.node_bg_id}` : finding.locator ? ` · ${finding.locator.selector}` : t("modes.quality.noLocation")}
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
         {actions.canOpenFile && <Button type="button" variant="outline" size="sm" className="h-8 px-2 max-[900px]:min-h-11" onClick={() => onOpenFile(finding)}><FileCode2 />{t("modes.quality.openFile")}</Button>}

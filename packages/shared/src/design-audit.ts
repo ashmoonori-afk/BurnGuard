@@ -12,6 +12,8 @@ export type DesignAuditTargetedAction = "expand_or_reflow_text" | "separate_over
 export const DESIGN_AUDIT_SAFE_FIX_FONT_SIZES = ["12px", "24px", "var(--slide-type-caption)"] as const;
 
 export type DesignAuditSafeFix = { readonly kind: "patch_html_node"; readonly rel_path: string; readonly request: PatchFileRequest };
+/** Where an element without a data-bg-node-id sits: a project-relative CSS path and its measured page-coordinate bounds in px. */
+export type DesignAuditLocator = { readonly selector: string; readonly bounds: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } };
 export type DesignAuditFinding = {
   readonly id: string;
   readonly check_code: DesignAuditCheckCode;
@@ -22,6 +24,7 @@ export type DesignAuditFinding = {
   readonly threshold?: number;
   readonly targeted_action: DesignAuditTargetedAction;
   readonly safe_fix?: DesignAuditSafeFix;
+  readonly locator?: DesignAuditLocator;
 };
 export type DesignAuditCheck = { readonly code: DesignAuditCheckCode; readonly status: DesignAuditCheckStatus; readonly reason: DesignAuditUnknownReason | null; readonly findings: readonly DesignAuditFinding[] };
 export type DesignAuditResult = { readonly schema_version: 1; readonly project_id: string; readonly artifact_revision: number; readonly artifact_digest: string; readonly created_at: number; readonly overall_status: DesignAuditOverallStatus; readonly checks: readonly DesignAuditCheck[]; readonly shared_change_divergence?: readonly string[] };
@@ -85,8 +88,8 @@ function parseCheck(input: unknown, expectedCode: DesignAuditCheckCode, path: st
 
 function parseFinding(input: unknown, code: DesignAuditCheckCode, path: string): DesignAuditFinding {
   const raw = plainRecord(input, path);
-  const allowed = ["id", "check_code", "severity", "source", "evidence", "measured", "threshold", "targeted_action", "safe_fix"];
-  exact(raw, allowed, { path, optional: ["measured", "threshold", "safe_fix"] });
+  const allowed = ["id", "check_code", "severity", "source", "evidence", "measured", "threshold", "targeted_action", "safe_fix", "locator"];
+  exact(raw, allowed, { path, optional: ["measured", "threshold", "safe_fix", "locator"] });
   const id = boundedString(raw["id"], `${path}.id`, 240);
   if (raw["check_code"] !== code) invalid(`${path}.check_code`);
   const severity = oneOf(raw["severity"], `${path}.severity`, ["must_fix", "recommended"] as const);
@@ -100,7 +103,15 @@ function parseFinding(input: unknown, code: DesignAuditCheckCode, path: string):
   const measured = optionalFinite(raw["measured"], `${path}.measured`);
   const threshold = optionalFinite(raw["threshold"], `${path}.threshold`);
   const safeFix = raw["safe_fix"] === undefined ? undefined : parseSafeFix({ input: raw["safe_fix"], code, relPath, nodeBgId, path: `${path}.safe_fix` });
-  return { id, check_code: code, severity, source: { rel_path: relPath, node_bg_id: nodeBgId }, evidence, ...(measured === undefined ? {} : { measured }), ...(threshold === undefined ? {} : { threshold }), targeted_action: ACTIONS[code], ...(safeFix === undefined ? {} : { safe_fix: safeFix }) };
+  const locator = raw["locator"] === undefined ? undefined : parseLocator(raw["locator"], `${path}.locator`);
+  return { id, check_code: code, severity, source: { rel_path: relPath, node_bg_id: nodeBgId }, evidence, ...(measured === undefined ? {} : { measured }), ...(threshold === undefined ? {} : { threshold }), targeted_action: ACTIONS[code], ...(safeFix === undefined ? {} : { safe_fix: safeFix }), ...(locator === undefined ? {} : { locator }) };
+}
+
+function parseLocator(input: unknown, path: string): DesignAuditLocator {
+  const value = record(input, path, ["selector", "bounds"]);
+  const bounds = record(value["bounds"], `${path}.bounds`, ["x", "y", "width", "height"]);
+  const finite = (key: string): number => optionalFinite(bounds[key], `${path}.bounds.${key}`) ?? invalid(`${path}.bounds.${key}`);
+  return { selector: boundedString(value["selector"], `${path}.selector`, 300), bounds: { x: finite("x"), y: finite("y"), width: finite("width"), height: finite("height") } };
 }
 
 function parseSafeFix(context: { readonly input: unknown; readonly code: DesignAuditCheckCode; readonly relPath: string; readonly nodeBgId: string | null; readonly path: string }): DesignAuditSafeFix {
