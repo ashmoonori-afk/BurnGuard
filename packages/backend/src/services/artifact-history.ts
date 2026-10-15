@@ -30,5 +30,7 @@ export function artifactHistory(db: Database, projectId: string, revision: numbe
     // External saves reverted while an operation ran, still retained and not yet re-applied.
     external_captures: operations.filter(row => row.status === "conflicted" && row.replay.kind === "external" && row.retention.replayable && row.retention.retained_until > now && !reapplied.has(row.id))
       .map(row => ({ operation_id: row.id, captured_at: row.created_at, file_count: row.diff.length })),
+    // Needs the filesystem (receipt + stage check), so the history route fills it in.
+    review_failed_drafts: [],
   };
 }

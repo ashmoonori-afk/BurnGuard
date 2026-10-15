@@ -141,6 +141,7 @@ jobs:
           packages/frontend/tests/error-copy.test.ts
           packages/backend/tests/project-import.test.ts
           packages/backend/tests/artifact-history.test.ts
+          packages/backend/tests/review-failed-draft-recovery.test.ts
           packages/backend/tests/checkpoints.test.ts
           packages/backend/tests/project-bundle.test.ts
           packages/backend/tests/export-pptx.test.ts

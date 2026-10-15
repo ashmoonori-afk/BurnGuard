@@ -10,6 +10,7 @@ import { readProjectPalette, replaceProjectPalette } from "../services/project-p
 import { inspectCanonicalTree } from "../services/canonical-tree-manifest";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
 import { artifactHistory } from "../services/artifact-history";
+import { listReviewFailedDrafts, readUnverifiedDraft, recoverReviewFailedDraft, ReviewRecoveryError } from "../services/review-failed-recovery";
 import { visualAlternativeRoutes } from "./visual-alternatives";
 
 function ok<T>(data: T): ApiSuccess<T> { return { data }; }
@@ -27,8 +28,20 @@ artifactOperationRoutes.get("/api/projects/:id/history", async c => {
   const project = await getProjectDetail(c.req.param("id"));
   if (!project) return c.json(fail("project_not_found", "Project not found"), 404);
   if (!project.current_digest) return c.json(fail("artifact_identity_unavailable", "Artifact is not initialized"), 409);
-  try { return c.json(ok(artifactHistory(getSqlite(), project.id, project.current_revision, project.current_digest))); }
+  try { return c.json(ok({ ...artifactHistory(getSqlite(), project.id, project.current_revision, project.current_digest), review_failed_drafts: await listReviewFailedDrafts(getSqlite(), project.id) })); }
   catch (error) { if (error instanceof PersistedArtifactOperationError) return c.json(fail(error.code, "History could not be read"), 409); throw error; }
+});
+
+artifactOperationRoutes.get("/api/projects/:id/unverified-draft", async c => {
+  const project = await getProjectDetail(c.req.param("id"));
+  if (!project) return c.json(fail("project_not_found", "Project not found"), 404);
+  return c.json(ok(await readUnverifiedDraft(resolveManagedPath(projectsDir, project.dir_path), project)));
+});
+
+const RECOVERY_STATUS = { draft_recovery_unavailable: 404, draft_recovery_expired: 410, draft_recovery_corrupt: 409, draft_recovery_disallowed: 422 } as const;
+artifactOperationRoutes.post("/api/projects/:id/operations/:operationId/recover-draft", async c => {
+  try { return c.json(ok(await recoverReviewFailedDraft(getSqlite(), { projectId: c.req.param("id"), operationId: c.req.param("operationId") }))); }
+  catch (error) { if (error instanceof ReviewRecoveryError) return c.json(fail(error.code, "The retained output could not be opened as a draft"), RECOVERY_STATUS[error.code]); throw error; }
 });
 
 artifactOperationRoutes.get("/api/projects/:id/palette", async (c) => {

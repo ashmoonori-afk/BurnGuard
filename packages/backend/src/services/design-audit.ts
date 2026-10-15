@@ -210,6 +210,12 @@ export async function writeProjectAuditCache(projectDir: string, result: DesignA
   await writeCache(resolveWithin(projectDir, ".meta", "audits", `${result.artifact_revision}-${result.artifact_digest}-${DESIGN_AUDIT_POLICY_VERSION}.json`), result);
 }
 
+/** The cached audit for exactly this artifact identity, or null. Reads only; it never renders. */
+export async function readCachedProjectAudit(projectDir: string, projectId: string, revision: number, digest: string): Promise<DesignAuditResult | null> {
+  const cached = await readCache(resolveWithin(projectDir, ".meta", "audits", `${revision}-${digest}-${DESIGN_AUDIT_POLICY_VERSION}.json`));
+  return cached !== null && cached.project_id === projectId && cached.artifact_revision === revision && cached.artifact_digest === digest ? cached : null;
+}
+
 async function readCache(cachePath: string): Promise<DesignAuditResult | null> {
   try { return parseDesignAuditResult(JSON.parse(await readFile(cachePath, "utf8"))); }
   catch (error) { if (error instanceof SyntaxError || error instanceof DesignAuditContractError || error instanceof Error && Reflect.get(error, "code") === "ENOENT") return null; throw error; }
