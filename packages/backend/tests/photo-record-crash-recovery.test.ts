@@ -25,10 +25,11 @@ afterEach(async () => {
   await Promise.all(temps.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-/** Runs the worker to its fault point; the process ends there, leaving a half-finished operation on disk. */
-function crashAt(point: "afterPublishWrite" | "beforeDatabaseCommit"): void {
-  const child = Bun.spawnSync(["bun", WORKER, temp, point], { env: { ...process.env, BG_APP_ROOT: path.join(temp, "profile") }, timeout: 60_000 });
-  if (child.exitCode !== CRASH_EXIT) throw new Error(`worker exited ${child.exitCode}: ${child.stderr.toString()}`);
+/** Runs the worker to its fault point and waits for the process to be gone, so nothing it held is still open. */
+async function crashAt(point: "afterPublishWrite" | "beforeDatabaseCommit"): Promise<void> {
+  const child = Bun.spawn(["bun", WORKER, temp, point], { env: { ...process.env, BG_APP_ROOT: path.join(temp, "profile") }, stdout: "pipe", stderr: "pipe" });
+  const [exitCode, stderr] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()]);
+  if (exitCode !== CRASH_EXIT) throw new Error(`worker exited ${exitCode}: ${stderr}`);
 }
 
 async function purpose(): Promise<string | null> {
@@ -38,7 +39,7 @@ async function purpose(): Promise<string | null> {
 
 describe("photo record durable recovery", () => {
   test("Given a crash after the canonical files were published and before the photo record was installed, When startup recovery commits the operation, Then the new record and reference are installed with it", async () => {
-    crashAt("afterPublishWrite");
+    await crashAt("afterPublishWrite");
     expect(await purpose()).toBe("Old placement");
     const db = new Database(path.join(temp, "state.sqlite"));
     try {
@@ -49,11 +50,11 @@ describe("photo record durable recovery", () => {
       expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("<p>Second</p>");
       expect(await purpose()).toBe("New placement");
       expect((await readFile(path.join(root, REFERENCE))).toString()).toBe("new reference bytes");
-    } finally { db.close(); }
+    } finally { db.close(true); }
   }, 120_000);
 
   test("Given a recovered commit, When startup recovery runs again, Then the new record is unchanged", async () => {
-    crashAt("afterPublishWrite");
+    await crashAt("afterPublishWrite");
     const db = new Database(path.join(temp, "state.sqlite"));
     try {
       await reconcileArtifactState(db);
@@ -61,11 +62,11 @@ describe("photo record durable recovery", () => {
 
       expect(await purpose()).toBe("New placement");
       expect((await readFile(path.join(root, REFERENCE))).toString()).toBe("new reference bytes");
-    } finally { db.close(); }
+    } finally { db.close(true); }
   }, 120_000);
 
   test("Given a crash after the photo record was installed and before the commit, When the live files changed so the operation is rolled back, Then the previous record and reference are restored", async () => {
-    crashAt("beforeDatabaseCommit");
+    await crashAt("beforeDatabaseCommit");
     expect(await purpose()).toBe("New placement");
     await writeFile(path.join(root, "index.html"), "<p>Edited elsewhere</p>");
     const db = new Database(path.join(temp, "state.sqlite"));
@@ -75,7 +76,7 @@ describe("photo record durable recovery", () => {
       expect(db.query("SELECT current_revision FROM projects WHERE id='p'").get()).toEqual({ current_revision: 1 });
       expect(await purpose()).toBe("Old placement");
       expect((await readFile(path.join(root, REFERENCE))).toString()).toBe("old reference bytes");
-    } finally { db.close(); }
+    } finally { db.close(true); }
   }, 120_000);
 
   test("Given an installation repeated after a crash, When it is installed twice and rolled back twice, Then the original record and reference are back", async () => {
