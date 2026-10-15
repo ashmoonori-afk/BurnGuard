@@ -127,6 +127,35 @@ describe("edit scope publication contract", () => {
     expect(await compareRevisionTrees(root, root, { mode: "image_only" })).toEqual(first);
   });
 
+  async function compareSources(before: string, after: string, mode: "image_only" | "text_only") {
+    const roots = [await mkdtemp(path.join(tmpdir(), "bg-edit-ws-a-")), await mkdtemp(path.join(tmpdir(), "bg-edit-ws-b-"))];
+    try {
+      await writeFile(path.join(roots[0], "index.html"), before);
+      await writeFile(path.join(roots[1], "index.html"), after);
+      return await compareRevisionTrees(roots[0], roots[1], { mode });
+    } finally { await Promise.all(roots.map(dir => rm(dir, { recursive: true, force: true }))); }
+  }
+
+  for (const [label, before, after] of [
+    ["preformatted text", "<html><body><pre>A B</pre></body></html>", "<html><body><pre>A\n\nB</pre></body></html>"],
+    ["pre-wrap inline style", '<html><body><p style="white-space:pre-wrap">A  B</p></body></html>', '<html><body><p style="white-space:pre-wrap">A B</p></body></html>'],
+    ["separating space between inline elements", "<html><body><p><span>A</span> <span>B</span></p></body></html>", "<html><body><p><span>A</span><span>B</span></p></body></html>"],
+  ] as const) {
+    test(`Given image_only When ${label} changes Then the comparison reports a text finding`, async () => {
+      const comparison = await compareSources(before, after, "image_only");
+      expect(comparison.findings.map(finding => finding.kind)).toEqual(["text"]);
+      expect((await compareSources(before, after, "text_only")).findings).toEqual([]);
+    });
+  }
+
+  test("Given reindented HTML source When rendered text is unchanged Then image_only reports no finding", async () => {
+    const before = "<html><body>\n<div>\n  <span>A</span>\n  <span>B   C</span>\n</div>\n</body></html>";
+    const after = "<html><body>\n\n    <div>\n\t\t<span>A</span> \n\t\t<span>B C</span>\n    </div>\n</body></html>";
+    const comparison = await compareSources(before, after, "image_only");
+    expect(comparison.findings).toEqual([]);
+    expect(comparison.pages).toEqual([]);
+  });
+
   for (const [flavor, base, target] of [[path.win32, "C:\\artifacts", "C:\\artifacts\\pages\\index.html"], [path.posix, "/artifacts", "/artifacts/pages/index.html"]] as const) {
     test(`Given a ${flavor.sep === "\\" ? "Windows" : "POSIX"} artifact path When resolving a local image Then the shared URL inventory stays canonical`, () => {
       const relPath = canonicalTreePath(base, target, flavor);
