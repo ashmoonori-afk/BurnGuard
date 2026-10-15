@@ -20,6 +20,7 @@ Start with the [product introduction and setup](../README.md), available in [Kor
 - [Brand identity](brand-identity.md)
 - [Logo design deliverable](logo-design.md)
 - [Model capability profiles, CSS logos and web asset sourcing](model-profiles.md)
+- [Edit scope and revision comparison](edit-scope.md)
 - [Sample design system](<../design system sample/README.md>)
 - [Bundled themes](<../design system themes/>)
 - [Original sample collections](../samples/original/README.md)

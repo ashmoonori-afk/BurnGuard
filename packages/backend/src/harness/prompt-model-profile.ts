@@ -10,6 +10,7 @@ import {
 } from "@bg/shared";
 import { CSS_LOGO_MAX_COLORS, CSS_LOGO_MAX_SHAPES } from "../services/css-logo-check";
 import type { Deliverable } from "./prompt-task-presets";
+import { editScopePromptLine } from "./prompt-edit-scope";
 
 export type WebAssetToolState = "available" | "unavailable" | "not_applicable";
 
@@ -82,6 +83,7 @@ export function appendModelProfileContext(
 ): ModelProfileSelection | null {
   if (!backendId || !generation) return null;
   const selection = selectModelProfile(backendId, generation, deliverable, webAssetTools);
+  lines.push(editScopePromptLine(generation.edit_scope));
   lines.push("## Model capability profile");
   lines.push("<burnguard-model-profile-v1>");
   lines.push(JSON.stringify({

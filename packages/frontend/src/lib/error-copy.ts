@@ -3,6 +3,8 @@ import { t, type MessageKey } from "@/i18n/t";
 
 /** Backend messages are internal; map known codes to localized recovery copy. */
 const ERROR_COPY: Record<string, MessageKey> = {
+  edit_scope_violation: "revision.blocked",
+  invalid_edit_scope: "revision.invalid",
   session_not_found: "errors.session_not_found",
   permission_not_pending: "errors.permission_not_pending",
   stale_artifact_identity: "errors.stale_artifact_identity",

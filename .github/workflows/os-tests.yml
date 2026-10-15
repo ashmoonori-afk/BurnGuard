@@ -58,6 +58,7 @@ jobs:
       - name: Platform-sensitive suites
         run: >-
           bun test --timeout 30000
+          packages/backend/tests/edit-scope.test.ts
           packages/backend/tests/os-portability.test.ts
           packages/backend/tests/decomposed-file-names.test.ts
           packages/backend/tests/artifact-tree-durability.test.ts
