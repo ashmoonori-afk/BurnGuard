@@ -11,6 +11,7 @@ import {
 /** CSS pixels are 1/96 inch. */
 const CSS_PX_PER_INCH = 96;
 const MM_PER_INCH = 25.4;
+const BUNDLED_FONT_PREFIX = "/runtime/fonts/";
 const LICENSE_FILE = /^(?:licen[cs]e|ofl|copying)/iu;
 
 export type PathFlavor = typeof path.posix;
@@ -135,12 +136,21 @@ function classifyReference(url: string, baseDir: string): Reference {
   return { kind: "local", segments: joined.split("/").filter((segment) => segment !== "" && segment !== ".") };
 }
 
+/** Keeps the faces whose family is set on rendered text; a null usage (nothing was measured) keeps every face. */
+export function usedFontFaceRefs(refs: readonly FontFaceRef[], usedFamilies: readonly string[] | null): readonly FontFaceRef[] {
+  if (usedFamilies === null) return refs;
+  const used = new Set(usedFamilies.map((family) => family.toLowerCase()));
+  return refs.filter((ref) => used.has(ref.family.toLowerCase()));
+}
+
 /**
  * Resolves each referenced face against the project. A face counts as resolved when any of its listed files
  * exists, because the remaining entries are format fallbacks; otherwise the first file is named relative to the project.
  */
 export async function resolveFonts(input: {
   readonly projectRoot: string;
+  /** True when the export pipeline serves this `/runtime/fonts/...` url from the bundled registry. */
+  readonly bundled?: (urlPath: string) => Promise<boolean>;
   readonly refs: readonly FontFaceRef[];
   readonly flavor: PathFlavor;
   readonly exists: (absolute: string) => Promise<boolean>;
@@ -151,6 +161,8 @@ export async function resolveFonts(input: {
     let first: PrintPreflightFont | null = null;
     let resolved: PrintPreflightFont | null = null;
     for (const url of ref.urls) {
+      const bundledPath = url.split(/[?#]/u)[0] ?? "";
+      if (input.bundled !== undefined && bundledPath.startsWith(BUNDLED_FONT_PREFIX) && await input.bundled(bundledPath)) { resolved = { family: ref.family, status: "resolved", path: null, license_present: true }; break; }
       const target = classifyReference(url, ref.baseDir);
       if (target.kind === "data") { resolved = { family: ref.family, status: "resolved", path: null, license_present: false }; break; }
       if (target.kind === "remote") { first ??= { family: ref.family, status: "remote", path: null, license_present: false }; continue; }

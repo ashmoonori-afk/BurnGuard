@@ -6,17 +6,19 @@ import type { PrintBrowserReadiness, PrintPreflightV1 } from "@bg/shared/print-p
 import { getProjectDetail } from "../db/project-read-repository";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
 import { resolveWithin } from "../security/path-boundary";
+import { readBundledFontUrl } from "../data/bundled-fonts";
 import { chromiumLaunchCapability } from "./chromium-capability";
 import { runRenderPhase } from "./export-render-phase";
 import { openRenderSession } from "./export-render-session";
-import { extractFontFaceRefs, resolveFonts, summarizeImages, summarizePages, type FontFaceRef, type ImageMeasurement, type PageMeasurement } from "./print-preflight";
+import { extractFontFaceRefs, resolveFonts, summarizeImages, summarizePages, usedFontFaceRefs, type FontFaceRef, type ImageMeasurement, type PageMeasurement } from "./print-preflight";
 
 export class PrintPreflightError extends Error {
   readonly name = "PrintPreflightError";
   constructor(readonly code: "project_not_found") { super(code); }
 }
 
-export type PageMeasurements = { readonly pages: readonly PageMeasurement[]; readonly images: readonly ImageMeasurement[] };
+/** `usedFamilies` is the lower-cased font-family names computed on text-bearing elements; null when nothing was measured. */
+export type PageMeasurements = { readonly pages: readonly PageMeasurement[]; readonly images: readonly ImageMeasurement[]; readonly usedFamilies: readonly string[] | null };
 export type PrintPreflightSeams = {
   readonly measure?: (stagedDir: string, entrypoint: string, signal: AbortSignal) => Promise<PageMeasurements>;
   readonly readiness?: (signal: AbortSignal) => Promise<PrintBrowserReadiness>;
@@ -69,7 +71,15 @@ export function measurePrintPage(page: Page, signal: AbortSignal): Promise<PageM
           images.push({ pageIndex, locator: image.id !== "" ? `img#${image.id}` : `img[${imageIndex + 1}] ${source}`.trim(), naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight, displayWidth: box.width, displayHeight: box.height, visibleWidthFraction: visibleWidth, visibleHeightFraction: visibleHeight });
         });
       });
-      return { pages, images };
+      const used = new Set<string>();
+      for (const element of document.body.querySelectorAll<HTMLElement>("*")) {
+        if (["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE"].includes(element.tagName)) continue;
+        if (![...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "")) continue;
+        const style = getComputedStyle(element);
+        if (style.display === "none" || style.visibility === "hidden") continue;
+        for (const part of style.fontFamily.split(",")) { const name = part.trim().replace(/^["']|["']$/gu, "").toLowerCase(); if (name !== "") used.add(name); }
+      }
+      return { pages, images, usedFamilies: [...used] };
     }), { signal });
 }
 
@@ -80,7 +90,7 @@ async function measureInBrowser(stagedDir: string, entrypoint: string, signal: A
 
 /** Joins a browser measurement with the fonts the project references on disk. */
 export async function assemblePrintPreflight(projectRoot: string, entrypoint: string, measured: PageMeasurements, browser: PrintBrowserReadiness): Promise<PrintPreflightV1> {
-  const fonts = await resolveFonts({ projectRoot, refs: await fontFaceRefs(projectRoot, entrypoint), flavor: path, exists: isFile, listDir });
+  const fonts = await resolveFonts({ projectRoot, refs: usedFontFaceRefs(await fontFaceRefs(projectRoot, entrypoint), measured.usedFamilies), flavor: path, exists: isFile, listDir, bundled: async (urlPath) => (await readBundledFontUrl(urlPath)) !== null });
   return { schema_version: 1, pages: summarizePages(measured.pages), fonts, images: summarizeImages(measured.pages, measured.images), browser };
 }
 
@@ -91,6 +101,6 @@ export async function buildPrintPreflight(projectId: string, signal: AbortSignal
   const projectRoot = resolveManagedPath(projectsDir, project.dir_path);
   const readiness = await (seams.readiness ?? ((s) => chromiumLaunchCapability(undefined, { signal: s })))(signal);
   // Measuring needs the browser; without a usable one the page and image sections stay empty rather than guessed.
-  const measured = readiness === "unusable" ? { pages: [], images: [] } : await (seams.measure ?? measureInBrowser)(projectRoot, project.entrypoint, signal);
+  const measured = readiness === "unusable" ? { pages: [], images: [], usedFamilies: null } : await (seams.measure ?? measureInBrowser)(projectRoot, project.entrypoint, signal);
   return assemblePrintPreflight(projectRoot, project.entrypoint, measured, readiness);
 }
