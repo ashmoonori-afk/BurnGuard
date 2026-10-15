@@ -10,12 +10,13 @@ import { inspectRenderedPage, type DomAuditFinding, type DomAuditObservation } f
 import { fingerprintHtmlNode, FilePatchError } from "./file-patch";
 import { launchChromium, openRenderSession, RenderSessionError, type RenderSession } from "./export-render-session";
 import { registerExportBrowser } from "./export-browser-registry";
+import { findReferencePhotoLeaks } from "./photo-placements";
 import { parseStoredProjectOptions } from "./project-options";
 import { buildSiteMap, type SiteMap } from "./site-map";
 import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
 
-/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v9: a verified focus-revealed skip link is not text overflow; anonymous findings carry a locator). */
-export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v9";
+/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v9: a verified focus-revealed skip link is not text overflow; anonymous findings carry a locator; v10: stretched_image and reference_photo_leak checks). */
+export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v10";
 
 /**
  * The fixed page a project renders into, or undefined for a responsive website audit. A logo
@@ -95,7 +96,13 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   const selected = rawPages.map((): DomAuditFinding[] => []);
   for (const severity of ["must_fix", "recommended"] as const) rawPages.forEach((page, index) => { for (const finding of page.raw) if (finding.severity === severity && available > 0) { selected[index]!.push(finding); available -= 1; } });
   for (const [index, page] of rawPages.entries()) if (selected[index]!.length > 0) renderedFindings.push(...await enrichFindings(selected[index]!, input, manifest, page.relPath));
-  const findings = [...renderedFindings, ...siteFindings].slice(0, 200);
+  // Reference photographs are inputs only: a copy of one inside the published tree is a must-fix finding.
+  const leakFindings: DesignAuditFinding[] = (await findReferencePhotoLeaks(input.projectDir, current.files)).map((leak, index) => ({
+    id: `reference_photo_leak:${createHash("sha256").update(`${leak.placement_id}\0${leak.deliverable_path}\0${index}`).digest("hex").slice(0, 24)}`,
+    check_code: "reference_photo_leak", severity: "must_fix", source: { rel_path: leak.deliverable_path, node_bg_id: null },
+    evidence: `Reference photograph for placement ${leak.placement_id} is present in the deliverable; reference photos are inputs only`, targeted_action: "remove_reference_photo",
+  }));
+  const findings = [...leakFindings, ...renderedFindings, ...siteFindings].slice(0, 200);
   // Site structure is never audited on a fixed canvas and a fixed canvas is never rendered narrow, so those checks cannot pass or fail there.
   const applicable = (code: DesignAuditCheckCode): boolean => !(fixedCanvas && (code === "narrow_width" || code.startsWith("site_") || code.startsWith("journey_") || code === "eyebrow_density" || code === "duplicate_cta_intent" || code === "cta_label_wrap" || code === "repeated_section_structure"));
   const checks = DESIGN_AUDIT_CHECK_CODES.map((code) => buildCheck(code, findings, code === "narrow_width" || code === "journey_mobile_nav" ? narrows : desktops, applicable(code)));
