@@ -14,8 +14,8 @@ import { parseStoredProjectOptions } from "./project-options";
 import { buildSiteMap, type SiteMap } from "./site-map";
 import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
 
-/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v8: data-bg-motion regions measured at rest). */
-export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v8";
+/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v9: a verified focus-revealed skip link is not text overflow; anonymous findings carry a locator). */
+export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v9";
 
 /**
  * The fixed page a project renders into, or undefined for a responsive website audit. A logo
@@ -196,7 +196,7 @@ async function enrichFindings(raw: readonly DomAuditFinding[], input: AuditRende
   const html = htmlEntry === undefined ? null : await readFile(resolveWithin(input.projectDir, relPath), "utf8");
   return sorted.map((finding, index) => {
     const source = { rel_path: relPath, node_bg_id: finding.nodeId };
-    const base = { id: `${finding.code}:${createHash("sha256").update(`${relPath}\0${finding.nodeId ?? ""}\0${finding.evidence}\0${index}`).digest("hex").slice(0, 24)}`, check_code: finding.code, severity: finding.severity, source, evidence: finding.evidence, ...(finding.measured === undefined ? {} : { measured: finding.measured }), ...(finding.threshold === undefined ? {} : { threshold: finding.threshold }), targeted_action: finding.action };
+    const base = { id: `${finding.code}:${createHash("sha256").update(`${relPath}\0${finding.nodeId ?? ""}\0${finding.evidence}\0${index}`).digest("hex").slice(0, 24)}`, check_code: finding.code, severity: finding.severity, source, evidence: finding.evidence, ...(finding.measured === undefined ? {} : { measured: finding.measured }), ...(finding.threshold === undefined ? {} : { threshold: finding.threshold }), targeted_action: finding.action, ...(finding.locator === undefined ? {} : { locator: finding.locator }) };
     if (input.safeFix === false || finding.code !== "minimum_text_size" || finding.nodeId === null || finding.fix === undefined || html === null || htmlEntry === undefined) return base;
     try {
       const node = fingerprintHtmlNode(html, finding.nodeId);
