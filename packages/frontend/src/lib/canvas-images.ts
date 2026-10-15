@@ -72,6 +72,18 @@ export function isProjectImageUrl(value: string, documentUrl: string): boolean {
   } catch { return false; }
 }
 
+/**
+ * A missing resource must not blank the whole document. A live preview may reference an image or
+ * CSS file the generator writes next; any document may reference one broken image (a recovered
+ * draft can carry a quoted or removed URL), which the frame then shows as a broken image.
+ * A missing stylesheet or script outside a preview stays fatal.
+ */
+export function tolerateMissingResource(documentUrl: string, kind: "asset" | "css" | "script", error: unknown): boolean {
+  if (error === null || typeof error !== "object" || !("httpStatus" in error) || error.httpStatus !== 404) return false;
+  if (kind === "asset") return true;
+  return /\/preview\//.test(new URL(documentUrl).pathname);
+}
+
 export async function embedCssImages(css: string, resolve: (url: string) => Promise<string>): Promise<string> {
   const matches = Array.from(css.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s)]*))\s*\)/gi));
   const replacements = await Promise.all(matches.map(async (match) => {
@@ -160,8 +172,7 @@ export async function embedCanvasImages(html: string, documentUrl: string, signa
           reader.readAsDataURL(blob);
         });
       })().catch((error: unknown) => {
-        // A draft may reference an image/CSS file that the generator writes next.
-        if (/\/preview\//.test(new URL(documentUrl).pathname) && error !== null && typeof error === "object" && "httpStatus" in error && error.httpStatus === 404) return source;
+        if (tolerateMissingResource(documentUrl, kind, error)) return source;
         // An asset beyond the byte budget stays unembedded; CSS and script overruns remain fatal.
         if (kind === "asset" && error instanceof Error && error.message === "artifact_image_limit") return source;
         resources.abort(); throw error;
