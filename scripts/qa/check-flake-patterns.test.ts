@@ -148,6 +148,21 @@ describe("platform early returns in tests", () => {
     expect(checkTestSources([{ path: "packages/backend/tests/other.test.ts", text: body }]).map((problem) => problem.code)).toEqual(["fixed_sleep_in_test"]);
   });
 
+  test.each([
+    ["a browser launched under a timeout signal", 'const browser = await launchChromium(AbortSignal.timeout(60_000));'],
+    ["a shared browser in beforeAll", 'beforeAll(async () => { browser = await launchChromium(AbortSignal.timeout(45_000)); });'],
+  ] as const)("Given %s When checked Then the timer is rejected as owning the browser", (_name, body) => {
+    expect(checkTestSources([spec(`test("a", async () => {\n  ${body}\n});`)])).toMatchObject([{ code: "timed_signal_owns_test_browser", line: 2 }]);
+  });
+
+  test.each([
+    ["the launch-only helper", 'const browser = await launchTestChromium(60_000);'],
+    ["a caller-owned lifetime", 'const browser = await launchChromium(lifetime.signal);'],
+    ["a timeout signal on another call", 'await openRenderSession({ signal: AbortSignal.timeout(15_000), browser });'],
+  ] as const)("Given %s When checked Then it is accepted", (_name, body) => {
+    expect(lines(`test("a", async () => {\n  ${body}\n});`)).toEqual([]);
+  });
+
   test("Given the package tests on this host When checked Then no test returns early on the platform", async () => {
     const tests = await readTestSources(path.resolve(import.meta.dir, "..", ".."));
 

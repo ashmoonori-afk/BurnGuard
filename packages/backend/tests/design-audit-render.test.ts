@@ -6,6 +6,7 @@ import path from "node:path";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { inspectRenderedPage } from "../src/services/design-audit-dom";
 import { launchChromium } from "../src/services/export-render-session";
+import { launchTestChromium } from "./helpers/chromium";
 import { auditRenderedTree } from "../src/services/design-audit";
 
 const allPassFixture = `<!doctype html><html><head><style>/* @bg-shared-css */:root{--ink:#111;--paper:#fff}html,body{margin:0;background:var(--paper);color:var(--ink)}/* @bg-page-css */.a,.b{position:absolute;width:100px;height:30px}.a{left:10px;top:10px}.b{left:150px;top:10px}</style></head><body><header data-bg-shared="header"></header><nav data-bg-shared="nav"><a href="index.html" aria-current="page">Home</a></nav><main data-bg-content><div class="a" data-bg-node-id="a">Alpha</div><div class="b" data-bg-node-id="b">Beta</div></main><footer data-bg-shared="footer"></footer></body></html>`;
@@ -121,7 +122,7 @@ describe("rendered design auditor", () => {
   }, 60_000);
 
   test("Given an oversized motion region and clipped copy outside a valid one When inspected Then only the valid region is exempt", async () => {
-    const browser = await launchChromium(AbortSignal.timeout(60_000));
+    const browser = await launchTestChromium(60_000);
     try {
       const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
       await page.setContent(`<!doctype html><style>${motionStyle}.clip{width:40px;overflow:hidden;white-space:nowrap}.huge{height:3000px}</style><div class="reveal" data-bg-motion data-bg-node-id="reveal"><h1 class="slide" data-bg-node-id="moving">Sliding in</h1></div><p class="clip" data-bg-node-id="outside">clipped outside copy</p><div class="huge band" data-bg-motion data-bg-node-id="huge"><div class="track"><span data-bg-node-id="hidden">${"Copy that should stay audited ".repeat(12)}</span></div></div>`);
@@ -132,7 +133,7 @@ describe("rendered design auditor", () => {
   }, 60_000);
 
   test("Given visible tight text and clipped or off-canvas text When inspected Then only lost text fails", async () => {
-  const browser = await launchChromium(AbortSignal.timeout(60_000));
+  const browser = await launchTestChromium(60_000);
   try {
     const page = await browser.newPage({ viewport: { width: 1080, height: 1350 } });
     await page.setContent('<!doctype html><style>body{margin:40px}h1{font:100px/.82 Arial;margin:40px 0}#clip{overflow:hidden;height:20px}#parent{overflow:hidden;height:20px}#below{margin-top:1500px}</style><h1 data-bg-node-id="visible">VISIBLE</h1><h1 id="clip" data-bg-node-id="clip">CLIPPED</h1><div id="parent"><div data-bg-node-id="ancestor" style="height:60px">First<br>Second<br>Third</div></div><p id="below" data-bg-node-id="below">Below the fold</p>');

@@ -5,7 +5,8 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { chromiumNodeCommand, launchChromiumViaNode } from "../src/services/chromium-node-launch";
-import { launchChromium, openRenderSession } from "../src/services/export-render-session";
+import { openRenderSession } from "../src/services/export-render-session";
+import { launchTestChromium } from "./helpers/chromium";
 import { resetChromiumCapability } from "../src/services/chromium-capability";
 import { playwrightInstallCommand } from "../src/services/playwright-install";
 import { version } from "playwright-core/package.json";
@@ -163,7 +164,7 @@ test.skipIf(process.env.BG_BROWSER_SMOKE !== "1")("Given the installed Node brow
   expect(chromiumNodeCommand()).not.toBeNull();
   resetChromiumCapability();
   try {
-    const browser = await launchChromium(AbortSignal.timeout(30000));
+    const browser = await launchTestChromium(30000);
     try {
       const page = await browser.newPage();
       await page.setContent('<html><body><h1 id="title">Local rendering</h1></body></html>');

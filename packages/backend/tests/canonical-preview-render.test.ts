@@ -9,7 +9,7 @@ import { createApp } from "../src/server";
 import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 import { persistCanonicalExtraction, upsertDesignSystemColorToken, uploadDesignSystemFont } from "../src/services/design-system-extract";
 import { reserveExtractionBundle, validateExtractionBundle } from "../src/services/extraction-publication";
-import { launchChromium } from "../src/services/export-render-session";
+import { launchTestChromium } from "./helpers/chromium";
 import { resetChromiumCapability } from "../src/services/chromium-capability";
 
 const id = `canonical-preview-render-${process.pid}`;
@@ -37,7 +37,7 @@ beforeAll(async () => {
   } });
   origin = `http://127.0.0.1:${server.port}`;
   app = createApp({ capability: "canonical-preview-test", bootstrapSecret: "canonical-bootstrap-secret", appAuthority: new URL(origin).host });
-  browser = await launchChromium(AbortSignal.timeout(60_000));
+  browser = await launchTestChromium(60_000);
   page = await browser.newPage();
   page.on("requestfailed", request => failures.push(`${request.url()}: ${request.failure()?.errorText}`));
   page.on("console", message => { if (message.type() === "error") failures.push(message.text()); });

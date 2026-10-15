@@ -70,6 +70,19 @@ jobs run each pinning suite.
 
 ## Hardening log
 
+### 2026-10-15: a test's launch deadline also closed its shared browser
+
+- Symptom: Windows x64, run 38704171155 (PR #322): every case of `design-audit-skip-link` failed with
+  `Chromium connection aborted`, the first one about 45 s after the suite started; macOS and Ubuntu passed, and a
+  rerun of the same head passed.
+- Root cause: `launchChromium(signal)` hands its signal to the Node bridge, which closes the browser connection when
+  the signal aborts (`chromium-node-launch.ts`). The suite passed `AbortSignal.timeout(45_000)` for a browser shared
+  by `beforeAll`; a cold Windows launch took about 43 s, so the timer fired during the first case and closed the
+  browser under every later one. Eight other test call sites had the same shape with 30-60 s timers.
+- Fix: `packages/backend/tests/helpers/chromium.ts` `launchTestChromium(deadlineMs)` bounds the launch only and clears
+  its deadline once the browser is up; every test launch uses it. `check-flake-patterns` rejects
+  `launchChromium(AbortSignal.timeout(...))` in tests (`timed_signal_owns_test_browser`).
+
 ### 2026-10-01: export closure textual import scan was quadratic
 
 Issue [#203](https://github.com/ashmoonori-afk/BurnGuard/issues/203), found while fixing #201. When a script does not

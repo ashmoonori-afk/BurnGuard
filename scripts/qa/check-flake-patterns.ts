@@ -23,6 +23,10 @@
  *                                      pass for a case that never ran; use test.skipIf(...) with a reason, or the
  *                                      form that OS supports
  *
+ *   timed_signal_owns_test_browser     launchChromium(AbortSignal.timeout(N)) in a test: the signal also owns the
+ *                                      browser connection, so the timer closes a browser still in use after a slow
+ *                                      launch ("Chromium connection aborted"); use launchTestChromium (tests/helpers)
+ *
  *   bun scripts/qa/check-flake-patterns.ts        exit 1 on any problem
  */
 import { readFile } from "node:fs/promises";
@@ -38,7 +42,7 @@ const PLAYWRIGHT_MODULE = /(?:^|\/)playwright(?:-core|-runtime)?$/;
 
 export const TEST_ROOTS_GLOB = "packages/*/tests";
 
-export type FlakeProblemCode = "raw_timeout_signal_in_launch_call" | "launch_module_signal_not_armed" | "playwright_timeout_option" | "launch_server_without_deadline" | "platform_early_return_in_test" | "fixed_sleep_in_test";
+export type FlakeProblemCode = "raw_timeout_signal_in_launch_call" | "launch_module_signal_not_armed" | "playwright_timeout_option" | "launch_server_without_deadline" | "platform_early_return_in_test" | "fixed_sleep_in_test" | "timed_signal_owns_test_browser";
 export type FlakeProblem = { readonly code: FlakeProblemCode; readonly path: string; readonly line: number };
 export type SourceText = { readonly path: string; readonly text: string };
 
@@ -222,6 +226,9 @@ export function checkTestFile(source: SourceText): FlakeProblem[] {
     if (ts.isCallExpression(node) && (isBareSleep(node) || isBunSleep(node)) && !KNOWN_TEST_SLEEPS.has(repoPath(source.path))) {
       problems.push({ code: "fixed_sleep_in_test", path: repoPath(source.path), line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1 });
     }
+    if (ts.isCallExpression(node) && calleeName(node) === "launchChromium" && node.arguments[0] !== undefined && isAbortSignalCall(node.arguments[0], "timeout")) {
+      problems.push({ code: "timed_signal_owns_test_browser", path: repoPath(source.path), line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1 });
+    }
     const next = isFunctionLike(node) || ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) ? node : enclosing;
     ts.forEachChild(node, (child) => { visit(child, next); });
   };
@@ -258,6 +265,7 @@ const HELP: Record<FlakeProblemCode, string> = {
   playwright_timeout_option: "do not rely on Playwright's timeout option: race the call against an owned deadline (launchWithin, settleLaunch)",
   launch_server_without_deadline: "launchServer has no working deadline of its own: call it through launchWithin or probeChannels",
   fixed_sleep_in_test: "do not sleep in a test: resolve a deferred from the event you wait for and await it under a bounded deadline",
+  timed_signal_owns_test_browser: "the signal handed to launchChromium also closes the browser when it aborts: launch with launchTestChromium (packages/backend/tests/helpers/chromium.ts), which bounds the launch only",
   platform_early_return_in_test: "an early return on process.platform reports a pass without running: use test.skipIf(...) with a reason, or the form that OS supports",
 };
 
