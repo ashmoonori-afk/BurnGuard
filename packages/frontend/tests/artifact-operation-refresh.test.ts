@@ -21,10 +21,12 @@ test("Given a committed operation When the workspace plans its refresh Then it a
   expect(artifactOperationRefresh("committed")).toEqual({ invalidate: true, refreshCanvas: true, openChangedTabs: true, notice: null });
 });
 
-test("Given a cancelled or failed operation When the workspace plans its refresh Then nothing is requested", () => {
-  for (const outcome of ["cancelled", "failed"] as const) {
-    expect(artifactOperationRefresh(outcome), outcome).toEqual({ invalidate: false, refreshCanvas: false, openChangedTabs: false, notice: null });
-  }
+test("Given a cancelled operation When the workspace plans its refresh Then nothing is requested", () => {
+  expect(artifactOperationRefresh("cancelled")).toEqual({ invalidate: false, refreshCanvas: false, openChangedTabs: false, notice: null });
+});
+
+test("Given a failed operation with retained comparison findings When the workspace plans its refresh Then history refetches without reloading the unchanged canvas", () => {
+  expect(artifactOperationRefresh("failed")).toEqual({ invalidate: true, refreshCanvas: false, openChangedTabs: false, notice: null });
 });
 
 test("Given a retained external edit that a generation replaced When the save history renders Then it lists the capture with one restore action", () => {

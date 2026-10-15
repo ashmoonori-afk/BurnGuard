@@ -14,7 +14,8 @@ import { workspaceMessages } from "./workspace";
 import { logoMessages } from "./logo";
 import { logoPipelineMessages } from "./logo-pipeline";
 import { promptsMessages } from "./prompts";
+import { revisionMessages } from "./revision";
 
-export const messagePacks = [settingsMessages, shellMessages, errorsMessages, homeMessages, systemMessages, filesMessages, exportMessages, directionsMessages, canvasMessages, modesMessages, chatMessages, chatPolishMessages, workspaceMessages, logoMessages, logoPipelineMessages, promptsMessages] as const;
-export const messages = { ...settingsMessages, ...shellMessages, ...errorsMessages, ...homeMessages, ...systemMessages, ...filesMessages, ...exportMessages, ...directionsMessages, ...canvasMessages, ...modesMessages, ...chatMessages, ...chatPolishMessages, ...workspaceMessages, ...logoMessages, ...logoPipelineMessages, ...promptsMessages };
+export const messagePacks = [settingsMessages, shellMessages, errorsMessages, homeMessages, systemMessages, filesMessages, exportMessages, directionsMessages, canvasMessages, modesMessages, chatMessages, chatPolishMessages, workspaceMessages, logoMessages, logoPipelineMessages, promptsMessages, revisionMessages] as const;
+export const messages = { ...settingsMessages, ...shellMessages, ...errorsMessages, ...homeMessages, ...systemMessages, ...filesMessages, ...exportMessages, ...directionsMessages, ...canvasMessages, ...modesMessages, ...chatMessages, ...chatPolishMessages, ...workspaceMessages, ...logoMessages, ...logoPipelineMessages, ...promptsMessages, ...revisionMessages };
 export type MessageKey = keyof typeof messages;

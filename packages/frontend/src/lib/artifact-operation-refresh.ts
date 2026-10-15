@@ -14,12 +14,7 @@ export type ArtifactOperationRefresh = {
   readonly notice: MessageKey | null;
 };
 
-/**
- * What the workspace does with an `artifact.operation` event. A committed turn refreshes and opens
- * its files; an external conflict or a startup recovery replaced the tree with nothing on screen
- * announcing it, so those refresh and notify; a cancelled or failed operation left the tree as it
- * was and needs nothing.
- */
+/** Failed operations refresh history findings without reloading the unchanged canvas. */
 export function artifactOperationRefresh(outcome: ArtifactOperationOutcome): ArtifactOperationRefresh {
   switch (outcome) {
     case "committed":
@@ -28,8 +23,9 @@ export function artifactOperationRefresh(outcome: ArtifactOperationOutcome): Art
       return { invalidate: true, refreshCanvas: true, openChangedTabs: false, notice: "workspace.project.operationConflicted" };
     case "recovered":
       return { invalidate: true, refreshCanvas: true, openChangedTabs: false, notice: "workspace.project.operationRecovered" };
-    case "cancelled":
     case "failed":
+      return { invalidate: true, refreshCanvas: false, openChangedTabs: false, notice: null };
+    case "cancelled":
       return { invalidate: false, refreshCanvas: false, openChangedTabs: false, notice: null };
     default: {
       const unreachable: never = outcome;

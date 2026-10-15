@@ -235,6 +235,8 @@ function failureStage(value: unknown): RuntimeFailureStage {
 
 function failureCode(value: unknown): RuntimeFailureCode {
   switch (value) {
+    case "edit_scope_violation":
+    case "invalid_edit_scope":
     case "graphic_requires_authenticated_codex":
     case "graphic_starter_unchanged":
     case "logo_requires_authenticated_codex":

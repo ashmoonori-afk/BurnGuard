@@ -10,6 +10,8 @@ export type TurnErrorCode =
   | "logo_directions_invalid"
   | "logo_originality_rejected"
   | "design_review_failed"
+  | "edit_scope_violation"
+  | "invalid_edit_scope"
   | "commandcode_unavailable"
   | "unsupported_generation_model_effort"
   | "backend_unavailable"

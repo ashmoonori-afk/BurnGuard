@@ -1,3 +1,5 @@
+import type { RevisionComparison } from "./edit-scope";
+
 export interface ArtifactHistoryEntry {
   operation_id: string;
   revision: number;
@@ -42,4 +44,6 @@ export interface ArtifactHistoryV1 {
   entries: ArtifactHistoryEntry[];
   external_captures: ArtifactExternalCapture[];
   review_failed_drafts: ReviewFailedDraftOffer[];
+  latest_comparison?: RevisionComparison | null;
+  scope_violation?: { readonly operation_id: string; readonly comparison: RevisionComparison } | null;
 }

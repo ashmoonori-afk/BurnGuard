@@ -3,6 +3,7 @@ import { COMMANDCODE_MODELS, defaultEffortFor, effortBelowRecommendation, resolv
 import { detectBackends, getSettings } from "@/api/home";
 import type { MessageKey } from "@/i18n/messages";
 import { useT } from "@/i18n/t";
+import EditScopeFields from "@/components/chat/EditScopeFields";
 
 export const EFFORT_LABELS: Readonly<Record<GenerationEffort, MessageKey>> = {
   low: "settings.effort.low",
@@ -41,6 +42,7 @@ export default function GenerationControls({ backendId, value, onChange, disable
   </>;
   return <fieldset disabled={disabled} className="space-y-2 text-xs disabled:opacity-60">
     <legend className="sr-only">{t("settings.generationOptions")}</legend>
+    {compact && <EditScopeFields value={value.edit_scope} onChange={scope => onChange({ ...value, edit_scope: scope })} />}
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(90px,auto)] gap-2">
       <label>{t("settings.model")}<select aria-label={t("settings.generationModel")} className={selectClass} value={value.model} onChange={(event) => onChange({ ...value, model: event.target.value, effort: defaultEffortFor(models.find((candidate) => candidate.id === event.target.value) ?? models[0]) })}>
         <option value="">{model ? t("settings.defaultModel", { name: models[0]?.label ?? "" }) : t("settings.toolDefault")}</option>

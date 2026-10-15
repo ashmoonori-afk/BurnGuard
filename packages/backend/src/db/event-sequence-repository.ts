@@ -176,6 +176,7 @@ function fileAction(item: Readonly<Record<string, unknown>>, id: string): "creat
 function turnErrorCode(item: Readonly<Record<string, unknown>>, id: string): TurnErrorCode {
   const value = text(item, "code", id);
   switch (value) {
+    case "edit_scope_violation": case "invalid_edit_scope":
     case "graphic_requires_authenticated_codex": case "graphic_starter_unchanged":
     case "logo_requires_authenticated_codex": case "logo_deliverables_missing":
     case "logo_image_provenance_missing": case "design_review_failed":

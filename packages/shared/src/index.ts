@@ -17,6 +17,7 @@ export * from "./design-surface";
 export * from "./design-brief";
 export * from "./design-direction";
 export * from "./design-audit";
+export * from "./edit-scope";
 export * from "./events";
 export * from "./export";
 export * from "./print-preflight";

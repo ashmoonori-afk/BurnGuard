@@ -1,8 +1,9 @@
 import { useT, type MessageKey } from "@/i18n/t";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { localeTag, useLocaleStore } from "@/i18n/locale";
 import type { ArtifactExternalCapture, ArtifactHistoryV1, ReviewFailedDraftOffer, UnverifiedDraftStateV1 } from "@bg/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import RevisionComparisonSummary from "./RevisionComparisonSummary";
 
 const labels: Record<string, MessageKey> = { initialize: "canvas.history.kind.initialize", patch: "canvas.toolbar.edit", palette: "canvas.history.kind.palette", turn: "canvas.history.kind.turn", restore: "canvas.history.kind.restore", undo: "canvas.history.kind.undo", external: "canvas.history.kind.external", reapply_external: "canvas.history.kind.reapplyExternal" };
 /** External saves reverted while a generation ran; each can be re-applied as a new save. */
@@ -34,9 +35,17 @@ export default function ArtifactHistory({ history, disabled, onRestore, onReappl
   const [open, setOpen] = useState(false), [selected, setSelected] = useState("");
   const locale = useLocaleStore((state) => state.locale);
   const entry = history?.entries.find(item => item.operation_id === selected);
+  const lastComparison = useRef<string | null>(null);
+  const comparison = history?.scope_violation?.comparison ?? history?.latest_comparison;
+  const comparisonId = history?.scope_violation?.operation_id ?? (history ? `${history.current_revision}:${comparison?.result_digest ?? ""}` : null);
+  useEffect(() => {
+    if (comparison && comparisonId !== null && lastComparison.current !== null && lastComparison.current !== comparisonId) setOpen(true);
+    if (comparisonId !== null) lastComparison.current = comparisonId;
+  }, [comparison, comparisonId]);
   return <Dialog open={open} onOpenChange={setOpen}>
     <DialogTrigger asChild><button type="button" disabled={disabled || !history} className="h-9 shrink-0 rounded px-2 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50">{t("canvas.history.title")}</button></DialogTrigger>
-    <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>{t("canvas.history.restoreTitle")}</DialogTitle><DialogDescription>{t("canvas.history.description")}</DialogDescription></DialogHeader>
+    <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto"><DialogHeader><DialogTitle>{t("canvas.history.restoreTitle")}</DialogTitle><DialogDescription>{t("canvas.history.description")}</DialogDescription></DialogHeader>
+      {comparison && <RevisionComparisonSummary comparison={comparison} />}
       <ExternalCaptures captures={history?.external_captures ?? []} disabled={disabled} onReapply={async operationId => { await onReapply(operationId); setOpen(false); setSelected(""); }} />
       <ReviewFailedDrafts offers={history?.review_failed_drafts ?? []} disabled={disabled} onRecover={async operationId => { await onRecoverDraft(operationId); setOpen(false); setSelected(""); }} />
       <p className="text-sm">{t("canvas.history.currentRevision", { revision: history?.current_revision ?? "-" })}</p>

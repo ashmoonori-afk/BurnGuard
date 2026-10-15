@@ -1,6 +1,8 @@
 import type { Database } from "bun:sqlite";
 import type { ArtifactHistoryV1 } from "@bg/shared";
 import { listArtifactOperations } from "../db/artifact-operation-query";
+import { readOperationComparison } from "./revision-comparison-storage";
+import { assertSafeName, resolveWithin } from "../security/path-boundary";
 
 /** Follow undo ancestry, not the most recent write: undoing an undo must not toggle two states. */
 export function artifactHistory(db: Database, projectId: string, revision: number, digest: string, now = Date.now()): ArtifactHistoryV1 {
@@ -14,6 +16,14 @@ export function artifactHistory(db: Database, projectId: string, revision: numbe
   const byRevision = new Map(rows.map(row => [row.result_revision, row]));
   let next = byRevision.get(revision);
   if (next?.result_digest !== digest) next = undefined;
+  const current = next;
+  const project = db.query<{ readonly dir_path: string }, [string]>("SELECT dir_path FROM projects WHERE id=?").get(projectId);
+  const comparisonFor = (row: (typeof operations)[number] | undefined) => {
+    if (!row || !project || !row.retention.replayable) return null;
+    return readOperationComparison(resolveWithin(project.dir_path, ".meta", "artifact-operations", assertSafeName(row.id)), row.base_digest, row.result_digest ?? undefined);
+  };
+  const latest = operations.find(row => row.status === "committed" || row.status === "failed");
+  const refused = latest?.status === "failed" ? comparisonFor(latest) : null;
   const seen = new Set<string>();
   while (next?.replay.kind === "undo") {
     if (seen.has(next.id)) { next = undefined; break; }
@@ -22,6 +32,8 @@ export function artifactHistory(db: Database, projectId: string, revision: numbe
     next = target ? byRevision.get(target.base_revision) : undefined;
   }
   return { schema_version: 1, current_revision: revision, current_digest: digest,
+    latest_comparison: comparisonFor(current),
+    scope_violation: refused && refused.findings.length > 0 && latest ? { operation_id: latest.id, comparison: refused } : null,
     undo_operation_id: next && next.replay.kind !== "initialize" && restorable(next) ? next.id : null,
     entries: rows.filter(row => row.replay.kind !== "initialize" && row.base_digest !== digest).map(row => {
       const previous = byRevision.get(row.base_revision);

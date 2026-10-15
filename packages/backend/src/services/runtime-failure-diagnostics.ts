@@ -129,12 +129,14 @@ function failureStage(code: RuntimeFailureCode): RuntimeFailureStage {
     case "unsupported_generation_model_effort":
     case "backend_unavailable":
       return "preflight";
+    case "invalid_edit_scope":
     case "agent_control_files_present":
     case "path_unavailable":
     case "immutable_reference_path_unavailable":
     case "private_input_unavailable":
     case "deck_source_page_limit":
       return "input";
+    case "edit_scope_violation":
     case "logo_deliverables_missing":
     case "logo_image_provenance_missing":
     case "logo_directions_invalid":

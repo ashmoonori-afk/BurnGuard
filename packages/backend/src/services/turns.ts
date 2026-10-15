@@ -417,7 +417,7 @@ async function runUserTurnInternal(
   if (!sessionContext) throw new Error("session_not_found");
   // Previously submitted documents remain available after navigation/restart.
   const modelPayload = dependencies.modelText === undefined ? payload : { ...payload, text: dependencies.modelText };
-  const contextPayload = { ...modelPayload, attachments: selectContextAttachments(sessionContext.attachments, payload.attachments ?? [], payload.text) };
+  const contextPayload = { ...modelPayload, generation, attachments: selectContextAttachments(sessionContext.attachments, payload.attachments ?? [], payload.text) };
   const visualSources = await buildVisualSourceManifest({
     projectDir: sessionContext.project.project_dir,
     attachments: sessionContext.attachments,
@@ -497,6 +497,7 @@ async function runUserTurnInternal(
   try {
     const operation = await coordinator.run({
       projectId: project.id, projectDir, kind: "turn", operationId,
+      editScope: generation.edit_scope,
       ...(project.type === "logo" ? { signal: activeTurn.abortController.signal } : {}),
       expectedRevision: project.current_revision, expectedArtifactDigest: base.tree_digest,
       publicationPolicy: { forbiddenSha256 },
