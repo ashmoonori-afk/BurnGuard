@@ -70,6 +70,28 @@ jobs run each pinning suite.
 
 ## Hardening log
 
+### 2026-10-15: multi-minute Windows stalls, and a logo-test cleanup that turned one into many failures
+
+- Symptom: Windows x64, runs 38732070767 (main `cc1c93e1`) and 38734059594 (PR #335): in `logo-completion-gate`,
+  four and five consecutive cases timed out at 30 s, after which the file recovered; every timeout was followed by
+  `ENOENT` or `tree_missing` and a SQLite `FOREIGN KEY` failure at `turns.ts` `persistAndPublish`. macOS and Ubuntu
+  passed; reruns passed.
+- What is known: these are stretches of 2-3 minutes in which every turn on the machine is slow, not one case that
+  hangs. In run 38750245081 (job "base 6", unchanged main) the same stretch hit the first backend suite of the step,
+  `artifact-history`, before any of the 2026-10-15 suites had run, and in the same minutes a child-process Chromium
+  launch in `design-audit-skip-link` missed its 45 s deadline. The failing operations were in baseline
+  materialization, snapshot copying and the logo gate alike. Measured on 24 other Windows jobs with per-phase timing:
+  single small-file write+rename steps of up to 5.3 s, with and without a Defender exclusion of the workspace and
+  temp directories. The slow primitive (a filesystem call, the runtime, or the VM) is not identified; no code path
+  was found that waits for the project directory to be deleted.
+- Fixed: the test's `afterEach` deleted the project and session while a timed-out case's turn was still running, so
+  that turn wrote into a deleted project, failed its event insert and left later cases to fail on the same machine
+  stall. Cleanup now interrupts and joins the case's own turn before deleting anything. A deterministic local probe
+  that holds a turn after its adapter showed the old order ends in `SQLITE_CONSTRAINT_FOREIGNKEY` and the new order
+  settles cleanly.
+- Open: the cause of the stall itself. The next failure needs per-operation begin/end markers captured before
+  cleanup to separate a pending filesystem call from a stalled event loop.
+
 ### 2026-10-15: a test's launch deadline also closed its shared browser
 
 - Symptom: Windows x64, run 38704171155 (PR #322): every case of `design-audit-skip-link` failed with
