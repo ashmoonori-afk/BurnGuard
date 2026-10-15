@@ -84,40 +84,62 @@ export async function writePreparedPhotoRecord(prepared: Extract<PreparedPhotoRe
   await writeAtomic(resolveWithin(root, ...PHOTO_PLACEMENTS_FILE.split("/")), prepared.record);
 }
 
+const BEGIN_FILE = "begin.json";
+type PhotoBackupBegin = { readonly had_references: boolean; readonly had_record: boolean };
+
+async function readBegin(backupDir: string): Promise<PhotoBackupBegin | null> {
+  const bytes = await readContainedFile(backupDir, BEGIN_FILE, 1024);
+  if (bytes === null) return null;
+  const value: unknown = JSON.parse(bytes.toString("utf8"));
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("photo_backup_corrupt");
+  const hadReferences = Reflect.get(value, "had_references");
+  const hadRecord = Reflect.get(value, "had_record");
+  if (typeof hadReferences !== "boolean" || typeof hadRecord !== "boolean") throw new Error("photo_backup_corrupt");
+  return { had_references: hadReferences, had_record: hadRecord };
+}
+
 /**
- * One operation's installation of a prepared record in the live project. `install` moves the previous record and
- * reference directory into `backupDir` (inside the operation's own storage) before writing the new ones;
- * `rollback` removes what was installed and moves the previous ones back. Both are idempotent per step.
+ * One operation's installation of a prepared record in the live project. All progress lives on disk in `backupDir`
+ * (inside the operation's own storage), never in memory, so startup recovery can finish or undo it after a crash:
+ * `begin.json` records, before anything moves, whether the project already had a record and a reference directory;
+ * `install` then moves those into `backupDir` and writes the new files (references first, the record last);
+ * `rollback` removes what was installed and moves the previous ones back. Both can be repeated any number of times.
  */
 export class PhotoRecordPublication {
-  private movedReferences = false;
-  private movedRecord = false;
-  private installedReferences = false;
-  private installedRecord = false;
-
-  constructor(private readonly prepared: Extract<PreparedPhotoRecord, { kind: "ready" }>, private readonly projectDir: string, private readonly backupDir: string) {}
+  constructor(private readonly prepared: Extract<PreparedPhotoRecord, { kind: "ready" }> | null, private readonly projectDir: string, private readonly backupDir: string) {}
 
   private live(relative: string): string { return resolveWithin(this.projectDir, ...relative.split("/")); }
 
   async install(): Promise<void> {
+    if (this.prepared === null) throw new Error("photo_record_not_prepared");
     const references = this.live(PHOTO_REFERENCE_DIR);
     const record = this.live(PHOTO_PLACEMENTS_FILE);
     await mkdir(this.backupDir, { recursive: true });
-    if (await exists(references)) { await rename(references, path.join(this.backupDir, "references")); this.movedReferences = true; }
-    if (await exists(record)) { await rename(record, path.join(this.backupDir, "photo-placements.json")); this.movedRecord = true; }
-    this.installedReferences = true;
-    this.installedRecord = true;
+    let begin = await readBegin(this.backupDir);
+    if (begin === null) {
+      begin = { had_references: await exists(references), had_record: await exists(record) };
+      await writeAtomic(path.join(this.backupDir, BEGIN_FILE), Buffer.from(JSON.stringify(begin)));
+    }
+    const savedReferences = path.join(this.backupDir, "references");
+    const savedRecord = path.join(this.backupDir, "photo-placements.json");
+    if (begin.had_references && !(await exists(savedReferences))) await rename(references, savedReferences);
+    if (begin.had_record && !(await exists(savedRecord))) await rename(record, savedRecord);
     await writePreparedPhotoRecord(this.prepared, this.projectDir);
   }
 
   async rollback(): Promise<void> {
-    const references = this.live(PHOTO_REFERENCE_DIR);
-    const record = this.live(PHOTO_PLACEMENTS_FILE);
-    if (this.installedReferences) await rm(references, { recursive: true, force: true });
-    if (this.installedRecord) await rm(record, { force: true });
-    if (this.movedReferences) await rename(path.join(this.backupDir, "references"), references);
-    if (this.movedRecord) await rename(path.join(this.backupDir, "photo-placements.json"), record);
-    this.movedReferences = this.movedRecord = this.installedReferences = this.installedRecord = false;
+    const begin = await readBegin(this.backupDir);
+    if (begin === null) return;
+    await this.restore(PHOTO_REFERENCE_DIR, path.join(this.backupDir, "references"), begin.had_references, true);
+    await this.restore(PHOTO_PLACEMENTS_FILE, path.join(this.backupDir, "photo-placements.json"), begin.had_record, false);
+  }
+
+  private async restore(relative: string, saved: string, hadIt: boolean, directory: boolean): Promise<void> {
+    const live = this.live(relative);
+    if (await exists(saved)) {
+      await rm(live, { recursive: directory, force: true });
+      await rename(saved, live);
+    } else if (!hadIt) await rm(live, { recursive: directory, force: true });
   }
 }
 
