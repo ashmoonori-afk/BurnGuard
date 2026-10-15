@@ -132,6 +132,8 @@ describe("edit scope publication contract", () => {
       const relPath = canonicalTreePath(base, target, flavor);
       expect(relPath).toBe("pages/index.html");
       expect(resolveRevisionReference(relPath, "../assets/photo.png?v=2")).toBe("assets/photo.png");
+      const cssPath = canonicalTreePath(base, flavor.join(base, "styles", "theme.css"), flavor);
+      expect(resolveRevisionReference(cssPath, "../assets/photo.png?v=2")).toBe("assets/photo.png");
       expect(parseEditScope({ mode: "image_only", targets: [{ rel_path: relPath }] }).targets?.[0].rel_path).toBe(relPath);
     });
   }
@@ -172,5 +174,44 @@ describe("edit scope publication contract", () => {
     expect(observed.result.revision).toBe(0);
     expect(observed.result.treeDigest).toBe(observed.baseDigest);
     expect(observed.result.history.scope_violation?.comparison.findings).toContainEqual(expect.objectContaining({ node_id: "title2", kind: "text" }));
+  });
+
+  for (const fixture of [
+    { surface: "linked stylesheet", document: html.replace('href="styles.css"', 'data-bg-node-id="sheet" href="styles/theme.css"'), css: '[data-graphic-artboard=p2]{background-image:url("../assets/one.png")}', nodeId: "sheet" },
+    { surface: "inline style", document: html.replace('data-graphic-artboard="p2"', 'data-graphic-artboard="p2" data-bg-node-id="background2" style="background-image:url(assets/one.png)"'), css: "body{color:#111}", nodeId: "background2" },
+    { surface: "style block", document: html.replace("</head>", '<style data-bg-node-id="sheetblock">[data-graphic-artboard=p2]{background-image:url("assets/one.png")}</style></head>'), css: "body{color:#111}", nodeId: "sheetblock" },
+  ]) test(`Given a targeted image also used by an untargeted ${fixture.surface} When its bytes change Then publication is blocked`, async () => {
+    await writeFile(path.join(root, "index.html"), fixture.document);
+    await mkdir(path.join(root, "styles"));
+    await writeFile(path.join(root, "styles", "theme.css"), fixture.css);
+    const coordinator = new ArtifactCoordinator(db);
+    const base = await coordinator.initialize("scope", root);
+    await expect(coordinator.run({ projectId: "scope", projectDir: root, kind: "turn", expectedRevision: 0, expectedArtifactDigest: base.tree_digest,
+      editScope: { mode: "image_only", targets: [{ rel_path: "index.html", node_id: "photo1" }] }, mutate: async stage => { await writeFile(path.join(stage, "assets/one.png"), "changed image bytes"); },
+    })).rejects.toMatchObject({ code: "edit_scope_violation", findings: expect.arrayContaining([expect.objectContaining({ rel_path: "index.html", node_id: fixture.nodeId, kind: "image" })]) });
+    expect((await inspectCanonicalTree(root)).tree_digest).toBe(base.tree_digest);
+  });
+
+  test("Given one stylesheet loaded by two pages When a shared image changes Then every loading link contributes its scope location", async () => {
+    await writeFile(path.join(root, "styles.css"), 'body{background-image:url("assets/one.png")}');
+    await writeFile(path.join(root, "other.html"), '<html><head><link data-bg-node-id="other-sheet" rel="stylesheet" href="styles.css"></head><body>Other page</body></html>');
+    const coordinator = new ArtifactCoordinator(db);
+    const base = await coordinator.initialize("scope", root);
+    await expect(coordinator.run({ projectId: "scope", projectDir: root, kind: "turn", expectedRevision: 0, expectedArtifactDigest: base.tree_digest,
+      editScope: { mode: "image_only", targets: [{ rel_path: "index.html" }] }, mutate: async stage => { await writeFile(path.join(stage, "assets/one.png"), "shared image bytes"); },
+    })).rejects.toMatchObject({ code: "edit_scope_violation", findings: expect.arrayContaining([expect.objectContaining({ rel_path: "other.html", node_id: "other-sheet", kind: "image" })]) });
+    expect((await inspectCanonicalTree(root)).tree_digest).toBe(base.tree_digest);
+  });
+
+  test("Given CSS using an unrelated image When only a targeted image changes Then publication still passes", async () => {
+    await writeFile(path.join(root, "styles.css"), 'body{background-image:url("assets/three.png")}');
+    const coordinator = new ArtifactCoordinator(db);
+    const base = await coordinator.initialize("scope", root);
+    const result = await coordinator.run({ projectId: "scope", projectDir: root, kind: "turn", expectedRevision: 0, expectedArtifactDigest: base.tree_digest,
+      editScope: { mode: "image_only", targets: [{ rel_path: "index.html", node_id: "photo1" }] }, mutate: async stage => { await writeFile(path.join(stage, "assets/one.png"), "targeted image bytes"); },
+    });
+    expect(result.status).toBe("committed");
+    expect(result.comparison?.findings).toEqual([]);
+    expect((await inspectCanonicalTree(root)).files.filter(file => file.path !== "assets/one.png")).toEqual(base.files.filter(file => file.path !== "assets/one.png"));
   });
 });

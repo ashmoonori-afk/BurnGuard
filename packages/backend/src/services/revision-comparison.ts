@@ -4,6 +4,7 @@ import { parse, HTMLElement, NodeType, type Node } from "node-html-parser";
 import { parseEditScope, type EditScope, type RevisionChange, type RevisionChangeKind, type RevisionComparison, type RevisionTextChange } from "@bg/shared";
 import { inspectCanonicalTreeOnDisk, type InspectedCanonicalTree } from "./canonical-tree-manifest";
 import { readManagedFile } from "./artifact-tree-storage";
+import { cssUrlValues } from "./export-closure";
 
 interface LocatedValue {
   readonly value: string;
@@ -93,9 +94,12 @@ async function inventory(root: string, strictEncoding: boolean): Promise<Invento
   const tree = await inspectCanonicalTreeOnDisk(root);
   const pages = new Map<string, PageInventory>();
   const assetUses: Inventory["assetUses"] = new Map();
+  const cssFiles = new Map(tree.manifest.files.filter(file => path.posix.extname(file.path).toLowerCase() === ".css").map(file => [file.path, file]));
+  const cssReferencesByPath = new Map<string, readonly string[]>();
   for (const file of tree.manifest.files.filter(file => /\.html?$/iu.test(file.path))) {
     const source = new TextDecoder("utf-8", { fatal: strictEncoding }).decode(await readManagedFile(root, file, {}, tree.diskPaths));
     const document = parse(source, { comment: false });
+    const stylesheets: { relPath: string; page: PageInventory; location: LocatedValue; visited: Set<string> }[] = [];
     let artboardIndex = 0;
     const pageFor = (artboardId: string | null): PageInventory => {
       const key = JSON.stringify([file.path, artboardId]);
@@ -104,11 +108,18 @@ async function inventory(root: string, strictEncoding: boolean): Promise<Invento
       return page;
     };
     pageFor(null).structure.set("declaration", { value: source.match(/^\s*<!doctype[^>]*>/iu)?.[0].trim() ?? "", nodeId: null, ancestors: [] });
-    const useAsset = (reference: string, page: PageInventory, location: LocatedValue) => {
-      const resolved = resolveRevisionReference(file.path, reference);
-      if (resolved === null) return;
+    const useAsset = (reference: string, page: PageInventory, location: LocatedValue, owner = file.path): string | null => {
+      const resolved = resolveRevisionReference(owner, reference);
+      if (resolved === null) return null;
       const uses = assetUses.get(resolved) ?? [];
       uses.push({ page, location }); assetUses.set(resolved, uses);
+      return resolved;
+    };
+    const useCssReferences = (references: readonly string[], owner: string, page: PageInventory, location: LocatedValue, visited = new Set<string>()) => {
+      for (const reference of references) {
+        const resolved = useAsset(reference, page, location, owner);
+        if (resolved !== null && cssFiles.has(resolved)) stylesheets.push({ relPath: resolved, page, location, visited });
+      }
     };
     const walk = (node: Node, locator: string, page: PageInventory, ancestors: readonly string[], hidden: boolean): void => {
       if (node.nodeType === NodeType.TEXT_NODE) {
@@ -143,14 +154,26 @@ async function inventory(root: string, strictEncoding: boolean): Promise<Invento
         page.text.set(`${locator}@${name}`, { ...location, value: normalizeText(attributes[name]) });
         delete attributes[name];
       }
-      if (attributes.style !== undefined) { page.styles.set(`${locator}@style`, { ...location, value: attributes.style }); delete attributes.style; }
-      if (tag === "STYLE") { page.styles.set(locator, { ...location, value: JSON.stringify([attributes, node.innerHTML]) }); return; }
+      if (attributes.style !== undefined) {
+        page.styles.set(`${locator}@style`, { ...location, value: attributes.style });
+        useCssReferences(scanCssUrls(attributes.style), file.path, page, location);
+        delete attributes.style;
+      }
+      if (tag === "STYLE") {
+        page.styles.set(locator, { ...location, value: JSON.stringify([attributes, node.innerHTML]) });
+        useCssReferences(scanCssUrls(node.innerHTML), file.path, page, location);
+        return;
+      }
       if (tag === "SCRIPT") { page.structure.set(locator, { ...location, value: digest(node.toString()) }); return; }
       // Every other attribute, tag, order and element identity is immutable in restricted edits.
       page.structure.set(locator, { ...location, value: JSON.stringify([tag, Object.keys(attributes).sort().map(key => [key, attributes[key]])]) });
       for (const attr of ["href", "src", "data", "poster"]) {
         const ref = node.getAttribute(attr);
         if (ref !== undefined && !imageAttrs.includes(attr)) useAsset(ref, page, location);
+      }
+      if (tag === "LINK" && (node.getAttribute("rel") ?? "").toLowerCase().split(/\s+/u).includes("stylesheet")) {
+        const relPath = resolveRevisionReference(file.path, node.getAttribute("href") ?? "");
+        if (relPath !== null && cssFiles.has(relPath)) stylesheets.push({ relPath, page, location, visited: new Set() });
       }
       let elementIndex = 0, textIndex = 0;
       for (const child of node.childNodes) {
@@ -159,8 +182,28 @@ async function inventory(root: string, strictEncoding: boolean): Promise<Invento
       }
     };
     walk(document, "root", pageFor(null), [], false);
+    for (const sheet of stylesheets) {
+      if (sheet.visited.has(sheet.relPath)) continue;
+      sheet.visited.add(sheet.relPath);
+      let references = cssReferencesByPath.get(sheet.relPath);
+      if (references === undefined) {
+        const entry = cssFiles.get(sheet.relPath)!;
+        const css = new TextDecoder("utf-8", { fatal: strictEncoding }).decode(await readManagedFile(root, entry, {}, tree.diskPaths));
+        references = scanCssUrls(css);
+        cssReferencesByPath.set(sheet.relPath, references);
+      }
+      // Cache parsing, not attribution: every loading link retains its own page/node scope.
+      useCssReferences(references, sheet.relPath, sheet.page, sheet.location, sheet.visited);
+    }
   }
   return { tree, pages, assetUses };
+}
+
+function scanCssUrls(source: string): readonly string[] {
+  const references: string[] = [];
+  // Canonical tree byte limits bound the source; the scanner emits fewer entries than characters.
+  cssUrlValues(source, references, source.length);
+  return references;
 }
 
 /** HTML references use URL slashes, independent of the host's filesystem separators. */
