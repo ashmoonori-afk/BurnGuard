@@ -51,7 +51,7 @@ import { ApiError } from "@/api/client";
 import { isStaleIdentityError, readFileIdentity } from "@/lib/artifact-identity";
 import { getProjectDesignAudit, retryProjectDesignAudit } from "@/api/design-audit";
 import { restoreCheckpoint } from "@/api/checkpoints";
-import { getArtifactHistory, reapplyExternalCapture, restoreArtifactHistory, patchProjectFile } from "@/api/files";
+import { getArtifactHistory, getUnverifiedDraft, reapplyExternalCapture, recoverReviewFailedDraft, restoreArtifactHistory, patchProjectFile } from "@/api/files";
 import {
   createProjectComment,
   listProjectComments,
@@ -82,7 +82,7 @@ import { apiErrorCopy } from "@/lib/error-copy";
 import { sendFailureTitleKey } from "@/lib/composer-send";
 import Canvas from "@/components/canvas/Canvas";
 import ColorPalette from "@/components/canvas/ColorPalette";
-import ArtifactHistory from "@/components/canvas/ArtifactHistory";
+import ArtifactHistory, { UnverifiedDraftBadge } from "@/components/canvas/ArtifactHistory";
 import { qualityFixRequest } from "@/lib/quality-fix-request";
 import { installLeaveGuard } from "@/lib/leave-guard";
 import { createPagePrompt } from "@/lib/create-page-prompt";
@@ -272,7 +272,7 @@ export default function ProjectView() {
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
-  const invalidateDesignAudit = useCallback(() => queryClient.invalidateQueries({ queryKey: designAuditQueryKey }), [designAuditQueryKey, queryClient]);
+  const invalidateDesignAudit = useCallback(() => Promise.all([queryClient.invalidateQueries({ queryKey: designAuditQueryKey }), queryClient.invalidateQueries({ queryKey: ["project", id, "unverified-draft"] })]), [designAuditQueryKey, id, queryClient]);
   // Every artifact write carries the revision/digest the user was looking at.
   // A stale rejection means someone else moved the canvas: refetch identity
   // and ask for one retry instead of showing the raw backend message.
@@ -1055,6 +1055,19 @@ export default function ProjectView() {
     },
     enabled: Boolean(id && undoActiveRelPath),
   });
+  const unverifiedDraftQuery = useQuery({
+    queryKey: ["project", id, "unverified-draft"] as const,
+    queryFn: () => (id ? getUnverifiedDraft(id) : null),
+    enabled: Boolean(id),
+  });
+  const recoverDraftMutation = useMutation({
+    mutationFn: (operationId: string) => {
+      if (!id) throw new Error("no_project");
+      return recoverReviewFailedDraft(id, operationId);
+    },
+    onSuccess: (result) => navigate(`/projects/${encodeURIComponent(result.project_id)}`),
+    onError: (err) => pushToast({ title: t("workspace.project.undoFailed"), body: apiErrorCopy(err), tone: "error" }),
+  });
   const artifactRedo = useRef<{ revision: number; operations: string[] }>({ revision: -1, operations: [] });
   const undoMutation = useMutation({
     mutationFn: (input: { operationId?: string; redo?: boolean; fromHistory?: boolean; reapplyExternal?: boolean }) => {
@@ -1523,7 +1536,8 @@ export default function ProjectView() {
                   onDelete={async alternativeId => { await deleteAlternativeMutation.mutateAsync(alternativeId); }}
                   onCancel={async () => { await cancelAlternativesMutation.mutateAsync(); }}
                 />
-                <ArtifactHistory history={undoInfoQuery.data} disabled={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} onReapply={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true, reapplyExternal: true }); }} />
+                <UnverifiedDraftBadge state={unverifiedDraftQuery.data} />
+                <ArtifactHistory history={undoInfoQuery.data} onRecoverDraft={async operationId => { await recoverDraftMutation.mutateAsync(operationId); }} disabled={composerDisabled || recoverDraftMutation.isPending || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} onReapply={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true, reapplyExternal: true }); }} />
               </div>}
               canUndo={Boolean(undoInfoQuery.data?.undo_operation_id)}
               undoPending={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending}

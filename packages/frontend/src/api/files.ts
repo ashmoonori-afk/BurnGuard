@@ -1,4 +1,4 @@
-import type { ArtifactHistoryV1, PatchFileRequest, PatchFileResponse } from "@bg/shared";
+import type { ArtifactHistoryV1, PatchFileRequest, PatchFileResponse, RecoverReviewFailedDraftResponse, UnverifiedDraftStateV1 } from "@bg/shared";
 import { ApiError, apiFetch, authorizedFetch } from "./client";
 
 export function getArtifactHistory(projectId: string): Promise<ArtifactHistoryV1> {
@@ -9,6 +9,12 @@ export function restoreArtifactHistory(projectId: string, operationId: string, h
 }
 export function reapplyExternalCapture(projectId: string, operationId: string, history: ArtifactHistoryV1): Promise<{ operation_id: string; result_revision: number }> {
   return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/operations/${encodeURIComponent(operationId)}/reapply`, { method: "POST", body: JSON.stringify({ expected_revision: history.current_revision, expected_artifact_digest: history.current_digest }) });
+}
+export function recoverReviewFailedDraft(projectId: string, operationId: string): Promise<RecoverReviewFailedDraftResponse> {
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/operations/${encodeURIComponent(operationId)}/recover-draft`, { method: "POST" });
+}
+export function getUnverifiedDraft(projectId: string): Promise<UnverifiedDraftStateV1 | null> {
+  return apiFetch(`/api/projects/${encodeURIComponent(projectId)}/unverified-draft`);
 }
 
 export interface FileUndoInfo {
