@@ -4,6 +4,7 @@ import type { PdfPaper } from "@bg/shared";
 import { PDF_PRINT_CSS, pdfDimensionsForPaper, pdfPointsForPaper, pdfRasterBudgetFitsPages, revealExportPages } from "./export-pdf-contract";
 import { capturePageFromSession } from "./export-frame-capture";
 import { openRenderSession, RenderSessionError, type RenderPhase, type RenderSession } from "./export-render-session";
+import { RenderPhaseError, runRenderPhase } from "./export-render-phase";
 import { validatePdf, type PdfValidation } from "./export-pdf-validation";
 
 /** Stacked artboards carry layout spacing and page minimums that would print as blank pages. */
@@ -55,15 +56,15 @@ export async function renderDeckToPdf(input: {
     await session.page.evaluate(revealExportPages);
     const selector = input.selector ?? "[data-slide]";
     if (selector === "[data-graphic-artboard]") await session.page.addStyleTag({ content: ARTBOARD_PRINT_CSS });
-    await capturePageFromSession(session.page).awaitRenderReady();
-    const preflight = await session.page.evaluate((elementSelector) => [...document.querySelectorAll<HTMLElement>(elementSelector)].map((slide) => {
+    await runRenderPhase("layout", () => capturePageFromSession(session.page).awaitRenderReady(), { signal });
+    const preflight = await runRenderPhase("layout", () => session.page.evaluate((elementSelector) => [...document.querySelectorAll<HTMLElement>(elementSelector)].map((slide) => {
       const bounds = slide.getBoundingClientRect();
       const clipped = [...slide.querySelectorAll<HTMLElement>("*")].some((element) => {
         const style = getComputedStyle(element); if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
         const rect = element.getBoundingClientRect(); return rect.right > bounds.right + 1 || rect.bottom > bounds.bottom + 1 || rect.left < bounds.left - 1 || rect.top < bounds.top - 1;
       });
       return { width: bounds.width, height: bounds.height, clipped };
-    }), selector);
+    }), selector), { signal });
     if (preflight.length === 0 || preflight.some((slide) => slide.clipped || slide.width <= 0 || slide.height <= 0)) throw new PdfExportError("render_failed", "Export pages are missing or clipped");
     const paper = input.paper ?? "a4";
     if (paper === "artboard") assertUniformArtboardPages(preflight);
@@ -102,15 +103,15 @@ export async function renderDeckToPdf(input: {
         }
       }
       const dimensions = pdfDimensionsForPaper(paper, preflight[index]);
-      const pageBytes = await session.page.pdf({ format: dimensions.format, width: dimensions.width, height: dimensions.height, landscape: dimensions.format !== undefined, printBackground: true, preferCSSPageSize: false, displayHeaderFooter: false });
+      const pageBytes = await runRenderPhase("raster", () => session.page.pdf({ format: dimensions.format, width: dimensions.width, height: dimensions.height, landscape: dimensions.format !== undefined, printBackground: true, preferCSSPageSize: false, displayHeaderFooter: false }), { signal });
       const part = await PDFDocument.load(pageBytes); const copied = await combined.copyPages(part, part.getPageIndices()); for (const page of copied) combined.addPage(page);
     }
-    combined.setTitle(title); combined.setProducer("BurnGuard"); await writeFile(input.outputPath, await combined.save({ useObjectStreams: false }));
+    combined.setTitle(title); combined.setProducer("BurnGuard"); await runRenderPhase("write", async () => writeFile(input.outputPath, await combined.save({ useObjectStreams: false })), { signal });
     const firstPoints = pagePoints[0];
     if (firstPoints === undefined) throw new PdfExportError("render_failed", "PDF page geometry unavailable");
     return await validatePdf({ bytes: new Uint8Array(await readFile(input.outputPath)), context: session.context, expectedPages: preflight.length, expectedWidthPoints: firstPoints.width, expectedHeightPoints: firstPoints.height, expectedPagePoints: pagePoints, expectedTitle: title, signal });
   } catch (error) {
-    if (error instanceof PdfExportError) throw error;
+    if (error instanceof PdfExportError || error instanceof RenderPhaseError) throw error;
     throw new PdfExportError("render_failed", error instanceof Error ? error.message : String(error));
   } finally { await session.close(); }
 }

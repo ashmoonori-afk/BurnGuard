@@ -152,6 +152,9 @@ jobs:
           packages/backend/tests/chromium-bridge-probe.test.ts
           packages/backend/tests/chromium-browser-paths.test.ts
           packages/backend/tests/export-render-launch.test.ts
+          packages/backend/tests/export-render-phase.test.ts
+          packages/backend/tests/print-preflight.test.ts
+          packages/frontend/tests/print-preflight-view.test.ts
           packages/backend/tests/chromium-process-tree.test.ts
           packages/backend/tests/chromium-launch-hardening.test.ts
           packages/backend/tests/design-audit-skip-link.test.ts

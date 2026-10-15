@@ -23,6 +23,7 @@ import { platformGuideView } from "./platform-guide";
 import HandoffCommands from "./HandoffCommands";
 import { handoffCommands } from "./handoff-command-state";
 import ExportParitySummary from "./ExportParitySummary";
+import { classifyRenderPhaseFailure, renderPhaseFailureMessage } from "./export-options";
 
 export type ExportRowActions = {
   readonly onRetry?: (job: ExportJob) => void;
@@ -86,6 +87,7 @@ export default function ExportStatusRow({
   const iconClass = `h-3.5 w-3.5 ${state.cancelled ? "text-muted-foreground" : STAGE_ICON_CLASS[stage]}`;
   const canFix = offersFixRequest(job) && actions.onRequestFix !== undefined;
   const continuation = handoffCommands(job);
+  const phaseFailure = job.status === "failed" ? classifyRenderPhaseFailure(job.error_message) : null;
   return (
     <li className="space-y-1 rounded-md px-1 py-1 text-xs">
       <div className="flex items-center gap-2">
@@ -145,6 +147,9 @@ export default function ExportStatusRow({
       </div>
       {isPackage && stage === "ready" && job.status === "succeeded" && (
         <p className="text-pretty break-keep pl-6 text-[10px] text-muted-foreground">{t("export.packageNote")}</p>
+      )}
+      {phaseFailure !== null && (
+        <p role="alert" className="text-pretty break-keep pl-6 text-[10px] text-destructive">{renderPhaseFailureMessage(phaseFailure)}</p>
       )}
       {continuation !== null && (
         <HandoffCommands continuation={continuation} />

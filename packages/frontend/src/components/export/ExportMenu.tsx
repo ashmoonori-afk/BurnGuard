@@ -39,10 +39,13 @@ import { apiErrorCopy } from "@/lib/error-copy";
 import {
   buildExportMenuModel,
   classifyChromiumFailure,
+  classifyRenderPhaseFailure,
+  renderPhaseFailureMessage,
   CHROMIUM_FAILURE_MESSAGE,
   EXPORT_DISABLED_LABEL,
 } from "./export-options";
 import ExportOptionFields from "./ExportOptionFields";
+import PrintPreflightSection from "./PrintPreflightSection";
 import { platformCheckFailureCopy, platformFindings } from "./export-delivery";
 import { platformFixRequest } from "@/lib/platform-fix-request";
 import { useExportOptionValues } from "./useExportOptionValues";
@@ -158,14 +161,17 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
         continue;
       }
       const chromiumFailure = classifyChromiumFailure(job.error_message);
+      const phaseFailure = classifyRenderPhaseFailure(job.error_message);
       const platformCopy = platformCheckFailureCopy(job);
       pushToast({
         title: t("export.failedFormat", { name: formatLabel(job.format) }),
         body: platformCopy !== null
           ? t(platformCopy)
-          : chromiumFailure !== null
-            ? CHROMIUM_FAILURE_MESSAGE[chromiumFailure]
-            : apiErrorCopy({ code: job.latest_attempt?.stop_reason }),
+          : phaseFailure !== null
+            ? renderPhaseFailureMessage(phaseFailure)
+            : chromiumFailure !== null
+              ? CHROMIUM_FAILURE_MESSAGE[chromiumFailure]
+              : apiErrorCopy({ code: job.latest_attempt?.stop_reason }),
         tone: "error",
       });
     }
@@ -191,6 +197,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
           <p className="text-pretty break-keep text-xs text-foreground">{t(qualityGate.copyKey, { count: qualityGate.mustFixCount })}</p>
           <Button type="button" variant="outline" size="sm" className="mt-2 h-8 w-full max-[900px]:min-h-11" onClick={openQuality}>{t("export.openQuality")}</Button>
         </div>}
+        <PrintPreflightSection projectId={projectId} enabled={open} />
         {!menuModel.ok && (
           <p className="mx-2 rounded-md border border-warning/30 bg-warning/15 p-2 text-pretty break-keep text-xs">
             {menuModel.message}

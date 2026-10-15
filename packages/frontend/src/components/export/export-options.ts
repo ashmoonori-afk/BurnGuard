@@ -88,6 +88,31 @@ export function classifyChromiumFailure(errorMessage: string | null): ChromiumFa
   return errorMessage.toLowerCase().includes("chromium") ? "not_installed" : null;
 }
 
+export type RenderPhase = "load" | "fonts" | "layout" | "raster" | "write";
+export type RenderPhaseFailure = { readonly kind: "timeout" | "failed"; readonly phase: RenderPhase };
+const RENDER_PHASES: readonly RenderPhase[] = ["load", "fonts", "layout", "raster", "write"];
+
+/** The backend reports the failed render phase as a typed code inside the failure message (`render_timeout_fonts`). */
+export function classifyRenderPhaseFailure(errorMessage: string | null): RenderPhaseFailure | null {
+  if (errorMessage === null) return null;
+  for (const phase of RENDER_PHASES) {
+    if (errorMessage.includes(`render_timeout_${phase}`)) return { kind: "timeout", phase };
+    if (errorMessage.includes(`render_failed_${phase}`)) return { kind: "failed", phase };
+  }
+  return null;
+}
+
+export function renderPhaseFailureMessage(failure: RenderPhaseFailure): string {
+  const phaseName = {
+    get load() { return t("export.phase.name.load"); },
+    get fonts() { return t("export.phase.name.fonts"); },
+    get layout() { return t("export.phase.name.layout"); },
+    get raster() { return t("export.phase.name.raster"); },
+    get write() { return t("export.phase.name.write"); },
+  }[failure.phase];
+  return t(failure.kind === "timeout" ? "export.phase.timeout" : "export.phase.failed", { phase: phaseName });
+}
+
 export const CHROMIUM_FAILURE_MESSAGE: Record<ChromiumFailure, string> = {
   get launch_timeout() { return t("export.chromium.launch_timeout"); },
   get not_installed() { return t("export.chromium.not_installed"); },
