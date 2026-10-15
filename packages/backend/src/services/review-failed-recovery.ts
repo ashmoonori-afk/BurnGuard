@@ -12,6 +12,7 @@ import { parsePersistedArtifactOperation, type PersistedArtifactOperationRow } f
 import { materializeManagedTree } from "./artifact-tree-storage";
 import { inspectCanonicalTree, isCanonicalTreeRootMissing } from "./canonical-tree-manifest";
 import { readCachedProjectAudit } from "./design-audit";
+import { prepareStagedPhotoRecord, writePreparedPhotoRecord } from "./photo-placement-publication";
 
 const RECEIPT_FILE = "review-failure.json";
 const DRAFT_FILE = "unverified-draft.json";
@@ -128,6 +129,9 @@ export async function recoverReviewFailedDraft(db: Database, input: { readonly p
     beforeInsert: async (dirPath) => {
       await mkdir(path.join(dirPath, ".meta"), { recursive: true });
       await writeFile(path.join(dirPath, ".meta", DRAFT_FILE), JSON.stringify(state), { flag: "wx", mode: 0o600 });
+      // The draft carries the validated photo placement record of the retained stage; nothing else under .meta is copied.
+      const photoRecord = await prepareStagedPhotoRecord(located.stagePath);
+      if (photoRecord.kind === "ready") await writePreparedPhotoRecord(photoRecord, dirPath);
     },
     initializeArtifact: async (stage) => { await materializeManagedTree(located.stagePath, stage); },
   });
