@@ -25,8 +25,31 @@ interface Inventory {
   readonly assetUses: Map<string, { page: PageInventory; location: LocatedValue }[]>;
 }
 const WHITESPACE_PRESERVING_TAGS = new Set(["PRE", "TEXTAREA", "LISTING", "PLAINTEXT"]);
-const WHITESPACE_PRESERVING_STYLE = /(?:^|;)\s*white-space\s*:\s*(?:pre|pre-wrap|pre-line|break-spaces)\b/iu;
-const WHITESPACE_PRESERVING_DECLARATION = /white-space\s*:\s*(?:pre|pre-wrap|pre-line|break-spaces)\b/iu;
+const WHITESPACE_DECLARATION = /white-space(?:-collapse)?\s*:([^;}]*)/giu;
+const COLLAPSING_WHITESPACE_VALUES = new Set(["normal", "nowrap", "collapse"]);
+
+/** Comments are removed in one forward pass: an unclosed comment ends the scan instead of restarting it. */
+function stripCssComments(css: string): string {
+  let out = "";
+  for (let index = 0; index < css.length;) {
+    const start = css.indexOf("/*", index);
+    if (start < 0) { out += css.slice(index); break; }
+    out += `${css.slice(index, start)} `;
+    const end = css.indexOf("*/", start + 2);
+    if (end < 0) break;
+    index = end + 2;
+  }
+  return out;
+}
+
+/** Conservative: any white-space value other than a plain collapsing keyword (a pre value, var(), inherit...) may preserve whitespace. */
+function mayPreserveWhitespace(css: string): boolean {
+  for (const match of stripCssComments(css).matchAll(WHITESPACE_DECLARATION)) {
+    const value = (match[1] ?? "").replace(/!\s*important/iu, "").trim().toLowerCase();
+    if (!COLLAPSING_WHITESPACE_VALUES.has(value)) return true;
+  }
+  return false;
+}
 const IMAGE_FILE = /\.(?:png|jpe?g|webp|gif|avif|svg|ico|bmp)$/iu;
 const IMAGE_ATTRIBUTES: Readonly<Record<string, readonly string[]>> = { IMG: ["src", "srcset"], SOURCE: ["src", "srcset"], VIDEO: ["poster"], IMAGE: ["href", "xlink:href"], INPUT: ["src"] };
 
@@ -102,12 +125,12 @@ async function inventory(root: string, strictEncoding: boolean): Promise<Invento
   // Selector matching is not modelled: when any stylesheet can make whitespace significant, every page's text is compared exactly.
   let sheetsPreserveWhitespace = false;
   for (const file of cssFiles.values()) {
-    if (WHITESPACE_PRESERVING_DECLARATION.test(new TextDecoder("utf-8").decode(await readManagedFile(root, file, {}, tree.diskPaths)))) { sheetsPreserveWhitespace = true; break; }
+    if (mayPreserveWhitespace(new TextDecoder("utf-8").decode(await readManagedFile(root, file, {}, tree.diskPaths)))) { sheetsPreserveWhitespace = true; break; }
   }
   for (const file of tree.manifest.files.filter(file => /\.html?$/iu.test(file.path))) {
     const source = new TextDecoder("utf-8", { fatal: strictEncoding }).decode(await readManagedFile(root, file, {}, tree.diskPaths));
-    const pagePreservesWhitespace = sheetsPreserveWhitespace || [...source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/giu)].some(match => WHITESPACE_PRESERVING_DECLARATION.test(match[1] ?? ""));
     const document = parse(source, { comment: false });
+    const pagePreservesWhitespace = sheetsPreserveWhitespace || document.querySelectorAll("style").some(style => mayPreserveWhitespace(style.textContent));
     const stylesheets: { relPath: string; page: PageInventory; location: LocatedValue; visited: Set<string> }[] = [];
     let artboardIndex = 0;
     const pageFor = (artboardId: string | null): PageInventory => {
@@ -141,7 +164,7 @@ async function inventory(root: string, strictEncoding: boolean): Promise<Invento
       const id = node.getAttribute("data-bg-node-id");
       const ids = id ? [...ancestors, id] : ancestors;
       const invisible = hidden || ["HEAD", "TEMPLATE", "NOSCRIPT"].includes(tag) || node.hasAttribute("hidden") || node.getAttribute("aria-hidden") === "true" || /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:;|$)/iu.test(node.getAttribute("style") ?? "");
-      const keepWhitespace = preserve || WHITESPACE_PRESERVING_TAGS.has(tag) || WHITESPACE_PRESERVING_STYLE.test(node.getAttribute("style") ?? "");
+      const keepWhitespace = preserve || WHITESPACE_PRESERVING_TAGS.has(tag) || mayPreserveWhitespace(node.getAttribute("style") ?? "");
       const isBoard = node.hasAttribute("data-slide") || node.hasAttribute("data-graphic-artboard") || node.hasAttribute("data-bg-artboard");
       if (isBoard) {
         artboardIndex++;

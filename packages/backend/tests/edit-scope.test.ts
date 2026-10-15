@@ -151,6 +151,22 @@ describe("edit scope publication contract", () => {
     });
   }
 
+  for (const [label, stylesheet] of [
+    ["a commented white-space value", ".note{white-space:/**/pre-wrap}"],
+    ["a white-space value from a custom property", ":root{--ws:pre-wrap}.note{white-space:var(--ws)}"],
+  ] as const) {
+    test(`Given image_only When text under ${label} changes Then the comparison reports a text finding`, async () => {
+      const page = (text: string) => `<html><head><link rel="stylesheet" href="site.css"></head><body><p class="note">${text}</p></body></html>`;
+      expect((await compareSources(page("A\n\nB"), page("A B"), "image_only", stylesheet)).findings.map(finding => finding.kind)).toEqual(["text"]);
+    });
+  }
+
+  test("Given a page repeating an unclosed <style> tag When compared Then the style scan stays linear and the change is still found", async () => {
+    const filler = "<style>".repeat(40_000);
+    const comparison = await compareSources(`<html><body><p>A</p>${filler}</body></html>`, `<html><body><p>B</p>${filler}</body></html>`, "image_only");
+    expect(comparison.findings.length).toBeGreaterThan(0);
+  });
+
   test("Given image_only When text under a linked stylesheet's pre-wrap rule changes Then the comparison reports a text finding", async () => {
     const page = (text: string) => `<html><head><link rel="stylesheet" href="site.css"></head><body><p class="note">${text}</p></body></html>`;
     const comparison = await compareSources(page("A\n\nB"), page("A B"), "image_only", ".note{white-space:pre-wrap}");
