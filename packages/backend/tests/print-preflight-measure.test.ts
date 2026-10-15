@@ -5,7 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { createCanvas } from "@napi-rs/canvas";
 import type { Browser } from "playwright-core";
-import { launchChromium } from "../src/services/export-render-session";
+import { launchTestChromium } from "./helpers/chromium";
 import { assemblePrintPreflight, measurePrintPage } from "../src/services/print-preflight-service";
 
 // A4 at 96 dpi is 793.7 x 1122.5 CSS px; two artboards, one holding a 600px-wide image and one a 3000px-wide image.
@@ -29,7 +29,7 @@ beforeAll(async () => {
     await writeFile(path.join(root, "img", `${name}.png`), canvas.toBuffer("image/png"));
   }
   await writeFile(path.join(root, ENTRYPOINT), HTML);
-  browser = await launchChromium(AbortSignal.timeout(45_000));
+  browser = await launchTestChromium(45_000);
 }, 60_000);
 afterAll(async () => { await browser.close(); await rm(root, { recursive: true, force: true }); });
 
