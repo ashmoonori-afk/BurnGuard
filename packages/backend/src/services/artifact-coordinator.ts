@@ -10,6 +10,7 @@ import { applyHtmlNodePatch, fingerprintHtmlNode, type PatchHtmlNodeInput } from
 import { inspectCanonicalTree, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { ArtifactPublicationPolicyError, diffManagedTrees, manifestEntry, materializeManagedTree, publishManagedTree, syncManagedTree, defaultManagedTreeIo, type ManagedTreeIo, type ArtifactFileDiff, type PublicationPolicy } from "./artifact-tree-storage";
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
+import { PhotoRecordPublication, prepareStagedPhotoRecord, seedStagedPhotoRecord } from "./photo-placement-publication";
 import { beginArtifactPublication, endArtifactPublication } from "./artifact-publication-registry";
 import { replaceArtifactFileIndex, replaceArtifactFileIndexInTransaction } from "../db/artifact-file-index";
 import { adoptExistingArtifact, establishEmptyArtifactAuthority } from "./artifact-initialization";
@@ -191,6 +192,8 @@ export class ArtifactCoordinator {
         await validateCanonicalTree(snapshotPath, base);
         await materializeManagedTree(input.projectDir, stagePath);
         await validateCanonicalTree(stagePath, base);
+        // The stage starts from the live photo placement record so a later generation can read and amend it.
+        await seedStagedPhotoRecord(input.projectDir, stagePath);
         await writeOperationScope(ownedRoot, scope);
         this.insertWorking(id, input, base, snapshotPath, stagePath);
       } catch (error) {
@@ -200,6 +203,7 @@ export class ArtifactCoordinator {
     } finally { releaseAdmission(); }
     input.onPrepared?.(stagePath);
     let publicationStarted = false;
+    let photoPublication: PhotoRecordPublication | null = null;
     let releasePublication: (() => void) | null = null;
     let result: CanonicalTreeManifest;
     let diff: readonly ArtifactFileDiff[];
@@ -234,6 +238,9 @@ export class ArtifactCoordinator {
         publishArtifactOperationEvent(this.db, { projectId: input.projectId, operationId: id, revision: input.expectedRevision, digest: base.tree_digest, outcome: "cancelled", diff });
         return { id, kind: input.kind, status: "cancelled", baseRevision: input.expectedRevision, baseDigest: base.tree_digest, resultRevision: input.expectedRevision, resultDigest: base.tree_digest, diff, comparison };
       }
+      // A record the shared parser or file checks reject is not published and the previous one stays: the artifact is
+      // still the turn's result, and without a valid record the Quality panel can only report the placement unverified.
+      const stagedPhotoRecord = await prepareStagedPhotoRecord(stagePath);
       releasePublication = await acquireArtifactProjectLock(this.db, input.projectId);
       this.prepareResult(id, resultRevision, result, diff);
       beginArtifactPublication(input.projectId);
@@ -262,6 +269,10 @@ export class ArtifactCoordinator {
         },
       }, this.treeIo);
       await validateCanonicalTree(input.projectDir, result);
+      if (stagedPhotoRecord.kind === "ready") {
+        photoPublication = new PhotoRecordPublication(stagedPhotoRecord, input.projectDir, path.join(ownedRoot, "photo-backup"));
+        await photoPublication.install();
+      }
       // The agent wrote the stage; recovery adopts it as the baseline after a crash, so flush it before the commit.
       await syncManagedTree(stagePath, this.treeIo);
       this.faults.beforeDatabaseCommit?.();
@@ -273,6 +284,7 @@ export class ArtifactCoordinator {
       try {
         this.faults.beforeRollback?.();
         if (!securityFailure) await publishManagedTree(snapshotPath, input.projectDir);
+        await photoPublication?.rollback();
         await validateCanonicalTree(input.projectDir, base);
       } finally {
         if (publicationStarted) endArtifactPublication(input.projectId);

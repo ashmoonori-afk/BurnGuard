@@ -21,7 +21,7 @@ export type PhotoPlacementsRead =
 
 export type ReferenceLeak = { readonly placement_id: string; readonly reference_file: string; readonly deliverable_path: string };
 
-async function readContained(projectDir: string, relative: string, maxBytes: number): Promise<Buffer | null> {
+export async function readContainedFile(projectDir: string, relative: string, maxBytes: number): Promise<Buffer | null> {
   try {
     const target = resolveWithin(projectDir, ...relative.split("/"));
     const info = await lstat(target);
@@ -35,7 +35,7 @@ async function readContained(projectDir: string, relative: string, maxBytes: num
 }
 
 export async function readPhotoPlacements(projectDir: string): Promise<PhotoPlacementsRead> {
-  const bytes = await readContained(projectDir, PHOTO_PLACEMENTS_FILE, MAX_RECORD_BYTES);
+  const bytes = await readContainedFile(projectDir, PHOTO_PLACEMENTS_FILE, MAX_RECORD_BYTES);
   if (bytes === null) return { kind: "absent" };
   try {
     return { kind: "present", record: parsePhotoPlacementsV1(bytes.toString("utf8")) };
@@ -55,7 +55,7 @@ export async function findReferencePhotoLeaks(projectDir: string, files: readonl
   const leaks: ReferenceLeak[] = [];
   for (const placement of read.record.placements) {
     for (const reference of placement.references) {
-      const stored = await readContained(projectDir, reference.local_file, MAX_REFERENCE_BYTES);
+      const stored = await readContainedFile(projectDir, reference.local_file, MAX_REFERENCE_BYTES);
       const hashes = new Set([reference.sha256]);
       if (stored !== null) hashes.add(createHash("sha256").update(stored).digest("hex"));
       for (const file of files) if (hashes.has(file.sha256)) leaks.push({ placement_id: placement.id, reference_file: reference.local_file, deliverable_path: file.path });
