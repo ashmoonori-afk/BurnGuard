@@ -24,6 +24,8 @@ interface Inventory {
   readonly pages: Map<string, PageInventory>;
   readonly assetUses: Map<string, { page: PageInventory; location: LocatedValue }[]>;
 }
+const WHITESPACE_PRESERVING_TAGS = new Set(["PRE", "TEXTAREA", "LISTING", "PLAINTEXT"]);
+const WHITESPACE_PRESERVING_STYLE = /(?:^|;)\s*white-space\s*:\s*(?:pre|pre-wrap|pre-line|break-spaces)\b/iu;
 const IMAGE_FILE = /\.(?:png|jpe?g|webp|gif|avif|svg|ico|bmp)$/iu;
 const IMAGE_ATTRIBUTES: Readonly<Record<string, readonly string[]>> = { IMG: ["src", "srcset"], SOURCE: ["src", "srcset"], VIDEO: ["poster"], IMAGE: ["href", "xlink:href"], INPUT: ["src"] };
 
@@ -121,9 +123,9 @@ async function inventory(root: string, strictEncoding: boolean): Promise<Invento
         if (resolved !== null && cssFiles.has(resolved)) stylesheets.push({ relPath: resolved, page, location, visited });
       }
     };
-    const walk = (node: Node, locator: string, page: PageInventory, ancestors: readonly string[], hidden: boolean): void => {
+    const walk = (node: Node, locator: string, page: PageInventory, ancestors: readonly string[], hidden: boolean, preserve = false): void => {
       if (node.nodeType === NodeType.TEXT_NODE) {
-        const value = normalizeText(node.textContent);
+        const value = preserve ? node.textContent.normalize("NFC") : normalizeText(node.textContent);
         if (value !== "") (hidden ? page.structure : page.text).set(locator, { value, nodeId: ancestors.at(-1) ?? null, ancestors });
         return;
       }
@@ -132,6 +134,7 @@ async function inventory(root: string, strictEncoding: boolean): Promise<Invento
       const id = node.getAttribute("data-bg-node-id");
       const ids = id ? [...ancestors, id] : ancestors;
       const invisible = hidden || ["HEAD", "TEMPLATE", "NOSCRIPT"].includes(tag) || node.hasAttribute("hidden") || node.getAttribute("aria-hidden") === "true" || /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:;|$)/iu.test(node.getAttribute("style") ?? "");
+      const keepWhitespace = preserve || WHITESPACE_PRESERVING_TAGS.has(tag) || WHITESPACE_PRESERVING_STYLE.test(node.getAttribute("style") ?? "");
       const isBoard = node.hasAttribute("data-slide") || node.hasAttribute("data-graphic-artboard") || node.hasAttribute("data-bg-artboard");
       if (isBoard) {
         artboardIndex++;
@@ -178,7 +181,7 @@ async function inventory(root: string, strictEncoding: boolean): Promise<Invento
       let elementIndex = 0, textIndex = 0;
       for (const child of node.childNodes) {
         const suffix = child.nodeType === NodeType.TEXT_NODE ? `text-${textIndex++}` : `element-${elementIndex++}`;
-        walk(child, `${locator}/${suffix}`, page, ids, invisible);
+        walk(child, `${locator}/${suffix}`, page, ids, invisible, keepWhitespace);
       }
     };
     walk(document, "root", pageFor(null), [], false);
@@ -215,6 +218,7 @@ export function resolveRevisionReference(relativePage: string, reference: string
   return resolved === ".." || resolved.startsWith("../") ? null : resolved.normalize("NFC");
 }
 
-function normalizeText(text: string): string { return text.normalize("NFC").replace(/\s+/gu, " ").trim(); }
+/** Rendered whitespace: runs collapse to one space but are not trimmed, so adding or removing a separating space ("A <b>" vs "A<b>") is a change while reindentation is not. */
+function normalizeText(text: string): string { return text.normalize("NFC").replace(/\s+/gu, " "); }
 function digest(value: string): string { return createHash("sha256").update(value).digest("hex"); }
 function order(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
