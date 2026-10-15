@@ -127,11 +127,12 @@ describe("edit scope publication contract", () => {
     expect(await compareRevisionTrees(root, root, { mode: "image_only" })).toEqual(first);
   });
 
-  async function compareSources(before: string, after: string, mode: "image_only" | "text_only") {
+  async function compareSources(before: string, after: string, mode: "image_only" | "text_only", stylesheet?: string) {
     const roots = [await mkdtemp(path.join(tmpdir(), "bg-edit-ws-a-")), await mkdtemp(path.join(tmpdir(), "bg-edit-ws-b-"))];
     try {
       await writeFile(path.join(roots[0], "index.html"), before);
       await writeFile(path.join(roots[1], "index.html"), after);
+      if (stylesheet !== undefined) await Promise.all(roots.map(root => writeFile(path.join(root, "site.css"), stylesheet)));
       return await compareRevisionTrees(roots[0], roots[1], { mode });
     } finally { await Promise.all(roots.map(dir => rm(dir, { recursive: true, force: true }))); }
   }
@@ -140,6 +141,8 @@ describe("edit scope publication contract", () => {
     ["preformatted text", "<html><body><pre>A B</pre></body></html>", "<html><body><pre>A\n\nB</pre></body></html>"],
     ["pre-wrap inline style", '<html><body><p style="white-space:pre-wrap">A  B</p></body></html>', '<html><body><p style="white-space:pre-wrap">A B</p></body></html>'],
     ["separating space between inline elements", "<html><body><p><span>A</span> <span>B</span></p></body></html>", "<html><body><p><span>A</span><span>B</span></p></body></html>"],
+    ["text under a pre-wrap <style> rule", "<html><head><style>.note{white-space:pre-wrap}</style></head><body><p class=\"note\">A\n\nB</p></body></html>", "<html><head><style>.note{white-space:pre-wrap}</style></head><body><p class=\"note\">A B</p></body></html>"],
+    ["a nonbreaking space", "<html><body><p>A\u00a0B</p></body></html>", "<html><body><p>A B</p></body></html>"],
   ] as const) {
     test(`Given image_only When ${label} changes Then the comparison reports a text finding`, async () => {
       const comparison = await compareSources(before, after, "image_only");
@@ -147,6 +150,12 @@ describe("edit scope publication contract", () => {
       expect((await compareSources(before, after, "text_only")).findings).toEqual([]);
     });
   }
+
+  test("Given image_only When text under a linked stylesheet's pre-wrap rule changes Then the comparison reports a text finding", async () => {
+    const page = (text: string) => `<html><head><link rel="stylesheet" href="site.css"></head><body><p class="note">${text}</p></body></html>`;
+    const comparison = await compareSources(page("A\n\nB"), page("A B"), "image_only", ".note{white-space:pre-wrap}");
+    expect(comparison.findings.map(finding => finding.kind)).toEqual(["text"]);
+  });
 
   test("Given reindented HTML source When rendered text is unchanged Then image_only reports no finding", async () => {
     const before = "<html><body>\n<div>\n  <span>A</span>\n  <span>B   C</span>\n</div>\n</body></html>";
