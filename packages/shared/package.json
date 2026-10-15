@@ -29,6 +29,7 @@
     "./figma-import": "./src/figma-import.ts",
     "./logo": "./src/logo.ts",
     "./logo-moodboard": "./src/logo-moodboard.ts",
+    "./photo-placement": "./src/photo-placement.ts",
     "./extraction-domain": "./src/extraction-domain.ts",
     "./events": "./src/events.ts",
     "./learning-contract": "./src/learning-contract.ts",

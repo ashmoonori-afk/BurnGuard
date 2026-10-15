@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useT, t, type MessageKey } from "@/i18n/t";
 import type { DesignAuditFinding } from "@bg/shared";
 import { AlertCircle, CircleHelp, Loader2, RefreshCw, WandSparkles } from "lucide-react";
@@ -21,7 +22,7 @@ export type QualityPanelBinding = {
   readonly autoFixDisabled: boolean;
 };
 
-export default function QualityPanel({ quality }: { readonly quality: QualityPanelBinding }) {
+export default function QualityPanel({ quality, extra }: { readonly quality: QualityPanelBinding; readonly extra?: ReactNode }) {
   const t = useT();
   const running = quality.autoFixPending || ("running" in quality.state && quality.state.running);
   const report = reportFromState(quality.state);
@@ -63,6 +64,7 @@ export default function QualityPanel({ quality }: { readonly quality: QualityPan
             <p className="mt-2 break-keep text-xs text-muted-foreground">{t("modes.quality.passedHint")}</p>
           </details>
         </>}
+        {extra}
       </div>
     </div>
   );

@@ -112,6 +112,8 @@ jobs:
           packages/backend/tests/image-fingerprint.test.ts
           packages/backend/tests/logo-moodboard.test.ts
           packages/backend/tests/logo-moodboard-routes.test.ts
+          packages/backend/tests/photo-placements.test.ts
+          packages/backend/tests/photo-stretch.browser.test.ts
           packages/backend/tests/logo-originality.test.ts
           packages/backend/tests/logo-pipeline-state.test.ts
           packages/backend/tests/logo-completion-gate.test.ts

@@ -58,6 +58,12 @@ Example briefs, written for imaginary projects:
 - New imagery must be distinct across content placements. Renaming, recoloring or cropping a repeated image is not a new composition. Identity marks and functional icons follow the existing exceptions.
 - Inspect actual output at its intended size: crop, perspective, anatomy, materials, exact lettering, repeated assets, loading and artboard dimensions. Report unavailable checks honestly. Quality advice does not prevent user-directed export.
 
+## Photographic placement record
+
+For a photograph of a real-world object, person scale or place the agent keeps a per-placement record in `.meta/photo-placements.json` (contract: `packages/shared/src/photo-placement.ts`). It lists the placement box and crop, text-safe region, source references (HTTPS URL, licence, local file under `.meta/references/`, content hash), scale facts marked verified (with a source) or estimated, whether the provider actually received the reference files (`yes`, `no`, `unsupported`), at least two candidates with rejection reasons, and the placement mode (`cover` or `crop`; the parser rejects anything else, so a stretch placement cannot be recorded).
+
+The status is derived, never written: `reference_verified` needs one or more sources, a `yes` receipt and two or more candidates; otherwise the placement is `unverified` with the missing steps listed, or `unsupported` when the provider cannot take references. `.meta/` is outside the canonical artifact tree. The design audit adds two must-fix checks: `reference_photo_leak` (a deliverable file whose content hash equals a reference photo) and `stretched_image` (a raster image rendered more than 5% away from its pixel aspect ratio with the default `object-fit: fill`). The Quality panel lists each placement with its references, candidates and derived status; it shows source text, not thumbnails, because `.meta/` files are not served to the browser.
+
 ## Implementation and checks
 
 The shared `image-prompt-recipes.ts` catalog supplies the UI labels and prompt recipes. `generation-style.ts` preserves the existing version-1 contract and accepts an optional validated `image_recipe`; older saved preferences remain valid. `prompt-image-production.ts` injects the common rules once in both compact and full generation modes.
