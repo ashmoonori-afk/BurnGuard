@@ -9,7 +9,9 @@ import type {
   UpsertDesignSystemColorRequest,
   DesignSystemPreview,
 } from "@bg/shared";
-import { apiFetch } from "./client";
+import { ApiError, apiFetch, authorizedFetch } from "./client";
+import { t } from "@/i18n/t";
+import type { ImportDesignMdRequest } from "@bg/shared";
 import { parseDesignSystemAssetGuide, parseDesignSystemLayout, parseDesignSystemPageCoverage, parseDesignSystemRules, type AddDesignSystemRuleRequest, type DesignSystemRules } from "@bg/shared";
 
 export function extractPinterestMood(body: import("@bg/shared").CreatePinterestMoodRequest): Promise<import("@bg/shared").CreatePinterestMoodResponse> {
@@ -65,6 +67,22 @@ export async function getDesignSystemTokens(
     ...(response.pages === undefined ? {} : { pages: parseDesignSystemPageCoverage(response.pages) }),
     ...(response.rules === undefined ? {} : { rules: parseDesignSystemRules(response.rules) }),
   };
+}
+
+export async function importDesignMd(body: ImportDesignMdRequest): Promise<CreateDesignSystemExtractionResponse> {
+  return apiFetch<CreateDesignSystemExtractionResponse>("/api/design-systems/import-md", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function downloadDesignMd(id: string): Promise<{ readonly blob: Blob; readonly filename: string }> {
+  const response = await authorizedFetch(`/api/design-systems/${encodeURIComponent(id)}/design-md`);
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    const code = body && typeof body === "object" && "error" in body && body.error && typeof body.error === "object" && "code" in body.error && typeof body.error.code === "string" ? body.error.code : "design_md_export_failed";
+    throw new ApiError(code, t("errors.fallback"), response.status);
+  }
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const encoded = /filename\*=UTF-8''([^;]+)/iu.exec(disposition)?.[1];
+  return { blob: await response.blob(), filename: encoded ? decodeURIComponent(encoded) : "DESIGN.md" };
 }
 
 export async function addDesignSystemRule(id: string, body: AddDesignSystemRuleRequest): Promise<DesignSystemRules> {

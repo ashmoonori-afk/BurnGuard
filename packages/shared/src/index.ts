@@ -12,6 +12,7 @@ export * from "./design-system-layout";
 export * from "./design-system-assets";
 export * from "./design-system-pages";
 export * from "./design-system-rules";
+export * from "./design-md";
 export * from "./design-system-measured-layout";
 export * from "./design-system-layout-preview";
 export * from "./design-surface";

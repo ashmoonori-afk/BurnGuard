@@ -8,6 +8,7 @@ import {
   deleteDesignSystem,
   extractDesignSystem,
   uploadDesignSystem,
+  importDesignMd,
 } from "@/api/design-system";
 import { ApiError } from "@/api/client";
 import {
@@ -226,6 +227,10 @@ export default function HomeView() {
           throw Object.assign(new Error("Upload file is required"), {
             code: "upload_file_required",
           });
+        }
+        if (systemUploadFile.name.toLowerCase().endsWith(".md")) {
+          const name = systemDraftName.trim();
+          return await importDesignMd({ markdown: await systemUploadFile.text(), ...(name ? { name } : {}) });
         }
         return await uploadDesignSystem(systemUploadFile, {
           name: systemDraftName.trim() || undefined,
@@ -808,7 +813,7 @@ function SystemsSection({
                   <input
                     id="system-upload-file"
                     type="file"
-                    accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                    accept=".pptx,.pdf,.md,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown"
                     disabled={isPending}
                     onChange={(e) =>
                       onUploadFileChange(e.currentTarget.files?.[0] ?? null)

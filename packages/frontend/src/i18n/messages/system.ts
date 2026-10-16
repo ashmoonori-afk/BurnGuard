@@ -202,6 +202,8 @@ export const systemMessages = defineMessages({
   "system.rules.origin.manual": { ko: "직접 추가함", en: "Added by you", "zh-CN": "手动添加" },
   "system.rules.origin.imported": { ko: "디자인 파일에서 가져옴", en: "Imported from a design file", "zh-CN": "从设计文件导入" },
   "system.rules.origin.correction": { ko: "대화 중 수정 요청에서 만듦", en: "Saved from a chat correction", "zh-CN": "来自对话中的修改请求" },
+  "system.designMd.download": { ko: "DESIGN.md 내려받기", en: "Download DESIGN.md", "zh-CN": "下载 DESIGN.md" },
+  "system.designMd.failed": { ko: "디자인 파일을 만들지 못했어요", en: "Could not create the design file", "zh-CN": "无法生成设计文件" },
   "system.preview.failed": { ko: "미리보기를 불러오지 못했어요.", en: "Could not load the preview.", "zh-CN": "无法加载预览。" },
   "system.preview.loading": { ko: "미리보기를 불러오는 중이에요.", en: "Loading preview.", "zh-CN": "正在加载预览。" },
   "system.preview.title": { ko: "디자인 시스템 미리보기", en: "Design system preview", "zh-CN": "设计系统预览" },

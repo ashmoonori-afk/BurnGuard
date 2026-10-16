@@ -13,6 +13,7 @@
     "./harness": "./src/harness.ts",
     "./design-system": "./src/design-system.ts",
     "./design-system-rules": "./src/design-system-rules.ts",
+    "./design-md": "./src/design-md.ts",
     "./design-surface": "./src/design-surface.ts",
     "./design-brief": "./src/design-brief.ts",
     "./design-direction": "./src/design-direction.ts",
