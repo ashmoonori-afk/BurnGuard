@@ -11,7 +11,7 @@ import {
 import { getDesignSystemDetail } from "../db/seed";
 import { extractCssCustomProperties } from "./extraction-css";
 import { readDesignSystemLayout, readDesignSystemSourceFile } from "./design-system-layout";
-import { addDesignSystemRule, readDesignSystemRules } from "./design-system-rules";
+import { addDesignSystemRules, readDesignSystemRules } from "./design-system-rules";
 import { persistCanonicalExtraction } from "./design-system-extract";
 import { DesignSystemAssetEditError } from "./extraction-asset-errors";
 import type { ExtractionDiscovery } from "./extraction-provenance";
@@ -93,12 +93,7 @@ export async function importDesignMd(input: ImportDesignMdInput, signal: AbortSi
   const parsed = parseDesignMd(input.markdown);
   const doc = typeof input.name === "string" ? { ...parsed, name: input.name.trim() } : parsed;
   const result = await persistCanonicalExtraction({ requestedId: doc.name, brandName: doc.name, sourceType: "upload", sourceReference: "DESIGN.md", lineage: null, analysis: analysisFromDesignMd(doc), signal });
-  let imported = 0;
-  for (const [kind, texts] of [["do", doc.dos], ["dont", doc.donts]] as const) {
-    for (const text of texts) {
-      await addDesignSystemRule(result.system.id, { kind, text, origin: { type: "imported" } });
-      imported += 1;
-    }
-  }
+  const rules = await addDesignSystemRules(result.system.id, [...doc.dos.map((text) => ({ kind: "do" as const, text })), ...doc.donts.map((text) => ({ kind: "dont" as const, text }))], { type: "imported" });
+  const imported = rules.rules.length;
   return { ...result, rules_imported: imported };
 }

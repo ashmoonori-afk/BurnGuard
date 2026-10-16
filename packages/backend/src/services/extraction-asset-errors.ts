@@ -14,7 +14,8 @@ export class DesignSystemAssetEditError extends Error {
       | "invalid_rule_text"
       | "invalid_rule_origin"
       | "rule_limit_reached"
-      | "rule_not_found",
+      | "rule_not_found"
+      | "rules_file_invalid",
     message: string,
   ) {
     super(message);

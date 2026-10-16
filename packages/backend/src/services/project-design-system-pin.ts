@@ -47,13 +47,19 @@ export async function ensureProjectDesignSystemPin(projectId: string): Promise<D
   return readProjectDesignSystemPin(projectId);
 }
 
+/** The context without the Do / Don't rule block and its REQUIRED line, to tell a rule-only change apart. */
+function withoutRuleBlock(context: string): string {
+  return context.replace(/<selected_design_system_rules>\n[^\n]*\n<\/selected_design_system_rules>\n[^\n]*\n\n?/gu, "");
+}
+
 export async function inspectProjectDesignSystemPin(projectId: string): Promise<ProjectDesignSystemPin | null> {
   const current = await ensureProjectDesignSystemPin(projectId);
   if (!current) return null;
   const next = await candidate(projectId);
   if (!next || next.system_id !== current.system_id) throw new DesignSystemPinError("pin_conflict");
   return { revision: current.revision, digest: current.digest, candidate_digest: next.digest,
-    rules_changed: current.context !== next.context, tokens_changed: current.tokens !== next.tokens };
+    rules_changed: current.context !== next.context, tokens_changed: current.tokens !== next.tokens,
+    rules_only_changed: current.context !== next.context && current.tokens === next.tokens && withoutRuleBlock(current.context) === withoutRuleBlock(next.context) };
 }
 
 export async function refreshProjectDesignSystemPin(projectId: string, expected: string, candidateDigest: string): Promise<void> {

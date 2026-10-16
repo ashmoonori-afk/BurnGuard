@@ -35,7 +35,12 @@ const SAFE_VALUE = /^[^;{}<>\\]{1,200}$/u;
 
 function unquote(raw: string): string {
   const value = raw.trim();
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) return value.slice(1, -1).trim();
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    // Double-quoted YAML scalars use JSON-compatible escapes; renderDesignMd writes them with JSON.stringify.
+    try { const decoded: unknown = JSON.parse(value); if (typeof decoded === "string") return decoded.trim(); } catch { /* fall through to the raw text */ }
+    return value.slice(1, -1).trim();
+  }
+  if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1).replace(/''/gu, "'").trim();
   return value.replace(/\s+#.*$/u, "").trim();
 }
 

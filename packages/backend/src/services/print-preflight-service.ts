@@ -87,17 +87,36 @@ export function measurePrintPage(page: Page, signal: AbortSignal): Promise<PageM
             if (decoded === undefined) {
               const image = new Image();
               image.src = source;
-              decoded = image.decode().then(() => image, () => null);
+              // A background URL that never settles must not stall the whole check.
+              decoded = Promise.race([image.decode().then(() => image, () => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000))]);
               backgrounds.set(source, decoded);
             }
             const image = await decoded;
             layer += 1;
             if (image === null || image.naturalWidth === 0) continue;
+            // The drawn tile follows background-size, not the element box: "auto" draws one image pixel per CSS pixel
+            // (a tiled texture is never upscaled), cover/contain scale to the box, and lengths or percentages are explicit.
+            const sizes = style.backgroundSize.split(",").map((part) => part.trim());
+            const size = sizes[(layer - 1) % sizes.length] ?? "auto";
+            const nw = image.naturalWidth; const nh = image.naturalHeight;
+            let drawW = nw; let drawH = nh; let visibleW = 1; let visibleH = 1;
+            if (size === "cover" || size === "contain") {
+              const scale = size === "cover" ? Math.max(box.width / nw, box.height / nh) : Math.min(box.width / nw, box.height / nh);
+              drawW = nw * scale; drawH = nh * scale;
+              if (size === "cover") { visibleW = Math.min(1, box.width / drawW); visibleH = Math.min(1, box.height / drawH); }
+            } else {
+              const [rawW = "auto", rawH = "auto"] = size.split(/\s+/u);
+              const length = (raw: string, basis: number): number | null => raw.endsWith("%") ? basis * Number.parseFloat(raw) / 100 : raw.endsWith("px") ? Number.parseFloat(raw) : null;
+              const w = length(rawW, box.width); const h = length(rawH, box.height);
+              if (w !== null && h !== null) { drawW = w; drawH = h; }
+              else if (w !== null) { drawW = w; drawH = w * nh / nw; }
+              else if (h !== null) { drawH = h; drawW = h * nw / nh; }
+            }
             images.push({
               pageIndex, locator: `${target.tagName.toLowerCase()}${target.id ? `#${target.id}` : `[${elementIndex + 1}]`} background[${layer}]`,
-              naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight,
-              displayWidth: box.width, displayHeight: box.height,
-              visibleWidthFraction: 1, visibleHeightFraction: 1,
+              naturalWidth: nw, naturalHeight: nh,
+              displayWidth: drawW, displayHeight: drawH,
+              visibleWidthFraction: visibleW, visibleHeightFraction: visibleH,
             });
           }
         }
