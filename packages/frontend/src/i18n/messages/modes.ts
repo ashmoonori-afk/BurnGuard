@@ -190,6 +190,7 @@ export const modesMessages = defineMessages({
   "modes.audit.action.imageCrop": {"ko":"사진을 늘리지 말고 object-fit: cover로 잘라서 맞추세요","en":"Crop the photograph with object-fit: cover instead of stretching it","zh-CN":"用 object-fit: cover 裁剪照片，不要拉伸"},
   "modes.audit.action.removeReference": {"ko":"참고 사진을 결과물에서 빼세요","en":"Remove the reference photograph from the deliverable","zh-CN":"从交付物中移除参考照片"},
   "modes.photo.title": {"ko":"사진 배치와 참고 사진","en":"Photo placements and references","zh-CN":"照片位置与参考照片"},
+  "modes.photo.selfReported": {"ko":"참고 사진이 이미지 생성에 전달됐는지는 AI 도구가 스스로 보고한 기록이에요. 앱이 따로 확인한 것은 아니에요.","en":"Whether reference photos reached image generation is reported by the AI tool itself; the app does not check it independently.","zh-CN":"参考照片是否已送入图像生成，由 AI 工具自行报告；应用不会单独核实。"},
   "modes.photo.verified": {"ko":"참고 사진 확인됨","en":"Reference verified","zh-CN":"参考已验证"},
   "modes.photo.unverified": {"ko":"확인되지 않음","en":"Unverified","zh-CN":"未验证"},
   "modes.photo.unsupported": {"ko":"이 생성 방식은 참고 사진을 받을 수 없음","en":"This provider cannot take reference photos","zh-CN":"此生成方式无法接收参考照片"},

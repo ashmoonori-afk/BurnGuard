@@ -20,6 +20,7 @@ export default function PhotoPlacementsSection({ projectId }: { readonly project
   return (
     <section className="mt-4" aria-labelledby="photo-placements-title">
       <h3 id="photo-placements-title" className="mb-2 text-xs font-semibold">{t("modes.photo.title")}</h3>
+      <p data-qa="photo-self-reported" className="mb-2 text-[11px] text-muted-foreground">{t("modes.photo.selfReported")}</p>
       <div className="space-y-2">{view.record.placements.map((placement) => {
         const derived = derivePhotoPlacementStatus(placement);
         return (
