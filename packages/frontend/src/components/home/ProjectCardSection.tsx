@@ -4,6 +4,7 @@ import { FolderOpen, Search } from "lucide-react";
 import CardGrid from "./CardGrid";
 import type { CardViewModel } from "./mappers";
 import ProjectCard from "./ProjectCard";
+import type { ExampleBrief } from "@/lib/example-briefs";
 
 interface ProjectCardSectionProps {
   readonly cards: readonly CardViewModel[];
@@ -19,6 +20,8 @@ interface ProjectCardSectionProps {
   /** The empty state's button; defaults to creating a project, so a tab whose hint names another action passes its own. */
   readonly emptyAction?: { readonly label: string; readonly onSelect: () => void; readonly pending?: boolean };
   readonly onDelete?: (card: CardViewModel) => void;
+  readonly briefFor?: (card: CardViewModel) => ExampleBrief | null;
+  readonly onStartFrom?: (brief: ExampleBrief) => void;
 }
 
 export default function ProjectCardSection({
@@ -34,6 +37,8 @@ export default function ProjectCardSection({
   onStartProject,
   emptyAction,
   onDelete,
+  briefFor,
+  onStartFrom,
 }: ProjectCardSectionProps) {
   const t = useT();
   const action = emptyAction ?? { label: t("home.createTitle"), onSelect: onStartProject };
@@ -119,6 +124,7 @@ export default function ProjectCardSection({
             key={card.id}
             {...card}
             onDelete={onDelete ? () => onDelete(card) : undefined}
+            {...(briefFor && onStartFrom ? { brief: briefFor(card), onStartFrom } : {})}
           />
         ))}
       </CardGrid>

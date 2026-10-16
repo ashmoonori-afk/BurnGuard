@@ -12,9 +12,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { CardViewModel } from "./mappers";
+import type { ExampleBrief } from "@/lib/example-briefs";
 
 export default function ProjectCard(
-  props: CardViewModel & { onDelete?: () => void },
+  props: CardViewModel & { onDelete?: () => void; brief?: ExampleBrief | null; onStartFrom?: (brief: ExampleBrief) => void },
 ) {
   const t = useT();
   const [failedSource, setFailedSource] = useState<string | null>(null);
@@ -114,6 +115,16 @@ export default function ProjectCard(
           </DropdownMenu>
         </div>
       )}
+      {props.brief && props.onStartFrom ? <div className="mt-2 rounded-xl border border-border bg-card p-3 text-xs" data-qa="example-brief">
+        <details>
+          <summary className="cursor-pointer font-medium">{t("home.example.seeBrief")}</summary>
+          <dl className="mt-2 space-y-1 text-muted-foreground">
+            <div><dt className="inline font-medium text-foreground">{t("home.example.audience")}: </dt><dd className="inline">{props.brief.audience}</dd></div>
+            <div><dt className="inline font-medium text-foreground">{t("home.example.objective")}: </dt><dd className="inline">{props.brief.objective}</dd></div>
+          </dl>
+        </details>
+        <button type="button" data-qa="example-start-from" onClick={() => props.brief && props.onStartFrom?.(props.brief)} className="mt-2 min-h-10 w-full rounded-lg border border-border px-3 font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("home.example.startFrom")}</button>
+      </div> : null}
     </div>
   );
 }

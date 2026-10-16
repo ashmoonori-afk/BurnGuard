@@ -152,6 +152,7 @@ jobs:
           packages/backend/tests/project-instructions.test.ts
           packages/backend/tests/project-reader.test.ts
           packages/frontend/tests/correction-rule.test.ts
+          packages/frontend/tests/example-briefs.test.ts
           packages/backend/tests/extraction-source-publication.test.ts
           packages/frontend/tests/error-copy.test.ts
           packages/backend/tests/project-import.test.ts
