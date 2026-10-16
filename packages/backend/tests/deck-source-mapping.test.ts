@@ -49,7 +49,7 @@ test("Given a stored source-mapping contract When it is malformed Then loading c
     design_brief: { ...brief, source_page_mapping: "unknown" },
   }))).toThrow();
   expect(() => parseStoredProjectOptions(JSON.stringify({
-    design_brief: { ...brief, source_page_mapping: "one_to_one", audience: "" },
+    design_brief: { ...brief, source_page_mapping: "one_to_one", audience: "", objective: "" },
   }))).toThrow();
 });
 
