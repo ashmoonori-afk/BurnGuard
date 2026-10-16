@@ -50,12 +50,16 @@ export async function fontFaceRefs(projectRoot: string, entrypoint: string): Pro
 
 /** Lays the page out in the browser and reads every artboard and its raster placements. */
 export function measurePrintPage(page: Page, signal: AbortSignal): Promise<PageMeasurements> {
-  return runRenderPhase("layout", () => page.evaluate(() => {
+  return runRenderPhase("layout", async () => {
+    await page.emulateMedia({ media: "print" });
+    return page.evaluate(async () => {
+      await document.fonts.ready;
       const artboards = [...document.querySelectorAll<HTMLElement>("[data-graphic-artboard]")];
       const pageElements = artboards.length > 0 ? artboards : [...document.querySelectorAll<HTMLElement>("[data-slide]")];
       const pages: { name: string; width: number; height: number }[] = [];
       const images: { pageIndex: number; locator: string; naturalWidth: number; naturalHeight: number; displayWidth: number; displayHeight: number; visibleWidthFraction: number; visibleHeightFraction: number }[] = [];
-      pageElements.forEach((element, pageIndex) => {
+      const backgrounds = new Map<string, Promise<HTMLImageElement | null>>();
+      for (const [pageIndex, element] of pageElements.entries()) {
         const bounds = element.getBoundingClientRect();
         pages.push({ name: element.getAttribute("data-name") ?? element.getAttribute("aria-label") ?? `Page ${pageIndex + 1}`, width: bounds.width, height: bounds.height });
         [...element.querySelectorAll<HTMLImageElement>("img")].forEach((image, imageIndex) => {
@@ -70,7 +74,34 @@ export function measurePrintPage(page: Page, signal: AbortSignal): Promise<PageM
           const source = (image.getAttribute("src") ?? "").split(/[?#]/u)[0]?.split(/[\\/]/u).pop() ?? "";
           images.push({ pageIndex, locator: image.id !== "" ? `img#${image.id}` : `img[${imageIndex + 1}] ${source}`.trim(), naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight, displayWidth: box.width, displayHeight: box.height, visibleWidthFraction: visibleWidth, visibleHeightFraction: visibleHeight });
         });
-      });
+        // Computed styles resolve stylesheet-relative URLs and shorthand declarations.
+        for (const [elementIndex, target] of [element, ...element.querySelectorAll<HTMLElement>("*")].entries()) {
+          const box = target.getBoundingClientRect();
+          const style = getComputedStyle(target);
+          if (box.width <= 0 || box.height <= 0 || style.visibility === "hidden" || style.visibility === "collapse" || target.getClientRects().length === 0) continue;
+          let layer = 0;
+          for (const match of style.backgroundImage.matchAll(/url\("((?:\\.|[^"\\])*)"\)/gu)) {
+            const source = match[1]?.replace(/\\(["\\])/gu, "$1");
+            if (!source) continue;
+            let decoded = backgrounds.get(source);
+            if (decoded === undefined) {
+              const image = new Image();
+              image.src = source;
+              decoded = image.decode().then(() => image, () => null);
+              backgrounds.set(source, decoded);
+            }
+            const image = await decoded;
+            layer += 1;
+            if (image === null || image.naturalWidth === 0) continue;
+            images.push({
+              pageIndex, locator: `${target.tagName.toLowerCase()}${target.id ? `#${target.id}` : `[${elementIndex + 1}]`} background[${layer}]`,
+              naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight,
+              displayWidth: box.width, displayHeight: box.height,
+              visibleWidthFraction: 1, visibleHeightFraction: 1,
+            });
+          }
+        }
+      }
       const used = new Set<string>();
       for (const element of [document.body, ...document.body.querySelectorAll<HTMLElement>("*")]) {
         if (["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE"].includes(element.tagName)) continue;
@@ -80,7 +111,8 @@ export function measurePrintPage(page: Page, signal: AbortSignal): Promise<PageM
         for (const part of style.fontFamily.split(",")) { const name = part.trim().replace(/^["']|["']$/gu, "").toLowerCase(); if (name !== "") used.add(name); }
       }
       return { pages, images, usedFamilies: [...used] };
-    }), { signal });
+    });
+  }, { signal });
 }
 
 async function measureInBrowser(stagedDir: string, entrypoint: string, signal: AbortSignal): Promise<PageMeasurements> {
@@ -91,7 +123,7 @@ async function measureInBrowser(stagedDir: string, entrypoint: string, signal: A
 /** Joins a browser measurement with the fonts the project references on disk. */
 export async function assemblePrintPreflight(projectRoot: string, entrypoint: string, measured: PageMeasurements, browser: PrintBrowserReadiness): Promise<PrintPreflightV1> {
   const fonts = await resolveFonts({ projectRoot, refs: usedFontFaceRefs(await fontFaceRefs(projectRoot, entrypoint), measured.usedFamilies), flavor: path, exists: isFile, listDir, bundled: async (urlPath) => (await readBundledFontUrl(urlPath)) !== null });
-  return { schema_version: 1, pages: summarizePages(measured.pages), fonts, images: summarizeImages(measured.pages, measured.images), browser };
+  return { schema_version: 1, pages: summarizePages(measured.pages), fonts, images: summarizeImages(measured.pages, measured.images), browser, source_upscaling_detection: "unsupported" };
 }
 
 /** Print readiness of a live project: page geometry, referenced fonts, effective image resolution and browser readiness. */

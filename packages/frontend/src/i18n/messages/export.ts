@@ -69,6 +69,7 @@ export const exportMessages = defineMessages({
   "export.phase.name.write": { ko: "파일 저장", en: "file saving", "zh-CN": "文件保存" },
   "export.preflight.title": { ko: "인쇄 점검", en: "Print check", "zh-CN": "印刷检查" },
   "export.preflight.loading": { ko: "점검 중이에요…", en: "Checking…", "zh-CN": "检查中…" },
+  "export.preflight.sourceUpscaling": { ko: "CSS 배경은 표시되는 요소 크기를 기준으로 점검해요. 파일 자체를 미리 확대했는지는 감지하지 못해요.", en: "CSS backgrounds are checked against the rendered element box. Prior upscaling of source files is not detected.", "zh-CN": "CSS \u80cc\u666f\u6309\u5143\u7d20\u7684\u6e32\u67d3\u5c3a\u5bf8\u68c0\u67e5\u3002\u65e0\u6cd5\u68c0\u6d4b\u6e90\u6587\u4ef6\u662f\u5426\u5df2\u88ab\u653e\u5927\u3002" },
   "export.preflight.failed": { ko: "인쇄 점검을 불러오지 못했어요.", en: "Could not load the print check.", "zh-CN": "无法加载印刷检查。" },
   "export.preflight.pages": { ko: "{count}페이지 · {size}", en: "{count} pages · {size}", "zh-CN": "{count} 页 · {size}" },
   "export.preflight.fontsMissing": { ko: "찾을 수 없는 글꼴 파일: {list}", en: "Missing font files: {list}", "zh-CN": "缺少字体文件：{list}" },

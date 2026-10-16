@@ -39,6 +39,7 @@ function PreflightBody({ data }: { readonly data: PrintPreflightV1 }) {
       ))}
       {data.browser === "unusable" && <li>{t("export.preflight.browserUnusable")}</li>}
       {data.browser === "inconclusive" && <li>{t("export.preflight.browserInconclusive")}</li>}
+      <li className="text-muted-foreground">{t("export.preflight.sourceUpscaling")}</li>
     </ul>
   );
 }

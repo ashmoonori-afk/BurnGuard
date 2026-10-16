@@ -88,6 +88,8 @@ PPTX exports contain a high-resolution image of each slide and its text in speak
 - **Add source material.** Attach supported PDFs, slide decks, documents, images or text, or import an exported HTML project ZIP. Original attachments are retained separately from published website assets.
 - **Review before sharing.** Quality and UX panels identify issues and offer repair actions. Their findings are advisory; review the rendered result before exporting or publishing.
 
+The export menu's print check measures image resolution at print size: warnings below 300 ppi and strong warnings below 150 ppi. It checks intrinsic pixels of `<img>` elements after cropping and CSS background URLs from inline styles and stylesheets against each rendered element's box, including layered backgrounds. It cannot detect whether a source file was previously upscaled.
+
 ### Images, charts and 3D
 
 Give images a role in the design: a product hero, campaign scene, explanatory illustration or background. BurnGuard includes **21 image treatments** and **38 purpose recipes** across 13 domains. Generated images are **photorealistic by default**: abstract imagery is prohibited unless you ask for it, image prompts are written as a photographer's brief, and generated-art signatures such as plastic skin, glowing backdrops and garbled lettering are rejected at inspection. Non-photographic treatments apply only when you select or request them. Generation guidance calls for image production where the design needs it; the configured provider must support the requested generation. Graphic generation requires an authenticated Codex connection. [Image production guide](doc/image-production.md)
