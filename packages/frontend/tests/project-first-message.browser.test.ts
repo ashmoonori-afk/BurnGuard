@@ -3,7 +3,7 @@ import type { SequencedEventEnvelope } from "@bg/shared";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 import type {} from "./fixtures/project-first-message-browser";
 
-async function fixture(options: { complete?: boolean; createFails?: boolean; sendFails?: boolean } = {}) {
+async function fixture(options: { complete?: boolean; createFails?: boolean; sendFails?: boolean; guide?: boolean } = {}) {
   const compiler = Bun.spawn([process.execPath, "build", `${import.meta.dir}/fixtures/project-first-message-browser.tsx`, "--target=browser", "--format=iife"], { stdout: "pipe", stderr: "pipe" });
   const [code, script, errors] = await Promise.all([compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text()]);
   if (code !== 0) throw new Error(`Creation fixture bundle failed (${code}): ${errors}`);
@@ -51,11 +51,42 @@ async function fixture(options: { complete?: boolean; createFails?: boolean; sen
   page.setDefaultTimeout(5000);
   await page.goto(server.url.origin);
   await page.addScriptTag({ content: script });
-  await page.evaluate((complete) => globalThis.creationTest.mount(complete), options.complete ?? false);
+  await page.evaluate(({ complete, guide }) => globalThis.creationTest.mount(complete, guide), { complete: options.complete ?? false, guide: options.guide ?? false });
   return { page, creates, sends, close: async () => { await browser.close(); await server.stop(true); } };
 }
 
 describe("create to first message", () => {
+  test("Given a first launch When the guide is dismissed Then dismissal survives remount without blocking ordinary creation", async () => {
+    const f = await fixture({ guide: true });
+    try {
+      await f.page.locator('[data-qa="first-run-guide"]').waitFor();
+      await f.page.locator('[data-qa="first-run-dismiss"]').click();
+      await f.page.locator('[data-qa="first-run-guide"]').waitFor({ state: "detached" });
+      expect(await f.page.evaluate(() => localStorage.getItem("burnguard.first-run-dismissed"))).toBe("1");
+      await f.page.evaluate(() => globalThis.creationTest.mount(false, true));
+      expect(await f.page.locator('[data-qa="first-run-guide"]').count()).toBe(0);
+      expect(await f.page.getByRole("button", { name: "New project", exact: true }).isVisible()).toBe(true);
+      expect(f.creates).toHaveLength(0);
+      expect(f.sends).toHaveLength(0);
+    } finally { await f.close(); }
+  }, 60_000);
+
+  test("Given a first launch When one idea is generated in the guide Then a first message appears and onboarding completes", async () => {
+    const f = await fixture({ guide: true });
+    try {
+      await f.page.locator('[data-qa="first-run-guide"]').waitFor();
+      await f.page.locator("#creation-backend").selectOption("claude-code");
+      await f.page.locator("#brief-objective").fill("A bakery website");
+      await f.page.locator('[data-qa="creation-submit"]').click();
+      await f.page.locator('[data-qa="created"]').waitFor();
+      expect(f.creates).toHaveLength(1);
+      expect(f.sends).toHaveLength(1);
+      expect(f.creates[0]).toMatchObject({ backend_id: "claude-code", design_system_id: null });
+      expect(await f.page.locator('[data-qa="created"]').textContent()).toContain("A bakery website");
+      expect(await f.page.evaluate(() => localStorage.getItem("burnguard.first-run-dismissed"))).toBe("1");
+    } finally { await f.close(); }
+  }, 60_000);
+
   test("Given only an idea When creating once Then the first message is sent and rendered without another action", async () => {
     const f = await fixture();
     try {

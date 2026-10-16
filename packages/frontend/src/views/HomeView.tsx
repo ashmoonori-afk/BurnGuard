@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useT, type MessageKey } from "@/i18n/t";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Blocks, Image, LayoutTemplate, PenTool, Plus, Presentation, Search } from "lucide-react";
-import type { ProjectType } from "@bg/shared";
+import type { CreateProjectResponse, ProjectType } from "@bg/shared";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   deleteDesignSystem,
@@ -32,6 +32,8 @@ import ProjectCard from "@/components/home/ProjectCard";
 import ProjectImportDialog from "@/components/home/ProjectImportDialog";
 import RecentlyDeletedSection from "@/components/home/RecentlyDeletedSection";
 import NewProjectPanel from "@/components/home/NewProjectPanel";
+import FirstRunGuide from "@/components/home/FirstRunGuide";
+import { dismissFirstRun, readFirstRunDismissed, shouldShowFirstRun } from "@/lib/first-run";
 import PinterestImportDialog from "@/components/home/PinterestImportDialog";
 import DeleteDesignSystemDialog from "@/components/home/DeleteDesignSystemDialog";
 import DeleteProjectDialog from "@/components/home/DeleteProjectDialog";
@@ -83,6 +85,7 @@ export default function HomeView() {
   // Whichever control opened the creation dialog gets focus back; the header button is only the fallback.
   const openerRef = useRef<HTMLElement | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [firstRunDismissed, setFirstRunDismissed] = useState(readFirstRunDismissed);
   const [pickingSystem, setPickingSystem] = useState(false);
   const pickerBackRef = useRef<(() => void) | null>(null);
   const [projectImportOpen, setProjectImportOpen] = useState(false);
@@ -131,12 +134,12 @@ export default function HomeView() {
   const mineQuery = useQuery({
     queryKey: ["projects", "mine"],
     queryFn: () => listProjects("mine"),
-    enabled: activeTab === "mine" || projectSearchTab(activeTab, projectQuery) === "mine",
+    enabled: (!firstRunDismissed && activeTab === "recent") || activeTab === "mine" || projectSearchTab(activeTab, projectQuery) === "mine",
   });
   const examplesQuery = useQuery({
     queryKey: ["projects", "examples"],
     queryFn: () => listProjects("examples"),
-    enabled: activeTab === "examples",
+    enabled: activeTab === "examples" || (!firstRunDismissed && (activeTab === "recent" || activeTab === "mine") && mineQuery.data?.every((project) => project.is_bundled === true)),
   });
   const systemsQuery = useQuery({
     queryKey: ["design-systems", "all"],
@@ -156,6 +159,16 @@ export default function HomeView() {
 
   const graphicReady = hasGraphicBackend(detectionQuery.data?.backends ?? []);
   const graphicGate = graphicGateCopy(detectionQuery.isError);
+  const showFirstRun = creationType === null && (activeTab === "recent" || activeTab === "mine")
+    && shouldShowFirstRun(firstRunDismissed, mineQuery.data, examplesQuery.data);
+  const finishFirstRun = () => {
+    setFirstRunDismissed(true);
+    dismissFirstRun();
+  };
+  const projectCreated = (created: CreateProjectResponse) => {
+    finishFirstRun();
+    navigate(`/projects/${created.id}`);
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteProject(id),
@@ -336,6 +349,7 @@ export default function HomeView() {
         </div>
         {detectionQuery.data !== undefined && needsCliGuidance(detectionQuery.data.backends) ? <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-sm text-muted-foreground">{t("home.aiNotice")}</p><Button variant="outline" size="sm" onClick={() => setCliMissingOpen(true)}>{t("home.aiGuide")}</Button></div> : null}
         {detectionQuery.isError ? <div role="alert" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3"><p className="text-sm text-foreground">{t("home.detectionFailed")}</p><Button variant="outline" size="sm" disabled={detectionQuery.isFetching} onClick={() => void detectionQuery.refetch()}>{t("home.retry")}</Button></div> : null}
+        {showFirstRun && <FirstRunGuide onDismiss={finishFirstRun} onCreated={projectCreated} />}
         {activeTab === "recent" || activeTab === "mine" ? <section aria-label={t("home.quickStart")} className="mb-10 grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 xl:grid-cols-4">
           {PROJECT_TYPES.map(({ id, label, description, icon: Icon, color }) => {
             // A gated tile stays in the tab order and names its reason instead of vanishing from assistive technology.
@@ -509,7 +523,7 @@ export default function HomeView() {
             </div>
             {!graphicReady && <p className="mt-2 text-xs text-muted-foreground">{t("home.graphicAvailability")}</p>}
           </div>
-          {settingsQuery.isPending ? <p role="status" className="p-6 text-sm text-muted-foreground">{t("home.settingsLoading")}</p> : settingsQuery.isError ? <div role="alert" className="space-y-3 p-6"><p className="text-sm text-destructive">{t("home.settingsError")}</p><Button variant="outline" onClick={() => void settingsQuery.refetch()}>{t("home.settingsRetry")}</Button></div> : creationType !== null ? <NewProjectPanel generationDefaults={settingsQuery.data.generation_defaults} graphicReady={graphicReady} type={creationType} designSystems={systemsQuery.data ?? []} defaultBackend={settingsQuery.data.default_backend} systemsLoading={systemsQuery.isFetching} systemsError={systemsQuery.error} onRetrySystems={() => void systemsQuery.refetch()} onPendingChange={setCreatingProject} onChoosingChange={setPickingSystem} backRef={pickerBackRef} onCreated={(project) => navigate(`/projects/${project.id}`)} /> : null}
+          {settingsQuery.isPending ? <p role="status" className="p-6 text-sm text-muted-foreground">{t("home.settingsLoading")}</p> : settingsQuery.isError ? <div role="alert" className="space-y-3 p-6"><p className="text-sm text-destructive">{t("home.settingsError")}</p><Button variant="outline" onClick={() => void settingsQuery.refetch()}>{t("home.settingsRetry")}</Button></div> : creationType !== null ? <NewProjectPanel generationDefaults={settingsQuery.data.generation_defaults} graphicReady={graphicReady} type={creationType} designSystems={systemsQuery.data ?? []} defaultBackend={settingsQuery.data.default_backend} systemsLoading={systemsQuery.isFetching} systemsError={systemsQuery.error} onRetrySystems={() => void systemsQuery.refetch()} onPendingChange={setCreatingProject} onChoosingChange={setPickingSystem} backRef={pickerBackRef} onCreated={projectCreated} /> : null}
         </DialogContent>
       </Dialog>
 

@@ -17,6 +17,8 @@ export interface ProjectSummary {
   thumbnail_path: string | null;
   updated_at: number;
   archived_at: number | null;
+  /** Bundled seed identity, independent of the tab where the project is listed. */
+  is_bundled?: boolean;
 }
 
 /** A deleted project still restorable from "Recently deleted"; never carries a filesystem path. */
