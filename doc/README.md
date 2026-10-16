@@ -2,6 +2,8 @@
 
 Start with the [product introduction and setup](../README.md), available in [Korean](../README.ko.md) and [Chinese](../README.zh-CN.md). Release changes are listed in the [changelog](../README.md#changelog).
 
+[User guide](user-guide.md): make a first website, fix an image, move a project to another computer and locate your files.
+
 ## Architecture and development
 
 - [Product overview](../README.md): current product scope, supported platforms and setup. The retired internal-alpha overview is available in Git history.
