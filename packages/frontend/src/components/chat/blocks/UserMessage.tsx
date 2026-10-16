@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Paperclip, RotateCcw } from "lucide-react";
+import { BookmarkPlus, Paperclip, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { commentEditDisplayText } from "@/components/modes/comment-edit-request";
 import { requestDisplayText } from "@/lib/request-display";
@@ -20,12 +20,14 @@ export default function UserMessage({
   turnId,
   onRevert,
   reverting,
+  onKeepAsRule,
 }: {
   text: string;
   attachmentCount?: number;
   turnId?: string;
   onRevert?: (turnId: string) => void;
   reverting?: boolean;
+  onKeepAsRule?: (turnId: string, text: string) => void;
 }) {
   const t = useT();
   const canRevert = Boolean(turnId && onRevert);
@@ -41,6 +43,18 @@ export default function UserMessage({
           </div>
         ) : null}
       </div>
+      {turnId && onKeepAsRule && (
+        <button
+          type="button"
+          data-qa="turn-keep-rule"
+          onClick={() => onKeepAsRule(turnId, requestDisplayText(commentEditDisplayText(text)))}
+          title={t("chat.keepRule.title")}
+          className="inline-flex min-h-7 items-center justify-center gap-1 rounded px-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11"
+        >
+          <BookmarkPlus className="h-3 w-3" aria-hidden="true" />
+          <span>{t("chat.keepRule.action")}</span>
+        </button>
+      )}
       {canRevert && (
         <button
           type="button"
