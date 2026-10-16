@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# A force-push makes the running pull_request job stale: the secret scan asks the API for the pull request's commits
+# at scan time and gets the new head, which the job's earlier checkout does not contain. Cancel the superseded run.
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   security:
     runs-on: ubuntu-latest
