@@ -38,7 +38,9 @@ Violations raise `edit_scope_violation` with typed page/artboard/node and change
 
 The operation writes and flushes `revision-comparison.json` outside the authored stage before committing. The existing operation retention policy owns this metadata. The history response includes the current committed comparison and the newest scope refusal, where retained receipts are available. The history dialog opens when a new comparison arrives and shows changed pages, change kinds and bounded before/after text excerpts.
 
-There is no revision-thumbnail endpoint to reuse cheaply, so this version shows a list only. It does not produce new thumbnails, rerender historical revisions, or claim rendered equality. The sampled export-parity score remains an export diagnostic and is never used as an edit-scope equality check.
+Each retained history entry shows small before/after previews of its entrypoint, alongside the existing source comparison. The current committed comparison shows the same pair. The existing project thumbnail handler accepts an operation identity and a `before` or `after` side: it validates the retained snapshot or committed stage and uses the existing thumbnail renderer and cache. Previews are overviews, not a separate image for every changed page or a rendered equality claim. A refused edit does not borrow a committed revision's previews.
+
+Expired, missing or damaged retained trees and failed renders show a preview fallback, never the current live artwork in place of history. Preview retries use the same bounded policy as project cards. The sampled export-parity score remains an export diagnostic and is never used as an edit-scope equality check.
 
 ## Decision
 

@@ -1537,7 +1537,7 @@ export default function ProjectView() {
                   onCancel={async () => { await cancelAlternativesMutation.mutateAsync(); }}
                 />
                 <UnverifiedDraftBadge state={unverifiedDraftQuery.data} />
-                <ArtifactHistory history={undoInfoQuery.data} onRecoverDraft={async operationId => { await recoverDraftMutation.mutateAsync(operationId); }} disabled={composerDisabled || recoverDraftMutation.isPending || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} onReapply={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true, reapplyExternal: true }); }} />
+                <ArtifactHistory projectId={project.id} history={undoInfoQuery.data} onRecoverDraft={async operationId => { await recoverDraftMutation.mutateAsync(operationId); }} disabled={composerDisabled || recoverDraftMutation.isPending || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} onReapply={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true, reapplyExternal: true }); }} />
               </div>}
               canUndo={Boolean(undoInfoQuery.data?.undo_operation_id)}
               undoPending={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending}

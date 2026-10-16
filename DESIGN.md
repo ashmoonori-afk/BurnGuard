@@ -78,6 +78,11 @@ for icons, borders, and large or bold labels.
   Escape closes and saves the draft. Refresh/file changes dismiss stale context
   while preserving edited text through the existing comment save path. Editable
   controls retain Alt/Option+C, including inside the opaque-origin sandbox.
+- **RevisionThumbnails**: two equal columns captioned before and after, using
+  the existing 640-by-360 preview with contain fitting, muted fallback text,
+  semantic borders and the 4px spacing scale. Each side keeps its own failed
+  source and bounded preview retry state. Expired or missing revisions never
+  substitute the live artifact. The history dialog owns scrolling.
 - **ChatPane**: intent entry and streaming state. Chat must not obscure the
   artifact or imply a completed update before the backend event arrives.
   Each queued PDF/PPTX owns a stable item identity and an explicit ordinary
