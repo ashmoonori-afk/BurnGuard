@@ -36,6 +36,7 @@ export default function MessageStream({
   onOpenFile,
   onRevertTurn,
   revertingTurnId,
+  onKeepAsRule,
 }: {
   events: NormalizedEvent[];
   session: SessionInfo;
@@ -43,6 +44,7 @@ export default function MessageStream({
   onOpenFile?: (relPath: string) => void;
   onRevertTurn?: (turnId: string) => void;
   revertingTurnId?: string | null;
+  onKeepAsRule?: (turnId: string, text: string) => void;
 }) {
   const t = useT();
   const groups = useMemo(() => buildGroups(events), [events]);
@@ -103,6 +105,8 @@ export default function MessageStream({
           </div>
         )}
         {groups.map((g, i) => {
+          // The first request is the brief; only later requests are corrections worth keeping as rules.
+          const correction = g.kind === "user" && groups.findIndex((group) => group.kind === "user") !== i;
           switch (g.kind) {
             case "user":
               return (
@@ -113,6 +117,7 @@ export default function MessageStream({
                   turnId={g.ev.turnId}
                   onRevert={onRevertTurn}
                   reverting={revertingTurnId === g.ev.turnId}
+                  {...(correction && onKeepAsRule ? { onKeepAsRule } : {})}
                 />
               );
             case "message":

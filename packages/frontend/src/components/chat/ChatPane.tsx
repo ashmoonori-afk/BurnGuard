@@ -30,6 +30,7 @@ export default function ChatPane({
   onOpenFile,
   onRevertTurn,
   revertingTurnId,
+  onKeepAsRule,
   composerInitialText,
   activePageLabel,
   statusSlot,
@@ -61,6 +62,7 @@ export default function ChatPane({
   ) => void | Promise<void>;
   onOpenFile?: (relPath: string) => void;
   onRevertTurn?: (turnId: string) => void;
+  onKeepAsRule?: (turnId: string, text: string) => void;
   revertingTurnId?: string | null;
   composerInitialText?: string;
   activePageLabel?: string | null;
@@ -137,6 +139,7 @@ export default function ChatPane({
             projectDir={projectDir}
             onOpenFile={onOpenFile}
             onRevertTurn={onRevertTurn}
+            {...(onKeepAsRule ? { onKeepAsRule } : {})}
             revertingTurnId={revertingTurnId}
           />
           {statusSlot !== undefined && statusSlot !== null && (

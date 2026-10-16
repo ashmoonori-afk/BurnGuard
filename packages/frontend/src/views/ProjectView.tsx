@@ -138,6 +138,7 @@ import { isSafeCanvasPagePath, resolveCanvasNavigationAfterRefetch, resolveCanva
 import { t as globalT, useT, type MessageKey } from "@/i18n/t";
 import { latestArtifactPreview } from "@/lib/live-preview";
 import AlternativeCompare from "@/components/alternatives/AlternativeCompare";
+import KeepRuleDialog, { type KeepRuleSource } from "@/components/chat/KeepRuleDialog";
 import {
   cancelVisualAlternatives,
   deleteVisualAlternative,
@@ -183,6 +184,7 @@ export default function ProjectView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [activeTabId, setActiveTabId] = useState("design-system");
+  const [keepRuleSource, setKeepRuleSource] = useState<KeepRuleSource | null>(null);
   const [mobilePane, setMobilePane] = useState<"workspace" | "chat">("workspace");
   const [logoStage, setLogoStage] = useState<LogoPipelineStage>("inspiration");
   const [chatCollapsed, setChatCollapsed] = useState(false);
@@ -1348,6 +1350,7 @@ export default function ProjectView() {
       </div>
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div id="project-chat-pane" className={cn("min-h-0 shrink-0 max-[900px]:flex-1", mobilePane !== "chat" && "max-[900px]:hidden", chatCollapsed && "min-[901px]:hidden")}>
+        <KeepRuleDialog projectId={project.id} designSystemId={project.design_system_id ?? null} source={keepRuleSource} onClose={() => setKeepRuleSource(null)} />
         <ChatPane
           chatFocusKey={chatFocusKey}
           events={events}
@@ -1395,6 +1398,7 @@ export default function ProjectView() {
               ? (restoreMutation.variables as string | undefined) ?? null
               : null
           }
+          onKeepAsRule={(turnId, text) => setKeepRuleSource({ turnId, text })}
         />
         </div>
         <div id="project-workspace-pane" className={cn("flex min-h-0 min-w-0 flex-1", isLogoProject && "flex-col", mobilePane !== "workspace" && "max-[900px]:hidden")}>
