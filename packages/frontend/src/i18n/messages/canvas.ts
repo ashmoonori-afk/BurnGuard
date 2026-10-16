@@ -125,7 +125,7 @@ export const canvasMessages = defineMessages({
   "canvas.history.reviewFailedDraftMeta": {"ko":"미완료 검사 {count}개 · {date}까지 보관","en":"{count} checks incomplete · kept until {date}","zh-CN":"{count} 项检查未完成 · 保留至 {date}"},
   "canvas.history.openUnverifiedDraft": {"ko":"미확인 초안으로 열기","en":"Open as unverified draft","zh-CN":"作为未验证草稿打开"},
   "canvas.draft.unverified": {"ko":"미확인 초안","en":"Unverified draft","zh-CN":"未验证草稿"},
-  "canvas.draft.unverifiedDetail": {"ko":"디자인 검사를 통과하지 못한 결과물에서 복구한 초안이에요. 미완료 검사 {count}개 · 원본은 {date}까지 보관돼요.","en":"Recovered from output that failed design review. {count} checks incomplete · the original copy is kept until {date}.","zh-CN":"此草稿恢复自未通过设计检查的结果。{count} 项检查未完成 · 原始副本保留至 {date}。"},
+  "canvas.draft.unverifiedDetail": {"ko":"디자인 검사를 통과하지 못한 결과물에서 복구한 초안이에요. 미완료 검사 {count}개 · 원본은 {date}까지 보관돼요. 전체 디자인 검사를 통과하기 전까지는 미확인 상태로 남아요.","en":"Recovered from output that failed design review. {count} checks incomplete · the original copy is kept until {date}. It stays unverified until a full design review passes.","zh-CN":"此草稿恢复自未通过设计检查的结果。{count} 项检查未完成 · 原始副本保留至 {date}。在完整设计检查通过之前，它会保持未验证状态。"},
   "canvas.history.reapplyExternal": {"ko":"내 편집 복원","en":"Restore my edit","zh-CN":"恢复我的编辑"},
   "canvas.frames.safeZone": {"ko":"9:16 안전 영역 밖(위·아래 250px)에는 중요한 글자를 두지 마세요.","en":"Keep important text inside the 9:16 safe zone, away from the top and bottom 250px.","zh-CN":"请勿将重要文字放在 9:16 安全区域之外（顶部和底部各 250px）。"},
   "canvas.frames.navigation": {"ko":"프레임 이동","en":"Frame navigation","zh-CN":"画框导航"},
