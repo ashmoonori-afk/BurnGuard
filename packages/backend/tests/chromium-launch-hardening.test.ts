@@ -27,8 +27,8 @@ export const chromium = {
     const behaviour = behaviours[channels.indexOf(options.channel ?? "bundled")];
     // The endpoint names which of these variables reached the browser; Playwright's default env is process.env.
     const seen = ["DISPLAY", "WAYLAND_DISPLAY", "BG_TEST_SENTINEL"].filter((name) => (options.env ?? process.env)[name] !== undefined);
-    if (behaviour === "launches") return Promise.resolve({ close: async () => undefined, wsEndpoint: () => "ws://127.0.0.1:9/fake?env=" + seen.join(",") });
-    if (behaviour === "missing") return Promise.reject(new Error("Executable doesn't exist"));
+    if (behaviour === "launches") return Promise.resolve({ close: async () => undefined, wsEndpoint: () => "ws://127.0.0.1:9/fake?env=" + seen.join(",") + "&channel=" + (options.channel ?? "bundled") });
+    if (behaviour === "missing") return Promise.reject(new Error("BG_TEST_MISSING_EXECUTABLE: Executable doesn't exist"));
     setInterval(() => undefined, 1_000);
     return new Promise(() => undefined);
   },
@@ -139,6 +139,82 @@ describe("headless browser environment", () => {
     expect(await child.exited).toBe(0);
     expect(new URL((JSON.parse(line) as { readonly endpoint: string }).endpoint).searchParams.get("env")).toBe("BG_TEST_SENTINEL");
   });
+});
+
+describe("bridge serve channel fallback", () => {
+  for (const { available, channel, behaviours } of [
+    { available: "chrome", channel: undefined, behaviours: "missing,launches,missing" },
+    { available: "msedge", channel: undefined, behaviours: "missing,missing,launches" },
+    { available: "chrome", channel: "chrome", behaviours: "launches,launches,missing" },
+  ] as const) {
+    test(`Given ${available} installed When the bridge serves ${channel === undefined ? "without a channel" : "with an explicit channel"} Then it connects through that system browser`, async () => {
+      const { node, script, root } = await fakeBridge("bg-bridge-fallback-");
+      const child = Bun.spawn({
+        cmd: [node, script, JSON.stringify(channel === undefined ? {} : { channel })],
+        cwd: root,
+        env: { ...process.env, BG_TEST_BROWSER_CHANNELS: behaviours },
+        stdin: "pipe", stdout: "pipe", stderr: "pipe",
+      });
+      const deadline = setTimeout(() => child.kill(), 15_000);
+      const reader = child.stdout.getReader();
+      let line = "";
+      try {
+        while (!line.includes("\n")) {
+          const next = await reader.read();
+          if (next.done) break;
+          line += new TextDecoder().decode(next.value);
+        }
+      } finally {
+        reader.releaseLock();
+        child.stdin.end();
+        await child.exited;
+        clearTimeout(deadline);
+      }
+      expect(child.exitCode).toBe(0);
+      const message: unknown = JSON.parse(line);
+      if (typeof message !== "object" || message === null || !("endpoint" in message) || typeof message.endpoint !== "string") throw new Error("Missing fake browser endpoint");
+      expect(new URL(message.endpoint).searchParams.get("channel")).toBe(available);
+    });
+  }
+});
+
+describe("bridge launch diagnostics", () => {
+  test("Given every browser executable missing When the real bridge serves Then stderr preserves the launch failure", async () => {
+    const { node, script, root } = await fakeBridge("bg-bridge-all-missing-");
+    const child = Bun.spawn({
+      cmd: [node, script, "{}"], cwd: root,
+      env: { ...process.env, BG_TEST_BROWSER_CHANNELS: "missing,missing,missing" },
+      stdin: "pipe", stdout: "ignore", stderr: "pipe",
+    });
+    const deadline = setTimeout(() => child.kill(), 15_000);
+    try {
+      const [exit, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+      expect(exit).toBe(1);
+      expect(stderr).toContain("BG_TEST_MISSING_EXECUTABLE");
+    } finally {
+      child.stdin.end();
+      clearTimeout(deadline);
+    }
+  });
+
+  for (const privatePath of ["/Users/private-person/Library/Caches/browser/chrome", "C:\\Users\\private-person\\App Data\\browser\\chrome.exe", "\\\\private-server\\private-share\\browser.exe"]) {
+    test(`Given a failed child with ${privatePath[0] === "/" ? "POSIX" : privatePath.startsWith("\\\\") ? "UNC" : "Windows"} diagnostics When launched Then the bounded error retains the cause without the private path`, async () => {
+      const root = await tempRoot("bg-bridge-diagnostic-");
+      const script = path.join(root, "bridge.mjs");
+      const diagnostic = `BG_TEST_LAUNCH_FAILURE: Executable doesn't exist at ${privatePath}\n` + "x".repeat(20_000);
+      await writeFile(script, `process.stderr.write(${JSON.stringify(diagnostic)}, () => process.exit(1));`);
+
+      const error = await launchChromiumViaNode({}, new AbortController().signal, { node: process.execPath, script, cwd: root }).then(() => null, (cause: unknown) => cause);
+
+      expect(error).toBeInstanceOf(Error);
+      if (!(error instanceof Error)) throw new Error("Expected launch failure");
+      expect(error.message).toContain("BG_TEST_LAUNCH_FAILURE");
+      expect(error.message).not.toContain(privatePath);
+      expect(error.message).not.toContain("private-person");
+      expect(error.message).not.toContain("private-server");
+      expect(error.message.length).toBeLessThanOrEqual(4_200);
+    });
+  }
 });
 
 describe("probe stopped at its deadline", () => {

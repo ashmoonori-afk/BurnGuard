@@ -20,7 +20,7 @@ export async function launchWithin(launch, options, timeoutMs, deadline = wait) 
   const attempt = launch(options);
   const expired = Symbol("expired");
   const outcome = await Promise.race([
-    attempt.then((server) => ({ kind: "launched", server }), () => ({ kind: "failed" })),
+    attempt.then((server) => ({ kind: "launched", server }), (error) => ({ kind: "failed", error })),
     deadline(timeoutMs).then(() => expired),
   ]);
   if (outcome !== expired) return outcome;
@@ -83,14 +83,19 @@ async function serve() {
   process.once("SIGINT", () => { void close(); });
   try {
     const options = JSON.parse(process.argv[2] ?? "{}");
-    const outcome = await launchWithin((launchOptions) => chromium.launchServer(launchOptions), { headless: true, host: "127.0.0.1", env: headlessEnv(process.env), ...(typeof options.channel === "string" ? { channel: options.channel } : {}) }, LAUNCH_TIMEOUT_MS);
-    if (outcome.kind !== "launched") throw new Error("Chromium bridge launch failed");
-    server = outcome.server;
+    const channels = typeof options.channel === "string" ? [{ channel: options.channel }] : CHANNELS;
+    const failures = [];
+    for (const channel of channels) {
+      const outcome = await launchWithin((launchOptions) => chromium.launchServer(launchOptions), { headless: true, host: "127.0.0.1", env: headlessEnv(process.env), ...channel }, LAUNCH_TIMEOUT_MS);
+      if (outcome.kind === "launched") { server = outcome.server; break; }
+      const detail = outcome.kind === "failed" ? (outcome.error instanceof Error ? outcome.error.message : String(outcome.error)) : "launch timed out";
+      failures.push(`${channel.channel ?? "bundled"}: ${detail}`);
+    }
+    if (server === undefined) throw new Error(failures.join("\n"));
     if (closing) { await server.close(); process.exit(0); }
     process.stdout.write(JSON.stringify({ endpoint: server.wsEndpoint() }) + "\n");
-  } catch {
-    process.stderr.write("Chromium bridge launch failed\n");
-    process.exit(1);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : "Chromium bridge launch failed"}\n`, () => process.exit(1));
   }
 }
 

@@ -37,9 +37,12 @@ bun run build:backend           # bun build --compile → dist/burnguard-design.
 ### Running tests
 
 ```bash
+node packages/backend/node_modules/playwright-core/cli.js install chromium
 bun test                        # unit + integration
 node scripts/qa/e2e-smoke.mjs [--only core]   # browser E2E over the core loop
 ```
+
+Install the bundled browser after installing dependencies and before running the full test suite. Browser-backed tests run through a Node child; when the bundled build is missing, a default launch tries installed Chrome, then Edge. Launch failures include bounded diagnostics with private absolute paths masked.
 
 Browser E2E runs on Node with playwright-core against an installed Chrome/Edge channel: by default it uses system Google Chrome. To use Edge instead, pass `--channel msedge`. To use bundled Chromium, first install it with `node packages/backend/node_modules/playwright-core/cli.js install chromium`, then pass `--channel bundled`.
 

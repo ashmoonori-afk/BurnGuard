@@ -21,8 +21,20 @@ export async function launchChromiumViaNode(options: { readonly channel?: string
   if (command === null) throw new Error("Node Chromium runtime is unavailable");
   signal.throwIfAborted();
   keepAbortSignalArmed(signal);
-  const owned = spawnOwnedProcess({ cmd: [command.node, command.script, JSON.stringify(options)], cwd: command.cwd, stdin: "pipe", stdout: "pipe", stderr: "ignore" });
+  const owned = spawnOwnedProcess({ cmd: [command.node, command.script, JSON.stringify(options)], cwd: command.cwd, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
   const child = owned.proc;
+  let stderr = "";
+  const stderrDone = (async () => {
+    const reader = child.stderr.getReader();
+    const decoder = new TextDecoder();
+    try {
+      while (true) {
+        const next = await reader.read();
+        if (next.done) return;
+        if (stderr.length < 4096) stderr += decoder.decode(next.value.subarray(0, 4096 - stderr.length), { stream: true });
+      }
+    } finally { reader.releaseLock(); }
+  })();
   let closing: Promise<void> | null = null;
   const closeChild = (): Promise<void> => closing ??= (async () => {
     signal.removeEventListener("abort", onAbort);
@@ -68,7 +80,15 @@ export async function launchChromiumViaNode(options: { readonly channel?: string
     browser.once("disconnected", onAbort);
     if (signal.aborted) { await browser.close(); signal.throwIfAborted(); }
     return browser;
-  } catch (error) { await close(); throw error; }
+  } catch (error) {
+    await close();
+    await stderrDone;
+    signal.throwIfAborted();
+    const message = error instanceof Error ? error.message : "Chromium bridge launch failed";
+    // Drop the rest of a path-bearing line: executable paths can contain spaces on every OS.
+    const diagnostic = `${message}${stderr.trim() ? `\n${stderr.trim()}` : ""}`.replace(/(?:[A-Za-z]:[\\/]|\\\\|\/)[^\r\n]*/g, "<private-path>");
+    throw new Error(diagnostic.slice(0, 4096));
+  }
   finally { clearTimeout(timer); }
 }
 
