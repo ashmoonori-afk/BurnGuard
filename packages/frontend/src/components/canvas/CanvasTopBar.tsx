@@ -5,6 +5,7 @@ import type { CanvasMode } from "@/components/modes/types";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 import { quickCommentShortcutLabel } from "./quick-comment";
+import { CANVAS_DEVICE_PRESETS, type CanvasDevicePreset } from "@/lib/canvas-device-width";
 
 export const MODES: Array<{ id: CanvasMode; label: MessageKey; icon: LucideIcon; hint: MessageKey }> = [
   { id: "edit", label: "canvas.toolbar.edit", icon: Pencil, hint: "canvas.toolbar.editHint" },
@@ -15,6 +16,8 @@ export const MODES: Array<{ id: CanvasMode; label: MessageKey; icon: LucideIcon;
 ];
 
 export default function CanvasTopBar({
+  devicePreset,
+  onDevicePresetChange,
   mode,
   onModeChange,
   onRefresh,
@@ -25,6 +28,8 @@ export default function CanvasTopBar({
   historyTools,
   readOnly = false,
 }: {
+  devicePreset?: CanvasDevicePreset;
+  onDevicePresetChange?: (preset: CanvasDevicePreset) => void;
   mode: CanvasMode | null;
   onModeChange: (m: CanvasMode | null) => void;
   onRefresh: () => void;
@@ -43,9 +48,9 @@ export default function CanvasTopBar({
   const t = useT();
   return (
     <div className="z-20 shrink-0 border-b border-border bg-background px-2 py-1.5">
-      <div className="flex flex-wrap items-center justify-between gap-1 min-[901px]:flex-nowrap">
-      {/* Below 901px the tools take their own row; otherwise the non-shrinking history group squeezes them into one icon per line. */}
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5 max-[900px]:basis-full min-[901px]:flex-nowrap" aria-label={t("canvas.toolbar.tools")}>
+      <div className="flex flex-wrap items-center justify-between gap-1">
+      {/* Let tool groups wrap at the canvas width; narrow viewports give the mode tools their own row. */}
+      <div className="flex min-w-0 flex-auto flex-wrap items-center gap-0.5 max-[900px]:basis-full" aria-label={t("canvas.toolbar.tools")}>
         <button type="button" title={t("canvas.toolbar.preview")} aria-label={t("canvas.toolbar.preview")} onClick={() => onModeChange(null)} aria-pressed={mode === null} className={cn("flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium max-[900px]:min-h-11", mode === null ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><Eye className="h-4 w-4 shrink-0" aria-hidden="true" /><span className={mode === null ? "hidden min-[1100px]:inline" : "hidden min-[1500px]:inline"}>{t("canvas.toolbar.preview")}</span></button>
         {MODES.map((m) => {
           const active = m.id === mode;
@@ -73,6 +78,15 @@ export default function CanvasTopBar({
         {colorPalette}
       </div>
 
+      {devicePreset !== undefined && <fieldset aria-label={t("canvas.device.width")} className="flex min-w-0 shrink-0 flex-wrap items-center gap-0.5">
+        {CANVAS_DEVICE_PRESETS.map((preset) => <button
+          key={preset}
+          type="button"
+          aria-pressed={devicePreset === preset}
+          onClick={() => onDevicePresetChange?.(preset)}
+          className={cn("h-9 rounded-md px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11", devicePreset === preset ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")}
+        >{t(`canvas.device.${preset}`)}</button>)}
+      </fieldset>}
       <div className="ml-auto flex shrink-0 items-center gap-0.5 border-l border-border pl-1">
         {historyTools}
         <Button

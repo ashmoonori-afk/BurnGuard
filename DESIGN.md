@@ -62,6 +62,11 @@ for icons, borders, and large or bold labels.
 
 - **CanvasTopBar**: mode controls, refresh, and file-level undo. Each action
   has an accessible name and a disabled state when unavailable.
+  Website surfaces also offer Fit, Desktop (1440), Tablet (768), and Phone
+  (390 CSS pixels). These change only the viewport width of the mounted
+  preview, never its document or model output. Fixed artboards keep their
+  geometry. Selected presets use a neutral wash and pressed state; controls
+  wrap on narrow screens, and wide previews scroll inside the canvas.
 - **SelectorOverlay**: hover and selected bounds. Selection must preserve
   element identity, computed styles, and an authoring anchor when one exists.
 - **SelectorReadOnlyPanel**: selected identity and computed/token context. When
