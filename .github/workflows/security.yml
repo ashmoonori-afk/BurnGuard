@@ -69,6 +69,7 @@ jobs:
           packages/backend/tests/bundled-fonts.test.ts
           packages/backend/tests/bundled-font-reference.test.ts
           packages/frontend/tests/canvas-edit-review.test.ts
+          packages/frontend/tests/revision-thumbnails.test.ts
           packages/backend/tests/daisyui-seed-themes.test.ts
           packages/backend/tests/theme-previews.test.ts
           packages/backend/tests/catalog.test.ts
@@ -144,6 +145,7 @@ jobs:
           packages/frontend/tests/error-copy.test.ts
           packages/backend/tests/project-import.test.ts
           packages/backend/tests/artifact-history.test.ts
+          packages/backend/tests/revision-thumbnails.test.ts
           packages/backend/tests/review-failed-draft-recovery.test.ts
           packages/backend/tests/checkpoints.test.ts
           packages/backend/tests/project-bundle.test.ts

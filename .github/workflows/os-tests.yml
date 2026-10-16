@@ -74,6 +74,7 @@ jobs:
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/design-system-starter.test.ts
           packages/frontend/tests/canvas-edit-review.test.ts
+          packages/frontend/tests/revision-thumbnails.test.ts
           packages/backend/tests/design-system-starter-entrypoint.test.ts
           packages/backend/tests/design-system-layout-reference.test.ts
           packages/backend/tests/design-system-conformance.test.ts
@@ -102,6 +103,7 @@ jobs:
           packages/frontend/tests/side-input.test.ts
           packages/frontend/tests/error-copy.test.ts
           packages/backend/tests/artifact-history.test.ts
+          packages/backend/tests/revision-thumbnails.test.ts
           packages/backend/tests/review-failed-draft-recovery.test.ts
           packages/backend/tests/review-artifact-safety.test.ts
           packages/backend/tests/watchers.test.ts

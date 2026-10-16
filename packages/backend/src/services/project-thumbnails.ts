@@ -2,9 +2,13 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { getProjectDetail } from "../db/project-read-repository";
+import { getArtifactOperation } from "../db/artifact-operation-query";
+import { getSqlite } from "../db/sqlite-client";
+import { PersistedArtifactOperationError } from "./artifact-operation-record";
+import { CanonicalTreeManifestError, inspectCanonicalTree } from "./canonical-tree-manifest";
 import { isChromiumLaunchable } from "./chromium-capability";
 import { projectsDir, resolveManagedPath } from "../lib/paths";
-import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
+import { assertSafeName, PathBoundaryError, resolveWithin } from "../security/path-boundary";
 import { parsePng, PngValidationError } from "./export-png-validation";
 
 export const THUMBNAIL_WIDTH = 640;
@@ -53,6 +57,7 @@ export type ThumbnailRenderRequest = {
 };
 
 export type ThumbnailRenderer = (request: ThumbnailRenderRequest) => Promise<void>;
+export type RevisionThumbnailSelection = { readonly operationId: string; readonly side: "before" | "after" };
 
 export type ThumbnailIdentitySource = {
   readonly id: string;
@@ -89,8 +94,9 @@ export async function loadProjectThumbnail(
   projectId: string,
   render: ThumbnailRenderer = renderThumbnailWithChromium,
   temporaryId: () => string = randomUUID,
+  revision?: RevisionThumbnailSelection,
 ): Promise<ThumbnailOutcome> {
-  const work = loadProjectThumbnailUncapped(projectId, render, temporaryId);
+  const work = loadProjectThumbnailUncapped(projectId, render, temporaryId, revision);
   const deadlineMs = renderResponseDeadlineMs();
   if (deadlineMs <= 0) {
     void work.catch(() => undefined);
@@ -112,11 +118,28 @@ async function loadProjectThumbnailUncapped(
   projectId: string,
   render: ThumbnailRenderer,
   temporaryId: () => string,
+  revision?: RevisionThumbnailSelection,
 ): Promise<ThumbnailOutcome> {
-  const project = await getProjectDetail(projectId);
+  let project = await getProjectDetail(projectId);
   if (project === null) return { kind: "not_found" };
 
-  const identity = projectThumbnailIdentity(project);
+  if (revision !== undefined) {
+    try {
+      const operation = getArtifactOperation(getSqlite(), projectId, revision.operationId);
+      if (!operation || operation.status !== "committed" || !operation.retention.replayable || operation.retention.retained_until <= Date.now()) return { kind: "unavailable", code: "thumbnail_unavailable" };
+      const root = resolveManagedPath(projectsDir, project.dir_path);
+      const retained = resolveWithin(root, ".meta", "artifact-operations", assertSafeName(operation.id), revision.side === "before" ? "snapshot" : "stage");
+      const digest = revision.side === "before" ? operation.base_digest : operation.result_digest;
+      const number = revision.side === "before" ? operation.base_revision : operation.result_revision;
+      if (digest === null || number === null || (await inspectCanonicalTree(retained)).tree_digest !== digest) return { kind: "unavailable", code: "thumbnail_unavailable" };
+      project = { ...project, dir_path: retained, current_digest: digest, current_revision: number };
+    } catch (error) {
+      if (error instanceof PathBoundaryError || error instanceof PersistedArtifactOperationError || error instanceof CanonicalTreeManifestError || isMissingFile(error)) return { kind: "unavailable", code: "thumbnail_unavailable" };
+      throw error;
+    }
+  }
+
+  const identity = projectThumbnailIdentity(revision === undefined ? project : { ...project, id: `${project.id}/${revision.operationId}/${revision.side}` });
   if (identity === null) return { kind: "unavailable", code: "artifact_unavailable" };
 
   // The DB thumbnail_path is never trusted as a filesystem path: the cache

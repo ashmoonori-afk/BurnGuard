@@ -1,6 +1,7 @@
 import type { ApiErrorBody } from "@bg/shared";
 import type { Context } from "hono";
 import { loadProjectThumbnail } from "../services/project-thumbnails";
+import { assertSafeName, PathBoundaryError } from "../security/path-boundary";
 
 const THUMBNAIL_FAILURES = {
   artifact_unavailable: {
@@ -15,7 +16,17 @@ const THUMBNAIL_FAILURES = {
 
 export async function serveProjectThumbnail(context: Context) {
   const id = context.req.param("id") ?? "";
-  const outcome = await loadProjectThumbnail(id);
+  const operationId = context.req.query("operation");
+  const side = context.req.query("side");
+  if (operationId !== undefined || side !== undefined) {
+    if (operationId === undefined || (side !== "before" && side !== "after")) return context.json(fail("invalid_thumbnail_revision", "Expected operation and thumbnail side", id), 400);
+    try { assertSafeName(operationId); }
+    catch (error) {
+      if (error instanceof PathBoundaryError) return context.json(fail("invalid_thumbnail_revision", "Invalid operation identity", id), 400);
+      throw error;
+    }
+  }
+  const outcome = await loadProjectThumbnail(id, undefined, undefined, operationId !== undefined && (side === "before" || side === "after") ? { operationId, side } : undefined);
   switch (outcome.kind) {
     case "not_found":
       return context.json(fail("project_not_found", "Project not found", id), 404);

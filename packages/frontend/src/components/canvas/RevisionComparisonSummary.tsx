@@ -1,15 +1,19 @@
 import type { RevisionComparison } from "@bg/shared";
 import { useT } from "@/i18n/t";
+import RevisionThumbnails from "./RevisionThumbnails";
+import type { RevisionThumbnailUrls } from "./revision-thumbnail-source";
 
 export interface RevisionComparisonSummaryProps {
   readonly comparison: RevisionComparison;
+  readonly thumbnails?: RevisionThumbnailUrls;
 }
 
-export default function RevisionComparisonSummary({ comparison }: RevisionComparisonSummaryProps) {
+export default function RevisionComparisonSummary({ comparison, thumbnails }: RevisionComparisonSummaryProps) {
   const t = useT();
   return <section data-qa="revision-comparison" className="space-y-2 rounded border border-border p-3 text-xs">
     <h3 className="font-semibold">{t("revision.title")}</h3>
     <p className="text-muted-foreground">{t("revision.sourceOnly")}</p>
+    {thumbnails && <RevisionThumbnails sources={thumbnails} />}
     {comparison.findings.length > 0 && <div role="alert" className="space-y-1 text-destructive">
       <p>{t("revision.blocked")}</p>
       <ul className="max-h-32 overflow-y-auto">{comparison.findings.map((finding, index) => <li key={index} className="break-words">{finding.rel_path}{finding.artboard_id ? ` / ${finding.artboard_id}` : ""}{finding.node_id ? ` / ${finding.node_id}` : ""}: {t(`revision.${finding.kind}`)}</li>)}</ul>
