@@ -20,6 +20,7 @@ export interface CardViewModel {
   kind?: ProjectType | "system";
   thumbnail?: string | null;
   isTemplate?: boolean;
+  designSystemId?: string | null;
 }
 
 export function filterHomeCards(
@@ -67,6 +68,7 @@ export function projectToCard(p: ProjectSummary): CardViewModel {
     tintClass: PROJECT_TINTS[p.type] ?? "bg-tint-stone",
     thumbnail: p.thumbnail_path,
     kind: p.type,
+    designSystemId: p.design_system_id,
   };
 }
 

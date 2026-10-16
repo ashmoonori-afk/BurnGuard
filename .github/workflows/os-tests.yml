@@ -85,6 +85,7 @@ jobs:
           packages/backend/tests/project-instructions.test.ts
           packages/backend/tests/project-reader.test.ts
           packages/frontend/tests/correction-rule.test.ts
+          packages/frontend/tests/example-briefs.test.ts
           packages/backend/tests/design-workflow.test.ts
           packages/backend/tests/generation-output.test.ts
           packages/backend/tests/css-logo-check.test.ts

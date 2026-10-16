@@ -28,6 +28,8 @@ import {
   type CardViewModel,
 } from "@/components/home/mappers";
 import ProjectCardSection from "@/components/home/ProjectCardSection";
+import { exampleBrief, exampleBriefForm, type ExampleBrief } from "@/lib/example-briefs";
+import { writeCreationDraft } from "@/lib/creation-draft";
 import ProjectCard from "@/components/home/ProjectCard";
 import ProjectImportDialog from "@/components/home/ProjectImportDialog";
 import RecentlyDeletedSection from "@/components/home/RecentlyDeletedSection";
@@ -315,6 +317,14 @@ export default function HomeView() {
     searchInputRef.current?.focus();
   };
 
+  const startFromExample = (brief: ExampleBrief) => {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    writeCreationDraft(brief.type, exampleBriefForm(brief));
+    const next = new URLSearchParams(searchParams);
+    next.set("create", brief.type);
+    setSearchParams(next);
+  };
+
   const startProject = (type: ProjectType = "slide_deck") => {
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const next = new URLSearchParams(searchParams);
@@ -466,6 +476,8 @@ export default function HomeView() {
                 onStartProject={() => startProject()}
                 emptyAction={{ label: t(restoreSamplesMutation.isPending ? "home.restoring" : "home.restoreExamples"), onSelect: () => restoreSamplesMutation.mutate(), pending: restoreSamplesMutation.isPending }}
                 onDelete={onProjectDelete}
+                briefFor={exampleBrief}
+                onStartFrom={startFromExample}
               />
             </TabsContent>
 
