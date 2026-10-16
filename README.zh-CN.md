@@ -154,10 +154,11 @@ bun run previews
 bun run typecheck
 bun run check:whitespace
 bun run build:frontend
+node packages/backend/node_modules/playwright-core/cli.js install chromium
 bun test
 ```
 
-请在仓库根目录运行测试，这样 preload 才会提供隔离的临时配置文件夹。浏览器 QA 需要 Node.js 和 Chrome/Edge；Windows 运行器可能需要 Bun 可执行文件的绝对路径。[贡献与原生构建](doc/CONTRIBUTING.md)
+请在仓库根目录运行测试，这样 preload 才会提供隔离的临时配置文件夹。浏览器测试需要 Node.js；安装依赖后，请运行上面的命令安装内置浏览器。内置浏览器缺失时，默认浏览器桥接会依次尝试已安装的 Chrome 和 Edge。浏览器 QA 需要 Node.js 和 Chrome/Edge；Windows 运行器可能需要 Bun 可执行文件的绝对路径。[贡献与原生构建](doc/CONTRIBUTING.md)
 
 <details>
 <summary>关于截图</summary>

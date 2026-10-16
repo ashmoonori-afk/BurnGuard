@@ -154,10 +154,11 @@ bun run previews
 bun run typecheck
 bun run check:whitespace
 bun run build:frontend
+node packages/backend/node_modules/playwright-core/cli.js install chromium
 bun test
 ```
 
-테스트는 저장소 루트에서 실행하세요. 그래야 preload가 격리된 임시 프로필을 제공해요. 브라우저 QA에는 Node.js와 Chrome/Edge가 필요하고, Windows 러너에서는 Bun 실행 파일의 절대 경로가 필요할 수 있어요. [기여 및 네이티브 빌드](doc/CONTRIBUTING.md)
+테스트는 저장소 루트에서 실행하세요. 그래야 preload가 격리된 임시 프로필을 제공해요. 브라우저 기반 테스트에는 Node.js가 필요해요. 의존성 설치 후 위 명령으로 번들 브라우저를 설치하세요. 번들이 없으면 기본 브라우저 브리지는 설치된 Chrome, Edge 순서로 시도해요. 브라우저 QA에는 Node.js와 Chrome/Edge가 필요하고, Windows 러너에서는 Bun 실행 파일의 절대 경로가 필요할 수 있어요. [기여 및 네이티브 빌드](doc/CONTRIBUTING.md)
 
 <details>
 <summary>스크린샷 안내</summary>

@@ -154,10 +154,11 @@ bun run previews
 bun run typecheck
 bun run check:whitespace
 bun run build:frontend
+node packages/backend/node_modules/playwright-core/cli.js install chromium
 bun test
 ```
 
-Run tests from the repository root so the preload provides an isolated temporary profile. Browser QA requires Node.js and Chrome/Edge; Windows runners may need an absolute Bun executable path. [Contributing and native builds](doc/CONTRIBUTING.md)
+Run tests from the repository root so the preload provides an isolated temporary profile. Browser-backed tests require Node.js; install the bundled browser with the command above after installing dependencies. When that build is missing, the default browser bridge tries installed Chrome, then Edge. Browser QA requires Node.js and Chrome/Edge; Windows runners may need an absolute Bun executable path. [Contributing and native builds](doc/CONTRIBUTING.md)
 
 <details>
 <summary>About the screenshots</summary>
