@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-13 tracked Markdown documents (four foundational specifications plus topic docs); the numbered records 04–23 and `reference-*.md` are local-only and gitignored (see `README.md`), so a fresh checkout has none of them. Earned this guide at score 8 for an authorship contract that no source guide covers.
+Tracked Markdown specifications and topic docs; the numbered records 04–23 and `reference-*.md` are local-only and gitignored (see `README.md`), so a fresh checkout has none of them. Earned this guide at score 8 for an authorship contract that no source guide covers.
 
 ## WHERE TO LOOK
 
@@ -10,7 +10,8 @@
 |------|----------|-------|
 | Entry point | `README.md` | Index, Start Here, numbered read order; states which specs are historical |
 | Contributing rules | `CONTRIBUTING.md` | Stack conventions, naming, import order, security rules, PR checklist |
-| Foundational specs | `00-overview` … `03-backend-adapters` | Overview, architecture, data model, adapters; `04`–`07` (UI spec, design-system format, milestones, ADRs) are local-only |
+| Product overview | Root `README.md` | Current product scope and setup; the internal-alpha `00-overview.md` was retired |
+| Foundational specs | `01-architecture` … `03-backend-adapters` | Architecture, data model, adapters; `04`–`07` (UI spec, design-system format, milestones, ADRs) are local-only |
 | Current behavior | `08`–`23` dated records (local-only) | Dated files supersede the numbered specs where they disagree; `14-…-2026-09-09` is the deliverables/publishing authority for maintainers holding the local copies |
 | Decisions | `07-decisions.md` (local-only) | 15 ADRs; entries carry context/decision/consequences and a `Supersedes` line |
 | Manual smoke steps | `07-manual-smoke-test.md` (local-only) | Referenced by `.github/workflows/security.yml` |

@@ -4,7 +4,7 @@ Start with the [product introduction and setup](../README.md), available in [Kor
 
 ## Architecture and development
 
-- [Overview](00-overview.md): product scope and implementation overview.
+- [Product overview](../README.md): current product scope, supported platforms and setup. The retired internal-alpha overview is available in Git history.
 - [Architecture](01-architecture.md): runtime topology, data flow and security boundaries.
 - [Data model](02-data-model.md): filesystem layout, SQLite schema and persistence.
 - [Backend adapters](03-backend-adapters.md): orchestration and normalized events.
