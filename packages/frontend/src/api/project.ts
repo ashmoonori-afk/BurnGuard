@@ -10,6 +10,10 @@ export async function getProject(id: string): Promise<ProjectDetail> {
   return apiFetch<ProjectDetail>(`/api/projects/${id}`);
 }
 
+export async function showProjectFolder(id: string): Promise<void> {
+  return apiFetch<void>(`/api/projects/${encodeURIComponent(id)}/show-folder`, { method: "POST" });
+}
+
 export async function getProjectSession(id: string): Promise<SessionInfo> {
   return apiFetch<SessionInfo>(`/api/projects/${id}/session`);
 }

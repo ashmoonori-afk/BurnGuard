@@ -1,6 +1,10 @@
 import { defineMessages } from "../types";
 
 export const workspaceMessages = defineMessages({
+  "workspace.project.showFolder": { ko: "프로젝트 폴더 열기", en: "Show project folder", "zh-CN": "显示项目文件夹" },
+  "workspace.project.folderPending": { ko: "폴더를 여는 중…", en: "Opening folder…", "zh-CN": "正在打开文件夹…" },
+  "workspace.project.folderFailed": { ko: "프로젝트 폴더를 열지 못했어요", en: "Could not open the project folder", "zh-CN": "无法打开项目文件夹" },
+  "workspace.project.folderUnavailable": { ko: "파일 관리자를 실행하지 못했어요. 잠시 후 다시 시도해 주세요.", en: "The file manager could not be started. Try again shortly.", "zh-CN": "无法启动文件管理器，请稍后重试。" },
   "workspace.composer.processing": { ko: "메시지와 첨부 자료를 보내고 있어요…", en: "Sending your message and attachments…", "zh-CN": "正在发送消息和附件…" },
   "workspace.composer.cancelled": { ko: "전송 요청을 취소했어요. 다시 보낼 수 있어요.", en: "The send request was canceled. You can send it again.", "zh-CN": "发送请求已取消。你可以重新发送。" },
   "workspace.composer.unsupportedFile": { ko: "지원하지 않는 형식이라 저장하지 않았어요. 해당 파일을 빼고 다시 보내 주세요.", en: "That file type isn't supported, so it wasn't saved. Remove the file and try again.", "zh-CN": "不支持该文件格式，因此未保存。请移除该文件后重试。" },
