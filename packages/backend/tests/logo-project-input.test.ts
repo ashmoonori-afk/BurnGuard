@@ -37,6 +37,7 @@ describe("logo project input boundary", () => {
       copy_as_is: false,
       design_brief: null,
       research_purpose: null,
+      standing_instructions: null,
       graphic_canvas: null,
       graphic_set: { schema_version: 1, kind: "single", frame_count: 1 },
       logo_set: logoSet,

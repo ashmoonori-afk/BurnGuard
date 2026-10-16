@@ -119,6 +119,8 @@ export const errorsMessages = defineMessages({
   "errors.design_md_invalid": { ko: "디자인 파일 형식을 읽지 못했어요. 맨 위 --- 사이의 토큰 목록과 ## 제목을 확인해 주세요.", en: "The design file could not be read. Check the token list between the top --- lines and the ## headings.", "zh-CN": "无法读取设计文件。请检查顶部 --- 之间的令牌列表和 ## 标题。" },
   "errors.design_md_empty": { ko: "디자인 파일에 토큰이나 설명 섹션이 없어요.", en: "The design file has no tokens or sections.", "zh-CN": "设计文件中没有令牌或说明章节。" },
   "errors.design_md_too_large": { ko: "디자인 파일은 256KB까지 가져올 수 있어요.", en: "Design files can be up to 256 KB.", "zh-CN": "设计文件最大 256 KB。" },
+  "errors.instructions_too_long": { ko: "항상 적용할 내용은 4,000자까지 쓸 수 있어요.", en: "Standing instructions can be up to 4,000 characters.", "zh-CN": "始终应用的内容最多 4,000 个字符。" },
+  "errors.instructions_conflict": { ko: "다른 변경과 겹쳐 저장하지 못했어요. 다시 저장해 주세요.", en: "Another change got there first. Save again.", "zh-CN": "与其他更改冲突，未能保存。请再次保存。" },
   "errors.design_system_not_found": { ko: "디자인 시스템을 찾을 수 없어요. 목록을 새로고침한 뒤 다시 확인해 주세요.", en: "Design system not found. Refresh the list and check again.", "zh-CN": "未找到设计系统。请刷新列表后重新检查。" },
   "errors.design_system_file_not_found": { ko: "디자인 시스템 파일을 찾을 수 없어요. 파일 목록을 새로고침한 뒤 다시 선택해 주세요.", en: "Design system file not found. Refresh the file list and select it again.", "zh-CN": "未找到设计系统文件。请刷新文件列表后重新选择。" },
   "errors.invalid_design_system": { ko: "선택한 디자인 시스템을 사용할 수 없어요. 다른 디자인 시스템을 골라 주세요.", en: "The selected design system cannot be used. Choose another design system.", "zh-CN": "无法使用所选设计系统。请选择其他设计系统。" },

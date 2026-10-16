@@ -1,5 +1,6 @@
 import {
   DEFAULT_GRAPHIC_SET,
+  MAX_PROJECT_INSTRUCTIONS_CHARS,
   parseDesignBriefV1,
   parseGraphicCanvasV1,
   parseGraphicSetV1,
@@ -22,6 +23,8 @@ export type ProjectOptions = {
   readonly logo_set: LogoSetV1 | null;
   /** The research purpose the project's first matching request named; edits that name none run under it. */
   readonly research_purpose: PromptPurpose | null;
+  /** The user's per-project "always apply" note, injected into every turn. */
+  readonly standing_instructions: string | null;
 };
 
 const DEFAULT_OPTIONS: ProjectOptions = {
@@ -32,6 +35,7 @@ const DEFAULT_OPTIONS: ProjectOptions = {
   graphic_set: DEFAULT_GRAPHIC_SET,
   logo_set: null,
   research_purpose: null,
+  standing_instructions: null,
 };
 
 export function parseProjectOptions(input: unknown): ProjectOptions {
@@ -62,6 +66,7 @@ export function parseProjectOptions(input: unknown): ProjectOptions {
       input["research_purpose"] === undefined || input["research_purpose"] === null
         ? null
         : parseResearchPurposeOption(input["research_purpose"]),
+    standing_instructions: parseStandingInstructionsOption(input["standing_instructions"]),
   };
 }
 
@@ -73,6 +78,16 @@ export function withResearchPurpose(optionsJson: string | null, purpose: PromptP
     catch (error) { if (!(error instanceof SyntaxError)) throw error; }
   }
   return JSON.stringify({ ...(isRecord(stored) ? stored : {}), research_purpose: purpose });
+}
+
+/**
+ * Lenient on read: a malformed note must not reset the project's other options to defaults, so anything that is not a
+ * usable string reads as no note. Writes are validated strictly by project-instructions.ts.
+ */
+export function parseStandingInstructionsOption(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const text = input.trim();
+  return text === "" ? null : text.slice(0, MAX_PROJECT_INSTRUCTIONS_CHARS);
 }
 
 function parseResearchPurposeOption(input: unknown): PromptPurpose {

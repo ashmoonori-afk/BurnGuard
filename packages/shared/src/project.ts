@@ -59,3 +59,20 @@ export interface SessionSnapshot {
   readonly sequence: number;
   readonly pending_permissions: readonly Extract<NormalizedEvent, { type: "tool.permission_required" }>[];
 }
+
+/** Longest project standing instructions in characters; longer text is refused, never cut. */
+export const MAX_PROJECT_INSTRUCTIONS_CHARS = 4000;
+
+/** GET/PUT /api/projects/:id/instructions: the project's "always apply" note, null when none. */
+export interface ProjectInstructions {
+  readonly text: string | null;
+}
+
+/** PUT replaces the whole note; POST /api/projects/:id/instructions/lines appends one line. */
+export interface PutProjectInstructionsRequest {
+  readonly text: string;
+}
+
+export interface AppendProjectInstructionRequest {
+  readonly line: string;
+}
