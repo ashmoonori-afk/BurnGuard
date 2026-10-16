@@ -181,6 +181,18 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 </details>
 
+### Read a project from your coding agent
+
+Your own coding agent can read a live BurnGuard project in place, without an export: from a source checkout run
+
+```bash
+bun scripts/burnguard-read.ts projects                 # active projects: id, type, name, design system
+bun scripts/burnguard-read.ts project <id>             # Markdown brief: directory, "always apply" note, design-system rules, files
+bun scripts/burnguard-read.ts project <id> --json
+```
+
+It reads the profile at `BG_APP_ROOT` (default `~/.burnguard`) with the database opened read-only, never writes, and opens no network port, so it is safe while the app is running.
+
 ## Changelog
 
 ### 0.5.30
