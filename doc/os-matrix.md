@@ -71,6 +71,19 @@ jobs run each pinning suite.
 
 ## Hardening log
 
+### 2026-10-16: "Scan for secrets" failing on pull requests that were force-pushed during the run
+
+- Symptom: Security runs 38849940297 (PR #350) and 38851727312 (PR #352) failed only in "Scan for secrets" with
+  `failed to scan Git repository ... stderr is not empty`; every test step passed, and the next run passed.
+- Cause: on a `pull_request` event the scan action lists the pull request's commits through the API when it reaches
+  that step and scans `<head>^..<head>`. Both branches were force-pushed (rebased) after the job had checked out
+  `refs/pull/<n>/merge`, so the API returned a head commit (fe7b9b96 for run 38851727312, whose checkout was 0b24e710)
+  that the job's checkout does not contain, and `git log` failed. Not a test flake; the same day's other first-run
+  failures were real defects fixed by later commits (stale option expectations, a source-mapping contract test, a
+  reverted bridge commit).
+- Fixed: `security.yml` now cancels a superseded run of the same ref (`concurrency` with `cancel-in-progress`), as
+  `os-tests.yml` already did, so a force-push stops the stale job instead of letting its scan fail.
+
 ### 2026-10-15: multi-minute Windows stalls, and a logo-test cleanup that turned one into many failures
 
 - Symptom: Windows x64, runs 38732070767 (main `cc1c93e1`) and 38734059594 (PR #335): in `logo-completion-gate`,
