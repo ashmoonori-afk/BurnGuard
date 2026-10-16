@@ -28,4 +28,13 @@ describe("example briefs", () => {
     expect([form.name, form.audience, form.objective]).toEqual([brief.name, brief.audience, brief.objective]);
     expect({ ...form, name: "", audience: "", objective: "" }).toEqual({ ...INITIAL_BRIEF_FORM, name: "", audience: "", objective: "" });
   });
+
+  test("Given the Korean or Chinese interface When a brief is read Then its name, audience and objective are in that language", () => {
+    for (const locale of ["ko", "zh-CN"] as const) {
+      const english = exampleBrief({ kind: "prototype", designSystemId: "sample-system-original-velune" }, "en")!;
+      const local = exampleBrief({ kind: "prototype", designSystemId: "sample-system-original-velune" }, locale)!;
+      for (const field of ["name", "audience", "objective"] as const) expect(local[field]).not.toBe(english[field]);
+      expect(/[\u3131-\uD79D\u4E00-\u9FFF]/u.test(local.objective)).toBe(true);
+    }
+  });
 });
