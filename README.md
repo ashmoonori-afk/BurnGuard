@@ -14,18 +14,20 @@ Make websites, slides and graphics with AI, refine them on canvas and keep the f
 
 [Download the app](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [Documentation](doc/README.md) · [한국어](README.ko.md) · [简体中文](README.zh-CN.md)
 
+[User guide](doc/user-guide.md): your first website, correcting an image, moving a project and finding your files.
+
 ## How it compares
 
-*As of 2026-09-28, from each product's public page or README ([sources](#comparison-sources)).*
+*Updated 2026-10-16 from public sources: canvas editing and sharing entries refreshed; other entries retain the 2026-09-28 review. This is not a desktop-app comparison test ([sources](#comparison-sources)).*
 
 | | BurnGuard | Claude Design | OpenDesign |
 |---|---|---|---|
 | Cost model | Free, Apache-2.0. Generation runs through your own Claude Code or Codex CLI and that provider account | Included in paid Claude plans; uses your plan's usage limits, with optional extra usage | Free, Apache-2.0. Bring your own coding-agent CLI or API key; optional paid OpenDesign Cloud models |
 | Where files live | On your computer (`~/.burnguard`) | Claude's hosted workspace; export or save as a folder | Local-first desktop app; Docker self-hosting |
 | Design-system rules | 41 bundled themes, each with navigation, hero and footer layout rules; add your own from files, websites, repositories or Figma | Built from your codebase and design files; admins can lock one approved system | `DESIGN.md` design systems, skills and plugins |
-| Canvas edit | Select, resize, rotate, typography, spacing and colors on the canvas; pinned comments | Inline comments, direct text edits, generated sliders; drag, resize and align | Iterate with the agent beside a sandboxed preview; comment-mode edits partially shipped (its roadmap) |
+| Canvas edit | Select, resize, rotate, typography, spacing and colors on the canvas; pinned comments | Inline comments, direct text edits, generated sliders; drag, resize and align | Direct element edits in a live preview; send team comments to the agent as one revision task |
 | Export formats | HTML ZIP, PDF, PPTX, PNG, PNG bundle, SVG (logos), handoff package, Cafe24 and Imweb packages | PDF, PPTX, standalone HTML, folder; Canva and other connectors; Claude Code handoff | HTML, PDF, PPTX, ZIP, Markdown, MP4 |
-| Publish | Publish to your own Vercel account with your token (one click once the token is saved in Settings and the export is verified) | Organization-scoped links; connectors including Vercel | Not documented in its README |
+| Publish | Publish to your own Vercel account with your token (one click once the token is saved in Settings and the export is verified) | Organization-scoped links; connectors including Vercel | Share designs for team viewing and comments; public website publishing not verified |
 | OS | Windows 10/11 x64; macOS 14+ on Apple silicon | Web and Claude apps, Claude Code | macOS (Apple silicon and Intel), Windows x64; Linux from source |
 
 ![BurnGuard website workspace with a conversation panel, model controls and the SONNEL sample in the canvas](doc/images/readme-website-workspace.png)
@@ -141,7 +143,7 @@ bun install --frozen-lockfile
 bun run scripts/dev-launcher.ts
 ```
 
-The launcher opens the frontend at `http://127.0.0.1:5173`; the backend uses `127.0.0.1:14070`. Stop it with Ctrl+C. On Windows, `Start-BurnGuard.bat` is a source-build launcher for development (requires Bun and the .NET 8 SDK); normal users should download the release installer from GitHub Releases instead. Use `--rebuild` after source changes.
+The launcher opens the frontend at `http://127.0.0.1:5173`; the backend uses `127.0.0.1:14070`. Stop it with Ctrl+C. On macOS, double-click `Start-BurnGuard.command` in Finder to run the same development stack (requires Bun); closing its Terminal window stops the servers. On Windows, `Start-BurnGuard.bat` is a source-build launcher for development (requires Bun and the .NET 8 SDK); use `--rebuild` after source changes. Normal users should download a release package instead of using either source launcher.
 
 To inspect the repository's theme examples, open `design system themes/previews/index.html` in a browser. The pages use bundled local fonts and images. After editing theme tokens, rebuild the token catalogue and website previews:
 
@@ -297,10 +299,10 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 ## Documentation and license
 
-[Documentation index](doc/README.md) · [Architecture](doc/01-architecture.md) · [Design guidance](doc/design-craft.md) · [Installation and updates](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)
+[User guide](doc/user-guide.md) · [Documentation index](doc/README.md) · [Architecture](doc/01-architecture.md) · [Design guidance](doc/design-craft.md) · [Installation and updates](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)
 
 BurnGuard is licensed under **Apache-2.0**. See [LICENSE](LICENSE), [NOTICE](NOTICE) and the [image provenance notes](doc/images/README.md).
 
 ### Comparison sources
 
-Checked on 2026-09-28. Claude Design: [product page](https://claude.com/product/design) and [launch announcement](https://www.anthropic.com/news/claude-design-anthropic-labs). OpenDesign: [nexu-io/open-design README](https://github.com/nexu-io/open-design). BurnGuard: this README and [`scripts/build-mac.ts`](scripts/build-mac.ts) (macOS target). Product details change; open an issue if a row is out of date.
+Baseline checked on 2026-09-28. Claude Design: [product page](https://claude.com/product/design) and [launch announcement](https://www.anthropic.com/news/claude-design-anthropic-labs). OpenDesign: [nexu-io/open-design README](https://github.com/nexu-io/open-design); canvas editing and sharing entries refreshed on 2026-10-16 from its [homepage](https://open-design.ai/ko/), [editing tutorial](https://open-design.ai/tutorials/open-design-free-open-source-alternative-code-a-program/) and [team plan](https://open-design.ai/ko/pricing/?audience=team). Shared review is not evidence of public website publishing. BurnGuard: this README and [`scripts/build-mac.ts`](scripts/build-mac.ts) (macOS target). Product details change; open an issue if a row is out of date.

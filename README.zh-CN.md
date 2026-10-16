@@ -14,18 +14,20 @@
 
 [下载应用](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [文档](doc/README.md) · [English](README.md) · [韩语](README.ko.md)
 
+[用户指南（英文）](doc/user-guide.md)：创建第一个网站、修改图片、迁移项目和查找文件。
+
 ## 对比
 
-*截至 2026-09-28，依据各产品的公开页面或 README（[来源](#对比来源)）。*
+*2026-10-16 依据公开资料更新了画布编辑和共享两项，其余保留 2026-09-28 的核对结果；并非桌面应用实测对比（[来源](#对比来源)）。*
 
 | | BurnGuard | Claude Design | OpenDesign |
 |---|---|---|---|
 | 费用模式 | 免费，Apache-2.0。生成通过你自己的 Claude Code 或 Codex CLI 及对应服务商账号运行 | 包含在付费 Claude 套餐中，使用套餐的用量额度，可选额外用量 | 免费，Apache-2.0。自带编码代理 CLI 或 API 密钥；可选付费 OpenDesign Cloud 模型 |
 | 文件位置 | 在你的电脑上（`~/.burnguard`） | Claude 的托管工作区；可导出或保存为文件夹 | 本地优先的桌面应用；支持 Docker 自托管 |
 | 设计系统规则 | 内置 41 个主题，每个都带导航、首屏（hero）和页脚的布局规则；可从文件、网站、代码仓库或 Figma 添加自己的 | 基于你的代码库和设计文件构建；管理员可锁定一个已批准的系统 | `DESIGN.md` 设计系统、技能和插件 |
-| 画布编辑 | 在画布上选择、缩放、旋转，调整字体排印、间距和颜色；固定位置的批注 | 行内批注、直接编辑文字、生成式滑块；拖动、缩放和对齐 | 在沙盒预览旁与代理迭代；批注模式编辑部分已上线（据其路线图） |
+| 画布编辑 | 在画布上选择、缩放、旋转，调整字体排印、间距和颜色；固定位置的批注 | 行内批注、直接编辑文字、生成式滑块；拖动、缩放和对齐 | 在实时预览中直接编辑元素；将团队批注合并为一次代理修改任务 |
 | 导出格式 | HTML ZIP、PDF、PPTX、PNG、PNG 打包、SVG（Logo）、交接包、Cafe24 与 Imweb 包 | PDF、PPTX、独立 HTML、文件夹；Canva 等连接器；Claude Code 交接 | HTML、PDF、PPTX、ZIP、Markdown、MP4 |
-| 发布 | 使用你自己的令牌发布到你自己的 Vercel 账号（在设置中保存令牌并验证导出后，一键即可） | 组织范围内的链接；包括 Vercel 在内的连接器 | 其 README 中未说明 |
+| 发布 | 使用你自己的令牌发布到你自己的 Vercel 账号（在设置中保存令牌并验证导出后，一键即可） | 组织范围内的链接；包括 Vercel 在内的连接器 | 共享设计供团队查看和批注；公开网站发布尚未验证 |
 | 操作系统 | Windows 10/11 x64；搭载 Apple 芯片的 macOS 14 及以上 | 网页和 Claude 应用、Claude Code | macOS（Apple 芯片和 Intel）、Windows x64；Linux 需从源码运行 |
 
 ![BurnGuard 网站工作区，含对话面板、模型控件和画布中的 SONNEL 示例](doc/images/readme-website-workspace.png)
@@ -139,7 +141,7 @@ bun install --frozen-lockfile
 bun run scripts/dev-launcher.ts
 ```
 
-启动器会在 `http://127.0.0.1:5173` 打开前端；后端使用 `127.0.0.1:14070`。按 Ctrl+C 停止。在 Windows 上，`Start-BurnGuard.bat` 是面向开发的源码构建启动器（需要 Bun 和 .NET 8 SDK）；普通用户请从 GitHub Releases 下载发布版安装程序。修改源码后请使用 `--rebuild`。
+启动器会在 `http://127.0.0.1:5173` 打开前端；后端使用 `127.0.0.1:14070`。按 Ctrl+C 停止。在 macOS 上，在 Finder 中双击 `Start-BurnGuard.command` 可启动相同的开发服务器（需要 Bun）；关闭其 Terminal 窗口会停止服务器。在 Windows 上，`Start-BurnGuard.bat` 是面向开发的源码构建启动器（需要 Bun 和 .NET 8 SDK）；修改源码后请使用 `--rebuild`。普通用户请下载发布版安装包，不要使用这两个源码启动器。
 
 要查看仓库中的主题示例，请在浏览器中打开 `design system themes/previews/index.html`。这些页面使用内置的本地字体和图片。编辑主题令牌之后，请重新生成令牌目录和网站预览：
 
@@ -273,13 +275,13 @@ bun test
 
 ## 文档与许可证
 
-[文档索引](doc/README.md) · [架构](doc/01-architecture.md) · [设计指引](doc/design-craft.md) · [安装与更新](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)
+[用户指南（英文）](doc/user-guide.md) · [文档索引](doc/README.md) · [架构](doc/01-architecture.md) · [设计指引](doc/design-craft.md) · [安装与更新](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)
 
 BurnGuard 采用 **Apache-2.0** 许可证。参见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和[图片来源说明](doc/images/README.md)。
 
 ### 对比来源
 
-核对于 2026-09-28。Claude Design：[产品页面](https://claude.com/product/design)和[发布公告](https://www.anthropic.com/news/claude-design-anthropic-labs)。OpenDesign：[nexu-io/open-design README](https://github.com/nexu-io/open-design)。BurnGuard：本 README 和 [`scripts/build-mac.ts`](scripts/build-mac.ts)（macOS 目标）。产品细节会变化；如有过时的行，请提交 issue。
+基础核对日期为 2026-09-28。Claude Design：[产品页面](https://claude.com/product/design)和[发布公告](https://www.anthropic.com/news/claude-design-anthropic-labs)。OpenDesign：[nexu-io/open-design README](https://github.com/nexu-io/open-design)；画布编辑和共享两项于 2026-10-16 根据其[首页](https://open-design.ai/ko/)、[编辑教程](https://open-design.ai/tutorials/open-design-free-open-source-alternative-code-a-program/)和[团队方案](https://open-design.ai/ko/pricing/?audience=team)更新。共享评审不等于公开网站发布。BurnGuard：本 README 和 [`scripts/build-mac.ts`](scripts/build-mac.ts)（macOS 目标）。产品细节会变化；如有过时的行，请提交 issue。
 
 ---
 

@@ -14,18 +14,20 @@ AI로 웹사이트·슬라이드·그래픽을 만들고, 캔버스에서 다듬
 
 [앱 다운로드](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [문서](doc/README.md) · [English](README.md) · [简体中文](README.zh-CN.md)
 
+[사용자 안내서(영문)](doc/user-guide.md): 첫 웹사이트 만들기, 이미지 수정, 프로젝트 이동, 파일 위치를 안내해요.
+
 ## 비교
 
-*2026-09-28 기준, 각 제품의 공개 페이지 또는 README를 참고했어요 ([출처](#비교-출처)).*
+*2026-10-16 공개 자료 기준으로 캔버스 편집과 공유 항목만 갱신했어요. 나머지는 2026-09-28 검토를 유지하며, 데스크톱 앱을 직접 비교한 결과는 아니에요 ([출처](#비교-출처)).*
 
 | | BurnGuard | Claude Design | OpenDesign |
 |---|---|---|---|
 | 비용 구조 | 무료, Apache-2.0. 생성은 내 Claude Code 또는 Codex CLI와 해당 제공업체 계정으로 실행 | 유료 Claude 요금제에 포함. 요금제 사용 한도를 쓰며 추가 사용량 선택 가능 | 무료, Apache-2.0. 코딩 에이전트 CLI나 API 키를 직접 연결. 유료 OpenDesign Cloud 모델은 선택 사항 |
 | 파일 위치 | 내 컴퓨터(`~/.burnguard`) | Claude의 호스팅 작업 공간. 폴더로 내보내거나 저장 | 로컬 우선 데스크톱 앱, Docker 셀프 호스팅 |
 | 디자인 시스템 규칙 | 번들 테마 41개, 각각 내비게이션·히어로·푸터 레이아웃 규칙 포함. 파일·웹사이트·저장소·Figma에서 직접 추가 | 코드베이스와 디자인 파일에서 구성. 관리자가 승인된 시스템 하나를 고정 가능 | `DESIGN.md` 디자인 시스템, 스킬, 플러그인 |
-| 캔버스 편집 | 캔버스에서 선택·크기·회전·타이포그래피·여백·색상 편집, 핀 코멘트 | 인라인 코멘트, 텍스트 직접 편집, 생성형 슬라이더, 드래그·크기 조절·정렬 | 샌드박스 미리보기 옆에서 에이전트와 반복 작업. 코멘트 모드 편집은 일부만 출시(로드맵 기준) |
+| 캔버스 편집 | 캔버스에서 선택·크기·회전·타이포그래피·여백·색상 편집, 핀 코멘트 | 인라인 코멘트, 텍스트 직접 편집, 생성형 슬라이더, 드래그·크기 조절·정렬 | 실시간 미리보기에서 요소 직접 편집. 팀 코멘트를 한 번의 수정 요청으로 에이전트에 전달 |
 | 내보내기 형식 | HTML ZIP, PDF, PPTX, PNG, PNG 묶음, SVG(로고), 핸드오프 패키지, 카페24·아임웹 패키지 | PDF, PPTX, 독립 HTML, 폴더. Canva 등 커넥터. Claude Code 핸드오프 | HTML, PDF, PPTX, ZIP, Markdown, MP4 |
-| 게시 | 내 Vercel 계정에 내 토큰으로 게시(설정에 토큰을 저장하고 내보내기를 확인하면 한 번의 클릭) | 조직 범위 링크. Vercel 등 커넥터 | README에 명시되지 않음 |
+| 게시 | 내 Vercel 계정에 내 토큰으로 게시(설정에 토큰을 저장하고 내보내기를 확인하면 한 번의 클릭) | 조직 범위 링크. Vercel 등 커넥터 | 팀 열람과 코멘트를 위한 디자인 공유. 공개 웹사이트 게시는 미확인 |
 | OS | Windows 10/11 x64, Apple silicon의 macOS 14 이상 | 웹과 Claude 앱, Claude Code | macOS(Apple silicon·Intel), Windows x64, Linux는 소스 실행 |
 
 ![대화 패널, 모델 설정, 캔버스에 열린 SONNEL 샘플이 보이는 BurnGuard 웹사이트 작업 공간](doc/images/readme-website-workspace.png)
@@ -141,7 +143,7 @@ bun install --frozen-lockfile
 bun run scripts/dev-launcher.ts
 ```
 
-런처는 프런트엔드를 `http://127.0.0.1:5173`에서 열고, 백엔드는 `127.0.0.1:14070`을 사용해요. Ctrl+C로 종료해요. Windows의 `Start-BurnGuard.bat`은 개발용 소스 빌드 런처예요(Bun과 .NET 8 SDK 필요). 일반 사용자는 GitHub Releases의 설치 프로그램을 받으세요. 소스를 고친 뒤에는 `--rebuild`를 사용하세요.
+런처는 프런트엔드를 `http://127.0.0.1:5173`에서 열고, 백엔드는 `127.0.0.1:14070`을 사용해요. Ctrl+C로 종료해요. macOS에서는 Finder에서 `Start-BurnGuard.command`를 두 번 클릭하면 같은 개발 서버를 실행해요(Bun 필요). 해당 Terminal 창을 닫으면 서버가 종료돼요. Windows의 `Start-BurnGuard.bat`은 개발용 소스 빌드 런처예요(Bun과 .NET 8 SDK 필요). 소스를 고친 뒤에는 `--rebuild`를 사용하세요. 일반 사용자는 두 소스 런처 대신 릴리스 패키지를 받으세요.
 
 저장소의 테마 예제를 보려면 브라우저에서 `design system themes/previews/index.html`을 열세요. 이 페이지는 번들 로컬 글꼴과 이미지를 사용해요. 테마 토큰을 고친 뒤에는 토큰 카탈로그와 웹사이트 미리보기를 다시 빌드하세요.
 
@@ -297,13 +299,13 @@ bun test
 
 ## 문서와 라이선스
 
-[문서 색인](doc/README.md) · [아키텍처](doc/01-architecture.md) · [디자인 가이드](doc/design-craft.md) · [설치와 업데이트](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)
+[사용자 안내서(영문)](doc/user-guide.md) · [문서 색인](doc/README.md) · [아키텍처](doc/01-architecture.md) · [디자인 가이드](doc/design-craft.md) · [설치와 업데이트](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)
 
 BurnGuard는 **Apache-2.0** 라이선스예요. [LICENSE](LICENSE), [NOTICE](NOTICE), [이미지 출처 안내](doc/images/README.md)를 참고하세요.
 
 ### 비교 출처
 
-2026-09-28에 확인했어요. Claude Design: [제품 페이지](https://claude.com/product/design), [출시 발표](https://www.anthropic.com/news/claude-design-anthropic-labs). OpenDesign: [nexu-io/open-design README](https://github.com/nexu-io/open-design). BurnGuard: 이 README와 [`scripts/build-mac.ts`](scripts/build-mac.ts)(macOS 대상). 제품 내용은 바뀔 수 있으니, 오래된 항목이 있으면 이슈로 알려 주세요.
+기본 검토일은 2026-09-28이에요. Claude Design: [제품 페이지](https://claude.com/product/design), [출시 발표](https://www.anthropic.com/news/claude-design-anthropic-labs). OpenDesign: [nexu-io/open-design README](https://github.com/nexu-io/open-design). 캔버스 편집과 공유 항목은 2026-10-16에 [홈페이지](https://open-design.ai/ko/), [편집 안내](https://open-design.ai/tutorials/open-design-free-open-source-alternative-code-a-program/), [팀 요금제](https://open-design.ai/ko/pricing/?audience=team)를 바탕으로 갱신했어요. 공동 검토용 공유가 공개 웹사이트 게시를 뜻하지는 않아요. BurnGuard: 이 README와 [`scripts/build-mac.ts`](scripts/build-mac.ts)(macOS 대상). 제품 내용은 바뀔 수 있으니, 오래된 항목이 있으면 이슈로 알려 주세요.
 
 ---
 
