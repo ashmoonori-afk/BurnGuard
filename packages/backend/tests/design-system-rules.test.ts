@@ -6,6 +6,7 @@ import { createDesignSystemRecord } from "../src/db/seed";
 import { getSqlite } from "../src/db/sqlite-client";
 import { systemsDir } from "../src/lib/paths";
 import { systemRoutes } from "../src/routes/system";
+import { classifyApiRoute } from "../src/server";
 import { appendDesignSystemContext, compactPinnedDesignSystemContext } from "../src/harness/prompt-design-system";
 
 const SYSTEM_ID = `rules-${process.pid}`;
@@ -42,6 +43,11 @@ afterAll(async () => {
 });
 
 describe("design-system do/don't rules", () => {
+  test("Given the rule endpoints When the server classifies them Then they reach the system routes rather than the catalog", () => {
+    expect(classifyApiRoute(`/api/design-systems/${SYSTEM_ID}/rules`, "POST")).toBe("system");
+    expect(classifyApiRoute(`/api/design-systems/${SYSTEM_ID}/rules/rule_abc`, "DELETE")).toBe("system");
+  });
+
   test("Given a system When a do and a dont rule are added and one is deleted Then rules.json, the API and the tokens response agree", async () => {
     const first = await call("POST", `/api/design-systems/${SYSTEM_ID}/rules`, { kind: "dont", text: "  No gradients\n on   buttons " });
     expect(first.status).toBe(201);
