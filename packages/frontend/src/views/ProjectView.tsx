@@ -1474,6 +1474,7 @@ export default function ProjectView() {
         {activeTab?.kind === "file" && (
           <div className="flex min-h-0 min-w-0 flex-1 max-[1000px]:flex-col">
             <Canvas
+              projectType={project.type}
               loading={projectQuery.isPending || filesQuery.isPending || artifactsQuery.isPending}
               working={session?.status === "running"}
               colorPalette={activeRelPath && /\.html?$/i.test(activeRelPath) ? <div className="flex items-center gap-2">

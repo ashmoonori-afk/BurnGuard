@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Comment, GraphicCanvasV1 } from "@bg/shared";
+import { surfaceForProjectType, type Comment, type GraphicCanvasV1, type ProjectType } from "@bg/shared";
 import CanvasTopBar from "./CanvasTopBar";
 import CommentLayer from "./CommentLayer";
 import QuickComment from "./QuickComment";
@@ -39,6 +39,7 @@ import { MIN_CANVAS_ZOOM, MAX_CANVAS_ZOOM, zoomCanvasAt } from "./canvas-zoom";
 import { useT } from "@/i18n/t";
 import { useLocaleStore } from "@/i18n/locale";
 import { canvasPlaceholderKeys, canvasRenderingVisible } from "@/lib/canvas-placeholder";
+import { canvasDeviceWidth, type CanvasDevicePreset } from "@/lib/canvas-device-width";
 
 function buildPlaceholderSrc(locale: string, title: string, subtitle: string): string {
   return `<!doctype html>
@@ -92,6 +93,7 @@ function buildPlaceholderSrc(locale: string, title: string, subtitle: string): s
 type PreviewReportState = "accepted" | "unavailable" | "failed" | `refused_${number}`;
 
 export default function Canvas({
+  projectType,
   mode,
   src,
   loading = false,
@@ -139,6 +141,7 @@ export default function Canvas({
   colorPalette,
   livePreview,
 }: {
+  projectType?: ProjectType;
   mode: CanvasMode | null;
   src?: string | null;
   loading?: boolean;
@@ -203,6 +206,8 @@ export default function Canvas({
   const frameSrcDoc = frameDocument && frameDocument.src === src ? frameDocument.html : null;
   const frameDocumentKey = frameDocument && frameDocument.src === src ? frameDocument.key : `placeholder:${src ?? ""}`;
   const [zoom, setZoom] = useState(1);
+  const [devicePreset, setDevicePreset] = useState<CanvasDevicePreset>("fit");
+  const deviceWidth = projectType === undefined ? undefined : canvasDeviceWidth(projectType, devicePreset);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const viewportRef = useRef({ zoom, pan });
   viewportRef.current = { zoom, pan };
@@ -409,6 +414,8 @@ export default function Canvas({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/40 max-[900px]:min-h-48">
       <CanvasTopBar
+        devicePreset={projectType !== undefined && surfaceForProjectType(projectType) === "website" ? devicePreset : undefined}
+        onDevicePresetChange={setDevicePreset}
         mode={mode}
         readOnly={Boolean(livePreview)}
         onModeChange={onModeChange}
@@ -420,8 +427,8 @@ export default function Canvas({
         historyTools={historyTools}
       />
       {livePreview && <div role="status" className="border-b border-border bg-accent/10 px-3 py-1 text-xs text-accent">{t("workspace.canvas.livePreview")}</div>}
-      <div ref={containerRef} className="relative flex-1 overflow-hidden bg-muted/70">
-        <div ref={stageRef} className="absolute inset-3 rounded-md shadow-md ring-1 ring-border/60 max-[600px]:inset-2" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "center" }}
+      <div ref={containerRef} className="relative flex-1 overflow-auto bg-muted/70">
+        <div ref={stageRef} className="absolute inset-3 rounded-md shadow-md ring-1 ring-border/60 max-[600px]:inset-2" style={{ width: deviceWidth, transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "center" }}
           onWheel={(event) => {
             if (event.ctrlKey || event.metaKey || !mode || moving || !stageRef.current) return;
             const [x, y] = canvasPoint(stageRef.current, event.clientX, event.clientY);

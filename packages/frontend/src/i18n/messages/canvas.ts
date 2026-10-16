@@ -1,6 +1,11 @@
 import { defineMessages } from "../types";
 
 export const canvasMessages = defineMessages({
+  "canvas.device.width": { ko: "미리보기 화면 너비", en: "Preview viewport width", "zh-CN": "预览视口宽度" },
+  "canvas.device.fit": { ko: "맞춤", en: "Fit", "zh-CN": "适应" },
+  "canvas.device.desktop": { ko: "데스크톱 1440", en: "Desktop 1440", "zh-CN": "桌面 1440" },
+  "canvas.device.tablet": { ko: "태블릿 768", en: "Tablet 768", "zh-CN": "平板 768" },
+  "canvas.device.phone": { ko: "휴대폰 390", en: "Phone 390", "zh-CN": "手机 390" },
   "canvas.chart.sankeyHeader": { ko: "출발\t도착\t값", en: "Source\tTarget\tValue", "zh-CN": "来源\t目标\t值" },
   "canvas.chart.categoryHeader": { ko: "항목", en: "Category", "zh-CN": "类别" },
   "canvas.toolbar.edit": {"ko":"편집","en":"Edit","zh-CN":"编辑"},
