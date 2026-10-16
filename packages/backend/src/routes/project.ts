@@ -11,6 +11,7 @@ import { DesignSystemPinError, inspectProjectDesignSystemPin, refreshProjectDesi
 import { exportProjectBundle, ProjectBundleError } from "../services/project-bundle";
 import { figmaImportRoutes } from "./figma-import";
 import { createProjectFolderRoutes } from "./project-folder";
+import { appendProjectInstruction, ProjectInstructionsError, readProjectInstructions, replaceProjectInstructions } from "../services/project-instructions";
 
 function ok<T>(data: T): ApiSuccess<T> {
   return { data };
@@ -29,6 +30,30 @@ projectRoutes.route("/", designDirectionRoutes);
 projectRoutes.route("/", chartRoutes);
 projectRoutes.route("/", figmaImportRoutes);
 projectRoutes.route("/", createProjectFolderRoutes());
+
+function instructionsFailure(error: ProjectInstructionsError) {
+  const status = error.code === "project_not_found" ? 404 : error.code === "instructions_conflict" ? 409 : 400;
+  return [fail(error.code, "Project instructions could not be saved"), status] as const;
+}
+
+projectRoutes.get("/api/projects/:id/instructions", (c) => {
+  try { return c.json(ok(readProjectInstructions(c.req.param("id")))); }
+  catch (error) { if (error instanceof ProjectInstructionsError) return c.json(...instructionsFailure(error)); throw error; }
+});
+
+projectRoutes.put("/api/projects/:id/instructions", async (c) => {
+  const body: unknown = await c.req.json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body)) return c.json(fail("invalid_body", "Expected a JSON object body"), 400);
+  try { return c.json(ok(replaceProjectInstructions(c.req.param("id"), Reflect.get(body, "text")))); }
+  catch (error) { if (error instanceof ProjectInstructionsError) return c.json(...instructionsFailure(error)); throw error; }
+});
+
+projectRoutes.post("/api/projects/:id/instructions/lines", async (c) => {
+  const body: unknown = await c.req.json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body)) return c.json(fail("invalid_body", "Expected a JSON object body"), 400);
+  try { return c.json(ok(appendProjectInstruction(c.req.param("id"), Reflect.get(body, "line")))); }
+  catch (error) { if (error instanceof ProjectInstructionsError) return c.json(...instructionsFailure(error)); throw error; }
+});
 
 projectRoutes.get("/api/projects/:id/bundle", async (c) => {
   try {

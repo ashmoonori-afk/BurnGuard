@@ -25,6 +25,7 @@ import {
   COMPACT_TASTE_REFERENCE,
 } from "./prompt-compact-skills";
 import { appendDesignBriefContext } from "./prompt-design-brief";
+import { appendProjectInstructions } from "./prompt-project-instructions";
 import { appendDesignSystemContext, appendDesignSystemStarter, compactPinnedDesignSystemContext } from "./prompt-design-system";
 import { appendGraphicOutputContext } from "./prompt-graphic-set";
 import { appendLogoOutputContext, readLogoManifestForPrompt, type LogoPromptPipelineState } from "./prompt-logo-set";
@@ -212,6 +213,7 @@ export async function buildPrompt(
   lines.push("Its creation_mode describes the captured state of the project directory. The explicit request and target decide whether this turn creates or modifies; existing starter files alone never make a request an edit.");
   lines.push("");
   appendDesignBriefContext(lines, projectOptions.design_brief);
+  appendProjectInstructions(lines, projectOptions.standing_instructions);
   await appendVisualSourceContext(lines, {
     projectDir: context.project.project_dir,
     attachments: context.attachments,

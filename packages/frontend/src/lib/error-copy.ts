@@ -139,6 +139,8 @@ const ERROR_COPY: Record<string, MessageKey> = {
   invalid_rule_text: "errors.invalid_rule_text",
   rule_limit_reached: "errors.rule_limit_reached",
   rule_not_found: "errors.rule_not_found",
+  instructions_too_long: "errors.instructions_too_long",
+  instructions_conflict: "errors.instructions_conflict",
   design_system_file_not_found: "errors.design_system_file_not_found",
   invalid_design_system: "errors.invalid_design_system",
   invalid_project_import: "errors.invalid_project_import",
