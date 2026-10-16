@@ -146,6 +146,7 @@ jobs:
           packages/backend/tests/export-render-phase.test.ts
           packages/backend/tests/print-preflight.test.ts
           packages/backend/tests/print-preflight-measure.test.ts
+          packages/backend/tests/print-backgrounds.browser.test.ts
           packages/backend/tests/export-render-phase-callers.test.ts
           packages/frontend/tests/print-preflight-view.test.ts
           packages/backend/tests/chromium-process-tree.test.ts

@@ -57,6 +57,7 @@ describe("print preflight measured in a real page", () => {
     expect(report.pages[0]?.width_px).toBe(A4_WIDTH);
     expect(report.pages[0]?.width_mm).toBeCloseTo(210, 0);
     expect(report.pages[0]?.height_mm).toBeCloseTo(297, 0);
+    expect(report.source_upscaling_detection).toBe("unsupported");
   }, 60_000);
 
   test("Given a 600px image spanning an A4 artboard, When measured, Then it is a strong warning naming that artboard and locator", async () => {

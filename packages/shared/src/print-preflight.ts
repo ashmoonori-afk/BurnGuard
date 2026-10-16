@@ -43,4 +43,6 @@ export type PrintPreflightV1 = {
   readonly fonts: readonly PrintPreflightFont[];
   readonly images: readonly PrintPreflightImage[];
   readonly browser: PrintBrowserReadiness;
+  /** Source files carry no reliable history of prior resampling. Optional for older producers. */
+  readonly source_upscaling_detection?: "unsupported";
 };
