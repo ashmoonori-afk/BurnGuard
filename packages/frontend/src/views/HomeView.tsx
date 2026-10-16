@@ -30,6 +30,7 @@ import {
 import ProjectCardSection from "@/components/home/ProjectCardSection";
 import { exampleBrief, exampleBriefForm, type ExampleBrief } from "@/lib/example-briefs";
 import { writeCreationDraft } from "@/lib/creation-draft";
+import { useLocaleStore } from "@/i18n/locale";
 import ProjectCard from "@/components/home/ProjectCard";
 import ProjectImportDialog from "@/components/home/ProjectImportDialog";
 import RecentlyDeletedSection from "@/components/home/RecentlyDeletedSection";
@@ -317,6 +318,7 @@ export default function HomeView() {
     searchInputRef.current?.focus();
   };
 
+  const locale = useLocaleStore((state) => state.locale);
   const startFromExample = (brief: ExampleBrief) => {
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     writeCreationDraft(brief.type, exampleBriefForm(brief));
@@ -476,7 +478,7 @@ export default function HomeView() {
                 onStartProject={() => startProject()}
                 emptyAction={{ label: t(restoreSamplesMutation.isPending ? "home.restoring" : "home.restoreExamples"), onSelect: () => restoreSamplesMutation.mutate(), pending: restoreSamplesMutation.isPending }}
                 onDelete={onProjectDelete}
-                briefFor={exampleBrief}
+                briefFor={(card) => exampleBrief(card, locale)}
                 onStartFrom={startFromExample}
               />
             </TabsContent>

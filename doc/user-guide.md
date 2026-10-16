@@ -1,16 +1,16 @@
 # BurnGuard user guide
 
-Use this guide for a first website, an image correction or a move to another computer. For installation and supported platforms, see the [README](../README.md#get-started). The steps below use English interface labels; Settings lets you change the language.
+Use this guide for a first website, an image correction or a move to another computer. Corrections you make often can be kept with **Keep as rule** in the conversation, and **Always apply** in the project top bar holds notes that every request should follow. For installation and supported platforms, see the [README](../README.md#get-started). The steps below use English interface labels; Settings lets you change the language.
 
 ## First website in 10 minutes
 
 Start with the app installed and a generation CLI authenticated. Generation time depends on the selected provider and the size of your request.
 
 1. Open Settings, connect your installed CLI and choose a model. If the connection is unavailable, check its sign-in state before creating a project. You can explore a bundled example without connecting a provider.
-2. On Home, create a **Web design** project. Enter a name, an audience under **Who will see it?**, and an objective under **What do you want to achieve?** All three are required.
+2. On Home, create a **Web design** project and describe your idea in one or two sentences. A project name is suggested from the idea, and the audience is optional; open the advanced options only when you need them. On the very first launch a short guide on Home does the same in one card.
 3. Pick a design system, or continue without one. For a first attempt, choose a bundled theme rather than importing a new system.
 4. Keep the first brief small: "Make a one-page website for a local pottery workshop. Visitors should find the next class date and request a place. Include an introduction, class details and a contact section. Do not invent prices or reviews."
-5. Create the project, then review the prepared message in the conversation and send it. Creating a project prepares the draft; it does not start generation by itself.
+5. Press the start action once: it creates the project and sends your idea as the first request, so generation starts right away. If that first send fails, the project is kept and the request waits in the message composer to send again.
 6. Wait for generation to finish, inspect the canvas and ask for one concrete correction at a time. Use the Quality and UX panels to review findings; they do not replace looking at the page.
 7. Use the export controls to download an HTML ZIP. Open the exported page and check its text, images and links before sharing it.
 
@@ -22,7 +22,7 @@ If generation stops, check **Settings > Runtime diagnostics** and the conversati
 2. In the message's generation controls, set **Edit scope** to **Images only**. Describe a specific replacement, for example: "Replace the workshop hero photo with a realistic wide photograph of hands shaping a clay bowl. Keep the text and layout unchanged."
 3. To limit the change further, expand **Target pages and nodes** and enter the project-relative HTML page and any artboard or node identifiers. [Scope syntax and limits](edit-scope.md#request-contract).
 4. Send the request. If it changes text, layout or other content outside the selected scope, BurnGuard refuses publication and keeps the previous committed result. Correct the request, or explicitly choose unrestricted scope when the layout really must change.
-5. Inspect the new image in the canvas and review the history comparison. History lists source changes, not rendered before/after thumbnails. Use history to restore a saved version if needed.
+5. Inspect the new image in the canvas and review the history comparison. History shows a small before and after thumbnail for each revision next to the list of changed sources. Use history to restore a saved version if needed.
 
 Changing a CSS background's URL changes styles and requires unrestricted scope. Replacing image bytes used in several places must be permitted at every use; targeting one placement does not authorize changing the others.
 
