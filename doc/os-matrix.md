@@ -42,6 +42,7 @@ jobs run each pinning suite.
 
 | Area | macOS arm64 | Windows x64 | Linux | Pinned by | Runs in |
 |------|-------------|-------------|-------|-----------|---------|
+| Show project folder | `open <dir>` | `explorer.exe <dir>` | `xdg-open <dir>` | `project-folder` (injected platform and spawner; managed-root containment, junction/symlink escapes, private error diagnostics) | Ubuntu, OS jobs |
 | Chromium launch | Node bridge child, capability probe | Node bridge child (in-process launch freezes Bun) | same as macOS | `chromium-node-launch`; `chromium-capability`, `chromium-bridge-probe`, `export-render-launch` (injected probe, launcher and deadline); `chromium-launch-hardening` (real bridge and probe children, fake browser) | `chromium-node-launch`: Ubuntu (opt-in smoke), Windows job; the others: Ubuntu, OS jobs |
 | System browser lookup (Chrome and Edge channels) | fixed `/Applications` paths | `LOCALAPPDATA`, `PROGRAMFILES`, `PROGRAMFILES(X86)` roots, backslash paths | fixed `/opt` paths | `chromium-browser-paths` (platform, environment, file check and Playwright build path injected) | Ubuntu, OS jobs |
 | Local fonts | `osascript` JXA family list | PowerShell family list | `fc-list` | `local-fonts` (runs the host command) | OS jobs |

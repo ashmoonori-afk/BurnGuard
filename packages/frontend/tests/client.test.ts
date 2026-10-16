@@ -7,6 +7,7 @@ import {
 } from "../src/api/client";
 import { catalogDetailRows, getDesignSystem, updateDesignSystemWithConflictReload } from "../src/api/design-system-metadata";
 import { deleteProject, listDesignSystems, restoreDeletedProject } from "../src/api/home";
+import { showProjectFolder } from "../src/api/project";
 
 const originalFetch = globalThis.fetch;
 
@@ -28,6 +29,20 @@ afterEach(() => {
 });
 
 describe("API authority client", () => {
+  test("Given a project When showing its folder Then the client sends an authorized POST and accepts an empty response", async () => {
+    const calls: Array<{ input: string; init?: RequestInit }> = [];
+    globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/bootstrap") return Response.json({ data: { capability: "folder-client" } });
+      calls.push({ input: String(input), init });
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+    await bootstrapApiAuthority();
+    await showProjectFolder("project/id");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe("/api/projects/project%2Fid/show-folder");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(new Headers(calls[0]?.init?.headers).get("x-burnguard-capability")).toBe("folder-client");
+  });
   test("Given more than one catalog page, When listing systems, Then external systems beyond the first page remain selectable", async () => {
     const offsets: string[] = [];
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {

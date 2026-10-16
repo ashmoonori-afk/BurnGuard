@@ -10,9 +10,10 @@ import { useT } from "@/i18n/t";
 import ProjectBundleButton from "./ProjectBundleButton";
 import { useState } from "react";
 import FigmaImportDialog from "./FigmaImportDialog";
+import ProjectFolderButton from "./ProjectFolderButton";
 
 /** Below 600px the actions wrap so Export stays on screen instead of overflowing the header. */
-export const PROJECT_ACTIONS_CLASS = "flex shrink-0 items-center gap-2 max-[600px]:ml-auto max-[600px]:shrink max-[600px]:flex-wrap max-[600px]:justify-end";
+export const PROJECT_ACTIONS_CLASS = "flex max-w-full shrink-0 flex-wrap items-center gap-2 max-[600px]:ml-auto max-[600px]:shrink max-[600px]:flex-wrap max-[600px]:justify-end";
 
 export default function ProjectTopBar({
   project,
@@ -70,6 +71,7 @@ export default function ProjectTopBar({
         </div>
       </div>
       <div className={PROJECT_ACTIONS_CLASS}>
+        <ProjectFolderButton projectId={project.id} />
         <Button variant="outline" size="sm" className="min-h-10 gap-2 px-3 max-[900px]:min-h-11" onClick={() => setFigmaImportOpen(true)} disabled={figmaImportDisabled}>
           <Figma className="h-3.5 w-3.5" />{t("workspace.figma.action")}
         </Button>

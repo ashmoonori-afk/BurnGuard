@@ -34,6 +34,7 @@ const KNOWN_CODES = [
 
 /** Codes the routes emit that gained recovery copy, each with the exact key it must resolve to. */
 const ADDED_CODES: readonly (readonly [string, MessageKey])[] = [
+  ["project_folder_unavailable", "workspace.project.folderUnavailable"],
   ["pdf_support_missing", "errors.pdf_support_missing"],
   ["invalid_color_value", "errors.invalid_color_value"],
   ["graphic_requires_authenticated_codex", "errors.graphic_requires_authenticated_codex"],
