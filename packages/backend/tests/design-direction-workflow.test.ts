@@ -78,6 +78,22 @@ class GateRenderer implements DesignDirectionRenderer {
 }
 
 describe("design direction workflow", () => {
+  test.each(["ko", "en", "zh-CN"])("Given no audience in %s When generating Then the outline omits that row", async (locale) => {
+    const workflow = new DesignDirectionWorkflow({ async render() {} });
+    const brief = {
+      schema_version: 1 as const, output_type: "prototype" as const,
+      audience: "", objective: "A bakery website", content_source: "none" as const,
+      locale, brand_mode: "none" as const, visual_mood: "formal" as const,
+      density: "balanced" as const, output_size: "responsive" as const,
+    };
+    const empty = await (await workflow.generate({ ...session(`no-audience-${locale}`), designBrief: brief })).completion;
+    const populated = await (await workflow.generate({
+      ...session(`audience-${locale}`), designBrief: { ...brief, audience: "Visitors" },
+    })).completion;
+    expect(empty.content_outline).toHaveLength(2);
+    expect(populated.content_outline).toHaveLength(3);
+    expect([populated.content_outline[0], populated.content_outline[2]]).toEqual(empty.content_outline);
+  });
   test("Given a selected system, then all directions and retried previews keep its saved layout", async () => {
     const input = { ...session("system-layout"), designSystem: { id: "test-dashboard", name: "Dashboard", layout: sampleLayoutFiles("dashboard").layout } };
     const layouts: DirectionRenderInput["systemLayout"][] = [];

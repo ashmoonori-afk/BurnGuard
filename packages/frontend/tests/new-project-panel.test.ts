@@ -46,12 +46,21 @@ describe("creation panel smoke (UX-33)", () => {
     expect(html).toContain('id="project-name"');
   });
 
-  test("Given a complete draft When the panel renders Then submit is enabled and leads to the system choice", () => {
+  test("Given a complete draft When the panel renders Then submit is enabled without a system detour", () => {
     storeDraft("slide_deck", { name: "분기 리뷰 덱", audience: "투자 심사역", objective: "투자 유치 승인" });
     const html = renderPanel("slide_deck", detection);
     expect(submit(html)).not.toContain('disabled=""');
-    expect(submit(html)).toContain(t("home.picker.next"));
+    expect(submit(html)).toContain(t("home.creation.create"));
     expect(html).toContain(t("home.creation.ready"));
+  });
+
+  test("Given only an idea When the panel renders Then creation is enabled and advanced fields are collapsed", () => {
+    storeDraft("prototype", { objective: "A local bakery website" });
+    const html = renderPanel("prototype", detection);
+    expect(submit(html)).not.toContain('disabled=""');
+    expect(html.indexOf('id="brief-objective"')).toBeLessThan(html.indexOf('id="project-name"'));
+    expect(html.match(/<details[^>]*data-qa="creation-advanced"[^>]*>/)?.[0]).not.toContain("open");
+    expect(html.match(/<input[^>]*id="brief-audience"[^>]*>/)?.[0]).not.toContain("required");
   });
 
   test("Given a slide deck When the brief renders Then the output sizes exclude responsive and the sources exclude template", () => {

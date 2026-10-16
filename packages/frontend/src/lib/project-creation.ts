@@ -37,6 +37,10 @@ import { useLocaleStore } from "@/i18n/locale";
 export const BRIEF_LOCALE = "ko";
 export const AUDIENCE_MAX_LENGTH = 200;
 export const OBJECTIVE_MAX_LENGTH = 1000;
+
+export function suggestedProjectName(objective: string): string {
+  return objective.trim().split(/\s+/u).slice(0, 6).join(" ").slice(0, 100);
+}
 export const PROTOTYPE_PAGE_PRESETS = [
   { label: "home.page.about", relPath: "about.html" },
   { label: "home.page.services", relPath: "services.html" },
@@ -311,11 +315,11 @@ export function buildCreateProjectRequest(
     && draft.pages.every((page) => safePage.test(page) && page.toLowerCase() !== "index.html")
     && new Set(draft.pages.map((page) => page.toLowerCase())).size === draft.pages.length;
   if ((draft.type !== "prototype" && draft.pages.length > 0) || !pagesValid) return { ok: false, problem: "pages_invalid" };
-  const name = draft.name.trim();
+  const name = draft.name.trim() || suggestedProjectName(draft.objective);
   if (name.length === 0) return { ok: false, problem: "name_required" };
 
   const audience = draft.audience.trim();
-  if (audience.length === 0 || audience.length > AUDIENCE_MAX_LENGTH) {
+  if (audience.length > AUDIENCE_MAX_LENGTH) {
     return { ok: false, problem: "audience_invalid" };
   }
 

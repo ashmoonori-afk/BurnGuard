@@ -60,6 +60,12 @@ for icons, borders, and large or bold labels.
 
 ## Component anatomy
 
+- **NewProjectPanel**: one prominent idea field, an editable suggested name,
+  optional audience, and inline design-system suggestions. The full picker opens
+  only through Browse all and preserves the brief. Attachments stay visible;
+  detailed fields share one collapsed Advanced section without changing their
+  limits or defaults. Create and generate admits one first message, preserves the
+  draft if sending fails, and never sends an empty request.
 - **CanvasTopBar**: mode controls, refresh, and file-level undo. Each action
   has an accessible name and a disabled state when unavailable.
   Website surfaces also offer Fit, Desktop (1440), Tablet (768), and Phone

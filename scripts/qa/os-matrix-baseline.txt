@@ -56,7 +56,6 @@ packages/backend/tests/design-brief-prompt.test.ts
 packages/backend/tests/design-direction-contract.test.ts
 packages/backend/tests/design-direction-renderer.test.ts
 packages/backend/tests/design-direction-routes.test.ts
-packages/backend/tests/design-direction-workflow.test.ts
 packages/backend/tests/design-system-asset-guide.test.ts
 packages/backend/tests/design-system-contract.test.ts
 packages/backend/tests/design-system-font-upload.test.ts
@@ -291,14 +290,12 @@ packages/frontend/tests/installed-fonts.test.ts
 packages/frontend/tests/live-preview.test.ts
 packages/frontend/tests/logo-export-options.test.ts
 packages/frontend/tests/logo-project-creation.test.ts
-packages/frontend/tests/new-project-panel.test.ts
 packages/frontend/tests/panel-generation.test.ts
 packages/frontend/tests/platform-export-options.test.ts
 packages/frontend/tests/platform-guide-modal.test.ts
 packages/frontend/tests/preview-report-payload.test.ts
 packages/frontend/tests/project-bundle-api.test.ts
 packages/frontend/tests/project-bundle-controls.test.ts
-packages/frontend/tests/project-creation.test.ts
 packages/frontend/tests/project-thumbnail.test.ts
 packages/frontend/tests/quality-fix-request.test.ts
 packages/frontend/tests/quick-comment.test.ts

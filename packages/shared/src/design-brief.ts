@@ -98,7 +98,7 @@ export function parseDesignBriefV1(input: unknown): DesignBriefV1 {
     ...(pages === undefined ? {} : { pages }),
     schema_version: 1,
     output_type: parsedOutputType,
-    audience: boundedString(record, "audience", 200),
+    audience: record.audience === undefined ? "" : boundedString(record, "audience", 200, true),
     objective: boundedString(record, "objective", 1000),
     content_source: parsedContentSource,
     locale,
@@ -122,9 +122,11 @@ function boundedString(
   record: Readonly<Record<string, unknown>>,
   key: string,
   maxLength: number,
+  allowEmpty = false,
 ): string {
-  const value = requiredString(record, key).trim();
-  if (value.length === 0 || value.length > maxLength) invalid(key);
+  const raw = record[key];
+  const value = allowEmpty && typeof raw === "string" ? raw.trim() : requiredString(record, key).trim();
+  if ((!allowEmpty && value.length === 0) || value.length > maxLength) invalid(key);
   return value;
 }
 
