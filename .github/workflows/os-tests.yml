@@ -202,6 +202,7 @@ jobs:
           packages/backend/tests/design-system-starter.test.ts
           packages/frontend/tests/deck-sandbox.browser.test.ts
           packages/frontend/tests/canvas-css-imports.browser.test.ts
+          packages/frontend/tests/project-first-message.browser.test.ts
       - name: Chromium popup and deck runtime
         env:
           BG_BROWSER_SMOKE: "1"

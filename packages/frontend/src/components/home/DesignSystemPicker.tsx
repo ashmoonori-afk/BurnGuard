@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { filterHomeCards, systemToCard } from "./mappers";
 import { thumbnailRetryDelay } from "./thumbnail-source";
 
-function PickerThumbnail({ source }: { source: string | null | undefined }) {
+export function PickerThumbnail({ source }: { source: string | null | undefined }) {
   const t = useT();
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);

@@ -77,6 +77,28 @@ function expectRequest(result: BuildResult): CreateProjectRequest {
   return result.request;
 }
 
+test("Given only an idea When creating Then the name is suggested and audience is optional", () => {
+  const request = expectRequest(buildCreateProjectRequest(draft({
+    name: "", audience: "", objective: "A simple site for a local bakery with opening hours",
+  }), SYSTEMS));
+  expect(request.name).toBe("A simple site for a local");
+  expect(parseDesignBriefV1(request.options?.design_brief).audience).toBe("");
+});
+
+test("Given a missing audience When parsing a brief Then it normalizes to empty without relaxing bounds", () => {
+  const brief = expectRequest(buildCreateProjectRequest(draft(), SYSTEMS)).options?.design_brief;
+  expect(parseDesignBriefV1({ ...brief, audience: undefined }).audience).toBe("");
+  expect(parseDesignBriefV1({ ...brief, audience: "  " }).audience).toBe("");
+  expect(() => parseDesignBriefV1({ ...brief, audience: "x".repeat(201) })).toThrow();
+  expect(() => parseDesignBriefV1({ ...brief, audience: 12 })).toThrow();
+  expect(() => parseDesignBriefV1({ ...brief, objective: "" })).toThrow();
+});
+
+test("Given no idea When building Then an explicit name cannot bypass the required objective", () => {
+  expect(buildCreateProjectRequest(draft({ name: "Named", audience: "", objective: "" }), SYSTEMS))
+    .toEqual({ ok: false, problem: "objective_invalid" });
+});
+
 // The brief carries the active UI locale; the default is pinned explicitly so the store never leaks between suites.
 const originalLocale = useLocaleStore.getState().locale;
 beforeEach(() => useLocaleStore.setState({ locale: BRIEF_LOCALE }));
@@ -303,15 +325,12 @@ describe("buildCreateProjectRequest", () => {
     });
   });
 
-  test("requires a name and bounded brief text", () => {
-    expect(buildCreateProjectRequest(draft({ name: "   " }), SYSTEMS)).toEqual({
+  test("requires an idea and bounded brief text while suggesting missing names", () => {
+    expect(buildCreateProjectRequest(draft({ name: "   ", objective: "" }), SYSTEMS)).toEqual({
       ok: false,
       problem: "name_required",
     });
-    expect(buildCreateProjectRequest(draft({ audience: "" }), SYSTEMS)).toEqual({
-      ok: false,
-      problem: "audience_invalid",
-    });
+    expect(expectRequest(buildCreateProjectRequest(draft({ audience: "" }), SYSTEMS)).options?.design_brief?.audience).toBe("");
     expect(
       buildCreateProjectRequest(draft({ objective: " " }), SYSTEMS),
     ).toEqual({ ok: false, problem: "objective_invalid" });

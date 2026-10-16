@@ -179,7 +179,7 @@ type DirectionCopy = {
 const DIRECTION_COPY: Readonly<Record<DirectionLocale, DirectionCopy>> = {
   ko: {
     outline: (projectName) => [`${projectName}의 핵심 문제`, "근거와 해결 방향", "명확한 다음 행동"],
-    briefOutline: (brief, projectType) => [`목표: ${brief.objective}`, `대상: ${brief.audience}`, `산출물: ${projectType} · ${brief.output_type} · ${brief.output_size}`],
+    briefOutline: (brief, projectType) => [`목표: ${brief.objective}`, ...(brief.audience ? [`대상: ${brief.audience}`] : []), `산출물: ${projectType} · ${brief.output_type} · ${brief.output_size}`],
     systemTitles: ["메시지 강조", "근거 강조", "행동 강조"],
     systemSummary: (systemName, order) => `${systemName}의 레이아웃을 유지하며 ${["핵심 메시지", "시각적 근거", "다음 행동"][order]}에 강조를 둡니다.`,
     systemFacts: (system) => [system.name, `${system.layout.tokens["--layout-columns"] ?? "미정"}열 · ${system.layout.tokens["--layout-max"] ?? "너비 미정"}`, "시스템 구성·폰트·색상 유지"],
@@ -191,7 +191,7 @@ const DIRECTION_COPY: Readonly<Record<DirectionLocale, DirectionCopy>> = {
   },
   en: {
     outline: (projectName) => [`Key problem of ${projectName}`, "Evidence and solution direction", "A clear next action"],
-    briefOutline: (brief, projectType) => [`Goal: ${brief.objective}`, `Audience: ${brief.audience}`, `Output: ${projectType} · ${brief.output_type} · ${brief.output_size}`],
+    briefOutline: (brief, projectType) => [`Goal: ${brief.objective}`, ...(brief.audience ? [`Audience: ${brief.audience}`] : []), `Output: ${projectType} · ${brief.output_type} · ${brief.output_size}`],
     systemTitles: ["Message emphasis", "Evidence emphasis", "Action emphasis"],
     systemSummary: (systemName, order) => `Keeps the ${systemName} layout and emphasizes ${["the key message", "the visual evidence", "the next action"][order]}.`,
     systemFacts: (system) => [system.name, `${system.layout.tokens["--layout-columns"] ?? "unset"} columns · ${system.layout.tokens["--layout-max"] ?? "width unset"}`, "System composition, fonts and colors kept"],
@@ -203,7 +203,7 @@ const DIRECTION_COPY: Readonly<Record<DirectionLocale, DirectionCopy>> = {
   },
   "zh-CN": {
     outline: (projectName) => [`${projectName}的核心问题`, "依据与解决方向", "明确的下一步行动"],
-    briefOutline: (brief, projectType) => [`目标：${brief.objective}`, `对象：${brief.audience}`, `产出：${projectType} · ${brief.output_type} · ${brief.output_size}`],
+    briefOutline: (brief, projectType) => [`目标：${brief.objective}`, ...(brief.audience ? [`对象：${brief.audience}`] : []), `产出：${projectType} · ${brief.output_type} · ${brief.output_size}`],
     systemTitles: ["强调信息", "强调依据", "强调行动"],
     systemSummary: (systemName, order) => `保持 ${systemName} 的版式，突出${["核心信息", "视觉依据", "下一步行动"][order]}。`,
     systemFacts: (system) => [system.name, `${system.layout.tokens["--layout-columns"] ?? "未定"}栏 · ${system.layout.tokens["--layout-max"] ?? "宽度未定"}`, "保留系统构成、字体与颜色"],
