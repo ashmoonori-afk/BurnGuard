@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CatalogDesignSystemDetail, DesignSystemColorToken, DesignSystemDetail } from "@bg/shared";
-import { ArrowLeft, ArrowUpRight, CheckCircle2, Pencil, Plus, Upload } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CheckCircle2, Download, Pencil, Plus, Upload } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import {
+  downloadDesignMd,
   getDesignSystemTokens,
   uploadDesignSystemFont,
   upsertDesignSystemColor,
@@ -83,6 +84,19 @@ function DesignSystemEditor({ id }: { id: string }) {
   const [draftStatus, setDraftStatus] = useState<DesignSystemDetail["status"]>(
     "draft",
   );
+  const downloadSystemFile = async () => {
+    try {
+      const file = await downloadDesignMd(id);
+      const url = URL.createObjectURL(file.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = file.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      pushToast({ tone: "error", title: t("system.designMd.failed"), body: apiErrorCopy(error) });
+    }
+  };
   const tokensQuery = useQuery({ queryKey: ["design-systems", "tokens", id], queryFn: () => getDesignSystemTokens(id), retry: false });
   const colorTokens = tokensQuery.data?.colors ?? [];
   const tokenFilePath = tokensQuery.data?.token_file_path ?? null;
@@ -267,6 +281,7 @@ function DesignSystemEditor({ id }: { id: string }) {
                 <Pencil className="h-3.5 w-3.5" />
                 {t("system.editDetails")}
               </Button>
+              <Button variant="outline" size="sm" data-qa="system-download-design-md" onClick={() => void downloadSystemFile()}><Download className="h-3.5 w-3.5" aria-hidden="true" />{t("system.designMd.download")}</Button>
               {system.status !== "published" ? <Button variant="cta" size="sm" onClick={() => updateMutation.mutate(system.status === "draft" ? "review" : "published")} disabled={updateMutation.isPending}>{updateMutation.isPending ? t("system.saving") : system.status === "draft" ? t("system.startReview") : t("system.publishSystem")}<ArrowUpRight className="h-3.5 w-3.5" /></Button> : null}
               </div>
             ) : null}

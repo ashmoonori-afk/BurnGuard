@@ -14,6 +14,8 @@ import type {
   UpsertDesignSystemColorRequest,
 } from "@bg/shared";
 import { addDesignSystemRule, deleteDesignSystemRule } from "../services/design-system-rules";
+import { exportDesignMd, importDesignMd } from "../services/design-md";
+import { DesignMdError } from "@bg/shared";
 import { getDesignSystemDetail } from "../db/seed";
 import { extractPinterestMood, parsePinterestMoodRequest } from "../services/pinterest-mood";
 import {
@@ -234,6 +236,34 @@ systemRoutes.delete("/api/design-systems/:id/rules/:ruleId", async (c) => {
   } catch (err) {
     if (err instanceof DesignSystemAssetEditError) return c.json(fail(err.code, err.message), designSystemEditStatus(err));
     return c.json(unexpectedFailure("design_system_rule_delete_failed", "Design system rule could not be deleted", err), 500);
+  }
+});
+
+systemRoutes.get("/api/design-systems/:id/design-md", async (c) => {
+  try {
+    const { filename, markdown } = await exportDesignMd(c.req.param("id"));
+    return new Response(markdown, { headers: {
+      "Content-Type": "text/markdown; charset=utf-8",
+      "Content-Disposition": `attachment; filename="DESIGN.md"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    } });
+  } catch (err) {
+    if (err instanceof DesignSystemAssetEditError) return c.json(fail(err.code, err.message), designSystemEditStatus(err));
+    return c.json(unexpectedFailure("design_md_export_failed", "Design system file could not be exported", err), 500);
+  }
+});
+
+systemRoutes.post("/api/design-systems/import-md", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body)) return c.json(fail("invalid_body", "Expected a JSON object body"), 400);
+  try {
+    const created = await importDesignMd({ markdown: Reflect.get(body, "markdown"), name: Reflect.get(body, "name") }, c.req.raw.signal);
+    return c.json(ok(created), 201);
+  } catch (err) {
+    if (err instanceof DesignMdError) return c.json(fail(err.code, "Design file could not be imported"), err.code === "design_md_too_large" ? 413 : 400);
+    if (err instanceof DesignSystemExtractError) return c.json(fail(err.code, err.message), 400);
+    return c.json(unexpectedFailure("design_md_import_failed", "Design file could not be imported", err), 500);
   }
 });
 
