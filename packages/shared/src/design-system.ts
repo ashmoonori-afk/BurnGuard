@@ -58,6 +58,7 @@ export interface DesignSystemTokensResponse {
   layout?: import("./design-system-layout").DesignSystemLayout;
   assets?: import("./design-system-assets").DesignSystemAssetGuide;
   pages?: import("./design-system-pages").DesignSystemPageCoverage;
+  rules?: import("./design-system-rules").DesignSystemRules;
 }
 
 export interface UpsertDesignSystemColorRequest {

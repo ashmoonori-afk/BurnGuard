@@ -8,7 +8,13 @@ export class DesignSystemAssetEditError extends Error {
       | "invalid_color_value"
       | "invalid_font_upload"
       | "unsafe_managed_path"
-      | "token_file_unreadable",
+      | "token_file_unreadable"
+      | "design_system_archived"
+      | "invalid_rule_kind"
+      | "invalid_rule_text"
+      | "invalid_rule_origin"
+      | "rule_limit_reached"
+      | "rule_not_found",
     message: string,
   ) {
     super(message);

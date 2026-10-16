@@ -10,7 +10,7 @@ import type {
   DesignSystemPreview,
 } from "@bg/shared";
 import { apiFetch } from "./client";
-import { parseDesignSystemAssetGuide, parseDesignSystemLayout, parseDesignSystemPageCoverage } from "@bg/shared";
+import { parseDesignSystemAssetGuide, parseDesignSystemLayout, parseDesignSystemPageCoverage, parseDesignSystemRules, type AddDesignSystemRuleRequest, type DesignSystemRules } from "@bg/shared";
 
 export function extractPinterestMood(body: import("@bg/shared").CreatePinterestMoodRequest): Promise<import("@bg/shared").CreatePinterestMoodResponse> {
   return apiFetch("/api/design-systems/pinterest", { method: "POST", body: JSON.stringify(body) });
@@ -63,7 +63,16 @@ export async function getDesignSystemTokens(
     ...(response.layout === undefined ? {} : { layout: parseDesignSystemLayout(response.layout) }),
     ...(response.assets === undefined ? {} : { assets: parseDesignSystemAssetGuide(response.assets) }),
     ...(response.pages === undefined ? {} : { pages: parseDesignSystemPageCoverage(response.pages) }),
+    ...(response.rules === undefined ? {} : { rules: parseDesignSystemRules(response.rules) }),
   };
+}
+
+export async function addDesignSystemRule(id: string, body: AddDesignSystemRuleRequest): Promise<DesignSystemRules> {
+  return parseDesignSystemRules(await apiFetch<unknown>(`/api/design-systems/${id}/rules`, { method: "POST", body: JSON.stringify(body) }));
+}
+
+export async function deleteDesignSystemRule(id: string, ruleId: string): Promise<DesignSystemRules> {
+  return parseDesignSystemRules(await apiFetch<unknown>(`/api/design-systems/${id}/rules/${encodeURIComponent(ruleId)}`, { method: "DELETE" }));
 }
 
 export async function upsertDesignSystemColor(
