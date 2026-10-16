@@ -9,9 +9,11 @@ import type {
   DesignSystemDetail,
   DesignSystemFontUploadResponse,
   DesignSystemExtractionLineageRequest,
+  DesignSystemRules,
   DesignSystemTokensResponse,
   UpsertDesignSystemColorRequest,
 } from "@bg/shared";
+import { addDesignSystemRule, deleteDesignSystemRule } from "../services/design-system-rules";
 import { getDesignSystemDetail } from "../db/seed";
 import { extractPinterestMood, parsePinterestMoodRequest } from "../services/pinterest-mood";
 import {
@@ -174,8 +176,9 @@ systemRoutes.get("/api/design-systems/:id", async (c) => {
 });
 
 /** An unreadable token file is a server-side fault (permissions, I/O), not a bad request, so it is a 500 with a fixed message. */
-function designSystemEditStatus(err: DesignSystemAssetEditError): 404 | 400 | 500 {
-  if (err.code === "design_system_not_found") return 404;
+function designSystemEditStatus(err: DesignSystemAssetEditError): 404 | 409 | 400 | 500 {
+  if (err.code === "design_system_not_found" || err.code === "rule_not_found") return 404;
+  if (err.code === "rule_limit_reached" || err.code === "design_system_archived") return 409;
   return err.code === "token_file_unreadable" ? 500 : 400;
 }
 
@@ -209,6 +212,28 @@ systemRoutes.patch("/api/design-systems/:id/colors", async (c) => {
       return c.json(fail(err.code, err.message), designSystemEditStatus(err));
     }
     return c.json(unexpectedFailure("design_system_color_update_failed", "Design system color could not be saved", err), 500);
+  }
+});
+
+systemRoutes.post("/api/design-systems/:id/rules", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body)) return c.json(fail("invalid_body", "Expected a JSON object body"), 400);
+  try {
+    const rules = await addDesignSystemRule(c.req.param("id"), { kind: Reflect.get(body, "kind"), text: Reflect.get(body, "text"), origin: Reflect.get(body, "origin") });
+    return c.json(ok(rules satisfies DesignSystemRules), 201);
+  } catch (err) {
+    if (err instanceof DesignSystemAssetEditError) return c.json(fail(err.code, err.message), designSystemEditStatus(err));
+    return c.json(unexpectedFailure("design_system_rule_save_failed", "Design system rule could not be saved", err), 500);
+  }
+});
+
+systemRoutes.delete("/api/design-systems/:id/rules/:ruleId", async (c) => {
+  try {
+    const rules = await deleteDesignSystemRule(c.req.param("id"), c.req.param("ruleId"));
+    return c.json(ok(rules satisfies DesignSystemRules));
+  } catch (err) {
+    if (err instanceof DesignSystemAssetEditError) return c.json(fail(err.code, err.message), designSystemEditStatus(err));
+    return c.json(unexpectedFailure("design_system_rule_delete_failed", "Design system rule could not be deleted", err), 500);
   }
 });
 

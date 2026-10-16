@@ -77,6 +77,7 @@ export {
 };
 import { detectComponentSamples } from "./upload-component-detect";
 import { DesignSystemAssetEditError } from "./extraction-asset-errors";
+import { readDesignSystemRules } from "./design-system-rules";
 import { DesignSystemExtractError, uploadFailureCode } from "./extraction-errors";
 import { assertAggregateAssetBytes, assertAssetCount, ExcludedPathError, fetchWebsiteResource } from "./extraction-website";
 
@@ -526,8 +527,8 @@ export async function readDesignSystemTokens(systemId: string) {
       "Design system not found",
     );
   }
-  const [layout, assets, pages] = await Promise.all([readDesignSystemLayout(detail), readDesignSystemAssetGuide(detail), readDesignSystemPageCoverage(detail)]);
-  const extras = { layout, assets, ...(pages ? { pages } : {}) };
+  const [layout, assets, pages, rules] = await Promise.all([readDesignSystemLayout(detail), readDesignSystemAssetGuide(detail), readDesignSystemPageCoverage(detail), readDesignSystemRules(detail)]);
+  const extras = { layout, assets, rules, ...(pages ? { pages } : {}) };
   if (!detail.tokens_css_path) {
     return { ...extras, colors: [], token_file_path: null };
   }
