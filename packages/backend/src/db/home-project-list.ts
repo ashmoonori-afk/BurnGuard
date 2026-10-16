@@ -5,6 +5,7 @@ import { getDb } from "./client";
 import { designSystemsTable, projectsTable } from "./schema";
 import { PROMPT_SAMPLE_TAG, TUTORIAL_TAG } from "./seed-tutorials";
 import { ORIGINAL_SAMPLE_TAG } from "../data/original-samples";
+import { homeProjectFixtures } from "../data/home";
 
 export async function listHomeProjects(
   tab: string,
@@ -48,6 +49,8 @@ export async function listHomeProjects(
     items: filtered.slice(offset, offset + effectiveLimit).map(
       ({ current_revision, current_digest, ...summary }) => ({
         ...summary,
+        is_bundled: homeProjectFixtures.some((fixture) => fixture.id === summary.id)
+          || [TUTORIAL_TAG, ORIGINAL_SAMPLE_TAG, PROMPT_SAMPLE_TAG].some((tag) => summary.name.startsWith(tag)),
         thumbnail_path: projectThumbnailUrl({
           id: summary.id,
           current_revision,

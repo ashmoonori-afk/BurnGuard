@@ -15,7 +15,8 @@ import GenerationControls from "@/components/settings/GenerationControls";
 import { createProject, detectBackends } from "@/api/home";
 import { sendUserEvent } from "@/api/session";
 import { logoIdeationMessage } from "@/lib/logo-project";
-import { backendOptionLabel, backendSelectState, graphicBackendId } from "@/lib/backend-display";
+import { backendLabel, backendOptionLabel, backendSelectState, graphicBackendId } from "@/lib/backend-display";
+import { FIRST_RUN_CONNECTION_COPY, firstRunConnectionState } from "@/lib/first-run";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ProjectBriefFields, {
@@ -59,6 +60,7 @@ export default function NewProjectPanel({
   type,
   designSystems,
   defaultBackend,
+  guided = false,
   graphicReady = false,
   generationDefaults,
   systemsLoading,
@@ -72,6 +74,7 @@ export default function NewProjectPanel({
   type: ProjectType;
   designSystems: DesignSystemSummary[];
   defaultBackend: BackendId;
+  guided?: boolean;
   graphicReady?: boolean;
   generationDefaults?: Partial<Record<BackendId, GenerationOptions>>;
   systemsLoading: boolean;
@@ -215,33 +218,7 @@ export default function NewProjectPanel({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  if (choosingSystem) return <DesignSystemPicker
-    projectType={isTemplate ? templateFormat : type}
-    systems={selectable} selectedId={designSystemId} loading={systemsLoading} error={systemsError} allowNone={!isTemplate}
-    onSelect={setPickedSystemId} onRefresh={onRetrySystems} onBack={() => setChoosingSystem(false)}
-    onApply={(id) => { setPickedSystemId(id); setChoosingSystem(false); }}
-  />;
-
-  return (
-    <form className="p-6" onSubmit={(event) => {
-      event.preventDefault();
-      if (!canContinue || disabled || submitting.current || (needsImageBackend && !graphicReady)) return;
-      if (!built.ok || (designSystemId && (systemsLoading || systemsError))) return;
-      submitting.current = true;
-      setError(null);
-      createMutation.mutate(built.request);
-    }}>
-      <h2 className="mb-3 text-xs font-semibold text-muted-foreground">{t("home.creation.basics")}</h2>
-
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <label htmlFor="brief-objective" className="text-sm font-medium">{t("home.brief.objective")}</label>
-          <textarea id="brief-objective" rows={4} required maxLength={OBJECTIVE_MAX_LENGTH}
-            placeholder={t("home.brief.objectivePlaceholder")} value={form.objective} disabled={disabled}
-            onChange={(event) => update("objective", event.target.value)}
-            className={`${PROJECT_CONTROL_CLASS} h-auto resize-y py-3 leading-relaxed`} />
-        </div>
-        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={backendSelect.placeholder === null ? effectiveBackend : ""} disabled={disabled || needsImageBackend || backendSelect.placeholder !== null} onChange={(event) => setBackendId(event.target.value as BackendId)}>{backendSelect.placeholder === null ? detectedBackends.map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendOptionLabel(backend)}</option>) : <option value="">{t(backendSelect.placeholder)}</option>}</select>{detection.isError ? <p role="alert" className="text-xs text-destructive">{apiErrorCopy(detection.error)} <button type="button" onClick={() => void detection.refetch()} className="font-medium text-accent underline underline-offset-2 hover:no-underline">{t("home.retry")}</button></p> : null}</div>
+  const identityFields = (<>
         <div className="space-y-1.5">
           <label htmlFor="project-name" className={PROJECT_LABEL_CLASS}>
             {t("home.creation.name")}
@@ -260,6 +237,47 @@ export default function NewProjectPanel({
           <Input id="brief-audience" maxLength={AUDIENCE_MAX_LENGTH} value={form.audience} disabled={disabled}
             placeholder={t("home.brief.audiencePlaceholder")} onChange={(event) => update("audience", event.target.value)} />
         </div>
+
+  </>);
+  const materialsField = (
+        <div className="space-y-2"><label htmlFor="project-materials" className={PROJECT_LABEL_CLASS}>{t("home.creation.attach")}</label><input id="project-materials" type="file" multiple accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")} disabled={disabled} onChange={(event) => { const picked = Array.from(event.target.files ?? []); setItems((current) => planAttachmentIntake(current, picked)); event.target.value = ""; }} className="block w-full text-sm" /><p className="text-xs text-muted-foreground">{t("home.creation.attachHint")}</p><ComposerAttachments items={items} sending={disabled} onRemove={(id) => setItems((current) => current.filter((item) => item.id !== id))} onRoleChange={(id, role) => setItems((current) => setAttachmentRole(current, id, role))} /></div>
+  );
+  if (choosingSystem) return <DesignSystemPicker
+    projectType={isTemplate ? templateFormat : type}
+    systems={selectable} selectedId={designSystemId} loading={systemsLoading} error={systemsError} allowNone={!isTemplate}
+    onSelect={setPickedSystemId} onRefresh={onRetrySystems} onBack={() => setChoosingSystem(false)}
+    onApply={(id) => { setPickedSystemId(id); setChoosingSystem(false); }}
+  />;
+
+  return (
+    <form className={guided ? "[&_select]:min-h-11" : "p-6"} onSubmit={(event) => {
+      event.preventDefault();
+      if (!canContinue || disabled || submitting.current || (needsImageBackend && !graphicReady)) return;
+      if (!built.ok || (designSystemId && (systemsLoading || systemsError))) return;
+      submitting.current = true;
+      setError(null);
+      createMutation.mutate(built.request);
+    }}>
+      {!guided && <h2 className="mb-3 text-xs font-semibold text-muted-foreground">{t("home.creation.basics")}</h2>}
+
+      <div className="space-y-4">
+        {guided && <ul className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+          {detectedBackends.map((backend) => {
+            const state = firstRunConnectionState(backend);
+            return <li key={backend.id} data-connection-state={state} className="rounded-md bg-muted px-2 py-1">
+              {backendLabel(backend.id)}: {t(FIRST_RUN_CONNECTION_COPY[state])}
+            </li>;
+          })}
+        </ul>}
+        <div className="space-y-2">
+          <label htmlFor="brief-objective" className="text-sm font-medium">{t("home.brief.objective")}</label>
+          <textarea id="brief-objective" rows={4} required maxLength={OBJECTIVE_MAX_LENGTH}
+            placeholder={t("home.brief.objectivePlaceholder")} value={form.objective} disabled={disabled}
+            onChange={(event) => update("objective", event.target.value)}
+            className={`${PROJECT_CONTROL_CLASS} h-auto resize-y py-3 leading-relaxed`} />
+        </div>
+        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={backendSelect.placeholder === null ? effectiveBackend : ""} disabled={disabled || needsImageBackend || backendSelect.placeholder !== null} onChange={(event) => setBackendId(event.target.value as BackendId)}>{backendSelect.placeholder === null ? detectedBackends.map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendOptionLabel(backend)}</option>) : <option value="">{t(backendSelect.placeholder)}</option>}</select>{detection.isError ? <p role="alert" className="text-xs text-destructive">{apiErrorCopy(detection.error)} <button type="button" onClick={() => void detection.refetch()} className="font-medium text-accent underline underline-offset-2 hover:no-underline">{t("home.retry")}</button></p> : null}</div>
+        {!guided && identityFields}
 
         <div className="space-y-1.5">
           <label htmlFor="design-system" className={PROJECT_LABEL_CLASS}>
@@ -298,7 +316,7 @@ export default function NewProjectPanel({
                   </option>
                 ))}
           </select>
-          {!systemsLoading && !systemsError && suggestions.length > 0 && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-qa="creation-suggestions">
+          {!guided && !systemsLoading && !systemsError && suggestions.length > 0 && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-qa="creation-suggestions">
             {suggestions.map((card) => <button key={card.id} type="button" disabled={disabled} aria-pressed={designSystemId === card.id}
               onClick={() => setPickedSystemId(card.id)}
               className={`min-w-0 overflow-hidden rounded-lg border border-border text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${designSystemId === card.id ? "bg-accent-soft" : "bg-card hover:bg-muted"}`}>
@@ -306,7 +324,7 @@ export default function NewProjectPanel({
               <span className="block break-words p-2 text-xs font-medium">{card.name}</span>
             </button>)}
           </div>}
-          <Button ref={returnFocusRef} type="button" variant="outline" className="w-full" disabled={disabled} onClick={() => setChoosingSystem(true)}>{t("home.picker.browse")}</Button>
+          {!guided && <Button ref={returnFocusRef} type="button" variant="outline" className="w-full" disabled={disabled} onClick={() => setChoosingSystem(true)}>{t("home.picker.browse")}</Button>}
           {systemsError ? (
             <button
               type="button"
@@ -346,10 +364,11 @@ export default function NewProjectPanel({
           </div>
         )}
 
-        <div className="space-y-2"><label htmlFor="project-materials" className={PROJECT_LABEL_CLASS}>{t("home.creation.attach")}</label><input id="project-materials" type="file" multiple accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")} disabled={disabled} onChange={(event) => { const picked = Array.from(event.target.files ?? []); setItems((current) => planAttachmentIntake(current, picked)); event.target.value = ""; }} className="block w-full text-sm" /><p className="text-xs text-muted-foreground">{t("home.creation.attachHint")}</p><ComposerAttachments items={items} sending={disabled} onRemove={(id) => setItems((current) => current.filter((item) => item.id !== id))} onRoleChange={(id, role) => setItems((current) => setAttachmentRole(current, id, role))} /></div>
+        {!guided && materialsField}
         <details className="rounded-xl border border-border bg-muted/30 p-4" data-qa="creation-advanced">
           <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("home.brief.details")}</summary>
           <div className="mt-4 space-y-4">
+            {guided && <>{identityFields}{materialsField}</>}
             <GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} />
         {isGraphic && (
           <GraphicCanvasFields

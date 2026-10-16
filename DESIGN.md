@@ -66,6 +66,12 @@ for icons, borders, and large or bold labels.
   detailed fields share one collapsed Advanced section without changing their
   limits or defaults. Create and generate admits one first message, preserves the
   draft if sending fails, and never sends an empty request.
+- **FirstRunGuide**: a dismissible, nonmodal home card only before a user has
+  created a project. Reuse provider detection and distinguish signed-in,
+  signed-out, unknown, failed-probe, and missing states. Its compact creation
+  form keeps optional identity, attachments, and detailed controls in Advanced;
+  the normal creation entry remains available. Successful creation or explicit
+  dismissal hides the guide persistently when browser storage is available.
 - **CanvasTopBar**: mode controls, refresh, and file-level undo. Each action
   has an accessible name and a disabled state when unavailable.
   Website surfaces also offer Fit, Desktop (1440), Tablet (768), and Phone
