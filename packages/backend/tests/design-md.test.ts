@@ -80,6 +80,11 @@ describe("one-file design Markdown", () => {
     expect(rendered).toContain('label: "a: b"');
   });
 
+  test("Given font stacks with quoted family names When exported and imported again Then the values survive unchanged", () => {
+    const doc = { ...parseDesignMd(SAMPLE), tokens: { colors: {}, typography: { "font-sans": '"DM Sans", sans-serif', "font-display": "'Iowan Old Style', serif" }, spacing: {}, radius: {}, shadows: {}, tokens: {} } };
+    expect(parseDesignMd(renderDesignMd(doc)).tokens.typography).toEqual(doc.tokens.typography);
+  });
+
   test("Given malformed, empty, oversized or injected input When parsed Then it is refused or the unsafe value is dropped", () => {
     expect(() => parseDesignMd("---\nname: x\n")).toThrow(DesignMdError);
     expect(() => parseDesignMd("just text")).toThrow(DesignMdError);

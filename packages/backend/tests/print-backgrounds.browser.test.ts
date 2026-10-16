@@ -32,7 +32,7 @@ describe("rendered print backgrounds", () => {
   });
 
   test("Given stylesheet shorthand and layered backgrounds, When measured, Then each rendered URL is checked", async () => {
-    const images = await measure('<div id="photo"></div>', `#photo{width:794px;height:1123px;background:linear-gradient(transparent,black),url("${low}"),url("${high}")}`);
+    const images = await measure('<div id="photo"></div>', `#photo{width:794px;height:1123px;background:linear-gradient(transparent,black),url("${low}"),url("${high}");background-size:cover}`);
     expect(images.map(image => image.severity)).toEqual(["strong_warn", "ok"]);
     expect(images.map(image => image.intrinsic_width_px)).toEqual([600, 3000]);
   });
@@ -51,6 +51,20 @@ describe("rendered print backgrounds", () => {
 
   test("Given a print-only background, When measured, Then print media rather than screen styles is used", async () => {
     const images = await measure('<div id="photo"></div>', `#photo{width:794px;height:1123px}@media print{#photo{background-image:url("${low}")}}`);
+    expect(images).toHaveLength(1);
+    expect(images[0]?.severity).toBe("strong_warn");
+  });
+
+  test("Given a small texture tiled with background-size, When measured, Then each drawn tile rather than the element box sets the resolution", async () => {
+    const tile = createCanvas(300, 300).toDataURL("image/png");
+    const images = await measure(`<div id="texture" style="width:794px;height:1123px;background-image:url('${tile}');background-size:25px 25px;background-repeat:repeat"></div>`);
+    expect(images).toHaveLength(1);
+    expect(images[0]?.severity).toBe("ok");
+  });
+
+  test("Given a cover background on a box with a different ratio, When measured, Then the scaled image and its cropped share are used", async () => {
+    const wide = createCanvas(3000, 1000).toDataURL("image/png");
+    const images = await measure(`<div style="width:794px;height:1123px;background:url('${wide}') center/cover no-repeat"></div>`);
     expect(images).toHaveLength(1);
     expect(images[0]?.severity).toBe("strong_warn");
   });

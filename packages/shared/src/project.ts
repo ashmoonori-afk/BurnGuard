@@ -8,6 +8,8 @@ export interface ProjectDesignSystemPin {
   readonly digest: string;
   readonly candidate_digest: string;
   readonly rules_changed: boolean;
+  /** True when the only difference from the candidate is the design-system Do / Don't rule block. */
+  readonly rules_only_changed?: boolean;
   readonly tokens_changed: boolean;
 }
 

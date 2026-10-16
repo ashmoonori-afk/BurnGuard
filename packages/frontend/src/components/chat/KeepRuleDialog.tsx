@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { MAX_DESIGN_SYSTEM_RULE_CHARS, type DesignSystemRuleKind } from "@bg/shared";
 import type { ProjectDesignSystemPin } from "@bg/shared/project";
-import { apiFetch } from "@/api/client";
+import { ApiError, apiFetch } from "@/api/client";
 import { addDesignSystemRule } from "@/api/design-system";
 import { appendProjectInstruction } from "@/api/project";
 import { Button } from "@/components/ui/button";
@@ -17,15 +17,21 @@ export type KeepRuleSource = { readonly turnId: string; readonly text: string };
 type Target = "system" | "project";
 
 /**
- * Applies a saved system rule to this project's pinned baseline when the rule list is the only change, so the next turn
- * already follows it; any other pending system change keeps waiting for the user's explicit baseline update.
+ * Applies a saved system rule to this project's pinned baseline only when that rule is the sole pending change, so the
+ * next turn already follows it; any other pending system change keeps waiting for the user's explicit baseline update.
+ * The rule is already saved at this point, so a refused refresh (for example while a turn runs) is reported as pending.
  */
 async function applyRuleToPin(projectId: string): Promise<boolean> {
   const url = `/api/projects/${encodeURIComponent(projectId)}/design-system-pin`;
-  const pin = await apiFetch<ProjectDesignSystemPin | null>(url);
-  if (!pin || pin.digest === pin.candidate_digest || pin.tokens_changed) return false;
-  await apiFetch(url, { method: "POST", body: JSON.stringify({ expected_digest: pin.digest, candidate_digest: pin.candidate_digest }) });
-  return true;
+  try {
+    const pin = await apiFetch<ProjectDesignSystemPin | null>(url);
+    if (!pin || pin.digest === pin.candidate_digest || pin.rules_only_changed !== true) return false;
+    await apiFetch(url, { method: "POST", body: JSON.stringify({ expected_digest: pin.digest, candidate_digest: pin.candidate_digest }) });
+    return true;
+  } catch (error) {
+    if (error instanceof ApiError) return false;
+    throw error;
+  }
 }
 
 export default function KeepRuleDialog({ projectId, designSystemId, source, onClose }: {
@@ -73,10 +79,10 @@ export default function KeepRuleDialog({ projectId, designSystemId, source, onCl
           <DialogDescription>{t("chat.keepRule.help")}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap gap-2">
-          <select aria-label={t("chat.keepRule.kind")} className="h-9 rounded-md border border-border bg-background px-2 text-sm" value={kind} onChange={(event) => setKind(event.target.value === "dont" ? "dont" : "do")}>
+          {target === "system" ? <select aria-label={t("chat.keepRule.kind")} className="h-9 rounded-md border border-border bg-background px-2 text-sm" value={kind} onChange={(event) => setKind(event.target.value === "dont" ? "dont" : "do")}>
             <option value="do">{t("system.rules.do")}</option>
             <option value="dont">{t("system.rules.dont")}</option>
-          </select>
+          </select> : null}
           <select aria-label={t("chat.keepRule.target")} className="h-9 rounded-md border border-border bg-background px-2 text-sm" value={target} onChange={(event) => setTarget(event.target.value === "system" && designSystemId ? "system" : "project")}>
             {designSystemId ? <option value="system">{t("chat.keepRule.targetSystem")}</option> : null}
             <option value="project">{t("chat.keepRule.targetProject")}</option>
