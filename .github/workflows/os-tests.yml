@@ -166,6 +166,7 @@ jobs:
           packages/backend/tests/chromium-launch-hardening.test.ts
           packages/backend/tests/design-audit-skip-link.test.ts
           scripts/qa/check-os-matrix-coverage.test.ts
+          scripts/qa/frontend-failure-evidence.test.ts
           scripts/qa/check-flake-patterns.test.ts
           scripts/qa/check-migration-order.test.ts
           scripts/whitespace-base.test.ts

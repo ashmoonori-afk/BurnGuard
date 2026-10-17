@@ -1,0 +1,61 @@
+name: Frontend failure evidence
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/frontend/**
+      - packages/shared/**
+      - scripts/test-preload.ts
+      - scripts/qa/frontend-failure-evidence*
+      - bun.lock
+      - bunfig.toml
+      - .github/workflows/frontend-failure-evidence.yml
+  pull_request:
+    paths:
+      - packages/frontend/**
+      - packages/shared/**
+      - scripts/test-preload.ts
+      - scripts/qa/frontend-failure-evidence*
+      - bun.lock
+      - bunfig.toml
+      - .github/workflows/frontend-failure-evidence.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    # Configure this repository variable with an RSA >=3072-bit SPKI public PEM.
+    # Keep the matching private key OFF GitHub. No evidence is uploaded unencrypted.
+    # Explicit opt-in is needed because artifacts in a public repository are not private.
+    if: vars.BG_FRONTEND_EVIDENCE_PUBLIC_KEY != ''
+    runs-on: ubuntu-latest
+    # Enclose the collector's three bounded 15-minute phases and setup/upload.
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.0
+      - name: Capture one frozen fresh run and one warm comparison
+        env:
+          BG_FRONTEND_EVIDENCE_PUBLIC_KEY: ${{ vars.BG_FRONTEND_EVIDENCE_PUBLIC_KEY }}
+          BG_FRONTEND_EVIDENCE_DIRECTORY: ${{ runner.temp }}/frontend-failure-evidence
+        run: bun scripts/qa/frontend-failure-evidence.ts
+      - name: Retain encrypted failures for seven days
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/frontend-failure-evidence/frontend-failure.encrypted.json
+          retention-days: 7
+          if-no-files-found: error

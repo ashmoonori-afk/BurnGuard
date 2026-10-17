@@ -1,0 +1,131 @@
+#!/usr/bin/env bun
+// F06: preserve the next failure, not a guessed fix for the unrecovered hpdesk failure.
+import { createCipheriv, createHash, createPublicKey, publicEncrypt, randomBytes, constants } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+const OUTPUT_LIMIT = 4 * 1024 * 1024;
+const RUN_TIMEOUT = 15 * 60 * 1000;
+
+export interface CapturedOutput {
+  readonly text: string;
+  readonly bytes: number;
+  readonly truncated: boolean;
+}
+
+/** Drain even after the byte cap so evidence collection cannot deadlock the test process. */
+export async function captureOutput(stream: ReadableStream<Uint8Array>): Promise<CapturedOutput> {
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  let retained = 0;
+  for await (const chunk of stream) {
+    bytes += chunk.length;
+    const kept = chunk.subarray(0, Math.max(0, OUTPUT_LIMIT - retained));
+    if (kept.length > 0) chunks.push(kept);
+    retained += kept.length;
+  }
+  return { text: Buffer.concat(chunks).toString("utf8"), bytes, truncated: retained < bytes };
+}
+
+/** Identities come from executed runner records, never source-text test-name guesses. */
+export function testRecords(text: string): readonly { readonly file: string; readonly status: string; readonly name: string }[] {
+  let file = "";
+  const records: { file: string; status: string; name: string }[] = [];
+  for (const line of text.split("\n")) {
+    const header = line.replaceAll("\\", "/").replace(/^\.\//, "");
+    if (/^packages\/frontend\/tests\/.*\.test\.tsx?:$/.test(header)) file = header.slice(0, -1);
+    const match = /^\((pass|fail|skip|todo)\) (.*?)(?: \[\d+(?:\.\d+)?m?s\])?$/.exec(line);
+    if (match && file) records.push({ file, status: match[1], name: match[2] });
+  }
+  return records;
+}
+
+/** Only ciphertext leaves the runner. The RSA private key stays with the evidence owner. */
+export function sealEvidence(plaintext: string, recipientPem: string): string {
+  const recipient = createPublicKey(recipientPem);
+  if (recipient.asymmetricKeyType !== "rsa" || (recipient.asymmetricKeyDetails?.modulusLength ?? 0) < 3072) {
+    throw new Error("evidence_recipient_invalid");
+  }
+  const key = randomBytes(32);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  return JSON.stringify({
+    schema: 1, algorithm: "RSA-OAEP-SHA256/AES-256-GCM",
+    key: publicEncrypt({ key: recipient, oaepHash: "sha256", padding: constants.RSA_PKCS1_OAEP_PADDING }, key).toString("base64"),
+    iv: iv.toString("base64"), tag: cipher.getAuthTag().toString("base64"),
+    ciphertext: ciphertext.toString("base64"),
+  });
+}
+
+if (import.meta.main) {
+  try {
+    if (Bun.version !== "1.3.14") throw new Error("evidence_bun_version");
+    const recipient = process.env.BG_FRONTEND_EVIDENCE_PUBLIC_KEY;
+    if (!recipient) throw new Error("evidence_recipient_missing");
+    // Validate before any install/test starts; never fall back to publishing plaintext.
+    sealEvidence("", recipient);
+    const root = path.resolve(import.meta.dir, "../..");
+    const destination = process.env.BG_FRONTEND_EVIDENCE_DIRECTORY;
+    if (!destination || !path.isAbsolute(destination)) throw new Error("evidence_directory_required");
+    await mkdir(destination, { recursive: true, mode: 0o700 });
+    const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
+    const revision = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd: root, stdout: "pipe", stderr: "pipe" });
+    const [commit, revisionError, revisionExit] = await Promise.all([
+      new Response(revision.stdout).text(), new Response(revision.stderr).text(), revision.exited,
+    ]);
+    if (revisionExit !== 0 || revisionError) throw new Error("evidence_revision_failed");
+    const manifest = [...new Bun.Glob("packages/frontend/tests/**/*.test.{ts,tsx}").scanSync({ cwd: root })].sort();
+    if (manifest.length === 0) throw new Error("evidence_manifest_empty");
+    const lock = await readFile(path.join(root, "bun.lock"));
+    // No provider credentials, launch authority or recipient configuration reach the child.
+    const environment = {
+      PATH: process.env.PATH ?? "", HOME: os.homedir(), TMPDIR: os.tmpdir(),
+      CI: "1", LANG: "en_US.UTF-8", TZ: "Asia/Seoul", NO_COLOR: "1", FORCE_COLOR: "0",
+    };
+    const command = [process.execPath, "test", "--timeout", "30000", ...manifest];
+    const receipt = {
+      schema: 1, commit: commit.trim(), lock_sha256: digest(lock),
+      manifest, manifest_sha256: digest(JSON.stringify(manifest)), command,
+      environment, bun: Bun.version, platform: process.platform, arch: process.arch,
+      output_limit_per_stream: OUTPUT_LIMIT,
+    };
+    const results: { phase: string; command: string[]; exit: number; signal: string | null; stdout: CapturedOutput; stderr: CapturedOutput }[] = [];
+    for (const [phase, invocation] of [
+      ["install", [process.execPath, "install", "--frozen-lockfile"]],
+      ["fresh", command],
+      ["warm", command],
+    ] satisfies [string, string[]][]) {
+      const child = Bun.spawn(invocation, {
+        cwd: root, env: environment, stdout: "pipe", stderr: "pipe",
+        timeout: RUN_TIMEOUT, killSignal: "SIGKILL",
+      });
+      const [stdout, stderr, exit] = await Promise.all([captureOutput(child.stdout), captureOutput(child.stderr), child.exited]);
+      results.push({ phase, command: invocation, exit, signal: child.signalCode, stdout, stderr });
+      console.log(`frontend evidence: ${phase} exit=${exit}`);
+      if (phase === "install" && exit !== 0) break;
+      if (digest(await readFile(path.join(root, "bun.lock"))) !== receipt.lock_sha256) throw new Error("evidence_lock_changed");
+    }
+    const tests = results.filter(result => result.phase !== "install").map(result => ({
+      phase: result.phase, records: testRecords(`${result.stdout.text}\n${result.stderr.text}`),
+    }));
+    const names = tests.map(run => run.records.map(record => `${record.file}\t${record.name}`).sort());
+    const sameNames = names.length === 2 && names.every(run => run.length > 0) && JSON.stringify(names[0]) === JSON.stringify(names[1]);
+    const incomplete = results.some(result => result.stdout.truncated || result.stderr.truncated);
+    const failed = results.some(result => result.exit !== 0) || !sameNames || incomplete;
+    if (failed) {
+      await writeFile(path.join(destination, "frontend-failure.encrypted.json"), sealEvidence(JSON.stringify({
+        receipt, results, tests, same_names: sameNames,
+        first_failure: results.find(result => result.exit !== 0)?.phase ?? null,
+        incomplete,
+      }), recipient), { mode: 0o600, flag: "wx" });
+    }
+    console.log(`frontend evidence: fresh=${tests[0]?.records.length ?? 0} warm=${tests[1]?.records.length ?? 0} same_names=${sameNames} retained=${failed}`);
+    process.exitCode = failed ? 1 : 0;
+  } catch {
+    // A CLI boundary must not print diagnostics containing private paths, output or recipient data.
+    console.error("frontend_evidence_capture_failed");
+    process.exitCode = 1;
+  }
+}
