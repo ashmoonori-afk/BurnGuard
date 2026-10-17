@@ -129,6 +129,8 @@ export const workspaceMessages = defineMessages({
   "workspace.project.applyStyleFailed": { ko: "스타일을 적용하지 못했어요", en: "The styles couldn't be applied", "zh-CN": "无法应用样式" },
   "workspace.project.saveEditFailed": { ko: "편집을 저장하지 못했어요", en: "The edit couldn't be saved", "zh-CN": "无法保存编辑" },
   "workspace.project.notFound": { ko: "프로젝트를 찾을 수 없어요", en: "The project couldn't be found", "zh-CN": "找不到项目" },
+  "workspace.project.notFoundHelp": { ko: "삭제되었거나 주소가 잘못되었을 수 있어요. 프로젝트 목록에서 다시 골라 주세요.", en: "It may have been deleted, or the address may be wrong. Pick it again from your projects.", "zh-CN": "它可能已被删除，或地址有误。请从项目列表中重新选择。" },
+  "workspace.project.backToProjects": { ko: "프로젝트로 돌아가기", en: "Back to projects", "zh-CN": "返回项目" },
   "workspace.project.turnRestored": { ko: "이전 턴으로 되돌렸어요", en: "The previous turn was restored", "zh-CN": "已恢复到上一轮" },
   "workspace.project.restoreTurnFailed": { ko: "턴을 되돌리지 못했어요", en: "The turn couldn't be restored", "zh-CN": "无法恢复该轮次" },
   "workspace.project.drawSaveRetained": { ko: "그리기를 저장하지 못했어요. 현재 그리기는 화면에 남아 있어요. 다시 시도해 주세요.", en: "The drawing couldn't be saved. It remains on screen. Please try again.", "zh-CN": "无法保存绘图。当前绘图仍保留在画面上。请重试。" },

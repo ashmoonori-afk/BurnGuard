@@ -170,7 +170,10 @@ export const INITIAL_BRIEF_FORM: BriefForm = {
   logoAvoid: "",
 };
 
-export const PROJECT_LABEL_CLASS = "text-xs font-medium text-foreground/80";
+/** One field-label style for every creation and import form. */
+export const PROJECT_LABEL_CLASS = "text-sm font-medium text-foreground";
+/** One section-heading style for the numbered sections of the creation dialog. */
+export const PROJECT_SECTION_CLASS = "text-sm font-semibold text-foreground";
 export const PROJECT_CONTROL_CLASS =
   "flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground opacity-100 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground";
 

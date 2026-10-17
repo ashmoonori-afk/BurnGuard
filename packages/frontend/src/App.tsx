@@ -4,6 +4,7 @@ import HomeView from "@/views/HomeView";
 import ProjectView from "@/views/ProjectView";
 import DesignSystemView from "@/views/DesignSystemView";
 import SettingsView from "@/views/SettingsView";
+import NotFoundView from "@/views/NotFoundView";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ToastContainer from "@/components/errors/BackendCrashToast";
 import StarPrompt from "@/components/layout/StarPrompt";
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/projects/:id" element={<ProjectRoute />} />
           <Route path="/systems/:id" element={<DesignSystemView />} />
           <Route path="/settings" element={<SettingsView />} />
+          <Route path="*" element={<NotFoundView />} />
         </Routes>
       </AppShell>
       <SettingsModal />

@@ -1,5 +1,6 @@
 import { loadComposerDraft } from "@/components/chat/useComposerDraft";
 import ProjectDesignSystemVersion from "@/components/systems/ProjectDesignSystemVersion";
+import ProjectNotFound from "@/components/project/ProjectNotFound";
 import type { ReadyAttachmentSource } from "@/components/chat/attachment-intake";
 import { saveAndRequestCommentEdit } from "@/components/modes/comment-edit-request";
 import { CommentItem } from "@/components/modes/CommentPanel";
@@ -235,6 +236,7 @@ export default function ProjectView() {
     queryKey: ["project", id],
     queryFn: () => getProject(id!),
     enabled: Boolean(id),
+    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 1,
   });
   const sessionQuery = useQuery({
     queryKey: ["project", id, "session"],
@@ -535,15 +537,6 @@ export default function ProjectView() {
     },
     onError: (error) => handleWriteError("workspace.project.saveEditFailed", error),
   });
-
-  useEffect(() => {
-    const error = projectQuery.error;
-    if (!(error instanceof ApiError) || error.status !== 404) {
-      return;
-    }
-    pushToast({ title: globalT("workspace.project.notFound"), tone: "error" });
-    navigate("/", { replace: true });
-  }, [navigate, projectQuery.error, pushToast]);
 
   useEffect(() => {
     activeTabIdRef.current = activeTabId;
@@ -1155,6 +1148,10 @@ export default function ProjectView() {
     sessionQuery.isLoading ||
     filesQuery.isLoading ||
     artifactsQuery.isLoading || (Boolean(sessionQuery.data) && !stream.state && !stream.error));
+
+  if (projectQuery.error instanceof ApiError && projectQuery.error.status === 404) {
+    return <ProjectNotFound retrying={projectQuery.isFetching} onRetry={() => void projectQuery.refetch()} />;
+  }
 
   if (isLoading) {
     return (
