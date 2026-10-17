@@ -4,6 +4,7 @@ import {
   apiFetch,
   authorizedFetch,
   bootstrapApiAuthority,
+  isAuthorityExpired,
 } from "../src/api/client";
 import { catalogDetailRows, getDesignSystem, updateDesignSystemWithConflictReload } from "../src/api/design-system-metadata";
 import { deleteProject, listDesignSystems, restoreDeletedProject } from "../src/api/home";
@@ -29,6 +30,18 @@ afterEach(() => {
 });
 
 describe("API authority client", () => {
+  test("Given denied, offline, and invalid bootstrap responses When bootstrapping Then safe typed failure kinds stay distinct", async () => {
+    const cases = [
+      { response: () => Response.json({ error: { code: "forbidden", message: "private" } }, { status: 403 }), kind: "denied", status: 403 },
+      { response: () => { throw new TypeError("private network detail"); }, kind: "network", status: 0 },
+      { response: () => new Response("private server detail", { status: 503 }), kind: "other", status: 503 },
+      { response: () => Response.json({ data: {} }), kind: "other", status: 200 },
+    ];
+    for (const entry of cases) {
+      globalThis.fetch = mock(async () => entry.response()) as typeof fetch;
+      await expect(bootstrapApiAuthority()).rejects.toMatchObject({ name: "BootstrapError", kind: entry.kind, status: entry.status });
+    }
+  });
   test("Given a project When showing its folder Then the client sends an authorized POST and accepts an empty response", async () => {
     const calls: Array<{ input: string; init?: RequestInit }> = [];
     globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -42,6 +55,40 @@ describe("API authority client", () => {
     expect(calls[0]?.input).toBe("/api/projects/project%2Fid/show-folder");
     expect(calls[0]?.init?.method).toBe("POST");
     expect(new Headers(calls[0]?.init?.headers).get("x-burnguard-capability")).toBe("folder-client");
+  });
+  test("Given a denied replacement bootstrap When a mutation is attempted Then it fails as expired authority without another request", async () => {
+    let requests = 0;
+    globalThis.fetch = mock(async () => {
+      requests += 1;
+      return requests === 1
+        ? Response.json({ data: { capability: "launch-before-denial" } })
+        : Response.json({ error: { code: "forbidden", message: "denied" } }, { status: 403 });
+    }) as typeof fetch;
+    await bootstrapApiAuthority();
+    await expect(bootstrapApiAuthority()).rejects.toMatchObject({ kind: "denied" });
+    await expect(authorizedFetch("/api/projects", { method: "POST" })).rejects.toMatchObject({ code: "forbidden", status: 403 });
+    expect(requests).toBe(2);
+  });
+
+  test("Given a request from the old launch When its denial arrives after a fresh bootstrap Then the new authority stays usable", async () => {
+    const oldResponse = Promise.withResolvers<Response>();
+    let generation = 0;
+    let privateRequests = 0;
+    globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/bootstrap") {
+        generation += 1;
+        return Response.json({ data: { capability: `launch-${generation}` } });
+      }
+      privateRequests += 1;
+      return privateRequests === 1 ? oldResponse.promise : Response.json({ data: {} });
+    }) as typeof fetch;
+    await bootstrapApiAuthority();
+    const pending = authorizedFetch("/api/projects");
+    await bootstrapApiAuthority();
+    oldResponse.resolve(Response.json({ error: { code: "forbidden", message: "old launch" } }, { status: 403 }));
+    expect((await pending).status).toBe(403);
+    expect(isAuthorityExpired()).toBe(false);
+    expect((await authorizedFetch("/api/projects", { method: "POST" })).status).toBe(200);
   });
   test("Given more than one catalog page, When listing systems, Then external systems beyond the first page remain selectable", async () => {
     const offsets: string[] = [];
@@ -133,9 +180,7 @@ describe("API authority client", () => {
 
     await bootstrapApiAuthority();
     await expect(bootstrapApiAuthority()).rejects.toThrow();
-    await expect(apiFetch("/api/private")).rejects.toThrow(
-      "BurnGuard API authority is not initialized.",
-    );
+    await expect(apiFetch("/api/private")).rejects.toMatchObject({ code: "forbidden", status: 403 });
   });
 
   test("Given a bootstrap request that never answers When the timeout elapses Then it rejects and the next call starts a fresh request", async () => {

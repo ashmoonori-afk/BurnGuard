@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NormalizedEvent } from "@bg/shared";
-import { bootstrapApiAuthority } from "@/api/client";
+import { bootstrapApiAuthority, isAuthorityDenied, onAuthorityRejected, rejectLaunchAuthority } from "@/api/client";
 import { getSessionSnapshot, listSessionEvents, subscribeSessionStream } from "@/api/session";
 import { mergeSessionEvents, type SessionEventState } from "@/lib/session-event-state";
+import { useLaunchAuthority } from "./useLaunchAuthority";
 
 type SessionStreamApi = {
   readonly getSessionSnapshot: typeof getSessionSnapshot;
@@ -25,11 +26,11 @@ export type SessionStreamHandlers = {
 };
 
 /**
- * A restarted backend mints a new launch capability, so every request with the old one answers 403
- * and the stream can never come back on its own: a retry re-bootstraps the capability first.
+ * A connectivity retry must establish authority before opening another stream.
+ * A denied bootstrap propagates; it must never silently reopen a stale stream.
  */
 export async function retrySessionStream(resubscribe: () => void): Promise<void> {
-  await bootstrapApiAuthority().catch(() => {});
+  await bootstrapApiAuthority();
   resubscribe();
 }
 
@@ -44,6 +45,35 @@ async function refreshSessionSnapshot(sessionId: string, stateRef: StateRef, set
 export function openSessionStream(sessionId: string, stateRef: StateRef, handlers: SessionStreamHandlers, api: SessionStreamApi = sessionApi): () => void {
   let active = true;
   let unsubscribe = () => {};
+  let checkedDisconnect = false;
+  let disconnectCheck: AbortController | null = null;
+  const closeDenied = () => {
+    if (!active) return;
+    active = false;
+    disconnectCheck?.abort();
+    unsubscribe();
+    handlers.setReconnecting(false);
+    handlers.setError(true);
+  };
+  const stopAuthorityListener = onAuthorityRejected(closeDenied);
+  const handleFailure = (error: unknown) => {
+    if (active && isAuthorityDenied(error)) {
+      rejectLaunchAuthority();
+      closeDenied();
+    }
+  };
+  const checkDisconnect = () => {
+    if (checkedDisconnect) return;
+    checkedDisconnect = true;
+    const controller = new AbortController();
+    disconnectCheck = controller;
+    const timer = setTimeout(() => controller.abort(), 15_000);
+    void api.getSessionSnapshot(sessionId, controller.signal)
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) handleFailure(error);
+      })
+      .finally(() => clearTimeout(timer));
+  };
   stateRef.current = null;
   handlers.setState(null);
   handlers.setError(false);
@@ -69,6 +99,7 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
       }, (report) => {
         if (!active) return;
         if (report.kind === "connection") {
+          checkDisconnect();
           if (report.state === "closed") { handlers.setReconnecting(false); handlers.setError(true); } else handlers.setReconnecting(true);
           return;
         }
@@ -76,21 +107,23 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
         handlers.setStale(true);
         refreshSessionSnapshot(sessionId, stateRef, handlers.setState, api)
           .then(() => { if (active) handlers.setStale(false); })
-          .catch(() => { if (active) handlers.setStale(true); });
+          .catch((error: unknown) => { handleFailure(error); if (active) handlers.setStale(true); });
       }, {
         afterSequence: stateRef.current.sequence,
         onOpen: () => {
           if (!active) return;
+          disconnectCheck?.abort();
+          checkedDisconnect = false;
           handlers.setError(false);
           handlers.setReconnecting(false);
           refreshSessionSnapshot(sessionId, stateRef, handlers.setState, api)
             .then(() => { if (active) handlers.setStale(false); })
-            .catch(() => { if (active) handlers.setStale(true); });
+            .catch((error: unknown) => { handleFailure(error); if (active) handlers.setStale(true); });
         },
       });
-    } catch { if (active) handlers.setError(true); }
+    } catch (error) { handleFailure(error); if (active) handlers.setError(true); }
   })();
-  return () => { active = false; unsubscribe(); };
+  return () => { active = false; disconnectCheck?.abort(); stopAuthorityListener(); unsubscribe(); };
 }
 
 export function useSessionEvents(sessionId: string | undefined, onLiveEvent: (event: NormalizedEvent) => void) {
@@ -99,6 +132,7 @@ export function useSessionEvents(sessionId: string | undefined, onLiveEvent: (ev
   const [reconnecting, setReconnecting] = useState(false);
   const [stale, setStale] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const authorityExpired = useLaunchAuthority();
   const stateRef = useRef<SessionEventState | null>(null);
   const onLiveRef = useRef(onLiveEvent);
   onLiveRef.current = onLiveEvent;
@@ -117,5 +151,5 @@ export function useSessionEvents(sessionId: string | undefined, onLiveEvent: (ev
     setReconnecting(false);
     setStale(false);
   }, [sessionId, attempt]);
-  return { state: state?.snapshot.session.id === sessionId ? state : null, error, reconnecting, stale, retry, refreshSnapshot };
+  return { state: state?.snapshot.session.id === sessionId ? state : null, error, reconnecting, stale, retry, refreshSnapshot, authorityExpired };
 }

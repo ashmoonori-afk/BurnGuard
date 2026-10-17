@@ -856,8 +856,8 @@ export default function ProjectView() {
       : null);
   const directionLoading = directionState?.status === "loading";
   const chatComposerDisabled = sendPending || session?.status === "running";
-  const composerDisabled = chatComposerDisabled || directionLoading || stream.error;
-  const composerDisabledReason: ComposerDisabledReason = chatComposerDisabled ? "busy" : directionLoading ? "directions" : stream.error ? "disconnected" : null;
+  const composerDisabled = chatComposerDisabled || directionLoading || stream.error || stream.authorityExpired;
+  const composerDisabledReason: ComposerDisabledReason = stream.authorityExpired ? "authority" : chatComposerDisabled ? "busy" : directionLoading ? "directions" : stream.error ? "disconnected" : null;
   const generateAlternativesMutation = useMutation({
     mutationFn: (request: CreateVisualAlternativesRequest) =>
       generateVisualAlternatives(id ?? "", request),
@@ -1300,9 +1300,10 @@ export default function ProjectView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {(refreshError || stream.stale) && <div role="alert" aria-label={t("workspace.project.refreshErrorLabel")} className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm"><span>{t("workspace.project.refreshError")}</span><button type="button" className="min-h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium" onClick={() => { for (const query of loadQueries) if (query.isError) void query.refetch(); if (stream.stale) void stream.refreshSnapshot().catch(() => {}); }}>{t("workspace.project.refreshData")}</button></div>}
-      {stream.reconnecting && !stream.error && <div role="status" className="shrink-0 bg-warning/10 px-4 py-1 text-xs">{t("workspace.project.streamReconnecting")}</div>}
-      {stream.error && <div role="alert" className="flex items-center justify-between bg-warning/15 px-4 py-2 text-sm"><span>{t("workspace.project.streamDisconnected")}</span><button type="button" className="rounded border px-3 py-2" onClick={() => void stream.retry().then(() => queryClient.invalidateQueries())}>{t("workspace.project.reconnect")}</button></div>}
+      {stream.authorityExpired && <div role="alert" data-authority-expired className="shrink-0 border-b border-warning/30 bg-warning/10 px-4 py-3 text-sm"><p className="font-semibold">{t("shell.launchExpiredTitle")}</p><p className="mt-1">{t("shell.launchExpiredDraft")}</p></div>}
+      {!stream.authorityExpired && (refreshError || stream.stale) && <div role="alert" aria-label={t("workspace.project.refreshErrorLabel")} className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm"><span>{t("workspace.project.refreshError")}</span><button type="button" className="min-h-10 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium" onClick={() => { for (const query of loadQueries) if (query.isError) void query.refetch(); if (stream.stale) void stream.refreshSnapshot().catch(() => {}); }}>{t("workspace.project.refreshData")}</button></div>}
+      {!stream.authorityExpired && stream.reconnecting && !stream.error && <div role="status" className="shrink-0 bg-warning/10 px-4 py-1 text-xs">{t("workspace.project.streamReconnecting")}</div>}
+      {!stream.authorityExpired && stream.error && <div role="alert" className="flex items-center justify-between bg-warning/15 px-4 py-2 text-sm"><span>{t("workspace.project.streamDisconnected")}</span><button type="button" className="rounded border px-3 py-2" onClick={() => void stream.retry().then(() => queryClient.invalidateQueries()).catch((error: unknown) => pushToast({ title: t("shell.reconnectFailed"), body: apiErrorCopy(error), tone: "error" }))}>{t("workspace.project.reconnect")}</button></div>}
       <ProjectTopBar
         chatCollapsed={chatCollapsed}
         onToggleChat={() => setChatCollapsed((value) => !value)}

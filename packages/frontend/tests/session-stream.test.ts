@@ -1,6 +1,6 @@
 import { afterEach, expect, mock, test } from "bun:test";
 import type { SequencedEventEnvelope, SessionInfo, SessionSnapshot } from "@bg/shared";
-import { bootstrapApiAuthority } from "../src/api/client";
+import { ApiError, bootstrapApiAuthority } from "../src/api/client";
 import type { SessionStreamReport } from "../src/api/session";
 import { openSessionStream, retrySessionStream, type SessionStreamHandlers } from "../src/hooks/useSessionEvents";
 
@@ -26,6 +26,59 @@ const originalEventSource = globalThis.EventSource;
 afterEach(() => {
   globalThis.fetch = originalFetch;
   globalThis.EventSource = originalEventSource;
+});
+
+test("Given repeated errors in one disconnect cycle When the authorized snapshot rejects Then one check closes the stale stream and preserves its state", async () => {
+  const subscribed = deferred();
+  const closed = deferred();
+  const checking = deferred();
+  let snapshots = 0;
+  let report: (error: SessionStreamReport) => void = () => {};
+  const stateRef: Parameters<typeof openSessionStream>[1] = { current: null };
+  const flags: string[] = [];
+  const stop = openSessionStream("s1", stateRef, {
+    setState: () => {},
+    setError: (value) => { flags.push(`error:${value}`); },
+    setReconnecting: (value) => { flags.push(`reconnecting:${value}`); },
+    setStale: () => {},
+    onLive: () => {},
+  }, {
+    getSessionSnapshot: async () => {
+      snapshots += 1;
+      if (snapshots > 1) {
+        await checking.promise;
+        throw new ApiError("forbidden", "private", 403);
+      }
+      return snapshot(0);
+    },
+    listSessionEvents: async () => [],
+    subscribeSessionStream: (_id, _onEvent, onError) => {
+      report = (error) => onError?.(error);
+      subscribed.resolve();
+      return () => closed.resolve();
+    },
+  });
+  try {
+    await subscribed.promise;
+    const previous = stateRef.current;
+    report({ kind: "connection", state: "connecting", message: "" });
+    report({ kind: "connection", state: "closed", message: "" });
+    checking.resolve();
+    await closed.promise;
+    expect(snapshots).toBe(2);
+    expect(stateRef.current).toBe(previous);
+    expect(flags.at(-1)).toBe("error:true");
+    expect(flags.at(-2)).toBe("reconnecting:false");
+  } finally {
+    stop();
+  }
+});
+
+test("Given bootstrap denies a reconnect When retrying Then no new stream is opened", async () => {
+  let subscriptions = 0;
+  globalThis.fetch = mock(async () => Response.json({ error: { code: "forbidden", message: "private" } }, { status: 403 })) as typeof fetch;
+  await expect(retrySessionStream(() => { subscriptions += 1; })).rejects.toMatchObject({ kind: "denied" });
+  expect(subscriptions).toBe(0);
 });
 
 test("Given an open stream whose resync snapshot fails When the stream opens Then the workspace is stale rather than disconnected, and the next envelope clears it", async () => {

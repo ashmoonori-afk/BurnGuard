@@ -1,10 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { bootstrapApiAuthority, onAuthorityRejected } from "@/api/client";
+import { BootstrapError, bootstrapApiAuthority, onAuthorityRejected } from "@/api/client";
 import { getSettings, patchSettings } from "@/api/home";
 import { synchronizePortableLocale } from "@/i18n/locale";
 import { t as translate, useT } from "@/i18n/t";
 import { apiErrorCopy } from "@/lib/error-copy";
-import { reloadWithoutLeaveGuard } from "@/lib/leave-guard";
 import { useUIStore } from "@/state/uiStore";
 
 /**
@@ -21,21 +20,20 @@ export async function runBootstrap(signal: AbortSignal, onSettingsSyncFailed: (e
 }
 
 /**
- * A stale launch capability after a backend restart: one persistent notice with a Reload action.
- * Automatic re-bootstrap is deliberately not done here until it has had a security review.
+ * A stale launch capability needs a new normal launch, not another reload of the expired entry.
  */
-export function announceBackendRestart(reload: () => void = () => reloadWithoutLeaveGuard()): void {
+export function announceBackendRestart(): void {
   const store = useUIStore.getState();
-  const title = translate("errors.forbidden");
+  const title = translate("shell.launchExpiredTitle");
   if (store.toasts.some((toast) => toast.title === title)) return;
-  store.pushToast({ title, tone: "error", action: { label: translate("shell.reload"), onSelect: reload } });
+  store.pushToast({ title, body: translate("shell.launchExpiredBody"), tone: "error" });
 }
 
 /** Render recovery before API consumers mount, including while bootstrap is offline. */
 export default function Bootstrap({ children }: { children: ReactNode }) {
   const t = useT();
   const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [state, setState] = useState<"loading" | "ready" | BootstrapError["kind"]>("loading");
   useEffect(() => {
     void attempt;
     const controller = new AbortController();
@@ -46,17 +44,26 @@ export default function Bootstrap({ children }: { children: ReactNode }) {
       if (active) useUIStore.getState().pushToast({ title: translate("shell.settingsSyncFailed"), body: apiErrorCopy(error), tone: "warn" });
     }).then(
       () => { if (active) setState("ready"); },
-      () => { if (active) setState("error"); },
+      (error: unknown) => {
+        if (!active) return;
+        if (error instanceof BootstrapError) setState(error.kind);
+        else if (error instanceof DOMException && error.name === "AbortError") setState("network");
+        else setState("other");
+      },
     ).finally(() => window.clearTimeout(timeout));
     return () => { active = false; controller.abort(); window.clearTimeout(timeout); };
   }, [attempt]);
   useEffect(() => onAuthorityRejected(() => announceBackendRestart()), []);
   if (state === "ready") return children;
   return <main className="grid min-h-dvh place-items-center bg-background p-6 text-foreground">
-    <div className="max-w-md space-y-4 text-center" role={state === "error" ? "alert" : "status"}>
-      <h1 className="text-xl font-semibold">BurnGuard</h1>
-      <p>{t(state === "loading" ? "shell.loading" : "shell.offline")}</p>
-      {state === "error" && <button type="button" className="rounded-md bg-primary px-4 py-3 text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" onClick={() => setAttempt((value) => value + 1)}>{t("shell.reconnect")}</button>}
+    <div className="max-w-md space-y-4 text-center" role={state === "loading" ? "status" : "alert"} data-bootstrap-state={state}>
+      <h1 className="text-xl font-semibold">{state === "denied" ? t("shell.launchExpiredTitle") : "BurnGuard"}</h1>
+      <p>{t(state === "loading" ? "shell.loading" : ({
+        denied: "shell.launchExpiredBody",
+        network: "shell.offline",
+        other: "shell.bootstrapFailed",
+      } as const)[state])}</p>
+      {(state === "network" || state === "other") && <button type="button" className="rounded-md bg-primary px-4 py-3 text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" onClick={() => setAttempt((value) => value + 1)}>{t(state === "network" ? "shell.reconnect" : "shell.retry")}</button>}
     </div>
   </main>;
 }

@@ -14,8 +14,8 @@ export async function listSessionEvents(
   return envelopes;
 }
 
-export async function getSessionSnapshot(id: string): Promise<SessionSnapshot> {
-  return apiFetch<SessionSnapshot>(`/api/sessions/${id}/snapshot`);
+export async function getSessionSnapshot(id: string, signal?: AbortSignal): Promise<SessionSnapshot> {
+  return apiFetch<SessionSnapshot>(`/api/sessions/${id}/snapshot`, { signal });
 }
 
 /**
