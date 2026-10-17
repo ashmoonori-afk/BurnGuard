@@ -25,7 +25,7 @@ export default function EditScopeFields({ value, onChange }: EditScopeFieldsProp
     </label>
     {scope.mode !== "unrestricted" && <details>
       <summary className="cursor-pointer py-1 text-xs">{t("revision.targets")}</summary>
-      <p className="my-1 text-[11px] text-muted-foreground">{t("revision.targetHint")}</p>
+      <p className="my-1 text-xs text-muted-foreground">{t("revision.targetHint")}</p>
       <textarea key={scope.mode} aria-label={t("revision.targets")} aria-invalid={!valid} rows={2} maxLength={48_000} defaultValue={targets} className="w-full rounded border border-border bg-background p-2 font-mono text-xs" onChange={event => {
         const rows = event.target.value.split("\n").filter(row => row.trim() !== "");
         onChange({ mode: scope.mode, ...(rows.length === 0 ? {} : { targets: rows.map(row => {

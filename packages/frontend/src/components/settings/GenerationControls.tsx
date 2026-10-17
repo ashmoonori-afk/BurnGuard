@@ -27,6 +27,12 @@ export default function GenerationControls({ backendId, value, onChange, disable
   const profile = resolveModelCapabilityProfile(backendId, value);
   const belowRecommendation = effortBelowRecommendation(profile, value.effort);
   const selectClass = "mt-1 min-h-9 w-full rounded-lg border border-input bg-card px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const guidance = <>
+    <p data-bg-recommended-models className="text-xs font-medium text-foreground">{t("settings.recommendedModels")}</p>
+    {/* States that guidance follows the selection. Never surfaces preset ids, block text or prompt JSON. */}
+    <p className="text-xs text-muted-foreground">{t("settings.taskGuidanceAdapts")}</p>
+    {profile.recommended_min_effort !== null && <p data-bg-effort-note={belowRecommendation ? "below" : "met"} className={belowRecommendation ? "rounded-md bg-warning/10 px-2 py-1 text-xs text-warning-text" : "text-xs text-muted-foreground"}>{t("settings.capableModelEffortNote")}</p>}
+  </>;
   const secondary = <>
     {backendId === "claude-code" && <label className="block">{t("settings.connection")}
       <select aria-label={t("settings.modelConnection")} className={selectClass} value={value.provider} onChange={(event) => {
@@ -52,10 +58,10 @@ export default function GenerationControls({ backendId, value, onChange, disable
         {efforts.map((effort) => <option key={effort} value={effort}>{t(EFFORT_LABELS[effort])}</option>)}
       </select></label>
     </div>
-    <p data-bg-recommended-models className="text-xs font-medium text-foreground">{t("settings.recommendedModels")}</p>
-    {/* States that guidance follows the selection. Never surfaces preset ids, block text or prompt JSON. */}
-    <p className="text-xs text-muted-foreground">{t("settings.taskGuidanceAdapts")}</p>
-    {profile.recommended_min_effort !== null && <p data-bg-effort-note={belowRecommendation ? "below" : "met"} className={belowRecommendation ? "rounded-md bg-warning/10 px-2 py-1 text-xs text-warning-text" : "text-xs text-muted-foreground"}>{t("settings.capableModelEffortNote")}</p>}
+    {compact ? <details className="text-muted-foreground">
+      <summary className="cursor-pointer rounded py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("chat.details")}</summary>
+      <div className="mt-1 space-y-1">{guidance}</div>
+    </details> : guidance}
     {compact ? <details className="text-muted-foreground">
       <summary className="cursor-pointer rounded py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("settings.additional")}</summary>
       <div className="mt-1 space-y-3 rounded-lg bg-muted/40 p-2.5">{secondary}</div>

@@ -6,7 +6,8 @@ import { useT } from "@/i18n/t";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { useUIStore } from "@/state/uiStore";
 
-export default function ProjectFolderButton({ projectId }: { readonly projectId: string }) {
+/** Opens the project folder in the file manager; shared by the header button and the More menu item. */
+export function useRevealProjectFolder(projectId: string): { readonly reveal: () => Promise<void>; readonly pending: boolean } {
   const t = useT();
   const pushToast = useUIStore((state) => state.pushToast);
   const pendingRef = useRef(false);
@@ -25,6 +26,12 @@ export default function ProjectFolderButton({ projectId }: { readonly projectId:
       setPending(false);
     }
   };
+  return { reveal, pending };
+}
+
+export default function ProjectFolderButton({ projectId }: { readonly projectId: string }) {
+  const t = useT();
+  const { reveal, pending } = useRevealProjectFolder(projectId);
   return <Button variant="outline" size="sm" className="min-h-10 gap-2 px-3 max-[900px]:min-h-11" disabled={pending} onClick={reveal}>
     <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
     {t(pending ? "workspace.project.folderPending" : "workspace.project.showFolder")}

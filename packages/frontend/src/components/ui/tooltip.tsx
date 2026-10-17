@@ -11,19 +11,21 @@ export interface TooltipProps {
   side?: TooltipSide;
   defaultOpen?: boolean;
   className?: string;
+  /** Extra classes for the wrapper, e.g. `min-w-0 max-w-full` so a truncating child can shrink. */
+  wrapperClassName?: string;
 }
 
 /**
  * Dependency-free tooltip. Opens on pointer hover and keyboard focus, closes on
  * leave, blur and Escape, and stays open while the pointer rests on the bubble.
  */
-export function Tooltip({ content, children, side = "top", defaultOpen = false, className }: TooltipProps) {
+export function Tooltip({ content, children, side = "top", defaultOpen = false, className, wrapperClassName }: TooltipProps) {
   const id = React.useId();
   const [open, setOpen] = React.useState(defaultOpen);
   const describedBy = [children.props["aria-describedby"], open ? id : undefined].filter(Boolean).join(" ");
   return (
     <span
-      className="relative inline-flex"
+      className={cn("relative inline-flex", wrapperClassName)}
       onPointerEnter={() => setOpen(true)}
       onPointerLeave={() => setOpen(false)}
       onFocus={() => setOpen(true)}

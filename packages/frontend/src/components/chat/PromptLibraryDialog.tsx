@@ -89,7 +89,7 @@ export default function PromptLibraryDialog({
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-foreground">{title}</p>
                         <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{catalogT(promptMessageKey(entry.id, "summary"))}</p>
-                        <p className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+                        <p className="mt-1.5 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
                           <span className="rounded-md bg-muted px-1.5 py-0.5">{translate(`prompts.category.${entry.category}`)}</span>
                           {entry.aspect !== null && <span className="rounded-md bg-muted px-1.5 py-0.5">{translate("prompts.library.aspect", { aspect: entry.aspect })}</span>}
                         </p>
@@ -99,8 +99,8 @@ export default function PromptLibraryDialog({
                       </Button>
                     </div>
                     <details className="mt-2">
-                      <summary className="cursor-pointer text-[11px] text-muted-foreground hover:text-foreground">{translate("prompts.library.preview")}</summary>
-                      <pre className="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-2 font-sans text-[11px] leading-relaxed text-foreground">{entry.prompt}</pre>
+                      <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">{translate("prompts.library.preview")}</summary>
+                      <pre className="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-2 font-sans text-xs leading-relaxed text-foreground">{entry.prompt}</pre>
                     </details>
                   </li>
                 );

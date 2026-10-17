@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { detectBackends, getSettings } from "@/api/home";
 import type { BackendDetectionResult } from "@bg/shared";
 import GenerationControls from "@/components/settings/GenerationControls";
-import { LibraryBig, Paperclip, Send, Settings2, StopCircle } from "lucide-react";
+import { LibraryBig, Paperclip, Send, Settings2, SlidersHorizontal, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/state/uiStore";
 import { cn } from "@/lib/utils";
@@ -139,6 +139,7 @@ export default function Composer({
   }, draft.items, draft.setItems);
   const [dragOver, setDragOver] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const promptLibrary = usePromptLibrary();
   const fileInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -204,7 +205,7 @@ export default function Composer({
     <div
       data-qa="composer"
       className={cn(
-        "max-h-[55%] shrink-0 overflow-y-auto border-t border-border bg-background p-3",
+        "flex max-h-[60%] shrink-0 flex-col border-t border-border bg-background p-3",
         dragOver && "ring-2 ring-accent ring-inset",
       )}
       onDragOver={(e) => {
@@ -214,14 +215,15 @@ export default function Composer({
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
     >
+      <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mb-2 flex items-center justify-between gap-2">
         <label htmlFor={`composer-${sessionId}`} className="text-xs font-semibold text-foreground">{translate("workspace.composer.requestLabel")}</label>
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {length.counter !== null && <span role="status" className={cn("mr-2", !length.canSend && "text-destructive")}>{translate("workspace.composer.charCount", length.counter)}</span>}
           {translate("workspace.composer.shortcutHint")}
         </span>
       </div>
-      {activePageLabel !== null ? <div className="mb-2 w-fit max-w-full truncate rounded-full border border-border bg-muted px-2.5 py-1 font-mono text-[11px] text-muted-foreground" title={activePageLabel}>{activePageLabel}</div> : null}
+      {activePageLabel !== null ? <div className="mb-2 w-fit max-w-full truncate rounded-full border border-border bg-muted px-2.5 py-1 font-mono text-xs text-muted-foreground" title={activePageLabel}>{activePageLabel}</div> : null}
       <ComposerAttachments
         items={visualSources.items}
         sending={sending}
@@ -281,8 +283,15 @@ export default function Composer({
         {translate("workspace.composer.noAiTool")}{" "}
         <button type="button" onClick={() => setSettingsOpen(true)} className="font-medium underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{translate("workspace.composer.openSettings")}</button>
       </p>}
-      <div className="mt-2"><GenerationControls compact backendId={backendId} value={generation} onChange={draft.setGeneration} disabled={disabled || sending || !draft.ready} /></div>
-      <div className="mt-1 flex items-center gap-1.5">
+      {optionsOpen && <div id={`composer-options-${sessionId}`} className="mt-2 space-y-2 rounded-lg border border-border bg-muted/30 p-2.5">
+        <GenerationControls compact backendId={backendId} value={generation} onChange={draft.setGeneration} disabled={disabled || sending || !draft.ready} />
+        <button type="button" onClick={() => setSettingsOpen(true)} className="inline-flex min-h-8 items-center gap-1.5 rounded text-xs font-medium text-accent underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />{translate("workspace.composer.openSettings")}
+        </button>
+      </div>}
+      <VisualSourceCandidates files={projectFiles} />
+      </div>
+      <div className="mt-2 flex shrink-0 items-center gap-1.5">
         <input
           ref={fileInput}
           type="file"
@@ -299,24 +308,15 @@ export default function Composer({
           }}
         />
         <Button
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 shrink-0 text-muted-foreground max-[900px]:h-11 max-[900px]:w-11"
-          title={translate("workspace.composer.openSettings")}
-          aria-label={translate("workspace.composer.openSettings")}
-          onClick={() => setSettingsOpen(true)}
-        >
-          <Settings2 className="h-3.5 w-3.5" />
-        </Button>
-        <Button
           variant="outline"
-          size="sm"
-          className="h-9 gap-1.5 px-2.5 text-xs max-[900px]:h-11"
+          size="icon"
+          className="h-9 w-9 shrink-0 max-[900px]:h-11 max-[900px]:w-11"
           title={translate("workspace.composer.attachTitle")}
+          aria-label={translate("workspace.composer.attach")}
           disabled={disabled || sending || !draft.ready}
           onClick={() => fileInput.current?.click()}
         >
-          <Paperclip className="h-3.5 w-3.5" /> {translate("workspace.composer.attach")}
+          <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
         <Button
           variant="outline"
@@ -330,6 +330,17 @@ export default function Composer({
           onClick={() => setLibraryOpen(true)}
         >
           <LibraryBig className="h-3.5 w-3.5" aria-hidden="true" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 gap-1.5 px-2.5 text-xs max-[900px]:h-11"
+          title={translate("chat.composer.optionsTitle")}
+          aria-expanded={optionsOpen}
+          aria-controls={`composer-options-${sessionId}`}
+          onClick={() => setOptionsOpen((value) => !value)}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />{translate("chat.composer.options")}
         </Button>
         <div className="flex-1" />
         {sending ? (
@@ -361,7 +372,6 @@ export default function Composer({
           </Button>
         )}
       </div>
-      <VisualSourceCandidates files={projectFiles} />
       <PromptLibraryDialog open={libraryOpen} onOpenChange={setLibraryOpen} library={promptLibrary.data} status={promptLibrary.status} onInsert={insertPrompt} onCloseAutoFocus={restoreFocusAfterLibrary} />
     </div>
   );
