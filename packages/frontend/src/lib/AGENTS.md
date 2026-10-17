@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-20 dependency-free helper modules (1,515 LOC) holding the view logic worth asserting; earned this guide at score 9 for export count, test-target density, and `cn`/`apiErrorCopy` reference reach.
+62 dependency-free helper modules holding the view logic worth asserting; earned this guide at score 9 for export count, test-target density, and `cn`/`apiErrorCopy` reference reach.
 
 ## WHERE TO LOOK
 
@@ -17,6 +17,9 @@
 | Workflow state | `design-audit-state.ts`, `design-direction-state.ts`, `session-event-state.ts`, `app-update-state.ts` | Pure reducers over query + SSE inputs |
 | Draft persistence | `creation-draft.ts` | localStorage draft lifecycle for the creation panel |
 | Graphic projects | `graphic-project.ts`, `graphic-preview.ts`, `graphic-set-form.ts` | Canvas parsing, preview selection, form models |
+| Canvas/header layout | `canvas-device-width.ts`, `toolbar-overflow.ts`, `project-header-actions.ts`, `settings-sections.ts` | Device-width presets, width-driven overflow splits, Settings section tracking |
+| Home copy and dates | `date-format.ts`, `example-briefs.ts`, `first-run.ts`, `system-display.ts` | Locale dates, example briefs, first-run guide state |
+| Chat rule capture | `correction-rule.ts`, `design-system-rules.ts` | Draft a Do/Don't rule from a correction |
 | Fix requests | `quality-fix-request.ts`, `platform-fix-request.ts` | Both build prompts for the single repair send path |
 
 ## CONVENTIONS

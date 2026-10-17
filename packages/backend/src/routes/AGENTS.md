@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-Hono HTTP/SSE boundary: 17 domain route modules plus 3 `*-input.ts` body parsers and one thumbnail handler (~3.4k LOC); earned this guide at score 12 for distinct transport contracts, dense handlers, and central route exports. `session.ts` (606 LOC) is the largest and most coupled module.
+Hono HTTP/SSE boundary: 17 domain route modules plus 3 `*-input.ts` body parsers and one thumbnail handler (~3.4k LOC); earned this guide at score 12 for distinct transport contracts, dense handlers, and central route exports. `session.ts` (686 LOC) is the largest and most coupled module.
 
 ## WHERE TO LOOK
 
@@ -14,6 +14,7 @@ Hono HTTP/SSE boundary: 17 domain route modules plus 3 `*-input.ts` body parsers
 | Design-system APIs | `system.ts`, `catalog.ts` | Extraction/editing versus catalog lifecycle domains |
 | Research/learning | `research.ts`, `learning.ts` | Persisted lifecycle contracts and cancellation |
 | Settings/home | `settings.ts`, `home.ts` | Never expose secret values in status payloads |
+| Project folder, instructions | `project-folder.ts`, `project.ts` | Reveal in file manager (204, no path in errors); standing instructions |
 | Runtime delivery | `runtime.ts` | Shipped deck-stage path is a stable browser contract |
 
 ## CONVENTIONS

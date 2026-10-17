@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-229 flat Bun suites plus 6 `*-cases.ts` modules and `learning-fixture.ts` (~34.3k LOC) covering backend `src/` end to end; earned this guide at score 8 as a distinct domain with its own isolation, platform-skip, and smoke-gate rules.
+304 flat Bun suites plus 6 `*-cases.ts` modules and `learning-fixture.ts` (~34.3k LOC) covering backend `src/` end to end; earned this guide at score 8 as a distinct domain with its own isolation, platform-skip, and smoke-gate rules.
 
 ## STRUCTURE
 

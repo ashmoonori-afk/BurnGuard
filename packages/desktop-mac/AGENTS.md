@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-Single-file Swift `WKWebView` shell (`main.swift`, 287 LOC) that launches and owns the bundled backend; earned this guide at score 8 as the repository's only Swift surface, mirroring the Windows shell's process contract with a different toolchain.
+Single-file Swift `WKWebView` shell (`main.swift`, 849 LOC) that launches and owns the bundled backend; earned this guide at score 8 as the repository's only Swift surface, mirroring the Windows shell's process contract with a different toolchain.
 
 ## WHERE TO LOOK
 

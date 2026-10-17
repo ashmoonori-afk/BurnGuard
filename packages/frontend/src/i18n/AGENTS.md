@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-Typed three-locale message registry (16 files, 1,936 LOC) behind every user-facing string; earned this guide at score 12 for its registry module boundary, export surface, and `useT` reach across ~75 modules.
+Typed three-locale message registry  behind every user-facing string; earned this guide at score 12 for its registry module boundary, export surface, and `useT` reach across ~75 modules.
 
 ## WHERE TO LOOK
 
@@ -11,7 +11,7 @@ Typed three-locale message registry (16 files, 1,936 LOC) behind every user-faci
 | Locale state | `locale.ts` | `LOCALES = ["ko","en","zh-CN"]`, `LOCALE_STORAGE_KEY = "burnguard.locale"`, `useLocaleStore`, `localeTag` (`ko-KR`/`en-US`/`zh-CN`), `applyDocumentLocale` sets `<html lang>` |
 | Translate | `t.ts` | `t(key, params)` reads the store snapshot; `useT()` subscribes and re-renders; `formatMessage` does `{name}` interpolation |
 | Message shape | `types.ts` | `Message = string \| { one, other }`, `MessageDefinition = Record<Locale, Message>`, `defineMessages` identity helper |
-| Registry | `messages/index.ts` | 12 packs spread-merged; `MessageKey = keyof typeof messages` |
+| Registry | `messages/index.ts` | 17 packs spread-merged; `MessageKey = keyof typeof messages` |
 | Add copy | `messages/<pack>.ts` | `home` 306, `chat` 252, `modes` 241, `export` 182, `canvas` 173, `directions` 170, `settings` 127, `workspace` 129, `system` 121, `errors` 66, `files` 44, `shell` 27 LOC |
 
 ## CONVENTIONS

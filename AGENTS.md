@@ -68,7 +68,7 @@ BurnGuard/
 | Durable repositories | Persistence boundary | `backend/src/db/` | Backend workflows | Conditional transitions and recovery authority |
 | Route/event layer | HTTP/SSE boundary | `backend/src/routes/` | Frontend client | Validation, envelopes, status, event publication |
 | Security seam | Authority | `backend/src/security/` | All non-health routes | Capability check, `resolveWithin`, body caps |
-| Frontend entry chain | Composition | `frontend/src/main.tsx` -> `App.tsx` | SPA | `Bootstrap` -> `QueryClientProvider` -> `BrowserRouter`; routes `/`, `/projects/:id`, `/systems/:id`, `/settings` |
+| Frontend entry chain | Composition | `frontend/src/main.tsx` -> `App.tsx` | SPA | `Bootstrap` -> `QueryClientProvider` -> `BrowserRouter`; routes `/`, `/projects/:id`, `/systems/:id`, `/settings`, catch-all `NotFoundView` |
 | Typed browser client | API boundary | `frontend/src/api/client.ts` | React UI | Carries launch capability by resource |
 | Canvas bridge | Sandbox protocol | `frontend/src/components/` | Canvas iframe | Tagged `postMessage` exchange |
 | Desktop shells | Process host | `desktop-windows/Program.cs`, `desktop-mac/main.swift` | Packaged app | Readiness protocol, mutex, job object, nav limits |
@@ -95,7 +95,7 @@ BurnGuard/
 - Never render or log raw backend/provider diagnostics, absolute private paths, tokens, or the launch capability — not in API errors, dialogs, toasts, receipts, prompt context, or native shells. Backend messages are never shown raw to users; map through `error-copy`.
 - Never bypass launch-capability checks outside `/api/health`, and never permit mutations without owned host/origin authority.
 - Never edit an applied migration — add a lexically later one.
-- Never grant the canvas iframe same-origin; artifacts are `sandbox="allow-scripts allow-popups"`, `systems/PreviewIframe.tsx` is the single deliberate exception. Untagged messages without strict `event.source` checks are not trusted.
+- Never grant the canvas iframe same-origin; artifacts are `sandbox="allow-scripts"`, `systems/PreviewIframe.tsx` is the single deliberate exception. Untagged messages without strict `event.source` checks are not trusted.
 - Never use fixed sleeps, `waitForTimeout`, or blind polling in tests or scripts — subscribe to the event and await under a bounded deadline. `scripts/qa/task-8-gates.sh` statically rejects sleeps, `as any`, `@ts-ignore`, and debug logging.
 - Never pin prompt or UI prose in tests; assert sentinel tags and parsed fields.
 - Never enable `BG_UPLOAD_SMOKE` / `BG_BROWSER_SMOKE` / `BG_EXPORT_SMOKE` by default; they stay opt-in.

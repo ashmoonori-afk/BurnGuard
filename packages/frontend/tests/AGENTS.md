@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-46 `bun:test` suites (4,243 LOC) plus browser fixtures, held at package level rather than beside sources; earned this guide at score 8 for file count and a harness contract distinct from the `src` guides.
+144 `bun:test` suites plus browser fixtures, held at package level rather than beside sources; earned this guide at score 8 for file count and a harness contract distinct from the `src` guides.
 
 ## WHERE TO LOOK
 
