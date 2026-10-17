@@ -55,7 +55,7 @@ export default function ProjectCard(
           ) : (
             <div className="flex flex-col items-center gap-3 text-muted-foreground">
               <span className="grid h-16 w-16 place-items-center rounded-2xl border border-card/80 bg-card/70"><Icon className="h-7 w-7" strokeWidth={1.5} aria-hidden="true" /></span>
-              <span className="text-xs">{thumbnailFailed ? retryDelay === null ? t("home.previewError") : t("home.previewPreparing") : t("home.previewEmpty")}</span>
+              <span className="rounded-md bg-card px-2 py-1 text-xs text-muted-foreground">{thumbnailFailed ? retryDelay === null ? t("home.previewError") : t("home.previewPreparing") : t("home.previewEmpty")}</span>
             </div>
           ) : (
             <>
@@ -74,7 +74,7 @@ export default function ProjectCard(
         {props.isTemplate && (
           <Badge
             variant="outline"
-            className="absolute top-2 left-2 bg-background/95 text-[10px] tracking-wider"
+            className="absolute top-2 left-2 bg-background/95 text-xs"
           >
             {t("home.type.from_template")}
           </Badge>
@@ -125,7 +125,7 @@ export default function ProjectCard(
       )}
       {props.brief && props.onStartFrom ? <div className="mt-2 rounded-xl border border-border bg-card p-3 text-xs" data-qa="example-brief">
         <details>
-          <summary className="cursor-pointer font-medium">{t("home.example.seeBrief")}</summary>
+          <summary className="min-h-6 cursor-pointer rounded-sm py-1 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">{t("home.example.seeBrief")}</summary>
           <dl className="mt-2 space-y-1 text-muted-foreground">
             <div><dt className="inline font-medium text-foreground">{t("home.example.audience")}: </dt><dd className="inline">{props.brief.audience}</dd></div>
             <div><dt className="inline font-medium text-foreground">{t("home.example.objective")}: </dt><dd className="inline">{props.brief.objective}</dd></div>

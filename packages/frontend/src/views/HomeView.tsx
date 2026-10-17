@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useT, type MessageKey } from "@/i18n/t";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, Blocks, Image, LayoutTemplate, PenTool, Plus, Presentation, Search } from "lucide-react";
+import { ArrowUpRight, Blocks, Image, LayoutTemplate, LockKeyhole, PenTool, Plus, Presentation, Search } from "lucide-react";
 import type { CreateProjectResponse, ProjectType } from "@bg/shared";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -520,9 +520,9 @@ export default function HomeView() {
           <div className="shrink-0 px-6 pt-5">
             <p id="project-type-label" className={`mb-2 ${PROJECT_SECTION_CLASS}`}>{t("home.createType")}</p>
             <div role="group" aria-labelledby="project-type-label" className="flex flex-wrap gap-2">
-              {[...PROJECT_TYPES, { id: "other" as const, label: "home.type.other" as const }].map((type) => <button key={type.id} type="button" disabled={creatingProject || (requiresImageBackend(type.id) && !graphicReady)} aria-pressed={creationType === type.id} onClick={() => { const next = new URLSearchParams(searchParams); next.set("create", type.id); setSearchParams(next, { replace: true }); }} className={`min-h-10 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${creationType === type.id ? "border-accent bg-accent/10 text-accent" : "border-border bg-card text-muted-foreground hover:bg-muted"}`}>{t(type.label)}</button>)}
+              {[...PROJECT_TYPES, { id: "other" as const, label: "home.type.other" as const }].map((type) => <Button key={type.id} type="button" variant="outline" disabled={creatingProject || (requiresImageBackend(type.id) && !graphicReady)} aria-describedby={requiresImageBackend(type.id) && !graphicReady ? "project-type-unavailable" : undefined} aria-pressed={creationType === type.id} onClick={() => { const next = new URLSearchParams(searchParams); next.set("create", type.id); setSearchParams(next, { replace: true }); }} className={`min-h-10 rounded-lg px-3 py-2 ${creationType === type.id ? "border-accent bg-accent-soft text-accent" : "border-border text-muted-foreground"}`}>{requiresImageBackend(type.id) && !graphicReady ? <LockKeyhole aria-hidden="true" /> : null}{t(type.label)}</Button>)}
             </div>
-            {!graphicReady && <p className="mt-2 text-xs text-muted-foreground">{t("home.graphicAvailability")}</p>}
+            {!graphicReady && <p id="project-type-unavailable" className="mt-2 text-xs text-muted-foreground">{t("home.graphicAvailability")}</p>}
           </div>
           {settingsQuery.isPending ? <p role="status" className="p-6 text-sm text-muted-foreground">{t("home.settingsLoading")}</p> : settingsQuery.isError ? <div role="alert" className="space-y-3 p-6"><p className="text-sm text-destructive">{t("home.settingsError")}</p><Button variant="outline" onClick={() => void settingsQuery.refetch()}>{t("home.settingsRetry")}</Button></div> : creationType !== null ? <NewProjectPanel generationDefaults={settingsQuery.data.generation_defaults} graphicReady={graphicReady} type={creationType} designSystems={systemsQuery.data ?? []} defaultBackend={settingsQuery.data.default_backend} systemsLoading={systemsQuery.isFetching} systemsError={systemsQuery.error} onRetrySystems={() => void systemsQuery.refetch()} onPendingChange={setCreatingProject} onChoosingChange={setPickingSystem} backRef={pickerBackRef} onCreated={projectCreated} /> : null}
         </DialogContent>
