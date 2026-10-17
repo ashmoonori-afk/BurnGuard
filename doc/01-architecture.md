@@ -2,7 +2,7 @@
 
 ## 1. Runtime Topology
 
-Reviewed against v0.5.31 on 2026-10-17. BurnGuard runs as a single Bun backend process plus a React frontend:
+Reviewed for v0.5.31 on 2026-10-17. BurnGuard runs as one Bun backend process paired with a React frontend:
 
 ```text
 burnguard-design.exe or bun run src/index.ts
@@ -14,11 +14,11 @@ burnguard-design.exe or bun run src/index.ts
       +-- Bootstrap (config, sample design system, migrations, seed data)
       +-- Session/event services
       +-- File watchers for project directories
-      +-- Export pipeline (Chromium through a Node bridge child)
+      +-- Export pipeline (Chromium launched through a Node bridge child)
       +-- CLI child processes launched with Bun.spawn
             +-- claude
             +-- codex
-            +-- gemini, copilot (registered adapters)
+            +-- gemini, copilot (registered in the adapter registry)
 ```
 
 Important current constraint:
@@ -30,14 +30,14 @@ Important current constraint:
 
 Current startup flow:
 
-1. Acquire the profile (one process per `BG_APP_ROOT`; desktop mode also checks the port first)
-2. Create the local app directories and ensure config exists
-3. Seed the bundled sample and theme design systems if missing
-4. Run SQLite migrations, then seed core data, tutorials and original samples, and reconcile recovery state
-5. Prune expired snapshots and start the project-deletion purge scheduler
-6. Start the Hono server on `127.0.0.1` (port 14070 by default) and print the readiness line
-7. Outside dev and desktop mode, open the launch URL in the default browser
-8. Start project file watchers in the background
+1. Acquire profile ownership (one process per `BG_APP_ROOT`; desktop mode checks the port first)
+2. Create local app directories and ensure the config file exists
+3. Seed the bundled sample and theme design systems when missing
+4. Run SQLite migrations, seed core records, tutorials, and original samples, and reconcile recovery state
+5. Prune expired snapshots and start the scheduled purge for deleted projects
+6. Start the Hono server on `127.0.0.1` (default port 14070) and print the readiness line
+7. When not in dev or desktop mode, open the launch URL in the default browser
+8. Start background file watchers for projects
 
 Relevant implementation files:
 - `packages/backend/src/index.ts`
@@ -77,10 +77,10 @@ Current export implementation:
 | Format | Status |
 |---|---|
 | `html_zip` | Implemented |
-| `pdf` | Implemented: slide decks (A4, Letter or 16:9), graphic artboards and logo guidelines |
-| `pptx` | Implemented: slide decks at 16:9 or 4:3; each slide is a high-resolution image with source text in speaker notes |
-| `png` | Implemented: a single graphic or page at a bounded size |
-| `handoff` | Implemented: developer handoff ZIP with the source tree and a continuation prompt |
+| `pdf` | Implemented: slide decks (A4, Letter, or 16:9), graphic artboards, and logo guidelines |
+| `pptx` | Implemented: slide decks at 16:9 or 4:3; each slide uses a high-resolution image and puts source text in speaker notes |
+| `png` | Implemented: one graphic or page within bounded dimensions |
+| `handoff` | Implemented: developer handoff ZIP containing the source tree and continuation prompt |
 | `png_zip` | Implemented: one PNG per deck slide or graphic frame, or section-aware PNG/JPEG slices for a product detail page |
 | `cafe24_package` | Implemented: Cafe24 (카페24) Smart Design layout, per-page fragments, rewritten assets, guide, and lint report |
 | `imweb_package` | Implemented: Imweb (아임웹) code-widget fragments plus shared header and footer code, guide, and lint report |
@@ -88,7 +88,7 @@ Current export implementation:
 
 PDF accepts an `artboard` paper for graphic projects: each page uses the artboard's own pixel size converted to points, so a graphic set prints one page per artboard. A set whose artboards differ in size has no single page geometry and is rejected. A logo project uses the same artboard paper for its 1920 x 1080 guideline pages; the download is named `<slug>-guidelines-r<revision>.pdf` (see [logo-design.md](logo-design.md)).
 
-ZIP outputs (`html_zip`, `handoff`) are written by `services/zip.ts` with JSZip on every platform. PDF, PNG and PPTX rendering runs Chromium through `chromium-node-bridge.mjs`, never on the Bun event loop.
+`services/zip.ts` writes ZIP outputs (`html_zip`, `handoff`) with JSZip on all platforms. PDF, PNG, and PPTX rendering runs Chromium via `chromium-node-bridge.mjs` rather than on the Bun event loop.
 
 ## 4. Source Tree
 
@@ -189,7 +189,7 @@ BurnGuard/
 
 There are two current paths:
 
-- immediate `file.changed` events from the Claude Code and Codex parsers when write/edit-style tools succeed
+- immediate `file.changed` events emitted by the Claude Code and Codex parsers when write or edit tools succeed
 - background re-indexing through `services/watchers.ts` using `fs.watch`
 
 The watcher currently refreshes DB file state only. It does not emit chat timeline events.
@@ -223,10 +223,10 @@ Important backend routes today:
 | `POST /api/sessions/:id/events` | send user turn |
 | `GET /api/sessions/:id/events` | replay session history |
 | `GET /api/sessions/:id/stream` | live SSE stream |
-| `GET /api/projects/:id/history` | revision history and comparisons |
-| `GET`/`PUT /api/projects/:id/instructions` | project standing instructions |
-| `POST /api/projects/:id/show-folder` | reveal the project folder in the file manager |
-| `GET /api/projects/:id/bundle` | download a `.burnguard-project` backup |
+| `GET /api/projects/:id/history` | revision history and source comparisons |
+| `GET`/`PUT /api/projects/:id/instructions` | standing project instructions |
+| `POST /api/projects/:id/show-folder` | open the project folder in the system file manager |
+| `GET /api/projects/:id/bundle` | download a `.burnguard-project` backup bundle |
 | `POST /api/sessions/:id/interrupt` | aborts the running CLI subprocess (abort signal to the adapter, owned process tree killed) and marks the session interrupted |
 | `GET /runtime/deck-stage.js` | slide deck runtime script |
 
@@ -340,6 +340,6 @@ The docs previously described a larger logging/retry stack than what exists toda
 These ideas still appear in planning docs but are **not** current implementation:
 
 - PTY-managed interactive sessions
-- a pre-execution tool approval gate (permission events are observational today)
+- a tool approval gate before execution (permission events are observational today)
 - automated retry/backoff framework
 - plugin adapter loading

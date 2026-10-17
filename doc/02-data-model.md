@@ -2,16 +2,16 @@
 
 ## 1. Filesystem Layout
 
-Reviewed against v0.5.31 on 2026-10-17; `packages/backend/src/lib/app-paths.ts` and the migrations in `packages/backend/src/db/migrations/` are the authority.
+Reviewed for v0.5.31 on 2026-10-17; `packages/backend/src/lib/app-paths.ts` and the SQL migrations in `packages/backend/src/db/migrations/` are authoritative.
 
-Root is `BG_APP_ROOT` when set (it must be absolute), otherwise `~/.burnguard/` (`%USERPROFILE%\.burnguard\` on Windows). Abstracted as `os.homedir() + "/.burnguard"`.
+The root directory is `BG_APP_ROOT` when set (must be an absolute path), and otherwise `~/.burnguard/` (`%USERPROFILE%\.burnguard\` on Windows), which resolves to `os.homedir() + "/.burnguard"`.
 
 ```
 ~/.burnguard/
 ├── burnguard.db                     # SQLite DB (WAL mode)
 ├── config.json                      # Shared portable settings
-├── config.local.<platform>.json     # OS-local settings and secrets
-├── backups/                         # VACUUM INTO snapshots before migrations (last 3)
+├── config.local.<platform>.json     # Device-local settings and secrets
+├── backups/                         # VACUUM INTO snapshots taken before migrations (keeps last 3)
 ├── data/
 │   ├── systems/
 │   │   ├── northvale-capital/           # Sample (embedded → copied on first run)
@@ -20,11 +20,11 @@ Root is `BG_APP_ROOT` when set (it must be absolute), otherwise `~/.burnguard/` 
 │   │   │   ├── colors_and_type.css
 │   │   │   ├── fonts/
 │   │   │   ├── assets/logos/
-│   │   │   ├── preview/             # preview HTML cards
+│   │   │   ├── preview/             # Preview HTML cards
 │   │   │   ├── ui_kits/website/
 │   │   │   └── uploads/
-│   │   ├── builtin-theme-<slug>/    # Bundled themes
-│   │   └── {system_id}/             # Imported or user-created
+│   │   ├── builtin-theme-<slug>/    # Bundled theme systems
+│   │   └── {system_id}/             # Imported or user-authored systems
 │   ├── projects/
 │   │   └── {project_id}/
 │   │       ├── index.html           # Prototype entry
@@ -34,10 +34,10 @@ Root is `BG_APP_ROOT` when set (it must be absolute), otherwise `~/.burnguard/` 
 │   │       ├── deck-stage.js        # Slide runtime (P2)
 │   │       ├── .attachments/        # Chat-uploaded files
 │   │       └── .meta/
-│   │           └── checkpoints/         # Turn checkpoint manifests and snapshots
+│   │           └── checkpoints/         # Per-turn checkpoint manifests and snapshots
 ├── cache/
-│   └── exports/                     # Export outputs and receipts
-└── logs/                            # Session traces (0600 on POSIX)
+│   └── exports/                     # Rendered export files and receipts
+└── logs/                            # Session trace logs (mode 0600 on POSIX)
 ```
 
 ### Path constraints
@@ -113,7 +113,7 @@ CREATE INDEX idx_projects_ds ON projects(design_system_id);
 
 `options_json` stores snake-case project options. The current object may contain
 `use_speaker_notes` for slide decks, `copy_as_is` for template-based projects,
-`graphic_canvas` and `graphic_set` for graphic projects, `standing_instructions` (at most 4,000 characters) for any project, `logo_set` for logo
+`graphic_canvas` and `graphic_set` for graphic projects, `standing_instructions` (up to 4,000 characters) on any project, `logo_set` for logo
 projects (brand name, niche, character, logo type, symbol keywords), and a versioned `design_brief` with output type, audience, objective, content
 source, locale, brand mode, visual mood, density, and output size. The HTTP
 boundary rejects unknown keys and malformed brief fields before persistence;
@@ -135,8 +135,8 @@ CREATE TABLE sessions (
   backend_id            TEXT NOT NULL,
   backend_session_state TEXT,                        -- CLI-specific serialized state (nullable)
   status                TEXT NOT NULL CHECK(status IN ('idle','running','awaiting_tool','error','terminated')),
-  pid                   INTEGER,                     -- Current provider process PID (nullable)
-  process_owner_json    TEXT,                        -- Provider process ownership record, reaped at startup (0022)
+  pid                   INTEGER,                     -- Active provider process PID (nullable)
+  process_owner_json    TEXT,                        -- Persisted provider process ownership, reaped on startup (0022)
   last_turn_id          TEXT,
   usage_input_tokens    INTEGER NOT NULL DEFAULT 0,
   usage_output_tokens   INTEGER NOT NULL DEFAULT 0,
@@ -310,14 +310,14 @@ CREATE TABLE meta_schema (
 
 ## 4. Migration Strategy
 
-- Migrations are hand-written forward SQL files named `NNNN_name.sql`; lexical order is persisted in `schema_migrations`
+- Migrations are hand-authored forward SQL files named `NNNN_name.sql`, recorded in lexical order in `schema_migrations`
 - Location: `packages/backend/src/db/migrations/*.sql`
 - Applied at boot (`migrate()` runs before anything else)
 - Local single-user assumption means **no rollback** — changes are forward-only
 - Every migration is idempotent (`CREATE TABLE IF NOT EXISTS`, `ALTER ... IF NOT EXISTS`)
-- Compatibility check on app boot:
-  - Pending migrations: snapshot the database with `VACUUM INTO` under `backups/`, migrate, then run `PRAGMA foreign_key_check`
-  - Applied ids this binary does not ship: refuse to start (`schema_newer_than_app`)
+- Boot-time compatibility check:
+  - Pending migrations: write a `VACUUM INTO` backup under `backups/`, apply migrations, and verify `PRAGMA foreign_key_check`
+  - Applied migration IDs unknown to this binary: refuse startup with `schema_newer_than_app`
 
 ## 5. Query Patterns
 
@@ -385,5 +385,5 @@ ORDER BY created_at DESC;
 
 ## 7. Backup & Migration
 
-- **One project**: **Download project backup** in the project header writes a `.burnguard-project` bundle; Home → **Import project** restores it as a new project (48 MB compressed, 128 MB unpacked, 10,000 files).
-- **Whole profile**: close BurnGuard and copy the entire profile directory privately. There is no in-app full-profile backup.
+- **Single project**: **Download project backup** in the project top bar exports a `.burnguard-project` bundle; on Home, **Import project** restores it into a new project (limits: 48 MB compressed, 128 MB unpacked, 10,000 files).
+- **Full profile**: quit BurnGuard and copy the profile directory yourself. The app does not include a full-profile backup action.

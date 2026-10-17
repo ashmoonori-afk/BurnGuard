@@ -16,7 +16,7 @@ Claude Code and Codex subprocess/stream translation boundary; earned this guide 
 | Codex stream parsing | `codex/parser.ts` | `parseCodexLine` falls through to raw text on non-JSON |
 | Codex event mapping | `codex/event-mapping.ts` | `mapCodexEnvelope` turns provider events into shared events |
 | Child cleanup | `owned-process-tree.ts`, `process-streams.ts` | Spawn options, tree kill, and stream settle before completion |
-| Crash recovery | `owned-process-record.ts`, `process-start-token.ts` | Persisted ownership record; startup reaps it by birth identity or Job token |
+| Crash recovery | `owned-process-record.ts`, `process-start-token.ts` | Saved ownership record; startup stops leftover processes by birth identity or Job token |
 
 ## CONVENTIONS
 

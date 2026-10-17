@@ -77,8 +77,8 @@ for icons, borders, and large or bold labels.
   Website surfaces also offer Fit, Desktop (1440), Tablet (768), and Phone
   (390 CSS pixels). These change only the viewport width of the mounted
   preview, never its document or model output. Fixed artboards keep their
-  geometry. Selected presets use a neutral wash and pressed state. The toolbar is
-  one row: when it is narrow, presets and history move into a More menu.
+  geometry. Selected presets use a neutral wash and pressed state. The toolbar stays on
+  a single row: when space is narrow, presets and history move into the More menu.
   Wide previews scroll inside the canvas.
 - **SelectorOverlay**: hover and selected bounds. Selection must preserve
   element identity, computed styles, and an authoring anchor when one exists.
@@ -136,9 +136,9 @@ for icons, borders, and large or bold labels.
 - Keyboard: every toolbar action and inspector control is reachable in order;
   focus is visible with the accent ring.
 - Reduced motion: state changes remain understandable without transitions.
-- One modal at a time: platform export guides open as a step view inside the
-  export details dialog with a Back button; closing the dialog returns focus to
-  the Export button.
+- One modal at a time: platform export guides open as a step view with a Back
+  button inside the export details dialog, and closing the dialog returns focus
+  to the Export button.
 
 ## Motion
 
@@ -154,8 +154,8 @@ remove non-essential transitions and preserve the same visible state changes.
   (home, settings, systems) keep normal page scrolling.
 - Desktop: chat, canvas, and the contextual inspector share the viewport
   without nested horizontal scrolling.
-- Narrow viewport (below lg): mode panels open as a bottom sheet over the
-  canvas, as tall as their content up to 65%; controls remain at least 44px high where touch is plausible. At
+- Narrow viewport (below lg): mode panels open over the canvas as a bottom sheet
+  sized to their content up to 65% height; controls remain at least 44px high where touch is plausible. At
   widths up to 900px, every canvas mode action is at least 44px high.
 - At widths up to 900px chat, canvas, and the inspector share the capped
   height instead of scrolling the page: chat and the inspector shrink, the

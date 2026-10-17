@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-Typed three-locale message registry  behind every user-facing string; earned this guide at score 12 for its registry module boundary, export surface, and `useT` reach across ~75 modules.
+Typed three-locale message registry backing every user-facing string; earned this guide at score 12 for its registry boundary, exported types, and `useT` usage across ~75 modules.
 
 ## WHERE TO LOOK
 
@@ -11,8 +11,8 @@ Typed three-locale message registry  behind every user-facing string; earned thi
 | Locale state | `locale.ts` | `LOCALES = ["ko","en","zh-CN"]`, `LOCALE_STORAGE_KEY = "burnguard.locale"`, `useLocaleStore`, `localeTag` (`ko-KR`/`en-US`/`zh-CN`), `applyDocumentLocale` sets `<html lang>` |
 | Translate | `t.ts` | `t(key, params)` reads the store snapshot; `useT()` subscribes and re-renders; `formatMessage` does `{name}` interpolation |
 | Message shape | `types.ts` | `Message = string \| { one, other }`, `MessageDefinition = Record<Locale, Message>`, `defineMessages` identity helper |
-| Registry | `messages/index.ts` | 17 packs spread-merged; `MessageKey = keyof typeof messages` |
-| Add copy | `messages/<pack>.ts` | One pack per namespace (`home`, `chat`, `workspace`, `export`, `modes`, ...); see `messages/index.ts` for the full list |
+| Registry | `messages/index.ts` | 17 packs merged into one object; `MessageKey = keyof typeof messages` |
+| Add copy | `messages/<pack>.ts` | One file per namespace (`home`, `chat`, `workspace`, `export`, `modes`, and others); see `messages/index.ts` for all packs |
 
 ## CONVENTIONS
 
