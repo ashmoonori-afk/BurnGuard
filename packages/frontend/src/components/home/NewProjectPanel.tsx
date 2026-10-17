@@ -15,8 +15,7 @@ import GenerationControls from "@/components/settings/GenerationControls";
 import { createProject, detectBackends } from "@/api/home";
 import { sendUserEvent } from "@/api/session";
 import { logoIdeationMessage } from "@/lib/logo-project";
-import { backendLabel, backendOptionLabel, backendSelectState, graphicBackendId } from "@/lib/backend-display";
-import { FIRST_RUN_CONNECTION_COPY, firstRunConnectionState } from "@/lib/first-run";
+import { backendOptionLabel, backendSelectState, graphicBackendId } from "@/lib/backend-display";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ProjectBriefFields, {
@@ -38,6 +37,7 @@ import {
   draftProblemMessage,
   PROJECT_CONTROL_CLASS,
   PROJECT_LABEL_CLASS,
+  PROJECT_SECTION_CLASS,
   PROTOTYPE_PAGE_PRESETS,
   buildCreateProjectRequest,
   coerceBriefChoice,
@@ -242,15 +242,15 @@ export default function NewProjectPanel({
   const materialsField = (
         <div className="space-y-2"><label htmlFor="project-materials" className={PROJECT_LABEL_CLASS}>{t("home.creation.attach")}</label><input id="project-materials" type="file" multiple accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")} disabled={disabled} onChange={(event) => { const picked = Array.from(event.target.files ?? []); setItems((current) => planAttachmentIntake(current, picked)); event.target.value = ""; }} className="block w-full text-sm" /><p className="text-xs text-muted-foreground">{t("home.creation.attachHint")}</p><ComposerAttachments items={items} sending={disabled} onRemove={(id) => setItems((current) => current.filter((item) => item.id !== id))} onRoleChange={(id, role) => setItems((current) => setAttachmentRole(current, id, role))} /></div>
   );
-  if (choosingSystem) return <DesignSystemPicker
+  if (choosingSystem) return <div className="min-h-0 flex-1 overflow-y-auto"><DesignSystemPicker
     projectType={isTemplate ? templateFormat : type}
     systems={selectable} selectedId={designSystemId} loading={systemsLoading} error={systemsError} allowNone={!isTemplate}
     onSelect={setPickedSystemId} onRefresh={onRetrySystems} onBack={() => setChoosingSystem(false)}
     onApply={(id) => { setPickedSystemId(id); setChoosingSystem(false); }}
-  />;
+  /></div>;
 
   return (
-    <form className={guided ? "[&_select]:min-h-11" : "p-6"} onSubmit={(event) => {
+    <form className={guided ? "[&_select]:min-h-11" : "flex min-h-0 flex-1 flex-col"} onSubmit={(event) => {
       event.preventDefault();
       if (!canContinue || disabled || submitting.current || (needsImageBackend && !graphicReady)) return;
       if (!built.ok || (designSystemId && (systemsLoading || systemsError))) return;
@@ -258,19 +258,12 @@ export default function NewProjectPanel({
       setError(null);
       createMutation.mutate(built.request);
     }}>
-      {!guided && <h2 className="mb-3 text-xs font-semibold text-muted-foreground">{t("home.creation.basics")}</h2>}
+      <div className={guided ? "" : "min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-5"}>
+      {!guided && <h2 className={`mb-3 ${PROJECT_SECTION_CLASS}`}>{t("home.creation.basics")}</h2>}
 
       <div className="space-y-4">
-        {guided && <ul className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-          {detectedBackends.map((backend) => {
-            const state = firstRunConnectionState(backend);
-            return <li key={backend.id} data-connection-state={state} className="rounded-md bg-muted px-2 py-1">
-              {backendLabel(backend.id)}: {t(FIRST_RUN_CONNECTION_COPY[state])}
-            </li>;
-          })}
-        </ul>}
         <div className="space-y-2">
-          <label htmlFor="brief-objective" className="text-sm font-medium">{t("home.brief.objective")}</label>
+          <label htmlFor="brief-objective" className={PROJECT_LABEL_CLASS}>{t("home.brief.objective")}</label>
           <textarea id="brief-objective" rows={4} required maxLength={OBJECTIVE_MAX_LENGTH}
             placeholder={t("home.brief.objectivePlaceholder")} value={form.objective} disabled={disabled}
             onChange={(event) => update("objective", event.target.value)}
@@ -450,10 +443,12 @@ export default function NewProjectPanel({
         </details>
       </div>
 
-      {needsImageBackend && !graphicReady && <p role="status" className="mt-4 text-sm text-muted-foreground">{t(isLogo ? "home.creation.logoRequired" : "home.creation.graphicRequired")}</p>}
+      </div>
+      <div className={guided ? "mt-5" : "shrink-0 border-t border-border bg-card px-6 py-4"}>
+      {needsImageBackend && !graphicReady && <p role="status" className="mb-3 text-sm text-muted-foreground">{t(isLogo ? "home.creation.logoRequired" : "home.creation.graphicRequired")}</p>}
       <Button
         data-qa="creation-submit"
-        className="mt-6 h-11 w-full gap-2 rounded-xl"
+        className="h-11 w-full gap-2 rounded-xl"
         type="submit"
         variant="cta"
         disabled={!canContinue || disabled || (needsImageBackend && !graphicReady) || (!!designSystemId && (systemsLoading || systemsError !== null))}
@@ -471,6 +466,7 @@ export default function NewProjectPanel({
             : draftProblemMessage(built.problem)}
         </p>
       )}
+      </div>
     </form>
   );
 }

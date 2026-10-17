@@ -4,7 +4,8 @@ import type {
   ProjectSummary,
   ProjectType,
 } from "@bg/shared";
-import { formatRelativeDay, projectTypeLabel } from "@/lib/format";
+import { formatFullDate, formatRelativeDay, projectTypeLabel } from "@/lib/format";
+import { isBuiltInSystem, systemDisplayName, systemMonogram } from "@/lib/system-display";
 import { t, type MessageKey } from "@/i18n/t";
 
 /**
@@ -21,6 +22,14 @@ export interface CardViewModel {
   thumbnail?: string | null;
   isTemplate?: boolean;
   designSystemId?: string | null;
+  /** Date and time of the last change, shown on hover. */
+  updatedTitle?: string;
+  /** Neutral placeholder letter for a system without a preview. */
+  monogram?: string;
+  /** Bundled theme or sample rather than a system the user made. */
+  builtIn?: boolean;
+  /** Stored name when the display name drops a redundant suffix, so search still finds it. */
+  fullName?: string;
 }
 
 export function filterHomeCards(
@@ -32,7 +41,8 @@ export function filterHomeCards(
     return cards;
   }
   return cards.filter((card) =>
-    normalizeSearchText(card.name).includes(normalizedQuery),
+    normalizeSearchText(card.name).includes(normalizedQuery) ||
+    (card.fullName !== undefined && normalizeSearchText(card.fullName).includes(normalizedQuery)),
   );
 }
 
@@ -50,8 +60,6 @@ const PROJECT_TINTS: Record<string, string> = {
   other: "bg-tint-stone",
 };
 
-const SYSTEM_TINTS = ["bg-tint-amber", "bg-tint-sky", "bg-tint-emerald", "bg-tint-violet"];
-
 const SYSTEM_STATUS_SUFFIX: Record<DesignSystemStatus, MessageKey> = {
   draft: "home.systemDraft",
   review: "home.systemReview",
@@ -66,6 +74,7 @@ export function projectToCard(p: ProjectSummary): CardViewModel {
     subtitle: `${projectTypeDisplayLabel(p.type)} · ${formatRelativeDay(p.updated_at)}`,
     href: `/projects/${p.id}`,
     tintClass: PROJECT_TINTS[p.type] ?? "bg-tint-stone",
+    updatedTitle: formatFullDate(p.updated_at),
     thumbnail: p.thumbnail_path,
     kind: p.type,
     designSystemId: p.design_system_id,
@@ -84,14 +93,18 @@ function projectTypeDisplayLabel(type: string): string {
   return projectTypeLabel(type === "from_template" ? "other" : type);
 }
 
-export function systemToCard(s: DesignSystemSummary, index = 0, type?: ProjectType): CardViewModel {
+export function systemToCard(s: DesignSystemSummary, _index = 0, type?: ProjectType): CardViewModel {
   const statusSuffix = t(SYSTEM_STATUS_SUFFIX[s.status]);
   return {
     id: s.id,
-    name: s.name,
+    name: systemDisplayName(s.name),
+    fullName: s.name,
+    monogram: systemMonogram(s.name),
+    builtIn: isBuiltInSystem(s),
+    updatedTitle: formatFullDate(s.updated_at),
     subtitle: `${statusSuffix} · ${formatRelativeDay(s.updated_at)}`,
     href: `/systems/${s.id}`,
-    tintClass: SYSTEM_TINTS[index % SYSTEM_TINTS.length],
+    tintClass: "bg-muted",
     thumbnail: type === undefined || type === "other" || type === "from_template"
       ? s.thumbnail_path
       : s.thumbnail_paths?.[type] ?? null,

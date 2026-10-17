@@ -44,27 +44,22 @@ import CliMissingModal from "@/components/errors/CliMissingModal";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { graphicGateCopy, hasGraphicBackend, needsCliGuidance } from "@/lib/backend-display";
 import { creationEscapeAction } from "@/lib/creation-dialog";
-import { requiresImageBackend } from "@/lib/project-creation";
+import { PROJECT_LABEL_CLASS, PROJECT_SECTION_CLASS, requiresImageBackend } from "@/lib/project-creation";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import { useUIStore } from "@/state/uiStore";
 
 type HomeTab = "recent" | "mine" | "examples" | "systems";
 type SystemImportMode = "url" | "upload";
 
 const PROJECT_TYPES = [
-  { id: "slide_deck", label: "home.type.slide_deck", description: "home.type.slideDescription", icon: Presentation, color: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" },
-  { id: "prototype", label: "home.type.prototype", description: "home.type.webDescription", icon: Blocks, color: "bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300" },
-  { id: "graphic", label: "home.type.graphic", description: "home.type.graphicDescription", icon: Image, color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
-  { id: "logo", label: "home.type.logo", description: "home.type.logoDescription", icon: PenTool, color: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/50 dark:text-fuchsia-300" },
-  { id: "from_template", label: "home.type.from_template", description: "home.type.templateDescription", icon: LayoutTemplate, color: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" },
+  { id: "slide_deck", label: "home.type.slide_deck", description: "home.type.slideDescription", icon: Presentation, color: "bg-tint-blue text-foreground" },
+  { id: "prototype", label: "home.type.prototype", description: "home.type.webDescription", icon: Blocks, color: "bg-tint-violet text-foreground" },
+  { id: "graphic", label: "home.type.graphic", description: "home.type.graphicDescription", icon: Image, color: "bg-tint-emerald text-foreground" },
+  { id: "logo", label: "home.type.logo", description: "home.type.logoDescription", icon: PenTool, color: "bg-tint-fuchsia text-foreground" },
+  { id: "from_template", label: "home.type.from_template", description: "home.type.templateDescription", icon: LayoutTemplate, color: "bg-tint-amber text-foreground" },
 ] as const;
 
 const HOME_TITLES: Record<HomeTab, { title: MessageKey; description: MessageKey }> = {
@@ -80,6 +75,7 @@ export default function HomeView() {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
+  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
   const requestedView = searchParams.get("view");
   const activeTab: HomeTab = requestedView === "mine" || requestedView === "examples" || requestedView === "systems" ? requestedView : "recent";
   const requestedType = searchParams.get("create");
@@ -340,11 +336,6 @@ export default function HomeView() {
     // Replace, so Back from the closed dialog does not land on the entry that reopens it.
     setSearchParams(next, { replace: true });
   };
-  const changeView = (view: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set("view", view);
-    setSearchParams(next);
-  };
 
   return (
     <>
@@ -357,35 +348,31 @@ export default function HomeView() {
             <h1 className="text-2xl font-semibold tracking-tight sm:text-[32px] sm:leading-tight">{t(HOME_TITLES[activeTab].title)}</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{t(HOME_TITLES[activeTab].description)}</p>
           </div>
-          <div className="flex gap-2"><Button ref={projectImportTriggerRef} variant="outline" className="h-11" onClick={() => setProjectImportOpen(true)} aria-haspopup="dialog">{t("home.importProject")}</Button><Button ref={createTriggerRef} variant="cta" className="h-11 gap-2 rounded-xl px-4" onClick={() => startProject()} aria-haspopup="dialog"><Plus className="h-4 w-4" aria-hidden="true" />{t("home.newProject")}</Button></div>
+          <div className="flex gap-2"><Button ref={projectImportTriggerRef} variant="outline" className="h-11" onClick={() => setProjectImportOpen(true)} aria-haspopup="dialog">{t("home.importProject")}</Button><Button ref={createTriggerRef} variant={showFirstRun ? "outline" : "cta"} className="h-11 gap-2 rounded-xl px-4" onClick={() => startProject()} aria-haspopup="dialog"><Plus className="h-4 w-4" aria-hidden="true" />{t("home.newProject")}</Button></div>
         </div>
         {detectionQuery.data !== undefined && needsCliGuidance(detectionQuery.data.backends) ? <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-sm text-muted-foreground">{t("home.aiNotice")}</p><Button variant="outline" size="sm" onClick={() => setCliMissingOpen(true)}>{t("home.aiGuide")}</Button></div> : null}
         {detectionQuery.isError ? <div role="alert" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3"><p className="text-sm text-foreground">{t("home.detectionFailed")}</p><Button variant="outline" size="sm" disabled={detectionQuery.isFetching} onClick={() => void detectionQuery.refetch()}>{t("home.retry")}</Button></div> : null}
         {showFirstRun && <FirstRunGuide onDismiss={finishFirstRun} onCreated={projectCreated} />}
-        {activeTab === "recent" || activeTab === "mine" ? <section aria-label={t("home.quickStart")} className="mb-10 grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 xl:grid-cols-4">
-          {PROJECT_TYPES.map(({ id, label, description, icon: Icon, color }) => {
-            // A gated tile stays in the tab order and names its reason instead of vanishing from assistive technology.
+        {(activeTab === "recent" || activeTab === "mine") && !showFirstRun ? <section aria-label={t("home.quickStart")} className="mb-10 grid grid-cols-1 gap-3 md:grid-cols-6 xl:grid-cols-5">
+          {PROJECT_TYPES.map(({ id, label, description, icon: Icon, color }, index) => {
+            // A gated tile stays in the tab order and names its reason, with the way to fix it, on the card itself.
             const gated = requiresImageBackend(id) && !graphicReady;
-            return <button key={id} type="button" onClick={() => { if (!gated) startProject(id); }} aria-disabled={gated || undefined} aria-describedby={gated ? "home-graphic-gate" : undefined} title={gated ? t(graphicGate.title) : undefined} aria-haspopup="dialog" className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:border-border aria-disabled:hover:bg-card xl:items-start xl:gap-3">
-              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${color}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
-              <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{t(label)}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{t(description)}</span></span>
-              <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" aria-hidden="true" />
-            </button>;
+            const gateId = `home-${id}-gate`;
+            return <div key={id} className={cn("group flex flex-col overflow-hidden rounded-2xl border border-border transition-colors md:col-span-3 xl:col-span-1", index < 3 && "md:col-span-2", gated ? "bg-muted/40" : "bg-card hover:border-accent/40 hover:bg-accent/5")}>
+              <button type="button" onClick={() => { if (!gated) startProject(id); }} aria-disabled={gated || undefined} aria-describedby={gated ? gateId : undefined} title={gated ? t(graphicGate.title) : undefined} aria-haspopup="dialog" className="flex flex-1 items-center gap-4 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-disabled:cursor-not-allowed xl:flex-col xl:items-start xl:gap-3">
+                <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-xl", color, gated && "opacity-60")}><Icon className="h-5 w-5" aria-hidden="true" /></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{t(label)}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{t(description)}</span></span>
+                {gated ? null : <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent xl:hidden" aria-hidden="true" />}
+              </button>
+              {gated ? <div className="border-t border-border px-4 py-3">
+                <p id={gateId} className="text-xs leading-5 text-muted-foreground">{t(graphicGate.hint)}</p>
+                <button type="button" onClick={() => { if (detectionQuery.isError) void detectionQuery.refetch(); else setSettingsOpen(true); }} className="mt-1 inline-flex min-h-9 items-center rounded-md text-xs font-medium text-accent underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t(detectionQuery.isError ? "home.retry" : "home.gate.openSettings")}</button>
+              </div> : null}
+            </div>;
           })}
-          {!graphicReady ? <p id="home-graphic-gate" className="col-span-full text-xs text-muted-foreground">{t(graphicGate.hint)}</p> : null}
         </section> : null}
-        <Tabs
-          value={activeTab}
-          onValueChange={changeView}
-          className="flex flex-1 flex-col"
-        >
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
-            <TabsList className="max-[640px]:grid max-[640px]:h-auto max-[640px]:w-full max-[640px]:grid-cols-2">
-              <TabsTrigger value="recent">{t("home.recent")}</TabsTrigger>
-              <TabsTrigger value="mine">{t("home.title.mine")}</TabsTrigger>
-              <TabsTrigger value="examples">{t("home.examples")}</TabsTrigger>
-              <TabsTrigger value="systems">{t("home.title.systems")}</TabsTrigger>
-            </TabsList>
+        <div className="flex flex-1 flex-col">
+          <div className="mb-5 flex flex-wrap items-center gap-3">
 
               <div className="flex w-full max-w-sm gap-2 max-[640px]:max-w-none">
               <div className="relative min-w-0 flex-1">
@@ -416,7 +403,7 @@ export default function HomeView() {
           </div>
 
           <div>
-            <TabsContent value="recent">
+            {activeTab === "recent" ? <>
               <ProjectCardSection
                 cards={recentSource.filtered}
                 sourceCount={recentSource.cards.length}
@@ -430,9 +417,9 @@ export default function HomeView() {
                 onStartProject={() => startProject()}
                 onDelete={onProjectDelete}
               />
-            </TabsContent>
+            </> : null}
 
-            <TabsContent value="mine">
+            {activeTab === "mine" ? <>
               <ProjectCardSection
                 cards={filteredMineCards}
                 sourceCount={mineCards.length}
@@ -447,9 +434,9 @@ export default function HomeView() {
                 onDelete={onProjectDelete}
               />
               <RecentlyDeletedSection />
-            </TabsContent>
+            </> : null}
 
-            <TabsContent value="examples">
+            {activeTab === "examples" ? <>
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
                 <p className="max-w-2xl text-xs leading-5 text-muted-foreground">
                   {t("home.examplesHint")}
@@ -481,9 +468,9 @@ export default function HomeView() {
                 briefFor={(card) => exampleBrief(card, locale)}
                 onStartFrom={startFromExample}
               />
-            </TabsContent>
+            </> : null}
 
-            <TabsContent value="systems">
+            {activeTab === "systems" ? <>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
                 <div><h2 className="text-sm font-semibold">{t("home.pinMood")}</h2><p className="mt-1 text-xs text-muted-foreground">{t("home.pinMoodHint")}</p></div>
                 <Button variant="outline" onClick={() => setPinterestImportOpen(true)}>{t("home.importPinterest")}</Button>
@@ -518,20 +505,20 @@ export default function HomeView() {
                   setDeleteSystemTarget({ id: card.id, name: card.name });
                 }}
               />
-            </TabsContent>
+            </> : null}
           </div>
-        </Tabs>
+        </div>
         </div>
       </div>
 
       <Dialog open={creationType !== null} onOpenChange={(open) => { if (!open) closeCreation(); }}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-2xl gap-0 p-0" hideClose={creatingProject} onEscapeKeyDown={(event) => { const action = creationEscapeAction({ creating: creatingProject, picking: pickingSystem }); if (action !== "dismiss") event.preventDefault(); if (action === "back") pickerBackRef.current?.(); }} onInteractOutside={(event) => { if (creatingProject) event.preventDefault(); }} onOpenAutoFocus={(event) => { event.preventDefault(); document.getElementById("project-name")?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); (openerRef.current?.isConnected ? openerRef.current : createTriggerRef.current)?.focus(); }}>
-          <DialogHeader className="border-b border-border px-6 pb-5 pt-6">
+        <DialogContent className="flex w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0" hideClose={creatingProject} onEscapeKeyDown={(event) => { const action = creationEscapeAction({ creating: creatingProject, picking: pickingSystem }); if (action !== "dismiss") event.preventDefault(); if (action === "back") pickerBackRef.current?.(); }} onInteractOutside={(event) => { if (creatingProject) event.preventDefault(); }} onOpenAutoFocus={(event) => { event.preventDefault(); document.getElementById("project-name")?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); (openerRef.current?.isConnected ? openerRef.current : createTriggerRef.current)?.focus(); }}>
+          <DialogHeader className="shrink-0 border-b border-border px-6 pb-5 pt-6">
             <DialogTitle className="text-xl">{t("home.createTitle")}</DialogTitle>
             <DialogDescription className="pt-1 leading-6">{t("home.createDescription")}</DialogDescription>
           </DialogHeader>
-          <div className="px-6 pt-5">
-            <p id="project-type-label" className="mb-2 text-xs font-semibold text-muted-foreground">{t("home.createType")}</p>
+          <div className="shrink-0 px-6 pt-5">
+            <p id="project-type-label" className={`mb-2 ${PROJECT_SECTION_CLASS}`}>{t("home.createType")}</p>
             <div role="group" aria-labelledby="project-type-label" className="flex flex-wrap gap-2">
               {[...PROJECT_TYPES, { id: "other" as const, label: "home.type.other" as const }].map((type) => <button key={type.id} type="button" disabled={creatingProject || (requiresImageBackend(type.id) && !graphicReady)} aria-pressed={creationType === type.id} onClick={() => { const next = new URLSearchParams(searchParams); next.set("create", type.id); setSearchParams(next, { replace: true }); }} className={`min-h-10 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${creationType === type.id ? "border-accent bg-accent/10 text-accent" : "border-border bg-card text-muted-foreground hover:bg-muted"}`}>{t(type.label)}</button>)}
             </div>
@@ -647,18 +634,23 @@ function SystemsSection({
   const MAX_UPLOAD_BYTES = 48_000_000;
   const uploadTooLarge =
     importMode === "upload" && uploadFile !== null && uploadFile.size > MAX_UPLOAD_BYTES;
+  const showCards = !isLoading && error === null;
+  const mineCards = cards.filter((card) => card.builtIn !== true);
+  const builtInCards = cards.filter((card) => card.builtIn === true);
   const canImport =
     importMode === "upload"
       ? uploadFile !== null && !uploadTooLarge && !isPending
       : sourceUrl.trim().length > 0 && !isPending;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="max-w-3xl rounded-xl border border-border bg-card/70 px-4 py-3 text-sm leading-6 text-muted-foreground">
         {t("home.systemsIntro")}
       </div>
 
-      <CardGrid>
+      <section aria-labelledby="systems-mine-heading" className="space-y-3">
+        <h2 id="systems-mine-heading" className="text-base font-semibold">{t("home.systems.mine")}</h2>
+        <CardGrid>
         <button
           ref={importTriggerRef}
           type="button"
@@ -685,17 +677,19 @@ function SystemsSection({
             </div>
           </div>
         </button>
-
-        {isLoading || error !== null
-          ? null
-          : cards.map((card) => (
-              <ProjectCard
-                key={card.id}
-                {...card}
-                onDelete={() => onSystemDelete(card)}
-              />
-            ))}
-      </CardGrid>
+        {showCards ? mineCards.map((card) => (
+          <ProjectCard key={card.id} {...card} onDelete={() => onSystemDelete(card)} />
+        )) : null}
+        </CardGrid>
+      </section>
+      {showCards && builtInCards.length > 0 ? <section aria-labelledby="systems-builtin-heading" className="space-y-3">
+        <h2 id="systems-builtin-heading" className="text-base font-semibold">{t("home.systems.builtIn")}</h2>
+        <CardGrid>
+          {builtInCards.map((card) => (
+            <ProjectCard key={card.id} {...card} onDelete={() => onSystemDelete(card)} />
+          ))}
+        </CardGrid>
+      </section> : null}
 
       {!isLoading && error === null && hasFilters ? <p role="status" className="text-sm text-muted-foreground">{t("home.searchCount", { count: cards.length })} <button type="button" onClick={onClearFilters} className="ml-2 font-medium text-accent underline underline-offset-2">{t("home.clearFilters")}</button></p> : null}
 
@@ -781,7 +775,7 @@ function SystemsSection({
                 <div className="md:col-span-2">
                   <label
                     htmlFor="system-source-url"
-                    className="text-xs font-medium text-muted-foreground"
+                    className={PROJECT_LABEL_CLASS}
                   >
                     {t("home.sourceUrl")}
                   </label>
@@ -798,7 +792,7 @@ function SystemsSection({
                 <div>
                   <label
                     htmlFor="system-source-type"
-                    className="text-xs font-medium text-muted-foreground"
+                    className={PROJECT_LABEL_CLASS}
                   >
                     {t("home.sourceType")}
                   </label>
@@ -823,7 +817,7 @@ function SystemsSection({
                     <option value="figma">{t("home.source.figma")}</option>
                   </select>
                   {sourceType === "figma" && (
-                    <p className="mt-1 text-[11px] text-muted-foreground">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {t("home.figmaTokenHint")}
                     </p>
                   )}
@@ -834,7 +828,7 @@ function SystemsSection({
                 <div className="md:col-span-2">
                   <label
                     htmlFor="system-upload-file"
-                    className="text-xs font-medium text-muted-foreground"
+                    className={PROJECT_LABEL_CLASS}
                   >
                     {t("home.fileToUpload")}
                   </label>
@@ -870,7 +864,7 @@ function SystemsSection({
             <div className="md:col-span-2">
               <label
                 htmlFor="system-draft-name"
-                className="text-xs font-medium text-muted-foreground"
+                className={PROJECT_LABEL_CLASS}
               >
                 {t("home.draftName")}
               </label>

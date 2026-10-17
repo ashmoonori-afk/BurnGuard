@@ -47,20 +47,28 @@ export default function ProjectCard(
             props.tintClass,
           )}
         >
-          {thumbnailSource === null ? (
+          {thumbnailSource === null ? props.kind === "system" && props.monogram !== undefined ? (
+            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+              <span aria-hidden="true" className="grid h-14 w-14 place-items-center rounded-full border border-border bg-card text-xl font-semibold text-foreground/70">{props.monogram}</span>
+              <span className="text-xs">{t("home.previewEmpty")}</span>
+            </div>
+          ) : (
             <div className="flex flex-col items-center gap-3 text-muted-foreground">
               <span className="grid h-16 w-16 place-items-center rounded-2xl border border-card/80 bg-card/70"><Icon className="h-7 w-7" strokeWidth={1.5} aria-hidden="true" /></span>
               <span className="text-xs">{thumbnailFailed ? retryDelay === null ? t("home.previewError") : t("home.previewPreparing") : t("home.previewEmpty")}</span>
             </div>
           ) : (
+            <>
+            {props.kind === "system" && props.monogram !== undefined ? <span aria-hidden="true" className="col-start-1 row-start-1 grid h-14 w-14 place-items-center place-self-center rounded-full border border-border bg-card text-xl font-semibold text-foreground/70">{props.monogram}</span> : null}
             <img
               src={thumbnailSource}
               alt=""
               loading="lazy"
               decoding="async"
-              className="h-full w-full object-cover"
+              className="col-start-1 row-start-1 h-full w-full object-cover"
               onError={() => setFailedSource(thumbnailSource)}
             />
+            </>
           )}
         </div>
         {props.isTemplate && (
@@ -75,7 +83,7 @@ export default function ProjectCard(
           <div className="line-clamp-1 text-sm font-semibold text-foreground">
             {props.name}
           </div>
-          <div className="mt-1.5 line-clamp-1 text-xs text-muted-foreground">
+          <div className="mt-1.5 line-clamp-1 text-xs text-muted-foreground" title={props.updatedTitle}>
             {props.subtitle}
           </div>
           <ArrowUpRight className="absolute right-4 top-4 h-4 w-4 text-muted-foreground group-hover:text-accent" aria-hidden="true" />
@@ -94,21 +102,21 @@ export default function ProjectCard(
                   e.stopPropagation();
                 }}
                 type="button"
-                className="grid h-11 w-11 place-items-center rounded-xl border border-border bg-card/95 text-muted-foreground shadow-app-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-card/95 text-muted-foreground shadow-app-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={t("home.optionsNamed", { name: props.name })}
               >
-                <MoreHorizontal className="h-3.5 w-3.5" />
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuContent align="end" side="bottom" sideOffset={6} collisionPadding={12} className="min-w-[11rem] p-1.5" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuItem
-                className="text-destructive focus:text-destructive gap-2"
+                className="min-h-9 gap-2.5 px-3 text-sm font-medium text-destructive focus:bg-destructive/10 focus:text-destructive"
                 onSelect={(e) => {
                   e.preventDefault();
                   props.onDelete?.();
                 }}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
                 {t("home.delete")}
               </DropdownMenuItem>
             </DropdownMenuContent>
