@@ -41,7 +41,7 @@ export default function ExportParitySummary({
       <div className="flex items-center gap-1.5">
         <Icon
           className={`h-3.5 w-3.5 ${
-            passed ? "text-success" : "text-warning"
+            passed ? "text-success-text" : "text-warning-text"
           }`}
           aria-hidden="true"
         />

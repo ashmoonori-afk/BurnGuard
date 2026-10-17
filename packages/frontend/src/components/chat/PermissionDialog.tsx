@@ -48,7 +48,7 @@ export default function PermissionDialog({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <div className="mb-3 grid h-10 w-10 place-items-center rounded-md bg-amber-500/10 text-amber-600">
+          <div className="mb-3 grid h-10 w-10 place-items-center rounded-md bg-warning/10 text-warning-text">
             <ShieldAlert className="h-5 w-5" />
           </div>
           <DialogTitle>{t("chat.permission.title")}</DialogTitle>

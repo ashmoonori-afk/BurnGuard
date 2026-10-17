@@ -23,7 +23,7 @@ export default function QualityFindingCard({ finding, actionContext, revealResul
   return (
     <article className="min-w-0 rounded-md border border-border bg-background p-3">
       <div className="flex items-start gap-2">
-        <span className={mustFix ? "mt-0.5 text-destructive" : "mt-0.5 text-warning"} aria-hidden="true">
+        <span className={mustFix ? "mt-0.5 text-destructive" : "mt-0.5 text-warning-text"} aria-hidden="true">
           {mustFix ? <AlertTriangle className="h-4 w-4" /> : <Wrench className="h-4 w-4" />}
         </span>
         <div className="min-w-0 flex-1">

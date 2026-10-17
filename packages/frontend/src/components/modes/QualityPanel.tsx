@@ -55,7 +55,7 @@ export default function QualityPanel({ quality, extra }: { readonly quality: Qua
           <section className="mt-4" aria-labelledby="quality-unknown-title">
             <h3 id="quality-unknown-title" className="mb-2 text-xs font-semibold">{t("modes.quality.unknown")}</h3>
             {grouped.unknown.length === 0 ? <p className="text-xs text-muted-foreground">{t("modes.quality.noUnknown")}</p> : <div className="space-y-2">{grouped.unknown.map((item) => <article key={item.code} className="rounded-md border border-warning/50 bg-warning/10 p-3">
-              <div className="flex items-start gap-2"><CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-warning" /><div className="min-w-0"><div className="text-xs font-semibold">{DESIGN_AUDIT_CHECK_COPY[item.code]}</div><div className="mt-0.5 text-[11px] text-muted-foreground">{DESIGN_AUDIT_STATUS_COPY[item.status]}</div></div></div>
+              <div className="flex items-start gap-2"><CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" /><div className="min-w-0"><div className="text-xs font-semibold">{DESIGN_AUDIT_CHECK_COPY[item.code]}</div><div className="mt-0.5 text-[11px] text-muted-foreground">{DESIGN_AUDIT_STATUS_COPY[item.status]}</div></div></div>
               <p className="mt-2 break-keep text-xs leading-relaxed">{DESIGN_AUDIT_UNKNOWN_COPY[item.reason]} <strong>{t("modes.quality.notPass")}</strong></p>
             </article>)}</div>}
           </section>
