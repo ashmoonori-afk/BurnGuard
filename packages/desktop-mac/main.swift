@@ -389,10 +389,14 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
             try { if(method==='POST'&&pathname===`/api/projects/${projectId}/exports`){const data=await json(response.clone());if(data.format===format)createdId=data.id;} if(method==='GET'&&pathname===`/api/projects/${projectId}/exports`&&createdId){const jobs=await json(response.clone());const job=jobs.find(value=>value.id===createdId);if(job?.status==='failed')throw new Error(`${format} export failed`);if(job?.status==='succeeded'){clearTimeout(timer);restoreFetch();resolve(job);}} } catch(error){clearTimeout(timer);restoreFetch();reject(error);} return response; };
         });
         const item=menu.querySelectorAll('[role="menuitem"]')[index]; if(!item) throw new Error(`${format} menu item unavailable`); item.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerType:'mouse'})); item.click(); const job=await terminal;
-        await waitFor(()=>[...menu.querySelectorAll('li')].find(value=>[...value.querySelectorAll('span')].some(span=>span.textContent?.trim()===format.toUpperCase()))).catch(error=>{throw new Error(`${format}-download-row: ${error}`)});
         const response=await fetch(`/api/exports/${job.id}/download`); if(!response.ok)throw new Error(`${format} download HTTP ${response.status}`); const disposition=response.headers.get('content-disposition')??''; const filename=/filename="([^"]+)"/i.exec(disposition)?.[1]??`native-${format}`; const url=URL.createObjectURL(await response.blob()); const link=document.createElement('a');link.href=url;link.download=filename;link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); return {id:job.id,size:job.size_bytes,digest:job.latest_attempt?.digests?.output};
       };
       const svg=await runExport(0,'svg'); const pdf=await runExport(1,'pdf');
+      // Finished exports are listed in the Recent exports dialog, which the menu opens; the menu itself lists formats only.
+      const recent=[...menu.querySelectorAll('[role="menuitem"]')].find(value=>value.querySelector('svg.lucide-history')); if(!recent) throw new Error('Recent exports control unavailable');
+      recent.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerType:'mouse'})); recent.click();
+      const listed=format=>[...document.querySelectorAll('[role="dialog"] li')].some(value=>[...value.querySelectorAll('span')].some(span=>span.textContent?.trim()===format.toUpperCase()));
+      await waitFor(()=>listed('svg')&&listed('pdf')).catch(error=>{throw new Error(`recent-exports-rows: ${error}`)});
       return {...diagnostics,reloadPersisted:true,reloadedRevision:project.current_revision,exports:{svg,pdf}};
     } catch(error) {
       const textarea=document.getElementById('element-edit-text'); if(textarea instanceof HTMLTextAreaElement){diagnostics.reloadTextareaValue=textarea.value;diagnostics.reloadTextareaState=textarea.value===persistedText?'persisted':'mismatch';}
