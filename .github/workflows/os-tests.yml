@@ -179,6 +179,9 @@ jobs:
           packages/frontend/tests/project-creation.test.ts
           packages/frontend/tests/new-project-panel.test.ts
           packages/frontend/tests/first-run-guide.test.ts
+          packages/frontend/tests/design-token-contrast.test.ts
+          packages/frontend/tests/design-token-usage.test.ts
+          packages/frontend/tests/ui-primitives.test.ts
           packages/backend/tests/first-run-project-origin.test.ts
           packages/backend/tests/design-direction-workflow.test.ts
       # The first Windows PowerShell start on a runner loads .NET Framework and System.Drawing cold (1-9 s usually, over
