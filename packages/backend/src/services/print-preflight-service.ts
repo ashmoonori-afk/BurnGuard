@@ -79,8 +79,24 @@ export function measurePrintPage(page: Page, signal: AbortSignal): Promise<PageM
           const box = target.getBoundingClientRect();
           const style = getComputedStyle(target);
           if (box.width <= 0 || box.height <= 0 || style.visibility === "hidden" || style.visibility === "collapse" || target.getClientRects().length === 0) continue;
-          let layer = 0;
-          for (const match of style.backgroundImage.matchAll(/url\("((?:\\.|[^"\\])*)"\)/gu)) {
+          // background-size has one entry per background-image layer, gradients included, so a URL's size is
+          // chosen by its position among all layers, not among the URL layers. Split at top-level commas.
+          const layers: string[] = [];
+          const value = style.backgroundImage;
+          let depth = 0; let quote = ""; let start = 0;
+          for (let index = 0; index < value.length; index += 1) {
+            const character = value[index];
+            if (quote !== "") { if (character === "\\") index += 1; else if (character === quote) quote = ""; }
+            else if (character === "\"" || character === "'") quote = character;
+            else if (character === "(") depth += 1;
+            else if (character === ")") depth -= 1;
+            else if (character === "," && depth === 0) { layers.push(value.slice(start, index)); start = index + 1; }
+          }
+          layers.push(value.slice(start));
+          for (const [layerIndex, layerValue] of layers.entries()) {
+            const match = /^\s*url\("((?:\\.|[^"\\])*)"\)\s*$/u.exec(layerValue);
+            if (match === null) continue;
+            const layer = layerIndex + 1;
             const source = match[1]?.replace(/\\(["\\])/gu, "$1");
             if (!source) continue;
             let decoded = backgrounds.get(source);
@@ -92,7 +108,6 @@ export function measurePrintPage(page: Page, signal: AbortSignal): Promise<PageM
               backgrounds.set(source, decoded);
             }
             const image = await decoded;
-            layer += 1;
             if (image === null || image.naturalWidth === 0) continue;
             // The drawn tile follows background-size, not the element box: "auto" draws one image pixel per CSS pixel
             // (a tiled texture is never upscaled), cover/contain scale to the box, and lengths or percentages are explicit.

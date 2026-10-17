@@ -175,6 +175,27 @@ test("Given recovery requires termination proof When signalling is refused Then 
   }
 });
 
+test("Given a group whose last member exited but is not yet reaped When recovery signals it Then the refusal waits for proof of absence instead of failing", async () => {
+  if (process.platform === "win32") {
+    await expect(closeOwnedProcessTree(1_000_000_000, { requireTermination: true })).rejects.toBeInstanceOf(OwnedProcessTreeCleanupError);
+    return;
+  }
+  // Darwin answers SIGKILL to an unreaped zombie group with EPERM; the group is gone once its parent reaps it.
+  const signals: Array<[number, string | number | undefined]> = [];
+  const kill = spyOn(process, "kill").mockImplementation((pid, signal) => {
+    signals.push([pid, signal]);
+    const code = signal === "SIGKILL" ? "EPERM" : "ESRCH";
+    throw Object.assign(new Error("fixture zombie group"), { code });
+  });
+  try {
+    expect(await closeOwnedProcessTree(1_000_000_000, { requireTermination: true })).toBeUndefined();
+    expect(signals).toContainEqual([-1_000_000_000, "SIGKILL"]);
+    expect(signals).toContainEqual([-1_000_000_000, 0]);
+  } finally {
+    kill.mockRestore();
+  }
+});
+
 test("Given ownership changed during the process snapshot When cleanup rechecks Then no captured PID receives a signal", async () => {
   if (process.platform === "win32") {
     await expect(closeOwnedProcessTree(1_000_000_000, { requireTermination: true, verifyOwnership: () => false })).rejects.toBeInstanceOf(OwnedProcessTreeCleanupError);

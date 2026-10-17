@@ -37,6 +37,13 @@ describe("rendered print backgrounds", () => {
     expect(images.map(image => image.intrinsic_width_px)).toEqual([600, 3000]);
   });
 
+  test("Given a gradient layer sized differently before an image layer, When measured, Then the image uses its own layer's background-size", async () => {
+    const images = await measure('<div id="photo"></div>', `#photo{width:794px;height:1123px;background-image:linear-gradient(transparent,black),url("${low}");background-size:25px 25px,794px 1123px}`);
+    expect(images).toHaveLength(1);
+    expect(images[0]).toMatchObject({ intrinsic_width_px: 600, severity: "strong_warn" });
+    expect(images[0]?.locator).toContain("background[2]");
+  });
+
   test("Given hidden backgrounds and an artboard background, When measured, Then only the rendered artboard is included", async () => {
     const images = await measure(`<div style="display:none;width:794px;height:1123px;background:url('${low}')"></div>`, `[data-graphic-artboard]{background-image:url("${high}")}`);
     expect(images).toHaveLength(1);
