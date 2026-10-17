@@ -80,7 +80,7 @@ export default function GraphicFrameNavigator({
         />
       ))}
       {bands.length > 0 && (
-        <p className="pointer-events-none absolute left-2 top-2 rounded bg-background/80 px-2 py-1 text-[10px] text-muted-foreground">
+        <p className="pointer-events-none absolute left-2 top-2 rounded bg-background/80 px-2 py-1 text-xs text-muted-foreground">
           {t("canvas.frames.safeZone")}</p>
       )}
       <div
@@ -101,7 +101,7 @@ export default function GraphicFrameNavigator({
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </button>
-        <span aria-live="polite" className="min-w-16 text-center text-[11px] tabular-nums text-foreground">
+        <span aria-live="polite" className="min-w-16 text-center text-xs tabular-nums text-foreground">
           {t("canvas.frames.position", { index: index + 1, count })}
         </span>
         <button

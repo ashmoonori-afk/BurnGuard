@@ -210,4 +210,5 @@ export const workspaceMessages = defineMessages({
   "workspace.instructions.saved": { ko: "다음 요청부터 적용돼요", en: "Applies from the next request", "zh-CN": "将从下一次请求开始应用" },
   "workspace.instructions.failed": { ko: "항상 적용할 내용을 저장하지 못했어요", en: "Could not save the standing instructions", "zh-CN": "无法保存始终应用的内容" },
   "workspace.ux.fixDisplay": { ko: "UX 개선 요청 · {title}", en: "UX improvement request · {title}", "zh-CN": "UX 改进请求 · {title}" },
+  "workspace.canvas.zoomHelp": { ko: "확대·축소 방법", en: "How to zoom", "zh-CN": "缩放方式" },
 });

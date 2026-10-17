@@ -137,7 +137,7 @@ function CommentPin({
       }}
       title={commentPinTitle(comment.body, t)}
       className={cn(
-        "absolute -translate-x-1/2 -translate-y-1/2 h-6 w-6 rounded-full text-[10px] font-semibold border shadow-md flex items-center justify-center transition",
+        "absolute -translate-x-1/2 -translate-y-1/2 h-6 w-6 rounded-full text-xs font-semibold border shadow-md flex items-center justify-center transition",
         "bg-accent text-accent-foreground border-white",
         focused && "ring-2 ring-accent/30 scale-110",
       )}
