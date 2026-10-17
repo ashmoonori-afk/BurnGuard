@@ -62,14 +62,17 @@
     --muted-foreground: 98 108 124;  /* supporting copy */
     --accent: 36 84 224;             /* cobalt */
     --accent-foreground: 255 255 255;
-    --success: 0 206 120;           /* green-500 */
+    --accent-soft: 228 237 254;      /* selected / hover fill; accent text stays >=4.5:1 */
+    --success: 0 206 120;           /* green-500 — fills, dots, icons */
     --success-foreground: 23 25 26;
-    --warning: 252 166 61;          /* yellow-500 */
+    --success-text: 4 120 87;        /* success as text: 5.5:1 on card */
+    --warning: 252 166 61;          /* yellow-500 — fills, dots, icons */
     --warning-foreground: 23 25 26;
+    --warning-text: 146 64 14;       /* warning as text: 7.1:1 on card */
     --destructive: 217 45 32;        /* red-700 */
     --destructive-foreground: 255 255 255;
     --border: 225 230 237;           /* subtle dividers */
-    --input: 215 222 232;            /* visible input edge */
+    --input: 130 138 150;            /* control edge: >=3:1 on card and background */
     --ring: 0 79 255;                /* blue-500 */
 
     /* Card tints — soft thumbnail backgrounds, one per project type or
@@ -102,14 +105,17 @@
     --muted-foreground: 187 197 204;
     --accent: 109 149 255;
     --accent-foreground: 17 17 17;
+    --accent-soft: 34 46 80;
     --success: 52 211 153;
     --success-foreground: 17 17 17;
+    --success-text: 52 211 153;
     --warning: 251 191 36;
     --warning-foreground: 17 17 17;
+    --warning-text: 251 191 36;
     --destructive: 255 120 114;
     --destructive-foreground: 17 17 17;
     --border: 70 74 77;
-    --input: 70 74 77;
+    --input: 118 125 132;
     --ring: 109 149 255;
     --tint-rose: 136 19 55;
     --tint-slate: 30 41 59;

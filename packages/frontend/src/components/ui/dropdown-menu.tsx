@@ -16,7 +16,7 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 min-w-[10rem] overflow-hidden rounded-md border border-border bg-background p-1 text-foreground shadow-app-3",
+        "z-50 min-w-[10rem] overflow-hidden rounded-card border border-border bg-popover p-1 text-popover-foreground shadow-app-3",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         className,
       )}
@@ -35,8 +35,8 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-xs outline-none transition-colors",
-      "focus:bg-muted focus:text-foreground",
+      "relative flex min-h-8 cursor-pointer select-none items-center gap-2 rounded-control px-2 py-1.5 text-xs outline-none transition-colors",
+      "focus:bg-muted focus:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       inset && "pl-8",
       className,
@@ -55,7 +55,7 @@ const DropdownMenuLabel = React.forwardRef<
   <DropdownMenuPrimitive.Label
     ref={ref}
     className={cn(
-      "px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground",
+      "px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground",
       inset && "pl-8",
       className,
     )}

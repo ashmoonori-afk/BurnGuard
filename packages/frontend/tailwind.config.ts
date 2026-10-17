@@ -35,14 +35,20 @@ export default {
         accent: {
           DEFAULT: "rgb(var(--accent) / <alpha-value>)",
           foreground: "rgb(var(--accent-foreground) / <alpha-value>)",
+          // Selected / hover fill behind accent text (`bg-accent-soft`).
+          soft: "rgb(var(--accent-soft) / <alpha-value>)",
         },
         success: {
           DEFAULT: "rgb(var(--success) / <alpha-value>)",
           foreground: "rgb(var(--success-foreground) / <alpha-value>)",
+          // Text-safe variant (`text-success-text`); DEFAULT is for fills and dots.
+          text: "rgb(var(--success-text) / <alpha-value>)",
         },
         warning: {
           DEFAULT: "rgb(var(--warning) / <alpha-value>)",
           foreground: "rgb(var(--warning-foreground) / <alpha-value>)",
+          // Text-safe variant (`text-warning-text`); DEFAULT is for fills and dots.
+          text: "rgb(var(--warning-text) / <alpha-value>)",
         },
         destructive: {
           DEFAULT: "rgb(var(--destructive) / <alpha-value>)",
@@ -99,7 +105,15 @@ export default {
           900: "var(--color-blue-900)",
         },
       },
+      // Radius scale (apply it in src/components/ui; features inherit it):
+      //   dialog 16px  -> rounded-dialog (rounded-2xl)
+      //   card / menu 12px -> rounded-card (rounded-lg)
+      //   control 10px -> rounded-control (rounded-md)
+      //   pill -> rounded-full
       borderRadius: {
+        dialog: "1rem",
+        card: "var(--radius)",
+        control: "calc(var(--radius) - 2px)",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",

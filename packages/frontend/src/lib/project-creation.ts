@@ -172,7 +172,7 @@ export const INITIAL_BRIEF_FORM: BriefForm = {
 
 export const PROJECT_LABEL_CLASS = "text-xs font-medium text-foreground/80";
 export const PROJECT_CONTROL_CLASS =
-  "flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground opacity-100 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-50";
+  "flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground opacity-100 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground";
 
 export type DraftProblem =
   | "section_count_invalid"
