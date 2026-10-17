@@ -84,7 +84,7 @@ export async function codexFixture(options: { readonly missingRoot?: boolean; re
   ) => {
     const callback = typeof watchOptions === "function" ? watchOptions : listener;
     const settings = typeof watchOptions === "function" ? null : watchOptions ?? null;
-    const observesImages = String(filename) === home || String(filename) === imageRoot;
+    const observesImages = String(filename) === home || String(filename) === imageRoot || String(filename) === threadDir;
     let watcher: fs.FSWatcher;
     if (options.controlledWatch && observesImages) {
       fs.statSync(filename); // Preserve native ENOENT behavior for the missing-root schedule.
@@ -155,8 +155,8 @@ export async function codexFixture(options: { readonly missingRoot?: boolean; re
     },
     async image() {
       await mkdir(threadDir, { recursive: true });
-      // Native delivery must never hash a partially written PNG.
-      const staged = path.join(threadDir, "exec-1.tmp");
+      // The watched tree receives only the completed PNG, not a temporary-write/rename pair.
+      const staged = path.join(root, "exec-1.tmp");
       await writeFile(staged, PNG);
       await rename(staged, path.join(threadDir, "exec-1.png"));
     },

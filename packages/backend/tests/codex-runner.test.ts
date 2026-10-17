@@ -262,6 +262,66 @@ describe("runCodexTurn image-tool lifecycle (real subprocess fixtures)", () => {
     });
   }
 
+  runnerTest("Given a watched image root When a new thread directory precedes its PNG Then a direct thread notification delivers the hash live", async () => {
+    await using fixture = await codexFixture({ controlledWatch: true });
+    const finished = Promise.withResolvers<void>();
+    const run = fixture.start({ onEvent: async (event) => { if (event.type === "tool.finished") finished.resolve(); } });
+    await fixture.ready;
+    await fixture.imageAttached;
+    await mkdir(fixture.threadDir);
+    imageWatch(fixture).emit("change", "rename", path.basename(fixture.threadDir));
+    const watcher = fixture.watches.find(entry => entry.path === fixture.threadDir)?.watcher;
+    if (!watcher) throw new Error("New thread directory has no direct image observer");
+    const observed = Promise.race([finished.promise, run.then(() => { throw new Error("thread image not delivered live"); })]);
+    await fixture.image();
+    watcher.emit("change", "rename", "exec-1.png");
+    await observed;
+    await fixture.command("complete");
+    expect(await run).toEqual({ exitCode: 0 });
+    expect(fixture.events.filter(event => event.type === "tool.finished")).toEqual([
+      expect.objectContaining({ output: { image_sha256: [PNG_SHA] } }),
+    ]);
+    expectGone(fixture.pids);
+  });
+
+  runnerTest("Given a newly created thread watcher When it errors Then its replacement delivers the next PNG live", async () => {
+    await using fixture = await codexFixture({ controlledWatch: true });
+    const finished = Promise.withResolvers<void>();
+    const run = fixture.start({ onEvent: async (event) => { if (event.type === "tool.finished") finished.resolve(); } });
+    await fixture.ready;
+    await fixture.imageAttached;
+    await mkdir(fixture.threadDir);
+    imageWatch(fixture).emit("change", "rename", path.basename(fixture.threadDir));
+    const failed = fixture.watches.find(entry => entry.path === fixture.threadDir)?.watcher;
+    if (!failed) throw new Error("Thread image observer missing");
+    failed.emit("error", new Error("thread_watch_lost"));
+    const replacement = [...fixture.watches].reverse().find(entry => entry.path === fixture.threadDir)?.watcher;
+    if (!replacement) throw new Error("Replacement thread observer missing");
+    expect(replacement).not.toBe(failed);
+    const observed = Promise.race([finished.promise, run.then(() => { throw new Error("replacement thread image not delivered live"); })]);
+    await fixture.image();
+    replacement.emit("change", "rename", null);
+    await observed;
+    await fixture.command("complete");
+    expect(await run).toEqual({ exitCode: 0 });
+    expect(fixture.events.filter(event => event.type === "tool.finished")).toHaveLength(1);
+    expectGone(fixture.pids);
+  });
+
+  runnerTest("Given a thread symlink escaping Codex home When the image root reports its creation Then direct observation stays inside the boundary", async () => {
+    await using fixture = await codexFixture({ controlledWatch: true });
+    const run = fixture.start();
+    await fixture.ready;
+    await fixture.imageAttached;
+    await symlink(fixture.root, fixture.threadDir, "junction");
+    imageWatch(fixture).emit("change", "rename", path.basename(fixture.threadDir));
+    expect(fixture.watches.some(entry => entry.path === fixture.threadDir)).toBe(false);
+    await fixture.command("complete");
+    expect(await run).toEqual({ exitCode: 0 });
+    expect(fixture.events.some(event => event.type === "tool.started")).toBe(false);
+    expectGone(fixture.pids);
+  });
+
   runnerTest("Given a basename notification When a PNG exists in the current thread Then its hash is delivered before completion", async () => {
     await using fixture = await codexFixture({ controlledWatch: true });
     const imageFinished = Promise.withResolvers<void>();
