@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-Core artifact, extraction, export, research, and runtime workflows; earned this guide at score 14 for 152 flat TypeScript modules plus the `chromium-node-bridge.mjs` child entry (~17.7k LOC, no barrel `index.ts`), high symbol density, broad exports, and dominant reference centrality.
+Core artifact, extraction, export, research, and runtime workflows; earned this guide at score 14 for 255 flat TypeScript modules and the `chromium-node-bridge.mjs` child entry (~17.7k LOC, with no barrel `index.ts`), high symbol density, broad exports, and central reference reach.
 
 ## WHERE TO LOOK
 

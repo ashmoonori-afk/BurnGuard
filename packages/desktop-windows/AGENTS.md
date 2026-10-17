@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-WinForms + WebView2 host (`Program.cs`, 431 LOC) that owns the packaged backend process and the Velopack update lifecycle; earned this guide at score 8 as the repository's only C#/.NET surface, with a toolchain and process contract nothing else documents.
+WinForms + WebView2 host (`Program.cs`, 704 LOC) managing the packaged backend process and Velopack updates; earned this guide at score 8 as the repository's primary C#/.NET desktop shell with its own toolchain and process contract.
 
 ## STRUCTURE
 

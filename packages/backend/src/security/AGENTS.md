@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-Five modules (464 LOC) that own every trust decision the rest of the backend depends on; earned this guide at score 9 as a distinct domain with 38 top-level symbols, 18 exports, and 54 backend files importing from `security/` (40 of them `resolveWithin`, 22 `assertSafeName`).
+Five modules (498 LOC) owning every trust check the rest of the backend relies on; earned this guide at score 9 as a distinct domain with 38 top-level symbols, 18 exports, and 54 backend files importing from `security/` (40 using `resolveWithin`, 22 using `assertSafeName`).
 
 ## WHERE TO LOOK
 

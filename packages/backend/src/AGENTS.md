@@ -13,7 +13,8 @@ src/
 ├── harness/        # Prompt assembly and shipped artifact skills
 ├── routes/         # Hono API domain handlers
 ├── security/       # request authority and managed-path containment (own guide)
-├── services/       # lifecycle, extraction, export, and artifact logic (152 modules)
+├── services/       # lifecycle, extraction, export, and artifact workflows (255 modules)
+├── cli/            # read-only profile reader used by scripts/burnguard-read.ts
 ├── runtime/        # browser-injected deck runtime strings
 ├── lib/            # app-root paths, port probe, browser launch
 ├── data/           # bundled design systems, fonts, original samples

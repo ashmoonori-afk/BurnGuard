@@ -1,8 +1,10 @@
 # LLM Harness and Backend Adapters
 
-This document describes the **current** adapter implementation in the repository as of April 22, 2026.
+This document describes the **current** adapter implementation, reviewed for v0.5.31 on 2026-10-17.
 
 ## 1. Current Design Principles
+
+The adapter registry (`adapters/registry.ts`) dispatches `claude-code`, `codex`, `gemini`, and `copilot`.
 
 1. Normalize backend output into one `NormalizedEvent` stream
 2. Persist every meaningful event so session history survives refresh and reload
@@ -27,8 +29,7 @@ For each user turn, the backend currently:
 9. Marks the session idle and writes a checkpoint
 
 Important current behavior:
-- there is a per-session in-memory lock so only one turn can run at a time
-- the session event route returns `409 session_busy` if another turn is already running
+- turn admission is enforced per session and across the process: the session event route returns `409 session_busy` when that session already has a running turn, and `429 turn_capacity_exhausted` when active sessions reach `harness.maxConcurrentSessions`
 - execution is per-turn subprocess invocation, not a long-lived interactive shell session
 
 ## 3. Current Normalized Event Schema
@@ -109,18 +110,21 @@ Currently mapped:
 | successful write/edit tool_result | `file.changed` if the path resolves inside the project |
 | result with usage | `usage.delta` + `chat.message_end` + `status.idle` |
 
+Additional flags passed today: `--permission-mode acceptEdits`, `--effort <level>` (defaults to `low`), `--model` when chosen, `--safe-mode` in vanilla mode, `--include-partial-messages` when supported by the installed CLI, and `--mcp-config`/`--allowedTools` for the web-asset server under the `claude-frontier` profile.
+
 Current limitations:
-- no tool permission gate
+- no tool permission gate before execution
 - no resume-by-session-id integration
-- no explicit interrupt/cancel support
+
+Turn interruption is supported: the session interrupt route signals abort to the turn and terminates the owned process tree.
+
+While a turn is running, the session row stores the provider process ownership record (the POSIX PID with its birth identity, or the Windows named Job token). After an unexpected backend exit, startup stops any recorded provider process before restoring project files, and aborts startup if it cannot confirm that the process has stopped (`adapters/owned-process-record.ts`, `services/session-process-recovery.ts`).
 
 ## 6. Codex Adapter
 
 ### 6.1 Execution model
 
-The Codex adapter is intentionally minimal today.
-
-Current command shape:
+Current command shape (along with `-c` options for reasoning effort, reasoning summary, image generation toggle, optional progress metrics, `--model`, and vanilla-mode flags):
 
 ```text
 codex exec --json --skip-git-repo-check --sandbox workspace-write -
@@ -135,9 +139,7 @@ Behavior:
 
 ### 6.2 Limitations
 
-The current Codex path does **not** provide:
-- cancellation
-- replayable backend session identity
+The current Codex path does **not** provide a replayable backend session identity. Turn cancellation terminates the owned process tree in the same way as Claude Code.
 
 It remains a per-turn subprocess backend with shared session persistence around it.
 
@@ -161,7 +163,7 @@ There are two separate mechanisms today:
 
 ### 8.1 Adapter-emitted file changes
 
-Claude Code parser emits `file.changed` when:
+The Claude Code and Codex parsers emit `file.changed` when:
 - a recognized write/edit-style tool succeeds
 - the target file path can be normalized relative to the project directory
 
@@ -181,13 +183,9 @@ It currently does **not** emit `file.changed` events into the chat stream.
 The earlier architecture docs described a larger harness than what exists. The following are still planned or partial, not shipped:
 
 - PTY-based execution
-- permission-required tool gating
-- true subprocess interrupt
+- tool permission gating prior to execution
 - retry/backoff strategy
-- scheduler and concurrency caps beyond one turn per session
 - plugin adapter loading
-- structured Codex parsing
-- committed adapter fixture tests
 
 ## 10. What Is Stable Enough To Rely On
 
@@ -198,4 +196,4 @@ The following contracts are stable enough to document as current behavior:
 - one turn at a time per session
 - Claude Code `stream-json` parsing path
 - project prompt building from indexed files and design system excerpts
-- HTML zip export as the only implemented export format
+- every export format defined in `@bg/shared/export` (`html_zip`, `pdf`, `png`, `pptx`, `handoff`, `png_zip`, `cafe24_package`, `imweb_package`, `svg`)

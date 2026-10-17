@@ -2,16 +2,16 @@
 
 ## OVERVIEW
 
-Five route compositions (3,435 LOC) mounted by `App.tsx`; earned this guide at score 9 for route-boundary ownership, symbol density, and `ProjectView` centrality over canvas, chat, modes, and export.
+Six route views (3,788 LOC) mounted by `App.tsx`; earned this guide at score 9 for route-level state ownership, symbol density, and `ProjectView` coordination across canvas, chat, modes, and export.
 
 ## WHERE TO LOOK
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Route table | `../App.tsx` | `/`, `/projects/:id`, `/systems/:id`, `/settings`; `ProjectRoute` passes `key={id}` so a project switch remounts |
-| Workspace orchestration | `ProjectView.tsx` | 1,741 LOC, largest file in the repo: session events, artifact tabs/history, comments, directions, modes, present, palette |
-| Home surfaces | `HomeView.tsx` | 877 LOC: project/system listing plus create, import, delete, restore mutations |
-| Design-system editing | `DesignSystemView.tsx` | 729 LOC; also named-exports `ColorTokenEditor` |
+| Route table | `../App.tsx` | `/`, `/projects/:id`, `/systems/:id`, `/settings`, and `*` (`NotFoundView`); `ProjectRoute` sets `key={id}` so switching projects remounts |
+| Workspace orchestration | `ProjectView.tsx` | 1,987 LOC: session events, artifact tabs and history, comments, directions, modes, present, palette |
+| Home surfaces | `HomeView.tsx` | 922 LOC: project and system lists plus create, import, delete, and restore actions |
+| Design-system editing | `DesignSystemView.tsx` | 772 LOC; also exports `ColorTokenEditor` |
 | Managed file browsing | `DesignFilesView.tsx` | 69 LOC; embedded inside `ProjectView`, not only a route |
 | Settings route | `SettingsView.tsx` | 19 LOC shim; the real UI is `components/settings/SettingsModal.tsx` |
 
@@ -26,7 +26,7 @@ Five route compositions (3,435 LOC) mounted by `App.tsx`; earned this guide at s
 ## ANTI-PATTERNS
 
 - Do not convert `ProjectView`'s mount-only effect into a dependency-tracking effect; it intentionally runs once per project mount.
-- Do not leave the frame describing a change the backend rejected - a rejected PATCH must roll the canvas UI back (`ProjectView.tsx:1645`).
-- Do not add a second repair workflow: platform lint repair reuses the quality-repair send path (`ProjectView.tsx:1095`).
+- Do not leave the frame showing an edit the backend rejected; a failed PATCH must roll back the canvas UI (`ProjectView.tsx`).
+- Do not introduce a second repair flow; platform lint repair sends through the existing quality-repair path (`ProjectView.tsx`).
 - Do not poll for state the session SSE stream or the frame bridge already signals.
 - Do not push view-only orchestration down into `components/` or up into a new global store.

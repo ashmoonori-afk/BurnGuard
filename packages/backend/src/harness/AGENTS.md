@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-Prompt construction, structural summaries, and shipped generation skills; earned this guide at score 9 for a distinct high-fan-in domain and widely referenced prompt exports. 23 root prompt/rule/extractor modules, 6 `skills/*-skill.ts`, 1 generated Lucide asset module (~2.3k LOC).
+Prompt construction, structural summaries, and shipped generation skills; earned this guide at score 9 for a distinct high-fan-in domain and widely referenced prompt exports: 23 root prompt/rule/extractor modules, 7 `skills/*-skill.ts` files, and 1 generated Lucide asset module (~2.3k LOC).
 
 ## WHERE TO LOOK
 
@@ -14,7 +14,8 @@ Prompt construction, structural summaries, and shipped generation skills; earned
 | Attachments | `prompt-attachments.ts`, `prompt-visual-sources.ts` | Original binary paths remain private |
 | Reference layouts | `prompt-reference-layout.ts` | Immutable underlay and exporter constraints |
 | Existing artifact map | `structure-extractor.ts` | Summarize HTML instead of embedding full files |
-| Project skills | `skills/*-skill.ts` | Six separate skills: deck, prototype, diagram, logo, reference-layout, visual-craft |
+| Project skills | `skills/*-skill.ts` | Seven skill modules: deck, prototype, diagram, logo, reference-layout, taste, visual-craft |
+| Standing instructions | `prompt-project-instructions.ts` | Appends the `<project_standing_instructions>` block after the brief |
 | Compact mode | `prompt-compact-skills.ts` | Stable contract references replace full prose |
 | Lucide assets | `assets/lucide/icons.ts`, `assets/lucide/reference.md`, `lucide-reference.ts` | Generated inline reference; `provisionLucideIconReference` stages it at `.burnguard-inputs/lucide-icons.md` every turn so the skills can point at a project-local path; no CDN |
 

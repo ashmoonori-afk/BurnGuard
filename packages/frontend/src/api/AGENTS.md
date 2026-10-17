@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-Typed browser client for backend resources; earned this guide at score 9 for 17 modules (~1.1k LOC), broad exports, and central use by all views. `client.ts` exports `ApiError`, `bootstrapApiAuthority`, `authorizedFetch`, `apiFetch`; every other module builds on them.
+Typed browser client for backend endpoints; earned this guide at score 9 for 24 modules, wide exports, and use across every view. `client.ts` exports `ApiError`, `bootstrapApiAuthority`, `authorizedFetch`, and `apiFetch`; all other modules build on them.
 
 ## WHERE TO LOOK
 
