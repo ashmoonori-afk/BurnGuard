@@ -193,6 +193,7 @@ jobs:
           packages/frontend/tests/design-token-contrast.test.ts
           packages/frontend/tests/design-token-usage.test.ts
           packages/frontend/tests/ui-primitives.test.ts
+          packages/frontend/tests/home-card-display.test.ts
           packages/backend/tests/first-run-project-origin.test.ts
           packages/frontend/tests/tool-badge-copy.test.ts
           packages/frontend/tests/prompt-library.test.ts

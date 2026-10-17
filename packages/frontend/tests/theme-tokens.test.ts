@@ -46,9 +46,9 @@ describe("theme token coverage (UX-32)", () => {
     expect(card.tintClass).toMatch(/^bg-tint-[a-z]+$/);
   });
 
-  test("Given four design systems When mapped Then each tint is a theme token and the cycle stays distinct", () => {
+  test("Given four design systems When mapped Then they share one calm theme-token tint instead of a saturated cycle", () => {
     const tints = [0, 1, 2, 3].map((index) => systemToCard({ id: `s${index}`, name: "s", status: "published", is_template: false, thumbnail_path: null, updated_at: 0 }, index).tintClass);
-    expect(new Set(tints).size).toBe(4);
+    expect(new Set(tints).size).toBe(1);
     for (const tint of tints) expect(tint).toMatch(/^bg-tint-[a-z]+$/);
   });
 
