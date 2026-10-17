@@ -1,7 +1,9 @@
 import { useT, type MessageKey } from "@/i18n/t";
-import { Pencil, Square, ArrowUpRight, Undo2, Redo2, Trash2 } from "lucide-react";
+import { Pencil, Square, ArrowUpRight, Check, Undo2, Redo2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import type { DrawTool } from "@/components/canvas/DrawLayer";
+import { ModePanelHeader, PanelSectionLabel } from "./ModePanelHeader";
 
 const TOOLS: Array<{ id: DrawTool; label: MessageKey; icon: typeof Pencil }> = [
   { id: "pen", label: "modes.draw.pen", icon: Pencil },
@@ -10,7 +12,11 @@ const TOOLS: Array<{ id: DrawTool; label: MessageKey; icon: typeof Pencil }> = [
 ];
 
 const COLORS = ["#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#111827"];
-const WIDTHS = [2, 4, 6];
+const WIDTHS: Array<{ value: number; label: MessageKey }> = [
+  { value: 2, label: "modes.draw.widthThin" },
+  { value: 4, label: "modes.draw.widthMedium" },
+  { value: 6, label: "modes.draw.widthThick" },
+];
 
 export default function DrawPanel({
   tool,
@@ -22,6 +28,7 @@ export default function DrawPanel({
   onUndo,
   onRedo,
   onClear,
+  onClose,
   hasShapes,
   canRedo,
 }: {
@@ -34,25 +41,17 @@ export default function DrawPanel({
   onUndo: () => void;
   onRedo: () => void;
   onClear: () => void;
+  onClose?: () => void;
   hasShapes: boolean;
   canRedo: boolean;
 }) {
   const t = useT();
   return (
     <div className="flex min-h-0 flex-col overflow-y-auto">
-      <div className="border-b border-border px-3 py-2">
-        <div className="text-sm font-semibold">
-          {t("modes.draw.title")}
-        </div>
-        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          {t("modes.draw.description")}
-        </p>
-      </div>
+      <ModePanelHeader title={t("modes.draw.title")} description={t("modes.draw.description")} onClose={onClose} />
 
-      <section className="px-3 py-2 border-b border-border">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
-          {t("modes.draw.tools")}
-        </div>
+      <section className="border-b border-border px-3 py-3">
+        <PanelSectionLabel>{t("modes.draw.tools")}</PanelSectionLabel>
         <div className="grid grid-cols-3 gap-1" role="radiogroup" aria-label={t("modes.draw.toolGroup")}>
           {TOOLS.map((item) => (
             <button
@@ -62,100 +61,88 @@ export default function DrawPanel({
               aria-checked={tool === item.id}
               onClick={() => onChangeTool(item.id)}
               className={cn(
-                "flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs transition-colors",
+                "flex min-h-12 flex-col items-center justify-center gap-1 rounded-control border px-2 py-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 tool === item.id
-                  ? "border-accent bg-accent/10 text-accent"
-                  : "border-border text-muted-foreground hover:text-foreground",
+                  ? "border-accent bg-accent/10 font-medium text-accent"
+                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <item.icon className="h-3.5 w-3.5" />
+              <item.icon className="h-4 w-4" aria-hidden="true" />
               {t(item.label)}
             </button>
           ))}
         </div>
       </section>
 
-      <section className="px-3 py-2 border-b border-border">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
-          {t("modes.color")}
-        </div>
-        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t("modes.color")}>
-          {COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              role="radio"
-              aria-checked={color === c}
-              onClick={() => onChangeColor(c)}
-              title={c}
-              aria-label={t("modes.draw.colorLabel", { color: c })}
-              className={cn(
-                "h-9 w-9 rounded-full border-4 transition-transform max-[900px]:h-11 max-[900px]:w-11",
-                color === c ? "border-foreground scale-110" : "border-transparent",
-              )}
-              style={{ backgroundColor: c }}
-            />
-          ))}
+      <section className="border-b border-border px-3 py-3">
+        <PanelSectionLabel>{t("modes.color")}</PanelSectionLabel>
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t("modes.color")}>
+          {COLORS.map((c) => {
+            const selected = color === c;
+            return (
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => onChangeColor(c)}
+                title={c}
+                aria-label={t("modes.draw.colorLabel", { color: c })}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-[900px]:h-11 max-[900px]:w-11"
+              >
+                <span
+                  className={cn(
+                    "block h-7 w-7 rounded-full border border-foreground/40",
+                    selected && "ring-2 ring-foreground ring-offset-2 ring-offset-background",
+                  )}
+                  style={{ backgroundColor: c }}
+                />
+                {selected && (
+                  <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-foreground text-background">
+                    <Check className="h-3 w-3" aria-hidden="true" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </section>
 
-      <section className="px-3 py-2 border-b border-border">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
-          {t("modes.draw.strokeWidth")}
-        </div>
-        <div className="flex gap-1.5" role="radiogroup" aria-label={t("modes.draw.strokeWidth")}>
+      <section className="border-b border-border px-3 py-3">
+        <PanelSectionLabel>{t("modes.draw.strokeWidth")}</PanelSectionLabel>
+        <div className="grid grid-cols-3 gap-1" role="radiogroup" aria-label={t("modes.draw.strokeWidth")}>
           {WIDTHS.map((w) => (
             <button
-              key={w}
+              key={w.value}
               type="button"
               role="radio"
-              aria-checked={strokeWidth === w}
-              onClick={() => onChangeWidth(w)}
-              aria-label={t("modes.draw.widthLabel", { width: w })}
+              aria-checked={strokeWidth === w.value}
+              onClick={() => onChangeWidth(w.value)}
+              aria-label={t("modes.draw.widthLabel", { width: w.value })}
               className={cn(
-                "flex h-10 w-12 items-center justify-center rounded-lg border text-xs transition-colors max-[900px]:h-11",
-                strokeWidth === w
-                  ? "border-foreground bg-muted"
-                  : "border-border text-muted-foreground hover:text-foreground",
+                "flex min-h-12 flex-col items-center justify-center gap-1 rounded-control border px-2 py-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                strokeWidth === w.value
+                  ? "border-accent bg-accent/10 font-medium text-accent"
+                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <span
-                className="inline-block rounded-full bg-foreground"
-                style={{ width: w * 2, height: w * 2 }}
-              />
+              <span className="inline-block rounded-full bg-current" style={{ width: w.value * 2, height: w.value * 2 }} aria-hidden="true" />
+              {t(w.label)}
             </button>
           ))}
         </div>
       </section>
 
       <div className="flex flex-wrap items-center gap-2 px-3 py-3">
-        <button
-          type="button"
-          onClick={onUndo}
-          disabled={!hasShapes}
-          className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
-          title={t("modes.draw.undoShortcut")}
-        >
-          <Undo2 className="h-3 w-3" />{" "}{t("modes.undo")}
-        </button>
-        <button
-          type="button"
-          onClick={onRedo}
-          disabled={!canRedo}
-          className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
-          title={t("modes.draw.redoShortcut")}
-        >
-          <Redo2 className="h-3 w-3" />{" "}{t("modes.redo")}
-        </button>
-        <button
-          type="button"
-          onClick={onClear}
-          disabled={!hasShapes}
-          className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-2 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-40 disabled:cursor-not-allowed"
-          title={t("modes.draw.clearHint")}
-        >
-          <Trash2 className="h-3 w-3" />{" "}{t("modes.draw.clearAll")}
-        </button>
+        <Button type="button" variant="outline" size="sm" onClick={onUndo} disabled={!hasShapes} title={t("modes.draw.undoShortcut")}>
+          <Undo2 aria-hidden="true" />{t("modes.undo")}
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={onRedo} disabled={!canRedo} title={t("modes.draw.redoShortcut")}>
+          <Redo2 aria-hidden="true" />{t("modes.redo")}
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="text-destructive" onClick={onClear} disabled={!hasShapes} title={t("modes.draw.clearHint")}>
+          <Trash2 aria-hidden="true" />{t("modes.draw.clearAll")}
+        </Button>
       </div>
     </div>
   );

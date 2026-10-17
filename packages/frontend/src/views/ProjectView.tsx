@@ -1625,6 +1625,7 @@ export default function ProjectView() {
             />
             <ModePanel
               mode={livePreview ? null : mode}
+              onClose={() => setMode(null)}
               projectId={id!}
               uxReview={{
                 projectId: id!,

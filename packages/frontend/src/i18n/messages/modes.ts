@@ -309,4 +309,8 @@ export const modesMessages = defineMessages({
   "modes.tweaks.paletteEmpty": {"ko":"이 페이지에서 색상을 찾지 못했어요. 아래에 직접 입력해 주세요.","en":"No colors were found on this page. Enter one below.","zh-CN":"在此页面中未找到颜色。请在下方直接输入。"},
   "modes.tweaks.paletteError": {"ko":"페이지 색상을 읽지 못했어요. 아래에 직접 입력해 주세요.","en":"The page colors could not be read. Enter one below.","zh-CN":"无法读取页面颜色。请在下方直接输入。"},
   "modes.ux.request.outro": {"ko":"정적 HTML 진단은 실제 사용성 검증 결과가 아니에요. 현재 파일과 근거를 먼저 확인하고 필요한 수정만 적용해 주세요. 요소 ID가 원본에 없거나 bg-auto 임시 앵커이면 관찰 근거로 대상을 확인하고, 대상을 확정할 수 없으면 임의로 수정하지 마세요. 기존 동작과 접근성을 유지하고 변경 내용과 미확인 항목을 설명해 주세요.","en":"A static HTML review is not a usability verification. Check the current file and the evidence first, and apply only the changes that are needed. If the element ID is missing from the source or is a temporary bg-auto anchor, locate the target from the evidence; if the target cannot be confirmed, do not change anything arbitrarily. Keep the existing behavior and accessibility, and describe what changed and what could not be verified.","zh-CN":"静态 HTML 诊断并非实际的可用性验证。请先确认当前文件和依据，只应用必要的修改。如果元素 ID 不在原文件中或是临时的 bg-auto 锚点，请根据观察依据确认目标；无法确定目标时不要随意修改。保持现有行为和无障碍性，并说明变更内容和未确认的项目。"},
+  "modes.panel.close": {"ko":"패널 닫기","en":"Close panel","zh-CN":"关闭面板"},
+  "modes.draw.widthThin": {"ko":"얇게","en":"Thin","zh-CN":"细"},
+  "modes.draw.widthMedium": {"ko":"보통","en":"Medium","zh-CN":"中"},
+  "modes.draw.widthThick": {"ko":"굵게","en":"Thick","zh-CN":"粗"},
 });

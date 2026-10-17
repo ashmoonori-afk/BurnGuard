@@ -15,6 +15,7 @@ import type { TweakChangePreview } from "./TweaksPanel";
 import PhotoPlacementsSection from "./PhotoPlacementsSection";
 import QualityPanel, { type QualityPanelBinding } from "./QualityPanel";
 import UxReviewPanel, { type UxReviewBinding } from "./UxReviewPanel";
+import { ModePanelHeader } from "./ModePanelHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 /**
@@ -58,6 +59,7 @@ export default function ModePanel({
   onClearDraw,
   quality,
   uxReview,
+  onClose,
 }: {
   mode: CanvasMode | null;
   projectId: string;
@@ -97,6 +99,7 @@ export default function ModePanel({
   onClearDraw: () => void;
   quality: QualityPanelBinding;
   uxReview: UxReviewBinding;
+  onClose?: () => void;
 }) {
   const t = useT();
   if (!mode) return null;
@@ -113,6 +116,7 @@ export default function ModePanel({
           onResetAll={onResetTweaks}
           onClear={onClearTweaks}
           review={tweakReview}
+          onClose={onClose}
         />
       )}
       {mode === "comment" && (
@@ -127,6 +131,7 @@ export default function ModePanel({
           onToggleResolved={onToggleCommentResolved}
           onRequestEdit={onRequestCommentEdit}
           editDisabled={commentEditDisabled}
+          onClose={onClose}
         />
       )}
       {mode === "edit" && (
@@ -135,13 +140,14 @@ export default function ModePanel({
           saving={editSaving}
           onSave={onSaveEdit}
           onClear={onClearEdit}
+          onClose={onClose}
         />
       )}
-      {mode === "quality" && <Tabs defaultValue="quality" className="flex min-h-0 flex-1 flex-col">
+      {mode === "quality" && <><ModePanelHeader title={t("canvas.toolbar.quality")} onClose={onClose} /><Tabs defaultValue="quality" className="flex min-h-0 flex-1 flex-col">
         <TabsList aria-label={t("modes.panel.review")} className="m-2 h-auto shrink-0"><TabsTrigger value="quality" className="min-h-11 flex-1">{t("modes.panel.quality")}</TabsTrigger><TabsTrigger value="ux" className="min-h-11 flex-1">{t("modes.panel.ux")}</TabsTrigger></TabsList>
         <TabsContent value="quality" className="min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col"><QualityPanel quality={quality} extra={<PhotoPlacementsSection projectId={projectId} />} /></TabsContent>
         <TabsContent value="ux" className="min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col"><UxReviewPanel key={`${uxReview.projectId}:${uxReview.relPath}:${uxReview.digest}:${uxReview.revision}`} binding={uxReview} /></TabsContent>
-      </Tabs>}
+      </Tabs></>}
       {mode === "draw" && (
         <DrawPanel
           tool={drawTool}
@@ -155,6 +161,7 @@ export default function ModePanel({
           onUndo={onUndoDraw}
           onRedo={onRedoDraw}
           onClear={onClearDraw}
+          onClose={onClose}
         />
       )}
     </aside>
