@@ -9,7 +9,7 @@ Feature-oriented React UI and canvas integration; earned this guide at score 14 
 ```text
 components/
 ├── alternatives/ # visual alternatives generation and side-by-side compare
-├── canvas/       # sandbox iframe, frame bridge (847 LOC), draw/edit/tweak overlays (3.1k LOC)
+├── canvas/       # sandbox iframe, frame bridge (1,005 LOC), draw/edit/tweak overlays (3.1k LOC)
 ├── chat/         # composer, attachment intake, blocks/ event renderers
 ├── directions/   # generated direction choices and status
 ├── errors/       # backend crash toast container, CLI missing modal
@@ -34,9 +34,9 @@ components/
 | Frame protocol | `canvas/frame-bridge.ts` | Source identity substitutes for opaque-origin checks |
 | Draw persistence | `canvas/DrawLayer.tsx` | Serialization format is consumed by API storage |
 | Attachment behavior | `chat/attachment-intake.ts` | Limits, roles, readiness, and supported kinds |
-| Tweak controls | `modes/TweaksPanel.tsx` | 630 LOC: parsing, clamping, previews, commit-on-blur |
+| Tweak controls | `modes/TweaksPanel.tsx` | 644 LOC: parsing, clamping, previews, commit-on-blur |
 | Mode routing | `modes/ModePanel.tsx` | Single orchestrator for every mode panel |
-| Settings UI | `settings/SettingsModal.tsx` | 627 LOC hub for backend/provider/generation/update/locale state |
+| Settings UI | `settings/SettingsModal.tsx` | 776 LOC hub for backend/provider/generation/update/locale state |
 | Shared controls | `ui/` | One disabled/focus/radius recipe; `Tooltip` (no Radix dependency), `Spinner`, `Skeleton`, `EmptyState` |
 | Canvas toolbar | `canvas/CanvasTopBar.tsx` | Single row; device-width presets (`@/lib/canvas-device-width`) and history move into More via `@/lib/toolbar-overflow` |
 | Project header | `project/ProjectTopBar.tsx` | Inline vs More actions per width tier (`@/lib/project-header-actions`); Project instructions dialog |

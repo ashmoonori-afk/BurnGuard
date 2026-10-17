@@ -12,7 +12,7 @@ Typed three-locale message registry  behind every user-facing string; earned thi
 | Translate | `t.ts` | `t(key, params)` reads the store snapshot; `useT()` subscribes and re-renders; `formatMessage` does `{name}` interpolation |
 | Message shape | `types.ts` | `Message = string \| { one, other }`, `MessageDefinition = Record<Locale, Message>`, `defineMessages` identity helper |
 | Registry | `messages/index.ts` | 17 packs spread-merged; `MessageKey = keyof typeof messages` |
-| Add copy | `messages/<pack>.ts` | `home` 306, `chat` 252, `modes` 241, `export` 182, `canvas` 173, `directions` 170, `settings` 127, `workspace` 129, `system` 121, `errors` 66, `files` 44, `shell` 27 LOC |
+| Add copy | `messages/<pack>.ts` | One pack per namespace (`home`, `chat`, `workspace`, `export`, `modes`, ...); see `messages/index.ts` for the full list |
 
 ## CONVENTIONS
 

@@ -2,12 +2,16 @@
 
 ## 1. Filesystem Layout
 
-Root is `~/.burnguard/` (`%USERPROFILE%\.burnguard\` on Windows). Abstracted as `os.homedir() + "/.burnguard"`.
+Reviewed against v0.5.31 on 2026-10-17; `packages/backend/src/lib/app-paths.ts` and the migrations in `packages/backend/src/db/migrations/` are the authority.
+
+Root is `BG_APP_ROOT` when set (it must be absolute), otherwise `~/.burnguard/` (`%USERPROFILE%\.burnguard\` on Windows). Abstracted as `os.homedir() + "/.burnguard"`.
 
 ```
 ~/.burnguard/
 ├── burnguard.db                     # SQLite DB (WAL mode)
-├── config.json                      # User settings
+├── config.json                      # Shared portable settings
+├── config.local.<platform>.json     # OS-local settings and secrets
+├── backups/                         # VACUUM INTO snapshots before migrations (last 3)
 ├── data/
 │   ├── systems/
 │   │   ├── northvale-capital/           # Sample (embedded → copied on first run)
@@ -16,10 +20,11 @@ Root is `~/.burnguard/` (`%USERPROFILE%\.burnguard\` on Windows). Abstracted as 
 │   │   │   ├── colors_and_type.css
 │   │   │   ├── fonts/
 │   │   │   ├── assets/logos/
-│   │   │   ├── preview/             # 16 preview HTML files
+│   │   │   ├── preview/             # preview HTML cards
 │   │   │   ├── ui_kits/website/
 │   │   │   └── uploads/
-│   │   └── {system_id}/             # User-added (Phase 3)
+│   │   ├── builtin-theme-<slug>/    # Bundled themes
+│   │   └── {system_id}/             # Imported or user-created
 │   ├── projects/
 │   │   └── {project_id}/
 │   │       ├── index.html           # Prototype entry
@@ -29,23 +34,10 @@ Root is `~/.burnguard/` (`%USERPROFILE%\.burnguard\` on Windows). Abstracted as 
 │   │       ├── deck-stage.js        # Slide runtime (P2)
 │   │       ├── .attachments/        # Chat-uploaded files
 │   │       └── .meta/
-│   │           ├── checkpoints/
-│   │           │   └── turn-{n}.tar.zst
-│   │           └── thumbnails/
-│   │               └── latest.png
-│   └── exports/
-│       └── {export_id}/
-│           ├── result.zip
-│           ├── result.pdf
-│           └── manifest.json
+│   │           └── checkpoints/         # Turn checkpoint manifests and snapshots
 ├── cache/
-│   ├── thumbnails/                  # Project/system thumbnails (sharp)
-│   └── esbuild-wasm/                # Frontend browser cache
-├── plugins/                         # Phase 3+ (third-party adapters)
-│   └── *.js
-└── logs/
-    ├── app.log                      # 10 MB rotate × 10
-    └── session-{session_id}.log     # Raw CLI trace
+│   └── exports/                     # Export outputs and receipts
+└── logs/                            # Session traces (0600 on POSIX)
 ```
 
 ### Path constraints
@@ -81,7 +73,7 @@ CREATE TABLE design_systems (
   name              TEXT NOT NULL,
   description       TEXT,
   status            TEXT NOT NULL CHECK(status IN ('draft','review','published')),
-  source_type       TEXT CHECK(source_type IN ('sample','github','figma','upload','manual')),
+  source_type       TEXT CHECK(source_type IN ('sample','github','website','figma','upload','manual')),
   source_uri        TEXT,                            -- Original URL if any
   is_template       INTEGER NOT NULL DEFAULT 0,      -- 0|1
   dir_path          TEXT NOT NULL,                   -- Absolute path
@@ -121,7 +113,7 @@ CREATE INDEX idx_projects_ds ON projects(design_system_id);
 
 `options_json` stores snake-case project options. The current object may contain
 `use_speaker_notes` for slide decks, `copy_as_is` for template-based projects,
-`graphic_canvas` and `graphic_set` for graphic projects, `logo_set` for logo
+`graphic_canvas` and `graphic_set` for graphic projects, `standing_instructions` (at most 4,000 characters) for any project, `logo_set` for logo
 projects (brand name, niche, character, logo type, symbol keywords), and a versioned `design_brief` with output type, audience, objective, content
 source, locale, brand mode, visual mood, density, and output size. The HTTP
 boundary rejects unknown keys and malformed brief fields before persistence;
@@ -268,7 +260,7 @@ CREATE INDEX idx_tweaks_turn ON tweaks(turn_id);
 CREATE TABLE exports (
   id            TEXT PRIMARY KEY,
   project_id    TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  format        TEXT NOT NULL CHECK(format IN ('html_zip','pdf','pptx','handoff')),
+  format        TEXT NOT NULL CHECK(format IN ('html_zip','pdf','png','pptx','handoff','cafe24_package','imweb_package','png_zip','svg')),
   status        TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed')),
   output_path   TEXT,
   error_message TEXT,
@@ -317,14 +309,14 @@ CREATE TABLE meta_schema (
 
 ## 4. Migration Strategy
 
-- Drizzle-kit generates migration SQL
+- Migrations are hand-written forward SQL files named `NNNN_name.sql`; lexical order is persisted in `schema_migrations`
 - Location: `packages/backend/src/db/migrations/*.sql`
 - Applied at boot (`migrate()` runs before anything else)
 - Local single-user assumption means **no rollback** — changes are forward-only
 - Every migration is idempotent (`CREATE TABLE IF NOT EXISTS`, `ALTER ... IF NOT EXISTS`)
-- Schema version is stored in `meta_schema.version`. Compatibility check on app boot:
-  - App > DB: auto-migrate
-  - App < DB: refuse to start, show "newer DB detected; upgrade app" message
+- Compatibility check on app boot:
+  - Pending migrations: snapshot the database with `VACUUM INTO` under `backups/`, migrate, then run `PRAGMA foreign_key_check`
+  - Applied ids this binary does not ship: refuse to start (`schema_newer_than_app`)
 
 ## 5. Query Patterns
 
@@ -392,6 +384,5 @@ ORDER BY created_at DESC;
 
 ## 7. Backup & Migration
 
-- **Backup**: Settings UI → "Export data" → `burnguard-backup-{ts}.zip` (DB + entire `data/`)
-- **Restore**: Settings UI → "Import data" → must extract into empty `~/.burnguard/`. No merge with existing DB.
-- **Migration**: Moving to another machine = copy the backup ZIP.
+- **One project**: **Download project backup** in the project header writes a `.burnguard-project` bundle; Home → **Import project** restores it as a new project (48 MB compressed, 128 MB unpacked, 10,000 files).
+- **Whole profile**: close BurnGuard and copy the entire profile directory privately. There is no in-app full-profile backup.

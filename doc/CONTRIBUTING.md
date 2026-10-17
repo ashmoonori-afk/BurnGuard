@@ -11,7 +11,7 @@ This document defines how we develop BurnGuard Design: environment setup, coding
 - **Git**
 - **Claude Code CLI** OR **Codex CLI** — at least one must be installed locally for end-to-end testing
 - **.NET 8 SDK** (Windows only) — builds the process host that owns every provider and browser child process. `bun run scripts/dev-launcher.ts` builds it into `dist/windows-process-host/` when it is missing; before running `bun run dev` directly, run `bun scripts/build-windows-process-host.ts` once.
-- Windows 10/11 (primary target; macOS/Linux support arrives in Phase 3)
+- Windows 10/11 is the primary target; macOS arm64 packages ship too (`bun run build:mac`, `build:mac:dmg`, `build:mac:release` via `scripts/build-mac.ts`, released by `.github/workflows/macos-release.yml`). Linux runs from source for development and CI.
 
 ### Bootstrap
 
@@ -124,10 +124,11 @@ Per `~/.claude/rules/common/testing.md`, enforce:
 
 ### Test structure
 
-- Colocate unit tests: `foo.ts` and `foo.test.ts` side by side
-- Integration tests: `packages/backend/tests/integration/*.test.ts`
+- Tests live at package level, not beside sources: `packages/backend/tests/*.test.ts` and `packages/frontend/tests/*.test.ts` (see each folder's `AGENTS.md`)
+- Run them from the repository root: `bunfig.toml` preloads `scripts/test-preload.ts`, which creates a throwaway `BG_APP_ROOT`
 - E2E: `scripts/qa/*-fixtures.mjs` browser suites, composed by `node scripts/qa/e2e-smoke.mjs`
-- Fixtures: `tests/fixtures/{adapter_id}/*.jsonl`
+- Fixtures: `packages/backend/tests/fixtures/`
+- Every new test file is listed in `.github/workflows/os-tests.yml` and `.github/workflows/security.yml`
 
 ### Fixture-driven parser tests
 
