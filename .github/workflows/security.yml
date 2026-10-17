@@ -87,6 +87,7 @@ jobs:
           packages/frontend/tests/quick-comment.test.ts
           packages/frontend/tests/canvas-interaction.test.ts
           packages/backend/tests/structure-extractor.test.ts
+          packages/frontend/tests/project-header-actions.test.ts
           packages/frontend/tests/workspace-narrow-layout.test.ts
           packages/frontend/tests/chat-status-slot-layout.test.ts
           packages/frontend/tests/turn-disposition.test.ts

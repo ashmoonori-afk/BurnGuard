@@ -26,11 +26,13 @@ const errors: Record<string, MessageKey> = {
   publish_token_required: "export.share.error.publish_token_required",
 };
 
-export default function VercelShare({ projectId, projectType }: { projectId: string; projectType: ProjectType }) {
+export default function VercelShare({ projectId, projectType, open: controlledOpen, onOpenChange, hideTrigger = false }: { projectId: string; projectType: ProjectType; open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean }) {
   const t = useT();
   const queryClient = useQueryClient();
   const oweStarPrompt = useUIStore((s) => s.oweStarPrompt);
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = controlledOpen ?? innerOpen;
+  const setOpen = (value: boolean) => { setInnerOpen(value); onOpenChange?.(value); };
   const [token, setToken] = useState("");
   const [teamId, setTeamId] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export default function VercelShare({ projectId, projectType }: { projectId: str
     if (await prepare()) setAutoPublish(true);
   }
   return <Dialog open={open} onOpenChange={(value) => { if (!busy) { setOpen(value); if (!value) { setToken(""); setAutoPublish(false); } } }}>
-    <DialogTrigger asChild><Button variant="outline" size="sm"><Share2 className="mr-1 size-4" />{t("export.share.title")}</Button></DialogTrigger>
+    {!hideTrigger && <DialogTrigger asChild><Button variant="outline" size="sm"><Share2 className="mr-1 size-4" />{t("export.share.title")}</Button></DialogTrigger>}
     <DialogContent className="max-w-md"><DialogHeader><DialogTitle>{t("export.share.publishTitle")}</DialogTitle></DialogHeader>
       <p className="text-sm text-muted-foreground">{t("export.share.description")}</p>
       <p className="text-xs text-muted-foreground">{t("export.share.planNote")}</p>

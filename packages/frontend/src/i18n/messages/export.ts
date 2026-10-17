@@ -2,7 +2,7 @@ import { defineMessages } from "../types";
 
 export const exportMessages = defineMessages({
   "export.title": { ko: "내보내기", en: "Export", "zh-CN": "导出" },
-  "export.projectBundle": { ko: "프로젝트 백업", en: "Back up project", "zh-CN": "备份项目" },
+  "export.projectBundle": { ko: "프로젝트 백업 내려받기", en: "Download project backup", "zh-CN": "下载项目备份" },
   "export.projectBundlePending": { ko: "백업하는 중…", en: "Backing up…", "zh-CN": "正在备份…" },
   "export.projectBundleReady": { ko: "프로젝트 백업을 내려받았어요", en: "Project backup downloaded", "zh-CN": "项目备份已下载" },
   "export.projectBundleFailed": { ko: "프로젝트를 백업하지 못했어요", en: "Could not back up project", "zh-CN": "无法备份项目" },

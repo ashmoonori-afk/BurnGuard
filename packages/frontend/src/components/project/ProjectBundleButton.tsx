@@ -28,7 +28,8 @@ export function ProjectBundleControl({
   );
 }
 
-export default function ProjectBundleButton({ projectId }: { readonly projectId: string }) {
+/** Downloads the project backup; shared by the header button and the More menu item. */
+export function useProjectBundleExport(projectId: string): { readonly onExport: () => Promise<void>; readonly pending: boolean } {
   const t = useT();
   const pushToast = useUIStore((state) => state.pushToast);
   const [pending, setPending] = useState(false);
@@ -56,5 +57,10 @@ export default function ProjectBundleButton({ projectId }: { readonly projectId:
     }
   };
 
+  return { onExport, pending };
+}
+
+export default function ProjectBundleButton({ projectId }: { readonly projectId: string }) {
+  const { onExport, pending } = useProjectBundleExport(projectId);
   return <ProjectBundleControl pending={pending} onExport={onExport} />;
 }
