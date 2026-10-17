@@ -56,8 +56,21 @@ export async function closeOwnedProcessTree(processId: number, options: { readon
   // Snapshotting invokes ps. Recheck the durable birth identity afterwards,
   // before any signal, so a root replaced during that probe is never killed.
   if (options.verifyOwnership !== undefined && !options.verifyOwnership()) return;
-  for (const pid of descendants.reverse()) killIfPresent(pid, options.requireTermination);
-  killIfPresent(-processId, options.requireTermination);
+  // Darwin refuses a signal with EPERM for a process that has exited but is not
+  // yet reaped (a zombie has no credentials to check), and for a group whose only
+  // members are such zombies. That refusal does not mean the writer survived, so
+  // when termination must be proven the presence check below decides; the first
+  // refusal is rethrown only if the tree is still present at the deadline.
+  let refused: unknown;
+  const signal = (pid: number): void => {
+    try { killIfPresent(pid, options.requireTermination); }
+    catch (error) {
+      if (!(options.requireTermination && isPermissionError(error))) throw error;
+      refused ??= error;
+    }
+  };
+  for (const pid of descendants.reverse()) signal(pid);
+  signal(-processId);
   // Real elapsed time, not scheduler ticks: the previous setImmediate loop
   // drained in a couple of milliseconds and reported failure long before a
   // signalled process group had a chance to be reaped.
@@ -67,7 +80,7 @@ export async function closeOwnedProcessTree(processId: number, options: { readon
     await new Promise<void>((resolve) => setTimeout(resolve, CLEANUP_POLL_MS));
   }
   if (isProcessGroupPresent(processId) || descendants.some(isProcessPresent)) {
-    if (options.requireTermination) throw new OwnedProcessTreeCleanupError(processId);
+    if (options.requireTermination) throw refused ?? new OwnedProcessTreeCleanupError(processId);
     warnCleanupIncomplete(processId);
   }
 }
@@ -91,6 +104,10 @@ function snapshotDescendants(processId: number): number[] {
   }
   owned.delete(processId);
   return [...owned];
+}
+
+function isPermissionError(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "EPERM";
 }
 
 function killIfPresent(pid: number, requireTermination = false): void {

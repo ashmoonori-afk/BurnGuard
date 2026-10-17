@@ -71,6 +71,22 @@ jobs run each pinning suite.
 
 ## Hardening log
 
+### 2026-10-17: macOS crash recovery refused a signal to an already exited process group
+
+- Symptom: OS tests on the v0.5.31 release merge (run 39024693525, macOS arm64) failed
+  `Given an owned root that exited with a quiet descendant When recovering its receipt Then root absence does not leave
+  the writer alive` with `kill() failed: EPERM`; the release reviewer reproduced it on a local Mac every time.
+- Root cause: Darwin answers a signal to a process that has exited but is not yet reaped (a zombie keeps no
+  credentials to check) with EPERM, and does the same for a process group whose only members are such zombies.
+  Recovery kills the descendants first, so the group kill that follows usually meets the just-killed writer before
+  launchd reaps it. With `requireTermination` the EPERM was thrown at once, so startup could fail after a crash even
+  though nothing was left running.
+- Fix: `closeOwnedProcessTree` (`packages/backend/src/adapters/owned-process-tree.ts`) no longer treats an EPERM
+  refusal as proof of survival when termination must be proven. The presence check decides, and the first refusal is
+  rethrown only if the tree is still present at the deadline, so a real permission boundary still fails closed.
+- Pinned by `owned-process-tree` on Ubuntu, macOS and Windows: an injected refusal followed by absence now resolves,
+  a refusal that persists still rejects with EPERM, and the real root-exited case passes on macOS.
+
 ### 2026-10-16: "Scan for secrets" failing on pull requests that were force-pushed during the run
 
 - Symptom: Security runs 38849940297 (PR #350) and 38851727312 (PR #352) failed only in "Scan for secrets" with
