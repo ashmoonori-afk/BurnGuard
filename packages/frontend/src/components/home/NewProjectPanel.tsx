@@ -218,7 +218,7 @@ export default function NewProjectPanel({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const identityFields = (<>
+  const nameField = (
         <div className="space-y-1.5">
           <label htmlFor="project-name" className={PROJECT_LABEL_CLASS}>
             {t("home.creation.name")}
@@ -231,14 +231,15 @@ export default function NewProjectPanel({
             onChange={(e) => update("name", e.target.value)}
           />
         </div>
-
+  );
+  const audienceField = (
         <div className="space-y-1.5">
           <label htmlFor="brief-audience" className={PROJECT_LABEL_CLASS}>{t("home.brief.audience")}</label>
           <Input id="brief-audience" maxLength={AUDIENCE_MAX_LENGTH} value={form.audience} disabled={disabled}
             placeholder={t("home.brief.audiencePlaceholder")} onChange={(event) => update("audience", event.target.value)} />
         </div>
 
-  </>);
+  );
   const materialsField = (
         <div className="space-y-2"><label htmlFor="project-materials" className={PROJECT_LABEL_CLASS}>{t("home.creation.attach")}</label><input id="project-materials" type="file" multiple accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")} disabled={disabled} onChange={(event) => { const picked = Array.from(event.target.files ?? []); setItems((current) => planAttachmentIntake(current, picked)); event.target.value = ""; }} className="block w-full text-sm" /><p className="text-xs text-muted-foreground">{t("home.creation.attachHint")}</p><ComposerAttachments items={items} sending={disabled} onRemove={(id) => setItems((current) => current.filter((item) => item.id !== id))} onRoleChange={(id, role) => setItems((current) => setAttachmentRole(current, id, role))} /></div>
   );
@@ -267,10 +268,11 @@ export default function NewProjectPanel({
           <textarea id="brief-objective" rows={4} required maxLength={OBJECTIVE_MAX_LENGTH}
             placeholder={t("home.brief.objectivePlaceholder")} value={form.objective} disabled={disabled}
             onChange={(event) => update("objective", event.target.value)}
-            className={`${PROJECT_CONTROL_CLASS} h-auto resize-y py-3 leading-relaxed`} />
+            className={`${PROJECT_CONTROL_CLASS} h-auto resize-y py-3 leading-relaxed placeholder:text-muted-foreground`} />
         </div>
         <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={backendSelect.placeholder === null ? effectiveBackend : ""} disabled={disabled || needsImageBackend || backendSelect.placeholder !== null} onChange={(event) => setBackendId(event.target.value as BackendId)}>{backendSelect.placeholder === null ? detectedBackends.map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendOptionLabel(backend)}</option>) : <option value="">{t(backendSelect.placeholder)}</option>}</select>{detection.isError ? <p role="alert" className="text-xs text-destructive">{apiErrorCopy(detection.error)} <button type="button" onClick={() => void detection.refetch()} className="font-medium text-accent underline underline-offset-2 hover:no-underline">{t("home.retry")}</button></p> : null}</div>
-        {!guided && identityFields}
+        {nameField}
+        {!guided && audienceField}
 
         <div className="space-y-1.5">
           <label htmlFor="design-system" className={PROJECT_LABEL_CLASS}>
@@ -359,9 +361,9 @@ export default function NewProjectPanel({
 
         {!guided && materialsField}
         <details className="rounded-xl border border-border bg-muted/30 p-4" data-qa="creation-advanced">
-          <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("home.brief.details")}</summary>
+          <summary className="min-h-6 cursor-pointer rounded-sm py-1 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">{t("home.brief.details")}</summary>
           <div className="mt-4 space-y-4">
-            {guided && <>{identityFields}{materialsField}</>}
+            {guided && <>{audienceField}{materialsField}</>}
             <GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} />
         {isGraphic && (
           <GraphicCanvasFields

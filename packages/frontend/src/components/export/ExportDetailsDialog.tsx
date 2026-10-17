@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { ArrowLeft } from "lucide-react";
 import { useT, type MessageKey } from "@/i18n/t";
 import {
   Dialog,
@@ -11,6 +13,8 @@ import ExportOptionFields from "./ExportOptionFields";
 import ExportStatusList from "./ExportStatusList";
 import PrintPreflightSection from "./PrintPreflightSection";
 import type { ExportMenuOption, ExportOptionValues } from "./export-options";
+import { platformGuideView } from "./platform-guide";
+import { PlatformGuideContent } from "./PlatformGuideDialog";
 
 export type ExportDetailsSection = "settings" | "print" | "status";
 
@@ -29,6 +33,7 @@ const HINT_KEY: Record<ExportDetailsSection, MessageKey> = {
 export default function ExportDetailsDialog({
   section,
   onClose,
+  returnFocusRef,
   projectId,
   options,
   values,
@@ -43,6 +48,7 @@ export default function ExportDetailsDialog({
 }: {
   readonly section: ExportDetailsSection | null;
   readonly onClose: () => void;
+  readonly returnFocusRef: RefObject<HTMLButtonElement>;
   readonly projectId: string;
   readonly options: readonly ExportMenuOption[];
   readonly values: ExportOptionValues;
@@ -56,30 +62,51 @@ export default function ExportDetailsDialog({
   readonly statusBusy: boolean;
 }) {
   const t = useT();
+  const [guideJob, setGuideJob] = useState<ExportJob | null>(null);
+  const guideOpenerRef = useRef<HTMLElement | null>(null);
+  const backRef = useRef<HTMLButtonElement | null>(null);
+  const guide = guideJob === null ? null : platformGuideView(guideJob.format);
+  useEffect(() => {
+    if (guideJob !== null) backRef.current?.focus({ preventScroll: true });
+    else if (section === "status") guideOpenerRef.current?.focus({ preventScroll: true });
+  }, [guideJob, section]);
   if (section === null) return null;
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="flex max-h-[min(640px,calc(100dvh-2rem))] max-w-lg flex-col gap-4 overflow-hidden">
+    <Dialog open onOpenChange={(open) => { if (!open) { setGuideJob(null); guideOpenerRef.current = null; onClose(); } }}>
+      <DialogContent
+        className="flex max-h-[min(640px,calc(100dvh-2rem))] max-w-lg flex-col gap-4 overflow-hidden"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocusRef.current?.focus({ preventScroll: true });
+        }}
+      >
+        {guide !== null && <button ref={backRef} type="button" onClick={() => setGuideJob(null)} className="inline-flex min-h-9 shrink-0 items-center gap-2 self-start rounded-control px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{t("export.guide.back")}</button>}
         <DialogHeader className="shrink-0 pr-8">
-          <DialogTitle>{t(TITLE_KEY[section])}</DialogTitle>
-          <DialogDescription>{t(HINT_KEY[section])}</DialogDescription>
+          <DialogTitle>{guide?.title ?? t(TITLE_KEY[section])}</DialogTitle>
+          <DialogDescription>{guide?.summary ?? t(HINT_KEY[section])}</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          {section === "settings" && (
+          {guide !== null && guideJob !== null && <PlatformGuideContent format={guideJob.format} />}
+          {guide === null && section === "settings" && (
             <ExportOptionFields options={options} values={values} disabled={optionsDisabled} onChange={onValuesChange} />
           )}
-          {section === "print" && <PrintPreflightSection projectId={projectId} enabled />}
+          {guide === null && section === "print" && <PrintPreflightSection projectId={projectId} enabled />}
           {section === "status" && (
-            jobs.length === 0
+            jobs.length === 0 && guide === null
               ? <p className="px-1 py-4 text-sm text-muted-foreground">{t("export.menu.recentEmpty")}</p>
-              : <ExportStatusList
+              : jobs.length > 0 && <div className={guide !== null ? "hidden" : undefined}><ExportStatusList
                   jobs={jobs}
                   onRetry={onRetry}
                   onCancel={onCancel}
                   onDownload={onDownload}
                   retryDisabled={statusBusy}
+                  onOpenGuide={(job) => {
+                    const active = document.activeElement;
+                    guideOpenerRef.current = active instanceof HTMLElement ? active : null;
+                    setGuideJob(job);
+                  }}
                   {...(onRequestFix === undefined ? {} : { onRequestFix })}
-                />
+                /></div>
           )}
         </div>
       </DialogContent>

@@ -1,5 +1,8 @@
-import { Link, useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useLocation, useMatch } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { getDesignSystem } from "@/api/design-system-metadata";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useT } from "@/i18n/t";
 
 /** Only routes that have a real place in the app get a breadcrumb; anything else (the not-found page) renders its own heading. */
@@ -13,13 +16,31 @@ export default function TopBar() {
   const t = useT();
   const { pathname } = useLocation();
   const route = topBarRoute(pathname);
+  const systemId = useMatch("/systems/:id")?.params.id;
+  const systemQuery = useQuery({
+    queryKey: ["design-systems", "detail", systemId],
+    queryFn: () => getDesignSystem(systemId ?? ""),
+    enabled: systemId !== undefined,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
   if (route === null) return null;
   const system = route === "system";
+  const systemName = systemQuery.data?.name ?? t("shell.systemWorkspace");
   return (
-    <header className="flex min-h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-5 sm:px-8">
+    <header className="relative flex min-h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-5 sm:px-8">
       <Link to={system ? "/?view=systems" : "/"} className="inline-flex min-h-11 items-center gap-2 rounded-lg text-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"><ChevronLeft className="h-4 w-4" aria-hidden="true" />{t(system ? "shell.systems" : "shell.work")}</Link>
       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
-      <span className="text-sm font-medium">{t(system ? "shell.systemWorkspace" : "shell.settings")}</span>
+      {system ? (
+        <Tooltip
+          content={systemName}
+          side="bottom"
+          wrapperClassName="min-w-0 max-w-full max-sm:static"
+          className="break-words max-sm:inset-x-5 max-sm:w-auto max-sm:max-w-none max-sm:translate-x-0"
+        >
+          <span tabIndex={0} aria-current="page" className="block max-w-[min(55vw,32rem)] truncate rounded-control text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card">{systemName}</span>
+        </Tooltip>
+      ) : <span aria-current="page" className="text-sm font-medium">{t("shell.settings")}</span>}
     </header>
   );
 }

@@ -105,7 +105,7 @@ export default function ModePanel({
   if (!mode) return null;
 
   return (
-    <aside aria-label={t("modes.panel.settings")} className="flex min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1500px]:w-[288px] max-[1000px]:max-h-[40%] max-[1000px]:w-full max-[1000px]:shrink max-[1000px]:border-l-0 max-[1000px]:border-t">
+    <aside aria-label={t("modes.panel.settings")} className="flex min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1500px]:w-[288px] max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 max-lg:h-auto max-lg:max-h-[min(65%,32rem)] max-lg:w-full max-lg:rounded-t-card max-lg:border-l-0 max-lg:border-t max-lg:shadow-app-3">
       {mode === "tweaks" && (
         <TweaksPanel
           projectId={projectId}

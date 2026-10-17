@@ -82,6 +82,8 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
   const oweStarPrompt = useUIStore((s) => s.oweStarPrompt);
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState<ExportDetailsSection | null>(null);
+  const exportTriggerRef = useRef<HTMLButtonElement>(null);
+  const pendingDetailsRef = useRef<ExportDetailsSection | null>(null);
   const [optionValues, setOptionValues] = useExportOptionValues(projectId);
   const openQuality = () => {
     setOpen(false);
@@ -187,6 +189,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
+          ref={exportTriggerRef}
           variant="cta"
           size="sm"
           className="min-h-10 gap-2 px-4 focus:ring-2 focus:ring-ring focus:ring-offset-1 max-[900px]:min-h-11"
@@ -195,7 +198,16 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
           <Download className="h-3.5 w-3.5" /> {t("export.title")}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent data-export-menu-content align="end" collisionPadding={12} className="z-[100] max-h-[var(--radix-dropdown-menu-content-available-height)] w-80 max-w-[calc(100vw-24px)] overflow-y-auto p-2">
+      <DropdownMenuContent
+        data-export-menu-content
+        onCloseAutoFocus={(event) => {
+          const next = pendingDetailsRef.current;
+          if (next === null) return;
+          pendingDetailsRef.current = null;
+          event.preventDefault();
+          setDetails(next);
+        }}
+        align="end" collisionPadding={12} className="z-[100] max-h-[var(--radix-dropdown-menu-content-available-height)] w-80 max-w-[calc(100vw-24px)] overflow-y-auto p-2">
         <DropdownMenuLabel>{t("export.formats")}</DropdownMenuLabel>
         {jobsQuery.isError && <div role="alert" className="p-2 text-xs"><p>{t("export.listFailed")}</p><button type="button" className="mt-2 min-h-8 underline" onClick={() => void jobsQuery.refetch()}>{t("export.retry")}</button></div>}
         {qualityGate !== null && <div className="mx-1 mb-2 rounded-control border border-destructive/30 bg-destructive/10 p-2">
@@ -244,7 +256,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
         })}
         <DropdownMenuSeparator />
         {hasSettingsFields && (
-          <DropdownMenuItem className="min-h-11 gap-3 rounded-control px-3" onSelect={() => setDetails("settings")}>
+          <DropdownMenuItem className="min-h-11 gap-3 rounded-control px-3" onSelect={() => { pendingDetailsRef.current = "settings"; }}>
             <SlidersHorizontal className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span className="min-w-0 flex-1 text-sm">
               {t("export.menu.settings")}
@@ -252,14 +264,14 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
             </span>
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem className="min-h-11 gap-3 rounded-control px-3" onSelect={() => setDetails("print")}>
+        <DropdownMenuItem className="min-h-11 gap-3 rounded-control px-3" onSelect={() => { pendingDetailsRef.current = "print"; }}>
           <ScanSearch className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1 text-sm">
             {t("export.preflight.title")}
             <span className="mt-0.5 block text-pretty break-keep text-xs font-normal text-muted-foreground">{t("export.menu.printHint")}</span>
           </span>
         </DropdownMenuItem>
-        <DropdownMenuItem className="min-h-11 gap-3 rounded-control px-3" onSelect={() => setDetails("status")}>
+        <DropdownMenuItem className="min-h-11 gap-3 rounded-control px-3" onSelect={() => { pendingDetailsRef.current = "status"; }}>
           <History className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1 text-sm">
             {t("export.recent")}
@@ -273,6 +285,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
       <ExportDetailsDialog
         section={details}
         onClose={() => setDetails(null)}
+        returnFocusRef={exportTriggerRef}
         projectId={projectId}
         options={menuModel.options}
         values={optionValues}

@@ -59,9 +59,9 @@ export default function QualityPanel({ quality, extra }: { readonly quality: Qua
               <p className="mt-2 break-keep text-xs leading-relaxed">{DESIGN_AUDIT_UNKNOWN_COPY[item.reason]} <strong>{t("modes.quality.notPass")}</strong></p>
             </article>)}</div>}
           </section>
-          <details className="mt-4 rounded-md border border-border px-3 py-2">
-            <summary className="cursor-pointer text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.quality.passedCount", { count: grouped.passedCount })}</summary>
-            <p className="mt-2 break-keep text-xs text-muted-foreground">{t("modes.quality.passedHint")}</p>
+          <details className="mt-4 rounded-md border border-border">
+            <summary className="flex min-h-11 cursor-pointer items-center rounded-control px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">{t("modes.quality.passedCount", { count: grouped.passedCount })}</summary>
+            <p className="px-3 pb-3 break-keep text-xs text-muted-foreground">{t("modes.quality.passedHint")}</p>
           </details>
         </>}
         {extra}

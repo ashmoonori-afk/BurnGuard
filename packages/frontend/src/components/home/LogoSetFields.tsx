@@ -102,7 +102,7 @@ export function LogoSetFields({
           aria-describedby="logo-avoid-hint"
           placeholder={t("home.logo.avoidPlaceholder")}
           onChange={(event) => onChange({ logoAvoid: event.target.value })}
-          className="w-full rounded-md border border-input bg-background p-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="w-full rounded-md border border-input bg-background p-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <p id="logo-avoid-hint" className="text-pretty break-keep text-xs text-muted-foreground">
           {t("home.logo.avoidHint")} ({form.logoAvoid.length}/{AVOID_MAX_LENGTH})

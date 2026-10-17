@@ -29,6 +29,7 @@ export const exportMessages = defineMessages({
   "export.retryFormat": { ko: "{name} 다시 시도", en: "Retry {name}", "zh-CN": "重试 {name}" },
   "export.cancelFormat": { ko: "{name} 취소", en: "Cancel {name}", "zh-CN": "取消 {name}" },
   "export.viewGuide": { ko: "가이드 보기", en: "View guide", "zh-CN": "查看指南" },
+  "export.guide.back": { ko: "최근 내보내기로 돌아가기", en: "Back to recent exports", "zh-CN": "返回最近的导出" },
   "export.cancel": { ko: "취소", en: "Cancel", "zh-CN": "取消" },
   "export.requestFix": { ko: "AI에게 수정 요청", en: "Ask AI to fix", "zh-CN": "请求 AI 修复" },
   "export.packageReady": { ko: "패키지 다운로드됨", en: "Package downloaded", "zh-CN": "已下载包" },

@@ -42,7 +42,7 @@ export function PinterestImportForm({ name, urls, pending, error, onNameChange, 
   const state = pinterestSubmitState(urls);
   return <>
     <label className="grid gap-2 text-sm">{t("home.pinterest.name")}<input className="rounded-md border border-input bg-background p-2" maxLength={100} value={name} onChange={(event) => onNameChange(event.target.value)} disabled={pending} /></label>
-    <label className="grid gap-2 text-sm">{t("home.pinterest.urls")}<textarea className="min-h-40 rounded-md border border-input bg-background p-2" value={urls} onChange={(event) => onUrlsChange(event.target.value)} disabled={pending} maxLength={2400} placeholder="https://www.pinterest.com/pin/123/" /></label>
+    <label className="grid gap-2 text-sm">{t("home.pinterest.urls")}<textarea className="min-h-40 rounded-md border border-input bg-background p-2 placeholder:text-muted-foreground" value={urls} onChange={(event) => onUrlsChange(event.target.value)} disabled={pending} maxLength={2400} placeholder="https://www.pinterest.com/pin/123/" /></label>
     <p className="text-sm text-muted-foreground">{t("home.pinterest.hint")}</p>
     {state.reason !== null && <p role="status" className="text-sm text-destructive">{t(state.reason, { count: PINTEREST_PIN_LIMIT })}</p>}
     {error !== null && <p role="alert" className="text-sm text-destructive">{pinterestErrorCopy(error)}</p>}
